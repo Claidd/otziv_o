@@ -87,87 +87,71 @@ public class WorkerRiskExplanationQualityService {
                 AppSettingService.WORKER_RISK_EXPLANATION_QUALITY_ENABLED,
                 true
         )) {
-            return result(
-                    WorkerRiskExplanationQuality.NEEDS_REVIEW,
-                    0,
-                    "Автоматическая проверка пояснений выключена",
-                    "",
-                    "disabled"
+            return unavailable(
+                    "Автоматическая проверка пояснений выключена", "disabled", null
             );
         }
         if (!"deepseek".equalsIgnoreCase(providerRouter.activeProviderName())
                 || !providerRouter.activeProviderAvailable()) {
-            return result(
-                    WorkerRiskExplanationQuality.NEEDS_REVIEW,
-                    0,
+            return unavailable(
                     "DeepSeek недоступен, пояснение передано менеджеру без автоматического вывода",
-                    "",
-                    providerRouter.activeProviderName()
+                    providerRouter.activeProviderName(), null
             );
         }
 
+        AiResponse response = null;
         try {
             int timeoutSeconds = Math.max(5, Math.min(60, appSettingService.getInt(
                     AppSettingService.WORKER_RISK_EXPLANATION_AI_TIMEOUT_SECONDS,
                     20
             )));
             String contextJson = objectMapper.writeValueAsString(context(incident, answer));
-            AiResponse response = providerRouter.activeProvider().generate(new AiRequest(
+            response = providerRouter.activeProvider().generate(new AiRequest(
                     "worker-risk-explanation-quality",
                     SYSTEM_PROMPT,
                     contextJson,
                     0.1,
                     true,
-                    700,
-                    Duration.ofSeconds(timeoutSeconds)
+                    2048,
+                    Duration.ofSeconds(timeoutSeconds),
+                    false
             ));
             if (!response.errorMessage().isBlank() || response.text().isBlank()) {
-                return result(
-                        WorkerRiskExplanationQuality.NEEDS_REVIEW,
-                        0,
+                return unavailable(
                         response.errorMessage().isBlank()
                                 ? "DeepSeek вернул пустой ответ"
                                 : limit(response.errorMessage(), 500),
-                        "",
-                        response.provider()
+                        response.provider(),
+                        response
                 );
             }
             return parse(response);
-        } catch (RuntimeException exception) {
-            log.warn("Оценка пояснения риска не выполнена incidentId={}: {}",
-                    incident == null ? null : incident.getId(),
-                    exception.getMessage());
-            return result(
-                    WorkerRiskExplanationQuality.NEEDS_REVIEW,
-                    0,
-                    "DeepSeek не смог оценить пояснение: " + limit(exception.getMessage(), 300),
-                    "",
-                    "deepseek"
-            );
         } catch (Exception exception) {
-            return result(
-                    WorkerRiskExplanationQuality.NEEDS_REVIEW,
-                    0,
-                    "Ответ DeepSeek не удалось обработать",
-                    "",
-                    "deepseek"
-            );
+            // Neither the provider response nor the explanation belongs in application logs.
+            log.warn("Оценка пояснения риска не выполнена incidentId={}, errorType={}",
+                    incident == null ? null : incident.getId(), exception.getClass().getSimpleName());
+            return unavailable("Ответ DeepSeek не удалось обработать", "deepseek", response);
         }
     }
 
     private Result parse(AiResponse response) throws Exception {
         String json = stripCodeFence(response.text());
         JsonNode root = objectMapper.readTree(json);
-        WorkerRiskExplanationQuality quality;
-        try {
-            quality = WorkerRiskExplanationQuality.valueOf(
-                    root.path("quality").asText("NEEDS_REVIEW").trim().toUpperCase(Locale.ROOT)
-            );
-        } catch (IllegalArgumentException exception) {
-            quality = WorkerRiskExplanationQuality.NEEDS_REVIEW;
+        if (root == null || !root.isObject()
+                || !root.path("quality").isTextual()
+                || !root.path("confidence").isNumber()
+                || !root.path("reason").isTextual()
+                || root.path("reason").asText().isBlank()) {
+            throw new IllegalArgumentException("Invalid explanation assessment schema");
         }
-        double confidence = Math.max(0, Math.min(1, root.path("confidence").asDouble(0)));
-        String reason = root.path("reason").asText("DeepSeek не указал причину оценки");
+        WorkerRiskExplanationQuality quality = WorkerRiskExplanationQuality.valueOf(
+                root.path("quality").asText().trim().toUpperCase(Locale.ROOT)
+        );
+        double confidence = root.path("confidence").asDouble();
+        if (!Double.isFinite(confidence) || confidence < 0 || confidence > 1) {
+            throw new IllegalArgumentException("Invalid explanation assessment confidence");
+        }
+        String reason = root.path("reason").asText();
         String missingFacts = arrayText(root.path("missingFacts"));
         String contradictions = arrayText(root.path("contradictions"));
         if (!missingFacts.isBlank()) {
@@ -276,6 +260,20 @@ public class WorkerRiskExplanationQualityService {
                 : "Что именно произошло по замечанию «" + limit(title, 160) + "»?";
     }
 
+    private Result unavailable(String reason, String provider, AiResponse response) {
+        return new Result(
+                WorkerRiskExplanationQuality.NEEDS_REVIEW,
+                BigDecimal.ZERO.setScale(4),
+                limit(reason, 1000),
+                "",
+                provider,
+                response == null ? "" : aiProperties.getDeepseek().getModel(),
+                response == null ? 0 : response.inputTokens(),
+                response == null ? 0 : response.outputTokens(),
+                false
+        );
+    }
+
     private Result result(
             WorkerRiskExplanationQuality quality,
             double confidence,
@@ -355,7 +353,14 @@ public class WorkerRiskExplanationQualityService {
             String provider,
             String model,
             int inputTokens,
-            int outputTokens
+            int outputTokens,
+            boolean assessmentAvailable
     ) {
+        public Result(
+                WorkerRiskExplanationQuality quality, BigDecimal confidence, String reason,
+                String clarificationQuestion, String provider, String model, int inputTokens, int outputTokens
+        ) {
+            this(quality, confidence, reason, clarificationQuestion, provider, model, inputTokens, outputTokens, true);
+        }
     }
 }

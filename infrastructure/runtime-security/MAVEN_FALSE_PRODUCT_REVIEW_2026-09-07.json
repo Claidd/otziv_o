@@ -1,0 +1,253 @@
+{
+  "schemaVersion": 1,
+  "reviewedAt": "2026-09-07T15:57:02.991659+00:00",
+  "sourceReport": ".codex-tmp/rc26/security-audit-v3/target/dependency-check-report.json",
+  "sourceReportSha256": "8c3fd6da0ca7cf469c419dda62c2d6b0b3d5ca22ca3ed92a620b7189340f5016",
+  "scope": "Exact artifact/version and individual foreign product/module advisories only. Does not suppress shaded HttpClient, Jetty, Plexus, Commons or other genuine findings. No risk acceptance.",
+  "rules": [
+    {
+      "packageUrl": "pkg:maven/io.grpc/grpc-opentelemetry@1.76.3",
+      "sha256": "5a1218a54c149540b48c28762438cddabb0ba502f1a7ec87c63b1ea191d9920f",
+      "observedCpes": [
+        "cpe:2.3:a:grpc:grpc:1.76.3:*:*:*:*:*:*:*",
+        "cpe:2.3:a:opentelemetry:opentelemetry:1.76.3:*:*:*:*:*:*:*"
+      ],
+      "individualAdvisories": [
+        "CVE-2026-54285"
+      ],
+      "decision": "VERIFIED_INCORRECT_ARTIFACT_MATCH",
+      "reasons": [
+        "The advisory affects JavaScript W3C baggage propagator; the exact detected Maven artifact is a Java implementation, not that independently versioned product."
+      ],
+      "primarySources": [
+        "https://github.com/open-telemetry/opentelemetry-js/security/advisories/GHSA-8988-4f7v-96qf"
+      ],
+      "riskAcceptance": false
+    },
+    {
+      "packageUrl": "pkg:maven/org.jetbrains.kotlin/kotlin-stdlib@2.2.21",
+      "sha256": "6558a3d233da56a20934b32159f9db5f86ed5816ef098f78a2c223dc6abb79dd",
+      "observedCpes": [
+        "cpe:2.3:a:jetbrains:kotlin:2.2.21:*:*:*:*:*:*:*"
+      ],
+      "individualAdvisories": [
+        "CVE-2026-53914"
+      ],
+      "decision": "VERIFIED_INCORRECT_ARTIFACT_MATCH",
+      "reasons": [
+        "Vendor patch changes KAPT incremental-cache deserialization in plugins/kapt3/kapt3-base; kotlin-stdlib does not contain org/jetbrains/kotlin/kapt3 classes. No Kotlin Gradle plugin or KAPT artifact is in this Maven project dependency graph."
+      ],
+      "primarySources": [
+        "https://github.com/JetBrains/kotlin/commit/bf51df665b458fda7c3eaf436c4d88dc119d7ec6"
+      ],
+      "riskAcceptance": false
+    },
+    {
+      "packageUrl": "pkg:maven/io.opentelemetry/opentelemetry-api@1.55.0",
+      "sha256": "387b4bf98631fc2ede9470879a8ff28dd8c5cb2d3dcf5b6ef77f5ee2bdb7b4f1",
+      "observedCpes": [
+        "cpe:2.3:a:opentelemetry:opentelemetry:1.55.0:*:*:*:*:*:*:*"
+      ],
+      "individualAdvisories": [
+        "CVE-2026-54285"
+      ],
+      "decision": "VERIFIED_INCORRECT_ARTIFACT_MATCH",
+      "reasons": [
+        "The advisory affects JavaScript W3C baggage propagator; the exact detected Maven artifact is a Java implementation, not that independently versioned product."
+      ],
+      "primarySources": [
+        "https://github.com/open-telemetry/opentelemetry-js/security/advisories/GHSA-8988-4f7v-96qf"
+      ],
+      "riskAcceptance": false
+    },
+    {
+      "packageUrl": "pkg:maven/io.opentelemetry/opentelemetry-extension-incubator@1.35.0-alpha",
+      "sha256": "5ca38a9ecdf2c93183069dae1d7d76ec12e9cf4feb3c2209d04566e82fc4df3c",
+      "observedCpes": [
+        "cpe:2.3:a:opentelemetry:opentelemetry:1.35.0:alpha:*:*:*:*:*:*"
+      ],
+      "individualAdvisories": [
+        "CVE-2026-39883",
+        "CVE-2026-24051",
+        "CVE-2026-39882",
+        "CVE-2026-41178",
+        "CVE-2026-54285"
+      ],
+      "decision": "VERIFIED_INCORRECT_ARTIFACT_MATCH",
+      "reasons": [
+        "The advisory affects Go OTLP HTTP exporters; the exact detected Maven artifact is a Java implementation, not that independently versioned product.",
+        "The advisory affects Go SDK resource detector; the exact detected Maven artifact is a Java implementation, not that independently versioned product.",
+        "The advisory affects Go baggage parser; the exact detected Maven artifact is a Java implementation, not that independently versioned product.",
+        "The advisory affects JavaScript W3C baggage propagator; the exact detected Maven artifact is a Java implementation, not that independently versioned product."
+      ],
+      "primarySources": [
+        "https://github.com/open-telemetry/opentelemetry-go/security/advisories/GHSA-5wrp-cwcj-q835",
+        "https://github.com/open-telemetry/opentelemetry-go/security/advisories/GHSA-9h8m-3fm2-qjrq",
+        "https://github.com/open-telemetry/opentelemetry-go/security/advisories/GHSA-hfvc-g4fc-pqhx",
+        "https://github.com/open-telemetry/opentelemetry-go/security/advisories/GHSA-w8rr-5gcm-pp58",
+        "https://github.com/open-telemetry/opentelemetry-js/security/advisories/GHSA-8988-4f7v-96qf"
+      ],
+      "riskAcceptance": false
+    },
+    {
+      "packageUrl": "pkg:maven/io.opentelemetry.contrib/opentelemetry-gcp-resources@1.37.0-alpha",
+      "sha256": "f7b6baddfbbe57f0e3e1e3cc08eb68bb61c29ef6c17898ce7ce35b1f3029d3e6",
+      "observedCpes": [
+        "cpe:2.3:a:opentelemetry:opentelemetry:1.37.0:alpha:*:*:*:*:*:*"
+      ],
+      "individualAdvisories": [
+        "CVE-2026-29181",
+        "CVE-2026-39883",
+        "CVE-2026-24051",
+        "CVE-2026-39882",
+        "CVE-2026-41178",
+        "CVE-2026-54285"
+      ],
+      "decision": "VERIFIED_INCORRECT_ARTIFACT_MATCH",
+      "reasons": [
+        "The advisory affects Go OTLP HTTP exporters; the exact detected Maven artifact is a Java implementation, not that independently versioned product.",
+        "The advisory affects Go SDK resource detector; the exact detected Maven artifact is a Java implementation, not that independently versioned product.",
+        "The advisory affects Go baggage parser; the exact detected Maven artifact is a Java implementation, not that independently versioned product.",
+        "The advisory affects Go baggage propagator; the exact detected Maven artifact is a Java implementation, not that independently versioned product.",
+        "The advisory affects JavaScript W3C baggage propagator; the exact detected Maven artifact is a Java implementation, not that independently versioned product."
+      ],
+      "primarySources": [
+        "https://github.com/open-telemetry/opentelemetry-go/security/advisories/GHSA-5wrp-cwcj-q835",
+        "https://github.com/open-telemetry/opentelemetry-go/security/advisories/GHSA-9h8m-3fm2-qjrq",
+        "https://github.com/open-telemetry/opentelemetry-go/security/advisories/GHSA-hfvc-g4fc-pqhx",
+        "https://github.com/open-telemetry/opentelemetry-go/security/advisories/GHSA-mh2q-q3fh-2475",
+        "https://github.com/open-telemetry/opentelemetry-go/security/advisories/GHSA-w8rr-5gcm-pp58",
+        "https://github.com/open-telemetry/opentelemetry-js/security/advisories/GHSA-8988-4f7v-96qf"
+      ],
+      "riskAcceptance": false
+    },
+    {
+      "packageUrl": "pkg:maven/io.opentelemetry.instrumentation/opentelemetry-grpc-1.6@2.1.0-alpha",
+      "sha256": "7c033f0c8c8c8159c396b21922460ecfb7a5f004258f8fcdc4ce9979261e1ac9",
+      "observedCpes": [
+        "cpe:2.3:a:opentelemetry:opentelemetry:2.1.0:alpha:*:*:*:*:*:*"
+      ],
+      "individualAdvisories": [
+        "CVE-2026-54285"
+      ],
+      "decision": "VERIFIED_INCORRECT_ARTIFACT_MATCH",
+      "reasons": [
+        "The advisory affects JavaScript W3C baggage propagator; the exact detected Maven artifact is a Java implementation, not that independently versioned product."
+      ],
+      "primarySources": [
+        "https://github.com/open-telemetry/opentelemetry-js/security/advisories/GHSA-8988-4f7v-96qf"
+      ],
+      "riskAcceptance": false
+    },
+    {
+      "packageUrl": "pkg:maven/io.opentelemetry.instrumentation/opentelemetry-instrumentation-api@2.1.0",
+      "sha256": "4f6ac1247c7372c103c23ef2594413418a496b114e13ef237031255a2d3ce361",
+      "observedCpes": [
+        "cpe:2.3:a:opentelemetry:opentelemetry:2.1.0:*:*:*:*:*:*:*"
+      ],
+      "individualAdvisories": [
+        "CVE-2026-54285"
+      ],
+      "decision": "VERIFIED_INCORRECT_ARTIFACT_MATCH",
+      "reasons": [
+        "The advisory affects JavaScript W3C baggage propagator; the exact detected Maven artifact is a Java implementation, not that independently versioned product."
+      ],
+      "primarySources": [
+        "https://github.com/open-telemetry/opentelemetry-js/security/advisories/GHSA-8988-4f7v-96qf"
+      ],
+      "riskAcceptance": false
+    },
+    {
+      "packageUrl": "pkg:maven/io.opentelemetry.proto/opentelemetry-proto@1.8.0-alpha",
+      "sha256": "c551873983e22b308c738860da0903cdff2e47182140cf2a8dd9abb1adf31d08",
+      "observedCpes": [
+        "cpe:2.3:a:opentelemetry:opentelemetry:1.8.0:alpha:*:*:*:*:*:*"
+      ],
+      "individualAdvisories": [
+        "CVE-2026-39882",
+        "CVE-2026-40894",
+        "CVE-2026-41178",
+        "CVE-2026-44967",
+        "CVE-2026-54285"
+      ],
+      "decision": "VERIFIED_INCORRECT_ARTIFACT_MATCH",
+      "reasons": [
+        "The advisory affects .NET OpenTelemetry.Api; the exact detected Maven artifact is a Java implementation, not that independently versioned product.",
+        "The advisory affects C++ OTLP HTTP exporter; the exact detected Maven artifact is a Java implementation, not that independently versioned product.",
+        "The advisory affects Go OTLP HTTP exporters; the exact detected Maven artifact is a Java implementation, not that independently versioned product.",
+        "The advisory affects Go baggage parser; the exact detected Maven artifact is a Java implementation, not that independently versioned product.",
+        "The advisory affects JavaScript W3C baggage propagator; the exact detected Maven artifact is a Java implementation, not that independently versioned product."
+      ],
+      "primarySources": [
+        "https://github.com/open-telemetry/opentelemetry-cpp/issues/3958",
+        "https://github.com/open-telemetry/opentelemetry-dotnet/security/advisories/GHSA-g94r-2vxg-569j",
+        "https://github.com/open-telemetry/opentelemetry-go/security/advisories/GHSA-5wrp-cwcj-q835",
+        "https://github.com/open-telemetry/opentelemetry-go/security/advisories/GHSA-w8rr-5gcm-pp58",
+        "https://github.com/open-telemetry/opentelemetry-js/security/advisories/GHSA-8988-4f7v-96qf"
+      ],
+      "riskAcceptance": false
+    },
+    {
+      "packageUrl": "pkg:maven/org.springframework.boot/spring-boot-devtools@4.0.8",
+      "sha256": "66d491824019bfdf19494b21ffd9c52570936f856dc80e5e97daa17ae1748c06",
+      "observedCpes": [
+        "cpe:2.3:a:vmware:spring_boot:4.0.8:*:*:*:*:*:*:*",
+        "cpe:2.3:a:vmware:spring_boot_tools:4.0.8:*:*:*:*:*:*:*",
+        "cpe:2.3:a:vmware:spring_tools:4.0.8:*:*:*:*:*:*:*"
+      ],
+      "individualAdvisories": [
+        "CVE-2022-31691"
+      ],
+      "decision": "VERIFIED_INCORRECT_ARTIFACT_MATCH",
+      "reasons": [
+        "The vendor advisory names STS4 Eclipse and VSCode editor extensions, not Spring Boot Devtools application library."
+      ],
+      "primarySources": [
+        "https://spring.io/security/cve-2022-31691/"
+      ],
+      "riskAcceptance": false
+    },
+    {
+      "packageUrl": "pkg:maven/org.telegram/telegrambots@6.9.7.1",
+      "sha256": "bfcca1f6b2c4a0d4e0fd85288f7cbda9483af2415e66d1db69c2661c35ff511f",
+      "observedCpes": [
+        "cpe:2.3:a:telegram:telegram:6.9.7.1:*:*:*:*:*:*:*"
+      ],
+      "individualAdvisories": [
+        "CVE-2019-10044",
+        "CVE-2021-31320",
+        "CVE-2021-31321",
+        "CVE-2024-7014",
+        "CVE-2021-27204",
+        "CVE-2021-27205",
+        "CVE-2021-31315",
+        "CVE-2021-31317",
+        "CVE-2021-31318",
+        "CVE-2021-31319",
+        "CVE-2021-31322",
+        "CVE-2021-31323",
+        "CVE-2021-27351",
+        "CVE-2021-36769"
+      ],
+      "decision": "VERIFIED_INCORRECT_ARTIFACT_MATCH",
+      "reasons": [
+        "The exact artifact is RubenLaguses Java Telegram Bot SDK; the reported CPE represents Telegram Android/iOS/macOS/Desktop messenger applications. Their native media/UI/client-session code is not this Java Bot API SDK."
+      ],
+      "primarySources": [
+        "https://github.com/rubenlagus/TelegramBots/tree/v6.9.7.1",
+        "https://repo.maven.apache.org/maven2/org/telegram/telegrambots/6.9.7.1/telegrambots-6.9.7.1.pom"
+      ],
+      "riskAcceptance": false
+    }
+  ],
+  "xmlSha256": "127cf947b2682ecd2ca30a120228bd2ddeaf7a3eb8f7beba5bcb05ca700e8c49",
+  "wiring": "Configured in backend security-audit profile after parent review, actual OWASP13 XML/XSD parser and 38 causal checks passed; no risk acceptance.",
+  "validation": {
+    "path": ".codex-tmp/finalization-20260907/maven-suppression-counterfactual.json",
+    "sha256": "276bc558116739cd8bf1067e574954d66c59dcb6bb02998f3b76522478dc9c14",
+    "rules": 10,
+    "explicitFalsePairs": 36,
+    "retainedBaselineCandidatePairs": 26,
+    "checks": 38
+  }
+}

@@ -21,6 +21,8 @@ public class AppSettingService {
     public static final String REVIEW_ACCOUNT_WALKED_COUNTER_THRESHOLD = "review.account.walked-counter-threshold";
     public static final String REVIEW_ACCOUNT_WALK_DELAY_DAYS = "review.account.walk-delay-days";
     public static final String REVIEW_ACCOUNT_COOLDOWN_DAYS = "review.account.cooldown-days";
+    public static final String WORKER_ACCOUNT_ACTION_COOLDOWN_SECONDS = "worker.account-action.cooldown-seconds";
+    public static final String WORKER_ACCOUNT_ACTION_COOLDOWN_ENABLED = "worker.account-action.cooldown-enabled";
     public static final String WORKER_PUBLICATION_SPECIAL_TASK_GATE_ENABLED = "worker.publication.special-task-gate.enabled";
     public static final String WORKER_PUBLICATION_SPECIAL_TASK_GATE_ROLLOUT_STARTED_ON = "worker.publication.special-task-gate.rollout-started-on";
     public static final String WORKER_PUBLICATION_SPECIAL_TASK_GATE_ACTIVATE_ON = "worker.publication.special-task-gate.activate-on";

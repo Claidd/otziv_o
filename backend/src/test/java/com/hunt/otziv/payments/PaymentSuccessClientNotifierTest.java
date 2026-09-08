@@ -50,6 +50,7 @@ class PaymentSuccessClientNotifierTest {
         order.setCompany(company);
 
         PaymentLink link = new PaymentLink();
+        link.setId(101L);
         link.setOrder(order);
         link.setToken("pay-token");
         link.setAmountKopecks(25000L);
@@ -58,7 +59,7 @@ class PaymentSuccessClientNotifierTest {
         link.setStatus(PaymentLinkStatus.CONFIRMED);
         link.setExpiresAt(LocalDateTime.now().plusDays(1));
 
-        when(messageSender.send(eq(company), eq("wa-client"), eq("wa-group"), org.mockito.ArgumentMatchers.anyString()))
+        when(messageSender.sendWithOperationId(eq(company), eq("wa-client"), eq("wa-group"), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.isNull(), eq("payment-success:101")))
                 .thenReturn(ClientMessageSendResult.sent("WhatsApp"));
         when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true)).thenReturn(true);
         when(appSettingService.getString(
@@ -69,7 +70,7 @@ class PaymentSuccessClientNotifierTest {
         ClientMessageSendResult result = notifier.notifySuccess(link);
 
         ArgumentCaptor<String> messageCaptor = ArgumentCaptor.forClass(String.class);
-        verify(messageSender).send(eq(company), eq("wa-client"), eq("wa-group"), messageCaptor.capture());
+        verify(messageSender).sendWithOperationId(eq(company), eq("wa-client"), eq("wa-group"), messageCaptor.capture(), org.mockito.ArgumentMatchers.isNull(), eq("payment-success:101"));
         String message = messageCaptor.getValue();
         assertTrue(result.sent());
         assertTrue(message.contains("Оплата прошла успешно."));
@@ -97,6 +98,7 @@ class PaymentSuccessClientNotifierTest {
         order.setCompany(company);
 
         PaymentLink link = new PaymentLink();
+        link.setId(101L);
         link.setOrder(order);
         link.setToken("manual-token");
         link.setAmountKopecks(110000L);
@@ -106,7 +108,7 @@ class PaymentSuccessClientNotifierTest {
         link.setStatus(PaymentLinkStatus.CONFIRMED);
         link.setExpiresAt(LocalDateTime.now().plusDays(1));
 
-        when(messageSender.send(eq(company), eq("wa-client"), eq("wa-group"), org.mockito.ArgumentMatchers.anyString()))
+        when(messageSender.sendWithOperationId(eq(company), eq("wa-client"), eq("wa-group"), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.isNull(), eq("payment-success:101")))
                 .thenReturn(ClientMessageSendResult.sent("WhatsApp"));
         when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true)).thenReturn(true);
         when(appSettingService.getString(
@@ -117,7 +119,7 @@ class PaymentSuccessClientNotifierTest {
         ClientMessageSendResult result = notifier.notifySuccess(link);
 
         ArgumentCaptor<String> messageCaptor = ArgumentCaptor.forClass(String.class);
-        verify(messageSender).send(eq(company), eq("wa-client"), eq("wa-group"), messageCaptor.capture());
+        verify(messageSender).sendWithOperationId(eq(company), eq("wa-client"), eq("wa-group"), messageCaptor.capture(), org.mockito.ArgumentMatchers.isNull(), eq("payment-success:101"));
         String message = messageCaptor.getValue();
         assertTrue(result.sent());
         assertTrue(message.contains("Оплата по реквизитам подтверждена."));

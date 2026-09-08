@@ -1,0 +1,25 @@
+# Explicit public module seams. This file does not export controllers, models, or all services.
+# A new export requires an owner, caller, authorization and transaction contract in the relevant ADR/catalogue.
+com.hunt.otziv.api.dto.*
+com.hunt.otziv.c_companies.api.*
+com.hunt.otziv.common_billing.api.*
+com.hunt.otziv.payments.api.*
+com.hunt.otziv.whatsapp.api.*
+com.hunt.otziv.p_products.api.*
+com.hunt.otziv.s3.api.*
+# Exact HTTP exception mapper, callable only from transport (application-to-controller is forbidden).
+com.hunt.otziv.p_products.controller.OrderCommandHttpAdapter
+com.hunt.otziv.client_messages.api.*
+# A01 / ADR-008: scalar projections, source-authorized reminders and best-effort text notifications.
+com.hunt.otziv.u_users.api.WorkerRiskReviewerDirectory
+com.hunt.otziv.personal_reminders.api.SystemReminderCommands
+com.hunt.otziv.t_telegrambot.api.TelegramNotifications
+com.hunt.otziv.client_messages.dto.ClientMessageSendResult
+com.hunt.otziv.client_messages.dto.TelegramTransferCopyButton
+# Platform encryption capability; no business persistence or transport methods.
+com.hunt.otziv.security.credentials.CredentialCipher
+# Monitoring consumes these existing snapshot-only services; neither exposes mutation methods.
+com.hunt.otziv.integration.outbox.service.IntegrationOutboxStatusService
+com.hunt.otziv.integration.outbox.dto.IntegrationOutboxStatusResponse
+com.hunt.otziv.workload_shadow.health.service.WorkloadShadowHealthService
+com.hunt.otziv.workload_shadow.health.dto.WorkloadShadowHealthSnapshot

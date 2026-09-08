@@ -1,15 +1,18 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
+import { apiTransportSource } from './api-source.mjs';
+import { loadTsModule } from './load-ts-module.mjs';
 
 const pageSource = source('src/app/features/public-pay-group.page.ts');
-const apiSource = source('src/app/core/api.service.ts');
+const apiSource = apiTransportSource();
 const bankRouteSource = source('src/app/shared/bank-payment-source.ts');
 
-test('mobile common invoice models every public routing field returned by the backend', () => {
-  const interfaceStart = apiSource.indexOf('export interface PublicCommonInvoice {');
-  const interfaceEnd = apiSource.indexOf('\n}', interfaceStart);
-  const block = apiSource.slice(interfaceStart, interfaceEnd);
+test('mobile generated common invoice projection retains every public routing field returned by the backend', () => {
+  const adapter = loadTsModule('node_modules/@otziv/client-common/src/public-payments.ts');
+  const fixtures = JSON.parse(readFileSync(new URL('../../contracts/fixtures/client-api-current.json', import.meta.url), 'utf8'));
+  const wire = { ...fixtures.responses.PublicCommonInvoiceResponseOutput, status: 'READY', paymentRouteType: 'MANUAL_EXTERNAL_LINK' };
+  const value = adapter.decodePublicCommonInvoice(wire);
 
   for (const field of [
     'paymentRouteType',
@@ -23,7 +26,7 @@ test('mobile common invoice models every public routing field returned by the ba
     'clientReportable',
     'clientReportedAt'
   ]) {
-    assert.match(block, new RegExp(`\\b${field}\\b`));
+    assert.equal(value[field], wire[field], field);
   }
 });
 

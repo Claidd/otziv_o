@@ -1,6 +1,6 @@
 package com.hunt.otziv.z_zp.service;
 
-import com.hunt.otziv.c_companies.service.CompanyService;
+import com.hunt.otziv.c_companies.api.CompanyStatisticsOperations;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
@@ -33,7 +33,7 @@ import java.util.LinkedHashMap;
 public class PaymentCheckServiceImpl implements PaymentCheckService {
 
     private final PaymentCheckRepository paymentCheckRepository;
-    private final CompanyService companyService;
+    private final CompanyStatisticsOperations companyService;
 
     public List<PaymentCheck> findAll(){
         return paymentCheckRepository.findAll();
@@ -102,7 +102,7 @@ public class PaymentCheckServiceImpl implements PaymentCheckService {
                 ));
 
         // Получаем карту с количеством новых компаний
-        Map<String, Long> newCompanies = companyService.getAllNewCompanies2(firstDayOfMonth, lastDayOfMonth).stream()
+        Map<String, Long> newCompanies = companyService.countNewCompaniesByManager(firstDayOfMonth, lastDayOfMonth).stream()
                 .collect(Collectors.toMap(
                         obj -> (String) obj[0],   // ФИО менеджера
                         obj -> (Long) obj[1]      // Количество компаний

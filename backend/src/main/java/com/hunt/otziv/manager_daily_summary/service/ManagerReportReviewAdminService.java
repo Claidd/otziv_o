@@ -38,9 +38,19 @@ public class ManagerReportReviewAdminService {
 
     @Transactional
     public void resolveDispute(Long reviewId, String action, String comment, User actor) {
-        ManagerReportReviewSession review = sessionRepository.findById(reviewId)
+        resolveDispute(reviewId, null, action, comment, actor);
+    }
+
+    @Transactional
+    public void resolveDispute(Long reviewId, Long disputeId, String action, String comment, User actor) {
+        ManagerReportReviewSession review = sessionRepository.findForUpdateById(reviewId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Разбор не найден"));
-        var issueDispute = issueService.openDispute(review);
+        var issueDispute = issueService.unresolvedDispute(review);
+        if (disputeId != null && (issueDispute.isEmpty()
+                || !disputeId.equals(issueDispute.get().getId()))) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Этот спор уже закрыт. Используйте кнопки в актуальной карточке спора");
+        }
         if (issueDispute.isPresent()) {
             resolveIssueDispute(
                     review,
@@ -50,6 +60,10 @@ public class ManagerReportReviewAdminService {
                     actor
             );
             return;
+        }
+        // A closed issue dispute must never fall back to resolving the entire audit.
+        if (!issueService.disputes(review).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "У этого разбора нет открытого спора");
         }
         if (review.getStatus() != ManagerReportReviewStatus.DISPUTED
                 && review.getStatus() != ManagerReportReviewStatus.DISPUTE_PENDING) {
@@ -205,6 +219,8 @@ public class ManagerReportReviewAdminService {
         if (REPORT_NEEDS_CONTEXT.equals(normalizedAction)) {
             issue.setStatus(ManagerReportReviewIssueStatus.NEEDS_CONTEXT);
             dispute.setStatus(ManagerReportReviewDisputeStatus.NEEDS_CONTEXT);
+            dispute.setResolvedAt(null);
+            dispute.setResolvedByUserId(null);
             saveIssueDecision(issue, dispute);
             review.setAuditRequired(true);
             if (review.getReadingConfirmedAt() == null) {
@@ -227,9 +243,12 @@ public class ManagerReportReviewAdminService {
                             ? "Остальные вопросы аудита необходимо продолжить."
                             : "Остальных вопросов сейчас нет."),
                     "HTML",
-                    issueService.hasPendingQuestions(review)
-                            ? ManagerReportReviewTelegramService.continueKeyboard(review.getId())
-                            : java.util.List.of()
+                    java.util.stream.Stream.concat(
+                            ManagerReportReviewTelegramService.disputeKeyboard(review.getId()).stream(),
+                            issueService.hasPendingQuestions(review)
+                                    ? ManagerReportReviewTelegramService.continueKeyboard(review.getId()).stream()
+                                    : java.util.stream.Stream.empty()
+                    ).toList()
             );
             return;
         }

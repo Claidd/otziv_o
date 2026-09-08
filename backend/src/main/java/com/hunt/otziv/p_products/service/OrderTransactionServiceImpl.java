@@ -3,7 +3,7 @@ package com.hunt.otziv.p_products.service;
 import com.hunt.otziv.bad_reviews.dto.BadReviewTaskSummary;
 import com.hunt.otziv.bad_reviews.service.BadReviewTaskService;
 import com.hunt.otziv.c_companies.model.Company;
-import com.hunt.otziv.c_companies.service.CompanyService;
+import com.hunt.otziv.c_companies.api.CompanyRecordOperations;
 import com.hunt.otziv.c_companies.service.CompanyStatusService;
 import com.hunt.otziv.config.metrics.R0ObservabilityMetrics;
 import com.hunt.otziv.contractor_payments.service.ContractorCompletionRewardService;
@@ -31,7 +31,7 @@ import static com.hunt.otziv.config.metrics.R0ObservabilityMetrics.TransactionFl
 @Slf4j
 public class OrderTransactionServiceImpl implements OrderTransactionService {
 
-    private final CompanyService companyService;
+    private final CompanyRecordOperations companyService;
     private final ZpService zpService;
     private final PaymentCheckService paymentCheckService;
     private final OrderRepository orderRepository;
@@ -48,7 +48,7 @@ public class OrderTransactionServiceImpl implements OrderTransactionService {
     public static final String STATUS_COMPANY_IN_NEW_ORDER = "Новый заказ";
 
     public OrderTransactionServiceImpl(
-            CompanyService companyService,
+            CompanyRecordOperations companyService,
             ZpService zpService,
             PaymentCheckService paymentCheckService,
             OrderRepository orderRepository,

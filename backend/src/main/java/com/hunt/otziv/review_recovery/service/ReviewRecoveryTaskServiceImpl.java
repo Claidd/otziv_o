@@ -1,5 +1,7 @@
 package com.hunt.otziv.review_recovery.service;
 
+import com.hunt.otziv.worker_activity.account_action.WorkerAccountActionCooldownService;
+
 import com.hunt.otziv.archive.dto.ArchiveReviewRecoverySource;
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.b_bots.service.BotService;
@@ -56,6 +58,8 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.http.HttpStatus;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.security.core.Authentication;
+import com.hunt.otziv.p_products.worker_access.service.WorkerTaskSchedulePermission;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import static com.hunt.otziv.r_review.utils.ReviewTextPolicy.isBlankOrPlaceholder;
@@ -104,6 +108,7 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
     private final ObjectProvider<CommonBillingService> commonBillingServiceProvider;
     private final ApplicationEventPublisher eventPublisher;
     private final WorkerAssignmentMutationGuardService assignmentMutationGuardService;
+    private final WorkerAccountActionCooldownService accountActionCooldownService;
 
     @Override
     @Transactional(readOnly = true)
@@ -233,7 +238,21 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
     @Override
     @Transactional
     public ReviewRecoveryTask updateTask(Long taskId, String recoveryText, String recoveryAnswer, LocalDate scheduledDate) {
-        ReviewRecoveryTask task = requireTaskForMutation(taskId);
+        return updateTaskWithActor(taskId, recoveryText, recoveryAnswer, scheduledDate, null);
+    }
+
+    @Override
+    @Transactional
+    public ReviewRecoveryTask updateTask(Long taskId, String recoveryText, String recoveryAnswer, LocalDate scheduledDate, Authentication authentication) {
+        java.util.Objects.requireNonNull(authentication, "authentication");
+        return updateTaskWithActor(taskId, recoveryText, recoveryAnswer, scheduledDate, authentication);
+    }
+
+    private ReviewRecoveryTask updateTaskWithActor(Long taskId, String recoveryText, String recoveryAnswer, LocalDate scheduledDate, Authentication authentication) {
+        ReviewRecoveryTask task = requireTaskForMutation(taskId, authentication);
+        if (authentication != null && !WorkerTaskSchedulePermission.allows(scheduledDate, task.getScheduledDate(), authentication)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, WorkerTaskSchedulePermission.DENIED_MESSAGE);
+        }
         if (task.getStatus() != ReviewRecoveryTaskStatus.PLANNED) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Можно редактировать только активную задачу восстановления");
         }
@@ -256,7 +275,18 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
     @Override
     @Transactional
     public ReviewRecoveryTask reassignTask(Long taskId, Worker worker) {
-        ReviewRecoveryTask task = requireTaskForMutation(taskId);
+        return reassignTaskWithActor(taskId, worker, null);
+    }
+
+    @Override
+    @Transactional
+    public ReviewRecoveryTask reassignTask(Long taskId, Worker worker, Authentication authentication) {
+        java.util.Objects.requireNonNull(authentication, "authentication");
+        return reassignTaskWithActor(taskId, worker, authentication);
+    }
+
+    private ReviewRecoveryTask reassignTaskWithActor(Long taskId, Worker worker, Authentication authentication) {
+        ReviewRecoveryTask task = requireTaskForMutation(taskId, authentication);
         if (task.getStatus() != ReviewRecoveryTaskStatus.PLANNED) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
@@ -300,7 +330,18 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
     @Override
     @Transactional
     public ReviewRecoveryTask completeTask(Long taskId, User completedBy) {
-        ReviewRecoveryTask task = requireTaskForMutation(taskId);
+        return completeTaskWithActor(taskId, completedBy, null);
+    }
+
+    @Override
+    @Transactional
+    public ReviewRecoveryTask completeTask(Long taskId, User completedBy, Authentication authentication) {
+        java.util.Objects.requireNonNull(authentication, "authentication");
+        return completeTaskWithActor(taskId, completedBy, authentication);
+    }
+
+    private ReviewRecoveryTask completeTaskWithActor(Long taskId, User completedBy, Authentication authentication) {
+        ReviewRecoveryTask task = requireTaskForMutation(taskId, authentication);
         if (task.getStatus() == ReviewRecoveryTaskStatus.DONE) {
             return task;
         }
@@ -353,10 +394,24 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
     @Override
     @Transactional(noRollbackFor = ResponseStatusException.class)
     public ReviewRecoveryTask changeTaskBot(Long taskId) {
-        ReviewRecoveryTask task = requireTaskForMutation(taskId);
+        return changeTaskBotWithActor(taskId, null);
+    }
+
+    @Override
+    @Transactional(noRollbackFor = ResponseStatusException.class)
+    public ReviewRecoveryTask changeTaskBot(Long taskId, Authentication authentication) {
+        java.util.Objects.requireNonNull(authentication, "authentication");
+        return changeTaskBotWithActor(taskId, authentication);
+    }
+
+    private ReviewRecoveryTask changeTaskBotWithActor(Long taskId, Authentication authentication) {
+        ReviewRecoveryTask task = requireTaskForMutation(taskId, authentication);
         if (task.getStatus() != ReviewRecoveryTaskStatus.PLANNED) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Аккаунт можно менять только у активной задачи восстановления");
         }
+
+        if (authentication == null) accountActionCooldownService.admitCurrentAction();
+        else accountActionCooldownService.admitAction(authentication);
 
         Bot oldBot = task.getBot();
         botExclusionService.reject(task.getId(), oldBot, "CHANGE");
@@ -374,7 +429,18 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
     @Override
     @Transactional
     public ReviewRecoveryTask deactivateAndChangeTaskBot(Long taskId, Long botId) {
-        ReviewRecoveryTask task = requireTaskForMutation(taskId);
+        return deactivateAndChangeTaskBotWithActor(taskId, botId, null);
+    }
+
+    @Override
+    @Transactional
+    public ReviewRecoveryTask deactivateAndChangeTaskBot(Long taskId, Long botId, Authentication authentication) {
+        java.util.Objects.requireNonNull(authentication, "authentication");
+        return deactivateAndChangeTaskBotWithActor(taskId, botId, authentication);
+    }
+
+    private ReviewRecoveryTask deactivateAndChangeTaskBotWithActor(Long taskId, Long botId, Authentication authentication) {
+        ReviewRecoveryTask task = requireTaskForMutation(taskId, authentication);
         if (task.getStatus() != ReviewRecoveryTaskStatus.PLANNED) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Аккаунт можно блокировать только у активной задачи восстановления");
         }
@@ -382,6 +448,9 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
         Bot currentBot = task.getBot();
         Long currentBotId = currentBot != null ? currentBot.getId() : null;
         assertRequestedBotIsCurrent(botId, currentBotId);
+
+        if (authentication == null) accountActionCooldownService.admitCurrentAction();
+        else accountActionCooldownService.admitAction(authentication);
 
         botExclusionService.reject(task.getId(), currentBot, "BLOCK");
 
@@ -929,10 +998,15 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
     }
 
     private ReviewRecoveryTask requireTaskForMutation(Long taskId) {
+        return requireTaskForMutation(taskId, null);
+    }
+
+    private ReviewRecoveryTask requireTaskForMutation(Long taskId, Authentication authentication) {
         if (taskId == null || taskId <= 0) {
             throw new EntityNotFoundException("Задача восстановления не найдена");
         }
-        assignmentMutationGuardService.assertRecoveryTask(taskId);
+        if (authentication == null) assignmentMutationGuardService.assertRecoveryTask(taskId);
+        else assignmentMutationGuardService.assertRecoveryTask(taskId, authentication);
         return taskRepository.findByIdForMutation(taskId)
                 .orElseThrow(() -> new EntityNotFoundException("Задача восстановления не найдена: " + taskId));
     }

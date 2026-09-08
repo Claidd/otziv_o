@@ -5,7 +5,7 @@
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>4.0.7</version>
+		<version>4.0.8</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>com.hunt</groupId>
@@ -20,9 +20,18 @@
 		<apache.poi.version>5.5.1</apache.poi.version>
 		<commons-compress.version>1.28.0</commons-compress.version>
 		<commons-io.version>2.22.0</commons-io.version>
-		<pdfbox.version>3.0.7</pdfbox.version>
+		<pdfbox.version>3.0.8</pdfbox.version>
 		<testcontainers.version>2.0.5</testcontainers.version>
 		<aws.sdk.version>2.44.1</aws.sdk.version>
+		<!-- Boot 4.0.8 aligns Netty 4.2.17, Spring Framework 7.0.9 and Security 7.0.7.
+		     Keep newer transport fixes above its BOM; HttpClient 5.6.4 targets Core 5.4.3. -->
+		<tomcat.version>11.0.25</tomcat.version>
+		<httpclient5.version>5.6.4</httpclient5.version>
+		<httpcore5.version>5.4.3</httpcore5.version>
+		<mysql.version>26.7.0</mysql.version>
+		<!-- Both Jackson families ship the XML datatype length checks for CVE-2026-68497. -->
+		<jackson-2-bom.version>2.21.6</jackson-2-bom.version>
+		<jackson-bom.version>3.1.6</jackson-bom.version>
 	</properties>
 
 	<dependencyManagement>
@@ -45,6 +54,12 @@
 	</dependencyManagement>
 
 	<dependencies>
+		<dependency>
+			<groupId>com.tngtech.archunit</groupId>
+			<artifactId>archunit</artifactId>
+			<version>1.4.2</version>
+			<scope>test</scope>
+		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-data-jpa</artifactId>
@@ -176,7 +191,7 @@
 		<dependency>
 			<groupId>org.jsoup</groupId>
 			<artifactId>jsoup</artifactId>
-			<version>1.22.2</version>
+			<version>1.23.2</version>
 		</dependency>
 		<!-- Explicit HTTP transport: the crawler pins each validated DNS answer to the
 		     socket connection, preventing DNS-rebinding between validation and connect. -->
@@ -238,10 +253,29 @@
 			<groupId>org.testcontainers</groupId>
 			<artifactId>testcontainers-junit-jupiter</artifactId>
 			<scope>test</scope>
+			<exclusions>
+				<exclusion>
+					<groupId>com.github.docker-java</groupId>
+					<artifactId>docker-java-transport-zerodep</artifactId>
+				</exclusion>
+			</exclusions>
 		</dependency>
 		<dependency>
 			<groupId>org.testcontainers</groupId>
 			<artifactId>testcontainers-mysql</artifactId>
+			<scope>test</scope>
+			<exclusions>
+				<exclusion>
+					<groupId>com.github.docker-java</groupId>
+					<artifactId>docker-java-transport-zerodep</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+		<!-- Testcontainers keeps its upstream discovery/provider while using the patched downstream transport. -->
+		<dependency>
+			<groupId>com.hunt.build</groupId>
+			<artifactId>docker-java-transport-zerodep</artifactId>
+			<version>3.7.1-otziv.1</version>
 			<scope>test</scope>
 		</dependency>
 		<dependency>
@@ -258,16 +292,125 @@
 			<groupId>org.telegram</groupId>
 			<artifactId>telegrambots</artifactId>
 			<version>6.9.7.1</version>
+			<!-- The application uses the long-polling BotSession; no Telegram webhook HTTP server. -->
+			<exclusions>
+				<exclusion>
+					<groupId>org.glassfish.jersey.containers</groupId>
+					<artifactId>jersey-container-grizzly2-http</artifactId>
+				</exclusion>
+			</exclusions>
 		</dependency>
 
 	</dependencies>
 
 	<build>
+		<pluginManagement>
+			<plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-resources-plugin</artifactId>
+                    <version>3.5.0</version>
+                    <dependencies>
+                        <dependency>
+                            <groupId>org.codehaus.plexus</groupId>
+                            <artifactId>plexus-utils</artifactId>
+                            <version>3.6.2</version>
+                        </dependency>
+                    </dependencies>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-jar-plugin</artifactId>
+                    <version>3.5.1</version>
+                    <dependencies>
+                        <dependency>
+                            <groupId>org.codehaus.plexus</groupId>
+                            <artifactId>plexus-utils</artifactId>
+                            <version>4.0.3</version>
+                        </dependency>
+                    </dependencies>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-clean-plugin</artifactId>
+                    <version>3.5.0</version>
+                    <dependencies>
+                        <dependency>
+                            <groupId>org.codehaus.plexus</groupId>
+                            <artifactId>plexus-utils</artifactId>
+                            <version>4.0.3</version>
+                        </dependency>
+                    </dependencies>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-install-plugin</artifactId>
+                    <version>3.1.4</version>
+                    <dependencies>
+                        <dependency>
+                            <groupId>org.codehaus.plexus</groupId>
+                            <artifactId>plexus-utils</artifactId>
+                            <version>4.0.3</version>
+                        </dependency>
+                    </dependencies>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-deploy-plugin</artifactId>
+                    <version>3.1.4</version>
+                    <dependencies>
+                        <dependency>
+                            <groupId>org.codehaus.plexus</groupId>
+                            <artifactId>plexus-utils</artifactId>
+                            <version>4.0.3</version>
+                        </dependency>
+                    </dependencies>
+                </plugin>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-site-plugin</artifactId>
+					<version>3.22.0-otziv-jetty12.0.39-1</version>
+				<dependencies>
+					<dependency>
+						<groupId>org.jsoup</groupId>
+						<artifactId>jsoup</artifactId>
+						<version>1.23.2</version>
+					</dependency>
+					<dependency>
+						<groupId>commons-beanutils</groupId>
+						<artifactId>commons-beanutils</artifactId>
+						<version>1.11.0</version>
+					</dependency>
+				</dependencies>
+				</plugin>
+			</plugins>
+		</pluginManagement>
 		<finalName>otziv-1</finalName> <!-- 👈 добавь это -->
 		<plugins>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
+                <dependencies>
+                    <dependency>
+                        <groupId>tools.jackson.core</groupId>
+                        <artifactId>jackson-core</artifactId>
+                        <version>3.1.6</version>
+                    </dependency>
+                    <dependency>
+                        <groupId>tools.jackson.core</groupId>
+                        <artifactId>jackson-databind</artifactId>
+                        <version>3.1.6</version>
+                    </dependency>
+                    <dependency><groupId>org.apache.httpcomponents.client5</groupId><artifactId>httpclient5</artifactId><version>5.6.4</version></dependency>
+                    <dependency><groupId>org.apache.httpcomponents.core5</groupId><artifactId>httpcore5</artifactId><version>5.4.3</version></dependency>
+                    <dependency><groupId>org.apache.httpcomponents.core5</groupId><artifactId>httpcore5-h2</artifactId><version>5.4.3</version></dependency>
+                    <dependency><groupId>org.apache.commons</groupId><artifactId>commons-lang3</artifactId><version>3.20.0</version></dependency>
+                    <dependency>
+                        <groupId>org.codehaus.plexus</groupId>
+                        <artifactId>plexus-utils</artifactId>
+                        <version>3.6.2</version>
+                    </dependency>
+                </dependencies>
 				<configuration>
 					<excludes>
 						<exclude>
@@ -280,6 +423,7 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
+				<version>3.16.0</version>
 				<configuration combine.self="override">
 					<release>${java.version}</release>
 					<parameters>true</parameters>
@@ -306,6 +450,14 @@
 								<requireJavaVersion>
 									<version>[26,27)</version>
 								</requireJavaVersion>
+								<dependencyConvergence>
+									<includes>
+										<include>io.netty:*</include>
+										<include>org.apache.tomcat.embed:*</include>
+										<include>org.apache.httpcomponents.core5:*</include>
+										<include>org.apache.httpcomponents.client5:*</include>
+									</includes>
+								</dependencyConvergence>
 							</rules>
 						</configuration>
 					</execution>
@@ -319,10 +471,66 @@
 			<build>
 				<plugins>
 					<plugin>
-						<groupId>org.owasp</groupId>
-						<artifactId>dependency-check-maven</artifactId>
-						<version>12.1.0</version>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-enforcer-plugin</artifactId>
+						<executions>
+							<execution>
+								<id>require-security-audit-credentials</id>
+								<phase>validate</phase>
+								<goals>
+									<goal>enforce</goal>
+								</goals>
+								<configuration>
+									<rules>
+										<requireEnvironmentVariable>
+											<variableName>SONATYPE_GUIDE_TOKEN</variableName>
+											<regex>\S+</regex>
+											<message>The security-audit lifecycle requires SONATYPE_GUIDE_TOKEN from the approved secret mechanism.</message>
+											<regexMessage>SONATYPE_GUIDE_TOKEN must be nonblank and contain no whitespace.</regexMessage>
+										</requireEnvironmentVariable>
+									</rules>
+								</configuration>
+							</execution>
+						</executions>
+					</plugin>
+					<plugin>
+						<groupId>com.hunt.build</groupId>
+						<artifactId>dependency-check-effective-maven-plugin</artifactId>
+						<version>1.0.0</version>
+						<!-- Plugin realms do not inherit the application's dependencyManagement. -->
+						<dependencies>
+							<dependency>
+								<groupId>com.fasterxml.jackson.core</groupId>
+								<artifactId>jackson-core</artifactId>
+								<version>2.22.2</version>
+							</dependency>
+							<dependency>
+								<groupId>com.fasterxml.jackson.core</groupId>
+								<artifactId>jackson-databind</artifactId>
+								<version>2.22.2</version>
+							</dependency>
+							<dependency>
+								<groupId>org.jsoup</groupId>
+								<artifactId>jsoup</artifactId>
+								<version>1.23.2</version>
+							</dependency>
+							<dependency>
+								<groupId>org.apache.httpcomponents.client5</groupId>
+								<artifactId>httpclient5</artifactId>
+								<version>${httpclient5.version}</version>
+							</dependency>
+						</dependencies>
 						<configuration>
+							<scanPlugins>true</scanPlugins>
+							<nvdDatafeedUrl>https://nvd.nist.gov/feeds/json/cve/2.0/nvdcve-2.0-{0}.json.gz</nvdDatafeedUrl>
+							<ossIndexServerId>otziv-sonatype</ossIndexServerId>
+							<ossIndexWarnOnlyOnRemoteErrors>false</ossIndexWarnOnlyOnRemoteErrors>
+							<suppressionFiles>
+								<suppressionFile>${project.basedir}/../infrastructure/runtime-security/maven-false-positives.xml</suppressionFile>
+							</suppressionFiles>
+							<skipTestScope>false</skipTestScope>
+							<skipProvidedScope>false</skipProvidedScope>
+							<skipSystemScope>false</skipSystemScope>
 							<formats>
 								<format>HTML</format>
 								<format>JSON</format>

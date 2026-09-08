@@ -88,3 +88,14 @@ test("remote client shutdown disconnects without closing the shared browser", as
   assert.equal(disconnected, 1);
   assert.equal(authDestroyed, 1);
 });
+
+test("failed owned-page cleanup detaches but rejects instead of certifying a clean remote session", async () => {
+  const failure = new Error("fixture page still alive"); let disconnected = false, authDestroyed = false;
+  const client = installRemoteBrowserLifecycle({
+    pupPage: { isClosed: () => false, close: async () => { throw failure; } },
+    pupBrowser: { isConnected: () => true, disconnect: async () => { disconnected = true; }, close: () => assert.fail("shared browser") },
+    authStrategy: { destroy: async () => { authDestroyed = true; } },
+  });
+  await assert.rejects(client.destroy(), error => error === failure);
+  assert.equal(disconnected, true); assert.equal(authDestroyed, true);
+});

@@ -1,0 +1,1289 @@
+{
+  "schema": "otziv-observed-fleet-registry-v1",
+  "generatedAt": "2026-09-07T15:24:08.339137+00:00",
+  "inventoryObservedAt": "2026-09-07T14:06:28.176127+00:00",
+  "inventorySha256": "5fb8b171eef739baeffc999ce0081ebe65ccefafc911ff455c699790b3b4fff8",
+  "scope": "One observed authorized VPS, not all possible hosts; host address intentionally omitted",
+  "remoteMutations": 0,
+  "counts": {
+    "containers": 13,
+    "uniqueImageConfigIds": 12,
+    "backendReplicas": 1,
+    "whatsappInstances": 2
+  },
+  "notObservedOnThisHost": [
+    "external-review-worker",
+    "docker-observer",
+    "monitoring signals publisher",
+    "minio"
+  ],
+  "containers": [
+    {
+      "name": "frontend",
+      "image": "claid38/otziv-web:6.21-account-cooldown-20260907-fc191ac23cfe",
+      "imageId": "sha256:c6782587e1c1c0db9d267008dde013be95b8c4302d27bd696ccdbf170dcd986e",
+      "repoDigests": [],
+      "running": true,
+      "health": "healthy",
+      "startedAt": "2026-09-07T04:36:29.355104777Z",
+      "restartPolicy": "unless-stopped",
+      "project": "otziv-prod",
+      "service": "nginx",
+      "flags": {},
+      "scanCoverage": "EXACT_CONFIG_VERIFIED_REPORT_PRESENT",
+      "scanProgress": "SCANNED",
+      "scan": {
+        "localImmutableImageReference": "sha256:d59c81f70bdcac9235d556f1207d64df91c7b0f05f4b47f4eb9ad9cc06464b51",
+        "archiveIdentityProof": {
+          "verifiedAt": "2026-09-07T14:41:35.682892+00:00",
+          "localImageReference": "sha256:d59c81f70bdcac9235d556f1207d64df91c7b0f05f4b47f4eb9ad9cc06464b51",
+          "observedConfigId": "sha256:c6782587e1c1c0db9d267008dde013be95b8c4302d27bd696ccdbf170dcd986e",
+          "archiveConfigSha256": "c6782587e1c1c0db9d267008dde013be95b8c4302d27bd696ccdbf170dcd986e",
+          "selectedDockerManifestConfig": "blobs/sha256/c6782587e1c1c0db9d267008dde013be95b8c4302d27bd696ccdbf170dcd986e",
+          "tarEntriesRead": 21
+        },
+        "scanCompletedAt": "2026-09-07T14:42:26.965837+00:00",
+        "report": ".codex-tmp/finalization-20260907/fleet-scans/01-frontend-vulnerabilities.json",
+        "reportSha256": "20f228070562fb57e49133c420ab172708953b06d87102f84e4297fa5c3e9298",
+        "reportCreatedAt": "2026-09-07T14:42:25.593204962Z",
+        "artifacts": {
+          "raw": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/01-frontend-vulnerabilities.json",
+            "sha256": "20f228070562fb57e49133c420ab172708953b06d87102f84e4297fa5c3e9298"
+          },
+          "triage": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/01-frontend-vulnerabilities.triage.json",
+            "sha256": "aa495333ce9e629d94bf66def255d7caa026e06d59e05025bcb5f84dcf773421"
+          },
+          "sbom": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/01-frontend-vulnerabilities.sbom.cdx.json",
+            "sha256": "2bc9c3f6a39c702056a162bcd44b5b2fea938b8913361028ba52336e56c56ee3"
+          },
+          "scannerLog": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/01-frontend-vulnerabilities.scanner.log",
+            "sha256": "4f00c713b9ed159aa79ec0066f9884c2f7fb68700d4564ae2d41fd1119b2a23b"
+          }
+        },
+        "sbomComponents": 69,
+        "operatingSystem": {
+          "Family": "alpine",
+          "Name": "3.21.3"
+        },
+        "packageSources": [
+          {
+            "type": "alpine",
+            "class": "os-pkgs",
+            "packageCount": 68,
+            "vulnerabilityRows": 111
+          }
+        ],
+        "allSeverityCounts": {
+          "CRITICAL": 2,
+          "HIGH": 32,
+          "MEDIUM": 51,
+          "LOW": 26,
+          "UNKNOWN": 0
+        },
+        "highCriticalPackageRows": 34,
+        "fixedHighCriticalRows": 34,
+        "unfixedHighCriticalRows": 0,
+        "scanExitCode": 1,
+        "scanCompleteArtifacts": true
+      },
+      "riskAcceptance": null
+    },
+    {
+      "name": "otziv-prod-app-1",
+      "image": "claid38/otziv-app:6.21-account-cooldown-20260907-fc191ac23cfe",
+      "imageId": "sha256:dd0585b6b55e4159a927683386b557fa38c3bd590c1c262694a52d94818a00ba",
+      "repoDigests": [],
+      "running": true,
+      "health": "healthy",
+      "startedAt": "2026-09-07T04:35:20.986098006Z",
+      "restartPolicy": "unless-stopped",
+      "project": "otziv-prod",
+      "service": "app",
+      "flags": {
+        "OTZIV_ANALYTICS_REBUILD_API_ENABLED": "false",
+        "OTZIV_TASK_SCHEDULING_POOL_SIZE": "4",
+        "OTZIV_PAYMENTS_TOCHKA_TEST_MODE": "false",
+        "OTZIV_AUTH_EPOCH_CLAIM_REQUIRED": "false",
+        "OTZIV_ARCHIVE_ORDERS_APPLY_ENABLED": "false",
+        "BACKUP_S3_INDEPENDENT_CONFIRMED": "true",
+        "OTZIV_PAYMENTS_TBANK_MANAGER_UI_ENABLED": "true",
+        "DEEPSEEK_ANTHROPIC_FALLBACK_ENABLED": "true",
+        "OUTREACH_BRIDGE_ENABLED": "false",
+        "TELEGRAM_BOT_SENDING_ENABLED": "true",
+        "OTZIV_AUTH_LEGACY_MIGRATION_ENABLED": "false",
+        "OTZIV_TRACING_ENABLED": "true",
+        "OTZIV_MONITORING_DISK_ENABLED": "true",
+        "LEAD_SYNC_OUTBOUND_ENABLED": "false",
+        "MANAGEMENT_TRACING_EXPORT_ENABLED": "true",
+        "OTZIV_PAYMENTS_TBANK_PAYMENT_LINKS_ENABLED": "true",
+        "MAX_BOT_WEBHOOK_AUTO_REGISTER_ENABLED": "true",
+        "OTZIV_WORKER_CELLULAR_ACCESS_MODE": "ENFORCE",
+        "OTZIV_INTEGRATION_OUTBOX_RELAY_ENABLED": "false",
+        "OTZIV_CREDENTIAL_ENCRYPTION_REQUIRED": "true",
+        "BACKUP_MAIL_ENABLED": "true",
+        "OTZIV_ANALYTICS_REBUILD_SCHEDULE_ENABLED": "true",
+        "OPENAI_PROXY_ENABLED": "true",
+        "OTZIV_AUTH_LEGACY_MIGRATION_RATE_LIMIT_ENABLED": "true",
+        "WHATSAPP_HEALTH_MONITOR_RESTART_ENABLED": "false",
+        "BACKUP_DESTINATION_PRIVATE_CONFIRMED": "true",
+        "MANAGEMENT_TRACING_EXPORT_OTLP_ENABLED": "true",
+        "BACKUP_SCHEDULE_ENABLED": "true",
+        "OTZIV_WORKER_CELLULAR_IP_INTELLIGENCE_ENABLED": "true",
+        "OTZIV_WORKER_CELLULAR_VIOLATION_STATISTICS_ENABLED": "true",
+        "OTZIV_CONTRACTOR_PAYMENTS_LIVE_ROUTING_MASTER_ENABLED": "true",
+        "MAX_PROXY_ENABLED": "false",
+        "MANAGEMENT_OTLP_METRICS_EXPORT_ENABLED": "false",
+        "DEEPSEEK_THINKING_ENABLED": "true",
+        "LEAD_INTEGRATION_LEGACY_BEARER_ENABLED": "false",
+        "MULTIBROWSER_ENABLED": "false",
+        "WEBHOOK_RATE_LIMIT_ENABLED": "true",
+        "EXTERNAL_REVIEW_CHECK_ENABLED": "false",
+        "WHATSAPP_WEBHOOK_HMAC_REQUIRED": "true",
+        "OTZIV_MOBILE_PUSH_FIREBASE_ENABLED": "false",
+        "BACKUP_S3_OBJECT_LOCK_ENABLED": "true",
+        "MAX_BOT_LONG_POLLING_ENABLED": "false",
+        "BACKUP_ENABLED": "true",
+        "OTZIV_LEGACY_ENABLED": "false",
+        "MAIL_STARTTLS_REQUIRED": "true",
+        "WHATSAPP_PROXY_ENABLED": "true",
+        "OTZIV_CONTRACTOR_PAYMENTS_REWARD_ATTRIBUTION_MASTER_ENABLED": "true",
+        "DEEPSEEK_ANTHROPIC_WEB_SEARCH_ENABLED": "true",
+        "OTZIV_PAYMENTS_TBANK_ENABLED": "true",
+        "DEEPSEEK_ANTHROPIC_DEEP_SEARCH_ENABLED": "true",
+        "BACKUP_SCHEDULE_CATCH_UP_ENABLED": "true",
+        "OTZIV_PAYMENTS_TOCHKA_ENABLED": "true",
+        "MAX_BOT_WEBHOOK_HMAC_REQUIRED": "false",
+        "OTZIV_ANALYTICS_AGGREGATES_READ_ENABLED": "true",
+        "OTZIV_ANALYTICS_REBUILD_STARTUP_ENABLED": "false",
+        "OTZIV_CREDENTIAL_ENCRYPTION_BACKFILL_ENABLED": "true",
+        "TELEGRAM_PROXY_ENABLED": "true",
+        "TELEGRAM_BOT_REGISTRATION_ENABLED": "true",
+        "MANAGEMENT_TRACING_ENABLED": "true",
+        "OTZIV_ARCHIVE_ORDERS_SCHEDULE_ENABLED": "false",
+        "BACKUP_ENCRYPTION_AT_REST_CONFIRMED": "true",
+        "WHATSAPP_HEALTH_MONITOR_ENABLED": "true"
+      },
+      "scanCoverage": "EXACT_CONFIG_VERIFIED_REPORT_PRESENT",
+      "scanProgress": "SCANNED",
+      "scan": {
+        "localImmutableImageReference": "sha256:9fc103a18115b900f908d6f584093f3684025d30a974046deaa00e6b13ab70cb",
+        "archiveIdentityProof": {
+          "verifiedAt": "2026-09-07T14:42:37.828802+00:00",
+          "localImageReference": "sha256:9fc103a18115b900f908d6f584093f3684025d30a974046deaa00e6b13ab70cb",
+          "observedConfigId": "sha256:dd0585b6b55e4159a927683386b557fa38c3bd590c1c262694a52d94818a00ba",
+          "archiveConfigSha256": "dd0585b6b55e4159a927683386b557fa38c3bd590c1c262694a52d94818a00ba",
+          "selectedDockerManifestConfig": "blobs/sha256/dd0585b6b55e4159a927683386b557fa38c3bd590c1c262694a52d94818a00ba",
+          "tarEntriesRead": 25
+        },
+        "scanCompletedAt": "2026-09-07T14:49:08.455752+00:00",
+        "report": ".codex-tmp/finalization-20260907/fleet-scans/02-otziv-prod-app-1-vulnerabilities.json",
+        "reportSha256": "1822e244345471955f97931c6e3ed8d3d04028043576f8db519d537539c54497",
+        "reportCreatedAt": "2026-09-07T14:49:06.817473471Z",
+        "artifacts": {
+          "raw": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/02-otziv-prod-app-1-vulnerabilities.json",
+            "sha256": "1822e244345471955f97931c6e3ed8d3d04028043576f8db519d537539c54497"
+          },
+          "triage": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/02-otziv-prod-app-1-vulnerabilities.triage.json",
+            "sha256": "ea60419b4ff1e1edaba9d4eb2d377376f653d90c8ea1d8934deb8152c0409bb2"
+          },
+          "sbom": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/02-otziv-prod-app-1-vulnerabilities.sbom.cdx.json",
+            "sha256": "a0ef67e30f78f640992059c55e1f26253d8191a354d3240b22fd04254f9cc5fc"
+          },
+          "scannerLog": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/02-otziv-prod-app-1-vulnerabilities.scanner.log",
+            "sha256": "de4ff2729baae42a4ef4b05e928ba2109aee655611898d76d6930e3aa9ee8ae2"
+          }
+        },
+        "sbomComponents": 479,
+        "operatingSystem": {
+          "Family": "ubuntu",
+          "Name": "22.04"
+        },
+        "packageSources": [
+          {
+            "type": "ubuntu",
+            "class": "os-pkgs",
+            "packageCount": 132,
+            "vulnerabilityRows": 143
+          },
+          {
+            "type": "jar",
+            "class": "lang-pkgs",
+            "packageCount": 346,
+            "vulnerabilityRows": 25
+          }
+        ],
+        "allSeverityCounts": {
+          "CRITICAL": 3,
+          "HIGH": 7,
+          "MEDIUM": 126,
+          "LOW": 32,
+          "UNKNOWN": 0
+        },
+        "highCriticalPackageRows": 10,
+        "fixedHighCriticalRows": 10,
+        "unfixedHighCriticalRows": 0,
+        "scanExitCode": 1,
+        "scanCompleteArtifacts": true
+      },
+      "riskAcceptance": null
+    },
+    {
+      "name": "whatsapp_vika",
+      "image": "otziv-whatsapp:6.21-5a6766bac605",
+      "imageId": "sha256:d3109bc19ed6608dc7159a3103a590900aa0b17acc7778744776b810f5561a54",
+      "repoDigests": [],
+      "running": true,
+      "health": "healthy",
+      "startedAt": "2026-09-05T22:38:45.658291519Z",
+      "restartPolicy": "unless-stopped",
+      "project": "otziv-prod",
+      "service": "whatsapp_vika",
+      "flags": {
+        "WHATSAPP_GATEWAY_AUTH_REQUIRED": "true",
+        "WHATSAPP_PROXY_ENABLED": "true",
+        "WHATSAPP_LAST_SEEN_ENABLED": "false",
+        "WHATSAPP_QR_LOG_ENABLED": "false",
+        "WHATSAPP_GROUP_INVITE_CONCURRENCY": "16",
+        "WHATSAPP_HTTP_MAX_CONCURRENCY": "16",
+        "OUTREACH_WEBHOOK_ENABLED": "false"
+      },
+      "scanCoverage": "EXACT_CONFIG_VERIFIED_REPORT_PRESENT",
+      "scanProgress": "SCANNED",
+      "scan": {
+        "localImmutableImageReference": "sha256:9ec8801eb01f58dd479cb243717b57302989d3d1346107b50d1a0807987fa389",
+        "archiveIdentityProof": {
+          "verifiedAt": "2026-09-07T14:53:00.987869+00:00",
+          "localImageReference": "sha256:9ec8801eb01f58dd479cb243717b57302989d3d1346107b50d1a0807987fa389",
+          "observedConfigId": "sha256:d3109bc19ed6608dc7159a3103a590900aa0b17acc7778744776b810f5561a54",
+          "archiveConfigSha256": "d3109bc19ed6608dc7159a3103a590900aa0b17acc7778744776b810f5561a54",
+          "selectedDockerManifestConfig": "blobs/sha256/d3109bc19ed6608dc7159a3103a590900aa0b17acc7778744776b810f5561a54",
+          "tarEntriesRead": 19
+        },
+        "scanCompletedAt": "2026-09-07T14:57:12.998358+00:00",
+        "report": ".codex-tmp/finalization-20260907/fleet-scans/03-whatsapp_vika-vulnerabilities.json",
+        "reportSha256": "4b5e3ad72dacfcf4bb17ceb229c5555ed0e730638c3906ab78a137558aad3194",
+        "reportCreatedAt": "2026-09-07T14:57:11.39640646Z",
+        "artifacts": {
+          "raw": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/03-whatsapp_vika-vulnerabilities.json",
+            "sha256": "4b5e3ad72dacfcf4bb17ceb229c5555ed0e730638c3906ab78a137558aad3194"
+          },
+          "triage": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/03-whatsapp_vika-vulnerabilities.triage.json",
+            "sha256": "fd1d956accc8bf3c31a08fa17f2dfe3eedf94024d980e1f2f32d9e9d2b81bc27"
+          },
+          "sbom": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/03-whatsapp_vika-vulnerabilities.sbom.cdx.json",
+            "sha256": "f6f5207eebb5210b8dd3311bcd94f81742e0e052f09a95f981229c711d747fe9"
+          },
+          "scannerLog": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/03-whatsapp_vika-vulnerabilities.scanner.log",
+            "sha256": "b130a26e26bf470d4fc0a88679626bfc189258f0acb42482e1d5e974a59bb06c"
+          }
+        },
+        "sbomComponents": 784,
+        "operatingSystem": {
+          "Family": "debian",
+          "Name": "12.15"
+        },
+        "packageSources": [
+          {
+            "type": "debian",
+            "class": "os-pkgs",
+            "packageCount": 283,
+            "vulnerabilityRows": 1662
+          },
+          {
+            "type": "node-pkg",
+            "class": "lang-pkgs",
+            "packageCount": 500,
+            "vulnerabilityRows": 22
+          }
+        ],
+        "allSeverityCounts": {
+          "CRITICAL": 8,
+          "HIGH": 123,
+          "MEDIUM": 239,
+          "LOW": 253,
+          "UNKNOWN": 1061
+        },
+        "highCriticalPackageRows": 131,
+        "fixedHighCriticalRows": 28,
+        "unfixedHighCriticalRows": 103,
+        "scanExitCode": 1,
+        "scanCompleteArtifacts": true
+      },
+      "riskAcceptance": null
+    },
+    {
+      "name": "whatsapp_lika",
+      "image": "otziv-whatsapp:6.21-5a6766bac605",
+      "imageId": "sha256:d3109bc19ed6608dc7159a3103a590900aa0b17acc7778744776b810f5561a54",
+      "repoDigests": [],
+      "running": true,
+      "health": "healthy",
+      "startedAt": "2026-09-05T22:38:45.629375737Z",
+      "restartPolicy": "unless-stopped",
+      "project": "otziv-prod",
+      "service": "whatsapp_lika",
+      "flags": {
+        "WHATSAPP_GROUP_INVITE_CONCURRENCY": "16",
+        "WHATSAPP_PROXY_ENABLED": "true",
+        "WHATSAPP_LAST_SEEN_ENABLED": "false",
+        "OUTREACH_WEBHOOK_ENABLED": "false",
+        "WHATSAPP_HTTP_MAX_CONCURRENCY": "16",
+        "WHATSAPP_QR_LOG_ENABLED": "false",
+        "WHATSAPP_GATEWAY_AUTH_REQUIRED": "true"
+      },
+      "scanCoverage": "EXACT_CONFIG_VERIFIED_REPORT_PRESENT",
+      "scanProgress": "SCANNED",
+      "scan": {
+        "localImmutableImageReference": "sha256:9ec8801eb01f58dd479cb243717b57302989d3d1346107b50d1a0807987fa389",
+        "archiveIdentityProof": {
+          "verifiedAt": "2026-09-07T14:53:00.987869+00:00",
+          "localImageReference": "sha256:9ec8801eb01f58dd479cb243717b57302989d3d1346107b50d1a0807987fa389",
+          "observedConfigId": "sha256:d3109bc19ed6608dc7159a3103a590900aa0b17acc7778744776b810f5561a54",
+          "archiveConfigSha256": "d3109bc19ed6608dc7159a3103a590900aa0b17acc7778744776b810f5561a54",
+          "selectedDockerManifestConfig": "blobs/sha256/d3109bc19ed6608dc7159a3103a590900aa0b17acc7778744776b810f5561a54",
+          "tarEntriesRead": 19
+        },
+        "scanCompletedAt": "2026-09-07T14:57:12.998358+00:00",
+        "report": ".codex-tmp/finalization-20260907/fleet-scans/03-whatsapp_vika-vulnerabilities.json",
+        "reportSha256": "4b5e3ad72dacfcf4bb17ceb229c5555ed0e730638c3906ab78a137558aad3194",
+        "reportCreatedAt": "2026-09-07T14:57:11.39640646Z",
+        "artifacts": {
+          "raw": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/03-whatsapp_vika-vulnerabilities.json",
+            "sha256": "4b5e3ad72dacfcf4bb17ceb229c5555ed0e730638c3906ab78a137558aad3194"
+          },
+          "triage": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/03-whatsapp_vika-vulnerabilities.triage.json",
+            "sha256": "fd1d956accc8bf3c31a08fa17f2dfe3eedf94024d980e1f2f32d9e9d2b81bc27"
+          },
+          "sbom": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/03-whatsapp_vika-vulnerabilities.sbom.cdx.json",
+            "sha256": "f6f5207eebb5210b8dd3311bcd94f81742e0e052f09a95f981229c711d747fe9"
+          },
+          "scannerLog": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/03-whatsapp_vika-vulnerabilities.scanner.log",
+            "sha256": "b130a26e26bf470d4fc0a88679626bfc189258f0acb42482e1d5e974a59bb06c"
+          }
+        },
+        "sbomComponents": 784,
+        "operatingSystem": {
+          "Family": "debian",
+          "Name": "12.15"
+        },
+        "packageSources": [
+          {
+            "type": "debian",
+            "class": "os-pkgs",
+            "packageCount": 283,
+            "vulnerabilityRows": 1662
+          },
+          {
+            "type": "node-pkg",
+            "class": "lang-pkgs",
+            "packageCount": 500,
+            "vulnerabilityRows": 22
+          }
+        ],
+        "allSeverityCounts": {
+          "CRITICAL": 8,
+          "HIGH": 123,
+          "MEDIUM": 239,
+          "LOW": 253,
+          "UNKNOWN": 1061
+        },
+        "highCriticalPackageRows": 131,
+        "fixedHighCriticalRows": 28,
+        "unfixedHighCriticalRows": 103,
+        "scanExitCode": 1,
+        "scanCompleteArtifacts": true
+      },
+      "riskAcceptance": null
+    },
+    {
+      "name": "my-mysql",
+      "image": "mysql@sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383",
+      "imageId": "sha256:31ebb0b19998d2c1b8bcbb8fc0f0e676dcc9a758b2fea940f8e6aa27b4c916cf",
+      "repoDigests": [
+        "mysql@sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383"
+      ],
+      "running": true,
+      "health": "healthy",
+      "startedAt": "2026-09-05T22:38:45.791407699Z",
+      "restartPolicy": "unless-stopped",
+      "project": "otziv-prod",
+      "service": "mysql",
+      "flags": {},
+      "scanCoverage": "EXACT_CONFIG_VERIFIED_REPORT_PRESENT",
+      "scanProgress": "SCANNED",
+      "scan": {
+        "localImmutableImageReference": "sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383",
+        "archiveIdentityProof": {
+          "verifiedAt": "2026-09-07T14:57:19.955746+00:00",
+          "localImageReference": "sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383",
+          "observedConfigId": "sha256:31ebb0b19998d2c1b8bcbb8fc0f0e676dcc9a758b2fea940f8e6aa27b4c916cf",
+          "archiveConfigSha256": "31ebb0b19998d2c1b8bcbb8fc0f0e676dcc9a758b2fea940f8e6aa27b4c916cf",
+          "selectedDockerManifestConfig": "blobs/sha256/31ebb0b19998d2c1b8bcbb8fc0f0e676dcc9a758b2fea940f8e6aa27b4c916cf",
+          "tarEntriesRead": 22
+        },
+        "scanCompletedAt": "2026-09-07T14:59:04.686925+00:00",
+        "report": ".codex-tmp/finalization-20260907/fleet-scans/04-my-mysql-vulnerabilities.json",
+        "reportSha256": "8905c406a39181fdf522ea49e512a56c8712a304e5c06cbe95ac5e95545fd3d9",
+        "reportCreatedAt": "2026-09-07T14:59:03.112351627Z",
+        "artifacts": {
+          "raw": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/04-my-mysql-vulnerabilities.json",
+            "sha256": "8905c406a39181fdf522ea49e512a56c8712a304e5c06cbe95ac5e95545fd3d9"
+          },
+          "triage": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/04-my-mysql-vulnerabilities.triage.json",
+            "sha256": "1a5ad38d1f5c688946332c55cb8d97e6d5ab928f1704874ba00ef16c7f84fe67"
+          },
+          "sbom": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/04-my-mysql-vulnerabilities.sbom.cdx.json",
+            "sha256": "d49e0271cf38275657903b3c1c4b046ea85a212bc48709c566821eca30ace3bc"
+          },
+          "scannerLog": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/04-my-mysql-vulnerabilities.scanner.log",
+            "sha256": "4bda36d8296e21a96016a775f68fd11933b05085c01b3f941e6e5a071be0424c"
+          }
+        },
+        "sbomComponents": 144,
+        "operatingSystem": {
+          "Family": "oracle",
+          "Name": "9.4"
+        },
+        "packageSources": [
+          {
+            "type": "oracle",
+            "class": "os-pkgs",
+            "packageCount": 122,
+            "vulnerabilityRows": 307
+          },
+          {
+            "type": "python-pkg",
+            "class": "lang-pkgs",
+            "packageCount": 16,
+            "vulnerabilityRows": 11
+          },
+          {
+            "type": "gobinary",
+            "class": "lang-pkgs",
+            "packageCount": 4,
+            "vulnerabilityRows": 111
+          }
+        ],
+        "allSeverityCounts": {
+          "CRITICAL": 4,
+          "HIGH": 161,
+          "MEDIUM": 240,
+          "LOW": 23,
+          "UNKNOWN": 1
+        },
+        "highCriticalPackageRows": 165,
+        "fixedHighCriticalRows": 165,
+        "unfixedHighCriticalRows": 0,
+        "scanExitCode": 1,
+        "scanCompleteArtifacts": true
+      },
+      "riskAcceptance": null
+    },
+    {
+      "name": "prometheus",
+      "image": "prom/prometheus@sha256:2659f4c2ebb718e7695cb9b25ffa7d6be64db013daba13e05c875451cf51b0d3",
+      "imageId": "sha256:899b369f202e252dfef80f3999e981a3d7fc7445228aa6098177acaf50349a76",
+      "repoDigests": [
+        "prom/prometheus@sha256:2659f4c2ebb718e7695cb9b25ffa7d6be64db013daba13e05c875451cf51b0d3"
+      ],
+      "running": true,
+      "health": "healthy",
+      "startedAt": "2026-09-05T22:38:45.864785239Z",
+      "restartPolicy": "unless-stopped",
+      "project": "otziv-prod",
+      "service": "prometheus",
+      "flags": {},
+      "scanCoverage": "EXACT_CONFIG_VERIFIED_REPORT_PRESENT",
+      "scanProgress": "SCANNED",
+      "scan": {
+        "localImmutableImageReference": "sha256:a8432f01e6546d85a1e3193a554d8c2e52162f46f1c054de72829aa5e5d6c0e8",
+        "archiveIdentityProof": {
+          "verifiedAt": "2026-09-07T15:00:05.874411+00:00",
+          "localImageReference": "sha256:a8432f01e6546d85a1e3193a554d8c2e52162f46f1c054de72829aa5e5d6c0e8",
+          "observedConfigId": "sha256:899b369f202e252dfef80f3999e981a3d7fc7445228aa6098177acaf50349a76",
+          "archiveConfigSha256": "899b369f202e252dfef80f3999e981a3d7fc7445228aa6098177acaf50349a76",
+          "selectedDockerManifestConfig": "blobs/sha256/899b369f202e252dfef80f3999e981a3d7fc7445228aa6098177acaf50349a76",
+          "tarEntriesRead": 19
+        },
+        "scanCompletedAt": "2026-09-07T15:02:01.318567+00:00",
+        "report": ".codex-tmp/finalization-20260907/fleet-scans/05-prometheus-vulnerabilities.json",
+        "reportSha256": "0338af4c6ae6dd57d1e2922dfc6179e40edffe3780b7d2ba4c91c30124238775",
+        "reportCreatedAt": "2026-09-07T15:01:59.86785158Z",
+        "artifacts": {
+          "raw": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/05-prometheus-vulnerabilities.json",
+            "sha256": "0338af4c6ae6dd57d1e2922dfc6179e40edffe3780b7d2ba4c91c30124238775"
+          },
+          "triage": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/05-prometheus-vulnerabilities.triage.json",
+            "sha256": "9cc9a2f58ce3eae58487110507249e288ffa6673ca36443faf9c9f27cce3bf44"
+          },
+          "sbom": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/05-prometheus-vulnerabilities.sbom.cdx.json",
+            "sha256": "44baf1b7ad7bba4e9c66e56384ea35402d845ea625e270cac5651dec95602707"
+          },
+          "scannerLog": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/05-prometheus-vulnerabilities.scanner.log",
+            "sha256": "deed2d8984b7b5d408b722d7178f7067a328a304d960bafe63072cd8cfbe39fa"
+          }
+        },
+        "sbomComponents": 348,
+        "operatingSystem": null,
+        "packageSources": [
+          {
+            "type": "gobinary",
+            "class": "lang-pkgs",
+            "packageCount": 182,
+            "vulnerabilityRows": 108
+          },
+          {
+            "type": "gobinary",
+            "class": "lang-pkgs",
+            "packageCount": 164,
+            "vulnerabilityRows": 104
+          }
+        ],
+        "allSeverityCounts": {
+          "CRITICAL": 6,
+          "HIGH": 94,
+          "MEDIUM": 95,
+          "LOW": 9,
+          "UNKNOWN": 8
+        },
+        "highCriticalPackageRows": 100,
+        "fixedHighCriticalRows": 96,
+        "unfixedHighCriticalRows": 4,
+        "scanExitCode": 1,
+        "scanCompleteArtifacts": true
+      },
+      "riskAcceptance": null
+    },
+    {
+      "name": "otziv-prod-grafana-1",
+      "image": "grafana/grafana@sha256:7567a7c70a3c1d75aeeedc968d1304174a16651e55a60d1fb132a05e1e63a054",
+      "imageId": "sha256:2fec87cd43629f53c0d4cc447be3f12a0fcd8a43c9351b5bb901d5887b75a503",
+      "repoDigests": [
+        "grafana/grafana@sha256:7567a7c70a3c1d75aeeedc968d1304174a16651e55a60d1fb132a05e1e63a054"
+      ],
+      "running": true,
+      "health": "healthy",
+      "startedAt": "2026-09-05T22:38:45.752753443Z",
+      "restartPolicy": "unless-stopped",
+      "project": "otziv-prod",
+      "service": "grafana",
+      "flags": {
+        "GF_METRICS_ENABLED": "true",
+        "GF_AUTH_ANONYMOUS_ENABLED": "false"
+      },
+      "scanCoverage": "EXACT_CONFIG_VERIFIED_REPORT_PRESENT",
+      "scanProgress": "SCANNED",
+      "scan": {
+        "localImmutableImageReference": "sha256:900d443e018ebfe49b00a1e94d6e9ee225e0de5ffec25532d1bfd53daf16cf1b",
+        "archiveIdentityProof": {
+          "verifiedAt": "2026-09-07T15:03:29.817733+00:00",
+          "localImageReference": "sha256:900d443e018ebfe49b00a1e94d6e9ee225e0de5ffec25532d1bfd53daf16cf1b",
+          "observedConfigId": "sha256:2fec87cd43629f53c0d4cc447be3f12a0fcd8a43c9351b5bb901d5887b75a503",
+          "archiveConfigSha256": "2fec87cd43629f53c0d4cc447be3f12a0fcd8a43c9351b5bb901d5887b75a503",
+          "selectedDockerManifestConfig": "blobs/sha256/2fec87cd43629f53c0d4cc447be3f12a0fcd8a43c9351b5bb901d5887b75a503",
+          "tarEntriesRead": 17
+        },
+        "scanCompletedAt": "2026-09-07T15:06:06.213519+00:00",
+        "report": ".codex-tmp/finalization-20260907/fleet-scans/06-otziv-prod-grafana-1-vulnerabilities.json",
+        "reportSha256": "9f26c5534a11cac7b0906965e674b9fc0ffd32f4af16575e82293b8a9c28f53f",
+        "reportCreatedAt": "2026-09-07T15:06:04.686872361Z",
+        "artifacts": {
+          "raw": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/06-otziv-prod-grafana-1-vulnerabilities.json",
+            "sha256": "9f26c5534a11cac7b0906965e674b9fc0ffd32f4af16575e82293b8a9c28f53f"
+          },
+          "triage": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/06-otziv-prod-grafana-1-vulnerabilities.triage.json",
+            "sha256": "f0bc080796773d3dd69baa11b677a5db4d1443d3b31438a2dff82354c1df3896"
+          },
+          "sbom": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/06-otziv-prod-grafana-1-vulnerabilities.sbom.cdx.json",
+            "sha256": "9ca689a1e9ffe21adf8309bf57fd91b07fadd986809e27b326a8e8eb70d1adc7"
+          },
+          "scannerLog": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/06-otziv-prod-grafana-1-vulnerabilities.scanner.log",
+            "sha256": "a7f360efcdc950621a3e43a0abf22108120172e37ce8db15d470697f3ecfdf91"
+          }
+        },
+        "sbomComponents": 414,
+        "operatingSystem": {
+          "Family": "alpine",
+          "Name": "3.18.4",
+          "EOSL": true
+        },
+        "packageSources": [
+          {
+            "type": "alpine",
+            "class": "os-pkgs",
+            "packageCount": 31,
+            "vulnerabilityRows": 67
+          },
+          {
+            "type": "node-pkg",
+            "class": "lang-pkgs",
+            "packageCount": 6,
+            "vulnerabilityRows": 0
+          },
+          {
+            "type": "gobinary",
+            "class": "lang-pkgs",
+            "packageCount": 361,
+            "vulnerabilityRows": 151
+          },
+          {
+            "type": "gobinary",
+            "class": "lang-pkgs",
+            "packageCount": 6,
+            "vulnerabilityRows": 68
+          },
+          {
+            "type": "gobinary",
+            "class": "lang-pkgs",
+            "packageCount": 6,
+            "vulnerabilityRows": 68
+          }
+        ],
+        "allSeverityCounts": {
+          "CRITICAL": 10,
+          "HIGH": 117,
+          "MEDIUM": 181,
+          "LOW": 40,
+          "UNKNOWN": 6
+        },
+        "highCriticalPackageRows": 127,
+        "fixedHighCriticalRows": 127,
+        "unfixedHighCriticalRows": 0,
+        "scanExitCode": 1,
+        "scanCompleteArtifacts": true
+      },
+      "riskAcceptance": null
+    },
+    {
+      "name": "alloy",
+      "image": "grafana/alloy@sha256:6e00cf7c5a692ff5f24844529416ed017d76fce922f8199004e73d5eca46b6b8",
+      "imageId": "sha256:d84408ef5c0971690e94110e7ed887c102465f5ccb9a43f26fc2ab6cd686a78b",
+      "repoDigests": [
+        "grafana/alloy@sha256:6e00cf7c5a692ff5f24844529416ed017d76fce922f8199004e73d5eca46b6b8"
+      ],
+      "running": true,
+      "health": "healthy",
+      "startedAt": "2026-09-05T22:38:45.253588235Z",
+      "restartPolicy": "unless-stopped",
+      "project": "otziv-prod",
+      "service": "alloy",
+      "flags": {},
+      "scanCoverage": "EXACT_CONFIG_VERIFIED_REPORT_PRESENT",
+      "scanProgress": "SCANNED",
+      "scan": {
+        "localImmutableImageReference": "sha256:6e00cf7c5a692ff5f24844529416ed017d76fce922f8199004e73d5eca46b6b8",
+        "archiveIdentityProof": {
+          "verifiedAt": "2026-09-07T15:06:12.420316+00:00",
+          "localImageReference": "sha256:6e00cf7c5a692ff5f24844529416ed017d76fce922f8199004e73d5eca46b6b8",
+          "observedConfigId": "sha256:d84408ef5c0971690e94110e7ed887c102465f5ccb9a43f26fc2ab6cd686a78b",
+          "archiveConfigSha256": "d84408ef5c0971690e94110e7ed887c102465f5ccb9a43f26fc2ab6cd686a78b",
+          "selectedDockerManifestConfig": "blobs/sha256/d84408ef5c0971690e94110e7ed887c102465f5ccb9a43f26fc2ab6cd686a78b",
+          "tarEntriesRead": 18
+        },
+        "scanCompletedAt": "2026-09-07T15:08:49.600635+00:00",
+        "report": ".codex-tmp/finalization-20260907/fleet-scans/07-alloy-vulnerabilities.json",
+        "reportSha256": "0933c4a19e0b13ccaf7a92fe010c751acb5617ac4863e0def8cedb89680b4dbd",
+        "reportCreatedAt": "2026-09-07T15:08:48.166123343Z",
+        "artifacts": {
+          "raw": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/07-alloy-vulnerabilities.json",
+            "sha256": "0933c4a19e0b13ccaf7a92fe010c751acb5617ac4863e0def8cedb89680b4dbd"
+          },
+          "triage": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/07-alloy-vulnerabilities.triage.json",
+            "sha256": "b5845365a46f0d2f9a7f276f017398889f65ae0404d4263261fd4ba62a8f01d2"
+          },
+          "sbom": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/07-alloy-vulnerabilities.sbom.cdx.json",
+            "sha256": "0403e9a23ab5e8cc0f242712eea2aca10ee58b7d968254d5319ae8f8981812af"
+          },
+          "scannerLog": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/07-alloy-vulnerabilities.scanner.log",
+            "sha256": "804d677ec26171e1a47abc7dc6e03fbefb68ea0314103457d0e4adb0efdcf1de"
+          }
+        },
+        "sbomComponents": 1138,
+        "operatingSystem": {
+          "Family": "ubuntu",
+          "Name": "24.04"
+        },
+        "packageSources": [
+          {
+            "type": "ubuntu",
+            "class": "os-pkgs",
+            "packageCount": 95,
+            "vulnerabilityRows": 154
+          },
+          {
+            "type": "gobinary",
+            "class": "lang-pkgs",
+            "packageCount": 1041,
+            "vulnerabilityRows": 69
+          }
+        ],
+        "allSeverityCounts": {
+          "CRITICAL": 1,
+          "HIGH": 45,
+          "MEDIUM": 132,
+          "LOW": 41,
+          "UNKNOWN": 4
+        },
+        "highCriticalPackageRows": 46,
+        "fixedHighCriticalRows": 43,
+        "unfixedHighCriticalRows": 3,
+        "scanExitCode": 1,
+        "scanCompleteArtifacts": true
+      },
+      "riskAcceptance": null
+    },
+    {
+      "name": "log-viewer",
+      "image": "amir20/dozzle@sha256:1c1060cfb5402093c4e0f03f3534d7deaffeb0a6f6dd034e7c5f244603f35fb3",
+      "imageId": "sha256:56d821a0152f98282efb5a4dff3b55e4415503d28922f9d2cb5690173f6702fc",
+      "repoDigests": [
+        "amir20/dozzle@sha256:1c1060cfb5402093c4e0f03f3534d7deaffeb0a6f6dd034e7c5f244603f35fb3"
+      ],
+      "running": true,
+      "health": "healthy",
+      "startedAt": "2026-09-05T22:38:45.265555623Z",
+      "restartPolicy": "unless-stopped",
+      "project": "otziv-prod",
+      "service": "dozzle",
+      "flags": {},
+      "scanCoverage": "EXACT_CONFIG_VERIFIED_REPORT_PRESENT",
+      "scanProgress": "SCANNED",
+      "scan": {
+        "localImmutableImageReference": "sha256:1c1060cfb5402093c4e0f03f3534d7deaffeb0a6f6dd034e7c5f244603f35fb3",
+        "archiveIdentityProof": {
+          "verifiedAt": "2026-09-07T15:08:51.237678+00:00",
+          "localImageReference": "sha256:1c1060cfb5402093c4e0f03f3534d7deaffeb0a6f6dd034e7c5f244603f35fb3",
+          "observedConfigId": "sha256:56d821a0152f98282efb5a4dff3b55e4415503d28922f9d2cb5690173f6702fc",
+          "archiveConfigSha256": "56d821a0152f98282efb5a4dff3b55e4415503d28922f9d2cb5690173f6702fc",
+          "selectedDockerManifestConfig": "blobs/sha256/56d821a0152f98282efb5a4dff3b55e4415503d28922f9d2cb5690173f6702fc",
+          "tarEntriesRead": 16
+        },
+        "scanCompletedAt": "2026-09-07T15:10:08.471252+00:00",
+        "report": ".codex-tmp/finalization-20260907/fleet-scans/08-log-viewer-vulnerabilities.json",
+        "reportSha256": "d552ce9b0add3f7e4e6c9e84cfa542cef9a60853f87946a093555bd0ca089481",
+        "reportCreatedAt": "2026-09-07T15:10:06.778861224Z",
+        "artifacts": {
+          "raw": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/08-log-viewer-vulnerabilities.json",
+            "sha256": "d552ce9b0add3f7e4e6c9e84cfa542cef9a60853f87946a093555bd0ca089481"
+          },
+          "triage": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/08-log-viewer-vulnerabilities.triage.json",
+            "sha256": "ce7c1481ff4ed0937a1b7b8009d38ec675234b20e97fddbc6aa3e0a31afba354"
+          },
+          "sbom": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/08-log-viewer-vulnerabilities.sbom.cdx.json",
+            "sha256": "8cc7c6caa426c3e9a6e0f8c2384062fa295045465a266cf6505a24b4355a326b"
+          },
+          "scannerLog": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/08-log-viewer-vulnerabilities.scanner.log",
+            "sha256": "81cfaff37e5db0b621380356b04b83e9fd003f36e9f4caad5f61753aeef44a46"
+          }
+        },
+        "sbomComponents": 132,
+        "operatingSystem": null,
+        "packageSources": [
+          {
+            "type": "gobinary",
+            "class": "lang-pkgs",
+            "packageCount": 131,
+            "vulnerabilityRows": 15
+          }
+        ],
+        "allSeverityCounts": {
+          "CRITICAL": 1,
+          "HIGH": 10,
+          "MEDIUM": 1,
+          "LOW": 0,
+          "UNKNOWN": 3
+        },
+        "highCriticalPackageRows": 11,
+        "fixedHighCriticalRows": 11,
+        "unfixedHighCriticalRows": 0,
+        "scanExitCode": 1,
+        "scanCompleteArtifacts": true
+      },
+      "riskAcceptance": null
+    },
+    {
+      "name": "loki",
+      "image": "grafana/loki@sha256:8b5bd7748d0e4da66cd741ac276e485517514af0bea32167e27c0e1a95bcf8aa",
+      "imageId": "sha256:105db0731131ce0a837c6b422d2c96d4e26eed348f1168c884815bf2052e1212",
+      "repoDigests": [
+        "grafana/loki@sha256:8b5bd7748d0e4da66cd741ac276e485517514af0bea32167e27c0e1a95bcf8aa"
+      ],
+      "running": true,
+      "health": "healthy",
+      "startedAt": "2026-09-05T22:38:45.488325078Z",
+      "restartPolicy": "unless-stopped",
+      "project": "otziv-prod",
+      "service": "loki",
+      "flags": {},
+      "scanCoverage": "EXACT_CONFIG_VERIFIED_REPORT_PRESENT",
+      "scanProgress": "SCANNED",
+      "scan": {
+        "localImmutableImageReference": "sha256:8b5bd7748d0e4da66cd741ac276e485517514af0bea32167e27c0e1a95bcf8aa",
+        "archiveIdentityProof": {
+          "verifiedAt": "2026-09-07T15:10:10.847746+00:00",
+          "localImageReference": "sha256:8b5bd7748d0e4da66cd741ac276e485517514af0bea32167e27c0e1a95bcf8aa",
+          "observedConfigId": "sha256:105db0731131ce0a837c6b422d2c96d4e26eed348f1168c884815bf2052e1212",
+          "archiveConfigSha256": "105db0731131ce0a837c6b422d2c96d4e26eed348f1168c884815bf2052e1212",
+          "selectedDockerManifestConfig": "blobs/sha256/105db0731131ce0a837c6b422d2c96d4e26eed348f1168c884815bf2052e1212",
+          "tarEntriesRead": 14
+        },
+        "scanCompletedAt": "2026-09-07T15:11:17.201114+00:00",
+        "report": ".codex-tmp/finalization-20260907/fleet-scans/09-loki-vulnerabilities.json",
+        "reportSha256": "74cda8edba6f1bd8dbc00943d11959ab978b1bb145ce092b04915970f96ee22b",
+        "reportCreatedAt": "2026-09-07T15:11:15.435629453Z",
+        "artifacts": {
+          "raw": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/09-loki-vulnerabilities.json",
+            "sha256": "74cda8edba6f1bd8dbc00943d11959ab978b1bb145ce092b04915970f96ee22b"
+          },
+          "triage": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/09-loki-vulnerabilities.triage.json",
+            "sha256": "a63862ea508cc0de3e032744534a14478dadac7d9f7a1b0240f3865bbfa65ec5"
+          },
+          "sbom": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/09-loki-vulnerabilities.sbom.cdx.json",
+            "sha256": "0a2cdbba0db077e0279df0390a4a52e6907e05c4e018157dce5e49a1361e20c0"
+          },
+          "scannerLog": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/09-loki-vulnerabilities.scanner.log",
+            "sha256": "71bfc26e38c59164eb73b97f3faa7d9c825fcc9994cf90fd653ac2903ad6782a"
+          }
+        },
+        "sbomComponents": 248,
+        "operatingSystem": {
+          "Family": "alpine",
+          "Name": "3.18.6",
+          "EOSL": true
+        },
+        "packageSources": [
+          {
+            "type": "alpine",
+            "class": "os-pkgs",
+            "packageCount": 19,
+            "vulnerabilityRows": 28
+          },
+          {
+            "type": "gobinary",
+            "class": "lang-pkgs",
+            "packageCount": 227,
+            "vulnerabilityRows": 112
+          }
+        ],
+        "allSeverityCounts": {
+          "CRITICAL": 4,
+          "HIGH": 51,
+          "MEDIUM": 65,
+          "LOW": 16,
+          "UNKNOWN": 4
+        },
+        "highCriticalPackageRows": 55,
+        "fixedHighCriticalRows": 55,
+        "unfixedHighCriticalRows": 0,
+        "scanExitCode": 1,
+        "scanCompleteArtifacts": true
+      },
+      "riskAcceptance": null
+    },
+    {
+      "name": "otziv-prod-keycloak-1",
+      "image": "quay.io/keycloak/keycloak@sha256:4883630ef9db14031cde3e60700c9a9a8eaf1b5c24db1589d6a2d43de38ba2a9",
+      "imageId": "sha256:df8a2a25b1d12325a193a3a52f75a705faa55c76027601a8f04fc86e8ba3b8e5",
+      "repoDigests": [
+        "quay.io/keycloak/keycloak@sha256:4883630ef9db14031cde3e60700c9a9a8eaf1b5c24db1589d6a2d43de38ba2a9"
+      ],
+      "running": true,
+      "health": "healthy",
+      "startedAt": "2026-09-05T22:38:45.332885946Z",
+      "restartPolicy": "unless-stopped",
+      "project": "otziv-prod",
+      "service": "keycloak",
+      "flags": {
+        "KC_HTTP_ENABLED": "true",
+        "KC_METRICS_ENABLED": "true",
+        "KC_HEALTH_ENABLED": "true"
+      },
+      "scanCoverage": "EXACT_CONFIG_VERIFIED_REPORT_PRESENT",
+      "scanProgress": "SCANNED",
+      "scan": {
+        "localImmutableImageReference": "sha256:4883630ef9db14031cde3e60700c9a9a8eaf1b5c24db1589d6a2d43de38ba2a9",
+        "archiveIdentityProof": {
+          "verifiedAt": "2026-09-07T15:11:30.801730+00:00",
+          "localImageReference": "sha256:4883630ef9db14031cde3e60700c9a9a8eaf1b5c24db1589d6a2d43de38ba2a9",
+          "observedConfigId": "sha256:df8a2a25b1d12325a193a3a52f75a705faa55c76027601a8f04fc86e8ba3b8e5",
+          "archiveConfigSha256": "df8a2a25b1d12325a193a3a52f75a705faa55c76027601a8f04fc86e8ba3b8e5",
+          "selectedDockerManifestConfig": "blobs/sha256/df8a2a25b1d12325a193a3a52f75a705faa55c76027601a8f04fc86e8ba3b8e5",
+          "tarEntriesRead": 15
+        },
+        "scanCompletedAt": "2026-09-07T15:19:03.705680+00:00",
+        "report": ".codex-tmp/finalization-20260907/fleet-scans/10-otziv-prod-keycloak-1-vulnerabilities.json",
+        "reportSha256": "47ab9a3ddd45f58d1497cd51d8d15317c12c4d15974a83a780e53c569817f3cf",
+        "reportCreatedAt": "2026-09-07T15:19:01.931706419Z",
+        "artifacts": {
+          "raw": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/10-otziv-prod-keycloak-1-vulnerabilities.json",
+            "sha256": "47ab9a3ddd45f58d1497cd51d8d15317c12c4d15974a83a780e53c569817f3cf"
+          },
+          "triage": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/10-otziv-prod-keycloak-1-vulnerabilities.triage.json",
+            "sha256": "9e23ea65ea34c0d2d9ecea60085b8c2ae5673286a5f3d85100dd44670c4e1dbd"
+          },
+          "sbom": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/10-otziv-prod-keycloak-1-vulnerabilities.sbom.cdx.json",
+            "sha256": "7a9324a473fdce0dd0d8aff77789499e5f7815b3a9bff29bc155be90f6d12d84"
+          },
+          "scannerLog": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/10-otziv-prod-keycloak-1-vulnerabilities.scanner.log",
+            "sha256": "28575e5b80936935dccd88d06ffd492576dae1f290b7b6bd8995acf11616697d"
+          }
+        },
+        "sbomComponents": 506,
+        "operatingSystem": {
+          "Family": "redhat",
+          "Name": "9.6"
+        },
+        "packageSources": [
+          {
+            "type": "redhat",
+            "class": "os-pkgs",
+            "packageCount": 43,
+            "vulnerabilityRows": 116
+          },
+          {
+            "type": "jar",
+            "class": "lang-pkgs",
+            "packageCount": 462,
+            "vulnerabilityRows": 162
+          }
+        ],
+        "allSeverityCounts": {
+          "CRITICAL": 3,
+          "HIGH": 69,
+          "MEDIUM": 154,
+          "LOW": 52,
+          "UNKNOWN": 0
+        },
+        "highCriticalPackageRows": 72,
+        "fixedHighCriticalRows": 71,
+        "unfixedHighCriticalRows": 1,
+        "scanExitCode": 1,
+        "scanCompleteArtifacts": true
+      },
+      "riskAcceptance": null
+    },
+    {
+      "name": "tempo",
+      "image": "grafana/tempo@sha256:ef4384fce6e8ad22b95b243d8fc165628cda655376fd50e7850536ad89d71d50",
+      "imageId": "sha256:5e6726c9734173eec4081ddfd9038e61d002bc1ce0d89b94c1281f5d87e11abd",
+      "repoDigests": [
+        "grafana/tempo@sha256:ef4384fce6e8ad22b95b243d8fc165628cda655376fd50e7850536ad89d71d50"
+      ],
+      "running": true,
+      "health": "healthy",
+      "startedAt": "2026-09-05T22:38:45.185334219Z",
+      "restartPolicy": "unless-stopped",
+      "project": "otziv-prod",
+      "service": "tempo",
+      "flags": {},
+      "scanCoverage": "EXACT_CONFIG_VERIFIED_REPORT_PRESENT",
+      "scanProgress": "SCANNED",
+      "scan": {
+        "localImmutableImageReference": "sha256:6598dcec4eb39a5b9810ba914a5f65d56f59139fd1d788bdfd89b79c24b872c4",
+        "archiveIdentityProof": {
+          "verifiedAt": "2026-09-07T15:19:27.254242+00:00",
+          "localImageReference": "sha256:6598dcec4eb39a5b9810ba914a5f65d56f59139fd1d788bdfd89b79c24b872c4",
+          "observedConfigId": "sha256:5e6726c9734173eec4081ddfd9038e61d002bc1ce0d89b94c1281f5d87e11abd",
+          "archiveConfigSha256": "5e6726c9734173eec4081ddfd9038e61d002bc1ce0d89b94c1281f5d87e11abd",
+          "selectedDockerManifestConfig": "blobs/sha256/5e6726c9734173eec4081ddfd9038e61d002bc1ce0d89b94c1281f5d87e11abd",
+          "tarEntriesRead": 12
+        },
+        "scanCompletedAt": "2026-09-07T15:20:38.271740+00:00",
+        "report": ".codex-tmp/finalization-20260907/fleet-scans/11-tempo-vulnerabilities.json",
+        "reportSha256": "d6a1a057c8331ea820df6c5a5006006179fd7a99c573334518e62144a023b6ee",
+        "reportCreatedAt": "2026-09-07T15:20:36.475602377Z",
+        "artifacts": {
+          "raw": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/11-tempo-vulnerabilities.json",
+            "sha256": "d6a1a057c8331ea820df6c5a5006006179fd7a99c573334518e62144a023b6ee"
+          },
+          "triage": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/11-tempo-vulnerabilities.triage.json",
+            "sha256": "5ff0b7b882885b2272c36494979e8498963b05c16c99fc621c9e0a5051de896b"
+          },
+          "sbom": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/11-tempo-vulnerabilities.sbom.cdx.json",
+            "sha256": "44395cbbbf35dd36597fea3e2bfad740da6312696ff5656e5d6495d1b2d61bf4"
+          },
+          "scannerLog": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/11-tempo-vulnerabilities.scanner.log",
+            "sha256": "36c57d7b7981e5e2382ff78d3d8d529848f9172e22081c7b6b723192cc46fcc2"
+          }
+        },
+        "sbomComponents": 296,
+        "operatingSystem": {
+          "Family": "alpine",
+          "Name": "3.20.3",
+          "EOSL": true
+        },
+        "packageSources": [
+          {
+            "type": "alpine",
+            "class": "os-pkgs",
+            "packageCount": 15,
+            "vulnerabilityRows": 58
+          },
+          {
+            "type": "gobinary",
+            "class": "lang-pkgs",
+            "packageCount": 279,
+            "vulnerabilityRows": 115
+          }
+        ],
+        "allSeverityCounts": {
+          "CRITICAL": 5,
+          "HIGH": 73,
+          "MEDIUM": 65,
+          "LOW": 26,
+          "UNKNOWN": 4
+        },
+        "highCriticalPackageRows": 78,
+        "fixedHighCriticalRows": 78,
+        "unfixedHighCriticalRows": 0,
+        "scanExitCode": 1,
+        "scanCompleteArtifacts": true
+      },
+      "riskAcceptance": null
+    },
+    {
+      "name": "keycloak-postgres",
+      "image": "postgres@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d",
+      "imageId": "sha256:f9cab62aaf3471220dcbdeea5a686fca1c7f9e99621db14fdaebceaffe7a8f24",
+      "repoDigests": [
+        "postgres@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d"
+      ],
+      "running": true,
+      "health": "healthy",
+      "startedAt": "2026-09-05T22:38:45.99491188Z",
+      "restartPolicy": "unless-stopped",
+      "project": "otziv-prod",
+      "service": "keycloak-postgres",
+      "flags": {},
+      "scanCoverage": "EXACT_CONFIG_VERIFIED_REPORT_PRESENT",
+      "scanProgress": "SCANNED",
+      "scan": {
+        "localImmutableImageReference": "sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d",
+        "archiveIdentityProof": {
+          "verifiedAt": "2026-09-07T15:20:44.153277+00:00",
+          "localImageReference": "sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d",
+          "observedConfigId": "sha256:f9cab62aaf3471220dcbdeea5a686fca1c7f9e99621db14fdaebceaffe7a8f24",
+          "archiveConfigSha256": "f9cab62aaf3471220dcbdeea5a686fca1c7f9e99621db14fdaebceaffe7a8f24",
+          "selectedDockerManifestConfig": "blobs/sha256/f9cab62aaf3471220dcbdeea5a686fca1c7f9e99621db14fdaebceaffe7a8f24",
+          "tarEntriesRead": 26
+        },
+        "scanCompletedAt": "2026-09-07T15:23:12.152647+00:00",
+        "report": ".codex-tmp/finalization-20260907/fleet-scans/12-keycloak-postgres-vulnerabilities.json",
+        "reportSha256": "96db61d47c5ac5842d5f238feafcd11876a639a727a0d2498bb7c3bab4838c9c",
+        "reportCreatedAt": "2026-09-07T15:23:10.906488099Z",
+        "artifacts": {
+          "raw": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/12-keycloak-postgres-vulnerabilities.json",
+            "sha256": "96db61d47c5ac5842d5f238feafcd11876a639a727a0d2498bb7c3bab4838c9c"
+          },
+          "triage": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/12-keycloak-postgres-vulnerabilities.triage.json",
+            "sha256": "feecf156a878e0ee47a9fe31ad9ce4940d06630db71437d20180ed95e03bb6a7"
+          },
+          "sbom": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/12-keycloak-postgres-vulnerabilities.sbom.cdx.json",
+            "sha256": "510bc083738dfcf3ee0910adc8e8e884a7b7eb6dceaac9399a7ebac4006ffa66"
+          },
+          "scannerLog": {
+            "path": ".codex-tmp/finalization-20260907/fleet-scans/12-keycloak-postgres-vulnerabilities.scanner.log",
+            "sha256": "94a89de205780ca9944034012f423652592d2f90effc8a9886c633d1fd6a3db1"
+          }
+        },
+        "sbomComponents": 148,
+        "operatingSystem": {
+          "Family": "debian",
+          "Name": "13.6"
+        },
+        "packageSources": [
+          {
+            "type": "debian",
+            "class": "os-pkgs",
+            "packageCount": 142,
+            "vulnerabilityRows": 477
+          },
+          {
+            "type": "gobinary",
+            "class": "lang-pkgs",
+            "packageCount": 4,
+            "vulnerabilityRows": 46
+          }
+        ],
+        "allSeverityCounts": {
+          "CRITICAL": 14,
+          "HIGH": 158,
+          "MEDIUM": 184,
+          "LOW": 153,
+          "UNKNOWN": 14
+        },
+        "highCriticalPackageRows": 172,
+        "fixedHighCriticalRows": 86,
+        "unfixedHighCriticalRows": 86,
+        "scanExitCode": 1,
+        "scanCompleteArtifacts": true
+      },
+      "riskAcceptance": null
+    }
+  ],
+  "applicationDatabaseFlags": {
+    "otziv": {
+      "archive.orders.apply.enabled": "true",
+      "archive.orders.schedule.enabled": "true",
+      "archive.orders.schedule.worker.enabled": "true",
+      "client.messages.archive-reorder.enabled": "true",
+      "client.messages.bad-review-auto-ban.enabled": "true",
+      "client.messages.bad-review-invoice.enabled": "true",
+      "client.messages.client-text-reminder.enabled": "true",
+      "client.messages.error-protection.enabled": "true",
+      "client.messages.immediate.enabled": "true",
+      "client.messages.live.enabled": "true",
+      "client.messages.monitor.enabled": "true",
+      "client.messages.payment-overdue.enabled": "true",
+      "client.messages.payment-overdue.live-enabled": "true",
+      "client.messages.payment-reminder.enabled": "true",
+      "client.messages.review-check.auto-archive.enabled": "true",
+      "client.messages.review-check.enabled": "true",
+      "client.messages.review-recovery-notice.enabled": "true",
+      "client.messages.worker.enabled": "true",
+      "client.publication-progress-reports.enabled": "true",
+      "contractor-payments.live-readiness-confirmed": "true",
+      "contractor-payments.live-routing-enabled": "true",
+      "contractor-payments.reward-attribution-live-enabled": "true",
+      "contractor-payments.shadow-enabled": "true",
+      "manager-control.unanswered-client-messages.auto-ignore-enabled": "true",
+      "manager-control.unanswered-client-messages.enabled": "true",
+      "manager-control.unanswered-client-messages.fast-click-guard-enabled": "true",
+      "manager-control.unanswered-client-messages.reply-quality-shadow-enabled": "true",
+      "manager-control.unanswered-client-messages.resolution-enforcement-enabled": "true",
+      "manager.gamification.competition-enabled": "true",
+      "manager.gamification.rewards-enabled": "true",
+      "manager.report-review.enabled": "true",
+      "manager.report-review.restriction-enabled": "true",
+      "manager.sla.enabled": "true",
+      "manager.summary.ai-analysis-enabled": "true",
+      "manager.summary.cleanup-enabled": "true",
+      "manager.summary.enabled": "true",
+      "manager.summary.manager-groups-enabled": "true",
+      "payment.links.archive.enabled": "false",
+      "payments.tbank.enabled": "true",
+      "payments.tbank.manager-ui-enabled": "true",
+      "payments.tbank.mirpay-enabled": "false",
+      "payments.tbank.payment-links-enabled": "true",
+      "payments.tbank.sberpay-enabled": "false",
+      "payments.tbank.tpay-enabled": "true",
+      "performers.rollout.enabled": "false",
+      "publication.health-monitor.enabled": "true",
+      "telegram.reports.evening.enabled": "true",
+      "telegram.reports.morning.enabled": "true",
+      "whatsapp.group-sync.enabled": "true",
+      "worker-risk.explanation.auto-request-enabled": "true",
+      "worker-risk.explanation.quality-enabled": "true",
+      "worker-risk.specialist-section-restriction-enabled": "true",
+      "worker.account-action.cooldown-enabled": "true",
+      "worker.cellular-access.mode": "ENFORCE",
+      "worker.progress.cleanup-enabled": "true",
+      "worker.progress.enabled": "true",
+      "worker.progress.monthly-aggregate-enabled": "true",
+      "worker.publication.special-task-gate.enabled": "false",
+      "worker.thematic-notifications.enabled": "true",
+      "workload.live.apply-enabled": "true",
+      "workload.live.emergency-fallback-enabled": "false",
+      "workload.shadow.adaptive-estimates-enabled": "true",
+      "workload.shadow.apply-enabled": "false",
+      "workload.shadow.group-notifications-enabled": "true",
+      "workload.shadow.observation-enabled": "true",
+      "zp.product-reward-percent.enabled": "false"
+    }
+  },
+  "database": {
+    "otziv": {
+      "tables": {
+        "flyway_schema_history": {
+          "rows": 374
+        },
+        "lead_sync_queue": {
+          "rows": 0
+        },
+        "review_performer_assignments": {
+          "rows": 0
+        }
+      },
+      "latestMigration": "1.10.287"
+    }
+  },
+  "systemdTimerMetadata": [
+    {
+      "next": 1788790084693591,
+      "last": 1788789961745257,
+      "unit": "otziv-prod-up.timer",
+      "activates": "otziv-prod-up.service"
+    },
+    {
+      "next": 1788796800000000,
+      "last": 1788710401745395,
+      "unit": "dpkg-db-backup.timer",
+      "activates": "dpkg-db-backup.service"
+    }
+  ],
+  "schedulerDefinitions": {
+    "path": "PUBLISHED_SCHEDULERS_2026-09-07.json",
+    "sha256": "ed5e87fef1a7d3be04944c4cac0723f178162839b87a0b5a9d02751e73c2c657",
+    "staticMethods": 68,
+    "registeredCount": null
+  },
+  "effectiveConfigurationCaveats": [
+    "Environment inventory includes selected scalar booleans/modes/pool/concurrency only; omitted values are unknown, not false",
+    "Observed DB archive apply/schedule/worker overrides true take precedence over false environment defaults in fc191ac OrderArchiveDryRunService; effective run mode/time/claim state were not inventoried",
+    "LEAD_SYNC_OUTBOUND_ENABLED=false excludes LeadSyncServiceImpl, but separate VpsSyncService.retryFailedSync remains an annotated legacy consumer without that flag; observed legacy queue0 is not a kill switch",
+    "Scheduled definitions do not prove registration/invocation; actuator access returned401 and no authenticated retry was performed",
+    "Backup confirmation flags are declarations, not independent-storage or successful-restore evidence",
+    "Image vulnerability reports may be used only when their config identity exactly matches; candidate or rebuilt images are separate artifacts"
+  ]
+}

@@ -1,0 +1,274 @@
+{
+  "schema": "otziv-verified-build-tool-proof-v1",
+  "recordedAt": "2026-09-07T18:17:50.959611+00:00",
+  "status": "APPLIED_REVIEWED_PLUGIN_ONLY_CORRECTIONS",
+  "finalPomSha256": "cef061f2018f509de7bce4d9ed93189879c1e2f83013fad3c728a0cacb7729f9",
+  "baselineRuntimeJarSha256": "baf750d0616b2ebd4c680d9477934d81f85319b11992d18d0d24fa5e03b1339d",
+  "runtimeMainResourcesAndLibrariesByteIdentical": true,
+  "mainClassResourceEntries": 3517,
+  "nestedJars": 330,
+  "classEntriesIncludingBootLoader": 3053,
+  "allChangedArchiveEntries": [
+    "META-INF/maven/com.hunt/otziv/pom.xml",
+    "META-INF/maven/com.hunt/otziv/pom.properties",
+    "META-INF/MANIFEST.MF"
+  ],
+  "wholeJarBytesIdentical": false,
+  "securityAuditProfileChanged": false,
+  "newSuppressionRules": false,
+  "authenticatedSonatypeAuditRun": false,
+  "checks": {
+    "compilerOnlyCleanPackage": "PASS",
+    "allStandardPluginCleanPackage": "PASS",
+    "bootFixedTransportPackageRepackage": "PASS",
+    "plexusApiComparisons": 4,
+    "plexusBenignAndBoundaryComparisons": 4,
+    "localInstallAndDeploy": 2,
+    "bootTransportHttpChecks": 12,
+    "bootTransportLoopbackRequests": 105,
+    "resolvedChangedLibrarySymbols": 46756,
+    "symbolsFromOtherPluginArtifacts": 68,
+    "unresolvedSymbols": 0,
+    "missingConstructorCounterfactualDetections": 9
+  },
+  "boundaries": [
+    "General library API diff does not claim global compatibility; bytecode symbol check applies to this exact observed plugin realm.",
+    "HTTP fixture binds only127.0.0.1 and exercises actual Boot remote transport factory; no real Docker engine, registry, remote TLS or full buildpack image build.",
+    "Deployment goal used an owned local file repository only.",
+    "Historical fullgraph raw report remains unchanged and is not a post-application count.",
+    "ODC13 published-POM resolution limitation and missing authenticated Sonatype remain open."
+  ],
+  "evidenceRoot": ".codex-tmp/finalization-20260907/maven-remaining-feasibility",
+  "files": [
+    {
+      "path": "metadata-index.json",
+      "bytes": 10173,
+      "sha256": "da652dbec95269373eb84d87b608a94269a17e002064c75e6802bac43deec46b"
+    },
+    {
+      "path": "candidate-pom-index.json",
+      "bytes": 31040,
+      "sha256": "10c6572a88f73b3d2fbb710764f08c8ecca4faba80970d5d8330c0a770901111"
+    },
+    {
+      "path": "source-inputs.json",
+      "bytes": 482962,
+      "sha256": "b273fa3120879c8372b98c2b4cb6383884222f72208ae0bb2769380ff93ab36b"
+    },
+    {
+      "path": "compiler-only.pom.xml",
+      "bytes": 13776,
+      "sha256": "23ce198b193aebb94d93656ffc189ab196d4d7c38dfaeed058b33a679d014210"
+    },
+    {
+      "path": "compiler-only-build.log",
+      "bytes": 4842,
+      "sha256": "99de53b1add5a731376845c8d74fe1431c5d2742a85f0ee771690e90e4c06566"
+    },
+    {
+      "path": "compiler-only-byte-comparison.json",
+      "bytes": 317,
+      "sha256": "9823288cb2caca810bde8353bdc947da1a8ccdd867cd112dd0b52699be6bdc94"
+    },
+    {
+      "path": "final-candidate.pom.xml",
+      "bytes": 16932,
+      "sha256": "496222c19daafdeed2cbff378f7a2d1941253c5f83cdc261c45cfc3c65ead6d4"
+    },
+    {
+      "path": "final-candidate-build.log",
+      "bytes": 6696,
+      "sha256": "bec716b2b3d513d8c9f007c04d4f3ed82ad0c61904b2c72a49a8690bf7dc7d83"
+    },
+    {
+      "path": "final-candidate-byte-comparison.json",
+      "bytes": 539,
+      "sha256": "c39e07c36382525fae516d9bb1006a52e8fcfe8563878e587099c89a19028238"
+    },
+    {
+      "path": "final-proposal-summary.json",
+      "bytes": 3330,
+      "sha256": "25c1df311d8dc301f92f41a7f8ce7858fac66f9b59b9d793e456a2de12521fea"
+    },
+    {
+      "path": "application-evidence.json",
+      "bytes": 620,
+      "sha256": "e464d45f7565303295586b4a29ef5c251bf4dda2a1c6e1727d5b0920943f9cc5"
+    },
+    {
+      "path": "plexus-public-api-compatibility.json",
+      "bytes": 1589,
+      "sha256": "e9e0b677701fa1574696883b51b05772ef199b668d3c6f20e2378da487c64652"
+    },
+    {
+      "path": "plexus-fix-source-check.json",
+      "bytes": 876,
+      "sha256": "17ebb0d03f4347b4d7ce3c1a27a38ab063bc9b1fdf8fd3c912bb723346718fda"
+    },
+    {
+      "path": "plexus-extraction-proof.json",
+      "bytes": 1032,
+      "sha256": "645eb65f313b83f2d9c5c1cb80de7925e41249c915a508425da45e6d375e5eda"
+    },
+    {
+      "path": "local-plugin-publish-proof.json",
+      "bytes": 360,
+      "sha256": "62e370934a82a90ffadb0fcb4b3de941c0b467c078f378838ea85c6ad930ee96"
+    },
+    {
+      "path": "install-file.log",
+      "bytes": 5525,
+      "sha256": "d5bce2b7708cee758216f1a0df2136373b544a791de346e264567dd151cf09fe"
+    },
+    {
+      "path": "deploy-file.log",
+      "bytes": 1207,
+      "sha256": "bd174c45fa6e5772933bb3d4965b432178ba3a968b6eab40592d48950f238a7d"
+    },
+    {
+      "path": "boot-transport-candidate.pom.xml",
+      "bytes": 17551,
+      "sha256": "cef061f2018f509de7bce4d9ed93189879c1e2f83013fad3c728a0cacb7729f9"
+    },
+    {
+      "path": "boot-transport-candidate-build.log",
+      "bytes": 2792,
+      "sha256": "c0f0a2e37dd32c43d6e2647c010c02cc7146bca83a7acc7e836cb09a767aa59f"
+    },
+    {
+      "path": "boot-transport-byte-comparison.json",
+      "bytes": 539,
+      "sha256": "21a0da4216e407257057dc0477f5538def408d92b5ba79e3431aa7f181aeee10"
+    },
+    {
+      "path": "boot-transport-proposal-summary.json",
+      "bytes": 2659,
+      "sha256": "9d65a441041b2c209def3a2c5eb4c30fa7fbb7283f90c94cbd6aa17def86ed77"
+    },
+    {
+      "path": "boot-transport-application-evidence.json",
+      "bytes": 668,
+      "sha256": "73168ac232585f31be8bce04619dcfe8cb1f3848b67a1c0fc0187fdd91591f0b"
+    },
+    {
+      "path": "boot-transport-api-compatibility.json",
+      "bytes": 70503,
+      "sha256": "d3c1292e6c291e1f15b5ed6aea306d45d35e5e1a58753f451bf62d52a7e00046"
+    },
+    {
+      "path": "boot-realm-linkage-proof.json",
+      "bytes": 444,
+      "sha256": "1fce11ee38c5d46adb088ec80955a2ea732952da844c3a20ac5798c35c189b65"
+    },
+    {
+      "path": "boot-realm-linkage-proof.log",
+      "bytes": 153,
+      "sha256": "419b8aeff4480b6f57898699a080f013ce942c2f29845c10bbe4af040507b4ac"
+    },
+    {
+      "path": "boot-transport-http-proof.json",
+      "bytes": 263,
+      "sha256": "7182397704487091ae165968d42c29baba6f044ae668c635ce879e357f0b0793"
+    },
+    {
+      "path": "boot-transport-http-proof.log",
+      "bytes": 133,
+      "sha256": "d8141e8ad7401aaa8f6a21d3f273d0472944a8ef5ebd7002443c6859c4cddc22"
+    },
+    {
+      "path": "BootRealmLinkageProof.java",
+      "bytes": 4010,
+      "sha256": "aa0dc9e9ea31856b213760ada13b9528919840a195bee46ece508a0fa52dcfe0"
+    },
+    {
+      "path": "BootTransportProof.java",
+      "bytes": 4445,
+      "sha256": "f1b85fc51060e927a78c9734ca986bdabb7954e5f4541e5cf8208cce509c7c12"
+    },
+    {
+      "path": "PlexusExtractionProof.java",
+      "bytes": 1552,
+      "sha256": "31457943531a014421bc879d39153084bf5ebf4120a4a171f009b9673bcbb039"
+    },
+    {
+      "path": "graphs/graphs.log",
+      "bytes": 26648,
+      "sha256": "3b12fcd50d5cac59515916a43d767afeaa8bd5e2f34e2e025cb83e5092566de2"
+    },
+    {
+      "path": "actual-realms/maven-clean-plugin-clean.json",
+      "bytes": 432,
+      "sha256": "b68ab6c50d18ee71b4d4abca83b12235bf265582ce123d0d8b80cf83a4437c7b"
+    },
+    {
+      "path": "actual-realms/maven-compiler-plugin-compile.json",
+      "bytes": 1708,
+      "sha256": "022ad644d621a5070be9980544efcae6a8006b2522daecb0719d0e8be19610b8"
+    },
+    {
+      "path": "actual-realms/maven-compiler-plugin-testCompile.json",
+      "bytes": 1708,
+      "sha256": "022ad644d621a5070be9980544efcae6a8006b2522daecb0719d0e8be19610b8"
+    },
+    {
+      "path": "actual-realms/maven-deploy-plugin-deploy-file.json",
+      "bytes": 555,
+      "sha256": "58370815659d5bc04f2fb1bdc8f1dec356fe94835cb9cfad657d8e0ede004a4b"
+    },
+    {
+      "path": "actual-realms/maven-install-plugin-install-file.json",
+      "bytes": 557,
+      "sha256": "6dcb6b6d117addd10b9de4b1653239ef6341b4c3136a7bc1ae9b7522aea5ef69"
+    },
+    {
+      "path": "actual-realms/maven-jar-plugin-jar.json",
+      "bytes": 1910,
+      "sha256": "03c536ddfe8e78bd62053e3ee7055cc1aba22e77993bed7fe558848c18f146e9"
+    },
+    {
+      "path": "actual-realms/maven-resources-plugin-resources.json",
+      "bytes": 950,
+      "sha256": "744da79961e7d96576751a03cf6ba2887b251ca9268094316a1088def61e70b3"
+    },
+    {
+      "path": "actual-realms/maven-resources-plugin-testResources.json",
+      "bytes": 950,
+      "sha256": "744da79961e7d96576751a03cf6ba2887b251ca9268094316a1088def61e70b3"
+    },
+    {
+      "path": "actual-realms/spring-boot-maven-plugin-repackage.json",
+      "bytes": 4673,
+      "sha256": "b9736cb6a23e287ea8a26dcebc1e47f50ecf2b53626ffb18ef811d9f7008d7f3"
+    },
+    {
+      "path": "boot-fixed-realms/maven-compiler-plugin-compile.json",
+      "bytes": 1708,
+      "sha256": "022ad644d621a5070be9980544efcae6a8006b2522daecb0719d0e8be19610b8"
+    },
+    {
+      "path": "boot-fixed-realms/maven-compiler-plugin-testCompile.json",
+      "bytes": 1708,
+      "sha256": "022ad644d621a5070be9980544efcae6a8006b2522daecb0719d0e8be19610b8"
+    },
+    {
+      "path": "boot-fixed-realms/maven-jar-plugin-jar.json",
+      "bytes": 1910,
+      "sha256": "03c536ddfe8e78bd62053e3ee7055cc1aba22e77993bed7fe558848c18f146e9"
+    },
+    {
+      "path": "boot-fixed-realms/maven-resources-plugin-resources.json",
+      "bytes": 950,
+      "sha256": "744da79961e7d96576751a03cf6ba2887b251ca9268094316a1088def61e70b3"
+    },
+    {
+      "path": "boot-fixed-realms/maven-resources-plugin-testResources.json",
+      "bytes": 950,
+      "sha256": "744da79961e7d96576751a03cf6ba2887b251ca9268094316a1088def61e70b3"
+    },
+    {
+      "path": "boot-fixed-realms/spring-boot-maven-plugin-repackage.json",
+      "bytes": 4673,
+      "sha256": "c0ab186e4d7c9b699ea784327b99d65f368f694a4f900ba8956eaa56469023c8"
+    }
+  ]
+}

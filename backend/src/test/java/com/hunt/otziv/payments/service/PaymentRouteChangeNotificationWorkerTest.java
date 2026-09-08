@@ -65,9 +65,9 @@ class PaymentRouteChangeNotificationWorkerTest {
         when(order.getManager()).thenReturn(manager);
         when(manager.getClientId()).thenReturn("client");
         when(company.getGroupId()).thenReturn("group");
-        when(notificationService.sendInformationalMessageToClientChat(
+        when(notificationService.sendInformationalForOccurrence(
                 order, "client", "group", "По вашей просьбе способ оплаты изменен. Используйте новые реквизиты.\n\nПолный текст",
-                "Новые реквизиты оплаты", "89140000000"
+                "Новые реквизиты оплаты", "89140000000", "payment-link:22"
         )).thenReturn(true);
         when(outboxRepository.markSent(delivery)).thenReturn(true);
         PaymentRouteChangeNotificationWorker worker = worker();
@@ -95,9 +95,9 @@ class PaymentRouteChangeNotificationWorkerTest {
         when(order.getManager()).thenReturn(manager);
         when(manager.getClientId()).thenReturn("client");
         when(company.getGroupId()).thenReturn("group");
-        when(notificationService.sendInformationalMessageToClientChat(
+        when(notificationService.sendInformationalForOccurrence(
                 order, "client", "group", "По вашей просьбе способ оплаты изменен. Используйте новые реквизиты.\n\nПолный текст",
-                "Новые реквизиты оплаты", "89140000000"
+                "Новые реквизиты оплаты", "89140000000", "payment-link:22"
         )).thenReturn(false);
         when(outboxRepository.markFailed(
                 eq(delivery),

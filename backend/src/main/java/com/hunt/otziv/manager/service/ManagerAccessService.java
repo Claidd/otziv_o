@@ -93,6 +93,27 @@ public class ManagerAccessService {
         return false;
     }
 
+    /**
+     * Checks a current manager id read after locking an existing live order.
+     * The caller owns existence and locking; querying the order again here could
+     * reuse an older InnoDB snapshot. Global owners retain access to an existing
+     * unassigned order, matching canAccessOrder's ALL_MANAGERS behavior.
+     */
+    @Transactional(readOnly = true)
+    public boolean canAccessCurrentOrderManager(Long currentManagerId, Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()
+                || authentication.getName() == null || authentication.getName().isBlank()) {
+            return false;
+        }
+        if (managerPermissionService.hasRole(authentication, "ADMIN")) {
+            return true;
+        }
+        if (managerPermissionService.hasRole(authentication, "OWNER") && ownerCanAccessAllManagers(authentication)) {
+            return true;
+        }
+        return canAccessManager(currentManagerId, authentication);
+    }
+
     /** Checks a canonical manager assignment, including the owner's manager scope. */
     @Transactional(readOnly = true)
     public boolean canAccessManager(Long managerId, Authentication authentication) {

@@ -1,0 +1,32 @@
+{
+  "schema": "otziv-c12-alloy-closure-analysis-v1",
+  "createdAt": "2026-09-08T07:16:01.390911+00:00",
+  "publishedBinarySha256": "2c21e2c85e1e88c88b3335d39c84ae5414232514aeaaea02457fef54f4c5e3dc",
+  "reproducedBinaryByteIdentical": true,
+  "moduleProvenanceByteIdentical": true,
+  "buildInfoByteIdenticalIgnoringFilename": true,
+  "packageCount": 5199,
+  "importEdges": 53420,
+  "daemonPackages": 0,
+  "linkedFunctions": 418393,
+  "daemonFunctions": 0,
+  "sourceArchiveSha256": "69efdb87a91bb538323f5ccb6bcd86240cee3a78ee97632bd1005c434344c7f1",
+  "originalDockerfileSha256": "713509a4d988d813b1c2738a3ee6d896c386d2d350594998c9934357b46c9915",
+  "rawGoListSha256": "d9a4eff9abdfd15ed69536e919c8e079c7c0447079c39969ce08a81160bbb41c",
+  "importGraphSha256": "fc3f4c777cc1888a9f8efbdbfdecbe514a83d96c29c08f10a5a1d311564b09f0",
+  "decision": "EXACT_PUBLISHED_ARTIFACT_HAS_NO_DAEMON_PACKAGE; INDEPENDENT_REVIEW_REQUIRED_BEFORE_GATE_INTEGRATION",
+  "files": {
+    "import-closure.json.gz": {
+      "bytes": 332712,
+      "sha256": "7dc809e1d2a68995a997ad722ac1f9c4dd4a2a693aca87c753737d6a9ac76cdd"
+    },
+    "packages.raw.jsons.gz": {
+      "bytes": 4711921,
+      "sha256": "a15385303235914f7dda6305047f6b94d5e2c753adf1f9ec4ccce611fc3f700e"
+    },
+    "linked-functions.raw.json.gz": {
+      "bytes": 2216553,
+      "sha256": "46cbc607c7c54b2b61c6599834e12910b34f82866dbe5f7a3f6d8942ca87e3ad"
+    }
+  }
+}

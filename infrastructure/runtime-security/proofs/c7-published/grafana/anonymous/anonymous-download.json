@@ -1,0 +1,73 @@
+{
+  "schema": "otziv-anonymous-download-v1",
+  "component": "grafana",
+  "commit": "2cd29a17f5ae7c8d7e00d332379c7ac887d5b52f",
+  "run": "34178760576",
+  "attempt": "1",
+  "runner": "GitHub Actions 1000001352",
+  "startedAt": "2026-09-08T02:44:24.548Z",
+  "sourcePublicationSha256": "29578d30b660972052f9c3cdb6205270abd22459ef35deb6f166258476ed7006",
+  "result": "PASS",
+  "accountCredentialsUsed": false,
+  "dockerCredentialHelpersAvailable": false,
+  "dockerTransport": "unix:///var/run/docker.sock",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:b13b0abc6fb26fb7b1e55190411f8b6a5d1894fb7a6c27df2352cb5a3adb54ae",
+  "imageAbsentBeforePull": true,
+  "daemonVersion": "\"28.0.4\"",
+  "attestationEvidence": {
+    "schema": "otziv-registry-evidence-v1",
+    "imageManifestDigest": "sha256:5892984de79f49e6d3e0cd8b859a82470da4f39ce193b3311681cf13a7030578",
+    "predicates": [
+      "https://slsa.dev/provenance/v1",
+      "https://spdx.dev/Document"
+    ],
+    "artifacts": [
+      {
+        "file": "registry-index.json",
+        "digest": "sha256:b13b0abc6fb26fb7b1e55190411f8b6a5d1894fb7a6c27df2352cb5a3adb54ae",
+        "size": 857
+      },
+      {
+        "file": "registry-amd64-manifest.json",
+        "digest": "sha256:5892984de79f49e6d3e0cd8b859a82470da4f39ce193b3311681cf13a7030578",
+        "size": 3527
+      },
+      {
+        "file": "registry-amd64-config.json",
+        "digest": "sha256:884196c9a81cca9518c21076460cf7697622dc695d2ec4e71bada03d2c6497ca",
+        "size": 9331
+      },
+      {
+        "file": "registry-attestation-0.json",
+        "digest": "sha256:d9f446095c08e19e96b5ca2e9dca3ae9529c0dedcff7f5afaab7980a2d8b3304",
+        "size": 1112
+      },
+      {
+        "file": "registry-attestation-0-payload-0.json",
+        "digest": "sha256:1c267ff7a46d48176ff21795a823f76741e0b229cb881de7e9a8e4b91344c7a9",
+        "size": 1602062
+      },
+      {
+        "file": "registry-attestation-0-payload-1.json",
+        "digest": "sha256:13fe3d9fc5fb1cfb006ee1297bab1e244bd26b1015091e13bea06913cc91c020",
+        "size": 45843
+      }
+    ],
+    "sourceBinding": "LOCAL_GIT_METADATA_CHECKED_AGAINST_CLEAN_CHECKOUT_NOT_INDEPENDENT_SOURCE_AUTHENTICATION"
+  },
+  "pullExitCode": 0,
+  "imageId": "sha256:884196c9a81cca9518c21076460cf7697622dc695d2ec4e71bada03d2c6497ca",
+  "platform": "linux/amd64",
+  "labels": {
+    "com.otziv.publication.revision": "2cd29a17f5ae7c8d7e00d332379c7ac887d5b52f",
+    "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+    "com.otziv.reviewed-component": "grafana",
+    "com.otziv.security.patch": "Go1.27.1; grpc1.83.1; thrift0.24.0; exact required MVS; OpenSSL3.5.8; official CGO0 modernc SQLite",
+    "maintainer": "Grafana Labs <hello@grafana.com>",
+    "org.opencontainers.image.revision": "81407c71e96e8351b4600164c1b4d30c8baf41d6",
+    "org.opencontainers.image.source": "https://github.com/grafana/grafana",
+    "org.opencontainers.image.version": "12.4.10+otziv.1"
+  },
+  "publicDownloadReadiness": "VERIFIED_ANONYMOUS_DIGEST_PULL",
+  "finishedAt": "2026-09-08T02:44:43.993Z"
+}

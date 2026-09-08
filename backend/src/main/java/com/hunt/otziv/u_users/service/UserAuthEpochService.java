@@ -25,10 +25,16 @@ public class UserAuthEpochService {
 
     private final UserRepository userRepository;
     private final MobilePushTokenRepository pushTokenRepository;
+    private final com.hunt.otziv.u_users.repository.AuthSessionStateRepository sessionState;
 
     @Transactional
     public void passwordChanged(User user) {
         rotate(user, PASSWORD_CHANGED, DeactivationChange.KEEP);
+    }
+
+    @Transactional
+    public void sessionProtocolCutover(User user) {
+        rotate(user, "SESSION_PROTOCOL_CUTOVER", DeactivationChange.KEEP);
     }
 
     @Transactional
@@ -59,6 +65,7 @@ public class UserAuthEpochService {
 
         Long actorUserId = currentActorUserId(user);
         user.setAuthEpoch(user.getAuthEpoch() + 1L);
+        sessionState.enqueue(user, reason);
 
         if (deactivationChange == DeactivationChange.SET) {
             user.setDeactivatedAt(LocalDateTime.now());

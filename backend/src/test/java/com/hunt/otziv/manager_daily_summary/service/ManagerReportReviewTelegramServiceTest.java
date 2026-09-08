@@ -865,6 +865,100 @@ class ManagerReportReviewTelegramServiceTest {
         );
     }
 
+    @Test
+    void disputeButtonResumesDraftEvenWhenAuditWasCompleted() {
+        ManagerReportReviewSession review = disputedReview(ManagerReportReviewStatus.COMPLETED);
+        review.setCompletedAt(LocalDateTime.now().minusDays(2));
+        ManagerReportReviewDispute draft = dispute(review);
+        when(sessionRepository.findForUpdateById(41L)).thenReturn(Optional.of(review));
+        when(userService.findByChatId(700L)).thenReturn(Optional.of(user));
+        when(issueService.explanationDispute(review)).thenReturn(Optional.of(draft));
+
+        assertThat(service.handle(callback("manager-review:dispute:41", 700L, -100900L)))
+                .contains("Опишите неточность");
+
+        assertThat(review.getStatus()).isEqualTo(ManagerReportReviewStatus.DISPUTE_PENDING);
+        assertThat(review.getCompletedAt()).isNotNull();
+        verify(issueService, never()).beginDispute(any(), any());
+    }
+
+    @Test
+    void ownerCallbackCarriesExactDisputeFromCompletedAudit() {
+        ManagerReportReviewSession review = disputedReview(ManagerReportReviewStatus.COMPLETED);
+        com.hunt.otziv.u_users.model.Role role = new com.hunt.otziv.u_users.model.Role();
+        role.setName("ROLE_OWNER");
+        User owner = User.builder().id(99L).telegramChatId(800L).active(true)
+                .roles(java.util.Set.of(role)).build();
+        when(sessionRepository.findForUpdateById(41L)).thenReturn(Optional.of(review));
+        when(userService.findByChatId(800L)).thenReturn(Optional.of(owner));
+
+        assertThat(service.handle(callback("manager-review:owner-confirm:41:20", 800L, 800L)))
+                .contains("Замечание подтверждено");
+
+        verify(adminService).resolveDispute(eq(41L), eq(20L),
+                eq(ManagerReportReviewAdminService.REPORT_CONFIRMED), any(), eq(owner));
+    }
+
+    @Test
+    void managerCannotPressOwnerDecisionButton() {
+        ManagerReportReviewSession review = disputedReview(ManagerReportReviewStatus.DISPUTED);
+        when(sessionRepository.findForUpdateById(41L)).thenReturn(Optional.of(review));
+        when(userService.findByChatId(700L)).thenReturn(Optional.of(user));
+
+        assertThat(service.handle(callback("manager-review:owner-right:41:20", 700L, -100900L)))
+                .hasValueSatisfying(answer -> assertThat(answer).contains("только владелец"));
+
+        verify(adminService, never()).resolveDispute(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void replyToOlderDraftIsRoutedToThatAuditAndNotNewestQuestion() {
+        ManagerReportReviewSession review = disputedReview(ManagerReportReviewStatus.DISPUTE_PENDING);
+        review.setReplyPromptMessageId(501);
+        ManagerReportReviewDispute dispute = dispute(review);
+        dispute.setPreviousSessionStatus(ManagerReportReviewStatus.COMPLETED);
+        String explanation = "Примеры уже отправлены клиенту в предыдущем сообщении, это видно в переписке";
+        when(sessionRepository.findFirstByManagerUserIdAndRecipientChatIdAndReplyPromptMessageId(
+                17L, -100900L, 501)).thenReturn(Optional.of(review));
+        when(issueService.submitDispute(review, explanation)).thenReturn(dispute);
+
+        assertThat(service.handleTextMessage(-100900L, user, explanation, 501)).isTrue();
+
+        verify(ownerNotificationService).notifyDispute(review, dispute);
+        verify(sessionRepository, never())
+                .findFirstByManagerUserIdAndRecipientChatIdAndStatusInOrderByCreatedAtDesc(any(), any(), any());
+        verify(qualityService, never()).assessAnswer(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
+        assertThat(review.getStatus()).isEqualTo(ManagerReportReviewStatus.COMPLETED);
+    }
+
+    private ManagerReportReviewSession disputedReview(ManagerReportReviewStatus status) {
+        ManagerReportReviewSession review = new ManagerReportReviewSession();
+        review.setId(41L);
+        review.setManagerUserId(17L);
+        review.setRecipientChatId(-100900L);
+        review.setStatus(status);
+        return review;
+    }
+
+    private ManagerReportReviewDispute dispute(ManagerReportReviewSession review) {
+        ManagerReportReviewDispute dispute = new ManagerReportReviewDispute();
+        dispute.setId(20L);
+        dispute.setIssue(issue(review, 0, "Выбранное замечание"));
+        dispute.setStatus(ManagerReportReviewDisputeStatus.DRAFT);
+        return dispute;
+    }
+
+    private CallbackQuery callback(String data, long from, long chatId) {
+        CallbackQuery callback = new CallbackQuery();
+        callback.setData(data);
+        org.telegram.telegrambots.meta.api.objects.User actor =
+                new org.telegram.telegrambots.meta.api.objects.User();
+        actor.setId(from);
+        callback.setFrom(actor);
+        callback.setMessage(messageInChat(chatId));
+        return callback;
+    }
+
     private Message messageInChat(long chatId) {
         Chat chat = new Chat();
         chat.setId(chatId);

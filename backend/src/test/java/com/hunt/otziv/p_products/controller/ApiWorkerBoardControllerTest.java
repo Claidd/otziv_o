@@ -178,12 +178,17 @@ class ApiWorkerBoardControllerTest {
     private Authentication workerAuth;
     private Worker worker;
 
+    @org.junit.jupiter.api.AfterEach
+    void clearOrderCommandSecurityContext() {
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
+    }
+
     @BeforeEach
     void setUp() {
         principal = () -> "worker";
         workerAuth = new UsernamePasswordAuthenticationToken(
                 "worker",
-                "password",
+                null,
                 List.of(new SimpleGrantedAuthority("ROLE_WORKER"))
         );
 
@@ -192,41 +197,49 @@ class ApiWorkerBoardControllerTest {
         worker = new Worker();
         worker.setId(88L);
 
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(workerAuth);
+        var publicationGate = new WorkerPublicationGateService(orderService, badReviewTaskService,
+                reviewRecoveryTaskService, userService, workerService, workerFlowLockService,
+                appSettingService, publicationSessionService);
+        var staffAccess = new com.hunt.otziv.p_products.application.WorkerStaffAccessPolicy(userService, managerService, workerService);
+        var boardTaskQueries = new com.hunt.otziv.p_products.board.service.WorkerBoardTaskQueries(
+                staffAccess, reviewService, reviewRecoveryTaskService, badReviewTaskService);
+        var overdueOrdersQuery = new com.hunt.otziv.p_products.board.service.WorkerOverdueOrdersQuery(
+                staffAccess, orderRepository, boardTaskQueries);
+        var schedule = new com.hunt.otziv.p_products.application.WorkerTaskSchedulePolicy(badReviewTaskService, reviewRecoveryTaskService);
+        var reviewAccess = new com.hunt.otziv.p_products.application.WorkerReviewAccessPolicy(reviewService, workerCellularAccessService, assignmentMutationGuardService);
         controller = new ApiWorkerBoardController(
+                staffAccess,
+                new com.hunt.otziv.p_products.application.WorkerOrderCommands(orderService,assignmentMutationGuardService,scheduledClientMessageService,companyService,workerActivityService,
+                        new com.hunt.otziv.p_products.application.OrderStatusCommandService(orderService,orderDetailsService,reviewService,assignmentMutationGuardService,scheduledClientMessageService,userService,workerService)),
+                new com.hunt.otziv.p_products.application.WorkerTaskEditingCommands(badReviewTaskService, reviewRecoveryTaskService, workerActivityService, workerCellularAccessService, assignmentMutationGuardService, schedule),
+                new com.hunt.otziv.p_products.application.WorkerTaskAssignmentCommands(badReviewTaskService, reviewRecoveryTaskService, assignmentMutationGuardService, staffAccess),
+                new com.hunt.otziv.p_products.application.WorkerTaskAccountCommands(badReviewTaskService, reviewRecoveryTaskService, workerActivityService, workerCellularAccessService, assignmentMutationGuardService),
+                new com.hunt.otziv.p_products.application.WorkerTaskCompletionCommands(userService, badReviewTaskService, reviewRecoveryTaskService, workerActivityService, workerCellularAccessService, assignmentMutationGuardService),
+                new com.hunt.otziv.p_products.application.WorkerReviewContentCommands(reviewService, workerActivityService, reviewAccess),
+                new com.hunt.otziv.p_products.application.WorkerReviewPublicationCommands(
+                        new com.hunt.otziv.p_products.application.ReviewPublicationCommandService(new com.hunt.otziv.p_products.application.ReviewPublicationMutationService(orderService,reviewService,assignmentMutationGuardService,workerActivityService),reviewService,publicationGate,credentialPreparationService,workerCellularAccessService,assignmentMutationGuardService),
+                        reviewService,publicationGate,workerActivityService,credentialPreparationService,workerCellularAccessService,assignmentMutationGuardService),
+                new com.hunt.otziv.p_products.application.WorkerCredentialCommands(reviewService, badReviewTaskService, reviewRecoveryTaskService, publicationGate, workerActivityService, credentialPreparationService, workerCellularAccessService, assignmentMutationGuardService, credentialRevealService, reviewAccess),
+                new com.hunt.otziv.p_products.application.WorkerReviewAccountCommands(reviewService,botService,
+                        assignmentMutationGuardService,workerCellularAccessService,publicationGate,workerActivityService),
                 orderService,
                 orderBoardQueryService,
-                orderRepository,
-                orderDetailsService,
+                boardTaskQueries,
+                overdueOrdersQuery,
                 reviewService,
                 promoTextService,
                 botService,
-                companyService,
-                userService,
-                managerService,
-                workerService,
                 new PerformanceMetrics(new SimpleMeterRegistry()),
                 badReviewTaskService,
                 reviewRecoveryTaskService,
                 metricSnapshotService,
                 appSettingService,
-                new WorkerPublicationGateService(
-                        orderService,
-                        badReviewTaskService,
-                        reviewRecoveryTaskService,
-                        userService,
-                        workerService,
-                        workerFlowLockService,
-                        appSettingService,
-                        publicationSessionService
-                ),
-                workerActivityService,
+                publicationGate,
                 credentialPreparationService,
                 staffDailyProgressService,
                 workerCellularAccessService,
-                assignmentMutationGuardService,
-                scheduledClientMessageService,
-                workerRiskAccessPolicy,
-                credentialRevealService
+                workerRiskAccessPolicy
         );
 
         lenient().when(userService.findByUserName("worker")).thenReturn(Optional.of(user));
@@ -332,7 +345,7 @@ class ApiWorkerBoardControllerTest {
         order.setWorker(worker);
         order.setWaitingForClient(true);
         when(orderService.getOrder(32L)).thenReturn(order);
-        when(orderService.changeStatusForOrder(32L, "В проверку")).thenReturn(true);
+        when(orderService.changeStatusForOrder(org.mockito.ArgumentMatchers.eq(32L), org.mockito.ArgumentMatchers.eq("В проверку"), org.mockito.ArgumentMatchers.any(org.springframework.security.core.Authentication.class))).thenReturn(true);
 
         controller.updateOrderStatus(
                 32L,
@@ -342,7 +355,7 @@ class ApiWorkerBoardControllerTest {
                 workerAuth
         );
 
-        verify(orderService).changeStatusForOrder(32L, "В проверку");
+        verify(orderService).changeStatusForOrder(eq(32L),eq("В проверку"),any(Authentication.class));
         assertFalse(order.isWaitingForClient());
         verify(orderService).save(order);
     }
@@ -355,6 +368,8 @@ class ApiWorkerBoardControllerTest {
         order.setWaitingForClient(false);
         when(orderService.getOrder(25_442L)).thenReturn(order);
 
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("manager", "", List.of(new SimpleGrantedAuthority("ROLE_MANAGER"))));
         controller.updateOrderClientWaiting(
                 25_442L,
                 new ApiWorkerBoardController.ClientWaitingRequest(true)
@@ -363,7 +378,7 @@ class ApiWorkerBoardControllerTest {
         assertTrue(order.isWaitingForClient());
         assertTrue(order.isClientTextExpected());
         assertTrue(order.getWaitingForClientChangedAt() != null);
-        verify(assignmentMutationGuardService).assertOrder(25_442L);
+        verify(assignmentMutationGuardService).assertOrder(eq(25_442L), any(Authentication.class));
         verify(orderService).save(order);
         verify(scheduledClientMessageService).synchronizeClientTextReminderForOrder(order);
     }
@@ -388,7 +403,7 @@ class ApiWorkerBoardControllerTest {
         );
 
         assertEquals(403, error.getStatusCode().value());
-        verify(orderService, never()).changeStatusForOrder(any(), anyString());
+        verify(orderService, never()).changeStatusForOrder(any(), anyString(),any(Authentication.class));
     }
 
     @Test
@@ -483,7 +498,7 @@ class ApiWorkerBoardControllerTest {
         assertEquals(0, controller.getOverdueOrders(ownerPrincipal, ownerAuth).total());
 
         Principal managerPrincipal = () -> "manager-overdue";
-        Authentication managerAuth = auth("ROLE_MANAGER");
+        Authentication managerAuth = new UsernamePasswordAuthenticationToken("manager", null, List.of(new SimpleGrantedAuthority("ROLE_MANAGER")));
         User managerUser = new User();
         managerUser.setId(41L);
         Manager manager = new Manager();
@@ -505,7 +520,7 @@ class ApiWorkerBoardControllerTest {
     @Test
     void managerWorkerFilterShowsOnlyManagerWorkersAndRejectsOthers() {
         Principal managerPrincipal = () -> "manager";
-        Authentication managerAuth = auth("ROLE_MANAGER");
+        Authentication managerAuth = new UsernamePasswordAuthenticationToken("manager", null, List.of(new SimpleGrantedAuthority("ROLE_MANAGER")));
         User managerUser = new User();
         managerUser.setId(11L);
         Manager manager = new Manager();
@@ -673,7 +688,7 @@ class ApiWorkerBoardControllerTest {
     @Test
     void managerRecoveryBoardIncludesFutureArchiveTasks() {
         Principal managerPrincipal = () -> "manager";
-        Authentication managerAuth = auth("ROLE_MANAGER");
+        Authentication managerAuth = new UsernamePasswordAuthenticationToken("manager", null, List.of(new SimpleGrantedAuthority("ROLE_MANAGER")));
         User managerUser = new User();
         managerUser.setId(11L);
         Manager manager = new Manager();
@@ -862,7 +877,7 @@ class ApiWorkerBoardControllerTest {
                 "all"
         );
         when(reviewService.getReviewById(906L)).thenReturn(review);
-        when(credentialRevealService.revealReview(review, request))
+        when(credentialRevealService.revealReview(eq(review), eq(request), any(Authentication.class)))
                 .thenReturn(new CredentialRevealResponse("secret"));
 
         var response = controller.revealReviewCredential(
@@ -875,8 +890,8 @@ class ApiWorkerBoardControllerTest {
         assertEquals("secret", response.getBody().value());
         assertTrue(response.getHeaders().getCacheControl().contains("no-store"));
         assertEquals("no-cache", response.getHeaders().getFirst(HttpHeaders.PRAGMA));
-        verify(assignmentMutationGuardService).assertReview(906L);
-        verify(credentialRevealService).revealReview(review, request);
+        verify(assignmentMutationGuardService).assertReview(eq(906L), any(Authentication.class));
+        verify(credentialRevealService).revealReview(eq(review), eq(request), any(Authentication.class));
     }
 
     @Test
@@ -1053,7 +1068,7 @@ class ApiWorkerBoardControllerTest {
 
         assertEquals(409, exception.getStatusCode().value());
         assertTrue(exception.getReason().contains("Плохие"));
-        verify(orderService, never()).changeStatusAndOrderCounter(15L);
+        verify(orderService, never()).changeStatusAndOrderCounter(eq(15L), any(Authentication.class));
     }
 
     @Test
@@ -1079,7 +1094,7 @@ class ApiWorkerBoardControllerTest {
 
         assertEquals(409, exception.getStatusCode().value());
         assertEquals("После копирования логина и пароля подождите еще 1 сек.", exception.getReason());
-        verify(orderService, never()).changeStatusAndOrderCounter(15L);
+        verify(orderService, never()).changeStatusAndOrderCounter(eq(15L), any(Authentication.class));
     }
 
     @Test
@@ -1096,12 +1111,12 @@ class ApiWorkerBoardControllerTest {
                 .thenReturn(false);
         when(workerFlowLockService.syncPublicationLock("worker:88:special-tasks", 88L, true, false))
                 .thenReturn(false);
-        when(orderService.changeStatusAndOrderCounter(15L)).thenReturn(true);
+        when(orderService.changeStatusAndOrderCounter(eq(15L), any(Authentication.class))).thenReturn(true);
 
         controller.publishReview(15L, principal, workerAuth);
 
-        verify(workerCellularAccessService).enforceProtectedAccess("publish");
-        verify(orderService).changeStatusAndOrderCounter(15L);
+        verify(workerCellularAccessService).enforceProtectedAccess(eq("publish"), any(Authentication.class));
+        verify(orderService).changeStatusAndOrderCounter(eq(15L), any(Authentication.class));
     }
 
     @Test
@@ -1139,7 +1154,7 @@ class ApiWorkerBoardControllerTest {
                 workerAuth
         );
 
-        verify(workerCellularAccessService).enforceSection("new");
+        verify(workerCellularAccessService).enforceSection(eq("new"), any(Authentication.class));
         verify(workerCellularAccessService, never()).enforceProtectedAccess("review");
     }
 
@@ -1156,7 +1171,7 @@ class ApiWorkerBoardControllerTest {
                 workerAuth
         );
 
-        verify(workerCellularAccessService).enforceSection("nagul");
+        verify(workerCellularAccessService).enforceSection(eq("nagul"), any(Authentication.class));
         verify(workerCellularAccessService, never()).enforceProtectedAccess("review");
     }
 
@@ -1174,7 +1189,7 @@ class ApiWorkerBoardControllerTest {
                 workerAuth
         );
 
-        verify(workerCellularAccessService).enforceSection("publish");
+        verify(workerCellularAccessService).enforceSection(eq("publish"), any(Authentication.class));
     }
 
     @Test
@@ -1186,7 +1201,7 @@ class ApiWorkerBoardControllerTest {
 
         controller.changeReviewBot(15L, null, principal, workerAuth);
 
-        verify(workerCellularAccessService).enforceSection("publish");
+        verify(workerCellularAccessService).enforceSection(eq("publish"), any(Authentication.class));
     }
 
     @Test
@@ -1212,7 +1227,7 @@ class ApiWorkerBoardControllerTest {
 
         assertEquals(409, exception.getStatusCode().value());
         assertEquals("После копирования логина и пароля подождите еще 2 сек.", exception.getReason());
-        verify(reviewService, never()).performNagulWithExceptions(15L, "worker");
+        verify(reviewService, never()).performNagulWithExceptions(eq(15L), eq("worker"), any(Authentication.class));
     }
 
     @Test
@@ -1266,7 +1281,7 @@ class ApiWorkerBoardControllerTest {
         );
 
         assertEquals(403, exception.getStatusCode().value());
-        verify(badReviewTaskService, never()).updateTask(eq(15L), anyString(), any());
+        verify(badReviewTaskService, never()).updateTask(eq(15L), anyString(), any(), any(Authentication.class));
     }
 
     @Test
@@ -1283,7 +1298,7 @@ class ApiWorkerBoardControllerTest {
                 workerAuth
         );
 
-        verify(badReviewTaskService).updateTask(15L, "text", currentDate);
+        verify(badReviewTaskService).updateTask(eq(15L), eq("text"), eq(currentDate), any(Authentication.class));
     }
 
     @Test
@@ -1302,13 +1317,13 @@ class ApiWorkerBoardControllerTest {
         );
 
         verify(badReviewTaskService, never()).getTask(15L);
-        verify(badReviewTaskService).updateTask(15L, "text", newDate);
+        verify(badReviewTaskService).updateTask(eq(15L), eq("text"), eq(newDate), any(Authentication.class));
     }
 
     @Test
     void managerCanReassignBadTaskToWorkerFromOwnTeam() {
         Principal managerPrincipal = () -> "manager";
-        Authentication managerAuth = auth("ROLE_MANAGER");
+        Authentication managerAuth = new UsernamePasswordAuthenticationToken("manager", null, List.of(new SimpleGrantedAuthority("ROLE_MANAGER")));
         User managerUser = new User();
         managerUser.setId(11L);
         Manager manager = new Manager();
@@ -1330,13 +1345,13 @@ class ApiWorkerBoardControllerTest {
                 managerAuth
         );
 
-        verify(badReviewTaskService).reassignTask(15L, targetWorker);
+        verify(badReviewTaskService).reassignTask(eq(15L), eq(targetWorker), any(Authentication.class));
     }
 
     @Test
     void managerCannotReassignTaskFromAnotherManager() {
         Principal managerPrincipal = () -> "manager";
-        Authentication managerAuth = auth("ROLE_MANAGER");
+        Authentication managerAuth = new UsernamePasswordAuthenticationToken("manager", null, List.of(new SimpleGrantedAuthority("ROLE_MANAGER")));
         User managerUser = new User();
         managerUser.setId(11L);
         Manager currentManager = new Manager();
@@ -1362,13 +1377,13 @@ class ApiWorkerBoardControllerTest {
         );
 
         assertEquals(403, exception.getStatusCode().value());
-        verify(badReviewTaskService, never()).reassignTask(any(), any());
+        verify(badReviewTaskService, never()).reassignTask(any(), any(), any(Authentication.class));
     }
 
     @Test
     void staleRecoveryManagerSnapshotCannotOverrideCurrentOrderManagerOnReassign() {
         Principal managerPrincipal = () -> "old-manager";
-        Authentication managerAuth = auth("ROLE_MANAGER");
+        Authentication managerAuth = new UsernamePasswordAuthenticationToken("old-manager", null, List.of(new SimpleGrantedAuthority("ROLE_MANAGER")));
         User managerUser = new User();
         managerUser.setId(11L);
         Manager oldManager = new Manager();
@@ -1397,7 +1412,7 @@ class ApiWorkerBoardControllerTest {
         );
 
         assertEquals(403, exception.getStatusCode().value());
-        verify(reviewRecoveryTaskService, never()).reassignTask(any(), any());
+        verify(reviewRecoveryTaskService, never()).reassignTask(any(), any(), any(Authentication.class));
     }
 
     @Test
@@ -1418,7 +1433,7 @@ class ApiWorkerBoardControllerTest {
         );
 
         assertEquals(403, exception.getStatusCode().value());
-        verify(reviewRecoveryTaskService, never()).updateTask(eq(15L), anyString(), anyString(), any());
+        verify(reviewRecoveryTaskService, never()).updateTask(eq(15L), anyString(), anyString(), any(), any(Authentication.class));
     }
 
     @Test
@@ -1761,8 +1776,8 @@ class ApiWorkerBoardControllerTest {
                 workerAuth
         );
 
-        verify(assignmentMutationGuardService).assertBadTask(597L);
-        verify(assignmentMutationGuardService, never()).assertReview(172291L);
+        verify(assignmentMutationGuardService).assertBadTask(eq(597L), any(Authentication.class));
+        verify(assignmentMutationGuardService, never()).assertReview(eq(172291L), any(Authentication.class));
         verify(badReviewTaskService).getTask(597L);
         verify(workerActivityService).recordSafely(
                 eq(workerAuth),
@@ -1796,7 +1811,7 @@ class ApiWorkerBoardControllerTest {
     void deactivateRecoveryTaskBotPreservesDomainConflictStatus() {
         ReviewRecoveryTask task = ReviewRecoveryTask.builder().id(40L).build();
         when(reviewRecoveryTaskService.getTask(40L)).thenReturn(task);
-        when(reviewRecoveryTaskService.deactivateAndChangeTaskBot(40L, 99L))
+        when(reviewRecoveryTaskService.deactivateAndChangeTaskBot(eq(40L), eq(99L), any(Authentication.class)))
                 .thenThrow(new ResponseStatusException(HttpStatus.CONFLICT, "bot mismatch"));
 
         ResponseStatusException exception = assertThrows(
@@ -1809,10 +1824,43 @@ class ApiWorkerBoardControllerTest {
     }
 
     @Test
+    void accountChangeEndpointsPreserveCooldown429() {
+        ResponseStatusException cooldown = new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "Ожидайте");
+        when(reviewRecoveryTaskService.changeTaskBot(eq(40L), any(Authentication.class))).thenThrow(cooldown);
+        when(badReviewTaskService.changeTaskBot(eq(42L), any(Authentication.class))).thenThrow(cooldown);
+
+        assertEquals(cooldown.getStatusCode(), assertThrows(ResponseStatusException.class, () -> controller.changeRecoveryTaskBot(40L)).getStatusCode());
+        assertEquals(cooldown.getReason(), assertThrows(ResponseStatusException.class, () -> controller.changeRecoveryTaskBot(40L)).getReason());
+        assertEquals(cooldown.getStatusCode(), assertThrows(ResponseStatusException.class, () -> controller.changeBadReviewTaskBot(42L)).getStatusCode());
+        assertEquals(cooldown.getReason(), assertThrows(ResponseStatusException.class, () -> controller.changeBadReviewTaskBot(42L)).getReason());
+    }
+
+
+    @Test
+    void taskCooldownRetainsItsDedicatedMvcPayloadAndRetryHeaders() throws Exception {
+        var now=java.time.Instant.parse("2026-09-07T00:00:00Z");
+        var state=new com.hunt.otziv.worker_activity.account_action.WorkerAccountActionCooldownState(true,60,25,now.plusSeconds(25),now);
+        var cooldown=new com.hunt.otziv.worker_activity.account_action.WorkerAccountActionCooldownException(state);
+        when(reviewRecoveryTaskService.changeTaskBot(eq(40L),any(Authentication.class))).thenThrow(cooldown);
+        org.junit.jupiter.api.Assertions.assertSame(cooldown,assertThrows(ResponseStatusException.class,() -> controller.changeRecoveryTaskBot(40L)));
+        var mvc=org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup(controller)
+            .setControllerAdvice(new com.hunt.otziv.worker_activity.account_action.WorkerAccountActionCooldownExceptionHandler())
+            .build();
+        var response=mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/worker/recovery-tasks/40/change-bot"))
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isTooManyRequests())
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Retry-After","25"))
+            .andReturn().getResponse();
+        var payload=new ObjectMapper().readTree(response.getContentAsString());
+        assertEquals("WORKER_ACCOUNT_ACTION_COOLDOWN",payload.path("code").asText());
+        assertEquals(25,payload.path("remainingSeconds").asInt());
+        assertTrue(payload.path("enabled").asBoolean());
+    }
+
+    @Test
     void deactivateBadReviewTaskBotPreservesDomainConflictStatus() {
         BadReviewTask task = BadReviewTask.builder().id(42L).build();
         when(badReviewTaskService.getTask(42L)).thenReturn(task);
-        when(badReviewTaskService.deactivateAndChangeTaskBot(42L, 99L))
+        when(badReviewTaskService.deactivateAndChangeTaskBot(eq(42L), eq(99L), any(Authentication.class)))
                 .thenThrow(new ResponseStatusException(HttpStatus.CONFLICT, "bot mismatch"));
 
         ResponseStatusException exception = assertThrows(

@@ -3,6 +3,7 @@ package com.hunt.otziv.personal_reminders.service;
 import com.hunt.otziv.bad_reviews.repository.BadReviewTaskRepository;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.personal_reminders.dto.PersonalReminderResponse;
+import com.hunt.otziv.personal_reminders.api.SystemReminderCommands;
 import com.hunt.otziv.personal_reminders.dto.PersonalReminderRequest;
 import com.hunt.otziv.personal_reminders.model.PersonalReminder;
 import com.hunt.otziv.personal_reminders.repository.PersonalReminderRepository;
@@ -58,6 +59,44 @@ class PersonalReminderServiceTest {
 
     @InjectMocks
     private PersonalReminderService service;
+
+    @Test
+    void scalarSystemReminderCommandResolvesRecipientAndKeepsExistingReminder() {
+        User user = User.builder().id(5L).active(true).build();
+        when(userService.findByIdToUserInfo(5L)).thenReturn(user);
+        when(reminderRepository.existsByUserIdAndSourceTypeAndSourceIdAndCompletedAtIsNull(5L, "RISK", 99L))
+                .thenReturn(true);
+
+        service.ensureOpenDueNow(new SystemReminderCommands.Reminder(5L, "title", "text", "RISK", 99L, 10L));
+
+        verify(reminderRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void scalarSystemReminderCommandCreatesDueNowReminderWithOriginalSource() {
+        User user = User.builder().id(5L).active(true).build();
+        when(userService.findByIdToUserInfo(5L)).thenReturn(user);
+
+        service.ensureOpenDueNow(new SystemReminderCommands.Reminder(5L, "title", "text", "RISK", 99L, 10L));
+
+        var saved = org.mockito.ArgumentCaptor.forClass(PersonalReminder.class);
+        verify(reminderRepository).save(saved.capture());
+        assertEquals(user, saved.getValue().getUser());
+        assertEquals("title", saved.getValue().getTitle());
+        assertEquals("text", saved.getValue().getText());
+        assertEquals("RISK", saved.getValue().getSourceType());
+        assertEquals(99L, saved.getValue().getSourceId());
+        assertEquals(10L, saved.getValue().getSourceOrderId());
+        assertEquals("datetime", saved.getValue().getReminderMode());
+        assertNotNull(saved.getValue().getRemindAt());
+    }
+
+    @Test
+    void scalarSystemReminderCommandDoesNotWriteForInactiveRecipient() {
+        when(userService.findByIdToUserInfo(5L)).thenReturn(User.builder().id(5L).active(false).build());
+        service.ensureOpenDueNow(new SystemReminderCommands.Reminder(5L, "title", "text", "RISK", 99L, 10L));
+        verifyNoInteractions(reminderRepository);
+    }
 
     @Test
     void listHidesRecoveryCompletionReminderWhenBatchReopened() {

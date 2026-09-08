@@ -6,6 +6,7 @@ import com.hunt.otziv.c_categories.model.Category;
 import com.hunt.otziv.c_categories.model.SubCategory;
 import com.hunt.otziv.c_categories.service.CategoryService;
 import com.hunt.otziv.c_categories.service.SubCategoryService;
+import com.hunt.otziv.c_companies.api.CompanyStatisticsOperations;
 import com.hunt.otziv.c_companies.dto.CompanyDTO;
 import com.hunt.otziv.c_companies.dto.CompanyContactDTO;
 import com.hunt.otziv.c_companies.dto.CompanyInfoDTO;
@@ -34,10 +35,8 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.p_products.model.Product;
-import com.hunt.otziv.p_products.next_order.model.NextOrderRequest;
-import com.hunt.otziv.p_products.next_order.repository.NextOrderRequestRepository;
-import com.hunt.otziv.p_products.next_order.model.NextOrderRequestStatus;
-import com.hunt.otziv.p_products.next_order.dto.NextOrderRequestSummary;
+import com.hunt.otziv.p_products.api.NextOrderRequests;
+import com.hunt.otziv.p_products.api.NextOrderRequests.CompanySummary;
 import com.hunt.otziv.r_review.service.ReviewService;
 import com.hunt.otziv.t_telegrambot.service.TelegramGroupLinkService;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
@@ -71,10 +70,6 @@ import java.util.stream.Collectors;
 @Slf4j
 @RequiredArgsConstructor
 public class CompanyServiceImpl implements CompanyService{
-    private static final Set<NextOrderRequestStatus> OPEN_NEXT_ORDER_STATUSES = Set.of(
-            NextOrderRequestStatus.PENDING,
-            NextOrderRequestStatus.FAILED
-    );
     private static final long OPERATOR_COUNT_ZERO_MANAGER_ID = 2L;
     private static final long OPERATOR_COUNT_ONE_MANAGER_ID = 3L;
     private static final int COMPANY_COMMENTS_MAX_LENGTH = 2000;
@@ -83,6 +78,8 @@ public class CompanyServiceImpl implements CompanyService{
 
     private final CompanyRepository companyRepository;
     private final CompanyInfoRepository companyInfoRepository;
+    private final CompanyRecordService companyRecords;
+    private final CompanyStatisticsOperations companyStatistics;
     private final LeadService leadService;
     private final UserService userService;
     private final ManagerService managerService;
@@ -96,7 +93,7 @@ public class CompanyServiceImpl implements CompanyService{
     private final TelegramService telegramService;
     private final TelegramGroupLinkService telegramGroupLinkService;
     private final MaxGroupLinkService maxGroupLinkService;
-    private final NextOrderRequestRepository nextOrderRequestRepository;
+    private final NextOrderRequests nextOrderRequests;
     private final PublicationProgressPreferenceService publicationProgressPreferenceService;
 
     @Value("${otziv.board.live-slice.retention-days:90}")
@@ -104,8 +101,7 @@ public class CompanyServiceImpl implements CompanyService{
 
     @Transactional
     public void save(Company company){
-        Company saved = companyRepository.save(company);
-        persistTransientCompanyInfo(saved);
+        companyRecords.save(company);
     } // Сохранение компании в БД
 
     //    Метод подготовки ДТО при создании компании из Лида менеджером
@@ -372,7 +368,7 @@ public class CompanyServiceImpl implements CompanyService{
         List<Company> companies = companyRepository.findAll(ids).stream()
                 .sorted(Comparator.comparingInt(company -> orderById.getOrDefault(company.getId(), Integer.MAX_VALUE)))
                 .toList();
-        Map<Long, NextOrderRequestSummary> nextOrderSummaries = nextOrderSummaries(ids);
+        Map<Long, CompanySummary> nextOrderSummaries = nextOrderRequests.companySummaries(ids);
 
         List<CompanyListDTO> companyListDTOs = companies.stream()
                 .map(company -> convertCompanyListDTO(company, nextOrderSummaries.get(company.getId())))
@@ -477,9 +473,7 @@ public class CompanyServiceImpl implements CompanyService{
 
     @Override
     public Company getCompaniesById(Long id) { // Берем компанию по Id
-        return companyRepository.findById(id).orElseThrow(() -> new UsernameNotFoundException(
-                String.format("Компания '%d' не найден", id)
-        ));
+        return companyRecords.getCompaniesById(id);
     } // Берем компанию по Id
 
     @Override
@@ -952,7 +946,7 @@ public class CompanyServiceImpl implements CompanyService{
 
     @Override
     public List<Object[]> getAllNewCompanies2(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
-        return companyRepository.getAllNewCompanies(firstDayOfMonth, lastDayOfMonth);
+        return companyStatistics.countNewCompaniesByManager(firstDayOfMonth, lastDayOfMonth);
     }
 
     @Override
@@ -1027,10 +1021,10 @@ public class CompanyServiceImpl implements CompanyService{
         if (company == null || company.getId() == null) {
             return convertCompanyListDTO(company, null);
         }
-        return convertCompanyListDTO(company, nextOrderSummaries(List.of(company.getId())).get(company.getId()));
+        return convertCompanyListDTO(company, nextOrderRequests.companySummaries(List.of(company.getId())).get(company.getId()));
     }
 
-    private CompanyListDTO convertCompanyListDTO(Company company, NextOrderRequestSummary nextOrderSummary) { // перевод компании в ДТО
+    private CompanyListDTO convertCompanyListDTO(Company company, CompanySummary nextOrderSummary) { // перевод компании в ДТО
         if (company != null && company.getId() != null) {
             Filial firstFilial = company.getFilial() == null
                     ? null
@@ -1072,67 +1066,6 @@ public class CompanyServiceImpl implements CompanyService{
             return new CompanyListDTO();
         }
     } // перевод компании в ДТО
-
-    private Map<Long, NextOrderRequestSummary> nextOrderSummaries(Collection<Long> companyIds) {
-        if (companyIds == null || companyIds.isEmpty()) {
-            return Map.of();
-        }
-
-        Map<Long, MutableNextOrderSummary> mutableSummaries = new HashMap<>();
-        List<NextOrderRequest> requests = nextOrderRequestRepository.findByCompanyIdInAndStatusIn(
-                companyIds,
-                OPEN_NEXT_ORDER_STATUSES
-        );
-
-        for (NextOrderRequest request : requests) {
-            if (request.getCompany() == null || request.getCompany().getId() == null) {
-                continue;
-            }
-            MutableNextOrderSummary summary = mutableSummaries.computeIfAbsent(
-                    request.getCompany().getId(),
-                    id -> new MutableNextOrderSummary()
-            );
-            summary.openCount++;
-            if (isAfter(request.getUpdatedAt(), summary.latestRequestAt)) {
-                summary.latestRequestAt = request.getUpdatedAt();
-                summary.latestFilialTitle = request.getFilial() == null ? null : request.getFilial().getTitle();
-            }
-            if (request.getStatus() == NextOrderRequestStatus.FAILED) {
-                summary.failedCount++;
-                if (request.getErrorMessage() != null
-                        && !request.getErrorMessage().isBlank()
-                        && isAfter(request.getUpdatedAt(), summary.latestErrorAt)) {
-                    summary.latestErrorAt = request.getUpdatedAt();
-                    summary.latestError = request.getErrorMessage();
-                }
-            }
-        }
-
-        Map<Long, NextOrderRequestSummary> result = new HashMap<>();
-        mutableSummaries.forEach((companyId, summary) -> result.put(
-                companyId,
-                new NextOrderRequestSummary(
-                        summary.openCount,
-                        summary.failedCount,
-                        summary.latestFilialTitle,
-                        summary.latestError
-                )
-        ));
-        return result;
-    }
-
-    private boolean isAfter(LocalDateTime candidate, LocalDateTime current) {
-        return candidate != null && (current == null || candidate.isAfter(current));
-    }
-
-    private static class MutableNextOrderSummary {
-        private int openCount;
-        private int failedCount;
-        private LocalDateTime latestRequestAt;
-        private String latestFilialTitle;
-        private LocalDateTime latestErrorAt;
-        private String latestError;
-    }
 
     private Set<OrderDTO> convertToOrderDTOSet(Set<Order> orders){ // перевод заказа в ДТО Сэт
         return orders.stream().map(this::convertToOrderDTO).collect(Collectors.toSet());
@@ -1648,7 +1581,7 @@ public class CompanyServiceImpl implements CompanyService{
         filialDTO.setUrl(clean(filialDTO.getUrl()));
         Filial existingFilial = filialService.findFilialByTitleAndUrl(filialDTO.getTitle(), filialDTO.getUrl());
         if (existingFilial != null) {
-            return Collections.singleton(existingFilial);
+            throw new IllegalArgumentException("Этот филиал уже существует. Используйте существующую компанию");
         } else {
             Filial newFilial = filialService.save(filialDTO);
             return Collections.singleton(newFilial);
@@ -1820,11 +1753,7 @@ public class CompanyServiceImpl implements CompanyService{
     }
 
     private void persistTransientCompanyInfo(Company company) {
-        if (company == null || company.getInfo() == null) {
-            return;
-        }
-        company.getInfo().setCompany(company);
-        company.setInfo(companyInfoRepository.save(company.getInfo()));
+        companyRecords.persistTransientCompanyInfo(company);
     }
 
     private boolean companyInfoSame(CompanyInfo currentInfo, CompanyInfo updatedInfo) {

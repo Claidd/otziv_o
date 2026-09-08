@@ -1,6 +1,9 @@
+import type { OrderEditPayload } from '@otziv/client-common/order-editor';
+export type { OrderEditPayload } from '@otziv/client-common/order-editor';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, map } from 'rxjs';
+import { decodeOrderEditPayload, managerOrderEditPath } from '@otziv/client-common/order-editor';
 import { appEnvironment } from './app-environment';
 import { DailyWorkProgress } from './daily-progress';
 import type {
@@ -519,30 +522,6 @@ export interface CompanyOrderCreateResult {
   amount: number;
 }
 
-export interface OrderEditPayload {
-  id: number;
-  companyId: number;
-  companyTitle: string;
-  status: string;
-  sum?: number;
-  amount?: number;
-  counter?: number;
-  created: string;
-  changed: string;
-  payDay: string;
-  orderComments: string;
-  commentsCompany: string;
-  complete: boolean;
-  filial?: ManagerOption | null;
-  manager?: ManagerOption | null;
-  worker?: ManagerOption | null;
-  filials: ManagerOption[];
-  managers: ManagerOption[];
-  workers: ManagerOption[];
-  canComplete: boolean;
-  canDelete: boolean;
-  canCancelPayment: boolean;
-}
 
 export interface OrderUpdateRequest {
   filialId: number | null;
@@ -1100,7 +1079,7 @@ export class ManagerApi {
   }
 
   getOrderEdit(orderId: number): Observable<OrderEditPayload> {
-    return this.http.get<OrderEditPayload>(`${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/edit`);
+    return this.http.get<unknown>(`${appEnvironment.apiBaseUrl}${managerOrderEditPath(orderId)}`).pipe(map(decodeOrderEditPayload));
   }
 
   updateOrder(orderId: number, request: OrderUpdateRequest): Observable<OrderEditPayload> {

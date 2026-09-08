@@ -80,7 +80,7 @@ function Get-LocalNodeDependencyClosure {
         }
 
         $source = [IO.File]::ReadAllText($currentPath)
-        foreach ($match in [regex]::Matches($source, 'require\(["''](?<relative>\./[^"'']+)["'']\)')) {
+        foreach ($match in [regex]::Matches($source, 'require(?:\.resolve)?\(["''](?<relative>\./[^"'']+)["'']\)')) {
             $dependencyPath = [IO.Path]::GetFullPath((Join-Path ([IO.Path]::GetDirectoryName($currentPath)) $match.Groups['relative'].Value))
             if ([string]::IsNullOrEmpty([IO.Path]::GetExtension($dependencyPath))) {
                 $dependencyPath += '.js'
@@ -325,6 +325,15 @@ Assert-Match $deploy 'set_env EXTERNAL_REVIEW_WORKER_IMAGE.+external_review_work
 Assert-Match $deploy 'if \[ "`\$deploy_external_review_worker" = "1" \]; then[\s\S]{0,300}recreate_service_with_retry external-review-worker external-review[\s\S]{0,200}wait_service_healthy external-review-worker[\s\S]{0,300}assert_running_service_image external-review-worker[\s\S]{0,100}fi' 'Production deploy must start, health-check, and verify the worker image only when opted in.'
 Assert-Match $deploy 'if \[ "`\$deploy_external_review_worker" != "1" \]; then[\s\S]{0,500}stop external-review-worker' 'Production deploy must stop a stale worker when the replacement backend has external checks disabled.'
 Assert-Order $deploy 'wait_service_healthy app 1200' 'compose --profile external-review stop external-review-worker' 'A disabled rollout must keep the previous worker until the replacement backend is healthy.'
+$observerRollout = Get-Content -LiteralPath (Join-Path $repoRoot 'infrastructure/scripts/prod/rollout-docker-observer.sh') -Raw
+Assert-Match $deploy '"infrastructure\\scripts\\prod\\rollout-docker-observer\.sh"' 'Deploy bundle must include the sourced observer rollout owner.'
+Assert-Match $deploy '\. infrastructure/scripts/prod/rollout-docker-observer\.sh\r?\nrollout_docker_observer' 'Deploy must execute the checked-in observer rollout owner.'
+Assert-Order $deploy 'wait_service_healthy app 1200' 'rollout_docker_observer' 'Observer rollout must follow the healthy replacement backend.'
+Assert-Order $deploy 'rollout_docker_observer' '--remove-orphans --no-deps dozzle alloy' 'Consumer log-flow proof must precede orphan cleanup.'
+Assert-Order $observerRollout 'compose build docker-observer' 'recreate_service_with_retry docker-observer' 'Each deploy must build the current observer before recreation.'
+Assert-Order $observerRollout 'wait_service_healthy docker-observer 120' 'recreate_service_with_retry dozzle' 'The proxy must be ready before its consumers.'
+Assert-Order $observerRollout 'verify_observer_logflow dozzle' 'recreate_service_with_retry alloy' 'Consumer rollout must be sequential with actual Dozzle stream proof.'
+Assert-Order $observerRollout 'wait_service_healthy alloy 120' 'verify_observer_logflow alloy' 'Alloy rollout must verify actual Loki ingestion.'
 Assert-Order $deploy 'wait_service_healthy app 1200' '--remove-orphans --no-deps dozzle alloy' 'Orphan cleanup must not run until the replacement backend is healthy.'
 Assert-Match $deploy 'if \[ "`\$deploy_external_review_worker" = "1" \]; then[\s\S]{0,150}compose --profile external-review up -d --remove-orphans --no-deps dozzle alloy[\s\S]{0,100}else[\s\S]{0,100}compose up -d --remove-orphans --no-deps dozzle alloy' 'Orphan cleanup must preserve the opted-in worker profile.'
 Assert-Match $deploy 'set_env EXTERNAL_REVIEW_CHECK_ENABLED "true"[\s\S]{0,100}set_env EXTERNAL_REVIEW_CHECK_ENABLED "false"' 'Production deploy must persist the backend hard switch consistently with the worker opt-in.'
@@ -467,7 +476,14 @@ Assert-Match $deploy 'assert_compose_service_image external-review-worker "`\$ex
 Assert-Match $deploy 'assert_running_service_image app "`\$app_image"[\s\S]{0,1500}assert_running_service_image nginx "`\$web_image"' 'Backend and frontend image IDs must be verified during the rollout.'
 Assert-Match $deploy 'whatsapp\\chromium-launch\.js' 'Deploy bundle must include the shared audited Chromium launch arguments.'
 Assert-Match $deploy 'whatsapp\\chromium-smoke\.js' 'Deploy bundle must include the real Chromium launch smoke test.'
-$whatsappRuntimeDependencies = Get-LocalNodeDependencyClosure -EntryPath $whatsappIndexPath
+$whatsappRuntimeDependencies = @(
+    foreach ($entry in @('index.js', 'chromium-smoke.js', 'compatibility-smoke.js',
+            'remote-session-admin.js', 'operation-ledger-maintenance.js', 'operation-ledger-benchmark.js')) {
+        Get-LocalNodeDependencyClosure -EntryPath (Join-Path $repoRoot "whatsapp/$entry")
+    }
+) | Sort-Object -Unique
+$deployBundle = [regex]::Match($deploy, '(?s)\$deployBundlePaths\s*=\s*@\((.*?)\r?\n\)').Groups[1].Value
+if ([string]::IsNullOrWhiteSpace($deployBundle)) { throw 'Deploy bundle declaration must be inspectable.' }
 $resolvedRepoRoot = [IO.Path]::GetFullPath($repoRoot)
 $repoRootPrefix = $resolvedRepoRoot.TrimEnd([char[]]@(
         [IO.Path]::DirectorySeparatorChar,
@@ -479,8 +495,18 @@ foreach ($dependencyPath in $whatsappRuntimeDependencies) {
         throw "WhatsApp runtime dependency escapes the repository: $resolvedDependencyPath"
     }
     $relativePath = $resolvedDependencyPath.Substring($repoRootPrefix.Length).Replace('/', '\')
-    Assert-Match $deploy ('"' + [regex]::Escape($relativePath) + '"') "Deploy bundle must include WhatsApp runtime dependency: $relativePath"
+    Assert-Match $deployBundle ('"' + [regex]::Escape($relativePath) + '"') "Deploy bundle must include WhatsApp runtime/maintenance dependency: $relativePath"
 }
+foreach ($runbook in @('whatsapp/OPERATION_LEDGER_RECOVERY.md', 'whatsapp/OUTBOUND_OPERATIONS.md',
+        'docs/WHATSAPP_INBOUND_DELIVERY_RUNBOOK.md', 'docs/WHATSAPP_REMOTE_SESSION_RECOVERY.md')) {
+    if (-not [IO.File]::Exists((Join-Path $repoRoot $runbook))) { throw "WhatsApp runbook is missing: $runbook" }
+    Assert-Match $deployBundle ('"' + [regex]::Escape($runbook.Replace('/', '\')) + '"') "Deploy bundle must include WhatsApp runbook: $runbook"
+    if ($runbook.StartsWith('docs/')) {
+        if ($runbook -notin @(Get-OtzivDeployInputPaths)) { throw "Automatic snapshot must include runbook: $runbook" }
+        Assert-Match $legacyDeploy ('Copy-DeployPath[^\r\n]+-RelativePath "' + [regex]::Escape($runbook.Replace('/', '\')) + '"') "SSH image deploy must include runbook: $runbook"
+    }
+}
+Assert-Match $legacyDeploy 'Copy-DeployPath[^\r\n]+-RelativePath "whatsapp"' 'SSH image deploy must retain the complete WhatsApp runtime and maintenance source tree.'
 Assert-Match $whatsappIndex 'chromiumLaunchArgs\(proxyServerArg\(\)\)' 'WhatsApp clients must use the shared audited Chromium launch arguments.'
 Assert-Match $whatsappIndex 'webVersionCache:\s*\{[\s\S]{0,300}type:\s*"none"' 'WhatsApp Web cache must stay disabled because its default local persistence targets the read-only application directory before READY.'
 Assert-Match $whatsappPackage '"brace-expansion"\s*:\s*"2\.1\.4"' 'WhatsApp must retain the patched brace-expansion override.'

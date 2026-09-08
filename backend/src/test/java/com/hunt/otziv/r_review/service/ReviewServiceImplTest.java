@@ -62,6 +62,8 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class ReviewServiceImplTest {
+    @org.mockito.Mock
+    private com.hunt.otziv.r_review.photo.ReviewPhotoReferencePolicy photoReferences;
 
     private static final String PHOTO_URL = "https://storage.example/reviews/17-photo.jpg";
 

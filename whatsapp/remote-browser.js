@@ -60,26 +60,38 @@ async function resolveRemoteBrowserUrl(value, lookup = dns.lookup) {
   return parsed.toString().replace(/\/$/u, "");
 }
 
-function installRemoteBrowserLifecycle(client) {
+function installRemoteBrowserLifecycle(client, { beforeDestroy, afterDestroy } = {}) {
   if (!client || typeof client !== "object") {
     throw new Error("WhatsApp client is required");
   }
   client.destroy = async () => {
     const page = client.pupPage;
     const browser = client.pupBrowser;
+    let cleanupFailure;
+    try { await beforeDestroy?.(client); } catch (error) { cleanupFailure = error; }
     try {
       if (page && typeof page.isClosed === "function" && !page.isClosed()) {
         await page.close();
       }
     } catch (error) {
-      // A dead page must not prevent detaching from the peoples-owned browser.
+      // Detach even on failure, but never certify that an unknown owned page
+      // was closed: a replacement client could otherwise run alongside it.
+      cleanupFailure ||= error;
     }
-    if (browser && browser.isConnected?.()) {
-      browser.disconnect();
+    try {
+      if (browser && browser.isConnected?.()) await browser.disconnect();
+    } catch (error) {
+      cleanupFailure ||= error;
     }
-    if (client.authStrategy && typeof client.authStrategy.destroy === "function") {
-      await client.authStrategy.destroy();
+    try {
+      if (client.authStrategy && typeof client.authStrategy.destroy === "function") {
+        await client.authStrategy.destroy();
+      }
+    } catch (error) {
+      cleanupFailure ||= error;
     }
+    if (cleanupFailure) throw cleanupFailure;
+    await afterDestroy?.();
   };
   return client;
 }

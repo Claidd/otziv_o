@@ -36,6 +36,26 @@ import static org.mockito.Mockito.when;
 class AdminPaymentControllerTest {
 
     @Test
+    void journalHttpSortIsAdditiveAndKeepsItsExistingAuthorization() throws Exception {
+        var controller = new AdminPaymentController(paymentLinkService, paymentProfileService, runtimeSettingsService,
+                manualPaymentTaskService, contractorPaymentTargetAccessPolicy);
+        var mvc = org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup(controller).build();
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/admin/payments/tbank-links"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk());
+        verify(paymentLinkService).adminLinks(0, 25, "all", "", null, null, "LIVE", "desc");
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/admin/payments/tbank-links")
+                        .param("sortDirection", "asc").param("source", "ARCHIVE").param("status", "paid")
+                        .param("search", "needle").param("page", "2").param("size", "10")
+                        .param("from", "2026-09-01").param("to", "2026-09-03"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk());
+        verify(paymentLinkService).adminLinks(2, 10, "paid", "needle", java.time.LocalDate.of(2026, 9, 1),
+                java.time.LocalDate.of(2026, 9, 3), "ARCHIVE", "asc");
+        var method = AdminPaymentController.class.getMethod("tbankLinks", int.class, int.class, String.class,
+                String.class, String.class, java.time.LocalDate.class, java.time.LocalDate.class, String.class);
+        assertEquals("hasAnyRole('ADMIN', 'OWNER')", method.getAnnotation(PreAuthorize.class).value());
+    }
+
+    @Test
     void bankProfileEndpointsKeepLegacyTbankAliases() throws Exception {
         GetMapping getMapping = AdminPaymentController.class
                 .getMethod("bankProfiles")

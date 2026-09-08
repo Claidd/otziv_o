@@ -238,6 +238,8 @@ try {
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath ".dockerignore"
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "Dockerfile.whatsapp"
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "whatsapp"
+    Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "docs\WHATSAPP_INBOUND_DELIVERY_RUNBOOK.md"
+    Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "docs\WHATSAPP_REMOTE_SESSION_RECOVERY.md"
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\nginx"
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\keycloak"
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\prometheus"

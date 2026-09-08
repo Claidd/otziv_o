@@ -19,6 +19,7 @@
 
 
                 <form method="post" th:action="@{'/whatsapp/send'}" >
+                    <input type="hidden" name="operationId" th:value="${operationId}" />
                     <label>Клиент:
                         <select name="clientId">
                             <option value="client1">client1</option>
@@ -36,6 +37,7 @@
                     </label>
                     <br><br>
                     <button type="submit">Отправить</button>
+                    <a th:href="@{/whatsapp}">Новое сообщение</a>
                 </form>
 
                 <div style="margin-top: 20px; color: green;">

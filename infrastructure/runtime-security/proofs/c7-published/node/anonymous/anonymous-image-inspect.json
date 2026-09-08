@@ -1,0 +1,75 @@
+[
+    {
+        "Id": "sha256:b534b8f7a094402a949e022d13fafbf91ff447bf8aaf67d51c122f052e2848fb",
+        "RepoTags": [],
+        "RepoDigests": [
+            "ghcr.io/claidd/otziv-security@sha256:8917049917dc110930957c5d59cff66489d9a3e486ffdfe7b2221c40acc0f14c"
+        ],
+        "Parent": "",
+        "Comment": "buildkit.dockerfile.v0",
+        "Created": "2026-09-08T02:32:44.898425363Z",
+        "DockerVersion": "",
+        "Author": "",
+        "Config": {
+            "Hostname": "",
+            "Domainname": "",
+            "User": "",
+            "AttachStdin": false,
+            "AttachStdout": false,
+            "AttachStderr": false,
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "NODE_VERSION=24.20.0",
+                "YARN_VERSION=1.22.22"
+            ],
+            "Cmd": [
+                "node"
+            ],
+            "Image": "",
+            "Volumes": null,
+            "WorkingDir": "/",
+            "Entrypoint": [
+                "docker-entrypoint.sh"
+            ],
+            "OnBuild": null,
+            "Labels": {
+                "com.otziv.publication.revision": "2cd29a17f5ae7c8d7e00d332379c7ac887d5b52f",
+                "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+                "com.otziv.reviewed-component": "node",
+                "com.otziv.security.patch": "Node24.20.0/npm11.19.0 unchanged; exact compatible npm vendor package patches and Alpine3.24 updates"
+            }
+        },
+        "Architecture": "amd64",
+        "Os": "linux",
+        "Size": 177457339,
+        "GraphDriver": {
+            "Data": {
+                "LowerDir": "/var/lib/docker/overlay2/93b8d535958ed96071cbf8b19cc928d1bf5056d5095a56aa9f8284a3e643c2f6/diff:/var/lib/docker/overlay2/6f54ea833909033e786c145c7e6dcfd8beb186c9c97da3957f3b20b71f147ca1/diff:/var/lib/docker/overlay2/a5249b820e2a077f68937e8316817123ab51ea3339758e7ffaecf22535d9922b/diff:/var/lib/docker/overlay2/34f2b18b0e81c09f4912ec4ec58ff871390b8e37ba6f405ad46953b7201bc8e4/diff:/var/lib/docker/overlay2/ba2936edb284b8f739ce108035b1e2522a029b68b1024994dfaec5ccd55e60f5/diff:/var/lib/docker/overlay2/18f06f9c6a541bdb5477968c49631b8bce42431b6b5e9418bd722a754aa27f83/diff:/var/lib/docker/overlay2/f3fc253691e70f996e29f752cecd41c9eb6ebe2484100579ab01ef51f4a5f37c/diff:/var/lib/docker/overlay2/6cd9d25b77d5d8d421834484c24c8e2eca8d11db83ca99100ad7e3b7fe7e3329/diff",
+                "MergedDir": "/var/lib/docker/overlay2/1da17dcf864008053c20dbc0faab8446f48eaa1fd26494705d3f6b738592b186/merged",
+                "UpperDir": "/var/lib/docker/overlay2/1da17dcf864008053c20dbc0faab8446f48eaa1fd26494705d3f6b738592b186/diff",
+                "WorkDir": "/var/lib/docker/overlay2/1da17dcf864008053c20dbc0faab8446f48eaa1fd26494705d3f6b738592b186/work"
+            },
+            "Name": "overlay2"
+        },
+        "RootFS": {
+            "Type": "layers",
+            "Layers": [
+                "sha256:34884abbe92863fce933ed7c39c0e045631af0ed86d5cc0dfbdf9fdca426ce3c",
+                "sha256:f467b00ca3efcb5b6a186b885b2f953ebcaafe718037830678307fd49e9ea668",
+                "sha256:a48208c8ecf5256d9e84d598c0d55e808ae1e94c68aee812526a8218ccb46844",
+                "sha256:2ab560d5e5312e7efd41e4fc35f9000848bfa9bffc4707dd09d10072999073d0",
+                "sha256:733873964a74c50c731b94a18c1e92e5ab2ee3e43f10c64bcb5989e721b164ef",
+                "sha256:9210e14239faf178922a411e6362cc5829fb5216c92f0a4ead9850304ea7f945",
+                "sha256:c40ee94c9a0efd7018aa068b493660542b8baeeebe7797c4733446cd59eb6520",
+                "sha256:9e851e92985bead69da8528cf869b67e6f9b208f8dfb32fb306c2bb81a4c79e5",
+                "sha256:9ddfdd821b67ab0d8eb59779e54e5d60bee46e217951e7c56b8e7e400f4ab304"
+            ]
+        },
+        "Metadata": {
+            "LastTagTime": "0001-01-01T00:00:00Z"
+        }
+    }
+]

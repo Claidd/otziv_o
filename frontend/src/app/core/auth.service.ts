@@ -3,7 +3,12 @@ import Keycloak, { KeycloakProfile, KeycloakTokenParsed } from 'keycloak-js';
 import { apiErrorMessage } from '../shared/api-error-message';
 import { appEnvironment } from './app-environment';
 
-export type AuthStatus = 'initializing' | 'anonymous' | 'authenticated' | 'refreshing' | 'expired' | 'error';
+export type AuthStatus = 'initializing' | 'anonymous' | 'authenticated' | 'refreshing' | 'temporarily-unavailable' | 'expired' | 'error';
+
+export class AuthTemporarilyUnavailableError extends Error {
+  readonly status = 0;
+  constructor() { super('Не удалось обновить сессию. Проверьте соединение и повторите действие.'); }
+}
 
 export const KEYCLOAK_CLIENT = new InjectionToken<Keycloak>('KEYCLOAK_CLIENT', {
   providedIn: 'root',
@@ -17,6 +22,10 @@ export class AuthService {
   private refreshPromise: Promise<boolean> | null = null;
   private redirectingToLogin = false;
   private browserResumeHandlersRegistered = false;
+  private sessionGeneration = 0;
+  private retryTimer: ReturnType<typeof setTimeout> | undefined;
+  private retryAttempt = 0;
+  private nextRetryAt = 0;
 
   readonly status = signal<AuthStatus>('initializing');
   readonly error = signal<string | null>(null);
@@ -67,12 +76,14 @@ export class AuthService {
   }
 
   login(targetUrl = '/'): Promise<void> {
+    this.invalidatePendingAuthentication();
     return this.keycloak.login({
       redirectUri: `${window.location.origin}${safeAuthTarget(targetUrl)}`
     });
   }
 
   restartLogin(targetUrl = '/'): Promise<void> {
+    this.invalidatePendingAuthentication();
     return this.keycloak.login({
       redirectUri: `${window.location.origin}${safeAuthTarget(targetUrl)}`,
       prompt: 'login'
@@ -80,6 +91,8 @@ export class AuthService {
   }
 
   logout(): Promise<void> {
+    this.invalidatePendingAuthentication();
+    this.redirectingToLogin = true;
     this.stopRefreshLoop();
     this.clearSession('anonymous');
 
@@ -93,12 +106,14 @@ export class AuthService {
       return null;
     }
 
-    const refreshed = await this.refreshToken(30);
-    if (!refreshed && !this.keycloak.token) {
+    const generation = this.sessionGeneration;
+    await this.refreshToken(30);
+    if (generation !== this.sessionGeneration || this.redirectingToLogin || !this.keycloak.authenticated) {
       return null;
     }
-
-    return this.keycloak.token ?? null;
+    const token = this.getOptionalToken(0);
+    if (!token) throw new AuthTemporarilyUnavailableError();
+    return token;
   }
 
   /**
@@ -113,7 +128,7 @@ export class AuthService {
 
     const expiresAtSeconds = this.keycloak.tokenParsed?.exp;
     if (!expiresAtSeconds
-      || expiresAtSeconds <= Math.floor(Date.now() / 1000) + Math.max(0, minValiditySeconds)) {
+      || expiresAtSeconds <= Math.floor(Date.now() / 1000) - (this.keycloak.timeSkew ?? 0) + Math.max(0, minValiditySeconds)) {
       return null;
     }
 
@@ -132,6 +147,12 @@ export class AuthService {
     return roles.some((role) => this.hasRealmRole(role));
   }
 
+  captureSession(): number { return this.sessionGeneration; }
+
+  isCurrentRequest(generation: number, token: string | null): boolean {
+    return generation === this.sessionGeneration && !this.redirectingToLogin && (token === null || token === (this.keycloak.token ?? null));
+  }
+
   async refreshToken(minValiditySeconds = 60): Promise<boolean> {
     if (this.redirectingToLogin || !this.keycloak.authenticated) {
       return false;
@@ -140,25 +161,30 @@ export class AuthService {
     if (this.refreshPromise) {
       return this.refreshPromise;
     }
+    if (Date.now() < this.nextRetryAt) return false;
 
     this.status.set('refreshing');
-
-    this.refreshPromise = this.keycloak.updateToken(minValiditySeconds)
+    const generation = this.sessionGeneration;
+    const pending = this.keycloak.updateToken(minValiditySeconds)
       .then((refreshed) => {
+        if (generation !== this.sessionGeneration || this.redirectingToLogin) return false;
+        this.resetRefreshRetry();
         this.syncTokenState();
         this.error.set(null);
         this.status.set('authenticated');
         return refreshed;
       })
       .catch((error) => {
-        this.handleRefreshFailure(error);
+        if (generation === this.sessionGeneration && !this.redirectingToLogin) this.handleRefreshFailure(error);
         return false;
       })
       .finally(() => {
-        this.refreshPromise = null;
+        if (this.refreshPromise === pending) {
+          this.refreshPromise = null;
+        }
       });
-
-    return this.refreshPromise;
+    this.refreshPromise = pending;
+    return pending;
   }
 
   handleUnauthorized(targetUrl = this.currentBrowserPath()): void {
@@ -167,6 +193,7 @@ export class AuthService {
     }
 
     this.redirectingToLogin = true;
+    this.invalidatePendingAuthentication();
     this.stopRefreshLoop();
     this.clearSession('expired');
     this.error.set('Сессия закончилась. Войдите снова.');
@@ -193,21 +220,23 @@ export class AuthService {
 
   private registerKeycloakCallbacks(): void {
     this.keycloak.onAuthSuccess = () => {
+      this.invalidatePendingAuthentication();
+      this.redirectingToLogin = false;
       void this.setAuthenticatedState();
     };
 
     this.keycloak.onAuthLogout = () => {
-      this.clearSession('anonymous');
+      if (!this.redirectingToLogin) this.handleUnauthorized();
     };
 
     this.keycloak.onAuthRefreshSuccess = () => {
-      this.syncTokenState();
-      this.error.set(null);
-      this.status.set('authenticated');
+      // updateToken's promise owns the result and its session fence. The SDK
+      // invokes this callback before resolving that promise.
     };
 
     this.keycloak.onAuthRefreshError = () => {
-      this.handleRefreshFailure();
+      // Keycloak invokes this without the cause before rejecting updateToken.
+      // Only the rejection can distinguish a network outage from invalid_grant.
     };
 
     this.keycloak.onTokenExpired = () => {
@@ -225,6 +254,7 @@ export class AuthService {
     window.addEventListener('focus', () => {
       void this.refreshTokenAfterResume();
     });
+    window.addEventListener('online', () => { void this.refreshTokenAfterResume(); });
 
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
@@ -238,10 +268,12 @@ export class AuthService {
       return;
     }
 
+    this.resetRefreshRetry();
     await this.refreshToken(30);
   }
 
   private async setAuthenticatedState(): Promise<void> {
+    const generation = this.sessionGeneration;
     this.authenticated.set(true);
     this.syncTokenState();
     this.error.set(null);
@@ -249,9 +281,10 @@ export class AuthService {
     this.startRefreshLoop();
 
     try {
-      this.profile.set(await this.keycloak.loadUserProfile());
+      const profile = await this.keycloak.loadUserProfile();
+      if (generation === this.sessionGeneration && !this.redirectingToLogin) this.profile.set(profile);
     } catch {
-      this.profile.set(null);
+      if (generation === this.sessionGeneration && !this.redirectingToLogin) this.profile.set(null);
     }
   }
 
@@ -264,8 +297,35 @@ export class AuthService {
   }
 
   private handleRefreshFailure(error?: unknown): void {
-    this.handleUnauthorized();
-    this.error.set(error ? this.getErrorMessage(error) : 'Сессия закончилась. Войдите снова.');
+    const response = (error as { response?: { status?: number }; status?: number } | undefined);
+    const status = response?.response?.status ?? response?.status;
+    if (!this.keycloak.authenticated || status === 400 || status === 401 || status === 403 || this.isAuthRestartPage()) {
+      this.handleUnauthorized();
+      return;
+    }
+    this.status.set('temporarily-unavailable');
+    this.error.set(new AuthTemporarilyUnavailableError().message);
+    const delay = [2_000, 5_000, 15_000][this.retryAttempt++];
+    this.nextRetryAt = delay === undefined ? Number.POSITIVE_INFINITY : Date.now() + delay;
+    if (delay !== undefined) {
+      const generation = this.sessionGeneration;
+      this.retryTimer = setTimeout(() => {
+        this.retryTimer = undefined;
+        if (generation === this.sessionGeneration && !this.redirectingToLogin) void this.refreshToken(-1);
+      }, delay);
+    }
+  }
+
+  private resetRefreshRetry(): void {
+    if (this.retryTimer !== undefined) clearTimeout(this.retryTimer);
+    this.retryTimer = undefined;
+    this.retryAttempt = 0;
+    this.nextRetryAt = 0;
+  }
+
+  private invalidatePendingAuthentication(): void {
+    this.sessionGeneration += 1;
+    this.resetRefreshRetry();
   }
 
   private clearSession(status: AuthStatus): void {

@@ -1,4 +1,6 @@
-import { Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
+import { commonInvoiceDeliveryWarning } from '@otziv/client-common/billing-payments';
+import { CommonBillingApi } from '../core/common-billing.api';
+import { inject, Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, Router } from '@angular/router';
 import { IonContent, IonRefresher, IonRefresherContent, RefresherCustomEvent } from '@ionic/angular/standalone';
@@ -647,6 +649,7 @@ type InvoiceAction =
   `]
 })
 export class CommonBillingPage implements OnInit, OnDestroy {
+  private readonly commonBillingApi = inject(CommonBillingApi);
   readonly paymentInitNoPaymentActionLabel = COMMON_INVOICE_NO_PAYMENT_ACTION_LABEL;
   readonly paymentInitNoPaymentActionHint = commonInvoiceNoPaymentActionHint();
   readonly paymentInitInstructions = commonInvoicePaymentInitInstructions();
@@ -763,7 +766,7 @@ export class CommonBillingPage implements OnInit, OnDestroy {
         await this.runOrderMutation(
           ticket,
           'paper-invoice-paid',
-          () => this.api.markCommonInvoicePaperInvoicePaid(invoiceId, evidence)
+          () => this.commonBillingApi.markCommonInvoicePaperInvoicePaid(invoiceId, evidence)
         );
         return;
       }
@@ -809,7 +812,8 @@ export class CommonBillingPage implements OnInit, OnDestroy {
         return;
       }
       this.details.set(details);
-      this.error.set(null);
+      this.error.set(action === 'send' || action === 'remind'
+        ? commonInvoiceDeliveryWarning(details.summary.lastError) : null);
     } catch (error) {
       if (this.routeGuard.accepts(ticket)) {
         this.error.set(this.errorMessage(error, 'Не удалось обновить общий счет.'));
@@ -843,7 +847,7 @@ export class CommonBillingPage implements OnInit, OnDestroy {
     await this.runOrderMutation(
       ticket,
       `paid-${order.orderId}`,
-      () => this.api.markCommonInvoiceOrderPaid(invoiceId, order.orderId, evidence)
+      () => this.commonBillingApi.markCommonInvoiceOrderPaid(invoiceId, order.orderId, evidence)
     );
   }
 
@@ -871,7 +875,7 @@ export class CommonBillingPage implements OnInit, OnDestroy {
     await this.runOrderMutation(
       ticket,
       'manual-card-paid',
-      () => this.api.reportCommonInvoiceManualCardPayment(invoiceId, reason)
+      () => this.commonBillingApi.reportCommonInvoiceManualCardPayment(invoiceId, reason)
     );
   }
 
@@ -888,7 +892,7 @@ export class CommonBillingPage implements OnInit, OnDestroy {
     this.readRun += 1;
     this.mutating.set('load-payment-route-change');
     try {
-      const context = await firstValueFrom(this.api.getCommonInvoicePaymentRouteChangeContext(invoiceId));
+      const context = await firstValueFrom(this.commonBillingApi.getCommonInvoicePaymentRouteChangeContext(invoiceId));
       if (!this.routeGuard.accepts(ticket)) {
         return;
       }
@@ -914,7 +918,7 @@ export class CommonBillingPage implements OnInit, OnDestroy {
         return;
       }
       this.mutating.set('change-payment-route');
-      const details = await firstValueFrom(this.api.changeCommonInvoicePaymentRoute(
+      const details = await firstValueFrom(this.commonBillingApi.changeCommonInvoicePaymentRoute(
         invoiceId,
         target,
         context.paymentEvidenceToken
@@ -948,7 +952,7 @@ export class CommonBillingPage implements OnInit, OnDestroy {
     this.readRun += 1;
     this.mutating.set('load-owner-bank-reissue');
     try {
-      const context = await firstValueFrom(this.api.getCommonInvoicePaymentRouteChangeContext(invoiceId));
+      const context = await firstValueFrom(this.commonBillingApi.getCommonInvoicePaymentRouteChangeContext(invoiceId));
       if (!this.routeGuard.accepts(ticket)) {
         return;
       }
@@ -969,7 +973,7 @@ export class CommonBillingPage implements OnInit, OnDestroy {
         return;
       }
       this.mutating.set('reissue-owner-bank-route');
-      const details = await firstValueFrom(this.api.changeCommonInvoicePaymentRoute(
+      const details = await firstValueFrom(this.commonBillingApi.changeCommonInvoicePaymentRoute(
         invoiceId,
         'OWNER_BANK_REISSUE',
         context.paymentEvidenceToken,
@@ -1011,7 +1015,7 @@ export class CommonBillingPage implements OnInit, OnDestroy {
     await this.runOrderMutation(
       ticket,
       'change-paper-invoice-mode',
-      () => this.api.changeCommonInvoicePaymentMode(
+      () => this.commonBillingApi.changeCommonInvoicePaymentMode(
         invoiceId,
         paperEnabled ? 'AUTO_ROUTING' : 'OWNER_PAPER_INVOICE'
       )
@@ -1036,7 +1040,7 @@ export class CommonBillingPage implements OnInit, OnDestroy {
     await this.runOrderMutation(
       ticket,
       'paper-invoice-issued',
-      () => this.api.markCommonInvoicePaperInvoiceIssued(invoiceId)
+      () => this.commonBillingApi.markCommonInvoicePaperInvoiceIssued(invoiceId)
     );
   }
 
@@ -1071,7 +1075,7 @@ export class CommonBillingPage implements OnInit, OnDestroy {
     await this.runOrderMutation(
       ticket,
       'contractor-source-confirmation',
-      () => this.api.confirmCommonInvoiceContractorSource(invoiceId, {
+      () => this.commonBillingApi.confirmCommonInvoiceContractorSource(invoiceId, {
         recipientStatementChecked: true,
         paymentReceived: true,
         confirmedTotalKopecks,
@@ -1090,7 +1094,7 @@ export class CommonBillingPage implements OnInit, OnDestroy {
     this.readRun += 1;
     this.mutating.set('archive-preview');
     try {
-      const preview = await firstValueFrom(this.api.getCommonInvoiceArchivePreview(invoiceId));
+      const preview = await firstValueFrom(this.commonBillingApi.getCommonInvoiceArchivePreview(invoiceId));
       if (!this.routeGuard.accepts(ticket)) {
         return;
       }
@@ -1107,7 +1111,7 @@ export class CommonBillingPage implements OnInit, OnDestroy {
         return;
       }
       this.mutating.set('archive-invoice');
-      const details = await firstValueFrom(this.api.archiveCommonInvoice(invoiceId));
+      const details = await firstValueFrom(this.commonBillingApi.archiveCommonInvoice(invoiceId));
       if (this.routeGuard.accepts(ticket)) {
         this.details.set(details);
         this.error.set(null);
@@ -1138,7 +1142,7 @@ export class CommonBillingPage implements OnInit, OnDestroy {
       return;
     }
 
-    await this.runOrderMutation(ticket, `detach-${order.orderId}`, () => this.api.detachCommonInvoiceOrder(invoiceId, order.orderId));
+    await this.runOrderMutation(ticket, `detach-${order.orderId}`, () => this.commonBillingApi.detachCommonInvoiceOrder(invoiceId, order.orderId));
   }
 
   async deleteInvoiceWithOrders(invoice: CommonInvoiceSummaryResponse): Promise<void> {
@@ -1159,7 +1163,7 @@ export class CommonBillingPage implements OnInit, OnDestroy {
     this.readRun += 1;
     this.mutating.set(`delete-invoice-${invoice.id}`);
     try {
-      await firstValueFrom(this.api.deleteCommonInvoiceWithOrders(invoice.id));
+      await firstValueFrom(this.commonBillingApi.deleteCommonInvoiceWithOrders(invoice.id));
       if (!this.routeGuard.accepts(ticket)) {
         return;
       }
@@ -1530,13 +1534,13 @@ export class CommonBillingPage implements OnInit, OnDestroy {
     const readRun = ++this.readRun;
     this.loading.set(true);
     try {
-      const details = await firstValueFrom(this.api.getCommonInvoice(invoiceId));
+      const details = await firstValueFrom(this.commonBillingApi.getCommonInvoice(invoiceId));
       if (!this.acceptsRead(ticket, readRun)) {
         return;
       }
       this.details.set(details);
       try {
-        const mode = await firstValueFrom(this.api.getCommonManualPaymentMode(invoiceId));
+        const mode = await firstValueFrom(this.commonBillingApi.getCommonManualPaymentMode(invoiceId));
         if (!this.acceptsRead(ticket, readRun)) {
           return;
         }
@@ -1642,39 +1646,39 @@ export class CommonBillingPage implements OnInit, OnDestroy {
   ): ReturnType<ApiService['getCommonInvoice']> {
     switch (action) {
       case 'send':
-        return this.api.sendCommonInvoice(invoiceId);
+        return this.commonBillingApi.sendCommonInvoice(invoiceId);
       case 'remind':
-        return this.api.remindCommonInvoice(invoiceId);
+        return this.commonBillingApi.remindCommonInvoice(invoiceId);
       case 'paid':
         if (!manualPaymentEvidence) {
           throw new Error('Для ручного подтверждения оплаты нужны данные сверки.');
         }
-        return this.api.markCommonInvoicePaid(invoiceId, manualPaymentEvidence);
+        return this.commonBillingApi.markCommonInvoicePaid(invoiceId, manualPaymentEvidence);
       case 'unpaid':
-        return this.api.markCommonInvoiceUnpaid(invoiceId);
+        return this.commonBillingApi.markCommonInvoiceUnpaid(invoiceId);
       case 'ban':
-        return this.api.markCommonInvoiceBan(invoiceId);
+        return this.commonBillingApi.markCommonInvoiceBan(invoiceId);
       case 'repair-payment-route':
-        return this.api.repairCommonInvoicePaymentRoute(invoiceId);
+        return this.commonBillingApi.repairCommonInvoicePaymentRoute(invoiceId);
       case 'resolve-technical-tail':
-        return this.api.resolveCommonInvoiceTechnicalTail(invoiceId);
+        return this.commonBillingApi.resolveCommonInvoiceTechnicalTail(invoiceId);
       case 'resolve-payment-notification':
-        return this.api.resolveCommonInvoicePaymentNotification(invoiceId);
+        return this.commonBillingApi.resolveCommonInvoicePaymentNotification(invoiceId);
       case 'retry':
-        return this.api.retryCommonInvoiceAttention(invoiceId);
+        return this.commonBillingApi.retryCommonInvoiceAttention(invoiceId);
       case 'resolve':
-        return this.api.resolveCommonInvoiceAttention(invoiceId);
+        return this.commonBillingApi.resolveCommonInvoiceAttention(invoiceId);
       case 'late-payment':
-        return this.api.applyCommonInvoiceLatePayment(invoiceId);
+        return this.commonBillingApi.applyCommonInvoiceLatePayment(invoiceId);
       case 'final-cancel-check':
-        return this.api.confirmCommonInvoiceFinalPaymentCancelCheck(invoiceId);
+        return this.commonBillingApi.confirmCommonInvoiceFinalPaymentCancelCheck(invoiceId);
       case 'payment-init-check':
-        return this.api.confirmCommonInvoicePaymentInitCheck(
+        return this.commonBillingApi.confirmCommonInvoicePaymentInitCheck(
           invoiceId,
           paymentEvidenceToken
         );
       case 'approve-review-orders':
-        return this.api.approveCommonInvoiceReviewOrders(invoiceId);
+        return this.commonBillingApi.approveCommonInvoiceReviewOrders(invoiceId);
     }
   }
 

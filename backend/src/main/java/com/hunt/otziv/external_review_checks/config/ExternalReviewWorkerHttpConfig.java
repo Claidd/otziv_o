@@ -21,6 +21,22 @@ public class ExternalReviewWorkerHttpConfig {
     static final String INTERNAL_AUTH_HEADER = "X-Otziv-Internal-Token";
 
     @Bean
+    @Qualifier("externalReviewWorkerReadinessRestTemplate")
+    public RestTemplate externalReviewWorkerReadinessRestTemplate(ExternalReviewCheckProperties properties) {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(2000);
+        factory.setReadTimeout(2000);
+        configureProxy(factory, properties.getProxy());
+        RestTemplate client = new RestTemplate(factory);
+        client.getInterceptors().add((request, body, execution) -> {
+            addWorkerAuthorization(request.getHeaders(), properties.getWorkerSharedSecret());
+            addProxyAuthorization(request.getHeaders(), properties.getProxy());
+            return new SizeLimitedClientHttpResponse(execution.execute(request, body), 4096);
+        });
+        return client;
+    }
+
+    @Bean
     @Qualifier("externalReviewWorkerRestTemplate")
     public RestTemplate externalReviewWorkerRestTemplate(ExternalReviewCheckProperties properties) {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();

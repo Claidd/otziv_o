@@ -4,7 +4,7 @@ logging {
 }
 
 discovery.docker "containers" {
-  host             = "unix:///var/run/docker.sock"
+  host             = "http://docker-observer:2375"
   refresh_interval = "5s"
 }
 
@@ -44,7 +44,7 @@ discovery.relabel "containers" {
 }
 
 loki.source.docker "containers" {
-  host          = "unix:///var/run/docker.sock"
+  host          = "http://docker-observer:2375"
   targets       = discovery.docker.containers.targets
   labels        = {collector = "alloy"}
   relabel_rules = discovery.relabel.containers.rules

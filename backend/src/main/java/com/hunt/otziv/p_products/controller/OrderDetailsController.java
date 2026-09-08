@@ -48,6 +48,7 @@ public class OrderDetailsController {
 
     private final ReviewService reviewService;
     private final OrderService orderService;
+    private final com.hunt.otziv.p_products.api.ReviewPublicationCommands publication;
     private final AutoTextService autoTextService;
     private final AppSettingService appSettingService;
     private final WorkerPublicationGateService workerPublicationGateService;
@@ -273,12 +274,13 @@ public class OrderDetailsController {
     @PostMapping("/{companyId}/{orderId}/published/{reviewId}") // Изменение статуса отзыва и сохранение копии в архив + проверка на выполнение заказа.
     public String publishReview(@PathVariable Long reviewId,@PathVariable Long companyId, RedirectAttributes rm, @PathVariable Long orderId, Model model, Principal principal){
         log.info("1. Смена статуса отзыва на В Опубликован - {}", principal != null ? principal.getName() : "Гость");
-        String blockedRedirect = blockWorkerPublicationRedirect(reviewId, rm, principal);
-        if (blockedRedirect != null) {
-            return blockedRedirect;
-        }
         try {
-            orderService.changeStatusAndOrderCounter(reviewId);
+            var outcome=publication.publishLegacy(companyId,orderId,reviewId,SecurityContextHolder.getContext().getAuthentication());
+            if(!outcome.published()) {
+                rm.addFlashAttribute("saveSuccess","false");
+                rm.addFlashAttribute("errorMessage",outcome.message());
+                return legacyWorkerRedirect(outcome.blockedSection());
+            }
             rm.addFlashAttribute("saveSuccess", "true");
             rm.addFlashAttribute("errorMessage", null); // Убираем сообщение об ошибке
         } catch (Exception e) {
@@ -292,12 +294,13 @@ public class OrderDetailsController {
     @PostMapping("/{companyId}/{orderId}/published_to_worker/{reviewId}") // Изменение статуса отзыва и сохранение копии в архив + проверка на выполнение заказа.
     public String publishReviewToWorker(@PathVariable Long reviewId,@PathVariable Long companyId, RedirectAttributes rm, @PathVariable Long orderId, Model model, Principal principal){
         log.info("1. Смена статуса отзыва на Опубликован - {}", principal != null ? principal.getName() : "Гость");
-        String blockedRedirect = blockWorkerPublicationRedirect(reviewId, rm, principal);
-        if (blockedRedirect != null) {
-            return blockedRedirect;
-        }
         try {
-            orderService.changeStatusAndOrderCounter(reviewId);
+            var outcome=publication.publishLegacy(companyId,orderId,reviewId,SecurityContextHolder.getContext().getAuthentication());
+            if(!outcome.published()) {
+                rm.addFlashAttribute("saveSuccess","false");
+                rm.addFlashAttribute("errorMessage",outcome.message());
+                return legacyWorkerRedirect(outcome.blockedSection());
+            }
             rm.addFlashAttribute("saveSuccess", "true");
             rm.addFlashAttribute("errorMessage", null); // Убираем сообщение об ошибке
         } catch (Exception e) {
@@ -307,21 +310,6 @@ public class OrderDetailsController {
         }
         return "redirect:/worker/publish";
     } // Изменение статуса отзыва и сохранение копии в архив + проверка на выполнение заказа.
-
-    private String blockWorkerPublicationRedirect(Long reviewId, RedirectAttributes rm, Principal principal) {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        var publicationBlock = workerPublicationGateService.blockForPublication(principal, authentication);
-        if (publicationBlock.isPresent()) {
-            rm.addFlashAttribute("saveSuccess", "false");
-            rm.addFlashAttribute("errorMessage", publicationBlock.get().message());
-            log.warn("Работник {} пытался опубликовать отзыв {}, но публикация заблокирована: {}",
-                    principal != null ? principal.getName() : "Гость",
-                    reviewId,
-                    publicationBlock.get().message());
-            return legacyWorkerRedirect(publicationBlock.get().section());
-        }
-        return null;
-    }
 
     private String legacyWorkerRedirect(String section) {
         return switch (section) {

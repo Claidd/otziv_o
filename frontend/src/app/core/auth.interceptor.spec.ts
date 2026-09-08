@@ -9,6 +9,8 @@ import { authInterceptor } from './auth.interceptor';
 describe('authInterceptor', () => {
   it('uses an already-valid optional token without refreshing a public capability request', async () => {
     const auth = {
+      captureSession: vi.fn(() => 0),
+      isCurrentRequest: vi.fn(() => true),
       getOptionalToken: vi.fn(() => 'optional-token'),
       getToken: vi.fn(),
       refreshToken: vi.fn(),
@@ -40,6 +42,8 @@ describe('authInterceptor', () => {
 
   it('retries an optional public capability request anonymously after a stale token 401', async () => {
     const auth = {
+      captureSession: vi.fn(() => 0),
+      isCurrentRequest: vi.fn(() => true),
       getOptionalToken: vi.fn(() => 'stale-token'),
       getToken: vi.fn(),
       refreshToken: vi.fn(),
@@ -72,6 +76,8 @@ describe('authInterceptor', () => {
 
   it('does not duplicate an already-anonymous optional request that returns 401', async () => {
     const auth = {
+      captureSession: vi.fn(() => 0),
+      isCurrentRequest: vi.fn(() => true),
       getOptionalToken: vi.fn(() => null),
       getToken: vi.fn(),
       refreshToken: vi.fn(),
@@ -102,6 +108,8 @@ describe('authInterceptor', () => {
 
   it('refreshes the token once and retries an explicitly stale-token 403', async () => {
     const auth = {
+      captureSession: vi.fn(() => 0),
+      isCurrentRequest: vi.fn(() => true),
       getToken: vi.fn()
         .mockResolvedValueOnce('old-token')
         .mockResolvedValueOnce('new-token'),
@@ -139,6 +147,8 @@ describe('authInterceptor', () => {
 
   it('does not refresh an ordinary permission-denied 403', async () => {
     const auth = {
+      captureSession: vi.fn(() => 0),
+      isCurrentRequest: vi.fn(() => true),
       getToken: vi.fn().mockResolvedValue('token'),
       refreshToken: vi.fn(),
       isAuthenticated: vi.fn(() => true),
@@ -165,6 +175,8 @@ describe('authInterceptor', () => {
 
   it('does not start a second refresh when the retried request is also forbidden', async () => {
     const auth = {
+      captureSession: vi.fn(() => 0),
+      isCurrentRequest: vi.fn(() => true),
       getToken: vi.fn()
         .mockResolvedValueOnce('old-token')
         .mockResolvedValueOnce('new-token'),
@@ -194,6 +206,8 @@ describe('authInterceptor', () => {
 
   it('redirects a restricted manager to the personal cabinet after 423', async () => {
     const auth = {
+      captureSession: vi.fn(() => 0),
+      isCurrentRequest: vi.fn(() => true),
       getToken: vi.fn().mockResolvedValue('token'),
       refreshToken: vi.fn(),
       isAuthenticated: vi.fn(() => true),

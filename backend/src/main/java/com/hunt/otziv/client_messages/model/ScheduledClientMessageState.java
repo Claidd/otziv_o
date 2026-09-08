@@ -95,11 +95,20 @@ public class ScheduledClientMessageState {
     @Column(name = "delivery_message", columnDefinition = "TEXT")
     private String deliveryMessage;
 
+    @Column(name = "delivery_envelope", columnDefinition = "MEDIUMTEXT")
+    private String deliveryEnvelope;
+
+    @Column(name = "delivery_channel", length = 32)
+    private String deliveryChannel;
+
     @Column(name = "delivery_task_id")
     private Long deliveryTaskId;
 
     @Column(name = "delivery_prepared_at")
     private LocalDateTime deliveryPreparedAt;
+
+    @Column(name = "delivery_recovery_checked_at")
+    private LocalDateTime deliveryRecoveryCheckedAt;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;

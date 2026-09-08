@@ -36,7 +36,7 @@ import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
-public class PersonalReminderService {
+public class PersonalReminderService implements com.hunt.otziv.personal_reminders.api.SystemReminderCommands {
 
     private static final String IMMUTABLE_PAYMENT_RETURN_SOURCE = "PAYMENT_RETURN_RECONCILIATION";
 
@@ -134,6 +134,20 @@ public class PersonalReminderService {
         return reminder != null
                 && (SOURCE_BAD_REVIEW_TASK.equals(reminder.getSourceType())
                 || SOURCE_BAD_REVIEW_ORDER_READY.equals(reminder.getSourceType()));
+    }
+
+    @Override
+    @Transactional
+    public void ensureOpenDueNow(com.hunt.otziv.personal_reminders.api.SystemReminderCommands.Reminder command) {
+        User recipient = userService.findByIdToUserInfo(command.recipientUserId());
+        if (recipient == null || !java.util.Objects.equals(recipient.getId(), command.recipientUserId())
+                || !recipient.isActive()) {
+            return;
+        }
+        if (!hasOpenSystemReminder(recipient, command.sourceType(), command.sourceId())) {
+            createSystemReminderDueNow(recipient, command.title(), command.text(), command.sourceType(),
+                    command.sourceId(), command.sourceOrderId());
+        }
     }
 
     @Transactional

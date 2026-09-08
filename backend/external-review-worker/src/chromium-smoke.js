@@ -2,6 +2,7 @@ import { chromium } from "playwright";
 import { chromiumLaunchArgs } from "./chromium-security.js";
 
 const browser = await chromium.launch({
+  chromiumSandbox: true,
   headless: true,
   executablePath: process.env.CHROMIUM_EXECUTABLE_PATH || undefined,
   args: chromiumLaunchArgs(),

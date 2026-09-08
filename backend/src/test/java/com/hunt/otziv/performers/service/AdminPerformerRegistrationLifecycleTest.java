@@ -42,12 +42,13 @@ class AdminPerformerRegistrationLifecycleTest {
     @Mock private KeycloakAdminClient keycloakAdminClient;
     @Mock private UserAuthEpochService authEpochService;
     @Mock private ContractorPaymentProfileService contractorPaymentProfileService;
+    @Mock private PerformerMutationLockService mutationLocks;
 
     @Test
     void pendingApplicationCannotActivateWithoutExplicitManualPhoneVerification() {
         AdminPerformerService service = service();
         PerformerProfile performer = validPending();
-        when(performerProfileRepository.findById(7L)).thenReturn(Optional.of(performer));
+        when(mutationLocks.profile(7L)).thenReturn(performer);
 
         assertThatThrownBy(() -> service.updateStatus(7L, PerformerProfileStatus.ACTIVE, "", false, "admin"))
                 .hasMessageContaining("вручную проверьте телефон");
@@ -62,7 +63,7 @@ class AdminPerformerRegistrationLifecycleTest {
         AdminPerformerService service = service();
         PerformerProfile performer = validPending();
         User moderator = User.builder().id(2L).username("admin").active(true).build();
-        when(performerProfileRepository.findById(7L)).thenReturn(Optional.of(performer));
+        when(mutationLocks.profile(7L)).thenReturn(performer);
         when(userRepository.findByUsername("admin")).thenReturn(Optional.of(moderator));
         doAnswer(invocation -> {
             ((User) invocation.getArgument(0)).setActive(true);
@@ -100,7 +101,7 @@ class AdminPerformerRegistrationLifecycleTest {
         PerformerProfile expired = validPending();
         expired.setStatus(PerformerProfileStatus.REJECTED);
         expired.setRegistrationExpiresAt(LocalDateTime.now().minusMinutes(1));
-        when(performerProfileRepository.findById(7L)).thenReturn(Optional.of(expired));
+        when(mutationLocks.profile(7L)).thenReturn(expired);
 
         assertThatThrownBy(() -> service.updateStatus(
                 7L,
@@ -120,7 +121,7 @@ class AdminPerformerRegistrationLifecycleTest {
         bypassAttempt.setStatus(PerformerProfileStatus.PAUSED);
         bypassAttempt.setRegistrationExpiresAt(LocalDateTime.now().minusMinutes(1));
         bypassAttempt.setRulesConsentVersion(null);
-        when(performerProfileRepository.findById(7L)).thenReturn(Optional.of(bypassAttempt));
+        when(mutationLocks.profile(7L)).thenReturn(bypassAttempt);
 
         assertThatThrownBy(() -> service.updateStatus(
                 7L,
@@ -141,7 +142,7 @@ class AdminPerformerRegistrationLifecycleTest {
         approved.setStatus(PerformerProfileStatus.PAUSED);
         approved.setPhoneVerifiedAt(LocalDateTime.now().minusDays(1));
         approved.setRegistrationExpiresAt(LocalDateTime.now().minusMinutes(1));
-        when(performerProfileRepository.findById(7L)).thenReturn(Optional.of(approved));
+        when(mutationLocks.profile(7L)).thenReturn(approved);
 
         service.updateStatus(
                 7L,
@@ -171,7 +172,7 @@ class AdminPerformerRegistrationLifecycleTest {
         legacy.setHonestReviewConsentVersion(null);
         legacy.setTelegramLinkedAt(null);
         legacy.getUser().setTelegramChatId(null);
-        when(performerProfileRepository.findById(7L)).thenReturn(Optional.of(legacy));
+        when(mutationLocks.profile(7L)).thenReturn(legacy);
 
         var response = service.updateStatus(
                 7L,
@@ -201,7 +202,8 @@ class AdminPerformerRegistrationLifecycleTest {
                 userRepository,
                 keycloakAdminClient,
                 authEpochService,
-                contractorPaymentProfileService
+                contractorPaymentProfileService,
+                mutationLocks
         );
     }
 

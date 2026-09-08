@@ -24,6 +24,26 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class TelegramServiceSendRetryTest {
 
     @Test
+    void durableDeliveryDoesNotRetryAmbiguousNetworkFailure() {
+        RetryableTelegramService service = new RetryableTelegramService(1);
+
+        assertTrue(service.sendMessageOnceWithInlineKeyboardMessageId(
+                123L, "Delivery", "HTML", List.of()).isEmpty());
+
+        assertEquals(1, service.attempts);
+        assertEquals(0, service.sleeps);
+    }
+
+    @Test
+    void durableDeliveryRequiresConfirmedMessageId() {
+        RetryableTelegramService service = new RetryableTelegramService(0);
+
+        assertTrue(service.sendMessageOnceWithInlineKeyboardMessageId(
+                123L, "Delivery", "HTML", List.of()).isEmpty());
+        assertEquals(1, service.attempts);
+    }
+
+    @Test
     void copyTextCompatibleResponseRejectsMalformedSuccessWithoutMessageId() {
         TelegramService.CopyTextCompatibleSendMessage message =
                 new TelegramService.CopyTextCompatibleSendMessage();

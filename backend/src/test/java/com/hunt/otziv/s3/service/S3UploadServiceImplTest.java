@@ -40,7 +40,8 @@ class S3UploadServiceImplTest {
         S3UploadServiceImpl service = new S3UploadServiceImpl(
                 s3Client,
                 guard(),
-                mock(S3ObjectCleanupQueue.class)
+                mock(S3ObjectCleanupQueue.class),
+                mock(com.hunt.otziv.s3.cleanup.service.S3UploadRegistry.class)
         );
         ReflectionTestUtils.setField(service, "bucket", "bucket");
         ReflectionTestUtils.setField(service, "region", "ru-1");
@@ -178,7 +179,8 @@ class S3UploadServiceImplTest {
         S3UploadServiceImpl service = new S3UploadServiceImpl(
                 s3Client,
                 guard(),
-                mock(S3ObjectCleanupQueue.class)
+                mock(S3ObjectCleanupQueue.class),
+                mock(com.hunt.otziv.s3.cleanup.service.S3UploadRegistry.class)
         );
         ReflectionTestUtils.setField(service, "bucket", "bucket");
         ReflectionTestUtils.setField(service, "region", "ru-1");

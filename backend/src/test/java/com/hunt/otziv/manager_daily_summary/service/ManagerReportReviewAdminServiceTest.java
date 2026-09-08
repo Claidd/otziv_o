@@ -1,11 +1,14 @@
 package com.hunt.otziv.manager_daily_summary.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
+import static org.mockito.ArgumentMatchers.any;
 
 import com.hunt.otziv.manager_daily_summary.model.ManagerReportReviewDispute;
 import com.hunt.otziv.manager_daily_summary.model.ManagerReportReviewDisputeStatus;
@@ -21,6 +24,7 @@ import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.User;
 import java.time.LocalDateTime;
 import java.util.Optional;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -66,7 +70,7 @@ class ManagerReportReviewAdminServiceTest {
         review.setCompletedAt(completedAt);
         review.setRestrictedAt(completedAt.minusMinutes(5));
         review.setRestrictionReleasedAt(completedAt);
-        when(sessionRepository.findById(2L)).thenReturn(Optional.of(review));
+        when(sessionRepository.findForUpdateById(2L)).thenReturn(Optional.of(review));
 
         service.resolveDispute(
                 2L,
@@ -94,7 +98,7 @@ class ManagerReportReviewAdminServiceTest {
         review.setIssueCount(3);
         review.setCurrentQuestionIndex(1);
         review.setReadingConfirmedAt(LocalDateTime.now().minusMinutes(20));
-        when(sessionRepository.findById(2L)).thenReturn(Optional.of(review));
+        when(sessionRepository.findForUpdateById(2L)).thenReturn(Optional.of(review));
 
         service.resolveDispute(
                 2L,
@@ -128,8 +132,8 @@ class ManagerReportReviewAdminServiceTest {
         dispute.setStatus(ManagerReportReviewDisputeStatus.OPEN);
         dispute.setPreviousIssueStatus(ManagerReportReviewIssueStatus.PENDING);
         dispute.setPreviousSessionStatus(ManagerReportReviewStatus.READING);
-        when(sessionRepository.findById(2L)).thenReturn(Optional.of(review));
-        when(issueService.openDispute(review)).thenReturn(Optional.of(dispute));
+        when(sessionRepository.findForUpdateById(2L)).thenReturn(Optional.of(review));
+        when(issueService.unresolvedDispute(review)).thenReturn(Optional.of(dispute));
         when(issueService.hasUnresolvedDisputes(review)).thenReturn(false);
         when(issueService.validIssueCount(review)).thenReturn(1L);
         when(issueService.answeredCount(review)).thenReturn(0L);
@@ -153,6 +157,95 @@ class ManagerReportReviewAdminServiceTest {
                 eq("HTML"),
                 eq(ManagerReportReviewTelegramService.continueKeyboard(2L))
         );
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = ManagerReportReviewStatus.class,
+            names = {"COMPLETED", "DISPUTED", "DISPUTE_PENDING"})
+    void ownerCanResolveDraftWithoutWithdrawingOtherIssues(ManagerReportReviewStatus status) {
+        ManagerReportReviewSession review = review();
+        review.setStatus(status);
+        ManagerReportReviewDispute dispute = dispute(review, ManagerReportReviewDisputeStatus.DRAFT);
+        when(sessionRepository.findForUpdateById(2L)).thenReturn(Optional.of(review));
+        when(issueService.unresolvedDispute(review)).thenReturn(Optional.of(dispute));
+        when(issueService.validIssueCount(review)).thenReturn(1L);
+        when(issueService.hasPendingQuestions(review)).thenReturn(true);
+
+        service.resolveDispute(2L, 20L, ManagerReportReviewAdminService.REPORT_INCORRECT,
+                "Проверено по переписке", User.builder().id(1L).build());
+
+        assertThat(dispute.getStatus()).isEqualTo(ManagerReportReviewDisputeStatus.ACCEPTED);
+        assertThat(dispute.getManagerText()).isNull();
+        assertThat(dispute.getResolvedByUserId()).isEqualTo(1L);
+        assertThat(dispute.getIssue().getStatus()).isEqualTo(ManagerReportReviewIssueStatus.WITHDRAWN);
+        assertThat(review.getStatus()).isEqualTo(ManagerReportReviewStatus.READING);
+        assertThat(review.getAnswerQuality()).isNotEqualTo("REPORT_WITHDRAWN");
+    }
+
+    @Test
+    void completedReviewKeepsAcceptedAnswerWhenOwnerConfirmsOpenDispute() {
+        ManagerReportReviewSession review = review();
+        LocalDateTime completed = LocalDateTime.now().minusDays(3);
+        review.setStatus(ManagerReportReviewStatus.COMPLETED);
+        review.setCompletedAt(completed);
+        review.setReadingConfirmedAt(completed.minusHours(1));
+        ManagerReportReviewDispute dispute = dispute(review, ManagerReportReviewDisputeStatus.OPEN);
+        dispute.setPreviousIssueStatus(ManagerReportReviewIssueStatus.ANSWERED);
+        when(sessionRepository.findForUpdateById(2L)).thenReturn(Optional.of(review));
+        when(issueService.unresolvedDispute(review)).thenReturn(Optional.of(dispute));
+        when(issueService.validIssueCount(review)).thenReturn(3L);
+        when(issueService.answeredCount(review)).thenReturn(3L);
+
+        service.resolveDispute(2L, 20L, ManagerReportReviewAdminService.REPORT_CONFIRMED,
+                "", User.builder().id(1L).build());
+
+        assertThat(dispute.getStatus()).isEqualTo(ManagerReportReviewDisputeStatus.REJECTED);
+        assertThat(dispute.getIssue().getStatus()).isEqualTo(ManagerReportReviewIssueStatus.ANSWERED);
+        assertThat(review.getStatus()).isEqualTo(ManagerReportReviewStatus.COMPLETED);
+        assertThat(review.getCompletedAt()).isEqualTo(completed);
+    }
+
+    @Test
+    void staleButtonCannotResolveAnotherDispute() {
+        ManagerReportReviewSession review = review();
+        ManagerReportReviewDispute current = dispute(review, ManagerReportReviewDisputeStatus.OPEN);
+        when(sessionRepository.findForUpdateById(2L)).thenReturn(Optional.of(review));
+        when(issueService.unresolvedDispute(review)).thenReturn(Optional.of(current));
+
+        assertThatThrownBy(() -> service.resolveDispute(2L, 19L,
+                ManagerReportReviewAdminService.REPORT_INCORRECT, "", null))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .hasMessageContaining("Этот спор уже закрыт");
+
+        assertThat(current.getStatus()).isEqualTo(ManagerReportReviewDisputeStatus.OPEN);
+        verify(disputeRepository, never()).save(any());
+        verify(telegramService, never()).sendMessage(any(Long.class), any(), any());
+    }
+
+    @Test
+    void closedIssueDisputeCannotFallBackToWholeReviewDecision() {
+        ManagerReportReviewSession review = review();
+        review.setStatus(ManagerReportReviewStatus.DISPUTED);
+        when(sessionRepository.findForUpdateById(2L)).thenReturn(Optional.of(review));
+        when(issueService.disputes(review)).thenReturn(List.of(
+                dispute(review, ManagerReportReviewDisputeStatus.ACCEPTED)));
+
+        assertThatThrownBy(() -> service.resolveDispute(2L,
+                ManagerReportReviewAdminService.REPORT_INCORRECT, "", null))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+
+        assertThat(review.getStatus()).isEqualTo(ManagerReportReviewStatus.DISPUTED);
+        verify(sessionRepository, never()).save(any());
+    }
+
+    private ManagerReportReviewDispute dispute(ManagerReportReviewSession review,
+            ManagerReportReviewDisputeStatus status) {
+        ManagerReportReviewDispute dispute = new ManagerReportReviewDispute();
+        dispute.setId(20L);
+        dispute.setIssue(issue(review, 0, "Оспоренный пункт"));
+        dispute.setStatus(status);
+        dispute.setPreviousIssueStatus(ManagerReportReviewIssueStatus.PENDING);
+        return dispute;
     }
 
     private ManagerReportReviewSession review() {

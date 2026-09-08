@@ -1,0 +1,584 @@
+{
+  "schema": "otziv-backend-advisory-validation-v1",
+  "recordedAt": "2026-09-07T20:27:58.606652+00:00",
+  "reportDate": "2026-09-08",
+  "scope": "Runtime advisory patch verification on immutable publication-derived source, final complete backend verify, actual image scan and authorized stock local smoke. Does not assert production activation or risk acceptance.",
+  "supersedesNoExistingEvidence": true,
+  "previousAttestationPreserved": {
+    "path": "infrastructure/runtime-security/FINAL_BACKEND_RUNTIME_2026-09-07.json",
+    "sha256": "084310420e1b2e2ad84faff8d3da2ad9c34891d424499b028ded78619d2a1405"
+  },
+  "backendFullSuitePending": false,
+  "backendFullSuite": {
+    "status": "PASS_WITH_DECLARED_SKIPS",
+    "snapshot": "E:\\Works\\Projects\\otziv\\.codex-tmp\\rc26\\finalization6",
+    "counts": {
+      "tests": 4712,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 15
+    },
+    "executedAndPassed": 4697,
+    "surefireReportFiles": 678,
+    "sourceFilesVerifiedUnchanged": 3216,
+    "runtime": {
+      "os.name": [
+        "Windows 11"
+      ],
+      "java.version": [
+        "26.0.1"
+      ],
+      "os.arch": [
+        "amd64"
+      ],
+      "java.vendor": [
+        "Eclipse Adoptium"
+      ],
+      "java.vm.version": [
+        "26.0.1+8"
+      ]
+    },
+    "finalResultAttestation": {
+      "path": ".codex-tmp/finalization-20260907/final-backend-v6-attestation.json",
+      "sha256": "82657a69f9516a63f577b8ab06a4aed34922310b4393957e48a0b4efe9e54482"
+    },
+    "manifestSha256": "1f324b423d7f5ff82e0290eb32611c152fccd32f8b5805e251c28b49e0e21c4b",
+    "allSkippedCasesPreserved": true,
+    "priorFailedFingerprintAttempt": {
+      "path": ".codex-tmp/finalization-20260907/final-backend-v5-attestation.json",
+      "sha256": "305613c9a615c42847a117e8feaa60cc70ee91a0bea02c895ef13f86cc28379c",
+      "tests": 4712,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 15,
+      "cause": "POM fingerprint changed; contract API semantics were equal. Original failed run is retained."
+    },
+    "finalJarSha256": "24283c7670aa0e590147b4baee6da3cc822e2c24591f1a70a2ca11287d7123ff",
+    "postVerifyArtifactComparison": {
+      "path": ".codex-tmp/finalization-20260907/runtime-advisory-v6-post-verify-jar-comparison.json",
+      "sha256": "406e62333b7ced2c3c809d2111ffe6a7c968e1421fc98ca93e0f884ef75b1120"
+    }
+  },
+  "verifiedSource": {
+    "sourceCommit": "0b03150369037ab087bc627534e8c945102ccb27",
+    "sourceManifest": {
+      "path": ".codex-tmp/finalization-20260907/final-source-manifest-v6.json",
+      "sha256": "1f324b423d7f5ff82e0290eb32611c152fccd32f8b5805e251c28b49e0e21c4b",
+      "bytes": 664969,
+      "availability": "retained private local evidence; not embedded in the repository"
+    },
+    "sourceManifestFiles": 3216,
+    "currentPomSha256": "46a1a8160f7cced473772e44518bfb5b173860f1fe76cbc0702540b325d6ea00",
+    "concurrentOriginalWorkerRiskChangesExcluded": true
+  },
+  "checkedContract": {
+    "path": "contracts/generated/client-api.openapi.json",
+    "sha256": "3c42d187318ecb3c4e25655b1b9cd023502049a2850856cb49f8b081627c9e00",
+    "operations": 187,
+    "paths": 172,
+    "schemas": 204,
+    "contractTests": {
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "semanticsUnchanged": true,
+    "change": "POM source fingerprint changed; one fixture CRLF normalized to LF, parsed JSON unchanged.",
+    "evidence": [
+      {
+        "path": ".codex-tmp/finalization-20260907/runtime-advisory-v6-contract.log",
+        "sha256": "5a5a8cf23847e4adea8aab802819b84d55478ff8f86b9aa3d5a08d815b45007e",
+        "bytes": 8126,
+        "availability": "retained private local evidence; not embedded in the repository"
+      },
+      {
+        "path": ".codex-tmp/finalization-20260907/runtime-advisory-v6-generate.log",
+        "sha256": "563b7d9be1178c3489c31927ebd598218e5e96b7671ee6d971e17ffe1410af8d",
+        "bytes": 205,
+        "availability": "retained private local evidence; not embedded in the repository"
+      }
+    ]
+  },
+  "runtimeDependencyPatch": {
+    "baselineCommit": "23b6440107caeb83c4b59850f3b913a3311df008",
+    "beforeRuntimeCoordinates": 347,
+    "afterRuntimeCoordinates": 347,
+    "changedCoordinates": 13,
+    "changes": [
+      {
+        "package": "com.fasterxml.jackson.core:jackson-core",
+        "before": "2.21.5",
+        "after": "2.21.6"
+      },
+      {
+        "package": "com.fasterxml.jackson.core:jackson-databind",
+        "before": "2.21.5",
+        "after": "2.21.6"
+      },
+      {
+        "package": "com.fasterxml.jackson.dataformat:jackson-dataformat-xml",
+        "before": "2.21.5",
+        "after": "2.21.6"
+      },
+      {
+        "package": "com.fasterxml.jackson.datatype:jackson-datatype-jdk8",
+        "before": "2.21.5",
+        "after": "2.21.6"
+      },
+      {
+        "package": "com.fasterxml.jackson.datatype:jackson-datatype-jsr310",
+        "before": "2.21.5",
+        "after": "2.21.6"
+      },
+      {
+        "package": "com.fasterxml.jackson.jaxrs:jackson-jaxrs-base",
+        "before": "2.21.5",
+        "after": "2.21.6"
+      },
+      {
+        "package": "com.fasterxml.jackson.jaxrs:jackson-jaxrs-json-provider",
+        "before": "2.21.5",
+        "after": "2.21.6"
+      },
+      {
+        "package": "com.fasterxml.jackson.module:jackson-module-jakarta-xmlbind-annotations",
+        "before": "2.21.5",
+        "after": "2.21.6"
+      },
+      {
+        "package": "com.fasterxml.jackson.module:jackson-module-jaxb-annotations",
+        "before": "2.21.5",
+        "after": "2.21.6"
+      },
+      {
+        "package": "com.fasterxml.jackson.module:jackson-module-kotlin",
+        "before": "2.21.5",
+        "after": "2.21.6"
+      },
+      {
+        "package": "org.jsoup:jsoup",
+        "before": "1.22.2",
+        "after": "1.23.2"
+      },
+      {
+        "package": "tools.jackson.core:jackson-core",
+        "before": "3.1.5",
+        "after": "3.1.6"
+      },
+      {
+        "package": "tools.jackson.core:jackson-databind",
+        "before": "3.1.5",
+        "after": "3.1.6"
+      }
+    ],
+    "patches": {
+      "jackson2BomProperty": "jackson-2-bom.version=2.21.6",
+      "jackson3BomProperty": "jackson-bom.version=3.1.6",
+      "jsoup": "1.23.2"
+    },
+    "primarySources": [
+      "https://github.com/FasterXML/jackson-databind/security/advisories/GHSA-q4xh-88c3-wmh7",
+      "https://github.com/FasterXML/jackson/wiki/Jackson-Release-3.1.6",
+      "https://jsoup.org/news/release-1.23.2",
+      "https://github.com/jhy/jsoup/commit/862ba2f1d48ee95609183dbcfc848c9fd7afc76a"
+    ],
+    "evidence": [
+      {
+        "path": ".codex-tmp/rc26/runtimepatch/dependency-diff-c2.json",
+        "sha256": "3a143f7f89aed67e3b9ba9101ef7e71c2c28e3d3c179ac0725a5d6b149bedfe1",
+        "bytes": 1893,
+        "availability": "retained private local evidence; not embedded in the repository"
+      },
+      {
+        "path": ".codex-tmp/rc26/runtimepatch/before-c2/runtime-dependencies.json",
+        "sha256": "084f661861b9fe1d711278d43fb84ade344beb00e5323861f72c75e38837184b",
+        "bytes": 104592,
+        "availability": "retained private local evidence; not embedded in the repository"
+      },
+      {
+        "path": ".codex-tmp/rc26/runtimepatch/after/runtime-dependencies.json",
+        "sha256": "2f9b1699ee841b6d84c2de95fa2b8cd911bf7f87bfef88364ad01a9436371258",
+        "bytes": 104592,
+        "availability": "retained private local evidence; not embedded in the repository"
+      }
+    ]
+  },
+  "boundedRuntimeRegressions": {
+    "method": "Same manual Java harness compiled against patched API, then executed with exact before and after runtime JARs, 256 MiB heap, no HTTP and no application source changes. These are dependency behavior checks, not the full application suite.",
+    "before": {
+      "passed": 11,
+      "failed": 5,
+      "exitCode": 1,
+      "jsoupMaximumDepth": 699
+    },
+    "after": {
+      "passed": 16,
+      "failed": 0,
+      "exitCode": 0,
+      "jsoupMaximumDepth": 511
+    },
+    "checks": [
+      {
+        "name": "Jackson 2: ordinary XML duration remains valid",
+        "passed": true
+      },
+      {
+        "name": "Jackson 2: ordinary XML calendar remains valid",
+        "passed": true
+      },
+      {
+        "name": "Jackson 2: typed JSON preserves unknown status and optional null",
+        "passed": true
+      },
+      {
+        "name": "Jackson 2: 2000-digit XML duration rejected with StreamConstraintsException",
+        "passed": true
+      },
+      {
+        "name": "Jackson 2: 2000-digit XML calendar fraction rejected with StreamConstraintsException",
+        "passed": true
+      },
+      {
+        "name": "Jackson 2: 1100-level JSON nesting rejected with StreamConstraintsException",
+        "passed": true
+      },
+      {
+        "name": "Jackson 3: ordinary XML duration remains valid",
+        "passed": true
+      },
+      {
+        "name": "Jackson 3: ordinary XML calendar remains valid",
+        "passed": true
+      },
+      {
+        "name": "Jackson 3: typed JSON preserves unknown status and optional null",
+        "passed": true
+      },
+      {
+        "name": "Jackson 3: 2000-digit XML duration rejected with StreamConstraintsException",
+        "passed": true
+      },
+      {
+        "name": "Jackson 3: 2000-digit XML calendar fraction rejected with StreamConstraintsException",
+        "passed": true
+      },
+      {
+        "name": "Jackson 3: 1100-level JSON nesting rejected with StreamConstraintsException",
+        "passed": true
+      },
+      {
+        "name": "Jsoup: 700 nested namespace elements respect default depth 512",
+        "passed": true
+      },
+      {
+        "name": "Jsoup: bounded XML preserves all text",
+        "passed": true
+      },
+      {
+        "name": "Jsoup: nested namespace shadowing and restoration",
+        "passed": true
+      },
+      {
+        "name": "Jsoup: ordinary HTML text behavior preserved",
+        "passed": true
+      }
+    ],
+    "evidence": [
+      {
+        "path": ".codex-tmp/rc26/runtimepatch/RuntimeXmlSecurityEvidence.java",
+        "sha256": "5660d6fc6f14d4ea8194711fad2f28232d37f625b500b6ea6b8cb61f0ead127c",
+        "bytes": 4018,
+        "availability": "retained private local evidence; not embedded in the repository"
+      },
+      {
+        "path": ".codex-tmp/rc26/runtimepatch/xml-security-evidence.json",
+        "sha256": "1dea1031be79e10d2bcb1ecf48945f60b492704b94c0bccb2af7da6bcd10bed6",
+        "bytes": 6130,
+        "availability": "retained private local evidence; not embedded in the repository"
+      },
+      {
+        "path": ".codex-tmp/rc26/runtimepatch/before-c2-xml-security.log",
+        "sha256": "ed30b2b89cbdcecc4460d7d53763a4e1407882ae2ef118003495d90ce7e16ece",
+        "bytes": 271,
+        "availability": "retained private local evidence; not embedded in the repository"
+      },
+      {
+        "path": ".codex-tmp/rc26/runtimepatch/after-xml-security.log",
+        "sha256": "b3876ad37766f81bbedc9316785f10ae7b4ab307dd6c9aca37c777332efccc3a",
+        "bytes": 36,
+        "availability": "retained private local evidence; not embedded in the repository"
+      }
+    ]
+  },
+  "actualImage": {
+    "localTag": "otziv-backend-advisory-ci-v5:latest",
+    "imageIndexId": "sha256:fb5835ef464657179e81b5d7847fe3124c7e8ca238f868c9dd26c91c5f91b90e",
+    "imageManifestId": "sha256:598fecd03aa247d8a0772a5cc49e3b552cdba2a407af60a0adeceada3c09bef8",
+    "imageConfigId": "sha256:7f28b54809b93dfaaeb949b649459050df2c5037fe967393bd12f7376cc1969a",
+    "jarSha256": "d1539d74885126e5d3442f158a2bde2e0c1f9fc2edb24ab30437256c16d3e963",
+    "builtPomSha256": "9ffdd93bf5c6ed85a227c30a2d3ee21120ecb7cc81524e18eebd1912ecab9f94",
+    "snapshot": ".codex-tmp/rc26/finalization5/backend",
+    "buildExitCode": 0,
+    "checkedBuildInputs": 3157,
+    "buildInputDrift": [],
+    "evidence": [
+      {
+        "path": ".codex-tmp/finalization-20260907/runtime-advisory-v5/build-result.json",
+        "sha256": "38eec14727b307e67ec3dc0c9a706bf3296715f2cb16c789ee3e79895657c109",
+        "bytes": 979,
+        "availability": "retained private local evidence; not embedded in the repository"
+      },
+      {
+        "path": ".codex-tmp/finalization-20260907/runtime-advisory-v5/build.log",
+        "sha256": "8c3062cdbffccddddcdd212d613b76ce063ae8240346fb881941a7846d307815",
+        "bytes": 19129,
+        "availability": "retained private local evidence; not embedded in the repository"
+      },
+      {
+        "path": ".codex-tmp/finalization-20260907/runtime-advisory-v5/source-manifest.json",
+        "sha256": "3595c413d3419b166ff2e9fac1030b1ed36379517e2ead5cb47706757507ce26",
+        "bytes": 629277,
+        "availability": "retained private local evidence; not embedded in the repository"
+      },
+      {
+        "path": ".codex-tmp/finalization-20260907/runtime-advisory-v5/image-fb5835-otziv-1.jar",
+        "sha256": "d1539d74885126e5d3442f158a2bde2e0c1f9fc2edb24ab30437256c16d3e963",
+        "bytes": 246846790,
+        "availability": "retained private local evidence; not embedded in the repository"
+      }
+    ]
+  },
+  "actualImageScan": {
+    "schema": "otziv-vulnerability-scan-v1",
+    "artifactCount": 2,
+    "high": 0,
+    "critical": 0,
+    "unfixedHighOrCritical": 0,
+    "blockingFixedHighOrCritical": 0,
+    "result": "PASS",
+    "unresolvedRiskReview": "NONE",
+    "scannerImage": "aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969",
+    "allFindingCount": 145,
+    "resultClasses": [
+      {
+        "type": "ubuntu",
+        "class": "os-pkgs",
+        "packages": 132,
+        "severityCounts": {
+          "MEDIUM": 111,
+          "LOW": 32
+        }
+      },
+      {
+        "type": "jar",
+        "class": "lang-pkgs",
+        "packages": 342,
+        "severityCounts": {
+          "MEDIUM": 2
+        }
+      }
+    ],
+    "sbomComponents": 475,
+    "completeOsAndNestedJavaAnalysis": true,
+    "ignorefile": "/dev/null",
+    "suppressionUsed": false,
+    "lowerSeverityDisposition": "145 lower-severity findings retained in raw report; 0 HIGH/CRITICAL is not a claim of zero vulnerabilities.",
+    "evidence": [
+      {
+        "path": ".codex-tmp/finalization-20260907/runtime-advisory-v5/scan-result.json",
+        "sha256": "36508997269c4a1723c3a4b36872a65e79d16daf559be1969373ed12c54b760d",
+        "bytes": 3044,
+        "availability": "retained private local evidence; not embedded in the repository"
+      },
+      {
+        "path": ".codex-tmp/finalization-20260907/runtime-advisory-v5/vulnerabilities.json",
+        "sha256": "38ad3bd09160d2c719bb289556be5c08c6d958dfa1def638c7eb5eb4b507c910",
+        "bytes": 1199643,
+        "availability": "retained private local evidence; not embedded in the repository"
+      },
+      {
+        "path": ".codex-tmp/finalization-20260907/runtime-advisory-v5/vulnerabilities.triage.json",
+        "sha256": "16e919ffeb32b2e9945e6b402e2e56f62c877cadffa21ccef803fd83d2b51380",
+        "bytes": 365,
+        "availability": "retained private local evidence; not embedded in the repository"
+      },
+      {
+        "path": ".codex-tmp/finalization-20260907/runtime-advisory-v5/vulnerabilities.sbom.cdx.json",
+        "sha256": "fa77da7cc8afa7a08e695d0cc0700b7db055869f3a7204781a2b92fee08a5aec",
+        "bytes": 939417,
+        "availability": "retained private local evidence; not embedded in the repository"
+      },
+      {
+        "path": ".codex-tmp/finalization-20260907/runtime-advisory-v5/vulnerabilities.scanner.log",
+        "sha256": "32757d9896c19233bbaad9ed18e52c7d5514024e859ecc0c8fe9bb545b857bcd",
+        "bytes": 168031,
+        "availability": "retained private local evidence; not embedded in the repository"
+      }
+    ]
+  },
+  "stockLocalSmoke": {
+    "completedAt": "2026-09-07T20:12:52.974571+00:00",
+    "result": "PASS",
+    "exitCode": 0,
+    "stockPassedSentinel": true,
+    "runtime": {
+      "container": "/otziv-prod-local-app-1",
+      "imageId": "sha256:fb5835ef464657179e81b5d7847fe3124c7e8ca238f868c9dd26c91c5f91b90e",
+      "configuredImage": "sha256:fb5835ef464657179e81b5d7847fe3124c7e8ca238f868c9dd26c91c5f91b90e",
+      "matchesScannedImage": true,
+      "startedAt": "2026-09-07T20:09:43.463474583Z",
+      "status": "running",
+      "health": "healthy",
+      "oomKilled": false,
+      "restartCount": 0,
+      "user": "otziv:otziv",
+      "readonlyRootfs": true,
+      "capDrop": [
+        "ALL"
+      ],
+      "securityOpt": [
+        "no-new-privileges:true"
+      ],
+      "jarSha256": "d1539d74885126e5d3442f158a2bde2e0c1f9fc2edb24ab30437256c16d3e963",
+      "matchesBuiltJar": true
+    },
+    "http": {
+      "/actuator/health": 200,
+      "/keycloak/realms/otziv/.well-known/openid-configuration": 200,
+      "/": 200
+    },
+    "database": {
+      "mysqlVersion": "9.0.0",
+      "latestVersion": "1.10.306",
+      "failedMigrations": 0,
+      "installedMigrations": 387
+    },
+    "originalEnvironmentBytesPreserved": true,
+    "sourceCode": "Stock original-root smoke/Compose/helpers matched verified publication after CRLF normalization. Original root selected to retain existing bind paths; -NoBuild prevents application source build.",
+    "arguments": [
+      "-NoBuild",
+      "-NoOfflineFallback",
+      "-SkipProdDbRestore",
+      "-NoDbAdmin",
+      "-NoLogs",
+      "-SkipOpenAiProxyIpSync",
+      "-TimeoutSeconds",
+      "1200"
+    ],
+    "imageSelection": "Process APP_IMAGE was exact scanned image ID; original env file and prior image tag were not rewritten.",
+    "freshDatabaseProvenance": {
+      "origin": "Previously completed stock VPS-to-local restore, reused for this smoke",
+      "archiveName": "prod-20260907-225604.sql.gz",
+      "archiveBytes": 109081618,
+      "archiveSha256": "fdab6b68faa78a6082ce09610273e88fa4a740b47f792d9009a9eccac1fbbce7",
+      "checksumVerified": true,
+      "sanitizationVerified": true,
+      "externalMessagingDisabled": true,
+      "ephemeralDownloadedDumpRemovedByStockRestore": true,
+      "newDownloadOrRestoreInThisRun": false,
+      "evidence": {
+        "path": ".codex-tmp/finalization-20260907/local-fresh-restore.log",
+        "sha256": "47cbdfc75f71007ccd220d2448327462b8a81db2c967260d923bc0659046594f",
+        "bytes": 3885,
+        "availability": "retained private local evidence; not embedded in the repository"
+      }
+    },
+    "hardenedRecoveryDatabaseProof": "Separate paired recovery run owned by recovery agent/root. This stock smoke uses existing MySQL 9.0.0 and does not attest the hardened MySQL 9.7.3/PostgreSQL 17.11 recovery images.",
+    "evidence": [
+      {
+        "path": ".codex-tmp/finalization-20260907/runtime-advisory-v5/stock-smoke-result.json",
+        "sha256": "d5a9b6bb1bb7e835d334f1185a12e86d7a4a07cfe4f402e5a4b8a1e878817a29",
+        "bytes": 1449,
+        "availability": "retained private local evidence; not embedded in the repository"
+      },
+      {
+        "path": ".codex-tmp/finalization-20260907/runtime-advisory-v5/stock-smoke.log",
+        "sha256": "d6d0ab59b9ca5ab69f906d95b297cd6d4e9d17e6b9ac3a9f65f625386605371c",
+        "bytes": 10573,
+        "availability": "retained private local evidence; not embedded in the repository"
+      },
+      {
+        "path": ".codex-tmp/finalization-20260907/runtime-advisory-v5/smoke-source-comparison.json",
+        "sha256": "50706c154c42b447efeeb20fdd66d70720100fc444ce1ee0b56817691c412e0c",
+        "bytes": 1853,
+        "availability": "retained private local evidence; not embedded in the repository"
+      },
+      {
+        "path": ".codex-tmp/finalization-20260907/runtime-advisory-v5/smoke-plan.json",
+        "sha256": "7fa91aca5982627094228543461156628f5ac05f31e613263c71312f450004ce",
+        "bytes": 4701,
+        "availability": "retained private local evidence; not embedded in the repository"
+      },
+      {
+        "path": ".codex-tmp/finalization-20260907/runtime-advisory-v5/run-stock-smoke.ps1",
+        "sha256": "542b4d0fa4e4cd7c658c024149e03b77624a88eb16eeb8b8a9900131817c1cbe",
+        "bytes": 1958,
+        "availability": "retained private local evidence; not embedded in the repository"
+      }
+    ]
+  },
+  "v6PackageExecutableIdentity": {
+    "result": "EXACT_EXECUTABLE_CONTENT_MATCH",
+    "comparedAt": "2026-09-07T20:12:13.145903+00:00",
+    "comparedBy": "All non-directory ZIP entries compared by SHA256 of exact uncompressed bytes; outer ZIP order/compression/timestamps separately represented by JAR hash",
+    "imageJarSha256": "d1539d74885126e5d3442f158a2bde2e0c1f9fc2edb24ab30437256c16d3e963",
+    "v6JarSha256": "24283c7670aa0e590147b4baee6da3cc822e2c24591f1a70a2ca11287d7123ff",
+    "v6JarStableDuringComparison": true,
+    "categories": {
+      "nestedRuntimeJar": {
+        "imageCount": 330,
+        "v6Count": 330,
+        "changedOrMissingCount": 0
+      },
+      "mainClassesAndResources": {
+        "imageCount": 3517,
+        "v6Count": 3517,
+        "changedOrMissingCount": 0
+      },
+      "packagingMetadata": {
+        "imageCount": 3,
+        "v6Count": 3,
+        "changedOrMissingCount": 1
+      },
+      "loaderAndPackagingSupport": {
+        "imageCount": 103,
+        "v6Count": 103,
+        "changedOrMissingCount": 0
+      }
+    },
+    "differences": [
+      {
+        "entry": "META-INF/maven/com.hunt/otziv/pom.xml",
+        "category": "packagingMetadata",
+        "image": {
+          "sha256": "9ffdd93bf5c6ed85a227c30a2d3ee21120ecb7cc81524e18eebd1912ecab9f94",
+          "size": 17743
+        },
+        "v6": {
+          "sha256": "46a1a8160f7cced473772e44518bfb5b173860f1fe76cbc0702540b325d6ea00",
+          "size": 19110
+        }
+      }
+    ],
+    "wholeJarByteIdentical": false,
+    "interpretation": "All 3517 main/resource entries, 330 nested runtime JARs and 103 loader/support entries are byte-identical. Only embedded Maven pom.xml differs (9ff to 46a). Image scan and smoke substantiate that executable closure; they do not turn the metadata-different v6 JAR into the exact scanned image.",
+    "evidence": {
+      "path": ".codex-tmp/finalization-20260907/runtime-advisory-v5/v6-jar-comparison.json",
+      "sha256": "bc4b46d18cd53ae90603f0fd935b9269b29b54423840a3b6dacebc8d0594d59e",
+      "bytes": 1730,
+      "availability": "retained private local evidence; not embedded in the repository"
+    }
+  },
+  "productionActivation": false,
+  "deploymentAuthorization": null,
+  "riskAcceptance": null,
+  "riskOwner": null,
+  "riskAcceptanceExpiry": null,
+  "remainingEvidence": {
+    "finalV6FullSuite": "COMPLETED_WITH_15_DECLARED_SKIPS",
+    "pairedRecoveryWithCurrentAppAndIssuer": "See ISSUER_ORDERING_VALIDATION_2026-09-08.json: separate 21-check completed synthetic rehearsal",
+    "hostedRequiredChecksAndReleaseApproval": "NOT_ASSERTED_BY_THIS_DOCUMENT"
+  },
+  "sourceHashEncodingNote": "Local raw SHA256 values preserve Windows line endings. Git normalizes eligible text blobs; publication/c4-reviewed-source.json records normalized text SHA256 separately. POM normalized LF SHA256 is 19d9b3f7e41409fa76ed2f4072a6c8fe81144c4bb58645cbda7ff2eee49ea247."
+}

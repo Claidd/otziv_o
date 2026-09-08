@@ -2,7 +2,8 @@ import { DatePipe, DecimalPipe } from '@angular/common';
 import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { forkJoin, switchMap, tap } from 'rxjs';
+import { Subscription, forkJoin, switchMap, tap } from 'rxjs';
+import { LatestRouteRequest } from '../../../core/latest-route-request';
 import { PaymentsApi } from '../../../core/payments.api';
 import type { OrderCardItem } from '../../../core/manager.api';
 import type {
@@ -142,8 +143,16 @@ export class TbankPaymentsComponent implements OnDestroy {
   readonly profileAssignments = signal<Record<number, number | null>>({});
   readonly profilePolicies = signal<Record<number, ProfilePolicyDraft>>({});
   readonly runtimeSettings = signal<TbankRuntimeSettings | null>(null);
-  readonly loading = signal(false);
-  readonly error = signal<string | null>(null);
+  private readonly bootstrapLoading = signal(false);
+  readonly journalLoading = signal(false);
+  readonly loading = computed(() => this.bootstrapLoading() || this.journalLoading());
+  private readonly bootstrapError = signal<string | null>(null);
+  readonly journalError = signal<string | null>(null);
+  readonly error = computed(() => this.bootstrapError() || this.journalError());
+  private readonly journalRead = new LatestRouteRequest<AdminPaymentLinksPageResponse>();
+  private bootstrapRead?: Subscription;
+  private bootstrapEpoch = 0;
+  private destroyed = false;
   readonly mutatingId = signal<number | null>(null);
   readonly mutatingTaskId = signal<number | null>(null);
   readonly editingTaskId = signal<number | null>(null);
@@ -162,6 +171,7 @@ export class TbankPaymentsComponent implements OnDestroy {
   readonly editTaskAccountingTargetError = signal<string | null>(null);
   private adminTaskAccountingPreviewEpoch = 0;
   private editTaskAccountingPreviewEpoch = 0;
+  private manualTaskEditEpoch = 0;
   readonly savingManualTask = signal(false);
   readonly savingProfiles = signal(false);
   readonly savingProfilePolicies = signal(false);
@@ -181,6 +191,7 @@ export class TbankPaymentsComponent implements OnDestroy {
   readonly archiving = signal(false);
   readonly loadingRecipientSummary = signal(false);
   private recipientSummaryLoadEpoch = 0;
+  private recipientSummaryRead?: Subscription;
   private searchReloadTimer: number | null = null;
 
   readonly statusOptions: StatusFilterOption[] = [
@@ -422,34 +433,47 @@ export class TbankPaymentsComponent implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.destroyed = true;
+    this.bootstrapEpoch += 1;
+    this.recipientSummaryLoadEpoch += 1;
+    this.bootstrapRead?.unsubscribe();
+    this.journalRead.cancel();
+    this.recipientSummaryRead?.unsubscribe();
+    this.bootstrapLoading.set(false);
+    this.journalLoading.set(false);
+    this.loadingRecipientSummary.set(false);
     if (this.searchReloadTimer != null) {
       window.clearTimeout(this.searchReloadTimer);
     }
   }
 
   load(): void {
-    this.loading.set(true);
-    this.error.set(null);
+    if (this.destroyed) return;
+    const epoch = ++this.bootstrapEpoch;
+    this.bootstrapRead?.unsubscribe();
+    this.bootstrapLoading.set(true);
+    this.bootstrapError.set(null);
     this.loadRecipientMonthlySummary();
-    forkJoin({
+    this.loadPaymentLinks();
+    this.bootstrapRead = forkJoin({
       status: this.paymentsApi.getTbankStatus(),
-      links: this.paymentsApi.getAdminTbankPaymentLinks(this.paymentLinkQuery()),
       profiles: this.paymentsApi.getAdminBankPaymentProfiles(),
       manualTasks: this.paymentsApi.getAdminManualPaymentTasks(),
       runtimeSettings: this.paymentsApi.getAdminTbankRuntimeSettings()
     }).subscribe({
-      next: ({ status, links, profiles, manualTasks, runtimeSettings }) => {
+      next: ({ status, profiles, manualTasks, runtimeSettings }) => {
+        if (this.destroyed || epoch !== this.bootstrapEpoch) return;
         this.status.set(status);
-        this.applyPaymentLinksPage(links);
         this.manualTasks.set(manualTasks ?? []);
         this.runtimeSettings.set(runtimeSettings);
         this.applyProfilesState(profiles.profiles, profiles.managers);
-        this.loading.set(false);
+        this.bootstrapLoading.set(false);
       },
       error: (err) => {
+        if (this.destroyed || epoch !== this.bootstrapEpoch) return;
         const message = apiErrorDetail(err, 'Не удалось загрузить банковские платежи');
-        this.error.set(message);
-        this.loading.set(false);
+        this.bootstrapError.set(message);
+        this.bootstrapLoading.set(false);
         this.toastService.error('Банковские платежи не загрузились', message);
       }
     });
@@ -587,6 +611,7 @@ export class TbankPaymentsComponent implements OnDestroy {
   setSearch(value: string): void {
     this.search.set(value ?? '');
     this.paymentPage.set(0);
+    this.invalidatePaymentLinks();
     if (this.searchReloadTimer != null) {
       window.clearTimeout(this.searchReloadTimer);
     }
@@ -1147,6 +1172,7 @@ export class TbankPaymentsComponent implements OnDestroy {
     if (!task?.id || task.status === 'COMPLETED' || task.status === 'CANCELED') {
       return;
     }
+    this.manualTaskEditEpoch += 1;
     this.editingTaskId.set(task.id);
     this.editTaskPaymentType.set(this.normalizeManualPaymentType(task.manualPaymentType));
     this.editTaskPhone.set(task.manualPhone ?? '');
@@ -1162,6 +1188,7 @@ export class TbankPaymentsComponent implements OnDestroy {
   }
 
   cancelManualTaskEdit(): void {
+    this.manualTaskEditEpoch += 1;
     this.editingTaskId.set(null);
     this.editTaskAccountingTargets.set([]);
     this.editTaskAccountingTargetKey.set('');
@@ -1219,8 +1246,8 @@ export class TbankPaymentsComponent implements OnDestroy {
     const hasTarget = this.editTaskPaymentType() === 'MOBILE_BANK'
       ? Boolean(this.editTaskPhone().trim()) && Boolean(this.editTaskRecipient().trim())
       : Boolean(this.editTaskPaymentUrl().trim()) && Boolean(this.editTaskRecipient().trim());
-    return this.editingTaskId() === task.id
-      && this.mutatingTaskId() !== task.id
+    return !this.destroyed && this.editingTaskId() === task.id
+      && this.mutatingTaskId() == null
       && task.status !== 'COMPLETED'
       && task.status !== 'CANCELED'
       && hasTarget
@@ -1239,6 +1266,9 @@ export class TbankPaymentsComponent implements OnDestroy {
     if (!accountingTarget) {
       return;
     }
+    const editEpoch = this.manualTaskEditEpoch;
+    const ownsEditor = () => !this.destroyed && editEpoch === this.manualTaskEditEpoch
+      && this.editingTaskId() === task.id;
     this.mutatingTaskId.set(task.id);
     this.paymentsApi.updateAdminManualPaymentTask(task.id, {
       manualPaymentType: this.editTaskPaymentType(),
@@ -1258,15 +1288,21 @@ export class TbankPaymentsComponent implements OnDestroy {
       expectedGeneration: task.generation ?? null
     }).subscribe({
       next: (updated) => {
-        this.manualTasks.update((tasks) => tasks.map((item) => item.id === updated.id ? updated : item));
-        this.editingTaskId.set(null);
-        this.mutatingTaskId.set(null);
-        this.toastService.success('Задание сохранено');
+        if (!this.destroyed) {
+          this.manualTasks.update((tasks) => tasks.map((item) => item.id === updated.id ? updated : item));
+        }
+        if (ownsEditor()) {
+          this.cancelManualTaskEdit();
+          this.toastService.success('Задание сохранено');
+        }
+        if (this.mutatingTaskId() === task.id) this.mutatingTaskId.set(null);
       },
       error: (err) => {
-        const message = apiErrorDetail(err, 'Не удалось обновить ручное задание');
-        this.mutatingTaskId.set(null);
-        this.toastService.error('Задание не сохранено', message);
+        if (this.mutatingTaskId() === task.id) this.mutatingTaskId.set(null);
+        if (ownsEditor()) {
+          const message = apiErrorDetail(err, 'Не удалось обновить ручное задание');
+          this.toastService.error('Задание не сохранено', message);
+        }
       }
     });
   }
@@ -2008,13 +2044,35 @@ export class TbankPaymentsComponent implements OnDestroy {
   }
 
   private loadPaymentLinks(): void {
-    this.paymentsApi.getAdminTbankPaymentLinks(this.paymentLinkQuery()).subscribe({
-      next: (links) => this.applyPaymentLinksPage(links),
+    if (this.destroyed) return;
+    if (this.searchReloadTimer != null) {
+      window.clearTimeout(this.searchReloadTimer);
+      this.searchReloadTimer = null;
+    }
+    const query = this.paymentLinkQuery();
+    this.invalidatePaymentLinks();
+    this.journalRead.start(this.paymentsApi.getAdminTbankPaymentLinks(query), {
+      next: (links) => {
+        this.applyPaymentLinksPage(links);
+        this.journalLoading.set(false);
+      },
       error: (err) => {
         const message = apiErrorDetail(err, 'Не удалось обновить журнал платежей');
+        this.journalError.set(message);
+        this.journalLoading.set(false);
         this.toastService.error('Журнал не обновлен', message);
       }
     });
+  }
+
+  private invalidatePaymentLinks(): void {
+    this.journalRead.cancel();
+    this.journalLoading.set(true);
+    this.journalError.set(null);
+    this.links.set([]);
+    this.paymentSummary.set(null);
+    this.paymentTotalElements.set(0);
+    this.paymentTotalPages.set(0);
   }
 
   private loadManualTasks(): void {
@@ -2028,10 +2086,12 @@ export class TbankPaymentsComponent implements OnDestroy {
   }
 
   loadRecipientMonthlySummary(): void {
+    if (this.destroyed) return;
     const loadEpoch = ++this.recipientSummaryLoadEpoch;
+    this.recipientSummaryRead?.unsubscribe();
     this.loadingRecipientSummary.set(true);
     this.recipientSummaryError.set(null);
-    this.paymentsApi.getAdminManualRecipientMonthlySummary(this.recipientSummaryMonth()).subscribe({
+    this.recipientSummaryRead = this.paymentsApi.getAdminManualRecipientMonthlySummary(this.recipientSummaryMonth()).subscribe({
       next: (summary) => {
         if (loadEpoch !== this.recipientSummaryLoadEpoch) {
           return;

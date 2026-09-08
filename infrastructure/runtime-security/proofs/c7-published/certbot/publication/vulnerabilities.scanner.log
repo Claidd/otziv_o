@@ -1,0 +1,29 @@
+Unable to find image 'aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969' locally
+docker.io/aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969: Pulling from aquasec/trivy
+55afa1ecc21d: Already exists
+0c664a59f299: Pulling fs layer
+9b17763e725d: Pulling fs layer
+99f1ca71a2b5: Pulling fs layer
+99f1ca71a2b5: Verifying Checksum
+99f1ca71a2b5: Download complete
+0c664a59f299: Verifying Checksum
+0c664a59f299: Download complete
+9b17763e725d: Verifying Checksum
+9b17763e725d: Download complete
+0c664a59f299: Pull complete
+9b17763e725d: Pull complete
+99f1ca71a2b5: Pull complete
+Digest: sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969
+Status: Downloaded newer image for aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969
+2026-09-08T02:11:05Z	INFO	[vulndb] Need to update DB
+2026-09-08T02:11:05Z	INFO	[vulndb] Downloading vulnerability DB...
+2026-09-08T02:11:05Z	INFO	[vulndb] Downloading artifact...	repo="mirror.gcr.io/aquasec/trivy-db:2"
+1.21 MiB / 112.17 MiB [>_____________________________________________________________] 1.08% ? p/s ?14.55 MiB / 112.17 MiB [------->____________________________________________________] 12.97% ? p/s ?40.62 MiB / 112.17 MiB [--------------------->______________________________________] 36.21% ? p/s ?67.48 MiB / 112.17 MiB [--------------------------->__________________] 60.16% 110.61 MiB p/s ETA 0s94.61 MiB / 112.17 MiB [-------------------------------------->_______] 84.35% 110.61 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [------------------------------------------->] 100.00% 110.61 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [------------------------------------------->] 100.00% 108.27 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [------------------------------------------->] 100.00% 108.27 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [------------------------------------------->] 100.00% 108.27 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [------------------------------------------->] 100.00% 101.29 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [------------------------------------------->] 100.00% 101.29 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [------------------------------------------->] 100.00% 101.29 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [-------------------------------------------->] 100.00% 94.75 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [-------------------------------------------->] 100.00% 94.75 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [-------------------------------------------->] 100.00% 94.75 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [-------------------------------------------->] 100.00% 88.64 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [-------------------------------------------->] 100.00% 88.64 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [-------------------------------------------->] 100.00% 88.64 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [-------------------------------------------->] 100.00% 82.92 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [-------------------------------------------->] 100.00% 82.92 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [-------------------------------------------->] 100.00% 82.92 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [-------------------------------------------->] 100.00% 77.57 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [-------------------------------------------->] 100.00% 77.57 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [-------------------------------------------->] 100.00% 77.57 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [-------------------------------------------->] 100.00% 72.57 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [-------------------------------------------->] 100.00% 72.57 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [-----------------------------------------------] 100.00% 22.11 MiB p/s 5.3s2026-09-08T02:11:12Z	INFO	[vulndb] Artifact successfully downloaded	repo="mirror.gcr.io/aquasec/trivy-db:2"
+2026-09-08T02:11:12Z	INFO	[vuln] Vulnerability scanning is enabled
+2026-09-08T02:11:12Z	WARN	Third-party SBOM may lead to inaccurate vulnerability detection
+2026-09-08T02:11:12Z	WARN	Recommend using Trivy to generate SBOMs
+2026-09-08T02:11:12Z	INFO	[python] Licenses acquired from one or more METADATA files may be subject to additional terms. Use `--debug` flag to see all affected packages.
+2026-09-08T02:11:12Z	INFO	Detected OS	family="alpine" version="3.23.5"
+2026-09-08T02:11:12Z	INFO	[alpine] Detecting vulnerabilities...	os_version="3.23" repository="3.23" pkg_num=36
+2026-09-08T02:11:12Z	INFO	Number of language-specific files	num=1
+2026-09-08T02:11:12Z	INFO	[python-pkg] Detecting vulnerabilities...

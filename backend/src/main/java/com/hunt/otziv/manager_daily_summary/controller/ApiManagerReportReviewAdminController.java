@@ -2,6 +2,8 @@ package com.hunt.otziv.manager_daily_summary.controller;
 
 import com.hunt.otziv.manager_daily_summary.dto.ManagerReportDisputeResolutionRequest;
 import com.hunt.otziv.manager_daily_summary.service.ManagerReportReviewAdminService;
+import com.hunt.otziv.manager_daily_summary.service.ManagerReportReviewTelegramService;
+import com.hunt.otziv.manager_daily_summary.service.ManagerReportReviewOwnerNotificationService;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.repository.UserRepository;
 import java.security.Principal;
@@ -22,7 +24,21 @@ import org.springframework.web.server.ResponseStatusException;
 public class ApiManagerReportReviewAdminController {
 
     private final ManagerReportReviewAdminService service;
+    private final ManagerReportReviewTelegramService telegramReviewService;
     private final UserRepository userRepository;
+
+    @PostMapping("/{reviewId}/resend-dispute")
+    public ManagerReportReviewOwnerNotificationService.DeliveryResult resendDispute(
+            @PathVariable Long reviewId, Principal principal
+    ) {
+        if (principal == null || principal.getName() == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
+        }
+        User actor = userRepository.findByUsername(principal.getName())
+                .filter(User::isActive)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+        return telegramReviewService.resendDispute(reviewId, actor);
+    }
 
     @PostMapping("/{reviewId}/resolve-dispute")
     public void resolveDispute(

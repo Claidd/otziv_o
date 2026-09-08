@@ -1,4 +1,5 @@
 package com.hunt.otziv.client_messages.service;
+import com.hunt.otziv.whatsapp.service.WhatsAppOperationKey;
 
 import com.hunt.otziv.bad_reviews.dto.BadReviewTaskSummary;
 import com.hunt.otziv.bad_reviews.service.BadReviewTaskService;
@@ -6,6 +7,8 @@ import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.client_messages.dto.ArchiveCompanyMessageCandidate;
 import com.hunt.otziv.client_messages.dto.ClientMessageSendResult;
+import com.hunt.otziv.client_messages.api.ClientMessageDelivery;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hunt.otziv.client_messages.dto.TelegramTransferCopyButton;
 import com.hunt.otziv.client_messages.model.ClientMessageScenario;
 import com.hunt.otziv.client_messages.model.ClientMessageTargetType;
@@ -72,12 +75,15 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
 @Slf4j
 @RequiredArgsConstructor
 public class ScheduledClientMessageService {
+
+    private static final ObjectMapper DELIVERY_JSON = new ObjectMapper();
 
     private static final int REVIEW_RECOVERY_RECHECK_MINUTES = 10;
 
@@ -245,8 +251,10 @@ public class ScheduledClientMessageService {
         try {
             transactionRunner.runInNewTransaction(() -> {
                 recoverExpiredBadReviewDeliveries(nowStorage);
+                stateRepository.releaseExpiredOrdinaryPreparationClaims(nowStorage);
                 releaseReenabledBadReviewScenarios(nowStorage);
             });
+            recoverOrdinaryDeliveries(nowStorage);
         } catch (RuntimeException e) {
             log.error("Bad-review delivery recovery transaction failed", e);
         }
@@ -284,9 +292,7 @@ public class ScheduledClientMessageService {
                 if (isBadReviewInvoiceState(stateId)) {
                     processClaimedBadReviewInvoiceOutsideTransaction(stateId, claimNow, claimedUntil, null);
                 } else {
-                    transactionRunner.runInNewTransaction(
-                            () -> processClaimedState(stateId, claimNow, claimedUntil)
-                    );
+                    processClaimedStateOutsideTransaction(stateId, claimNow, claimedUntil, false);
                 }
                 processed++;
             } catch (RuntimeException e) {
@@ -363,12 +369,7 @@ public class ScheduledClientMessageService {
                         state.getId(), nowStorage, claimedUntil, null
                 );
             } else {
-                transactionRunner.runInNewTransaction(() -> processClaimedState(
-                        state.getId(),
-                        nowStorage,
-                        claimedUntil,
-                        reconcilePaymentBeforeRetry
-                ));
+                processClaimedStateOutsideTransaction(state.getId(), nowStorage, claimedUntil, reconcilePaymentBeforeRetry);
             }
         } catch (RuntimeException e) {
             log.error("Manual client message retry transaction rolled back stateId={}", state.getId(), e);
@@ -1236,7 +1237,7 @@ public class ScheduledClientMessageService {
         if (orderId == null || orderId <= 0
                 || !appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true)
                 || !appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_INVOICE_ENABLED, true)
-                || !appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)) {
+                || !liveSendingEnabled()) {
             return;
         }
         ScheduledClientMessageState state = stateRepository.findByScenarioAndTargetKey(
@@ -1266,10 +1267,17 @@ public class ScheduledClientMessageService {
             LocalDateTime expectedLockedUntil,
             Long taskId
     ) {
-        PreparedBadReviewDelivery prepared = transactionRunner.callInNewTransaction(
+        PreparedBadReviewDelivery prepared = transactionRunner.callInPreparationTransaction(
                 () -> prepareBadReviewDelivery(stateId, nowStorage, expectedLockedUntil, taskId)
         );
         if (prepared == null) {
+            return;
+        }
+        requireNoBusinessTransaction();
+        if (!liveSendingEnabled()) {
+            transactionRunner.runInNewTransaction(() -> pausePreparedWithoutDispatch(prepared.stateId(),
+                    prepared.orderId(), prepared.deliveryToken(), ClientMessageScenario.BAD_REVIEW_INVOICE,
+                    "bad-review-invoice:order:" + prepared.orderId(), databaseTimestamp(LocalDateTime.now(clock))));
             return;
         }
         ClientMessageSendResult result;
@@ -1279,26 +1287,20 @@ public class ScheduledClientMessageService {
             TelegramTransferCopyButton copyButton = TelegramTransferCopyButton
                     .fromFrozenTransferNumber(prepared.telegramCopyTransferNumber())
                     .orElse(null);
-            result = copyButton == null
-                    ? messageSender.send(
-                            prepared.company(),
-                            prepared.managerClientId(),
-                            prepared.groupId(),
-                            prepared.message()
-                    )
-                    : messageSender.send(
-                            prepared.company(),
-                            prepared.managerClientId(),
-                            prepared.groupId(),
-                            prepared.message(),
-                            copyButton
-                    );
+            requireNoBusinessTransaction();
+            result = messageSender.deliverWithOperationId(
+                    prepared.target(), prepared.managerClientId(), prepared.groupId(),
+                    prepared.message(), copyButton,
+                    WhatsAppOperationKey.of("bad-review-invoice-v1", prepared.stateId(), prepared.deliveryToken())
+            );
             if (result == null) {
                 outcomeUnknown = true;
                 result = ClientMessageSendResult.failed(
                         ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN,
                         "Канал отправки не вернул результат"
                 );
+            } else if (!result.sent() && !ClientChatMessageSender.isKnownUnsent(result)) {
+                outcomeUnknown = true;
             }
         } catch (RuntimeException e) {
             outcomeUnknown = true;
@@ -1520,41 +1522,44 @@ public class ScheduledClientMessageService {
         if (taskId == null && !reserveBackgroundDeliverySlot(state, company, nowStorage)) {
             return null;
         }
-        String message;
-        String frozenTransferNumber;
-        try {
-            OrderPaymentMessageBuilder.PreparedPaymentMessage paymentMessage =
-                    orderPaymentMessageBuilder.publishedOrderPaymentMessageWithTransfer(order);
-            message = paymentMessage.message();
-            frozenTransferNumber = paymentMessage.telegramCopyTransferNumber();
-        } catch (RuntimeException e) {
-            registerFailure(state, nowStorage, "payment_instruction_failed", readableException(e), null, 0);
+        PreparedBadReviewDelivery prepared;
+        if (hasText(state.getDeliveryEnvelope())) {
+            // A pause before dispatch retains the exact invoice/route/token. It
+            // must not render a changed payment instruction when live resumes.
+            try { prepared = DELIVERY_JSON.readValue(state.getDeliveryEnvelope(), PreparedBadReviewDelivery.class); }
+            catch (Exception corrupt) { throw new IllegalStateException("Saved bad-review delivery is unreadable; replay is blocked", corrupt); }
+            if (!Objects.equals(prepared.stateId(), state.getId()) || !Objects.equals(prepared.orderId(), state.getOrderId())) {
+                throw new IllegalStateException("Saved bad-review delivery belongs to another occurrence");
+            }
+        } else {
+            try {
+                OrderPaymentMessageBuilder.PreparedPaymentMessage paymentMessage =
+                        orderPaymentMessageBuilder.publishedOrderPaymentMessageWithTransfer(order);
+                Manager manager = manager(order);
+                prepared = new PreparedBadReviewDelivery(state.getId(), state.getOrderId(), UUID.randomUUID().toString(),
+                        companyTarget(company), manager == null ? null : manager.getClientId(), company.getGroupId(),
+                        paymentMessage.message(), paymentMessage.telegramCopyTransferNumber());
+            } catch (RuntimeException e) {
+                registerFailure(state, nowStorage, "payment_instruction_failed", readableException(e), null, 0);
+                return null;
+            }
+        }
+        if (!liveSendingEnabled()) {
+            registerDryRun(state, nowStorage, prepared.message(), null);
             return null;
         }
-        if (!appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)) {
-            registerDryRun(state, nowStorage, message, null);
-            return null;
-        }
-        Manager manager = manager(order);
-        String token = UUID.randomUUID().toString();
-        state.setDeliveryToken(token);
+        try { state.setDeliveryEnvelope(DELIVERY_JSON.writeValueAsString(prepared)); }
+        catch (com.fasterxml.jackson.core.JsonProcessingException failure) { throw new IllegalStateException("Bad-review snapshot is not serializable", failure); }
+        state.setDeliveryToken(prepared.deliveryToken());
         state.setDeliveryStatus("PREPARED");
-        state.setDeliveryMessage(message);
+        state.setDeliveryMessage(prepared.message());
+        state.setDeliveryChannel(expectedChannel(prepared.target()));
         state.setDeliveryTaskId(taskId);
         state.setDeliveryPreparedAt(nowStorage);
         state.setLastErrorCode("delivery_prepared");
         state.setLastErrorMessage("Сообщение подготовлено; внешний вызов выполняется после фиксации транзакции");
         stateRepository.save(state);
-        return new PreparedBadReviewDelivery(
-                state.getId(),
-                state.getOrderId(),
-                token,
-                company,
-                manager == null ? null : manager.getClientId(),
-                company.getGroupId(),
-                message,
-                frozenTransferNumber
-        );
+        return prepared;
     }
 
     private Long finalizeBadReviewDelivery(
@@ -1569,6 +1574,7 @@ public class ScheduledClientMessageService {
             if (!isPreparedDeliveryState(state, prepared)) {
                 return null;
             }
+            stateRepository.lockDispatchBudget();
             state.setDeliveryStatus("UNKNOWN");
             state.setLastAttemptAt(nowStorage);
             state.setLastErrorCode(ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN);
@@ -1596,12 +1602,13 @@ public class ScheduledClientMessageService {
         if (!isPreparedDeliveryState(state, prepared)) {
             return null;
         }
+        stateRepository.lockDispatchBudget();
         if (result.sent()) {
             state.setDeliveryStatus("SENT");
             registerSuccess(
                     state,
                     nowStorage,
-                    hasText(result.channel()) ? result.channel() : expectedChannel(prepared.company()),
+                    hasText(result.channel()) ? result.channel() : expectedChannel(prepared.target()),
                     prepared.message(),
                     durationMs,
                     null
@@ -1689,8 +1696,11 @@ public class ScheduledClientMessageService {
         state.setDeliveryToken(null);
         state.setDeliveryStatus(null);
         state.setDeliveryMessage(null);
+        state.setDeliveryEnvelope(null);
+        state.setDeliveryChannel(null);
         state.setDeliveryTaskId(null);
         state.setDeliveryPreparedAt(null);
+        state.setDeliveryRecoveryCheckedAt(null);
     }
 
     private boolean reserveBackgroundDeliverySlot(
@@ -1698,6 +1708,7 @@ public class ScheduledClientMessageService {
             Company company,
             LocalDateTime nowStorage
     ) {
+        stateRepository.lockDispatchBudget();
         if (!withinDailyLimit(nowStorage)) {
             postpone(state, nextBusinessDayStartStorage(nowIrkutsk()), "daily_limit",
                     "Дневной лимит авторассылки исчерпан");
@@ -1707,7 +1718,7 @@ public class ScheduledClientMessageService {
         LocalDateTime nowIrkutsk = nowIrkutsk();
         LocalDateTime allowed = slotPlanner.afterGap(
                 nowIrkutsk,
-                lastSentAtIrkutsk(channel),
+                lastDispatchAtIrkutsk(channel),
                 gapSeconds(channel),
                 businessWindows()
         );
@@ -1747,7 +1758,7 @@ public class ScheduledClientMessageService {
             Long stateId,
             Long orderId,
             String deliveryToken,
-            Company company,
+            ClientMessageDelivery.Target target,
             String managerClientId,
             String groupId,
             String message,
@@ -1755,23 +1766,244 @@ public class ScheduledClientMessageService {
     ) {
     }
 
-    private void processClaimedState(
+    /** Versioned scalar snapshot persisted before any client transport is called. */
+    public record PreparedScheduledDelivery(
+            Long stateId, ClientMessageScenario scenario, String targetKey, Long orderId, String token,
+            String operationId, ClientMessageDelivery.Target target, String clientId, String groupId,
+            String message, String copy, Integer nextIntervalDays, String successEffect, Long recoveryBatchId,
+            long orderGeneration, String orderStatus, OrderStatusNotificationService.PreparedAction orderAction,
+            List<WhatsAppAuthAlertService.Recipient> recipients) {}
+
+    private void processClaimedStateOutsideTransaction(Long stateId, LocalDateTime nowStorage,
+            LocalDateTime claimedUntil, boolean reconcilePaymentBeforeRetry) {
+        requireNoBusinessTransaction();
+        if (reconcilePaymentBeforeRetry) {
+            ScheduledClientMessageState snapshot = stateRepository.findById(stateId).orElse(null);
+            if (snapshot != null && snapshot.getOrderId() != null) paymentLinkService.reconcileActiveLinkForOrder(snapshot.getOrderId());
+        }
+        PreparedScheduledDelivery prepared = transactionRunner.callInPreparationTransaction(
+                () -> processClaimedState(stateId, nowStorage, claimedUntil, false));
+        if (prepared == null) return;
+        dispatchScheduledDelivery(prepared, nowStorage);
+    }
+
+    void dispatchScheduledDelivery(PreparedScheduledDelivery prepared, LocalDateTime nowStorage) {
+        requireNoBusinessTransaction();
+        if (!liveSendingEnabled()) {
+            transactionRunner.runInNewTransaction(() -> pausePreparedWithoutDispatch(prepared.stateId(),
+                    prepared.orderId(), prepared.token(), prepared.scenario(), prepared.targetKey(),
+                    databaseTimestamp(LocalDateTime.now(clock))));
+            return;
+        }
+        long startedAt = System.currentTimeMillis();
+        ClientMessageSendResult result;
+        try {
+            requireNoBusinessTransaction();
+            result = prepared.orderAction() == null
+                    ? messageSender.deliverWithOperationId(prepared.target(), prepared.clientId(), prepared.groupId(), prepared.message(),
+                            TelegramTransferCopyButton.fromFrozenTransferNumber(prepared.copy()).orElse(null), prepared.operationId())
+                    : orderStatusNotificationService.dispatchPreparedAction(prepared.orderAction());
+            if (result == null) result = ClientMessageOperationFence.unknown();
+        } catch (RuntimeException ambiguous) {
+            result = ClientMessageOperationFence.unknown();
+        }
+        ClientMessageSendResult outcome = result;
+        boolean finalized = transactionRunner.callInNewTransaction(() -> finalizeScheduledDelivery(prepared, outcome,
+                databaseTimestamp(LocalDateTime.now(clock)), System.currentTimeMillis() - startedAt));
+        if (finalized) notifyScheduledDeliveryOutcome(prepared, outcome, nowStorage);
+    }
+
+    private void requireNoBusinessTransaction() {
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw new IllegalStateException("Scheduled provider I/O must run outside the business transaction");
+        }
+    }
+
+    private boolean liveSendingEnabled() {
+        try {
+            return appSettingService.getBooleanFreshFailClosed(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true);
+        } catch (RuntimeException unavailable) {
+            log.warn("Client delivery safety switch unavailable; provider dispatch is paused");
+            return false;
+        }
+    }
+
+    /** This branch executes only before any provider call, so non-delivery is known. */
+    private void pausePreparedWithoutDispatch(Long stateId, Long orderId, String token,
+            ClientMessageScenario scenario, String targetKey, LocalDateTime nowStorage) {
+        if (orderId != null) orderRepository.findByIdForMutation(orderId);
+        ScheduledClientMessageState state = stateRepository.findByIdForUpdate(stateId).orElse(null);
+        if (state == null || state.getStatus() != ScheduledMessageStateStatus.ACTIVE
+                || !"PREPARED".equals(state.getDeliveryStatus()) || !Objects.equals(state.getDeliveryToken(), token)
+                || state.getScenario() != scenario || !Objects.equals(state.getTargetKey(), targetKey)
+                || !Objects.equals(state.getOrderId(), orderId)) return;
+        stateRepository.lockDispatchBudget();
+        state.setDeliveryStatus("RETRYABLE");
+        // Existing SKIPPED/dry-run release resumes promptly after live is enabled.
+        // Keep the saved envelope/token/copy payload instead of inventing a retry.
+        registerDryRun(state, nowStorage, state.getDeliveryMessage(), null);
+    }
+
+    private PreparedScheduledDelivery persistScheduledDelivery(ScheduledClientMessageState state, Company company,
+            Manager manager, String message, String copy, Integer nextIntervalDays, String successEffect,
+            Long recoveryBatchId, Order order, OrderStatusNotificationService.PreparedAction orderAction, LocalDateTime nowStorage) {
+        PreparedScheduledDelivery prepared;
+        if (hasText(state.getDeliveryEnvelope())) {
+            prepared = decodeScheduledDelivery(state);
+            if (!Objects.equals(prepared.stateId(), state.getId()) || prepared.scenario() != state.getScenario()
+                    || !Objects.equals(prepared.targetKey(), state.getTargetKey())) {
+                throw new IllegalStateException("Saved scheduled delivery belongs to another business occurrence");
+            }
+        } else {
+            String operation = orderAction == null ? WhatsAppOperationKey.of(
+                    "scheduled-client-message-v1", state.getId(), state.getScenario(), state.getSentCount()) : orderAction.operationId();
+            prepared = new PreparedScheduledDelivery(state.getId(), state.getScenario(), state.getTargetKey(), state.getOrderId(),
+                    UUID.randomUUID().toString(), operation, companyTarget(company), manager == null ? null : manager.getClientId(),
+                    company.getGroupId(), message, copy, nextIntervalDays, successEffect, recoveryBatchId,
+                    order == null ? 0 : order.getClientMessageGeneration(), order == null ? null : statusTitle(order), orderAction,
+                    WhatsAppAuthAlertService.captureRecipients(managerCandidates(company, manager)));
+        }
+        try { state.setDeliveryEnvelope(DELIVERY_JSON.writeValueAsString(prepared)); }
+        catch (com.fasterxml.jackson.core.JsonProcessingException failure) { throw new IllegalStateException("Scheduled delivery snapshot is not serializable", failure); }
+        state.setDeliveryToken(prepared.token());
+        state.setDeliveryMessage(prepared.message());
+        state.setDeliveryStatus("PREPARED");
+        if (!hasText(state.getDeliveryChannel())) state.setDeliveryChannel(expectedChannel(company));
+        state.setDeliveryPreparedAt(nowStorage);
+        state.setLastErrorCode("delivery_prepared");
+        state.setLastErrorMessage("Сообщение сохранено; отправка выполняется после commit");
+        state.setNextAttemptAt(null);
+        stateRepository.save(state);
+        return prepared;
+    }
+
+    private ClientMessageDelivery.Target companyTarget(Company company) {
+        return company == null ? null : new ClientMessageDelivery.Target(company.getId(), company.getTitle(), company.getUrlChat(),
+                company.getTelegramGroupChatId(), company.getMaxGroupChatId());
+    }
+
+    private PreparedScheduledDelivery decodeScheduledDelivery(ScheduledClientMessageState state) {
+        return decodeScheduledDelivery(state.getDeliveryEnvelope());
+    }
+
+    private PreparedScheduledDelivery decodeScheduledDelivery(String envelope) {
+        try { return DELIVERY_JSON.readValue(envelope, PreparedScheduledDelivery.class); }
+        catch (Exception corrupt) { throw new IllegalStateException("Scheduled delivery snapshot is unreadable; replay is blocked", corrupt); }
+    }
+
+    private boolean finalizeScheduledDelivery(PreparedScheduledDelivery prepared, ClientMessageSendResult result,
+            LocalDateTime nowStorage, long durationMs) {
+        Order order = prepared.orderId() == null ? null : orderRepository.findByIdForMutation(prepared.orderId()).orElse(null);
+        ScheduledClientMessageState state = stateRepository.findByIdForUpdate(prepared.stateId()).orElse(null);
+        if (state == null || state.getStatus() != ScheduledMessageStateStatus.ACTIVE
+                || !Objects.equals(state.getDeliveryToken(), prepared.token()) || state.getScenario() != prepared.scenario()
+                || !Objects.equals(state.getTargetKey(), prepared.targetKey())
+                || !("PREPARED".equals(state.getDeliveryStatus()) || "UNKNOWN".equals(state.getDeliveryStatus()))) return false;
+        stateRepository.lockDispatchBudget();
+        if (!result.sent() && !ClientChatMessageSender.isKnownUnsent(result)) {
+            state.setDeliveryStatus("UNKNOWN");
+            state.setLastAttemptAt(nowStorage);
+            state.setLastErrorCode(ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN);
+            state.setLastErrorMessage("Исход отправки не подтверждён; сохранённый operation ID требует сверки без новой отправки");
+            state.setNextAttemptAt(null);
+            state.setLockedUntil(null);
+            recordAttempt(state, ScheduledMessageAttemptStatus.FAILED, result.channel(), state.getLastErrorCode(),
+                    state.getLastErrorMessage(), prepared.message(), durationMs);
+            stateRepository.save(state);
+            return true;
+        }
+        if (!result.sent()) {
+            // Retain exact target/content/key for a proven unsent attempt. A changed
+            // template or company route must not change an already frozen envelope.
+            state.setDeliveryStatus("RETRYABLE");
+            registerFailure(state, nowStorage, result.errorCode(), result.errorMessage(), prepared.message(), durationMs);
+            return true;
+        }
+        clearDeliveryPreparation(state);
+        registerSuccess(state, nowStorage, result.channel(), prepared.message(), durationMs, prepared.nextIntervalDays());
+        if (prepared.orderAction() != null) {
+            orderStatusNotificationService.applyPreparedAction(order, prepared.orderAction());
+            markDone(state, nowStorage, null, null);
+        } else if ("PAYMENT_REMINDER".equals(prepared.successEffect()) && order != null
+                && order.getClientMessageGeneration() == prepared.orderGeneration()
+                && Objects.equals(statusTitle(order), prepared.orderStatus()) && STATUS_TO_PAY.equals(statusTitle(order))) {
+            movePaymentReminderToReminderStatus(state, order, nowStorage);
+        } else if ("REVIEW_RECOVERY_NOTICE".equals(prepared.successEffect())) {
+            reviewRecoveryTaskService.markClientNotifiedAutomatically(prepared.recoveryBatchId());
+            markDone(state, nowStorage, null, null);
+        }
+        return true;
+    }
+
+    private void notifyScheduledDeliveryOutcome(PreparedScheduledDelivery prepared, ClientMessageSendResult result, LocalDateTime nowStorage) {
+        requireNoBusinessTransaction();
+        try {
+            if (prepared.orderAction() != null) {
+                orderStatusNotificationService.notifyPreparedActionOutcome(prepared.orderAction(), result);
+            } else if (result.sent() && isWhatsAppChannel(result.channel())) {
+                whatsAppAuthAlertService.notifyRecoveredSnapshot(prepared.clientId(), "успешная отправка автоответчика", nowStorage, prepared.recipients());
+            } else if (!result.sent() && isWhatsAppAuthUnavailable(result.errorCode(), result.errorMessage())) {
+                whatsAppAuthAlertService.notifyAuthIssueSnapshot(prepared.clientId(), prepared.target() == null ? null : prepared.target().title(),
+                        "фоновый автоответчик", result.errorCode(), result.errorMessage(), nowStorage,
+                        toIrkutskTime(nextWhatsAppAuthAttemptAt(nowStorage)), prepared.recipients());
+            }
+        } catch (RuntimeException notificationFailed) {
+            log.warn("Scheduled delivery ancillary notification failed: stateId={}", prepared.stateId(), notificationFailed);
+        }
+    }
+
+    private void recoverOrdinaryDeliveries(LocalDateTime nowStorage) {
+        requireNoBusinessTransaction();
+        for (Long stateId : stateRepository.findRecoverablePreparedIds(nowStorage.minusMinutes(DEFAULT_LOCK_MINUTES), PageRequest.of(0, 20))) {
+            try {
+                String envelope = transactionRunner.callInNewTransaction(() -> {
+                    ScheduledClientMessageState state = stateRepository.findByIdForUpdate(stateId).orElse(null);
+                    if (state == null || state.getStatus() != ScheduledMessageStateStatus.ACTIVE
+                            || !hasText(state.getDeliveryEnvelope()) || !("PREPARED".equals(state.getDeliveryStatus())
+                            || "UNKNOWN".equals(state.getDeliveryStatus()))) return null;
+                    state.setDeliveryStatus("UNKNOWN");
+                    // Rotate bounded recovery batches even when old UNKNOWN receipts
+                    // remain unavailable, so they cannot starve later operations.
+                    state.setDeliveryRecoveryCheckedAt(nowStorage);
+                    state.setLastErrorCode(ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN);
+                    state.setNextAttemptAt(null);
+                    state.setLockedUntil(null);
+                    stateRepository.save(state);
+                    return state.getDeliveryEnvelope();
+                });
+                if (envelope == null) continue;
+                // Decode after commit: a corrupt/older snapshot must retain its
+                // UNKNOWN barrier and recovery backoff instead of rolling them back.
+                PreparedScheduledDelivery prepared = decodeScheduledDelivery(envelope);
+                ClientMessageSendResult receipt = messageSender.recordedOutcome(prepared.operationId());
+                if (receipt != null && (receipt.sent() || ClientChatMessageSender.isKnownUnsent(receipt))) {
+                    boolean finalized = transactionRunner.callInNewTransaction(() -> finalizeScheduledDelivery(prepared, receipt, nowStorage, 0));
+                    if (finalized) notifyScheduledDeliveryOutcome(prepared, receipt, nowStorage);
+                }
+            } catch (RuntimeException recoveryFailed) { log.warn("Scheduled delivery recovery held for review: stateId={}", stateId, recoveryFailed); }
+        }
+    }
+
+    private PreparedScheduledDelivery processClaimedState(
             Long stateId,
             LocalDateTime nowStorage,
             LocalDateTime expectedLockedUntil
     ) {
-        processClaimedState(stateId, nowStorage, expectedLockedUntil, false);
+        return processClaimedState(stateId, nowStorage, expectedLockedUntil, false);
     }
 
-    private void processClaimedState(
+    private PreparedScheduledDelivery processClaimedState(
             Long stateId,
             LocalDateTime nowStorage,
             LocalDateTime expectedLockedUntil,
             boolean reconcilePaymentBeforeRetry
     ) {
+        // Order -> state -> shared budget is the preparation/finalization lock order.
+        ScheduledClientMessageState snapshot = stateRepository.findById(stateId).orElse(null);
+        if (snapshot != null && snapshot.getOrderId() != null) orderRepository.findByIdForMutation(snapshot.getOrderId());
         ScheduledClientMessageState state = stateRepository.findByIdForUpdate(stateId).orElse(null);
         if (state == null || state.getStatus() != ScheduledMessageStateStatus.ACTIVE) {
-            return;
+            return null;
         }
         LocalDateTime currentLockedUntil = databaseTimestamp(state.getLockedUntil());
         LocalDateTime currentTime = databaseTimestamp(LocalDateTime.now(clock));
@@ -1783,16 +2015,19 @@ public class ScheduledClientMessageService {
                     expectedLockedUntil,
                     currentLockedUntil
             );
-            return;
+            return null;
         }
         if (!currentLockedUntil.isAfter(currentTime)) {
             log.warn("Scheduled client message claim expired before processing stateId={}", stateId);
-            return;
+            return null;
         }
-        if (reconcilePaymentBeforeRetry && state.getOrderId() != null) {
-            paymentLinkService.reconcileActiveLinkForOrder(state.getOrderId());
+        if (requiresClientMessageSlot(state.getScenario())) stateRepository.lockDispatchBudget();
+        PreparedScheduledDelivery prepared = processState(stateId, databaseTimestamp(LocalDateTime.now(clock)));
+        if (prepared == null && "CLAIMED".equals(state.getDeliveryStatus())) {
+            state.setDeliveryStatus(hasText(state.getDeliveryEnvelope()) ? "RETRYABLE" : null);
+            stateRepository.save(state);
         }
-        processState(stateId, nowStorage);
+        return prepared;
     }
 
     private void quarantineRolledBackState(
@@ -1848,10 +2083,10 @@ public class ScheduledClientMessageService {
         }
     }
 
-    private void processState(Long stateId, LocalDateTime nowStorage) {
+    private PreparedScheduledDelivery processState(Long stateId, LocalDateTime nowStorage) {
         ScheduledClientMessageState state = stateRepository.findById(stateId).orElse(null);
         if (state == null || state.getStatus() != ScheduledMessageStateStatus.ACTIVE) {
-            return;
+            return null;
         }
         if (state.getScenario() == ClientMessageScenario.BAD_REVIEW_AUTO_BAN
                 && !appSettingService.getBoolean(
@@ -1862,40 +2097,41 @@ public class ScheduledClientMessageService {
                     "bad_review_auto_ban_disabled",
                     "Автобан после дополнительных задач выключен настройкой"
             );
-            return;
+            return null;
         }
         if (isPaymentScenario(state.getScenario()) && suppressDuplicatePaymentMessage(state, nowStorage)) {
-            return;
+            return null;
         }
 
         LocalDateTime nowIrkutsk = nowIrkutsk();
         boolean requiresMessageSlot = requiresClientMessageSlot(state.getScenario());
         if (requiresMessageSlot && !withinDailyLimit(nowStorage)) {
             postpone(state, nextBusinessDayStartStorage(nowIrkutsk), "daily_limit", "Дневной лимит авторассылки исчерпан");
-            return;
+            return null;
         }
 
         Company company = resolveCompany(state);
         if (company == null) {
             disable(state, nowStorage, "company_missing", "Компания для авторассылки не найдена");
-            return;
+            return null;
         }
 
         if (requiresMessageSlot) {
-            String expectedChannel = expectedChannel(company);
+            String expectedChannel = hasText(state.getDeliveryEnvelope()) && hasText(state.getDeliveryChannel())
+                    ? state.getDeliveryChannel() : expectedChannel(company);
             LocalDateTime allowedByGap = slotPlanner.afterGap(
                     nowIrkutsk,
-                    lastSentAtIrkutsk(expectedChannel),
+                    lastDispatchAtIrkutsk(expectedChannel),
                     gapSeconds(expectedChannel),
                     businessWindows()
             );
             if (allowedByGap.isAfter(nowIrkutsk.plusSeconds(1))) {
                 postpone(state, toStorageTime(allowedByGap), "rate_limited", "Следующий слот отправки: " + allowedByGap);
-                return;
+                return null;
             }
         }
 
-        switch (state.getScenario()) {
+        return switch (state.getScenario()) {
             case CLIENT_TEXT_REMINDER -> sendClientTextReminder(state, company, nowStorage);
             case REVIEW_CHECK_REMINDER -> sendOrderReminder(
                     state,
@@ -1907,7 +2143,7 @@ public class ScheduledClientMessageService {
                     nowStorage
             );
             case REVIEW_CHECK_DELIVERY_RETRY -> retryReviewCheckDelivery(state, company, nowStorage);
-            case REVIEW_CHECK_AUTO_ARCHIVE -> autoArchiveStaleReviewCheck(state, nowStorage);
+            case REVIEW_CHECK_AUTO_ARCHIVE -> { autoArchiveStaleReviewCheck(state, nowStorage); yield null; }
             case PAYMENT_REMINDER -> sendOrderReminder(
                     state,
                     company,
@@ -1919,16 +2155,16 @@ public class ScheduledClientMessageService {
             );
             case PAYMENT_INVOICE_RETRY -> retryPaymentInvoice(state, company, nowStorage);
             case ARCHIVE_REORDER_OFFER -> sendArchiveOffer(state, company, nowStorage);
-            case PAYMENT_OVERDUE_ESCALATION -> escalateOverduePayment(state, nowStorage);
+            case PAYMENT_OVERDUE_ESCALATION -> { escalateOverduePayment(state, nowStorage); yield null; }
             case BAD_REVIEW_INVOICE -> throw new IllegalStateException(
                     "BAD_REVIEW_INVOICE must use prepare/commit/send/finalize delivery"
             );
-            case BAD_REVIEW_AUTO_BAN -> autoBanAfterBadReviews(state, nowStorage);
+            case BAD_REVIEW_AUTO_BAN -> { autoBanAfterBadReviews(state, nowStorage); yield null; }
             case REVIEW_RECOVERY_NOTICE -> sendReviewRecoveryNotice(state, company, nowStorage);
-        }
+        };
     }
 
-    private void sendClientTextReminder(
+    private PreparedScheduledDelivery sendClientTextReminder(
             ScheduledClientMessageState state,
             Company company,
             LocalDateTime nowStorage
@@ -1936,12 +2172,12 @@ public class ScheduledClientMessageService {
         Order order = orderRepository.findByIdForMutation(state.getOrderId()).orElse(null);
         if (order == null) {
             disable(state, nowStorage, "order_missing", "Заказ для напоминания о тексте клиента не найден");
-            return;
+            return null;
         }
 
         if (!order.isWaitingForClient()) {
             markDone(state, nowStorage, "client_text_received", "Заказ уже не ждет текст клиента");
-            return;
+            return null;
         }
         if (shouldAutoClearClientTextWaiting(order, nowStorage)) {
             order.setWaitingForClient(false);
@@ -1950,27 +2186,27 @@ public class ScheduledClientMessageService {
             markDone(state, nowStorage, "client_text_waiting_expired", "Ожидание текста клиента снято автоматически: заказ без изменений 7 дней");
             log.info("Client text waiting auto-cleared orderId={} stateId={} after {} days",
                     order.getId(), state.getId(), DEFAULT_CLIENT_TEXT_WAITING_AUTO_CLEAR_DAYS);
-            return;
+            return null;
         }
         if (postponeForReviewRecoveryIfNeeded(state, order, nowStorage)) {
-            return;
+            return null;
         }
 
         String status = statusTitle(order);
         if (!listSetting(AppSettingService.CLIENT_MESSAGES_CLIENT_TEXT_REMINDER_STATUSES, DEFAULT_CLIENT_TEXT_REMINDER_STATUSES).contains(status)) {
             markDone(state, nowStorage, "order_status_changed", "Заказ уже не в статусе ожидания текста клиента");
-            return;
+            return null;
         }
         if (!isCurrentClientTextWaitingCycle(state, order)) {
             markDone(state, nowStorage, "client_text_cycle_changed", "Заказ уже перешел в новый цикл ожидания текста клиента");
-            return;
+            return null;
         }
 
         String message = clientTextReminderText(order);
-        sendMessage(state, company, manager(order), message, nowStorage, clientTextReminderIntervalDays());
+        return sendMessage(state, company, manager(order), message, nowStorage, clientTextReminderIntervalDays());
     }
 
-    private void sendOrderReminder(
+    private PreparedScheduledDelivery sendOrderReminder(
             ScheduledClientMessageState state,
             Company company,
             Collection<String> expectedStatuses,
@@ -1982,10 +2218,10 @@ public class ScheduledClientMessageService {
         Order order = orderRepository.findByIdForMutation(state.getOrderId()).orElse(null);
         if (order == null) {
             disable(state, nowStorage, "order_missing", "Заказ для авторассылки не найден");
-            return;
+            return null;
         }
         if (postponeForReviewRecoveryIfNeeded(state, order, nowStorage)) {
-            return;
+            return null;
         }
         if (!reviewCheck && completePaymentMessageForCommonBillingLinkedOrder(
                 state,
@@ -1993,7 +2229,7 @@ public class ScheduledClientMessageService {
                 nowStorage,
                 "Заказ входит в общий счет; одиночное платежное напоминание не отправляется"
         )) {
-            return;
+            return null;
         }
 
         String status = statusTitle(order);
@@ -2001,13 +2237,13 @@ public class ScheduledClientMessageService {
         if (!expectedStatuses.contains(status)
                 && !(paymentReturnReminder && isPaymentReturnEligibleStatus(status))) {
             markDone(state, nowStorage, "order_status_changed", changedMessage);
-            return;
+            return null;
         }
         if (paymentReturnReminder
                 ? !isCurrentPaymentReturnCycle(state, order)
                 : !isCurrentOrderCycle(state, order)) {
             markDone(state, nowStorage, "order_status_changed", "Заказ уже перешел в новый цикл статуса");
-            return;
+            return null;
         }
 
         PaymentMessageWithTransfer paymentMessage;
@@ -2017,94 +2253,54 @@ public class ScheduledClientMessageService {
                     : paymentReminderText(order);
         } catch (PaymentInstructionException e) {
             registerFailure(state, nowStorage, "payment_instruction_failed", e.getMessage(), null, 0);
-            return;
+            return null;
         }
-        boolean sent = sendMessage(
-                state,
-                company,
-                manager(order),
-                paymentMessage.message(),
-                nowStorage,
-                nextIntervalDays,
-                paymentMessage.telegramCopyTransferNumber()
-        );
-        if (sent && !reviewCheck && STATUS_TO_PAY.equals(status)) {
-            movePaymentReminderToReminderStatus(state, order, nowStorage);
-        }
+        return prepareMessage(state, company, manager(order), paymentMessage.message(), nowStorage,
+                nextIntervalDays, paymentMessage.telegramCopyTransferNumber(),
+                !reviewCheck && STATUS_TO_PAY.equals(status) ? "PAYMENT_REMINDER" : null, order, null, null);
     }
 
-    private void retryReviewCheckDelivery(ScheduledClientMessageState state, Company company, LocalDateTime nowStorage) {
+    private PreparedScheduledDelivery retryReviewCheckDelivery(ScheduledClientMessageState state, Company company, LocalDateTime nowStorage) {
         Order order = orderRepository.findByIdForMutation(state.getOrderId()).orElse(null);
         if (order == null) {
             disable(state, nowStorage, "order_missing", "Заказ для повторной отправки проверки отзывов не найден");
-            return;
+            return null;
         }
         if (postponeForReviewRecoveryIfNeeded(state, order, nowStorage)) {
-            return;
+            return null;
         }
 
         String status = statusTitle(order);
         if (!STATUS_TO_CHECK.equals(status)) {
             markDone(state, nowStorage, "order_status_changed", "Заказ уже вышел из статуса ожидания отправки проверки");
-            return;
+            return null;
         }
         if (!isCurrentOrderCycle(state, order)) {
             markDone(state, nowStorage, "order_status_changed", "Заказ уже перешел в новый цикл статуса");
-            return;
+            return null;
         }
 
         String message = reviewCheckReminderText(order);
-        if (!appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)) {
+        if (!liveSendingEnabled()) {
             registerDryRun(state, nowStorage, message, null);
-            return;
+            return null;
         }
 
-        long startedAt = System.currentTimeMillis();
-        try {
-            String appliedStatus = orderStatusNotificationService.sendMessageToClientChat(
-                    STATUS_TO_CHECK,
-                    order,
-                    order.getManager() == null ? null : order.getManager().getClientId(),
-                    order.getCompany() == null ? null : order.getCompany().getGroupId(),
-                    message,
-                    STATUS_IN_CHECK
-            );
-            long durationMs = System.currentTimeMillis() - startedAt;
-            if (STATUS_IN_CHECK.equals(appliedStatus)) {
-                registerSuccess(state, nowStorage, expectedChannel(company), message, durationMs, null);
-                markDone(state, nowStorage, null, null);
-                log.info("Review check delivery retry sent orderId={} stateId={}", order.getId(), state.getId());
-                return;
-            }
-
-            registerFailure(
-                    state,
-                    nowStorage,
-                    "client_chat_send_failed",
-                    "Ссылка на проверку не отправлена, заказ остался в статусе \"" + appliedStatus + "\"",
-                    message,
-                    durationMs
-            );
-        } catch (Exception e) {
-            registerFailure(
-                    state,
-                    nowStorage,
-                    "review_check_retry_exception",
-                    readableException(e),
-                    message,
-                    System.currentTimeMillis() - startedAt
-            );
-        }
+        var action = orderStatusNotificationService.prepareAction(STATUS_TO_CHECK, order,
+                order.getManager() == null ? null : order.getManager().getClientId(),
+                order.getCompany() == null ? null : order.getCompany().getGroupId(), message, STATUS_IN_CHECK, null);
+        return prepareMessage(state, company, manager(order), message, nowStorage, null, null,
+                "ORDER_ACTION", order, null, action);
     }
 
-    private void retryPaymentInvoice(ScheduledClientMessageState state, Company company, LocalDateTime nowStorage) {
+    private PreparedScheduledDelivery retryPaymentInvoice(ScheduledClientMessageState state, Company company, LocalDateTime nowStorage) {
         Order order = orderRepository.findByIdForMutation(state.getOrderId()).orElse(null);
         if (order == null) {
             disable(state, nowStorage, "order_missing", "Заказ для повторной отправки счета не найден");
-            return;
+            return null;
         }
         if (postponeForReviewRecoveryIfNeeded(state, order, nowStorage)) {
-            return;
+            return null;
         }
         if (completePaymentMessageForCommonBillingLinkedOrder(
                 state,
@@ -2112,17 +2308,17 @@ public class ScheduledClientMessageService {
                 nowStorage,
                 "Заказ входит в общий счет; одиночный финальный счет не отправляется"
         )) {
-            return;
+            return null;
         }
 
         String status = statusTitle(order);
         if (!STATUS_PUBLIC.equals(status)) {
             markDone(state, nowStorage, "order_status_changed", "Заказ уже вышел из статуса опубликованного счета");
-            return;
+            return null;
         }
         if (!isCurrentOrderCycle(state, order)) {
             markDone(state, nowStorage, "order_status_changed", "Заказ уже перешел в новый цикл статуса");
-            return;
+            return null;
         }
 
         OrderPaymentMessageBuilder.PreparedPaymentMessage paymentMessage;
@@ -2130,54 +2326,23 @@ public class ScheduledClientMessageService {
             paymentMessage = orderPaymentMessageBuilder.publishedOrderPaymentMessageWithTransfer(order);
         } catch (ResponseStatusException e) {
             registerFailure(state, nowStorage, "payment_instruction_failed", readableException(e), null, 0);
-            return;
+            return null;
         } catch (Exception e) {
             registerFailure(state, nowStorage, "payment_instruction_failed", readableException(e), null, 0);
-            return;
+            return null;
         }
 
-        if (!appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)) {
+        if (!liveSendingEnabled()) {
             registerDryRun(state, nowStorage, paymentMessage.message(), null);
-            return;
+            return null;
         }
 
-        long startedAt = System.currentTimeMillis();
-        try {
-            String appliedStatus = orderStatusNotificationService.sendMessageToClientChat(
-                    STATUS_PUBLIC,
-                    order,
-                    order.getManager() == null ? null : order.getManager().getClientId(),
-                    order.getCompany() == null ? null : order.getCompany().getGroupId(),
-                    paymentMessage.message(),
-                    STATUS_TO_PAY,
-                    paymentMessage.telegramCopyTransferNumber()
-            );
-            long durationMs = System.currentTimeMillis() - startedAt;
-            if (STATUS_TO_PAY.equals(appliedStatus)) {
-                registerSuccess(state, nowStorage, expectedChannel(company), paymentMessage.message(), durationMs, null);
-                markDone(state, nowStorage, null, null);
-                log.info("Payment invoice retry sent orderId={} stateId={}", order.getId(), state.getId());
-                return;
-            }
-
-            registerFailure(
-                    state,
-                    nowStorage,
-                    "client_chat_send_failed",
-                    "Финальный счет не отправлен, заказ остался в статусе \"" + appliedStatus + "\"",
-                    paymentMessage.message(),
-                    durationMs
-            );
-        } catch (Exception e) {
-            registerFailure(
-                    state,
-                    nowStorage,
-                    "payment_invoice_retry_exception",
-                    readableException(e),
-                    paymentMessage.message(),
-                    System.currentTimeMillis() - startedAt
-            );
-        }
+        var action = orderStatusNotificationService.prepareAction(STATUS_PUBLIC, order,
+                order.getManager() == null ? null : order.getManager().getClientId(),
+                order.getCompany() == null ? null : order.getCompany().getGroupId(),
+                paymentMessage.message(), STATUS_TO_PAY, paymentMessage.telegramCopyTransferNumber());
+        return prepareMessage(state, company, manager(order), paymentMessage.message(), nowStorage, null,
+                paymentMessage.telegramCopyTransferNumber(), "ORDER_ACTION", order, null, action);
     }
 
     private void autoArchiveStaleReviewCheck(ScheduledClientMessageState state, LocalDateTime nowStorage) {
@@ -2417,6 +2582,10 @@ public class ScheduledClientMessageService {
         String message = "Заказ #" + order.getId() + " автоматически переведен в Бан: после финального счета за плохие отзывы прошло "
                 + badReviewAutoBanDelayDays() + " дн., оплаты нет.";
         try {
+            // The status transition cancels active auto-ban jobs. Complete our own claim
+            // in this same transaction so that cancellation does not reject it as in flight.
+            state.setStatus(ScheduledMessageStateStatus.DONE);
+            stateRepository.save(state);
             boolean changed = orderStatusTransitionService.changeStatusForOrder(order.getId(), STATUS_BAN);
             if (changed) {
                 recordAttempt(state, ScheduledMessageAttemptStatus.SENT, "system", null, null, message, 0);
@@ -2424,21 +2593,23 @@ public class ScheduledClientMessageService {
                 log.info("Bad review auto-ban applied orderId={} stateId={}", order.getId(), state.getId());
                 return;
             }
+            state.setStatus(ScheduledMessageStateStatus.ACTIVE);
             registerFailure(state, nowStorage, "status_change_failed", "Статус заказа не изменен", message, 0);
         } catch (Exception e) {
+            state.setStatus(ScheduledMessageStateStatus.ACTIVE);
             registerFailure(state, nowStorage, "bad_review_auto_ban_exception", readableException(e), message, 0);
         }
     }
 
-    private void sendArchiveOffer(ScheduledClientMessageState state, Company company, LocalDateTime nowStorage) {
+    private PreparedScheduledDelivery sendArchiveOffer(ScheduledClientMessageState state, Company company, LocalDateTime nowStorage) {
         String expectedStatus = archiveCompanyStatus();
         if (!expectedStatus.equals(companyStatusTitle(company))) {
             markDone(state, nowStorage, "company_status_changed", "Компания уже не в статусе \"" + expectedStatus + "\"");
-            return;
+            return null;
         }
         if (!isCurrentArchiveCompanyCycle(state, company)) {
             markDone(state, nowStorage, "company_status_changed", "Компания уже перешла в новый цикл статуса");
-            return;
+            return null;
         }
         if (archiveCandidateRepository.hasArchiveReorderBlocker(
                 company == null ? null : company.getId(),
@@ -2446,11 +2617,11 @@ public class ScheduledClientMessageService {
                 listSetting(AppSettingService.CLIENT_MESSAGES_OPEN_NEXT_ORDER_REQUEST_STATUSES, DEFAULT_OPEN_NEXT_ORDER_REQUEST_STATUSES)
         )) {
             markDone(state, nowStorage, "archive_reorder_blocked", "У компании уже есть активный заказ или открытая заявка на следующий заказ");
-            return;
+            return null;
         }
 
         String message = archiveOfferText(company);
-        sendMessage(state, company, company.getManager(), message, nowStorage, null);
+        return sendMessage(state, company, company.getManager(), message, nowStorage, null);
     }
 
     private void escalateOverduePayment(ScheduledClientMessageState state, LocalDateTime nowStorage) {
@@ -2524,54 +2695,50 @@ public class ScheduledClientMessageService {
         }
     }
 
-    private void sendReviewRecoveryNotice(ScheduledClientMessageState state, Company company, LocalDateTime nowStorage) {
+    private PreparedScheduledDelivery sendReviewRecoveryNotice(ScheduledClientMessageState state, Company company, LocalDateTime nowStorage) {
         Long batchId = ReviewRecoveryNoticeScheduler.batchIdFromTargetKey(state.getTargetKey());
         if (batchId == null) {
             disable(state, nowStorage, "review_recovery_batch_missing", "Не удалось определить пачку восстановления");
-            return;
+            return null;
         }
 
         ReviewRecoveryBatch batch = reviewRecoveryBatchRepository.findById(batchId).orElse(null);
         if (batch == null) {
             disable(state, nowStorage, "review_recovery_batch_missing", "Пачка восстановления не найдена");
-            return;
+            return null;
         }
         if (batch.getStatus() == ReviewRecoveryBatchStatus.CLIENT_NOTIFIED
                 || batch.getStatus() == ReviewRecoveryBatchStatus.ARCHIVED) {
             markDone(state, nowStorage, "review_recovery_already_notified", "Клиент уже отмечен уведомленным");
-            return;
+            return null;
         }
         if (batch.getStatus() == ReviewRecoveryBatchStatus.OPEN) {
             postpone(state, scheduleAtStorage(nowStorage.plusHours(reviewRecoveryNoticeRetryDelayHours())),
                     "review_recovery_still_open", "Восстановление еще не завершено");
-            return;
+            return null;
         }
         if (batch.getStatus() != ReviewRecoveryBatchStatus.COMPLETED) {
             markDone(state, nowStorage, "review_recovery_status_changed", "Пачка восстановления уже не ждет уведомления");
-            return;
+            return null;
         }
 
         Order order = batch.getOrder();
         if (order == null || order.getId() == null) {
             disable(state, nowStorage, "order_missing", "Заказ для уведомления о восстановлении не найден");
-            return;
+            return null;
         }
         if (reviewRecoveryHoldService.shouldSkipClientRecoveryNotice(order)) {
             reviewRecoveryTaskService.markClientNotifiedAutomatically(batch.getId());
             markDone(state, nowStorage, "order_closed", "Заказ закрыт, клиентское уведомление о восстановлении не требуется");
-            return;
+            return null;
         }
 
         String message = reviewRecoveryNoticeText(order);
-        boolean sent = sendMessage(state, company, manager(order), message, nowStorage, null);
-        if (sent) {
-            reviewRecoveryTaskService.markClientNotifiedAutomatically(batch.getId());
-            markDone(state, nowStorage, null, null);
-            log.info("Review recovery notice sent batchId={} orderId={} stateId={}", batch.getId(), order.getId(), state.getId());
-        }
+        return prepareMessage(state, company, manager(order), message, nowStorage, null, null,
+                "REVIEW_RECOVERY_NOTICE", order, batch.getId(), null);
     }
 
-    private boolean sendMessage(
+    private PreparedScheduledDelivery sendMessage(
             ScheduledClientMessageState state,
             Company company,
             Manager manager,
@@ -2582,7 +2749,7 @@ public class ScheduledClientMessageService {
         return sendMessage(state, company, manager, message, nowStorage, nextIntervalDays, null);
     }
 
-    private boolean sendMessage(
+    private PreparedScheduledDelivery sendMessage(
             ScheduledClientMessageState state,
             Company company,
             Manager manager,
@@ -2591,46 +2758,19 @@ public class ScheduledClientMessageService {
             Integer nextIntervalDays,
             String frozenTransferNumber
     ) {
-        if (!appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)) {
+        return prepareMessage(state, company, manager, message, nowStorage, nextIntervalDays, frozenTransferNumber,
+                null, null, null, null);
+    }
+
+    private PreparedScheduledDelivery prepareMessage(ScheduledClientMessageState state, Company company, Manager manager,
+            String message, LocalDateTime nowStorage, Integer nextIntervalDays, String frozenTransferNumber,
+            String successEffect, Order order, Long recoveryBatchId, OrderStatusNotificationService.PreparedAction action) {
+        if (!liveSendingEnabled()) {
             registerDryRun(state, nowStorage, message, nextIntervalDays);
-            return false;
+            return null;
         }
-
-        long startedAt = System.currentTimeMillis();
-        TelegramTransferCopyButton copyButton = TelegramTransferCopyButton
-                .fromFrozenTransferNumber(frozenTransferNumber)
-                .orElse(null);
-        ClientMessageSendResult result = copyButton == null
-                ? messageSender.send(
-                        company,
-                        manager == null ? null : manager.getClientId(),
-                        company.getGroupId(),
-                        message
-                )
-                : messageSender.send(
-                        company,
-                        manager == null ? null : manager.getClientId(),
-                        company.getGroupId(),
-                        message,
-                        copyButton
-                );
-        long durationMs = System.currentTimeMillis() - startedAt;
-
-        if (result.sent()) {
-            if (isWhatsAppChannel(result.channel())) {
-                whatsAppAuthAlertService.notifyRecovered(
-                        manager == null ? null : manager.getClientId(),
-                        "успешная отправка автоответчика",
-                        nowStorage,
-                        managerCandidates(company, manager)
-                );
-            }
-            registerSuccess(state, nowStorage, result.channel(), message, durationMs, nextIntervalDays);
-            return true;
-        } else {
-            registerFailure(state, nowStorage, result.errorCode(), result.errorMessage(), message, durationMs, company, manager);
-            return false;
-        }
+        return persistScheduledDelivery(state, company, manager, message, frozenTransferNumber, nextIntervalDays,
+                successEffect, recoveryBatchId, order, action, nowStorage);
     }
 
     private void movePaymentReminderToReminderStatus(ScheduledClientMessageState state, Order order, LocalDateTime nowStorage) {
@@ -2675,7 +2815,7 @@ public class ScheduledClientMessageService {
     }
 
     private int releaseDryRunMessagesIfLiveEnabled(LocalDateTime nowStorage) {
-        if (!appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)) {
+        if (!liveSendingEnabled()) {
             return 0;
         }
         int released = stateRepository.releaseDryRunStates(nowStorage);
@@ -2788,19 +2928,7 @@ public class ScheduledClientMessageService {
 
         stateRepository.save(state);
         notifyPaymentIssueIfNeeded(state, code, readable);
-        if (policy.notifyWhatsAppAuth()) {
-            Manager targetManager = manager != null ? manager : company == null ? null : company.getManager();
-            whatsAppAuthAlertService.notifyAuthIssue(
-                    targetManager == null ? null : targetManager.getClientId(),
-                    company == null ? null : company.getTitle(),
-                    "фоновый автоответчик",
-                    code,
-                    readable,
-                    nowStorage,
-                    toIrkutskTime(nextWhatsAppAuthAttemptAt(nowStorage)),
-                    managerCandidates(company, manager)
-            );
-        }
+        // Transport/auth notifications run after this transaction through notifyScheduledDeliveryOutcome.
         if (policy.countForMassProtection()) {
             applyMassErrorProtection(nowStorage, code, readable);
         }
@@ -2848,6 +2976,12 @@ public class ScheduledClientMessageService {
             int consecutiveFailures,
             LocalDateTime nowStorage
     ) {
+        if ("operation_ledger_full".equals(code)) {
+            return new FailureRetryPolicy(nextTransientAttemptAt(nowStorage), false, false, false);
+        }
+        if (code.startsWith("operation_") || "invalid_operation_id".equals(code)) {
+            return new FailureRetryPolicy(null, true, false, false);
+        }
         if (isWhatsAppAuthUnavailable(code, readable)) {
             return new FailureRetryPolicy(nextWhatsAppAuthAttemptAt(nowStorage), false, true, false);
         }
@@ -3192,7 +3326,15 @@ public class ScheduledClientMessageService {
         int limit = intSetting(AppSettingService.CLIENT_MESSAGES_DAILY_LIMIT, DEFAULT_DAILY_LIMIT, 1, 5000);
         LocalDate irkutskToday = nowIrkutsk().toLocalDate();
         LocalDateTime dayStart = toStorageTime(irkutskToday.atStartOfDay());
-        return attemptRepository.countClientSentSince(ScheduledMessageAttemptStatus.SENT, dayStart) < limit;
+        return attemptRepository.countClientSentSince(ScheduledMessageAttemptStatus.SENT, dayStart)
+                + stateRepository.countReservedDeliveriesSince(dayStart) < limit;
+    }
+
+    private LocalDateTime lastDispatchAtIrkutsk(String channel) {
+        LocalDateTime sentAt = lastSentAtIrkutsk(channel);
+        LocalDateTime reservedAt = stateRepository.latestReservedDeliveryAt(channel)
+                .map(this::toIrkutskTime).orElse(null);
+        return sentAt == null ? reservedAt : reservedAt == null || sentAt.isAfter(reservedAt) ? sentAt : reservedAt;
     }
 
     private int gapSeconds(String expectedChannel) {
@@ -3210,7 +3352,14 @@ public class ScheduledClientMessageService {
     }
 
     private String expectedChannel(Company company) {
-        String value = company.getUrlChat();
+        return expectedChannelUrl(company == null ? null : company.getUrlChat());
+    }
+
+    private String expectedChannel(ClientMessageDelivery.Target target) {
+        return expectedChannelUrl(target == null ? null : target.urlChat());
+    }
+
+    private String expectedChannelUrl(String value) {
         if (!hasText(value)) {
             return "ANY";
         }
@@ -3229,10 +3378,10 @@ public class ScheduledClientMessageService {
     }
 
     private LocalDateTime lastSentAtIrkutsk(String channel) {
-        LocalDateTime channelValue = parseLocalDateTime(appSettingService.getString(lastSentSettingKey(channel), null));
+        LocalDateTime channelValue = parseLocalDateTime(appSettingService.getStringFresh(lastSentSettingKey(channel), null));
         return channelValue != null
                 ? channelValue
-                : parseLocalDateTime(appSettingService.getString(lastSentSettingKey("ANY"), null));
+                : parseLocalDateTime(appSettingService.getStringFresh(lastSentSettingKey("ANY"), null));
     }
 
     private String lastSentSettingKey(String channel) {

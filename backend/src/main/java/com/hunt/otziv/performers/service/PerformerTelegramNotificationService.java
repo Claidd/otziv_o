@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @Service
 @RequiredArgsConstructor
@@ -20,39 +21,27 @@ public class PerformerTelegramNotificationService {
     @Value("${app.public-base-url:https://o-ogo.ru}")
     private String publicBaseUrl;
 
-    public Optional<Integer> sendOffer(ReviewPerformerOffer offer) {
-        Long chatId = offer.getPerformer().getUser().getTelegramChatId();
-        if (chatId == null) {
-            return Optional.empty();
-        }
+    public record Message(Long chatId, String text, List<List<InlineKeyboardButton>> keyboard) {}
 
-        String text = offerText(offer);
-        List<List<InlineKeyboardButton>> keyboard = List.of(List.of(
-                button("Принять", "perf:accept:" + offer.getId()),
-                button("Отказаться", "perf:decline:" + offer.getId())
-        ));
-        return telegramService.sendMessageWithInlineKeyboardMessageId(chatId, text, "HTML", keyboard);
+    /** Called only while the aggregate is loaded inside a short transaction. */
+    public Message prepare(String type, ReviewPerformerAssignment assignment, ReviewPerformerOffer offer) {
+        if ("OFFER".equals(type)) {
+            return new Message(offer.getPerformer().getUser().getTelegramChatId(), offerText(offer),
+                    List.of(List.of(button("Принять", "perf:accept:" + offer.getId()),
+                            button("Отказаться", "perf:decline:" + offer.getId()))));
+        }
+        Long chatId = assignment.getPerformer() == null || assignment.getPerformer().getUser() == null
+                ? null : assignment.getPerformer().getUser().getTelegramChatId();
+        return new Message(chatId, "ACCEPTED".equals(type) ? acceptedText(assignment)
+                : "Можно публиковать отзыв по заданию #" + assignment.getId() + ". Откройте кабинет: " + performerUrl(), List.of());
     }
 
-    public void sendAccepted(ReviewPerformerAssignment assignment) {
-        Long chatId = assignment.getPerformer() == null || assignment.getPerformer().getUser() == null
-                ? null
-                : assignment.getPerformer().getUser().getTelegramChatId();
-        if (chatId == null) {
-            return;
+    public Optional<Integer> sendOnce(Message message) {
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw new IllegalStateException("Telegram I/O cannot run in a performer transaction");
         }
-        telegramService.sendMessage(chatId, acceptedText(assignment), "HTML");
-    }
-
-    public void sendReadyToPublish(ReviewPerformerAssignment assignment) {
-        Long chatId = assignment.getPerformer() == null || assignment.getPerformer().getUser() == null
-                ? null
-                : assignment.getPerformer().getUser().getTelegramChatId();
-        if (chatId == null) {
-            return;
-        }
-        telegramService.sendMessage(chatId, "Можно публиковать отзыв по заданию #" + assignment.getId()
-                + ". Откройте кабинет: " + performerUrl(), "HTML");
+        return telegramService.sendMessageOnceWithInlineKeyboardMessageId(
+                message.chatId(), message.text(), "HTML", message.keyboard());
     }
 
     private String offerText(ReviewPerformerOffer offer) {
@@ -65,7 +54,7 @@ public class PerformerTelegramNotificationService {
                 + title + "\n"
                 + (city.isBlank() ? "" : "Город: " + city + "\n")
                 + "Площадка: " + platform + "\n"
-                + "Ответьте до: " + offer.getExpiresAt() + "\n"
+                + "Время на ответ после доставки: " + offer.getResponseTtlMinutes() + " мин.\n"
                 + "Кабинет: " + performerUrl();
     }
 
@@ -87,6 +76,6 @@ public class PerformerTelegramNotificationService {
     }
 
     private String safe(String value) {
-        return value == null ? "" : value;
+        return value == null ? "" : value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 }

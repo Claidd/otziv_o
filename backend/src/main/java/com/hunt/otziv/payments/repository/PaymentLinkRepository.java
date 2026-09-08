@@ -159,7 +159,6 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
                     OR LOWER(COALESCE(link.lastError, '')) LIKE :searchText
                     OR (:searchId IS NOT NULL AND (link.id = :searchId OR o.id = :searchId))
                   )
-                ORDER BY link.createdAt DESC, link.id DESC
             """,
             countQuery = """
                 SELECT COUNT(link)

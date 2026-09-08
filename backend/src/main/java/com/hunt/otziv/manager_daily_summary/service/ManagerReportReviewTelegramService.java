@@ -27,6 +27,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 
@@ -102,12 +104,18 @@ public class ManagerReportReviewTelegramService {
         return List.of(List.of(button(retry ? "✍️ Ответить ещё раз" : "✍️ Ответить", ANSWER, reviewId)));
     }
 
-    public static List<List<InlineKeyboardButton>> ownerDecisionKeyboard(Long reviewId) {
+    public static List<List<InlineKeyboardButton>> ownerDecisionKeyboard(Long reviewId, Long disputeId) {
         return List.of(
-                List.of(button("✅ Менеджер прав", OWNER_MANAGER_RIGHT, reviewId)),
-                List.of(button("⚠️ Замечание верно", OWNER_REPORT_RIGHT, reviewId)),
-                List.of(button("🔎 Недостаточно данных", OWNER_NEEDS_CONTEXT, reviewId))
+                List.of(ownerButton("✅ Менеджер прав", OWNER_MANAGER_RIGHT, reviewId, disputeId)),
+                List.of(ownerButton("⚠️ Замечание верно", OWNER_REPORT_RIGHT, reviewId, disputeId)),
+                List.of(ownerButton("🔎 Недостаточно данных", OWNER_NEEDS_CONTEXT, reviewId, disputeId))
         );
+    }
+
+    private static InlineKeyboardButton ownerButton(String text, String action, Long reviewId, Long disputeId) {
+        InlineKeyboardButton button = button(text, action, reviewId);
+        button.setCallbackData(button.getCallbackData() + ":" + disputeId);
+        return button;
     }
 
     private static List<List<InlineKeyboardButton>> issueSelectionKeyboard(
@@ -343,6 +351,9 @@ public class ManagerReportReviewTelegramService {
             if (!canOwnerResolve(review, actor, telegramUserId, callbackChatId)) {
                 return Optional.of("Решение может принять только владелец или администратор");
             }
+            if (command.disputeId() == null && issueService.disputes(review).size() > 1) {
+                return Optional.of("Используйте кнопки в актуальной карточке конкретного спора");
+            }
             String action = OWNER_MANAGER_RIGHT.equals(command.action())
                     ? ManagerReportReviewAdminService.REPORT_INCORRECT
                     : OWNER_REPORT_RIGHT.equals(command.action())
@@ -350,6 +361,7 @@ public class ManagerReportReviewTelegramService {
                             : ManagerReportReviewAdminService.REPORT_NEEDS_CONTEXT;
             adminService.resolveDispute(
                     review.getId(),
+                    command.disputeId(),
                     action,
                     "Решение принято владельцем в Telegram",
                     actor
@@ -410,6 +422,18 @@ public class ManagerReportReviewTelegramService {
     }
 
     @Transactional
+    public ManagerReportReviewOwnerNotificationService.DeliveryResult resendDispute(Long reviewId, User actor) {
+        ManagerReportReviewSession review = sessionRepository.findForUpdateById(reviewId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Разбор не найден"));
+        ManagerReportReviewDispute dispute = issueService.unresolvedDispute(review)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "Открытого спора нет"));
+        var result = ownerNotificationService.notifyDispute(review, dispute);
+        event(review, "DISPUTE_NOTIFICATION_RESENT", actor.getId(), "OWNER", "manager-control",
+                "Спор №" + dispute.getId() + ": доставлено " + result.delivered() + ", ошибок " + result.failed());
+        return result;
+    }
+
+    @Transactional
     public boolean handleTextMessage(long chatId, User user, String messageText) {
         return handleTextMessage(chatId, user, messageText, null);
     }
@@ -419,7 +443,10 @@ public class ManagerReportReviewTelegramService {
         if (user == null || user.getId() == null || !user.isActive() || clean(messageText).isBlank()) {
             return false;
         }
-        ManagerReportReviewSession review = sessionRepository
+        ManagerReportReviewSession review = replyToMessageId == null ? null : sessionRepository
+                .findFirstByManagerUserIdAndRecipientChatIdAndReplyPromptMessageId(
+                        user.getId(), chatId, replyToMessageId).orElse(null);
+        if (review == null) review = sessionRepository
                 .findFirstByManagerUserIdAndRecipientChatIdAndStatusInOrderByCreatedAtDesc(
                         user.getId(),
                         chatId,
@@ -889,6 +916,10 @@ public class ManagerReportReviewTelegramService {
     }
 
     private String startDisputeSelection(ManagerReportReviewSession review) {
+        var draft = issueService.explanationDispute(review);
+        if (draft.isPresent()) {
+            return promptDispute(review, draft.get());
+        }
         if (issueService.hasUnresolvedDisputes(review)) {
             telegramService.sendMessage(
                     review.getRecipientChatId(),
@@ -936,6 +967,10 @@ public class ManagerReportReviewTelegramService {
             User actor,
             Long issueId
     ) {
+        var draft = issueService.explanationDispute(review);
+        if (draft.isPresent() && issueId.equals(draft.get().getIssue().getId())) {
+            return promptDispute(review, draft.get());
+        }
         LocalDateTime now = LocalDateTime.now();
         ManagerReportReviewDispute dispute;
         try {
@@ -954,6 +989,12 @@ public class ManagerReportReviewTelegramService {
         sessionRepository.save(review);
         event(review, "DISPUTE_REQUESTED", actor.getId(), actorRole(review), "telegram",
                 "Выбрано замечание: " + dispute.getIssue().getTitle());
+        ownerNotificationService.notifyDispute(review, dispute);
+        return promptDispute(review, dispute);
+    }
+
+    private String promptDispute(ManagerReportReviewSession review, ManagerReportReviewDispute dispute) {
+        review.setStatus(ManagerReportReviewStatus.DISPUTE_PENDING);
         Optional<Integer> promptId = sendReplyPrompt(
                 review,
                 "⚖️ Вы оспариваете:\n"
@@ -1025,16 +1066,13 @@ public class ManagerReportReviewTelegramService {
         if (!review.isTestMode()) {
             accessPolicy.invalidate(review.getManagerUserId());
         }
-        if (!review.isTestMode() && !isGroupChat(review.getRecipientChatId())) {
-            ownerNotificationService.notifyDispute(review);
-        }
-        telegramService.sendMessageWithInlineKeyboard(
+        ownerNotificationService.notifyDispute(review, issueDispute);
+        telegramService.sendMessage(
                 review.getRecipientChatId(),
                 "⚖️ <b>Спор по одному замечанию передан владельцу</b>\n\n"
                         + "Оспоренный пункт временно исключён. "
                         + remainingFlowText(review),
-                "HTML",
-                ownerDecisionKeyboard(review.getId())
+                "HTML"
         );
         continueAfterDispute(review, actor);
         return true;
@@ -1109,6 +1147,11 @@ public class ManagerReportReviewTelegramService {
     ) {
         if (!issueService.hasUnresolvedDisputes(review)) {
             completeReview(review, actor, reason);
+            return;
+        }
+        var draft = issueService.explanationDispute(review);
+        if (draft.isPresent()) {
+            promptDispute(review, draft.get());
             return;
         }
         review.setStatus(ManagerReportReviewStatus.DISPUTED);
@@ -1621,9 +1664,11 @@ public class ManagerReportReviewTelegramService {
 
     private CallbackCommand parse(String data) {
         String[] parts = data.split(":");
-        if (parts.length != 3) return null;
+        if (parts.length != 3 && parts.length != 4) return null;
+        if (parts.length == 4 && !ownerDecision(parts[1])) return null;
         try {
-            return new CallbackCommand(parts[1], Long.parseLong(parts[2]));
+            return new CallbackCommand(parts[1], Long.parseLong(parts[2]),
+                    parts.length == 4 ? Long.parseLong(parts[3]) : null);
         } catch (NumberFormatException exception) {
             return null;
         }
@@ -1729,6 +1774,6 @@ public class ManagerReportReviewTelegramService {
         return clean(value).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 
-    private record CallbackCommand(String action, Long reviewId) {
+    private record CallbackCommand(String action, Long reviewId, Long disputeId) {
     }
 }

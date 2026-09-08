@@ -19,6 +19,27 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface ScheduledClientMessageStateRepository extends CrudRepository<ScheduledClientMessageState, Long> {
 
+    @Query(value = "SELECT guard_id FROM scheduled_client_message_dispatch_guard WHERE guard_id = 1 FOR UPDATE", nativeQuery = true)
+    int lockDispatchBudget();
+
+    @Query("SELECT COUNT(s) FROM ScheduledClientMessageState s WHERE s.deliveryStatus IN ('PREPARED','UNKNOWN') AND s.deliveryPreparedAt >= :dayStart")
+    long countReservedDeliveriesSince(@Param("dayStart") LocalDateTime dayStart);
+
+    @Query("SELECT MAX(s.deliveryPreparedAt) FROM ScheduledClientMessageState s WHERE s.deliveryStatus IN ('PREPARED','UNKNOWN') AND (:channel = 'ANY' OR s.deliveryChannel = :channel)")
+    Optional<LocalDateTime> latestReservedDeliveryAt(@Param("channel") String channel);
+
+    @Query("SELECT s.id FROM ScheduledClientMessageState s WHERE s.status = com.hunt.otziv.client_messages.model.ScheduledMessageStateStatus.ACTIVE AND s.scenario <> com.hunt.otziv.client_messages.model.ClientMessageScenario.BAD_REVIEW_INVOICE AND s.deliveryEnvelope IS NOT NULL AND s.deliveryStatus IN ('PREPARED','UNKNOWN') AND COALESCE(s.deliveryRecoveryCheckedAt, s.deliveryPreparedAt) < :cutoff ORDER BY COALESCE(s.deliveryRecoveryCheckedAt, s.deliveryPreparedAt), s.id")
+    List<Long> findRecoverablePreparedIds(@Param("cutoff") LocalDateTime cutoff, Pageable pageable);
+
+    @Modifying
+    @Query(value = """
+        UPDATE scheduled_client_message_state SET delivery_status = IF(delivery_envelope IS NULL, NULL, 'RETRYABLE'),
+          next_attempt_at = :now, locked_until = NULL, last_error_code = 'expired_claim_recovered',
+          last_error_message = 'Захват истек до отправки; сохранённый снимок будет использован повторно', updated_at = :now
+        WHERE state_status = 'ACTIVE' AND delivery_status = 'CLAIMED' AND locked_until < :now
+        """, nativeQuery = true)
+    int releaseExpiredOrdinaryPreparationClaims(@Param("now") LocalDateTime now);
+
     Optional<ScheduledClientMessageState> findByScenarioAndTargetKey(ClientMessageScenario scenario, String targetKey);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
@@ -618,6 +639,7 @@ public interface ScheduledClientMessageStateRepository extends CrudRepository<Sc
     @Query(value = """
         UPDATE scheduled_client_message_state state
         SET state.locked_until = :lockedUntil,
+            state.delivery_status = IF(state.scenario = 'BAD_REVIEW_INVOICE', NULL, 'CLAIMED'),
             state.next_attempt_at = NULL,
             state.last_error_code = :claimCode,
             state.last_error_message = :claimMessage,
@@ -627,7 +649,7 @@ public interface ScheduledClientMessageStateRepository extends CrudRepository<Sc
           AND state.next_attempt_at IS NOT NULL
           AND state.next_attempt_at <= :now
           AND (state.locked_until IS NULL OR state.locked_until < :now)
-          AND state.delivery_status IS NULL
+          AND (state.delivery_status IS NULL OR state.delivery_status = 'RETRYABLE')
         """, nativeQuery = true)
     int lockDueState(@Param("id") Long id,
                      @Param("now") LocalDateTime now,
@@ -639,6 +661,7 @@ public interface ScheduledClientMessageStateRepository extends CrudRepository<Sc
     @Query(value = """
         UPDATE scheduled_client_message_state state
         SET state.locked_until = :lockedUntil,
+            state.delivery_status = IF(state.scenario = 'BAD_REVIEW_INVOICE', NULL, 'CLAIMED'),
             state.next_attempt_at = NULL,
             state.last_error_code = :claimCode,
             state.last_error_message = :claimMessage,
@@ -646,7 +669,7 @@ public interface ScheduledClientMessageStateRepository extends CrudRepository<Sc
         WHERE state.state_id = :id
           AND state.state_status = 'ACTIVE'
           AND (state.locked_until IS NULL OR state.locked_until < :now)
-          AND state.delivery_status IS NULL
+          AND (state.delivery_status IS NULL OR state.delivery_status = 'RETRYABLE')
         """, nativeQuery = true)
     int lockActiveState(@Param("id") Long id,
                         @Param("now") LocalDateTime now,

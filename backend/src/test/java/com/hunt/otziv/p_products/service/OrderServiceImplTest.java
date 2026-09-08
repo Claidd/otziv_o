@@ -159,12 +159,13 @@ class OrderServiceImplTest {
         verify(reviewArchiveService).saveNewReviewArchive(2L, ReviewArchiveSourceReason.PUBLISHED);
         verify(reviewRepository).countPublishedByOrderId(10L);
         verify(orderStatusCheckerService).validateCounterConsistency(order, 2);
-        verify(orderStatusNotificationService).sendProgressMessageToClientChat(
-                order,
-                null,
-                null,
-                "Company - Main filial. Опубликован новый отзыв 2 / 5.",
-                false
+        verify(orderStatusNotificationService).sendPublicationProgressForOccurrence(
+                eq(order),
+                eq(null),
+                eq(null),
+                eq("Company - Main filial. Опубликован новый отзыв 2 / 5."),
+                eq(false),
+                org.mockito.ArgumentMatchers.startsWith("review:")
         );
         verify(orderStatusCheckerService).checkAndMarkOrderCompleted(order);
         verify(reviewService, never()).save(reviewToPublish);
@@ -195,12 +196,13 @@ class OrderServiceImplTest {
 
         assertTrue(orderService.changeStatusAndOrderCounter(2L));
 
-        verify(orderStatusNotificationService).sendProgressMessageToClientChat(
-                order,
-                null,
-                null,
-                "Company - Main filial. Опубликован новый отзыв 1 / 5.",
-                true
+        verify(orderStatusNotificationService).sendPublicationProgressForOccurrence(
+                eq(order),
+                eq(null),
+                eq(null),
+                eq("Company - Main filial. Опубликован новый отзыв 1 / 5."),
+                eq(true),
+                org.mockito.ArgumentMatchers.startsWith("review:")
         );
     }
 
@@ -219,12 +221,13 @@ class OrderServiceImplTest {
 
         assertTrue(orderService.changeStatusAndOrderCounter(2L));
 
-        verify(orderStatusNotificationService, never()).sendProgressMessageToClientChat(
+        verify(orderStatusNotificationService, never()).sendPublicationProgressForOccurrence(
                 same(order),
                 eq(null),
                 eq(null),
                 org.mockito.ArgumentMatchers.anyString(),
-                org.mockito.ArgumentMatchers.anyBoolean()
+                org.mockito.ArgumentMatchers.anyBoolean(),
+                org.mockito.ArgumentMatchers.anyString()
         );
         verify(orderStatusCheckerService).checkAndMarkOrderCompleted(order);
     }

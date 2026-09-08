@@ -63,6 +63,22 @@ class OrderControllerAccessTest {
     @InjectMocks
     private OrderController controller;
 
+    @org.junit.jupiter.api.BeforeEach void wireStatusApplication() {
+        var guard=org.mockito.Mockito.mock(com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService.class);
+        org.mockito.Mockito.lenient().doAnswer(call -> {
+            Long id=call.getArgument(0);Authentication actor=call.getArgument(1);
+            managerAccessService.requireOrderAccess(id,actor);
+            Order order=orderAggregateMutationLockService.lock(id);
+            managerAccessService.requireOrderAccess(id,actor);
+            org.mockito.Mockito.lenient().when(orderService.getOrder(id)).thenReturn(order);
+            return null;
+        }).when(guard).assertOrder(org.mockito.ArgumentMatchers.anyLong(),any());
+        org.springframework.test.util.ReflectionTestUtils.setField(controller,"statusCommands",
+                new com.hunt.otziv.p_products.application.OrderStatusCommandService(orderService,orderDetailsService,reviewService,guard,
+                        org.mockito.Mockito.mock(com.hunt.otziv.client_messages.service.ScheduledClientMessageService.class),
+                        org.mockito.Mockito.mock(com.hunt.otziv.u_users.service.UserService.class),org.mockito.Mockito.mock(com.hunt.otziv.u_users.service.WorkerService.class)));
+    }
+
     @Test
     void editViewRejectsForeignOrderBeforeLoadingItsData() {
         Authentication actor = managerAuthentication();
@@ -250,7 +266,7 @@ class OrderControllerAccessTest {
 
         verify(orderAggregateMutationLockService, never()).lock(any());
         try {
-            verify(orderService, never()).changeStatusForOrder(any(), any());
+            verify(orderService, never()).changeStatusForOrder(any(), any(), any());
         } catch (Exception exception) {
             throw new AssertionError(exception);
         }
@@ -269,7 +285,7 @@ class OrderControllerAccessTest {
         assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
         verify(managerAccessService, times(2)).requireOrderAccess(50L, actor);
         try {
-            verify(orderService, never()).changeStatusForOrder(any(), any());
+            verify(orderService, never()).changeStatusForOrder(any(), any(), any());
         } catch (Exception verificationFailure) {
             throw new AssertionError(verificationFailure);
         }
@@ -279,13 +295,13 @@ class OrderControllerAccessTest {
     void statusMutationLocksAndRechecksAccessBeforeChangingStatus() throws Exception {
         Authentication actor = managerAuthentication();
         when(orderAggregateMutationLockService.lock(50L)).thenReturn(lockedOrder(100L));
-        when(orderService.changeStatusForOrder(50L, "На проверке")).thenReturn(true);
+        when(orderService.changeStatusForOrder(50L, "На проверке", actor)).thenReturn(true);
 
         controller.changeStatusOnChecking(50L, 100L, "В проверку", 0, actor);
 
         verify(managerAccessService, times(2)).requireOrderAccess(50L, actor);
         verify(orderAggregateMutationLockService).lock(50L);
-        verify(orderService).changeStatusForOrder(50L, "На проверке");
+        verify(orderService).changeStatusForOrder(50L, "На проверке", actor);
     }
 
     @Test
@@ -350,12 +366,12 @@ class OrderControllerAccessTest {
     void workerCanSubmitOwnOrderForChecking() throws Exception {
         Authentication actor = workerAuthentication();
         when(orderAggregateMutationLockService.lock(50L)).thenReturn(lockedOrder(100L));
-        when(orderService.changeStatusForOrder(50L, "В проверку")).thenReturn(true);
+        when(orderService.changeStatusForOrder(50L, "В проверку", actor)).thenReturn(true);
 
         controller.changeStatusForChecking(50L, 100L, model, redirectAttributes, actor);
 
         verify(managerAccessService, times(2)).requireOrderAccess(50L, actor);
-        verify(orderService).changeStatusForOrder(50L, "В проверку");
+        verify(orderService).changeStatusForOrder(50L, "В проверку", actor);
     }
 
     @Test

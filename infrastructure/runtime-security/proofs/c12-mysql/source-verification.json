@@ -1,0 +1,364 @@
+{
+  "schema": "otziv-c12-independent-source-binding-review-v1",
+  "recordedAt": "2026-09-08T07:36:10.759962+00:00",
+  "result": "PASS",
+  "checkCount": 73,
+  "checks": [
+    "mysql_preimage_infrastructure/runtime-security/mysql-upgrade-rehearsal.mjs",
+    "mysql_candidate_infrastructure/runtime-security/mysql-upgrade-rehearsal.mjs",
+    "mysql_preimage_infrastructure/runtime-security/mysql-upgrade-rehearsal.test.mjs",
+    "mysql_candidate_infrastructure/runtime-security/mysql-upgrade-rehearsal.test.mjs",
+    "mysql_preimage_infrastructure/runtime-security/MYSQL_UPGRADE_REHEARSAL.md",
+    "mysql_candidate_infrastructure/runtime-security/MYSQL_UPGRADE_REHEARSAL.md",
+    "mysql_runbook_append_only",
+    "mysql_evidence_candidate.patch",
+    "mysql_evidence_documentation.patch",
+    "mysql_evidence_actual-result.json",
+    "mysql_evidence_execution-inputs.json",
+    "mysql_evidence_source-binding.json",
+    "mysql_evidence_doc-binding.json",
+    "mysql_evidence_historical-freeze-check.json",
+    "mysql_evidence_unit-tests-final.log",
+    "mysql_evidence_source-continuity.json",
+    "mysql_evidence_cleanup-verification.json",
+    "mysql_evidence_execution.log",
+    "mysql_evidence_diff-check.json",
+    "mysql_evidence_diff-check-final.log",
+    "mysql_evidence_REVIEW.md",
+    "mysql_evidence_run/capture.json",
+    "mysql_evidence_run/owner.json",
+    "mysql_evidence_run/rehearsal.json",
+    "mysql_evidence_run/upgrade-checker.json",
+    "mysql_patch_recomputed",
+    "mysql_source_binding_infrastructure/runtime-security/mysql-upgrade-rehearsal.mjs",
+    "mysql_source_binding_infrastructure/runtime-security/mysql-upgrade-rehearsal.test.mjs",
+    "mysql_source_binding_infrastructure/recovery/process.mjs",
+    "mysql_source_binding_infrastructure/recovery/docker-environment.mjs",
+    "mysql_actual_mode_and_count",
+    "mysql_actual_script_binding",
+    "mysql_actual_capture_schema",
+    "mysql_actual_published_runtime",
+    "mysql_real_backup_restore",
+    "mysql_checker_complete",
+    "mysql_continuity_cleanup",
+    "mysql_retained_unit_counts",
+    "alloy_proof_analyze-closure.py",
+    "alloy_proof_closure-analysis.json",
+    "alloy_proof_collector.go.mod.after.txt",
+    "alloy_proof_collector.go.mod.before.txt",
+    "alloy_proof_collector.go.sum.after.txt",
+    "alloy_proof_collector.go.sum.before.txt",
+    "alloy_proof_exact-target.json",
+    "alloy_proof_GHSA-rg2x-37c3-w2rh.json",
+    "alloy_proof_GO-2026-5746.json",
+    "alloy_proof_go-env.json",
+    "alloy_proof_import-closure.json.gz",
+    "alloy_proof_linked-functions.go",
+    "alloy_proof_linked-functions.raw.json.gz",
+    "alloy_proof_packages.raw.jsons.gz",
+    "alloy_proof_primary-index.json",
+    "alloy_proof_published-binary.json",
+    "alloy_proof_published-version.txt",
+    "alloy_proof_reproduce.Dockerfile",
+    "alloy_proof_reproduced-sha256.txt",
+    "alloy_proof_reproduction-attempts.json",
+    "alloy_proof_reproduction-build.log.gz",
+    "alloy_proof_reviewed-buildinfo.txt",
+    "alloy_proof_reviewed-scan.json.gz",
+    "alloy_proof_root.go.mod.after.txt",
+    "alloy_proof_root.go.mod.before.txt",
+    "alloy_proof_root.go.sum.after.txt",
+    "alloy_proof_root.go.sum.before.txt",
+    "alloy_proof_upstream-govulncheck.yaml",
+    "alloy_proof_upstream-Makefile",
+    "alloy_proof_independent-review.json",
+    "alloy_proof_independent-review.md",
+    "alloy_independent_review_unchanged",
+    "alloy_review_exact_prior_config_and_path",
+    "alloy_review_exact_two_cves",
+    "alloy_retained_unit_counts"
+  ],
+  "inputs": {
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\mysql-c7-integration\\integration-manifest.json": {
+      "sha256": "2fe7afa112eec8bee9d4cce26e774c312ad76a438c3e468bf0008a7151acc699",
+      "bytes": 4247
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\finalization-20260907\\publication\\worktree\\infrastructure\\runtime-security\\mysql-upgrade-rehearsal.mjs": {
+      "sha256": "14f33ec47bf0d596ba1a93e974aaeab8303fae9ceae56e9cd0e0016960ad282c",
+      "bytes": 39208
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\mysql-c7-integration\\candidate\\infrastructure\\runtime-security\\mysql-upgrade-rehearsal.mjs": {
+      "sha256": "730cecd70f78dfd2dc5b7104c5438ec3cd78668644b8e2ce2ace997e8f1be7ce",
+      "bytes": 54105
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\finalization-20260907\\publication\\worktree\\infrastructure\\runtime-security\\mysql-upgrade-rehearsal.test.mjs": {
+      "sha256": "00a8ae2092e39a75b9b9dd59270fded97afec659cf916c9f30754bd832cdfd29",
+      "bytes": 2445
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\mysql-c7-integration\\candidate\\infrastructure\\runtime-security\\mysql-upgrade-rehearsal.test.mjs": {
+      "sha256": "d06fe976d0561393b97ae936d5807270e678ac4fc9b7418382f8a48677798b52",
+      "bytes": 10294
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\finalization-20260907\\publication\\worktree\\infrastructure\\runtime-security\\MYSQL_UPGRADE_REHEARSAL.md": {
+      "sha256": "7dcdb94088f36bc43459b1e2c498f87679627f0cc34ddec406b7c98066882a0e",
+      "bytes": 10766
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\mysql-c7-integration\\candidate\\infrastructure\\runtime-security\\MYSQL_UPGRADE_REHEARSAL.md": {
+      "sha256": "296a58ead632ccd31e7be1cd1b58705c92807d1757202a1696d27ff0c3501ebf",
+      "bytes": 14969
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\mysql-c7-integration\\candidate.patch": {
+      "sha256": "fd09b4e4822a6cbc98ec80e6d574c9cff6e131e9f36bb22143ff795fcddda992",
+      "bytes": 41405
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\mysql-c7-integration\\documentation.patch": {
+      "sha256": "957988565ed7270fb42cf652b65c2677bb0437789213d27aa868129dbf95b4d9",
+      "bytes": 5407
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\mysql-c7-integration\\actual-result.json": {
+      "sha256": "96db2ebb5aae9b18a53fdceeb904fbfa321485e219786ab074f420c5a57a11e5",
+      "bytes": 3453
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\mysql-c7-integration\\execution-inputs.json": {
+      "sha256": "7f03033190dd1fd14f7cf6fe5b5bf1dfe7810bf66ca8c76d72a0a33bcc55b331",
+      "bytes": 843
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\mysql-c7-integration\\source-binding.json": {
+      "sha256": "4e431f558c5c8d593c273afd159bbf5a6570bef8906503a59daa774555392a00",
+      "bytes": 4180
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\mysql-c7-integration\\doc-binding.json": {
+      "sha256": "47ca13c351fdd68fbf3599691afdaff7609592e6ba7c94f9a9580e5b43c95cce",
+      "bytes": 287
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\mysql-c7-integration\\historical-freeze-check.json": {
+      "sha256": "4b001e22bf8176b84dacdb62397f37304e03b2e4d057f74c63c4a313a143c041",
+      "bytes": 1569
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\mysql-c7-integration\\unit-tests-final.log": {
+      "sha256": "262151c5d7253ee7ea2a70a3bb1d281ed0419e4b146a71f013c00fe4225b3f43",
+      "bytes": 2859
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\mysql-c7-integration\\source-continuity.json": {
+      "sha256": "544305f1ba94dac730a71fa6663b5f57bca77eee9dbc38b56141809ee62da19a",
+      "bytes": 1630
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\mysql-c7-integration\\cleanup-verification.json": {
+      "sha256": "e9e052565274ec8cfe9e785b125ad33f2efe1d777b1600111baf84524bbf4888",
+      "bytes": 344
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\mysql-c7-integration\\execution.log": {
+      "sha256": "aef4a3c8eea7956261f1d29f09c8eb04d9b9cfc4ddad84b839db65b70d36715a",
+      "bytes": 2432
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\mysql-c7-integration\\diff-check.json": {
+      "sha256": "d85c2b37cdd1c19ff24219257b9298156fa50b7f53e30915c5716de8eca84470",
+      "bytes": 600
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\mysql-c7-integration\\diff-check-final.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\mysql-c7-integration\\REVIEW.md": {
+      "sha256": "cac7f7e9d8af2812fbd4706ad6e68bbdf8038ec53ceb8d73173462d302b6da0e",
+      "bytes": 5415
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\mysql-c7-integration\\run\\capture.json": {
+      "sha256": "466f6febbbd910d84ff8e34a651e6612f96d4092d41aba14cdfdd8f3d461515f",
+      "bytes": 1461
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\mysql-c7-integration\\run\\owner.json": {
+      "sha256": "120db06cb7b22cdcbe4ad780b3cc001acac15d9ed3b8c46dd782f03cb9819c06",
+      "bytes": 436
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\mysql-c7-integration\\run\\rehearsal.json": {
+      "sha256": "af08bca75f43ac0c0057807692d8a72dab886e05bbdb5085cd30b9ddb2f29c89",
+      "bytes": 20265
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\mysql-c7-integration\\run\\upgrade-checker.json": {
+      "sha256": "78fb4b5f8dc06cd0acca7b69d86031b21a51e033bc570346406f31d179c2df11",
+      "bytes": 9315
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\finalization-20260907\\publication\\worktree\\infrastructure\\recovery\\process.mjs": {
+      "sha256": "f3910105086cb2e75dc731f527d5de0338ae987b4bb238bc7d87a867a05b64fc",
+      "bytes": 2326
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\mysql-c7-integration\\candidate\\infrastructure\\recovery\\process.mjs": {
+      "sha256": "f3910105086cb2e75dc731f527d5de0338ae987b4bb238bc7d87a867a05b64fc",
+      "bytes": 2326
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\finalization-20260907\\publication\\worktree\\infrastructure\\recovery\\docker-environment.mjs": {
+      "sha256": "d5a865db01a3d6a838a0a9b0b2cc348dc52ad432146d04e29f1f9ac30a70eedc",
+      "bytes": 639
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\mysql-c7-integration\\candidate\\infrastructure\\recovery\\docker-environment.mjs": {
+      "sha256": "d5a865db01a3d6a838a0a9b0b2cc348dc52ad432146d04e29f1f9ac30a70eedc",
+      "bytes": 639
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\mysql-c7-integration\\run-proof.py": {
+      "sha256": "966e56ecaf44f488c4e42692531c30b6dbd657bdae4c00904c43009d79da3c51",
+      "bytes": 5974
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-alloy-integration\\candidate\\infrastructure\\runtime-security\\alloy-daemon-adjudication.mjs": {
+      "sha256": "7824c3dfc255c288522d7f7af0a00452ceb9a4c47a84f0ee5ed150db1909ef98",
+      "bytes": 11689
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-alloy-integration\\candidate\\infrastructure\\runtime-security\\alloy-daemon-adjudication.test.mjs": {
+      "sha256": "86d97b61ebe5a085e0dac5d5428ee60b049a35c210378635ed64ba50cc014e7c",
+      "bytes": 7998
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-alloy-integration\\candidate\\infrastructure\\runtime-security\\go-binary-inspection.mjs": {
+      "sha256": "c67072bad8c104d2e222170b7e33d5e2cd0b9a1ae13ca079959f8c9dd753d3e1",
+      "bytes": 4063
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-alloy-integration\\candidate\\infrastructure\\runtime-security\\grafana-tempo-adjudication.mjs": {
+      "sha256": "1cc234bd44c3280043dcef3be29e372095691a0f7a91e524dfd67fbb3555dc05",
+      "bytes": 4754
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-alloy-integration\\candidate\\infrastructure\\runtime-security\\grafana-tempo-adjudication.test.mjs": {
+      "sha256": "05aa0c68aef4dcb364cf395fc803583d951559694efe480750f3a0fa838c860b",
+      "bytes": 5533
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-alloy-integration\\candidate\\infrastructure\\runtime-security\\scan.mjs": {
+      "sha256": "b797fa39600820e968b895533333176f37c5694ee869c8621043bf8d553b086f",
+      "bytes": 7694
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-alloy-integration\\candidate\\infrastructure\\runtime-security\\adjudications\\alloy-daemon\\review.json": {
+      "sha256": "cdda7bfda718a0abb91a556a39b700b5bf4c93d8ef4439eca6cd088ff7670b07",
+      "bytes": 6451
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-alloy-integration\\candidate\\infrastructure\\runtime-security\\adjudications\\alloy-daemon\\analyze-closure.py": {
+      "sha256": "eb5685d4835fd23537bde829eca4ff5942302d9481698bfd67e4c441a515ee9c",
+      "bytes": 6612
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-alloy-integration\\candidate\\infrastructure\\runtime-security\\adjudications\\alloy-daemon\\closure-analysis.json": {
+      "sha256": "cfe868a394aea2d70d65dab0b02eff8496e092608a3a282968c340b91fa79678",
+      "bytes": 1435
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-alloy-integration\\candidate\\infrastructure\\runtime-security\\adjudications\\alloy-daemon\\collector.go.mod.after.txt": {
+      "sha256": "de38f56fa6d3894f1cae1d6b783f96e7db56a04192487b990dbcd7e2775528e8",
+      "bytes": 73326
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-alloy-integration\\candidate\\infrastructure\\runtime-security\\adjudications\\alloy-daemon\\collector.go.mod.before.txt": {
+      "sha256": "e8668ec77ceed40ba241e710ffbbc3b014d5aa3fb85cd9900a0bd3f0988476e2",
+      "bytes": 73326
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-alloy-integration\\candidate\\infrastructure\\runtime-security\\adjudications\\alloy-daemon\\collector.go.sum.after.txt": {
+      "sha256": "09d595177bf801a6839e1b2607bbc003f1e257cccc4fcaef149a27b22e50e5c4",
+      "bytes": 349086
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-alloy-integration\\candidate\\infrastructure\\runtime-security\\adjudications\\alloy-daemon\\collector.go.sum.before.txt": {
+      "sha256": "b20fafa996273e1844ca55342fb2c21182e66ca10f3c658f17d0a508a958f696",
+      "bytes": 348921
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-alloy-integration\\candidate\\infrastructure\\runtime-security\\adjudications\\alloy-daemon\\exact-target.json": {
+      "sha256": "eb97609783090aca4d33d5bec82e0c27a2dd4a523f49b46da79e489831da0375",
+      "bytes": 602
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-alloy-integration\\candidate\\infrastructure\\runtime-security\\adjudications\\alloy-daemon\\GHSA-rg2x-37c3-w2rh.json": {
+      "sha256": "549718d505c9a5749d6640e62c45bd64d0b14f0defd35c9944f2c60d27f302e6",
+      "bytes": 5925
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-alloy-integration\\candidate\\infrastructure\\runtime-security\\adjudications\\alloy-daemon\\GO-2026-5746.json": {
+      "sha256": "d11da88232883a96ac3b74f848f172ce86c3783b7818d7da4b925335621d5273",
+      "bytes": 1850
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-alloy-integration\\candidate\\infrastructure\\runtime-security\\adjudications\\alloy-daemon\\go-env.json": {
+      "sha256": "bda8db5575b46bea4c6361aac9f034b508a5c5c7dfcf19aa233ac4ca93f9cedc",
+      "bytes": 109
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-alloy-integration\\candidate\\infrastructure\\runtime-security\\adjudications\\alloy-daemon\\import-closure.json.gz": {
+      "sha256": "7dc809e1d2a68995a997ad722ac1f9c4dd4a2a693aca87c753737d6a9ac76cdd",
+      "bytes": 332712
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-alloy-integration\\candidate\\infrastructure\\runtime-security\\adjudications\\alloy-daemon\\linked-functions.go": {
+      "sha256": "3b45fe63c35a768005f083e086754e2f3bcc9e7714da3f845595931b698d0299",
+      "bytes": 1724
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-alloy-integration\\candidate\\infrastructure\\runtime-security\\adjudications\\alloy-daemon\\linked-functions.raw.json.gz": {
+      "sha256": "46cbc607c7c54b2b61c6599834e12910b34f82866dbe5f7a3f6d8942ca87e3ad",
+      "bytes": 2216553
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-alloy-integration\\candidate\\infrastructure\\runtime-security\\adjudications\\alloy-daemon\\packages.raw.jsons.gz": {
+      "sha256": "a15385303235914f7dda6305047f6b94d5e2c753adf1f9ec4ccce611fc3f700e",
+      "bytes": 4711921
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-alloy-integration\\candidate\\infrastructure\\runtime-security\\adjudications\\alloy-daemon\\primary-index.json": {
+      "sha256": "e3f4a18bdb4bb60bdea30c5ea8353f41d9e75a574f32616ccb6399b9b3dad73f",
+      "bytes": 1029
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-alloy-integration\\candidate\\infrastructure\\runtime-security\\adjudications\\alloy-daemon\\published-binary.json": {
+      "sha256": "354923b3eeed6718a8491f3510bebcf2aef1324960c5e602b153cb8444a933d8",
+      "bytes": 1115
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-alloy-integration\\candidate\\infrastructure\\runtime-security\\adjudications\\alloy-daemon\\published-version.txt": {
+      "sha256": "137371c9d3870c9cf772fc6721bbf8863f54cf7a024e15ca91e6205fbac98318",
+      "bytes": 330
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-alloy-integration\\candidate\\infrastructure\\runtime-security\\adjudications\\alloy-daemon\\reproduce.Dockerfile": {
+      "sha256": "4ea73efb766742c784d4cbb3edd01e57a38ce9750f01aeeec87253cce0ebea95",
+      "bytes": 5235
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-alloy-integration\\candidate\\infrastructure\\runtime-security\\adjudications\\alloy-daemon\\reproduced-sha256.txt": {
+      "sha256": "cab8733a99b33a074c6469c2aebf2364c103fbc3fec50a2a14b2659d87f0a29e",
+      "bytes": 549
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-alloy-integration\\candidate\\infrastructure\\runtime-security\\adjudications\\alloy-daemon\\reproduction-attempts.json": {
+      "sha256": "819f0ee9bb83deebe6e4ace90cf927358fd98c03391430e2390f521b3daa2ba6",
+      "bytes": 1074
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-alloy-integration\\candidate\\infrastructure\\runtime-security\\adjudications\\alloy-daemon\\reproduction-build.log.gz": {
+      "sha256": "bbe18a95244c103f5fed91ad55b7740391588f1324df773bf24df69580a4f0b5",
+      "bytes": 23787
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-alloy-integration\\candidate\\infrastructure\\runtime-security\\adjudications\\alloy-daemon\\reviewed-buildinfo.txt": {
+      "sha256": "55691e5409e905eae7a3cf3ffa90754c4649124eb4170f4b1cd75427078d411f",
+      "bytes": 112001
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-alloy-integration\\candidate\\infrastructure\\runtime-security\\adjudications\\alloy-daemon\\reviewed-scan.json.gz": {
+      "sha256": "5bd16356cd89d60c8d4dd1e973cf94e7d20fd71618a95fb75c541f39bf69819d",
+      "bytes": 115428
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-alloy-integration\\candidate\\infrastructure\\runtime-security\\adjudications\\alloy-daemon\\root.go.mod.after.txt": {
+      "sha256": "83b8feada5d425154429ae17a9239fc3a75ce32a845cdc3ec5c22954d2ee6aa9",
+      "bytes": 74257
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-alloy-integration\\candidate\\infrastructure\\runtime-security\\adjudications\\alloy-daemon\\root.go.mod.before.txt": {
+      "sha256": "ed321aa8a43f595baf993923014ad38d4b0f8ae16b8b35950c5eef2a550e431b",
+      "bytes": 74257
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-alloy-integration\\candidate\\infrastructure\\runtime-security\\adjudications\\alloy-daemon\\root.go.sum.after.txt": {
+      "sha256": "5889d530a7bd08dacfe87b963043737cea4c2029330fd1fefb3777275b0f5eb0",
+      "bytes": 349166
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-alloy-integration\\candidate\\infrastructure\\runtime-security\\adjudications\\alloy-daemon\\root.go.sum.before.txt": {
+      "sha256": "dd1cf41ff1fcc69e2d5d76de18c716600a285e0e2fea86b2dd2b31a6457d878d",
+      "bytes": 349001
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-alloy-integration\\candidate\\infrastructure\\runtime-security\\adjudications\\alloy-daemon\\upstream-govulncheck.yaml": {
+      "sha256": "559294c1964d4813b1ec863d0c3f80eb1d0390201c369b604828b09744c560cd",
+      "bytes": 3858
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-alloy-integration\\candidate\\infrastructure\\runtime-security\\adjudications\\alloy-daemon\\upstream-Makefile": {
+      "sha256": "8fa8cbd50eff7b8116e41ee0117801a5f7711be37747410264f328870e834745",
+      "bytes": 21162
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-alloy-integration\\candidate\\infrastructure\\runtime-security\\adjudications\\alloy-daemon\\independent-review.json": {
+      "sha256": "6c940fb7ed1613c4e0f58dec4e9d7cdf092461dc77352804f2d82e600e771aff",
+      "bytes": 16685
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-alloy-integration\\candidate\\infrastructure\\runtime-security\\adjudications\\alloy-daemon\\independent-review.md": {
+      "sha256": "a80405a060650dce486028be00044b5ac1a5a304e463e4111320c63ce7030fea",
+      "bytes": 4584
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-alloy-independent-review\\verification.json": {
+      "sha256": "6c940fb7ed1613c4e0f58dec4e9d7cdf092461dc77352804f2d82e600e771aff",
+      "bytes": 16685
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-alloy-integration\\unit-tests.log": {
+      "sha256": "5b0c9c131a60371fdbc81d5d808be3c0873f9986fd29bab13911777f1bb46129",
+      "bytes": 3742
+    }
+  },
+  "scope": "Offline source and retained evidence integrity; no shared mutation, tests/builds/scans rerun, Docker/SQL/network operation."
+}

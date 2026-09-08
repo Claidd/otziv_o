@@ -5,31 +5,8 @@ on:
   schedule:
     - cron: "17 2 * * 1"
   pull_request:
-    paths:
-      - "frontend/package.json"
-      - "frontend/package-lock.json"
-      - "mobile/package.json"
-      - "mobile/package-lock.json"
-      - "whatsapp/package.json"
-      - "whatsapp/package-lock.json"
-      - "backend/external-review-worker/package.json"
-      - "backend/external-review-worker/package-lock.json"
-      - "backend/pom.xml"
-      - "backend/.mvn/**"
-      - ".github/workflows/dependency-audit.yml"
   push:
-    paths:
-      - "frontend/package.json"
-      - "frontend/package-lock.json"
-      - "mobile/package.json"
-      - "mobile/package-lock.json"
-      - "whatsapp/package.json"
-      - "whatsapp/package-lock.json"
-      - "backend/external-review-worker/package.json"
-      - "backend/external-review-worker/package-lock.json"
-      - "backend/pom.xml"
-      - "backend/.mvn/**"
-      - ".github/workflows/dependency-audit.yml"
+    branches: [main]
 
 permissions:
   contents: read
@@ -39,7 +16,27 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Dependency change detection
+    runs-on: ubuntu-24.04
+    outputs:
+      audit: ${{ steps.detect.outputs.audit }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24.18.0"
+          package-manager-cache: false
+      - id: detect
+        env:
+          BASE_REVISION: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: node infrastructure/scripts/security/dependency-changes.mjs
   npm-audit:
+    needs: changes
+    if: needs.changes.outputs.audit == 'true'
     name: npm audit
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -51,11 +48,12 @@ jobs:
           - mobile
           - whatsapp
           - backend/external-review-worker
+          - infrastructure/browser-smoke
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: "22.18.0"
+          node-version: ${{ (matrix.project == 'whatsapp' || matrix.project == 'backend/external-review-worker') && '22.23.2' || '24.18.0' }}
           cache: npm
           cache-dependency-path: ${{ matrix.project }}/package-lock.json
       - name: Verify locked install
@@ -69,26 +67,149 @@ jobs:
         working-directory: ${{ matrix.project }}
 
   maven-audit:
+    needs: changes
+    if: needs.changes.outputs.audit == 'true'
     name: Maven dependency-check
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    # An uncached complete NVD import is rate limited without an API key.
+    # Keep the audit blocking while allowing the measured cold-start import.
+    timeout-minutes: 90
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4.8.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
         with:
           distribution: temurin
           java-version: "26"
+          show-download-progress: true
           cache: maven
+          cache-jdk: false
+          server-id: otziv-sonatype
+          server-username-env-var: SONATYPE_GUIDE_USERNAME
+          server-password-env-var: SONATYPE_GUIDE_TOKEN
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: '8.0.x'
+      - name: Require complete analyzer credentials
+        env:
+          SONATYPE_GUIDE_TOKEN: ${{ secrets.SONATYPE_GUIDE_TOKEN }}
+        run: |
+          if [ -z "${SONATYPE_GUIDE_TOKEN}" ]; then
+            echo 'Sonatype Guide token is required: an unauthenticated analyzer must not count as a complete audit.'
+            exit 1
+          fi
+      - name: Prepare isolated public analyzer cache
+        run: |
+          mkdir -p "$RUNNER_TEMP/otziv-dependency-check-data" "$GITHUB_WORKSPACE/backend/target"
+          test ! -e "$GITHUB_WORKSPACE/backend/target/dependency-check-data"
+          test ! -L "$GITHUB_WORKSPACE/backend/target/dependency-check-data"
+          ln -s "$RUNNER_TEMP/otziv-dependency-check-data" "$GITHUB_WORKSPACE/backend/target/dependency-check-data"
+      # Cache only the public NVD database and package vulnerability reports.
+      # Maven settings, PAT, reports, logs and the rest of target are excluded.
+      - name: Restore public NVD and OSS Index data
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ${{ runner.temp }}/otziv-dependency-check-data/odc.mv.db
+            ${{ runner.temp }}/otziv-dependency-check-data/oss_cache
+          key: ${{ runner.os }}-dependency-check-13-public-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: ${{ runner.os }}-dependency-check-13-public-v1-
+      - name: Build reviewed Maven tooling and test transport
+        id: bootstrap
+        working-directory: backend
+        run: |
+          chmod +x ./mvnw
+          bash ./mvnw -B -ntp -f build-support/pom.xml install
       - name: OWASP dependency-check (CVSS 7+ blocks)
+        id: audit
+        if: ${{ !cancelled() && steps.bootstrap.outcome == 'success' }}
+        env:
+          SONATYPE_GUIDE_USERNAME: token
+          SONATYPE_GUIDE_TOKEN: ${{ secrets.SONATYPE_GUIDE_TOKEN }}
         run: bash ./mvnw -B -ntp -Psecurity-audit -DskipTests verify
         working-directory: backend
+      - name: Audit every build-support module and its effective plugins
+        id: bootstrap-audit
+        if: ${{ !cancelled() && steps.bootstrap.outcome == 'success' }}
+        env:
+          SONATYPE_GUIDE_USERNAME: token
+          SONATYPE_GUIDE_TOKEN: ${{ secrets.SONATYPE_GUIDE_TOKEN }}
+        run: >-
+          python3 backend/build-support/audit.py
+          --maven "$GITHUB_WORKSPACE/backend/mvnw"
+          --settings "$HOME/.m2/settings.xml"
+          --suppression-file "$GITHUB_WORKSPACE/infrastructure/runtime-security/maven-false-positives.xml"
+          --data-directory "$RUNNER_TEMP/otziv-dependency-check-data"
+      - name: Select the standalone issuer's supported Java runtime
+        id: issuer-java
+        if: ${{ !cancelled() && steps.bootstrap.outcome == 'success' }}
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
+        with:
+          distribution: temurin
+          java-version: "21"
+          show-download-progress: true
+          server-id: otziv-sonatype
+          server-username-env-var: SONATYPE_GUIDE_USERNAME
+          server-password-env-var: SONATYPE_GUIDE_TOKEN
+      - name: Audit the standalone issuer including provided and plugin dependencies
+        id: issuer-audit
+        if: ${{ !cancelled() && steps.bootstrap.outcome == 'success' && steps.issuer-java.outcome == 'success' }}
+        env:
+          SONATYPE_GUIDE_USERNAME: token
+          SONATYPE_GUIDE_TOKEN: ${{ secrets.SONATYPE_GUIDE_TOKEN }}
+        run: >-
+          python3 backend/build-support/audit.py
+          --standalone-project keycloak
+          --maven "$GITHUB_WORKSPACE/backend/mvnw"
+          --settings "$HOME/.m2/settings.xml"
+          --suppression-file "$GITHUB_WORKSPACE/infrastructure/runtime-security/maven-false-positives.xml"
+          --data-directory "$RUNNER_TEMP/otziv-dependency-check-data"
+      # All three audits are blocking and run despite findings in an earlier
+      # audit, so independent project coverage is never skipped.
+      # Findings or remote errors still fail the job. Retain public data after
+      # that failure so the next full audit need not spend the same credits.
+      - name: Save public NVD and OSS Index data
+        if: ${{ !cancelled() && (steps.audit.outcome == 'success' || steps.audit.outcome == 'failure' || steps.bootstrap-audit.outcome == 'success' || steps.bootstrap-audit.outcome == 'failure' || steps.issuer-audit.outcome == 'success' || steps.issuer-audit.outcome == 'failure') }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ${{ runner.temp }}/otziv-dependency-check-data/odc.mv.db
+            ${{ runner.temp }}/otziv-dependency-check-data/oss_cache
+          key: ${{ runner.os }}-dependency-check-13-public-v1-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Upload dependency-check reports
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: maven-dependency-check
           path: |
             backend/target/dependency-check-report.html
             backend/target/dependency-check-report.json
+            backend/build-support/**/target/dependency-check-report.html
+            backend/build-support/**/target/dependency-check-report.json
+            backend/build-support/target/audit-policy-verification.json
+            backend/build-support/target/audit-report-coverage.json
+            backend/build-support/target/audit-effective-pom.xml
+            infrastructure/keycloak/security-generation/target/dependency-check-report.html
+            infrastructure/keycloak/security-generation/target/dependency-check-report.json
+            infrastructure/keycloak/security-generation/target/audit-policy-verification.json
+            infrastructure/keycloak/security-generation/target/audit-report-coverage.json
+            infrastructure/keycloak/security-generation/target/audit-effective-pom.xml
           if-no-files-found: ignore
           retention-days: 14
+
+  dependency-gate:
+    name: Dependency audit gate
+    if: always()
+    needs: [changes, npm-audit, maven-audit]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24.18.0"
+          package-manager-cache: false
+      - env:
+          AUDIT_NEEDED: ${{ needs.changes.outputs.audit }}
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          NPM_RESULT: ${{ needs.npm-audit.result }}
+          MAVEN_RESULT: ${{ needs.maven-audit.result }}
+        run: node infrastructure/scripts/security/dependency-changes.mjs gate

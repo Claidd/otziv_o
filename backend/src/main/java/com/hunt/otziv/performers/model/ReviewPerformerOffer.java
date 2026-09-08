@@ -49,6 +49,17 @@ public class ReviewPerformerOffer {
     @Column(name = "telegram_message_id")
     private Integer telegramMessageId;
 
+    @Builder.Default
+    @Column(name = "delivery_state", nullable = false, length = 32)
+    private String deliveryState = "LEGACY_UNKNOWN";
+
+    @Column(name = "delivered_at")
+    private LocalDateTime deliveredAt;
+
+    @Builder.Default
+    @Column(name = "response_ttl_minutes", nullable = false)
+    private int responseTtlMinutes = 10;
+
     @Column(name = "decline_reason", length = 1000)
     private String declineReason;
 

@@ -17,7 +17,7 @@ import com.hunt.otziv.r_review.service.ReviewService;
 import com.hunt.otziv.reputationai.application.service.ReputationSingleReviewDraftService;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryTask;
 import com.hunt.otziv.review_recovery.service.ReviewRecoveryTaskService;
-import com.hunt.otziv.s3.service.S3UploadService;
+import com.hunt.otziv.s3.api.ReviewPhotoUploads;
 import com.hunt.otziv.security.credentials.CredentialRevealRequest;
 import com.hunt.otziv.security.credentials.CredentialRevealResponse;
 import com.hunt.otziv.security.credentials.service.CredentialRevealService;
@@ -69,7 +69,7 @@ class ApiManagerReviewControllerCredentialRevealTest {
     @Mock
     private AutoTextService autoTextService;
     @Mock
-    private S3UploadService s3UploadService;
+    private ReviewPhotoUploads photoUploads;
     @Mock
     private BadReviewTaskService badReviewTaskService;
     @Mock
@@ -101,10 +101,11 @@ class ApiManagerReviewControllerCredentialRevealTest {
         controller = new ApiManagerReviewController(
                 companyService,
                 orderService,
+                org.mockito.Mockito.mock(com.hunt.otziv.p_products.api.ReviewPublicationCommands.class),
                 productService,
                 reviewService,
                 autoTextService,
-                s3UploadService,
+                photoUploads,
                 badReviewTaskService,
                 reviewRecoveryTaskService,
                 reputationSingleReviewDraftService,

@@ -979,6 +979,7 @@ $webImage = "${DockerHubNamespace}/${WebRepository}:${Tag}"
 $externalReviewWorkerImage = "${DockerHubNamespace}/${ExternalReviewWorkerRepository}:${Tag}"
 $deployBundlePaths = @(
     "docker-compose.yaml",
+    "compose.monitoring.yaml",
     ".dockerignore",
     "Dockerfile.whatsapp",
     "whatsapp\package.json",
@@ -986,26 +987,51 @@ $deployBundlePaths = @(
     "whatsapp\index.js",
     "whatsapp\chromium-launch.js",
     "whatsapp\chromium-smoke.js",
+    "whatsapp\compatibility-smoke.js",
     "whatsapp\internal-auth.js",
+    "whatsapp\operation-ledger.js",
+    "whatsapp\operation-ledger-index.js",
+    "whatsapp\operation-ledger-owner.js",
+    "whatsapp\operation-ledger-recovery.js",
+    "whatsapp\operation-ledger-maintenance.js",
+    "whatsapp\operation-ledger-benchmark.js",
+    "whatsapp\OPERATION_LEDGER_RECOVERY.md",
+    "whatsapp\OUTBOUND_OPERATIONS.md",
+    "whatsapp\outbound-routes.js",
+    "whatsapp\task-limiter.js",
+    "whatsapp\client-lifecycle.js",
+    "whatsapp\remote-session-fence.js",
+    "whatsapp\remote-session-admin.js",
+    "whatsapp\remote-session-smoke.js",
+    "whatsapp\puppeteer-compatibility.js",
     "whatsapp\message-webhook.js",
+    "whatsapp\inbound-inbox.js",
+    "whatsapp\inbound-history.js",
     "whatsapp\raw-chat-reconciliation.js",
     "whatsapp\group-invite.js",
     "whatsapp\groups-cache.js",
     "whatsapp\last-seen.js",
     "whatsapp\remote-browser.js",
+    "docs\WHATSAPP_INBOUND_DELIVERY_RUNBOOK.md",
+    "docs\WHATSAPP_REMOTE_SESSION_RECOVERY.md",
     "infrastructure\nginx",
     "infrastructure\keycloak",
     "infrastructure\prometheus",
     "infrastructure\loki",
     "infrastructure\tempo",
     "infrastructure\alloy",
+    "infrastructure\docker-observer",
+    "infrastructure\runtime-security",
+    "infrastructure\monitoring",
     "infrastructure\grafana",
     "infrastructure\systemd\otziv-prod-up.timer",
     "infrastructure\systemd\otziv-prod-up.service.in",
     "infrastructure\scripts\prod\apply-keycloak-prod-settings.sh",
     "infrastructure\scripts\prod\validate-flyway-migrations.sh",
+    "infrastructure\scripts\prod\rollout-docker-observer.sh",
     "infrastructure\scripts\prod\create-pre-deploy-db-backup.sh",
     "infrastructure\scripts\prod\otziv-prod-up.sh",
+    "infrastructure\scripts\prod\database_image_guard.py",
     "infrastructure\scripts\prod\register-max-webhook.sh",
     "infrastructure\scripts\prod\init-letsencrypt.sh",
     "infrastructure\scripts\prod\renew-letsencrypt.sh",
@@ -1712,6 +1738,8 @@ release_payload_complete="0"
 mobile_storage_owner_needs_restore="0"
 active_env_temp=""
 active_systemd_unit_stage=""
+database_guard_temp=""
+database_image_override=""
 
 assert_self_heal_stopped() {
   for unit in "`$self_heal_timer" "`$self_heal_service"; do
@@ -1812,6 +1840,9 @@ deploy_cleanup() {
   fi
   rm -f -- "`$bundle_path" "`$rollout_script_path" || true
   rmdir -- "`$deploy_bundle_dir" 2>/dev/null || true
+  if [ -n "`$database_guard_temp" ]; then
+    rm -f -- "`$database_guard_temp" || true
+  fi
   if [ -n "`$active_env_temp" ]; then
     rm -f -- "`$active_env_temp" || true
   fi
@@ -1922,14 +1953,25 @@ unset COMPOSE_ENV_FILES COMPOSE_DISABLE_ENV_FILE
 compose_project_name="otziv-prod"
 
 compose() {
+  local database_override_args=()
+  if [ -n "`$database_image_override" ]; then
+    database_override_args=(-f "`$database_image_override")
+  fi
   if docker compose version >/dev/null 2>&1; then
-    docker compose --project-name "`$compose_project_name" --project-directory "`$remote_path" -f "`$remote_path/docker-compose.yaml" --env-file "`$remote_path/`$env_file" "`$@"
+    docker compose --project-name "`$compose_project_name" --project-directory "`$remote_path" -f "`$remote_path/docker-compose.yaml" --env-file "`$remote_path/`$env_file" "`${database_override_args[@]}" "`$@"
   elif command -v docker-compose >/dev/null 2>&1; then
-    docker-compose --project-name "`$compose_project_name" --project-directory "`$remote_path" -f "`$remote_path/docker-compose.yaml" --env-file "`$remote_path/`$env_file" "`$@"
+    docker-compose --project-name "`$compose_project_name" --project-directory "`$remote_path" -f "`$remote_path/docker-compose.yaml" --env-file "`$remote_path/`$env_file" "`${database_override_args[@]}" "`$@"
   else
     echo "Docker Compose is not installed. Install docker-compose or the Docker Compose plugin." >&2
     exit 1
   fi
+}
+
+guard_database_images() {
+  database_guard_temp="`$(mktemp "`$remote_path/.deploy-db-images.XXXXXXXX")"
+  chmod 600 "`$database_guard_temp"
+  compose config --format json | python3 infrastructure/scripts/prod/database_image_guard.py > "`$database_guard_temp"
+  database_image_override="`$database_guard_temp"
 }
 
 require_compose_service() {
@@ -2928,6 +2970,8 @@ chmod +x infrastructure/scripts/prod/apply-keycloak-prod-settings.sh || true
 chmod +x infrastructure/scripts/prod/validate-flyway-migrations.sh || true
 chmod +x infrastructure/scripts/prod/create-pre-deploy-db-backup.sh || true
 chmod +x infrastructure/scripts/prod/register-max-webhook.sh || true
+# Refuse database image/storage changes before any rollout startup or retry.
+guard_database_images
 require_compose_service whatsapp_lika
 require_compose_service whatsapp_vika
 assert_compose_service_image app "`$app_image"
@@ -2989,6 +3033,9 @@ compose run --rm --no-deps --interactive=false -T --cap-add CHOWN --cap-add DAC_
 compose run --rm --no-deps --interactive=false -T --cap-add CHOWN --cap-add DAC_READ_SEARCH --user 0 --entrypoint sh whatsapp_vika -c 'node_uid="`$(id -u node)"; node_gid="`$(id -g node)"; chown -R "`$node_uid:`$node_gid" /auth' </dev/null
 recreate_service_with_retry whatsapp_lika
 recreate_service_with_retry whatsapp_vika
+. infrastructure/scripts/prod/rollout-docker-observer.sh
+rollout_docker_observer
+# Prune obsolete profile services only after each observer consumer passed log flow.
 if [ "`$deploy_external_review_worker" = "1" ]; then
   compose --profile external-review up -d --remove-orphans --no-deps dozzle alloy
 else

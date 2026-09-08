@@ -7,6 +7,8 @@ function Get-OtzivDeployInputPaths {
         'mobile',
         'whatsapp',
         'infrastructure',
+        'docs/WHATSAPP_INBOUND_DELIVERY_RUNBOOK.md',
+        'docs/WHATSAPP_REMOTE_SESSION_RECOVERY.md',
         '.github',
         'docker-compose.yaml',
         'docker-compose.build.yaml',

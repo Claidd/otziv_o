@@ -55,6 +55,10 @@ class PerformerAssignmentServiceTelegramSecurityTest {
     @Mock private PerformerRolloutService rolloutService;
     @Mock private PerformerAssignmentScreenshotStorage screenshotStorage;
     @Mock private CityDistanceService cityDistanceService;
+    @Mock private PerformerMutationLockService mutationLocks;
+    @Mock private PerformerNotificationService notifications;
+    @Mock private com.hunt.otziv.performers.repository.PerformerNotificationRepository notificationRepository;
+    @Mock private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     @InjectMocks private PerformerAssignmentService service;
 
@@ -62,7 +66,7 @@ class PerformerAssignmentServiceTelegramSecurityTest {
     @EnumSource(value = PerformerProfileStatus.class, names = {"NEW", "BLOCKED"})
     void telegramAcceptRejectsInactivePerformer(PerformerProfileStatus status) {
         ReviewPerformerOffer offer = offer(status, 700L);
-        when(offerRepository.findByIdForAction(40L)).thenReturn(Optional.of(offer));
+        when(mutationLocks.offer(40L)).thenReturn(offer);
 
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
@@ -79,7 +83,7 @@ class PerformerAssignmentServiceTelegramSecurityTest {
     @EnumSource(value = PerformerProfileStatus.class, names = {"NEW", "BLOCKED"})
     void telegramDeclineRejectsInactivePerformer(PerformerProfileStatus status) {
         ReviewPerformerOffer offer = offer(status, 700L);
-        when(offerRepository.findByIdForAction(40L)).thenReturn(Optional.of(offer));
+        when(mutationLocks.offer(40L)).thenReturn(offer);
 
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
@@ -95,7 +99,7 @@ class PerformerAssignmentServiceTelegramSecurityTest {
     @Test
     void telegramAcceptRejectsCallbackFromDifferentChat() {
         ReviewPerformerOffer offer = offer(PerformerProfileStatus.ACTIVE, 700L);
-        when(offerRepository.findByIdForAction(40L)).thenReturn(Optional.of(offer));
+        when(mutationLocks.offer(40L)).thenReturn(offer);
 
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
@@ -111,7 +115,7 @@ class PerformerAssignmentServiceTelegramSecurityTest {
     @Test
     void telegramDeclineRejectsCallbackFromDifferentSender() {
         ReviewPerformerOffer offer = offer(PerformerProfileStatus.ACTIVE, 700L);
-        when(offerRepository.findByIdForAction(40L)).thenReturn(Optional.of(offer));
+        when(mutationLocks.offer(40L)).thenReturn(offer);
 
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,

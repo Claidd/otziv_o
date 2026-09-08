@@ -1,0 +1,372 @@
+{
+  "schemaVersion": 1,
+  "recordedAtUtc": "2026-09-07T20:08:19.859893+00:00",
+  "checkpoint": "Actual authenticated hosted C2/C3, followed by locally verified dependency fixes; next hosted head pending",
+  "authenticatedHostedRuns": [
+    {
+      "runId": 34154946485,
+      "head": "23b6440107caeb83c4b59850f3b913a3311df008",
+      "url": "https://github.com/Claidd/otziv_o/actions/runs/34154946485",
+      "mavenJobId": 101844920819,
+      "sonatypeCompleted": "2026-09-07T19:27:50Z",
+      "conclusion": "FAIL_CVSS_GE_7_ANALYZERS_COMPLETED"
+    },
+    {
+      "runId": 34156195253,
+      "head": "0b03150369037ab087bc627534e8c945102ccb27",
+      "url": "https://github.com/Claidd/otziv_o/actions/runs/34156195253",
+      "mavenJobId": 101848497262,
+      "sonatypeCompleted": "2026-09-07T19:39:28.3441378Z",
+      "conclusion": "FAIL_CVSS_GE_7_ANALYZERS_COMPLETED"
+    }
+  ],
+  "rawReportCounts": {
+    "dependencyEntries": 492,
+    "vulnerableEntries": 33,
+    "unsuppressedPairs": 71,
+    "uniqueAdvisories": 44,
+    "severityCounts": {
+      "LOW": 3,
+      "HIGH": 27,
+      "MEDIUM": 33,
+      "CRITICAL": 8
+    },
+    "providerCounts": {
+      "OSSINDEX": 24,
+      "NVD": 47
+    },
+    "suppressedPairs": 35
+  },
+  "c2C3ExactArtifactAdvisoryPairsEqual": true,
+  "analysisExceptionsField": "Not present in JSON; completed analyzer stages verified from logs, not fabricated empty field",
+  "costAndCache": {
+    "c2Head": "23b6440107caeb83c4b59850f3b913a3311df008",
+    "c3Head": "0b03150369037ab087bc627534e8c945102ccb27",
+    "c2Pairs": 71,
+    "c3Pairs": 71,
+    "exactArtifactAdvisorySourceSeverityEqual": true,
+    "c3ReportSha256": "adac99c88e441b97550f24f1a793a7f77f1c18629a1d33297a4cb6bd0e742ab9",
+    "cacheHit": "Linux-dependency-check-13-public-v1-34154946485-1",
+    "sonatypeAnalyzerCompletedAt": "2026-09-07T19:39:28.3441378Z",
+    "creditObservation": {
+      "source": "Parent direct Guide Free UI observation; not inferred from cache",
+      "observedApproxUtc": "2026-09-07T19:52:00Z",
+      "usedCredits": 60.9,
+      "allowance": 500,
+      "apiRequests": 609,
+      "displayedPercent": 12,
+      "paidSetup": false
+    }
+  },
+  "appliedPom": {
+    "basePomSha256": "9ffdd93bf5c6ed85a227c30a2d3ee21120ecb7cc81524e18eebd1912ecab9f94",
+    "appliedPomSha256": "46a1a8160f7cced473772e44518bfb5b173860f1fe76cbc0702540b325d6ea00",
+    "approvedSemanticCandidateSha256": "27ff9ad29afafdf403bbc7c38047f7f196c791af94bbda14dc59622087a13551",
+    "formatting": "Expanded only seven approved plugin dependencies; preserved other source bytes",
+    "rootRuntimeCodeModified": false,
+    "byteIdentityVs9ffJar": "Pending root final package comparison"
+  },
+  "verifiedPluginFixes": [
+    {
+      "plugin": "spring-boot-maven-plugin4.0.8",
+      "dependencies": [
+        "tools.jackson.core:jackson-core:3.1.6",
+        "tools.jackson.core:jackson-databind:3.1.6"
+      ],
+      "actualRealmArtifacts": 36
+    },
+    {
+      "plugin": "dependency-check-maven13.0.0",
+      "dependencies": [
+        "com.fasterxml.jackson.core:jackson-core:2.22.2",
+        "com.fasterxml.jackson.core:jackson-databind:2.22.2",
+        "org.jsoup:jsoup:1.23.2"
+      ],
+      "actualRealmArtifacts": 73
+    },
+    {
+      "plugin": "maven-site-plugin3.22.0",
+      "dependencies": [
+        "org.jsoup:jsoup:1.23.2",
+        "commons-beanutils:commons-beanutils:1.11.0"
+      ],
+      "actualRealmArtifacts": 77
+    }
+  ],
+  "causalBehavior": {
+    "result": "PASS",
+    "checks": 44,
+    "beanutilsOldLeakReproduced": true,
+    "fixedDefaultBlocks": true,
+    "providerRequests": 0
+  },
+  "actualPluginGoals": [
+    {
+      "name": "boot-help",
+      "goal": "org.springframework.boot:spring-boot-maven-plugin:4.0.8:help",
+      "exitCode": 0
+    },
+    {
+      "name": "odc-help",
+      "goal": "org.owasp:dependency-check-maven:13.0.0:help",
+      "exitCode": 0
+    },
+    {
+      "name": "site-render",
+      "goal": "org.apache.maven.plugins:maven-site-plugin:3.22.0:site",
+      "exitCode": 0
+    }
+  ],
+  "linkage": {
+    "dependency-check-maven-help-linkage.log": {
+      "indexedClasses": 15957,
+      "updatedLibraryReferences": 69119,
+      "referencesFromOtherRealmArtifacts": 150,
+      "unresolved": 0,
+      "counterfactualMissingMethodDetected": 1
+    },
+    "maven-site-plugin-site-linkage.log": {
+      "indexedClasses": 6427,
+      "updatedLibraryReferences": 14317,
+      "referencesFromOtherRealmArtifacts": 54,
+      "unresolved": 0,
+      "counterfactualMissingMethodDetected": 1
+    },
+    "spring-boot-maven-plugin-help-linkage.log": {
+      "indexedClasses": 10065,
+      "updatedLibraryReferences": 56760,
+      "referencesFromOtherRealmArtifacts": 113,
+      "unresolved": 0,
+      "counterfactualMissingMethodDetected": 1
+    }
+  },
+  "linkageScope": "Only symbols of libraries changed in each actual realm; ODC scope Jackson/Jsoup. Unchanged optional commons-validator->absent BeanUtils references are outside this delta, not asserted repaired.",
+  "newFalseMatchCorrections": [
+    {
+      "packageUrl": "pkg:maven/org.telegram/telegrambots-meta@6.9.7.1",
+      "artifactSha256": "6a87f4a1f3de4fd5371ac69c5371eca5f63076301ca52b03678524d6e69c19a2",
+      "advisories": [
+        "CVE-2019-10044",
+        "CVE-2021-31320",
+        "CVE-2021-31321",
+        "CVE-2024-7014",
+        "CVE-2021-27204",
+        "CVE-2021-27205",
+        "CVE-2021-31315",
+        "CVE-2021-31317",
+        "CVE-2021-31318",
+        "CVE-2021-31319",
+        "CVE-2021-31322",
+        "CVE-2021-31323",
+        "CVE-2021-27351",
+        "CVE-2021-36769"
+      ],
+      "reason": "Exact Java Telegram Bot API SDK metadata/model artifact; reported advisories concern separately versioned Telegram Android, iOS, macOS, Windows or desktop messenger clients and native rlottie. Existing telegrambots selector does not cover this distinct artifact.",
+      "primarySources": [
+        "https://repo.maven.apache.org/maven2/org/telegram/telegrambots-meta/6.9.7.1/telegrambots-meta-6.9.7.1.pom",
+        "https://github.com/rubenlagus/TelegramBots/tree/v6.9.7.1/telegrambots-meta"
+      ]
+    },
+    {
+      "packageUrl": "pkg:maven/org.springframework.boot/spring-boot-loader-tools@4.0.8",
+      "artifactSha256": "260e52aa495965a5833f7568d26f80094bcf4eb73eb7a38f748338ebd72493b8",
+      "advisories": [
+        "CVE-2022-31691"
+      ],
+      "reason": "Boot executable archive packaging tools are not the STS4 Eclipse / VSCode YAML editor products named by the vendor.",
+      "primarySources": [
+        "https://spring.io/security/cve-2022-31691/",
+        "https://repo.maven.apache.org/maven2/org/springframework/boot/spring-boot-loader-tools/4.0.8/spring-boot-loader-tools-4.0.8.pom"
+      ]
+    },
+    {
+      "packageUrl": "pkg:maven/com.google.code.gson/gson@2.9.0",
+      "artifactSha256": "c96d60551331a196dac54b745aa642cd078ef89b6f267146b705f2c2cbef052d",
+      "advisories": [
+        "CVE-2025-53864"
+      ],
+      "reason": "The CNA names Nimbus JOSE JWT and explicitly states this advisory is independent of the Gson issue. Exact Gson artifact is not Nimbus. This correction does not assert Gson recursion is fixed or accept its other findings.",
+      "primarySources": [
+        "https://raw.githubusercontent.com/CVEProject/cvelistV5/main/cves/2025/53xxx/CVE-2025-53864.json"
+      ]
+    },
+    {
+      "packageUrl": "pkg:maven/com.h2database/h2@2.4.240",
+      "artifactSha256": "29b70e427cc1c40cdc376283adbb0cc62853073797bb5fe5761f81fe73d57ce0",
+      "advisories": [
+        "CVE-2018-14335"
+      ],
+      "reason": "H2 maintainer states the console-tool authorization flaw is fixed since 1.4.198. Exact 2.4.240 WebApp tools.do still requires checkAdmin; the finding targets the old 1.4.197 behavior.",
+      "primarySources": [
+        "https://github.com/h2database/h2database/issues/1294#issuecomment-1227877194",
+        "https://raw.githubusercontent.com/h2database/h2database/version-2.4.240/h2/src/main/org/h2/server/web/WebApp.java"
+      ]
+    },
+    {
+      "packageUrl": "pkg:maven/org.apache.httpcomponents.client5/httpclient5@5.5.1",
+      "artifactSha256": "f381d1bde581bb36992f14674a9ac88f7362b3e35c48a99805bc56e1df931647",
+      "advisories": [
+        "CVE-2026-40542"
+      ],
+      "reason": "Apache CNA affected range is [5.6,5.6.1) with other versions unaffected. SCRAM was introduced in 5.6; 5.5.1 has no SCRAM source. Shaded 5.5.1 retains its other real advisories; this is only a version-range correction.",
+      "primarySources": [
+        "https://raw.githubusercontent.com/CVEProject/cvelistV5/main/cves/2026/40xxx/CVE-2026-40542.json",
+        "https://github.com/apache/httpcomponents-client/tree/rel/v5.5.1"
+      ]
+    },
+    {
+      "packageUrl": "pkg:maven/org.apache.httpcomponents.client5/httpclient5@5.5.2",
+      "artifactSha256": "5aec3f3447ec816e593e380b59fbe3e42083318af6b215bc177386f7742f6146",
+      "advisories": [
+        "CVE-2026-40542"
+      ],
+      "reason": "Apache CNA affected range is [5.6,5.6.1) with other versions unaffected. 5.5.2 is outside that range; other reported HTTP Client advisories remain.",
+      "primarySources": [
+        "https://raw.githubusercontent.com/CVEProject/cvelistV5/main/cves/2026/40xxx/CVE-2026-40542.json"
+      ]
+    },
+    {
+      "packageUrl": "pkg:maven/org.springframework.security/spring-security-web@7.0.7",
+      "artifactSha256": "b9935b0ab3ddbf4df963b2c7fa8fc98245687398ef3e22253c26e1d53db75388",
+      "advisories": [
+        "CVE-2026-47838"
+      ],
+      "reason": "The vendor limits this continuation to Spring Security5/6. Its related7.0 issue CVE-2026-22747 affects7.0.0-7.0.4 and is fixed7.0.5. Exact7.0.7 is outside47838 affected branches. This does not assert deprecated SubjectDnX509PrincipalExtractor safe or suppress22747 on another version.",
+      "primarySources": [
+        "https://spring.io/security/cve-2026-47838/",
+        "https://spring.io/security/cve-2026-22747/"
+      ]
+    },
+    {
+      "packageUrl": "pkg:maven/org.springframework.security/spring-security-crypto@7.0.7",
+      "artifactSha256": "e03b7570b6bac4a7d4837542e9317bc65158cfc96485564a29e7bb6747f218aa",
+      "advisories": [
+        "CVE-2026-47842"
+      ],
+      "reason": "The vendor identifies7.0.0-7.0.6 affected and7.0.7 as the OSS fix. Correct the exact version-range finding only. The old deprecated AesBytesEncryptor compatibility API remains unsuitable; applications using it still need the vendor migration. No reachability or blanket-crypto exemption is asserted.",
+      "primarySources": [
+        "https://spring.io/security/cve-2026-47842/"
+      ]
+    },
+    {
+      "packageUrl": "pkg:maven/org.jetbrains.kotlin/kotlin-reflect@2.2.21",
+      "artifactSha256": "44380abf37d245ce5c0f294f43512d1c39a59642bfa463922c74e96877cf49f8",
+      "advisories": [
+        "CVE-2026-53914"
+      ],
+      "reason": "Vendor fix changes KAPT build-cache deserialization. Exact kotlin-reflect JAR contains2144classes and no KAPT/build-cache classes or ObjectInputStream references. This Java runtime reflection artifact is not the independently deployed Kotlin Gradle/KAPT/compiler build tool; those artifacts are not exempt.",
+      "primarySources": [
+        "https://github.com/JetBrains/kotlin/commit/bf51df665b458fda7c3eaf436c4d88dc119d7ec6",
+        "https://www.jetbrains.com/privacy-security/issues-fixed/"
+      ]
+    }
+  ],
+  "suppressionProof": {
+    "result": "PASS",
+    "engine": "ODC13 actual XSD/parser and SuppressionRule.process",
+    "checks": 338,
+    "rules": 19,
+    "allListedPairs": 58,
+    "C2rawPairs": 71,
+    "newlyCorrectedPairs": 22,
+    "retainedPairs": 49,
+    "removedHighCriticalPairs": 10,
+    "NVDandOSSIndexCounterfactuals": true,
+    "liveAuditInvoked": false
+  },
+  "appliedSuppressionXmlSha256": "027819a84fe08ad10d4a6ce99694250ddc083cd4ca010dc03d2879d03f741fb6",
+  "riskAcceptance": null,
+  "remaining": [
+    "Testcontainers shaded HttpClient5.5.1 genuine71290/64607",
+    "Site Jetty9.4.58 genuine advisories; no free fixed compatible public9.4 binary established",
+    "Dependency-Check published plugin graph ignores project plugin dependencies; fixed execution realms do not produce a green declared-graph scan",
+    "Other reported lower-severity runtime pairs remain recorded; reviewed matches do not exempt unknown/new CVEs",
+    "Authenticated audit of next published corrected head has not run at this checkpoint;49retained is an old-report counterfactual, not current whole-graph count"
+  ],
+  "evidence": [
+    {
+      "path": ".codex-tmp/finalization-20260907/hosted-dependency-audit/c2-report/dependency-check-report.json",
+      "sha256": "6dca3e2f931959ef19f0113f687f67f74507899e780c3cfd7a5bee2efe13506a"
+    },
+    {
+      "path": ".codex-tmp/finalization-20260907/hosted-dependency-audit/c2-report/dependency-check-report.html",
+      "sha256": "e4c0a6fda04bf44ea90a4a33930c3cef94249899d734e4b92aec93d056637e19"
+    },
+    {
+      "path": ".codex-tmp/finalization-20260907/hosted-dependency-audit/c2-report/provenance.json",
+      "sha256": "48bc1200ce0199f63909c0b564b38c192da4f7110f70c02d88e69d30d3c2a856"
+    },
+    {
+      "path": ".codex-tmp/finalization-20260907/hosted-dependency-audit/c3-report/dependency-check-report.json",
+      "sha256": "adac99c88e441b97550f24f1a793a7f77f1c18629a1d33297a4cb6bd0e742ab9"
+    },
+    {
+      "path": ".codex-tmp/finalization-20260907/hosted-dependency-audit/c3-report/provenance.json",
+      "sha256": "c1e0f0f8a86904e049b920860edac898d9a4282472f91dd59f8d336f4143caee"
+    },
+    {
+      "path": ".codex-tmp/finalization-20260907/hosted-dependency-audit/maven-job-101844920819-safe-excerpts.json",
+      "sha256": "eee15a402f50b1da881dfff72f95bf1a95d90d84ff7b3a03d11f58f91935ebcd"
+    },
+    {
+      "path": ".codex-tmp/finalization-20260907/hosted-dependency-audit/maven-job-101848497262-safe-excerpts.json",
+      "sha256": "bbc072b3115ec7103fc5f900f1d1026b9f53a7c60f11a01cc4c41c1ec6a83136"
+    },
+    {
+      "path": ".codex-tmp/finalization-20260907/hosted-dependency-audit/c2-c3-comparison.json",
+      "sha256": "f53e19a9716b1528dea0b0cf7f80150c7f9103216679fec39e49acd30f83db6d"
+    },
+    {
+      "path": ".codex-tmp/finalization-20260907/hosted-dependency-audit/c2-triage-supplement.json",
+      "sha256": "ac58264077bfe9cbc8adfe28c05e8976d643adda4cef47dd02f9b9fdecf15f21"
+    },
+    {
+      "path": ".codex-tmp/finalization-20260907/hosted-dependency-audit/c2-primary/source-index.json",
+      "sha256": "c859d164dc4710e2f96e521bfce936e943006751fc9a7b98cda3c31d66ed2450"
+    },
+    {
+      "path": ".codex-tmp/finalization-20260907/hosted-dependency-audit/c2-primary/extra-sources.json",
+      "sha256": "894fdcdf48ab431ce2210e0787b8fa67f0f10dfb763bc4386bc6dcf6af952396"
+    },
+    {
+      "path": ".codex-tmp/finalization-20260907/hosted-dependency-audit/c2-primary/exact-artifact-identities.json",
+      "sha256": "102bd50926c892880ac2ebc821b0e6abf6519a8ed0905f6fd6a66fd36200ba02"
+    },
+    {
+      "path": ".codex-tmp/finalization-20260907/hosted-dependency-audit/c2-suppression-counterfactual.json",
+      "sha256": "5686e1e63a914c101af3dd4df266f4ce406a48af9df39e4f6ae4802ef791030b"
+    },
+    {
+      "path": ".codex-tmp/finalization-20260907/hosted-dependency-audit/c2-suppression-counterfactual.log",
+      "sha256": "eb92c01b3bafef9c0077c53565cddf64e2d5391ba56b87b4003e15ccdd3468fb"
+    },
+    {
+      "path": ".codex-tmp/finalization-20260907/hosted-dependency-audit/C2SuppressionEvidence.java",
+      "sha256": "2f65dda17af5ee95c45140d8acf5a127b4ec7ba6f2dfc9b7b534114370af69af"
+    },
+    {
+      "path": ".codex-tmp/finalization-20260907/hosted-dependency-audit/plugin-candidate/PluginBehaviorProof.java",
+      "sha256": "7e08aa7657d33f8fcb011e6e8a7719a59b371ae3215a18d924adbecb37df22da"
+    },
+    {
+      "path": ".codex-tmp/finalization-20260907/hosted-dependency-audit/plugin-candidate/PluginRealmLinkageProof.java",
+      "sha256": "f91fc345f584ed5b4f93b8f3c36d508bd69d90e36e5045d91884ecbc450afb9c"
+    },
+    {
+      "path": ".codex-tmp/finalization-20260907/hosted-dependency-audit/plugin-candidate/behavior-proof.log",
+      "sha256": "58ed8a66ea4037e4c255d9ccdb4b0215ff929812102fbef4aca99dd0dce85796"
+    },
+    {
+      "path": ".codex-tmp/finalization-20260907/hosted-dependency-audit/plugin-candidate/goals.json",
+      "sha256": "510e2b23b3d9d990355d9bc5103d52c8b6e707961e04df53b76b32710c1c7b6b"
+    },
+    {
+      "path": ".codex-tmp/finalization-20260907/hosted-dependency-audit/plugin-candidate/proposal-proof.json",
+      "sha256": "41891d6df49e963587113f7ad120da4b2bf6a5b57d98ad72caba229a34b947a6"
+    },
+    {
+      "path": ".codex-tmp/finalization-20260907/hosted-dependency-audit/plugin-candidate/application-evidence.json",
+      "sha256": "e806a7dcc78b76ea9e2814aeae59c69fc413614586f3b76a87e6c798669c77d2"
+    }
+  ]
+}

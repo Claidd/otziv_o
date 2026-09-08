@@ -97,6 +97,48 @@ class DeepSeekProviderTest {
         }
     }
 
+    @Test
+    void explicitNonThinkingRequestOverridesGlobalThinkingSetting() throws Exception {
+        AtomicReference<String> requestBody = new AtomicReference<>();
+        HttpServer server = completionServer(requestBody, new AtomicReference<>(), """
+                {"choices":[{"finish_reason":"stop","message":{"content":"{}"}}]}
+                """);
+        server.start();
+        try {
+            AiResponse response = provider(server).generate(new AiRequest(
+                    "worker-risk-explanation-quality", "Return JSON", "Explanation", 0.1, true,
+                    2048, Duration.ofSeconds(5), false));
+            JsonNode sent = objectMapper.readTree(requestBody.get());
+            assertThat(response.errorMessage()).isBlank();
+            assertThat(sent.path("thinking").path("type").asText()).isEqualTo("disabled");
+            assertThat(sent.has("reasoning_effort")).isFalse();
+            assertThat(sent.path("max_tokens").asInt()).isEqualTo(2048);
+            assertThat(sent.path("temperature").asDouble()).isEqualTo(0.1);
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"", "{", "{}"})
+    void lengthCompletionIsNeverTreatedAsSuccessfulAssessment(String content) throws Exception {
+        String responseBody = objectMapper.writeValueAsString(java.util.Map.of(
+                "choices", java.util.List.of(java.util.Map.of("finish_reason", "length",
+                        "message", java.util.Map.of("content", content))),
+                "usage", java.util.Map.of("prompt_tokens", 100, "completion_tokens", 700)));
+        HttpServer server = completionServer(new AtomicReference<>(), new AtomicReference<>(), responseBody);
+        server.start();
+        try {
+            AiResponse response = provider(server).generate(new AiRequest("test", "system", "user", 0.1));
+            assertThat(response.text()).isBlank();
+            assertThat(response.errorMessage()).contains("finish_reason=length");
+            assertThat(response.inputTokens()).isEqualTo(100);
+            assertThat(response.outputTokens()).isEqualTo(700);
+        } finally {
+            server.stop(0);
+        }
+    }
+
     private DeepSeekProvider provider(HttpServer server) {
         ReputationAiProperties properties = new ReputationAiProperties();
         properties.getDeepseek().setApiKey("test-deepseek-key");

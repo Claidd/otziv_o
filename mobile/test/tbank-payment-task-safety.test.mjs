@@ -48,12 +48,12 @@ test('journal legacy confirmation opens typed flow only for actual-recipient req
   assert.match(webTbankSource, /manualPaymentRouteErrorMessage\(err/);
 });
 
-test('monthly recipient summary is fail-soft and outside the main bootstrap Promise.all', () => {
+test('monthly recipient summary is fail-soft and outside the main bootstrap group', () => {
   const method = tbankSource.match(/async load\(\): Promise<void> \{[\s\S]*?\r?\n  \}\r?\n\r?\n  setMode/);
   assert.ok(method, 'load method was not found');
   assert.match(method[0], /void this\.loadRecipientMonthlySummary\(\)/);
-  const all = method[0].match(/Promise\.all\(\[([\s\S]*?)\]\)/);
-  assert.ok(all, 'bootstrap Promise.all was not found');
+  const all = method[0].match(/forkJoin\(\{([\s\S]*?)\}\)/);
+  assert.ok(all, 'bootstrap forkJoin was not found');
   assert.doesNotMatch(all[1], /getAdminManualRecipientMonthlySummary/);
   assert.match(tbankSource, /readonly recipientSummaryError = signal<string \| null>\(null\)/);
 

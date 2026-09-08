@@ -23,10 +23,12 @@ public class PaymentRouteChangeNotificationOutboxRepository {
         return jdbc.update("""
                 INSERT IGNORE INTO payment_route_change_notification_outbox (
                     payment_link_id,
-                    order_id
+                    order_id,
+                    operation_identity_ready
                 ) VALUES (
                     :paymentLinkId,
-                    :orderId
+                    :orderId,
+                    TRUE
                 )
                 """, new MapSqlParameterSource()
                 .addValue("paymentLinkId", paymentLinkId)
@@ -38,6 +40,7 @@ public class PaymentRouteChangeNotificationOutboxRepository {
                 SELECT payment_link_id
                 FROM payment_route_change_notification_outbox
                 WHERE sent_at IS NULL
+                  AND operation_identity_ready = TRUE
                   AND skipped_at IS NULL
                   AND next_attempt_at <= CURRENT_TIMESTAMP(6)
                   AND (
@@ -75,6 +78,7 @@ public class PaymentRouteChangeNotificationOutboxRepository {
                     updated_at = CURRENT_TIMESTAMP(6)
                 WHERE payment_link_id = :paymentLinkId
                   AND sent_at IS NULL
+                  AND operation_identity_ready = TRUE
                   AND skipped_at IS NULL
                   AND next_attempt_at <= CURRENT_TIMESTAMP(6)
                   AND (
@@ -95,6 +99,7 @@ public class PaymentRouteChangeNotificationOutboxRepository {
                   AND processing_token = :processingToken
                   AND processing_lease_until > CURRENT_TIMESTAMP(6)
                   AND sent_at IS NULL
+                  AND operation_identity_ready = TRUE
                   AND skipped_at IS NULL
                 """, parameters, (resultSet, rowNum) -> new Delivery(
                         resultSet.getLong("payment_link_id"),
@@ -161,6 +166,7 @@ public class PaymentRouteChangeNotificationOutboxRepository {
                   AND processing_token = :processingToken
                   AND processing_lease_until > CURRENT_TIMESTAMP(6)
                   AND sent_at IS NULL
+                  AND operation_identity_ready = TRUE
                   AND skipped_at IS NULL
                 """, fence(delivery)) == 1;
     }
@@ -180,6 +186,7 @@ public class PaymentRouteChangeNotificationOutboxRepository {
                   AND processing_token = :processingToken
                   AND processing_lease_until > CURRENT_TIMESTAMP(6)
                   AND sent_at IS NULL
+                  AND operation_identity_ready = TRUE
                   AND skipped_at IS NULL
                 """, parameters) == 1;
     }
@@ -205,6 +212,7 @@ public class PaymentRouteChangeNotificationOutboxRepository {
                   AND processing_token = :processingToken
                   AND processing_lease_until > CURRENT_TIMESTAMP(6)
                   AND sent_at IS NULL
+                  AND operation_identity_ready = TRUE
                   AND skipped_at IS NULL
                 """, parameters) == 1;
     }

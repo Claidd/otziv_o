@@ -35,6 +35,43 @@ public class WhatsAppAuthAlertService {
     private final UserRepository userRepository;
     private final PersonalReminderService personalReminderService;
 
+    /** Capture before the business commit; no managed association leaves this projection. */
+    public static List<Recipient> captureRecipients(Collection<Manager> managers) {
+        if (managers == null) return List.of();
+        Map<Long, Recipient> recipients = new LinkedHashMap<>();
+        for (Manager manager : managers) {
+            User user = manager == null ? null : manager.getUser();
+            if (user != null && user.getId() != null) {
+                recipients.putIfAbsent(user.getId(), new Recipient(manager.getId(), user.getId(), user.getTelegramChatId()));
+            }
+        }
+        return List.copyOf(recipients.values());
+    }
+
+    public void notifyRecoveredSnapshot(String clientId, String source, LocalDateTime now, List<Recipient> recipients) {
+        notifyRecovered(clientId, source, now, detachedManagers(recipients));
+    }
+
+    public void notifyAuthIssueSnapshot(String clientId, String companyTitle, String source, String code,
+            String readable, LocalDateTime now, LocalDateTime retryAtIrkutsk, List<Recipient> recipients) {
+        notifyAuthIssue(clientId, companyTitle, source, code, readable, now, retryAtIrkutsk, detachedManagers(recipients));
+    }
+
+    private List<Manager> detachedManagers(List<Recipient> recipients) {
+        if (recipients == null) return List.of();
+        return recipients.stream().map(recipient -> {
+            User user = new User();
+            user.setId(recipient.userId());
+            user.setTelegramChatId(recipient.telegramChatId());
+            Manager manager = new Manager();
+            manager.setId(recipient.managerId());
+            manager.setUser(user);
+            return manager;
+        }).toList();
+    }
+
+    public record Recipient(Long managerId, Long userId, Long telegramChatId) {}
+
     public void notifyAuthIssue(
             String clientId,
             String companyTitle,

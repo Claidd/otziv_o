@@ -1,11 +1,15 @@
-import { Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
+import { ManagerCompanyBillingApi } from '../core/manager-company-billing.api';
+import { ManagerBoardApi } from '../core/manager-board.api';
+import { CommonBillingApi } from '../core/common-billing.api';
+import { ClientContractError } from '@otziv/client-common/billing-payments';
+import { inject, Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { IonContent, IonRefresher, IonRefresherContent, RefresherCustomEvent } from '@ionic/angular/standalone';
 import { firstValueFrom } from 'rxjs';
 import {
-  ApiService,
+  type ApiService,
   CommonBillingAccountRequest,
   CommonBillingAccountResponse,
   CommonBillingCompanyResponse,
@@ -578,6 +582,9 @@ type CommonBillingDraft = {
   `]
 })
 export class CommonBillingAdminPage implements OnInit, OnDestroy {
+  private readonly managerCompanyBillingApi = inject(ManagerCompanyBillingApi);
+  private readonly managerBoardApi = inject(ManagerBoardApi);
+  private readonly commonBillingApi = inject(CommonBillingApi);
   readonly accounts = signal<CommonBillingAccountResponse[]>([]);
   readonly selectedAccountId = signal<number | null>(null);
   readonly details = signal<CommonInvoiceDetailsResponse | null>(null);
@@ -616,9 +623,7 @@ export class CommonBillingAdminPage implements OnInit, OnDestroy {
   private mutationGeneration = 0;
   private destroyed = false;
 
-  constructor(
-    private readonly api: ApiService,
-    private readonly router: Router,
+  constructor(private readonly router: Router,
     private readonly confirm: MobileConfirmService
   ) {}
 
@@ -654,7 +659,7 @@ export class CommonBillingAdminPage implements OnInit, OnDestroy {
     const generation = ++this.accountLoadGeneration;
     this.loading.set(true);
     try {
-      const accounts = await firstValueFrom(this.api.getCommonBillingAccounts());
+      const accounts = await firstValueFrom(this.commonBillingApi.getCommonBillingAccounts());
       if (!this.isCurrentAccountLoad(generation)) {
         return;
       }
@@ -667,6 +672,13 @@ export class CommonBillingAdminPage implements OnInit, OnDestroy {
       await this.loadSelectedInvoice();
     } catch (error) {
       if (this.isCurrentAccountLoad(generation)) {
+        if (error instanceof ClientContractError) {
+          this.invoiceLoadGeneration += 1;
+          this.accounts.set([]);
+          this.selectedAccountId.set(null);
+          this.details.set(null);
+          this.applyDraftFromAccount(null);
+        }
         this.error.set(this.errorMessage(error, 'Не удалось загрузить общие счета.'));
       }
     } finally {
@@ -737,8 +749,8 @@ export class CommonBillingAdminPage implements OnInit, OnDestroy {
     this.mutating.set('account');
     try {
       const account = selected
-        ? await firstValueFrom(this.api.updateCommonBillingAccount(selected.id, request))
-        : await firstValueFrom(this.api.createCommonBillingAccount(request));
+        ? await firstValueFrom(this.managerCompanyBillingApi.updateCommonBillingAccount(selected.id, request))
+        : await firstValueFrom(this.managerCompanyBillingApi.createCommonBillingAccount(request));
       if (!this.isCurrentMutation(mutationGeneration, selectedAccountId)) {
         return;
       }
@@ -792,7 +804,7 @@ export class CommonBillingAdminPage implements OnInit, OnDestroy {
 
     this.companySearchLoading.set(true);
     try {
-      const board = await firstValueFrom(this.api.getManagerBoard({
+      const board = await firstValueFrom(this.managerBoardApi.getManagerBoard({
         section: 'companies',
         status: 'Все',
         keyword,
@@ -831,7 +843,7 @@ export class CommonBillingAdminPage implements OnInit, OnDestroy {
     this.invalidateAccountLoad();
     this.mutating.set(mutationKey);
     try {
-      const updated = await firstValueFrom(this.api.addCommonBillingCompany(account.id, company.id));
+      const updated = await firstValueFrom(this.commonBillingApi.addCommonBillingCompany(account.id, company.id));
       if (!this.isCurrentMutation(mutationGeneration, account.id)) {
         return;
       }
@@ -880,7 +892,7 @@ export class CommonBillingAdminPage implements OnInit, OnDestroy {
     this.invalidateAccountLoad();
     this.mutating.set(mutationKey);
     try {
-      const updated = await firstValueFrom(this.api.removeCommonBillingCompany(account.id, company.companyId, detachCurrent));
+      const updated = await firstValueFrom(this.managerCompanyBillingApi.removeCommonBillingCompany(account.id, company.companyId, detachCurrent));
       if (!this.isCurrentMutation(mutationGeneration, account.id)) {
         return;
       }
@@ -911,7 +923,7 @@ export class CommonBillingAdminPage implements OnInit, OnDestroy {
 
     this.invoiceLoading.set(true);
     try {
-      const details = await firstValueFrom(this.api.getCommonInvoice(invoiceId));
+      const details = await firstValueFrom(this.commonBillingApi.getCommonInvoice(invoiceId));
       if (!this.isCurrentInvoiceLoad(generation, accountId, invoiceId)) {
         return;
       }

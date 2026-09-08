@@ -10,14 +10,23 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class ClientMessageTransactionRunner {
 
     private final TransactionTemplate requiresNew;
+    private final TransactionTemplate preparation;
 
     public ClientMessageTransactionRunner(PlatformTransactionManager transactionManager) {
         this.requiresNew = new TransactionTemplate(transactionManager);
         this.requiresNew.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        this.preparation = new TransactionTemplate(transactionManager);
+        this.preparation.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        this.preparation.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
     }
 
     public <T> T callInNewTransaction(Supplier<T> work) {
         return requiresNew.execute(status -> work.get());
+    }
+
+    /** Budget reads made after a contended reservation lock must see the preceding commit. */
+    public <T> T callInPreparationTransaction(Supplier<T> work) {
+        return preparation.execute(status -> work.get());
     }
 
     public void runInNewTransaction(Runnable work) {

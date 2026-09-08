@@ -1,4 +1,6 @@
-import { Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
+import { DictionariesApi } from '../core/dictionaries.api';
+import { CompaniesApi } from '../core/companies.api';
+import { inject, Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
   IonContent,
@@ -1100,6 +1102,8 @@ const OPERATOR_TABS: OperatorTab[] = [
   `]
 })
 export class OperatorPage implements OnInit, OnDestroy {
+  private readonly dictionariesApi = inject(DictionariesApi);
+  private readonly companiesApi = inject(CompaniesApi);
   private searchTimer: ReturnType<typeof setTimeout> | null = null;
   private phoneSearchTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -1533,7 +1537,7 @@ export class OperatorPage implements OnInit, OnDestroy {
     this.companyError.set(null);
 
     try {
-      await firstValueFrom(this.api.createCompany(this.companyRequestFromDraft(draft)));
+      await firstValueFrom(this.companiesApi.createCompany(this.companyRequestFromDraft(draft)));
       this.closeCompanyCreate();
       await this.loadBoard();
     } catch (error) {
@@ -1580,7 +1584,7 @@ export class OperatorPage implements OnInit, OnDestroy {
     this.phoneError.set(null);
 
     try {
-      const response = await firstValueFrom(this.api.getOperatorPhones(this.phoneSearch()));
+      const response = await firstValueFrom(this.dictionariesApi.getOperatorPhones(this.phoneSearch()));
       this.phones.set(response.phones);
       this.operators.set(response.operators);
       this.restorePhoneSelection(response.phones);
@@ -1643,8 +1647,8 @@ export class OperatorPage implements OnInit, OnDestroy {
       const selected = this.selectedPhone();
       const request = this.phoneRequest(draft);
       const saved = selected
-        ? await firstValueFrom(this.api.updateOperatorPhone(selected.id, request))
-        : await firstValueFrom(this.api.createOperatorPhone(request));
+        ? await firstValueFrom(this.dictionariesApi.updateOperatorPhone(selected.id, request))
+        : await firstValueFrom(this.dictionariesApi.createOperatorPhone(request));
       this.selectedPhone.set(saved);
       this.phoneDraft.set(this.phoneDraftFromPhone(saved));
       await this.loadPhones();
@@ -1675,7 +1679,7 @@ export class OperatorPage implements OnInit, OnDestroy {
     this.phoneError.set(null);
 
     try {
-      await firstValueFrom(this.api.deleteOperatorPhone(phone.id));
+      await firstValueFrom(this.dictionariesApi.deleteOperatorPhone(phone.id));
       this.startNewPhone();
       await this.loadPhones();
     } catch (error) {
@@ -1705,7 +1709,7 @@ export class OperatorPage implements OnInit, OnDestroy {
     this.phoneError.set(null);
 
     try {
-      await firstValueFrom(this.api.deleteOperatorPhoneDeviceToken(phone.id, token.token));
+      await firstValueFrom(this.dictionariesApi.deleteOperatorPhoneDeviceToken(phone.id, token.token));
       await this.loadPhones();
     } catch (error) {
       this.phoneError.set(this.apiErrorMessage(error, 'Не удалось отвязать устройство.'));
@@ -1845,7 +1849,7 @@ export class OperatorPage implements OnInit, OnDestroy {
     this.companyError.set(null);
 
     try {
-      const payload = await firstValueFrom(this.api.getCompanyCreatePayload('operator', lead.id, managerId));
+      const payload = await firstValueFrom(this.companiesApi.getCompanyCreatePayload('operator', lead.id, managerId));
       this.companyPayload.set(payload);
       this.companySubCategories.set(payload.subCategories ?? []);
       this.companyDraft.set({
@@ -1861,7 +1865,7 @@ export class OperatorPage implements OnInit, OnDestroy {
 
   private async loadCompanySubCategories(categoryId: number): Promise<void> {
     try {
-      this.companySubCategories.set(await firstValueFrom(this.api.getCompanySubcategories(categoryId)));
+      this.companySubCategories.set(await firstValueFrom(this.companiesApi.getCompanySubcategories(categoryId)));
     } catch (error) {
       this.companyError.set(this.apiErrorMessage(error, 'Не удалось загрузить подкатегории.'));
     }

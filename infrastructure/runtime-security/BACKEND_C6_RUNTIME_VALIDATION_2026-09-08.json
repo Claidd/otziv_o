@@ -1,0 +1,273 @@
+{
+  "schema": "otziv-backend-c6-runtime-validation-v1",
+  "reportDate": "2026-09-08",
+  "recordedAt": "2026-09-07T23:28:46.160196+00:00",
+  "publicationStatus": "VALIDATED_PENDING_C6_COMMIT_ID",
+  "scope": "C6 build-tooling changes on publication-derived source, complete backend verify, executable byte identity, complete actual runtime-image scan and completed stock fresh local restore/smoke. Does not assert production activation or risk acceptance.",
+  "supersedesNoExistingEvidence": true,
+  "priorRuntimeAttestation": {
+    "path": "infrastructure/runtime-security/BACKEND_ADVISORY_VALIDATION_2026-09-08.json",
+    "sha256": "40dd78c832a06550341361d36cb9213fa4a867d3aca4be62cd2af1092bd0ffb1",
+    "preserved": true
+  },
+  "verifiedSource": {
+    "publicationBaseCommit": "cad6694c307bcb9b474540d93397073ca66caca0",
+    "c6ChangesCommitId": null,
+    "commitIdPending": true,
+    "backendPomSha256": "2e9352557648eb450ba7bd8f004cf21e6ab08b6e1fe5915e034cb2cd115efac6",
+    "concurrentOriginalBusinessSourceExcluded": true,
+    "sourceDescription": "C6 reviewed changes in the publication worktree; the original root business source is not the build context.",
+    "runEvidence": {
+      "path": ".codex-tmp/security-closure-20260908/c6-backend-run.json",
+      "sha256": "58ae52c9199b9d6652af199dad393507e18300aa2e509158a2d04908f8516c51",
+      "bytes": 853,
+      "availability": "Retained private validation evidence; raw artifact is not embedded in this public attestation."
+    }
+  },
+  "backendFullSuite": {
+    "status": "PASS_WITH_DECLARED_SKIPS",
+    "counts": {
+      "tests": 4712,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 15
+    },
+    "executedAndPassed": 4697,
+    "surefireReportFiles": 678,
+    "logTotalsIndependentlyConfirmedFromXml": true,
+    "completedAt": "2026-09-07T22:47:26.774662+00:00",
+    "log": {
+      "path": ".codex-tmp/security-closure-20260908/c6-backend-full.log",
+      "sha256": "2cfab4ff154babd4f539a82094e06c49f2c53fd2cc1d706952ee19ea0f177dec",
+      "bytes": 5016156,
+      "availability": "Retained private validation evidence; raw artifact is not embedded in this public attestation."
+    },
+    "xmlManifest": {
+      "path": ".codex-tmp/security-closure-20260908/c6-runtime-surefire-xml-manifest.json",
+      "sha256": "981b4ac71cd4a6c73fde7feb38c54a751288ccd16d691628a87131f8165c14ca",
+      "bytes": 135556,
+      "availability": "Retained private validation evidence; raw artifact is not embedded in this public attestation."
+    }
+  },
+  "checkedContract": {
+    "path": "contracts/generated/client-api.openapi.json",
+    "sha256": "af16bd5da32f70c8478344ff6fe572b7f6c9a5214c79169d768fe4a7c81a124f",
+    "operations": 187,
+    "schemas": 204,
+    "generationResult": "PASS",
+    "generationEvidence": {
+      "path": ".codex-tmp/security-closure-20260908/c6-contract-generate.log",
+      "sha256": "90036486049e1fb5154f818307c1f422d7a302fbe6da557282296ef8f771179d",
+      "bytes": 202,
+      "availability": "Retained private validation evidence; raw artifact is not embedded in this public attestation."
+    },
+    "exportEvidence": {
+      "path": ".codex-tmp/security-closure-20260908/c6-contract-export.log",
+      "sha256": "e7a4f46e5d5e9aacaacd576982bb7e2ccdff789b928356d50c1aec7bc70f84df",
+      "bytes": 7850,
+      "availability": "Retained private validation evidence; raw artifact is not embedded in this public attestation."
+    },
+    "postSuitePresentationNormalization": {
+      "kind": "Windows export CRLF to canonical repository LF checkout",
+      "timing": "After the complete backend test suite; no application source, API shape or runtime JAR change.",
+      "beforeExportSha256": "0b367b3e65541fa4462b40aa892da5b6c11099efedc580c4ac13d2ec72cf24db",
+      "afterRepositoryLfSha256": "af16bd5da32f70c8478344ff6fe572b7f6c9a5214c79169d768fe4a7c81a124f",
+      "jsonStructuralEquality": "PASS (root verified)",
+      "generatorCheck": "PASS (root verified contracts/generate.mjs --check: 187 operations, 204 schemas)",
+      "normalizationIsPresentationOnly": true,
+      "historicalExportLogsAndReportHashesPreserved": true,
+      "priorPublicDraftSha256": "6490de13e75a65e73c3bec243823d53027a2bc9e75c8e67383cd7b30930e4c01"
+    }
+  },
+  "runtimeJar": {
+    "sha256": "b704151a8f4505a4f025fa1540ee293b947dd683aad411445d06959cf54e61c2",
+    "baseJarSha256": "d1539d74885126e5d3442f158a2bde2e0c1f9fc2edb24ab30437256c16d3e963",
+    "allNonDirectoryEntries": 3953,
+    "mainClassesAndResources": 3517,
+    "completeNestedLibraries": 330,
+    "springBootLoaderFiles": 99,
+    "loaderPlusBootIndexesAndMetadata": 103,
+    "loader103Definition": "99 loader files plus MANIFEST.MF, FileSystemProvider service, classpath.idx and layers.idx",
+    "allComparedRuntimeBytesIdentical": true,
+    "addedEntries": [],
+    "removedEntries": [],
+    "onlyChangedEntry": "META-INF/maven/com.hunt/otziv/pom.xml",
+    "method": "SHA256 of uncompressed bytes of every non-directory ZIP entry, including each complete nested JAR; ZIP timestamps/compression metadata are not runtime bytes.",
+    "evidence": {
+      "path": ".codex-tmp/security-closure-20260908/runtime-c6/jar-byte-comparison.json",
+      "sha256": "238e78a9a7ad40f6f058a54f0cacb6b8be9b4eb5842d06adc2655cec0322031c",
+      "bytes": 1599,
+      "availability": "Retained private validation evidence; raw artifact is not embedded in this public attestation."
+    }
+  },
+  "actualRuntimeImage": {
+    "immutableLocalImageId": "sha256:eb5419e630ed6bd3f21c9c510c3961797b7faf5e6a81ed400e0ba4ebd7d38a0f",
+    "configId": "sha256:bef19620f3faf8e740d136d216c92f2ed8a1cf74f915d49204dca576151df9a4",
+    "registryPublication": "NOT_PERFORMED",
+    "verifiedBaseImageId": "sha256:fb5835ef464657179e81b5d7847fe3124c7e8ca238f868c9dd26c91c5f91b90e",
+    "originalRootfsLayersPreserved": 14,
+    "buildDockerfile": "backend/Dockerfile.runtime-local",
+    "dockerfileSha256": "f03336067a9f7676af4fc2997d087d4032e4814602acac2f3bfdd983597a6d0b",
+    "sourceMainRebuiltDuringImageAssembly": false,
+    "buildEvidence": {
+      "path": ".codex-tmp/security-closure-20260908/runtime-c6/image-build-result.json",
+      "sha256": "b541eae197b8925078a904755768caeb227c9f99fb0474f969c661c80f679dbf",
+      "bytes": 969,
+      "availability": "Retained private validation evidence; raw artifact is not embedded in this public attestation."
+    },
+    "networkDisabledProbe": {
+      "status": "PASS",
+      "checks": 5,
+      "applicationStarted": false,
+      "evidence": {
+        "path": ".codex-tmp/security-closure-20260908/runtime-c6/network-disabled-runtime.json",
+        "sha256": "fcc31c6f59d3298165f0503fad5d8f43e3f43e8759f57751b06bc2ed51a669ee",
+        "bytes": 597,
+        "availability": "Retained private validation evidence; raw artifact is not embedded in this public attestation."
+      }
+    }
+  },
+  "completeActualImageSecurityScan": {
+    "status": "PASS",
+    "high": 0,
+    "critical": 0,
+    "fixedHighOrCritical": 0,
+    "unfixedHighOrCritical": 0,
+    "adjudicationsApplied": 0,
+    "rawReportModified": false,
+    "scannerImage": "aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969",
+    "rawReport": {
+      "path": ".codex-tmp/security-closure-20260908/runtime-c6/vulnerabilities.json",
+      "sha256": "b14c3fb50c12959b6bc22a46b051f4f101b0217fc0ab78fa89efa6ff22020e98",
+      "bytes": 1201033,
+      "availability": "Retained private validation evidence; raw artifact is not embedded in this public attestation."
+    },
+    "sbom": {
+      "path": ".codex-tmp/security-closure-20260908/runtime-c6/vulnerabilities.sbom.cdx.json",
+      "sha256": "0436c5e1c583aeae1be103a6283ed179070cf358d4a9afdd4061dad714e6adbd",
+      "bytes": 939739,
+      "availability": "Retained private validation evidence; raw artifact is not embedded in this public attestation."
+    },
+    "triage": {
+      "path": ".codex-tmp/security-closure-20260908/runtime-c6/vulnerabilities.triage.json",
+      "sha256": "263822b13aaa2b33753ed170dd6a24ee76f9579a2b3ae72328d78549a3fcdbc9",
+      "bytes": 364,
+      "availability": "Retained private validation evidence; raw artifact is not embedded in this public attestation."
+    },
+    "adjudications": {
+      "path": ".codex-tmp/security-closure-20260908/runtime-c6/vulnerabilities.adjudications.json",
+      "sha256": "e80803ca17c22d4432cfcdd61e079f313b83fa21d1946097f3ac0f46ac108492",
+      "bytes": 405,
+      "availability": "Retained private validation evidence; raw artifact is not embedded in this public attestation."
+    }
+  },
+  "freshStockLocalRestoreAndSmoke": {
+    "status": "PASS",
+    "executionOwner": "root",
+    "mode": "Stock fresh production-database dump read, isolated local import and sanitization, then the existing stock smoke with the exact scanned image.",
+    "skipProdDbRestore": false,
+    "businessSourceRebuildDisabled": true,
+    "preflight": {
+      "status": "PASS",
+      "reviewedStockSources": 7,
+      "migrationSqlFilesComparedWithPublicationAndTestedJar": 387,
+      "dedicatedLocalDockerTargetVerified": true
+    },
+    "finalResult": {
+      "runtime": {
+        "imageId": "sha256:eb5419e630ed6bd3f21c9c510c3961797b7faf5e6a81ed400e0ba4ebd7d38a0f",
+        "matchesScannedImage": true,
+        "jarSha256": "b704151a8f4505a4f025fa1540ee293b947dd683aad411445d06959cf54e61c2",
+        "matchesTestedJar": true,
+        "status": "running",
+        "health": "healthy",
+        "oomKilled": false,
+        "restartCount": 0,
+        "nonRoot": true,
+        "readOnlyRootfs": true,
+        "allCapabilitiesDropped": true
+      },
+      "localDatabase": {
+        "mysqlVersion": "9.0.0",
+        "latestVersion": "1.10.306",
+        "failedMigrations": 0,
+        "installedMigrations": 387,
+        "presentSafetySettings": 29,
+        "expectedSafetySettings": 29,
+        "matchingSafetySettings": 29,
+        "imageId": "sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383",
+        "scope": "Stock local MySQL 9.0; this is not the separately tested hardened recovery-database image."
+      },
+      "httpStatus": {
+        "backend": 200,
+        "issuerDiscovery": 200,
+        "frontend": 200
+      },
+      "dispatchSafetyAggregates": {
+        "checked": 8,
+        "present": 8,
+        "disabled": 8,
+        "messengerTokensAbsent": true
+      },
+      "freshDump": {
+        "sha256": "79a8fd571c1a121c00514e2562d961b3cc7e24f74d6587149b2f4f6d2e57a692",
+        "bytes": 109128370,
+        "downloadIntegrityVerified": true,
+        "ephemeralLocalDumpAbsentAfterRestore": true
+      },
+      "stockLogSentinels": {
+        "sourceDumpCreatedAndValidated": true,
+        "localDumpRestored": true,
+        "localExternalMessagingDisabled": true,
+        "externalCredentialSanitizationCompleted": true,
+        "flywayChecksumValidationPassed": true,
+        "ephemeralDumpRemoved": true,
+        "stockSmokePassed": true
+      },
+      "protectedEnvironmentContentPreserved": true,
+      "verificationMethod": [
+        "Local Docker inspect metadata",
+        "Read app.jar SHA256",
+        "Read-only aggregate MySQL SELECT",
+        "Local HTTP GET",
+        "Private log parse to safe booleans and dump integrity metadata"
+      ],
+      "businessRowsOrCredentialsReturned": false
+    },
+    "productionDatabaseWrites": false,
+    "productionServiceLifecycleChanges": false,
+    "remoteFilesystemScope": "Restricted temporary dump creation and removal by the existing stock backup workflow.",
+    "retentionScope": "Existing stock production-dump gzip retention only; maintenance SQL and unrelated rollback fixtures are excluded.",
+    "startedAt": "2026-09-07T23:17:09.856137+00:00",
+    "completedAt": "2026-09-07T23:23:50.681625+00:00",
+    "exitCode": 0,
+    "executionEvidence": {
+      "path": ".codex-tmp/security-closure-20260908/runtime-c6/actual-stock-execution.json",
+      "sha256": "58291048e41c92789de652d1c82646f531109a7ba1cb0e726bc678955dc2eee7",
+      "bytes": 454,
+      "availability": "Retained private validation evidence; raw artifact is not embedded in this public attestation."
+    },
+    "privateStockLog": {
+      "path": ".codex-tmp/security-closure-20260908/runtime-c6/actual-stock-fresh-restore-and-smoke.log",
+      "sha256": "b2459e163ad7404be6b0e09624ad2da41841b028289f9a32deb3f59364f47832",
+      "bytes": 15986,
+      "availability": "Retained private validation evidence; raw artifact is not embedded in this public attestation."
+    },
+    "safeAggregateEvidence": {
+      "path": ".codex-tmp/security-closure-20260908/runtime-c6-post/actual-stock-safe-aggregate.json",
+      "sha256": "21c68f1f32c7730610c6e4e7cc89d66b5ec6c25b0f006732fd23b5e8c50944a1",
+      "bytes": 2473,
+      "availability": "Retained private validation evidence; raw artifact is not embedded in this public attestation."
+    },
+    "preparedInputAndPriorProofFilesVerifiedUnchangedAfterRun": 25,
+    "previouslyRunningExecutionOutputFilesNowFinalized": 2
+  },
+  "productionActivationPerformed": false,
+  "riskAcceptanceGranted": false,
+  "limitations": [
+    "The fresh stock drill uses its existing MySQL 9.0 image. It does not certify deployment of the separately tested hardened recovery-database image.",
+    "The image identity is a local immutable image ID, not a registry manifest publication claim.",
+    "A zero High/Critical result for this application image does not close unrelated upstream-image or Maven dependency security gates.",
+    "Referenced raw reports and suite evidence are privately retained; the attestation is not a substitute for making those artifacts available during release review."
+  ]
+}

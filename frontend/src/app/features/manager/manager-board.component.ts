@@ -1,3 +1,4 @@
+import { commonInvoiceDeliveryWarning } from '@otziv/client-common/billing-payments';
 import { Component, HostListener, OnDestroy, computed, effect, inject, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -1149,10 +1150,16 @@ export class ManagerBoardComponent implements OnDestroy {
     request.subscribe({
       next: (details) => {
         this.mutationKey.set(null);
-        this.toastService.success(
-          'Общий счет обновлен',
-          `${order.companyTitle}: ${this.commonInvoiceStatusLabel(details, action.status)}`
-        );
+        const deliveryWarning = action.status === 'Выставлен счет' || action.status === 'Напоминание'
+          ? commonInvoiceDeliveryWarning(details.summary.lastError) : null;
+        if (deliveryWarning) {
+          this.toastService.warning('Отправка общего счета не подтверждена', deliveryWarning);
+        } else {
+          this.toastService.success(
+            'Общий счет обновлен',
+            `${order.companyTitle}: ${this.commonInvoiceStatusLabel(details, action.status)}`
+          );
+        }
         this.loadBoard();
       },
       error: (err) => {

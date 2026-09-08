@@ -60,7 +60,8 @@ test('native auth fails closed without SecureStorage and only uses Preferences f
 
   assert.match(storage, /private requireNativeSecureStorage\(\): void \{[\s\S]*?if \(!this\.secureStorageAvailable\) \{[\s\S]*?throw new Error/);
   assert.match(storage, /if \(this\.isNative\) \{\s*this\.requireNativeSecureStorage\(\);\s*await SecureStorage\.set/);
-  assert.match(storage, /const normalized = this\.normalizeStoredValue<T>\(secureValue\);\s*if \(normalized\) \{[\s\S]*?await Preferences\.remove\(\{ key \}\);\s*return normalized;/);
+  // Migration ordering and native commit failures are exercised through the
+  // actual service in mobile-auth-storage.runtime.spec.ts.
   assert.doesNotMatch(storage, /SecureStorage\.get\(key\)\.catch/);
   assert.doesNotMatch(storage, /SecureStorage\.remove\(key\)\.catch/);
   assert.match(storage, /Preferences\.set\(\{\s*key: TOKENS_REVOCATION_KEY,\s*value: TOKEN_REVOCATION_MARKER/);

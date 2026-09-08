@@ -1,10 +1,11 @@
+import { apiTransportSource } from './api-source.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const read = (relativeUrl) => readFileSync(new URL(relativeUrl, import.meta.url), 'utf8');
-const api = read('../src/app/core/api.service.ts');
-const orderDetails = read('../src/app/features/order-details.page.ts');
+const api = apiTransportSource();
+const orderDetails = read('../src/app/features/order-details.page.ts') + read('../src/app/features/order-details/order-review-editor.facade.ts');
 const worker = read('../src/app/features/worker.page.ts');
 const workerEditor = read('../src/app/features/worker/mobile-worker-review-edit-sheet.component.ts');
 

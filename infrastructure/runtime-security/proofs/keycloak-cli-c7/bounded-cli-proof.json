@@ -1,0 +1,41 @@
+{
+  "result": "PASS",
+  "imageId": "sha256:73f6667a8062cfe7a17d67354a52d6bcd196f18a26bd01dd0faba7be1fbc0562",
+  "patchedJarSha256": "8db44618333b39f295c2f56c6e00341775ad8bee14eaf224710f4c6ea8ff39f5",
+  "controls": {
+    "original": {
+      "exitCode": 1,
+      "proof": {
+        "checks": {
+          "jackson_core.json_version": false,
+          "jackson_databind.cfg_version": false,
+          "jackson_datatype.jdk8_version": false,
+          "jackson_datatype.jsr310_version": false,
+          "jackson_dataformat.yaml_version": false,
+          "duration_numeric_constraint": false,
+          "calendar_numeric_constraint": false,
+          "ordinary_duration": true
+        },
+        "jacksonVersion": "2.21.5",
+        "jacksonSource": "file:/opt/keycloak/bin/client/keycloak-admin-cli-26.7.3.jar"
+      }
+    },
+    "patched": {
+      "exitCode": 0,
+      "proof": {
+        "checks": {
+          "jackson_core.json_version": true,
+          "jackson_databind.cfg_version": true,
+          "jackson_datatype.jdk8_version": true,
+          "jackson_datatype.jsr310_version": true,
+          "jackson_dataformat.yaml_version": true,
+          "duration_numeric_constraint": true,
+          "calendar_numeric_constraint": true,
+          "ordinary_duration": true
+        },
+        "jacksonVersion": "2.21.6",
+        "jacksonSource": "file:/opt/keycloak/bin/client/keycloak-admin-cli-26.7.3.jar"
+      }
+    }
+  }
+}

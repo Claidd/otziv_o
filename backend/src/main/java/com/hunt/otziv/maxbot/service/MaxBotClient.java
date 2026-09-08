@@ -56,6 +56,48 @@ public class MaxBotClient {
         return sendMessage("userId", "user_id", userId, text);
     }
 
+    /**
+     * One operation-owned attempt: no chunking, fallback or retry after an uncertain result.
+     * The caller owns durable deduplication; MAX does not receive an invented idempotency header.
+     */
+    public SendOnceResult sendMessageToChatOnce(Long chatId, String text) {
+        if (chatId == null || !hasText(text)) return new SendOnceResult(null, "invalid_request");
+        if (text.length() > MAX_MESSAGE_LENGTH) return new SendOnceResult(null, "payload_too_large");
+        if (!isConfigured()) return new SendOnceResult(null, "max_not_configured");
+
+        String url = UriComponentsBuilder.fromUriString(baseUrl + "/messages")
+                .queryParam("chat_id", chatId)
+                .queryParam("disable_link_preview", true)
+                .toUriString();
+        HttpEntity<Map<String, Object>> request = new HttpEntity<>(Map.of("text", text, "notify", true), headers());
+        try {
+            ResponseEntity<String> response = restTemplate.postForEntity(url, request, String.class);
+            if (response.getStatusCode().is2xxSuccessful() && hasText(response.getBody())) {
+                JsonNode result = objectMapper.readTree(response.getBody());
+                // POST /messages returns Message.body.mid, an opaque string rather than a Telegram-style integer.
+                // https://dev.max.ru/docs-api/methods/POST/messages
+                JsonNode receipt = result == null ? null : result.path("message").path("body").path("mid");
+                boolean rejected = result != null && (result.hasNonNull("error") || result.hasNonNull("code")
+                        || (result.has("success") && (!result.path("success").isBoolean() || !result.path("success").booleanValue())));
+                if (!rejected && receipt != null && receipt.isTextual() && validReceiptId(receipt.textValue())) {
+                    return new SendOnceResult(receipt.textValue(), null);
+                }
+            }
+        } catch (Exception unconfirmed) {
+            log.warn("MAX operation has no confirmed result ({})", unconfirmed.getClass().getSimpleName());
+        }
+        return new SendOnceResult(null, "operation_unknown");
+    }
+
+    public record SendOnceResult(String messageId, String errorCode) {
+        public boolean confirmed() { return errorCode == null && validReceiptId(messageId); }
+    }
+
+    private static boolean validReceiptId(String messageId) {
+        return messageId != null && messageId.matches("(?:mid\\.)?[a-zA-Z0-9_\\-]+")
+                && !messageId.matches("-?[0]+|-[0-9]+");
+    }
+
     private boolean sendMessage(String recipientLabel, String recipientParam, Long recipientId, String text) {
         if (recipientId == null) {
             log.warn("MAX-сообщение не отправлено: {} пустой", recipientLabel);

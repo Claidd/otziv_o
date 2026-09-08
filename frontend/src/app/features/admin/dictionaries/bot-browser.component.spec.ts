@@ -3,7 +3,7 @@ import { DomSanitizer } from '@angular/platform-browser';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { BehaviorSubject, NEVER, Subject, of } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
-import { AdminDictionariesApi } from '../../../core/admin-dictionaries.api';
+import { AdminAccountsApi } from '../../../core/admin-accounts.api';
 import { BotBrowserComponent } from './bot-browser.component';
 
 describe('BotBrowserComponent', () => {
@@ -30,7 +30,7 @@ describe('BotBrowserComponent', () => {
           useValue: { snapshot: { paramMap: convertToParamMap({ botId: '37' }) } }
         },
         { provide: DomSanitizer, useValue: sanitizer },
-        { provide: AdminDictionariesApi, useValue: api }
+        { provide: AdminAccountsApi, useValue: api }
       ]
     }).compileComponents();
 
@@ -71,7 +71,7 @@ describe('BotBrowserComponent', () => {
           useValue: { snapshot: { paramMap: convertToParamMap({ botId: '37' }) } }
         },
         { provide: DomSanitizer, useValue: sanitizer },
-        { provide: AdminDictionariesApi, useValue: api }
+        { provide: AdminAccountsApi, useValue: api }
       ]
     }).compileComponents();
 
@@ -118,7 +118,7 @@ describe('BotBrowserComponent', () => {
           useValue: { snapshot: { paramMap: convertToParamMap({ botId: '37' }) } }
         },
         { provide: DomSanitizer, useValue: sanitizer },
-        { provide: AdminDictionariesApi, useValue: api }
+        { provide: AdminAccountsApi, useValue: api }
       ]
     }).compileComponents();
 
@@ -169,7 +169,7 @@ describe('BotBrowserComponent', () => {
           provide: DomSanitizer,
           useValue: { bypassSecurityTrustResourceUrl: vi.fn((url: string) => url) }
         },
-        { provide: AdminDictionariesApi, useValue: api }
+        { provide: AdminAccountsApi, useValue: api }
       ]
     }).compileComponents();
 
@@ -212,7 +212,7 @@ describe('BotBrowserComponent', () => {
           provide: DomSanitizer,
           useValue: { bypassSecurityTrustResourceUrl: vi.fn((url: string) => url) }
         },
-        { provide: AdminDictionariesApi, useValue: api }
+        { provide: AdminAccountsApi, useValue: api }
       ]
     }).compileComponents();
 

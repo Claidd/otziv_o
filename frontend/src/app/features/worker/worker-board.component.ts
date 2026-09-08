@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../../core/auth.service';
+import { WorkerAccountActionCooldownService } from '../../core/worker-account-action-cooldown.service';
 import {
   ManagerApi,
   ManagerOverdueOrders,
@@ -123,6 +124,7 @@ type WorkerBoardState = {
   styleUrl: './worker-board.component.scss'
 })
 export class WorkerBoardComponent implements OnDestroy {
+  readonly accountActionCooldown = inject(WorkerAccountActionCooldownService);
   private readonly workerApi = inject(WorkerApi);
   private readonly managerApi = inject(ManagerApi);
   private readonly metricSnapshotApi = inject(MetricSnapshotApi);
@@ -625,6 +627,7 @@ export class WorkerBoardComponent implements OnDestroy {
   }
 
   changeReviewBot(review: WorkerReviewItem): void {
+    if (this.accountActionCooldown.locked()) return;
     this.actionFacade.changeReviewBot(review);
   }
 
@@ -633,6 +636,7 @@ export class WorkerBoardComponent implements OnDestroy {
   }
 
   deactivateReviewBot(review: WorkerReviewItem): void {
+    if (this.accountActionCooldown.locked()) return;
     this.actionFacade.deactivateReviewBot(review);
   }
 
@@ -744,6 +748,7 @@ export class WorkerBoardComponent implements OnDestroy {
   }
 
   assignReviewNewAccount(): void {
+    if (this.accountActionCooldown.locked()) return;
     this.editFacade.assignReviewNewAccount();
   }
 

@@ -1,0 +1,142 @@
+{
+  "schema": "otziv-full-system-fixture-v1",
+  "startedAt": "2026-09-08T01:40:49.231Z",
+  "production": false,
+  "productionIndependence": "NOT_PROVEN",
+  "agreedBusinessRpoRto": "NOT_PROVIDED",
+  "releaseApproval": "NOT_ASSERTED_BY_THIS_DRILL",
+  "recoveryKeyCustody": "EPHEMERAL_DESTROYED_AFTER_PROOF",
+  "checks": [
+    {
+      "name": "source_actual_login_and_local_subject_binding",
+      "passed": true
+    },
+    {
+      "name": "source_actual_refresh",
+      "passed": true
+    },
+    {
+      "name": "source_application_decrypts_encrypted_credential",
+      "passed": true
+    },
+    {
+      "name": "mysql_contains_ciphertext_not_plaintext",
+      "passed": true
+    },
+    {
+      "name": "source_application_uploads_real_object",
+      "passed": true
+    },
+    {
+      "name": "source_object_has_exact_version_and_bytes",
+      "passed": true
+    },
+    {
+      "name": "application_sigterm_drains_without_forced_kill",
+      "passed": true
+    },
+    {
+      "name": "actual_writer_stop_and_database_capture_fences",
+      "passed": true
+    },
+    {
+      "name": "four_actual_components_sealed_in_one_authenticated_manifest",
+      "passed": true
+    },
+    {
+      "name": "actual_mysql_postgres_and_versioned_object_volume_restored",
+      "passed": true
+    },
+    {
+      "name": "paired_subject_identity_survives_both_database_restores",
+      "passed": true
+    },
+    {
+      "name": "old_key_removed_before_application_starts",
+      "passed": true
+    },
+    {
+      "name": "restored_online_refresh_session_invalidated_before_application",
+      "passed": true
+    },
+    {
+      "name": "restored_offline_refresh_session_invalidated_before_application",
+      "passed": true
+    },
+    {
+      "name": "old_access_token_is_still_unexpired_when_revocation_is_tested",
+      "passed": true
+    },
+    {
+      "name": "restored_old_access_token_denied_by_real_application",
+      "passed": true
+    },
+    {
+      "name": "restored_actual_login_with_recovered_issuer_and_backend",
+      "passed": true
+    },
+    {
+      "name": "restored_actual_refresh_is_accepted_by_backend",
+      "passed": true
+    },
+    {
+      "name": "restored_application_decrypts_with_recovered_key",
+      "passed": true
+    },
+    {
+      "name": "restored_database_reference_resolves_exact_original_object_version",
+      "passed": true
+    },
+    {
+      "name": "strict_credential_audit_is_written_after_restore",
+      "passed": true
+    }
+  ],
+  "images": {
+    "app": "sha256:eb5419e630ed6bd3f21c9c510c3961797b7faf5e6a81ed400e0ba4ebd7d38a0f",
+    "keycloak": "sha256:d773e1d0de1ef972ba01443a8217d23d6060d2b20d474b3ff84ae2dc840baa54",
+    "mysql": "sha256:69eb992969cb5fd2e0ad55d75e113d9b98e98428a0355cfa14b1d587bcf51063",
+    "postgres": "sha256:84631285605c9dea134ddb89a1986ba30bcdfef1f16a5c1664b06bb6f9303097",
+    "objects": "sha256:a1ea29fa28355559ef137d71fc570e508a214ec84ff8083e39bc5428980b015e",
+    "runner": "sha256:9e9bc5c2dd3e98ff5cc61c4a2e9961400100f1a6ffd01863a9fd15639d595150"
+  },
+  "sourceSha256": {
+    "full-system-fixture.mjs": "8fb59c2c2f9f641fd4967663bd223b9c8ffb912209d249f714f60ad1dcd49965",
+    "system-http-bridge.mjs": "1fdb90685d4512575d89c4d1f3e44f59d738ab5ed7863b4f2b860a2bdeb95af1",
+    "system-bundle.mjs": "514b9f78b5eb4c30c02590ac979dfd78adc48a3be6ea5d9e31ffb46a816066a5",
+    "docker-environment.mjs": "d5a865db01a3d6a838a0a9b0b2cc348dc52ad432146d04e29f1f9ac30a70eedc",
+    "process.mjs": "f3910105086cb2e75dc731f527d5de0338ae987b4bb238bc7d87a867a05b64fc",
+    "application-shutdown.mjs": "00648ab59790156095c5f0aba4eea4b565433ca03a95e77a2fe5b65aaf4244a9"
+  },
+  "applicationShutdown": {
+    "pid1": "java",
+    "elapsedMs": 1303,
+    "exitCode": 143,
+    "oomKilled": false,
+    "running": false,
+    "logsSha256": "96fe58aeac3f1da98b2c45d92e7eab7945c457afb417fcfc328e510b9c855735",
+    "gracefulComplete": true,
+    "entityManagerClosed": true,
+    "poolsStarted": [
+      "HikariPool-1",
+      "worker-account-action-cooldown"
+    ],
+    "poolsClosed": [
+      "HikariPool-1",
+      "worker-account-action-cooldown"
+    ]
+  },
+  "bundle": {
+    "manifestSha256": "681d9abd0b8406476395bc7b547b9c30f72a470df9e49753762fffaf9efc0eb8",
+    "components": 4
+  },
+  "restoreStartedAt": "2026-09-08T01:43:15.964Z",
+  "restoreFinishedAt": "2026-09-08T01:44:36.082Z",
+  "observedRestoreSeconds": 81,
+  "observedRecoveryPointAgeSeconds": 84,
+  "result": "PASS",
+  "fullSystemRestore": "PROVEN_FOR_THIS_REAL_ISOLATED_FIXTURE",
+  "cleanup": "PASS",
+  "finishedAt": "2026-09-08T01:44:41.773Z",
+  "elapsedSeconds": 233
+}

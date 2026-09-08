@@ -2,7 +2,7 @@ package com.hunt.otziv.payments.service;
 
 import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.c_companies.model.Company;
-import com.hunt.otziv.c_companies.service.CompanyService;
+import com.hunt.otziv.c_companies.api.CompanyRecordOperations;
 import com.hunt.otziv.contractor_payments.service.ContractorCompletionRewardService;
 import com.hunt.otziv.contractor_payments.service.ContractorRewardLedgerService;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceOrderRepository;
@@ -53,7 +53,7 @@ public class PaymentReturnOrderRecoveryService {
     private final PaymentLinkService paymentLinkService;
     private final ContractorCompletionRewardService contractorCompletionRewardService;
     private final PaymentCheckRepository paymentCheckRepository;
-    private final CompanyService companyService;
+    private final CompanyRecordOperations companyService;
     private final ContractorRewardLedgerService contractorRewardLedgerService;
     private final PaymentIssueReminderService paymentIssueReminderService;
     private final CommonInvoiceOrderRepository commonInvoiceOrderRepository;

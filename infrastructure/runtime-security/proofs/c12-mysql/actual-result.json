@@ -1,0 +1,74 @@
+{
+  "schema": "otziv-mysql-additive-published-rollback-proof-v1",
+  "result": "PASS",
+  "steps": [
+    {
+      "name": "capture",
+      "startedAt": "2026-09-08T07:12:39.289507+00:00",
+      "completedAt": "2026-09-08T07:12:55.743605+00:00",
+      "exitCode": 0
+    },
+    {
+      "name": "rehearse",
+      "startedAt": "2026-09-08T07:12:55.743625+00:00",
+      "completedAt": "2026-09-08T07:20:03.776445+00:00",
+      "exitCode": 0
+    }
+  ],
+  "completedAt": "2026-09-08T07:20:04.604834+00:00",
+  "checks": 49,
+  "unitTests": 33,
+  "mode": "published-rollback",
+  "images": {
+    "source": "sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383",
+    "targetReference": "ghcr.io/claidd/otziv-security@sha256:3a3caaab4e71b3bfdec9da21c17c00ed10ca237151919aeddac8e5ce4b8b7baa",
+    "targetConfigurationDigest": "sha256:80ee3b50147a329addbaf754abc4dce86dc06636624680d780351e2320a11070",
+    "upgradeCheckerReference": "container-registry.oracle.com/mysql/community-server@sha256:bf955135c21e2c1c153417407fbbbb8efa786f487781b1fb6baaf7aba17d4340",
+    "app": "sha256:eb5419e630ed6bd3f21c9c510c3961797b7faf5e6a81ed400e0ba4ebd7d38a0f",
+    "published": {
+      "reference": "ghcr.io/claidd/otziv-security@sha256:3a3caaab4e71b3bfdec9da21c17c00ed10ca237151919aeddac8e5ce4b8b7baa",
+      "configurationDigest": "sha256:80ee3b50147a329addbaf754abc4dce86dc06636624680d780351e2320a11070",
+      "localId": "sha256:3a3caaab4e71b3bfdec9da21c17c00ed10ca237151919aeddac8e5ce4b8b7baa"
+    },
+    "targetLocalId": "sha256:3a3caaab4e71b3bfdec9da21c17c00ed10ca237151919aeddac8e5ce4b8b7baa",
+    "upgradeCheckerLocalId": "sha256:bf955135c21e2c1c153417407fbbbb8efa786f487781b1fb6baaf7aba17d4340"
+  },
+  "runtimeVersion": "9.7.3",
+  "sourceSchema": "1.10.306",
+  "upgradeChecker": {
+    "errors": 0,
+    "warnings": 23,
+    "notices": 0,
+    "completedChecks": 7,
+    "manualChecks": []
+  },
+  "rollback": {
+    "result": "PASS",
+    "sourceImage": "sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383",
+    "restoredVersion": "9.0.0",
+    "backup": {
+      "file": "preupgrade.sql.gz",
+      "sha256": "996e8814d879f6453aa1cb68ef5cddd8b21f59b451f54b207379d854361289d3",
+      "bytes": 101190902
+    },
+    "postUpgradeWriteAbsent": true,
+    "configuredAccountGrantsPreserved": true,
+    "applicationImage": "sha256:eb5419e630ed6bd3f21c9c510c3961797b7faf5e6a81ed400e0ba4ebd7d38a0f",
+    "binaryDowngradeAttempted": false
+  },
+  "sourceWrites": false,
+  "production": false,
+  "sourceContinuity": "PASS",
+  "cleanup": "PASS",
+  "sourceBindingSha256": "4e431f558c5c8d593c273afd159bbf5a6570bef8906503a59daa774555392a00",
+  "rawRehearsalSha256": "af08bca75f43ac0c0057807692d8a72dab886e05bbdb5085cd30b9ddb2f29c89",
+  "executionLogSha256": "aef4a3c8eea7956261f1d29f09c8eb04d9b9cfc4ddad84b839db65b70d36715a",
+  "sharedSourceUnchanged": true,
+  "limitations": [
+    "local sanitized clone; not a production rollout",
+    "no performance SLO or fleet compatibility implied",
+    "application health/Flyway/Hibernate only; Keycloak login and external delivery are not tested",
+    "the configured source account identity and grants are reproduced with a newly generated clone-only password; other source users are not copied",
+    "Private local sanitized clone; no database defaults or deployment acceptance changed. Original legacy/resume/hardened branches are source-bound and unit checked, not rerun on real volumes in this invocation."
+  ]
+}

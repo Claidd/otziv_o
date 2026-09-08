@@ -1,98 +1,15 @@
+import { decodePublicCommonInvoice, decodePublicPaymentInit, decodePublicSbpBanks } from '@otziv/client-common/public-payments';
+import type { PublicCommonInvoiceResponseOutput, PublicPaymentInitRequestInput, PublicPaymentInitResponseOutput, PublicSbpBankResponseOutput } from '@otziv/client-common/client-api';
+import type { PublicPaymentInitResponse, PublicCommonInvoiceOrder, PublicCommonInvoice, PublicSbpBank } from '@otziv/client-common/public-payments';
+export type { PublicPaymentInitResponse, PublicCommonInvoiceOrder, PublicCommonInvoice, PublicSbpBank } from '@otziv/client-common/public-payments';
+import { decodePublicPaymentLink } from '@otziv/client-common/billing-payments';
+import type { PublicPaymentLink } from '@otziv/client-common/billing-payments';
+export type { PublicPaymentLink } from '@otziv/client-common/billing-payments';
 import { HttpClient, HttpContext, HttpParams } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { Observable } from 'rxjs';
+import { map, Observable } from 'rxjs';
 import { appEnvironment } from './app-environment';
 import { SKIP_AUTH_REDIRECT_ON_401, SKIP_AUTH_TOKEN } from './auth-http-context';
-
-export interface PublicPaymentLink {
-  token: string;
-  provider?: 'T_BANK' | 'TOCHKA' | string | null;
-  sbpBankSelectionSupported?: boolean | null;
-  orderId?: number | null;
-  companyTitle: string;
-  filialTitle: string;
-  serviceTitle: string;
-  amount: number;
-  amountKopecks: number;
-  description: string;
-  payerEmail?: string | null;
-  status: string;
-  paymentMethod?: PaymentMethod;
-  expiresAt: string;
-  payable: boolean;
-  paymentPageMode?: TbankPaymentPageMode;
-  tpayEnabled?: boolean;
-  sberpayEnabled?: boolean;
-  mirpayEnabled?: boolean;
-  manualPaymentType?: ManualPaymentType | string | null;
-  manualPhone?: string | null;
-  manualRecipientName?: string | null;
-  manualBankName?: string | null;
-  manualPaymentUrl?: string | null;
-  manualPaymentButtonLabel?: string | null;
-  manualComment?: string | null;
-  receiptStatus?: PaymentReceiptStatus | string | null;
-}
-
-export interface PublicPaymentInitResponse {
-  paymentUrl: string;
-  paymentId: string;
-  status: string;
-  method?: PaymentMethod;
-  qrPayload?: string | null;
-  qrImage?: string | null;
-}
-
-export interface PublicCommonInvoiceOrder {
-  orderId: number;
-  companyId: number;
-  companyTitle: string;
-  filialTitle?: string | null;
-  orderStatus: string;
-  originalOrderStatus?: string | null;
-  amount: number;
-  amountKopecks: number;
-  ready: boolean;
-  paid: boolean;
-  unpaid: boolean;
-  detachable?: boolean;
-  paidAt?: string | null;
-}
-
-export interface PublicCommonInvoice {
-  token: string;
-  title: string;
-  accountName: string;
-  status: string;
-  amount: number;
-  paid: number;
-  remaining: number;
-  amountKopecks: number;
-  paidKopecks: number;
-  remainingKopecks: number;
-  payable: boolean;
-  paymentRouteType?: string | null;
-  manualPaymentType?: string | null;
-  manualPhone?: string | null;
-  manualRecipientName?: string | null;
-  manualBankName?: string | null;
-  manualPaymentUrl?: string | null;
-  manualPaymentButtonLabel?: string | null;
-  manualComment?: string | null;
-  paymentInstructionText?: string | null;
-  clientReportable: boolean;
-  clientReportedAt?: string | null;
-  orders: PublicCommonInvoiceOrder[];
-}
-
-export interface PublicSbpBank {
-  bankId: string;
-  nspkBankId?: string | null;
-  name: string;
-  logoUrl?: string | null;
-  order?: number | null;
-  featured: boolean;
-}
 
 export interface ManagerPaymentLinkResponse {
   token: string;
@@ -470,17 +387,17 @@ export class PaymentsApi {
   constructor(private readonly http: HttpClient) {}
 
   getPublicPaymentLink(token: string): Observable<PublicPaymentLink> {
-    return this.http.get<PublicPaymentLink>(
+    return this.http.get<unknown>(
       `${appEnvironment.apiBaseUrl}/api/payments/public/${encodeURIComponent(token)}`,
       { context: this.publicContext }
-    );
+    ).pipe(map(decodePublicPaymentLink));
   }
 
   getPublicCommonInvoice(token: string): Observable<PublicCommonInvoice> {
-    return this.http.get<PublicCommonInvoice>(
+    return this.http.get<PublicCommonInvoiceResponseOutput>(
       `${appEnvironment.apiBaseUrl}/api/payments/public/group/${encodeURIComponent(token)}`,
       { context: this.publicContext }
-    );
+    ).pipe(map(decodePublicCommonInvoice));
   }
 
   initPublicPayment(
@@ -490,11 +407,11 @@ export class PaymentsApi {
     privacyConsent: boolean,
     receiptConsent: boolean
   ): Observable<PublicPaymentInitResponse> {
-    return this.http.post<PublicPaymentInitResponse>(
+    return this.http.post<PublicPaymentInitResponseOutput>(
       `${appEnvironment.apiBaseUrl}/api/payments/public/${encodeURIComponent(token)}/init`,
-      { email, offerConsent, privacyConsent, receiptConsent },
+      { email, offerConsent, privacyConsent, receiptConsent } satisfies PublicPaymentInitRequestInput,
       { context: this.publicContext }
-    );
+    ).pipe(map(decodePublicPaymentInit));
   }
 
   initPublicCommonInvoicePayment(
@@ -504,11 +421,11 @@ export class PaymentsApi {
     privacyConsent: boolean,
     receiptConsent: boolean
   ): Observable<PublicPaymentInitResponse> {
-    return this.http.post<PublicPaymentInitResponse>(
+    return this.http.post<PublicPaymentInitResponseOutput>(
       `${appEnvironment.apiBaseUrl}/api/payments/public/group/${encodeURIComponent(token)}/init`,
-      { email, offerConsent, privacyConsent, receiptConsent },
+      { email, offerConsent, privacyConsent, receiptConsent } satisfies PublicPaymentInitRequestInput,
       { context: this.publicContext }
-    );
+    ).pipe(map(decodePublicPaymentInit));
   }
 
   initPublicSbpPayment(
@@ -519,26 +436,26 @@ export class PaymentsApi {
     receiptConsent: boolean,
     sbpBankId?: string | null
   ): Observable<PublicPaymentInitResponse> {
-    return this.http.post<PublicPaymentInitResponse>(
+    return this.http.post<PublicPaymentInitResponseOutput>(
       `${appEnvironment.apiBaseUrl}/api/payments/public/${encodeURIComponent(token)}/sbp`,
-      { email, offerConsent, privacyConsent, receiptConsent, sbpBankId },
+      { email, offerConsent, privacyConsent, receiptConsent, sbpBankId } satisfies PublicPaymentInitRequestInput,
       { context: this.publicContext }
-    );
+    ).pipe(map(decodePublicPaymentInit));
   }
 
   getPublicSbpBanks(token: string): Observable<PublicSbpBank[]> {
-    return this.http.get<PublicSbpBank[]>(
+    return this.http.get<PublicSbpBankResponseOutput[]>(
       `${appEnvironment.apiBaseUrl}/api/payments/public/${encodeURIComponent(token)}/sbp/banks`,
       { context: this.publicContext }
-    );
+    ).pipe(map(decodePublicSbpBanks));
   }
 
   reportPublicManualPayment(token: string): Observable<PublicPaymentLink> {
-    return this.http.post<PublicPaymentLink>(
+    return this.http.post<unknown>(
       `${appEnvironment.apiBaseUrl}/api/payments/public/${encodeURIComponent(token)}/manual-paid`,
       {},
       { context: this.publicContext }
-    );
+    ).pipe(map(decodePublicPaymentLink));
   }
 
   getTbankStatus(): Observable<TbankPaymentStatus> {
@@ -560,6 +477,7 @@ export class PaymentsApi {
     status?: string;
     search?: string;
     source?: PaymentLinkListSource;
+    sortDirection?: 'asc' | 'desc';
     from?: string;
     to?: string;
   }): Observable<AdminPaymentLinksPageResponse> {
@@ -614,11 +532,11 @@ export class PaymentsApi {
   }
 
   reportPublicCommonInvoicePaid(token: string): Observable<PublicCommonInvoice> {
-    return this.http.post<PublicCommonInvoice>(
+    return this.http.post<PublicCommonInvoiceResponseOutput>(
       `${appEnvironment.apiBaseUrl}/api/payments/public/group/${encodeURIComponent(token)}/reported-paid`,
       {},
       { context: this.publicContext }
-    );
+    ).pipe(map(decodePublicCommonInvoice));
   }
 
   closeAdminManualPaymentLinkAsUnpaid(

@@ -1,0 +1,128 @@
+From bb8ca663db34a0980c9758b40d918fda3b4dbec3 Mon Sep 17 00:00:00 2001
+From: mattdurham <mattdurham@ppog.org>
+Date: Tue, 17 Mar 2026 11:52:32 -0400
+Subject: [PATCH] fix(s3): treat SSE-C encryption_key as a secret
+ (CVE-2026-28377) (#6711)
+
+* fix(s3): treat SSE-C encryption_key as a secret to prevent plaintext exposure (CVE-2026-28377)
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+* chore: update changelog with PR number and author
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+* test(s3): assert SSE-C encryption_key is redacted in YAML output
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+* fix(s3): gofmt config.go and move SSE redaction test to config_test.go
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+* fix(s3): address review feedback - local var for key, yaml.v3 in test, changelog grammar
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---------
+
+Co-authored-by: Claude Sonnet 4.6 <noreply@anthropic.com>
+---
+ CHANGELOG.md                      |  1 +
+ tempodb/backend/s3/config.go      | 10 +++++-----
+ tempodb/backend/s3/config_test.go | 28 ++++++++++++++++++++++++++++
+ tempodb/backend/s3/s3.go          |  5 +++--
+ 4 files changed, 37 insertions(+), 7 deletions(-)
+ create mode 100644 tempodb/backend/s3/config_test.go
+
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 78e3122279f..6d64212cd2f 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -1,5 +1,6 @@
+ ## main / unreleased
+ 
++* [BUGFIX] S3 SSE-C `encryption_key` is now treated as a secret to prevent it from being exposed in plaintext. Resolves CVE-2026-28377. [#6711](https://github.com/grafana/tempo/pull/6711) (@mattdurham)
+ * [BUGFIX] Fix integer overflow in query parameters by using `strconv.ParseUint` instead of `strconv.Atoi`/`strconv.ParseInt` for unsigned integer fields. [#6612](https://github.com/grafana/tempo/pull/6612) (@bejaratommy)
+ * [CHANGE] **BREAKING CHANGE** Centralize block and WAL config: `block_builder` and `live_store` now always use `storage.trace.block` settings; per-module block config fields are removed. [#6647](https://github.com/grafana/tempo/pull/6647) (@stoewer)
+ * [CHANGE] **BREAKING CHANGE** Remove Opencensus receiver [#6523](https://github.com/grafana/tempo/pull/6523) (@javiermolinar)
+diff --git a/tempodb/backend/s3/config.go b/tempodb/backend/s3/config.go
+index 33d977bcc37..10fc342fb76 100644
+--- a/tempodb/backend/s3/config.go
++++ b/tempodb/backend/s3/config.go
+@@ -37,10 +37,10 @@ var (
+ )
+ 
+ type SSEConfig struct {
+-	Type                  string `yaml:"type"`
+-	KMSKeyID              string `yaml:"kms_key_id"`
+-	KMSEncryptionContext  string `yaml:"kms_encryption_context"`
+-	CustomerEncryptionKey string `yaml:"encryption_key"`
++	Type                  string         `yaml:"type"`
++	KMSKeyID              string         `yaml:"kms_key_id"`
++	KMSEncryptionContext  string         `yaml:"kms_encryption_context"`
++	CustomerEncryptionKey flagext.Secret `yaml:"encryption_key"`
+ }
+ 
+ type Config struct {
+@@ -85,7 +85,7 @@ func (cfg *Config) RegisterFlagsAndApplyDefaults(prefix string, f *flag.FlagSet)
+ 	f.StringVar(&cfg.SSE.Type, util.PrefixConfig(prefix, "s3.sse.type"), "", fmt.Sprintf("Enable AWS Server Side Encryption. Supported values: %s.", strings.Join(supportedSSETypes, ", ")))
+ 	f.StringVar(&cfg.SSE.KMSKeyID, util.PrefixConfig(prefix, "s3.sse.kms-key-id"), "", "KMS Key ID used to encrypt objects in S3")
+ 	f.StringVar(&cfg.SSE.KMSEncryptionContext, util.PrefixConfig(prefix, "s3.sse.kms-encryption-context"), "", "KMS Encryption Context used for object encryption. It expects JSON formatted string.")
+-	f.StringVar(&cfg.SSE.CustomerEncryptionKey, util.PrefixConfig(prefix, "s3.sse.encryption-key"), "", "SSE-C Encryption Key used for object encryption.")
++	f.Var(&cfg.SSE.CustomerEncryptionKey, util.PrefixConfig(prefix, "s3.sse.encryption-key"), "SSE-C Encryption Key used for object encryption.")
+ 	cfg.HedgeRequestsUpTo = 2
+ }
+ 
+diff --git a/tempodb/backend/s3/config_test.go b/tempodb/backend/s3/config_test.go
+new file mode 100644
+index 00000000000..b4ce7a31926
+--- /dev/null
++++ b/tempodb/backend/s3/config_test.go
+@@ -0,0 +1,28 @@
++package s3
++
++import (
++	"testing"
++
++	"github.com/grafana/dskit/flagext"
++	"github.com/stretchr/testify/assert"
++	"github.com/stretchr/testify/require"
++	"gopkg.in/yaml.v3"
++)
++
++func TestSSEConfigEncryptionKeyRedacted(t *testing.T) {
++	const plaintext = "my-super-secret-key"
++
++	var key flagext.Secret
++	require.NoError(t, key.Set(plaintext))
++
++	cfg := SSEConfig{
++		Type:                  SSEC,
++		CustomerEncryptionKey: key,
++	}
++
++	out, err := yaml.Marshal(cfg)
++	require.NoError(t, err)
++
++	assert.NotContains(t, string(out), plaintext, "plaintext encryption key must not appear in YAML output")
++	assert.Contains(t, string(out), "********", "redacted marker must appear in YAML output")
++}
+diff --git a/tempodb/backend/s3/s3.go b/tempodb/backend/s3/s3.go
+index bbd6143ca50..6cdd8452b36 100644
+--- a/tempodb/backend/s3/s3.go
++++ b/tempodb/backend/s3/s3.go
+@@ -809,10 +809,11 @@ func buildSSEConfig(cfg *Config) (encrypt.ServerSide, error) {
+ 	case SSES3:
+ 		return encrypt.NewSSE(), nil
+ 	case SSEC:
+-		if cfg.SSE.CustomerEncryptionKey == "" {
++		key := cfg.SSE.CustomerEncryptionKey.String()
++		if key == "" {
+ 			return nil, errors.New("SSE-C EncryptionKey is missing")
+ 		}
+-		return encrypt.NewSSEC([]byte(cfg.SSE.CustomerEncryptionKey))
++		return encrypt.NewSSEC([]byte(key))
+ 	default:
+ 		return nil, errUnsupportedSSEType
+ 	}

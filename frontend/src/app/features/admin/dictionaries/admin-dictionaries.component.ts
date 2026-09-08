@@ -1,106 +1,44 @@
+import { AdminTaxonomyApi } from '../../../core/admin-taxonomy.api';
+import { AdminTaxonomyFacade } from './admin-taxonomy.facade';
+import { AdminProductsApi } from '../../../core/admin-products.api';
+import { AdminProductsFacade } from './admin-products.facade';
+import { AdminCommunicationTextsApi } from '../../../core/admin-communication-texts.api';
+import { AdminCommunicationTextsFacade } from './admin-communication-texts.facade';
+import { AdminClientMessageSettingsApi } from '../../../core/admin-client-message-settings.api';
+import { AdminClientMessageSettingsFacade } from './admin-client-message-settings.facade';
+import { AdminCitiesApi } from '../../../core/admin-cities.api';
+import { AdminCitiesFacade } from './admin-cities.facade';
+import { AdminContractorSystemApi } from '../../../core/admin-contractor-system.api';
+import { AdminContractorSystemFacade } from './admin-contractor-system.facade';
+import { AdminAccountsApi } from '../../../core/admin-accounts.api';
+import { AdminWorkSettingsApi } from '../../../core/admin-work-settings.api';
+import { AdminGamificationApi } from '../../../core/admin-gamification.api';
+import { AdminAccountsFacade } from './admin-accounts.facade';
+import { AdminPhonesFacade } from './admin-phones.facade';
+import { AdminGamificationFacade } from './admin-gamification.facade';
+import { AdminWorkSettingsFacade } from './admin-work-settings.facade';
+
+import { AdminAiProviderFacade } from './admin-ai-provider.facade';
+import { AdminMessageMonitorApi } from '../../../core/admin-message-monitor.api';
+import { AdminMessageMonitorFacade } from './admin-message-monitor.facade';
 import { DatePipe } from '@angular/common';
 import { Component, HostListener, OnDestroy, computed, inject, signal } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { ReactiveFormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { concat, forkJoin, Observable, of, tap } from 'rxjs';
-import {
-  AdminBot,
-  AdminCategory,
-  AdminClientMessageMaintenancePreview,
-  AdminClientMessageMonitor,
-  AdminClientMessageMonitorAttempt,
-  AdminClientMessageMonitorQueueItem,
-  AdminClientMessageMonitorScenario,
-  AdminClientMessageSettings,
-  AdminClientPublicationProgressReportSettings,
-  AdminCity,
-  AdminDictionariesApi,
-  AdminGamificationBalance,
-  AdminGamificationBalances,
-  AdminGamificationBackfill,
-  AdminGamificationEvent,
-  AdminGamificationProgress,
-  AdminGamificationRule,
-  AdminGamificationRulesRequest,
-  AdminGamificationRulesResponse,
-  AdminGamificationScoreLedger,
-  AdminGamificationScoreLedgerRebuild,
-  AdminGamificationScorePreview,
-  AdminGamificationSettings,
-  AdminGamificationSettingsRequest,
-  AdminManagerText,
-  AdminNagulSettings,
-  AdminProduct,
-  AdminPromoText,
-  AdminSharedChatLinkSyncResponse,
-  AdminSubCategory,
-  AdminTelegramReportScheduleSettings,
-  AdminWhatsAppGroupSyncSettings,
-  AdminWorkerCellularAccessSettings,
-  BotImportResponse,
-  BotRequest,
-  BotsResponse,
-  ClientPublicationProgressReportSettingsRequest,
-  ClientMessageSettingsRequest,
-  CityRequest,
-  DictionaryOption,
-  ManagerTextRequest,
-  NagulSettingsRequest,
-  PromoButtonSlot,
-  PromoTextAssignment,
-  PromoTextAssignmentRequest,
-  PromoTextManagementResponse,
-  ProductRequest,
-  ProductsResponse,
-  PromoTextRequest,
-  SubCategoryRequest,
-  TelegramReportScheduleSettingsRequest,
-  TitleRequest,
-  WhatsAppGroupSyncSettingsRequest,
-  WorkerCellularAccessMode,
-  WorkerCellularAccessSettingsRequest
-} from '../../../core/admin-dictionaries.api';
+import { AdminBot, AdminCategory, AdminCity, AdminManagerText, AdminProduct, AdminPromoText, AdminSubCategory, DictionaryOption, PromoButtonSlot } from '../../../core/admin-dictionaries.api';
 import { AuthService } from '../../../core/auth.service';
-import {
-  ContractorLegacyRewardManualGroup,
-  ContractorLegacyRewardReconciliation,
-  ContractorPaymentSystemStatus,
-  ContractorPaymentsApi
-} from '../../../core/contractor-payments.api';
+
 import { ReputationAiApi } from '../../../core/reputation-ai.api';
-import type { ReputationAiProvider, ReputationAiStatus } from '../../../core/reputation-ai.api';
-import {
-  AdminGamificationRewardsApi,
-  GamificationRewardSettings
-} from '../../../core/admin-gamification-rewards.api';
+import { AdminGamificationRewardsApi } from '../../../core/admin-gamification-rewards.api';
 import { AdminLayoutComponent } from '../../../shared/admin-layout.component';
-import { apiErrorMessage } from '../../../shared/api-error-message';
+
 import { LoadErrorCardComponent } from '../../../shared/load-error-card.component';
 import { ToastService } from '../../../shared/toast.service';
 import { UiTooltipDirective } from '../../../shared/ui-tooltip.directive';
-import { businessDateIso, businessDateTimeInput } from '../../../shared/business-date';
+
 import { SpecialistTransferComponent } from '../specialist-transfer/specialist-transfer.component';
-import {
-  DeviceToken,
-  OperatorPhone,
-  OperatorPhoneRequest,
-  OperatorPhonesApi,
-  OperatorPhonesResponse,
-  PhoneOperatorOption
-} from '../../../core/operator-phones.api';
-import {
-  requiresWorkerCellularEnforceConfirmation,
-  workerCellularAccessReasons
-} from './worker-cellular-access-settings';
+import { DeviceToken, OperatorPhone, OperatorPhonesApi, PhoneOperatorOption } from '../../../core/operator-phones.api';
 import { ManagerAuditSettingsComponent } from './manager-audit-settings.component';
-import {
-  CONTRACTOR_SYSTEM_ACTIVATION_CONFIRMATION,
-  canActivateContractorSystem as isContractorSystemActivationAllowed,
-  canChangeContractorRouting as isContractorRoutingChangeAllowed,
-  contractorRoutingConfirmation,
-  contractorSystemActivationDate,
-  contractorSystemModeLabel
-} from './contractor-payment-system-settings';
 
 type DictionaryTabKey = 'categories' | 'subcategories' | 'cities' | 'products' | 'phones' | 'accounts' | 'promo' | 'managerTexts' | 'messageDictionary' | 'specialistTransfer' | 'gamification' | 'settings' | 'audit' | 'aiProvider' | 'autoresponder' | 'autoresponderMonitor';
 
@@ -122,43 +60,6 @@ type DictionaryGuide = {
   title: string;
   text: string;
 };
-
-type DictionarySettingsResponse = {
-  nagulSettings: AdminNagulSettings;
-  telegramReportSettings: AdminTelegramReportScheduleSettings;
-  whatsAppGroupSyncSettings: AdminWhatsAppGroupSyncSettings;
-  clientPublicationProgressReportSettings: AdminClientPublicationProgressReportSettings;
-  workerCellularAccessSettings: AdminWorkerCellularAccessSettings | null;
-};
-
-type GamificationDictionaryResponse = {
-  settings: AdminGamificationSettings;
-  rules: AdminGamificationRulesResponse;
-  progress: AdminGamificationProgress;
-  scorePreview: AdminGamificationScorePreview;
-  scoreLedger: AdminGamificationScoreLedger;
-  balances: AdminGamificationBalances;
-  events: AdminGamificationEvent[];
-};
-
-type GamificationProgressDays = 1 | 7 | 30;
-type BotImportMode = 'file' | 'city';
-
-const PROMO_TEXT_LABELS: Record<number, string> = {
-  1: 'предложение',
-  2: 'напоминание',
-  3: 'данные',
-  4: 'ответы',
-  5: 'ссылка на проверку',
-  6: 'напоминание заказа',
-  7: 'угроза',
-  10: 'рассылка',
-  11: 'пояснение',
-  12: 'текст повторного заказа'
-};
-
-const CLIENT_MESSAGE_MONITOR_POLLING_MS = 60000;
-const DEFAULT_AUTO_IGNORE_PHRASES = 'ок,окей,хорошо,спасибо,спасибо большое,благодарю,да,нет,понял,поняла,поняли,принято,договорились,отлично,супер,ясно,ладно,хорошо спасибо,спс';
 
 const DICTIONARY_GUIDES: Record<DictionaryTabKey, DictionaryGuide> = {
   categories: {
@@ -234,21 +135,82 @@ const DICTIONARY_GUIDES: Record<DictionaryTabKey, DictionaryGuide> = {
   styleUrls: ['./admin-dictionaries.component.scss', './admin-dictionaries-monitor.component.scss']
 })
 export class AdminDictionariesComponent implements OnDestroy {
-  private readonly fb = inject(FormBuilder);
+
   private readonly route = inject(ActivatedRoute);
-  private readonly dictionariesApi = inject(AdminDictionariesApi);
-  private readonly contractorPaymentsApi = inject(ContractorPaymentsApi);
-  private readonly phonesApi = inject(OperatorPhonesApi);
+
   private readonly auth = inject(AuthService);
-  private readonly rewardsApi = inject(AdminGamificationRewardsApi);
-  private readonly reputationAiApi = inject(ReputationAiApi);
   private readonly toastService = inject(ToastService);
-  private readonly requestedPhoneId = Number(this.route.snapshot.queryParamMap.get('phoneId'));
-  private monitorTimerId: ReturnType<typeof window.setInterval> | null = null;
-  private dictionaryLoadEpoch = 0;
-  private aiProviderLoadEpoch = 0;
-  private botDetailLoadEpoch = 0;
-  private contractorSystemLoadEpoch = 0;
+  readonly selectedId = signal<number | null>(null);
+  readonly search = signal('');
+  private readonly phonesFeature = new AdminPhonesFacade({ api: inject(OperatorPhonesApi), toast: this.toastService,
+    isActive: () => this.domainActive('phones'), selectedId: this.selectedId, search: this.search,
+    requestedPhoneId: Number(this.route.snapshot.queryParamMap.get('phoneId')) });
+  private readonly accountsFeature = new AdminAccountsFacade({ api: inject(AdminAccountsApi), toast: this.toastService,
+    isActive: () => this.domainActive('accounts'), selectedId: this.selectedId, search: this.search });
+  private readonly gamificationFeature = new AdminGamificationFacade({ api: inject(AdminGamificationApi), toast: this.toastService,
+    isActive: () => this.domainActive('gamification'), selectedId: this.selectedId, search: this.search,
+    rewardsApi: inject(AdminGamificationRewardsApi) });
+  private readonly settingsFeature = new AdminWorkSettingsFacade({ api: inject(AdminWorkSettingsApi), toast: this.toastService,
+    isActive: () => this.domainActive('settings'), selectedId: this.selectedId, search: this.search,
+    canApplyMaintenance: () => this.canApplyMaintenance() });
+  private readonly contractorFeature=new AdminContractorSystemFacade({api:inject(AdminContractorSystemApi),toast:this.toastService,isActive:()=>this.domainActive('settings'),ownerAllowed:()=>this.canControlContractorSystem()});
+  private readonly citiesFeature = new AdminCitiesFacade({ api: inject(AdminCitiesApi), toast: this.toastService,
+    isActive: () => this.domainActive('cities'), selectedId: this.selectedId, search: this.search });
+
+  private readonly taxonomyFeature = new AdminTaxonomyFacade({ api: inject(AdminTaxonomyApi), toast: this.toastService,
+    isActive: () => ['categories', 'subcategories'].includes(this.activeTab()) && this.documentVisible(),
+    canWrite: () => this.canManageAllDictionaries(), tab: () => this.activeTab(), search: () => this.search() });
+  private readonly productsFeature = new AdminProductsFacade({ api: inject(AdminProductsApi), toast: this.toastService,
+    isActive: () => this.domainActive('products'), selectedId: this.selectedId, search: () => this.search() });
+  private readonly textsFeature = new AdminCommunicationTextsFacade({ api: inject(AdminCommunicationTextsApi), toast: this.toastService,
+    isActive: () => this.domainActive('promo') || this.domainActive('managerTexts'), tab: () => this.activeTab(),
+    selectedId: this.selectedId, search: () => this.search() });
+  private readonly messageSettingsFeature = new AdminClientMessageSettingsFacade({ api: inject(AdminClientMessageSettingsApi), toast: this.toastService,
+    isActive: () => this.domainActive('messageDictionary') || this.domainActive('autoresponder'),
+    onSettingsChanged: () => this.syncClientMessageMonitorPolling() });
+  private documentVisible(): boolean { return typeof document === 'undefined' || document.visibilityState === 'visible'; }
+  private dictionaryReloadOnVisible = false;
+  private domainActive(tab: DictionaryTabKey): boolean {
+    return this.activeTab() === tab && this.canManageAllDictionaries()
+      && (typeof document === 'undefined' || document.visibilityState === 'visible');
+  }
+  private activeFeature() {
+    switch (this.activeTab()) {
+      case 'categories': case 'subcategories': return this.taxonomyFeature;
+      case 'products': return this.productsFeature;
+      case 'promo': case 'managerTexts': return this.textsFeature;
+      case 'messageDictionary': case 'autoresponder': return this.messageSettingsFeature;
+      case 'cities': return this.citiesFeature;
+      case 'phones': return this.phonesFeature;
+      case 'accounts': return this.accountsFeature;
+      case 'gamification': return this.gamificationFeature;
+      case 'settings': return this.settingsFeature;
+      default: return null;
+    }
+  }
+
+  private dictionaryFeatures() {
+    return [this.taxonomyFeature, this.productsFeature, this.textsFeature, this.messageSettingsFeature,
+      this.phonesFeature, this.accountsFeature, this.gamificationFeature, this.settingsFeature,
+      this.contractorFeature, this.citiesFeature];
+  }
+  readonly activeSaving = computed(() => this.activeFeature()?.saving() ?? this.saving());
+  readonly activeDeleting = computed(() => this.activeFeature()?.deleting() ?? this.deleting());
+  readonly activeError = computed(() => { const feature=this.activeFeature(); return feature ? feature.error() : this.error(); });
+
+  private readonly aiProvider = new AdminAiProviderFacade({
+    api: inject(ReputationAiApi), toast: this.toastService,
+    isActive: () => this.activeTab() === 'aiProvider'
+  });
+  private readonly messageMonitor: AdminMessageMonitorFacade = new AdminMessageMonitorFacade({
+    api: inject(AdminMessageMonitorApi),
+    toast: this.toastService,
+    isActive: () => this.activeTab() === 'autoresponderMonitor',
+    isVisible: () => typeof document === 'undefined' || document.visibilityState === 'visible',
+    enabled: () => this.clientMessageSettings()?.monitorEnabled ?? this.clientMessageMonitor()?.enabled ?? false,
+    setEnabled: enabled => this.patchClientMessageMonitorEnabled(enabled)
+  });
+  readonly activeLoading = computed(() => this.loading() || (this.activeFeature()?.loading() ?? false) || (this.activeTab() === 'autoresponderMonitor' && this.clientMessageMonitorLoading()) || (this.activeTab() === 'aiProvider' && this.aiProvider.loading()));
 
   private readonly allTabs: DictionaryTab[] = [
     { key: 'categories', label: 'Категории', icon: 'category' },
@@ -271,121 +233,122 @@ export class AdminDictionariesComponent implements OnDestroy {
   ];
 
   readonly activeTab = signal<DictionaryTabKey>(this.initialTab());
-  readonly search = signal('');
+
   readonly loading = signal(false);
   readonly saving = signal(false);
   readonly deleting = signal(false);
-  readonly importing = signal(false);
-  readonly rebuildingCityDistances = signal(false);
-  readonly syncingWhatsAppGroups = signal(false);
-  readonly syncingSharedChatLinks = signal(false);
+  readonly importing = this.accountsFeature.importing;
+  readonly rebuildingCityDistances = this.citiesFeature.rebuildingCityDistances;
+  readonly syncingWhatsAppGroups = this.settingsFeature.syncingWhatsAppGroups;
+  readonly syncingSharedChatLinks = this.settingsFeature.syncingSharedChatLinks;
   readonly error = signal<string | null>(null);
-  readonly importError = signal<string | null>(null);
-  readonly importResult = signal<BotImportResponse | null>(null);
-  readonly importModalOpen = signal(false);
-  readonly importFile = signal<File | null>(null);
-  readonly importMode = signal<BotImportMode>('file');
-  readonly importCitySearch = signal('');
-  readonly importCityId = signal<number | null>(null);
-  readonly selectedId = signal<number | null>(null);
-  readonly activeCategoryId = signal<number | null>(null);
-  readonly editingCategoryId = signal<number | null>(null);
-  readonly editingSubCategoryId = signal<number | null>(null);
-  readonly categoryEditorOpen = signal(false);
-  readonly subCategoryEditorOpen = signal(false);
+  readonly importError = this.accountsFeature.importError;
+  readonly importResult = this.accountsFeature.importResult;
+  readonly importModalOpen = this.accountsFeature.importModalOpen;
+  readonly importFile = this.accountsFeature.importFile;
+  readonly importMode = this.accountsFeature.importMode;
+  readonly importCitySearch = this.accountsFeature.importCitySearch;
+  readonly importCityId = this.accountsFeature.importCityId;
 
-  readonly categories = signal<AdminCategory[]>([]);
-  readonly subCategories = signal<AdminSubCategory[]>([]);
-  readonly cities = signal<AdminCity[]>([]);
-  readonly products = signal<AdminProduct[]>([]);
-  readonly phones = signal<OperatorPhone[]>([]);
-  readonly phoneOperators = signal<PhoneOperatorOption[]>([]);
-  readonly selectedPhone = signal<OperatorPhone | null>(null);
-  readonly bots = signal<AdminBot[]>([]);
-  readonly botDetailLoadingId = signal<number | null>(null);
-  readonly selectedBotPasswordPresent = signal(false);
-  readonly promoTexts = signal<AdminPromoText[]>([]);
-  readonly managerTexts = signal<AdminManagerText[]>([]);
-  readonly promoManagers = signal<DictionaryOption[]>([]);
-  readonly promoAssignments = signal<PromoTextAssignment[]>([]);
-  readonly promoButtons = signal<PromoButtonSlot[]>([]);
-  readonly selectedPromoManagerId = signal<number | null>(null);
-  readonly nagulSettings = signal<AdminNagulSettings | null>(null);
-  readonly telegramReportSettings = signal<AdminTelegramReportScheduleSettings | null>(null);
-  readonly whatsAppGroupSyncSettings = signal<AdminWhatsAppGroupSyncSettings | null>(null);
-  readonly clientPublicationProgressReportSettings = signal<AdminClientPublicationProgressReportSettings | null>(null);
-  readonly workerCellularAccessSettings = signal<AdminWorkerCellularAccessSettings | null>(null);
+  readonly activeCategoryId = this.taxonomyFeature.activeCategoryId;
+  readonly editingCategoryId = this.taxonomyFeature.editingCategoryId;
+  readonly editingSubCategoryId = this.taxonomyFeature.editingSubCategoryId;
+  readonly categoryEditorOpen = this.taxonomyFeature.categoryEditorOpen;
+  readonly subCategoryEditorOpen = this.taxonomyFeature.subCategoryEditorOpen;
+
+  readonly categories = this.taxonomyFeature.categories;
+  readonly subCategories = this.taxonomyFeature.subCategories;
+  readonly cities = this.citiesFeature.cities;
+  readonly products = this.productsFeature.products;
+  readonly phones = this.phonesFeature.phones;
+  readonly phoneOperators = this.phonesFeature.phoneOperators;
+  readonly selectedPhone = this.phonesFeature.selectedPhone;
+  readonly bots = this.accountsFeature.bots;
+  readonly botDetailLoadingId = this.accountsFeature.botDetailLoadingId;
+  readonly selectedBotPasswordPresent = this.accountsFeature.selectedBotPasswordPresent;
+  readonly promoTexts = this.textsFeature.promoTexts;
+  readonly managerTexts = this.textsFeature.managerTexts;
+  readonly promoManagers = this.textsFeature.promoManagers;
+  readonly promoAssignments = this.textsFeature.promoAssignments;
+  readonly promoButtons = this.textsFeature.promoButtons;
+  readonly selectedPromoManagerId = this.textsFeature.selectedPromoManagerId;
+  readonly nagulSettings = this.settingsFeature.nagulSettings;
+  readonly workerAccountActionSettings = this.settingsFeature.workerAccountActionSettings;
+  readonly telegramReportSettings = this.settingsFeature.telegramReportSettings;
+  readonly whatsAppGroupSyncSettings = this.settingsFeature.whatsAppGroupSyncSettings;
+  readonly clientPublicationProgressReportSettings = this.settingsFeature.clientPublicationProgressReportSettings;
+  readonly workerCellularAccessSettings = this.settingsFeature.workerCellularAccessSettings;
   readonly auditManagerCount = signal(0);
-  readonly gamificationSettings = signal<AdminGamificationSettings | null>(null);
-  readonly rewardSettings = signal<GamificationRewardSettings | null>(null);
-  readonly gamificationRules = signal<AdminGamificationRule[]>([]);
-  readonly gamificationProgress = signal<AdminGamificationProgress | null>(null);
-  readonly gamificationProgressDays = signal<GamificationProgressDays>(1);
-  readonly gamificationScorePreview = signal<AdminGamificationScorePreview | null>(null);
-  readonly gamificationScoreLedger = signal<AdminGamificationScoreLedger | null>(null);
-  readonly gamificationLedgerRebuild = signal<AdminGamificationScoreLedgerRebuild | null>(null);
-  readonly gamificationBackfill = signal<AdminGamificationBackfill | null>(null);
-  readonly gamificationBalances = signal<AdminGamificationBalances | null>(null);
-  readonly gamificationEvents = signal<AdminGamificationEvent[]>([]);
-  readonly topWorkerGamificationScoreActors = computed(() => this.byRole(this.gamificationScorePreview()?.topActors ?? [], 'WORKER').slice(0, 8));
-  readonly topManagerGamificationScoreActors = computed(() => this.byRole(this.gamificationScorePreview()?.topActors ?? [], 'MANAGER').slice(0, 8));
-  readonly topOtherGamificationScoreActors = computed(() => this.withoutRoles(this.gamificationScorePreview()?.topActors ?? [], ['WORKER', 'MANAGER']).slice(0, 8));
-  readonly workerGamificationScoreActors = computed(() => this.byRole(this.gamificationScorePreview()?.topActors ?? [], 'WORKER'));
-  readonly managerGamificationScoreActors = computed(() => this.byRole(this.gamificationScorePreview()?.topActors ?? [], 'MANAGER'));
-  readonly otherGamificationScoreActors = computed(() => this.withoutRoles(this.gamificationScorePreview()?.topActors ?? [], ['WORKER', 'MANAGER']));
-  readonly workerGamificationLedgerActors = computed(() => this.byRole(this.gamificationScoreLedger()?.topActors ?? [], 'WORKER'));
-  readonly managerGamificationLedgerActors = computed(() => this.byRole(this.gamificationScoreLedger()?.topActors ?? [], 'MANAGER'));
-  readonly otherGamificationLedgerActors = computed(() => this.withoutRoles(this.gamificationScoreLedger()?.topActors ?? [], ['WORKER', 'MANAGER']));
-  readonly workerGamificationBalances = computed(() => this.byRole(this.gamificationBalances()?.balances ?? [], 'WORKER'));
-  readonly managerGamificationBalances = computed(() => this.byRole(this.gamificationBalances()?.balances ?? [], 'MANAGER'));
-  readonly otherGamificationBalances = computed(() => this.withoutRoles(this.gamificationBalances()?.balances ?? [], ['WORKER', 'MANAGER']));
-  readonly recentGamificationEvents = computed(() => this.gamificationEvents().slice(0, 6));
-  readonly clientMessageSettings = signal<AdminClientMessageSettings | null>(null);
-  readonly contractorSystemStatus = signal<ContractorPaymentSystemStatus | null>(null);
-  readonly contractorSystemLoading = signal(false);
-  readonly contractorSystemSaving = signal(false);
-  readonly contractorSystemError = signal<string | null>(null);
-  readonly contractorSystemActivationOpen = signal(false);
-  readonly contractorSystemRoutingOpen = signal(false);
-  readonly contractorRoutingTargetEnabled = signal(false);
-  readonly contractorSystemToday = businessDateIso();
-  readonly contractorActivationConfirmation = CONTRACTOR_SYSTEM_ACTIVATION_CONFIRMATION;
-  readonly contractorLegacyReconciliation = signal<ContractorLegacyRewardReconciliation | null>(null);
-  readonly contractorLegacyReconciliationSaving = signal(false);
-  readonly contractorLegacyManualGroup = signal<ContractorLegacyRewardManualGroup | null>(null);
-  readonly contractorLegacyManualOpen = signal(false);
-  readonly contractorLegacyAutoConfirmation = 'ПРИМЕНИТЬ АВТОСВЕРКУ';
-  readonly contractorLegacyManualConfirmation = 'ПОДТВЕРДИТЬ РУЧНУЮ СВЕРКУ';
-  readonly aiProviderStatus = signal<ReputationAiStatus | null>(null);
-  readonly aiProviderError = signal<string | null>(null);
-  readonly switchingAiProvider = signal(false);
-  readonly clientMessageMonitor = signal<AdminClientMessageMonitor | null>(null);
-  readonly clientMessageMaintenancePreview = signal<AdminClientMessageMaintenancePreview | null>(null);
-  readonly clientMessageMonitorLoading = signal(false);
-  readonly clientMessageMaintenancePreviewLoading = signal(false);
-  readonly clientMessageMonitorSaving = signal(false);
-  readonly clientMessageMonitorError = signal<string | null>(null);
-  readonly clientMessageMaintenancePreviewError = signal<string | null>(null);
-  readonly monitorScenarioFilter = signal('ALL');
-  readonly monitorQueueStatusFilter = signal('ALL');
-  readonly monitorAttemptStatusFilter = signal('ALL');
-  readonly monitorSearch = signal('');
-  readonly expandedMonitorQueueKey = signal<string | null>(null);
-  readonly clientMessageManualAction = signal<string | null>(null);
-  readonly maintenanceAction = signal<string | null>(null);
-  readonly autoIgnorePhraseDraft = signal('');
-  readonly editingAutoIgnorePhraseIndex = signal<number | null>(null);
-  readonly editingAutoIgnorePhraseValue = signal('');
-  readonly productCategories = signal<DictionaryOption[]>([]);
-  readonly botWorkers = signal<DictionaryOption[]>([]);
-  readonly botStatuses = signal<DictionaryOption[]>([]);
-  readonly botCities = signal<DictionaryOption[]>([]);
-  readonly botPage = signal(0);
-  readonly botPageSize = signal(50);
-  readonly botsTotal = signal(0);
-  readonly trackedBotCityId = 325;
-  readonly trackedCityUnblockedAccounts = signal<number | null>(null);
-  readonly botPageSizeOptions = [50, 100, 200];
+  readonly gamificationSettings = this.gamificationFeature.gamificationSettings;
+  readonly rewardSettings = this.gamificationFeature.rewardSettings;
+  readonly gamificationRules = this.gamificationFeature.gamificationRules;
+  readonly gamificationProgress = this.gamificationFeature.gamificationProgress;
+  readonly gamificationProgressDays = this.gamificationFeature.gamificationProgressDays;
+  readonly gamificationScorePreview = this.gamificationFeature.gamificationScorePreview;
+  readonly gamificationScoreLedger = this.gamificationFeature.gamificationScoreLedger;
+  readonly gamificationLedgerRebuild = this.gamificationFeature.gamificationLedgerRebuild;
+  readonly gamificationBackfill = this.gamificationFeature.gamificationBackfill;
+  readonly gamificationBalances = this.gamificationFeature.gamificationBalances;
+  readonly gamificationEvents = this.gamificationFeature.gamificationEvents;
+  readonly topWorkerGamificationScoreActors = this.gamificationFeature.topWorkerGamificationScoreActors;
+  readonly topManagerGamificationScoreActors = this.gamificationFeature.topManagerGamificationScoreActors;
+  readonly topOtherGamificationScoreActors = this.gamificationFeature.topOtherGamificationScoreActors;
+  readonly workerGamificationScoreActors = this.gamificationFeature.workerGamificationScoreActors;
+  readonly managerGamificationScoreActors = this.gamificationFeature.managerGamificationScoreActors;
+  readonly otherGamificationScoreActors = this.gamificationFeature.otherGamificationScoreActors;
+  readonly workerGamificationLedgerActors = this.gamificationFeature.workerGamificationLedgerActors;
+  readonly managerGamificationLedgerActors = this.gamificationFeature.managerGamificationLedgerActors;
+  readonly otherGamificationLedgerActors = this.gamificationFeature.otherGamificationLedgerActors;
+  readonly workerGamificationBalances = this.gamificationFeature.workerGamificationBalances;
+  readonly managerGamificationBalances = this.gamificationFeature.managerGamificationBalances;
+  readonly otherGamificationBalances = this.gamificationFeature.otherGamificationBalances;
+  readonly recentGamificationEvents = this.gamificationFeature.recentGamificationEvents;
+  readonly clientMessageSettings = this.messageSettingsFeature.clientMessageSettings;
+  readonly contractorSystemStatus=this.contractorFeature.contractorSystemStatus;
+  readonly contractorSystemLoading=this.contractorFeature.contractorSystemLoading;
+  readonly contractorSystemSaving=this.contractorFeature.contractorSystemSaving;
+  readonly contractorSystemError=this.contractorFeature.contractorSystemError;
+  readonly contractorSystemActivationOpen=this.contractorFeature.contractorSystemActivationOpen;
+  readonly contractorSystemRoutingOpen=this.contractorFeature.contractorSystemRoutingOpen;
+  readonly contractorRoutingTargetEnabled=this.contractorFeature.contractorRoutingTargetEnabled;
+  readonly contractorSystemToday=this.contractorFeature.contractorSystemToday;
+  readonly contractorActivationConfirmation=this.contractorFeature.contractorActivationConfirmation;
+  readonly contractorLegacyReconciliation=this.contractorFeature.contractorLegacyReconciliation;
+  readonly contractorLegacyReconciliationSaving=this.contractorFeature.contractorLegacyReconciliationSaving;
+  readonly contractorLegacyManualGroup=this.contractorFeature.contractorLegacyManualGroup;
+  readonly contractorLegacyManualOpen=this.contractorFeature.contractorLegacyManualOpen;
+  readonly contractorLegacyAutoConfirmation=this.contractorFeature.contractorLegacyAutoConfirmation;
+  readonly contractorLegacyManualConfirmation=this.contractorFeature.contractorLegacyManualConfirmation;
+  readonly aiProviderStatus = this.aiProvider.aiProviderStatus;
+  readonly aiProviderError = this.aiProvider.aiProviderError;
+  readonly switchingAiProvider = this.aiProvider.switchingAiProvider;
+  readonly clientMessageMonitor = this.messageMonitor.clientMessageMonitor;
+  readonly clientMessageMaintenancePreview = this.messageMonitor.clientMessageMaintenancePreview;
+  readonly clientMessageMonitorLoading = this.messageMonitor.clientMessageMonitorLoading;
+  readonly clientMessageMaintenancePreviewLoading = this.messageMonitor.clientMessageMaintenancePreviewLoading;
+  readonly clientMessageMonitorSaving = this.messageMonitor.clientMessageMonitorSaving;
+  readonly clientMessageMonitorError = this.messageMonitor.clientMessageMonitorError;
+  readonly clientMessageMaintenancePreviewError = this.messageMonitor.clientMessageMaintenancePreviewError;
+  readonly monitorScenarioFilter = this.messageMonitor.monitorScenarioFilter;
+  readonly monitorQueueStatusFilter = this.messageMonitor.monitorQueueStatusFilter;
+  readonly monitorAttemptStatusFilter = this.messageMonitor.monitorAttemptStatusFilter;
+  readonly monitorSearch = this.messageMonitor.monitorSearch;
+  readonly expandedMonitorQueueKey = this.messageMonitor.expandedMonitorQueueKey;
+  readonly clientMessageManualAction = this.messageMonitor.clientMessageManualAction;
+  readonly maintenanceAction = this.messageMonitor.maintenanceAction;
+  readonly autoIgnorePhraseDraft = this.messageSettingsFeature.autoIgnorePhraseDraft;
+  readonly editingAutoIgnorePhraseIndex = this.messageSettingsFeature.editingAutoIgnorePhraseIndex;
+  readonly editingAutoIgnorePhraseValue = this.messageSettingsFeature.editingAutoIgnorePhraseValue;
+  readonly productCategories = this.productsFeature.productCategories;
+  readonly botWorkers = this.accountsFeature.botWorkers;
+  readonly botStatuses = this.accountsFeature.botStatuses;
+  readonly botCities = this.accountsFeature.botCities;
+  readonly botPage = this.accountsFeature.botPage;
+  readonly botPageSize = this.accountsFeature.botPageSize;
+  readonly botsTotal = this.accountsFeature.botsTotal;
+  readonly trackedBotCityId = this.accountsFeature.trackedBotCityId;
+  readonly trackedCityUnblockedAccounts = this.accountsFeature.trackedCityUnblockedAccounts;
+  readonly botPageSizeOptions = this.accountsFeature.botPageSizeOptions;
   readonly canManageAllDictionaries = computed(() => {
     this.auth.tokenParsed();
     return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']);
@@ -398,241 +361,39 @@ export class AdminDictionariesComponent implements OnDestroy {
     this.auth.tokenParsed();
     return this.auth.hasRealmRole('OWNER');
   });
-  readonly canActivateContractorSystem = computed(() => isContractorSystemActivationAllowed(
-    this.contractorSystemStatus(),
-    this.canControlContractorSystem()
-  ));
-  readonly canChangeContractorRouting = computed(() => isContractorRoutingChangeAllowed(
-    this.contractorSystemStatus(),
-    this.canControlContractorSystem()
-  ));
+  readonly canActivateContractorSystem=this.contractorFeature.canActivateContractorSystem;
+  readonly canChangeContractorRouting=this.contractorFeature.canChangeContractorRouting;
   readonly tabs = computed<DictionaryTab[]>(() => this.canManageAllDictionaries() ? this.allTabs : this.managerTabs);
 
-  readonly categoryForm = this.fb.nonNullable.group({
-    title: ['', Validators.required]
-  });
+  readonly categoryForm = this.taxonomyFeature.categoryForm;
 
-  readonly subCategoryForm = this.fb.group({
-    title: this.fb.nonNullable.control('', Validators.required),
-    categoryId: this.fb.control<number | null>(null, Validators.required)
-  });
+  readonly subCategoryForm = this.taxonomyFeature.subCategoryForm;
 
-  readonly cityForm = this.fb.nonNullable.group({
-    title: ['', Validators.required],
-    latitude: [''],
-    longitude: ['']
-  });
+  readonly cityForm = this.citiesFeature.cityForm;
 
-  readonly productForm = this.fb.group({
-    title: this.fb.nonNullable.control('', Validators.required),
-    price: this.fb.nonNullable.control('0', Validators.required),
-    categoryId: this.fb.control<number | null>(null, Validators.required),
-    photo: this.fb.nonNullable.control(false),
-    requiresPerformer: this.fb.nonNullable.control(false),
-    targetPlatform: this.fb.nonNullable.control<'YANDEX' | 'GOOGLE' | 'GIS' | 'OTHER'>('OTHER'),
-    performerRewardPercent: this.fb.nonNullable.control(0),
-    specialistRewardPercent: this.fb.nonNullable.control(0),
-    managerRewardPercent: this.fb.nonNullable.control(0)
-  });
+  readonly productForm = this.productsFeature.productForm;
 
-  readonly phoneForm = this.fb.nonNullable.group({
-    number: ['+7', Validators.required],
-    fio: [''],
-    birthday: [''],
-    amountAllowed: [1, Validators.required],
-    amountSent: [0, Validators.required],
-    blockTime: [3, Validators.required],
-    timer: [''],
-    googleLogin: [''],
-    googlePassword: [''],
-    avitoPassword: [''],
-    mailLogin: [''],
-    mailPassword: [''],
-    fotoInstagram: [''],
-    active: [true],
-    createDate: [''],
-    operatorId: this.fb.control<number | null>(null)
-  });
+  readonly phoneForm = this.phonesFeature.phoneForm;
 
-  readonly botForm = this.fb.group({
-    login: this.fb.nonNullable.control('', Validators.required),
-    password: this.fb.nonNullable.control(''),
-    fio: this.fb.nonNullable.control('', Validators.required),
-    workerId: this.fb.control<number | null>(null, Validators.required),
-    cityId: this.fb.control<number | null>(null),
-    statusId: this.fb.control<number | null>(null, Validators.required),
-    counter: this.fb.nonNullable.control('0', Validators.required),
-    active: this.fb.nonNullable.control(true)
-  });
+  readonly botForm = this.accountsFeature.botForm;
 
-  readonly promoTextForm = this.fb.nonNullable.group({
-    text: ['', Validators.required]
-  });
+  readonly promoTextForm = this.textsFeature.promoTextForm;
 
-  readonly managerTextForm = this.fb.nonNullable.group({
-    payText: [''],
-    beginText: [''],
-    offerText: [''],
-    reminderText: [''],
-    startText: ['']
-  });
+  readonly managerTextForm = this.textsFeature.managerTextForm;
 
-  readonly settingsForm = this.fb.nonNullable.group({
-    nagulCooldownMinutes: [60, [Validators.required, Validators.min(0), Validators.max(1440)]],
-    nagulLookaheadDays: [60, [Validators.required, Validators.min(0), Validators.max(365)]],
-    accountWalkedCounterThreshold: [3, [Validators.required, Validators.min(1), Validators.max(30)]],
-    accountWalkDelayDays: [2, [Validators.required, Validators.min(0), Validators.max(30)]],
-    morningReportEnabled: [true],
-    morningReportTime: ['11:30', [Validators.required, Validators.pattern(/^([01]\d|2[0-3]):[0-5]\d$/)]],
-    eveningReportEnabled: [true],
-    eveningReportTime: ['22:00', [Validators.required, Validators.pattern(/^([01]\d|2[0-3]):[0-5]\d$/)]],
-    telegramReportZone: ['Asia/Irkutsk', Validators.required],
-    whatsAppGroupSyncEnabled: [true],
-    whatsAppGroupSyncIntervalMinutes: [30, [Validators.required, Validators.min(5), Validators.max(1440)]],
-    clientPublicationProgressReportsEnabled: [true],
-    workerCellularAccessMode: ['ENFORCE' as WorkerCellularAccessMode, Validators.required],
-    blockNonCellularNetwork: [true],
-    blockVpnProxyOrDatacenter: [true],
-    blockDesktopOrUnknownDevice: [false],
-    blockUnknownNetwork: [false],
-    enforceNativeVirtualDevice: [true]
-  });
+  readonly settingsForm = this.settingsFeature.settingsForm;
 
-  readonly contractorSystemActivationForm = this.fb.nonNullable.group({
-    attributionStartDate: [contractorSystemActivationDate(businessDateIso()), [Validators.required]],
-    reason: ['', [Validators.required]],
-    confirmation: ['', [Validators.required]]
-  });
+  readonly contractorSystemActivationForm=this.contractorFeature.contractorSystemActivationForm;
 
-  readonly contractorSystemRoutingForm = this.fb.nonNullable.group({
-    reason: ['', [Validators.required]],
-    confirmation: ['', [Validators.required]]
-  });
+  readonly contractorSystemRoutingForm=this.contractorFeature.contractorSystemRoutingForm;
 
-  readonly contractorLegacyAutoForm = this.fb.nonNullable.group({
-    reason: ['', Validators.required],
-    confirmation: ['', Validators.required]
-  });
+  readonly contractorLegacyAutoForm=this.contractorFeature.contractorLegacyAutoForm;
 
-  readonly contractorLegacyManualForm = this.fb.nonNullable.group({
-    completedOn: ['', Validators.required],
-    evidenceReference: ['', Validators.required],
-    reason: ['', Validators.required],
-    confirmation: ['', Validators.required]
-  });
+  readonly contractorLegacyManualForm=this.contractorFeature.contractorLegacyManualForm;
 
-  readonly gamificationForm = this.fb.nonNullable.group({
-    enabled: [false],
-    workerEnabled: [true],
-    managerEnabled: [true],
-    operatorEnabled: [true],
-    marketologEnabled: [true],
-    showInCabinet: [false],
-    showInScore: [false],
-    eventsEnabled: [false],
-    shadowScoringEnabled: [false],
-    rewardsEnabled: [false],
-    competitionEnabled: [false],
-    levelXp: [500, [Validators.required, Validators.min(100)]],
-    tokenLevelStep: [5, [Validators.required, Validators.min(2)]],
-    slaEnabled: [false],
-    controlTargetHours: [14, [Validators.required, Validators.min(1), Validators.max(24)]],
-    dayTargetPercent: [90, [Validators.required, Validators.min(1), Validators.max(100)]],
-    messageTargetMinutes: [30, [Validators.required, Validators.min(1)]],
-    messageHardMinutes: [480, [Validators.required, Validators.min(1)]],
-    leadTargetMinutes: [60, [Validators.required, Validators.min(1)]],
-    leadHardMinutes: [480, [Validators.required, Validators.min(1)]],
-    riskTargetMinutes: [30, [Validators.required, Validators.min(1)]],
-    riskHardMinutes: [240, [Validators.required, Validators.min(1)]],
-    defaultTargetMinutes: [120, [Validators.required, Validators.min(1)]],
-    defaultHardMinutes: [720, [Validators.required, Validators.min(1)]],
-    reviewPublishedRuleEnabled: [true],
-    reviewPublishedRulePoints: [10],
-    orderPaidRuleEnabled: [true],
-    orderPaidRulePoints: [25],
-    badReviewTaskDoneRuleEnabled: [true],
-    badReviewTaskDoneRulePoints: [15],
-    reviewRecoveryTaskDoneRuleEnabled: [true],
-    reviewRecoveryTaskDoneRulePoints: [20]
-  });
+  readonly gamificationForm = this.gamificationFeature.gamificationForm;
 
-  readonly autoresponderForm = this.fb.nonNullable.group({
-    workerEnabled: [true],
-    liveEnabled: [true],
-    immediateEnabled: [true],
-    monitorEnabled: [false],
-    reviewCheckEnabled: [true],
-    reviewCheckAutoArchiveEnabled: [true],
-    clientTextReminderEnabled: [true],
-    paymentReminderEnabled: [true],
-    badReviewInvoiceEnabled: [true],
-    badReviewAutoBanEnabled: [true],
-    reviewRecoveryNoticeEnabled: [true],
-    paymentOverdueEnabled: [true],
-    paymentOverdueLiveEnabled: [false],
-    archiveReorderEnabled: [true],
-    errorProtectionEnabled: [true],
-    unansweredAutoIgnoreEnabled: [true],
-    unansweredResolutionEnforcementEnabled: [true],
-    unansweredFastClickGuardEnabled: [false],
-    unansweredReplyQualityShadowEnabled: [true],
-    unansweredFastClickWarningCount: [3, [Validators.required, Validators.min(3), Validators.max(100)]],
-    unansweredFastClickWarningSeconds: [10, [Validators.required, Validators.min(3), Validators.max(300)]],
-    unansweredFastClickCriticalCount: [10, [Validators.required, Validators.min(3), Validators.max(500)]],
-    unansweredFastClickCriticalSeconds: [60, [Validators.required, Validators.min(3), Validators.max(3600)]],
-    reviewCheckIntervalDays: [2, [Validators.required, Validators.min(1), Validators.max(365)]],
-    reviewCheckAutoArchiveDays: [30, [Validators.required, Validators.min(1), Validators.max(3650)]],
-    clientTextReminderIntervalDays: [3, [Validators.required, Validators.min(1), Validators.max(365)]],
-    paymentReminderIntervalDays: [2, [Validators.required, Validators.min(1), Validators.max(365)]],
-    reviewCheckRetryDelayHours: [2, [Validators.required, Validators.min(1), Validators.max(168)]],
-    paymentInvoiceRetryDelayHours: [2, [Validators.required, Validators.min(1), Validators.max(168)]],
-    transientRetryMinutes: [15, [Validators.required, Validators.min(1), Validators.max(1440)]],
-    manualControlFailureThreshold: [3, [Validators.required, Validators.min(1), Validators.max(100)]],
-    manualControlAfterMinutes: [60, [Validators.required, Validators.min(1), Validators.max(1440)]],
-    badReviewInvoiceRetryDelayHours: [2, [Validators.required, Validators.min(1), Validators.max(168)]],
-    badReviewAutoBanDelayDays: [2, [Validators.required, Validators.min(1), Validators.max(365)]],
-    reviewRecoveryNoticeRetryDelayHours: [2, [Validators.required, Validators.min(1), Validators.max(168)]],
-    paymentOverdueDays: [30, [Validators.required, Validators.min(1), Validators.max(365)]],
-    archiveReorderMonths: [3, [Validators.required, Validators.min(1), Validators.max(36)]],
-    archiveReorderJitterDays: [10, [Validators.required, Validators.min(0), Validators.max(30)]],
-    archiveOrderRetentionDays: [90, [Validators.required, Validators.min(1), Validators.max(3650)]],
-    errorProtectionThreshold: [20, [Validators.required, Validators.min(1), Validators.max(10000)]],
-    errorProtectionWindowMinutes: [10, [Validators.required, Validators.min(1), Validators.max(1440)]],
-    errorProtectionCooldownMinutes: [60, [Validators.required, Validators.min(1), Validators.max(1440)]],
-    whatsAppAuthRetryHours: [2, [Validators.required, Validators.min(1), Validators.max(48)]],
-    whatsAppAuthAlertCooldownHours: [12, [Validators.required, Validators.min(1), Validators.max(168)]],
-    retentionDays: [90, [Validators.required, Validators.min(1), Validators.max(3650)]],
-    tickBatchSize: [5, [Validators.required, Validators.min(1), Validators.max(100)]],
-    candidateLimit: [200, [Validators.required, Validators.min(1), Validators.max(5000)]],
-    dailyLimit: [140, [Validators.required, Validators.min(1), Validators.max(5000)]],
-    defaultGapSeconds: [180, [Validators.required, Validators.min(30), Validators.max(86400)]],
-    whatsAppGapSeconds: [180, [Validators.required, Validators.min(30), Validators.max(86400)]],
-    telegramGapSeconds: [90, [Validators.required, Validators.min(30), Validators.max(86400)]],
-    maxGapSeconds: [90, [Validators.required, Validators.min(30), Validators.max(86400)]],
-    unansweredAutoIgnoreMaxLength: [60, [Validators.required, Validators.min(1), Validators.max(500)]],
-    businessWindows: ['10:00-12:00,14:00-17:00,19:00-21:00', [Validators.required, Validators.maxLength(500)]],
-    reviewCheckStatuses: ['На проверке', [Validators.required, Validators.maxLength(500)]],
-    clientTextReminderStatuses: ['Новый', [Validators.required, Validators.maxLength(500)]],
-    paymentReminderStatuses: ['Выставлен счет,Напоминание', [Validators.required, Validators.maxLength(500)]],
-    paymentOverdueStatuses: ['Выставлен счет,Напоминание', [Validators.required, Validators.maxLength(500)]],
-    closedOrderStatuses: ['Оплачено,Архив,Бан,Не оплачено', [Validators.required, Validators.maxLength(500)]],
-    paymentOverdueTargetStatus: ['Не оплачено', [Validators.required, Validators.maxLength(500)]],
-    archiveCompanyStatus: ['На стопе', [Validators.required, Validators.maxLength(500)]],
-    archiveInactiveOrderStatuses: ['Оплачено,Архив,Бан', [Validators.required, Validators.maxLength(500)]],
-    openNextOrderRequestStatuses: ['PENDING,FAILED', [Validators.required, Validators.maxLength(500)]],
-    reviewLinkBaseUrl: ['https://o-ogo.ru', [Validators.required, Validators.maxLength(500)]],
-    reviewReminderText: ['', [Validators.required, Validators.maxLength(500)]],
-    clientTextReminderText: ['', [Validators.required, Validators.maxLength(500)]],
-    publicationStartedText: ['', [Validators.required, Validators.maxLength(500)]],
-    publicationProgressReportText: ['', [Validators.required, Validators.maxLength(500)]],
-    paymentInstructionSource: ['MANAGER_TEXT' as 'MANAGER_TEXT' | 'TBANK_LINK' | 'BANK_LINK' | 'TOCHKA_LINK', [Validators.required]],
-    paymentReminderText: ['', [Validators.required, Validators.maxLength(500)]],
-    paymentLinkCopyText: ['', [Validators.required, Validators.maxLength(500)]],
-    paymentSuccessText: ['', [Validators.required, Validators.maxLength(500)]],
-    reviewRecoveryNoticeText: ['', [Validators.required, Validators.maxLength(500)]],
-    archiveOfferText: ['', [Validators.required, Validators.maxLength(500)]],
-    unansweredAutoIgnorePhrases: [DEFAULT_AUTO_IGNORE_PHRASES, [Validators.maxLength(2000)]]
-  });
+  readonly autoresponderForm = this.messageSettingsFeature.autoresponderForm;
 
   readonly activeLabel = computed(() => this.tabs().find((tab) => tab.key === this.activeTab())?.label ?? '');
   readonly searchPlaceholder = computed(() =>
@@ -647,36 +408,15 @@ export class AdminDictionariesComponent implements OnDestroy {
   readonly activeTabIcon = computed(() =>
     this.tabs().find((tab) => tab.key === this.activeTab())?.icon ?? 'help'
   );
-  readonly activeCategory = computed(() => {
-    const id = this.activeCategoryId();
-    return this.categories().find((category) => category.id === id) ?? null;
-  });
-  readonly selectedCategorySubCategories = computed(() => {
-    const categoryId = this.activeCategoryId();
-    if (categoryId == null) {
-      return [];
-    }
-
-    return this.subCategories().filter((subCategory) => subCategory.category?.id === categoryId);
-  });
-  readonly selectedManagerText = computed(() => {
-    const managerId = this.selectedId();
-    return managerId == null
-      ? null
-      : this.managerTexts().find((managerText) => managerText.managerId === managerId) ?? null;
-  });
-  readonly categoryEditorTitle = computed(() =>
-    this.editingCategoryId() == null ? 'Новая категория' : `Категория #${this.editingCategoryId()}`
-  );
-  readonly subCategoryEditorTitle = computed(() =>
-    this.editingSubCategoryId() == null ? 'Новая подкатегория' : `Подкатегория #${this.editingSubCategoryId()}`
-  );
-  readonly phoneDeviceTokenTotal = computed(() =>
-    this.phones().reduce((total, phone) => total + this.deviceTokenCount(phone), 0)
-  );
-  readonly botTotalPages = computed(() => Math.max(1, Math.ceil(this.botsTotal() / this.botPageSize())));
-  readonly botPageStart = computed(() => this.botsTotal() === 0 ? 0 : this.botPage() * this.botPageSize() + 1);
-  readonly botPageEnd = computed(() => Math.min(this.botsTotal(), (this.botPage() + 1) * this.botPageSize()));
+  readonly activeCategory = this.taxonomyFeature.activeCategory;
+  readonly selectedCategorySubCategories = this.taxonomyFeature.selectedCategorySubCategories;
+  readonly selectedManagerText = this.textsFeature.selectedManagerText;
+  readonly categoryEditorTitle = this.taxonomyFeature.categoryEditorTitle;
+  readonly subCategoryEditorTitle = this.taxonomyFeature.subCategoryEditorTitle;
+  readonly phoneDeviceTokenTotal = this.phonesFeature.phoneDeviceTokenTotal;
+  readonly botTotalPages = this.accountsFeature.botTotalPages;
+  readonly botPageStart = this.accountsFeature.botPageStart;
+  readonly botPageEnd = this.accountsFeature.botPageEnd;
   readonly activeItemsTotal = computed(() => {
     switch (this.activeTab()) {
       case 'categories':
@@ -756,106 +496,22 @@ export class AdminDictionariesComponent implements OnDestroy {
     }
   });
 
-  readonly monitorMetrics = computed<DictionaryMetric[]>(() => {
-    const monitor = this.clientMessageMonitor();
-    return [
-      { label: 'Активных', value: monitor?.activeCandidates ?? 0, icon: 'playlist_add_check', tone: 'blue', tooltip: 'Все активные задачи автоответчика: и просроченные, и запланированные на будущее.' },
-      { label: 'Пора проверить', value: monitor?.dueNow ?? 0, icon: 'schedule', tone: 'blue', tooltip: 'У этих задач уже наступило время следующей проверки, и они не захвачены другим worker-ом. Это еще не означает, что сообщение будет отправлено: задача может ждать окно, канал, лимит или проверку условий.' },
-      { label: 'Готово к отправке', value: monitor?.readyToSendNow ?? 0, icon: 'bolt', tone: 'green', tooltip: 'Предварительно готовые задачи: worker и live-отправка включены, рабочее окно открыто, обязательный chatId/groupId найден. Перед отправкой еще применяются интервалы каналов, дневной лимит и финальные проверки.' },
-      { label: 'Ждет окно', value: monitor?.waitingForWindow ?? 0, icon: 'access_time', tone: 'yellow', tooltip: 'Время проверки уже наступило, но сейчас закрыто рабочее окно. Задачи останутся в очереди до ближайшего разрешенного времени.' },
-      { label: 'Нет chatId', value: monitor?.missingChannelBindings ?? 0, icon: 'link_off', tone: monitor?.missingChannelBindings ? 'pink' : 'teal', tooltip: 'Активные задачи, для которых не найден обязательный идентификатор WhatsApp, Telegram или MAX-группы. Без исправления привязки сообщение не уйдет.' },
-      { label: 'Ручной контроль', value: monitor?.manualControlCandidates ?? 0, icon: 'support_agent', tone: monitor?.manualControlCandidates ? 'pink' : 'teal', tooltip: 'Задачи, где нужен человек: отсутствует или неверно настроен чат, повторилось слишком много ошибок либо ошибка остается без успешной обработки дольше допустимого времени.' },
-      { label: 'Ждут retry', value: monitor?.retryWaitingCandidates ?? 0, icon: 'replay', tone: monitor?.retryWaitingCandidates ? 'yellow' : 'teal', tooltip: 'Недавние временные ошибки, для которых уже назначена автоматическая повторная попытка. Пока вмешательство не требуется.' },
-      { label: 'Ждут восстановления', value: monitor?.recoveryHoldCandidates ?? 0, icon: 'healing', tone: monitor?.recoveryHoldCandidates ? 'blue' : 'teal', tooltip: 'Задачи поставлены на паузу, пока не завершится восстановление отзывов. После завершения зависимость будет снята автоматически.' },
-      { label: 'Автовосстановлено', value: monitor?.autoRecoveredToday ?? 0, icon: 'auto_fix_high', tone: monitor?.autoRecoveredToday ? 'green' : 'teal', tooltip: 'Сколько некорректных состояний очереди сервис автоматически исправил сегодня без ручного вмешательства.' },
-      { label: 'Отправлено сегодня', value: monitor?.sentToday ?? 0, icon: 'send', tone: 'green', tooltip: 'Успешные действия всех сценариев с начала сегодняшнего дня по иркутскому времени. Отдельное число только по архивному офферу показано ниже.' },
-      { label: 'Ошибок сегодня', value: monitor?.failedToday ?? 0, icon: 'priority_high', tone: monitor?.failedToday ? 'pink' : 'teal', tooltip: 'Неуспешные попытки всех сценариев за сегодня. Часть временных ошибок будет повторена автоматически.' },
-      { label: 'Пропущено', value: monitor?.skippedToday ?? 0, icon: 'pause_circle', tone: 'teal', tooltip: 'Попытки, где отправка осознанно не выполнялась: изменились условия, сработал dry-run, задача уже неактуальна или было выполнено системное действие. Это не обязательно ошибка или потерянное сообщение.' },
-      { label: 'Отключено задач', value: monitor?.disabledStates ?? 0, icon: 'block', tone: monitor?.disabledStates ? 'pink' : 'blue', tooltip: 'Задачи, окончательно исключенные из автоматической обработки. Они не вернутся в очередь без отдельного восстановления.' }
-    ];
-  });
+  readonly monitorMetrics = this.messageMonitor.monitorMetrics;
 
-  readonly archiveOfferMetrics = computed<DictionaryMetric[]>(() => {
-    const offer = this.clientMessageMonitor()?.archiveOfferToday;
-    return [
-      { label: 'Весь план на сегодня', value: offer?.plannedToday ?? 0, icon: 'today', tone: 'blue', tooltip: 'Весь объем архивного оффера на сегодня: уже отправленные плюс еще не завершенные задачи. Формула: «уже отправлено» + «осталось в плане».' },
-      { label: 'Пора обрабатывать', value: offer?.queuedNow ?? 0, icon: 'outbox', tone: 'yellow', tooltip: 'Часть оставшегося плана, у которой уже наступило время проверки. Остальные задачи из плана назначены на более позднее время сегодня.' },
-      { label: 'В обработке', value: offer?.processingNow ?? 0, icon: 'sync', tone: 'teal', tooltip: 'Офферы, которые worker уже захватил для проверки или отправки прямо сейчас. Обычно это число быстро возвращается к нулю.' },
-      { label: 'Можно отправлять сейчас', value: offer?.readyNow ?? 0, icon: 'bolt', tone: 'green', tooltip: 'Часть показателя «пора обрабатывать», для которой включена live-отправка, открыто рабочее окно и найдена безопасная привязка чата. Это еще не отправленные сообщения.' },
-      { label: 'Уже отправлено', value: offer?.sentToday ?? 0, icon: 'send', tone: 'green', tooltip: 'Только успешно отправленные сегодня сообщения сценария «Архивные компании», с начала дня по иркутскому времени.' },
-      { label: 'Осталось в плане', value: offer?.remainingToday ?? 0, icon: 'pending_actions', tone: 'blue', tooltip: 'Активные офферы, назначенные не позже конца сегодняшнего дня и еще не завершенные. Часть из них может быть перенесена на следующий день.' },
-      { label: 'Нет привязки чата', value: offer?.blockedByChannel ?? 0, icon: 'link_off', tone: offer?.blockedByChannel ? 'pink' : 'teal', tooltip: 'Активные задачи архивного оффера из оставшегося плана, у компаний которых нет корректного WhatsApp groupId, Telegram chatId или MAX chatId. Это количество задач, а не отдельный подсчет уникальных компаний. Перед отправкой статус компании проверяется повторно.' },
-      { label: 'Остаток общего лимита', value: offer?.dailyLimitRemaining ?? 0, icon: 'speed', tone: 'yellow', tooltip: 'Сколько клиентских сообщений еще разрешает общий дневной лимит автоответчика. Этот остаток делят все сценарии, а не только архивный оффер.' }
-    ];
-  });
+  readonly archiveOfferMetrics = this.messageMonitor.archiveOfferMetrics;
 
   readonly monitorArchiveOfferText = computed(() => {
     const template = this.clientMessageSettings()?.archiveOfferText?.trim() ?? '';
     return template.replace(/^\{company\}\s*/i, '').trim() || 'Текст архивного оффера не задан.';
   });
 
-  readonly selectedImportCity = computed(() => {
-    const cityId = this.importCityId();
-    return cityId == null ? null : this.botCities().find((city) => city.id === cityId) ?? null;
-  });
-  readonly filteredImportCities = computed(() => {
-    const search = this.importCitySearch().trim().toLowerCase();
-    const cities = this.botCities();
-    if (!search) {
-      return cities.slice(0, 12);
-    }
+  readonly selectedImportCity = this.accountsFeature.selectedImportCity;
+  readonly filteredImportCities = this.accountsFeature.filteredImportCities;
+  readonly canUploadBotImport = this.accountsFeature.canUploadBotImport;
 
-    return cities
-      .filter((city) => city.title.toLowerCase().includes(search) || String(city.id).includes(search))
-      .slice(0, 12);
-  });
-  readonly canUploadBotImport = computed(() =>
-    !!this.importFile()
-    && !this.importing()
-    && (this.importMode() !== 'city' || this.importCityId() != null)
-  );
+  readonly filteredMonitorQueue = this.messageMonitor.filteredMonitorQueue;
 
-  readonly filteredMonitorQueue = computed(() => {
-    const monitor = this.clientMessageMonitor();
-    if (!monitor) {
-      return [];
-    }
-    const scenarioFilter = this.monitorScenarioFilter();
-    const statusFilter = this.monitorQueueStatusFilter();
-    const search = this.monitorSearch().trim().toLowerCase();
-    const nowMs = Date.parse(monitor.updatedAt);
-    return monitor.queue.filter((item) => {
-      if (scenarioFilter !== 'ALL' && item.scenario !== scenarioFilter) {
-        return false;
-      }
-      if (statusFilter === 'DUE' && !this.isMonitorQueueDue(item, nowMs)) {
-        return false;
-      }
-      if (statusFilter === 'ERROR' && !item.lastErrorMessage) {
-        return false;
-      }
-      return this.matchesMonitorQueueSearch(item, search);
-    });
-  });
-
-  readonly filteredMonitorAttempts = computed(() => {
-    const monitor = this.clientMessageMonitor();
-    if (!monitor) {
-      return [];
-    }
-    const scenarioFilter = this.monitorScenarioFilter();
-    const statusFilter = this.monitorAttemptStatusFilter();
-    const search = this.monitorSearch().trim().toLowerCase();
-    return monitor.attempts.filter((attempt) => {
-      if (scenarioFilter !== 'ALL' && attempt.scenario !== scenarioFilter) {
-        return false;
-      }
-      if (statusFilter !== 'ALL' && attempt.status !== statusFilter) {
-        return false;
-      }
-      return this.matchesMonitorAttemptSearch(attempt, search);
-    });
-  });
+  readonly filteredMonitorAttempts = this.messageMonitor.filteredMonitorAttempts;
 
   constructor() {
     if (!this.tabs().some((item) => item.key === this.activeTab())) {
@@ -866,16 +522,21 @@ export class AdminDictionariesComponent implements OnDestroy {
   }
 
   ngOnDestroy(): void {
-    this.dictionaryLoadEpoch += 1;
-    this.aiProviderLoadEpoch += 1;
-    this.botDetailLoadEpoch += 1;
-    this.contractorSystemLoadEpoch += 1;
-    this.stopClientMessageMonitorPolling();
+    for (const feature of this.dictionaryFeatures()) feature.destroy();
+    this.aiProvider.destroy(); this.messageMonitor.destroy();
   }
 
   @HostListener('document:visibilitychange')
   onDocumentVisibilityChange(): void {
     this.syncClientMessageMonitorPolling();
+    if (document.visibilityState !== 'visible') {
+      this.dictionaryReloadOnVisible = this.activeLoading();
+      this.loading.set(false);
+      for (const feature of this.dictionaryFeatures()) feature.deactivate();
+    } else if (this.dictionaryReloadOnVisible) {
+      this.dictionaryReloadOnVisible = false;
+      this.loadActive();
+    }
   }
 
   setTab(tab: DictionaryTabKey): void {
@@ -883,14 +544,15 @@ export class AdminDictionariesComponent implements OnDestroy {
       return;
     }
 
+    for (const feature of this.dictionaryFeatures()) feature.deactivate();
+    this.dictionaryReloadOnVisible=false;
     this.activeTab.set(tab);
+    if (tab !== 'aiProvider') this.aiProvider.deactivate();
     this.search.set('');
     this.clearSelection();
     this.syncClientMessageMonitorPolling();
-    if (tab === 'accounts' && this.trackedCityUnblockedAccounts() == null) {
-      this.loadTrackedCityUnblockedAccountsSnapshot();
-    }
     if (tab === 'aiProvider') {
+      this.loading.set(false);
       this.loadAiProviderStatus();
       return;
     }
@@ -901,299 +563,41 @@ export class AdminDictionariesComponent implements OnDestroy {
     this.loadActive();
   }
 
-  loadContractorPaymentSystemStatus(): void {
-    this.loadContractorLegacyReconciliation();
-    const requestId = ++this.contractorSystemLoadEpoch;
-    this.contractorSystemLoading.set(true);
-    this.contractorSystemError.set(null);
-    this.contractorPaymentsApi.getSystemStatus().subscribe({
-      next: (status) => {
-        if (requestId !== this.contractorSystemLoadEpoch || this.activeTab() !== 'settings') {
-          return;
-        }
-        this.contractorSystemStatus.set(status);
-        this.contractorSystemLoading.set(false);
-      },
-      error: (error: unknown) => {
-        if (requestId !== this.contractorSystemLoadEpoch || this.activeTab() !== 'settings') {
-          return;
-        }
-        this.contractorSystemError.set(apiErrorMessage(
-          error,
-          'Не удалось загрузить статус новой системы расчётов.'
-        ));
-        this.contractorSystemLoading.set(false);
-      }
-    });
-  }
+  readonly loadContractorPaymentSystemStatus=this.contractorFeature.loadContractorPaymentSystemStatus.bind(this.contractorFeature);
 
-  loadContractorLegacyReconciliation(): void {
-    this.contractorPaymentsApi.getLegacyRewardReconciliation().subscribe({
-      next: (snapshot) => this.contractorLegacyReconciliation.set(snapshot),
-      error: (error: unknown) => this.contractorSystemError.set(apiErrorMessage(
-        error,
-        'Не удалось загрузить снимок сверки старых начислений.'
-      ))
-    });
-  }
+  readonly loadContractorLegacyReconciliation=this.contractorFeature.loadContractorLegacyReconciliation.bind(this.contractorFeature);
 
-  prepareContractorLegacyReconciliation(): void {
-    if (this.contractorLegacyReconciliationSaving() || this.contractorSystemStatus()?.systemEnabled) {
-      return;
-    }
-    this.contractorLegacyReconciliationSaving.set(true);
-    this.contractorSystemError.set(null);
-    this.contractorPaymentsApi.prepareLegacyRewardReconciliation().subscribe({
-      next: (snapshot) => {
-        this.contractorLegacyReconciliation.set(snapshot);
-        this.contractorLegacyReconciliationSaving.set(false);
-        this.contractorLegacyAutoForm.reset({ reason: '', confirmation: '' });
-        this.toastService.success('Dry-run сверки подготовлен', 'Начисления не изменялись.');
-      },
-      error: (error: unknown) => this.finishLegacyReconciliationError(
-        error,
-        'Не удалось подготовить dry-run сверки.'
-      )
-    });
-  }
+  readonly prepareContractorLegacyReconciliation=this.contractorFeature.prepareContractorLegacyReconciliation.bind(this.contractorFeature);
 
-  applyContractorLegacyAutomatic(): void {
-    const snapshot = this.contractorLegacyReconciliation();
-    const raw = this.contractorLegacyAutoForm.getRawValue();
-    if (!this.canControlContractorSystem()
-      || !snapshot?.runId
-      || !snapshot.snapshotHash
-      || this.contractorLegacyAutoForm.invalid
-      || raw.confirmation.trim() !== this.contractorLegacyAutoConfirmation
-      || this.contractorLegacyReconciliationSaving()) {
-      this.contractorLegacyAutoForm.markAllAsTouched();
-      return;
-    }
-    this.contractorLegacyReconciliationSaving.set(true);
-    this.contractorPaymentsApi.applyLegacyRewardReconciliation(snapshot.runId, {
-      snapshotHash: snapshot.snapshotHash,
-      reason: raw.reason.trim(),
-      confirmation: raw.confirmation.trim()
-    }).subscribe({
-      next: (updated) => {
-        this.contractorLegacyReconciliation.set(updated);
-        this.contractorLegacyReconciliationSaving.set(false);
-        this.contractorLegacyAutoForm.reset({ reason: '', confirmation: '' });
-        this.toastService.success('Автоматическая сверка применена', 'Неоднозначные группы оставлены для ручной проверки.');
-      },
-      error: (error: unknown) => this.finishLegacyReconciliationError(
-        error,
-        'Автоматическая сверка не применена.'
-      )
-    });
-  }
+  readonly applyContractorLegacyAutomatic=this.contractorFeature.applyContractorLegacyAutomatic.bind(this.contractorFeature);
 
-  openContractorLegacyManual(group: ContractorLegacyRewardManualGroup): void {
-    if (!this.canControlContractorSystem() || group.status !== 'PENDING') {
-      return;
-    }
-    this.contractorLegacyManualGroup.set(group);
-    this.contractorLegacyManualForm.reset({
-      completedOn: '',
-      evidenceReference: '',
-      reason: '',
-      confirmation: ''
-    });
-    this.contractorLegacyManualOpen.set(true);
-  }
+  readonly openContractorLegacyManual=this.contractorFeature.openContractorLegacyManual.bind(this.contractorFeature);
 
-  closeContractorLegacyManual(): void {
-    if (!this.contractorLegacyReconciliationSaving()) {
-      this.contractorLegacyManualOpen.set(false);
-      this.contractorLegacyManualGroup.set(null);
-    }
-  }
+  readonly closeContractorLegacyManual=this.contractorFeature.closeContractorLegacyManual.bind(this.contractorFeature);
 
-  resolveContractorLegacyManual(): void {
-    const snapshot = this.contractorLegacyReconciliation();
-    const group = this.contractorLegacyManualGroup();
-    const raw = this.contractorLegacyManualForm.getRawValue();
-    if (!this.canControlContractorSystem()
-      || !snapshot?.runId
-      || !snapshot.snapshotHash
-      || !group
-      || this.contractorLegacyManualForm.invalid
-      || raw.confirmation.trim() !== this.contractorLegacyManualConfirmation
-      || this.contractorLegacyReconciliationSaving()) {
-      this.contractorLegacyManualForm.markAllAsTouched();
-      return;
-    }
-    this.contractorLegacyReconciliationSaving.set(true);
-    this.contractorPaymentsApi.resolveLegacyRewardManualGroup(
-      snapshot.runId,
-      group.orderId,
-      {
-        snapshotHash: snapshot.snapshotHash,
-        groupHash: group.groupHash,
-        completedOn: raw.completedOn,
-        evidenceReference: raw.evidenceReference.trim(),
-        reason: raw.reason.trim(),
-        confirmation: raw.confirmation.trim()
-      }
-    ).subscribe({
-      next: (updated) => {
-        this.contractorLegacyReconciliation.set(updated);
-        this.contractorLegacyReconciliationSaving.set(false);
-        this.contractorLegacyManualOpen.set(false);
-        this.contractorLegacyManualGroup.set(null);
-        this.toastService.success('Ручная сверка подтверждена', 'Evidence и точный снимок сохранены в аудите.');
-      },
-      error: (error: unknown) => this.finishLegacyReconciliationError(
-        error,
-        'Ручная сверка не применена.'
-      )
-    });
-  }
+  readonly resolveContractorLegacyManual=this.contractorFeature.resolveContractorLegacyManual.bind(this.contractorFeature);
 
-  private finishLegacyReconciliationError(error: unknown, fallback: string): void {
-    const message = apiErrorMessage(error, fallback);
-    this.contractorSystemError.set(message);
-    this.contractorLegacyReconciliationSaving.set(false);
-    this.toastService.error('Сверка старых начислений', message);
-  }
+  readonly finishLegacyReconciliationError=this.contractorFeature.finishLegacyReconciliationError.bind(this.contractorFeature);
 
-  requestContractorSystemActivation(event: Event): void {
-    event.preventDefault();
-    if (!this.canActivateContractorSystem() || this.contractorSystemSaving()) {
-      return;
-    }
-    this.contractorSystemError.set(null);
-    this.contractorSystemActivationForm.reset({
-      attributionStartDate: contractorSystemActivationDate(businessDateIso()),
-      reason: '',
-      confirmation: ''
-    });
-    this.contractorSystemActivationOpen.set(true);
-  }
+  readonly requestContractorSystemActivation=this.contractorFeature.requestContractorSystemActivation.bind(this.contractorFeature);
 
-  closeContractorSystemActivation(): void {
-    if (!this.contractorSystemSaving()) {
-      this.contractorSystemActivationOpen.set(false);
-    }
-  }
+  readonly closeContractorSystemActivation=this.contractorFeature.closeContractorSystemActivation.bind(this.contractorFeature);
 
-  contractorSystemActivationReady(): boolean {
-    return this.contractorSystemActivationForm.valid
-      && this.contractorSystemActivationForm.controls.confirmation.value.trim()
-        === CONTRACTOR_SYSTEM_ACTIVATION_CONFIRMATION;
-  }
+  readonly contractorSystemActivationReady=this.contractorFeature.contractorSystemActivationReady.bind(this.contractorFeature);
 
-  activateContractorSystem(): void {
-    const status = this.contractorSystemStatus();
-    if (
-      !status
-      || !this.canActivateContractorSystem()
-      || !this.contractorSystemActivationReady()
-      || this.contractorSystemSaving()
-    ) {
-      this.contractorSystemActivationForm.markAllAsTouched();
-      return;
-    }
+  readonly activateContractorSystem=this.contractorFeature.activateContractorSystem.bind(this.contractorFeature);
 
-    const raw = this.contractorSystemActivationForm.getRawValue();
-    this.contractorSystemSaving.set(true);
-    this.contractorSystemError.set(null);
-    this.contractorPaymentsApi.activateSystem({
-      attributionStartDate: raw.attributionStartDate,
-      confirmation: raw.confirmation.trim(),
-      reason: raw.reason.trim(),
-      expectedRevision: status.revision
-    }).subscribe({
-      next: (updated) => {
-        this.contractorSystemStatus.set(updated);
-        this.contractorSystemSaving.set(false);
-        this.contractorSystemActivationOpen.set(false);
-        this.toastService.success(
-          'Новая система расчётов активирована',
-          'Возврат к старому учёту невозможен.'
-        );
-      },
-      error: (error: unknown) => {
-        const message = apiErrorMessage(error, 'Активация не выполнена. Обновите статус и проверьте причины блокировки.');
-        this.contractorSystemError.set(message);
-        this.contractorSystemSaving.set(false);
-        this.toastService.error('Новая система не активирована', message);
-      }
-    });
-  }
+  readonly openContractorRoutingChange=this.contractorFeature.openContractorRoutingChange.bind(this.contractorFeature);
 
-  openContractorRoutingChange(enabled: boolean): void {
-    if (!this.canChangeContractorRouting() || this.contractorSystemSaving()) {
-      return;
-    }
-    this.contractorSystemError.set(null);
-    this.contractorRoutingTargetEnabled.set(enabled);
-    this.contractorSystemRoutingForm.reset({ reason: '', confirmation: '' });
-    this.contractorSystemRoutingOpen.set(true);
-  }
+  readonly closeContractorRoutingChange=this.contractorFeature.closeContractorRoutingChange.bind(this.contractorFeature);
 
-  closeContractorRoutingChange(): void {
-    if (!this.contractorSystemSaving()) {
-      this.contractorSystemRoutingOpen.set(false);
-    }
-  }
+  readonly contractorRoutingConfirmationPrompt=this.contractorFeature.contractorRoutingConfirmationPrompt.bind(this.contractorFeature);
 
-  contractorRoutingConfirmationPrompt(): string {
-    return contractorRoutingConfirmation(this.contractorRoutingTargetEnabled());
-  }
+  readonly contractorRoutingChangeReady=this.contractorFeature.contractorRoutingChangeReady.bind(this.contractorFeature);
 
-  contractorRoutingChangeReady(): boolean {
-    return this.contractorSystemRoutingForm.valid
-      && this.contractorSystemRoutingForm.controls.confirmation.value.trim()
-        === this.contractorRoutingConfirmationPrompt();
-  }
+  readonly updateContractorRouting=this.contractorFeature.updateContractorRouting.bind(this.contractorFeature);
 
-  updateContractorRouting(): void {
-    const status = this.contractorSystemStatus();
-    if (
-      !status
-      || !this.canChangeContractorRouting()
-      || !this.contractorRoutingChangeReady()
-      || this.contractorSystemSaving()
-    ) {
-      this.contractorSystemRoutingForm.markAllAsTouched();
-      return;
-    }
-
-    const enabled = this.contractorRoutingTargetEnabled();
-    const raw = this.contractorSystemRoutingForm.getRawValue();
-    this.contractorSystemSaving.set(true);
-    this.contractorSystemError.set(null);
-    this.contractorPaymentsApi.updateSystemRouting({
-      enabled,
-      confirmation: raw.confirmation.trim(),
-      reason: raw.reason.trim(),
-      expectedRevision: status.revision
-    }).subscribe({
-      next: (updated) => {
-        this.contractorSystemStatus.set(updated);
-        this.contractorSystemSaving.set(false);
-        this.contractorSystemRoutingOpen.set(false);
-        this.toastService.success(
-          enabled ? 'Выдача реквизитов запрошена' : 'Выдача реквизитов приостановлена',
-          enabled && !updated.liveRoutingEffective
-            ? 'Запрос сохранён, но боевые предохранители пока не дают выдавать реквизиты.'
-            : 'Новые счета будут обрабатываться по обновлённому режиму.'
-        );
-      },
-      error: (error: unknown) => {
-        const message = apiErrorMessage(error, 'Не удалось изменить режим выдачи реквизитов. Обновите статус и повторите.');
-        this.contractorSystemError.set(message);
-        this.contractorSystemSaving.set(false);
-        this.toastService.error('Режим реквизитов не изменён', message);
-      }
-    });
-  }
-
-  contractorPaymentSystemModeLabel(): string {
-    const status = this.contractorSystemStatus();
-    return status ? contractorSystemModeLabel(status.mode) : '—';
-  }
+  readonly contractorPaymentSystemModeLabel=this.contractorFeature.contractorPaymentSystemModeLabel.bind(this.contractorFeature);
 
   searchActive(): void {
     if (this.activeTab() === 'accounts') {
@@ -1212,71 +616,15 @@ export class AdminDictionariesComponent implements OnDestroy {
     this.loadActive();
   }
 
-  loadAiProviderStatus(): void {
-    const requestId = ++this.aiProviderLoadEpoch;
-    this.loading.set(true);
-    this.aiProviderError.set(null);
-    this.reputationAiApi.status().subscribe({
-      next: (status) => {
-        if (requestId !== this.aiProviderLoadEpoch || this.activeTab() !== 'aiProvider') {
-          return;
-        }
-        this.aiProviderStatus.set(status);
-        this.loading.set(false);
-      },
-      error: (err: unknown) => {
-        if (requestId !== this.aiProviderLoadEpoch || this.activeTab() !== 'aiProvider') {
-          return;
-        }
-        const message = this.errorMessage(err, 'Не удалось загрузить настройки AI-провайдера');
-        this.aiProviderError.set(message);
-        this.loading.set(false);
-        this.toastService.error('AI-провайдер не загрузился', message);
-      }
-    });
-  }
+  readonly loadAiProviderStatus = this.aiProvider.loadAiProviderStatus.bind(this.aiProvider);
 
-  selectAiProvider(provider: ReputationAiProvider): void {
-    if (this.switchingAiProvider() || this.aiProviderStatus()?.aiProvider === provider) {
-      return;
-    }
+  readonly selectAiProvider = this.aiProvider.selectAiProvider.bind(this.aiProvider);
 
-    this.switchingAiProvider.set(true);
-    this.aiProviderError.set(null);
-    this.reputationAiApi.selectProvider(provider).subscribe({
-      next: (status) => {
-        this.aiProviderStatus.set(status);
-        this.switchingAiProvider.set(false);
-        this.toastService.success('AI-провайдер переключён', this.aiProviderDisplayName(provider));
-      },
-      error: (err: unknown) => {
-        const message = this.errorMessage(err, 'Не удалось переключить AI-провайдера');
-        this.aiProviderError.set(message);
-        this.switchingAiProvider.set(false);
-        this.toastService.error('AI-провайдер не переключён', message);
-      }
-    });
-  }
+  readonly aiProviderDisplayName = this.aiProvider.aiProviderDisplayName.bind(this.aiProvider);
 
-  aiProviderDisplayName(provider: ReputationAiProvider): string {
-    return provider === 'deepseek' ? 'DeepSeek' : provider === 'yandexgpt' ? 'YandexGPT' : 'OpenAI';
-  }
+  readonly aiProviderConfigured = this.aiProvider.aiProviderConfigured.bind(this.aiProvider);
 
-  aiProviderConfigured(provider: ReputationAiProvider, status: ReputationAiStatus): boolean {
-    return provider === 'deepseek'
-      ? status.deepSeekConfigured
-      : provider === 'yandexgpt'
-        ? status.yandexGptConfigured
-        : status.openAiConfigured;
-  }
-
-  aiProviderModel(provider: ReputationAiProvider, status: ReputationAiStatus): string {
-    return provider === 'deepseek'
-      ? status.deepSeekModel
-      : provider === 'yandexgpt'
-        ? status.yandexModel
-        : status.openAiModel;
-  }
+  readonly aiProviderModel = this.aiProvider.aiProviderModel.bind(this.aiProvider);
 
   openActiveCreate(): void {
     if (this.activeTab() === 'categories') {
@@ -1312,368 +660,56 @@ export class AdminDictionariesComponent implements OnDestroy {
     this.clearSelection();
   }
 
-  selectCategory(category: AdminCategory): void {
-    this.activeCategoryId.set(category.id);
-    this.startNewSubCategory();
-    this.error.set(null);
-  }
+  readonly selectCategory = this.taxonomyFeature.selectCategory.bind(this.taxonomyFeature);
 
-  openNewCategory(): void {
-    this.startNewCategory();
-    this.categoryEditorOpen.set(true);
-  }
+  readonly openNewCategory = this.taxonomyFeature.openNewCategory.bind(this.taxonomyFeature);
 
-  editCategory(event: Event, category: AdminCategory): void {
-    event.preventDefault();
-    event.stopPropagation();
-    this.activeCategoryId.set(category.id);
-    this.editingCategoryId.set(category.id);
-    this.categoryForm.setValue({ title: category.title });
-    this.categoryEditorOpen.set(true);
-    this.error.set(null);
-  }
+  readonly editCategory = this.taxonomyFeature.editCategory.bind(this.taxonomyFeature);
 
-  closeCategoryEditor(): void {
-    if (this.saving() || this.deleting()) {
-      return;
-    }
+  readonly closeCategoryEditor = this.taxonomyFeature.closeCategoryEditor.bind(this.taxonomyFeature);
 
-    this.categoryEditorOpen.set(false);
-    this.startNewCategory();
-  }
+  readonly selectSubCategory = this.taxonomyFeature.selectSubCategory.bind(this.taxonomyFeature);
 
-  selectSubCategory(subCategory: AdminSubCategory): void {
-    const categoryId = subCategory.category?.id ?? this.activeCategoryId() ?? this.defaultCategoryId();
-    this.editingSubCategoryId.set(subCategory.id);
-    this.activeCategoryId.set(categoryId);
-    this.subCategoryForm.setValue({
-      title: subCategory.title,
-      categoryId
-    });
-    this.error.set(null);
-  }
+  readonly openNewSubCategory = this.taxonomyFeature.openNewSubCategory.bind(this.taxonomyFeature);
 
-  openNewSubCategory(): void {
-    if (this.activeCategoryId() == null) {
-      this.activeCategoryId.set(this.defaultCategoryId());
-    }
+  readonly editSubCategory = this.taxonomyFeature.editSubCategory.bind(this.taxonomyFeature);
 
-    this.startNewSubCategory();
-    this.subCategoryEditorOpen.set(true);
-  }
+  readonly closeSubCategoryEditor = this.taxonomyFeature.closeSubCategoryEditor.bind(this.taxonomyFeature);
 
-  editSubCategory(event: Event, subCategory: AdminSubCategory): void {
-    event.preventDefault();
-    event.stopPropagation();
-    this.selectSubCategory(subCategory);
-    this.subCategoryEditorOpen.set(true);
-  }
+  readonly selectCity = this.citiesFeature.selectCity.bind(this.citiesFeature);
 
-  closeSubCategoryEditor(): void {
-    if (this.saving() || this.deleting()) {
-      return;
-    }
+  readonly selectProduct = this.productsFeature.selectProduct.bind(this.productsFeature);
 
-    this.subCategoryEditorOpen.set(false);
-    this.startNewSubCategory();
-  }
+  readonly selectPhone = this.phonesFeature.selectPhone.bind(this.phonesFeature);
 
-  selectCity(city: AdminCity): void {
-    this.selectedId.set(city.id);
-    this.cityForm.setValue({
-      title: city.title,
-      latitude: city.latitude == null ? '' : String(city.latitude),
-      longitude: city.longitude == null ? '' : String(city.longitude)
-    });
-    this.error.set(null);
-  }
+  readonly startNewPhone = this.phonesFeature.startNewPhone.bind(this.phonesFeature);
 
-  selectProduct(product: AdminProduct): void {
-    this.selectedId.set(product.id);
-    this.productForm.setValue({
-      title: product.title,
-      price: String(product.price ?? 0),
-      categoryId: product.category?.id ?? this.defaultProductCategoryId(),
-      photo: product.photo,
-      requiresPerformer: product.requiresPerformer,
-      targetPlatform: product.targetPlatform || 'OTHER',
-      performerRewardPercent: product.performerRewardPercent ?? 0,
-      specialistRewardPercent: product.specialistRewardPercent ?? 0,
-      managerRewardPercent: product.managerRewardPercent ?? 0
-    });
-    this.error.set(null);
-  }
+  readonly selectBot = this.accountsFeature.selectBot.bind(this.accountsFeature);
 
-  selectPhone(phone: OperatorPhone): void {
-    this.selectedId.set(phone.id);
-    this.selectedPhone.set(phone);
-    this.error.set(null);
-    this.phoneForm.reset({
-      number: phone.number ?? '+7',
-      fio: phone.fio ?? '',
-      birthday: this.toDateInput(phone.birthday),
-      amountAllowed: phone.amountAllowed,
-      amountSent: phone.amountSent,
-      blockTime: phone.blockTime,
-      timer: this.toDateTimeInput(phone.timer),
-      // Provider credentials are write-only. Blank fields preserve the stored values.
-      googleLogin: '',
-      googlePassword: '',
-      avitoPassword: '',
-      mailLogin: '',
-      mailPassword: '',
-      fotoInstagram: phone.fotoInstagram ?? '',
-      active: phone.active,
-      createDate: this.toDateInput(phone.createDate),
-      operatorId: phone.operator?.id ?? null
-    });
-  }
+  readonly selectPromoText = this.textsFeature.selectPromoText.bind(this.textsFeature);
 
-  startNewPhone(): void {
-    this.selectedId.set(null);
-    this.selectedPhone.set(null);
-    this.error.set(null);
-    this.phoneForm.reset({
-      number: '+7',
-      fio: '',
-      birthday: '',
-      amountAllowed: 1,
-      amountSent: 0,
-      blockTime: 3,
-      timer: businessDateTimeInput(),
-      googleLogin: '',
-      googlePassword: '',
-      avitoPassword: '',
-      mailLogin: '',
-      mailPassword: '',
-      fotoInstagram: '',
-      active: true,
-      createDate: businessDateIso(),
-      operatorId: null
-    });
-  }
-
-  selectBot(bot: AdminBot): void {
-    const requestId = ++this.botDetailLoadEpoch;
-    this.botDetailLoadingId.set(bot.id);
-    this.error.set(null);
-    this.dictionariesApi.getBot(bot.id).subscribe({
-      next: (details) => {
-        if (requestId !== this.botDetailLoadEpoch) {
-          return;
-        }
-        this.selectedId.set(details.id);
-        this.selectedBotPasswordPresent.set(details.passwordPresent);
-        this.botForm.setValue({
-          login: details.login,
-          password: '',
-          fio: details.fio,
-          workerId: details.worker?.id ?? this.defaultBotWorkerId(),
-          cityId: details.city?.id ?? this.defaultBotCityId(),
-          statusId: details.status?.id ?? this.defaultBotStatusId(),
-          counter: String(details.counter ?? 0),
-          active: details.active
-        });
-        this.botDetailLoadingId.set(null);
-      },
-      error: (err) => {
-        if (requestId !== this.botDetailLoadEpoch) {
-          return;
-        }
-        const message = this.errorMessage(err, 'Не удалось загрузить данные аккаунта');
-        this.botDetailLoadingId.set(null);
-        this.error.set(message);
-        this.toastService.error('Аккаунт не загрузился', message);
-      }
-    });
-  }
-
-  selectPromoText(promoText: AdminPromoText): void {
-    this.selectedId.set(promoText.id);
-    this.promoTextForm.setValue({ text: promoText.text });
-    this.error.set(null);
-  }
-
-  selectManagerText(managerText: AdminManagerText): void {
-    this.selectedId.set(managerText.managerId);
-    this.managerTextForm.setValue({
-      payText: managerText.payText,
-      beginText: managerText.beginText,
-      offerText: managerText.offerText,
-      reminderText: managerText.reminderText,
-      startText: managerText.startText
-    });
-    this.error.set(null);
-  }
+  readonly selectManagerText = this.textsFeature.selectManagerText.bind(this.textsFeature);
 
   clearSelection(): void {
-    this.botDetailLoadEpoch += 1;
-    this.botDetailLoadingId.set(null);
-    this.selectedBotPasswordPresent.set(false);
-    this.selectedId.set(null);
-    this.editingCategoryId.set(null);
-    this.editingSubCategoryId.set(null);
-    this.categoryEditorOpen.set(false);
-    this.subCategoryEditorOpen.set(false);
-    this.error.set(null);
-
-    this.categoryForm.reset({ title: '' });
-    this.subCategoryForm.reset({ title: '', categoryId: this.activeCategoryId() ?? this.defaultCategoryId() });
-    this.cityForm.reset({ title: '', latitude: '', longitude: '' });
-    this.productForm.reset({
-      title: '',
-      price: '0',
-      categoryId: this.defaultProductCategoryId(),
-      photo: false,
-      requiresPerformer: false,
-      targetPlatform: 'OTHER',
-      performerRewardPercent: 0,
-      specialistRewardPercent: 0,
-      managerRewardPercent: 0
-    });
-    this.selectedPhone.set(null);
-    this.phoneForm.reset({
-      number: '+7',
-      fio: '',
-      birthday: '',
-      amountAllowed: 1,
-      amountSent: 0,
-      blockTime: 3,
-      timer: '',
-      googleLogin: '',
-      googlePassword: '',
-      avitoPassword: '',
-      mailLogin: '',
-      mailPassword: '',
-      fotoInstagram: '',
-      active: true,
-      createDate: '',
-      operatorId: null
-    });
-    this.botForm.reset({
-      login: '',
-      password: '',
-      fio: '',
-      workerId: this.defaultBotWorkerId(),
-      cityId: this.defaultBotCityId(),
-      statusId: this.defaultBotStatusId(),
-      counter: '0',
-      active: true
-    });
-    this.promoTextForm.reset({ text: '' });
-    this.managerTextForm.reset({
-      payText: '',
-      beginText: '',
-      offerText: '',
-      reminderText: '',
-      startText: ''
-    });
-    this.settingsForm.reset({
-      nagulCooldownMinutes: this.nagulSettings()?.cooldownMinutes ?? 60,
-      nagulLookaheadDays: this.nagulSettings()?.lookaheadDays ?? 60,
-      accountWalkedCounterThreshold: this.nagulSettings()?.accountWalkedCounterThreshold ?? 3,
-      accountWalkDelayDays: this.nagulSettings()?.accountWalkDelayDays ?? 2,
-      morningReportEnabled: this.telegramReportSettings()?.morningEnabled ?? true,
-      morningReportTime: this.telegramReportSettings()?.morningTime ?? '11:30',
-      eveningReportEnabled: this.telegramReportSettings()?.eveningEnabled ?? true,
-      eveningReportTime: this.telegramReportSettings()?.eveningTime ?? '22:00',
-      telegramReportZone: this.telegramReportSettings()?.zone ?? 'Asia/Irkutsk',
-      whatsAppGroupSyncEnabled: this.whatsAppGroupSyncSettings()?.enabled ?? true,
-      whatsAppGroupSyncIntervalMinutes: this.whatsAppGroupSyncSettings()?.intervalMinutes ?? 30,
-      clientPublicationProgressReportsEnabled: this.clientPublicationProgressReportSettings()?.enabled ?? true
-    });
-    this.resetAutoresponderForm();
+    this.selectedId.set(null); this.error.set(null);
+    this.taxonomyFeature.clearSelection(); this.productsFeature.clearSelection();
+    this.textsFeature.clearSelection(); this.citiesFeature.clearSelection();
+    this.accountsFeature.clearSelection(); this.phonesFeature.clearSelection();
+    this.settingsFeature.resetSettingsForm(); this.messageSettingsFeature.resetAutoresponderForm();
   }
 
-  startNewCategory(): void {
-    this.editingCategoryId.set(null);
-    this.categoryForm.reset({ title: '' });
-    this.error.set(null);
-  }
+  readonly startNewCategory = this.taxonomyFeature.startNewCategory.bind(this.taxonomyFeature);
 
-  startNewSubCategory(): void {
-    this.editingSubCategoryId.set(null);
-    this.subCategoryForm.reset({
-      title: '',
-      categoryId: this.activeCategoryId() ?? this.defaultCategoryId()
-    });
-    this.error.set(null);
-  }
+  readonly startNewSubCategory = this.taxonomyFeature.startNewSubCategory.bind(this.taxonomyFeature);
 
-  saveSelectedSubCategory(): void {
-    this.saveSubCategory();
-  }
+  readonly saveSelectedSubCategory = this.taxonomyFeature.saveSelectedSubCategory.bind(this.taxonomyFeature);
 
-  deleteEditingCategory(): void {
-    const selectedId = this.editingCategoryId();
-    if (selectedId == null || this.deleting()) {
-      return;
-    }
+  readonly deleteEditingCategory = this.taxonomyFeature.deleteEditingCategory.bind(this.taxonomyFeature);
 
-    const confirmed = window.confirm('Удалить категорию?');
-    if (!confirmed) {
-      return;
-    }
-
-    this.deleting.set(true);
-    this.error.set(null);
-
-    this.dictionariesApi.deleteCategory(selectedId).subscribe({
-      next: () => {
-        this.deleting.set(false);
-        this.categoryEditorOpen.set(false);
-        this.editingCategoryId.set(null);
-        this.categoryForm.reset({ title: '' });
-
-        if (this.activeCategoryId() === selectedId) {
-          this.activeCategoryId.set(null);
-          this.startNewSubCategory();
-        }
-
-        this.toastService.success('Категория удалена');
-        this.reloadAfterMutation();
-      },
-      error: (err) => {
-        const message = this.errorMessage(err, 'Не удалось удалить категорию');
-        this.error.set(message);
-        this.deleting.set(false);
-        this.toastService.error('Категория не удалена', message);
-      }
-    });
-  }
-
-  deleteEditingSubCategory(): void {
-    const selectedId = this.editingSubCategoryId();
-    if (selectedId == null || this.deleting()) {
-      return;
-    }
-
-    const confirmed = window.confirm('Удалить подкатегорию?');
-    if (!confirmed) {
-      return;
-    }
-
-    this.deleting.set(true);
-    this.error.set(null);
-
-    this.dictionariesApi.deleteSubCategory(selectedId).subscribe({
-      next: () => {
-        this.deleting.set(false);
-        this.subCategoryEditorOpen.set(false);
-        this.startNewSubCategory();
-        this.toastService.success('Подкатегория удалена');
-        this.reloadAfterMutation();
-      },
-      error: (err) => {
-        const message = this.errorMessage(err, 'Не удалось удалить подкатегорию');
-        this.error.set(message);
-        this.deleting.set(false);
-        this.toastService.error('Подкатегория не удалена', message);
-      }
-    });
-  }
+  readonly deleteEditingSubCategory = this.taxonomyFeature.deleteEditingSubCategory.bind(this.taxonomyFeature);
 
   saveActive(): void {
+    if(this.activeSaving() || this.activeDeleting()) return;
     switch (this.activeTab()) {
       case 'categories':
         this.saveCategory();
@@ -1717,612 +753,91 @@ export class AdminDictionariesComponent implements OnDestroy {
     }
   }
 
-  runWhatsAppGroupSync(): void {
-    if (this.syncingWhatsAppGroups() || this.saving()) {
-      return;
-    }
+  readonly runWhatsAppGroupSync = this.settingsFeature.runWhatsAppGroupSync.bind(this.settingsFeature);
 
-    this.syncingWhatsAppGroups.set(true);
-    this.error.set(null);
+  readonly runSharedChatLinkSync = this.settingsFeature.runSharedChatLinkSync.bind(this.settingsFeature);
 
-    this.dictionariesApi.runWhatsAppGroupSync().subscribe({
-      next: (settings) => {
-        this.syncingWhatsAppGroups.set(false);
-        this.applyWhatsAppGroupSyncSettings(settings);
-        this.toastService.success(
-          'WhatsApp-группы проверены',
-          `Новых привязок: ${settings.lastLinkedCount}`
-        );
-      },
-      error: (err: unknown) => {
-        const message = this.errorMessage(err, 'Не удалось запустить синхронизацию WhatsApp-групп');
-        this.error.set(message);
-        this.syncingWhatsAppGroups.set(false);
-        this.toastService.error('WhatsApp не синхронизирован', message);
-      }
-    });
-  }
+  readonly autoIgnorePhrases = this.messageSettingsFeature.autoIgnorePhrases.bind(this.messageSettingsFeature);
 
-  runSharedChatLinkSync(): void {
-    if (this.syncingSharedChatLinks() || this.saving()) {
-      return;
-    }
+  readonly updateAutoIgnorePhraseDraft = this.messageSettingsFeature.updateAutoIgnorePhraseDraft.bind(this.messageSettingsFeature);
 
-    this.syncingSharedChatLinks.set(true);
-    this.error.set(null);
+  readonly updateEditingAutoIgnorePhraseValue = this.messageSettingsFeature.updateEditingAutoIgnorePhraseValue.bind(this.messageSettingsFeature);
 
-    this.dictionariesApi.runSharedChatLinkSync().subscribe({
-      next: (response) => {
-        this.syncingSharedChatLinks.set(false);
-        this.toastService.success(
-          'Общие чаты синхронизированы',
-          this.sharedChatSyncSummary(response)
-        );
-      },
-      error: (err: unknown) => {
-        const message = this.errorMessage(err, 'Не удалось синхронизировать общие чаты');
-        this.error.set(message);
-        this.syncingSharedChatLinks.set(false);
-        this.toastService.error('Общие чаты не синхронизированы', message);
-      }
-    });
-  }
+  readonly addAutoIgnorePhrase = this.messageSettingsFeature.addAutoIgnorePhrase.bind(this.messageSettingsFeature);
 
-  autoIgnorePhrases(): string[] {
-    return this.splitAutoIgnorePhrases(this.autoresponderForm.controls.unansweredAutoIgnorePhrases.value);
-  }
+  readonly startEditAutoIgnorePhrase = this.messageSettingsFeature.startEditAutoIgnorePhrase.bind(this.messageSettingsFeature);
 
-  updateAutoIgnorePhraseDraft(value: string): void {
-    this.autoIgnorePhraseDraft.set(value);
-  }
+  readonly saveAutoIgnorePhraseEdit = this.messageSettingsFeature.saveAutoIgnorePhraseEdit.bind(this.messageSettingsFeature);
 
-  updateEditingAutoIgnorePhraseValue(value: string): void {
-    this.editingAutoIgnorePhraseValue.set(value);
-  }
+  readonly cancelAutoIgnorePhraseEdit = this.messageSettingsFeature.cancelAutoIgnorePhraseEdit.bind(this.messageSettingsFeature);
 
-  addAutoIgnorePhrase(): void {
-    const phrase = this.normalizeAutoIgnorePhrase(this.autoIgnorePhraseDraft());
-    if (!phrase) {
-      return;
-    }
-    const phrases = this.autoIgnorePhrases();
-    if (phrases.some((item) => item.toLocaleLowerCase() === phrase.toLocaleLowerCase())) {
-      this.toastService.info('Фраза уже есть', phrase);
-      return;
-    }
-    this.setAutoIgnorePhrases([...phrases, phrase]);
-    this.autoIgnorePhraseDraft.set('');
-  }
+  readonly removeAutoIgnorePhrase = this.messageSettingsFeature.removeAutoIgnorePhrase.bind(this.messageSettingsFeature);
 
-  startEditAutoIgnorePhrase(index: number, phrase: string): void {
-    this.editingAutoIgnorePhraseIndex.set(index);
-    this.editingAutoIgnorePhraseValue.set(phrase);
-  }
+  readonly setClientMessageMonitorEnabled = this.messageMonitor.setClientMessageMonitorEnabled.bind(this.messageMonitor);
 
-  saveAutoIgnorePhraseEdit(index: number): void {
-    const phrase = this.normalizeAutoIgnorePhrase(this.editingAutoIgnorePhraseValue());
-    if (!phrase) {
-      this.removeAutoIgnorePhrase(index);
-      return;
-    }
-    const phrases = this.autoIgnorePhrases();
-    const duplicateIndex = phrases.findIndex((item, itemIndex) =>
-      itemIndex !== index && item.toLocaleLowerCase() === phrase.toLocaleLowerCase()
-    );
-    if (duplicateIndex >= 0) {
-      this.toastService.info('Фраза уже есть', phrase);
-      return;
-    }
-    phrases[index] = phrase;
-    this.setAutoIgnorePhrases(phrases);
-    this.cancelAutoIgnorePhraseEdit();
-  }
+  readonly loadClientMessageMonitor = this.messageMonitor.loadClientMessageMonitor.bind(this.messageMonitor);
 
-  cancelAutoIgnorePhraseEdit(): void {
-    this.editingAutoIgnorePhraseIndex.set(null);
-    this.editingAutoIgnorePhraseValue.set('');
-  }
+  readonly loadClientMessageMaintenancePreview = this.messageMonitor.loadClientMessageMaintenancePreview.bind(this.messageMonitor);
 
-  removeAutoIgnorePhrase(index: number): void {
-    const phrases = this.autoIgnorePhrases().filter((_phrase, itemIndex) => itemIndex !== index);
-    this.setAutoIgnorePhrases(phrases);
-    if (this.editingAutoIgnorePhraseIndex() === index) {
-      this.cancelAutoIgnorePhraseEdit();
-    }
-  }
+  readonly applyClientMessageMaintenance = this.messageMonitor.applyClientMessageMaintenance.bind(this.messageMonitor);
 
-  setClientMessageMonitorEnabled(enabled: boolean): void {
-    if (this.clientMessageMonitorSaving()) {
-      return;
-    }
+  readonly setMonitorScenarioFilter = this.messageMonitor.setMonitorScenarioFilter.bind(this.messageMonitor);
 
-    const previous = this.clientMessageSettings()?.monitorEnabled ?? false;
-    this.clientMessageMonitorSaving.set(true);
-    this.clientMessageMonitorError.set(null);
-    this.dictionariesApi.updateClientMessageMonitorSettings(enabled).subscribe({
-      next: (settings) => {
-        this.clientMessageMonitorSaving.set(false);
-        this.patchClientMessageMonitorEnabled(settings.enabled);
-        if (settings.enabled) {
-          this.loadClientMessageMonitor();
-          this.startClientMessageMonitorPolling();
-        } else {
-          this.stopClientMessageMonitorPolling();
-          this.clientMessageMonitor.set(null);
-        }
-        this.toastService.success(
-          settings.enabled ? 'Мониторинг включен' : 'Мониторинг выключен',
-          settings.enabled ? 'Данные будут обновляться раз в минуту, пока вкладка открыта.' : 'Автоответчик продолжит работать без UI-опроса.'
-        );
-      },
-      error: (err: unknown) => {
-        const message = this.errorMessage(err, 'Не удалось переключить мониторинг автоответчика');
-        this.patchClientMessageMonitorEnabled(previous);
-        this.clientMessageMonitorSaving.set(false);
-        this.clientMessageMonitorError.set(message);
-        this.toastService.error('Мониторинг не переключен', message);
-      }
-    });
-  }
+  readonly setMonitorQueueStatusFilter = this.messageMonitor.setMonitorQueueStatusFilter.bind(this.messageMonitor);
 
-  loadClientMessageMonitor(silent = false): void {
-    if (!this.clientMessageSettings()?.monitorEnabled) {
-      this.clientMessageMonitor.set(null);
-      this.stopClientMessageMonitorPolling();
-      return;
-    }
-    if (!silent) {
-      this.clientMessageMonitorLoading.set(true);
-    }
-    this.clientMessageMonitorError.set(null);
-    this.dictionariesApi.getClientMessageMonitor().subscribe({
-      next: (monitor) => {
-        this.clientMessageMonitor.set(monitor);
-        this.patchClientMessageMonitorEnabled(monitor.enabled);
-        this.clientMessageMonitorLoading.set(false);
-        this.loadClientMessageMaintenancePreview(true);
-        if (monitor.enabled && this.activeTab() === 'autoresponderMonitor') {
-          this.startClientMessageMonitorPolling();
-        }
-      },
-      error: (err: unknown) => {
-        const message = this.errorMessage(err, 'Не удалось загрузить мониторинг автоответчика');
-        this.clientMessageMonitorError.set(message);
-        this.clientMessageMonitorLoading.set(false);
-        if (!silent) {
-          this.toastService.error('Мониторинг не загрузился', message);
-        }
-      }
-    });
-  }
+  readonly setMonitorAttemptStatusFilter = this.messageMonitor.setMonitorAttemptStatusFilter.bind(this.messageMonitor);
 
-  loadClientMessageMaintenancePreview(silent = false): void {
-    if (!silent) {
-      this.clientMessageMaintenancePreviewLoading.set(true);
-    }
-    this.clientMessageMaintenancePreviewError.set(null);
-    this.dictionariesApi.getClientMessageMaintenancePreview().subscribe({
-      next: (preview) => {
-        this.clientMessageMaintenancePreview.set(preview);
-        this.clientMessageMaintenancePreviewLoading.set(false);
-      },
-      error: (err: unknown) => {
-        const message = this.errorMessage(err, 'Не удалось загрузить dry-run актуализации');
-        this.clientMessageMaintenancePreviewError.set(message);
-        this.clientMessageMaintenancePreviewLoading.set(false);
-        if (!silent) {
-          this.toastService.error('Dry-run не загрузился', message);
-        }
-      }
-    });
-  }
+  readonly setMonitorSearch = this.messageMonitor.setMonitorSearch.bind(this.messageMonitor);
 
-  applyClientMessageMaintenance(
-    action: 'company-statuses' | 'payment-overdue' | 'missing-bad-tasks' | 'archive-offers' | 'publication-dates' | 'publication-completed',
-    label: string
-  ): void {
-    if (this.maintenanceAction()) {
-      return;
-    }
-    const confirmed = window.confirm(`Применить: ${label}? Перед применением лучше проверить текущий dry-run.`);
-    if (!confirmed) {
-      return;
-    }
+  readonly toggleMonitorQueueDetails = this.messageMonitor.toggleMonitorQueueDetails.bind(this.messageMonitor);
 
-    this.maintenanceAction.set(action);
-    this.clientMessageMaintenancePreviewError.set(null);
-    this.dictionariesApi.applyClientMessageMaintenance(action).subscribe({
-      next: (response) => {
-        this.maintenanceAction.set(null);
-        this.clientMessageMaintenancePreview.set(response.preview);
-        this.toastService.success('Актуализация выполнена', response.message);
-        this.loadClientMessageMonitor(true);
-      },
-      error: (err: unknown) => {
-        const message = this.errorMessage(err, 'Не удалось выполнить актуализацию');
-        this.maintenanceAction.set(null);
-        this.clientMessageMaintenancePreviewError.set(message);
-        this.toastService.error('Актуализация не выполнена', message);
-      }
-    });
-  }
+  readonly retryClientMessageCandidate = this.messageMonitor.retryClientMessageCandidate.bind(this.messageMonitor);
 
-  setMonitorScenarioFilter(value: string): void {
-    this.monitorScenarioFilter.set(value);
-    this.expandedMonitorQueueKey.set(null);
-  }
+  readonly disableClientMessageCandidate = this.messageMonitor.disableClientMessageCandidate.bind(this.messageMonitor);
 
-  setMonitorQueueStatusFilter(value: string): void {
-    this.monitorQueueStatusFilter.set(value);
-    this.expandedMonitorQueueKey.set(null);
-  }
+  readonly markClientMessageCandidateDone = this.messageMonitor.markClientMessageCandidateDone.bind(this.messageMonitor);
 
-  setMonitorAttemptStatusFilter(value: string): void {
-    this.monitorAttemptStatusFilter.set(value);
-  }
+  readonly monitorManualActionKey = this.messageMonitor.monitorManualActionKey.bind(this.messageMonitor);
 
-  setMonitorSearch(value: string): void {
-    this.monitorSearch.set(value);
-    this.expandedMonitorQueueKey.set(null);
-  }
+  readonly monitorQueueTimingLabel = this.messageMonitor.monitorQueueTimingLabel.bind(this.messageMonitor);
 
-  toggleMonitorQueueDetails(item: AdminClientMessageMonitorQueueItem): void {
-    this.expandedMonitorQueueKey.set(this.expandedMonitorQueueKey() === item.targetKey ? null : item.targetKey);
-  }
+  readonly monitorQueueTimingClass = this.messageMonitor.monitorQueueTimingClass.bind(this.messageMonitor);
 
-  retryClientMessageCandidate(item: AdminClientMessageMonitorQueueItem): void {
-    this.runClientMessageManualAction(
-      item,
-      'retry',
-      () => this.dictionariesApi.retryClientMessageNow(item.id),
-      'Кандидат поставлен на ближайшую попытку'
-    );
-  }
+  readonly monitorAttemptStatusClass = this.messageMonitor.monitorAttemptStatusClass.bind(this.messageMonitor);
 
-  disableClientMessageCandidate(item: AdminClientMessageMonitorQueueItem): void {
-    if (!window.confirm(`Отключить кандидата "${item.orderTitle || item.companyTitle}"?`)) {
-      return;
-    }
-    this.runClientMessageManualAction(
-      item,
-      'disable',
-      () => this.dictionariesApi.disableClientMessageCandidate(item.id),
-      'Кандидат отключен'
-    );
-  }
+  readonly monitorScenarioIcon = this.messageMonitor.monitorScenarioIcon.bind(this.messageMonitor);
 
-  markClientMessageCandidateDone(item: AdminClientMessageMonitorQueueItem): void {
-    if (!window.confirm(`Пометить кандидата "${item.orderTitle || item.companyTitle}" выполненным?`)) {
-      return;
-    }
-    this.runClientMessageManualAction(
-      item,
-      'done',
-      () => this.dictionariesApi.markClientMessageCandidateDone(item.id),
-      'Кандидат помечен выполненным'
-    );
-  }
+  readonly monitorScenarioTone = this.messageMonitor.monitorScenarioTone.bind(this.messageMonitor);
 
-  monitorManualActionKey(item: AdminClientMessageMonitorQueueItem, action: string): string {
-    return `${item.id}:${action}`;
-  }
+  readonly monitorScenarioDueValue = this.messageMonitor.monitorScenarioDueValue.bind(this.messageMonitor);
 
-  private runClientMessageManualAction(
-    item: AdminClientMessageMonitorQueueItem,
-    action: string,
-    requestFactory: () => Observable<AdminClientMessageMonitor>,
-    successTitle: string
-  ): void {
-    const key = this.monitorManualActionKey(item, action);
-    if (this.clientMessageManualAction()) {
-      return;
-    }
-    this.clientMessageManualAction.set(key);
-    this.clientMessageMonitorError.set(null);
-    requestFactory().subscribe({
-      next: (monitor) => {
-        this.clientMessageManualAction.set(null);
-        this.clientMessageMonitor.set(monitor);
-        this.patchClientMessageMonitorEnabled(monitor.enabled);
-        this.expandedMonitorQueueKey.set(null);
-        this.toastService.success(successTitle, item.scenarioLabel);
-      },
-      error: (err: unknown) => {
-        const message = this.errorMessage(err, 'Не удалось выполнить действие с кандидатом');
-        this.clientMessageManualAction.set(null);
-        this.clientMessageMonitorError.set(message);
-        this.toastService.error('Действие не выполнено', message);
-      }
-    });
-  }
+  readonly monitorScenarioDueLabel = this.messageMonitor.monitorScenarioDueLabel.bind(this.messageMonitor);
 
-  private isMonitorQueueDue(item: AdminClientMessageMonitorQueueItem, nowMs: number): boolean {
-    if (!item.nextAttemptAt || Number.isNaN(nowMs)) {
-      return false;
-    }
-    const nextMs = Date.parse(item.nextAttemptAt);
-    return !Number.isNaN(nextMs) && nextMs <= nowMs;
-  }
+  readonly monitorReadinessClass = this.messageMonitor.monitorReadinessClass.bind(this.messageMonitor);
 
-  monitorQueueTimingLabel(item: AdminClientMessageMonitorQueueItem): string | null {
-    const monitor = this.clientMessageMonitor();
-    if (!monitor || !item.nextAttemptAt) {
-      return null;
-    }
-    const nowMs = Date.parse(monitor.nowIrkutsk || monitor.updatedAt);
-    const nextMs = Date.parse(item.nextAttemptAt);
-    if (Number.isNaN(nowMs) || Number.isNaN(nextMs)) {
-      return null;
-    }
-    if (nextMs > nowMs) {
-      return 'по расписанию';
-    }
+  readonly monitorScenarioTooltip = this.messageMonitor.monitorScenarioTooltip.bind(this.messageMonitor);
 
-    switch (item.readiness) {
-      case 'WAITING_WINDOW':
-        return 'просрочено, ждет рабочее окно';
-      case 'MISSING_CHANNEL':
-        return 'просрочено, нужна привязка';
-      case 'READY_TO_SEND':
-        return 'просрочено, готово к отправке';
-      case 'READY_TO_RUN':
-        return 'просрочено, готово к действию';
-      case 'PAUSED':
-        return 'просрочено, пауза';
-      case 'WORKER_DISABLED':
-        return 'просрочено, worker выключен';
-      case 'DRY_RUN':
-        return 'просрочено, dry-run';
-      case 'LOCKED':
-        return 'в обработке';
-      default:
-        return 'просрочено';
-    }
-  }
+  readonly trackMonitorMetric = this.messageMonitor.trackMonitorMetric.bind(this.messageMonitor);
 
-  monitorQueueTimingClass(item: AdminClientMessageMonitorQueueItem): string {
-    const label = this.monitorQueueTimingLabel(item);
-    if (!label || label === 'по расписанию') {
-      return 'status-pill off';
-    }
-    const code = item.readiness ?? '';
-    if (code === 'MISSING_CHANNEL' || code === 'DRY_RUN' || code === 'WORKER_DISABLED') {
-      return 'status-pill danger';
-    }
-    if (code === 'READY_TO_SEND' || code === 'READY_TO_RUN') {
-      return 'status-pill';
-    }
-    return 'status-pill warning';
-  }
+  readonly trackMonitorScenario = this.messageMonitor.trackMonitorScenario.bind(this.messageMonitor);
 
-  private matchesMonitorQueueSearch(item: AdminClientMessageMonitorQueueItem, search: string): boolean {
-    if (!search) {
-      return true;
-    }
-    return [
-      item.scenarioLabel,
-      item.companyTitle,
-      item.orderTitle,
-      item.statusTitle,
-      item.lastErrorMessage,
-      item.readinessLabel,
-      item.readinessReason,
-      item.expectedChannel,
-      item.channelDetails,
-      item.messagePreview,
-      item.orderId?.toString(),
-      item.companyId?.toString()
-    ].some((value) => String(value ?? '').toLowerCase().includes(search));
-  }
+  readonly trackMonitorQueueItem = this.messageMonitor.trackMonitorQueueItem.bind(this.messageMonitor);
 
-  private matchesMonitorAttemptSearch(attempt: AdminClientMessageMonitorAttempt, search: string): boolean {
-    if (!search) {
-      return true;
-    }
-    return [
-      attempt.scenarioLabel,
-      attempt.companyTitle,
-      attempt.orderTitle,
-      attempt.statusLabel,
-      attempt.errorCode,
-      attempt.errorMessage,
-      attempt.messagePreview,
-      attempt.channel,
-      attempt.orderId?.toString(),
-      attempt.companyId?.toString()
-    ].some((value) => String(value ?? '').toLowerCase().includes(search));
-  }
-
-  monitorAttemptStatusClass(status: string): string {
-    if (status === 'SENT') {
-      return 'status-pill';
-    }
-    if (status === 'FAILED') {
-      return 'status-pill danger';
-    }
-    return 'status-pill off';
-  }
-
-  monitorScenarioIcon(scenario: AdminClientMessageMonitorScenario): string {
-    return {
-      CLIENT_TEXT_REMINDER: 'edit_note',
-      REVIEW_CHECK_REMINDER: 'playlist_add_check',
-      PAYMENT_REMINDER: 'receipt_long',
-      PAYMENT_OVERDUE_ESCALATION: 'priority_high',
-      ARCHIVE_REORDER_OFFER: 'archive',
-      BAD_REVIEW_INVOICE: 'request_quote',
-      BAD_REVIEW_AUTO_BAN: 'gavel',
-      REVIEW_RECOVERY_NOTICE: 'restore_page'
-    }[scenario.scenario] ?? 'mark_chat_unread';
-  }
-
-  monitorScenarioTone(scenario: AdminClientMessageMonitorScenario): DictionaryMetric['tone'] {
-    if (scenario.failedToday > 0 || scenario.lastError) {
-      return 'pink';
-    }
-    if ((scenario.missingChannelBindings ?? 0) > 0) {
-      return 'pink';
-    }
-    if ((scenario.readyToSendNow ?? 0) > 0) {
-      return 'green';
-    }
-    if ((scenario.waitingForWindow ?? 0) > 0 || scenario.dueNow > 0) {
-      return 'yellow';
-    }
-    if (scenario.activeCandidates > 0) {
-      return 'green';
-    }
-    return 'teal';
-  }
-
-  monitorScenarioDueValue(scenario: AdminClientMessageMonitorScenario): number {
-    if ((scenario.readyToSendNow ?? 0) > 0) {
-      return scenario.readyToSendNow;
-    }
-    if ((scenario.waitingForWindow ?? 0) > 0) {
-      return scenario.waitingForWindow;
-    }
-    return scenario.dueNow;
-  }
-
-  monitorScenarioDueLabel(scenario: AdminClientMessageMonitorScenario): string {
-    if ((scenario.readyToSendNow ?? 0) > 0) {
-      return 'готово к отправке';
-    }
-    if ((scenario.waitingForWindow ?? 0) > 0) {
-      return 'ждет окно';
-    }
-    return 'пора проверить';
-  }
-
-  monitorReadinessClass(item: AdminClientMessageMonitorQueueItem): string {
-    const code = item.readiness ?? '';
-    if (code === 'READY_TO_SEND' || code === 'READY_TO_RUN') {
-      return 'status-pill';
-    }
-    if (code === 'MISSING_CHANNEL' || code === 'DRY_RUN' || code === 'WORKER_DISABLED') {
-      return 'status-pill danger';
-    }
-    if (code === 'WAITING_WINDOW' || code === 'SCHEDULED' || code === 'PAUSED' || code === 'LOCKED') {
-      return 'status-pill warning';
-    }
-    return 'status-pill off';
-  }
-
-  monitorScenarioTooltip(scenario: AdminClientMessageMonitorScenario): string {
-    return {
-      CLIENT_TEXT_REMINDER: 'Напоминает клиенту прислать текст или пожелания, когда заказ в режиме "ждем текст от клиента".',
-      REVIEW_CHECK_REMINDER: 'Напоминает клиенту проверить шаблоны отзывов и перейти по ссылке проверки.',
-      PAYMENT_REMINDER: 'Напоминает клиенту об оплате заказа в статусах счета и напоминания.',
-      PAYMENT_OVERDUE_ESCALATION: 'Следит за долгой просрочкой оплаты и готовит перевод в целевой статус по настройкам.',
-      ARCHIVE_REORDER_OFFER: 'Предлагает новый заказ компаниям из архивного цикла, если нет активных заказов и открытой заявки.',
-      BAD_REVIEW_INVOICE: 'Фиксирует отправку счета после выполненного плохого отзыва с учетом доплаты.',
-      BAD_REVIEW_AUTO_BAN: 'Переводит заказ и компанию в Бан, если финальный счет после плохих не оплатили за заданный срок.',
-      REVIEW_RECOVERY_NOTICE: 'Финально уведомляет клиента, что все восстановления по заказу завершены, и снимает паузу с платежных таймеров.'
-    }[scenario.scenario] ?? 'Сценарий автоответчика: кандидаты, отправки, пропуски и ошибки.';
-  }
-
-  trackMonitorMetric(_index: number, metric: DictionaryMetric): string {
-    return metric.label;
-  }
-
-  trackMonitorScenario(_index: number, scenario: AdminClientMessageMonitorScenario): string {
-    return scenario.scenario;
-  }
-
-  trackMonitorQueueItem(_index: number, item: AdminClientMessageMonitorQueueItem): number {
-    return item.id;
-  }
-
-  trackMonitorAttempt(_index: number, attempt: AdminClientMessageMonitorAttempt): number {
-    return attempt.id;
-  }
+  readonly trackMonitorAttempt = this.messageMonitor.trackMonitorAttempt.bind(this.messageMonitor);
 
   deleteSelected(): void {
-    const activeTab = this.activeTab();
-    if (activeTab === 'promo'
-      || activeTab === 'managerTexts'
-      || activeTab === 'specialistTransfer'
-      || activeTab === 'gamification'
-      || activeTab === 'settings'
-      || activeTab === 'audit'
-      || activeTab === 'aiProvider'
-      || activeTab === 'messageDictionary'
-      || activeTab === 'autoresponder'
-      || activeTab === 'autoresponderMonitor') {
-      return;
+    switch (this.activeTab()) {
+      case 'categories': this.taxonomyFeature.deleteEditingCategory(); return;
+      case 'subcategories': this.taxonomyFeature.deleteEditingSubCategory(); return;
+      case 'products': this.productsFeature.deleteSelected(); return;
+      case 'cities': this.citiesFeature.deleteSelected(); return;
+      case 'accounts': this.accountsFeature.deleteSelectedBot(); return;
+      case 'phones': this.phonesFeature.deleteSelectedPhone(); return;
+      default: return;
     }
-
-    if (activeTab === 'phones') {
-      this.deleteSelectedPhone();
-      return;
-    }
-
-    const selectedId = this.selectedId();
-    if (selectedId == null || this.deleting()) {
-      return;
-    }
-
-    const confirmed = window.confirm(`Удалить запись из справочника "${this.activeLabel()}"?`);
-    if (!confirmed) {
-      return;
-    }
-
-    this.deleting.set(true);
-    this.error.set(null);
-
-    const request = {
-      categories: () => this.dictionariesApi.deleteCategory(selectedId),
-      subcategories: () => this.dictionariesApi.deleteSubCategory(selectedId),
-      cities: () => this.dictionariesApi.deleteCity(selectedId),
-      products: () => this.dictionariesApi.deleteProduct(selectedId),
-      accounts: () => this.dictionariesApi.deleteBot(selectedId),
-      promo: () => this.dictionariesApi.deleteBot(selectedId)
-    }[activeTab]();
-
-    request.subscribe({
-      next: () => {
-        this.deleting.set(false);
-        this.clearSelection();
-        this.toastService.success('Запись удалена', this.activeLabel());
-        this.reloadAfterMutation();
-      },
-      error: (err: unknown) => {
-        const message = this.errorMessage(err, 'Не удалось удалить запись');
-        this.error.set(message);
-        this.deleting.set(false);
-        this.toastService.error('Запись не удалена', message);
-      }
-    });
   }
 
-  deleteDeviceToken(phone: OperatorPhone, deviceToken: DeviceToken): void {
-    if (this.deleting()) {
-      return;
-    }
-
-    const confirmed = window.confirm(`Удалить токен устройства телефона ${phone.number}?`);
-    if (!confirmed) {
-      return;
-    }
-
-    this.deleting.set(true);
-    this.error.set(null);
-
-    this.phonesApi.deleteDeviceToken(phone.id, deviceToken.token).subscribe({
-      next: () => {
-        this.deleting.set(false);
-        this.removeDeviceToken(phone.id, deviceToken.token);
-        this.toastService.success('Токен удален', phone.number);
-      },
-      error: (err: unknown) => {
-        const message = this.errorMessage(err, 'Не удалось удалить токен устройства');
-        this.error.set(message);
-        this.deleting.set(false);
-        this.toastService.error('Токен не удален', message);
-      }
-    });
-  }
+  readonly deleteDeviceToken = this.phonesFeature.deleteDeviceToken.bind(this.phonesFeature);
 
   tabTotal(tab: DictionaryTabKey): number {
     return {
@@ -2345,214 +860,41 @@ export class AdminDictionariesComponent implements OnDestroy {
     }[tab];
   }
 
-  settingsTotal(): number {
-    return (this.nagulSettings() ? 1 : 0)
-      + (this.telegramReportSettings() ? 1 : 0)
-      + (this.whatsAppGroupSyncSettings() ? 1 : 0)
-      + (this.clientPublicationProgressReportSettings() ? 1 : 0);
-  }
+  readonly settingsTotal = this.settingsFeature.settingsTotal.bind(this.settingsFeature);
 
-  gamificationTotal(): number {
-    const settings = this.gamificationSettings();
-    if (!settings) {
-      return 0;
-    }
-    return [
-      settings.enabled,
-      settings.workerEnabled,
-      settings.managerEnabled,
-      settings.operatorEnabled,
-      settings.marketologEnabled,
-      settings.showInCabinet,
-      settings.showInScore,
-      settings.eventsEnabled,
-      settings.shadowScoringEnabled
-    ].filter(Boolean).length;
-  }
+  readonly gamificationTotal = this.gamificationFeature.gamificationTotal.bind(this.gamificationFeature);
 
-  gamificationEventLabel(eventType: string | null | undefined): string {
-    return {
-      REVIEW_PUBLISHED: 'Отзыв опубликован',
-      ORDER_PAID: 'Заказ закрыт оплатой',
-      BAD_REVIEW_TASK_DONE: 'Плохой отзыв выполнен',
-      REVIEW_RECOVERY_TASK_DONE: 'Восстановление выполнено',
-      WORKER_DAY_100: 'Специалист закрыл день на 100%',
-      WORKER_100_STREAK: 'Серия специалиста на 100%',
-      MANAGER_TEAM_DAY_100: 'Команда закрыла день на 100%',
-      MANAGER_TEAM_100_STREAK: 'Командная серия на 100%'
-    }[eventType ?? ''] ?? (eventType || 'Событие');
-  }
+  readonly gamificationEventLabel = this.gamificationFeature.gamificationEventLabel.bind(this.gamificationFeature);
 
-  gamificationRoleLabel(role: string | null | undefined): string {
-    return {
-      WORKER: 'Специалист',
-      MANAGER: 'Менеджер',
-      OPERATOR: 'Оператор',
-      MARKETOLOG: 'Маркетолог'
-    }[role ?? ''] ?? (role || '-');
-  }
+  readonly gamificationRoleLabel = this.gamificationFeature.gamificationRoleLabel.bind(this.gamificationFeature);
 
-  gamificationActor(event: AdminGamificationEvent): string {
-    if (event.actorName) {
-      return event.actorName;
-    }
-    if (event.actorRole) {
-      return event.actorRole;
-    }
-    return 'Система';
-  }
+  readonly gamificationActor = this.gamificationFeature.gamificationActor.bind(this.gamificationFeature);
 
-  gamificationEventTarget(event: AdminGamificationEvent): string {
-    const parts = [
-      event.orderId ? `Заказ ${event.orderId}` : null,
-      event.reviewId ? `Отзыв ${event.reviewId}` : null,
-      event.badReviewTaskId ? `Плохая ${event.badReviewTaskId}` : null,
-      event.recoveryTaskId ? `Восстановление ${event.recoveryTaskId}` : null
-    ].filter(Boolean);
-    return parts.length ? parts.join(' · ') : 'Без привязки';
-  }
+  readonly gamificationEventTarget = this.gamificationFeature.gamificationEventTarget.bind(this.gamificationFeature);
 
-  gamificationTimelinessLabel(event: AdminGamificationEvent): string {
-    if (!event.plannedDate || !event.actualDate) {
-      return 'без срока';
-    }
-    const delay = event.delayDays ?? 0;
-    if (delay <= 0) {
-      return 'в срок';
-    }
-    const percent = Math.round((event.timelinessMultiplier ?? 1) * 100);
-    return `+${delay} дн. · ${percent}%`;
-  }
+  readonly gamificationTimelinessLabel = this.gamificationFeature.gamificationTimelinessLabel.bind(this.gamificationFeature);
 
-  trackGamificationEvent(_index: number, event: AdminGamificationEvent): number {
-    return event.id;
-  }
+  readonly trackGamificationEvent = this.gamificationFeature.trackGamificationEvent.bind(this.gamificationFeature);
 
-  trackGamificationScoreActor(index: number, item: { actorUserId?: number | null; actorName?: string | null; actorRole?: string | null }): string {
-    return `${item.actorUserId ?? 'system'}-${item.actorRole ?? 'role'}-${item.actorName ?? index}`;
-  }
+  readonly trackGamificationScoreActor = this.gamificationFeature.trackGamificationScoreActor.bind(this.gamificationFeature);
 
-  trackGamificationBalance(index: number, item: AdminGamificationBalance): string {
-    return `${item.actorUserId ?? 'system'}-${item.actorRole ?? 'role'}-${item.actorName ?? index}`;
-  }
+  readonly trackGamificationBalance = this.gamificationFeature.trackGamificationBalance.bind(this.gamificationFeature);
 
-  private byRole<T extends { actorRole?: string | null }>(items: T[], role: string): T[] {
-    return items.filter((item) => item.actorRole === role);
-  }
+  readonly byRole = this.gamificationFeature.byRole.bind(this.gamificationFeature);
 
-  private withoutRoles<T extends { actorRole?: string | null }>(items: T[], roles: string[]): T[] {
-    return items.filter((item) => !roles.includes(item.actorRole ?? ''));
-  }
+  readonly withoutRoles = this.gamificationFeature.withoutRoles.bind(this.gamificationFeature);
 
-  setGamificationProgressDays(days: GamificationProgressDays): void {
-    if (this.gamificationProgressDays() === days) {
-      return;
-    }
-    this.gamificationProgressDays.set(days);
-    this.loadGamificationProgress();
-  }
+  readonly setGamificationProgressDays = this.gamificationFeature.setGamificationProgressDays.bind(this.gamificationFeature);
 
-  trackGamificationType(_index: number, item: { eventType: string }): string {
-    return item.eventType;
-  }
+  readonly trackGamificationType = this.gamificationFeature.trackGamificationType.bind(this.gamificationFeature);
 
-  trackGamificationActor(index: number, item: { actorUserId?: number | null; actorName?: string | null; actorRole?: string | null }): string {
-    return `${item.actorUserId ?? 'system'}-${item.actorRole ?? 'role'}-${item.actorName ?? index}`;
-  }
+  readonly trackGamificationActor = this.gamificationFeature.trackGamificationActor.bind(this.gamificationFeature);
 
-  saveGamificationRules(): void {
-    const raw = this.gamificationForm.getRawValue();
-    const request: AdminGamificationRulesRequest = {
-      rules: [
-        { eventType: 'REVIEW_PUBLISHED', enabled: raw.reviewPublishedRuleEnabled, points: raw.reviewPublishedRulePoints },
-        { eventType: 'ORDER_PAID', enabled: raw.orderPaidRuleEnabled, points: raw.orderPaidRulePoints },
-        { eventType: 'BAD_REVIEW_TASK_DONE', enabled: raw.badReviewTaskDoneRuleEnabled, points: raw.badReviewTaskDoneRulePoints },
-        { eventType: 'REVIEW_RECOVERY_TASK_DONE', enabled: raw.reviewRecoveryTaskDoneRuleEnabled, points: raw.reviewRecoveryTaskDoneRulePoints }
-      ]
-    };
+  readonly saveGamificationRules = this.gamificationFeature.saveGamificationRules.bind(this.gamificationFeature);
 
-    this.saving.set(true);
-    this.error.set(null);
+  readonly rebuildGamificationLedger = this.gamificationFeature.rebuildGamificationLedger.bind(this.gamificationFeature);
 
-    this.dictionariesApi.updateGamificationRules(request).subscribe({
-      next: (rules) => {
-        this.saving.set(false);
-        this.applyGamificationRules(rules);
-        this.loadGamificationProgress();
-        this.toastService.success('Правила очков сохранены', 'Предпросмотр обновлен');
-      },
-      error: (err) => {
-        const message = this.errorMessage(err, 'Не удалось сохранить правила очков');
-        this.error.set(message);
-        this.saving.set(false);
-        this.toastService.error('Правила не сохранены', message);
-      }
-    });
-  }
-
-  rebuildGamificationLedger(): void {
-    if (!this.gamificationSettings()?.shadowScoringEnabled) {
-      this.toastService.error('Ledger не пересобран', 'Сначала включите теневое начисление очков');
-      return;
-    }
-
-    const days = this.gamificationProgressDays();
-    const confirmed = window.confirm(`Пересобрать shadow-ledger за ${days} дн.? Текущие shadow-записи за период будут заменены.`);
-    if (!confirmed) {
-      return;
-    }
-
-    this.saving.set(true);
-    this.error.set(null);
-
-    this.dictionariesApi.rebuildGamificationScoreLedger(days).subscribe({
-      next: (result) => {
-        this.saving.set(false);
-        this.gamificationLedgerRebuild.set(result);
-        this.loadGamificationProgress();
-        this.toastService.success(
-          'Ledger пересобран',
-          `Событий: ${result.eventsReviewed}, записей: ${result.entriesCreated}, очков: ${result.totalPoints}`
-        );
-      },
-      error: (err) => {
-        const message = this.errorMessage(err, 'Не удалось пересобрать ledger');
-        this.error.set(message);
-        this.saving.set(false);
-        this.toastService.error('Ledger не пересобран', message);
-      }
-    });
-  }
-
-  backfillGamificationEvents(): void {
-    const days = this.gamificationProgressDays();
-    const confirmed = window.confirm(`Собрать исторические события геймификации за ${days} дн.? Дубли будут пропущены, ledger будет пересобран.`);
-    if (!confirmed) {
-      return;
-    }
-
-    this.saving.set(true);
-    this.error.set(null);
-
-    this.dictionariesApi.backfillGamificationEvents(days).subscribe({
-      next: (result) => {
-        this.saving.set(false);
-        this.gamificationBackfill.set(result);
-        this.gamificationLedgerRebuild.set(result.ledgerRebuild);
-        this.loadGamificationProgress();
-        this.toastService.success(
-          'История собрана',
-          `Проверено: ${result.reviewedCandidates}, новых событий: ${result.eventsCreated}, очков: ${result.ledgerRebuild.totalPoints}`
-        );
-      },
-      error: (err) => {
-        const message = this.errorMessage(err, 'Не удалось собрать исторические события');
-        this.error.set(message);
-        this.saving.set(false);
-        this.toastService.error('История не собрана', message);
-      }
-    });
-  }
+  readonly backfillGamificationEvents = this.gamificationFeature.backfillGamificationEvents.bind(this.gamificationFeature);
 
   autoresponderTotal(): number {
     const settings = this.clientMessageSettings();
@@ -2572,12 +914,7 @@ export class AdminDictionariesComponent implements OnDestroy {
     ].filter(Boolean).length;
   }
 
-  monitorTotal(): number {
-    if (!this.clientMessageSettings()?.monitorEnabled) {
-      return 0;
-    }
-    return this.clientMessageMonitor()?.activeCandidates ?? 0;
-  }
+  readonly monitorTotal = this.messageMonitor.monitorTotal.bind(this.messageMonitor);
 
   paymentInstructionSourceLabel(source?: 'MANAGER_TEXT' | 'TBANK_LINK' | string | null): string {
     return source === 'TBANK_LINK' || source === 'BANK_LINK' || source === 'TOCHKA_LINK'
@@ -2589,25 +926,15 @@ export class AdminDictionariesComponent implements OnDestroy {
     return category?.title || '-';
   }
 
-  phoneOperatorName(operator?: PhoneOperatorOption | null): string {
-    return operator?.title || '-';
-  }
+  readonly phoneOperatorName = this.phonesFeature.phoneOperatorName.bind(this.phonesFeature);
 
-  timerState(phone: OperatorPhone): string {
-    return this.isTimerReady(phone) ? 'готов' : 'пауза';
-  }
+  readonly timerState = this.phonesFeature.timerState.bind(this.phonesFeature);
 
-  isTimerReady(phone: OperatorPhone): boolean {
-    return !phone.timer || new Date(phone.timer).getTime() <= Date.now();
-  }
+  readonly isTimerReady = this.phonesFeature.isTimerReady.bind(this.phonesFeature);
 
-  deviceTokenCount(phone: OperatorPhone): number {
-    return phone.deviceTokens?.length ?? 0;
-  }
+  readonly deviceTokenCount = this.phonesFeature.deviceTokenCount.bind(this.phonesFeature);
 
-  tokenPreview(token: string): string {
-    return token.length > 18 ? `${token.slice(0, 8)}...${token.slice(-6)}` : token;
-  }
+  readonly tokenPreview = this.phonesFeature.tokenPreview.bind(this.phonesFeature);
 
   selectedTitle(): string {
     if (this.activeTab() === 'managerTexts') {
@@ -2645,201 +972,43 @@ export class AdminDictionariesComponent implements OnDestroy {
     return this.selectedId() == null ? 'Новая запись' : `ID ${this.selectedId()}`;
   }
 
-  promoTextLabel(promoText: AdminPromoText): string {
-    return PROMO_TEXT_LABELS[promoText.position] ?? `Текст #${promoText.position}`;
-  }
+  readonly promoTextLabel = this.textsFeature.promoTextLabel.bind(this.textsFeature);
 
-  promoTextMeta(promoText: AdminPromoText): string {
-    return `ID ${promoText.id} · позиция ${promoText.position}`;
-  }
+  readonly promoTextMeta = this.textsFeature.promoTextMeta.bind(this.textsFeature);
 
-  promoTextPreview(value: string): string {
-    const normalized = value.replace(/\s+/g, ' ').trim();
-    return normalized.length > 110 ? `${normalized.slice(0, 110)}...` : normalized;
-  }
+  readonly promoTextPreview = this.textsFeature.promoTextPreview.bind(this.textsFeature);
 
-  promoUsageSummary(promoText: AdminPromoText): string {
-    const usages = this.promoAssignments()
-      .filter((assignment) => assignment.promoTextId === promoText.id)
-      .map((assignment) => `${assignment.managerTitle}: ${assignment.buttonLabel}`);
+  readonly promoUsageSummary = this.textsFeature.promoUsageSummary.bind(this.textsFeature);
 
-    if (usages.length) {
-      return usages.slice(0, 2).join(', ') + (usages.length > 2 ? ` +${usages.length - 2}` : '');
-    }
+  readonly managerTextSummary = this.textsFeature.managerTextSummary.bind(this.textsFeature);
 
-    const defaultButtons = this.promoButtons()
-      .filter((button) => button.defaultPromoTextId === promoText.id)
-      .map((button) => `${button.sectionTitle}: ${button.buttonLabel}`);
+  readonly managerTextPreview = this.textsFeature.managerTextPreview.bind(this.textsFeature);
 
-    return defaultButtons.length ? `по умолчанию: ${defaultButtons.slice(0, 2).join(', ')}` : 'не назначен';
-  }
+  readonly selectedPromoManagerTitle = this.textsFeature.selectedPromoManagerTitle.bind(this.textsFeature);
 
-  managerTextSummary(managerText: AdminManagerText): string {
-    const fields = [
-      ['оплата', managerText.payText],
-      ['начало', managerText.beginText],
-      ['оффер', managerText.offerText],
-      ['напоминание', managerText.reminderText],
-      ['старт', managerText.startText]
-    ];
-    const filled = fields.filter(([, value]) => value.trim().length > 0).map(([label]) => label);
-    return filled.length ? filled.join(', ') : 'тексты не заполнены';
-  }
+  readonly selectPromoManager = this.textsFeature.selectPromoManager.bind(this.textsFeature);
 
-  managerTextPreview(managerText: AdminManagerText): string {
-    const value = [
-      managerText.payText,
-      managerText.beginText,
-      managerText.offerText,
-      managerText.reminderText,
-      managerText.startText
-    ].find((text) => text.trim().length > 0) ?? '';
-    return this.promoTextPreview(value);
-  }
+  readonly promoAssignmentValue = this.textsFeature.promoAssignmentValue.bind(this.textsFeature);
 
-  selectedPromoManagerTitle(): string {
-    const managerId = this.selectedPromoManagerId();
-    return this.promoManagers().find((manager) => manager.id === managerId)?.title ?? 'Выберите менеджера';
-  }
+  readonly promoDefaultTextLabel = this.textsFeature.promoDefaultTextLabel.bind(this.textsFeature);
 
-  selectPromoManager(value: string | number): void {
-    const managerId = Number(value);
-    this.selectedPromoManagerId.set(Number.isFinite(managerId) && managerId > 0 ? managerId : null);
-    this.error.set(null);
-  }
+  readonly promoAssignedTextLabel = this.textsFeature.promoAssignedTextLabel.bind(this.textsFeature);
 
-  promoAssignmentValue(button: PromoButtonSlot): number | '' {
-    return this.promoAssignmentFor(button)?.promoTextId ?? '';
-  }
+  readonly savePromoAssignment = this.textsFeature.savePromoAssignment.bind(this.textsFeature);
 
-  promoDefaultTextLabel(button: PromoButtonSlot): string {
-    const defaultText = this.promoTexts().find((text) => text.id === button.defaultPromoTextId);
-    return defaultText ? this.promoTextLabel(defaultText) : `позиция ${button.defaultPromoPosition}`;
-  }
+  readonly botBrowserUrl = this.accountsFeature.botBrowserUrl.bind(this.accountsFeature);
 
-  promoAssignedTextLabel(button: PromoButtonSlot): string {
-    const assignment = this.promoAssignmentFor(button);
-    if (!assignment?.promoTextId) {
-      return `по умолчанию: ${this.promoDefaultTextLabel(button)}`;
-    }
+  readonly openBotImport = this.accountsFeature.openBotImport.bind(this.accountsFeature);
 
-    const text = this.promoTexts().find((promoText) => promoText.id === assignment.promoTextId);
-    return text ? this.promoTextLabel(text) : assignment.promoTextLabel;
-  }
+  readonly closeBotImport = this.accountsFeature.closeBotImport.bind(this.accountsFeature);
 
-  savePromoAssignment(button: PromoButtonSlot, value: string): void {
-    const managerId = this.selectedPromoManagerId();
-    if (managerId == null) {
-      this.error.set('Выберите менеджера для назначения промо-текста.');
-      return;
-    }
+  readonly selectBotImportFile = this.accountsFeature.selectBotImportFile.bind(this.accountsFeature);
 
-    this.saving.set(true);
-    this.error.set(null);
+  readonly selectBotImportCity = this.accountsFeature.selectBotImportCity.bind(this.accountsFeature);
 
-    const request: Observable<PromoTextAssignment | void> = value
-      ? this.dictionariesApi.savePromoTextAssignment({
-          managerId,
-          section: button.section,
-          buttonKey: button.buttonKey,
-          promoTextId: Number(value)
-        } satisfies PromoTextAssignmentRequest)
-      : this.dictionariesApi.resetPromoTextAssignment(managerId, button.section, button.buttonKey);
+  readonly uploadBotImport = this.accountsFeature.uploadBotImport.bind(this.accountsFeature);
 
-    request.subscribe({
-      next: () => {
-        this.saving.set(false);
-        this.toastService.success('Назначение сохранено', `${button.sectionTitle}: ${button.buttonLabel}`);
-        this.reloadPromoManagement();
-      },
-      error: (err: unknown) => {
-        const message = this.errorMessage(err, 'Не удалось сохранить назначение');
-        this.error.set(message);
-        this.saving.set(false);
-        this.toastService.error('Назначение не сохранено', message);
-      }
-    });
-  }
-
-  botBrowserUrl(bot: AdminBot): string {
-    return `/admin/dictionaries/accounts/${bot.id}/browser`;
-  }
-
-  openBotImport(mode: BotImportMode = 'file'): void {
-    this.importMode.set(mode);
-    this.importModalOpen.set(true);
-    this.importFile.set(null);
-    this.importResult.set(null);
-    this.importError.set(null);
-    this.importCitySearch.set('');
-    this.importCityId.set(mode === 'city' ? null : this.defaultBotCityId());
-  }
-
-  closeBotImport(): void {
-    if (this.importing()) {
-      return;
-    }
-
-    this.importModalOpen.set(false);
-    this.importFile.set(null);
-    this.importError.set(null);
-    this.importCitySearch.set('');
-    this.importCityId.set(null);
-  }
-
-  selectBotImportFile(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    this.importFile.set(input.files?.[0] ?? null);
-    this.importResult.set(null);
-    this.importError.set(null);
-  }
-
-  selectBotImportCity(city: DictionaryOption): void {
-    this.importCityId.set(city.id);
-    this.importCitySearch.set(city.title);
-    this.importResult.set(null);
-    this.importError.set(null);
-  }
-
-  uploadBotImport(): void {
-    const file = this.importFile();
-    if (!file || this.importing()) {
-      this.importError.set('Выберите CSV или Excel-файл.');
-      return;
-    }
-
-    const cityId = this.importMode() === 'city' ? this.importCityId() : null;
-    if (this.importMode() === 'city' && cityId == null) {
-      this.importError.set('Выберите город для привязки аккаунтов.');
-      return;
-    }
-
-    this.importing.set(true);
-    this.importError.set(null);
-    this.importResult.set(null);
-
-    this.dictionariesApi.importBots(file, cityId).subscribe({
-      next: (result) => {
-        this.importing.set(false);
-        this.importResult.set(result);
-        this.importFile.set(null);
-        this.toastService.success('Импорт аккаунтов завершен', this.importResultMessage(result));
-        this.reloadAfterMutation();
-      },
-      error: (err) => {
-        const message = this.errorMessage(err, 'Не удалось импортировать аккаунты');
-        this.importError.set(message);
-        this.importing.set(false);
-        this.toastService.error('Аккаунты не импортированы', message);
-      }
-    });
-  }
-
-  importResultMessage(result: BotImportResponse): string {
-    const duplicateText = result.skippedDuplicates ? `, дублей пропущено: ${result.skippedDuplicates}` : '';
-    const invalidText = result.skippedInvalid ? `, строк с ошибками: ${result.skippedInvalid}` : '';
-    return `Добавлено: ${result.added}${duplicateText}${invalidText}`;
-  }
+  readonly importResultMessage = this.accountsFeature.importResultMessage.bind(this.accountsFeature);
 
   trackTab(_index: number, tab: DictionaryTab): DictionaryTabKey {
     return tab.key;
@@ -2899,7 +1068,7 @@ export class AdminDictionariesComponent implements OnDestroy {
 
   goToBotPage(page: number): void {
     const nextPage = Math.max(0, Math.min(page, this.botTotalPages() - 1));
-    if (nextPage === this.botPage() || this.loading()) {
+    if (nextPage === this.botPage() || this.activeLoading()) {
       return;
     }
 
@@ -2921,1343 +1090,115 @@ export class AdminDictionariesComponent implements OnDestroy {
   }
 
   private loadActive(): void {
-    const requestId = ++this.dictionaryLoadEpoch;
-    const tab = this.activeTab();
-    this.aiProviderLoadEpoch += 1;
-    if (tab === 'specialistTransfer' || tab === 'audit') {
-      this.loading.set(false);
-      this.error.set(null);
+    this.loading.set(false); this.error.set(null);
+    const feature = this.activeFeature();
+    if (feature) {
+      if (this.activeTab() === 'settings') this.loadContractorPaymentSystemStatus();
+      feature.load();
       return;
     }
-
-    this.loading.set(true);
-    this.error.set(null);
-    this.selectedId.set(null);
-
-    const keyword = this.search();
-    let request: Observable<AdminCategory[] | AdminSubCategory[] | AdminCity[] | ProductsResponse | OperatorPhonesResponse | BotsResponse | PromoTextManagementResponse | AdminManagerText[] | GamificationDictionaryResponse | AdminNagulSettings | DictionarySettingsResponse | AdminClientMessageSettings | AdminClientMessageMonitor>;
-    switch (tab) {
-      case 'categories':
-        request = this.dictionariesApi.getCategories(keyword);
-        break;
-      case 'aiProvider':
-        this.loadAiProviderStatus();
-        return;
-      case 'subcategories':
-        request = this.dictionariesApi.getSubCategories(keyword);
-        break;
-      case 'cities':
-        request = this.dictionariesApi.getCities(keyword);
-        break;
-      case 'products':
-        request = this.dictionariesApi.getProducts(keyword);
-        break;
-      case 'phones':
-        request = this.phonesApi.getPhones(keyword);
-        break;
-      case 'accounts':
-        request = this.dictionariesApi.getBots(keyword, this.botPage(), this.botPageSize());
-        break;
-      case 'promo':
-        request = this.dictionariesApi.getPromoTextManagement(keyword);
-        break;
-      case 'managerTexts':
-        request = this.dictionariesApi.getManagerTexts(keyword);
-        break;
-      case 'gamification':
-        request = forkJoin({
-          settings: this.dictionariesApi.getGamificationSettings(),
-          rules: this.dictionariesApi.getGamificationRules(),
-          progress: this.dictionariesApi.getGamificationProgress(this.gamificationProgressDays()),
-          scorePreview: this.dictionariesApi.getGamificationScorePreview(this.gamificationProgressDays()),
-          scoreLedger: this.dictionariesApi.getGamificationScoreLedger(this.gamificationProgressDays()),
-          balances: this.dictionariesApi.getGamificationBalances(this.gamificationProgressDays()),
-          events: this.dictionariesApi.getGamificationEvents()
-        });
-        break;
-      case 'settings':
-        this.loadContractorPaymentSystemStatus();
-        request = forkJoin({
-          nagulSettings: this.dictionariesApi.getNagulSettings(),
-          telegramReportSettings: this.dictionariesApi.getTelegramReportSettings(),
-          whatsAppGroupSyncSettings: this.dictionariesApi.getWhatsAppGroupSyncSettings(),
-          clientPublicationProgressReportSettings: this.dictionariesApi.getClientPublicationProgressReportSettings(),
-          workerCellularAccessSettings: this.canApplyMaintenance()
-            ? this.dictionariesApi.getWorkerCellularAccessSettings()
-            : of(null)
-        });
-        break;
-      case 'messageDictionary':
-        request = this.dictionariesApi.getClientMessageSettings();
-        break;
-      case 'autoresponder':
-        request = this.dictionariesApi.getClientMessageSettings();
-        break;
-      case 'autoresponderMonitor':
-        request = this.dictionariesApi.getClientMessageMonitor();
-        break;
-    }
-
-    request.subscribe({
-      next: (response: AdminCategory[] | AdminSubCategory[] | AdminCity[] | ProductsResponse | OperatorPhonesResponse | BotsResponse | PromoTextManagementResponse | AdminManagerText[] | GamificationDictionaryResponse | AdminNagulSettings | DictionarySettingsResponse | AdminClientMessageSettings | AdminClientMessageMonitor) => {
-        if (requestId !== this.dictionaryLoadEpoch || this.activeTab() !== tab) {
-          return;
-        }
-        switch (tab) {
-          case 'categories':
-            this.categories.set(response as AdminCategory[]);
-            this.ensureDefaults();
-            break;
-          case 'subcategories':
-            this.subCategories.set(response as AdminSubCategory[]);
-            break;
-          case 'cities':
-            this.cities.set(response as AdminCity[]);
-            break;
-          case 'products': {
-            const payload = response as ProductsResponse;
-            this.products.set(payload.products);
-            this.productCategories.set(payload.categories);
-            break;
-          }
-          case 'phones':
-            this.applyPhonesResponse(response as OperatorPhonesResponse);
-            break;
-          case 'accounts': {
-            const payload = response as BotsResponse;
-            const totalPages = Math.max(1, payload.totalPages);
-            if (payload.total > 0 && payload.page >= totalPages) {
-              this.botPage.set(totalPages - 1);
-              this.loadActive();
-              return;
-            }
-            this.applyBotsResponse(payload);
-            this.ensureDefaults();
-            break;
-          }
-          case 'promo':
-            this.applyPromoManagement(response as PromoTextManagementResponse);
-            break;
-          case 'managerTexts':
-            this.managerTexts.set(response as AdminManagerText[]);
-            break;
-          case 'gamification':
-            this.applyGamificationResponse(response as GamificationDictionaryResponse);
-            break;
-          case 'settings': {
-            const payload = response as DictionarySettingsResponse;
-            this.applyNagulSettings(payload.nagulSettings);
-            this.applyTelegramReportSettings(payload.telegramReportSettings);
-            this.applyWhatsAppGroupSyncSettings(payload.whatsAppGroupSyncSettings);
-            this.applyClientPublicationProgressReportSettings(payload.clientPublicationProgressReportSettings);
-            if (payload.workerCellularAccessSettings) {
-              this.applyWorkerCellularAccessSettings(payload.workerCellularAccessSettings);
-            }
-            break;
-          }
-          case 'messageDictionary':
-            this.applyClientMessageSettings(response as AdminClientMessageSettings);
-            break;
-          case 'autoresponder':
-            this.applyClientMessageSettings(response as AdminClientMessageSettings);
-            break;
-          case 'autoresponderMonitor': {
-            const monitor = response as AdminClientMessageMonitor;
-            this.clientMessageMonitor.set(monitor);
-            this.patchClientMessageMonitorEnabled(monitor.enabled);
-            break;
-          }
-        }
-
-        this.loading.set(false);
-      },
-      error: (err: unknown) => {
-        if (requestId !== this.dictionaryLoadEpoch || this.activeTab() !== tab) {
-          return;
-        }
-        const message = this.errorMessage(err, 'Не удалось загрузить справочник');
-        this.error.set(message);
-        this.loading.set(false);
-        this.toastService.error('Справочник не загрузился', message);
-      }
-    });
-  }
-
-  private saveCategory(): void {
-    if (this.categoryForm.invalid) {
-      this.categoryForm.markAllAsTouched();
-      return;
-    }
-
-    const request: TitleRequest = { title: this.categoryForm.controls.title.value.trim() };
-    const selectedId = this.editingCategoryId();
-    const call = selectedId == null
-      ? this.dictionariesApi.createCategory(request)
-      : this.dictionariesApi.updateCategory(selectedId, request);
-
-    this.runSave(call, 'Категория сохранена', (saved) => {
-      this.activeCategoryId.set(saved.id);
-      this.editingCategoryId.set(saved.id);
-      this.categoryEditorOpen.set(false);
-    });
-  }
-
-  private saveSubCategory(): void {
-    if (this.subCategoryForm.invalid) {
-      this.subCategoryForm.markAllAsTouched();
-      return;
-    }
-
-    const raw = this.subCategoryForm.getRawValue();
-    const request: SubCategoryRequest = {
-      title: raw.title.trim(),
-      categoryId: raw.categoryId ?? this.activeCategoryId()
-    };
-    const selectedId = this.editingSubCategoryId();
-    const call = selectedId == null
-      ? this.dictionariesApi.createSubCategory(request)
-      : this.dictionariesApi.updateSubCategory(selectedId, request);
-
-    this.runSave(call, 'Подкатегория сохранена', (saved) => {
-      this.editingSubCategoryId.set(saved.id);
-      this.subCategoryForm.controls.categoryId.setValue(request.categoryId);
-      this.subCategoryEditorOpen.set(false);
-    });
-  }
-
-  private saveCity(): void {
-    if (this.cityForm.invalid) {
-      this.cityForm.markAllAsTouched();
-      return;
-    }
-
-    const request: CityRequest = {
-      title: this.cityForm.controls.title.value.trim(),
-      latitude: this.coordinateValue(this.cityForm.controls.latitude.value),
-      longitude: this.coordinateValue(this.cityForm.controls.longitude.value)
-    };
-    if (!this.validCoordinate(request.latitude, -90, 90) || !this.validCoordinate(request.longitude, -180, 180)) {
-      this.error.set('Проверьте координаты: широта от -90 до 90, долгота от -180 до 180.');
-      return;
-    }
-    const selectedId = this.selectedId();
-    const call = selectedId == null
-      ? this.dictionariesApi.createCity(request)
-      : this.dictionariesApi.updateCity(selectedId, request);
-
-    this.runSave(call, 'Город сохранен');
-  }
-
-  rebuildCityDistances(): void {
-    if (this.rebuildingCityDistances()) {
-      return;
-    }
-    this.rebuildingCityDistances.set(true);
-    this.dictionariesApi.rebuildCityDistances(150).subscribe({
-      next: (result) => {
-        this.toastService.success(
-          'Матрица расстояний пересчитана',
-          `городов: ${result.citiesWithCoordinates}, без координат: ${result.citiesWithoutCoordinates}, связей: ${result.distancesSaved}`
-        );
-        this.rebuildingCityDistances.set(false);
-        this.loadActive();
-      },
-      error: (err) => {
-        this.toastService.error('Матрица не пересчитана', this.errorMessage(err, 'Не удалось пересчитать расстояния'));
-        this.rebuildingCityDistances.set(false);
-      }
-    });
-  }
-
-  rebuildSelectedCityDistances(): void {
-    const selectedId = this.selectedId();
-    if (selectedId == null || this.rebuildingCityDistances()) {
-      return;
-    }
-    this.rebuildingCityDistances.set(true);
-    this.dictionariesApi.rebuildCityDistancesForCity(selectedId).subscribe({
-      next: (result) => {
-        this.toastService.success(
-          'Город пересчитан',
-          `городов: ${result.citiesWithCoordinates}, без координат: ${result.citiesWithoutCoordinates}, связей: ${result.distancesSaved}`
-        );
-        this.rebuildingCityDistances.set(false);
-        this.loadActive();
-      },
-      error: (err) => {
-        this.toastService.error('Город не пересчитан', this.errorMessage(err, 'Не удалось пересчитать расстояния города'));
-        this.rebuildingCityDistances.set(false);
-      }
-    });
-  }
-
-  importCityCoordinates(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    const file = input.files?.[0];
-    if (!file || this.rebuildingCityDistances()) {
-      return;
-    }
-    this.rebuildingCityDistances.set(true);
-    this.dictionariesApi.importCityCoordinates(file).subscribe({
-      next: (result) => {
-        const errorTail = result.errors.length ? `, ошибок: ${result.errors.length}` : '';
-        this.toastService.success(
-          'Координаты загружены',
-          `обновлено: ${result.updated}, пропущено: ${result.skipped}${errorTail}, связей: ${result.distancesSaved}`
-        );
-        this.rebuildingCityDistances.set(false);
-        this.loadActive();
-      },
-      error: (err) => {
-        this.toastService.error('Координаты не загружены', this.errorMessage(err, 'Не удалось импортировать координаты'));
-        this.rebuildingCityDistances.set(false);
-      }
-    });
-    input.value = '';
-  }
-
-  private saveProduct(): void {
-    if (this.productForm.invalid) {
-      this.productForm.markAllAsTouched();
-      return;
-    }
-
-    const raw = this.productForm.getRawValue();
-    const request: ProductRequest = {
-      title: raw.title.trim(),
-      price: Number(raw.price || 0),
-      categoryId: raw.categoryId,
-      photo: raw.photo,
-      requiresPerformer: raw.requiresPerformer,
-      targetPlatform: raw.targetPlatform || 'OTHER',
-      performerRewardPercent: Number(raw.performerRewardPercent || 0),
-      specialistRewardPercent: Number(raw.specialistRewardPercent || 0),
-      managerRewardPercent: Number(raw.managerRewardPercent || 0)
-    };
-    const selectedId = this.selectedId();
-    const call = selectedId == null
-      ? this.dictionariesApi.createProduct(request)
-      : this.dictionariesApi.updateProduct(selectedId, request);
-
-    this.runSave(call, 'Продукт сохранен');
-  }
-
-  private coordinateValue(value: string): number | null {
-    const normalized = value.trim().replace(',', '.');
-    if (!normalized) {
-      return null;
-    }
-    const numeric = Number(normalized);
-    return Number.isFinite(numeric) ? numeric : Number.NaN;
-  }
-
-  private validCoordinate(value: number | null | undefined, min: number, max: number): boolean {
-    return value == null || (Number.isFinite(value) && value >= min && value <= max);
-  }
-
-  private savePhone(): void {
-    if (this.phoneForm.invalid) {
-      this.phoneForm.markAllAsTouched();
-      return;
-    }
-
-    const phone = this.selectedPhone();
-    const request = this.toPhoneRequest();
-    const call = phone
-      ? this.phonesApi.updatePhone(phone.id, request)
-      : this.phonesApi.createPhone(request);
-
-    this.saving.set(true);
-    this.error.set(null);
-
-    call.subscribe({
-      next: (saved) => {
-        this.saving.set(false);
-        this.selectedId.set(saved.id);
-        this.selectedPhone.set(saved);
-        this.patchSavedPhone(saved);
-        this.selectPhone(saved);
-        this.toastService.success('Телефон сохранен', `ID ${saved.id}`);
-        this.reloadAfterMutation();
-      },
-      error: (err: unknown) => {
-        const message = this.errorMessage(err, 'Не удалось сохранить телефон');
-        this.error.set(message);
-        this.saving.set(false);
-        this.toastService.error('Телефон не сохранен', message);
-      }
-    });
-  }
-
-  private deleteSelectedPhone(): void {
-    const phone = this.selectedPhone();
-    if (!phone || this.deleting()) {
-      return;
-    }
-
-    const confirmed = window.confirm(`Удалить телефон ${phone.number}?`);
-    if (!confirmed) {
-      return;
-    }
-
-    this.deleting.set(true);
-    this.error.set(null);
-
-    this.phonesApi.deletePhone(phone.id).subscribe({
-      next: () => {
-        this.deleting.set(false);
-        this.toastService.success('Телефон удален', phone.number);
-        this.startNewPhone();
-        this.reloadAfterMutation();
-      },
-      error: (err: unknown) => {
-        const message = this.errorMessage(err, 'Не удалось удалить телефон');
-        this.error.set(message);
-        this.deleting.set(false);
-        this.toastService.error('Телефон не удален', message);
-      }
-    });
-  }
-
-  private saveBot(): void {
-    if (this.selectedId() == null && !this.botForm.controls.password.value.trim()) {
-      this.botForm.controls.password.setErrors({ required: true });
-    }
-    if (this.botForm.invalid) {
-      this.botForm.markAllAsTouched();
-      return;
-    }
-
-    const raw = this.botForm.getRawValue();
-    const request: BotRequest = {
-      login: raw.login.trim(),
-      password: raw.password.trim(),
-      fio: raw.fio.trim(),
-      workerId: raw.workerId,
-      cityId: raw.cityId,
-      statusId: raw.statusId,
-      counter: Number(raw.counter || 0),
-      active: raw.active
-    };
-    const selectedId = this.selectedId();
-    const call = selectedId == null
-      ? this.dictionariesApi.createBot(request)
-      : this.dictionariesApi.updateBot(selectedId, request);
-
-    this.runSave(call, 'Аккаунт сохранен');
-  }
-
-  private savePromoText(): void {
-    if (this.promoTextForm.invalid) {
-      this.promoTextForm.markAllAsTouched();
-      return;
-    }
-
-    const request: PromoTextRequest = {
-      text: this.promoTextForm.controls.text.value.trim()
-    };
-
-    const selectedId = this.selectedId();
-    const call = selectedId == null
-      ? this.dictionariesApi.createPromoText(request)
-      : this.dictionariesApi.updatePromoText(selectedId, request);
-
-    this.runSave(call, 'Промо-текст сохранен');
-  }
-
-  private saveManagerText(): void {
-    const managerId = this.selectedId();
-    if (managerId == null) {
-      this.error.set('Выберите менеджера для редактирования текстов.');
-      return;
-    }
-
-    const raw = this.managerTextForm.getRawValue();
-    const request: ManagerTextRequest = {
-      payText: raw.payText,
-      beginText: raw.beginText,
-      offerText: raw.offerText,
-      reminderText: raw.reminderText,
-      startText: raw.startText
-    };
-
-    this.saving.set(true);
-    this.error.set(null);
-
-    this.dictionariesApi.updateManagerText(managerId, request).subscribe({
-      next: (saved) => {
-        this.saving.set(false);
-        this.selectedId.set(saved.managerId);
-        this.managerTexts.update((items) =>
-          items.map((item) => item.managerId === saved.managerId ? saved : item)
-        );
-        this.managerTextForm.setValue({
-          payText: saved.payText,
-          beginText: saved.beginText,
-          offerText: saved.offerText,
-          reminderText: saved.reminderText,
-          startText: saved.startText
-        });
-        this.toastService.success('Тексты менеджера сохранены', saved.managerTitle);
-      },
-      error: (err) => {
-        const message = this.errorMessage(err, 'Не удалось сохранить тексты менеджера');
-        this.error.set(message);
-        this.saving.set(false);
-        this.toastService.error('Тексты не сохранены', message);
-      }
-    });
-  }
-
-  private saveGamificationSettings(): void {
-    if (this.gamificationForm.invalid) {
-      this.gamificationForm.markAllAsTouched();
-      return;
-    }
-
-    const raw = this.gamificationForm.getRawValue();
-    const request: AdminGamificationSettingsRequest = {
-      enabled: raw.enabled,
-      workerEnabled: raw.workerEnabled,
-      managerEnabled: raw.managerEnabled,
-      operatorEnabled: raw.operatorEnabled,
-      marketologEnabled: raw.marketologEnabled,
-      showInCabinet: raw.showInCabinet,
-      showInScore: raw.showInScore,
-      eventsEnabled: raw.eventsEnabled,
-      shadowScoringEnabled: raw.shadowScoringEnabled
-    };
-    const rewardRequest: GamificationRewardSettings = {
-      rewardsEnabled: raw.rewardsEnabled,
-      competitionEnabled: raw.competitionEnabled,
-      levelXp: raw.levelXp,
-      tokenLevelStep: raw.tokenLevelStep,
-      slaEnabled: raw.slaEnabled,
-      controlTargetHours: raw.controlTargetHours,
-      dayTargetPercent: raw.dayTargetPercent,
-      messageTargetMinutes: raw.messageTargetMinutes,
-      messageHardMinutes: raw.messageHardMinutes,
-      leadTargetMinutes: raw.leadTargetMinutes,
-      leadHardMinutes: raw.leadHardMinutes,
-      riskTargetMinutes: raw.riskTargetMinutes,
-      riskHardMinutes: raw.riskHardMinutes,
-      defaultTargetMinutes: raw.defaultTargetMinutes,
-      defaultHardMinutes: raw.defaultHardMinutes
-    };
-
-    this.saving.set(true);
-    this.error.set(null);
-
-    forkJoin({
-      settings: this.dictionariesApi.updateGamificationSettings(request),
-      rewardSettings: this.rewardsApi.updateSettings(rewardRequest)
-    }).subscribe({
-      next: ({ settings, rewardSettings }) => {
-        this.saving.set(false);
-        this.applyGamificationSettings(settings);
-        this.applyRewardSettings(rewardSettings);
-        this.toastService.success(
-          'Геймификация сохранена',
-          settings.enabled ? 'Контур включен' : 'Контур выключен'
-        );
-      },
-      error: (err) => {
-        const message = this.errorMessage(err, 'Не удалось сохранить геймификацию');
-        this.error.set(message);
-        this.saving.set(false);
-        this.toastService.error('Геймификация не сохранена', message);
-      }
-    });
-  }
-
-  private saveSettings(): void {
-    if (this.settingsForm.invalid) {
-      this.settingsForm.markAllAsTouched();
-      return;
-    }
-
-    const raw = this.settingsForm.getRawValue();
-    const nagulRequest: NagulSettingsRequest = {
-      cooldownMinutes: Number(raw.nagulCooldownMinutes ?? 0),
-      lookaheadDays: Number(raw.nagulLookaheadDays ?? 60),
-      accountWalkedCounterThreshold: Number(raw.accountWalkedCounterThreshold ?? 3),
-      accountWalkDelayDays: Number(raw.accountWalkDelayDays ?? 2)
-    };
-    const telegramRequest: TelegramReportScheduleSettingsRequest = {
-      morningEnabled: raw.morningReportEnabled,
-      morningTime: raw.morningReportTime,
-      eveningEnabled: raw.eveningReportEnabled,
-      eveningTime: raw.eveningReportTime,
-      zone: raw.telegramReportZone.trim()
-    };
-    const whatsAppRequest: WhatsAppGroupSyncSettingsRequest = {
-      enabled: raw.whatsAppGroupSyncEnabled,
-      intervalMinutes: Number(raw.whatsAppGroupSyncIntervalMinutes ?? 30)
-    };
-    const clientPublicationProgressReportRequest: ClientPublicationProgressReportSettingsRequest = {
-      enabled: raw.clientPublicationProgressReportsEnabled
-    };
-    const workerCellularAccessRequest: WorkerCellularAccessSettingsRequest = {
-      mode: raw.workerCellularAccessMode,
-      enforcedReasons: workerCellularAccessReasons(raw),
-      enforceNativeVirtualDevice: raw.enforceNativeVirtualDevice
-    };
-
-    if (
-      this.canApplyMaintenance()
-      && requiresWorkerCellularEnforceConfirmation(
-        this.workerCellularAccessSettings()?.mode,
-        workerCellularAccessRequest.mode
-      )
-      && !window.confirm(
-        'Включить боевой режим? Специалисты через домашнюю сеть/Wi-Fi или VPN получат отказ в защищённых подразделах.'
-      )
-    ) {
-      return;
-    }
-
-    this.saving.set(true);
-    this.error.set(null);
-
-    const requests: Observable<unknown>[] = [
-      this.dictionariesApi.updateNagulSettings(nagulRequest),
-      this.dictionariesApi.updateTelegramReportSettings(telegramRequest),
-      this.dictionariesApi.updateWhatsAppGroupSyncSettings(whatsAppRequest),
-      this.dictionariesApi.updateClientPublicationProgressReportSettings(clientPublicationProgressReportRequest)
-    ];
-    if (this.canApplyMaintenance()) {
-      requests.push(this.dictionariesApi.updateWorkerCellularAccessSettings(workerCellularAccessRequest));
-    }
-
-    let completed = 0;
-    concat(...requests).pipe(
-      tap(() => {
-        completed += 1;
-      })
-    ).subscribe({
-      complete: () => {
-        this.saving.set(false);
-        this.loadActive();
-        this.toastService.success('Настройки сохранены', 'Все разделы применены; состояние перечитано с сервера.');
-      },
-      error: (err) => {
-        const message = this.errorMessage(err, 'Не удалось сохранить настройки');
-        this.error.set(message);
-        this.saving.set(false);
-        this.loadActive();
-        this.toastService.error(
-          completed > 0 ? 'Настройки сохранены частично' : 'Настройки не сохранены',
-          completed > 0
-            ? `Применено разделов: ${completed} из ${requests.length}. Состояние перечитано с сервера. ${message}`
-            : message
-        );
-      }
-    });
+    if (this.activeTab() === 'aiProvider') this.loadAiProviderStatus();
+    else if (this.activeTab() === 'autoresponderMonitor') this.messageMonitor.loadClientMessageMonitor(false, true);
   }
 
-  private saveAutoresponderSettings(
-    successTitle = 'Автоответчик сохранен',
-    successMessage: (settings: AdminClientMessageSettings) => string = (settings) =>
-      settings.workerEnabled ? `лимит ${settings.dailyLimit} в день` : 'сервис выключен'
-  ): void {
-    if (this.autoresponderForm.invalid) {
-      this.autoresponderForm.markAllAsTouched();
-      return;
-    }
-
-    const raw = this.autoresponderForm.getRawValue();
-    const request: ClientMessageSettingsRequest = {
-      workerEnabled: raw.workerEnabled,
-      liveEnabled: raw.liveEnabled,
-      immediateEnabled: raw.immediateEnabled,
-      monitorEnabled: raw.monitorEnabled,
-      reviewCheckEnabled: raw.reviewCheckEnabled,
-      reviewCheckAutoArchiveEnabled: raw.reviewCheckAutoArchiveEnabled,
-      clientTextReminderEnabled: raw.clientTextReminderEnabled,
-      paymentReminderEnabled: raw.paymentReminderEnabled,
-      badReviewInvoiceEnabled: raw.badReviewInvoiceEnabled,
-      badReviewAutoBanEnabled: raw.badReviewAutoBanEnabled,
-      reviewRecoveryNoticeEnabled: raw.reviewRecoveryNoticeEnabled,
-      paymentOverdueEnabled: raw.paymentOverdueEnabled,
-      paymentOverdueLiveEnabled: raw.paymentOverdueLiveEnabled,
-      archiveReorderEnabled: raw.archiveReorderEnabled,
-      errorProtectionEnabled: raw.errorProtectionEnabled,
-      unansweredAutoIgnoreEnabled: raw.unansweredAutoIgnoreEnabled,
-      unansweredResolutionEnforcementEnabled: raw.unansweredResolutionEnforcementEnabled,
-      unansweredFastClickGuardEnabled: raw.unansweredFastClickGuardEnabled,
-      unansweredReplyQualityShadowEnabled: raw.unansweredReplyQualityShadowEnabled,
-      unansweredFastClickWarningCount: Number(raw.unansweredFastClickWarningCount ?? 3),
-      unansweredFastClickWarningSeconds: Number(raw.unansweredFastClickWarningSeconds ?? 10),
-      unansweredFastClickCriticalCount: Number(raw.unansweredFastClickCriticalCount ?? 10),
-      unansweredFastClickCriticalSeconds: Number(raw.unansweredFastClickCriticalSeconds ?? 60),
-      reviewCheckIntervalDays: Number(raw.reviewCheckIntervalDays ?? 2),
-      reviewCheckAutoArchiveDays: Number(raw.reviewCheckAutoArchiveDays ?? 30),
-      clientTextReminderIntervalDays: Number(raw.clientTextReminderIntervalDays ?? 3),
-      paymentReminderIntervalDays: Number(raw.paymentReminderIntervalDays ?? 2),
-      reviewCheckRetryDelayHours: Number(raw.reviewCheckRetryDelayHours ?? 2),
-      paymentInvoiceRetryDelayHours: Number(raw.paymentInvoiceRetryDelayHours ?? 2),
-      transientRetryMinutes: Number(raw.transientRetryMinutes ?? 15),
-      manualControlFailureThreshold: Number(raw.manualControlFailureThreshold ?? 3),
-      manualControlAfterMinutes: Number(raw.manualControlAfterMinutes ?? 60),
-      badReviewInvoiceRetryDelayHours: Number(raw.badReviewInvoiceRetryDelayHours ?? 2),
-      badReviewAutoBanDelayDays: Number(raw.badReviewAutoBanDelayDays ?? 2),
-      reviewRecoveryNoticeRetryDelayHours: Number(raw.reviewRecoveryNoticeRetryDelayHours ?? 2),
-      paymentOverdueDays: Number(raw.paymentOverdueDays ?? 30),
-      archiveReorderMonths: Number(raw.archiveReorderMonths ?? 3),
-      archiveReorderJitterDays: Number(raw.archiveReorderJitterDays ?? 10),
-      archiveOrderRetentionDays: Number(raw.archiveOrderRetentionDays ?? 90),
-      errorProtectionThreshold: Number(raw.errorProtectionThreshold ?? 20),
-      errorProtectionWindowMinutes: Number(raw.errorProtectionWindowMinutes ?? 10),
-      errorProtectionCooldownMinutes: Number(raw.errorProtectionCooldownMinutes ?? 60),
-      whatsAppAuthRetryHours: Number(raw.whatsAppAuthRetryHours ?? 2),
-      whatsAppAuthAlertCooldownHours: Number(raw.whatsAppAuthAlertCooldownHours ?? 12),
-      retentionDays: Number(raw.retentionDays ?? 90),
-      tickBatchSize: Number(raw.tickBatchSize ?? 5),
-      candidateLimit: Number(raw.candidateLimit ?? 200),
-      dailyLimit: Number(raw.dailyLimit ?? 140),
-      defaultGapSeconds: Number(raw.defaultGapSeconds ?? 180),
-      whatsAppGapSeconds: Number(raw.whatsAppGapSeconds ?? 180),
-      telegramGapSeconds: Number(raw.telegramGapSeconds ?? 90),
-      maxGapSeconds: Number(raw.maxGapSeconds ?? 90),
-      unansweredAutoIgnoreMaxLength: Number(raw.unansweredAutoIgnoreMaxLength ?? 60),
-      businessWindows: raw.businessWindows.trim(),
-      reviewCheckStatuses: raw.reviewCheckStatuses.trim(),
-      clientTextReminderStatuses: raw.clientTextReminderStatuses.trim(),
-      paymentReminderStatuses: raw.paymentReminderStatuses.trim(),
-      paymentOverdueStatuses: raw.paymentOverdueStatuses.trim(),
-      closedOrderStatuses: raw.closedOrderStatuses.trim(),
-      paymentOverdueTargetStatus: raw.paymentOverdueTargetStatus.trim(),
-      archiveCompanyStatus: raw.archiveCompanyStatus.trim(),
-      archiveInactiveOrderStatuses: raw.archiveInactiveOrderStatuses.trim(),
-      openNextOrderRequestStatuses: raw.openNextOrderRequestStatuses.trim(),
-      reviewLinkBaseUrl: raw.reviewLinkBaseUrl.trim(),
-      reviewReminderText: raw.reviewReminderText.trim(),
-      clientTextReminderText: raw.clientTextReminderText.trim(),
-      publicationStartedText: raw.publicationStartedText.trim(),
-      publicationProgressReportText: raw.publicationProgressReportText.trim(),
-      paymentInstructionSource: raw.paymentInstructionSource,
-      paymentReminderText: raw.paymentReminderText.trim(),
-      paymentLinkCopyText: raw.paymentLinkCopyText.trim(),
-      paymentSuccessText: raw.paymentSuccessText.trim(),
-      reviewRecoveryNoticeText: raw.reviewRecoveryNoticeText.trim(),
-      archiveOfferText: raw.archiveOfferText.trim(),
-      unansweredAutoIgnorePhrases: this.joinAutoIgnorePhrases(this.splitAutoIgnorePhrases(raw.unansweredAutoIgnorePhrases))
-    };
-
-    this.saving.set(true);
-    this.error.set(null);
-
-    this.dictionariesApi.updateClientMessageSettings(request).subscribe({
-      next: (settings) => {
-        this.saving.set(false);
-        this.applyClientMessageSettings(settings);
-        this.toastService.success(
-          successTitle,
-          successMessage(settings)
-        );
-      },
-      error: (err) => {
-        const message = this.errorMessage(err, 'Не удалось сохранить автоответчик');
-        this.error.set(message);
-        this.saving.set(false);
-        this.toastService.error('Автоответчик не сохранен', message);
-      }
-    });
-  }
+  readonly saveCategory = this.taxonomyFeature.saveCategory.bind(this.taxonomyFeature);
 
-  private runSave<T extends { id: number }>(
-    request: Observable<T>,
-    title: string,
-    afterSave?: (saved: T) => void
-  ): void {
-    this.saving.set(true);
-    this.error.set(null);
-
-    request.subscribe({
-      next: (saved) => {
-        this.saving.set(false);
-        if (afterSave) {
-          afterSave(saved);
-        } else {
-          this.selectedId.set(saved.id);
-        }
-        this.toastService.success(title, `ID ${saved.id}`);
-        this.reloadAfterMutation();
-      },
-      error: (err) => {
-        const message = this.errorMessage(err, 'Не удалось сохранить запись');
-        this.error.set(message);
-        this.saving.set(false);
-        this.toastService.error('Запись не сохранена', message);
-      }
-    });
-  }
+  readonly saveSubCategory = this.taxonomyFeature.saveSubCategory.bind(this.taxonomyFeature);
 
-  private reloadAfterMutation(): void {
-    if (this.activeTab() === 'promo') {
-      this.reloadPromoManagement();
-      return;
-    }
-
-    if (this.activeTab() === 'categories' || this.activeTab() === 'subcategories') {
-      forkJoin({
-        categories: this.dictionariesApi.getCategories(this.activeTab() === 'categories' ? this.search() : ''),
-        subCategories: this.dictionariesApi.getSubCategories(this.activeTab() === 'subcategories' ? this.search() : '')
-      }).subscribe({
-        next: ({ categories, subCategories }) => {
-          this.categories.set(categories);
-          this.subCategories.set(subCategories);
-          this.ensureDefaults();
-        }
-      });
-      return;
-    }
-
-    this.loadActive();
-  }
+  readonly saveCity = this.citiesFeature.saveCity.bind(this.citiesFeature);
+  readonly rebuildCityDistances = this.citiesFeature.rebuildCityDistances.bind(this.citiesFeature);
+  readonly rebuildSelectedCityDistances = this.citiesFeature.rebuildSelectedCityDistances.bind(this.citiesFeature);
+  readonly importCityCoordinates = this.citiesFeature.importCityCoordinates.bind(this.citiesFeature);
 
-  private defaultCategoryId(): number | null {
-    return this.categories()[0]?.id ?? null;
-  }
+  readonly saveProduct = this.productsFeature.saveProduct.bind(this.productsFeature);
 
-  private defaultProductCategoryId(): number | null {
-    return this.productCategories()[0]?.id ?? null;
-  }
+  readonly savePhone = this.phonesFeature.savePhone.bind(this.phonesFeature);
 
-  private toPhoneRequest(): OperatorPhoneRequest {
-    const raw = this.phoneForm.getRawValue();
-    return {
-      number: raw.number.trim(),
-      fio: this.emptyToNull(raw.fio),
-      birthday: raw.birthday || null,
-      amountAllowed: Number(raw.amountAllowed || 0),
-      amountSent: Number(raw.amountSent || 0),
-      blockTime: Number(raw.blockTime || 0),
-      timer: raw.timer || null,
-      googleLogin: this.emptyToNull(raw.googleLogin),
-      googlePassword: this.emptyToNull(raw.googlePassword),
-      avitoPassword: this.emptyToNull(raw.avitoPassword),
-      mailLogin: this.emptyToNull(raw.mailLogin),
-      mailPassword: this.emptyToNull(raw.mailPassword),
-      fotoInstagram: this.emptyToNull(raw.fotoInstagram),
-      active: raw.active,
-      createDate: raw.createDate || null,
-      operatorId: raw.operatorId
-    };
-  }
+  readonly deleteSelectedPhone = this.phonesFeature.deleteSelectedPhone.bind(this.phonesFeature);
 
-  private toDateInput(value?: string | null): string {
-    return value ? value.slice(0, 10) : '';
-  }
+  readonly saveBot = this.accountsFeature.saveBot.bind(this.accountsFeature);
 
-  private toDateTimeInput(value?: string | null): string {
-    return value ? value.slice(0, 16) : '';
-  }
+  readonly savePromoText = this.textsFeature.savePromoText.bind(this.textsFeature);
 
-  private emptyToNull(value: string): string | null {
-    const trimmed = value.trim();
-    return trimmed ? trimmed : null;
-  }
+  readonly saveManagerText = this.textsFeature.saveManagerText.bind(this.textsFeature);
 
-  private patchSavedPhone(phone: OperatorPhone): void {
-    this.phones.update((phones) => {
-      const exists = phones.some((item) => item.id === phone.id);
-      return exists
-        ? phones.map((item) => item.id === phone.id ? phone : item)
-        : [phone, ...phones];
-    });
-  }
+  readonly saveGamificationSettings = this.gamificationFeature.saveGamificationSettings.bind(this.gamificationFeature);
 
-  private removeDeviceToken(phoneId: number, token: string): void {
-    const removeFromPhone = (phone: OperatorPhone): OperatorPhone => ({
-      ...phone,
-      deviceTokens: (phone.deviceTokens ?? []).filter((item) => item.token !== token)
-    });
-
-    this.phones.update((phones) =>
-      phones.map((phone) => phone.id === phoneId ? removeFromPhone(phone) : phone)
-    );
-
-    const selectedPhone = this.selectedPhone();
-    if (selectedPhone?.id === phoneId) {
-      const updatedPhone = removeFromPhone(selectedPhone);
-      this.selectedPhone.set(updatedPhone);
-      this.selectPhone(updatedPhone);
-    }
-  }
+  readonly saveSettings = this.settingsFeature.saveSettings.bind(this.settingsFeature);
 
-  private applyPhonesResponse(response: OperatorPhonesResponse): void {
-    this.phones.set(response.phones);
-    this.phoneOperators.set(response.operators);
-    this.restorePhoneSelection(response.phones);
-  }
+  readonly saveAutoresponderSettings = this.messageSettingsFeature.saveAutoresponderSettings.bind(this.messageSettingsFeature);
 
-  private restorePhoneSelection(phones: OperatorPhone[]): void {
-    const selectedId = this.selectedPhone()?.id || (Number.isFinite(this.requestedPhoneId) ? this.requestedPhoneId : null);
-    const nextSelected = selectedId ? phones.find((phone) => phone.id === selectedId) : null;
-
-    if (nextSelected) {
-      this.selectPhone(nextSelected);
-      return;
-    }
-
-    if (this.activeTab() === 'phones' && !this.selectedPhone()) {
-      this.startNewPhone();
-    }
-  }
+  readonly defaultCategoryId = this.taxonomyFeature.defaultCategoryId.bind(this.taxonomyFeature);
 
-  private defaultBotWorkerId(): number | null {
-    return this.botWorkers()[0]?.id ?? null;
-  }
+  readonly defaultProductCategoryId = this.productsFeature.defaultProductCategoryId.bind(this.productsFeature);
 
-  private defaultBotStatusId(): number | null {
-    return this.botStatuses()[0]?.id ?? null;
-  }
+  readonly toPhoneRequest = this.phonesFeature.toPhoneRequest.bind(this.phonesFeature);
 
-  private defaultBotCityId(): number | null {
-    return this.botCities()[0]?.id ?? null;
-  }
+  readonly toDateInput = this.phonesFeature.toDateInput.bind(this.phonesFeature);
 
-  private applyBotsResponse(response: BotsResponse): void {
-    this.bots.set(response.bots);
-    this.botWorkers.set(response.workers);
-    this.botStatuses.set(response.statuses);
-    this.botCities.set(response.cities);
-    this.botsTotal.set(response.total);
-    this.botPage.set(response.page);
-    this.botPageSize.set(response.size);
-  }
+  readonly toDateTimeInput = this.phonesFeature.toDateTimeInput.bind(this.phonesFeature);
 
-  private loadTrackedCityUnblockedAccountsSnapshot(): void {
-    this.dictionariesApi.getBotCityUnblockedCount(this.trackedBotCityId).subscribe({
-      next: (response) => this.trackedCityUnblockedAccounts.set(response.unblockedAccounts),
-      error: () => this.trackedCityUnblockedAccounts.set(null)
-    });
-  }
+  readonly emptyToNull = this.phonesFeature.emptyToNull.bind(this.phonesFeature);
 
-  private applyPromoManagement(response: PromoTextManagementResponse): void {
-    this.promoTexts.set(response.texts);
-    this.promoManagers.set(response.managers);
-    this.promoAssignments.set(response.assignments);
-    this.promoButtons.set(response.buttons);
-
-    const selectedManagerId = this.selectedPromoManagerId();
-    const hasSelectedManager = selectedManagerId != null
-      && response.managers.some((manager) => manager.id === selectedManagerId);
-    if (!hasSelectedManager) {
-      this.selectedPromoManagerId.set(response.managers[0]?.id ?? null);
-    }
-  }
+  readonly patchSavedPhone = this.phonesFeature.patchSavedPhone.bind(this.phonesFeature);
 
-  private applyNagulSettings(response: AdminNagulSettings): void {
-    this.nagulSettings.set(response);
-    this.settingsForm.patchValue({
-      nagulCooldownMinutes: response.cooldownMinutes,
-      nagulLookaheadDays: response.lookaheadDays,
-      accountWalkedCounterThreshold: response.accountWalkedCounterThreshold,
-      accountWalkDelayDays: response.accountWalkDelayDays
-    });
-  }
+  readonly removeDeviceToken = this.phonesFeature.removeDeviceToken.bind(this.phonesFeature);
 
-  private applyTelegramReportSettings(response: AdminTelegramReportScheduleSettings): void {
-    this.telegramReportSettings.set(response);
-    this.settingsForm.patchValue({
-      morningReportEnabled: response.morningEnabled,
-      morningReportTime: response.morningTime,
-      eveningReportEnabled: response.eveningEnabled,
-      eveningReportTime: response.eveningTime,
-      telegramReportZone: response.zone
-    });
-  }
+  readonly applyPhonesResponse = this.phonesFeature.applyPhonesResponse.bind(this.phonesFeature);
 
-  private applyWhatsAppGroupSyncSettings(response: AdminWhatsAppGroupSyncSettings): void {
-    this.whatsAppGroupSyncSettings.set(response);
-    this.settingsForm.patchValue({
-      whatsAppGroupSyncEnabled: response.enabled,
-      whatsAppGroupSyncIntervalMinutes: response.intervalMinutes
-    });
-  }
+  readonly restorePhoneSelection = this.phonesFeature.restorePhoneSelection.bind(this.phonesFeature);
 
-  private applyClientPublicationProgressReportSettings(response: AdminClientPublicationProgressReportSettings): void {
-    this.clientPublicationProgressReportSettings.set(response);
-    this.settingsForm.patchValue({
-      clientPublicationProgressReportsEnabled: response.enabled
-    });
-  }
+  readonly defaultBotWorkerId = this.accountsFeature.defaultBotWorkerId.bind(this.accountsFeature);
 
-  private applyWorkerCellularAccessSettings(response: AdminWorkerCellularAccessSettings): void {
-    this.workerCellularAccessSettings.set(response);
-    const reasons = new Set(response.enforcedReasons);
-    this.settingsForm.patchValue({
-      workerCellularAccessMode: response.mode,
-      blockNonCellularNetwork: reasons.has('NON_CELLULAR_NETWORK'),
-      blockVpnProxyOrDatacenter: reasons.has('VPN_PROXY_OR_DATACENTER'),
-      blockDesktopOrUnknownDevice: reasons.has('DESKTOP_OR_UNKNOWN_DEVICE'),
-      blockUnknownNetwork: reasons.has('UNKNOWN_NETWORK'),
-      enforceNativeVirtualDevice: response.enforceNativeVirtualDevice
-    });
-  }
+  readonly defaultBotStatusId = this.accountsFeature.defaultBotStatusId.bind(this.accountsFeature);
 
-  workerCellularAccessModeLabel(mode: WorkerCellularAccessMode): string {
-    switch (mode) {
-      case 'OFF':
-        return 'выключено';
-      case 'AUDIT':
-        return 'аудит без блокировки';
-      case 'ENFORCE':
-        return 'боевой режим';
-    }
-  }
+  readonly defaultBotCityId = this.accountsFeature.defaultBotCityId.bind(this.accountsFeature);
 
-  workerProtectedSectionLabel(section: string): string {
-    switch (section) {
-      case 'nagul':
-        return 'Выгул';
-      case 'publish':
-        return 'Публикация';
-      case 'recovery':
-        return 'Восстановление';
-      case 'bad':
-        return 'Плохие';
-      default:
-        return section;
-    }
-  }
+  readonly applyBotsResponse = this.accountsFeature.applyBotsResponse.bind(this.accountsFeature);
 
-  private applyGamificationSettings(response: AdminGamificationSettings): void {
-    this.gamificationSettings.set(response);
-    this.gamificationForm.patchValue({
-      enabled: response.enabled,
-      workerEnabled: response.workerEnabled,
-      managerEnabled: response.managerEnabled,
-      operatorEnabled: response.operatorEnabled,
-      marketologEnabled: response.marketologEnabled,
-      showInCabinet: response.showInCabinet,
-      showInScore: response.showInScore,
-      eventsEnabled: response.eventsEnabled,
-      shadowScoringEnabled: response.shadowScoringEnabled
-    });
-  }
+  readonly loadTrackedCityUnblockedAccountsSnapshot = this.accountsFeature.loadTrackedCityUnblockedAccountsSnapshot.bind(this.accountsFeature);
 
-  private applyRewardSettings(response: GamificationRewardSettings): void {
-    this.rewardSettings.set(response);
-    this.gamificationForm.patchValue(response);
-  }
+  readonly applyNagulSettings = this.settingsFeature.applyNagulSettings.bind(this.settingsFeature);
 
-  private applyGamificationRules(response: AdminGamificationRulesResponse): void {
-    this.gamificationRules.set(response.rules);
-    const rule = (eventType: string): AdminGamificationRule | undefined =>
-      response.rules.find((item) => item.eventType === eventType);
-    this.gamificationForm.patchValue({
-      reviewPublishedRuleEnabled: rule('REVIEW_PUBLISHED')?.enabled ?? true,
-      reviewPublishedRulePoints: rule('REVIEW_PUBLISHED')?.points ?? 10,
-      orderPaidRuleEnabled: rule('ORDER_PAID')?.enabled ?? true,
-      orderPaidRulePoints: rule('ORDER_PAID')?.points ?? 25,
-      badReviewTaskDoneRuleEnabled: rule('BAD_REVIEW_TASK_DONE')?.enabled ?? true,
-      badReviewTaskDoneRulePoints: rule('BAD_REVIEW_TASK_DONE')?.points ?? 15,
-      reviewRecoveryTaskDoneRuleEnabled: rule('REVIEW_RECOVERY_TASK_DONE')?.enabled ?? true,
-      reviewRecoveryTaskDoneRulePoints: rule('REVIEW_RECOVERY_TASK_DONE')?.points ?? 20
-    });
-  }
+  readonly applyTelegramReportSettings = this.settingsFeature.applyTelegramReportSettings.bind(this.settingsFeature);
 
-  private applyGamificationResponse(response: GamificationDictionaryResponse): void {
-    this.applyGamificationSettings(response.settings);
-    this.applyGamificationRules(response.rules);
-    this.gamificationProgress.set(response.progress);
-    this.gamificationScorePreview.set(response.scorePreview);
-    this.gamificationScoreLedger.set(response.scoreLedger);
-    this.gamificationBalances.set(response.balances);
-    this.gamificationEvents.set(response.events);
-  }
+  readonly applyWhatsAppGroupSyncSettings = this.settingsFeature.applyWhatsAppGroupSyncSettings.bind(this.settingsFeature);
 
-  private loadGamificationProgress(): void {
-    forkJoin({
-      progress: this.dictionariesApi.getGamificationProgress(this.gamificationProgressDays()),
-      scorePreview: this.dictionariesApi.getGamificationScorePreview(this.gamificationProgressDays()),
-      scoreLedger: this.dictionariesApi.getGamificationScoreLedger(this.gamificationProgressDays()),
-      balances: this.dictionariesApi.getGamificationBalances(this.gamificationProgressDays())
-    }).subscribe({
-      next: ({ progress, scorePreview, scoreLedger, balances }) => {
-        this.gamificationProgress.set(progress);
-        this.gamificationScorePreview.set(scorePreview);
-        this.gamificationScoreLedger.set(scoreLedger);
-        this.gamificationBalances.set(balances);
-      },
-      error: (err) => {
-        const message = this.errorMessage(err, 'Не удалось загрузить прогресс геймификации');
-        this.toastService.error('Прогресс не загружен', message);
-      }
-    });
-  }
+  readonly applyClientPublicationProgressReportSettings = this.settingsFeature.applyClientPublicationProgressReportSettings.bind(this.settingsFeature);
 
-  private applyClientMessageSettings(response: AdminClientMessageSettings): void {
-    this.clientMessageSettings.set(response);
-    this.autoresponderForm.patchValue(response);
-    this.syncClientMessageMonitorPolling();
-  }
+  readonly applyWorkerAccountActionSettings = this.settingsFeature.applyWorkerAccountActionSettings.bind(this.settingsFeature);
 
-  private patchClientMessageMonitorEnabled(enabled: boolean): void {
-    const current = this.clientMessageSettings();
-    if (current) {
-      this.clientMessageSettings.set({ ...current, monitorEnabled: enabled });
-    }
-    this.autoresponderForm.patchValue({ monitorEnabled: enabled });
-  }
+  readonly applyWorkerCellularAccessSettings = this.settingsFeature.applyWorkerCellularAccessSettings.bind(this.settingsFeature);
 
-  private syncClientMessageMonitorPolling(): void {
-    if (this.canPollClientMessageMonitor()) {
-      this.loadClientMessageMonitor(true);
-      this.startClientMessageMonitorPolling();
-      return;
-    }
-    this.stopClientMessageMonitorPolling();
-  }
+  readonly workerCellularAccessModeLabel = this.settingsFeature.workerCellularAccessModeLabel.bind(this.settingsFeature);
 
-  private startClientMessageMonitorPolling(): void {
-    if (this.monitorTimerId != null || !this.canPollClientMessageMonitor()) {
-      return;
-    }
-    this.monitorTimerId = window.setInterval(() => {
-      if (this.canPollClientMessageMonitor()) {
-        this.loadClientMessageMonitor(true);
-      } else {
-        this.stopClientMessageMonitorPolling();
-      }
-    }, CLIENT_MESSAGE_MONITOR_POLLING_MS);
-  }
+  readonly workerProtectedSectionLabel = this.settingsFeature.workerProtectedSectionLabel.bind(this.settingsFeature);
 
-  private stopClientMessageMonitorPolling(): void {
-    if (this.monitorTimerId == null) {
-      return;
-    }
-    window.clearInterval(this.monitorTimerId);
-    this.monitorTimerId = null;
-  }
+  readonly applyGamificationSettings = this.gamificationFeature.applyGamificationSettings.bind(this.gamificationFeature);
 
-  private canPollClientMessageMonitor(): boolean {
-    return this.activeTab() === 'autoresponderMonitor'
-      && !!this.clientMessageSettings()?.monitorEnabled
-      && (typeof document === 'undefined' || document.visibilityState === 'visible');
-  }
+  readonly applyRewardSettings = this.gamificationFeature.applyRewardSettings.bind(this.gamificationFeature);
 
-  private setAutoIgnorePhrases(phrases: string[]): void {
-    this.autoresponderForm.controls.unansweredAutoIgnorePhrases.setValue(this.joinAutoIgnorePhrases(phrases));
-    this.autoresponderForm.controls.unansweredAutoIgnorePhrases.markAsDirty();
-  }
+  readonly applyGamificationRules = this.gamificationFeature.applyGamificationRules.bind(this.gamificationFeature);
 
-  private splitAutoIgnorePhrases(value: string | null | undefined): string[] {
-    return (value ?? '')
-      .split(',')
-      .map((item) => this.normalizeAutoIgnorePhrase(item))
-      .filter(Boolean)
-      .filter((item, index, list) =>
-        list.findIndex((candidate) => candidate.toLocaleLowerCase() === item.toLocaleLowerCase()) === index
-      );
-  }
+  readonly applyGamificationResponse = this.gamificationFeature.applyGamificationResponse.bind(this.gamificationFeature);
 
-  private joinAutoIgnorePhrases(phrases: string[]): string {
-    return phrases
-      .map((item) => this.normalizeAutoIgnorePhrase(item))
-      .filter(Boolean)
-      .join(',');
-  }
+  readonly loadGamificationProgress = this.gamificationFeature.loadGamificationProgress.bind(this.gamificationFeature);
 
-  private normalizeAutoIgnorePhrase(value: string | null | undefined): string {
-    return (value ?? '').trim().replace(/\s+/g, ' ');
-  }
+  readonly applyClientMessageSettings = this.messageSettingsFeature.applyClientMessageSettings.bind(this.messageSettingsFeature);
 
-  private sharedChatSyncSummary(response: AdminSharedChatLinkSyncResponse): string {
-    const parts = [
-      `компаний обновлено: ${response.updatedCompanies}`,
-      `WhatsApp: ${response.whatsappLinked}`,
-      `Telegram: ${response.telegramLinked}`,
-      `MAX: ${response.maxLinked}`
-    ];
-    if (response.conflictGroups > 0) {
-      parts.push(`конфликтов: ${response.conflictGroups}`);
-    }
-    return parts.join(', ');
-  }
+  readonly patchClientMessageMonitorEnabled = this.messageSettingsFeature.patchClientMessageMonitorEnabled.bind(this.messageSettingsFeature);
 
-  private resetSettingsForm(): void {
-    this.settingsForm.reset({
-      nagulCooldownMinutes: this.nagulSettings()?.cooldownMinutes ?? 60,
-      nagulLookaheadDays: this.nagulSettings()?.lookaheadDays ?? 60,
-      accountWalkedCounterThreshold: this.nagulSettings()?.accountWalkedCounterThreshold ?? 3,
-      accountWalkDelayDays: this.nagulSettings()?.accountWalkDelayDays ?? 2,
-      morningReportEnabled: this.telegramReportSettings()?.morningEnabled ?? true,
-      morningReportTime: this.telegramReportSettings()?.morningTime ?? '11:30',
-      eveningReportEnabled: this.telegramReportSettings()?.eveningEnabled ?? true,
-      eveningReportTime: this.telegramReportSettings()?.eveningTime ?? '22:00',
-      telegramReportZone: this.telegramReportSettings()?.zone ?? 'Asia/Irkutsk',
-      whatsAppGroupSyncEnabled: this.whatsAppGroupSyncSettings()?.enabled ?? true,
-      whatsAppGroupSyncIntervalMinutes: this.whatsAppGroupSyncSettings()?.intervalMinutes ?? 30,
-      clientPublicationProgressReportsEnabled: this.clientPublicationProgressReportSettings()?.enabled ?? true
-    });
-  }
+  private syncClientMessageMonitorPolling(): void { this.messageMonitor.syncClientMessageMonitorPolling(); }
 
-  resetGamificationForm(): void {
-    const settings = this.gamificationSettings();
-    const rule = (eventType: string): AdminGamificationRule | undefined =>
-      this.gamificationRules().find((item) => item.eventType === eventType);
-    this.gamificationForm.reset({
-      enabled: settings?.enabled ?? false,
-      workerEnabled: settings?.workerEnabled ?? true,
-      managerEnabled: settings?.managerEnabled ?? true,
-      operatorEnabled: settings?.operatorEnabled ?? true,
-      marketologEnabled: settings?.marketologEnabled ?? true,
-      showInCabinet: settings?.showInCabinet ?? false,
-      showInScore: settings?.showInScore ?? false,
-      eventsEnabled: settings?.eventsEnabled ?? false,
-      shadowScoringEnabled: settings?.shadowScoringEnabled ?? false,
-      rewardsEnabled: this.rewardSettings()?.rewardsEnabled ?? false,
-      competitionEnabled: this.rewardSettings()?.competitionEnabled ?? false,
-      levelXp: this.rewardSettings()?.levelXp ?? 500,
-      tokenLevelStep: this.rewardSettings()?.tokenLevelStep ?? 5,
-      slaEnabled: this.rewardSettings()?.slaEnabled ?? false,
-      controlTargetHours: this.rewardSettings()?.controlTargetHours ?? 14,
-      dayTargetPercent: this.rewardSettings()?.dayTargetPercent ?? 90,
-      messageTargetMinutes: this.rewardSettings()?.messageTargetMinutes ?? 30,
-      messageHardMinutes: this.rewardSettings()?.messageHardMinutes ?? 480,
-      leadTargetMinutes: this.rewardSettings()?.leadTargetMinutes ?? 60,
-      leadHardMinutes: this.rewardSettings()?.leadHardMinutes ?? 480,
-      riskTargetMinutes: this.rewardSettings()?.riskTargetMinutes ?? 30,
-      riskHardMinutes: this.rewardSettings()?.riskHardMinutes ?? 240,
-      defaultTargetMinutes: this.rewardSettings()?.defaultTargetMinutes ?? 120,
-      defaultHardMinutes: this.rewardSettings()?.defaultHardMinutes ?? 720,
-      reviewPublishedRuleEnabled: rule('REVIEW_PUBLISHED')?.enabled ?? true,
-      reviewPublishedRulePoints: rule('REVIEW_PUBLISHED')?.points ?? 10,
-      orderPaidRuleEnabled: rule('ORDER_PAID')?.enabled ?? true,
-      orderPaidRulePoints: rule('ORDER_PAID')?.points ?? 25,
-      badReviewTaskDoneRuleEnabled: rule('BAD_REVIEW_TASK_DONE')?.enabled ?? true,
-      badReviewTaskDoneRulePoints: rule('BAD_REVIEW_TASK_DONE')?.points ?? 15,
-      reviewRecoveryTaskDoneRuleEnabled: rule('REVIEW_RECOVERY_TASK_DONE')?.enabled ?? true,
-      reviewRecoveryTaskDoneRulePoints: rule('REVIEW_RECOVERY_TASK_DONE')?.points ?? 20
-    });
-  }
+  readonly splitAutoIgnorePhrases = this.messageSettingsFeature.splitAutoIgnorePhrases.bind(this.messageSettingsFeature);
 
-  resetAutoresponderForm(): void {
-    const settings = this.clientMessageSettings();
-    this.autoresponderForm.reset({
-      workerEnabled: settings?.workerEnabled ?? true,
-      liveEnabled: settings?.liveEnabled ?? true,
-      immediateEnabled: settings?.immediateEnabled ?? true,
-      monitorEnabled: settings?.monitorEnabled ?? false,
-      reviewCheckEnabled: settings?.reviewCheckEnabled ?? true,
-      reviewCheckAutoArchiveEnabled: settings?.reviewCheckAutoArchiveEnabled ?? true,
-      clientTextReminderEnabled: settings?.clientTextReminderEnabled ?? true,
-      paymentReminderEnabled: settings?.paymentReminderEnabled ?? true,
-      badReviewInvoiceEnabled: settings?.badReviewInvoiceEnabled ?? true,
-      badReviewAutoBanEnabled: settings?.badReviewAutoBanEnabled ?? true,
-      reviewRecoveryNoticeEnabled: settings?.reviewRecoveryNoticeEnabled ?? true,
-      paymentOverdueEnabled: settings?.paymentOverdueEnabled ?? true,
-      paymentOverdueLiveEnabled: settings?.paymentOverdueLiveEnabled ?? false,
-      archiveReorderEnabled: settings?.archiveReorderEnabled ?? true,
-      errorProtectionEnabled: settings?.errorProtectionEnabled ?? true,
-      unansweredAutoIgnoreEnabled: settings?.unansweredAutoIgnoreEnabled ?? true,
-      unansweredResolutionEnforcementEnabled: settings?.unansweredResolutionEnforcementEnabled ?? true,
-      unansweredFastClickGuardEnabled: settings?.unansweredFastClickGuardEnabled ?? false,
-      unansweredReplyQualityShadowEnabled: settings?.unansweredReplyQualityShadowEnabled ?? true,
-      unansweredFastClickWarningCount: settings?.unansweredFastClickWarningCount ?? 3,
-      unansweredFastClickWarningSeconds: settings?.unansweredFastClickWarningSeconds ?? 10,
-      unansweredFastClickCriticalCount: settings?.unansweredFastClickCriticalCount ?? 10,
-      unansweredFastClickCriticalSeconds: settings?.unansweredFastClickCriticalSeconds ?? 60,
-      reviewCheckIntervalDays: settings?.reviewCheckIntervalDays ?? 2,
-      reviewCheckAutoArchiveDays: settings?.reviewCheckAutoArchiveDays ?? 30,
-      clientTextReminderIntervalDays: settings?.clientTextReminderIntervalDays ?? 3,
-      paymentReminderIntervalDays: settings?.paymentReminderIntervalDays ?? 2,
-      reviewCheckRetryDelayHours: settings?.reviewCheckRetryDelayHours ?? 2,
-      paymentInvoiceRetryDelayHours: settings?.paymentInvoiceRetryDelayHours ?? 2,
-      transientRetryMinutes: settings?.transientRetryMinutes ?? 15,
-      manualControlFailureThreshold: settings?.manualControlFailureThreshold ?? 3,
-      manualControlAfterMinutes: settings?.manualControlAfterMinutes ?? 60,
-      badReviewInvoiceRetryDelayHours: settings?.badReviewInvoiceRetryDelayHours ?? 2,
-      badReviewAutoBanDelayDays: settings?.badReviewAutoBanDelayDays ?? 2,
-      reviewRecoveryNoticeRetryDelayHours: settings?.reviewRecoveryNoticeRetryDelayHours ?? 2,
-      paymentOverdueDays: settings?.paymentOverdueDays ?? 30,
-      archiveReorderMonths: settings?.archiveReorderMonths ?? 3,
-      archiveReorderJitterDays: settings?.archiveReorderJitterDays ?? 10,
-      archiveOrderRetentionDays: settings?.archiveOrderRetentionDays ?? 90,
-      errorProtectionThreshold: settings?.errorProtectionThreshold ?? 20,
-      errorProtectionWindowMinutes: settings?.errorProtectionWindowMinutes ?? 10,
-      errorProtectionCooldownMinutes: settings?.errorProtectionCooldownMinutes ?? 60,
-      whatsAppAuthRetryHours: settings?.whatsAppAuthRetryHours ?? 2,
-      whatsAppAuthAlertCooldownHours: settings?.whatsAppAuthAlertCooldownHours ?? 12,
-      retentionDays: settings?.retentionDays ?? 90,
-      tickBatchSize: settings?.tickBatchSize ?? 5,
-      candidateLimit: settings?.candidateLimit ?? 200,
-      dailyLimit: settings?.dailyLimit ?? 140,
-      defaultGapSeconds: settings?.defaultGapSeconds ?? 180,
-      whatsAppGapSeconds: settings?.whatsAppGapSeconds ?? 180,
-      telegramGapSeconds: settings?.telegramGapSeconds ?? 90,
-      maxGapSeconds: settings?.maxGapSeconds ?? 90,
-      unansweredAutoIgnoreMaxLength: settings?.unansweredAutoIgnoreMaxLength ?? 60,
-      businessWindows: settings?.businessWindows ?? '10:00-12:00,14:00-17:00,19:00-21:00',
-      reviewCheckStatuses: settings?.reviewCheckStatuses ?? 'На проверке',
-      clientTextReminderStatuses: settings?.clientTextReminderStatuses ?? 'Новый',
-      paymentReminderStatuses: settings?.paymentReminderStatuses ?? 'Выставлен счет,Напоминание',
-      paymentOverdueStatuses: settings?.paymentOverdueStatuses ?? 'Выставлен счет,Напоминание',
-      closedOrderStatuses: settings?.closedOrderStatuses ?? 'Оплачено,Архив,Бан,Не оплачено',
-      paymentOverdueTargetStatus: settings?.paymentOverdueTargetStatus ?? 'Не оплачено',
-      archiveCompanyStatus: settings?.archiveCompanyStatus ?? 'На стопе',
-      archiveInactiveOrderStatuses: settings?.archiveInactiveOrderStatuses ?? 'Оплачено,Архив,Бан',
-      openNextOrderRequestStatuses: settings?.openNextOrderRequestStatuses ?? 'PENDING,FAILED',
-      reviewLinkBaseUrl: settings?.reviewLinkBaseUrl ?? 'https://o-ogo.ru',
-      reviewReminderText: settings?.reviewReminderText
-        ?? '{companyAndFilial}\n\nЗдравствуйте! Напоминаем, пожалуйста, проверьте шаблоны отзывов и внесите правки, если они нужны.\n\nСсылка на проверку отзывов: {reviewLink}',
-      clientTextReminderText: settings?.clientTextReminderText
-        ?? '{companyAndFilial}\n\nЗдравствуйте! Напоминаем, пожалуйста, пришлите текст или пожелания для отзывов по заказу №{orderId}, чтобы мы могли продолжить работу.',
-      publicationStartedText: settings?.publicationStartedText
-        ?? '{companyAndFilial}\n\nСпасибо, правки получили. Отзывы переданы в публикацию. Будем присылать короткие отчёты по мере публикации.',
-      publicationProgressReportText: settings?.publicationProgressReportText
-        ?? '{companyAndFilial}. Опубликован новый отзыв {progress}.',
-      paymentInstructionSource: settings?.paymentInstructionSource ?? 'MANAGER_TEXT',
-      paymentReminderText: settings?.paymentReminderText ?? '{companyAndFilial}\n\n{managerPayText} К оплате: {sum} руб.',
-      paymentLinkCopyText: settings?.paymentLinkCopyText
-        ?? '{companyAndFilial}\n\nЗдравствуйте, ваш заказ выполнен. К оплате: {sum} руб.\n\n{paymentInstruction}\n\n{paymentAfterword}',
-      paymentSuccessText: settings?.paymentSuccessText
-        ?? 'Оплата прошла успешно.\n\nНовый заказ принят в работу.\n{orderLine}{companyLine}Сумма: {sum}\nСтраница оплаты: {paymentPage}\n\n{receiptText}',
-      reviewRecoveryNoticeText: settings?.reviewRecoveryNoticeText
-        ?? '{companyAndFilial}\n\nВсе отзывы по заказу №{orderId} восстановлены. Продолжаем работу.',
-      archiveOfferText: settings?.archiveOfferText
-        ?? '{company}\n\nЗдравствуйте! Давно не запускали новый заказ. Можем подготовить новую аккуратную серию отзывов и обновить карточку компании. Если актуально, напишите, пожалуйста, сколько отзывов нужно в этот раз?',
-      unansweredAutoIgnorePhrases: settings?.unansweredAutoIgnorePhrases ?? DEFAULT_AUTO_IGNORE_PHRASES
-    });
-    this.autoIgnorePhraseDraft.set('');
-    this.editingAutoIgnorePhraseIndex.set(null);
-    this.editingAutoIgnorePhraseValue.set('');
-  }
+  readonly sharedChatSyncSummary = this.settingsFeature.sharedChatSyncSummary.bind(this.settingsFeature);
 
-  private reloadPromoManagement(): void {
-    this.dictionariesApi.getPromoTextManagement(this.search()).subscribe({
-      next: (response) => this.applyPromoManagement(response),
-      error: (err) => {
-        const message = this.errorMessage(err, 'Не удалось обновить промо-тексты');
-        this.error.set(message);
-        this.toastService.error('Промо не обновилось', message);
-      }
-    });
-  }
+  readonly resetSettingsForm = this.settingsFeature.resetSettingsForm.bind(this.settingsFeature);
 
-  private promoAssignmentFor(button: PromoButtonSlot): PromoTextAssignment | null {
-    const managerId = this.selectedPromoManagerId();
-    if (managerId == null) {
-      return null;
-    }
-
-    return this.promoAssignments().find((assignment) =>
-      assignment.managerId === managerId
-      && assignment.section === button.section
-      && assignment.buttonKey === button.buttonKey
-    ) ?? null;
-  }
+  readonly resetGamificationForm = this.gamificationFeature.resetGamificationForm.bind(this.gamificationFeature);
 
-  private handleLoadAllError(err: unknown): void {
-    const message = this.errorMessage(err, 'Не удалось загрузить справочники');
-    this.error.set(message);
-    this.loading.set(false);
-    this.toastService.error('Справочники не загрузились', message);
-  }
+  readonly resetAutoresponderForm = this.messageSettingsFeature.resetAutoresponderForm.bind(this.messageSettingsFeature);
 
   private initialTab(): DictionaryTabKey {
     const routeTab = this.route.snapshot.data['initialTab'] ?? this.route.snapshot.queryParamMap.get('tab');
@@ -4284,41 +1225,4 @@ export class AdminDictionariesComponent implements OnDestroy {
     ].includes(String(value));
   }
 
-  private ensureDefaults(): void {
-    const activeCategoryId = this.activeCategoryId();
-    const hasActiveCategory = activeCategoryId != null
-      && this.categories().some((category) => category.id === activeCategoryId);
-
-    if (!hasActiveCategory) {
-      this.activeCategoryId.set(this.defaultCategoryId());
-    }
-
-    const subCategoryCategoryId = this.subCategoryForm.controls.categoryId.value;
-    const hasSubCategoryCategory = subCategoryCategoryId != null
-      && this.categories().some((category) => category.id === subCategoryCategoryId);
-
-    if (subCategoryCategoryId == null || !hasSubCategoryCategory) {
-      this.subCategoryForm.controls.categoryId.setValue(this.activeCategoryId() ?? this.defaultCategoryId());
-    }
-
-    if (this.productForm.controls.categoryId.value == null) {
-      this.productForm.controls.categoryId.setValue(this.defaultProductCategoryId());
-    }
-
-    if (this.botForm.controls.workerId.value == null) {
-      this.botForm.controls.workerId.setValue(this.defaultBotWorkerId());
-    }
-
-    if (this.botForm.controls.statusId.value == null) {
-      this.botForm.controls.statusId.setValue(this.defaultBotStatusId());
-    }
-
-    if (this.botForm.controls.cityId.value == null) {
-      this.botForm.controls.cityId.setValue(this.defaultBotCityId());
-    }
-  }
-
-  private errorMessage(err: unknown, fallback: string): string {
-    return apiErrorMessage(err, fallback);
-  }
 }

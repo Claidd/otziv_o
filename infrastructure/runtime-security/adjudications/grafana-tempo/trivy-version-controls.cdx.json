@@ -1,0 +1,93 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "bom-ref": "engine-controls",
+      "type": "application",
+      "name": "tempo-trivy-version-controls"
+    }
+  },
+  "components": [
+    {
+      "bom-ref": "pkg:golang/github.com/grafana/tempo@v1.5.1-0.20260427112133-525d1bab07e0",
+      "type": "library",
+      "name": "github.com/grafana/tempo",
+      "version": "v1.5.1-0.20260427112133-525d1bab07e0",
+      "purl": "pkg:golang/github.com/grafana/tempo@v1.5.1-0.20260427112133-525d1bab07e0",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "github.com/grafana/tempo@v1.5.1-0.20260427112133-525d1bab07e0"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "gobinary"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:golang/github.com/grafana/tempo@v2.10.1",
+      "type": "library",
+      "name": "github.com/grafana/tempo",
+      "version": "v2.10.1",
+      "purl": "pkg:golang/github.com/grafana/tempo@v2.10.1",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "github.com/grafana/tempo@v2.10.1"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "gobinary"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:golang/github.com/grafana/tempo@v2.10.2",
+      "type": "library",
+      "name": "github.com/grafana/tempo",
+      "version": "v2.10.2",
+      "purl": "pkg:golang/github.com/grafana/tempo@v2.10.2",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "github.com/grafana/tempo@v2.10.2"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "gobinary"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:golang/github.com/grafana/tempo@v2.10.3",
+      "type": "library",
+      "name": "github.com/grafana/tempo",
+      "version": "v2.10.3",
+      "purl": "pkg:golang/github.com/grafana/tempo@v2.10.3",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "github.com/grafana/tempo@v2.10.3"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "gobinary"
+        }
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "ref": "engine-controls",
+      "dependsOn": [
+        "pkg:golang/github.com/grafana/tempo@v1.5.1-0.20260427112133-525d1bab07e0",
+        "pkg:golang/github.com/grafana/tempo@v2.10.1",
+        "pkg:golang/github.com/grafana/tempo@v2.10.2",
+        "pkg:golang/github.com/grafana/tempo@v2.10.3"
+      ]
+    }
+  ]
+}

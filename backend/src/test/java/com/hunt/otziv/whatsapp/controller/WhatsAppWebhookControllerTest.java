@@ -40,8 +40,8 @@ class WhatsAppWebhookControllerTest {
         );
         ReflectionTestUtils.setField(controller, "webhookSecret", SECRET);
         ReflectionTestUtils.setField(controller, "hmacRequired", false);
-        org.mockito.Mockito.lenient().when(groupWebhookDeduplicator.acquire(org.mockito.ArgumentMatchers.any()))
-                .thenReturn(true);
+        org.mockito.Mockito.lenient().when(groupWebhookDeduplicator.execute(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(call -> { call.getArgument(1, Runnable.class).run(); return WhatsAppGroupWebhookDeduplicator.Result.APPLIED; });
     }
 
     @Test
@@ -63,8 +63,9 @@ class WhatsAppWebhookControllerTest {
     void ignoresRepeatedGroupWebhookAfterSuccessfulDelivery() {
         String body = "{\"clientId\":\"whatsapp_vika\",\"groupId\":\"12001@g.us\","
                 + "\"messageId\":\"message-1\",\"message\":\"Отключить уведомления\"}";
-        org.mockito.Mockito.when(groupWebhookDeduplicator.acquire(org.mockito.ArgumentMatchers.any()))
-                .thenReturn(true, false);
+        org.mockito.Mockito.doAnswer(call -> { call.getArgument(1, Runnable.class).run(); return WhatsAppGroupWebhookDeduplicator.Result.APPLIED; })
+                .doReturn(WhatsAppGroupWebhookDeduplicator.Result.DUPLICATE)
+                .when(groupWebhookDeduplicator).execute(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
 
         ResponseEntity<Void> first = controller.handleGroupReply(request(), SECRET, null, body);
         ResponseEntity<Void> duplicate = controller.handleGroupReply(request(), SECRET, null, body);
@@ -83,6 +84,31 @@ class WhatsAppWebhookControllerTest {
         ResponseEntity<Void> response = controller.handleGroupReply(request(), "wrong", null, body);
 
         assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
+        org.mockito.Mockito.verifyNoInteractions(groupWebhookDeduplicator, groupReplyService);
+    }
+
+    @Test void inProgressMustNotAcknowledgeAnUncommittedEffect() {
+        org.mockito.Mockito.doReturn(WhatsAppGroupWebhookDeduplicator.Result.IN_PROGRESS)
+                .when(groupWebhookDeduplicator).execute(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+        var response = controller.handleGroupReply(request(), SECRET, null,
+                "{\"clientId\":\"a\",\"groupId\":\"1@g.us\",\"messageId\":\"m\",\"message\":\"hello\"}");
+        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+        assertEquals("1", response.getHeaders().getFirst("Retry-After"));
+        org.mockito.Mockito.verifyNoInteractions(groupReplyService);
+    }
+
+    @Test void missingStableIdentityIsRejectedBeforeAnyEffect() {
+        var response = controller.handleGroupReply(request(), SECRET, null,
+                "{\"clientId\":\"a\",\"groupId\":\"1@g.us\",\"message\":\"hello\"}");
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        org.mockito.Mockito.verifyNoInteractions(groupWebhookDeduplicator, groupReplyService);
+    }
+
+    @Test void processingOrCommitFailureCannotBecomeAnAck() {
+        org.mockito.Mockito.doThrow(new IllegalStateException("commit failure"))
+                .when(groupWebhookDeduplicator).execute(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class, () -> controller.handleGroupReply(request(), SECRET, null,
+                "{\"clientId\":\"a\",\"groupId\":\"1@g.us\",\"messageId\":\"m\",\"message\":\"hello\"}"));
     }
 
     private static MockHttpServletRequest request() {

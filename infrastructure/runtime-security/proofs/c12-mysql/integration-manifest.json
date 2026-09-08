@@ -1,0 +1,130 @@
+{
+  "schema": "otziv-mysql-published-rollback-additive-integration-v1",
+  "createdAt": "2026-09-08T07:20:48.765801+00:00",
+  "result": "PASS",
+  "base": "Published C11 generic mysql-upgrade-rehearsal; exact per-file preimages are authoritative",
+  "files": [
+    {
+      "path": "infrastructure/runtime-security/mysql-upgrade-rehearsal.mjs",
+      "beforeSha256": "14f33ec47bf0d596ba1a93e974aaeab8303fae9ceae56e9cd0e0016960ad282c",
+      "afterSha256": "730cecd70f78dfd2dc5b7104c5438ec3cd78668644b8e2ce2ace997e8f1be7ce",
+      "changed": true
+    },
+    {
+      "path": "infrastructure/runtime-security/mysql-upgrade-rehearsal.test.mjs",
+      "beforeSha256": "00a8ae2092e39a75b9b9dd59270fded97afec659cf916c9f30754bd832cdfd29",
+      "afterSha256": "d06fe976d0561393b97ae936d5807270e678ac4fc9b7418382f8a48677798b52",
+      "changed": true
+    },
+    {
+      "path": "infrastructure/runtime-security/MYSQL_UPGRADE_REHEARSAL.md",
+      "beforeSha256": "7dcdb94088f36bc43459b1e2c498f87679627f0cc34ddec406b7c98066882a0e",
+      "afterSha256": "296a58ead632ccd31e7be1cd1b58705c92807d1757202a1696d27ff0c3501ebf",
+      "oldBytesUnchangedPrefix": true
+    }
+  ],
+  "patches": [
+    {
+      "path": "candidate.patch",
+      "sha256": "fd09b4e4822a6cbc98ec80e6d574c9cff6e131e9f36bb22143ff795fcddda992"
+    },
+    {
+      "path": "documentation.patch",
+      "sha256": "957988565ed7270fb42cf652b65c2677bb0437789213d27aa868129dbf95b4d9"
+    }
+  ],
+  "validation": {
+    "unitTests": 33,
+    "unitSkipped": 0,
+    "actualRuntimeChecks": 49,
+    "actualCliCaptureAndRehearse": true,
+    "oldSourceBlocksOrTestBodies": 13,
+    "legacyRealVolumeRerun": false,
+    "existingProofRewritten": false,
+    "sharedSourceChanged": false,
+    "defaultsChanged": false,
+    "production": false
+  },
+  "evidence": [
+    {
+      "path": "actual-result.json",
+      "bytes": 3453,
+      "sha256": "96db2ebb5aae9b18a53fdceeb904fbfa321485e219786ab074f420c5a57a11e5"
+    },
+    {
+      "path": "execution-inputs.json",
+      "bytes": 843,
+      "sha256": "7f03033190dd1fd14f7cf6fe5b5bf1dfe7810bf66ca8c76d72a0a33bcc55b331"
+    },
+    {
+      "path": "source-binding.json",
+      "bytes": 4180,
+      "sha256": "4e431f558c5c8d593c273afd159bbf5a6570bef8906503a59daa774555392a00"
+    },
+    {
+      "path": "doc-binding.json",
+      "bytes": 287,
+      "sha256": "47ca13c351fdd68fbf3599691afdaff7609592e6ba7c94f9a9580e5b43c95cce"
+    },
+    {
+      "path": "historical-freeze-check.json",
+      "bytes": 1569,
+      "sha256": "4b001e22bf8176b84dacdb62397f37304e03b2e4d057f74c63c4a313a143c041"
+    },
+    {
+      "path": "unit-tests-final.log",
+      "bytes": 2859,
+      "sha256": "262151c5d7253ee7ea2a70a3bb1d281ed0419e4b146a71f013c00fe4225b3f43"
+    },
+    {
+      "path": "source-continuity.json",
+      "bytes": 1630,
+      "sha256": "544305f1ba94dac730a71fa6663b5f57bca77eee9dbc38b56141809ee62da19a"
+    },
+    {
+      "path": "cleanup-verification.json",
+      "bytes": 344,
+      "sha256": "e9e052565274ec8cfe9e785b125ad33f2efe1d777b1600111baf84524bbf4888"
+    },
+    {
+      "path": "execution.log",
+      "bytes": 2432,
+      "sha256": "aef4a3c8eea7956261f1d29f09c8eb04d9b9cfc4ddad84b839db65b70d36715a"
+    },
+    {
+      "path": "diff-check.json",
+      "bytes": 600,
+      "sha256": "d85c2b37cdd1c19ff24219257b9298156fa50b7f53e30915c5716de8eca84470"
+    },
+    {
+      "path": "diff-check-final.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "REVIEW.md",
+      "bytes": 5415,
+      "sha256": "cac7f7e9d8af2812fbd4706ad6e68bbdf8038ec53ceb8d73173462d302b6da0e"
+    },
+    {
+      "path": "run/capture.json",
+      "bytes": 1461,
+      "sha256": "466f6febbbd910d84ff8e34a651e6612f96d4092d41aba14cdfdd8f3d461515f"
+    },
+    {
+      "path": "run/owner.json",
+      "bytes": 436,
+      "sha256": "120db06cb7b22cdcbe4ad780b3cc001acac15d9ed3b8c46dd782f03cb9819c06"
+    },
+    {
+      "path": "run/rehearsal.json",
+      "bytes": 20265,
+      "sha256": "af08bca75f43ac0c0057807692d8a72dab886e05bbdb5085cd30b9ddb2f29c89"
+    },
+    {
+      "path": "run/upgrade-checker.json",
+      "bytes": 9315,
+      "sha256": "78fb4b5f8dc06cd0acca7b69d86031b21a51e033bc570346406f31d179c2df11"
+    }
+  ]
+}

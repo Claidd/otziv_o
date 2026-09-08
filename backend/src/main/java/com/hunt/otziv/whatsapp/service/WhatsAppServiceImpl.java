@@ -35,17 +35,27 @@ import java.util.stream.Collectors;
 @Slf4j
 public class WhatsAppServiceImpl implements WhatsAppService {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    // Keep JSON string identity through StringHttpMessageConverter's UTF-8 encoding,
+    // including a lone surrogate caused by a client truncating a Unicode message.
+    private static final ObjectMapper MAPPER = new ObjectMapper().configure(
+            com.fasterxml.jackson.core.json.JsonWriteFeature.ESCAPE_NON_ASCII.mappedFeature(), true);
 
     private final WhatsAppProperties properties;
     private final RestTemplate restTemplate;
+    private final com.hunt.otziv.whatsapp.api.WhatsAppBusinessOperations businessOperations;
+    private final io.micrometer.core.instrument.MeterRegistry meters;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public WhatsAppServiceImpl(
             WhatsAppProperties properties,
-            @Qualifier("whatsAppRestTemplate") RestTemplate restTemplate
+            @Qualifier("whatsAppRestTemplate") RestTemplate restTemplate,
+            com.hunt.otziv.whatsapp.api.WhatsAppBusinessOperations businessOperations,
+            io.micrometer.core.instrument.MeterRegistry meters
     ) {
         this.properties = properties;
         this.restTemplate = restTemplate;
+        this.businessOperations = businessOperations;
+        this.meters = meters == null ? new io.micrometer.core.instrument.simple.SimpleMeterRegistry() : meters;
     }
 
     // ==== Helpers ====
@@ -103,7 +113,49 @@ public class WhatsAppServiceImpl implements WhatsAppService {
     // ==== Public API ====
 
     @Override
+    public com.hunt.otziv.whatsapp.dto.WhatsAppOperationStatus getOperationStatus(String clientId, String operationId) {
+        if (operationId == null || !operationId.matches("[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")) {
+            throw new IllegalArgumentException("Invalid operation ID");
+        }
+        try {
+            String body = restTemplate.getForObject(baseUrl(clientId) + "/operations/" + operationId, String.class);
+            JsonNode node = MAPPER.readTree(body == null ? "{}" : body);
+            String state = node.path("state").asText();
+            if (!List.of("RUNNING", "UNKNOWN", "SUCCEEDED").contains(state)
+                    || !operationId.equals(node.path("operationId").asText())) {
+                throw new IllegalStateException("Invalid operation status response");
+            }
+            String messageId = node.path("messageId").asText(null);
+            if ("SUCCEEDED".equals(state) && (!node.path("messageId").isTextual()
+                    || !hasText(messageId) || messageId.length() > 512)) {
+                throw new IllegalStateException("Missing delivery evidence");
+            }
+            JsonNode hashNode = node.path("envelopeHash");
+            String envelopeHash = hashNode.isMissingNode() || hashNode.isNull() ? null : hashNode.asText();
+            if (envelopeHash != null && (!hashNode.isTextual() || !envelopeHash.matches("[a-f0-9]{64}"))) {
+                throw new IllegalStateException("Invalid operation envelope evidence");
+            }
+            return new com.hunt.otziv.whatsapp.dto.WhatsAppOperationStatus(operationId, state, messageId, envelopeHash);
+        } catch (RestClientResponseException error) {
+            if (error.getStatusCode().value() == 404) {
+                return new com.hunt.otziv.whatsapp.dto.WhatsAppOperationStatus(operationId, "NOT_FOUND", null);
+            }
+            throw new IllegalStateException("Operation status unavailable", error);
+        } catch (JsonProcessingException | ResourceAccessException error) {
+            throw new IllegalStateException("Operation status unavailable", error);
+        }
+    }
+
+    @Override
     public String sendMessageToGroup(String clientId, String groupId, String message) {
+        return rejectLegacy("send-group");
+    }
+
+    @Override
+    public String sendMessageToGroup(String clientId, String groupId, String message, String operationId) {
+        if (operationId == null || !operationId.matches("[A-Za-z0-9._:-]{1,128}")) {
+            return WhatsAppSendResult.error("invalid_operation_id", "Некорректный идентификатор отправки").toJson();
+        }
         log.info("WhatsApp group send request started: clientId={}, groupIdPresent={}", clientId, hasText(groupId));
 
         if (groupId == null || groupId.isBlank()) {
@@ -116,17 +168,21 @@ public class WhatsAppServiceImpl implements WhatsAppService {
         }
 
         try {
+            businessOperations.requireMatches(operationId,clientId,"send-group",groupId,message);
             String url = baseUrl(clientId) + "/send-group";
             HttpEntity<String> request = jsonEntity(Map.of(
                     "groupId", groupId,
-                    "message", message
+                    "message", message,
+                    "operationId", operationId
             ));
 
             log.info("WhatsApp group send request: url={}, groupIdPresent={}, messageLength={}",
                     url, hasText(groupId), message.length());
             ResponseEntity<String> response = restTemplate.postForEntity(url, request, String.class);
             log.info("WhatsApp group send response: clientId={}, status={}", clientId, response.getStatusCode().value());
-            return response.getBody() != null ? response.getBody() : "ok";
+            return response.getBody() != null ? response.getBody() : WhatsAppSendResult.unknown("operation_unknown", "Нет подтверждения отправки").toJson();
+        } catch (IllegalArgumentException e) {
+            return WhatsAppSendResult.error(e.getMessage(), "Операция не подготовлена или её содержимое изменено").toJson();
         } catch (WhatsAppConfigurationException e) {
             log.warn("WhatsApp-сообщение в группу не отправлено: {}", e.getMessage());
             return WhatsAppSendResult.error(e.getCode(), e.getMessage()).toJson();
@@ -137,17 +193,25 @@ public class WhatsAppServiceImpl implements WhatsAppService {
         } catch (ResourceAccessException e) {
             String error = "WhatsApp-клиент недоступен: " + e.getMessage();
             log.warn("{} ({})", error, clientId);
-            return WhatsAppSendResult.error("client_unavailable", error).toJson();
+            return WhatsAppSendResult.unknown("operation_unknown", "Результат отправки неизвестен; требуется проверка операции").toJson();
         } catch (JsonProcessingException e) {
             log.error("Не удалось собрать JSON для WhatsApp-сообщения в группу через {}", clientId, e);
             return WhatsAppSendResult.error("invalid_payload", "Не удалось собрать JSON для WhatsApp").toJson();
         } catch (Exception e) {
             log.error("❌ Ошибка при отправке в группу через {}: {}", clientId, e.getMessage(), e);
-            return WhatsAppSendResult.error("unexpected_error", e.getMessage()).toJson();
+            return WhatsAppSendResult.unknown("operation_unknown", "Результат отправки неизвестен; требуется проверка операции").toJson();
         }
     }
 
     public String sendMessage(String clientId, String phone, String message) {
+        return rejectLegacy("send");
+    }
+
+    @Override
+    public String sendMessage(String clientId, String phone, String message, String operationId) {
+        if (operationId == null || !operationId.matches("[A-Za-z0-9._:-]{1,128}")) {
+            return WhatsAppSendResult.error("invalid_operation_id", "Некорректный идентификатор отправки").toJson();
+        }
         String normalized = normalizePhone(phone);
         log.info("WhatsApp send request started: clientId={}, phone={}", clientId, maskPhone(normalized));
         if (!hasText(normalized)) {
@@ -160,11 +224,13 @@ public class WhatsAppServiceImpl implements WhatsAppService {
         }
 
         try {
+            businessOperations.requireMatches(operationId,clientId,"send",normalized,message);
             String url = baseUrl(clientId) + "/send";
             HttpEntity<String> request = jsonEntity(Map.of(
                     "client", clientId,
                     "phone", normalized,
-                    "message", message
+                    "message", message,
+                    "operationId", operationId
             ));
 
             log.info("WhatsApp send request: url={}, clientId={}, phone={}, messageLength={}",
@@ -172,7 +238,9 @@ public class WhatsAppServiceImpl implements WhatsAppService {
             ResponseEntity<String> response = restTemplate.postForEntity(url, request, String.class);
 
             log.info("WhatsApp send response: clientId={}, status={}", clientId, response.getStatusCode().value());
-            return response.getBody() != null ? response.getBody() : "ok";
+            return response.getBody() != null ? response.getBody() : WhatsAppSendResult.unknown("operation_unknown", "Нет подтверждения отправки").toJson();
+        } catch (IllegalArgumentException e) {
+            return WhatsAppSendResult.error(e.getMessage(), "Операция не подготовлена или её содержимое изменено").toJson();
         } catch (WhatsAppConfigurationException e) {
             log.warn("WhatsApp-сообщение не отправлено: {}", e.getMessage());
             return WhatsAppSendResult.error(e.getCode(), e.getMessage()).toJson();
@@ -183,14 +251,19 @@ public class WhatsAppServiceImpl implements WhatsAppService {
         } catch (ResourceAccessException e) {
             String error = "WhatsApp-клиент недоступен: " + e.getMessage();
             log.warn("{} ({})", error, clientId);
-            return WhatsAppSendResult.error("client_unavailable", error).toJson();
+            return WhatsAppSendResult.unknown("operation_unknown", "Результат отправки неизвестен; требуется проверка операции").toJson();
         } catch (JsonProcessingException e) {
             log.error("Не удалось собрать JSON для WhatsApp-сообщения через {}", clientId, e);
             return WhatsAppSendResult.error("invalid_payload", "Не удалось собрать JSON для WhatsApp").toJson();
         } catch (Exception e) {
             log.error("❌ Ошибка при отправке сообщения через {}: {}", clientId, e.getMessage(), e);
-            return WhatsAppSendResult.error("unexpected_error", e.getMessage()).toJson();
+            return WhatsAppSendResult.unknown("operation_unknown", "Результат отправки неизвестен; требуется проверка операции").toJson();
         }
+    }
+
+    private String rejectLegacy(String kind) {
+        meters.counter("otziv.whatsapp.legacy_send.rejected", "kind", kind).increment();
+        return WhatsAppSendResult.error("operation_id_required", "Создайте сохраняемую операцию отправки перед повтором").toJson();
     }
 
     @Override
@@ -327,6 +400,12 @@ public class WhatsAppServiceImpl implements WhatsAppService {
         String code = httpSendErrorCode(body);
         if (!hasText(code) && e.getStatusCode().value() == 503) {
             code = "whatsapp_http_503";
+        }
+        if ("operation_unknown".equals(code) || "operation_running".equals(code)) {
+            return WhatsAppSendResult.unknown(code, message);
+        }
+        if (e.getStatusCode().is5xxServerError() && (!hasText(code) || "whatsapp_http_503".equals(code))) {
+            return WhatsAppSendResult.unknown("operation_unknown", "Результат отправки неизвестен; требуется проверка операции");
         }
         return WhatsAppSendResult.error(hasText(code) ? code : "http_error", message);
     }

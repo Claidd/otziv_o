@@ -25,7 +25,13 @@ import { AuthService } from '../core/auth.service';
             <p>Мобильный кабинет команды</p>
           </section>
 
-          @if (auth.error()) {
+          @if (auth.status() === 'retrying' || (auth.status() === 'refreshing' && auth.tokens())) {
+            <div class="error-state" role="status">Сессия сохранена. Восстановите соединение, чтобы продолжить.</div>
+            <ion-button size="large" expand="block" (click)="retrySession()" [disabled]="busy()">
+              @if (busy()) { <ion-spinner name="crescent" /> }
+              Повторить подключение
+            </ion-button>
+          } @else if (auth.error()) {
             <div class="error-state">{{ auth.error() }}</div>
             <ion-button size="large" expand="block" (click)="login()" [disabled]="busy()">
               @if (busy()) {
@@ -158,6 +164,10 @@ export class LoginPage implements OnInit {
 
   login(): void {
     void this.startAutoLogin();
+  }
+
+  retrySession(): void {
+    void this.auth.refreshTokens();
   }
 
   private startAutoLogin(): void {

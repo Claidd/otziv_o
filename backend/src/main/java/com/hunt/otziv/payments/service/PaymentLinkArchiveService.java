@@ -13,6 +13,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -43,6 +44,14 @@ public class PaymentLinkArchiveService {
             LocalDate to,
             boolean excludePrivilegedTargets
     ) {
+        return archivedLinks(page, size, statusFilter, search, searchId, from, to, excludePrivilegedTargets, Sort.Direction.DESC);
+    }
+
+    @Transactional(readOnly = true)
+    public AdminPaymentLinksPageResponse archivedLinks(
+            int page, int size, String statusFilter, String search, Long searchId, LocalDate from, LocalDate to,
+            boolean excludePrivilegedTargets, Sort.Direction direction
+    ) {
         int resolvedPage = Math.max(0, page);
         int resolvedSize = Math.max(10, Math.min(size, 100));
         PaymentLinkAdminSummary summary = repository.summarizeArchived(
@@ -65,7 +74,8 @@ public class PaymentLinkArchiveService {
                         from,
                         to,
                         excludePrivilegedTargets,
-                        properties.getPublicBaseUrl()
+                        properties.getPublicBaseUrl(),
+                        direction
                 ),
                 resolvedPage,
                 resolvedSize,

@@ -10,11 +10,25 @@ const CONNECT_TIMEOUT_MS = 10_000;
  * destination DNS lookup, closing the validation-to-connect rebinding gap.
  */
 export async function startDnsPinningProxy({ lookup, upstreamProxy } = {}) {
+  const sockets = new Set();
+  const forwarding = new Set();
+  let closing = false;
+  const registerSocket = (socket) => {
+    if (closing) { socket.destroy(); return; }
+    sockets.add(socket);
+    socket.once("close", () => sockets.delete(socket));
+  };
+  const track = (promise) => {
+    forwarding.add(promise);
+    promise.then(() => forwarding.delete(promise), () => forwarding.delete(promise));
+  };
+  const options = { lookup, upstreamProxy, registerSocket };
   const server = http.createServer((request, response) => {
-    void forwardHttpRequest(request, response, { lookup, upstreamProxy });
+    track(forwardHttpRequest(request, response, options));
   });
+  server.on("connection", registerSocket);
   server.on("connect", (request, socket, head) => {
-    void forwardConnect(request, socket, head, { lookup, upstreamProxy });
+    track(forwardConnect(request, socket, head, options));
   });
   server.on("clientError", (_error, socket) => {
     socket.end("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n");
@@ -34,7 +48,13 @@ export async function startDnsPinningProxy({ lookup, upstreamProxy } = {}) {
   }
   return {
     server: `http://127.0.0.1:${address.port}`,
-    close: () => closeServer(server),
+    close: async () => {
+      closing = true;
+      const closed = closeServer(server);
+      for (const socket of sockets) socket.destroy();
+      await Promise.allSettled([...forwarding]);
+      await closed;
+    },
   };
 }
 
@@ -60,6 +80,8 @@ async function forwardConnect(request, clientSocket, head, options) {
     const upstreamSocket = options.upstreamProxy
       ? await connectThroughUpstream(target, options.upstreamProxy)
       : await connectSocket(target.address, target.port, target.family);
+    options.registerSocket(upstreamSocket);
+    if (clientSocket.destroyed) { upstreamSocket.destroy(); return; }
 
     clientSocket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
     if (head?.length) {
@@ -67,6 +89,8 @@ async function forwardConnect(request, clientSocket, head, options) {
     }
     upstreamSocket.on("error", () => clientSocket.destroy());
     clientSocket.on("error", () => upstreamSocket.destroy());
+    clientSocket.once("close", () => upstreamSocket.destroy());
+    upstreamSocket.once("close", () => clientSocket.destroy());
     clientSocket.pipe(upstreamSocket);
     upstreamSocket.pipe(clientSocket);
   } catch {
@@ -102,6 +126,8 @@ async function forwardHttpRequest(request, response, options) {
       response.writeHead(upstreamResponse.statusCode || 502, upstreamResponse.headers);
       upstreamResponse.pipe(response);
     });
+    upstreamRequest.on("socket", options.registerSocket);
+    response.once("close", () => upstreamRequest.destroy());
     upstreamRequest.setTimeout(CONNECT_TIMEOUT_MS, () => upstreamRequest.destroy());
     upstreamRequest.on("error", () => {
       if (!response.headersSent) {

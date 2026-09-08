@@ -1,0 +1,222 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Otziv order editor read contract",
+    "version": "1.1.0"
+  },
+  "x-generator-version": "1.0.0",
+  "paths": {
+    "/api/manager/orders/{orderId}/edit": {
+      "get": {
+        "operationId": "getManagerOrderEdit",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Order editor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderEditResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "OptionResponse": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "id",
+          "label"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "label": {
+            "type": "string"
+          }
+        }
+      },
+      "OrderEditResponse": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "id",
+          "companyId",
+          "companyTitle",
+          "status",
+          "sum",
+          "amount",
+          "counter",
+          "created",
+          "changed",
+          "payDay",
+          "orderComments",
+          "commentsCompany",
+          "complete",
+          "filial",
+          "manager",
+          "worker",
+          "filials",
+          "managers",
+          "workers",
+          "canComplete",
+          "canDelete",
+          "canCancelPayment"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "companyId": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "companyTitle": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "sum": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "amount": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "counter": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created": {
+            "type": "string"
+          },
+          "changed": {
+            "type": "string"
+          },
+          "payDay": {
+            "type": "string"
+          },
+          "orderComments": {
+            "type": "string"
+          },
+          "commentsCompany": {
+            "type": "string"
+          },
+          "complete": {
+            "type": "boolean"
+          },
+          "filial": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OptionResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "manager": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OptionResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "worker": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OptionResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "filials": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OptionResponse"
+            }
+          },
+          "managers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OptionResponse"
+            }
+          },
+          "workers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OptionResponse"
+            }
+          },
+          "canComplete": {
+            "type": "boolean"
+          },
+          "canDelete": {
+            "type": "boolean"
+          },
+          "canCancelPayment": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  },
+  "x-compatibility-optional-fields": {
+    "OrderEditResponse": [
+      "sum",
+      "amount",
+      "counter",
+      "filial",
+      "manager",
+      "worker",
+      "canCancelPayment"
+    ]
+  }
+}

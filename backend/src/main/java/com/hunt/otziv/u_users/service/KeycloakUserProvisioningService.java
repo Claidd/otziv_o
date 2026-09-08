@@ -106,6 +106,8 @@ public class KeycloakUserProvisioningService {
     private final TelegramGroupLinkService telegramGroupLinkService;
     private final CacheManager cacheManager;
     private final UserAuthEpochService authEpochService;
+    private final UserPasswordMutationService passwordMutations;
+    private final jakarta.persistence.EntityManager entityManager;
     private final ContractorPaymentProfileService contractorPaymentProfileService;
 
     /** ADMIN always remains global; OWNER cannot manage ADMIN/OWNER accounts unless explicitly enabled. */
@@ -360,27 +362,9 @@ public class KeycloakUserProvisioningService {
         return toAdminResponse(user);
     }
 
-    @Transactional
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     public void changePassword(Long userId, ChangeKeycloakPasswordRequest request) {
-        User user = findLockedUser(userId);
-
-        requireAdminForPrivilegedMutation(isPrivilegedUser(user));
-
-        if (!hasText(user.getKeycloakId())) {
-            throw new ResponseStatusException(
-                    BAD_REQUEST,
-                    "User is not linked to Keycloak yet. Run legacy migration first."
-            );
-        }
-
-        keycloakAdminClient.resetPassword(
-                user.getKeycloakId(),
-                request.getPassword(),
-                request.isTemporary()
-        );
-        keycloakAdminClient.logoutUserSessions(user.getKeycloakId());
-        authEpochService.passwordChanged(user);
-        userRepository.flush();
+        passwordMutations.change(userId, request, user -> requireAdminForPrivilegedMutation(isPrivilegedUser(user)));
     }
 
     @Transactional
@@ -462,6 +446,7 @@ public class KeycloakUserProvisioningService {
         String username = request.getUsername().trim();
         User user = userRepository.lockByUsername(username)
                 .orElse(null);
+        if (user != null) entityManager.refresh(user, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
         String legacyPasswordHash = user == null ? null : user.getPassword();
         boolean hasLegacyPasswordHash = hasText(legacyPasswordHash);
         boolean passwordMatches = passwordEncoder.matches(
@@ -584,8 +569,10 @@ public class KeycloakUserProvisioningService {
     }
 
     private User findLockedUser(Long userId) {
-        return userRepository.lockById(userId)
+        User user = userRepository.lockById(userId)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Local user not found"));
+        entityManager.refresh(user, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+        return user;
     }
 
     private User findLockedUserWithAssignments(Long userId) {

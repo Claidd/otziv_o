@@ -39,6 +39,9 @@ public class S3ObjectCleanupQueue {
     private final S3Client s3Client;
     private final SchedulerLeaseService schedulerLeaseService;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private List<ObjectDeletionGuard> deletionGuards = List.of();
+
     @Value("${s3.cleanup.batch-size:25}")
     private int configuredBatchSize;
 
@@ -56,7 +59,31 @@ public class S3ObjectCleanupQueue {
         }
         byte[] identityHash = identityHash(bucket, objectKey);
         try {
-            jdbc.update("""
+            persistIntent(bucket, objectKey, reason, identityHash);
+            log.info("S3 object cleanup queued: objectHash={}", fingerprint(identityHash));
+            return true;
+        } catch (RuntimeException exception) {
+            // Deletion is cleanup after the primary operation. Never turn a
+            // successful database commit into an apparent failure here.
+            log.error(
+                    "S3 cleanup queue write failed: objectHash={}, failureType={}",
+                    fingerprint(identityHash),
+                    exception.getClass().getSimpleName()
+            );
+            return false;
+        }
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void enqueueRequired(String bucket, String objectKey, String reason) {
+        if (!validBucket(bucket) || !validObjectKey(objectKey)) {
+            throw new IllegalArgumentException("Invalid S3 cleanup identity");
+        }
+        persistIntent(bucket, objectKey, reason, identityHash(bucket, objectKey));
+    }
+
+    private void persistIntent(String bucket, String objectKey, String reason, byte[] identityHash) {
+        jdbc.update("""
                     INSERT INTO s3_object_cleanup_queue (
                         object_identity_hash, bucket_name, object_key,
                         cleanup_reason, attempts, next_attempt_at,
@@ -75,18 +102,6 @@ public class S3ObjectCleanupQueue {
                     .addValue("bucket", bucket.trim())
                     .addValue("objectKey", objectKey)
                     .addValue("reason", normalizedReason(reason)));
-            log.info("S3 object cleanup queued: objectHash={}", fingerprint(identityHash));
-            return true;
-        } catch (RuntimeException exception) {
-            // Deletion is cleanup after the primary operation. Never turn a
-            // successful database commit into an apparent failure here.
-            log.error(
-                    "S3 cleanup queue write failed: objectHash={}, failureType={}",
-                    fingerprint(identityHash),
-                    exception.getClass().getSimpleName()
-            );
-            return false;
-        }
     }
 
     @Scheduled(
@@ -130,6 +145,10 @@ public class S3ObjectCleanupQueue {
         int deleted = 0;
         for (CleanupItem item : items) {
             try {
+                if (deletionGuards.stream().anyMatch(guard -> !guard.mayDelete(item.bucket(), item.objectKey()))) {
+                    scheduleRetry(item, new IllegalStateException("Object is still referenced"));
+                    continue;
+                }
                 s3Client.deleteObject(DeleteObjectRequest.builder()
                         .bucket(item.bucket())
                         .key(item.objectKey())

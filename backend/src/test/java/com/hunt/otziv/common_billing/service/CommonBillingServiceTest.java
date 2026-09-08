@@ -50,10 +50,8 @@ import com.hunt.otziv.p_products.deletion.service.OrderDeletionService;
 import com.hunt.otziv.p_products.mapper.OrderDtoMapper;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderStatus;
-import com.hunt.otziv.p_products.next_order.model.NextOrderRequest;
-import com.hunt.otziv.p_products.next_order.model.NextOrderRequestStatus;
 import com.hunt.otziv.p_products.next_order.service.NextOrderRequestService;
-import com.hunt.otziv.p_products.next_order.repository.NextOrderRequestRepository;
+import com.hunt.otziv.p_products.api.NextOrderRequests;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.review.service.OrderAggregateMutationLockService;
 import com.hunt.otziv.p_products.review.service.OrderPublicationApprovalService;
@@ -154,6 +152,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -208,8 +207,6 @@ class CommonBillingServiceTest {
     @Mock
     private PaymentLinkService paymentLinkService;
     @Mock
-    private ObjectProvider<PaymentLinkService> paymentLinkServiceProvider;
-    @Mock
     private PaymentIssueReminderService paymentIssueReminderService;
     @Mock
     private ManualPaymentTaskService manualPaymentTaskService;
@@ -228,7 +225,7 @@ class CommonBillingServiceTest {
     @Mock
     private NextOrderRequestService nextOrderRequestService;
     @Mock
-    private NextOrderRequestRepository nextOrderRequestRepository;
+    private NextOrderRequests nextOrderRequests;
     @Mock
     private BadReviewTaskService badReviewTaskService;
     @Mock
@@ -294,6 +291,8 @@ class CommonBillingServiceTest {
 
     @InjectMocks
     private CommonBillingService service;
+    @Mock
+    private com.hunt.otziv.payments.service.CommonInvoiceRouteSelector invoiceRouteSelector;
     private final Map<Long, CommonInvoicePaymentRef> paymentRefStore = new LinkedHashMap<>();
     private long nextPaymentRefId;
 
@@ -301,15 +300,106 @@ class CommonBillingServiceTest {
     void setUpLazyDependencies() {
         paymentRefStore.clear();
         nextPaymentRefId = 10_000L;
-        ReflectionTestUtils.setField(service, "orderTransactionService", orderTransactionService);
-        ReflectionTestUtils.setField(service, "orderStatusTransitionService", orderStatusTransitionService);
-        ReflectionTestUtils.setField(service, "nextOrderRequestService", nextOrderRequestService);
-        ReflectionTestUtils.setField(service, "publicationApprovalServiceProvider", publicationApprovalServiceProvider);
-        ReflectionTestUtils.setField(service, "orderDeletionServiceProvider", orderDeletionServiceProvider);
-        ReflectionTestUtils.setField(service, "paymentLinkServiceProvider", paymentLinkServiceProvider);
+        CommonInvoiceAfterCommitSender afterCommitSender = new CommonInvoiceAfterCommitSender(event -> {
+            CommonInvoiceAfterCommitSender.Request request = (CommonInvoiceAfterCommitSender.Request) event;
+            service.sendInvoiceAutomatically(request.invoiceId(), request.manual());
+        });
+        CommonInvoiceSettlementService settlement = new CommonInvoiceSettlementService(
+                transactionManager, entityManager, accountRepository, invoiceRepository,
+                invoiceOrderRepository, paymentRefRepository, paymentNotificationOutboxRepository,
+                orderRepository, orderAggregateMutationLockService, paymentLinkRepository, afterCommitSender,
+                manualPaymentTaskService, orderStatusService, badReviewTaskService, paymentInvoiceRetryScheduler,
+                manualPaymentAutoConfirmationService, appSettingService, contractorPaymentShadowService,
+                commonManualPaymentAttributionCoordinator, paymentProfileService, tokenSigner,
+                tochkaPaymentProfileResolver, tochkaPaymentOperationMapper, recoveryGateService, observabilityMetrics
+        );
+        ReflectionTestUtils.setField(settlement, "orderTransactionService", orderTransactionService);
+        ReflectionTestUtils.setField(settlement, "nextOrderRequestService", nextOrderRequestService);
+        ReflectionTestUtils.setField(service, "settlementService", settlement);
+        CommonInvoicePresenter presenter = new CommonInvoicePresenter(
+                settlement, contractorPaymentLiveRoutingService, paymentProfileService, properties);
+        CommonInvoiceCancellationService cancellation = new CommonInvoiceCancellationService(
+                settlement, invoiceRepository, paymentRefRepository, paymentProfileService, tbankClient);
+        ReflectionTestUtils.setField(service, "invoicePresenter", presenter);
+        ReflectionTestUtils.setField(service, "invoiceCancellation", cancellation);
+        CommonInvoiceInitializationService initialization = new CommonInvoiceInitializationService(
+                invoiceRouteSelector, cancellation, presenter, settlement, entityManager,
+                invoiceRepository, invoiceOrderRepository, paymentRefRepository, paymentLinkRepository,
+                paymentIssueReminderService, contractorPaymentLiveRoutingService, contractorPaymentShadowService,
+                taskReceiptIntegrationService, runtimeSettingsService, paymentProfileService, properties,
+                tbankClient, tochkaPaymentProfileResolver, tochkaClient);
+        ReflectionTestUtils.setField(service, "invoiceInitialization", initialization);
+        CommonInvoiceDetailsAssembler detailsAssembler = new CommonInvoiceDetailsAssembler(
+                presenter, settlement, invoiceOrderRepository, paymentRefRepository,
+                orderRepository, nextOrderRequests, orderDtoMapper, badReviewTaskService, paymentProfileService);
+        ReflectionTestUtils.setField(service, "invoiceDetailsAssembler", detailsAssembler);
+        CommonInvoiceDeliveryService delivery = new CommonInvoiceDeliveryService(
+                detailsAssembler, initialization, presenter, settlement, invoiceRepository, invoiceOrderRepository,
+                managerRepository, managerPermissionService, userService, messageSender,
+                paperInvoiceManagerNotificationService, appSettingService);
+        ReflectionTestUtils.setField(delivery, "orderStatusTransitionService", orderStatusTransitionService);
+        ReflectionTestUtils.setField(service, "invoiceDelivery", delivery);
+        CommonInvoiceTochkaReconciliationService reconciliation = new CommonInvoiceTochkaReconciliationService(
+                cancellation, settlement, entityManager, invoiceRepository, paymentRefRepository,
+                paymentProfileService, tochkaPaymentProfileResolver, tochkaClient, tochkaPaymentOperationMapper);
+        ReflectionTestUtils.setField(service, "invoiceReconciliation", reconciliation);
+        CommonInvoiceManualPaymentWorkflow manualPayments = new CommonInvoiceManualPaymentWorkflow(
+                paymentLinkService, cancellation, delivery, detailsAssembler, settlement,
+                invoiceRepository, invoiceOrderRepository, paymentRefRepository, paymentLinkRepository,
+                manualCardPaymentReviewNotificationService, commonManualPaymentAttributionCoordinator,
+                actualPaymentAttributionFlowPolicy, taskReceiptIntegrationService, paymentProfileService, tbankClient);
+        ReflectionTestUtils.setField(service, "manualPaymentWorkflow", manualPayments);
+        ReflectionTestUtils.setField(service, "invoiceRouteWorkflow", new CommonInvoicePaymentRouteWorkflow(
+                manualPayments, delivery, detailsAssembler, invoiceRouteSelector, initialization, cancellation,
+                presenter, settlement, accountRepository, invoiceRepository, invoiceOrderRepository,
+                paymentRefRepository, paperInvoiceManagerNotificationService, contractorPaymentLiveRoutingService,
+                taskReceiptIntegrationService, paymentProfileService, tbankClient));
+        CommonInvoiceMembershipWorkflow membership = new CommonInvoiceMembershipWorkflow(
+                manualPayments, detailsAssembler, initialization, presenter, settlement, entityManager,
+                accountCompanyRepository, invoiceRepository, invoiceOrderRepository, paymentRefRepository,
+                orderRepository, orderAggregateMutationLockService, nextOrderRequests,
+                paymentLinkRepository, orderStatusService, badReviewTaskService, appSettingService,
+                publicationBlockerService);
+        ReflectionTestUtils.setField(service, "invoiceMembershipWorkflow", membership);
+        CommonBillingCompanyReconciliationWorkflow companyReconciliation = new CommonBillingCompanyReconciliationWorkflow(
+                membership, manualPayments, initialization, settlement, accountRepository,
+                accountCompanyRepository, invoiceRepository, invoiceOrderRepository, orderRepository,
+                publicationBlockerService);
+        ReflectionTestUtils.setField(service, "companyReconciliation", companyReconciliation);
+        ReflectionTestUtils.setField(service, "accountWorkflow", new CommonBillingAccountWorkflow(
+                companyReconciliation, membership, delivery, initialization, presenter, settlement,
+                accountRepository, accountCompanyRepository, invoiceRepository, invoiceOrderRepository,
+                companyRepository, managerRepository));
+        CommonInvoiceBoardWorkflow boardWorkflow = new CommonInvoiceBoardWorkflow(
+                membership, manualPayments, delivery, initialization, presenter, settlement,
+                invoiceBoardQueryRepository, invoiceRepository, invoiceOrderRepository,
+                badReviewTaskService, publicationBlockerService);
+        ReflectionTestUtils.setField(service, "invoiceBoardWorkflow", boardWorkflow);
+        CommonInvoiceArchiveWorkflow archiveWorkflow = new CommonInvoiceArchiveWorkflow(
+                boardWorkflow, manualPayments, delivery, settlement, invoiceRepository, invoiceOrderRepository,
+                nextOrderRequests, badReviewTaskService, managerPermissionService,
+                contractorPaymentShadowService, taskReceiptIntegrationService, recoveryGateService);
+        ReflectionTestUtils.setField(archiveWorkflow, "orderStatusTransitionService", orderStatusTransitionService);
+        ReflectionTestUtils.setField(service, "invoiceArchiveWorkflow", archiveWorkflow);
+        CommonInvoiceReviewApprovalWorkflow reviewApproval = new CommonInvoiceReviewApprovalWorkflow(
+                membership, manualPayments, settlement, invoiceOrderRepository, publicationApprovalServiceProvider);
+        ReflectionTestUtils.setField(service, "invoiceReviewApprovalWorkflow", reviewApproval);
+        CommonInvoiceRecoveryWorkflow recoveryWorkflow = new CommonInvoiceRecoveryWorkflow(
+                reviewApproval, membership, manualPayments, delivery, detailsAssembler, initialization,
+                settlement, entityManager, invoiceRepository, invoiceOrderRepository, paymentRefRepository,
+                paymentLinkService, contractorPaymentLiveRoutingService);
+        ReflectionTestUtils.setField(service, "invoiceRecoveryWorkflow", recoveryWorkflow);
+        ReflectionTestUtils.setField(service, "invoiceCheckoutWorkflow", new CommonInvoiceCheckoutWorkflow(
+                boardWorkflow, manualPayments, detailsAssembler, initialization, settlement, entityManager,
+                invoiceRepository, invoiceOrderRepository, contractorPaymentLiveRoutingService));
+        ReflectionTestUtils.setField(service, "invoiceDeletionWorkflow", new CommonInvoiceDeletionWorkflow(
+                recoveryWorkflow, manualPayments, delivery, initialization, invoiceRepository,
+                invoiceOrderRepository, paymentRefRepository, orderDeletionServiceProvider));
+        ReflectionTestUtils.setField(service, "invoicePositionPaymentWorkflow", new CommonInvoicePositionPaymentWorkflow(
+                membership, manualPayments, settlement, invoiceRepository, invoiceOrderRepository,
+                actualPaymentAttributionFlowPolicy));
         lenient().when(publicationApprovalServiceProvider.getObject()).thenReturn(publicationApprovalService);
         lenient().when(orderDeletionServiceProvider.getObject()).thenReturn(orderDeletionService);
-        lenient().when(paymentLinkServiceProvider.getObject()).thenReturn(paymentLinkService);
         lenient().when(appSettingService.getBoolean(
                 AppSettingService.CLIENT_MESSAGES_PAYMENT_REMINDER_ENABLED,
                 true
@@ -318,7 +408,7 @@ class CommonBillingServiceTest {
                 AppSettingService.CLIENT_MESSAGES_PAYMENT_REMINDER_INTERVAL_DAYS,
                 2
         )).thenReturn(2);
-        lenient().when(paymentLinkService.selectCommonInvoiceRoute(any(), anyLong())).thenReturn(
+        lenient().when(invoiceRouteSelector.selectCommonInvoiceRoute(any(), anyLong())).thenReturn(
                 new PaymentRouteSelection(
                         TbankRuntimeSettingsService.PAYMENT_SOURCE_TBANK_LINK,
                         1L,
@@ -401,7 +491,7 @@ class CommonBillingServiceTest {
         assertNull(invoice.getPaymentRouteType());
         assertNull(invoice.getContractorAllocationId());
         verifyNoInteractions(contractorPaymentLiveRoutingService);
-        verify(paymentLinkService, never()).selectCommonInvoiceRoute(any(), anyLong());
+        verify(invoiceRouteSelector, never()).selectCommonInvoiceRoute(any(), anyLong());
     }
 
     @Test
@@ -699,7 +789,7 @@ class CommonBillingServiceTest {
         when(paymentRefRepository.findByInvoiceIdForUpdate(invoice.getId())).thenReturn(List.of());
         when(contractorPaymentLiveRoutingService.frozenCommonRouteAction(invoice.getId(), 501L))
                 .thenReturn(FrozenCommonRouteAction.KEEP);
-        when(paymentLinkService.selectCommonInvoiceTaskRoute(invoice, routeManager, 100_000L))
+        when(invoiceRouteSelector.selectCommonInvoiceTaskRoute(invoice, routeManager, 100_000L))
                 .thenReturn(Optional.empty());
         ContractorPaymentAllocation replacement = new ContractorPaymentAllocation();
         replacement.setId(502L);
@@ -761,7 +851,7 @@ class CommonBillingServiceTest {
         when(contractorPaymentLiveRoutingService.reserveOwnerForCommonInvoice(
                 eq(invoice), eq(List.of(order)), eq(routeManager), eq(100_000L)))
                 .thenReturn(owner);
-        when(paymentLinkService.selectCommonInvoiceOwnerAcquiringRoute(routeManager, 100_000L))
+        when(invoiceRouteSelector.selectCommonInvoiceOwnerAcquiringRoute(routeManager, 100_000L))
                 .thenReturn(new PaymentRouteSelection(
                         TbankRuntimeSettingsService.PAYMENT_SOURCE_TBANK_LINK,
                         1L,
@@ -799,7 +889,7 @@ class CommonBillingServiceTest {
                 eq(invoice), eq("Способ оплаты общего счёта изменён по просьбе клиента"),
                 eq("LIVE_COMMON:ROUTE_REPLACED"));
         verify(paymentProfileService).lockManagerForRouting(routeManager);
-        verify(paymentLinkService).selectCommonInvoiceOwnerAcquiringRoute(routeManager, 100_000L);
+        verify(invoiceRouteSelector).selectCommonInvoiceOwnerAcquiringRoute(routeManager, 100_000L);
     }
 
     @Test
@@ -838,7 +928,7 @@ class CommonBillingServiceTest {
         when(contractorPaymentLiveRoutingService.reserveOwnerForCommonInvoice(
                 eq(invoice), eq(List.of(order)), eq(routeManager), eq(100_000L)))
                 .thenReturn(owner);
-        when(paymentLinkService.selectCommonInvoiceOwnerAcquiringRoute(routeManager, 100_000L))
+        when(invoiceRouteSelector.selectCommonInvoiceOwnerAcquiringRoute(routeManager, 100_000L))
                 .thenReturn(new PaymentRouteSelection(
                         TbankRuntimeSettingsService.PAYMENT_SOURCE_BANK_LINK,
                         2L,
@@ -884,7 +974,7 @@ class CommonBillingServiceTest {
                 eq("LIVE_COMMON:ROUTE_REPLACED"));
         verify(paymentProfileService).lockManagerForRouting(routeManager);
         verify(paymentProfileService).lockForRouting(targetProfile);
-        verify(paymentLinkService).selectCommonInvoiceOwnerAcquiringRoute(routeManager, 100_000L);
+        verify(invoiceRouteSelector).selectCommonInvoiceOwnerAcquiringRoute(routeManager, 100_000L);
     }
 
     @Test
@@ -994,6 +1084,39 @@ class CommonBillingServiceTest {
         assertTrue(reason.contains("активная сессия T-Bank"));
         assertTrue(reason.contains("«Оплачен»"));
         verifyNoInteractions(contractorPaymentLiveRoutingService);
+    }
+
+    @Test
+    void invoiceRouteChangeCannotReplaceRecipientAfterUnknownDelivery() {
+        CommonInvoice invoice = invoice(account());
+        invoice.setPaymentMessageOperationId("invoice-message:10:unresolved");
+        invoice.setPaymentMessageOperationKind("INVOICE");
+        invoice.setLastError("operation_unknown: timeout");
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(paymentRefRepository.findByInvoiceIdForUpdate(10L)).thenReturn(List.of());
+        String token = ReflectionTestUtils.invokeMethod(service, "commonInvoiceRouteChangeToken", invoice, List.of());
+        var request = new CommonInvoicePaymentRouteChangeRequest(CommonInvoicePaymentRouteChangeTarget.OWNER_TBANK, true, token);
+        ResponseStatusException refusal = assertThrows(ResponseStatusException.class,
+                () -> ReflectionTestUtils.invokeMethod(service, "replaceCommonInvoicePaymentRouteLocked", 10L, request, "manager"));
+        assertTrue(refusal.getReason().contains("сверку сообщения"));
+        verifyNoInteractions(contractorPaymentLiveRoutingService, tbankClient, messageSender);
+        verify(invoiceRepository, never()).save(any());
+    }
+
+    @Test
+    void messageStartingAfterRoutePreviewInvalidatesThePreviewToken() {
+        CommonInvoice invoice = invoice(account());
+        String previewToken = ReflectionTestUtils.invokeMethod(service, "commonInvoiceRouteChangeToken", invoice, List.of());
+        invoice.setPaymentMessageOperationId("invoice-message:10:started-after-preview");
+        invoice.setLastError("message_send_in_progress");
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(paymentRefRepository.findByInvoiceIdForUpdate(10L)).thenReturn(List.of());
+        var request = new CommonInvoicePaymentRouteChangeRequest(CommonInvoicePaymentRouteChangeTarget.OWNER_TBANK, true, previewToken);
+        ResponseStatusException refusal = assertThrows(ResponseStatusException.class,
+                () -> ReflectionTestUtils.invokeMethod(service, "replaceCommonInvoicePaymentRouteLocked", 10L, request, "manager"));
+        assertEquals(HttpStatus.CONFLICT, refusal.getStatusCode());
+        verifyNoInteractions(contractorPaymentLiveRoutingService, tbankClient, messageSender);
+        verify(invoiceRepository, never()).save(any());
     }
 
     @Test
@@ -1302,7 +1425,7 @@ class CommonBillingServiceTest {
         verify(observabilityMetrics).observeTransactionCompletion(COMMON_INVOICE_CLOSE);
         verify(observabilityMetrics).recordCaughtFailure(COMMON_INVOICE_CLOSE, CLOSE_ORDER);
         verify(invoiceRepository, never()).save(invoice);
-        verify(messageSender, never()).send(any(), any(), any(), any());
+        verify(messageSender, never()).sendWithOperationId(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.anyString());
         assertEquals(CommonInvoiceStatus.READY, invoice.getStatus());
         assertNull(invoice.getLastError());
     }
@@ -2082,7 +2205,7 @@ class CommonBillingServiceTest {
         verify(commonManualPaymentAttributionCoordinator).recordFinalReceipt(
                 any(), anyList(), anyLong(), any(), any()
         );
-        verify(messageSender, never()).send(any(), any(), any(), any());
+        verify(messageSender, never()).sendWithOperationId(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.anyString());
         verify(manualPaymentTaskService, never()).completeCommonInvoiceTaskIfTargetReached(any());
         verify(nextOrderRequestService, never()).openForPaidOrder(any());
         verify(contractorPaymentShadowService, never()).reconcileCommonInvoiceId(anyLong());
@@ -2388,7 +2511,7 @@ class CommonBillingServiceTest {
         assertTrue(invoice.getStatus() != CommonInvoiceStatus.NEEDS_ATTENTION);
         assertTrue(invoice.getLastError() == null || !invoice.getLastError().contains("close_failed"));
         verify(nextOrderRequestService, never()).openForPaidOrder(any());
-        verify(messageSender, never()).send(any(), any(), any(), any());
+        verify(messageSender, never()).sendWithOperationId(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.anyString());
     }
 
     @Test
@@ -2417,7 +2540,7 @@ class CommonBillingServiceTest {
         assertTrue(invoice.getStatus() != CommonInvoiceStatus.NEEDS_ATTENTION);
         assertTrue(invoice.getLastError() == null || !invoice.getLastError().contains("next_order_failed"));
         verify(paymentNotificationOutboxRepository).enqueueClient(10L);
-        verify(messageSender, never()).send(any(), any(), any(), any());
+        verify(messageSender, never()).sendWithOperationId(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.anyString());
     }
 
     @Test
@@ -2866,7 +2989,7 @@ class CommonBillingServiceTest {
         assertThrows(ResponseStatusException.class, () -> service.markPaid(10L));
         assertThrows(ResponseStatusException.class, () -> service.detachOrder(10L, 101L));
 
-        verify(messageSender, never()).send(any(), any(), any(), any());
+        verify(messageSender, never()).sendWithOperationId(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.anyString());
         verify(orderTransactionService, never()).handlePaymentStatus(any(), anyBoolean());
     }
 
@@ -2918,7 +3041,7 @@ class CommonBillingServiceTest {
         when(invoiceRepository.findByTokenWithAccount("token")).thenReturn(Optional.of(invoice));
         when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
         when(badReviewTaskService.getPayableSum(item.getOrder())).thenReturn(BigDecimal.valueOf(1000));
-        when(paymentLinkService.selectCommonInvoiceRoute(any(), eq(100_000L))).thenReturn(managerText);
+        when(invoiceRouteSelector.selectCommonInvoiceRoute(any(), eq(100_000L))).thenReturn(managerText);
 
         var first = service.publicInvoice("token");
         var second = service.publicInvoice("token");
@@ -2926,7 +3049,7 @@ class CommonBillingServiceTest {
         assertEquals(TbankRuntimeSettingsService.PAYMENT_SOURCE_MANAGER_TEXT, first.paymentRouteType());
         assertEquals("Оплатите единый счет по реквизитам менеджера.", first.paymentInstructionText());
         assertEquals(first.paymentRouteType(), second.paymentRouteType());
-        verify(paymentLinkService, times(1)).selectCommonInvoiceRoute(any(), eq(100_000L));
+        verify(invoiceRouteSelector, times(1)).selectCommonInvoiceRoute(any(), eq(100_000L));
     }
 
     @Test
@@ -2944,15 +3067,15 @@ class CommonBillingServiceTest {
         when(badReviewTaskService.getPayableSum(item.getOrder())).thenReturn(BigDecimal.valueOf(1000));
         when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(true);
         when(properties.getPublicBaseUrl()).thenReturn("https://o-ogo.ru");
-        when(messageSender.send(any(), any(), any(), any()))
+        when(messageSender.sendWithOperationId(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.anyString()))
                 .thenReturn(ClientMessageSendResult.sent("Telegram"));
 
         service.sendInvoice(10L, true);
 
         ArgumentCaptor<String> text = ArgumentCaptor.forClass(String.class);
-        verify(messageSender).send(any(), any(), any(), text.capture());
+        verify(messageSender).sendWithOperationId(any(), any(), any(), text.capture(), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.anyString());
         assertTrue(text.getValue().contains("Оплатите единый счет по реквизитам менеджера."));
-        verify(messageSender, never()).send(any(), any(), any(), any(), any());
+        verify(messageSender, never()).sendWithOperationId(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNotNull(), org.mockito.ArgumentMatchers.anyString());
     }
 
     @Test
@@ -3034,7 +3157,7 @@ class CommonBillingServiceTest {
         when(contractorPaymentLiveRoutingService.reserveForCommonInvoice(
                 eq(invoice), any(), any(), eq(100_000L)
         )).thenReturn(allocation);
-        when(paymentLinkService.selectCommonInvoiceOwnerAcquiringRoute(any(), eq(100_000L)))
+        when(invoiceRouteSelector.selectCommonInvoiceOwnerAcquiringRoute(any(), eq(100_000L)))
                 .thenReturn(ownerRoute);
 
         var response = service.publicInvoice("token");
@@ -3043,8 +3166,8 @@ class CommonBillingServiceTest {
         assertEquals(TbankRuntimeSettingsService.PAYMENT_SOURCE_TBANK_LINK, response.paymentRouteType());
         verify(contractorPaymentLiveRoutingService).reserveForCommonInvoice(
                 eq(invoice), any(), any(), eq(100_000L));
-        verify(paymentLinkService).selectCommonInvoiceOwnerAcquiringRoute(any(), eq(100_000L));
-        verify(paymentLinkService, never()).selectCommonInvoiceRoute(any(), anyLong());
+        verify(invoiceRouteSelector).selectCommonInvoiceOwnerAcquiringRoute(any(), eq(100_000L));
+        verify(invoiceRouteSelector, never()).selectCommonInvoiceRoute(any(), anyLong());
     }
 
     @Test
@@ -3064,7 +3187,7 @@ class CommonBillingServiceTest {
         when(contractorPaymentLiveRoutingService.reserveForCommonInvoice(
                 eq(invoice), any(), any(), eq(100_000L)
         )).thenReturn(allocation);
-        when(paymentLinkService.selectCommonInvoiceOwnerAcquiringRoute(any(), eq(100_000L)))
+        when(invoiceRouteSelector.selectCommonInvoiceOwnerAcquiringRoute(any(), eq(100_000L)))
                 .thenThrow(new ResponseStatusException(HttpStatus.CONFLICT, "T-Bank недоступен"));
 
         ResponseStatusException exception = assertThrows(
@@ -3100,8 +3223,8 @@ class CommonBillingServiceTest {
         );
 
         assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
-        verify(paymentLinkService, never()).selectCommonInvoiceRoute(any(), anyLong());
-        verify(paymentLinkService, never()).selectCommonInvoiceOwnerAcquiringRoute(any(), anyLong());
+        verify(invoiceRouteSelector, never()).selectCommonInvoiceRoute(any(), anyLong());
+        verify(invoiceRouteSelector, never()).selectCommonInvoiceOwnerAcquiringRoute(any(), anyLong());
         verify(paymentIssueReminderService).notifyOrderIssue(
                 eq(101L),
                 eq(PaymentIssueReminderService.SOURCE_PAYMENT_FAIL_CLOSED),
@@ -3131,8 +3254,8 @@ class CommonBillingServiceTest {
         );
 
         assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
-        verify(paymentLinkService, never()).selectCommonInvoiceRoute(any(), anyLong());
-        verify(paymentLinkService, never()).selectCommonInvoiceOwnerAcquiringRoute(any(), anyLong());
+        verify(invoiceRouteSelector, never()).selectCommonInvoiceRoute(any(), anyLong());
+        verify(invoiceRouteSelector, never()).selectCommonInvoiceOwnerAcquiringRoute(any(), anyLong());
         verify(paymentIssueReminderService).notifyOrderIssue(
                 eq(101L),
                 eq(PaymentIssueReminderService.SOURCE_PAYMENT_FAIL_CLOSED),
@@ -3169,7 +3292,7 @@ class CommonBillingServiceTest {
                 )));
         when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(true);
         when(properties.getPublicBaseUrl()).thenReturn("https://o-ogo.ru");
-        when(messageSender.send(any(), any(), any(), any(), any()))
+        when(messageSender.sendWithOperationId(any(), any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyString()))
                 .thenReturn(ClientMessageSendResult.sent("Telegram"));
 
         service.sendInvoice(10L, true);
@@ -3177,7 +3300,7 @@ class CommonBillingServiceTest {
         ArgumentCaptor<String> text = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<TelegramTransferCopyButton> button =
                 ArgumentCaptor.forClass(TelegramTransferCopyButton.class);
-        verify(messageSender).send(any(), any(), any(), text.capture(), button.capture());
+        verify(messageSender).sendWithOperationId(any(), any(), any(), text.capture(), button.capture(), org.mockito.ArgumentMatchers.anyString());
         assertTrue(text.getValue().contains("Оплата по мобильному банку: 2202208238396676"));
         assertTrue(text.getValue().contains("Получатель: Получатель snapshot"));
         assertTrue(text.getValue().contains("После оплаты отправьте чек в этот чат."));
@@ -3629,12 +3752,8 @@ class CommonBillingServiceTest {
         createdOrder.setStatus(status("Новый"));
         CommonInvoiceOrder item = item(invoice, createdOrder);
         item.setReady(false);
-        NextOrderRequest request = new NextOrderRequest();
-        request.setStatus(NextOrderRequestStatus.CREATED);
-        request.setCreatedOrder(createdOrder);
-
         when(orderAggregateMutationLockService.lock(101L)).thenReturn(createdOrder);
-        when(nextOrderRequestRepository.findByCreatedOrderIdForUpdate(101L)).thenReturn(List.of(request));
+        when(nextOrderRequests.lockCreatedOrigin(101L)).thenReturn(true);
         when(invoiceOrderRepository.findByOrderIdWithInvoice(101L)).thenReturn(Optional.of(item));
         when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
         when(accountRepository.findByIdWithRelationsForUpdate(1L)).thenReturn(Optional.of(account));
@@ -3650,12 +3769,14 @@ class CommonBillingServiceTest {
         assertTrue(invoice.getLastError().startsWith("empty:"));
         var lockOrder = inOrder(
                 orderAggregateMutationLockService,
+                nextOrderRequests,
                 invoiceOrderRepository,
                 invoiceRepository,
                 accountRepository,
                 paymentRefRepository
         );
         lockOrder.verify(orderAggregateMutationLockService).lock(101L);
+        lockOrder.verify(nextOrderRequests).lockCreatedOrigin(101L);
         lockOrder.verify(invoiceOrderRepository).findByOrderIdWithInvoice(101L);
         lockOrder.verify(invoiceRepository).findByIdWithAccount(10L);
         lockOrder.verify(accountRepository).findByIdWithRelationsForUpdate(1L);
@@ -4402,7 +4523,7 @@ class CommonBillingServiceTest {
 
         assertThrows(ResponseStatusException.class, () -> service.sendInvoice(10L, true));
 
-        verify(messageSender, never()).send(any(), any(), any(), any());
+        verify(messageSender, never()).sendWithOperationId(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.anyString());
     }
 
     @Test
@@ -4484,7 +4605,7 @@ class CommonBillingServiceTest {
         assertEquals(CommonInvoiceStatus.PAID, invoice.getStatus());
         assertNull(invoice.getPaymentSuccessNotifiedAt());
         assertNull(invoice.getPaymentSuccessNotificationError());
-        verify(messageSender, never()).send(any(), any(), any(), any());
+        verify(messageSender, never()).sendWithOperationId(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.anyString());
         verify(paymentNotificationOutboxRepository).enqueueClient(10L);
     }
 
@@ -4533,7 +4654,7 @@ class CommonBillingServiceTest {
         when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true))
                 .thenReturn(true);
         when(properties.getPublicBaseUrl()).thenReturn("https://o-ogo.ru");
-        when(messageSender.send(eq(company), eq("whatsapp_vika"), eq("120363@test"), any()))
+        when(messageSender.sendWithOperationId(eq(company), eq("whatsapp_vika"), eq("120363@test"), any(), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.anyString()))
                 .thenReturn(ClientMessageSendResult.sent("WhatsApp"));
 
         var attempt = service.deliverPaymentSuccessNotificationFromOutbox(10L);
@@ -4557,7 +4678,7 @@ class CommonBillingServiceTest {
 
         assertTrue(attempt.skipped());
         assertEquals("already_notified", attempt.error());
-        verify(messageSender, never()).send(any(), any(), any(), any());
+        verify(messageSender, never()).sendWithOperationId(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.anyString());
     }
 
     @Test
@@ -6153,7 +6274,7 @@ class CommonBillingServiceTest {
 
         assertEquals(0, service.sendDueReminders(10));
 
-        verify(messageSender, never()).send(any(), any(), any(), any());
+        verify(messageSender, never()).sendWithOperationId(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.anyString());
         verify(invoiceOrderRepository, never()).findByInvoiceIdWithOrders(10L);
     }
 
@@ -6207,7 +6328,7 @@ class CommonBillingServiceTest {
         assertTrue(invoice.getLastError().contains("review_recovery_active"));
         assertNotNull(invoice.getNextReminderAt());
         verify(invoiceRepository, times(2)).save(invoice);
-        verify(messageSender, never()).send(any(), any(), any(), any());
+        verify(messageSender, never()).sendWithOperationId(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.anyString());
     }
 
     @Test
@@ -6247,7 +6368,7 @@ class CommonBillingServiceTest {
         assertEquals(PaymentLinkStatus.WAITING_MANUAL_PAYMENT, manualRoute.getStatus());
         verify(invoiceRepository).save(invoice);
         verify(paymentLinkRepository, never()).save(manualRoute);
-        verify(messageSender, never()).send(any(), any(), any(), any());
+        verify(messageSender, never()).sendWithOperationId(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.anyString());
     }
 
     @Test
@@ -6290,7 +6411,7 @@ class CommonBillingServiceTest {
         assertFalse(invoice.getLastError().startsWith("standalone_payment_route_conflict:"));
         verify(invoiceOrderRepository).saveAll(List.of(paidItem));
         verify(paymentLinkRepository, never()).saveAll(any());
-        verify(messageSender, never()).send(any(), any(), any(), any());
+        verify(messageSender, never()).sendWithOperationId(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.anyString());
     }
 
     @Test
@@ -6310,7 +6431,7 @@ class CommonBillingServiceTest {
         ResponseStatusException exception = assertThrows(ResponseStatusException.class, () -> service.sendInvoice(10L, true));
 
         assertEquals("Общий счет ждет завершения задач восстановления отзывов", exception.getReason());
-        verify(messageSender, never()).send(any(), any(), any(), any());
+        verify(messageSender, never()).sendWithOperationId(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.anyString());
     }
 
     @Test
@@ -6604,7 +6725,7 @@ class CommonBillingServiceTest {
         assertEquals(null, invoice.getNextReminderAt());
         assertTrue(invoice.getLastError().contains("dry_run"));
         verify(orderStatusTransitionService).changeStatusForCommonBillingOrder(101L, "Напоминание");
-        verify(messageSender, never()).send(any(), any(), any(), any());
+        verify(messageSender, never()).sendWithOperationId(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.anyString());
     }
 
     @Test
@@ -6633,7 +6754,7 @@ class CommonBillingServiceTest {
         assertEquals(sentAt, invoice.getSentAt());
         assertEquals(null, invoice.getNextReminderAt());
         assertTrue(invoice.getLastError().contains("dry_run"));
-        verify(messageSender, never()).send(any(), any(), any(), any());
+        verify(messageSender, never()).sendWithOperationId(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.anyString());
     }
 
     @Test
@@ -6659,7 +6780,7 @@ class CommonBillingServiceTest {
         assertEquals(null, invoice.getNextReminderAt());
         assertTrue(invoice.getLastError().contains("dry_run"));
         verify(orderStatusTransitionService).changeStatusForCommonBillingOrder(101L, "Выставлен счет");
-        verify(messageSender, never()).send(any(), any(), any(), any());
+        verify(messageSender, never()).sendWithOperationId(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.anyString());
     }
 
     @Test
@@ -6687,7 +6808,7 @@ class CommonBillingServiceTest {
 
         assertEquals(CommonInvoiceStatus.READY, invoice.getStatus());
         assertTrue(invoice.getLastError().contains("dry_run"));
-        verify(messageSender, never()).send(any(), any(), any(), any());
+        verify(messageSender, never()).sendWithOperationId(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.anyString());
     }
 
     @Test
@@ -6707,13 +6828,13 @@ class CommonBillingServiceTest {
         doAnswer(invocation -> {
             assertEquals("message_send_in_progress", invoice.getLastError());
             return ClientMessageSendResult.sent("test");
-        }).when(messageSender).send(any(), any(), any(), any());
+        }).when(messageSender).sendWithOperationId(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.anyString());
 
         service.sendInvoice(10L, true);
 
         assertEquals(CommonInvoiceStatus.INVOICED, invoice.getStatus());
         assertEquals(null, invoice.getLastError());
-        verify(messageSender).send(any(), any(), any(), any());
+        verify(messageSender).sendWithOperationId(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.anyString());
         verify(orderStatusTransitionService).changeStatusForCommonBillingOrder(101L, "Выставлен счет");
     }
 
@@ -6740,7 +6861,7 @@ class CommonBillingServiceTest {
         when(badReviewTaskService.getPayableSum(unpaidOrder)).thenReturn(BigDecimal.valueOf(1000));
         when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(true);
         when(properties.getPublicBaseUrl()).thenReturn("https://o-ogo.ru");
-        when(messageSender.send(any(), any(), any(), any())).thenReturn(ClientMessageSendResult.sent("test"));
+        when(messageSender.sendWithOperationId(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.anyString())).thenReturn(ClientMessageSendResult.sent("test"));
         ArgumentCaptor<String> messageCaptor = ArgumentCaptor.forClass(String.class);
 
         assertEquals(1, service.sendUnsentActionInvoices(20));
@@ -6748,7 +6869,7 @@ class CommonBillingServiceTest {
         assertEquals(CommonInvoiceStatus.PARTIALLY_PAID, invoice.getStatus());
         assertNotNull(invoice.getSentAt());
         assertNotNull(invoice.getNextReminderAt());
-        verify(messageSender).send(any(), any(), any(), messageCaptor.capture());
+        verify(messageSender).sendWithOperationId(any(), any(), any(), messageCaptor.capture(), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.anyString());
         String compactMessage = messageCaptor.getValue().replace(" ", "").replace("\u00A0", "");
         assertTrue(compactMessage.contains("Коплате:1000"));
         verify(orderStatusTransitionService, never())
@@ -6779,11 +6900,11 @@ class CommonBillingServiceTest {
         when(badReviewTaskService.getPayableSum(healthyOrder)).thenReturn(BigDecimal.valueOf(1000));
         when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(true);
         when(properties.getPublicBaseUrl()).thenReturn("https://o-ogo.ru");
-        when(messageSender.send(any(), any(), any(), any())).thenReturn(ClientMessageSendResult.sent("test"));
+        when(messageSender.sendWithOperationId(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.anyString())).thenReturn(ClientMessageSendResult.sent("test"));
 
         assertEquals(1, service.sendUnsentActionInvoices(20));
 
-        verify(messageSender).send(any(), any(), any(), any());
+        verify(messageSender).sendWithOperationId(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.anyString());
         assertNotNull(healthy.getSentAt());
     }
 
@@ -6806,7 +6927,7 @@ class CommonBillingServiceTest {
         when(badReviewTaskService.getPayableSum(unpaidOrder)).thenReturn(BigDecimal.valueOf(1000));
         when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(true);
         when(properties.getPublicBaseUrl()).thenReturn("https://o-ogo.ru");
-        when(messageSender.send(any(), any(), any(), any())).thenReturn(ClientMessageSendResult.sent("test"));
+        when(messageSender.sendWithOperationId(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.anyString())).thenReturn(ClientMessageSendResult.sent("test"));
 
         service.sendManualReminder(10L);
 
@@ -6833,7 +6954,7 @@ class CommonBillingServiceTest {
         when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(true);
         when(orderRepository.findOrderListRows(any())).thenReturn(List.of());
         when(properties.getPublicBaseUrl()).thenReturn("https://o-ogo.ru");
-        when(messageSender.send(any(), any(), any(), any()))
+        when(messageSender.sendWithOperationId(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.anyString()))
                 .thenReturn(ClientMessageSendResult.failed("no_chat", "чат не найден"));
 
         service.sendInvoice(10L, true);
@@ -6841,7 +6962,7 @@ class CommonBillingServiceTest {
         assertEquals(CommonInvoiceStatus.INVOICED, invoice.getStatus());
         assertTrue(invoice.getLastError().contains("no_chat"));
         verify(orderStatusTransitionService).changeStatusForCommonBillingOrder(101L, "Выставлен счет");
-        verify(messageSender).send(any(), any(), any(), any());
+        verify(messageSender).sendWithOperationId(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.anyString());
     }
 
     @Test
@@ -6867,7 +6988,7 @@ class CommonBillingServiceTest {
         when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true)).thenReturn(false);
         when(orderRepository.findOrderListRows(any())).thenReturn(List.of());
         when(properties.getPublicBaseUrl()).thenReturn("https://o-ogo.ru");
-        when(messageSender.send(any(), any(), any(), any()))
+        when(messageSender.sendWithOperationId(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.anyString()))
                 .thenReturn(ClientMessageSendResult.failed("no_chat", "чат временно недоступен"))
                 .thenReturn(ClientMessageSendResult.sent("retry"));
         ArgumentCaptor<String> messageCaptor = ArgumentCaptor.forClass(String.class);
@@ -6887,7 +7008,7 @@ class CommonBillingServiceTest {
         assertNotNull(invoice.getSentAt());
         assertNull(invoice.getLastError());
         verify(invoiceRepository, never()).findUnsentActionCandidates(any(), any(), any(Pageable.class));
-        verify(messageSender, times(2)).send(any(), any(), any(), messageCaptor.capture());
+        verify(messageSender, times(2)).sendWithOperationId(any(), any(), any(), messageCaptor.capture(), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.anyString());
         for (String message : messageCaptor.getAllValues()) {
             assertTrue(message.contains("Способ оплаты изменён"));
             assertTrue(message.contains("Не оплачивайте по ранее отправленным реквизитам или ссылке"));
@@ -6912,7 +7033,7 @@ class CommonBillingServiceTest {
         when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(true);
         when(orderRepository.findOrderListRows(any())).thenReturn(List.of());
         when(properties.getPublicBaseUrl()).thenReturn("https://o-ogo.ru");
-        when(messageSender.send(any(), any(), any(), any()))
+        when(messageSender.sendWithOperationId(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.anyString()))
                 .thenReturn(ClientMessageSendResult.failed("no_chat", "чат не найден"));
 
         service.sendManualReminder(10L);
@@ -6922,7 +7043,106 @@ class CommonBillingServiceTest {
         assertNotNull(invoice.getNextReminderAt());
         assertTrue(invoice.getLastError().contains("no_chat"));
         verify(orderStatusTransitionService).changeStatusForCommonBillingOrder(101L, "Напоминание");
-        verify(messageSender).send(any(), any(), any(), any());
+        verify(messageSender).sendWithOperationId(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.anyString());
+    }
+
+    @Test
+    void retryAfterUnknownReminderRetainsIdentityDespiteLegacyTimestampUpdate() {
+        CommonInvoice invoice = liveMessageInvoice();
+        when(messageSender.sendWithOperationId(any(), any(), any(), any(), any(), anyString()))
+                .thenReturn(ClientMessageSendResult.failed("operation_unknown", "timeout"))
+                .thenReturn(ClientMessageSendResult.sent("WhatsApp"));
+
+        service.sendManualReminder(10L);
+        String savedOperation = invoice.getPaymentMessageOperationId();
+        assertNotNull(savedOperation);
+        assertNotNull(invoice.getLastReminderAt(), "legacy UI timestamps must not be used as retry identity");
+        assertFalse(invoice.isPaymentMessageConfirmed());
+        service.sendManualReminder(10L);
+
+        assertEquals(savedOperation, invoice.getPaymentMessageOperationId());
+        assertTrue(invoice.isPaymentMessageConfirmed());
+        verify(messageSender, times(2)).sendWithOperationId(any(), any(), any(), any(), any(), eq(savedOperation));
+    }
+
+    @Test
+    void confirmedReminderAllowsNewOccurrenceButConfirmedInvoiceReplayDoesNotSendAgain() {
+        CommonInvoice invoice = liveMessageInvoice();
+        when(messageSender.sendWithOperationId(any(), any(), any(), any(), any(), anyString()))
+                .thenReturn(ClientMessageSendResult.sent("WhatsApp"));
+        service.sendInvoice(10L, true);
+        String invoiceOperation = invoice.getPaymentMessageOperationId();
+        LocalDateTime firstSentAt = invoice.getSentAt();
+        service.sendInvoice(10L, true);
+        assertEquals(firstSentAt, invoice.getSentAt());
+        verify(messageSender).sendWithOperationId(any(), any(), any(), any(), any(), eq(invoiceOperation));
+
+        service.sendManualReminder(10L);
+        String firstReminder = invoice.getPaymentMessageOperationId();
+        assertNotEquals(invoiceOperation, firstReminder);
+        service.sendManualReminder(10L);
+        assertNotEquals(firstReminder, invoice.getPaymentMessageOperationId());
+        verify(messageSender, times(3)).sendWithOperationId(any(), any(), any(), any(), any(), anyString());
+    }
+
+    @Test
+    void differentMessageKindCannotReplaceUnresolvedInvoiceOperation() {
+        CommonInvoice invoice = liveMessageInvoice();
+        when(messageSender.sendWithOperationId(any(), any(), any(), any(), any(), anyString()))
+                .thenReturn(ClientMessageSendResult.failed("operation_unknown", "timeout"));
+        service.sendInvoice(10L, true);
+        String unresolved = invoice.getPaymentMessageOperationId();
+        assertThrows(ResponseStatusException.class, () -> service.sendManualReminder(10L));
+        assertEquals(unresolved, invoice.getPaymentMessageOperationId());
+        verify(messageSender).sendWithOperationId(any(), any(), any(), any(), any(), eq(unresolved));
+    }
+
+    @Test
+    void lateCompletionCannotConfirmDifferentSavedOccurrence() {
+        CommonInvoice invoice = liveMessageInvoice();
+        CommonInvoiceDeliveryService delivery = (CommonInvoiceDeliveryService)
+                ReflectionTestUtils.getField(service, "invoiceDelivery");
+        var oldPrepared = delivery.preparePaymentMessage(10L, true, true, false, null, true);
+        invoice.setPaymentMessageOperationId("invoice-message:10:new-occurrence");
+        assertFalse(delivery.finishPaymentMessageSend(oldPrepared, ClientMessageSendResult.sent("WhatsApp")));
+        assertFalse(invoice.isPaymentMessageConfirmed());
+        assertEquals("message_send_in_progress", invoice.getLastError());
+        verifyNoInteractions(messageSender);
+    }
+
+    private CommonInvoice liveMessageInvoice() {
+        CommonInvoice invoice = invoice(account());
+        Order order = order(101L);
+        when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item(invoice, order)));
+        when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(true);
+        lenient().when(orderRepository.findOrderListRows(any())).thenReturn(List.of());
+        when(properties.getPublicBaseUrl()).thenReturn("https://o-ogo.ru");
+        return invoice;
+    }
+
+    @Test
+    void legacyAmbiguousSendCannotCreateANewIdentityJustBecauseItsMarkerExpired() {
+        CommonInvoiceInitializationService initialization = (CommonInvoiceInitializationService)
+                ReflectionTestUtils.getField(service, "invoiceInitialization");
+        for (String marker : List.of("message_send_in_progress", "payment_route_changed_message_in_progress",
+                "message_send_stale: old timeout", "operation_unknown: timeout", "send_exception: no receipt",
+                "payment_route_changed_message_retry:stale: old timeout",
+                "payment_route_changed_message_retry:operation_unknown: timeout")) {
+            CommonInvoice invoice = invoice(account());
+            invoice.setStatus(CommonInvoiceStatus.READY);
+            invoice.setLastError(marker);
+            invoice.setUpdatedAt(LocalDateTime.now().minusHours(3));
+            when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
+            // Simulate a preceding read/route operation running the shared stale recovery.
+            initialization.recoverStaleOperationInProgress(invoice);
+            assertEquals(marker, invoice.getLastError());
+            ResponseStatusException refusal = assertThrows(ResponseStatusException.class, () -> service.sendInvoice(10L, true));
+            assertTrue(refusal.getReason().contains("Историческая отправка"));
+            assertNull(invoice.getPaymentMessageOperationId());
+        }
+        verifyNoInteractions(messageSender);
     }
 
     @Test
@@ -6931,6 +7151,8 @@ class CommonBillingServiceTest {
         CommonInvoice invoice = invoice(account);
         invoice.setStatus(CommonInvoiceStatus.READY);
         invoice.setLastError("message_send_in_progress");
+        invoice.setPaymentMessageOperationId("invoice-message:10:stale-attempt");
+        invoice.setPaymentMessageOperationKind("INVOICE");
         invoice.setUpdatedAt(LocalDateTime.now().minusMinutes(31));
         Order order = order(101L);
         CommonInvoiceOrder item = item(invoice, order);
@@ -6941,13 +7163,13 @@ class CommonBillingServiceTest {
         when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(true);
         when(orderRepository.findOrderListRows(any())).thenReturn(List.of());
         when(properties.getPublicBaseUrl()).thenReturn("https://o-ogo.ru");
-        when(messageSender.send(any(), any(), any(), any())).thenReturn(ClientMessageSendResult.sent("test"));
+        when(messageSender.sendWithOperationId(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.anyString())).thenReturn(ClientMessageSendResult.sent("test"));
 
         service.sendInvoice(10L, true);
 
         assertEquals(CommonInvoiceStatus.INVOICED, invoice.getStatus());
         assertEquals(null, invoice.getLastError());
-        verify(messageSender).send(any(), any(), any(), any());
+        verify(messageSender).sendWithOperationId(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.anyString());
     }
 
     @Test
@@ -6966,7 +7188,7 @@ class CommonBillingServiceTest {
 
         assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
         assertTrue(invoice.getLastError().startsWith("amount_calc_failed"));
-        verify(messageSender, never()).send(any(), any(), any(), any());
+        verify(messageSender, never()).sendWithOperationId(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.anyString());
         verify(tbankClient, never()).init(any(), any());
     }
 
@@ -10376,7 +10598,7 @@ class CommonBillingServiceTest {
                 .thenReturn(Optional.of(invoice));
         when(invoiceOrderRepository.findByInvoiceIdWithOrders(invoice.getId())).thenReturn(List.of(item));
         when(badReviewTaskService.getPayableSum(item.getOrder())).thenReturn(BigDecimal.valueOf(1000));
-        when(paymentLinkService.selectCommonInvoiceRoute(any(), anyLong())).thenReturn(
+        when(invoiceRouteSelector.selectCommonInvoiceRoute(any(), anyLong())).thenReturn(
                 new PaymentRouteSelection(
                         TbankRuntimeSettingsService.PAYMENT_SOURCE_BANK_LINK,
                         2L,

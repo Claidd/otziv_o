@@ -27,11 +27,101 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class WhatsAppServiceTest {
 
+    @Test
+    void groupSendPreservesEnvelopeIdentityAcrossUtf8HttpEncoding() throws Exception {
+        WhatsAppProperties.ClientConfig config = new WhatsAppProperties.ClientConfig();
+        config.setId("fixture"); config.setUrl("http://fixture:3000");
+        when(properties.getClients()).thenReturn(List.of(config));
+        String original = "fixture \ud800x\udfff \ud83d\ude80";
+        when(restTemplate.postForEntity(anyString(), any(), eq(String.class))).thenAnswer(call -> {
+            org.springframework.http.HttpEntity<?> request = call.getArgument(1);
+            String wireMessage = new com.fasterxml.jackson.databind.ObjectMapper()
+                    .readTree(request.getBody().toString().getBytes(StandardCharsets.UTF_8)).path("message").asText();
+            assertEquals(original, wireMessage);
+            assertEquals(com.hunt.otziv.whatsapp.dto.WhatsAppOperationEnvelope.groupHash("fixture", "12345678@g.us", original),
+                    com.hunt.otziv.whatsapp.dto.WhatsAppOperationEnvelope.groupHash("fixture", "12345678@g.us", wireMessage));
+            return ResponseEntity.ok("{\"status\":\"ok\"}");
+        });
+        service.sendMessageToGroup("fixture", "12345678@g.us", original, "wire-operation");
+        org.mockito.Mockito.verify(restTemplate).postForEntity(anyString(), any(), eq(String.class));
+    }
+
+    @Test
+    void timeoutKeepsOperationIdentityAndPerformsOnlyOneSend() {
+        WhatsAppProperties.ClientConfig config = new WhatsAppProperties.ClientConfig();
+        config.setId("fixture"); config.setUrl("http://fixture:3000");
+        when(properties.getClients()).thenReturn(List.of(config));
+        when(restTemplate.postForEntity(anyString(), any(), eq(String.class)))
+                .thenThrow(new org.springframework.web.client.ResourceAccessException("response lost"));
+        String result = service.sendMessageToGroup("fixture", "123@g.us", "fixture", "durable-operation");
+        assertEquals("operation_unknown", com.hunt.otziv.whatsapp.dto.WhatsAppSendResult.parse(result).code());
+        org.mockito.ArgumentCaptor<org.springframework.http.HttpEntity> request = org.mockito.ArgumentCaptor.forClass(org.springframework.http.HttpEntity.class);
+        org.mockito.Mockito.verify(restTemplate).postForEntity(eq("http://fixture:3000/send-group"), request.capture(), eq(String.class));
+        assertTrue(request.getValue().getBody().toString().contains("\"operationId\":\"durable-operation\""));
+    }
+
+    @Test
+    void malformedSuccessFragmentIsNotDeliveryEvidence() {
+        var result = com.hunt.otziv.whatsapp.dto.WhatsAppSendResult.parse("broken {\"status\":\"ok\"");
+        assertFalse(result.isOk());
+        assertEquals("operation_unknown", result.code());
+    }
+
+    @Test
+    void operationLookupDoesNotSendAgain() {
+        WhatsAppProperties.ClientConfig config = new WhatsAppProperties.ClientConfig();
+        config.setId("fixture"); config.setUrl("http://fixture:3000");
+        when(properties.getClients()).thenReturn(List.of(config));
+        when(restTemplate.getForObject("http://fixture:3000/operations/durable-operation", String.class))
+                .thenReturn("{\"operationId\":\"durable-operation\",\"state\":\"SUCCEEDED\",\"messageId\":\"verified-message\"}");
+        var status = service.getOperationStatus("fixture", "durable-operation");
+        assertEquals("verified-message", status.messageId());
+        org.junit.jupiter.api.Assertions.assertNull(status.envelopeHash());
+        org.mockito.Mockito.verify(restTemplate, org.mockito.Mockito.never()).postForEntity(anyString(), any(), eq(String.class));
+    }
+
+    @Test
+    void operationLookupRetainsExactEnvelopeEvidence() {
+        WhatsAppProperties.ClientConfig config = new WhatsAppProperties.ClientConfig();
+        config.setId("fixture"); config.setUrl("http://fixture:3000");
+        when(properties.getClients()).thenReturn(List.of(config));
+        String hash = com.hunt.otziv.whatsapp.dto.WhatsAppOperationEnvelope.groupHash("fixture", "12345678@g.us", "fixture");
+        when(restTemplate.getForObject("http://fixture:3000/operations/durable-operation", String.class))
+                .thenReturn("{\"operationId\":\"durable-operation\",\"state\":\"SUCCEEDED\",\"messageId\":\"verified-message\",\"envelopeHash\":\"" + hash + "\"}");
+        assertEquals(hash, service.getOperationStatus("fixture", "durable-operation").envelopeHash());
+        org.mockito.Mockito.verify(restTemplate, org.mockito.Mockito.never()).postForEntity(anyString(), any(), eq(String.class));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"123", "{}", "[]", "\"short\"", "\"ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789\""})
+    void operationLookupRejectsMalformedEnvelopeEvidence(String value) {
+        WhatsAppProperties.ClientConfig config = new WhatsAppProperties.ClientConfig();
+        config.setId("fixture"); config.setUrl("http://fixture:3000");
+        when(properties.getClients()).thenReturn(List.of(config));
+        when(restTemplate.getForObject("http://fixture:3000/operations/durable-operation", String.class))
+                .thenReturn("{\"operationId\":\"durable-operation\",\"state\":\"SUCCEEDED\",\"messageId\":\"verified-message\",\"envelopeHash\":" + value + "}");
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                () -> service.getOperationStatus("fixture", "durable-operation"));
+    }
+
+    @Test
+    void operationLookupRejectsNumericMessageIdAsDeliveryEvidence() {
+        WhatsAppProperties.ClientConfig config = new WhatsAppProperties.ClientConfig();
+        config.setId("fixture"); config.setUrl("http://fixture:3000");
+        when(properties.getClients()).thenReturn(List.of(config));
+        when(restTemplate.getForObject("http://fixture:3000/operations/durable-operation", String.class))
+                .thenReturn("{\"operationId\":\"durable-operation\",\"state\":\"SUCCEEDED\",\"messageId\":123}");
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                () -> service.getOperationStatus("fixture", "durable-operation"));
+    }
+
     @Mock
     private WhatsAppProperties properties;
 
     @Mock
     private RestTemplate restTemplate;
+
+    @Mock private com.hunt.otziv.whatsapp.api.WhatsAppBusinessOperations businessOperations;
 
     @InjectMocks
     private WhatsAppServiceImpl service; // вместо WhatsAppService
@@ -46,7 +136,7 @@ class WhatsAppServiceTest {
         when(restTemplate.postForEntity(anyString(), any(), eq(String.class)))
                 .thenReturn(ResponseEntity.ok("{\"status\":\"ok\"}"));
 
-        String result = service.sendMessage("client1", "79086431055", "Тестовое сообщение");
+        String result = service.sendMessage("client1", "79086431055", "Тестовое сообщение", "fixture-operation");
 
         assertTrue(result.contains("\"status\":\"ok\""));
     }
@@ -55,7 +145,7 @@ class WhatsAppServiceTest {
     void sendMessageToGroup_unknownClientReturnsStructuredError() {
         when(properties.getClients()).thenReturn(List.of());
 
-        String result = service.sendMessageToGroup("whatsapp_lika", "120@g.us", "Тест");
+        String result = service.sendMessageToGroup("whatsapp_lika", "120@g.us", "Тест", "fixture-operation");
 
         assertTrue(result.contains("\"status\":\"error\""));
         assertTrue(result.contains("\"code\":\"unknown_client\""));
@@ -77,7 +167,7 @@ class WhatsAppServiceTest {
                         StandardCharsets.UTF_8
                 ));
 
-        String result = service.sendMessageToGroup("whatsapp_lika", "120@g.us", "Тест");
+        String result = service.sendMessageToGroup("whatsapp_lika", "120@g.us", "Тест", "fixture-operation");
 
         assertTrue(result.contains("\"status\":\"error\""));
         assertTrue(result.contains("\"code\":\"whatsapp_not_ready\""));
@@ -99,7 +189,7 @@ class WhatsAppServiceTest {
                         StandardCharsets.UTF_8
                 ));
 
-        String result = service.sendMessageToGroup("whatsapp_lika", "120@g.us", "Тест");
+        String result = service.sendMessageToGroup("whatsapp_lika", "120@g.us", "Тест", "fixture-operation");
 
         assertTrue(result.contains("\"status\":\"error\""));
         assertTrue(result.contains("\"code\":\"not_ready\""));

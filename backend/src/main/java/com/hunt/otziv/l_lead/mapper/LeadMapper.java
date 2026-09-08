@@ -186,28 +186,37 @@ public class LeadMapper {
                                          ManagerRepository managerRepository,
                                          MarketologRepository marketologRepository,
                                          TelephoneRepository telephoneRepository) {
+        updateEntityFromTransfer(lead,dto,operatorRepository,managerRepository,marketologRepository,telephoneRepository,false);
+    }
 
-        if (dto.getTelephoneLead() != null) lead.setTelephoneLead(dto.getTelephoneLead());
-        if (dto.getCompanyName() != null) lead.setCompanyName(dto.getCompanyName());
-        if (dto.getPhones() != null) lead.setPhones(dto.getPhones());
-        if (dto.getMobilePhones() != null) lead.setMobilePhones(dto.getMobilePhones());
-        if (dto.getWhatsappPhones() != null) lead.setWhatsappPhones(dto.getWhatsappPhones());
-        if (dto.getEmails() != null) lead.setEmails(dto.getEmails());
-        if (dto.getWebsites() != null) lead.setWebsites(dto.getWebsites());
-        if (dto.getVkUrl() != null) lead.setVkUrl(dto.getVkUrl());
-        if (dto.getTelegramUrl() != null) lead.setTelegramUrl(dto.getTelegramUrl());
-        if (dto.getIndustries() != null) lead.setIndustries(dto.getIndustries());
-        if (dto.getCompanyType() != null) lead.setCompanyType(dto.getCompanyType());
-        if (dto.getRegion() != null) lead.setRegion(dto.getRegion());
-        if (dto.getAddress() != null) lead.setAddress(dto.getAddress());
-        if (dto.getCityLead() != null) lead.setCityLead(dto.getCityLead());
-        if (dto.getCommentsLead() != null) lead.setCommentsLead(dto.getCommentsLead());
-        if (dto.getLidStatus() != null) lead.setLidStatus(dto.getLidStatus());
-        if (dto.getCreateDate() != null) lead.setCreateDate(dto.getCreateDate());
-        if (dto.getUpdateStatus() != null) lead.setUpdateStatus(dto.getUpdateStatus());
-        if (dto.getDateNewTry() != null) lead.setDateNewTry(dto.getDateNewTry());
+    public void updateEntityFromTransfer(Lead lead,
+                                         LeadDtoTransfer dto,
+                                         OperatorRepository operatorRepository,
+                                         ManagerRepository managerRepository,
+                                         MarketologRepository marketologRepository,
+                                         TelephoneRepository telephoneRepository, boolean fullSnapshot) {
+
+        if (fullSnapshot || dto.getTelephoneLead() != null) lead.setTelephoneLead(dto.getTelephoneLead());
+        if (fullSnapshot || dto.getCompanyName() != null) lead.setCompanyName(dto.getCompanyName());
+        if (fullSnapshot || dto.getPhones() != null) lead.setPhones(dto.getPhones());
+        if (fullSnapshot || dto.getMobilePhones() != null) lead.setMobilePhones(dto.getMobilePhones());
+        if (fullSnapshot || dto.getWhatsappPhones() != null) lead.setWhatsappPhones(dto.getWhatsappPhones());
+        if (fullSnapshot || dto.getEmails() != null) lead.setEmails(dto.getEmails());
+        if (fullSnapshot || dto.getWebsites() != null) lead.setWebsites(dto.getWebsites());
+        if (fullSnapshot || dto.getVkUrl() != null) lead.setVkUrl(dto.getVkUrl());
+        if (fullSnapshot || dto.getTelegramUrl() != null) lead.setTelegramUrl(dto.getTelegramUrl());
+        if (fullSnapshot || dto.getIndustries() != null) lead.setIndustries(dto.getIndustries());
+        if (fullSnapshot || dto.getCompanyType() != null) lead.setCompanyType(dto.getCompanyType());
+        if (fullSnapshot || dto.getRegion() != null) lead.setRegion(dto.getRegion());
+        if (fullSnapshot || dto.getAddress() != null) lead.setAddress(dto.getAddress());
+        if (fullSnapshot || dto.getCityLead() != null) lead.setCityLead(dto.getCityLead());
+        if (fullSnapshot || dto.getCommentsLead() != null) lead.setCommentsLead(dto.getCommentsLead());
+        if (fullSnapshot || dto.getLidStatus() != null) lead.setLidStatus(dto.getLidStatus());
+        if (fullSnapshot || dto.getCreateDate() != null) lead.setCreateDate(dto.getCreateDate());
+        if (fullSnapshot || dto.getUpdateStatus() != null) lead.setUpdateStatus(dto.getUpdateStatus());
+        if (fullSnapshot || dto.getDateNewTry() != null) lead.setDateNewTry(dto.getDateNewTry());
         lead.setOffer(dto.isOffer());
-        if (dto.getLastSeen() != null) lead.setLastSeen(dto.getLastSeen());
+        if (fullSnapshot || dto.getLastSeen() != null) lead.setLastSeen(dto.getLastSeen());
 
         lead.setOperator(dto.getOperatorId() != null ? operatorRepository.findById(dto.getOperatorId()).orElse(null) : null);
         lead.setManager(dto.getManagerId() != null ? managerRepository.findById(dto.getManagerId()).orElse(null) : null);

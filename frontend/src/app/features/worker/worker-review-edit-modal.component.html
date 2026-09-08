@@ -227,7 +227,8 @@
                   type="button"
                   class="secondary review-new-account"
                   (click)="newAccountRequested.emit()"
-                  [disabled]="busy"
+                  [disabled]="busy || accountActionCooldownLocked"
+                  [title]="accountActionCooldownLocked ? accountActionCooldownTitle : 'Назначить новый аккаунт'"
                 >
                   {{ newAccountLoading ? 'Назначаю...' : 'Новый аккаунт' }}
                 </button>

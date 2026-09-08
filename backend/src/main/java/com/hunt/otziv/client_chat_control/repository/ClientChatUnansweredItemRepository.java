@@ -20,6 +20,10 @@ import org.springframework.data.jpa.repository.Modifying;
 @Repository
 public interface ClientChatUnansweredItemRepository extends JpaRepository<ClientChatUnansweredItem, Long> {
 
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT item FROM ClientChatUnansweredItem item WHERE item.id = :id")
+    Optional<ClientChatUnansweredItem> findByIdForUpdate(@Param("id") Long id);
+
     List<ClientChatUnansweredItem> findByLastClientMessage(ClientChatMessage lastClientMessage);
 
     Optional<ClientChatUnansweredItem> findFirstByPlatformAndChatIdAndStatusOrderByLastClientMessageAtDesc(

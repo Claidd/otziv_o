@@ -1,0 +1,31 @@
+{
+  "schema": "otziv-alloy-primary-scope-v1",
+  "records": [
+    {
+      "file": "GO-2026-5746.json",
+      "url": "https://vuln.go.dev/ID/GO-2026-5746.json",
+      "sha256": "d11da88232883a96ac3b74f848f172ce86c3783b7818d7da4b925335621d5273",
+      "bytes": 1850,
+      "retrievedAt": "2026-09-08T07:03:07.116920+00:00"
+    },
+    {
+      "file": "GHSA-rg2x-37c3-w2rh.json",
+      "url": "https://api.github.com/repos/moby/moby/security-advisories/GHSA-rg2x-37c3-w2rh",
+      "sha256": "549718d505c9a5749d6640e62c45bd64d0b14f0defd35c9944f2c60d27f302e6",
+      "bytes": 5925,
+      "retrievedAt": "2026-09-08T07:03:07.145306+00:00"
+    }
+  ],
+  "affectedScopes": {
+    "CVE-2026-41567": {
+      "package": "github.com/docker/docker/daemon",
+      "symbol": "Daemon.containerExtractToDir",
+      "source": "GO-2026-5746.json"
+    },
+    "CVE-2026-42306": {
+      "package": "github.com/docker/docker/daemon",
+      "source": "GHSA-rg2x-37c3-w2rh.json"
+    }
+  },
+  "otherComponentsReviewed": false
+}

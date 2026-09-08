@@ -1,0 +1,6 @@
+{
+  "email": "release-fixture@example.invalid",
+  "offerConsent": true,
+  "privacyConsent": true,
+  "receiptConsent": true
+}

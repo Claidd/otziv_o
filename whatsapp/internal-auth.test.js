@@ -9,7 +9,6 @@ const {
   INTERNAL_AUTH_HEADER,
   boundedBodyBytes,
   constantTimeMatches,
-  createConcurrencyMiddleware,
   createInternalAuthMiddleware,
 } = require("./internal-auth");
 const {
@@ -64,31 +63,6 @@ test("gateway auth uses a constant-time digest comparison and never reflects tok
   assert.equal(JSON.stringify(response.body).includes(secret), false);
 });
 
-test("gateway concurrency bound releases slots on both close and finish", () => {
-  const middleware = createConcurrencyMiddleware(1);
-  const first = responseStub();
-  const second = responseStub();
-  const third = responseStub();
-  const fourth = responseStub();
-  let firstAccepted = false;
-  let thirdAccepted = false;
-  let fifthAccepted = false;
-
-  middleware({}, first, () => { firstAccepted = true; });
-  middleware({}, second, () => assert.fail("second request must be rejected"));
-  assert.equal(firstAccepted, true);
-  assert.equal(second.statusCode, 429);
-
-  first.emit("close");
-  middleware({}, third, () => { thirdAccepted = true; });
-  assert.equal(thirdAccepted, true);
-
-  middleware({}, fourth, () => assert.fail("fourth request must be rejected"));
-  assert.equal(fourth.statusCode, 429);
-  third.emit("finish");
-  middleware({}, responseStub(), () => { fifthAccepted = true; });
-  assert.equal(fifthAccepted, true);
-});
 
 test("WhatsApp Chromium keeps its Linux sandbox enabled", () => {
   const source = fs.readFileSync(path.join(__dirname, "index.js"), "utf8");
