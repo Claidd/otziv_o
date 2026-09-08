@@ -1,0 +1,335 @@
+{
+  "schemaVersion": 1,
+  "scope": "Local candidate build-support and standalone issuer remediation; hosted authenticated whole-project audit is pending.",
+  "result": "LOCAL_PROOFS_PASS_HOSTED_PENDING",
+  "hostedSonatype": "PENDING; no manual analyzer/provider calls were made for this candidate",
+  "applicationAndProviderJavaSourceChanged": false,
+  "changes": {
+    "site": "Parentless derivative preserves the effective project dependency graph, generated help and descriptors, manifest, LICENSE/NOTICE resource bundle. Removes inherited Apache-specific release/report/check automation from the local derivative build.",
+    "neededPluginRealms": {
+      "maven-help-plugin:3.5.1": {
+        "xstream": "1.4.21",
+        "plexus-utils": "4.0.3"
+      },
+      "maven-shade-plugin:3.6.1": {
+        "plexus-utils": "3.6.2"
+      },
+      "maven-plugin-plugin:3.15.2": {
+        "aircompressor": "2.0.3",
+        "plexus-utils": "4.0.3"
+      },
+      "maven-remote-resources-plugin:3.3.0": {
+        "aircompressor": "2.0.3",
+        "plexus-utils": "4.0.3"
+      }
+    },
+    "issuer": {
+      "javaRelease": 21,
+      "keycloakVersion": "26.7.3",
+      "nettyBom": "4.1.137.Final",
+      "protobufJava": "3.25.8",
+      "scope": "Keycloak and patched transitive libraries remain provided; no added runtime JAR payload."
+    },
+    "auditRunner": "Four sequential nonrecursive bootstrap project audits; separate fixed keycloak project option using the same full fail-closed analyzer flags. Rejects unpinned reporting plugins and unreviewed extensions."
+  },
+  "ordinaryTests": {
+    "reactorUnitTests": 11,
+    "siteUnitTests": 4,
+    "bridgeUnitTests": 7,
+    "issuerJava21Tests": 4,
+    "runnerCausalTests": 24,
+    "siteProvenance": {
+      "files": 60,
+      "unchanged": 55,
+      "patched": 5
+    },
+    "sourceFilesUnchanged": {
+      "siteSrc": 57,
+      "bridgeSrc": 2,
+      "transportSrc": 2,
+      "issuerSrc": 14
+    }
+  },
+  "payloadIdentity": {
+    "site-plugin": {
+      "beforeSHA256": "f48c8edf435f77d7371289cd7f67dfea8ee2021dee008a057b4ca4389837b832",
+      "afterSHA256": "81e6d5038e2ad007a408c0b7806d7529b436c2a40a63bbe7cc9c4c5d7cb69b16",
+      "beforeFiles": 60,
+      "afterFiles": 60,
+      "classCount": 26,
+      "changedEntries": [
+        "META-INF/maven/org.apache.maven.plugins/maven-site-plugin/pom.xml"
+      ],
+      "allClassesIdentical": true
+    },
+    "dependency-audit": {
+      "beforeSHA256": "b63d8ccfcd9598b98ef14b9ec7596b645c44a46afa4d2518db040f7e1d9ada9b",
+      "afterSHA256": "c79e8a8252b93ce8c81b1d9a329b2cb91944590d9b6ad334eb4130053cb25495",
+      "beforeFiles": 6,
+      "afterFiles": 6,
+      "classCount": 1,
+      "changedEntries": [
+        "META-INF/maven/com.hunt.build/dependency-check-effective-maven-plugin/pom.xml"
+      ],
+      "allClassesIdentical": true
+    },
+    "test-transport": {
+      "beforeSHA256": "e046e56344f486aa8a61115c1f8d6daf1f31c447aeafc12b3ae34414cb5801d3",
+      "afterSHA256": "78e0f0ab1e37f6db318947493c7275a53a876ab57065032d8c9d21458d8a76e1",
+      "beforeFiles": 1457,
+      "afterFiles": 1457,
+      "classCount": 1440,
+      "changedEntries": [
+        "META-INF/maven/com.hunt.build/docker-java-transport-zerodep/pom.xml"
+      ],
+      "allClassesIdentical": true
+    },
+    "issuer": {
+      "beforeSHA256": "2f7d19293fdb1e8555af4cc363f4685ec0802efd15c09130f192bb61aac739e8",
+      "afterSHA256": "14bac025da1e6a84d8150e5752a646d711759a3b08a195e033b275bbbb4e66d6",
+      "beforeFiles": 21,
+      "afterFiles": 21,
+      "classCount": 12,
+      "changedEntries": [
+        "META-INF/MANIFEST.MF",
+        "META-INF/maven/com.hunt.otziv/keycloak-security-generation/pom.properties",
+        "META-INF/maven/com.hunt.otziv/keycloak-security-generation/pom.xml"
+      ],
+      "allClassesIdentical": true
+    }
+  },
+  "localScan": {
+    "scanner": "aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969",
+    "reportCreatedAt": "2026-09-07T23:12:02.446829545Z",
+    "jarCount": 484,
+    "high": 0,
+    "critical": 0,
+    "medium": 5,
+    "rawReportSHA256": "a462a9ecd40234d5635ed301592fc2f60c0708ae6a24261efb9ee221afb430db",
+    "sbomSHA256": "4075abe66a2ce1c7280241a466d120fc35ab0eedd2344b50ee526c8880581822",
+    "inputManifestSHA256": "cc01e9f9a620d9d749fde6bfc0e9e243cbaacc609ee9c3a6e36e231626b51a4d",
+    "sources": [
+      {
+        "module": "aggregate",
+        "projectArtifactCount": 0,
+        "pluginRoots": 6,
+        "pluginOccurrences": 191,
+        "inventorySHA256": "27a6b2886427cc4c64cbf75cbedc414a0cc9f4a01f8f0409cc6a366d8935a719"
+      },
+      {
+        "module": "site-plugin",
+        "projectArtifactCount": 128,
+        "pluginRoots": 10,
+        "pluginOccurrences": 223,
+        "inventorySHA256": "d7738a06d8a624aa6489a2d5a58becdcfd52cfc509459a81784b51ce402e16d1"
+      },
+      {
+        "module": "dependency-audit",
+        "projectArtifactCount": 102,
+        "pluginRoots": 9,
+        "pluginOccurrences": 200,
+        "inventorySHA256": "c99851db6086401ce453633934da7a31df169d20c736a1ac7d2855e8de2fe792"
+      },
+      {
+        "module": "test-transport",
+        "projectArtifactCount": 7,
+        "pluginRoots": 9,
+        "pluginOccurrences": 166,
+        "inventorySHA256": "8e3fac532f8f3064e29f78b0968b487af73e025984dabbcf2d07f033a2bc0db8"
+      },
+      {
+        "module": "issuer",
+        "projectArtifactCount": 198,
+        "pluginRoots": 8,
+        "pluginOccurrences": 154,
+        "inventorySHA256": "400c3d4183eee651816570dc330a86745c47e4da018063bdd83b445a10d52b1d"
+      }
+    ],
+    "remainingFindings": [
+      {
+        "package": "io.opentelemetry:opentelemetry-api",
+        "version": "1.57.0",
+        "advisory": "CVE-2026-45292",
+        "severity": "MEDIUM",
+        "fixedVersion": "1.62.0"
+      },
+      {
+        "package": "io.vertx:vertx-core",
+        "version": "4.5.24",
+        "advisory": "CVE-2026-6860",
+        "severity": "MEDIUM",
+        "fixedVersion": "4.5.27, 5.0.12"
+      },
+      {
+        "package": "org.apache.commons:commons-lang3",
+        "version": "3.17.0",
+        "advisory": "CVE-2025-48924",
+        "severity": "MEDIUM",
+        "fixedVersion": "3.18.0"
+      },
+      {
+        "package": "org.jsoup:jsoup",
+        "version": "1.17.2",
+        "advisory": "CVE-2026-71497",
+        "severity": "MEDIUM",
+        "fixedVersion": "1.23.1"
+      },
+      {
+        "package": "org.jsoup:jsoup",
+        "version": "1.19.1",
+        "advisory": "CVE-2026-71497",
+        "severity": "MEDIUM",
+        "fixedVersion": "1.23.1"
+      }
+    ],
+    "suppressionPolicy": "No suppression, severity filter, ignored advisory file or vulnerability threshold change. Raw all-severity report and SBOM retained."
+  },
+  "historicalComparison": {
+    "fourBootstrapBaseline": {
+      "high": 9,
+      "critical": 3,
+      "rawReportSHA256": "ca17ecd527debe78b23b3d630444a3c0fd7b5578aa774c54e59b00e99cb93180"
+    },
+    "issuerBaseline": {
+      "high": 22,
+      "critical": 2,
+      "rawReportSHA256": "779f0b68fdb68a2e99c6441e7388a7f8f0664054746478fa670b8effa065187f"
+    },
+    "qualification": "Baseline graph counts overlap and must not be summed as unique vulnerabilities; none of the historical raw reports was overwritten."
+  },
+  "licensesAndOrigin": {
+    "siteArchiveSHA256": "9eba7729d7bb78828e97e08a07bb8c16411ea2bdf67207c80195651b73d074dd",
+    "siteOriginTableSHA256": "dfe62e1973340f8151f2252ce9da00eb0b7fe2e28b71e75d9eb421f9361445f4",
+    "sitePatchSHA256": "96592b3a5595fb6e01790eff8177e09feeb7e783fa247780d09d3f24ca15e98a",
+    "siteLicenseSHA256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "siteNoticeSHA256": "068c441c3db61c81b19b5d97ae39694a98a3feb87ec6979db2c31b87fb96dcae",
+    "site": "Apache source archive origin retained; distinct derivative version never overwrites vendor3.22.0.",
+    "transport": "Unchanged downstream transport implementation and upstream license; see existing transport source and Linux/Windows Docker evidence.",
+    "checkout": "Five origin-checked CRLF files are now LF, as required by scoped .gitattributes. Exact downstream hashes and a byte-reproducible archive patch describe the final Git checkout."
+  },
+  "primarySources": [
+    "https://repo.maven.apache.org/maven2/org/apache/maven/plugins/maven-site-plugin/3.22.0/maven-site-plugin-3.22.0-source-release.zip",
+    "https://repo.maven.apache.org/maven2/io/airlift/aircompressor/2.0.3/aircompressor-2.0.3.pom",
+    "https://netty.io/news/2026/08/06/4-1-137-Final.html",
+    "https://github.com/netty/netty/security/advisories/GHSA-558v-64gr-wgg4",
+    "https://repo.maven.apache.org/maven2/io/netty/netty-bom/4.1.137.Final/netty-bom-4.1.137.Final.pom"
+  ],
+  "riskAcceptance": null,
+  "evidenceDirectory": ".codex-tmp/security-closure-20260908/ordinary-candidate/",
+  "evidenceFiles": {
+    "build-final.log": "4c9bfe61a165c63978367270f65c7827548a706815b0a58b27ecd5638424e89f",
+    "issuer-baseline-build.log": "91ac760eb12c32f4b5dc3b29ff4f57ee3e69c558fdf8bf5369cc029ff03d58fb",
+    "issuer-build-v2.log": "2a090a47f82a36fb1422496f3a86a085c02dd326e65a9dcbc6bbb118bfca3b82",
+    "audit-tests-final.log": "3e81721e6f723d7cf4043be84bb87cb4c4ff2ad2ccb88f442a8edebacdc0755a",
+    "site-provenance-final.log": "e48281519497be99f16f71c830a0b9762f22fa02288408cdb4f942a3dcf92509",
+    "ordinary-final-payload-identity.json": "5b73bfca637ccfe6278e89fbf79c44900df83ef2d453ecb709fd235894291de2",
+    "effective-policy-proof-final.json": "dc8140de2ce166c33093d8a0dc120fbde2f8ba083c4bd724c3a109c114cdf4ce",
+    "issuer-effective-policy-proof.json": "f59a0769645384e97f523c2ff8391a49b5c3b4cd03728e19154ba486b61f46d3",
+    "all-five-input-manifest-final.json": "cc01e9f9a620d9d749fde6bfc0e9e243cbaacc609ee9c3a6e36e231626b51a4d",
+    "all-five-vulnerabilities-final.json": "a462a9ecd40234d5635ed301592fc2f60c0708ae6a24261efb9ee221afb430db",
+    "all-five-vulnerabilities-final.sbom.cdx.json": "4075abe66a2ce1c7280241a466d120fc35ab0eedd2344b50ee526c8880581822",
+    "all-five-vulnerabilities-final.triage.json": "c7950f21bc43a1329ec0c24ff3e43e58a0194818dac295f5a22251145ad353fc",
+    "scanner-command-final.json": "67a6b7084a743169dcbf9b02f5067c3a244079c9064d7b055c44d2cbbc13ff99"
+  },
+  "checkoutNormalization": {
+    "result": "PASS",
+    "reason": "The original working-tree CRLF hashes failed after Git produced the configured LF checkout.",
+    "normalizedFiles": [
+      {
+        "path": "backend/build-support/site-plugin/pom.xml",
+        "beforeSHA256": "1572710eb8c1c1246dbf989e10f526ebeaab7da9b8aa56036670a704989996bc",
+        "afterSHA256": "9885073766a22ca174c4d6bc60ab50a157b84ae5fbf7276c2dad21d2325e9c09"
+      },
+      {
+        "path": "backend/build-support/site-plugin/src/main/java/org/apache/maven/plugins/site/run/DoxiaFilter.java",
+        "beforeSHA256": "a713d9dc7a278a320235fed68127c3be2a2f18948826e0efbe76e165b6ea87e1",
+        "afterSHA256": "f8b3d3deef154b53cb40a12c2c2aedbcf307766ca5cfc7de922ebc07a35d0919"
+      },
+      {
+        "path": "backend/build-support/site-plugin/src/main/java/org/apache/maven/plugins/site/run/SiteRunMojo.java",
+        "beforeSHA256": "eb1833fdadb28db1d2a51240e3a7173eb79c9eba53bcaefe5144127076b388bc",
+        "afterSHA256": "10d0b34e7da732486b27b7d7947da9df9ef1c16c26dddb99095e5d5c832c2e40"
+      },
+      {
+        "path": "backend/build-support/site-plugin/src/test/java/org/apache/maven/plugins/site/deploy/AuthAsyncProxyServlet.java",
+        "beforeSHA256": "aad73c75a802d821e7998655d5092465e427117f19dde897bed5ae89a4202251",
+        "afterSHA256": "ed024e84cc8e4a706fd1c3bbf92a53cae7010f1853b91811ca40d0286ea823a4"
+      },
+      {
+        "path": "backend/build-support/site-plugin/src/test/java/org/apache/maven/plugins/site/deploy/SimpleDavServerHandler.java",
+        "beforeSHA256": "f142cca383cb132f5f16747902df5bccb25e023fe7747b1fa1957d5ad7f79238",
+        "afterSHA256": "859240fc109a2d85d040e4120ddb4b964ee3a59b38abf61fc7fa043378a351eb"
+      }
+    ],
+    "semanticTextChanges": 0,
+    "historicalPreNormalizationOrigin": {
+      "siteOriginTableSHA256": "b5b5e64d4ab45d75e1bd39dd9560c4a14c740951d20613f7206a0ed331fa5676",
+      "sitePatchSHA256": "a7ed337002652ea5467c3ec9b98788d3c6ec50a10f436504f926beb7b5affd81"
+    },
+    "actualGitCheckoutCases": [
+      {
+        "name": "baseline-windows",
+        "coreAutocrlf": true,
+        "source": "original CRLF working tree",
+        "operation": "git add followed by checkout-index into empty directory",
+        "exitCode": 1,
+        "expectedResultConfirmed": true,
+        "logSHA256": "952578af4a025a9929d8c28153adfb5064fdca3dfdce66a0d1563c5e897ccec5",
+        "checkedOutPOMSHA256": "9885073766a22ca174c4d6bc60ab50a157b84ae5fbf7276c2dad21d2325e9c09"
+      },
+      {
+        "name": "candidate-windows",
+        "coreAutocrlf": true,
+        "source": "LF-corrected candidate",
+        "operation": "git add followed by checkout-index into empty directory",
+        "exitCode": 0,
+        "expectedResultConfirmed": true,
+        "logSHA256": "e48281519497be99f16f71c830a0b9762f22fa02288408cdb4f942a3dcf92509",
+        "checkedOutPOMSHA256": "9885073766a22ca174c4d6bc60ab50a157b84ae5fbf7276c2dad21d2325e9c09"
+      },
+      {
+        "name": "candidate-linux-policy",
+        "coreAutocrlf": false,
+        "source": "LF-corrected candidate",
+        "operation": "git add followed by checkout-index into empty directory",
+        "exitCode": 0,
+        "expectedResultConfirmed": true,
+        "logSHA256": "e48281519497be99f16f71c830a0b9762f22fa02288408cdb4f942a3dcf92509",
+        "checkedOutPOMSHA256": "9885073766a22ca174c4d6bc60ab50a157b84ae5fbf7276c2dad21d2325e9c09"
+      }
+    ],
+    "archivePatchRoundtrip": {
+      "files": 60,
+      "allExactDownstreamBytesEqual": true
+    },
+    "actualSiteRebuild": {
+      "result": "PASS",
+      "actualBuild": "Offline Maven 3.9.15 clean verify on a clean LF Git checkout, Temurin 26.0.1+8 on Windows",
+      "tests": {
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "beforeJarSHA256": "81e6d5038e2ad007a408c0b7806d7529b436c2a40a63bbe7cc9c4c5d7cb69b16",
+      "afterJarSHA256": "78b1fb13c547c3014697e55b0fc501815da1878ccacf4bd608c93130e874f1f5",
+      "totalJarEntries": 60,
+      "changedEntries": [
+        "META-INF/maven/org.apache.maven.plugins/maven-site-plugin/pom.xml"
+      ],
+      "embeddedPOMChange": "CRLF to LF only; normalized bytes equal",
+      "allRuntimeClassesIdentical": 26,
+      "allTestClassesIdentical": 10,
+      "allOtherJarEntriesIdentical": 59,
+      "buildLogSHA256": "7f577fb990e07cc9d67502979732e5ae45c2bb2c6b237f2009db3b34591e89e1",
+      "repositoryBuildOutputsUntouched": true
+    },
+    "qualification": "payloadIdentity and localScan retain the exact previously executed and scanned artifacts; they are not relabeled as this subsequent LF-only rebuild. The new JAR differs only in line endings of its embedded POM; all 26 runtime classes, all test classes and all 59 other packaged entries are byte-identical. Historical private evidence and final-source-freeze.json remain unchanged.",
+    "privateEvidence": {
+      "directory": ".codex-tmp/security-closure-20260908/checkout-provenance/v3/",
+      "checkout-proof.json": "d659c6e480e44630a83d9f5d3152bae8102f4b89343e32ca74077894a7eb2fd7",
+      "site-lf-payload-identity.json": "30efc2266f59aa6f516d13da3d920caca7356f681cd4ae46c2e477347e289c0d",
+      "site-lf-build.log": "7f577fb990e07cc9d67502979732e5ae45c2bb2c6b237f2009db3b34591e89e1"
+    }
+  }
+}

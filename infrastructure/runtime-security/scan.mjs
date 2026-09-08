@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { run, startProcess } from '../recovery/process.mjs';
 import { assertLocalDocker } from '../recovery/drill.mjs';
 import { buildTriage } from './triage-report.mjs';
+import { adjudicateGrafanaImage, effectiveScanSummary } from './grafana-tempo-adjudication.mjs';
 
 export const TRIVY_IMAGE = 'aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969'; // 0.74.0
 
@@ -39,7 +40,13 @@ export async function scan(kind, source, output) {
   try {
     const input = join(local, 'input'), cache = join(local, 'cache'), results = join(local, 'results'), scratch = join(local, 'scratch');
     await Promise.all([input, cache, results, scratch].map(path => mkdir(path)));
-    if (kind === 'image') await run('docker', ['save', '--output', join(input, 'image.tar'), source], { timeoutMs: 300_000 });
+    let immutableImageId;
+    if (kind === 'image') {
+      const inspected = JSON.parse(await run('docker', ['image', 'inspect', source]));
+      immutableImageId = inspected[0]?.Id;
+      if (!/^sha256:[a-f0-9]{64}$/.test(immutableImageId || '')) throw new Error('scanner_image_identity_missing');
+      await run('docker', ['save', '--output', join(input, 'image.tar'), immutableImageId], { timeoutMs: 300_000 });
+    }
     else {
       const jars = (await readdir(source)).filter(name => name.endsWith('.jar'));
       if (!jars.length) throw new Error('packaged_maven_jar_missing');
@@ -79,7 +86,9 @@ export async function scan(kind, source, output) {
     await copyFile(join(results, 'sbom.cdx.json'), destination.replace(/\.json$/, '') + '.sbom.cdx.json');
     // Preserve ALL findings above. The automatic remediation gate blocks actionable fixes;
     // unresolved vendor findings remain explicit release risks, never implicit exemptions.
-    return { ...summary, result: summary.blockingFixedHighOrCritical ? 'FAIL' : 'PASS',
+    const adjudication = kind === 'image' ? await adjudicateGrafanaImage(report, reportBytes, immutableImageId, scratch) : null;
+    if (adjudication) await writeFile(destination.replace(/\.json$/, '') + '.adjudications.json', JSON.stringify(adjudication, null, 2) + '\n');
+    return { ...effectiveScanSummary(summary, adjudication),
       unresolvedRiskReview: summary.unfixedHighOrCritical ? 'REQUIRED' : 'NONE', scannerImage: TRIVY_IMAGE };
   } finally {
     // local is the exact fresh directory returned by mkdtemp, never a configured parent.

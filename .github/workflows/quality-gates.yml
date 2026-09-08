@@ -2,6 +2,12 @@ name: Quality gates
 
 on:
   workflow_dispatch:
+    inputs:
+      publish-reviewed-images:
+        description: Publish reviewed infrastructure candidates to GHCR and scan their exact digests; does not deploy
+        type: boolean
+        required: false
+        default: false
   pull_request:
   push:
 
@@ -9,10 +15,107 @@ permissions:
   contents: read
 
 concurrency:
-  group: quality-gates-${{ github.event.pull_request.number || github.ref }}
+  group: quality-gates-${{ github.event.pull_request.number || github.ref }}-${{ inputs.publish-reviewed-images && 'publication' || 'verification' }}
   cancel-in-progress: true
 
 jobs:
+  reviewed-image-inventory:
+    name: Inventory reviewed publication candidates
+    if: github.event_name == 'workflow_dispatch' && inputs.publish-reviewed-images == true
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.inventory.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24.20.0"
+      - id: inventory
+        run: node infrastructure/runtime-security/publish-reviewed-images.mjs matrix
+
+  reviewed-image-publication:
+    name: Publish reviewed candidate (${{ matrix.component }})
+    needs: reviewed-image-inventory
+    if: github.event_name == 'workflow_dispatch' && inputs.publish-reviewed-images == true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix: ${{ fromJSON(needs.reviewed-image-inventory.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24.20.0"
+      - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4.8.0
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Authenticate only to the repository container registry
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+      - name: Publish provenance, SBOM and candidate; scan its actual registry digest
+        env:
+          COMPONENT: ${{ matrix.component }}
+          OTZIV_PUBLISH_REVIEWED_IMAGES: 'true'
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node infrastructure/runtime-security/publish-reviewed-images.mjs "$COMPONENT" "$RUNNER_TEMP/reviewed-publication"
+      - name: Preserve exact publication and security evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: reviewed-publication-${{ matrix.component }}
+          path: ${{ runner.temp }}/reviewed-publication/
+          if-no-files-found: warn
+          retention-days: 14
+      - name: End the registry session
+        if: always()
+        run: docker logout ghcr.io
+
+  reviewed-image-anonymous-download:
+    name: Prove anonymous candidate download (${{ matrix.component }})
+    needs: [reviewed-image-inventory, reviewed-image-publication]
+    if: github.event_name == 'workflow_dispatch' && inputs.publish-reviewed-images == true && needs.reviewed-image-publication.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix: ${{ fromJSON(needs.reviewed-image-inventory.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24.20.0"
+      - name: Download this component's publication from this workflow run
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: reviewed-publication-${{ matrix.component }}
+          path: ${{ runner.temp }}/reviewed-publication-input
+      - name: Verify fresh anonymous registry evidence and digest pull
+        env:
+          COMPONENT: ${{ matrix.component }}
+          OTZIV_VERIFY_ANONYMOUS_DOWNLOAD: 'true'
+        run: node infrastructure/runtime-security/verify-anonymous-download.mjs "$COMPONENT" "$RUNNER_TEMP/reviewed-publication-input" "$RUNNER_TEMP/anonymous-download"
+      - name: Preserve separate anonymous download proof
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: anonymous-download-${{ matrix.component }}
+          path: ${{ runner.temp }}/anonymous-download/
+          if-no-files-found: warn
+          retention-days: 14
+
   repository-contracts:
     name: Repository contracts
     runs-on: ubuntu-24.04
@@ -45,6 +148,8 @@ jobs:
       - name: Exercise production release lineage guards
         shell: pwsh
         run: ./infrastructure/scripts/security/check-deploy-release-contract.ps1
+      - name: Verify build-support audit policy guards
+        run: python3 -m unittest discover -s backend/build-support -p "test_*.py" -v
       - name: Verify conditional dependency aggregate contract
         run: node --test infrastructure/scripts/security/dependency-changes.test.mjs infrastructure/scripts/security/verify-branch-policy.test.mjs
       - name: Verify every original finding and prevent premature closure
@@ -128,6 +233,9 @@ jobs:
           distribution: temurin
           java-version: "26"
           cache: maven
+      - name: Build reviewed Maven tooling and test transport
+        working-directory: backend
+        run: bash ./mvnw -B -ntp -f build-support/pom.xml install
       - name: Run all tests and package
         working-directory: backend
         run: bash ./mvnw -B -ntp verify
@@ -623,7 +731,7 @@ jobs:
           OTZIV_MONITORING_PROOF_NODE_IMAGE: otziv-monitoring-proof-ci
         run: |
           set -euo pipefail
-          SOURCE_IMAGE=$(node --input-type=module -e 'import {repositoryInventory} from "./infrastructure/runtime-security/upstream-images.mjs"; const images = await repositoryInventory(); const source = images.find(image => image.references.some(ref => ref.path === "docker-compose.yaml" && ref.service === process.env.COMPONENT)); if (!source) throw Error("source_image_missing"); console.log(source.image)')
+          SOURCE_IMAGE=$(node infrastructure/runtime-security/monitoring-source.mjs "$COMPONENT")
           docker pull "$SOURCE_IMAGE"
           CANDIDATE_ID=$(docker image inspect --format '{{.Id}}' "otziv-monitoring-$COMPONENT-ci")
           node infrastructure/runtime-security/monitoring-upgrade.mjs "$COMPONENT" "$CANDIDATE_ID" "$RUNNER_TEMP/monitoring-evidence/storage" 2>&1 | tee "$RUNNER_TEMP/monitoring-evidence/storage.log"

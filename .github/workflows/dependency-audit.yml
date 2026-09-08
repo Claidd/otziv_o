@@ -110,17 +110,61 @@ jobs:
             ${{ runner.temp }}/otziv-dependency-check-data/oss_cache
           key: ${{ runner.os }}-dependency-check-13-public-v1-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: ${{ runner.os }}-dependency-check-13-public-v1-
+      - name: Build reviewed Maven tooling and test transport
+        id: bootstrap
+        working-directory: backend
+        run: |
+          chmod +x ./mvnw
+          bash ./mvnw -B -ntp -f build-support/pom.xml install
       - name: OWASP dependency-check (CVSS 7+ blocks)
         id: audit
+        if: ${{ !cancelled() && steps.bootstrap.outcome == 'success' }}
         env:
           SONATYPE_GUIDE_USERNAME: token
           SONATYPE_GUIDE_TOKEN: ${{ secrets.SONATYPE_GUIDE_TOKEN }}
         run: bash ./mvnw -B -ntp -Psecurity-audit -DskipTests verify
         working-directory: backend
+      - name: Audit every build-support module and its effective plugins
+        id: bootstrap-audit
+        if: ${{ !cancelled() && steps.bootstrap.outcome == 'success' }}
+        env:
+          SONATYPE_GUIDE_USERNAME: token
+          SONATYPE_GUIDE_TOKEN: ${{ secrets.SONATYPE_GUIDE_TOKEN }}
+        run: >-
+          python3 backend/build-support/audit.py
+          --maven "$GITHUB_WORKSPACE/backend/mvnw"
+          --settings "$HOME/.m2/settings.xml"
+          --suppression-file "$GITHUB_WORKSPACE/infrastructure/runtime-security/maven-false-positives.xml"
+          --data-directory "$RUNNER_TEMP/otziv-dependency-check-data"
+      - name: Select the standalone issuer's supported Java runtime
+        id: issuer-java
+        if: ${{ !cancelled() && steps.bootstrap.outcome == 'success' }}
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4.8.0
+        with:
+          distribution: temurin
+          java-version: "21"
+          server-id: otziv-sonatype
+          server-username: SONATYPE_GUIDE_USERNAME
+          server-password: SONATYPE_GUIDE_TOKEN
+      - name: Audit the standalone issuer including provided and plugin dependencies
+        id: issuer-audit
+        if: ${{ !cancelled() && steps.bootstrap.outcome == 'success' && steps.issuer-java.outcome == 'success' }}
+        env:
+          SONATYPE_GUIDE_USERNAME: token
+          SONATYPE_GUIDE_TOKEN: ${{ secrets.SONATYPE_GUIDE_TOKEN }}
+        run: >-
+          python3 backend/build-support/audit.py
+          --standalone-project keycloak
+          --maven "$GITHUB_WORKSPACE/backend/mvnw"
+          --settings "$HOME/.m2/settings.xml"
+          --suppression-file "$GITHUB_WORKSPACE/infrastructure/runtime-security/maven-false-positives.xml"
+          --data-directory "$RUNNER_TEMP/otziv-dependency-check-data"
+      # All three audits are blocking and run despite findings in an earlier
+      # audit, so independent project coverage is never skipped.
       # Findings or remote errors still fail the job. Retain public data after
       # that failure so the next full audit need not spend the same credits.
       - name: Save public NVD and OSS Index data
-        if: ${{ !cancelled() && (steps.audit.outcome == 'success' || steps.audit.outcome == 'failure') }}
+        if: ${{ !cancelled() && (steps.audit.outcome == 'success' || steps.audit.outcome == 'failure' || steps.bootstrap-audit.outcome == 'success' || steps.bootstrap-audit.outcome == 'failure' || steps.issuer-audit.outcome == 'success' || steps.issuer-audit.outcome == 'failure') }}
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
@@ -135,6 +179,16 @@ jobs:
           path: |
             backend/target/dependency-check-report.html
             backend/target/dependency-check-report.json
+            backend/build-support/**/target/dependency-check-report.html
+            backend/build-support/**/target/dependency-check-report.json
+            backend/build-support/target/audit-policy-verification.json
+            backend/build-support/target/audit-report-coverage.json
+            backend/build-support/target/audit-effective-pom.xml
+            infrastructure/keycloak/security-generation/target/dependency-check-report.html
+            infrastructure/keycloak/security-generation/target/dependency-check-report.json
+            infrastructure/keycloak/security-generation/target/audit-policy-verification.json
+            infrastructure/keycloak/security-generation/target/audit-report-coverage.json
+            infrastructure/keycloak/security-generation/target/audit-effective-pom.xml
           if-no-files-found: ignore
           retention-days: 14
 

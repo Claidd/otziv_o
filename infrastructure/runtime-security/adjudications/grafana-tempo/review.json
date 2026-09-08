@@ -1,0 +1,72 @@
+{
+  "schema": "otziv-reviewed-binary-adjudication-v1",
+  "product": {
+    "source": "https://github.com/grafana/grafana",
+    "revision": "81407c71e96e8351b4600164c1b4d30c8baf41d6",
+    "version": "12.4.10+otziv.1"
+  },
+  "binary": {
+    "path": "usr/share/grafana/bin/grafana",
+    "sha256": "1b857d1ece48a10e5e1178e1c8d688a069e50b4166e79ed3d993967354c2106c",
+    "canonicalBuildInfoSha256": "dd3ed27690aef6058d4a63a26105ea64eb559e616b953ef18a41a6e19a736472",
+    "executedForInspection": false
+  },
+  "module": {
+    "name": "github.com/grafana/tempo",
+    "version": "v1.5.1-0.20260427112133-525d1bab07e0",
+    "sum": "h1:kE5kdMnyPJmlNUdWhahfzqPYB3vM8DtAxgWymbB8nOA="
+  },
+  "proofFiles": [
+    {
+      "path": "installed-frontend-config.go",
+      "sha256": "5fc4fb58dc5bf4aae0b81206b597cada656370d403c29c150aabddc31a5ed02f"
+    },
+    {
+      "path": "installed-s3-config.go",
+      "sha256": "e189ee9c2857831814b2512b4bcdb202783aa3dcc2ad3c9ae785ad6e3a71c10a"
+    },
+    {
+      "path": "installed-s3.go",
+      "sha256": "b467a24b7c5bc447f4decbe58f1f71717728f7ed01d7b3d170921d2aaecc6aff"
+    }
+  ],
+  "decisions": [
+    {
+      "cve": "CVE-2026-21728",
+      "state": "not_affected",
+      "justification": "fixed_code_present",
+      "reason": "fixed default maximum search result limit 262144",
+      "fixCommit": "650eb1985a0776789c8564122990f588a742356f",
+      "fixUrl": "https://github.com/grafana/tempo/commit/650eb1985a0776789c8564122990f588a742356f",
+      "advisoryUrl": "https://grafana.com/security/security-advisories/cve-2026-21728/",
+      "comparisonUrl": "https://github.com/grafana/tempo/compare/650eb1985a0776789c8564122990f588a742356f...525d1bab07e0",
+      "comparisonResponseSha256": "df7c85de417556b58769105fbd67a6f8ab11882810e60dc56eb4363b862257f2",
+      "behindBy": 0,
+      "mergeBase": "650eb1985a0776789c8564122990f588a742356f",
+      "comparisonFile": "ancestor-21728.json.gz",
+      "fixPatchFile": "fix-21728.patch",
+      "fixPatchSha256": "3022861c41a6965f66d0f654a67c01fc02e573061fb4d107c9dbeec96324bf36"
+    },
+    {
+      "cve": "CVE-2026-28377",
+      "state": "not_affected",
+      "justification": "fixed_code_present",
+      "reason": "customer encryption key uses flagext.Secret and correct String extraction",
+      "fixCommit": "bb8ca663db34a0980c9758b40d918fda3b4dbec3",
+      "fixUrl": "https://github.com/grafana/tempo/commit/bb8ca663db34a0980c9758b40d918fda3b4dbec3",
+      "advisoryUrl": "https://grafana.com/security/security-advisories/cve-2026-28377/",
+      "comparisonUrl": "https://github.com/grafana/tempo/compare/bb8ca663db34a0980c9758b40d918fda3b4dbec3...525d1bab07e0",
+      "comparisonResponseSha256": "6c64d825b9b13f965972a0111c4e399fed554663bf726d713ef73a5774352001",
+      "behindBy": 0,
+      "mergeBase": "bb8ca663db34a0980c9758b40d918fda3b4dbec3",
+      "comparisonFile": "ancestor-28377.json.gz",
+      "fixPatchFile": "fix-28377.patch",
+      "fixPatchSha256": "c7bc1d5c8c13c59a7d1df70152be8763ce1614ffe4f1ff1b88d440735a6a8790"
+    }
+  ],
+  "license": "Bundled source files are from Tempo under AGPL-3.0; see LICENSE and https://github.com/grafana/tempo/blob/525d1bab07e0/LICENSE",
+  "limits": [
+    "Only the reviewed exact executable SHA256 is allowed; an image rebuild with any changed binary needs a new review.",
+    "Raw scan findings and SBOM remain unchanged. These two decisions are fixed-code identity findings, not accepted vulnerabilities."
+  ]
+}

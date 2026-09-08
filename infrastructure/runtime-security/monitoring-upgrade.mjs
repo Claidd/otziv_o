@@ -6,20 +6,20 @@ import { readFile, writeFile, mkdir, readdir, cp } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { scenario } from './monitoring-scenarios.mjs';
+import { readMonitoringSource, assertDistinctMonitoringImageIds } from './monitoring-source.mjs';
 
 const [component, candidate, outputArgument] = process.argv.slice(2);
 if (!['prometheus', 'grafana', 'loki', 'tempo', 'alloy'].includes(component) || !/^(?:[a-z0-9./-]+@)?sha256:[a-f0-9]{64}$/.test(candidate || '') || !outputArgument) throw Error('Expected COMPONENT IMMUTABLE_CANDIDATE NEW_OUTPUT_DIRECTORY');
 const root = resolve(fileURLToPath(new URL('../../', import.meta.url))), output = resolve(outputArgument);
+const { source, manifestSha256: sourceManifestSha256 } = await readMonitoringSource(component);
 await mkdir(output, { recursive: true });
 if ((await readdir(output)).length) throw Error('output_must_be_new');
 const owner = 'otziv-monitor-' + randomUUID().replaceAll('-', '').slice(0, 16), network = owner + '-net', label = 'com.otziv.monitoring-proof.owner';
 await writeFile(join(output, 'run.claim'), owner, { flag: 'wx' });
-const compose = await readFile(join(root, 'docker-compose.yaml'), 'utf8');
-const source = compose.match(new RegExp(`^  ${component}:\\r?\\n    image: ([^\\r\\n]+@sha256:[a-f0-9]{64})`, 'm'))?.[1];
-assert.ok(source, 'production source image is pinned');
 const runnerImage = process.env.OTZIV_MONITORING_PROOF_NODE_IMAGE || 'otziv-observer-rollout:20260907';
 const containers = new Set(), volumes = new Set(), password = randomUUID() + '-Fixture9!';
 const report = { schema: 'otziv-monitoring-upgrade-v1', component, production: false, startedAt: new Date().toISOString(), source, candidate,
+  sourcePolicy: 'REVIEWED_IMMUTABLE_HISTORICAL_BASELINE', sourceManifestSha256,
   dataScope: 'SYNTHETIC_SEEDED_PERSISTENT_VOLUME', productionHistoricalData: 'NOT_TESTED', checks: [], incompatibilities: [], configurationHashes: {} };
 let runner, active, networkCreated = false;
 function docker(args, { input, allowFailure = false, env = {}, timeout = 120000, includeStderr = false } = {}) {
@@ -92,12 +92,13 @@ const context = { component, owner, password, report, check, docker, http, until
 };
 try {
   report.harnessSha256 = {};
-  for (const name of ['monitoring-upgrade.mjs', 'monitoring-scenarios.mjs', 'monitoring-fixture-http.cjs', '../docker-observer/consumer-fixture.cjs']) {
+  for (const name of ['monitoring-upgrade.mjs', 'monitoring-source.mjs', 'monitoring-scenarios.mjs', 'monitoring-fixture-http.cjs', '../docker-observer/consumer-fixture.cjs']) {
     report.harnessSha256[name] = createHash('sha256').update(await readFile(join(root, 'infrastructure/runtime-security', name))).digest('hex');
   }
   assert.match(docker(['context', 'inspect', '--format', '{{.Endpoints.docker.Host}}']), /^(npipe|unix):\/\//);
   report.sourceImageId = docker(['image', 'inspect', '--format', '{{.Id}}', source]);
   report.candidateImageId = docker(['image', 'inspect', '--format', '{{.Id}}', candidate]);
+  assertDistinctMonitoringImageIds(report.sourceImageId, report.candidateImageId);
   const configDirectory = await snapshotConfigs();
   docker(['network', 'create', '--internal', '--label', label + '=' + owner, network]); networkCreated = true;
   runner = create('http', runnerImage, ['--network-alias', 'app', '--memory', '128m', '--read-only', '--tmpfs', '/tmp:rw,nosuid,size=32m', '--cap-drop', 'ALL',

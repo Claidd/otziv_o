@@ -253,10 +253,29 @@
 			<groupId>org.testcontainers</groupId>
 			<artifactId>testcontainers-junit-jupiter</artifactId>
 			<scope>test</scope>
+			<exclusions>
+				<exclusion>
+					<groupId>com.github.docker-java</groupId>
+					<artifactId>docker-java-transport-zerodep</artifactId>
+				</exclusion>
+			</exclusions>
 		</dependency>
 		<dependency>
 			<groupId>org.testcontainers</groupId>
 			<artifactId>testcontainers-mysql</artifactId>
+			<scope>test</scope>
+			<exclusions>
+				<exclusion>
+					<groupId>com.github.docker-java</groupId>
+					<artifactId>docker-java-transport-zerodep</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+		<!-- Testcontainers keeps its upstream discovery/provider while using the patched downstream transport. -->
+		<dependency>
+			<groupId>com.hunt.build</groupId>
+			<artifactId>docker-java-transport-zerodep</artifactId>
+			<version>3.7.1-otziv.1</version>
 			<scope>test</scope>
 		</dependency>
 		<dependency>
@@ -350,7 +369,7 @@
 				<plugin>
 					<groupId>org.apache.maven.plugins</groupId>
 					<artifactId>maven-site-plugin</artifactId>
-					<version>3.22.0</version>
+					<version>3.22.0-otziv-jetty12.0.39-1</version>
 				<dependencies>
 					<dependency>
 						<groupId>org.jsoup</groupId>
@@ -475,9 +494,9 @@
 						</executions>
 					</plugin>
 					<plugin>
-						<groupId>org.owasp</groupId>
-						<artifactId>dependency-check-maven</artifactId>
-						<version>13.0.0</version>
+						<groupId>com.hunt.build</groupId>
+						<artifactId>dependency-check-effective-maven-plugin</artifactId>
+						<version>1.0.0</version>
 						<!-- Plugin realms do not inherit the application's dependencyManagement. -->
 						<dependencies>
 							<dependency>

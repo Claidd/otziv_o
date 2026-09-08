@@ -1,0 +1,34 @@
+[
+  {
+    "name": "brace-expansion",
+    "version": "5.0.9",
+    "url": "https://registry.npmjs.org/brace-expansion/-/brace-expansion-5.0.9.tgz",
+    "integrity": "sha512-ScQ4IuvIEF1TMlP7Zt+vjJ//9zlPb2SDcxWxM3bk8s6t6GGdJ7KO1dCcTidOPJKePW30LE/2cT7wCyPho9/Wxg==",
+    "dependencies": {
+      "balanced-match": "^4.0.2"
+    },
+    "sha256": "5d06001fddd25cbee90c96db4dc5b7b57711b984c3141e28d10f143deb52dbaf"
+  },
+  {
+    "name": "ip-address",
+    "version": "10.3.1",
+    "url": "https://registry.npmjs.org/ip-address/-/ip-address-10.3.1.tgz",
+    "integrity": "sha512-1e9d3kb97NHJTIJDZW9rKqW2h6+dFa50Dy0fpPSMQp2ADje5gvKsXmdiK6dwY5t76TaTt5+P5N1Y/LoToIxP6g==",
+    "dependencies": {},
+    "sha256": "ad1790063beea11a312c801df30d58e147de762f4f77787552376eb7424623e5"
+  },
+  {
+    "name": "tar",
+    "version": "7.5.21",
+    "url": "https://registry.npmjs.org/tar/-/tar-7.5.21.tgz",
+    "integrity": "sha512-XdhtCvlMywwxpCW8YEq3lOXBJpUPTR2OHHcwLPO3HwsJqOHa2Ok/oJ7ruGzp+JrKoRPVCzJwAdEjqLW/vNRPHA==",
+    "dependencies": {
+      "chownr": "^3.0.0",
+      "yallist": "^5.0.0",
+      "minipass": "^7.1.2",
+      "minizlib": "^3.1.0",
+      "@isaacs/fs-minipass": "^4.0.0"
+    },
+    "sha256": "bcedf25a21daecd1a18fb5e19ab855b7d79ec8ef1da175e8ba85cfc0ed0069d1"
+  }
+]

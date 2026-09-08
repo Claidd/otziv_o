@@ -5,7 +5,8 @@ import { fileURLToPath } from 'node:url';
 export function auditNeeded(paths, event, usableBase = true) {
   if (!usableBase || !['push', 'pull_request'].includes(event)) return true;
   return paths.some(path => /(^|\/)(package(-lock)?\.json|\.npmrc|pom\.xml)$/.test(path)
-    || /^(shared\/|backend\/\.mvn\/|\.github\/workflows\/|infrastructure\/scripts\/security\/dependency-)/.test(path));
+    || /^(shared\/|backend\/(?:\.mvn|build-support)\/|\.github\/workflows\/|infrastructure\/scripts\/security\/dependency-)/.test(path)
+    || path === 'infrastructure/runtime-security/maven-false-positives.xml');
 }
 export function gatePassed(audit, changes, npm, maven) {
   return changes === 'success' && ((audit === 'true' && npm === 'success' && maven === 'success')

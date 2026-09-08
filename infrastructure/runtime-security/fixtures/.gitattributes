@@ -1,0 +1,3 @@
+# OCI payload hashes cover exact bytes, including line endings.
+provenance-scratch/*.json -text
+provenance-nested/*.json -text

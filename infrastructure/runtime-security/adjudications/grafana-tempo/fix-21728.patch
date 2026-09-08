@@ -1,0 +1,72 @@
+From 650eb1985a0776789c8564122990f588a742356f Mon Sep 17 00:00:00 2001
+From: Xiaoguang Zhang <shawn.zhang@grafana.com>
+Date: Fri, 20 Feb 2026 12:41:28 -0500
+Subject: [PATCH] bugfix: set default max_result_limit for search to 256*1024
+ (#6525)
+
+---
+ CHANGELOG.md                                 |  1 +
+ docs/sources/tempo/configuration/manifest.md |  2 +-
+ modules/frontend/config.go                   |  2 +-
+ modules/frontend/config_test.go              | 15 +++++++++++++++
+ 4 files changed, 18 insertions(+), 2 deletions(-)
+ create mode 100644 modules/frontend/config_test.go
+
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 46514811d66..145c47da838 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -1,5 +1,6 @@
+ ## main / unreleased
+ 
++* [CHANGE] Set default `max_result_limit` for search to 256*1024 [#6525](https://github.com/grafana/tempo/pull/6525) (@zhxiaogg)
+ * [CHANGE] **BREAKING CHANGE** Remove Opencensus receiver [#6523](https://github.com/grafana/tempo/pull/6523) (@javiermolinar)
+ * [CHANGE] Upgrade Tempo to Go 1.26.0 [#6443](https://github.com/grafana/tempo/pull/6443) (@stoewer)
+ * [CHANGE] Allow duplicate dimensions for span metrics and service graphs. This is a valid use case if using different instrumentation libraries, with spans having "deployment.environment" and others "deployment_environment", for example. [#6288](https://github.com/grafana/tempo/pull/6288) (@carles-grafana)
+diff --git a/docs/sources/tempo/configuration/manifest.md b/docs/sources/tempo/configuration/manifest.md
+index f0a0c74d470..0c95d8323b3 100644
+--- a/docs/sources/tempo/configuration/manifest.md
++++ b/docs/sources/tempo/configuration/manifest.md
+@@ -397,7 +397,7 @@ query_frontend:
+         concurrent_jobs: 1000
+         target_bytes_per_job: 104857600
+         default_result_limit: 20
+-        max_result_limit: 0
++        max_result_limit: 262144
+         max_duration: 168h0m0s
+         query_backend_after: 15m0s
+         ingester_shards: 3
+diff --git a/modules/frontend/config.go b/modules/frontend/config.go
+index 2d5ea7fe28d..4ab10b15553 100644
+--- a/modules/frontend/config.go
++++ b/modules/frontend/config.go
+@@ -94,7 +94,7 @@ func (cfg *Config) RegisterFlagsAndApplyDefaults(string, *flag.FlagSet) {
+ 		Sharder: SearchSharderConfig{
+ 			QueryBackendAfter:      15 * time.Minute,
+ 			DefaultLimit:           20,
+-			MaxLimit:               0,
++			MaxLimit:               256 * 1024,
+ 			MaxDuration:            168 * time.Hour, // 1 week
+ 			ConcurrentRequests:     defaultConcurrentRequests,
+ 			TargetBytesPerRequest:  defaultTargetBytesPerRequest,
+diff --git a/modules/frontend/config_test.go b/modules/frontend/config_test.go
+new file mode 100644
+index 00000000000..cc17937f4ea
+--- /dev/null
++++ b/modules/frontend/config_test.go
+@@ -0,0 +1,15 @@
++package frontend
++
++import (
++	"flag"
++	"testing"
++
++	"github.com/stretchr/testify/assert"
++)
++
++func TestSearchSharderConfigDefaults(t *testing.T) {
++	cfg := &Config{}
++	cfg.RegisterFlagsAndApplyDefaults("", &flag.FlagSet{})
++
++	assert.Equal(t, uint32(256*1024), cfg.Search.Sharder.MaxLimit)
++}

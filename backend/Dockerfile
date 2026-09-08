@@ -2,6 +2,8 @@
 
 FROM maven:3.9.15-eclipse-temurin-26-alpine@sha256:9b0bc1420b93f3eafb7401dc3030eac01e773d8d709686d3c4ac351fcf6f9f42 AS build
 WORKDIR /app
+COPY build-support ./build-support
+RUN --mount=type=cache,target=/root/.m2 mvn -B -ntp -f build-support/pom.xml install
 COPY pom.xml .
 COPY src ./src
 RUN --mount=type=cache,target=/root/.m2 mvn -B -ntp clean package -DskipTests

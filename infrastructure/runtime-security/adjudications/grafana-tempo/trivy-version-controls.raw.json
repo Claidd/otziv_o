@@ -1,0 +1,361 @@
+{
+  "SchemaVersion": 2,
+  "Trivy": {
+    "Version": "0.74.0"
+  },
+  "ReportID": "01a07dd5-e86e-7909-83fe-aaff65e205e1",
+  "CreatedAt": "2026-09-07T21:46:05.806594219Z",
+  "ArtifactName": "/input/tempo-controls.cdx.json",
+  "ArtifactType": "cyclonedx",
+  "Results": [
+    {
+      "Target": "",
+      "Class": "lang-pkgs",
+      "Type": "gobinary",
+      "Packages": [
+        {
+          "ID": "github.com/grafana/tempo@v1.5.1-0.20260427112133-525d1bab07e0",
+          "Name": "github.com/grafana/tempo",
+          "Identifier": {
+            "PURL": "pkg:golang/github.com/grafana/tempo@v1.5.1-0.20260427112133-525d1bab07e0",
+            "UID": "1951796dad991d6b",
+            "BOMRef": "pkg:golang/github.com/grafana/tempo@v1.5.1-0.20260427112133-525d1bab07e0"
+          },
+          "Version": "v1.5.1-0.20260427112133-525d1bab07e0"
+        },
+        {
+          "ID": "github.com/grafana/tempo@v2.10.1",
+          "Name": "github.com/grafana/tempo",
+          "Identifier": {
+            "PURL": "pkg:golang/github.com/grafana/tempo@v2.10.1",
+            "UID": "957ade3b555fd8a1",
+            "BOMRef": "pkg:golang/github.com/grafana/tempo@v2.10.1"
+          },
+          "Version": "v2.10.1"
+        },
+        {
+          "ID": "github.com/grafana/tempo@v2.10.2",
+          "Name": "github.com/grafana/tempo",
+          "Identifier": {
+            "PURL": "pkg:golang/github.com/grafana/tempo@v2.10.2",
+            "UID": "85ec6f31216ea443",
+            "BOMRef": "pkg:golang/github.com/grafana/tempo@v2.10.2"
+          },
+          "Version": "v2.10.2"
+        },
+        {
+          "ID": "github.com/grafana/tempo@v2.10.3",
+          "Name": "github.com/grafana/tempo",
+          "Identifier": {
+            "PURL": "pkg:golang/github.com/grafana/tempo@v2.10.3",
+            "UID": "4a0d6ef7a8ca20ba",
+            "BOMRef": "pkg:golang/github.com/grafana/tempo@v2.10.3"
+          },
+          "Version": "v2.10.3"
+        }
+      ],
+      "Vulnerabilities": [
+        {
+          "VulnerabilityID": "CVE-2026-21728",
+          "VendorIDs": [
+            "GHSA-p4r4-xvrq-gvmc"
+          ],
+          "PkgID": "github.com/grafana/tempo@v1.5.1-0.20260427112133-525d1bab07e0",
+          "PkgName": "github.com/grafana/tempo",
+          "PkgIdentifier": {
+            "PURL": "pkg:golang/github.com/grafana/tempo@v1.5.1-0.20260427112133-525d1bab07e0",
+            "UID": "1951796dad991d6b",
+            "BOMRef": "pkg:golang/github.com/grafana/tempo@v1.5.1-0.20260427112133-525d1bab07e0"
+          },
+          "InstalledVersion": "v1.5.1-0.20260427112133-525d1bab07e0",
+          "FixedVersion": "2.8.4, 2.9.2, 2.10.2",
+          "Status": "fixed",
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-21728",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory Go",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Ago"
+          },
+          "Fingerprint": "sha256:48a8282b12a11151b84d34eeeeffd2822a75d0e2c589f4432d000678cca5e62c",
+          "Title": "grafana/tempo: Tempo: Denial of Service via large queries",
+          "Description": "Tempo queries with large limits can cause large memory allocations which can impact the availability of the service, depending on its deployment strategy.\n\nMitigation can be done by setting max_result_limit in the search config, e.g. to 262144 (2^18). Alternatively, automatically restart the service.",
+          "Severity": "HIGH",
+          "CweIDs": [
+            "CWE-400",
+            "CWE-770"
+          ],
+          "VendorSeverity": {
+            "ghsa": 3,
+            "redhat": 3
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 7.5
+            },
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 7.5
+            }
+          },
+          "References": [
+            "https://access.redhat.com/errata/RHSA-2026:21769",
+            "https://access.redhat.com/errata/RHSA-2026:22347",
+            "https://access.redhat.com/errata/RHSA-2026:22423",
+            "https://access.redhat.com/errata/RHSA-2026:23345",
+            "https://access.redhat.com/errata/RHSA-2026:24503",
+            "https://access.redhat.com/security/cve/CVE-2026-21728",
+            "https://bugzilla.redhat.com/show_bug.cgi?id=2461395",
+            "https://github.com/grafana/tempo",
+            "https://github.com/grafana/tempo/blob/4dc3e5b0d3463a0b67498b662b85a148698b4afd/docs/sources/tempo/release-notes/version-2/v2-10.md?plain=1#L328",
+            "https://github.com/grafana/tempo/blob/4dc3e5b0d3463a0b67498b662b85a148698b4afd/docs/sources/tempo/release-notes/version-2/v2-8.md?plain=1#L251",
+            "https://github.com/grafana/tempo/blob/4dc3e5b0d3463a0b67498b662b85a148698b4afd/docs/sources/tempo/release-notes/version-2/v2-9.md?plain=1#L224",
+            "https://github.com/grafana/tempo/commit/650eb1985a0776789c8564122990f588a742356f",
+            "https://github.com/grafana/tempo/pull/6525",
+            "https://grafana.com/security/security-advisories/cve-2026-21728",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-21728",
+            "https://security.access.redhat.com/data/csaf/v2/vex/2026/cve-2026-21728.json",
+            "https://www.cve.org/CVERecord?id=CVE-2026-21728"
+          ],
+          "PublishedDate": "2026-04-24T09:16:03.71Z",
+          "LastModifiedDate": "2026-09-07T13:18:11.477Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-28377",
+          "VendorIDs": [
+            "GHSA-ffqx-q65f-36jf"
+          ],
+          "PkgID": "github.com/grafana/tempo@v1.5.1-0.20260427112133-525d1bab07e0",
+          "PkgName": "github.com/grafana/tempo",
+          "PkgIdentifier": {
+            "PURL": "pkg:golang/github.com/grafana/tempo@v1.5.1-0.20260427112133-525d1bab07e0",
+            "UID": "1951796dad991d6b",
+            "BOMRef": "pkg:golang/github.com/grafana/tempo@v1.5.1-0.20260427112133-525d1bab07e0"
+          },
+          "InstalledVersion": "v1.5.1-0.20260427112133-525d1bab07e0",
+          "FixedVersion": "2.10.3",
+          "Status": "fixed",
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-28377",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory Go",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Ago"
+          },
+          "Fingerprint": "sha256:ef674fe5250f44511dd78225067028af7ebec90d4735403ecd09022c9d55a765",
+          "Title": "Grafana Tempo: Grafana Tempo: Information disclosure of S3 encryption key via status config endpoint",
+          "Description": "A vulnerability in Grafana Tempo exposes the S3 SSE-C encryption key in plaintext through the /status/config endpoint, potentially allowing unauthorized users to obtain the key used to encrypt trace data stored in S3.\n\nThanks to william_goodfellow for reporting this vulnerability.",
+          "Severity": "HIGH",
+          "CweIDs": [
+            "CWE-326"
+          ],
+          "VendorSeverity": {
+            "ghsa": 3,
+            "redhat": 2
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+              "V3Score": 7.5
+            },
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N",
+              "V3Score": 6.5
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2026-28377",
+            "https://github.com/advisories/GHSA-ffqx-q65f-36jf",
+            "https://github.com/grafana/tempo",
+            "https://github.com/grafana/tempo/blob/4dc3e5b0d3463a0b67498b662b85a148698b4afd/CHANGELOG.md?plain=1#L135",
+            "https://github.com/grafana/tempo/commit/bb8ca663db34a0980c9758b40d918fda3b4dbec3",
+            "https://grafana.com/security/security-advisories/cve-2026-28377",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-28377",
+            "https://www.cve.org/CVERecord?id=CVE-2026-28377"
+          ],
+          "PublishedDate": "2026-03-26T22:16:28.46Z",
+          "LastModifiedDate": "2026-06-17T13:20:14.76Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-21728",
+          "VendorIDs": [
+            "GHSA-p4r4-xvrq-gvmc"
+          ],
+          "PkgID": "github.com/grafana/tempo@v2.10.1",
+          "PkgName": "github.com/grafana/tempo",
+          "PkgIdentifier": {
+            "PURL": "pkg:golang/github.com/grafana/tempo@v2.10.1",
+            "UID": "957ade3b555fd8a1",
+            "BOMRef": "pkg:golang/github.com/grafana/tempo@v2.10.1"
+          },
+          "InstalledVersion": "v2.10.1",
+          "FixedVersion": "2.8.4, 2.9.2, 2.10.2",
+          "Status": "fixed",
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-21728",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory Go",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Ago"
+          },
+          "Fingerprint": "sha256:7cc412941bdddc68a2a24263b4be3570b1204a9913695c72673a198f2c1563ea",
+          "Title": "grafana/tempo: Tempo: Denial of Service via large queries",
+          "Description": "Tempo queries with large limits can cause large memory allocations which can impact the availability of the service, depending on its deployment strategy.\n\nMitigation can be done by setting max_result_limit in the search config, e.g. to 262144 (2^18). Alternatively, automatically restart the service.",
+          "Severity": "HIGH",
+          "CweIDs": [
+            "CWE-400",
+            "CWE-770"
+          ],
+          "VendorSeverity": {
+            "ghsa": 3,
+            "redhat": 3
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 7.5
+            },
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 7.5
+            }
+          },
+          "References": [
+            "https://access.redhat.com/errata/RHSA-2026:21769",
+            "https://access.redhat.com/errata/RHSA-2026:22347",
+            "https://access.redhat.com/errata/RHSA-2026:22423",
+            "https://access.redhat.com/errata/RHSA-2026:23345",
+            "https://access.redhat.com/errata/RHSA-2026:24503",
+            "https://access.redhat.com/security/cve/CVE-2026-21728",
+            "https://bugzilla.redhat.com/show_bug.cgi?id=2461395",
+            "https://github.com/grafana/tempo",
+            "https://github.com/grafana/tempo/blob/4dc3e5b0d3463a0b67498b662b85a148698b4afd/docs/sources/tempo/release-notes/version-2/v2-10.md?plain=1#L328",
+            "https://github.com/grafana/tempo/blob/4dc3e5b0d3463a0b67498b662b85a148698b4afd/docs/sources/tempo/release-notes/version-2/v2-8.md?plain=1#L251",
+            "https://github.com/grafana/tempo/blob/4dc3e5b0d3463a0b67498b662b85a148698b4afd/docs/sources/tempo/release-notes/version-2/v2-9.md?plain=1#L224",
+            "https://github.com/grafana/tempo/commit/650eb1985a0776789c8564122990f588a742356f",
+            "https://github.com/grafana/tempo/pull/6525",
+            "https://grafana.com/security/security-advisories/cve-2026-21728",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-21728",
+            "https://security.access.redhat.com/data/csaf/v2/vex/2026/cve-2026-21728.json",
+            "https://www.cve.org/CVERecord?id=CVE-2026-21728"
+          ],
+          "PublishedDate": "2026-04-24T09:16:03.71Z",
+          "LastModifiedDate": "2026-09-07T13:18:11.477Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-28377",
+          "VendorIDs": [
+            "GHSA-ffqx-q65f-36jf"
+          ],
+          "PkgID": "github.com/grafana/tempo@v2.10.1",
+          "PkgName": "github.com/grafana/tempo",
+          "PkgIdentifier": {
+            "PURL": "pkg:golang/github.com/grafana/tempo@v2.10.1",
+            "UID": "957ade3b555fd8a1",
+            "BOMRef": "pkg:golang/github.com/grafana/tempo@v2.10.1"
+          },
+          "InstalledVersion": "v2.10.1",
+          "FixedVersion": "2.10.3",
+          "Status": "fixed",
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-28377",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory Go",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Ago"
+          },
+          "Fingerprint": "sha256:8143c2b3edeac0abf66b3a17642b442de8a52c0448b73317b38caae70d458f19",
+          "Title": "Grafana Tempo: Grafana Tempo: Information disclosure of S3 encryption key via status config endpoint",
+          "Description": "A vulnerability in Grafana Tempo exposes the S3 SSE-C encryption key in plaintext through the /status/config endpoint, potentially allowing unauthorized users to obtain the key used to encrypt trace data stored in S3.\n\nThanks to william_goodfellow for reporting this vulnerability.",
+          "Severity": "HIGH",
+          "CweIDs": [
+            "CWE-326"
+          ],
+          "VendorSeverity": {
+            "ghsa": 3,
+            "redhat": 2
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+              "V3Score": 7.5
+            },
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N",
+              "V3Score": 6.5
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2026-28377",
+            "https://github.com/advisories/GHSA-ffqx-q65f-36jf",
+            "https://github.com/grafana/tempo",
+            "https://github.com/grafana/tempo/blob/4dc3e5b0d3463a0b67498b662b85a148698b4afd/CHANGELOG.md?plain=1#L135",
+            "https://github.com/grafana/tempo/commit/bb8ca663db34a0980c9758b40d918fda3b4dbec3",
+            "https://grafana.com/security/security-advisories/cve-2026-28377",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-28377",
+            "https://www.cve.org/CVERecord?id=CVE-2026-28377"
+          ],
+          "PublishedDate": "2026-03-26T22:16:28.46Z",
+          "LastModifiedDate": "2026-06-17T13:20:14.76Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-28377",
+          "VendorIDs": [
+            "GHSA-ffqx-q65f-36jf"
+          ],
+          "PkgID": "github.com/grafana/tempo@v2.10.2",
+          "PkgName": "github.com/grafana/tempo",
+          "PkgIdentifier": {
+            "PURL": "pkg:golang/github.com/grafana/tempo@v2.10.2",
+            "UID": "85ec6f31216ea443",
+            "BOMRef": "pkg:golang/github.com/grafana/tempo@v2.10.2"
+          },
+          "InstalledVersion": "v2.10.2",
+          "FixedVersion": "2.10.3",
+          "Status": "fixed",
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-28377",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory Go",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Ago"
+          },
+          "Fingerprint": "sha256:8c5424cf7ef3b136d126e7587e5301887c6950e113d2c8e0584e1891e4541551",
+          "Title": "Grafana Tempo: Grafana Tempo: Information disclosure of S3 encryption key via status config endpoint",
+          "Description": "A vulnerability in Grafana Tempo exposes the S3 SSE-C encryption key in plaintext through the /status/config endpoint, potentially allowing unauthorized users to obtain the key used to encrypt trace data stored in S3.\n\nThanks to william_goodfellow for reporting this vulnerability.",
+          "Severity": "HIGH",
+          "CweIDs": [
+            "CWE-326"
+          ],
+          "VendorSeverity": {
+            "ghsa": 3,
+            "redhat": 2
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+              "V3Score": 7.5
+            },
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N",
+              "V3Score": 6.5
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2026-28377",
+            "https://github.com/advisories/GHSA-ffqx-q65f-36jf",
+            "https://github.com/grafana/tempo",
+            "https://github.com/grafana/tempo/blob/4dc3e5b0d3463a0b67498b662b85a148698b4afd/CHANGELOG.md?plain=1#L135",
+            "https://github.com/grafana/tempo/commit/bb8ca663db34a0980c9758b40d918fda3b4dbec3",
+            "https://grafana.com/security/security-advisories/cve-2026-28377",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-28377",
+            "https://www.cve.org/CVERecord?id=CVE-2026-28377"
+          ],
+          "PublishedDate": "2026-03-26T22:16:28.46Z",
+          "LastModifiedDate": "2026-06-17T13:20:14.76Z"
+        }
+      ]
+    }
+  ]
+}

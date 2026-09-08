@@ -113,3 +113,32 @@ regexes = [
   '''keycloak-postgres:5432/keycloak''',
   '''5432/keycloak''',
 ]
+# Exact public Go module sums independently verified against sum.golang.org.
+# Only generic-api-key; both the evidence path and one complete reviewed line match.
+# RE2 anchors cover the entire line target. The optional leading LF is the
+# pinned Gitleaks location() representation, not an arbitrary content prefix.
+# Optional CR is only the CRLF line terminator; no arbitrary text is permitted.
+[[allowlists]]
+description = "Reviewed public Go module checksums in Grafana build provenance"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''(^|/)infrastructure/runtime\-security/adjudications/grafana\-tempo/reviewed\-buildinfo\.txt$''']
+regexes = [
+  '''^\n?\tdep\tcloud\.google\.com/go/auth\tv0\.20\.0\th1:kXTssoVb4azsVDoUiF8KvxAqrsQcQtB53DcSgta74CA=\r?$''',
+  '''^\n?\tdep\tcloud\.google\.com/go/auth/oauth2adapt\tv0\.2\.8\th1:keo8NaayQZ6wimpNSmW5OPc283g65QNIiLpZnkHRbnc=\r?$''',
+  '''^\n?\tdep\tgithub\.com/aws/aws\-sdk\-go\-v2/credentials\tv1\.19\.24\th1:2hQqYCV9yqyePQ9o6dCrZc/zO8U3TwPr9mIKlZnPu/I=\r?$''',
+  '''^\n?\tdep\tgithub\.com/aws/aws\-sdk\-go\-v2/service/resourcegroupstaggingapi\tv1\.26\.6\th1:PwbxovpcJvb25k019bkibvJfCpCmIANOFrXZIFPmRzk=\r?$''',
+  '''^\n?\tdep\tgithub\.com/blevesearch/bleve_index_api\tv1\.3\.0\th1:DsMpWVjFNlBw9/6pyWf59XoqcAkhHj3H0UWiQsavb6E=\r?$''',
+  '''^\n?\tdep\tgithub\.com/blevesearch/upsidedown_store_api\tv1\.0\.2\th1:U53Q6YoWEARVLd1OYNc9kvhBMGZzVrdmaozG2MfoB\+A=\r?$''',
+  '''^\n?\tdep\tgithub\.com/getkin/kin\-openapi\tv0\.147\.0\th1:s\+Xsm9gUMPJbgCnABZ2to3zSQQ5A9dyj/zo62VVsldY=\r?$''',
+  '''^\n?\tdep\tgithub\.com/gogo/googleapis\tv1\.4\.1\th1:1Yx4Myt7BxzvUr5ldGSbwYiZG6t9wGBZ\+8/fX3Wvtq0=\r?$''',
+  '''^\n?\tdep\tgithub\.com/hashicorp/consul/api\tv1\.33\.4\th1:AJkZp6qzgAYcMIU0\+CjJ0Rb7\+byfh0dazFK/gzlOcJk=\r?$''',
+  '''^\n?\tdep\tgithub\.com/moby/moby/api\tv1\.54\.2\th1:wiat9QAhnDQjA7wk1kh/TqHz2I1uUA7M7t9SAl/JNXg=\r?$''',
+  '''^\n?\tdep\tgolang\.org/x/oauth2\tv0\.36\.0\th1:peZ/1z27fi9hUOFCAZaHyrpWG5lwe0RJEEEeH0ThlIs=\r?$''',
+  '''^\n?\tdep\tgoogle\.golang\.org/api\tv0\.278\.0\th1:W7jiRvRi53VYFfZ/HoZjQBtJk7gOFbHD8ot1RzVZU6E=\r?$''',
+  '''^\n?\t=>\tk8s\.io/api\tv0\.35\.0\th1:iBAU5LTyBI9vw3L5glmat1njFK34srdLmktWwLTprlY=\r?$''',
+  '''^\n?\t=>\tk8s\.io/apiextensions\-apiserver\tv0\.35\.0\th1:3xHk2rTOdWXXJM\+RDQZJvdx0yEOgC0FgQ1PlJatA5T4=\r?$''',
+  '''^\n?\t=>\tk8s\.io/apimachinery\tv0\.35\.0\th1:Z2L3IHvPVv/MJ7xRxHEtk6GoJElaAqDCCU0S6ncYok8=\r?$''',
+  '''^\n?\t=>\tk8s\.io/apiserver\tv0\.35\.0\th1:CUGo5o\+7hW9GcAEF3x3usT3fX4f9r8xmgQeCBDaOgX4=\r?$''',
+]

@@ -4334,6 +4334,7 @@ function Assert-BackendDockerBuildContext {
     $requiredRelativePaths = @(
         "Dockerfile",
         "pom.xml",
+        "build-support\pom.xml",
         "src\main",
         "docker\certs\russian_trusted_root_ca.crt",
         "docker\certs\russian_trusted_sub_ca.crt",
@@ -4363,6 +4364,7 @@ function Invoke-OfflineAppBuild {
     Write-Host "Building backend jar locally for offline app image..."
     Push-Location $backendDir
     try {
+        Invoke-External -FilePath (Join-Path $backendDir "mvnw.cmd") -Arguments @("-B", "-ntp", "-f", "build-support/pom.xml", "install")
         Invoke-External -FilePath (Join-Path $backendDir "mvnw.cmd") -Arguments @("-B", "-ntp", "clean", "package", "-DskipTests")
     } finally {
         Pop-Location
