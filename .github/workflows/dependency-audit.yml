@@ -177,7 +177,7 @@ jobs:
           key: ${{ runner.os }}-dependency-check-13-public-v1-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Upload dependency-check reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: ./.github/actions/upload-report
         with:
           name: maven-dependency-check
           path: |

@@ -198,6 +198,8 @@ jobs:
         run: node contracts/generate.mjs --check
       - name: Test recovery, monitoring and runtime security gates
         run: node --test infrastructure/recovery/*.test.mjs infrastructure/monitoring/*.test.mjs infrastructure/runtime-security/*.test.mjs
+      - name: Test bounded report upload and strict completion checks
+        run: node --test .github/actions/upload-report/*.test.mjs
       - name: Reproduce Linux scanner bind permissions with the pinned scanner
         run: node infrastructure/runtime-security/scanner-bind-smoke.mjs "$RUNNER_TEMP/scanner-bind-proof.json"
       - name: Test notification media production importer
@@ -282,7 +284,7 @@ jobs:
         run: bash ./mvnw -B -ntp -Dtest=FinancialCtePlanEvidence -Dotziv.benchmark.cte.iterations=4 -Dotziv.benchmark.source=ci -Dotziv.benchmark.query-budgets=true test
       - name: Preserve causal performance scenario measurements
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: ./.github/actions/upload-report
         with:
           name: financial-scenario-benchmark
           path: backend/target/performance/*.json
@@ -296,7 +298,7 @@ jobs:
         run: node infrastructure/runtime-security/scan.mjs java backend/target "$RUNNER_TEMP/maven-vulnerabilities.json"
       - name: Preserve Maven security evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: ./.github/actions/upload-report
         with:
           name: maven-runtime-security
           path: ${{ runner.temp }}/maven-vulnerabilities*
@@ -304,7 +306,7 @@ jobs:
           retention-days: 14
       - name: Upload backend test reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: ./.github/actions/upload-report
         with:
           name: backend-test-reports
           path: backend/target/surefire-reports/
@@ -375,7 +377,7 @@ jobs:
         run: node infrastructure/recovery/full-system-fixture.mjs otziv-recovery-app-ci otziv-issuer-ci "$RUNNER_TEMP/paired-recovery"
       - name: Preserve issuer protocol and vulnerability evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: ./.github/actions/upload-report
         with:
           name: issuer-security-generation
           path: |
@@ -483,7 +485,7 @@ jobs:
           npm test
       - name: Preserve browser reports, failure screenshots and traces
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: ./.github/actions/upload-report
         with:
           name: browser-smoke-reports
           path: |
@@ -532,7 +534,7 @@ jobs:
         run: bash ./gradlew --no-daemon testDebugUnitTest lintDebug assembleDebug
       - name: Preserve Android unit and lint reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: ./.github/actions/upload-report
         with:
           name: android-native-lint
           path: |
@@ -652,7 +654,7 @@ jobs:
           node infrastructure/runtime-security/scan.mjs image "$UPSTREAM_IMAGE" "$RUNNER_TEMP/$UPSTREAM_ID-vulnerabilities.json"
       - name: Preserve raw findings, package inventory and triage
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: ./.github/actions/upload-report
         with:
           name: upstream-security-${{ matrix.id }}
           path: ${{ runner.temp }}/*-vulnerabilities*
@@ -745,7 +747,7 @@ jobs:
         run: node infrastructure/runtime-security/scan.mjs image "otziv-$COMPONENT-ci" "$RUNNER_TEMP/$COMPONENT-vulnerabilities.json"
       - name: Preserve vulnerability evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: ./.github/actions/upload-report
         with:
           name: integration-image-security-${{ matrix.component }}
           path: ${{ runner.temp }}/*-vulnerabilities*
@@ -812,7 +814,7 @@ jobs:
         run: node infrastructure/runtime-security/scan.mjs image "otziv-monitoring-$COMPONENT-ci" "$RUNNER_TEMP/monitoring-evidence/vulnerabilities.json"
       - name: Preserve exact builds, configuration, raw scans, SBOM and rollback proof
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: ./.github/actions/upload-report
         with:
           name: monitoring-candidate-${{ matrix.component }}
           path: ${{ runner.temp }}/monitoring-evidence/

@@ -703,6 +703,7 @@ condition = "AND"
 regexTarget = "match"
 paths = ['''^(?:/repo/)?(?:\.gitleaks-staged-index-[0-9a-fA-F-]{36}/)?infrastructure/keycloak/security\-generation/c14\-migration\-fix/proofs/security\-v3/otziv\-realm\-migration\-provenance\.json$''']
 regexes = [
+  '''^RemoveKeyConsumer\.class":"ec0f8dbe6b5b0179a51a930e36a441a65b5b55f9ba9f4731ce430391e62fafa5"$''',
   '''^CachedUserVerifiableCredential\.class":"3980411cc35cd70fe2f21325fe98f85aad5ba6240f06595a70d04c2323f8d53c"$''',
   '''^CachedUserVerifiableCredentials\.class":"ea6f31ffd559b257bdb83e716713f5774ce14a2bb14816d61ddd67d14755f9ca"$''',
   '''^ClearExpiredClientInitialAccessTokens\.class":"7e1fd5540277e86c1383596ef38bad000ca28379e36f254bde001cf388ae0906"$''',
@@ -924,6 +925,7 @@ condition = "AND"
 regexTarget = "match"
 paths = ['''^(?:/repo/)?(?:\.gitleaks-staged-index-[0-9a-fA-F-]{36}/)?infrastructure/runtime\-security/proofs/c14\-keycloak\-published/final/runtime/otziv\-realm\-migration\-provenance\.json$''']
 regexes = [
+  '''^RemoveKeyConsumer\.class":"ec0f8dbe6b5b0179a51a930e36a441a65b5b55f9ba9f4731ce430391e62fafa5"$''',
   '''^CachedUserVerifiableCredential\.class":"3980411cc35cd70fe2f21325fe98f85aad5ba6240f06595a70d04c2323f8d53c"$''',
   '''^CachedUserVerifiableCredentials\.class":"ea6f31ffd559b257bdb83e716713f5774ce14a2bb14816d61ddd67d14755f9ca"$''',
   '''^ClearExpiredClientInitialAccessTokens\.class":"7e1fd5540277e86c1383596ef38bad000ca28379e36f254bde001cf388ae0906"$''',
@@ -1109,6 +1111,7 @@ condition = "AND"
 regexTarget = "match"
 paths = ['''^(?:/repo/)?(?:\.gitleaks-staged-index-[0-9a-fA-F-]{36}/)?infrastructure/runtime\-security/proofs/c14\-keycloak\-published/runtime/otziv\-realm\-migration\-provenance\.json$''']
 regexes = [
+  '''^RemoveKeyConsumer\.class":"ec0f8dbe6b5b0179a51a930e36a441a65b5b55f9ba9f4731ce430391e62fafa5"$''',
   '''^CachedUserVerifiableCredential\.class":"3980411cc35cd70fe2f21325fe98f85aad5ba6240f06595a70d04c2323f8d53c"$''',
   '''^CachedUserVerifiableCredentials\.class":"ea6f31ffd559b257bdb83e716713f5774ce14a2bb14816d61ddd67d14755f9ca"$''',
   '''^ClearExpiredClientInitialAccessTokens\.class":"7e1fd5540277e86c1383596ef38bad000ca28379e36f254bde001cf388ae0906"$''',

@@ -1,0 +1,117 @@
+name: Upload ordinary CI report
+description: Bounded immutable uploads of prepared reports; publication proofs use their original actions.
+inputs:
+  name:
+    description: Base report artifact name; a run-attempt and upload-attempt suffix is added.
+    required: true
+  path:
+    description: Existing report files or patterns accepted by the official upload action.
+    required: true
+  if-no-files-found:
+    description: Official error, warn or ignore policy for an empty file selection.
+    default: warn
+  retention-days:
+    description: Official artifact retention period; zero uses repository defaults.
+    default: '0'
+  compression-level:
+    description: Official archive compression level.
+    default: '6'
+  include-hidden-files:
+    description: Include hidden files only when explicitly requested by the caller.
+    default: 'false'
+outputs:
+  artifact-id:
+    description: Artifact ID from the successful upload, or empty for allowed no-files.
+    value: ${{ steps.accept.outputs.artifact-id }}
+  artifact-url:
+    description: Artifact URL from the successful upload.
+    value: ${{ steps.accept.outputs.artifact-url }}
+  artifact-digest:
+    description: Artifact SHA-256 from the successful upload.
+    value: ${{ steps.accept.outputs.artifact-digest }}
+  artifact-name:
+    description: Exact immutable name of the successful upload.
+    value: ${{ steps.accept.outputs.artifact-name }}
+runs:
+  using: composite
+  steps:
+    - name: Prepare immutable attempt names
+      id: prepare
+      if: ${{ !cancelled() }}
+      shell: bash
+      env:
+        OTZIV_REPORT_NAME: ${{ inputs.name }}
+        OTZIV_REPORT_RUN_ATTEMPT: ${{ github.run_attempt }}
+        OTZIV_REPORT_NO_FILES: ${{ inputs.if-no-files-found }}
+        OTZIV_REPORT_ACTION_PATH: ${{ github.action_path }}
+      run: node "$OTZIV_REPORT_ACTION_PATH/receipt.mjs" prepare
+
+    - name: Upload report attempt 1
+      id: upload_1
+      if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
+      continue-on-error: true
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: ${{ steps.prepare.outputs.name-1 }}
+        path: ${{ inputs.path }}
+        if-no-files-found: ${{ inputs.if-no-files-found }}
+        retention-days: ${{ inputs.retention-days }}
+        compression-level: ${{ inputs.compression-level }}
+        include-hidden-files: ${{ inputs.include-hidden-files }}
+        overwrite: false
+        archive: true
+
+    - name: Wait before upload attempt 2
+      id: delay_2
+      if: ${{ !cancelled() && steps.upload_1.outcome == 'failure' }}
+      shell: bash
+      run: sleep 2
+
+    - name: Upload report attempt 2
+      id: upload_2
+      if: ${{ !cancelled() && steps.upload_1.outcome == 'failure' && steps.delay_2.outcome == 'success' }}
+      continue-on-error: true
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: ${{ steps.prepare.outputs.name-2 }}
+        path: ${{ inputs.path }}
+        if-no-files-found: ${{ inputs.if-no-files-found }}
+        retention-days: ${{ inputs.retention-days }}
+        compression-level: ${{ inputs.compression-level }}
+        include-hidden-files: ${{ inputs.include-hidden-files }}
+        overwrite: false
+        archive: true
+
+    - name: Wait before upload attempt 3
+      id: delay_3
+      if: ${{ !cancelled() && steps.upload_1.outcome == 'failure' && steps.upload_2.outcome == 'failure' }}
+      shell: bash
+      run: sleep 5
+
+    - name: Upload report attempt 3
+      id: upload_3
+      if: ${{ !cancelled() && steps.upload_1.outcome == 'failure' && steps.upload_2.outcome == 'failure' && steps.delay_3.outcome == 'success' }}
+      continue-on-error: true
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: ${{ steps.prepare.outputs.name-3 }}
+        path: ${{ inputs.path }}
+        if-no-files-found: ${{ inputs.if-no-files-found }}
+        retention-days: ${{ inputs.retention-days }}
+        compression-level: ${{ inputs.compression-level }}
+        include-hidden-files: ${{ inputs.include-hidden-files }}
+        overwrite: false
+        archive: true
+
+    - name: Require a successful report upload
+      id: accept
+      if: ${{ always() }}
+      shell: bash
+      env:
+        OTZIV_REPORT_NAME: ${{ inputs.name }}
+        OTZIV_REPORT_RUN_ATTEMPT: ${{ github.run_attempt }}
+        OTZIV_REPORT_NO_FILES: ${{ inputs.if-no-files-found }}
+        OTZIV_REPORT_STEPS: ${{ toJSON(steps) }}
+        OTZIV_REPORT_CANCELLED: ${{ job.status == 'cancelled' }}
+        OTZIV_REPORT_ACTION_PATH: ${{ github.action_path }}
+      run: node "$OTZIV_REPORT_ACTION_PATH/receipt.mjs" finalize
