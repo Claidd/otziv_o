@@ -47,7 +47,10 @@
 
 ```powershell
 node infrastructure/runtime-security/reviewed-image-defaults.mjs
-.\infrastructure\scripts\prod\deploy-prod.ps1 -PrepareSnapshotOnly
+.\infrastructure\scripts\prod\deploy-prod.ps1 -PrepareSnapshotOnly `
+  -VpsHost 95.213.248.152 -VpsUser hunt -VpsPort 22022 `
+  -VpsPath /docker -RemoteEnvFile .env -ProjectFilesRoot E:/Works/Projects `
+  -SkipEnvUpload -SkipMobileApkUpload -Tag architecture-20260909
 ```
 
 `-PrepareSnapshotOnly` завершает работу до Docker build/push и SSH. При dirty deploy inputs скрипт создаёт и проверяет отдельный snapshot; при чистом checkout проверяет revision/lineage. Сам по себе этот флаг не означает новый полный CI run. Полная локальная проверка подготовленного snapshot доступна в [validate-deploy-snapshot.ps1](../infrastructure/scripts/prod/validate-deploy-snapshot.ps1) с обязательными `-RepoRoot` и `-BaseRevision`. Нельзя подставлять другой base/revision или использовать `-AllowDirtyWorktree`, `-SkipAutoSnapshotValidation`, `-FastAutoSnapshotValidation` для закрытия приёмки этого выпуска.
