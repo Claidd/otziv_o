@@ -6,6 +6,9 @@ Set-StrictMode -Version Latest
 
 $fixtureRoot = Join-Path ([IO.Path]::GetTempPath()) ('otziv-snapshot-inputs-' + [Guid]::NewGuid().ToString('N'))
 $previousLocation = Get-Location
+$gitEnvironmentNames = @('GIT_INDEX_FILE', 'GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL')
+$originalEnvironment = @{}
+foreach ($name in $gitEnvironmentNames) { $originalEnvironment[$name] = [Environment]::GetEnvironmentVariable($name) }
 function Invoke-FixtureGit {
     param([string[]]$GitArguments)
     $output = @(& git -C $fixtureRoot @GitArguments 2>&1)
@@ -62,8 +65,36 @@ try {
     }
     $snapshotPaths = (Invoke-FixtureGit @('ls-tree','-r','--name-only',$snapshot.Commit)) -split "`n"
     if ('.env.prod' -in $snapshotPaths) { throw 'Snapshot included an external private input.' }
+    foreach ($name in $gitEnvironmentNames) {
+        if ([Environment]::GetEnvironmentVariable($name) -cne $originalEnvironment[$name]) {
+            throw "Snapshot did not restore Git environment variable $name."
+        }
+    }
+    # Exercise callers which already use a separate index, including failure
+    # before commit creation. Neither path may replace or erase that index.
+    $customIndex = Join-Path $fixtureRoot '.git/caller-index'
+    Copy-Item -LiteralPath (Join-Path $fixtureRoot '.git/index') -Destination $customIndex
+    $customIndexHash = (Get-FileHash -LiteralPath $customIndex).Hash
+    $env:GIT_INDEX_FILE = $customIndex
+    $env:GIT_AUTHOR_NAME = 'Caller author'
+    $null = New-OtzivDeploySnapshot -Repository $fixtureRoot -InputPaths $inputs
+    $failureObserved = $false
+    try { $null = New-OtzivDeploySnapshot -Repository $fixtureRoot -InputPaths @('missing-snapshot-input') }
+    catch {
+        if ($_.Exception.Message -notlike 'Unable to add deployment inputs*') { throw }
+        $failureObserved = $true
+    }
+    if (-not $failureObserved) { throw 'Expected snapshot input failure did not occur.' }
+    if ($env:GIT_INDEX_FILE -cne $customIndex -or $env:GIT_AUTHOR_NAME -cne 'Caller author' -or
+            (Get-FileHash -LiteralPath $customIndex).Hash -cne $customIndexHash) {
+        throw 'Snapshot success/failure did not preserve caller environment and custom index.'
+    }
     Write-Output 'Snapshot input regression passed: current shared/contracts/docs/monitoring inputs retained; user HEAD/index and unrelated/private inputs preserved.'
 } finally {
+    foreach ($name in $gitEnvironmentNames) {
+        if ($null -eq $originalEnvironment[$name]) { Remove-Item -LiteralPath "Env:$name" -ErrorAction SilentlyContinue }
+        else { [Environment]::SetEnvironmentVariable($name, $originalEnvironment[$name]) }
+    }
     Set-Location -LiteralPath $previousLocation.Path
     if (Test-Path -LiteralPath $fixtureRoot) {
         $resolvedFixture = (Resolve-Path -LiteralPath $fixtureRoot).Path
