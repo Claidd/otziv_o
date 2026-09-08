@@ -678,4 +678,5 @@ foreach ($parser in @{
 if ($LASTEXITCODE -ne 0) {
     throw 'Unable to restore a successful native-command state after deploy release regressions.'
 }
+& (Join-Path $PSScriptRoot 'test-deploy-snapshot-inputs.ps1')
 Write-Output 'Deploy release contract passed: durable lock, encrypted DB backup, optional worker/MAX rollout, and post-health APK publication are ordered safely.'

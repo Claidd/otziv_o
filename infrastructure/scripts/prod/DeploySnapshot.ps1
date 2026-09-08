@@ -5,8 +5,11 @@ function Get-OtzivDeployInputPaths {
         'backend',
         'frontend',
         'mobile',
+        'shared',
+        'contracts',
         'whatsapp',
         'infrastructure',
+        'docs',
         'docs/WHATSAPP_INBOUND_DELIVERY_RUNBOOK.md',
         'docs/WHATSAPP_REMOTE_SESSION_RECOVERY.md',
         '.github',
@@ -14,6 +17,8 @@ function Get-OtzivDeployInputPaths {
         'docker-compose.build.yaml',
         'compose.yaml',
         'compose.prod-local.yaml',
+        'compose.monitoring.yaml',
+        'compose.monitoring-security-upgrade.yaml',
         'Dockerfile.whatsapp',
         '.dockerignore',
         '.env.example',
@@ -272,9 +277,20 @@ function New-OtzivDeploySnapshot {
             throw 'Deploy snapshot did not resolve to one exact Git commit.'
         }
     } finally {
-        [Environment]::SetEnvironmentVariable('GIT_INDEX_FILE', $previousIndex)
+        # On recent PowerShell/.NET versions an untyped $null argument can
+        # become an empty environment value. Git treats GIT_INDEX_FILE=''
+        # as an empty index, so remove originally absent variables explicitly.
+        if ($null -eq $previousIndex) {
+            Remove-Item -LiteralPath 'Env:GIT_INDEX_FILE' -ErrorAction SilentlyContinue
+        } else {
+            [Environment]::SetEnvironmentVariable('GIT_INDEX_FILE', $previousIndex)
+        }
         foreach ($variable in $identityVariables) {
-            [Environment]::SetEnvironmentVariable($variable, $previousIdentity[$variable])
+            if ($null -eq $previousIdentity[$variable]) {
+                Remove-Item -LiteralPath "Env:$variable" -ErrorAction SilentlyContinue
+            } else {
+                [Environment]::SetEnvironmentVariable($variable, $previousIdentity[$variable])
+            }
         }
         if (Test-Path -LiteralPath $temporaryIndex) {
             Remove-Item -LiteralPath $temporaryIndex -Force
