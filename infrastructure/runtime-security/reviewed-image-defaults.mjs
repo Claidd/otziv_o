@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFile, realpath } from 'node:fs/promises';
-import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
+import { lstat, open, readFile, readdir, realpath } from 'node:fs/promises';
+import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { inventory, repositoryInventory } from './upstream-images.mjs';
 import { validateManifest } from './publish-reviewed-images.mjs';
@@ -113,20 +113,100 @@ export async function validateReviewedDefaults(rows, manifestBytes, activations,
   return checks;
 }
 
-export async function validateRepositoryDefaults(root = process.cwd(), rows) {
+// Only oversized OCI statement blobs use this storage representation. The logical
+// bytes still pass checkedJson and the complete OCI descriptor chain above.
+const PART_BYTES = 4 * 1024 * 1024;
+const FILE_GATE_BYTES = 5 * 1024 * 1024;
+const PARTS_MANIFEST_BYTES = 4096;
+const SPLIT_EVIDENCE_FILE = /^registry-attestation-[0-9]+-payload-[0-9]+\.json$/;
+
+export async function createEvidenceReader(root) {
   root = await realpath(root);
   const evidenceRoot = await realpath(resolve(root, 'infrastructure/runtime-security'));
   const evidenceRelative = relative(root, evidenceRoot);
   assert.ok(evidenceRelative && !isAbsolute(evidenceRelative) && evidenceRelative !== '..'
     && !evidenceRelative.startsWith('..' + sep), 'activation_evidence_root_symlink_escape');
-  const read = async path => {
+  function pathInScope(path) {
     assert.ok(typeof path === 'string' && path.startsWith('infrastructure/runtime-security/') && !isAbsolute(path)
-      && !path.includes('\\') && !path.split('/').includes('..'), 'activation_path_outside_evidence_scope');
-    const actual = await realpath(resolve(root, path));
+      && !path.includes('\\') && !path.includes(':')
+      && path.split('/').every(part => part && part !== '.' && part !== '..'), 'activation_path_outside_evidence_scope');
+    return resolve(root, path);
+  }
+  async function physicalPath(path) {
+    const actual = await realpath(pathInScope(path));
     const inside = relative(evidenceRoot, actual);
     assert.ok(inside && !isAbsolute(inside) && inside !== '..' && !inside.startsWith('..' + sep), 'activation_evidence_symlink_escape');
-    return readFile(actual);
+    return actual;
+  }
+  async function boundedRead(path, maximum) {
+    assert.ok((await lstat(pathInScope(path))).isFile(), 'activation_parts_regular_file_required');
+    const actual = await physicalPath(path);
+    const file = await open(actual, 'r');
+    try {
+      const stat = await file.stat();
+      assert.ok(stat.isFile() && stat.size > 0 && stat.size <= maximum, 'activation_parts_file_size');
+      // One extra byte also detects growth after stat without an unbounded read.
+      const buffer = Buffer.alloc(maximum + 1);
+      let offset = 0;
+      while (offset < buffer.length) {
+        const { bytesRead } = await file.read(buffer, offset, buffer.length - offset, null);
+        if (!bytesRead) break;
+        offset += bytesRead;
+      }
+      assert.equal(offset, stat.size, 'activation_parts_file_changed');
+      return buffer.subarray(0, offset);
+    } finally { await file.close(); }
+  }
+  function exactKeys(value, names) {
+    assert.ok(value && typeof value === 'object' && !Array.isArray(value), 'activation_parts_object');
+    assert.deepEqual(Object.keys(value).sort(), [...names].sort(), 'activation_parts_fields');
+  }
+  return async path => {
+    const resolved = pathInScope(path);
+    let exists;
+    try { exists = await lstat(resolved); }
+    catch (error) { if (error.code !== 'ENOENT') throw error; }
+    // Preserve the original-file path, including its existing outer hash checks.
+    // A dangling link is not an absent original and may not trigger the fallback.
+    if (exists) return readFile(await physicalPath(path));
+    const name = basename(path);
+    if (!SPLIT_EVIDENCE_FILE.test(name)) return readFile(await physicalPath(path));
+    const metadata = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(
+      await boundedRead(path + '.parts.json', PARTS_MANIFEST_BYTES)));
+    exactKeys(metadata, ['schema', 'bytes', 'sha256', 'parts']);
+    assert.equal(metadata.schema, 'otziv-raw-evidence-parts-v1', 'activation_parts_schema');
+    assert.ok(Number.isSafeInteger(metadata.bytes) && metadata.bytes > FILE_GATE_BYTES
+      && metadata.bytes <= 2 * PART_BYTES, 'activation_parts_total_size');
+    assert.match(metadata.sha256 || '', /^[a-f0-9]{64}$/, 'activation_parts_digest');
+    assert.ok(Array.isArray(metadata.parts) && metadata.parts.length === 2, 'activation_parts_count');
+    const expectedNames = [name + '.part001', name + '.part002'];
+    for (const [index, part] of metadata.parts.entries()) {
+      exactKeys(part, ['file', 'bytes', 'sha256']);
+      assert.equal(part.file, expectedNames[index], 'activation_parts_filename_or_order');
+      assert.ok(Number.isSafeInteger(part.bytes) && part.bytes > 0 && part.bytes <= PART_BYTES, 'activation_parts_chunk_size');
+      assert.match(part.sha256 || '', /^[a-f0-9]{64}$/, 'activation_parts_chunk_digest');
+    }
+    assert.equal(metadata.parts.reduce((sum, part) => sum + part.bytes, 0), metadata.bytes, 'activation_parts_size_sum');
+    const directory = dirname(await physicalPath(path + '.parts.json'));
+    const found = (await readdir(directory)).filter(file => file.startsWith(name + '.part')).sort();
+    assert.deepEqual(found, [...expectedNames, name + '.parts.json'].sort(), 'activation_parts_extra_or_missing_file');
+    const buffers = [];
+    for (const part of metadata.parts) {
+      const bytes = await boundedRead(dirname(path).replaceAll('\\', '/') + '/' + part.file, part.bytes);
+      assert.equal(bytes.length, part.bytes, 'activation_parts_chunk_bytes');
+      assert.equal(sha256(bytes), part.sha256, 'activation_parts_chunk_hash');
+      new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+      buffers.push(bytes);
+    }
+    const bytes = Buffer.concat(buffers, metadata.bytes);
+    assert.equal(bytes.length, metadata.bytes, 'activation_parts_total_bytes');
+    assert.equal(sha256(bytes), metadata.sha256, 'activation_parts_hash');
+    return bytes;
   };
+}
+
+export async function validateRepositoryDefaults(root = process.cwd(), rows) {
+  const read = await createEvidenceReader(root);
   const manifest = await read(MANIFEST);
   assert.equal(sha256(manifest), MANIFEST_SHA256, 'reviewed_frozen_manifest_changed');
   let activations;

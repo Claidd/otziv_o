@@ -1,0 +1,1008 @@
+{
+  "schema": "otziv-c7-publication-pairs-final-v1",
+  "createdAt": "2026-09-08T02:51:23.826406+00:00",
+  "result": "PASS",
+  "scope": "Publication and anonymous artifact identity/security verification only",
+  "expected": {
+    "head": "2cd29a17f5ae7c8d7e00d332379c7ac887d5b52f",
+    "run": "34178760576",
+    "attempt": "1",
+    "repository": "Claidd/otziv_o",
+    "branch": "codex/architecture-remediation-20260907",
+    "manifestSha256": "d48bdb7d6d869cde5d6f1a7b089491765e3eeaf46e0b0b6bb51b7719b38d3ef2"
+  },
+  "runUrl": "https://github.com/Claidd/otziv_o/actions/runs/34178760576",
+  "publicationJobsSucceeded": 12,
+  "anonymousJobsSucceeded": 12,
+  "offlinePairsPassed": 12,
+  "distinctApiDigestVerifiedArchives": 24,
+  "completedArtifactDownloadsRepeated": 0,
+  "effectiveBlockingFixedHighOrCritical": 0,
+  "rawFindingOccurrences": {
+    "high": 212,
+    "critical": 27,
+    "unfixedHighOrCritical": 237,
+    "blockingFixedHighOrCritical": 2
+  },
+  "adjudicatedFixedOccurrences": 2,
+  "eligibleForSeparateActivationReview": [
+    "certbot",
+    "grafana",
+    "keycloak",
+    "loki",
+    "nginx",
+    "node",
+    "prometheus",
+    "tempo"
+  ],
+  "notEligible": {
+    "alloy": "INELIGIBLE_UNRESOLVED_RISK",
+    "mysql": "INELIGIBLE_DATABASE_COORDINATED_TRANSITION_REQUIRED",
+    "phpmyadmin": "INELIGIBLE_UNRESOLVED_RISK",
+    "postgres": "INELIGIBLE_UNRESOLVED_RISK"
+  },
+  "databaseComponentsRequireCoordinatedTransition": [
+    "mysql",
+    "postgres"
+  ],
+  "sourcePolicyFreezeRechecked": [
+    {
+      "path": "infrastructure/runtime-security/verify-anonymous-download.mjs",
+      "sha256": "193645b099971df9832f75bb5f34ac086be1c93b67a1b7fd28d0bb7b0d294685"
+    },
+    {
+      "path": "infrastructure/runtime-security/publish-reviewed-images.mjs",
+      "sha256": "07387bb5f92d7a8e22af9a189970807f758c5c4c3c9480e368723644c242160d"
+    },
+    {
+      "path": "infrastructure/runtime-security/registry-evidence.mjs",
+      "sha256": "92e561f6ea9b288ae055cb77507752809508b256bac58a5c829771788c0f94b6"
+    },
+    {
+      "path": "infrastructure/runtime-security/keycloak-runtime-dependencies.mjs",
+      "sha256": "ef009b356a4d9774ec2ff68c2a8a37bbacc77e68b2b21b513d5cdab0f887a851"
+    },
+    {
+      "path": "infrastructure/runtime-security/scan.mjs",
+      "sha256": "94127bd40ab9792642a66f9f2cda2e48aaea275ab68699fdc4fdf64c74cd795c"
+    },
+    {
+      "path": "infrastructure/runtime-security/triage-report.mjs",
+      "sha256": "ebd14d41bb31bde92f313beb47b980dd5733457721f4c221272b5a40772eeb36"
+    },
+    {
+      "path": "infrastructure/runtime-security/grafana-tempo-adjudication.mjs",
+      "sha256": "8b5ea36138fbafb8b11409d8a580e9ba898bbf4178bea640b75f90c271db2793"
+    },
+    {
+      "path": "infrastructure/runtime-security/reviewed-images.json",
+      "sha256": "d48bdb7d6d869cde5d6f1a7b089491765e3eeaf46e0b0b6bb51b7719b38d3ef2"
+    }
+  ],
+  "stateSnapshot": {
+    "path": "run-34178760576\\collection-state-final.json",
+    "sha256": "dbff5b46f39e2c9bb46faf027c2873b55c24362086d8f26b351686c797a7f35d"
+  },
+  "components": [
+    {
+      "component": "alloy",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:a4ce96701d88e336791d1cca7745f5a87060a9834d8f4dd391de2a2072f57852",
+      "imageId": "sha256:7f5b0079e8c6b13cd2a767cdeb001430bdcf0db400afbaf925285d1ae29dd084",
+      "publicationSha256": "330e7275330b622d2a7c07459a4c5a06c0e82b01bd6ad7e4d749e6dceb9c7e29",
+      "rawScanSha256": "0ed6934afd2fce73be9eff9ecbfd2ee69c92ab4f210b06e88ca71315dbc8beec",
+      "rawCounts": {
+        "schema": "otziv-vulnerability-scan-v1",
+        "artifactCount": 2,
+        "high": 2,
+        "critical": 0,
+        "unfixedHighOrCritical": 2,
+        "blockingFixedHighOrCritical": 0
+      },
+      "effectiveCounts": {
+        "schema": "otziv-vulnerability-scan-v1",
+        "artifactCount": 2,
+        "high": 2,
+        "critical": 0,
+        "unfixedHighOrCritical": 2,
+        "blockingFixedHighOrCritical": 0,
+        "adjudicatedFixedHighOrCritical": 0,
+        "effectiveBlockingFixedHighOrCritical": 0,
+        "result": "PASS"
+      },
+      "unresolvedRiskReview": "REQUIRED",
+      "adjudicationBoundary": "NO_ADJUDICATED_FINDINGS",
+      "anonymous": {
+        "result": "PASS",
+        "verifiedByThisCommand": true,
+        "rawReceiptSha256": "36bdc1107cd37e64b5e877f68ab02e642b353f81d36539871af7d34a82635a41"
+      },
+      "activationEligibility": "INELIGIBLE_UNRESOLVED_RISK",
+      "pairReceipt": {
+        "path": "offline-alloy-34178760576-cc55cba6-4716-4dc6-b3b1-4da3440f9038.json",
+        "sha256": "5f2f532e49f08c83f6e2f33441eba9c28362a2e85203146f050b2ddc7fc50bb9"
+      },
+      "artifacts": {
+        "publication": {
+          "job": {
+            "id": 101913857808,
+            "name": "Publish reviewed candidate (alloy)",
+            "status": "completed",
+            "conclusion": "success",
+            "completed_at": "2026-09-08T02:28:23Z",
+            "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178760576/job/101913857808"
+          },
+          "id": 10038604916,
+          "name": "reviewed-publication-alloy",
+          "zipSha256": "da64541a3728b0814c760b4ec6812c415460c09c6fc35870031ca04cc1ad4691",
+          "apiDigestVerified": true,
+          "zipPath": "run-34178760576/20260908T022942Z-16caf88f20/artifact-10038604916.zip",
+          "extractedPath": "run-34178760576/20260908T022942Z-16caf88f20/artifact-10038604916",
+          "capturePath": "run-34178760576/20260908T022942Z-16caf88f20/run-evidence.json",
+          "captureSha256": "c8bc82442766686f5ac19aabc35f739f4284607fa0015739e7242393b654ead4"
+        },
+        "anonymous": {
+          "job": {
+            "id": 101920076855,
+            "name": "Prove anonymous candidate download (alloy)",
+            "status": "completed",
+            "conclusion": "success",
+            "completed_at": "2026-09-08T02:44:14Z",
+            "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178760576/job/101920076855"
+          },
+          "id": 10038920313,
+          "name": "anonymous-download-alloy",
+          "zipSha256": "24675245e7af3be6aadbcc5fa1beefaed17cc28f7e1fea535cd5fd8a69f2c7cd",
+          "apiDigestVerified": true,
+          "zipPath": "run-34178760576/20260908T024430Z-7d5d1d5668/artifact-10038920313.zip",
+          "extractedPath": "run-34178760576/20260908T024430Z-7d5d1d5668/artifact-10038920313",
+          "capturePath": "run-34178760576/20260908T024430Z-7d5d1d5668/run-evidence.json",
+          "captureSha256": "11f7c03b5503955a2ad3eefb62d47ea2912339ec98c39c35a333e30d223eef8e"
+        }
+      }
+    },
+    {
+      "component": "certbot",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:74afe2ca053c338fe4d14ed36397b4ccea286efc52a3db4fc5a5c07289a9c360",
+      "imageId": "sha256:c4c159009780a3fe965c60d6a1bd64a8a3045ce4712bda4172758784e1618e49",
+      "publicationSha256": "10f316bcc8ca1c91b3d8aed982ef02d2c242b55541c48537a8a014bb9d7b132b",
+      "rawScanSha256": "1005364564f3280474cfd67a7313a3bfb68e10f5a3a4dbd45755113efa5f71cb",
+      "rawCounts": {
+        "schema": "otziv-vulnerability-scan-v1",
+        "artifactCount": 2,
+        "high": 0,
+        "critical": 0,
+        "unfixedHighOrCritical": 0,
+        "blockingFixedHighOrCritical": 0
+      },
+      "effectiveCounts": {
+        "schema": "otziv-vulnerability-scan-v1",
+        "artifactCount": 2,
+        "high": 0,
+        "critical": 0,
+        "unfixedHighOrCritical": 0,
+        "blockingFixedHighOrCritical": 0,
+        "adjudicatedFixedHighOrCritical": 0,
+        "effectiveBlockingFixedHighOrCritical": 0,
+        "result": "PASS"
+      },
+      "unresolvedRiskReview": "NONE",
+      "adjudicationBoundary": "NO_ADJUDICATED_FINDINGS",
+      "anonymous": {
+        "result": "PASS",
+        "verifiedByThisCommand": true,
+        "rawReceiptSha256": "36ae7bc578278be5b3384b160ce1910fb7003229ff0bc38c5ec14db2ead0f6d1"
+      },
+      "activationEligibility": "SEPARATE_ACTIVATION_REVIEW_REQUIRED",
+      "pairReceipt": {
+        "path": "offline-certbot-34178760576-002ac793-d2e8-4ed2-b792-62fea1f5e328.json",
+        "sha256": "b499c2dfbae6fef7943b5cebe062bf751ce7bd57cfacea49a35e9b1cbe29872d"
+      },
+      "artifacts": {
+        "publication": {
+          "job": {
+            "id": 101913857719,
+            "name": "Publish reviewed candidate (certbot)",
+            "status": "completed",
+            "conclusion": "success",
+            "completed_at": "2026-09-08T02:11:18Z",
+            "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178760576/job/101913857719"
+          },
+          "id": 10038279243,
+          "name": "reviewed-publication-certbot",
+          "zipSha256": "a73874edbb25a2c67f08a4a17d37778d163dbe009e5539c8f958e67b85f9165d",
+          "apiDigestVerified": true,
+          "zipPath": "run-34178760576/20260908T021451Z-9db50fe71e/artifact-10038279243.zip",
+          "extractedPath": "run-34178760576/20260908T021451Z-9db50fe71e/artifact-10038279243",
+          "capturePath": "run-34178760576/20260908T021451Z-9db50fe71e/run-evidence.json",
+          "captureSha256": "a0a4d9031665c757c3380cda7d0a3d2730ee6bde31076ac42eeb396eceedd198"
+        },
+        "anonymous": {
+          "job": {
+            "id": 101920076862,
+            "name": "Prove anonymous candidate download (certbot)",
+            "status": "completed",
+            "conclusion": "success",
+            "completed_at": "2026-09-08T02:44:06Z",
+            "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178760576/job/101920076862"
+          },
+          "id": 10038917639,
+          "name": "anonymous-download-certbot",
+          "zipSha256": "0c0a836d1d4cf82e90ef6b673aec4019c1f48e61224f226028b045d05b45a771",
+          "apiDigestVerified": true,
+          "zipPath": "run-34178760576/20260908T024438Z-e8a50ebfd7/artifact-10038917639.zip",
+          "extractedPath": "run-34178760576/20260908T024438Z-e8a50ebfd7/artifact-10038917639",
+          "capturePath": "run-34178760576/20260908T024438Z-e8a50ebfd7/run-evidence.json",
+          "captureSha256": "7c4b6f30f12cdbd58044345dc964304ecce8dc84c2be8ab751161cb738bac0ca"
+        }
+      }
+    },
+    {
+      "component": "grafana",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:b13b0abc6fb26fb7b1e55190411f8b6a5d1894fb7a6c27df2352cb5a3adb54ae",
+      "imageId": "sha256:884196c9a81cca9518c21076460cf7697622dc695d2ec4e71bada03d2c6497ca",
+      "publicationSha256": "29578d30b660972052f9c3cdb6205270abd22459ef35deb6f166258476ed7006",
+      "rawScanSha256": "e0c812c8326244f448c43a20f674671833e08a79f02793ffd263c7ea1fefa255",
+      "rawCounts": {
+        "schema": "otziv-vulnerability-scan-v1",
+        "artifactCount": 5,
+        "high": 2,
+        "critical": 0,
+        "unfixedHighOrCritical": 0,
+        "blockingFixedHighOrCritical": 2
+      },
+      "effectiveCounts": {
+        "schema": "otziv-vulnerability-scan-v1",
+        "artifactCount": 5,
+        "high": 2,
+        "critical": 0,
+        "unfixedHighOrCritical": 0,
+        "blockingFixedHighOrCritical": 2,
+        "adjudicatedFixedHighOrCritical": 2,
+        "effectiveBlockingFixedHighOrCritical": 0,
+        "result": "PASS"
+      },
+      "unresolvedRiskReview": "NONE",
+      "adjudicationBoundary": "SAVED_SAME_IMAGE_RECEIPT_AND_REVIEW_REVALIDATED_NO_NEW_BINARY_EXTRACTION",
+      "anonymous": {
+        "result": "PASS",
+        "verifiedByThisCommand": true,
+        "rawReceiptSha256": "05ae5bbfc2df7747706218925e5eb6b35864559c97422d03f9298780f468ee01"
+      },
+      "activationEligibility": "SEPARATE_ACTIVATION_REVIEW_REQUIRED",
+      "pairReceipt": {
+        "path": "offline-grafana-34178760576-86925b10-246f-4454-bd55-5aa527a98fbd.json",
+        "sha256": "f7ddd1b12e872e335c8460593198089bc54f04d146b3fddbcd5e445ed725b94a"
+      },
+      "artifacts": {
+        "publication": {
+          "job": {
+            "id": 101913857660,
+            "name": "Publish reviewed candidate (grafana)",
+            "status": "completed",
+            "conclusion": "success",
+            "completed_at": "2026-09-08T02:25:46Z",
+            "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178760576/job/101913857660"
+          },
+          "id": 10038555164,
+          "name": "reviewed-publication-grafana",
+          "zipSha256": "ddb0836407d13da98b4362cef8170086e1ec70e82ccc1edf0eb7d86718476a78",
+          "apiDigestVerified": true,
+          "zipPath": "run-34178760576/20260908T022950Z-5e5028a178/artifact-10038555164.zip",
+          "extractedPath": "run-34178760576/20260908T022950Z-5e5028a178/artifact-10038555164",
+          "capturePath": "run-34178760576/20260908T022950Z-5e5028a178/run-evidence.json",
+          "captureSha256": "7527f946f4a431b97bfe7efa7ae3d3a1ec597d6b5dccf4cc35d253357ee42e5f"
+        },
+        "anonymous": {
+          "job": {
+            "id": 101920076848,
+            "name": "Prove anonymous candidate download (grafana)",
+            "status": "completed",
+            "conclusion": "success",
+            "completed_at": "2026-09-08T02:44:48Z",
+            "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178760576/job/101920076848"
+          },
+          "id": 10038930198,
+          "name": "anonymous-download-grafana",
+          "zipSha256": "231e10883f6a4eac7eff25f5db6ba15438eb1a97a5b8629c467e52b45f0a2f9a",
+          "apiDigestVerified": true,
+          "zipPath": "run-34178760576/20260908T024740Z-6f72b7ed57/artifact-10038930198.zip",
+          "extractedPath": "run-34178760576/20260908T024740Z-6f72b7ed57/artifact-10038930198",
+          "capturePath": "run-34178760576/20260908T024740Z-6f72b7ed57/run-evidence.json",
+          "captureSha256": "2c5c63148f4f64fc2ef960aa554e83190a022a2d31f5db08531e643b28111ba2"
+        }
+      }
+    },
+    {
+      "component": "keycloak",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:93dd42a5379a80fc0673bc1d0c5601d3b35009c8250394b1e2b45082388c82cc",
+      "imageId": "sha256:b5c718b887b315d3da78784a64d9d2966aac62e30117ceca620f08a7f57139ae",
+      "publicationSha256": "86b2fff2a14865ead12cc83f5b9558de55e11bfc454cb7f790b835e6f2ea02df",
+      "rawScanSha256": "53dee2a5787772e8478aa362a67141da291392d6b5d84ee67ed0003e353ea616",
+      "rawCounts": {
+        "schema": "otziv-vulnerability-scan-v1",
+        "artifactCount": 2,
+        "high": 0,
+        "critical": 0,
+        "unfixedHighOrCritical": 0,
+        "blockingFixedHighOrCritical": 0
+      },
+      "effectiveCounts": {
+        "schema": "otziv-vulnerability-scan-v1",
+        "artifactCount": 2,
+        "high": 0,
+        "critical": 0,
+        "unfixedHighOrCritical": 0,
+        "blockingFixedHighOrCritical": 0,
+        "adjudicatedFixedHighOrCritical": 0,
+        "effectiveBlockingFixedHighOrCritical": 0,
+        "result": "PASS"
+      },
+      "unresolvedRiskReview": "NONE",
+      "adjudicationBoundary": "NO_ADJUDICATED_FINDINGS",
+      "anonymous": {
+        "result": "PASS",
+        "verifiedByThisCommand": true,
+        "rawReceiptSha256": "b5527ffefbcdb0fb4c75e71b5dcb7aac7742164b4563f618dfc58b733202020a"
+      },
+      "activationEligibility": "SEPARATE_ACTIVATION_REVIEW_REQUIRED",
+      "pairReceipt": {
+        "path": "offline-keycloak-34178760576-4b6bab12-1195-4bfb-9657-5373937edd51.json",
+        "sha256": "890402f7a06d9bf2c953c421fcd7806616c20bbc74af38100f8f55b6ec8cfb7f"
+      },
+      "artifacts": {
+        "publication": {
+          "job": {
+            "id": 101913857739,
+            "name": "Publish reviewed candidate (keycloak)",
+            "status": "completed",
+            "conclusion": "success",
+            "completed_at": "2026-09-08T02:28:51Z",
+            "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178760576/job/101913857739"
+          },
+          "id": 10038613879,
+          "name": "reviewed-publication-keycloak",
+          "zipSha256": "f1151079b78177ee1c6c427c8e1dee778f6bd7d4ed61a2ffcafda51ae388e52b",
+          "apiDigestVerified": true,
+          "zipPath": "run-34178760576/20260908T022956Z-059a2a96fd/artifact-10038613879.zip",
+          "extractedPath": "run-34178760576/20260908T022956Z-059a2a96fd/artifact-10038613879",
+          "capturePath": "run-34178760576/20260908T022956Z-059a2a96fd/run-evidence.json",
+          "captureSha256": "02868e4b426be3bf871d2e8541882d146608838f457394f42024c60e26010807"
+        },
+        "anonymous": {
+          "job": {
+            "id": 101920076864,
+            "name": "Prove anonymous candidate download (keycloak)",
+            "status": "completed",
+            "conclusion": "success",
+            "completed_at": "2026-09-08T02:44:49Z",
+            "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178760576/job/101920076864"
+          },
+          "id": 10038930790,
+          "name": "anonymous-download-keycloak",
+          "zipSha256": "365cdb8fd9e8758790393d60146997d86874034dcd1a535dfd42297bc0f069bb",
+          "apiDigestVerified": true,
+          "zipPath": "run-34178760576/20260908T024748Z-9a6034971c/artifact-10038930790.zip",
+          "extractedPath": "run-34178760576/20260908T024748Z-9a6034971c/artifact-10038930790",
+          "capturePath": "run-34178760576/20260908T024748Z-9a6034971c/run-evidence.json",
+          "captureSha256": "ff524c363a162b7f725da9b7b3f47b74a7bf3cebfb2cf5ac6ea77e0fa2379141"
+        }
+      }
+    },
+    {
+      "component": "loki",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:afb2d631c2d294ca23fb0ed3f98c9d601a0e72b5d702f5cde2b9522bf8a1ded0",
+      "imageId": "sha256:1bce0472fa4e00224c95a07c7db9aa29c5e4451a7b539f1808e35826569df481",
+      "publicationSha256": "50ca82b2e2a08bd4d5b9d6280a1d75c5e757c94b14ac5c5cb11fa82e23fdf090",
+      "rawScanSha256": "ba2fa4eeff73671ac17c4e767ceea5987b5b58c1f6870ce2121985f1bcedc62e",
+      "rawCounts": {
+        "schema": "otziv-vulnerability-scan-v1",
+        "artifactCount": 3,
+        "high": 0,
+        "critical": 0,
+        "unfixedHighOrCritical": 0,
+        "blockingFixedHighOrCritical": 0
+      },
+      "effectiveCounts": {
+        "schema": "otziv-vulnerability-scan-v1",
+        "artifactCount": 3,
+        "high": 0,
+        "critical": 0,
+        "unfixedHighOrCritical": 0,
+        "blockingFixedHighOrCritical": 0,
+        "adjudicatedFixedHighOrCritical": 0,
+        "effectiveBlockingFixedHighOrCritical": 0,
+        "result": "PASS"
+      },
+      "unresolvedRiskReview": "NONE",
+      "adjudicationBoundary": "NO_ADJUDICATED_FINDINGS",
+      "anonymous": {
+        "result": "PASS",
+        "verifiedByThisCommand": true,
+        "rawReceiptSha256": "11be83a9d6b04dd4ef18eab823da33dca12e1077d8e683592ca6dc29e5f38310"
+      },
+      "activationEligibility": "SEPARATE_ACTIVATION_REVIEW_REQUIRED",
+      "pairReceipt": {
+        "path": "offline-loki-34178760576-97aaf7fe-7997-4309-aec9-c0384512565d.json",
+        "sha256": "b8a88d9016bb307f11462209d35f5ab738add9e9217bf66ecd7ae8098dfed070"
+      },
+      "artifacts": {
+        "publication": {
+          "job": {
+            "id": 101913857799,
+            "name": "Publish reviewed candidate (loki)",
+            "status": "completed",
+            "conclusion": "success",
+            "completed_at": "2026-09-08T02:34:25Z",
+            "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178760576/job/101913857799"
+          },
+          "id": 10038725942,
+          "name": "reviewed-publication-loki",
+          "zipSha256": "c15cac7394de460e5868ac5d9857bad16dc9ef9f323936b9322b895574ae9fe1",
+          "apiDigestVerified": true,
+          "zipPath": "run-34178760576/20260908T023607Z-1aff454d85/artifact-10038725942.zip",
+          "extractedPath": "run-34178760576/20260908T023607Z-1aff454d85/artifact-10038725942",
+          "capturePath": "run-34178760576/20260908T023607Z-1aff454d85/run-evidence.json",
+          "captureSha256": "4fce0553655e49c57871c991269bb2b04ce08a5f9efc9829c7404eeac14b9a55"
+        },
+        "anonymous": {
+          "job": {
+            "id": 101920076854,
+            "name": "Prove anonymous candidate download (loki)",
+            "status": "completed",
+            "conclusion": "success",
+            "completed_at": "2026-09-08T02:45:13Z",
+            "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178760576/job/101920076854"
+          },
+          "id": 10038937772,
+          "name": "anonymous-download-loki",
+          "zipSha256": "c5d73ab088da034bc423cca9df3989ba44eaf760c7a122758cd55c0e5777d6fb",
+          "apiDigestVerified": true,
+          "zipPath": "run-34178760576/20260908T024755Z-4df7625d5f/artifact-10038937772.zip",
+          "extractedPath": "run-34178760576/20260908T024755Z-4df7625d5f/artifact-10038937772",
+          "capturePath": "run-34178760576/20260908T024755Z-4df7625d5f/run-evidence.json",
+          "captureSha256": "d45ce4c1c211247e1874407b9ce72d77f0f287daebd40096050e7d445b1fb142"
+        }
+      }
+    },
+    {
+      "component": "mysql",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:3a3caaab4e71b3bfdec9da21c17c00ed10ca237151919aeddac8e5ce4b8b7baa",
+      "imageId": "sha256:80ee3b50147a329addbaf754abc4dce86dc06636624680d780351e2320a11070",
+      "publicationSha256": "c9f812b3754346b75e3d64ac824bdcef20ab798d95a91632981bd042c871d6e4",
+      "rawScanSha256": "6294d92fa1d76d06af21a493647f27e04b1ad43f52e8c7895fd3f2efd5aacbb9",
+      "rawCounts": {
+        "schema": "otziv-vulnerability-scan-v1",
+        "artifactCount": 1,
+        "high": 0,
+        "critical": 0,
+        "unfixedHighOrCritical": 0,
+        "blockingFixedHighOrCritical": 0
+      },
+      "effectiveCounts": {
+        "schema": "otziv-vulnerability-scan-v1",
+        "artifactCount": 1,
+        "high": 0,
+        "critical": 0,
+        "unfixedHighOrCritical": 0,
+        "blockingFixedHighOrCritical": 0,
+        "adjudicatedFixedHighOrCritical": 0,
+        "effectiveBlockingFixedHighOrCritical": 0,
+        "result": "PASS"
+      },
+      "unresolvedRiskReview": "NONE",
+      "adjudicationBoundary": "NO_ADJUDICATED_FINDINGS",
+      "anonymous": {
+        "result": "PASS",
+        "verifiedByThisCommand": true,
+        "rawReceiptSha256": "a1e93c19307ee4c65452ba4a18f997e61e19f1506e591d73721ac1d64533360a"
+      },
+      "activationEligibility": "INELIGIBLE_DATABASE_COORDINATED_TRANSITION_REQUIRED",
+      "pairReceipt": {
+        "path": "offline-mysql-34178760576-66f15ca2-5fbd-48fe-a2dc-b723462c4623.json",
+        "sha256": "ccd85acc6a8e812ebbe242f94495558fd319b4b641e47f3420acf7539b457f58"
+      },
+      "artifacts": {
+        "publication": {
+          "job": {
+            "id": 101913857704,
+            "name": "Publish reviewed candidate (mysql)",
+            "status": "completed",
+            "conclusion": "success",
+            "completed_at": "2026-09-08T02:31:30Z",
+            "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178760576/job/101913857704"
+          },
+          "id": 10038664771,
+          "name": "reviewed-publication-mysql",
+          "zipSha256": "93547501e95ffcc4e1d10b23a2fc7abc294e92759e399bc79694d7deb801ab29",
+          "apiDigestVerified": true,
+          "zipPath": "run-34178760576/20260908T023255Z-8b8bab9e7d/artifact-10038664771.zip",
+          "extractedPath": "run-34178760576/20260908T023255Z-8b8bab9e7d/artifact-10038664771",
+          "capturePath": "run-34178760576/20260908T023255Z-8b8bab9e7d/run-evidence.json",
+          "captureSha256": "c463315a2f4408e5c79a92e6b28def5f0704ee32f8e96b68461e66bda2430245"
+        },
+        "anonymous": {
+          "job": {
+            "id": 101920076900,
+            "name": "Prove anonymous candidate download (mysql)",
+            "status": "completed",
+            "conclusion": "success",
+            "completed_at": "2026-09-08T02:45:38Z",
+            "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178760576/job/101920076900"
+          },
+          "id": 10038945269,
+          "name": "anonymous-download-mysql",
+          "zipSha256": "165811b81efe8f1b447bc66691e241071870d3987c2c4c1dfeb780e387b3d9ee",
+          "apiDigestVerified": true,
+          "zipPath": "run-34178760576/20260908T024803Z-1de85801e5/artifact-10038945269.zip",
+          "extractedPath": "run-34178760576/20260908T024803Z-1de85801e5/artifact-10038945269",
+          "capturePath": "run-34178760576/20260908T024803Z-1de85801e5/run-evidence.json",
+          "captureSha256": "b461d7684687a8120989b1515df209d2f07649f8bbf106fedfafc74a394e9328"
+        }
+      }
+    },
+    {
+      "component": "nginx",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:025c28f7afbcc84d8d836840afb7cb2e8e44f2b4930131c4bbb539380fd8185f",
+      "imageId": "sha256:7ae9743dd8d6699a204b6348e2baeaf273c989af01e77fbc5f9a0c12ec3328e0",
+      "publicationSha256": "ef4b78f72af2ccc82e706a858e20aabc6dd4437699781a707ae7bc2f2e43a942",
+      "rawScanSha256": "b71ae81b7ca687377e9968910574d446f28dcd78e90f69b085e1c20485be4d6b",
+      "rawCounts": {
+        "schema": "otziv-vulnerability-scan-v1",
+        "artifactCount": 1,
+        "high": 0,
+        "critical": 0,
+        "unfixedHighOrCritical": 0,
+        "blockingFixedHighOrCritical": 0
+      },
+      "effectiveCounts": {
+        "schema": "otziv-vulnerability-scan-v1",
+        "artifactCount": 1,
+        "high": 0,
+        "critical": 0,
+        "unfixedHighOrCritical": 0,
+        "blockingFixedHighOrCritical": 0,
+        "adjudicatedFixedHighOrCritical": 0,
+        "effectiveBlockingFixedHighOrCritical": 0,
+        "result": "PASS"
+      },
+      "unresolvedRiskReview": "NONE",
+      "adjudicationBoundary": "NO_ADJUDICATED_FINDINGS",
+      "anonymous": {
+        "result": "PASS",
+        "verifiedByThisCommand": true,
+        "rawReceiptSha256": "233669328be0438903ed8a3d3d412a9db3bfdd927b00df1b5e2e360f59daf2c5"
+      },
+      "activationEligibility": "SEPARATE_ACTIVATION_REVIEW_REQUIRED",
+      "pairReceipt": {
+        "path": "offline-nginx-34178760576-842e7ea5-ee0b-435c-8445-75e08e370b8d.json",
+        "sha256": "5b38a9902b64ab756dbecb7841c096fe078b57c3ccbbaf3186fe00d0b6605a22"
+      },
+      "artifacts": {
+        "publication": {
+          "job": {
+            "id": 101913857827,
+            "name": "Publish reviewed candidate (nginx)",
+            "status": "completed",
+            "conclusion": "success",
+            "completed_at": "2026-09-08T02:32:15Z",
+            "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178760576/job/101913857827"
+          },
+          "id": 10038679970,
+          "name": "reviewed-publication-nginx",
+          "zipSha256": "2032a05fdeeff7a27cdf904b97e46fb83d8f1b5fd4c55c4fcb52e8f20837b44d",
+          "apiDigestVerified": true,
+          "zipPath": "run-34178760576/20260908T023302Z-a8493393c1/artifact-10038679970.zip",
+          "extractedPath": "run-34178760576/20260908T023302Z-a8493393c1/artifact-10038679970",
+          "capturePath": "run-34178760576/20260908T023302Z-a8493393c1/run-evidence.json",
+          "captureSha256": "49e4226a12d33d2a5f1fac458d84dbc778057a407accb5dbd70a66b0b428e35b"
+        },
+        "anonymous": {
+          "job": {
+            "id": 101920076810,
+            "name": "Prove anonymous candidate download (nginx)",
+            "status": "completed",
+            "conclusion": "success",
+            "completed_at": "2026-09-08T02:45:45Z",
+            "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178760576/job/101920076810"
+          },
+          "id": 10038947412,
+          "name": "anonymous-download-nginx",
+          "zipSha256": "34fbe40ff804c53866417bb76e0818d49eea60e7bfdbbecaed2ff774de3670ab",
+          "apiDigestVerified": true,
+          "zipPath": "run-34178760576/20260908T024811Z-22a2f335e5/artifact-10038947412.zip",
+          "extractedPath": "run-34178760576/20260908T024811Z-22a2f335e5/artifact-10038947412",
+          "capturePath": "run-34178760576/20260908T024811Z-22a2f335e5/run-evidence.json",
+          "captureSha256": "6f0d4171179236e3f4498f7d8fce6c7c484ffadf6d48af2cac4714a53ba41cf8"
+        }
+      }
+    },
+    {
+      "component": "node",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:8917049917dc110930957c5d59cff66489d9a3e486ffdfe7b2221c40acc0f14c",
+      "imageId": "sha256:b534b8f7a094402a949e022d13fafbf91ff447bf8aaf67d51c122f052e2848fb",
+      "publicationSha256": "3564898d800ceed2c89274acd3f68835173a22fabd0ebb6db26c00f7de0d183d",
+      "rawScanSha256": "59b7a5eb02d5ce7d7ed23a20044749f2235a62aed12ba8887ef985dfb39ed4b5",
+      "rawCounts": {
+        "schema": "otziv-vulnerability-scan-v1",
+        "artifactCount": 2,
+        "high": 0,
+        "critical": 0,
+        "unfixedHighOrCritical": 0,
+        "blockingFixedHighOrCritical": 0
+      },
+      "effectiveCounts": {
+        "schema": "otziv-vulnerability-scan-v1",
+        "artifactCount": 2,
+        "high": 0,
+        "critical": 0,
+        "unfixedHighOrCritical": 0,
+        "blockingFixedHighOrCritical": 0,
+        "adjudicatedFixedHighOrCritical": 0,
+        "effectiveBlockingFixedHighOrCritical": 0,
+        "result": "PASS"
+      },
+      "unresolvedRiskReview": "NONE",
+      "adjudicationBoundary": "NO_ADJUDICATED_FINDINGS",
+      "anonymous": {
+        "result": "PASS",
+        "verifiedByThisCommand": true,
+        "rawReceiptSha256": "425a705a621681088283bbe07ac7c51f9ea62158353f6194a3d3607a4b54dc96"
+      },
+      "activationEligibility": "SEPARATE_ACTIVATION_REVIEW_REQUIRED",
+      "pairReceipt": {
+        "path": "offline-node-34178760576-fd941ad7-9f5d-437d-ae93-fa384a131521.json",
+        "sha256": "eef5cb497ab65b561bbc1003a0fd18505b3ca45d1f8944ccd28246d7ac7fd40e"
+      },
+      "artifacts": {
+        "publication": {
+          "job": {
+            "id": 101913857684,
+            "name": "Publish reviewed candidate (node)",
+            "status": "completed",
+            "conclusion": "success",
+            "completed_at": "2026-09-08T02:33:16Z",
+            "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178760576/job/101913857684"
+          },
+          "id": 10038700852,
+          "name": "reviewed-publication-node",
+          "zipSha256": "83482aaea13f615a63249ceb5c63eff0d07e9efec3996b66e017f1c31640e889",
+          "apiDigestVerified": true,
+          "zipPath": "run-34178760576/20260908T023614Z-5da8628a3c/artifact-10038700852.zip",
+          "extractedPath": "run-34178760576/20260908T023614Z-5da8628a3c/artifact-10038700852",
+          "capturePath": "run-34178760576/20260908T023614Z-5da8628a3c/run-evidence.json",
+          "captureSha256": "29269683f6c5e226279da6a6ec5ba4ff577ab90187610dbe74d6bcd45687ac98"
+        },
+        "anonymous": {
+          "job": {
+            "id": 101920076860,
+            "name": "Prove anonymous candidate download (node)",
+            "status": "completed",
+            "conclusion": "success",
+            "completed_at": "2026-09-08T02:46:07Z",
+            "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178760576/job/101920076860"
+          },
+          "id": 10038952369,
+          "name": "anonymous-download-node",
+          "zipSha256": "1b58c31c122266f4aabc5bbc7cc21c67e839889681e699987d25ef3d8d9ab7a1",
+          "apiDigestVerified": true,
+          "zipPath": "run-34178760576/20260908T024817Z-3fd96c58ca/artifact-10038952369.zip",
+          "extractedPath": "run-34178760576/20260908T024817Z-3fd96c58ca/artifact-10038952369",
+          "capturePath": "run-34178760576/20260908T024817Z-3fd96c58ca/run-evidence.json",
+          "captureSha256": "3772e4fadf85362518a36fe3c3c6c9b841d569d010258cd8b7adee00d6c4b39c"
+        }
+      }
+    },
+    {
+      "component": "phpmyadmin",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:ea9c7f5a1340e33094ce3576d67d220d1baa5b933e69d1b916b3f0bd43e712b7",
+      "imageId": "sha256:4d17b98b9ff04fab5d53a030e20c4fd93bf46f71ce6ab7007e3eccfaf2982975",
+      "publicationSha256": "593cfc28cbe15785387eacb7aeca568ee1a5afc7a2b94b8c88da81ec6cf580ed",
+      "rawScanSha256": "ba641540910e71159726ce704e2fd4b99fb6c29babd5d678775ac1557ca20b2e",
+      "rawCounts": {
+        "schema": "otziv-vulnerability-scan-v1",
+        "artifactCount": 3,
+        "high": 135,
+        "critical": 14,
+        "unfixedHighOrCritical": 149,
+        "blockingFixedHighOrCritical": 0
+      },
+      "effectiveCounts": {
+        "schema": "otziv-vulnerability-scan-v1",
+        "artifactCount": 3,
+        "high": 135,
+        "critical": 14,
+        "unfixedHighOrCritical": 149,
+        "blockingFixedHighOrCritical": 0,
+        "adjudicatedFixedHighOrCritical": 0,
+        "effectiveBlockingFixedHighOrCritical": 0,
+        "result": "PASS"
+      },
+      "unresolvedRiskReview": "REQUIRED",
+      "adjudicationBoundary": "NO_ADJUDICATED_FINDINGS",
+      "anonymous": {
+        "result": "PASS",
+        "verifiedByThisCommand": true,
+        "rawReceiptSha256": "edd809b980ee973fd7803d37889e54fe4c7e294b1bfeee59f7b9a7bba0695eab"
+      },
+      "activationEligibility": "INELIGIBLE_UNRESOLVED_RISK",
+      "pairReceipt": {
+        "path": "offline-phpmyadmin-34178760576-b1547cee-2917-4540-91a1-6b27a1839714.json",
+        "sha256": "0b64c1f247813f9bed5f9bfa07db139ac42baf7dea8a19a0aba9780e9676439e"
+      },
+      "artifacts": {
+        "publication": {
+          "job": {
+            "id": 101913857742,
+            "name": "Publish reviewed candidate (phpmyadmin)",
+            "status": "completed",
+            "conclusion": "success",
+            "completed_at": "2026-09-08T02:34:46Z",
+            "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178760576/job/101913857742"
+          },
+          "id": 10038733967,
+          "name": "reviewed-publication-phpmyadmin",
+          "zipSha256": "00928c7015270caaaad0822dd70dba4071908569f23266d8b112512f521a7239",
+          "apiDigestVerified": true,
+          "zipPath": "run-34178760576/20260908T023621Z-2bfe6b2d3f/artifact-10038733967.zip",
+          "extractedPath": "run-34178760576/20260908T023621Z-2bfe6b2d3f/artifact-10038733967",
+          "capturePath": "run-34178760576/20260908T023621Z-2bfe6b2d3f/run-evidence.json",
+          "captureSha256": "72af79cdcd0c6eecaa5749e32970ad1655e28e0cded3cd51da35d361c4f4030c"
+        },
+        "anonymous": {
+          "job": {
+            "id": 101920076875,
+            "name": "Prove anonymous candidate download (phpmyadmin)",
+            "status": "completed",
+            "conclusion": "success",
+            "completed_at": "2026-09-08T02:46:29Z",
+            "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178760576/job/101920076875"
+          },
+          "id": 10038960778,
+          "name": "anonymous-download-phpmyadmin",
+          "zipSha256": "b738cd85d4b2755ae4da2eae0a12b3c6e00ab9b567826fd3e333179d78f419aa",
+          "apiDigestVerified": true,
+          "zipPath": "run-34178760576/20260908T024825Z-3b219eb2bd/artifact-10038960778.zip",
+          "extractedPath": "run-34178760576/20260908T024825Z-3b219eb2bd/artifact-10038960778",
+          "capturePath": "run-34178760576/20260908T024825Z-3b219eb2bd/run-evidence.json",
+          "captureSha256": "d2754da6edc2f53b69b00536f3d78b315f1728f1964446fb6280295b02ae3c99"
+        }
+      }
+    },
+    {
+      "component": "postgres",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:b5ad64813932280b9c33ed18fc61333b0a672679ba9144171162c09c42abbc1a",
+      "imageId": "sha256:d201bb19b717265832d6882d8608a1a3ce7edc2dec2b7153f87bbf409205695c",
+      "publicationSha256": "87492c21c6ed0e34981f37f328e198182c3e6002bd003522fcac7d7153cd7b80",
+      "rawScanSha256": "242b77dd1eb10ab17805c51e4138182db79fb63a74836fa7d93f6874e16dbfdb",
+      "rawCounts": {
+        "schema": "otziv-vulnerability-scan-v1",
+        "artifactCount": 2,
+        "high": 73,
+        "critical": 13,
+        "unfixedHighOrCritical": 86,
+        "blockingFixedHighOrCritical": 0
+      },
+      "effectiveCounts": {
+        "schema": "otziv-vulnerability-scan-v1",
+        "artifactCount": 2,
+        "high": 73,
+        "critical": 13,
+        "unfixedHighOrCritical": 86,
+        "blockingFixedHighOrCritical": 0,
+        "adjudicatedFixedHighOrCritical": 0,
+        "effectiveBlockingFixedHighOrCritical": 0,
+        "result": "PASS"
+      },
+      "unresolvedRiskReview": "REQUIRED",
+      "adjudicationBoundary": "NO_ADJUDICATED_FINDINGS",
+      "anonymous": {
+        "result": "PASS",
+        "verifiedByThisCommand": true,
+        "rawReceiptSha256": "d147cb583e140df872c6cf0759e8a8acb743153be9d6fb6757d5ce766e4d5e14"
+      },
+      "activationEligibility": "INELIGIBLE_UNRESOLVED_RISK",
+      "pairReceipt": {
+        "path": "offline-postgres-34178760576-9127d9d6-1f64-4aff-b714-520035b65d59.json",
+        "sha256": "7622070f07298028e9e2cf2ccce7563d3417da1a11b96beb46b757a1b5c164f0"
+      },
+      "artifacts": {
+        "publication": {
+          "job": {
+            "id": 101913857698,
+            "name": "Publish reviewed candidate (postgres)",
+            "status": "completed",
+            "conclusion": "success",
+            "completed_at": "2026-09-08T02:35:59Z",
+            "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178760576/job/101913857698"
+          },
+          "id": 10038760226,
+          "name": "reviewed-publication-postgres",
+          "zipSha256": "d8b4319832a7e634528e0c70a9b6567cd2cdb8a494b6bfd117b97ed83bf1cb88",
+          "apiDigestVerified": true,
+          "zipPath": "run-34178760576/20260908T023629Z-36a4e83733/artifact-10038760226.zip",
+          "extractedPath": "run-34178760576/20260908T023629Z-36a4e83733/artifact-10038760226",
+          "capturePath": "run-34178760576/20260908T023629Z-36a4e83733/run-evidence.json",
+          "captureSha256": "d0abeb2580cfcd3b3fcffb8a83d073ee1023453605672d12abbee02975a3c498"
+        },
+        "anonymous": {
+          "job": {
+            "id": 101920076840,
+            "name": "Prove anonymous candidate download (postgres)",
+            "status": "completed",
+            "conclusion": "success",
+            "completed_at": "2026-09-08T02:46:32Z",
+            "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178760576/job/101920076840"
+          },
+          "id": 10038962298,
+          "name": "anonymous-download-postgres",
+          "zipSha256": "51074a9794b1e14c9e733ec6fb0aaaaf5d03cb6ac89e2b9e98489de1139df31d",
+          "apiDigestVerified": true,
+          "zipPath": "run-34178760576/20260908T024836Z-0c20f69e44/artifact-10038962298.zip",
+          "extractedPath": "run-34178760576/20260908T024836Z-0c20f69e44/artifact-10038962298",
+          "capturePath": "run-34178760576/20260908T024836Z-0c20f69e44/run-evidence.json",
+          "captureSha256": "a4c0997182e268408caad6dbd4708b09af42152feb59d6071a52ea019bb67e3c"
+        }
+      }
+    },
+    {
+      "component": "prometheus",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:431b45903443dcef3c973e16d4ad76670a5d0f6a61dd8a1cfe15b1fa6dd8334d",
+      "imageId": "sha256:275a2d31be0d049a4e5b7620139f06f1abf7bd2f2f2064f814440ac9b9c48a9c",
+      "publicationSha256": "3036d6a89d05b9d1b4c1592292cee123b773a93154cd6923cf467aca260a39bb",
+      "rawScanSha256": "1556bd4958df777ef204faa6742e7e4be81349e20f0406a56dccc396dcc1ad50",
+      "rawCounts": {
+        "schema": "otziv-vulnerability-scan-v1",
+        "artifactCount": 2,
+        "high": 0,
+        "critical": 0,
+        "unfixedHighOrCritical": 0,
+        "blockingFixedHighOrCritical": 0
+      },
+      "effectiveCounts": {
+        "schema": "otziv-vulnerability-scan-v1",
+        "artifactCount": 2,
+        "high": 0,
+        "critical": 0,
+        "unfixedHighOrCritical": 0,
+        "blockingFixedHighOrCritical": 0,
+        "adjudicatedFixedHighOrCritical": 0,
+        "effectiveBlockingFixedHighOrCritical": 0,
+        "result": "PASS"
+      },
+      "unresolvedRiskReview": "NONE",
+      "adjudicationBoundary": "NO_ADJUDICATED_FINDINGS",
+      "anonymous": {
+        "result": "PASS",
+        "verifiedByThisCommand": true,
+        "rawReceiptSha256": "83392279671f18a543d8a1586502c74e4c51930948dcb37a4afd9b0c1259da88"
+      },
+      "activationEligibility": "SEPARATE_ACTIVATION_REVIEW_REQUIRED",
+      "pairReceipt": {
+        "path": "offline-prometheus-34178760576-6efb8c77-009b-45d6-843f-79745c6ecad2.json",
+        "sha256": "e13ff9ad4250641f546a87971c676007fdc8770b3989ce99a6c17384de7feb3d"
+      },
+      "artifacts": {
+        "publication": {
+          "job": {
+            "id": 101913857671,
+            "name": "Publish reviewed candidate (prometheus)",
+            "status": "completed",
+            "conclusion": "success",
+            "completed_at": "2026-09-08T02:39:55Z",
+            "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178760576/job/101913857671"
+          },
+          "id": 10038837778,
+          "name": "reviewed-publication-prometheus",
+          "zipSha256": "a10deb9307e33f769708ff8fb336e0006bfdf5d5165e0c12a2645e829ff02146",
+          "apiDigestVerified": true,
+          "zipPath": "run-34178760576/20260908T024149Z-e0d05a0241/artifact-10038837778.zip",
+          "extractedPath": "run-34178760576/20260908T024149Z-e0d05a0241/artifact-10038837778",
+          "capturePath": "run-34178760576/20260908T024149Z-e0d05a0241/run-evidence.json",
+          "captureSha256": "0d5d97087e257100822681a63dfd140031ca97c98bb3d133de43aa8f41ca656e"
+        },
+        "anonymous": {
+          "job": {
+            "id": 101920076884,
+            "name": "Prove anonymous candidate download (prometheus)",
+            "status": "completed",
+            "conclusion": "success",
+            "completed_at": "2026-09-08T02:47:04Z",
+            "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178760576/job/101920076884"
+          },
+          "id": 10038971536,
+          "name": "anonymous-download-prometheus",
+          "zipSha256": "983465ace0bfd459ce5e33e64a90589110bd02b851d5e9c7f0a86c997d71594e",
+          "apiDigestVerified": true,
+          "zipPath": "run-34178760576/20260908T024846Z-abdd8c6bbe/artifact-10038971536.zip",
+          "extractedPath": "run-34178760576/20260908T024846Z-abdd8c6bbe/artifact-10038971536",
+          "capturePath": "run-34178760576/20260908T024846Z-abdd8c6bbe/run-evidence.json",
+          "captureSha256": "4722fc822bdcb1273e572d7d554ddd80c2b01023be9f585d6f3bd418f3958f73"
+        }
+      }
+    },
+    {
+      "component": "tempo",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:82c90ef48d1d1e009b7847fc1a398995758e8dcaa89e7ea90992b599b935f15b",
+      "imageId": "sha256:a369e0e12fc9cada2d56c04d2b3f4254025b0e574a724828fadc046563dbc625",
+      "publicationSha256": "8aeefafb27cbb04de58171575127567f84197b290c1508cf9e264ef2a31af5f7",
+      "rawScanSha256": "7143dff002d3de833c1c0436af739de9255b8114cd202b722e4d6de9dbe954b8",
+      "rawCounts": {
+        "schema": "otziv-vulnerability-scan-v1",
+        "artifactCount": 3,
+        "high": 0,
+        "critical": 0,
+        "unfixedHighOrCritical": 0,
+        "blockingFixedHighOrCritical": 0
+      },
+      "effectiveCounts": {
+        "schema": "otziv-vulnerability-scan-v1",
+        "artifactCount": 3,
+        "high": 0,
+        "critical": 0,
+        "unfixedHighOrCritical": 0,
+        "blockingFixedHighOrCritical": 0,
+        "adjudicatedFixedHighOrCritical": 0,
+        "effectiveBlockingFixedHighOrCritical": 0,
+        "result": "PASS"
+      },
+      "unresolvedRiskReview": "NONE",
+      "adjudicationBoundary": "NO_ADJUDICATED_FINDINGS",
+      "anonymous": {
+        "result": "PASS",
+        "verifiedByThisCommand": true,
+        "rawReceiptSha256": "9287c393f8cae6a70a9e06324ce912b52bc3276f85477aa96ccbd9a74beabfd5"
+      },
+      "activationEligibility": "SEPARATE_ACTIVATION_REVIEW_REQUIRED",
+      "pairReceipt": {
+        "path": "offline-tempo-34178760576-5a5a1710-1344-457e-bcdf-9208f696c7cf.json",
+        "sha256": "fbafa8048a71df39368cfbdbe7bbb3d1fc569f75e5c2e4c07513ac7c3668d25c"
+      },
+      "artifacts": {
+        "publication": {
+          "job": {
+            "id": 101913857740,
+            "name": "Publish reviewed candidate (tempo)",
+            "status": "completed",
+            "conclusion": "success",
+            "completed_at": "2026-09-08T02:43:41Z",
+            "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178760576/job/101913857740"
+          },
+          "id": 10038909633,
+          "name": "reviewed-publication-tempo",
+          "zipSha256": "91fa6689841a00a4198294b57c60be9a3a51b6aee15b12ae23f070de0b3a5794",
+          "apiDigestVerified": true,
+          "zipPath": "run-34178760576/20260908T024445Z-470213415e/artifact-10038909633.zip",
+          "extractedPath": "run-34178760576/20260908T024445Z-470213415e/artifact-10038909633",
+          "capturePath": "run-34178760576/20260908T024445Z-470213415e/run-evidence.json",
+          "captureSha256": "050907d03418e18bffb5f5cf28639d6cca2105939904c5d9abc1aae43089fa1f"
+        },
+        "anonymous": {
+          "job": {
+            "id": 101920076893,
+            "name": "Prove anonymous candidate download (tempo)",
+            "status": "completed",
+            "conclusion": "success",
+            "completed_at": "2026-09-08T02:46:58Z",
+            "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178760576/job/101920076893"
+          },
+          "id": 10038969972,
+          "name": "anonymous-download-tempo",
+          "zipSha256": "986cdeb50969655dfab10fda0bd13e631af2d6e5632de8c74a5878acd599c875",
+          "apiDigestVerified": true,
+          "zipPath": "run-34178760576/20260908T024853Z-e1d7721a65/artifact-10038969972.zip",
+          "extractedPath": "run-34178760576/20260908T024853Z-e1d7721a65/artifact-10038969972",
+          "capturePath": "run-34178760576/20260908T024853Z-e1d7721a65/run-evidence.json",
+          "captureSha256": "1851275b7d73e34c699fcdf35e73ed6dd0ef1c2de4f805adfa9f2a15c527c672"
+        }
+      }
+    }
+  ],
+  "limitations": [
+    "No production activation, image pull, rebuild, scanner run, registry mutation or provider audit was performed by this collector.",
+    "Counts are finding occurrences across images, not globally deduplicated advisories.",
+    "Artifact metadata has no attempt field; attempt identity is verified in run/jobs and retained publication/anonymous receipts.",
+    "Grafana uses the retained exact-image adjudication receipt and reviewed source proof; this collector does not repeat binary extraction.",
+    "Other checks on this workflow or commit are outside this report; this report does not assert whole-head acceptance.",
+    "Unfixed findings remain open, with no risk acceptance granted by this report."
+  ]
+}

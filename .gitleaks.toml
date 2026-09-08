@@ -162,3 +162,27 @@ condition = "AND"
 regexTarget = "line"
 paths = ['''(^|/)infrastructure/runtime\-security/history/c7\-server\-only/vulnerabilities\.json$''']
 regexes = ['''^\n?          "Name": "org\.keycloak:keycloak\-crypto\-fips1402",\r?$''']
+
+# Exact public metadata in retained C7 publication artifacts. Full line AND exact path AND detector.
+# Hashes are existing reviewed public Tempo commit identities; the package string is a public Maven coordinate.
+
+[[allowlists]]
+description = "Reviewed public Tempo commit URLs in exact C7 Grafana CycloneDX evidence"
+targetRules = ["sourcegraph-access-token"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''(^|/)infrastructure/runtime\-security/proofs/c7\-published/grafana/publication/vulnerabilities\.sbom\.cdx\.json$''']
+regexes = [
+  '''^\n?          "url": "https://github\.com/grafana/tempo/commit/650eb1985a0776789c8564122990f588a742356f"\r?$''',
+  '''^\n?          "url": "https://github\.com/grafana/tempo/commit/bb8ca663db34a0980c9758b40d918fda3b4dbec3"\r?$''',
+]
+
+[[allowlists]]
+description = "Reviewed public Keycloak FIPS package names in exact C7 publication scan"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''(^|/)infrastructure/runtime\-security/proofs/c7\-published/keycloak/publication/vulnerabilities\.json$''']
+regexes = [
+  '''^\n?          "Name": "org\.keycloak:keycloak\-crypto\-fips1402",\r?$''',
+]

@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 2,
+  "mediaType": "application/vnd.oci.image.manifest.v1+json",
+  "config": {
+    "mediaType": "application/vnd.oci.image.config.v1+json",
+    "digest": "sha256:7ae9743dd8d6699a204b6348e2baeaf273c989af01e77fbc5f9a0c12ec3328e0",
+    "size": 13118
+  },
+  "layers": [
+    {
+      "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+      "digest": "sha256:55afa1ecc21d2bb5e5045f32dafee56272ffd89860bac26f6c32123439af26a4",
+      "size": 3846391
+    },
+    {
+      "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+      "digest": "sha256:f45fdf63315816ec6bd937d40fb4450c1364e299cf7bdb48c14d19ee26ce32a0",
+      "size": 4347545
+    },
+    {
+      "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+      "digest": "sha256:67ff5ce9d4e9e840b2a802e06f9db7aa2526032b11972f065750ca6082d06f2c",
+      "size": 627
+    },
+    {
+      "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+      "digest": "sha256:51ec9c021a5aa5f4b4e020396c3080d9434d71d75288c5f4b06bfc78104310fe",
+      "size": 954
+    },
+    {
+      "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+      "digest": "sha256:33e5f432b4d0343ae580ca491ee35e51f51000f5694efd025a8af08e0be7c729",
+      "size": 403
+    },
+    {
+      "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+      "digest": "sha256:6710fa5752a599abf4c9f536edfe5be7952768135b5050ac9afdefc0533834a2",
+      "size": 1209
+    },
+    {
+      "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+      "digest": "sha256:0bfd0ed0041486dd19ac2807088044b7b750d7ce008314ef49e75d92f42b9c19",
+      "size": 1397
+    },
+    {
+      "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+      "digest": "sha256:c39233542455bfb494d68089ebb1b8eb3f0104ef0f676e7bc78fc637a0bad7bf",
+      "size": 20333532
+    },
+    {
+      "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+      "digest": "sha256:1d9ff387d2c3ade0da6a6a1e9e1e7bd951689a90648fbf6448089972d07e33d1",
+      "size": 256322
+    }
+  ]
+}

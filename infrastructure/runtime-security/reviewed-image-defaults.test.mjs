@@ -4,9 +4,9 @@ import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node
 import { basename, dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
-import { validateActivation, validateReviewedDefaults, validateRepositoryDefaults } from './reviewed-image-defaults.mjs';
+import { createEvidenceReader, validateActivation, validateReviewedDefaults, validateRepositoryDefaults } from './reviewed-image-defaults.mjs';
 import { BUILDKIT, REPOSITORY, SBOM_GENERATOR } from './publish-reviewed-images.mjs';
-import { SOURCE_REPOSITORY, verifyRegistryEvidence } from './registry-evidence.mjs';
+import { checkedJson, SOURCE_REPOSITORY, verifyRegistryEvidence } from './registry-evidence.mjs';
 import { inventory } from './upstream-images.mjs';
 
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -222,3 +222,240 @@ test('repository evidence directory itself cannot escape through a symlink or Wi
     await assert.rejects(validateRepositoryDefaults(root, originalRepositoryRows()), /activation_evidence_root_symlink_escape/);
   });
 });
+
+test('filesystem parts preserve the complete paired OCI proof and cannot replace its descriptor hashes', async () => {
+  const value = scenario();
+  const raw = new Map(blobs);
+  const payloadName = 'registry-attestation-0-payload-0.json';
+  const payload = Buffer.concat([raw.get(payloadName), Buffer.alloc(6 * 1024 * 1024, 32)]);
+  const manifest = JSON.parse(raw.get('registry-attestation-0.json'));
+  const rootIndex = JSON.parse(raw.get('registry-index.json'));
+  function replace(name, content, descriptors) {
+    const previous = 'sha256:' + hash(raw.get(name));
+    const descriptor = descriptors.find(item => item.digest === previous);
+    assert.ok(descriptor);
+    raw.set(name, content); descriptor.digest = 'sha256:' + hash(content); descriptor.size = content.length;
+  }
+  replace(payloadName, payload, manifest.layers);
+  replace('registry-attestation-0.json', bytes(manifest), rootIndex.manifests);
+  raw.set('registry-index.json', bytes(rootIndex));
+  const digest = 'sha256:' + hash(raw.get('registry-index.json'));
+  const rawByDigest = new Map([...raw.values()].map(content => ['sha256:' + hash(content), content]));
+  const proof = await verifyRegistryEvidence({ digest, expected: fixture.expected,
+    read: async (kind, digest) => rawByDigest.get(digest), retain: async () => {} });
+  value.entry.reference = value.publication.reference = value.anonymous.reference = REPOSITORY + '@' + digest;
+  value.publication.attestationEvidence = value.anonymous.attestationEvidence = proof;
+  value.refresh();
+  const inspectPath = 'infrastructure/runtime-security/proofs/test/anonymous/anonymous-image-inspect.json';
+  const inspected = JSON.parse(value.files.get(inspectPath)); inspected[0].RepoDigests = [value.entry.reference];
+  value.files.set(inspectPath, bytes(inspected));
+  for (const group of ['publication', 'anonymous']) for (const [name, content] of raw)
+    value.files.set(`infrastructure/runtime-security/proofs/test/${group}/${name}`, content);
+  await repositoryFixture(async root => {
+    for (const [path, content] of value.files) {
+      await mkdir(dirname(join(root, path)), { recursive: true }); await writeFile(join(root, path), content);
+    }
+    const read = await createEvidenceReader(root);
+    await validateActivation(value.image, value.entry, value.manifestBytes, read);
+    for (const group of ['publication', 'anonymous']) {
+      const path = `infrastructure/runtime-security/proofs/test/${group}/${payloadName}`;
+      const buffers = [payload.subarray(0, 4 * 1024 * 1024), payload.subarray(4 * 1024 * 1024)];
+      const metadata = { schema: 'otziv-raw-evidence-parts-v1', bytes: payload.length, sha256: hash(payload),
+        parts: buffers.map((content, index) => ({ file: payloadName + '.part00' + (index + 1), bytes: content.length, sha256: hash(content) })) };
+      for (const [index, content] of buffers.entries()) await writeFile(join(root, path + '.part00' + (index + 1)), content);
+      await writeFile(join(root, path + '.parts.json'), bytes(metadata)); await rm(join(root, path));
+    }
+    await validateActivation(value.image, value.entry, value.manifestBytes, read);
+    // An internally consistent rewritten sidecar cannot authorize changed OCI bytes.
+    const path = `infrastructure/runtime-security/proofs/test/anonymous/${payloadName}`;
+    const changed = Buffer.from(payload); changed[changed.length - 1] = 10;
+    const metadata = JSON.parse(await readFile(join(root, path + '.parts.json')));
+    metadata.sha256 = hash(changed);
+    metadata.parts[1].sha256 = hash(changed.subarray(4 * 1024 * 1024));
+    await writeFile(join(root, path + '.part002'), changed.subarray(4 * 1024 * 1024));
+    await writeFile(join(root, path + '.parts.json'), bytes(metadata));
+    await assert.rejects(validateActivation(value.image, value.entry, value.manifestBytes, read), /registry_blob_digest_mismatch/);
+  });
+});
+
+// Bounded raw OCI storage is exercised through the same required test entrypoint.
+{
+const MiB = 1024 * 1024;
+const hash = bytes => createHash('sha256').update(bytes).digest('hex');
+const name = 'registry-attestation-0-payload-0.json';
+const path = 'infrastructure/runtime-security/proofs/test/' + name;
+const original = Buffer.from(JSON.stringify({ value: 'x'.repeat(5 * MiB + 64), unicode: 'Ж🧭' }));
+
+async function workspace(action) {
+  const parent = await realpath(tmpdir());
+  const root = await mkdtemp(join(parent, 'otziv-parts-'));
+  try { await action(root); }
+  finally {
+    const actual = await realpath(root);
+    assert.equal(dirname(actual), parent);
+    assert.ok(basename(actual).startsWith('otziv-parts-'));
+    await rm(actual, { recursive: true });
+  }
+}
+
+async function fixture(root, content = original) {
+  await mkdir(dirname(join(root, path)), { recursive: true });
+  const buffers = [content.subarray(0, 4 * MiB), content.subarray(4 * MiB)];
+  const manifest = { schema: 'otziv-raw-evidence-parts-v1', bytes: content.length, sha256: hash(content),
+    parts: buffers.map((bytes, index) => ({ file: name + '.part00' + (index + 1), bytes: bytes.length, sha256: hash(bytes) })) };
+  async function save() { await writeFile(join(root, path + '.parts.json'), JSON.stringify(manifest)); }
+  for (const [index, bytes] of buffers.entries()) await writeFile(join(root, path + '.part00' + (index + 1)), bytes);
+  await save();
+  return { manifest, buffers, save, read: await createEvidenceReader(root) };
+}
+
+test('two bounded plain UTF-8 chunks reconstruct exact large logical bytes and original OCI hash/size', async () => {
+  await workspace(async root => {
+    const { read } = await fixture(root);
+    const actual = await read(path);
+    assert.deepEqual(actual, original);
+    assert.deepEqual(checkedJson(actual, { digest: 'sha256:' + hash(original), size: original.length }), JSON.parse(original));
+    assert.throws(() => checkedJson(actual, { digest: 'sha256:' + 'a'.repeat(64), size: original.length }), /registry_blob_digest_mismatch/);
+    assert.throws(() => checkedJson(actual, { digest: 'sha256:' + hash(original), size: original.length - 1 }), /registry_blob_size_mismatch/);
+  });
+});
+
+test('existing unfragmented file retains original behavior even with unused invalid sidecar', async () => {
+  await workspace(async root => {
+    const { read } = await fixture(root);
+    await writeFile(join(root, path), original);
+    await writeFile(join(root, path + '.parts.json'), '{invalid');
+    assert.deepEqual(await read(path), original);
+  });
+});
+
+const invalidManifests = [
+  ['wrong schema', x => { x.schema = 'other'; }, /parts_schema/],
+  ['unknown manifest field', x => { x.other = true; }, /parts_fields/],
+  ['unknown chunk field', x => { x.parts[0].other = true; }, /parts_fields/],
+  ['missing chunk', x => { x.parts.pop(); }, /parts_count/],
+  ['extra chunk descriptor', x => { x.parts.push({ ...x.parts[0] }); }, /parts_count/],
+  ['ordered descriptors reversed', x => { x.parts.reverse(); }, /filename_or_order/],
+  ['duplicate descriptor', x => { x.parts[1] = { ...x.parts[0] }; }, /filename_or_order/],
+  ['traversal', x => { x.parts[0].file = '../' + x.parts[0].file; }, /filename_or_order/],
+  ['absolute file', x => { x.parts[0].file = '/tmp/' + x.parts[0].file; }, /filename_or_order/],
+  ['backslash file', x => { x.parts[0].file = 'other\\' + x.parts[0].file; }, /filename_or_order/],
+  ['recursive sidecar', x => { x.parts[0].file += '.parts.json'; }, /filename_or_order/],
+  ['whole bytes too small', x => { x.bytes = 5 * MiB; }, /total_size/],
+  ['whole bytes too large', x => { x.bytes = 8 * MiB + 1; }, /total_size/],
+  ['whole bytes not integer', x => { x.bytes = 6.5; }, /total_size/],
+  ['empty part', x => { x.parts[1].bytes = 0; }, /chunk_size/],
+  ['oversized part', x => { x.parts[0].bytes = 4 * MiB + 1; }, /chunk_size/],
+  ['wrong size sum', x => { x.parts[0].bytes--; }, /size_sum/],
+  ['wrong full hash', x => { x.sha256 = 'a'.repeat(64); }, /parts_hash/],
+  ['wrong part hash', x => { x.parts[1].sha256 = 'a'.repeat(64); }, /chunk_hash/]
+];
+for (const [label, change, expected] of invalidManifests) test('rejects ' + label, async () => {
+  await workspace(async root => {
+    const value = await fixture(root);
+    change(value.manifest); await value.save();
+    await assert.rejects(value.read(path), expected);
+  });
+});
+
+test('rejects oversized manifest before parsing it', async () => {
+  await workspace(async root => {
+    const value = await fixture(root);
+    await writeFile(join(root, path + '.parts.json'), ' '.repeat(4097));
+    await assert.rejects(value.read(path), /parts_file_size/);
+  });
+});
+
+for (const [label, suffix, value] of [
+  ['missing physical chunk', '.part002', null],
+  ['truncated chunk', '.part002', Buffer.from('x')],
+  ['changed same-size bytes', '.part002', Buffer.alloc(original.length - 4 * MiB, 120)],
+  ['oversized physical chunk', '.part001', Buffer.alloc(4 * MiB + 1, 120)],
+  ['extra chunk', '.part003', Buffer.from('extra')],
+  ['nested parts', '.part001.parts.json', Buffer.from('{}')]
+]) test('rejects ' + label, async () => {
+  await workspace(async root => {
+    const { read } = await fixture(root);
+    if (value === null) await rm(join(root, path + suffix));
+    else await writeFile(join(root, path + suffix), value);
+    await assert.rejects(read(path), /parts_/);
+  });
+});
+
+test('rejects physically swapped chunks even if descriptor names remain ordered', async () => {
+  await workspace(async root => {
+    const value = await fixture(root);
+    await writeFile(join(root, path + '.part001'), value.buffers[1]);
+    await writeFile(join(root, path + '.part002'), value.buffers[0]);
+    await assert.rejects(value.read(path), /parts_/);
+  });
+});
+
+test('each part must be valid UTF-8; split a multibyte codepoint only at its boundary', async () => {
+  await workspace(async root => {
+    const raw = Buffer.from('{"v":"' + 'x'.repeat(4 * MiB - 7) + 'Ж' + 'x'.repeat(2 * MiB) + '"}');
+    const value = await fixture(root, raw);
+    await assert.rejects(value.read(path), /encoded data was not valid/);
+    const buffers = [raw.subarray(0, 4 * MiB - 1), raw.subarray(4 * MiB - 1)];
+    for (const [index, bytes] of buffers.entries()) {
+      value.manifest.parts[index].bytes = bytes.length;
+      value.manifest.parts[index].sha256 = hash(bytes);
+      await writeFile(join(root, path + '.part00' + (index + 1)), bytes);
+    }
+    await value.save();
+    assert.deepEqual(await value.read(path), raw);
+  });
+});
+
+test('scope guard rejects traversal, absolute paths, alternate separators and other artifact types', async () => {
+  await workspace(async root => {
+    const { read } = await fixture(root);
+    for (const input of ['/tmp/' + name, 'infrastructure/runtime-security/../' + name,
+      'infrastructure/runtime-security/./' + name, 'infrastructure/runtime-security/escape:ads',
+      'infrastructure/runtime-security/escape\\' + name, 'infrastructure/runtime-security-foreign/' + name]) {
+      await assert.rejects(read(input), /path_outside_evidence_scope/);
+    }
+    const unsupported = 'infrastructure/runtime-security/proofs/test/publication.json';
+    await writeFile(join(root, unsupported + '.parts.json'), await readFile(join(root, path + '.parts.json')));
+    await assert.rejects(read(unsupported), { code: 'ENOENT' });
+  });
+});
+
+test('evidence root and nested directory symlinks cannot escape the repository scope', async () => {
+  await workspace(async owned => {
+    const root = join(owned, 'repository'), external = join(owned, 'outside');
+    await mkdir(join(root, 'infrastructure'), { recursive: true }); await mkdir(external);
+    const kind = process.platform === 'win32' ? 'junction' : 'dir';
+    await symlink(external, join(root, 'infrastructure/runtime-security'), kind);
+    await assert.rejects(createEvidenceReader(root), /root_symlink_escape/);
+    await rm(join(root, 'infrastructure/runtime-security'));
+    await mkdir(join(root, 'infrastructure/runtime-security'));
+    await symlink(external, join(root, 'infrastructure/runtime-security/proofs'), kind);
+    await mkdir(join(external, 'test'));
+    await writeFile(join(external, 'test', name + '.parts.json'), '{}');
+    const read = await createEvidenceReader(root);
+    await assert.rejects(read(path), /evidence_symlink_escape/);
+  });
+});
+
+test('part files cannot be directories or recursive manifests', async () => {
+  await workspace(async root => {
+    const { read } = await fixture(root);
+    await rm(join(root, path + '.part001'));
+    await mkdir(join(root, path + '.part001'));
+    await writeFile(join(root, path + '.part001', 'parts.json'), '{}');
+    await assert.rejects(read(path), /regular_file_required/);
+  });
+});
+
+test('invalid reconstructed JSON remains rejected by the mandatory original OCI parser', async () => {
+  await workspace(async root => {
+    const raw = Buffer.alloc(6 * MiB, 120);
+    const { read } = await fixture(root, raw);
+    assert.throws(() => checkedJson(raw, { digest: 'sha256:' + hash(raw), size: raw.length }), /blob_json_invalid/);
+    const reassembled = await read(path);
+    assert.throws(() => checkedJson(reassembled, { digest: 'sha256:' + hash(raw), size: raw.length }), /blob_json_invalid/);
+  });
+});
+
+}

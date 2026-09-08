@@ -117,7 +117,7 @@ services:
       - internal_net
 
   keycloak:
-    image: ${OTZIV_KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak@sha256:4883630ef9db14031cde3e60700c9a9a8eaf1b5c24db1589d6a2d43de38ba2a9}
+    image: ${OTZIV_KEYCLOAK_IMAGE:-ghcr.io/claidd/otziv-security@sha256:93dd42a5379a80fc0673bc1d0c5601d3b35009c8250394b1e2b45082388c82cc}
     restart: unless-stopped
     logging: *default-logging
     mem_limit: 1g
@@ -727,7 +727,7 @@ services:
       - internal_net
 
   prometheus:
-    image: prom/prometheus@sha256:2659f4c2ebb718e7695cb9b25ffa7d6be64db013daba13e05c875451cf51b0d3
+    image: ghcr.io/claidd/otziv-security@sha256:431b45903443dcef3c973e16d4ad76670a5d0f6a61dd8a1cfe15b1fa6dd8334d
     profiles: ["observability"]
     restart: unless-stopped
     logging: *default-logging
@@ -753,7 +753,7 @@ services:
       - internal_net
 
   loki:
-    image: grafana/loki@sha256:8b5bd7748d0e4da66cd741ac276e485517514af0bea32167e27c0e1a95bcf8aa
+    image: ghcr.io/claidd/otziv-security@sha256:afb2d631c2d294ca23fb0ed3f98c9d601a0e72b5d702f5cde2b9522bf8a1ded0
     profiles: ["observability"]
     restart: unless-stopped
     logging: *default-logging
@@ -762,16 +762,17 @@ services:
       - ./infrastructure/loki/loki-config.yaml:/etc/loki/loki-config.yaml:ro
       - loki_data:/loki
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3100/ready"]
+      test: ["CMD", "/usr/bin/http-ready", "http://127.0.0.1:3100/ready"]
       interval: 30s
-      timeout: 5s
+      timeout: 3s
       retries: 5
-      start_period: 30s
+      start_period: 40s
     networks:
       - internal_net
 
   tempo:
-    image: grafana/tempo@sha256:ef4384fce6e8ad22b95b243d8fc165628cda655376fd50e7850536ad89d71d50
+    image: ghcr.io/claidd/otziv-security@sha256:82c90ef48d1d1e009b7847fc1a398995758e8dcaa89e7ea90992b599b935f15b
+    stop_grace_period: 30s
     profiles: ["observability"]
     restart: unless-stopped
     logging: *default-logging
@@ -780,11 +781,11 @@ services:
       - ./infrastructure/tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
       - tempo_data:/var/tempo
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3200/ready"]
+      test: ["CMD", "/usr/bin/http-ready", "http://127.0.0.1:3200/ready"]
       interval: 30s
-      timeout: 5s
+      timeout: 3s
       retries: 5
-      start_period: 30s
+      start_period: 40s
     networks:
       - internal_net
 
@@ -816,7 +817,7 @@ services:
       - internal_net
 
   grafana:
-    image: grafana/grafana@sha256:7567a7c70a3c1d75aeeedc968d1304174a16651e55a60d1fb132a05e1e63a054
+    image: ghcr.io/claidd/otziv-security@sha256:b13b0abc6fb26fb7b1e55190411f8b6a5d1894fb7a6c27df2352cb5a3adb54ae
     profiles: ["observability"]
     restart: unless-stopped
     logging: *default-logging
