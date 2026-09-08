@@ -26,10 +26,11 @@ jobs:
     outputs:
       matrix: ${{ steps.inventory.outputs.matrix }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "24.20.0"
+          package-manager-cache: false
       - id: inventory
         run: node infrastructure/runtime-security/publish-reviewed-images.mjs matrix
 
@@ -47,15 +48,17 @@ jobs:
       max-parallel: 2
       matrix: ${{ fromJSON(needs.reviewed-image-inventory.outputs.matrix) }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "24.20.0"
-      - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4.8.0
+          package-manager-cache: false
+      - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
         with:
           distribution: temurin
           java-version: "21"
           cache: maven
+          cache-jdk: false
       - name: Authenticate only to the repository container registry
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -68,7 +71,7 @@ jobs:
         run: node infrastructure/runtime-security/publish-reviewed-images.mjs "$COMPONENT" "$RUNNER_TEMP/reviewed-publication"
       - name: Preserve exact publication and security evidence
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: reviewed-publication-${{ matrix.component }}
           path: ${{ runner.temp }}/reviewed-publication/
@@ -93,14 +96,15 @@ jobs:
       max-parallel: 2
       matrix: ${{ fromJSON(needs.reviewed-image-inventory.outputs.matrix) }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "24.20.0"
+          package-manager-cache: false
       - name: Download this component's publication from this workflow run
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: reviewed-publication-${{ matrix.component }}
           path: ${{ runner.temp }}/reviewed-publication-input
@@ -111,7 +115,7 @@ jobs:
         run: node infrastructure/runtime-security/verify-anonymous-download.mjs "$COMPONENT" "$RUNNER_TEMP/reviewed-publication-input" "$RUNNER_TEMP/anonymous-download"
       - name: Preserve separate anonymous download proof
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: anonymous-download-${{ matrix.component }}
           path: ${{ runner.temp }}/anonymous-download/
@@ -123,12 +127,13 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "24.18.0"
+          package-manager-cache: false
       - name: Validate workflow syntax and expressions
         run: >-
           docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true
@@ -231,12 +236,13 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4.8.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
         with:
           distribution: temurin
           java-version: "26"
           cache: maven
+          cache-jdk: false
       - name: Build reviewed Maven tooling and test transport
         working-directory: backend
         run: bash ./mvnw -B -ntp -f build-support/pom.xml install
@@ -248,20 +254,21 @@ jobs:
         run: bash ./mvnw -B -ntp -Dtest=FinancialCtePlanEvidence -Dotziv.benchmark.cte.iterations=4 -Dotziv.benchmark.source=ci -Dotziv.benchmark.query-budgets=true test
       - name: Preserve causal performance scenario measurements
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: financial-scenario-benchmark
           path: backend/target/performance/*.json
           if-no-files-found: warn
           retention-days: 14
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "24.18.0"
+          package-manager-cache: false
       - name: Scan packaged Maven runtime libraries
         run: node infrastructure/runtime-security/scan.mjs java backend/target "$RUNNER_TEMP/maven-vulnerabilities.json"
       - name: Preserve Maven security evidence
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: maven-runtime-security
           path: ${{ runner.temp }}/maven-vulnerabilities*
@@ -269,7 +276,7 @@ jobs:
           retention-days: 14
       - name: Upload backend test reports
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: backend-test-reports
           path: backend/target/surefire-reports/
@@ -281,15 +288,17 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4.8.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
         with:
           distribution: temurin
           java-version: "21"
           cache: maven
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+          cache-jdk: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "24.18.0"
+          package-manager-cache: false
       - name: Build the pinned Keycloak provider and test transaction failure behavior
         working-directory: backend
         run: bash ./mvnw -f ../infrastructure/keycloak/security-generation/pom.xml -B -ntp verify
@@ -334,7 +343,7 @@ jobs:
         run: node infrastructure/recovery/full-system-fixture.mjs otziv-recovery-app-ci otziv-issuer-ci "$RUNNER_TEMP/paired-recovery"
       - name: Preserve issuer protocol and vulnerability evidence
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: issuer-security-generation
           path: |
@@ -357,8 +366,8 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "24.18.0"
           cache: npm
@@ -377,8 +386,8 @@ jobs:
       run:
         working-directory: mobile
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "24.18.0"
           cache: npm
@@ -395,8 +404,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "24.18.0"
           cache: npm
@@ -437,7 +446,7 @@ jobs:
           npm test
       - name: Preserve browser reports, failure screenshots and traces
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: browser-smoke-reports
           path: |
@@ -452,17 +461,18 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "24.18.0"
           cache: npm
           cache-dependency-path: mobile/package-lock.json
-      - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4.8.0
+      - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
         with:
           distribution: temurin
           java-version: "21"
           cache: gradle
+          cache-jdk: false
       - name: Install required hosted Android SDK packages
         run: |
           set -euo pipefail
@@ -483,7 +493,7 @@ jobs:
         run: bash ./gradlew --no-daemon testDebugUnitTest lintDebug assembleDebug
       - name: Preserve Android unit and lint reports
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: android-native-lint
           path: |
@@ -502,8 +512,8 @@ jobs:
       run:
         working-directory: whatsapp
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22.23.2"
           cache: npm
@@ -521,8 +531,8 @@ jobs:
       run:
         working-directory: backend/external-review-worker
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22.23.2"
           cache: npm
@@ -542,8 +552,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "24.18.0"
           cache: npm
@@ -566,10 +576,11 @@ jobs:
     outputs:
       matrix: ${{ steps.inventory.outputs.matrix }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "24.18.0"
+          package-manager-cache: false
       - id: inventory
         run: node infrastructure/runtime-security/upstream-images.mjs matrix
 
@@ -583,10 +594,11 @@ jobs:
       max-parallel: 4
       matrix: ${{ fromJSON(needs.upstream-inventory.outputs.matrix) }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "24.18.0"
+          package-manager-cache: false
       - name: Pull and scan the exact Compose default without starting it
         env:
           UPSTREAM_IMAGE: ${{ matrix.image }}
@@ -596,7 +608,7 @@ jobs:
           node infrastructure/runtime-security/scan.mjs image "$UPSTREAM_IMAGE" "$RUNNER_TEMP/$UPSTREAM_ID-vulnerabilities.json"
       - name: Preserve raw findings, package inventory and triage
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: upstream-security-${{ matrix.id }}
           path: ${{ runner.temp }}/*-vulnerabilities*
@@ -625,10 +637,11 @@ jobs:
       matrix:
         component: [worker, whatsapp, observer, backend, web, publisher]
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "24.18.0"
+          package-manager-cache: false
       - name: Build the actual release Dockerfile
         env:
           COMPONENT: ${{ matrix.component }}
@@ -687,7 +700,7 @@ jobs:
         run: node infrastructure/runtime-security/scan.mjs image "otziv-$COMPONENT-ci" "$RUNNER_TEMP/$COMPONENT-vulnerabilities.json"
       - name: Preserve vulnerability evidence
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: integration-image-security-${{ matrix.component }}
           path: ${{ runner.temp }}/*-vulnerabilities*
@@ -714,10 +727,11 @@ jobs:
           - component: grafana
             dockerfile: Grafana
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "24.18.0"
+          package-manager-cache: false
       - name: Validate mandatory immutable release references and overlay contracts
         run: node --test infrastructure/runtime-security/monitoring-release.test.mjs
       - name: Build the exact source derivative and isolated proof runner
@@ -752,7 +766,7 @@ jobs:
         run: node infrastructure/runtime-security/scan.mjs image "otziv-monitoring-$COMPONENT-ci" "$RUNNER_TEMP/monitoring-evidence/vulnerabilities.json"
       - name: Preserve exact builds, configuration, raw scans, SBOM and rollback proof
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: monitoring-candidate-${{ matrix.component }}
           path: ${{ runner.temp }}/monitoring-evidence/

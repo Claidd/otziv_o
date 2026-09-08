@@ -493,9 +493,9 @@ Assert-TextMatch $localSecretScan 'jks\|keystore' 'The staged scan must reject J
 Assert-TextMatch $gitleaksConfig 'mobile/android/keystore\\\.properties' 'The dir scan may skip only the ignored local Android signing-properties path.'
 $pinnedWorkflowSet = $secretWorkflow + $qualityWorkflow + $dependencyWorkflow + $sqlGuardWorkflow
 Assert-TextNotMatch $pinnedWorkflowSet 'actions/(checkout|upload-artifact|setup-node|setup-java)@v[0-9]' 'CI actions must use immutable commit pins, not mutable major tags.'
-Assert-TextMatch $pinnedWorkflowSet 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' 'CI checkout must retain its reviewed immutable pin.'
-Assert-TextMatch $pinnedWorkflowSet 'actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020' 'CI setup-node must retain its reviewed v4.4.0 immutable pin.'
-Assert-TextMatch $pinnedWorkflowSet 'actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9' 'CI setup-java must retain its reviewed v4.8.0 immutable pin.'
+Assert-TextMatch $pinnedWorkflowSet 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' 'CI checkout must retain its reviewed immutable pin.'
+Assert-TextMatch $pinnedWorkflowSet 'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020' 'CI setup-node must retain its reviewed v7.0.0 immutable pin.'
+Assert-TextMatch $pinnedWorkflowSet 'actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c' 'CI setup-java must retain its reviewed v6.0.0 immutable pin.'
 Assert-TextMatch $maxWebhookRegistration 'https://platform-api2\.max\.ru' 'MAX webhook registration must use the current MAX API endpoint.'
 Assert-TextMatch $productionProperties 'MAX_BOT_API_BASE_URL:https://platform-api2\.max\.ru' 'Backend production properties must use the current MAX API endpoint.'
 Assert-TextMatch $productionProperties 'backup\.enabled=\$\{BACKUP_ENABLED:false\}' 'Backend production backup automation must fail closed outside Compose as well.'
