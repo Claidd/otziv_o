@@ -24,7 +24,10 @@ test('JTidy correction remains one exact archive, one advisory and an unexpired 
   assert.ok(selected[0].includes(`<cve>${cve}</cve>`));
   assert.doesNotMatch(selected[0], /<(?:packageUrl|filePath|cpe|cwe|cvss\w*Below|vulnerabilityName)(?:\s|>)/);
   const historical = (await read('after.xml')).toString();
-  assert.ok(historical.includes(selected[0]), 'changing the reviewed rule requires fresh proof');
+  // The frozen proof preserves CRLF bytes; ordinary repository XML is LF in
+  // clean Linux/archive checkouts. Compare only that transport difference.
+  assert.ok(historical.replaceAll('\r\n', '\n').includes(selected[0].replaceAll('\r\n', '\n')),
+    'changing the reviewed rule requires fresh proof');
   assert.ok(Date.now() < Date.parse('2027-01-01T00:00:00Z'), 'JTidy adjudication has expired; review required');
 });
 
