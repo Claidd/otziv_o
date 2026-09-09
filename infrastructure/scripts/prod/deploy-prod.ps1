@@ -1005,6 +1005,8 @@ $deployBundlePaths = @(
     "whatsapp\remote-session-smoke.js",
     "whatsapp\puppeteer-compatibility.js",
     "whatsapp\message-webhook.js",
+    "whatsapp\message-identity.js",
+    "whatsapp\operation-reconciliation.js",
     "whatsapp\inbound-inbox.js",
     "whatsapp\inbound-history.js",
     "whatsapp\raw-chat-reconciliation.js",
