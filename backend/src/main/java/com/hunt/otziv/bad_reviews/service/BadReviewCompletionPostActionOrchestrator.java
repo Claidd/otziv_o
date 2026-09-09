@@ -8,10 +8,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Starts post-commit delivery without an external send in the completion transaction. */
+/** Wakes a bounded background worker; the completion transaction already persisted its retry state. */
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -22,6 +23,7 @@ public class BadReviewCompletionPostActionOrchestrator {
     private final ObjectProvider<ScheduledClientMessageService> scheduledMessageServiceProvider;
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    @Async("clientNotificationExecutor")
     public void deliverInvoice(Long taskId, Long expectedOrderId) {
         DeliverySeed seed = transactionRunner.required(() -> prepareSeed(taskId, expectedOrderId));
         if (seed == null) {

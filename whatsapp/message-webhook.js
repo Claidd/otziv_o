@@ -3,6 +3,7 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const { serializedId } = require("./message-identity");
 
 const DELIVERY_STORE_COMPACT_EVERY = 256;
 const DELIVERY_STORE_MAX_ENTRIES = 50_000;
@@ -17,19 +18,6 @@ const SYSTEM_NOTIFICATION_TYPES = new Set([
   "notification_template",
   "protocol",
 ]);
-
-function serializedId(value) {
-  if (!value) {
-    return "";
-  }
-  if (typeof value === "string") {
-    return value.trim();
-  }
-  if (typeof value._serialized === "string") {
-    return value._serialized.trim();
-  }
-  return "";
-}
 
 function messageId(message) {
   return serializedId(message && message.id);

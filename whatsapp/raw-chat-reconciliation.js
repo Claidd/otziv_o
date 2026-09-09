@@ -1,17 +1,6 @@
 "use strict";
 
-function serializedId(value) {
-  if (!value) {
-    return "";
-  }
-  if (typeof value === "string") {
-    return value.trim();
-  }
-  if (typeof value._serialized === "string") {
-    return value._serialized.trim();
-  }
-  return "";
-}
+const { serializedId } = require("./message-identity");
 
 function normalizeMessage(data) {
   if (!data || typeof data !== "object") {

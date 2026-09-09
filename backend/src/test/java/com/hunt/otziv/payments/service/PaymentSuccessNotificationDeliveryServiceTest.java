@@ -26,12 +26,14 @@ class PaymentSuccessNotificationDeliveryServiceTest {
     private final PaymentSuccessClientNotifier notifier = mock(PaymentSuccessClientNotifier.class);
     private final PaymentSuccessNotificationRetryClaimService claimService =
             mock(PaymentSuccessNotificationRetryClaimService.class);
+    private final PaymentSuccessNotificationAsyncWakeup asyncWakeup = mock(PaymentSuccessNotificationAsyncWakeup.class);
     private final PaymentSuccessNotificationDeliveryService service =
             new PaymentSuccessNotificationDeliveryService(
                     paymentLinkRepository,
                     notifier,
                     claimService,
-                    new PaymentLinkTransactionExecutor()
+                    new PaymentLinkTransactionExecutor(),
+                    asyncWakeup
             );
 
     @Test
@@ -100,21 +102,43 @@ class PaymentSuccessNotificationDeliveryServiceTest {
 
     @Test
     void activePaymentTransactionDefersClaimAndProviderIoUntilAfterCommit() {
-        when(claimService.tryClaim(LINK_ID)).thenReturn(Optional.empty());
         TransactionSynchronizationManager.setActualTransactionActive(true);
         TransactionSynchronizationManager.initSynchronization();
         try {
             service.deliverAfterCommit(LINK_ID);
 
-            verifyNoInteractions(claimService, paymentLinkRepository, notifier);
+            verifyNoInteractions(claimService, paymentLinkRepository, notifier, asyncWakeup);
             assertThat(TransactionSynchronizationManager.getSynchronizations()).hasSize(1);
 
             TransactionSynchronization synchronization =
                     TransactionSynchronizationManager.getSynchronizations().get(0);
             synchronization.afterCommit();
 
-            verify(claimService).tryClaim(LINK_ID);
-            verifyNoInteractions(paymentLinkRepository, notifier);
+            verify(asyncWakeup).dispatch(LINK_ID);
+            verifyNoInteractions(claimService, paymentLinkRepository, notifier);
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+            TransactionSynchronizationManager.setActualTransactionActive(false);
+        }
+    }
+
+    @Test
+    void rejectedWakeupCannotTurnACommittedPaymentIntoAnErrorOrSendOnCallerThread() {
+        org.mockito.Mockito.doThrow(new org.springframework.core.task.TaskRejectedException("full"))
+                .when(asyncWakeup).dispatch(LINK_ID);
+        service.deliverAfterCommit(LINK_ID);
+        verifyNoInteractions(claimService, paymentLinkRepository, notifier);
+    }
+
+    @Test
+    void rollbackDoesNotWakeTheNotificationWorker() {
+        TransactionSynchronizationManager.setActualTransactionActive(true);
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            service.deliverAfterCommit(LINK_ID);
+            TransactionSynchronizationManager.getSynchronizations().forEach(sync ->
+                    sync.afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK));
+            verifyNoInteractions(claimService, paymentLinkRepository, notifier, asyncWakeup);
         } finally {
             TransactionSynchronizationManager.clearSynchronization();
             TransactionSynchronizationManager.setActualTransactionActive(false);

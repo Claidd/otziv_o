@@ -34,8 +34,8 @@ public class RestTemplateConfig {
 
     @Bean(name = "whatsAppRestTemplate")
     public RestTemplate whatsAppRestTemplate(
-            @Value("${app.http-client.connect-timeout:5s}") Duration connectTimeout,
-            @Value("${app.http-client.read-timeout:30s}") Duration readTimeout,
+            @Value("${whatsapp.http-client.connect-timeout:5s}") Duration connectTimeout,
+            @Value("${whatsapp.http-client.read-timeout:30s}") Duration readTimeout,
             @Value("${whatsapp.proxy.enabled:false}") boolean proxyEnabled,
             @Value("${whatsapp.proxy.host:}") String proxyHost,
             @Value("${whatsapp.proxy.port:8888}") int proxyPort,

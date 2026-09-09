@@ -29,6 +29,8 @@ const { ClientLifecycle } = require("./client-lifecycle");
 const { RemoteSessionFence } = require("./remote-session-fence");
 const { OperationLedger, OperationLedgerError } = require("./operation-ledger");
 const { createOutboundHandler } = require("./outbound-routes");
+const { createOperationReconciliationHandler } = require("./operation-reconciliation");
+const { serializedId, installMessageIdentityCompatibility } = require("./message-identity");
 const { installPuppeteerCompatibility } = require("./puppeteer-compatibility");
 const { chromiumLaunchArgs } = require("./chromium-launch");
 const { fetchRecentMessagesFromRawChat } = require("./raw-chat-reconciliation");
@@ -431,7 +433,7 @@ async function createClient() {
       await initialize(...args);
       await remoteSessionFence.capture(instance, generation);
     };
-    return installRemoteBrowserLifecycle(installPuppeteerCompatibility(instance), {
+    return installRemoteBrowserLifecycle(installMessageIdentityCompatibility(installPuppeteerCompatibility(instance)), {
       beforeDestroy: current => remoteSessionFence.capture(current, generation),
       afterDestroy: () => remoteSessionFence.complete(browserURL, generation),
     });
@@ -439,7 +441,7 @@ async function createClient() {
 
   removeStaleChromiumLocks(AUTH_PATH);
   const launchArgs = chromiumLaunchArgs(proxyServerArg());
-  return installPuppeteerCompatibility(new Client({
+  return installMessageIdentityCompatibility(installPuppeteerCompatibility(new Client({
     authStrategy: new LocalAuth({
       clientId: CLIENT_ID,
       dataPath: AUTH_PATH,
@@ -457,7 +459,7 @@ async function createClient() {
       protocolTimeout: WHATSAPP_PUPPETEER_TIMEOUT_MS,
       args: launchArgs,
     },
-  }));
+  })));
 }
 
 function wireClientEvents(instance, current, trackEvent) {
@@ -1019,14 +1021,14 @@ async function observedSendMessage(destination, message) {
 
 async function sendPersonalMessage(destination, message) {
   const sent = await observedSendMessage(destination, message);
-  return sent?.id?._serialized || null;
+  return serializedId(sent?.id) || null;
 }
 
 async function sendGroupMessage(destination, message) {
   const outboundToken = outboundRegistry.begin(destination, message);
   try {
     const sent = await observedSendMessage(destination, message);
-    const sentMessageId = sent?.id?._serialized || null;
+    const sentMessageId = serializedId(sent?.id) || null;
     outboundRegistry.complete(outboundToken, sentMessageId);
     if (sentMessageId) {
       try {
@@ -1058,6 +1060,12 @@ app.get("/operations/:operationId", asyncRoute(async (req, res) => {
   res.set("Cache-Control", "no-store");
   res.json({ operationId: req.params.operationId, ...operationLedger.lookup(req.params.operationId) });
 }));
+app.post("/operations/:operationId/reconcile", asyncRoute(createOperationReconciliationHandler({
+  ledger: operationLedger, clientId: CLIENT_ID,
+  canRead: () => ready && authenticated && client && !shuttingDown,
+  getMessage: id => client.getMessageById(id),
+  onReconciled: id => deliveryIdempotencyStore.mark(generatedOutboundKey(id), Date.now() + WHATSAPP_OUTBOUND_DURABLE_TTL_MS),
+})));
 
 app.get("/groups", asyncRoute(async (req, res) => {
   if (!requireReady(res)) {

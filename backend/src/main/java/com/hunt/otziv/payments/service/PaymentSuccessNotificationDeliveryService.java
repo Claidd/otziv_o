@@ -26,6 +26,7 @@ public class PaymentSuccessNotificationDeliveryService {
     private final PaymentSuccessClientNotifier paymentSuccessClientNotifier;
     private final PaymentSuccessNotificationRetryClaimService claimService;
     private final PaymentLinkTransactionExecutor transactionExecutor;
+    private final PaymentSuccessNotificationAsyncWakeup asyncWakeup;
 
     /**
      * Defers immediate delivery until the enclosing order/payment transaction
@@ -49,12 +50,12 @@ public class PaymentSuccessNotificationDeliveryService {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
-                    deliverSafely(paymentLinkId);
+                    enqueueWakeup(paymentLinkId);
                 }
             });
             return;
         }
-        deliverSafely(paymentLinkId);
+        enqueueWakeup(paymentLinkId);
     }
 
     /**
@@ -163,9 +164,9 @@ public class PaymentSuccessNotificationDeliveryService {
         return false;
     }
 
-    private void deliverSafely(long paymentLinkId) {
+    private void enqueueWakeup(long paymentLinkId) {
         try {
-            tryDeliver(paymentLinkId);
+            asyncWakeup.dispatch(paymentLinkId);
         } catch (RuntimeException exception) {
             // A direct delivery is best effort after the business transaction
             // has committed. The durable retry flag must remain the recovery
