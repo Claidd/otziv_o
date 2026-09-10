@@ -28,6 +28,20 @@ test('reviewed primary source, original ancestry responses and actual build info
   validateObservedBinary(report, inspect, review.binary.sha256, buildInfo, review);
   assert.equal(review.decisions.length, 2);
 });
+
+test('C15 review binds the new executable to the same exact fixed Tempo module', async () => {
+  const current = await loadReviewedProof('c15');
+  const currentBuild = await readFile(new URL('./adjudications/grafana-tempo-c15/reviewed-buildinfo.txt', import.meta.url), 'utf8');
+  const { report, inspect } = fixture();
+  assert.deepEqual(current.review.module, review.module);
+  assert.deepEqual(current.review.decisions, review.decisions);
+  assert.notEqual(current.review.binary.sha256, review.binary.sha256);
+  assert.match(currentBuild, /\tdep\tgoogle\.golang\.org\/grpc\tv1\.83\.2\t/);
+  validateObservedBinary(report, inspect, current.review.binary.sha256, currentBuild, current.review);
+  assert.throws(() => validateObservedBinary(report, inspect, review.binary.sha256, currentBuild, current.review), /binary_mismatch/);
+  assert.throws(() => validateObservedBinary(report, inspect, current.review.binary.sha256, buildInfo, current.review), /build_info_mismatch/);
+  await assert.rejects(loadReviewedProof('../unreviewed'), /review_unknown/);
+});
 test('effective summary retains both raw HIGH findings and does not mutate the raw report', () => {
   const { report } = fixture(), before = JSON.stringify(report);
   const decisions = matchingFindings(report, review), result = effectiveScanSummary(summarizeReport(report), { decisions });

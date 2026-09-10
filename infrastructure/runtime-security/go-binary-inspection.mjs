@@ -23,6 +23,10 @@ export function validateObservedBinary(report, inspect, binarySha256, buildInfo,
 }
 
 export async function inspectReviewedGoBinary(report, immutableImageId, scratch, review) {
+  const candidates = Array.isArray(review) ? review : [review];
+  if (!candidates.length || candidates.some(candidate => candidate.binary.path !== candidates[0].binary.path))
+    throw new Error('adjudication_target_invalid');
+  review = candidates[0];
   if (!/^sha256:[a-f0-9]{64}$/.test(immutableImageId)) throw new Error('adjudication_immutable_image_required');
   if (!/^[a-zA-Z0-9_.-]+(?:\/[a-zA-Z0-9_.-]+)*$/.test(review.binary.path) ||
       review.binary.path.split('/').some(part => part === '.' || part === '..')) throw new Error('adjudication_target_invalid');
@@ -39,7 +43,8 @@ export async function inspectReviewedGoBinary(report, immutableImageId, scratch,
     container = created;
     await run('docker', ['cp', `${container}:/${review.binary.path}`, join(directory, 'executable')], { timeoutMs: 120_000 });
     const binarySha256 = sha256(await readFile(join(directory, 'executable')));
-    if (binarySha256 !== review.binary.sha256) throw new Error('adjudication_binary_mismatch');
+    review = candidates.find(candidate => candidate.binary.sha256 === binarySha256);
+    if (!review) throw new Error('adjudication_binary_mismatch');
     const buildInfo = await run('docker', ['run', '--rm', '--network', 'none', '--read-only', '--cap-drop=ALL',
       '--security-opt=no-new-privileges:true', '--memory', '512m', '--pids-limit', '64', '-e', 'GOTOOLCHAIN=local',
       '--mount', `type=bind,source=${directory},target=/input,readonly`, BUILD_INFO_READER,

@@ -1,0 +1,8 @@
+{
+  "reference": "ghcr.io/claidd/otziv-security@sha256:7251fab0a3362e31a960df34b81baee64c3acb97b562d81ae248fb03a6b52c99",
+  "imageId": "sha256:10b295b4576869cc9a2eccaa3f4f15d73ac3ab243f606d3f8b87dff50e3b093f",
+  "dockerLocalId": "sha256:7251fab0a3362e31a960df34b81baee64c3acb97b562d81ae248fb03a6b52c99",
+  "binarySha256": "a196bbcb950f1afb48630b5f9499b73c5eab74287d896bdb8777b1e5d08fdd2e",
+  "canonicalBuildInfoSha256": "8609374b0b364b2465f94479588a4741fa0a701b5a89136600b7658ae63d0805",
+  "inspectedBinaryExecuted": false
+}

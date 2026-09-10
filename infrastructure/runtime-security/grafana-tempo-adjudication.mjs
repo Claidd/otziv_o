@@ -4,11 +4,12 @@ import { gunzipSync } from 'node:zlib';
 import { exactProduct, labelsOf, inspectReviewedGoBinary } from './go-binary-inspection.mjs';
 export { BUILD_INFO_READER, canonicalBuildInfo, validateObservedBinary } from './go-binary-inspection.mjs';
 
-const proofRoot = new URL('./adjudications/grafana-tempo/', import.meta.url);
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 
 
-export async function loadReviewedProof() {
+export async function loadReviewedProof(generation = 'original') {
+  if (!['original', 'c15'].includes(generation)) throw new Error('adjudication_review_unknown');
+  const proofRoot = new URL(generation === 'original' ? './adjudications/grafana-tempo/' : './adjudications/grafana-tempo-c15/', import.meta.url);
   const bytes = await readFile(new URL('review.json', proofRoot));
   const review = JSON.parse(bytes);
   const sources = {};
@@ -57,10 +58,12 @@ export async function adjudicateGrafanaImage(report, reportBytes, immutableImage
   const base = { schema: 'otziv-image-adjudication-v1', rawReportSha256: sha256(reportBytes),
     imageConfigId: report.Metadata?.ImageID, immutableImageId, rawReportModified: false, decisions: [] };
   try {
-    const { review, reviewSha256 } = await loadReviewedProof();
+    const candidates = await Promise.all(['original', 'c15'].map(loadReviewedProof));
+    const matching = candidates.filter(candidate => matchingFindings(report, candidate.review).length);
+    if (!matching.length) return { ...base, status: 'NOT_APPLICABLE' };
+    const observed = await inspectReviewedGoBinary(report, immutableImageId, scratch, matching.map(candidate => candidate.review));
+    const { review, reviewSha256 } = matching.find(candidate => candidate.review.binary.sha256 === observed.binarySha256);
     const decisions = matchingFindings(report, review);
-    if (!decisions.length) return { ...base, status: 'NOT_APPLICABLE' };
-    const observed = await inspectReviewedGoBinary(report, immutableImageId, scratch, review);
     return { ...base, status: 'EXACT_BINARY_FIXED_CODE_PROVEN', reviewSha256, ...observed, module: review.module, decisions };
   } catch (error) {
     return { ...base, status: 'REJECTED', reason: /^adjudication_[a-z_]+$/.test(error.message) ? error.message : 'adjudication_inspection_failed' };
