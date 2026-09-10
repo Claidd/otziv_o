@@ -15,7 +15,7 @@ wait_service_healthy() { record "ready:$*"; }
 verify_observer_logflow() { record "flow:$*"; }
 rollout_docker_observer
 `;
-const expected = ['compose:build docker-observer', 'recreate:docker-observer', 'ready:docker-observer 120',
+const expected = ['compose:pull docker-observer', 'recreate:docker-observer', 'ready:docker-observer 120',
   'recreate:dozzle', 'ready:dozzle 120', 'flow:dozzle', 'recreate:alloy', 'ready:alloy 120', 'flow:alloy'];
 for (const failure of ['', expected[0], expected[2], expected[5], expected[8]]) {
   // Run the real sourced shell owner with recording deployment ports. No daemon
@@ -29,4 +29,4 @@ for (const failure of ['', expected[0], expected[2], expected[5], expected[8]]) 
   assert.deepEqual(lines, failure ? expected.slice(0, expected.indexOf(failure) + 1) : expected);
 }
 console.log(JSON.stringify({ result: 'PASS', actualSourcedShell: true, scenarios: 5,
-  freshAndRepeatedBuild: true, failBeforeConsumerReplacement: true, sequentialLogFlow: true }));
+  publishedImagePull: true, failBeforeConsumerReplacement: true, sequentialLogFlow: true }));

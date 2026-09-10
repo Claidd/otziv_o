@@ -12,11 +12,16 @@ capacity = importlib.util.module_from_spec(spec); spec.loader.exec_module(capaci
 REV = 'a' * 40
 REF = 'example.org/app@sha256:' + 'b' * 64
 CONFIG = 'sha256:' + 'c' * 64
+DIFF = 'sha256:' + 'f' * 64
+
+
+def layer():
+    return {'diffId': DIFF, 'compressedBytes': capacity.GIB // 4, 'unpackedBytes': capacity.GIB}
 
 
 def plan():
-    return {'schema': 'otziv-deploy-capacity-v1', 'revision': REV,
-            'images': [{'reference': REF, 'configId': CONFIG, 'bytes': capacity.GIB}], 'releaseImages': {'app': REF}}
+    return {'schema': 'otziv-deploy-capacity-v2', 'revision': REV,
+            'images': [{'reference': REF, 'configId': CONFIG, 'layers': [layer()]}], 'releaseImages': {'app': REF}}
 
 
 class CapacityTests(unittest.TestCase):
@@ -27,7 +32,7 @@ class CapacityTests(unittest.TestCase):
 
     def test_same_disk_aggregates_backup_images_and_bundle_without_double_reserving(self):
         result = self.evaluate(); row = result['filesystems'][0]
-        self.assertEqual(row['requiredBytes'], capacity.GIB + 2 * capacity.GIB + 128 * 1024 ** 2 + 320 * 1024 ** 2)
+        self.assertEqual(row['requiredBytes'], capacity.GIB + 2 * capacity.GIB + capacity.GIB // 4 + 128 * 1024 ** 2 + 320 * 1024 ** 2)
         self.assertEqual(result['result'], 'PASS'); self.assertFalse(result['automaticDeletion'])
 
     def test_insufficient_space_and_exact_boundary(self):
@@ -52,15 +57,26 @@ class CapacityTests(unittest.TestCase):
 
     def test_aliases_of_same_config_do_not_double_charge(self):
         p = plan(); p['images'].append({**p['images'][0], 'reference': 'example.org/alias@sha256:' + 'd'*64})
-        self.assertEqual(self.evaluate(p)['filesystems'][0]['components']['imageDownloadAndUnpack'], 2 * capacity.GIB)
+        self.assertEqual(self.evaluate(p)['filesystems'][0]['components']['imageDownloadAndUnpack'], 2 * capacity.GIB + capacity.GIB // 4)
+
+    def test_only_complete_existing_prefix_reuses_a_layer_and_changed_parent_does_not(self):
+        p = plan(); p['images'][0]['layers'] = [layer(), {**layer(), 'diffId': 'sha256:' + 'd' * 64}]
+        def run(chains):
+            return capacity.budget(p, REV, lambda ref: False, lambda path: ('disk', 8 * capacity.GIB),
+                '/docker', '/store', 0, 0, False, chains)['filesystems'][0]['components']['imageDownloadAndUnpack']
+        cost = 2 * capacity.GIB + capacity.GIB // 4
+        self.assertEqual(run(set()), 2 * cost)
+        self.assertEqual(run({DIFF}), cost)
+        self.assertEqual(run(set(capacity.chain_ids([DIFF, 'sha256:' + 'd' * 64]))), 0)
+        self.assertEqual(run(set(capacity.chain_ids(['sha256:' + 'e' * 64, 'sha256:' + 'd' * 64]))), 2 * cost)
 
     def test_unknown_revision_mutable_ref_invalid_size_and_unlisted_release_reject(self):
         for mode in ['revision','tag','negative','boolean','duplicate','missing','config']:
             p = plan()
             if mode == 'revision': p['revision'] = 'd'*40
             if mode == 'tag': p['images'][0]['reference'] = 'example.org/app:latest'
-            if mode == 'negative': p['images'][0]['bytes'] = -1
-            if mode == 'boolean': p['images'][0]['bytes'] = True
+            if mode == 'negative': p['images'][0]['layers'][0]['unpackedBytes'] = -1
+            if mode == 'boolean': p['images'][0]['layers'][0]['compressedBytes'] = True
             if mode == 'duplicate': p['images'].append(copy.deepcopy(p['images'][0]))
             if mode == 'missing': p['releaseImages']['app'] = 'not-in-plan'
             if mode == 'config': p['images'][0]['configId'] = 'latest'
@@ -73,13 +89,13 @@ class CapacityTests(unittest.TestCase):
             if args[-1] == REF: return json.dumps({'manifests': [
                 {'digest':'sha256:'+'d'*64,'platform':{'os':'linux','architecture':'amd64'}},
                 {'digest':'sha256:'+'e'*64,'platform':{'os':'unknown','architecture':'unknown'}}]})
-            return json.dumps({'config': {'digest':CONFIG}})
-        with patch.object(capacity, 'run', side_effect=docker):
-            self.assertEqual(capacity.freeze_image('example.org/app:release'), {'reference':REF,'configId':CONFIG,'bytes':12345})
+            return json.dumps({'config': {'digest':CONFIG}, 'layers': [{'size': 100}]})
+        with patch.object(capacity, 'run', side_effect=docker), patch.object(capacity, 'measure_archive', return_value=[layer()]):
+            self.assertEqual(capacity.freeze_image('example.org/app:release'), {'reference':REF,'configId':CONFIG,'layers':[layer()]})
 
     def test_actual_compose_default_inventory_is_frozen_without_running_containers(self):
         root = HERE.parents[2]
-        with patch.object(capacity,'freeze_image',side_effect=lambda ref: {'reference':ref,'configId':CONFIG,'bytes':12345}):
+        with patch.object(capacity,'freeze_image',side_effect=lambda ref: {'reference':ref,'configId':CONFIG,'layers':[layer()]}):
             value = capacity.prepare(root/'docker-compose.yaml', REV, {'app':REF})
         capacity.validate_plan(value, REV)
         self.assertGreater(len(value['images']), 8)
@@ -92,6 +108,9 @@ class CapacityTests(unittest.TestCase):
         second = source.index('python3 "`$capacity_check_dir/infrastructure/scripts/prod/deployment_capacity.py" check')
         self.assertLess(second, source.index('tar --warning=no-timestamp -xzf "`$bundle_path" -C "`$remote_path"'))
         self.assertNotIn('compose build whatsapp_lika', source)
+        self.assertNotIn('compose build docker-observer', (HERE/'rollout-docker-observer.sh').read_text())
+        self.assertIn('"infrastructure\\scripts\\prod\\image_layer_capacity.py"', source)
+        self.assertIn('$dockerObserverImage = $capacityPlan.releaseImages.', source)
         self.assertIn('"infrastructure\\scripts\\prod\\deployment_capacity.py"', source)
         self.assertIn('$appImage = $capacityPlan.releaseImages.app', source)
         self.assertIn('$webImage = $capacityPlan.releaseImages.nginx', source)

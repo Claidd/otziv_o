@@ -109,11 +109,15 @@ const pgSql = sql => docker(['exec', '-i', pg, 'psql', '-U', 'keycloak', '-d', '
 async function startDatabases(suffix) {
   mysql = await container(suffix + '-mysql', 'mysql', ['--network-alias', 'mysql', '--memory', '768m', '-e', 'MYSQL_DATABASE=otziv',
     '-e', 'MYSQL_ROOT_PASSWORD=' + secret.dbPassword, '-e', 'MYSQL_USER=fixture', '-e', 'MYSQL_PASSWORD=' + secret.dbPassword],
-    ['--innodb-buffer-pool-size=128M', '--max-connections=50', '--restrict-fk-on-non-standard-key=OFF']);
+    ['mysqld', '--innodb-buffer-pool-size=128M', '--max-connections=50', '--restrict-fk-on-non-standard-key=OFF']);
   pg = await container(suffix + '-pg', 'postgres', ['--network-alias', 'postgres', '--memory', '384m', '-e', 'POSTGRES_DB=keycloak',
     '-e', 'POSTGRES_USER=keycloak', '-e', 'POSTGRES_PASSWORD=' + secret.dbPassword]);
   const deadline = Date.now() + 180000;
   while (Date.now() < deadline) {
+    for (const service of [mysql, pg]) {
+      if ((await docker(['inspect', '--format', '{{.State.Running}}', service])).trim() !== 'true')
+        throw Error('fixture_database_exited_before_readiness');
+    }
     try { if (await mysqlSql('SELECT 1') === '1' && (await pgSql('SELECT 1')).trim() === '1') return; } catch {}
     await pause(1000);
   }

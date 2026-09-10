@@ -1,7 +1,7 @@
 """Freeze release image references and fail before backup/rollout if disk is insufficient.
 
-The budget retains all current images. It gives no credit for pruning or shared layers.
-Two full image sizes cover a download and unpack; SQL data size is a conservative
+The budget retains all current images. Only exact existing layer chains are reused.
+Measured layer streams cover download and unpack; SQL data size is a conservative
 estimate, not an upper bound on future database/log growth. A 1 GiB reserve remains.
 """
 import argparse
@@ -12,6 +12,8 @@ import re
 import subprocess
 import sys
 import tarfile
+import tempfile
+from image_layer_capacity import chain_ids, measure_archive
 
 GIB = 1024 ** 3
 DIGEST = re.compile(r"^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$")
@@ -37,8 +39,8 @@ def freeze_image(reference):
         if len(choices) != 1:
             raise RuntimeError("Published image must have one matching repository digest")
         frozen = choices[0]
-    if not DIGEST.fullmatch(frozen) or type(image.get("Size")) is not int or image["Size"] <= 0:
-        raise RuntimeError("Published image identity or size is missing")
+    if not DIGEST.fullmatch(frozen):
+        raise RuntimeError("Published image identity is missing")
     manifest = json.loads(run(["docker", "buildx", "imagetools", "inspect", "--raw", frozen]))
     if "manifests" in manifest:
         choices = [item for item in manifest["manifests"] if item.get("platform", {}).get("os") == "linux" and item.get("platform", {}).get("architecture") == "amd64"]
@@ -46,7 +48,11 @@ def freeze_image(reference):
         manifest = json.loads(run(["docker", "buildx", "imagetools", "inspect", "--raw", repository + "@" + choices[0]["digest"]]))
     config_id = manifest["config"]["digest"]
     if not re.fullmatch(r"sha256:[a-f0-9]{64}", config_id): raise ValueError("Image config digest missing")
-    return {"reference": frozen, "configId": config_id, "bytes": image["Size"]}
+    with tempfile.TemporaryDirectory(prefix='otziv-release-layers-') as temporary:
+        archive = str(Path(temporary) / 'image.tar')
+        run(["docker", "image", "save", "--output", archive, frozen])
+        layers = measure_archive(archive, config_id, manifest['layers'])
+    return {"reference": frozen, "configId": config_id, "layers": layers}
 
 
 def prepare(compose, revision, application_images):
@@ -66,21 +72,27 @@ def prepare(compose, revision, application_images):
     if not keycloak or keycloak[1] not in images:
         raise ValueError("Reviewed Keycloak default missing")
     release["keycloak"] = keycloak[1]
-    return {"schema": "otziv-deploy-capacity-v1", "revision": revision, "images": list(images.values()), "releaseImages": release}
+    return {"schema": "otziv-deploy-capacity-v2", "revision": revision, "images": list(images.values()), "releaseImages": release}
 
 
 def validate_plan(plan, revision):
-    if plan.get("schema") != "otziv-deploy-capacity-v1" or plan.get("revision") != revision:
+    if plan.get("schema") != "otziv-deploy-capacity-v2" or plan.get("revision") != revision:
         raise ValueError("Capacity plan does not match this release revision")
     images = plan.get("images")
     if not isinstance(images, list) or not images or len(images) > 64:
         raise ValueError("Invalid release image inventory")
     seen = set()
     for item in images:
-        if (set(item) != {"reference", "configId", "bytes"} or not DIGEST.fullmatch(item["reference"])
+        if (set(item) != {"reference", "configId", "layers"} or not DIGEST.fullmatch(item["reference"])
                 or not re.fullmatch(r"sha256:[a-f0-9]{64}", item["configId"])
-                or type(item["bytes"]) is not int or not 0 < item["bytes"] <= 30 * GIB or item["reference"] in seen):
+                or not isinstance(item['layers'], list) or not 0 < len(item['layers']) <= 128 or item["reference"] in seen):
             raise ValueError("Invalid or duplicate release image identity/size")
+        for layer in item['layers']:
+            if (set(layer) != {'diffId', 'compressedBytes', 'unpackedBytes'}
+                    or not re.fullmatch(r"sha256:[a-f0-9]{64}", layer['diffId'])
+                    or any(type(layer[key]) is not int or not 0 < layer[key] <= 30 * GIB
+                           for key in ['compressedBytes', 'unpackedBytes'])):
+                raise ValueError("Invalid layer size or identity")
         seen.add(item["reference"])
     for ref in plan.get("releaseImages", {}).values():
         if ref not in seen:
@@ -88,7 +100,7 @@ def validate_plan(plan, revision):
     return images
 
 
-def budget(plan, revision, present, filesystem, deploy_path, docker_path, bundle_bytes, database_bytes, before_backup):
+def budget(plan, revision, present, filesystem, deploy_path, docker_path, bundle_bytes, database_bytes, before_backup, existing_chains=frozenset()):
     images = validate_plan(plan, revision)
     if type(database_bytes) is not int or database_bytes < 0 or type(bundle_bytes) is not int or bundle_bytes < 0:
         raise ValueError("Invalid database or bundle measurement")
@@ -103,8 +115,13 @@ def budget(plan, revision, present, filesystem, deploy_path, docker_path, bundle
         row["requiredBytes"] += amount; row["components"][reason] = row["components"].get(reason, 0) + amount
     missing = [item for item in images if not present(item["reference"])]
     unique_sizes = {}
-    for item in missing: unique_sizes[item["configId"]] = max(unique_sizes.get(item["configId"], 0), item["bytes"])
-    add(docker_path, 2 * sum(unique_sizes.values()), "imageDownloadAndUnpack")
+    for item in missing:
+        for chain, layer in zip(chain_ids([layer['diffId'] for layer in item['layers']]), item['layers']):
+            if chain not in existing_chains:
+                # Retain room for both temporary and final unpack plus download.
+                size = layer['compressedBytes'] + 2 * layer['unpackedBytes']
+                unique_sizes[chain] = max(unique_sizes.get(chain, 0), size)
+    add(docker_path, sum(unique_sizes.values()), "imageDownloadAndUnpack")
     # Old deployed files and the incoming extraction coexist during rollback setup.
     add(deploy_path, 2 * bundle_bytes, "bundleAndRollback")
     if before_backup:
@@ -113,6 +130,7 @@ def budget(plan, revision, present, filesystem, deploy_path, docker_path, bundle
     return {"schema": "otziv-deploy-capacity-result-v1", "revision": revision,
             "result": "PASS" if all(row["availableBytes"] >= row["requiredBytes"] for row in rows) else "FAIL",
             "filesystems": rows, "missingImages": [item["reference"] for item in missing],
+            "missingLayerChains": len(unique_sizes), "existingLayerChains": len(existing_chains),
             "currentImagesPreserved": True, "automaticDeletion": False}
 
 
@@ -125,6 +143,14 @@ def check(plan, revision, deploy_path, bundle, before_backup):
         raise ValueError("Capacity preflight requires the reviewed overlay2 storage driver")
     images = validate_plan(plan, revision)
     config_ids = {item["reference"]: item["configId"] for item in images}
+    existing_chains = set()
+    image_ids = sorted(set(run(['docker', 'image', 'ls', '--all', '--quiet', '--no-trunc']).split()))
+    if any(not re.fullmatch(r'sha256:[a-f0-9]{64}', identity) for identity in image_ids):
+        raise ValueError('Invalid installed image identity')
+    for start in range(0, len(image_ids), 40):
+        installed = json.loads(run(['docker', 'image', 'inspect', *image_ids[start:start+40]]))
+        for image in installed:
+            existing_chains.update(chain_ids(image['RootFS']['Layers']))
     def present(ref):
         result = subprocess.run(["docker", "image", "inspect", config_ids[ref]], capture_output=True, text=True, timeout=30)
         if result.returncode:
@@ -143,7 +169,7 @@ def check(plan, revision, deploy_path, bundle, before_backup):
         measured = run(["docker", "exec", "my-mysql", "sh", "-c", query]).strip()
         if not measured.isdecimal(): raise ValueError("Database size measurement failed")
         database_bytes = int(measured)
-    return budget(plan, revision, present, filesystem, deploy_path, docker_path, expanded, database_bytes, before_backup)
+    return budget(plan, revision, present, filesystem, deploy_path, docker_path, expanded, database_bytes, before_backup, existing_chains)
 
 
 def main():
@@ -153,12 +179,13 @@ def main():
     p.add_argument("--compose", required=True); p.add_argument("--revision", required=True); p.add_argument("--output", required=True)
     p.add_argument("--app", required=True); p.add_argument("--nginx", required=True)
     p.add_argument("--external-review-worker"); p.add_argument("--whatsapp")
+    p.add_argument("--docker-observer", required=True)
     q = sub.add_parser("check")
     q.add_argument("--plan", required=True); q.add_argument("--revision", required=True)
     q.add_argument("--deploy-path", required=True); q.add_argument("--bundle", required=True); q.add_argument("--before-backup", action="store_true")
     args = parser.parse_args()
     if args.command == "prepare":
-        selected = {name: getattr(args, name.replace('-', '_')) for name in ['app','nginx','external-review-worker','whatsapp'] if getattr(args, name.replace('-', '_'))}
+        selected = {name: getattr(args, name.replace('-', '_')) for name in ['app','nginx','docker-observer','external-review-worker','whatsapp'] if getattr(args, name.replace('-', '_'))}
         result = prepare(args.compose, args.revision, selected)
         Path(args.output).write_text(json.dumps(result, indent=2)+'\n', encoding='utf-8')
     else:

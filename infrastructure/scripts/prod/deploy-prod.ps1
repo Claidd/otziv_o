@@ -5,6 +5,7 @@ param(
     [string]$WebRepository = "otziv-web",
     [string]$ExternalReviewWorkerRepository = "otziv-external-review-worker",
     [string]$WhatsAppRepository = "otziv-whatsapp",
+    [string]$DockerObserverRepository = "otziv-docker-observer",
     [string]$Tag = (Get-Date -Format "yyyyMMdd-HHmmss"),
     [string]$VpsHost = "",
     [string]$VpsUser = "hunt",
@@ -69,7 +70,7 @@ Useful options:
 When deployment inputs contain local changes, this script automatically creates an
 isolated Git snapshot, validates affected components, and deploys from its clean
 temporary worktree. Your branch, staging area, and working files are not changed.
-Application, web and changed WhatsApp images are built locally. Published tags are
+Application, web, Docker observer and changed WhatsApp images are built locally. Published tags are
 resolved to immutable digests; disk capacity is checked before backup/autostart
 pause and again before rollout. The script does not delete old images to make room.
 '@ | Write-Host
@@ -982,6 +983,7 @@ $appImage = "${DockerHubNamespace}/${AppRepository}:${Tag}"
 $webImage = "${DockerHubNamespace}/${WebRepository}:${Tag}"
 $externalReviewWorkerImage = "${DockerHubNamespace}/${ExternalReviewWorkerRepository}:${Tag}"
 $whatsAppImage = "${DockerHubNamespace}/${WhatsAppRepository}:${Tag}"
+$dockerObserverImage = "${DockerHubNamespace}/${DockerObserverRepository}:${Tag}"
 $deployBundlePaths = @(
     "docker-compose.yaml",
     "compose.monitoring.yaml",
@@ -1040,6 +1042,7 @@ $deployBundlePaths = @(
     "infrastructure\scripts\prod\otziv-prod-up.sh",
     "infrastructure\scripts\prod\database_image_guard.py",
     "infrastructure\scripts\prod\deployment_capacity.py",
+    "infrastructure\scripts\prod\image_layer_capacity.py",
     "infrastructure\scripts\prod\register-max-webhook.sh",
     "infrastructure\scripts\prod\init-letsencrypt.sh",
     "infrastructure\scripts\prod\renew-letsencrypt.sh",
@@ -1136,6 +1139,7 @@ Write-Host "  SSH_KEY=$SshKey"
 Write-Host "  SSH_KNOWN_HOSTS=$SshKnownHostsFile"
 Write-Host "  APP_IMAGE=$appImage"
 Write-Host "  WEB_IMAGE=$webImage"
+Write-Host "  DOCKER_OBSERVER_IMAGE=$dockerObserverImage"
 if ($EnableExternalReviewWorker) {
     Write-Host "  EXTERNAL_REVIEW_WORKER_IMAGE=$externalReviewWorkerImage (enabled)"
 } else {
@@ -1192,6 +1196,7 @@ $env:APP_IMAGE = $appImage
 $env:WEB_IMAGE = $webImage
 $env:EXTERNAL_REVIEW_WORKER_IMAGE = $externalReviewWorkerImage
 $env:WHATSAPP_IMAGE = $whatsAppImage
+$env:DOCKER_OBSERVER_IMAGE = $dockerObserverImage
 
 if ($PreparedDeploySnapshot) {
     [void](Assert-OtzivPreparedDeploySnapshotState -Repository $repoRoot `
@@ -1202,7 +1207,7 @@ if (-not $SkipBuildPush) {
     if ($NoBuildCache) {
         $buildArgs += "--no-cache"
     }
-    $buildArgs += @("app", "nginx")
+    $buildArgs += @("app", "nginx", "docker-observer")
     if ($EnableExternalReviewWorker) {
         $buildArgs += "external-review-worker"
     }
@@ -1216,6 +1221,8 @@ if (-not $SkipBuildPush) {
     Invoke-ExternalWithRetry -FilePath "docker" -Arguments @("push", $appImage) -Attempts 3 -DelaySeconds 10
     Write-Host "Pushing web image..."
     Invoke-ExternalWithRetry -FilePath "docker" -Arguments @("push", $webImage) -Attempts 3 -DelaySeconds 10
+    Write-Host "Pushing Docker observer image..."
+    Invoke-ExternalWithRetry -FilePath "docker" -Arguments @("push", $dockerObserverImage) -Attempts 3 -DelaySeconds 10
     if ($EnableExternalReviewWorker) {
         Write-Host "Pushing external review worker image..."
         Invoke-ExternalWithRetry -FilePath "docker" -Arguments @("push", $externalReviewWorkerImage) -Attempts 3 -DelaySeconds 10
@@ -1390,19 +1397,22 @@ try {
     $capacityPlanPath = Join-Path $stageRoot '.deploy-capacity.json'
     $capacityArguments = @((Join-Path $scriptRoot 'deployment_capacity.py'), 'prepare',
         '--compose', (Join-Path $repoRoot 'docker-compose.yaml'), '--revision', $gitRevision,
-        '--output', $capacityPlanPath, '--app', $appImage, '--nginx', $webImage)
+        '--output', $capacityPlanPath, '--app', $appImage, '--nginx', $webImage,
+        '--docker-observer', $dockerObserverImage)
     if ($EnableExternalReviewWorker) { $capacityArguments += @('--external-review-worker', $externalReviewWorkerImage) }
     if ($deployWhatsAppChanged) { $capacityArguments += @('--whatsapp', $whatsAppImage) }
     Invoke-External -FilePath 'python' -Arguments $capacityArguments
     $capacityPlan = Get-Content -Raw -Encoding UTF8 -LiteralPath $capacityPlanPath | ConvertFrom-Json
     $appImage = $capacityPlan.releaseImages.app
     $webImage = $capacityPlan.releaseImages.nginx
+    $dockerObserverImage = $capacityPlan.releaseImages.'docker-observer'
     if ($EnableExternalReviewWorker) { $externalReviewWorkerImage = $capacityPlan.releaseImages.'external-review-worker' }
     if ($deployWhatsAppChanged) { $whatsAppImage = $capacityPlan.releaseImages.whatsapp }
     $keycloakImage = $capacityPlan.releaseImages.keycloak
     if (-not $SkipEnvUpload) {
         Set-EnvFileValue -Path $stageEnv -Name 'APP_IMAGE' -Value $appImage
         Set-EnvFileValue -Path $stageEnv -Name 'WEB_IMAGE' -Value $webImage
+        Set-EnvFileValue -Path $stageEnv -Name 'DOCKER_OBSERVER_IMAGE' -Value $dockerObserverImage
         Set-EnvFileValue -Path $stageEnv -Name 'EXTERNAL_REVIEW_WORKER_IMAGE' -Value $externalReviewWorkerImage
         if ($deployWhatsAppChanged) { Set-EnvFileValue -Path $stageEnv -Name 'WHATSAPP_IMAGE' -Value $whatsAppImage }
         Set-EnvFileValue -Path $stageEnv -Name 'OTZIV_KEYCLOAK_IMAGE' -Value $keycloakImage
@@ -1437,6 +1447,7 @@ chmod 600 $remoteBundleForUploadQuoted
     $webRepoQuoted = ConvertTo-BashSingleQuoted "${DockerHubNamespace}/${WebRepository}"
     $appImageQuoted = ConvertTo-BashSingleQuoted $appImage
     $webImageQuoted = ConvertTo-BashSingleQuoted $webImage
+    $dockerObserverImageQuoted = ConvertTo-BashSingleQuoted $dockerObserverImage
     $externalReviewWorkerImageQuoted = ConvertTo-BashSingleQuoted $externalReviewWorkerImage
     $whatsAppImageQuoted = ConvertTo-BashSingleQuoted $whatsAppImage
     $keycloakImageQuoted = ConvertTo-BashSingleQuoted $keycloakImage
@@ -1604,7 +1615,7 @@ trap cleanup_preflight EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 preflight_dir="`$(mktemp -d "`$remote_path/.deploy-preflight.XXXXXXXX")"
-tar --warning=no-timestamp -xzf "`$bundle_path" -C "`$preflight_dir" ./infrastructure/scripts/prod/create-pre-deploy-db-backup.sh ./infrastructure/scripts/prod/deployment_capacity.py ./.deploy-capacity.json
+tar --warning=no-timestamp -xzf "`$bundle_path" -C "`$preflight_dir" ./infrastructure/scripts/prod/create-pre-deploy-db-backup.sh ./infrastructure/scripts/prod/deployment_capacity.py ./infrastructure/scripts/prod/image_layer_capacity.py ./.deploy-capacity.json
 python3 "`$preflight_dir/infrastructure/scripts/prod/deployment_capacity.py" check \
   --plan "`$preflight_dir/.deploy-capacity.json" --revision $gitRevisionQuoted \
   --deploy-path "`$remote_path" --bundle "`$bundle_path" --before-backup
@@ -1756,6 +1767,7 @@ app_repo=$appRepoQuoted
 web_repo=$webRepoQuoted
 app_image=$appImageQuoted
 web_image=$webImageQuoted
+docker_observer_image=$dockerObserverImageQuoted
 external_review_worker_image=$externalReviewWorkerImageQuoted
 published_whatsapp_image=$whatsAppImageQuoted
 keycloak_image=$keycloakImageQuoted
@@ -1995,7 +2007,7 @@ self_heal_guard_engaged="1"
 # Docker Compose gives exported shell variables precedence over --env-file.
 # Remove release-critical overrides inherited through SSH and pin the project
 # name so every pull/recreate targets the audited production project.
-unset APP_IMAGE WEB_IMAGE EXTERNAL_REVIEW_WORKER_IMAGE WHATSAPP_IMAGE OTZIV_KEYCLOAK_IMAGE
+unset APP_IMAGE WEB_IMAGE EXTERNAL_REVIEW_WORKER_IMAGE WHATSAPP_IMAGE OTZIV_KEYCLOAK_IMAGE DOCKER_OBSERVER_IMAGE
 unset EXTERNAL_REVIEW_CHECK_ENABLED COMPOSE_FILE COMPOSE_PROJECT_NAME COMPOSE_PROFILES
 unset COMPOSE_ENV_FILES COMPOSE_DISABLE_ENV_FILE
 compose_project_name="otziv-prod"
@@ -2900,7 +2912,7 @@ printf '%s\n' \
 chmod 600 "`$backup_dir/ROLLBACK.txt" || true
 
 capacity_check_dir="`$(mktemp -d "`$deploy_bundle_dir/capacity.XXXXXXXX")"
-tar --warning=no-timestamp -xzf "`$bundle_path" -C "`$capacity_check_dir" ./infrastructure/scripts/prod/deployment_capacity.py ./.deploy-capacity.json
+tar --warning=no-timestamp -xzf "`$bundle_path" -C "`$capacity_check_dir" ./infrastructure/scripts/prod/deployment_capacity.py ./infrastructure/scripts/prod/image_layer_capacity.py ./.deploy-capacity.json
 python3 "`$capacity_check_dir/infrastructure/scripts/prod/deployment_capacity.py" check \
   --plan "`$capacity_check_dir/.deploy-capacity.json" --revision "`$release_revision" \
   --deploy-path "`$remote_path" --bundle "`$bundle_path"
@@ -2926,6 +2938,7 @@ if [ "`$uploaded_env" != "1" ]; then
 fi
 set_env EXTERNAL_REVIEW_WORKER_IMAGE "`$external_review_worker_image"
 set_env OTZIV_KEYCLOAK_IMAGE "`$keycloak_image"
+set_env DOCKER_OBSERVER_IMAGE "`$docker_observer_image"
 if [ "`$deploy_external_review_worker" = "1" ]; then
   set_env EXTERNAL_REVIEW_CHECK_ENABLED "true"
 else

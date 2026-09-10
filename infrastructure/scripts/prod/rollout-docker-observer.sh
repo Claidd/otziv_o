@@ -18,7 +18,9 @@ verify_observer_logflow() (
 )
 
 rollout_docker_observer() {
-  compose build docker-observer || return
+  # The deployment bundle supplies the published digest already included in the
+  # disk preflight. Never allocate an unbudgeted build cache on the VPS.
+  compose pull docker-observer || return
   recreate_service_with_retry docker-observer || return
   wait_service_healthy docker-observer 120 || return
   recreate_service_with_retry dozzle || return

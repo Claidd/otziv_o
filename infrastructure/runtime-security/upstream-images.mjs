@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 
 export const composeFiles = ['compose.yaml', 'compose.prod-local.yaml', 'docker-compose.yaml'];
-const separatelyBuilt = /^\$\{(?:APP_IMAGE|WEB_IMAGE|EXTERNAL_REVIEW_WORKER_IMAGE|WHATSAPP_IMAGE)(?::[-?][^}]*)?\}$/;
+const separatelyBuilt = /^\$\{(?:APP_IMAGE|WEB_IMAGE|EXTERNAL_REVIEW_WORKER_IMAGE|WHATSAPP_IMAGE|DOCKER_OBSERVER_IMAGE)(?::[-?][^}]*)?\}$/;
 
 // Read literal release defaults, without loading .env or resolving credentials.
 // Application images are already built and scanned in their own CI matrix.

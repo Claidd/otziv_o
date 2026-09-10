@@ -29,6 +29,7 @@ volumes:
 
 services:
   docker-observer:
+    image: ${DOCKER_OBSERVER_IMAGE:-otziv-docker-observer:local}
     build:
       context: ./infrastructure/docker-observer
     restart: unless-stopped

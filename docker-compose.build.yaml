@@ -1,6 +1,11 @@
 name: otziv-build
 
 services:
+  docker-observer:
+    image: ${DOCKER_OBSERVER_IMAGE:-claid38/otziv-docker-observer:build-local}
+    build:
+      context: ./infrastructure/docker-observer
+
   app:
     image: ${APP_IMAGE:-claid38/otziv-app:latest}
     build:
