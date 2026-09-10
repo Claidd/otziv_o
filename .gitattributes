@@ -18,7 +18,13 @@ infrastructure/runtime-security/adjudications/alloy-daemon/** -text
 infrastructure/runtime-security/builds/phpmyadmin-alpine/** text eol=lf
 infrastructure/runtime-security/reviewed-images-c12-phpmyadmin.json text eol=lf
 infrastructure/runtime-security/reviewed-images-c14-*.json text eol=lf
+infrastructure/runtime-security/reviewed-images-c15-*.json text eol=lf
+infrastructure/runtime-security/builds/*.Dockerfile text eol=lf
+infrastructure/keycloak/security-generation/c15-netty/** text eol=lf
+infrastructure/runtime-security/adjudications/grafana-tempo-c15/** -text
+infrastructure/runtime-security/adjudications/alloy-daemon-c15/** -text
 infrastructure/runtime-security/builds/minio/** text eol=lf
+infrastructure/runtime-security/builds/mc-c15/** text eol=lf
 infrastructure/runtime-security/builds/postgres-c14/** text eol=lf
 infrastructure/runtime-security/builds/versity-c14/** text eol=lf
 infrastructure/keycloak/security-generation/c14-migration-fix/** text eol=lf

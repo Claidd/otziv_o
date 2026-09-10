@@ -25,6 +25,7 @@ const RELEASE_SETS = Object.freeze({
   'c15-tempo': { component: 'tempo', path: 'infrastructure/runtime-security/reviewed-images-c15-tempo.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/Tempo.Dockerfile' },
   'c15-grafana': { component: 'grafana', path: 'infrastructure/runtime-security/reviewed-images-c15-grafana.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/Grafana.Dockerfile' },
   'c15-keycloak': { component: 'keycloak', path: 'infrastructure/runtime-security/reviewed-images-c15-keycloak.json', context: 'infrastructure/keycloak/security-generation/c15-netty', dockerfile: 'infrastructure/keycloak/security-generation/c15-netty/Dockerfile' },
+  'c15-mc': { component: 'mc', path: 'infrastructure/runtime-security/reviewed-images-c15-mc.json', context: 'infrastructure/runtime-security/builds/mc-c15', dockerfile: 'infrastructure/runtime-security/builds/mc-c15/mc.Dockerfile' },
 });
 // These two local-stack dependencies were absent from the immutable C7 manifest.
 // Keep their original pins and service coverage explicit when adding publication.

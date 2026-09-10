@@ -26,6 +26,7 @@ on:
           - c15-tempo
           - c15-grafana
           - c15-keycloak
+          - c15-mc
   pull_request:
   push:
 
