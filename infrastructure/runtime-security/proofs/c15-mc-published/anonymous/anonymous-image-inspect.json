@@ -1,0 +1,100 @@
+[
+    {
+        "Id": "sha256:8e905573627359647f868f1ce807de47f2591c7ee506de95639c7c6d24bd4841",
+        "RepoTags": [],
+        "RepoDigests": [
+            "ghcr.io/claidd/otziv-security@sha256:a0b7303c61b0f3e5b97d126ae34ce6cd53411dab07e721b7ba818706585dcced"
+        ],
+        "Parent": "",
+        "Comment": "buildkit.dockerfile.v0",
+        "Created": "2026-09-10T18:56:00.666954468Z",
+        "DockerVersion": "",
+        "Author": "",
+        "Config": {
+            "Hostname": "",
+            "Domainname": "",
+            "User": "",
+            "AttachStdin": false,
+            "AttachStdout": false,
+            "AttachStderr": false,
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "container=oci",
+                "MC_CONFIG_DIR=/tmp/.mc"
+            ],
+            "Cmd": null,
+            "Image": "",
+            "Volumes": null,
+            "WorkingDir": "/",
+            "Entrypoint": [
+                "mc"
+            ],
+            "OnBuild": null,
+            "Labels": {
+                "architecture": "x86_64",
+                "build-date": "2026-08-31T08:53:29Z",
+                "com.otziv.corresponding-source": "/usr/share/otziv-build/mc/corresponding-source.tar.gz",
+                "com.otziv.publication.revision": "1be0043f3f6c0253285b819407af35ac3c7260fe",
+                "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+                "com.otziv.reviewed-component": "mc",
+                "com.otziv.upstream.archived": "true",
+                "com.redhat.component": "ubi9-minimal-container",
+                "com.redhat.license_terms": "https://www.redhat.com/en/about/red-hat-end-user-license-agreements#UBI",
+                "cpe": "cpe:/a:redhat:enterprise_linux:9::appstream",
+                "description": "The Universal Base Image Minimal is a stripped down image that uses microdnf as a package manager. This base image is freely redistributable, but Red Hat only supports Red Hat technologies through subscriptions for Red Hat products. This image is maintained by Red Hat and updated regularly.",
+                "distribution-scope": "public",
+                "io.buildah.version": "1.44.0",
+                "io.k8s.description": "The Universal Base Image Minimal is a stripped down image that uses microdnf as a package manager. This base image is freely redistributable, but Red Hat only supports Red Hat technologies through subscriptions for Red Hat products. This image is maintained by Red Hat and updated regularly.",
+                "io.k8s.display-name": "Red Hat Universal Base Image 9 Minimal",
+                "io.openshift.expose-services": "",
+                "io.openshift.tags": "minimal rhel9",
+                "maintainer": "Red Hat, Inc.",
+                "name": "ubi9/ubi-minimal",
+                "org.opencontainers.image.created": "2026-08-31T08:53:29Z",
+                "org.opencontainers.image.licenses": "AGPL-3.0-or-later",
+                "org.opencontainers.image.revision": "77f82e18b5401a65958f1619df6ebb994634bd88",
+                "org.opencontainers.image.source": "https://github.com/Claidd/otziv_o",
+                "org.opencontainers.image.version": "RELEASE.2025-11-06T16-25-29Z.otziv-c15.1",
+                "release": "1788166357",
+                "summary": "Provides the latest release of the minimal Red Hat Universal Base Image 9.",
+                "url": "https://catalog.redhat.com/en/search?searchType=containers",
+                "vcs-ref": "3c32d7c63d617fc21bc66bb65a893d8db99096da",
+                "vcs-type": "git",
+                "vendor": "Red Hat, Inc.",
+                "version": "9.8"
+            }
+        },
+        "Architecture": "amd64",
+        "Os": "linux",
+        "Size": 191850852,
+        "GraphDriver": {
+            "Data": {
+                "LowerDir": "/var/lib/docker/overlay2/f4556c16c0033ebc7a5e534cce621cf53f5730c617ab553c8b276f29f14da408/diff:/var/lib/docker/overlay2/78d0a1a9de58fde5f8e7e2847215b8679d37d94f6d8ce9130706aa3e109f5fd7/diff:/var/lib/docker/overlay2/af7113f1405a608b2bc586d33e17404f3c878f41ff6000a3f9f74c88ceb0a182/diff:/var/lib/docker/overlay2/4cdb919dfd7de5b41e96955905b25d358ce61b1a852c354945949d8a030e9581/diff:/var/lib/docker/overlay2/eda5144022b8a7f6c573c576b31ec5ed73b14d36b3c06332eaef2c78e182c927/diff:/var/lib/docker/overlay2/8f30145fdfce786c363aca4a0c463b2e209e9fd16627b6b7065bc3552a28ac7f/diff:/var/lib/docker/overlay2/f1c6ac976a5d9f90a5e248f38e0be7e7fa0509c77796f8378a82b32f9535e3ce/diff:/var/lib/docker/overlay2/d2d0e149873c5ea6ffd6fc9b299cc917b05a8dc82aa56077155c518236f125f9/diff",
+                "MergedDir": "/var/lib/docker/overlay2/578532fd992501a477beadd3f63b3c79261de7de0ba02f7c27e304875eaa018e/merged",
+                "UpperDir": "/var/lib/docker/overlay2/578532fd992501a477beadd3f63b3c79261de7de0ba02f7c27e304875eaa018e/diff",
+                "WorkDir": "/var/lib/docker/overlay2/578532fd992501a477beadd3f63b3c79261de7de0ba02f7c27e304875eaa018e/work"
+            },
+            "Name": "overlay2"
+        },
+        "RootFS": {
+            "Type": "layers",
+            "Layers": [
+                "sha256:56550161697f795bc52c827a70fe1e427be4c6bdf4e3c9b2d560f51c2524b6f3",
+                "sha256:9a64d768cbc1571b0c6d95f13ff1203602f1018e769a3f80a334913bde82462f",
+                "sha256:e4f003a1da29f07d88cde982f4ad82da63940cf1ad27a6b856e5f87bafb2c46b",
+                "sha256:65bfd3cc144a9c9cad78b06d3decad41eae4c75642228c394f1b358e28002527",
+                "sha256:075a3a3050e470cc15c5d6b46a51691cff57435bb84758e7811b2065bc5ba7ca",
+                "sha256:b32edf5e5d96e3fb2e3701e2edbc8280932ff2fa967bbaaf5d0fdcff670176f3",
+                "sha256:4fcaea3b8ac2a35e4574e283a4e0e0a67dbba687a5f733a1f2b646303bf809f7",
+                "sha256:f0fa23747d8d26b38e019e156a9f17b9d2935c68fc0f66219f175607d16cdc6e",
+                "sha256:e01f1eeba5fa7324438073bf7cbd46a0dec5acd77d7207d1af68bbbda3bc9fd0"
+            ]
+        },
+        "Metadata": {
+            "LastTagTime": "0001-01-01T00:00:00Z"
+        }
+    }
+]
