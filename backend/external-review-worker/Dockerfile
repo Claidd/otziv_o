@@ -44,4 +44,8 @@ EXPOSE 3097
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 --start-period=20s \
   CMD node -e "require('http').get('http://127.0.0.1:' + (process.env.PORT || 3097) + '/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
 
+# Verify the vendor package includes the real helper, independently of its name.
+RUN test -x /opt/google/chrome/chrome-sandbox && \
+    test "$(stat -c '%u:%g:%a' /opt/google/chrome/chrome-sandbox)" = "0:0:4755"
+
 CMD ["node", "src/index.js"]

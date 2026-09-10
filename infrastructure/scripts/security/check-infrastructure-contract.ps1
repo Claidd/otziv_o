@@ -518,7 +518,11 @@ Assert-TextMatch $backendDockerfile 'update-ca-certificates' 'The backend image 
 Assert-TextMatch $backendDockerfile 'keytool -importcert' 'The backend image must import the MAX root into the JVM trust store.'
 Assert-TextMatch $backendDockerfile '(?m)^USER otziv:otziv\s*$' 'The backend runtime image must run as the dedicated non-root user.'
 Assert-TextMatch $whatsAppDockerfile '(?m)^USER node\s*$' 'The WhatsApp runtime image must run as the non-root node user.'
-Assert-TextMatch $whatsAppDockerfile '(?m)^\s*chromium-sandbox \\\r?$' 'The WhatsApp runtime image must install Chromium''s sandbox helper explicitly.'
+foreach ($browserDockerfile in @($whatsAppDockerfile, $externalReviewWorkerDockerfile)) {
+    Assert-TextMatch $browserDockerfile 'sha256sum --check --strict' 'The browser artifact must be verified against its pinned checksum.'
+    Assert-TextMatch $browserDockerfile 'test -x /opt/google/chrome/chrome-sandbox' 'Each browser image must verify its installed vendor sandbox helper is executable.'
+    Assert-TextMatch $browserDockerfile 'stat -c ''%u:%g:%a'' /opt/google/chrome/chrome-sandbox\)" = "0:0:4755"' 'Each browser image must verify the vendor helper ownership and setuid mode.'
+}
 Assert-TextNotMatch $whatsAppGateway '(?m)^[^/\r\n]*--no-sandbox' 'WhatsApp Chromium must not disable the browser sandbox.'
 Assert-TextNotMatch $whatsAppGateway '(?m)^[^/\r\n]*--disable-setuid-sandbox' 'WhatsApp Chromium must not disable the setuid sandbox.'
 foreach ($gateway in @('whatsapp_lika', 'whatsapp_vika')) {

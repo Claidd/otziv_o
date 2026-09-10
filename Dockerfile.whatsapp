@@ -43,4 +43,8 @@ RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack 
 
 USER node
 
+# Verify the vendor package includes the real helper, independently of its name.
+RUN test -x /opt/google/chrome/chrome-sandbox && \
+    test "$(stat -c '%u:%g:%a' /opt/google/chrome/chrome-sandbox)" = "0:0:4755"
+
 CMD ["node", "index.js"]
