@@ -12,7 +12,7 @@ limitations under the License.
 -->
 # Maven Site with Jetty 12 EE8
 
-This is an Otziv downstream derivative of Apache Maven Site Plugin 3.22.0, **not an Apache release**. The separate version `3.22.0-otziv-jetty12.0.39-1` never overwrites the vendor GAV. Keeping the original group/artifact is deliberate: Maven's ordinary `site` lifecycle resolves that identity. All ten goal descriptors and their parameters are unchanged. Java 17 or newer and Maven 3.9.15 or newer are required; the application build uses Java 26 and Maven 3.9.15.
+This is an Otziv downstream derivative of Apache Maven Site Plugin 3.22.0, **not an Apache release**. The separate version `3.22.0-otziv-jetty12.0.39-2` never overwrites the vendor GAV. Keeping the original group/artifact is deliberate: Maven's ordinary `site` lifecycle resolves that identity. All ten goal descriptors and their parameters are unchanged. Java 17 or newer and Maven 3.9.15 or newer are required; the application build uses Java 26 and Maven 3.9.15.
 
 The source archive is public at https://repo.maven.apache.org/maven2/org/apache/maven/plugins/maven-site-plugin/3.22.0/maven-site-plugin-3.22.0-source-release.zip. Its exact digest and each vendored file are checked by `proofs/SiteSourceProvenance.java` and `UPSTREAM-SOURCES.tsv`; `upstream.patch` records every delta. LICENSE and NOTICE are preserved. The module contains all 21 main Java files and all 26 runtime resources. It includes all seven upstream unit-test source files and their three resources; the upstream multi-project integration-test development tree is not vendored and its suite is not claimed as executed.
 
@@ -55,3 +55,5 @@ archive reproduces all 60 files. An offline Site-only rebuild passes all four
 tests and preserves every runtime and test class byte; only line endings of the
 embedded POM differ from the previously scanned JAR. Historical scan identities
 remain recorded separately in the C6 remediation evidence.
+
+The `-2` derivative pins Zstd JNI 1.5.7-14 in the project and the Maven plugin realms that use it. This addresses [GHSA-jfr6-9xqw-2g2q](https://github.com/luben/zstd-jni/security/advisories/GHSA-jfr6-9xqw-2g2q) and [GHSA-ff36-7w3w-g8rm](https://github.com/luben/zstd-jni/security/advisories/GHSA-ff36-7w3w-g8rm). The earlier scan remains historical; the new dependency graph requires its own audit.

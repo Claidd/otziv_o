@@ -21,7 +21,7 @@ under the License.
   <modelVersion>4.0.0</modelVersion>
   <groupId>org.apache.maven.plugins</groupId>
   <artifactId>maven-site-plugin</artifactId>
-  <version>3.22.0-otziv-jetty12.0.39-1</version>
+  <version>3.22.0-otziv-jetty12.0.39-2</version>
   <packaging>maven-plugin</packaging>
   <name>Otziv derivative of Apache Maven Site Plugin (Jetty 12 EE8)</name>
   <description>Otziv downstream source derivative of Apache Maven Site Plugin 3.22.0. Preserves every goal and migrates embedded preview to Jetty 12 EE8; not an Apache release.</description>
@@ -220,6 +220,11 @@ under the License.
   </licenses>
   <dependencyManagement>
     <dependencies>
+      <dependency>
+        <groupId>com.github.luben</groupId>
+        <artifactId>zstd-jni</artifactId>
+        <version>1.5.7-14</version>
+      </dependency>
       <dependency>
         <groupId>org.apache.maven.resolver</groupId>
         <artifactId>maven-resolver-api</artifactId>
@@ -687,6 +692,11 @@ under the License.
           <artifactId>maven-jar-plugin</artifactId>
           <version>3.5.1</version>
           <dependencies>
+              <dependency>
+                <groupId>com.github.luben</groupId>
+                <artifactId>zstd-jni</artifactId>
+                <version>1.5.7-14</version>
+              </dependency>
             <dependency>
               <groupId>org.codehaus.plexus</groupId>
               <artifactId>plexus-utils</artifactId>
@@ -731,8 +741,13 @@ under the License.
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-site-plugin</artifactId>
-          <version>3.22.0-otziv-jetty12.0.39-1</version>
+          <version>3.22.0-otziv-jetty12.0.39-2</version>
           <dependencies>
+              <dependency>
+                <groupId>com.github.luben</groupId>
+                <artifactId>zstd-jni</artifactId>
+                <version>1.5.7-14</version>
+              </dependency>
             <dependency>
               <groupId>org.jsoup</groupId>
               <artifactId>jsoup</artifactId>
@@ -750,6 +765,11 @@ under the License.
           <artifactId>maven-plugin-plugin</artifactId>
           <version>3.15.2</version>
           <dependencies>
+              <dependency>
+                <groupId>com.github.luben</groupId>
+                <artifactId>zstd-jni</artifactId>
+                <version>1.5.7-14</version>
+              </dependency>
             <dependency>
               <groupId>org.codehaus.plexus</groupId>
               <artifactId>plexus-utils</artifactId>
@@ -816,6 +836,13 @@ under the License.
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-dependency-plugin</artifactId>
           <version>3.11.0</version>
+                  <dependencies>
+              <dependency>
+                <groupId>com.github.luben</groupId>
+                <artifactId>zstd-jni</artifactId>
+                <version>1.5.7-14</version>
+              </dependency>
+          </dependencies>
         </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
@@ -827,6 +854,11 @@ under the License.
           <artifactId>maven-remote-resources-plugin</artifactId>
           <version>3.3.0</version>
           <dependencies>
+              <dependency>
+                <groupId>com.github.luben</groupId>
+                <artifactId>zstd-jni</artifactId>
+                <version>1.5.7-14</version>
+              </dependency>
             <dependency>
               <groupId>org.codehaus.plexus</groupId>
               <artifactId>plexus-utils</artifactId>
@@ -883,6 +915,13 @@ under the License.
             </configuration>
           </execution>
         </executions>
+              <dependencies>
+            <dependency>
+              <groupId>com.github.luben</groupId>
+              <artifactId>zstd-jni</artifactId>
+              <version>1.5.7-14</version>
+            </dependency>
+        </dependencies>
       </plugin>
       <plugin>
         <artifactId>maven-plugin-plugin</artifactId>
@@ -918,6 +957,13 @@ under the License.
             <extractor>java-annotations</extractor>
           </extractors>
         </configuration>
+              <dependencies>
+            <dependency>
+              <groupId>com.github.luben</groupId>
+              <artifactId>zstd-jni</artifactId>
+              <version>1.5.7-14</version>
+            </dependency>
+        </dependencies>
       </plugin>
       <plugin>
         <artifactId>maven-jar-plugin</artifactId>
@@ -947,6 +993,13 @@ under the License.
             </manifest>
           </archive>
         </configuration>
+              <dependencies>
+            <dependency>
+              <groupId>com.github.luben</groupId>
+              <artifactId>zstd-jni</artifactId>
+              <version>1.5.7-14</version>
+            </dependency>
+        </dependencies>
       </plugin>
       <plugin>
         <artifactId>maven-compiler-plugin</artifactId>

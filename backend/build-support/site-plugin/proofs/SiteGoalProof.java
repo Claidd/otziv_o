@@ -31,7 +31,7 @@ public class SiteGoalProof {
   Path fixture=Path.of(a[0]).toAbsolutePath();boolean fixed=Boolean.parseBoolean(a[1]);int port;
   try(ServerSocket p=new ServerSocket(0,0,InetAddress.getLoopbackAddress())) {port=p.getLocalPort();}
   Files.writeString(fixture.resolve("src/site/markdown/index.md"),"# Site security fixture\n\nORIGINAL_CONTENT\n\n[Second document](second.html)\n");
-  String coords=fixed?"org.apache.maven.plugins:maven-site-plugin:3.22.0-otziv-jetty12.0.39-1":"org.apache.maven.plugins:maven-site-plugin:3.22.0";
+  String coords=fixed?"org.apache.maven.plugins:maven-site-plugin:3.22.0-otziv-jetty12.0.39-2":"org.apache.maven.plugins:maven-site-plugin:3.22.0";
   AtomicInteger exit=new AtomicInteger(-99);System.setProperty("maven.multiModuleProjectDirectory",fixture.toString());
   Thread goal=new Thread(()->exit.set(new MavenCli().doMain(new String[]{"-B","-ntp","-X","-s",fixture.resolve("proof-settings.xml").toString(),"-gs",fixture.resolve("proof-settings.xml").toString(),"-Dhost=127.0.0.1","-Dport="+port,coords+":run"},fixture.toString(),System.out,System.err)),"actual-maven-site-run");goal.start();
   HttpResponse<String> page=null;long until=System.nanoTime()+Duration.ofSeconds(90).toNanos();

@@ -6,6 +6,7 @@ import { decryptArchive, encryptionKey, sha256File } from './envelope.mjs';
 import { workspace } from './backup.mjs';
 import { verifyManifest } from './manifest.mjs';
 import { run } from './process.mjs';
+import { assertPostgresImage } from './config.mjs';
 
 export async function assertLocalDocker(env = process.env, execute = run) {
   if (env.DOCKER_HOST && !/^(unix|npipe):\/\//.test(env.DOCKER_HOST)) throw new Error('remote_docker_forbidden');
@@ -15,7 +16,7 @@ export async function assertLocalDocker(env = process.env, execute = run) {
 
 export async function postgresDrill(config, manifest, archive, env = process.env, execute = run) {
   verifyManifest(manifest);
-  if (!/^postgres(?::[^@]+)?@sha256:[a-f0-9]{64}$/.test(config.postgresImage || '')) throw new Error('postgres_image_not_pinned');
+  assertPostgresImage(config.postgresImage);
   if (manifest.postgresImage !== config.postgresImage || manifest.postgresMajor !== config.postgres.major ||
       manifest.keycloakVersion !== config.keycloakVersion || manifest.databases.postgres.keyId !== config.keyId) {
     throw new Error('restore_version_or_key_identity_mismatch');

@@ -16,7 +16,7 @@ import { connect } from 'node:net';
 import { delimiter, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const VERSION = '3.22.0-otziv-jetty12.0.39-1';
+const VERSION = '3.22.0-otziv-jetty12.0.39-2';
 const proofDirectory = dirname(fileURLToPath(import.meta.url));
 const [mavenArg, javaArg, outputArg, repositoryArg] = process.argv.slice(2);
 if (!mavenArg || !javaArg || !outputArg || ![5, 6].includes(process.argv.length)) {

@@ -49,6 +49,11 @@
           <artifactId>maven-jar-plugin</artifactId>
           <version>3.5.1</version>
           <dependencies>
+              <dependency>
+                <groupId>com.github.luben</groupId>
+                <artifactId>zstd-jni</artifactId>
+                <version>1.5.7-14</version>
+              </dependency>
             <dependency>
               <groupId>org.codehaus.plexus</groupId>
               <artifactId>plexus-utils</artifactId>
@@ -93,8 +98,13 @@
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-site-plugin</artifactId>
-          <version>3.22.0-otziv-jetty12.0.39-1</version>
+          <version>3.22.0-otziv-jetty12.0.39-2</version>
           <dependencies>
+              <dependency>
+                <groupId>com.github.luben</groupId>
+                <artifactId>zstd-jni</artifactId>
+                <version>1.5.7-14</version>
+              </dependency>
             <dependency>
               <groupId>org.jsoup</groupId>
               <artifactId>jsoup</artifactId>
@@ -112,6 +122,11 @@
           <artifactId>maven-plugin-plugin</artifactId>
           <version>3.15.2</version>
           <dependencies>
+              <dependency>
+                <groupId>com.github.luben</groupId>
+                <artifactId>zstd-jni</artifactId>
+                <version>1.5.7-14</version>
+              </dependency>
             <dependency>
               <groupId>org.codehaus.plexus</groupId>
               <artifactId>plexus-utils</artifactId>
@@ -178,6 +193,14 @@
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-dependency-plugin</artifactId>
           <version>3.11.0</version>
+
+          <dependencies>
+              <dependency>
+                <groupId>com.github.luben</groupId>
+                <artifactId>zstd-jni</artifactId>
+                <version>1.5.7-14</version>
+              </dependency>
+          </dependencies>
         </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
@@ -189,6 +212,11 @@
           <artifactId>maven-remote-resources-plugin</artifactId>
           <version>3.3.0</version>
           <dependencies>
+              <dependency>
+                <groupId>com.github.luben</groupId>
+                <artifactId>zstd-jni</artifactId>
+                <version>1.5.7-14</version>
+              </dependency>
             <dependency>
               <groupId>org.codehaus.plexus</groupId>
               <artifactId>plexus-utils</artifactId>
@@ -235,6 +263,14 @@
     <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-resources-plugin</artifactId><version>3.5.0</version><dependencies><dependency><groupId>org.codehaus.plexus</groupId><artifactId>plexus-utils</artifactId><version>3.6.2</version></dependency></dependencies></plugin>
     <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-jar-plugin</artifactId><version>3.5.1</version><dependencies><dependency><groupId>org.codehaus.plexus</groupId><artifactId>plexus-utils</artifactId><version>4.0.3</version></dependency></dependencies></plugin>
     <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-install-plugin</artifactId><version>3.1.4</version><dependencies><dependency><groupId>org.codehaus.plexus</groupId><artifactId>plexus-utils</artifactId><version>4.0.3</version></dependency></dependencies></plugin>
-    <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-plugin-plugin</artifactId><version>3.15.2</version><configuration><goalPrefix>effective-dependency-check</goalPrefix><requiredJavaVersion>17</requiredJavaVersion><mojoDependencies><mojoDependency>org.owasp:dependency-check-maven</mojoDependency></mojoDependencies></configuration></plugin>
+    <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-plugin-plugin</artifactId><version>3.15.2</version><configuration><goalPrefix>effective-dependency-check</goalPrefix><requiredJavaVersion>17</requiredJavaVersion><mojoDependencies><mojoDependency>org.owasp:dependency-check-maven</mojoDependency></mojoDependencies></configuration>
+          <dependencies>
+              <dependency>
+                <groupId>com.github.luben</groupId>
+                <artifactId>zstd-jni</artifactId>
+                <version>1.5.7-14</version>
+              </dependency>
+          </dependencies>
+        </plugin>
   </plugins></build>
 </project>

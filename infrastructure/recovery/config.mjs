@@ -11,12 +11,19 @@ export function required(value, code) {
 export function positive(value, code, maximum = Number.MAX_SAFE_INTEGER) {
   if (!Number.isSafeInteger(value) || value < 1 || value > maximum) throw new Error(code);
 }
+// Keep the recovery runtime paired with the published PostgreSQL activation.
+// Other images in the shared GHCR repository are not PostgreSQL runtimes.
+export const REVIEWED_POSTGRES_IMAGE = 'ghcr.io/claidd/otziv-security@sha256:07834abbfd80ed7183afa9096db99afc4d93b99fd51aae726e550d07ade65dbf';
+export function assertPostgresImage(value) {
+  if (typeof value !== 'string' || (!/^postgres(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?@sha256:[a-f0-9]{64}$/.test(value) &&
+      value !== REVIEWED_POSTGRES_IMAGE)) throw new Error('postgres_image_not_pinned');
+}
 export function validateConfig(config) {
   if (config.schema !== 'otziv-recovery-config-v1') throw new Error('config_schema_invalid');
   for (const key of ['owner', 'keyId', 'releaseCommit', 'keycloakVersion', 'postgresImage']) required(config[key], `${key}_missing`);
   required(config.primaryStorageBucket, 'primary_storage_bucket_identity_missing');
   if (!/^[a-f0-9]{40}$/.test(config.releaseCommit)) throw new Error('release_commit_invalid');
-  if (!/^postgres(?::[^@]+)?@sha256:[a-f0-9]{64}$/.test(config.postgresImage)) throw new Error('postgres_image_not_pinned');
+  assertPostgresImage(config.postgresImage);
   if (!isAbsolute(config.workDirectory || '')) throw new Error('work_directory_not_absolute');
   positive(config.rpoSeconds, 'rpo_missing');
   positive(config.rtoSeconds, 'rto_missing');

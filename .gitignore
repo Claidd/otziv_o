@@ -112,3 +112,4 @@ __pycache__/
 !/backend/build-support/site-plugin/src/test/resources/unit/deploy-dav/target/site/css/maven-base.css
 
 !infrastructure/runtime-security/adjudications/alloy-daemon/upstream-govulncheck.yaml
+!infrastructure/runtime-security/adjudications/alloy-daemon-c15/upstream-govulncheck.yaml

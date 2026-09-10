@@ -30,7 +30,7 @@
 +  <groupId>org.apache.maven.plugins</groupId>
    <artifactId>maven-site-plugin</artifactId>
 -  <version>3.22.0</version>
-+  <version>3.22.0-otziv-jetty12.0.39-1</version>
++  <version>3.22.0-otziv-jetty12.0.39-2</version>
    <packaging>maven-plugin</packaging>
 -
 -  <name>Apache Maven Site Plugin</name>
@@ -42,7 +42,7 @@
    <contributors>
      <contributor>
        <name>Naoki Nose</name>
-@@ -160,137 +151,291 @@
+@@ -160,137 +151,296 @@
        </roles>
      </contributor>
      <contributor>
@@ -136,6 +136,11 @@
 +  </licenses>
 +  <dependencyManagement>
 +    <dependencies>
++      <dependency>
++        <groupId>com.github.luben</groupId>
++        <artifactId>zstd-jni</artifactId>
++        <version>1.5.7-14</version>
++      </dependency>
 +      <dependency>
 +        <groupId>org.apache.maven.resolver</groupId>
 +        <artifactId>maven-resolver-api</artifactId>
@@ -376,7 +381,7 @@
        <scope>provided</scope>
      </dependency>
      <dependency>
-@@ -299,113 +444,118 @@
+@@ -299,113 +449,118 @@
        <version>1</version>
        <scope>provided</scope>
      </dependency>
@@ -524,7 +529,7 @@
        <scope>test</scope>
        <exclusions>
          <exclusion>
-@@ -414,97 +564,90 @@
+@@ -414,97 +569,90 @@
          </exclusion>
        </exclusions>
      </dependency>
@@ -655,7 +660,7 @@
      <dependency>
        <groupId>org.apache.maven.plugin-testing</groupId>
        <artifactId>maven-plugin-testing-harness</artifactId>
-@@ -512,137 +655,354 @@
+@@ -512,137 +660,402 @@
        <scope>test</scope>
      </dependency>
    </dependencies>
@@ -729,6 +734,11 @@
 +          <artifactId>maven-jar-plugin</artifactId>
 +          <version>3.5.1</version>
 +          <dependencies>
++              <dependency>
++                <groupId>com.github.luben</groupId>
++                <artifactId>zstd-jni</artifactId>
++                <version>1.5.7-14</version>
++              </dependency>
 +            <dependency>
 +              <groupId>org.codehaus.plexus</groupId>
 +              <artifactId>plexus-utils</artifactId>
@@ -773,8 +783,13 @@
 +        <plugin>
 +          <groupId>org.apache.maven.plugins</groupId>
 +          <artifactId>maven-site-plugin</artifactId>
-+          <version>3.22.0-otziv-jetty12.0.39-1</version>
++          <version>3.22.0-otziv-jetty12.0.39-2</version>
 +          <dependencies>
++              <dependency>
++                <groupId>com.github.luben</groupId>
++                <artifactId>zstd-jni</artifactId>
++                <version>1.5.7-14</version>
++              </dependency>
 +            <dependency>
 +              <groupId>org.jsoup</groupId>
 +              <artifactId>jsoup</artifactId>
@@ -792,6 +807,11 @@
 +          <artifactId>maven-plugin-plugin</artifactId>
 +          <version>3.15.2</version>
 +          <dependencies>
++              <dependency>
++                <groupId>com.github.luben</groupId>
++                <artifactId>zstd-jni</artifactId>
++                <version>1.5.7-14</version>
++              </dependency>
 +            <dependency>
 +              <groupId>org.codehaus.plexus</groupId>
 +              <artifactId>plexus-utils</artifactId>
@@ -858,6 +878,13 @@
 +          <groupId>org.apache.maven.plugins</groupId>
 +          <artifactId>maven-dependency-plugin</artifactId>
 +          <version>3.11.0</version>
++                  <dependencies>
++              <dependency>
++                <groupId>com.github.luben</groupId>
++                <artifactId>zstd-jni</artifactId>
++                <version>1.5.7-14</version>
++              </dependency>
++          </dependencies>
 +        </plugin>
 +        <plugin>
 +          <groupId>org.apache.maven.plugins</groupId>
@@ -869,6 +896,11 @@
 +          <artifactId>maven-remote-resources-plugin</artifactId>
 +          <version>3.3.0</version>
 +          <dependencies>
++              <dependency>
++                <groupId>com.github.luben</groupId>
++                <artifactId>zstd-jni</artifactId>
++                <version>1.5.7-14</version>
++              </dependency>
 +            <dependency>
 +              <groupId>org.codehaus.plexus</groupId>
 +              <artifactId>plexus-utils</artifactId>
@@ -945,6 +977,13 @@
 -            <version>1.7.1</version>
 +          </execution>
 +        </executions>
++              <dependencies>
++            <dependency>
++              <groupId>com.github.luben</groupId>
++              <artifactId>zstd-jni</artifactId>
++              <version>1.5.7-14</version>
++            </dependency>
++        </dependencies>
 +      </plugin>
 +      <plugin>
 +        <artifactId>maven-plugin-plugin</artifactId>
@@ -1049,6 +1088,13 @@
 +            <extractor>java-annotations</extractor>
 +          </extractors>
 +        </configuration>
++              <dependencies>
++            <dependency>
++              <groupId>com.github.luben</groupId>
++              <artifactId>zstd-jni</artifactId>
++              <version>1.5.7-14</version>
++            </dependency>
++        </dependencies>
 +      </plugin>
 +      <plugin>
 +        <artifactId>maven-jar-plugin</artifactId>
@@ -1078,6 +1124,13 @@
 +            </manifest>
 +          </archive>
 +        </configuration>
++              <dependencies>
++            <dependency>
++              <groupId>com.github.luben</groupId>
++              <artifactId>zstd-jni</artifactId>
++              <version>1.5.7-14</version>
++            </dependency>
++        </dependencies>
 +      </plugin>
 +      <plugin>
 +        <artifactId>maven-compiler-plugin</artifactId>

@@ -9,7 +9,7 @@ import { encryptArchive, decryptArchive, sha256File, encryptionKey } from './env
 import { BackupStorage } from './storage.mjs';
 import { buildManifest, verifyManifest, compareIdentities } from './manifest.mjs';
 import { assertLocalDocker, postgresDrill } from './drill.mjs';
-import { validateConfig } from './config.mjs';
+import { validateConfig, assertPostgresImage, REVIEWED_POSTGRES_IMAGE } from './config.mjs';
 import { backup } from './backup.mjs';
 
 async function fixture(t) {
@@ -140,12 +140,39 @@ test('example configuration fails closed before provider/contact/RPO are selecte
   assert.throws(() => validateConfig(config), /missing/);
 });
 
+test('recovery accepts the activated PostgreSQL runtime, not arbitrary shared-repository images', async () => {
+  const activations = JSON.parse(await readFile(new URL('../runtime-security/reviewed-image-activations.json', import.meta.url), 'utf8'));
+  const postgres = activations.images.filter(entry => entry.component === 'postgres');
+  assert.equal(postgres.length, 1);
+  assert.equal(REVIEWED_POSTGRES_IMAGE, postgres[0].reference);
+  const example = JSON.parse(await readFile(new URL('./config.example.json', import.meta.url), 'utf8'));
+  assert.equal(example.postgresImage, REVIEWED_POSTGRES_IMAGE);
+  assertPostgresImage(REVIEWED_POSTGRES_IMAGE);
+  assertPostgresImage(`postgres:17@sha256:${'a'.repeat(64)}`);
+  for (const value of ['postgres:17', 'ghcr.io/claidd/otziv-security:latest',
+    `ghcr.io/claidd/otziv-security@sha256:${'a'.repeat(64)}`,
+    REVIEWED_POSTGRES_IMAGE + '\n', `postgres:17 --privileged@sha256:${'a'.repeat(64)}`, null]) {
+    assert.throws(() => assertPostgresImage(value), /postgres_image_not_pinned/);
+  }
+});
+
+test('restore rejects an unreviewed runtime or a different paired manifest before I/O', async () => {
+  const input = pairing(), manifest = buildManifest(input);
+  let calls = 0;
+  const execute = async () => { calls++; };
+  const config = { postgresImage: REVIEWED_POSTGRES_IMAGE, postgres: { major: 17 }, keycloakVersion: '26.2', keyId: 'pg-key-v1' };
+  await assert.rejects(postgresDrill(config, manifest, 'nonexistent-archive', {}, execute), /restore_version_or_key_identity_mismatch/);
+  await assert.rejects(postgresDrill({ ...config, postgresImage: `ghcr.io/claidd/otziv-security@sha256:${'a'.repeat(64)}` },
+    manifest, 'nonexistent-archive', {}, execute), /postgres_image_not_pinned/);
+  assert.equal(calls, 0);
+});
+
 test('capture pipeline authenticates remote bytes, writes receipts and removes every local dump', async t => {
   const path = await fixture(t), pgpass = join(path, 'pgpass'), cert = join(path, 'ca.crt');
   await writeFile(pgpass, 'fixture-pgpass', { mode: 0o600 }); await writeFile(cert, 'fixture-ca', { mode: 0o600 });
   const key = randomBytes(32);
   const config = { schema: 'otziv-recovery-config-v1', owner: 'fixture-owner', keyId: 'pg-key-v1', releaseCommit: 'a'.repeat(40),
-    keycloakVersion: '26.2', postgresImage: `postgres:17@sha256:${'a'.repeat(64)}`, workDirectory: path,
+    keycloakVersion: '26.2', postgresImage: REVIEWED_POSTGRES_IMAGE, workDirectory: path,
     primaryStorageBucket: 'fixture-primary', rpoSeconds: 3600, rtoSeconds: 3600, maxDumpBytes: 1000, dumpTimeoutSeconds: 60,
     postgres: { host: 'fixture-db.example.org', port: 5432, user: 'fixture', database: 'keycloak', major: 17,
       transport: 'tls-verify-full', sslRootCert: cert },
@@ -184,6 +211,7 @@ test('isolated restore uses no network, authenticates before restore and removes
   const path = await fixture(t), archive = join(path, 'archive.enc'), key = randomBytes(32);
   await encryptArchive(Readable.from([Buffer.from('PGDMP fixture database bytes')]), archive, key);
   const input = pairing(); input.postgres.sha256 = await sha256File(archive); input.postgres.bytes = (await stat(archive)).size;
+  input.postgres.postgresImage = REVIEWED_POSTGRES_IMAGE;
   const manifest = buildManifest(input), calls = []; let owner;
   const execute = async (command, args, options = {}) => {
     calls.push(args);
@@ -191,6 +219,7 @@ test('isolated restore uses no network, authenticates before restore and removes
     if (args[0] === 'volume' && args[1] === 'create') owner = args[args.indexOf('--label') + 1].split('=')[1];
     if (args.includes('inspect') && args.includes('--format')) return owner;
     if (args[0] === 'run') {
+      assert.equal(args.at(-1), REVIEWED_POSTGRES_IMAGE);
       assert.equal(args[args.indexOf('--network') + 1], 'none'); assert.ok(args.includes('--pull=never'));
       assert.equal(args.includes('--publish'), false); assert.equal(args.includes('--privileged'), false);
     }
