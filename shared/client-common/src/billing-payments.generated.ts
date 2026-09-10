@@ -186,6 +186,20 @@ export interface PublicPaymentLinkResponse {
   receiptStatus?: string | null;
 }
 
+export interface DeliveryOperationWire {
+  operationId: string;
+  status: string;
+  attempts: number;
+  errorCode: string | null;
+}
+
+export interface DeliveryOperation {
+  operationId: string;
+  status: string;
+  attempts: number;
+  errorCode: string | null;
+}
+
 export const BILLING_PAYMENT_CONTRACT_VERSION = '1.1.0';
 export const billingPaymentEnums = {
   "CommonInvoiceStatus": [
@@ -895,6 +909,38 @@ export const billingPaymentSchemas = {
         ]
       }
     }
+  },
+  "DeliveryOperation": {
+    "type": "object",
+    "additionalProperties": true,
+    "required": [
+      "operationId",
+      "status",
+      "attempts",
+      "errorCode"
+    ],
+    "properties": {
+      "operationId": {
+        "type": "string"
+      },
+      "status": {
+        "type": "string"
+      },
+      "attempts": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "errorCode": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    }
   }
 } as const;
 export const billingPaymentOptionalFields: Record<string, readonly string[]> = {
@@ -950,5 +996,6 @@ export const billingPaymentOptionalFields: Record<string, readonly string[]> = {
     "manualPaymentButtonLabel",
     "manualComment",
     "receiptStatus"
-  ]
+  ],
+  "DeliveryOperation": []
 };

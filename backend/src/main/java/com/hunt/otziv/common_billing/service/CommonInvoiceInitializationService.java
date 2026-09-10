@@ -81,6 +81,8 @@ import static com.hunt.otziv.config.metrics.R0ObservabilityMetrics.TransactionFl
 @RequiredArgsConstructor
 public class CommonInvoiceInitializationService {
 
+    private final CommonInvoiceMessageQueue messageQueue;
+
     private final com.hunt.otziv.payments.service.CommonInvoiceRouteSelector invoiceRouteSelector;
 
     private final CommonInvoiceCancellationService invoiceCancellation;
@@ -996,6 +998,7 @@ public class CommonInvoiceInitializationService {
         if (hasUnresolvedLegacyMessage(invoice)) {
             return;
         }
+        if (messageQueue.status(invoice.getPaymentMessageOperationId()) != null) return;
         String error = normalize(invoice.getLastError());
         if (!isMessageSendInProgress(error) && !PAYMENT_INIT_IN_PROGRESS.equals(error)) {
             return;

@@ -86,7 +86,9 @@ public class CommonInvoiceDeliveryService {
 
     private final UserService userService;
 
-    private final ClientChatMessageSender messageSender;
+    private final com.hunt.otziv.client_messages.api.ClientMessageDelivery messageSender;
+
+    private final CommonInvoiceMessageQueue messageQueue;
 
     private final PaperInvoiceManagerNotificationService paperInvoiceManagerNotificationService;
 
@@ -102,15 +104,35 @@ public class CommonInvoiceDeliveryService {
     }
 
     void sendInvoiceMessage(Long invoiceId, boolean manual, boolean paymentRouteChanged, boolean checkVisibility) {
-        PreparedCommonInvoiceMessage preparedMessage = writeTransaction(() -> preparePaymentMessage(invoiceId, false, manual, false, null, checkVisibility));
-        PreparedCommonInvoiceMessage prepared = paymentRouteChanged && preparedMessage != null && !preparedMessage.paymentRouteChanged() ? preparedMessage.asPaymentRouteChanged(paymentRouteChangedMessage(preparedMessage.message())) : preparedMessage;
-        if (prepared != null) {
-            ClientMessageSendResult result = sendPreparedPaymentMessage(prepared);
-            writeTransaction(() -> {
-                finishPaymentMessageSend(prepared, result);
-                return null;
-            });
-        }
+        queuePaymentMessage(invoiceId, false, manual, false, null, paymentRouteChanged, checkVisibility);
+    }
+
+    boolean queuePaymentMessage(Long invoiceId, boolean reminder, boolean manual, boolean dueOnly,
+            LocalDateTime dueNow, boolean routeChanged, boolean checkVisibility) {
+        return writeTransaction(() -> {
+            var prelude = lockedInvoiceAfterStandalonePaymentPrelude(invoiceId);
+            var invoice = prelude.invoice();
+            if (checkVisibility) ensureCommonInvoiceVisibleForCurrentUser(invoice);
+            var existing = messageQueue.unresolved(invoiceId);
+            if (existing.isPresent()) {
+                var saved = existing.get();
+                if (saved.reminder() != reminder || (routeChanged && !saved.paymentRouteChanged()))
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Предыдущая отправка счета ещё не завершена");
+                if (manual) {
+                    messageQueue.retryKnownUnsent(saved.operationId());
+                    invoice.setLastError(saved.paymentRouteChanged() ? PAYMENT_ROUTE_CHANGED_MESSAGE_IN_PROGRESS : MESSAGE_SEND_IN_PROGRESS);
+                    invoiceRepository.save(invoice);
+                }
+                return false;
+            }
+            var prepared = preparePaymentMessage(invoiceId, reminder, manual, dueOnly, dueNow, checkVisibility, prelude);
+            if (prepared != null) {
+                if (routeChanged && !prepared.paymentRouteChanged())
+                    prepared = prepared.asPaymentRouteChanged(paymentRouteChangedMessage(prepared.message()));
+                messageQueue.enqueue(prepared);
+            }
+            return prepared != null && !prepared.alreadyConfirmed();
+        });
     }
 
     void resetToReadyOnlyBeforeFirstSend(CommonInvoice invoice) {
@@ -128,46 +150,29 @@ public class CommonInvoiceDeliveryService {
     }
 
     public int sendDueReminders(int limit) {
-        if (!automaticPaymentRemindersEnabled()) {
-            return 0;
-        }
+        if (!automaticPaymentRemindersEnabled()) return 0;
         LocalDateTime now = LocalDateTime.now();
-        List<CommonInvoice> invoices = invoiceRepository.findReminderCandidates(REMINDER_STATUSES, now, PageRequest.of(0, Math.max(1, limit)));
-        int sent = 0;
-        for (CommonInvoice candidate : invoices) {
-            PreparedCommonInvoiceMessage prepared = writeTransaction(() -> preparePaymentMessage(candidate.getId(), true, false, true, now, false));
-            if (prepared != null) {
-                ClientMessageSendResult result = sendPreparedPaymentMessage(prepared);
-                boolean delivered = writeTransaction(() -> finishPaymentMessageSend(prepared, result));
-                if (delivered) {
-                    sent++;
-                }
-            }
+        var candidates = invoiceRepository.findReminderCandidates(REMINDER_STATUSES, now, PageRequest.of(0, Math.max(1, limit)));
+        int queued = 0;
+        for (var candidate : candidates) {
+            try { if (queuePaymentMessage(candidate.getId(), true, false, true, now, false, false)) queued++; }
+            catch (RuntimeException failure) { log.warn("Common reminder queue preparation failed: invoiceId={}", candidate.getId()); }
         }
-        return sent;
+        return queued;
     }
 
     public int sendUnsentActionInvoices(int limit) {
-        LocalDateTime readyBefore = LocalDateTime.now().minusMinutes(5);
-        Pageable page = PageRequest.of(0, Math.max(1, limit));
-        List<CommonInvoice> invoices = immediateClientMessagesEnabled() ? invoiceRepository.findUnsentActionCandidates(UNSENT_ACTION_STATUSES, readyBefore, page) : invoiceRepository.findPendingPaymentRouteChangeCandidates(UNSENT_ACTION_STATUSES, readyBefore, page);
-        int sent = 0;
-        for (CommonInvoice candidate : invoices) {
-            try {
-                PreparedCommonInvoiceMessage prepared = writeTransaction(() -> preparePaymentMessage(candidate.getId(), false, false, false, null, false));
-                if (prepared == null) {
-                    continue;
-                }
-                ClientMessageSendResult result = sendPreparedPaymentMessage(prepared);
-                boolean delivered = writeTransaction(() -> finishPaymentMessageSend(prepared, result));
-                if (delivered) {
-                    sent++;
-                }
-            } catch (RuntimeException exception) {
-                log.warn("Common billing unsent invoice skipped; other invoices will continue: invoiceId={}, failure={}", candidate == null ? null : candidate.getId(), readableException(exception));
-            }
+        var page = PageRequest.of(0, Math.max(1, limit));
+        var before = LocalDateTime.now().minusMinutes(5);
+        var candidates = immediateClientMessagesEnabled()
+                ? invoiceRepository.findUnsentActionCandidates(UNSENT_ACTION_STATUSES, before, page)
+                : invoiceRepository.findPendingPaymentRouteChangeCandidates(UNSENT_ACTION_STATUSES, before, page);
+        int queued = 0;
+        for (var candidate : candidates) {
+            try { if (queuePaymentMessage(candidate.getId(), false, false, false, null, false, false)) queued++; }
+            catch (RuntimeException failure) { log.warn("Common invoice queue preparation failed: invoiceId={}", candidate.getId()); }
         }
-        return sent;
+        return queued;
     }
 
     @Transactional
@@ -238,10 +243,15 @@ public class CommonInvoiceDeliveryService {
     }
 
     PreparedCommonInvoiceMessage preparePaymentMessage(Long invoiceId, boolean reminder, boolean manual, boolean dueOnly, LocalDateTime dueNow, boolean checkVisibility) {
+        return preparePaymentMessage(invoiceId, reminder, manual, dueOnly, dueNow, checkVisibility, null);
+    }
+
+    private PreparedCommonInvoiceMessage preparePaymentMessage(Long invoiceId, boolean reminder, boolean manual,
+            boolean dueOnly, LocalDateTime dueNow, boolean checkVisibility, LockedInvoicePaymentPrelude prelocked) {
         if (reminder && dueOnly && !automaticPaymentRemindersEnabled()) {
             return null;
         }
-        LockedInvoicePaymentPrelude paymentPrelude = lockedInvoiceAfterStandalonePaymentPrelude(invoiceId);
+        LockedInvoicePaymentPrelude paymentPrelude = prelocked == null ? lockedInvoiceAfterStandalonePaymentPrelude(invoiceId) : prelocked;
         CommonInvoice invoice = paymentPrelude.invoice();
         if (dueOnly && !isStillDueReminderCandidate(invoice, dueNow)) {
             return null;
@@ -323,25 +333,85 @@ public class CommonInvoiceDeliveryService {
             invoice.setPaymentMessageChannel(null);
         }
         if (confirmedReplay) {
-            return new PreparedCommonInvoiceMessage(invoice.getId(), chatCompany,
+            return new PreparedCommonInvoiceMessage(invoice.getId(), deliveryTarget(chatCompany),
                     messageManager == null ? null : messageManager.getClientId(),
                     chatCompany == null ? null : chatCompany.getGroupId(), "", null, reminder, manual,
-                    paymentRouteChangedRetry, invoice.getPaymentMessageOperationId(), true, invoice.getPaymentMessageChannel());
+                    paymentRouteChangedRetry, invoice.getPaymentMessageOperationId(), true, invoice.getPaymentMessageChannel(), remainingKopecks(invoice));
         }
         invoice.setLastError(paymentRouteChangedRetry ? PAYMENT_ROUTE_CHANGED_MESSAGE_IN_PROGRESS : MESSAGE_SEND_IN_PROGRESS);
         invoiceRepository.save(invoice);
-        return new PreparedCommonInvoiceMessage(invoice.getId(), chatCompany, messageManager == null ? null : messageManager.getClientId(), chatCompany == null ? null : chatCompany.getGroupId(), paymentRouteChangedRetry ? paymentRouteChangedMessage(invoiceMessage(invoice, items, reminder)) : invoiceMessage(invoice, items, reminder), telegramCopyTransferNumber(invoice), reminder, manual, paymentRouteChangedRetry, invoice.getPaymentMessageOperationId(), false, null);
+        return new PreparedCommonInvoiceMessage(invoice.getId(), deliveryTarget(chatCompany), messageManager == null ? null : messageManager.getClientId(), chatCompany == null ? null : chatCompany.getGroupId(), paymentRouteChangedRetry ? paymentRouteChangedMessage(invoiceMessage(invoice, items, reminder)) : invoiceMessage(invoice, items, reminder), telegramCopyTransferNumber(invoice), reminder, manual, paymentRouteChangedRetry, invoice.getPaymentMessageOperationId(), false, null, remainingKopecks(invoice));
     }
 
     ClientMessageSendResult sendPreparedPaymentMessage(PreparedCommonInvoiceMessage prepared) {
         if (prepared.alreadyConfirmed()) return ClientMessageSendResult.sent(prepared.confirmedChannel());
         try {
             TelegramTransferCopyButton copyButton = TelegramTransferCopyButton.fromFrozenTransferNumber(prepared.telegramCopyTransferNumber()).orElse(null);
-            return messageSender.sendWithOperationId(prepared.chatCompany(), prepared.managerClientId(),
+            return messageSender.deliverWithOperationId(prepared.chatCompany(), prepared.managerClientId(),
                     prepared.groupId(), prepared.message(), copyButton, prepared.operationId());
         } catch (RuntimeException e) {
             return ClientMessageSendResult.failed("send_exception", readableException(e));
         }
+    }
+
+    boolean messageDeliveryEnabled() {
+        try { return appSettingService.getBooleanFreshFailClosed(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true); }
+        catch (RuntimeException unavailable) { return false; }
+    }
+
+    boolean queuedMessageMayDispatch(PreparedCommonInvoiceMessage prepared) {
+        return writeTransaction(() -> {
+            var invoice = lockedInvoiceAfterStandalonePaymentPrelude(prepared.invoiceId()).invoice();
+            refreshInvoiceAmounts(invoice, invoiceOrderRepository.findByInvoiceIdWithOrders(prepared.invoiceId()));
+            return java.util.Objects.equals(invoice.getPaymentMessageOperationId(), prepared.operationId())
+                    && !invoice.isPaymentMessageConfirmed() && SEND_INVOICE_STATUSES.contains(invoice.getStatus())
+                    && remainingKopecks(invoice) > 0 && remainingKopecks(invoice) == prepared.remainingKopecks();
+        });
+    }
+
+    void finishQueuedMessage(CommonInvoiceMessageQueue.Claim claim, PreparedCommonInvoiceMessage prepared,
+            ClientMessageSendResult result, boolean pausedBeforeDispatch) {
+        writeTransaction(() -> {
+            // Preserve the same order as preparation and payment mutations: orders, payments, invoice, queue.
+            var invoice = lockedInvoiceAfterStandalonePaymentPrelude(prepared.invoiceId()).invoice();
+            if (!messageQueue.owns(claim)) return null;
+            String state;
+            String code = result == null ? "operation_unknown" : result.errorCode();
+            if (result != null && result.sent() && result.messageId() != null && !result.messageId().isBlank() && result.messageId().length() <= 512) {
+                if (invoice != null && java.util.Objects.equals(invoice.getPaymentMessageOperationId(), prepared.operationId())) {
+                    if (SEND_INVOICE_STATUSES.contains(invoice.getStatus()) && remainingKopecks(invoice) == prepared.remainingKopecks()) {
+                        // Restore only the marker belonging to this exact frozen operation.
+                        invoice.setLastError(prepared.paymentRouteChanged() ? PAYMENT_ROUTE_CHANGED_MESSAGE_IN_PROGRESS : MESSAGE_SEND_IN_PROGRESS);
+                        finishPaymentMessageSend(prepared, result);
+                    } else {
+                        // A paid/closed invoice is never reopened by a late receipt.
+                        invoice.setPaymentMessageConfirmed(true);
+                        invoice.setPaymentMessageChannel(result.channel());
+                        if (SEND_INVOICE_STATUSES.contains(invoice.getStatus())) {
+                            code = "finalization_required";
+                            invoice.setLastError("delivery_confirmed_amount_changed: отправка подтверждена, сумма счета изменилась; требуется сверка");
+                        }
+                        invoiceRepository.save(invoice);
+                    }
+                }
+                state = "SENT";
+            } else if (claim.mayDispatch() && "invoice_changed".equals(code)) {
+                state = "FAILED";
+                code = "context_changed";
+            } else if (pausedBeforeDispatch) {
+                state = "RETRYABLE";
+            } else if (com.hunt.otziv.client_messages.api.ClientMessageDelivery.isKnownUnsent(result)) {
+                state = claim.previousAttempts() + (claim.mayDispatch() ? 1 : 0) < 5 ? "RETRYABLE" : "FAILED";
+                if ("FAILED".equals(state) && invoice != null && java.util.Objects.equals(invoice.getPaymentMessageOperationId(), prepared.operationId())) {
+                    invoice.setLastError("delivery_failed: сообщение не отправлено; можно повторить сохранённую операцию");
+                    invoiceRepository.save(invoice);
+                }
+            } else {
+                state = "UNKNOWN";
+            }
+            messageQueue.finish(claim, state, code, pausedBeforeDispatch || "UNKNOWN".equals(state) ? 300 : Math.min(300, 15 << Math.min(claim.previousAttempts(), 4)));
+            return null;
+        });
     }
 
     boolean finishPaymentMessageSend(PreparedCommonInvoiceMessage prepared, ClientMessageSendResult result) {
@@ -513,7 +583,7 @@ public class CommonInvoiceDeliveryService {
             return ClientPaymentNotificationAttempt.failed(prepared.error());
         }
         try {
-            ClientMessageSendResult result = messageSender.sendWithOperationId(prepared.company(), prepared.managerClientId(),
+            ClientMessageSendResult result = messageSender.deliverWithOperationId(deliveryTarget(prepared.company()), prepared.managerClientId(),
                     prepared.groupId(), prepared.message(), null, "invoice-payment-success:" + invoiceId);
             if (result != null && result.sent()) {
                 return ClientPaymentNotificationAttempt.sent(result.channel());
@@ -816,11 +886,9 @@ public class CommonInvoiceDeliveryService {
         return settlementService.readableException(e);
     }
 
-    record PreparedCommonInvoiceMessage(Long invoiceId, Company chatCompany, String managerClientId, String groupId, String message, String telegramCopyTransferNumber, boolean reminder, boolean manual, boolean paymentRouteChanged, String operationId, boolean alreadyConfirmed, String confirmedChannel) {
-
-        private PreparedCommonInvoiceMessage asPaymentRouteChanged(String replacement) {
-            return new PreparedCommonInvoiceMessage(invoiceId, chatCompany, managerClientId, groupId, replacement, telegramCopyTransferNumber, reminder, manual, true, operationId, alreadyConfirmed, confirmedChannel);
-        }
+    private static com.hunt.otziv.client_messages.api.ClientMessageDelivery.Target deliveryTarget(Company company) {
+        return company == null ? null : new com.hunt.otziv.client_messages.api.ClientMessageDelivery.Target(
+                company.getId(), company.getTitle(), company.getUrlChat(), company.getTelegramGroupChatId(), company.getMaxGroupChatId());
     }
 
     record PreparedClientPaymentNotification(boolean skipped, String error, Company company, String managerClientId, String groupId, String message) {

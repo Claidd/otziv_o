@@ -600,7 +600,6 @@ com.hunt.otziv.common_billing.service.CommonInvoiceDeletionWorkflow -> com.hunt.
 com.hunt.otziv.common_billing.service.CommonInvoiceDeletionWorkflow -> com.hunt.otziv.p_products.model.Order
 com.hunt.otziv.common_billing.service.CommonInvoiceDeliveryService -> com.hunt.otziv.c_companies.model.Company
 com.hunt.otziv.common_billing.service.CommonInvoiceDeliveryService -> com.hunt.otziv.c_companies.model.Filial
-com.hunt.otziv.common_billing.service.CommonInvoiceDeliveryService -> com.hunt.otziv.client_messages.service.ClientChatMessageSender
 com.hunt.otziv.common_billing.service.CommonInvoiceDeliveryService -> com.hunt.otziv.config.settings.service.AppSettingService
 com.hunt.otziv.common_billing.service.CommonInvoiceDeliveryService -> com.hunt.otziv.contractor_payments.dto.ContractorPaymentRequisitesSnapshot
 com.hunt.otziv.common_billing.service.CommonInvoiceDeliveryService -> com.hunt.otziv.contractor_payments.service.ContractorPaymentTransferNumber
@@ -753,7 +752,6 @@ com.hunt.otziv.common_billing.service.CommonInvoiceSettlementService -> com.hunt
 com.hunt.otziv.common_billing.service.CommonInvoiceSettlementService -> com.hunt.otziv.payments.service.ManualPaymentTaskService
 com.hunt.otziv.common_billing.service.CommonInvoiceSettlementService -> com.hunt.otziv.payments.service.PaymentProfileService
 com.hunt.otziv.common_billing.service.CommonInvoiceSettlementService -> com.hunt.otziv.payments.service.PaymentUrlPolicy
-com.hunt.otziv.common_billing.service.CommonInvoiceSettlementService -> com.hunt.otziv.payments.service.StandaloneBankPaymentPolicy
 com.hunt.otziv.common_billing.service.CommonInvoiceSettlementService -> com.hunt.otziv.payments.service.TbankTokenSigner
 com.hunt.otziv.common_billing.service.CommonInvoiceSettlementService -> com.hunt.otziv.payments.tochka.dto.TochkaAcquiringInternetPaymentWebhook
 com.hunt.otziv.common_billing.service.CommonInvoiceSettlementService -> com.hunt.otziv.payments.tochka.dto.TochkaApiModels
@@ -1132,7 +1130,6 @@ com.hunt.otziv.l_lead.service.LeadSyncServiceImpl -> com.hunt.otziv.u_users.repo
 com.hunt.otziv.l_lead.service.LeadSyncServiceImpl -> com.hunt.otziv.u_users.repository.MarketologRepository
 com.hunt.otziv.l_lead.service.LeadSyncServiceImpl -> com.hunt.otziv.u_users.repository.OperatorRepository
 com.hunt.otziv.l_lead.service.LeadWorkNotificationService -> com.hunt.otziv.u_users.model.Manager
-com.hunt.otziv.l_lead.service.LeadWorkNotificationService -> com.hunt.otziv.whatsapp.service.service.WhatsAppService
 com.hunt.otziv.l_lead.service.TelephoneServiceImpl -> com.hunt.otziv.u_users.model.Operator
 com.hunt.otziv.l_lead.service.TelephoneServiceImpl -> com.hunt.otziv.u_users.repository.OperatorRepository
 com.hunt.otziv.manager.controller.ApiManagerBoardController -> com.hunt.otziv.config.metrics.PerformanceMetrics
@@ -1396,13 +1393,11 @@ com.hunt.otziv.manager_control.service.ManagerControlClientReplyWorkflow -> com.
 com.hunt.otziv.manager_control.service.ManagerControlClientReplyWorkflow -> com.hunt.otziv.client_chat_control.model.ClientChatUnansweredStatus
 com.hunt.otziv.manager_control.service.ManagerControlClientReplyWorkflow -> com.hunt.otziv.client_chat_control.repository.ClientChatUnansweredItemRepository
 com.hunt.otziv.manager_control.service.ManagerControlClientReplyWorkflow -> com.hunt.otziv.client_chat_control.service.ClientChatMessageTrackerService
-com.hunt.otziv.manager_control.service.ManagerControlClientReplyWorkflow -> com.hunt.otziv.client_messages.service.ClientChatMessageSender
 com.hunt.otziv.manager_control.service.ManagerControlClientReplyWorkflow -> com.hunt.otziv.u_users.model.Manager
 com.hunt.otziv.manager_control.service.ManagerControlClientReplyWorkflow -> com.hunt.otziv.whatsapp.dto.WhatsAppOperationEnvelope
 com.hunt.otziv.manager_control.service.ManagerControlClientReplyWorkflow -> com.hunt.otziv.whatsapp.dto.WhatsAppOperationStatus
 com.hunt.otziv.manager_control.service.ManagerControlClientReplyWorkflow -> com.hunt.otziv.whatsapp.service.service.WhatsAppService
 com.hunt.otziv.manager_control.service.ManagerControlClientSendWorkflow -> com.hunt.otziv.c_companies.model.Company
-com.hunt.otziv.manager_control.service.ManagerControlClientSendWorkflow -> com.hunt.otziv.client_messages.service.ClientChatMessageSender
 com.hunt.otziv.manager_control.service.ManagerControlClientSendWorkflow -> com.hunt.otziv.p_products.model.Order
 com.hunt.otziv.manager_control.service.ManagerControlClientSendWorkflow -> com.hunt.otziv.p_products.repository.OrderRepository
 com.hunt.otziv.manager_control.service.ManagerControlClientSendWorkflow -> com.hunt.otziv.p_products.service.OrderService
@@ -2089,12 +2084,10 @@ com.hunt.otziv.p_products.service.OrderServiceImpl -> com.hunt.otziv.business_au
 com.hunt.otziv.p_products.service.OrderServiceImpl -> com.hunt.otziv.c_companies.dto.CompanyDTO
 com.hunt.otziv.p_products.service.OrderServiceImpl -> com.hunt.otziv.c_companies.model.Company
 com.hunt.otziv.p_products.service.OrderServiceImpl -> com.hunt.otziv.c_companies.model.Filial
-com.hunt.otziv.p_products.service.OrderServiceImpl -> com.hunt.otziv.c_companies.service.CompanyService
 com.hunt.otziv.p_products.service.OrderServiceImpl -> com.hunt.otziv.c_companies.service.CompanyStatusService
 com.hunt.otziv.p_products.service.OrderServiceImpl -> com.hunt.otziv.client_messages.model.ClientMessageScenario
 com.hunt.otziv.p_products.service.OrderServiceImpl -> com.hunt.otziv.client_messages.model.ScheduledMessageStateStatus
 com.hunt.otziv.p_products.service.OrderServiceImpl -> com.hunt.otziv.common_billing.model.CommonInvoiceStatus
-com.hunt.otziv.p_products.service.OrderServiceImpl -> com.hunt.otziv.config.settings.service.AppSettingService
 com.hunt.otziv.p_products.service.OrderServiceImpl -> com.hunt.otziv.gamification.service.GamificationEventService
 com.hunt.otziv.p_products.service.OrderServiceImpl -> com.hunt.otziv.u_users.model.Manager
 com.hunt.otziv.p_products.service.OrderServiceImpl -> com.hunt.otziv.u_users.model.Worker

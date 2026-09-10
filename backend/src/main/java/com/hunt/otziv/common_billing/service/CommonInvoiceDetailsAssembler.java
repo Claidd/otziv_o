@@ -53,6 +53,8 @@ public class CommonInvoiceDetailsAssembler {
 
     private final CommonInvoicePresenter invoicePresenter;
 
+    private final CommonInvoiceMessageQueue messageQueue;
+
     private final CommonInvoiceSettlementService settlementService;
 
     static final String MIGRATION_PAYMENT_REGISTRY_MANUAL_CONFIRM_REASON = "nonterminal_or_unknown_payment_ref_on_invoice";
@@ -125,7 +127,7 @@ public class CommonInvoiceDetailsAssembler {
     CommonInvoiceDetailsResponse invoiceDetails(CommonInvoice invoice, List<CommonInvoiceOrder> items) {
         List<CommonInvoicePaymentRef> paymentRefs = paymentRefEvidenceRows(invoice);
         Map<String, String> terminalLabels = paymentTerminalLabels(invoice, paymentRefs);
-        return new CommonInvoiceDetailsResponse(toInvoiceSummary(invoice, items, terminalLabels.get(normalize(invoice == null ? null : invoice.getTbankTerminalKey()))), items.stream().map(this::toOrderResponse).toList(), toOrderCards(items), toNextCycleOrders(items), toPaymentRefEvidence(paymentRefs, terminalLabels), paymentEvidenceToken(invoice, paymentRefs));
+        return new CommonInvoiceDetailsResponse(toInvoiceSummary(invoice, items, terminalLabels.get(normalize(invoice == null ? null : invoice.getTbankTerminalKey()))), items.stream().map(this::toOrderResponse).toList(), toOrderCards(items), toNextCycleOrders(items), toPaymentRefEvidence(paymentRefs, terminalLabels), paymentEvidenceToken(invoice, paymentRefs), messageQueue.status(invoice.getPaymentMessageOperationId()));
     }
 
     List<CommonInvoicePaymentRef> paymentRefEvidenceRows(CommonInvoice invoice) {

@@ -52,6 +52,14 @@ public class ManagerClientReplyOperationRepository {
         finish(operation, state, channel, errorCode, null);
     }
 
+    /** Only the receipt workflow may reopen an uncertain operation after proven non-admission. */
+    public Operation resumeAfterKnownUnsentReceipt(Operation operation, String code) {
+        requireOne(jdbc.update("UPDATE manager_client_reply_operations SET state='PREPARED',completed_at=NULL,last_error_code=?,resolution_reason='Provider confirmed non-admission' WHERE operation_token=? AND state='UNKNOWN' AND provider_message_id IS NULL",
+                code, operation.token()));
+        return new Operation(operation.token(), operation.itemId(), operation.cardId(), operation.requestHash(),
+                "PREPARED", operation.preparedAt(), operation.snapshot(), null, false);
+    }
+
     public void finish(Operation operation, String state, String channel, String errorCode, String messageId) {
         if (!List.of("UNKNOWN", "SUCCEEDED", "FAILED_KNOWN").contains(state)) throw new IllegalArgumentException("Invalid delivery state");
         if ("SUCCEEDED".equals(state) && (messageId == null || messageId.isBlank() || messageId.length() > 512))

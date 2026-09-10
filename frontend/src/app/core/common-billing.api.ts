@@ -76,6 +76,7 @@ export interface CommonInvoicePaymentRefResponse {
 }
 
 export interface CommonInvoiceDetailsResponse {
+  delivery?: import('@otziv/client-common/billing-payments').DeliveryOperation | null;
   summary: CommonInvoiceSummaryResponse;
   orders: CommonInvoiceOrderResponse[];
   orderCards: OrderCardItem[];
@@ -225,7 +226,8 @@ export class CommonBillingApi {
   sendInvoice(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
     return this.http.post<CommonInvoiceDetailsResponse>(
       `${appEnvironment.apiBaseUrl}/api/common-billing/invoices/${invoiceId}/send`,
-      {}
+      {},
+      { headers: { "X-Otziv-Delivery-Protocol": "queued-v1" } }
     );
   }
 
@@ -284,7 +286,8 @@ export class CommonBillingApi {
   remind(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
     return this.http.post<CommonInvoiceDetailsResponse>(
       `${appEnvironment.apiBaseUrl}/api/common-billing/invoices/${invoiceId}/remind`,
-      {}
+      {},
+      { headers: { "X-Otziv-Delivery-Protocol": "queued-v1" } }
     );
   }
 

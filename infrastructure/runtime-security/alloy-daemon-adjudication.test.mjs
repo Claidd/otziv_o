@@ -1,4 +1,4 @@
-import test from 'node:test';
+import nodeTest from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { gunzipSync, gzipSync } from 'node:zlib';
@@ -6,8 +6,13 @@ import { loadAlloyProof, validateAlloyProof, matchingAlloyFindings, effectiveAll
 import { validateObservedBinary } from './go-binary-inspection.mjs';
 import { summarizeReport } from './scan.mjs';
 
-const NOW = new Date('2026-09-08T08:00:00Z');
-const { review, files } = await loadAlloyProof(NOW);
+for (const [scope, configId, expectedScan] of [
+  ['C7', undefined, '0ed6934afd2fce73be9eff9ecbfd2ee69c92ab4f210b06e88ca71315dbc8beec'],
+  ['C15', 'sha256:8084b7ee093d159c974d88ec56aad2a72f4bb939f974176759ff9233d9b58dfd', '1f44717cabdad957dc27390e229dcf0d6fa6122cd184a9d64c018393c9a73197']
+]) {
+const test = (name, body) => nodeTest(scope + ': ' + name, body);
+const NOW = new Date('2026-09-11T00:00:00Z');
+const { review, files } = await loadAlloyProof(NOW, configId);
 const raw = gunzipSync(files.get('reviewed-scan.json.gz'));
 const report = JSON.parse(raw);
 const info = files.get('reviewed-buildinfo.txt').toString('utf8');
@@ -15,8 +20,8 @@ const inspected = { Config: { Labels: report.Metadata.ImageConfig.config.Labels 
 const adjudication = decisions => ({ status: 'EXACT_BINARY_AFFECTED_CODE_ABSENT', decisions });
 const hash = b => createHash('sha256').update(b).digest('hex');
 
-test('actual reviewed C7 image has two exact daemon-only findings and retains all raw findings', () => {
-  assert.equal(hash(raw), '0ed6934afd2fce73be9eff9ecbfd2ee69c92ab4f210b06e88ca71315dbc8beec');
+test('actual reviewed image has two exact daemon-only findings and retains all raw findings', () => {
+  assert.equal(hash(raw), expectedScan);
   const before = JSON.stringify(report), decisions = matchingAlloyFindings(report, review);
   assert.deepEqual(decisions.map(item => item.cve).sort(), ['CVE-2026-41567', 'CVE-2026-42306']);
   validateObservedBinary(report, inspected, review.binary.sha256, info, review);
@@ -110,3 +115,4 @@ for (const [name, mutate] of Object.entries({
   const f = { inspect: structuredClone(inspected), sha: review.binary.sha256, info }; mutate(f);
   assert.throws(() => validateObservedBinary(report, f.inspect, f.sha, f.info, review), /adjudication_/);
 });
+}

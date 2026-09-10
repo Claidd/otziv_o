@@ -70,6 +70,12 @@ public class ClientChatMessageSender implements com.hunt.otziv.client_messages.a
             String clientId,String groupId,String message,boolean controls,String operationId) {
         return sendPublicationProgressWithOperationId(companySnapshot(target),clientId,groupId,message,controls,operationId);
     }
+    @Override public ClientMessageSendResult deliverToPlatformWithOperationId(String platform,
+            com.hunt.otziv.client_messages.api.ClientMessageDelivery.Target target,
+            String clientId, String chatId, String message, String operationId) {
+        return sendToPlatformWithOperationId(ClientChatPlatform.valueOf(platform), companySnapshot(target),
+                clientId, chatId, chatId, message, operationId);
+    }
     private Company companySnapshot(com.hunt.otziv.client_messages.api.ClientMessageDelivery.Target target) {
         if(target==null)return null;
         Company company=new Company();company.setId(target.companyId());company.setTitle(target.title());company.setUrlChat(target.urlChat());

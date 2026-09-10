@@ -96,6 +96,8 @@ class PublicationClientUpdatesMySqlIntegrationTest {
             jdbc.update("UPDATE orders SET counter=?,status=?,status_changed_at=? WHERE order_id=?",order.getCounter(),order.getStatus().getTitle(),order.getStatusChangedAt(),order.getId());return order; });
         settings = mock(AppSettingService.class);
         when(settings.getBooleanFreshFailClosed(anyString(),anyBoolean())).thenAnswer(call -> enabled.get());
+        when(settings.immediatePublicationMessagesEnabled()).thenAnswer(call -> settings.getBooleanFreshFailClosed(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED,true));
+        when(settings.publicationProgressReportsEnabled()).thenAnswer(call -> settings.getBooleanFreshFailClosed(AppSettingService.CLIENT_PUBLICATION_PROGRESS_REPORTS_ENABLED,true));
         when(settings.getBoolean(anyString(),anyBoolean())).thenAnswer(call -> enabled.get());
         when(settings.getString(anyString(),anyString())).thenAnswer(call -> call.getArgument(1));
         when(settings.getInt(anyString(),anyInt())).thenAnswer(call -> call.getArgument(1));
@@ -123,7 +125,8 @@ class PublicationClientUpdatesMySqlIntegrationTest {
         reviews = reviewRepository();
         publication = proxy(construct(OrderServiceImpl.class,Map.of(OrderRepository.class,orders,ReviewRepository.class,reviews,
             OrderStatusCheckerService.class,checker,OrderStatusNotificationService.class,notifications,
-            OrderPublicationOutbox.class,outbox,AppSettingService.class,settings)));
+            OrderPublicationOutbox.class,outbox,com.hunt.otziv.p_products.status.service.PublicationProgressMessage.class,
+                new com.hunt.otziv.p_products.status.service.PublicationProgressMessage(settings))));
     }
 
     @Test void realPublicationCommitsIntentAndCounterTogetherWithoutProviderAndOuterRollbackLeavesNothing() throws Exception {

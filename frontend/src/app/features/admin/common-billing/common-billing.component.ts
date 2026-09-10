@@ -1,9 +1,9 @@
-import { ClientContractError, commonInvoiceDeliveryWarning } from '@otziv/client-common/billing-payments';
+import { ClientContractError, commonInvoiceDeliveryWarning, deliveryOperationMessage, DeliveryStatusWatcher } from '@otziv/client-common/billing-payments';
 import { DatePipe } from '@angular/common';
 import { Component, ElementRef, OnDestroy, ViewChild, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { Subscription } from 'rxjs';
+import { Subscription, firstValueFrom } from 'rxjs';
 import {
   CommonBillingAccountResponse,
   CommonBillingApi,
@@ -284,6 +284,9 @@ export function isManualTbankReconciliationRetryError(error: string | null | und
   styleUrl: './common-billing.component.scss'
 })
 export class CommonBillingComponent implements OnDestroy {
+  readonly deliveryStatusText = deliveryOperationMessage;
+  private readonly deliveryWatcher = new DeliveryStatusWatcher();
+
   readonly paymentInitNoPaymentButtonLabel = PAYMENT_INIT_NO_PAYMENT_BUTTON_LABEL;
   @ViewChild('invoiceOrderCardsViewport') private invoiceOrderCardsElement?: ElementRef<HTMLElement>;
 
@@ -583,6 +586,7 @@ export class CommonBillingComponent implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.deliveryWatcher.cancel();
     this.destroyed = true;
     this.accountLoadRun += 1;
     this.companySearchRun += 1;
@@ -2184,6 +2188,8 @@ export class CommonBillingComponent implements OnDestroy {
           return;
         }
         this.invoiceDetails.set(details);
+        this.deliveryWatcher.watch(details, () => firstValueFrom(this.commonBillingApi.invoice(invoiceId)),
+          updated => this.invoiceDetails.set(updated), () => this.isCurrentInvoiceView(viewGeneration, invoiceId));
         this.accounts.update((accounts) => accounts.map((account) => {
           if (account.currentInvoice?.id !== invoiceId) {
             return account;
@@ -2192,9 +2198,11 @@ export class CommonBillingComponent implements OnDestroy {
         }));
         this.mutating.set('');
         const deliveryWarning = key === 'send-invoice'
-          ? commonInvoiceDeliveryWarning(details.summary.lastError) : null;
-        if (deliveryWarning) {
-          this.toastService.warning('Отправка общего счета не подтверждена', deliveryWarning);
+          ? (deliveryOperationMessage(details.delivery) ?? commonInvoiceDeliveryWarning(details.summary.lastError)) : null;
+        if (details.delivery?.status === 'SENT') {
+          this.toastService.success('Отправка подтверждена');
+        } else if (deliveryWarning) {
+          this.toastService.warning(details.delivery ? 'Состояние отправки' : 'Отправка общего счета не подтверждена', deliveryWarning);
         } else {
           this.toastService.success(successTitle);
         }

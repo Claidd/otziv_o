@@ -1,4 +1,4 @@
-import { commonInvoiceDeliveryWarning } from '@otziv/client-common/billing-payments';
+import { commonInvoiceDeliveryWarning, deliveryOperationMessage } from '@otziv/client-common/billing-payments';
 import { ManagerCompanyActionsApi } from '../core/manager-company-actions.api';
 import { ManagerOrdersApi } from '../core/manager-orders.api';
 import { CommonBillingApi } from '../core/common-billing.api';
@@ -3000,7 +3000,7 @@ export class ManagerPage implements OnInit, OnDestroy {
           ? this.commonBillingApi.sendCommonInvoice(invoiceId)
           : this.commonBillingApi.remindCommonInvoice(invoiceId);
         const details = await firstValueFrom(this.writes.track(request));
-        return { changed: true, deliveryWarning: commonInvoiceDeliveryWarning(details.summary.lastError) };
+        return { changed: true, deliveryWarning: (deliveryOperationMessage(details.delivery) ?? commonInvoiceDeliveryWarning(details.summary.lastError)) };
       }
       case 'Не оплачено':
         await firstValueFrom(this.writes.track(this.commonBillingApi.markCommonInvoiceUnpaid(invoiceId)));

@@ -1,0 +1,41 @@
+{
+  "schema": "otziv-keycloak-netty-patch-runtime-v1",
+  "result": "PASS",
+  "productionAccess": false,
+  "observedAt": "2026-09-10T18:37:09.061182+00:00",
+  "images": [
+    {
+      "reference": "ghcr.io/claidd/otziv-security@sha256:c6ee6afd6750ae0886a608c5837085cb20417a6746ca2ed47b59b1a0fdec1973",
+      "imageConfigId": "sha256:89f560e111619be776f984e2f317a775cb37ce20660271dbb25f638b454ffeab",
+      "inspectedImageId": "sha256:c6ee6afd6750ae0886a608c5837085cb20417a6746ca2ed47b59b1a0fdec1973",
+      "registryRootfsAndLabelsMatch": true,
+      "containerExecuted": false,
+      "files": {
+        "opt/keycloak/providers/otziv-security-generation.jar": "78645d0aff42d8c6668c88eb2e2bfa239f01d8db4085e4133803bfe7f5e5984a",
+        "opt/keycloak/lib/lib/main/org.keycloak.keycloak-model-infinispan-26.7.3.jar": "7acd37d1650757304bf85e16094eb704ec81b8eb616804942dc2550662906d12",
+        "opt/keycloak/lib/lib/main/org.keycloak.keycloak-model-storage-private-26.7.3.jar": "b0b192e7e8f4d94a60e4fd20f23dfa62fbda6905757fe55e451994c3633a09ce",
+        "opt/keycloak/lib/lib/main/io.netty.netty-handler-4.1.136.Final.jar": "54bb1a59f46a3aefd117942e6acee09e555b756776bad731fc06159d89c2da28"
+      }
+    },
+    {
+      "reference": "ghcr.io/claidd/otziv-security@sha256:bd5687843becb0cdb232c2b864cc3786fafb8fc91f30f531fa2db7fc4d1fc59d",
+      "imageConfigId": "sha256:34e7587586d4d0a8d8330845f43cc58db9196d4dc6c4f120ac70519541453e5e",
+      "inspectedImageId": "sha256:bd5687843becb0cdb232c2b864cc3786fafb8fc91f30f531fa2db7fc4d1fc59d",
+      "registryRootfsAndLabelsMatch": true,
+      "containerExecuted": false,
+      "files": {
+        "opt/keycloak/providers/otziv-security-generation.jar": "78645d0aff42d8c6668c88eb2e2bfa239f01d8db4085e4133803bfe7f5e5984a",
+        "opt/keycloak/lib/lib/main/org.keycloak.keycloak-model-infinispan-26.7.3.jar": "7acd37d1650757304bf85e16094eb704ec81b8eb616804942dc2550662906d12",
+        "opt/keycloak/lib/lib/main/org.keycloak.keycloak-model-storage-private-26.7.3.jar": "b0b192e7e8f4d94a60e4fd20f23dfa62fbda6905757fe55e451994c3633a09ce",
+        "opt/keycloak/lib/lib/main/io.netty.netty-handler-4.1.136.Final.jar": "d0e4c6ee4779f59f6ab2fb5d388e4f57147c82270164b37945764bb9bda96a44"
+      }
+    }
+  ],
+  "preservedFiles": [
+    "opt/keycloak/providers/otziv-security-generation.jar",
+    "opt/keycloak/lib/lib/main/org.keycloak.keycloak-model-infinispan-26.7.3.jar",
+    "opt/keycloak/lib/lib/main/org.keycloak.keycloak-model-storage-private-26.7.3.jar"
+  ],
+  "patchedFile": "opt/keycloak/lib/lib/main/io.netty.netty-handler-4.1.136.Final.jar",
+  "ownedContainersRemaining": 0
+}

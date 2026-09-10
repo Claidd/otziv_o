@@ -1,0 +1,118 @@
+[
+  {
+    "run": "34503949563",
+    "artifactId": 10163774375,
+    "artifactName": "anonymous-download-alloy-attempt-1",
+    "archiveSha256": "41b77a55619e8203b9c5912616a7ee437ae7bab006505e7a76d2d6f3b799bcdb",
+    "files": [
+      {
+        "file": "anonymous-image-inspect.json",
+        "sha256": "71b694b6f3c77ffab3f4de541532c71b5856aa0eb221838f24f9bdbbb8f503be",
+        "bytes": 4306
+      },
+      {
+        "file": "anonymous-download.json",
+        "sha256": "f98ac41d4bffc018071242acb17cb38373944a5da7e7d99eb3b1d4a23ba813c8",
+        "bytes": 3094
+      },
+      {
+        "file": "docker-client-isolation.json",
+        "sha256": "43059db9428713e407d8c2a7b353bcbc8716be2df54dc5e7a1d3798b413f8271",
+        "bytes": 128
+      },
+      {
+        "file": "registry-amd64-config.json",
+        "sha256": "8084b7ee093d159c974d88ec56aad2a72f4bb939f974176759ff9233d9b58dfd",
+        "bytes": 5563
+      },
+      {
+        "file": "registry-amd64-manifest.json",
+        "sha256": "75730269dd07be92f40a8f96a87ff285719f042edb7d440a52d8b5ee220e1efc",
+        "bytes": 2007
+      },
+      {
+        "file": "registry-attestation-0-payload-0.json",
+        "sha256": "2f004b533b8ecd39f9dca1d6dddd9ad4ce8d9f6db530f1a9dcd5bf26a634ddff",
+        "bytes": 3965055
+      },
+      {
+        "file": "registry-attestation-0-payload-1.json",
+        "sha256": "066e2b4fa6e1f8ec664cb7ec8ac01e4cdb64a8434abde522b362e5d3d73b036b",
+        "bytes": 35114
+      },
+      {
+        "file": "registry-attestation-0.json",
+        "sha256": "9d4779907f1ac46cc681a6d606684e813c2df07845ce68845880777a5ab02e19",
+        "bytes": 1112
+      },
+      {
+        "file": "registry-index.json",
+        "sha256": "d006cedf890ade4915a098a5362ce0cda9a3fd7ec2c02320f15e92ccfd669122",
+        "bytes": 857
+      }
+    ]
+  },
+  {
+    "run": "34503949563",
+    "artifactId": 10163746362,
+    "artifactName": "reviewed-publication-alloy-attempt-1",
+    "archiveSha256": "c43c43b6ac1bd19324417e972ceca0771bc91369ffbe913c3cc73d99168b83fe",
+    "files": [
+      {
+        "file": "build-metadata.json",
+        "sha256": "078b2d4e0b6468c0ff8758cf42f1bcd0db1d6ce51fbb17e1c51b9ce92bea4429",
+        "bytes": 12711
+      },
+      {
+        "file": "publication.json",
+        "sha256": "a97e7913fde94fb321c4ab44b48e319cec3631764958b42521c58a48de879553",
+        "bytes": 3382
+      },
+      {
+        "file": "registry-amd64-config.json",
+        "sha256": "8084b7ee093d159c974d88ec56aad2a72f4bb939f974176759ff9233d9b58dfd",
+        "bytes": 5563
+      },
+      {
+        "file": "registry-amd64-manifest.json",
+        "sha256": "75730269dd07be92f40a8f96a87ff285719f042edb7d440a52d8b5ee220e1efc",
+        "bytes": 2007
+      },
+      {
+        "file": "registry-attestation-0-payload-0.json",
+        "sha256": "2f004b533b8ecd39f9dca1d6dddd9ad4ce8d9f6db530f1a9dcd5bf26a634ddff",
+        "bytes": 3965055
+      },
+      {
+        "file": "registry-attestation-0-payload-1.json",
+        "sha256": "066e2b4fa6e1f8ec664cb7ec8ac01e4cdb64a8434abde522b362e5d3d73b036b",
+        "bytes": 35114
+      },
+      {
+        "file": "registry-attestation-0.json",
+        "sha256": "9d4779907f1ac46cc681a6d606684e813c2df07845ce68845880777a5ab02e19",
+        "bytes": 1112
+      },
+      {
+        "file": "registry-index.json",
+        "sha256": "d006cedf890ade4915a098a5362ce0cda9a3fd7ec2c02320f15e92ccfd669122",
+        "bytes": 857
+      },
+      {
+        "file": "vulnerabilities.adjudications.json",
+        "sha256": "cd18f0eef96d18c0a469febf205fec4fc500a772868384ff3978de22c06f31ae",
+        "bytes": 838
+      },
+      {
+        "file": "vulnerabilities.json",
+        "sha256": "1f44717cabdad957dc27390e229dcf0d6fa6122cd184a9d64c018393c9a73197",
+        "bytes": 1192449
+      },
+      {
+        "file": "vulnerabilities.triage.json",
+        "sha256": "0e3a827327d6087d206b9cbe572540e18e5ca443a3000c7ad694ed5a110efda5",
+        "bytes": 1806
+      }
+    ]
+  }
+]

@@ -14,5 +14,9 @@
   "statusOverrides": {
     "GET /api/payments/public/tbank-status": 404
   },
+  "optionalForCompatibility": {
+    "ManagerControlConcreteItemResponse": ["delivery"],
+    "CommonInvoiceDetailsResponse": ["delivery"]
+  },
   "releaseEvidence": "releases/inventory.json records actual latest published Android/backend artifacts; no minimum supported release is inferred."
 }

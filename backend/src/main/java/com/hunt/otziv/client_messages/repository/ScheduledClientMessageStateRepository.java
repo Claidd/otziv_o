@@ -28,7 +28,7 @@ public interface ScheduledClientMessageStateRepository extends CrudRepository<Sc
     @Query("SELECT MAX(s.deliveryPreparedAt) FROM ScheduledClientMessageState s WHERE s.deliveryStatus IN ('PREPARED','UNKNOWN') AND (:channel = 'ANY' OR s.deliveryChannel = :channel)")
     Optional<LocalDateTime> latestReservedDeliveryAt(@Param("channel") String channel);
 
-    @Query("SELECT s.id FROM ScheduledClientMessageState s WHERE s.status = com.hunt.otziv.client_messages.model.ScheduledMessageStateStatus.ACTIVE AND s.scenario <> com.hunt.otziv.client_messages.model.ClientMessageScenario.BAD_REVIEW_INVOICE AND s.deliveryEnvelope IS NOT NULL AND s.deliveryStatus IN ('PREPARED','UNKNOWN') AND COALESCE(s.deliveryRecoveryCheckedAt, s.deliveryPreparedAt) < :cutoff ORDER BY COALESCE(s.deliveryRecoveryCheckedAt, s.deliveryPreparedAt), s.id")
+    @Query("SELECT s.id FROM ScheduledClientMessageState s WHERE s.scenario <> com.hunt.otziv.client_messages.model.ClientMessageScenario.BAD_REVIEW_INVOICE AND s.deliveryEnvelope IS NOT NULL AND s.deliveryStatus IN ('PREPARED','UNKNOWN') AND COALESCE(s.deliveryRecoveryCheckedAt, s.deliveryPreparedAt) < :cutoff ORDER BY COALESCE(s.deliveryRecoveryCheckedAt, s.deliveryPreparedAt), s.id")
     List<Long> findRecoverablePreparedIds(@Param("cutoff") LocalDateTime cutoff, Pageable pageable);
 
     @Modifying

@@ -38,7 +38,7 @@ import com.hunt.otziv.payments.model.PaymentProfile;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.payments.service.PaymentProfileService;
 import com.hunt.otziv.payments.service.ManualPaymentTaskService;
-import com.hunt.otziv.payments.service.StandaloneBankPaymentPolicy;
+import com.hunt.otziv.payments.api.StandalonePaymentState;
 import com.hunt.otziv.payments.service.PaymentUrlPolicy;
 import com.hunt.otziv.payments.service.TbankTokenSigner;
 import com.hunt.otziv.payments.service.ManualPaymentAutoConfirmationService;
@@ -194,6 +194,7 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
     private final OrderAggregateMutationLockService orderAggregateMutationLockService;
 
     private final PaymentLinkRepository paymentLinkRepository;
+    private final StandalonePaymentState standalonePaymentState;
 
     private final CommonInvoiceAfterCommitSender commonInvoiceAfterCommitSender;
 
@@ -1538,7 +1539,7 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
         // current/locking read is therefore ordered strictly as
         // Order -> PaymentLink and observes an Init/GetQr reservation that
         // committed while CommonBilling was waiting for the Order lock.
-        boolean competingPayment = paymentLinkRepository.findByOrderIdForUpdate(order.getId()).stream().anyMatch(StandaloneBankPaymentPolicy::hasStartedProviderPayment);
+        boolean competingPayment = standalonePaymentState.hasStartedPaymentWithLock(order.getId());
         if (competingPayment) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "У заказа есть незавершенный T-Bank/СБП платеж. Проверьте его в журнале перед закрытием общего счета.");
         }

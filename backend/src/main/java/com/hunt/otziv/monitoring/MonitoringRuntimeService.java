@@ -1,6 +1,8 @@
 package com.hunt.otziv.monitoring;
 
 import com.hunt.otziv.integration.outbox.service.IntegrationOutboxStatusService;
+import com.hunt.otziv.client_messages.api.DeliveryQueueHealth;
+import com.hunt.otziv.config.settings.api.OutboundMessagePolicy;
 import com.hunt.otziv.workload_shadow.health.service.WorkloadShadowHealthService;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.lang.management.ManagementFactory;
@@ -23,11 +25,17 @@ public class MonitoringRuntimeService {
     private final RuntimeRequestWindow requests;
     private final IntegrationOutboxStatusService outbox;
     private final WorkloadShadowHealthService workload;
+    private final List<DeliveryQueueHealth> deliveryQueues;
+    private final OutboundMessagePolicy outboundPolicy;
+    private static final List<String> DELIVERY_QUEUES = List.of("common_invoice", "manager_client", "whatsapp_reply");
+    private volatile List<QueueSample> deliveryProjected = DELIVERY_QUEUES.stream().map(MonitoringRuntimeService::unavailable).toList();
     private volatile List<QueueSample> projected = List.of(unavailable("integration_outbox"), unavailable("workload"));
     private TransactionTemplate samplingTransaction;
     public MonitoringRuntimeService(MeterRegistry registry, Environment environment, RuntimeRequestWindow requests,
-            IntegrationOutboxStatusService outbox, WorkloadShadowHealthService workload) {
+            IntegrationOutboxStatusService outbox, WorkloadShadowHealthService workload,
+            List<DeliveryQueueHealth> deliveryQueues, OutboundMessagePolicy outboundPolicy) {
         this.registry=registry; this.environment=environment; this.requests=requests; this.outbox=outbox; this.workload=workload;
+        this.deliveryQueues=List.copyOf(deliveryQueues); this.outboundPolicy=outboundPolicy;
     }
     @Autowired
     void configureSamplingTransaction(PlatformTransactionManager manager) {
@@ -54,9 +62,33 @@ public class MonitoringRuntimeService {
                     (double)value.oldestDueAgeSeconds(), false);
         } catch (RuntimeException failed) { shadow=unavailable("workload"); }
         projected=List.of(integration,shadow);
+        var next = new ArrayList<QueueSample>();
+        for (String name : DELIVERY_QUEUES) {
+            try {
+                var sources = deliveryQueues.stream().filter(q -> name.equals(q.queueName())).toList();
+                if (sources.size() != 1) throw new IllegalStateException("Missing or duplicate queue owner");
+                boolean dispatchEnabled = outboundPolicy.clientMessagesEnabled();
+                var rows = read(sources.getFirst()::deliveryQueueHealth);
+                var states = new HashSet<DeliveryQueueHealth.State>();
+                double backlog = 0, dead = 0, unknown = 0, oldest = 0;
+                for (var row : rows) {
+                    if (!states.add(row.state()) || row.jobs() < 0 || row.oldestSeconds() < 0 || row.expiredLeases() < 0)
+                        throw new IllegalStateException("Invalid delivery queue snapshot");
+                    backlog += row.jobs();
+                    switch (row.state()) {
+                        case FAILED -> dead += row.jobs();
+                        case UNKNOWN -> unknown += row.jobs();
+                        default -> oldest = Math.max(oldest, row.oldestSeconds());
+                    }
+                }
+                next.add(new QueueSample(name, "AVAILABLE", Instant.now(), dispatchEnabled, backlog, dead, unknown, oldest, false));
+            } catch (RuntimeException failed) { next.add(unavailable(name)); }
+        }
+        deliveryProjected = List.copyOf(next);
     }
     public Snapshot snapshot() {
         Instant now=Instant.now(); var queues=new ArrayList<>(projected);
+        queues.addAll(deliveryProjected);
         Double leadObserved=gauge("otziv.lead.commands.observed.timestamp.seconds");
         queues.add(queue("lead", leadObserved==null || leadObserved<=0 ? null : Instant.ofEpochMilli((long)(leadObserved*1000)),
                 enabled("lead.commands.dispatch-enabled"), sumStates("READY","PROCESSING","UNKNOWN","QUARANTINED","LEGACY"),

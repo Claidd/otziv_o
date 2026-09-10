@@ -16,6 +16,8 @@ import com.hunt.otziv.p_products.next_order.service.NextOrderRequestService;
 import com.hunt.otziv.p_products.review.service.OrderAggregateMutationLockService;
 import com.hunt.otziv.p_products.service.OrderTransactionService;
 import com.hunt.otziv.payments.api.StandalonePaymentOperations;
+import com.hunt.otziv.payments.api.StandalonePaymentState;
+import com.hunt.otziv.payments.service.StandalonePaymentStateService;
 import com.hunt.otziv.payments.model.PaymentLink;
 import com.hunt.otziv.payments.model.PaymentLinkStatus;
 import com.hunt.otziv.payments.model.PaymentMethod;
@@ -88,6 +90,8 @@ class CommonInvoiceTransactionProxyMySqlIntegrationTest {
         dependencies.put(PlatformTransactionManager.class, transactionManager);
         createSchema();
         configureJdbcAdapters();
+        dependencies.put(StandalonePaymentState.class,
+                transactionalProxy(new StandalonePaymentStateService(dependency(PaymentLinkRepository.class))));
 
         CommonInvoiceSettlementService target = target(CommonInvoiceSettlementService.class);
         ReflectionTestUtils.setField(target, "orderTransactionService", dependency(OrderTransactionService.class));
@@ -99,6 +103,21 @@ class CommonInvoiceTransactionProxyMySqlIntegrationTest {
         assertThat(AopUtils.isAopProxy(settlement)).isTrue();
         assertThat(AopUtils.getTargetClass(settlement)).isEqualTo(CommonInvoiceSettlementService.class);
         assertThat(AopUtils.isAopProxy(manualPayments)).isTrue();
+    }
+
+    @Test
+    void paymentOwnedDecisionRequiresCallerTransactionAndKeepsSettlementAtomic() {
+        StandalonePaymentState state = dependency(StandalonePaymentState.class);
+        assertThatThrownBy(() -> state.hasStartedPaymentWithLock(101L))
+                .isInstanceOf(org.springframework.transaction.IllegalTransactionStateException.class);
+        assertThatThrownBy(() -> callerTransaction.executeWithoutResult(status -> {
+            jdbc.queryForObject("SELECT id FROM tx_orders WHERE id=101 FOR UPDATE", Long.class);
+            assertThat(state.hasStartedPaymentWithLock(101L)).isTrue();
+            jdbc.update("UPDATE tx_links SET status='CANCELED' WHERE id=501");
+            assertThat(state.hasStartedPaymentWithLock(101L)).isFalse();
+            throw new LateFailure();
+        })).isInstanceOf(LateFailure.class);
+        assertOriginalFinancialState();
     }
 
     @Test

@@ -96,6 +96,10 @@ class ManagerControlClientReplyMySqlIntegrationTest {
     private ManagerRepository managers;
     private ManagerAccessService companyAccess;
     private ManagerControlClientReplyWorkflow workflow;
+    private ManagerClientMessageQueue queue;
+    private ManagerClientMessageWorker worker;
+    private com.hunt.otziv.u_users.api.DeferredUserAuthority actors;
+
 
     @BeforeEach void setUp() {
         dataSource = new DriverManagerDataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword());
@@ -161,6 +165,21 @@ class ManagerControlClientReplyMySqlIntegrationTest {
             assertThat(call.getArgument(1, String.class)).isEqualTo(token.get());
             proofHook.get().run(); return proof.get();
         });
+        jdbc.execute("DROP TABLE IF EXISTS manager_client_message_queue");
+        new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_313__manager_client_message_queue.sql")).execute(dataSource);
+        var encryption = new com.hunt.otziv.security.credentials.CredentialEncryptionProperties();
+        encryption.setActiveKeyId("test"); encryption.setActiveKeyBase64(java.util.Base64.getEncoder().encodeToString(new byte[32]));
+        queue = proxy(new ManagerClientMessageQueue(jdbc, new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules(),
+                new com.hunt.otziv.security.credentials.CredentialCipher(encryption)));
+        actors = mock(com.hunt.otziv.u_users.api.DeferredUserAuthority.class);
+        var deferredActor = new com.hunt.otziv.u_users.api.DeferredUserAuthority.Actor(5L, PRINCIPAL.getName(), 0, java.util.Set.of("ROLE_ADMIN"));
+        when(actors.capture(AUTH)).thenReturn(deferredActor); when(actors.revalidate(deferredActor)).thenReturn(AUTH);
+        when(sender.deliverToPlatformWithOperationId(any(), any(), any(), any(), any(), anyString())).thenAnswer(call -> {
+            var target = (com.hunt.otziv.client_messages.api.ClientMessageDelivery.Target) call.getArgument(1);
+            var company = new Company(); company.setId(target.companyId()); company.setTitle(target.title());
+            return sender.sendToPlatformWithOperationId(ClientChatPlatform.valueOf(call.getArgument(0)), company,
+                    call.getArgument(2), call.getArgument(3), call.getArgument(3), call.getArgument(4), call.getArgument(5));
+        });
         restartWorkflow();
     }
 
@@ -193,12 +212,39 @@ class ManagerControlClientReplyMySqlIntegrationTest {
         sendResult.set(ClientMessageSendResult.failed("gateway_not_ready", "fixture")); conflictReply();
         String original = token.get(); assertThat(state()).isEqualTo("FAILED_KNOWN"); assertThat(comment()).isEqualTo("original");
         restartWorkflow(); sendResult.set(ClientMessageSendResult.sent("WhatsApp", "fixture-provider-message")); reply(1L);
-        assertThat(token.get()).isEqualTo(original); assertThat(sends.get()).isEqualTo(2); assertThat(state()).isEqualTo("SUCCEEDED");
+        assertThat(token.get()).isEqualTo(original); assertThat(sends.get()).isEqualTo(6); assertThat(state()).isEqualTo("SUCCEEDED");
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM manager_client_reply_operations", Integer.class)).isEqualTo(1);
     }
 
+    @Test void lateKnownUnsentReceiptRearmsTheSameFrozenOperationBeforeRetry() {
+        unknown(); String original = token.get(); restartWorkflow();
+        when(sender.recordedOutcome(original)).thenReturn(ClientMessageSendResult.failed("gateway_not_ready", "not admitted"));
+        jdbc.update("UPDATE manager_client_message_queue SET next_attempt_at=CURRENT_TIMESTAMP(6)");
+        worker.drain();
+        assertThat(state()).isEqualTo("PREPARED");
+        assertThat(queue.status(1L, original).status()).isEqualTo("RETRYABLE");
+        assertThat(sends.get()).isEqualTo(1);
+        sendResult.set(ClientMessageSendResult.sent("WhatsApp", "fixture-provider-message"));
+        jdbc.update("UPDATE manager_client_message_queue SET next_attempt_at=CURRENT_TIMESTAMP(6)");
+        worker.drain();
+        assertThat(state()).isEqualTo("SUCCEEDED");
+        assertThat(token.get()).isEqualTo(original);
+        assertThat(sends.get()).isEqualTo(2);
+    }
+
+    @Test void lateKnownUnsentReceiptCannotRearmAChangedSource() {
+        unknown(); newInbound();
+        when(sender.recordedOutcome(token.get())).thenReturn(ClientMessageSendResult.failed("gateway_not_ready", "not admitted"));
+        jdbc.update("UPDATE manager_client_message_queue SET next_attempt_at=CURRENT_TIMESTAMP(6)");
+        worker.drain();
+        assertThat(queue.status(1L, token.get()).status()).isEqualTo("FAILED");
+        assertThat(queue.status(1L, token.get()).errorCode()).isEqualTo("finalization_required");
+        assertThat(state()).isEqualTo("UNKNOWN"); assertThat(sourceStatus()).isEqualTo("OPEN");
+        assertThat(sends.get()).isEqualTo(1);
+    }
+
     @Test void stalePreparationBecomesUnknownAndDoesNotAuthorizeAnotherSend() {
-        unknown(); jdbc.update("UPDATE manager_client_reply_operations SET state='PREPARED',prepared_at=?", LocalDateTime.now().minusMinutes(16));
+        unknown(); jdbc.update("DELETE FROM manager_client_message_queue WHERE operation_id=?", token.get()); jdbc.update("UPDATE manager_client_reply_operations SET state='PREPARED',prepared_at=?", LocalDateTime.now().minusMinutes(16));
         jdbc.update("UPDATE mc_reply_card SET comment=? WHERE id=1", "client_reply_delivery_prepared:" + token.get());
         restartWorkflow(); conflictReply(); assertThat(state()).isEqualTo("UNKNOWN"); assertThat(sends.get()).isEqualTo(1);
     }
@@ -253,7 +299,7 @@ class ManagerControlClientReplyMySqlIntegrationTest {
     }
 
     @Test void recoveryOfStalePreparationCommitsUnknownEvenIfEvidenceIsAbsent() {
-        unknown(); jdbc.update("UPDATE manager_client_reply_operations SET state='PREPARED',prepared_at=?", LocalDateTime.now().minusMinutes(16));
+        unknown(); jdbc.update("DELETE FROM manager_client_message_queue WHERE operation_id=?", token.get()); jdbc.update("UPDATE manager_client_reply_operations SET state='PREPARED',prepared_at=?", LocalDateTime.now().minusMinutes(16));
         jdbc.update("UPDATE mc_reply_card SET comment=? WHERE id=1", "client_reply_delivery_prepared:" + token.get());
         proof.set(new WhatsAppOperationStatus(token.get(), "NOT_FOUND", null, null));
         restartWorkflow(); assertThatThrownBy(this::reconcile).isInstanceOf(ResponseStatusException.class);
@@ -358,13 +404,36 @@ class ManagerControlClientReplyMySqlIntegrationTest {
 
     private void unknown() { sendResult.set(ClientMessageSendResult.failed("operation_unknown", "fixture")); conflictReply(); }
     private void conflictReply() { assertThatThrownBy(() -> reply(1L)).isInstanceOf(ResponseStatusException.class); }
-    private ManagerControlConcreteItemResponse reply(Long id) { return workflow.reply(id, new ManagerControlClientReplyRequest(MESSAGE), PRINCIPAL, AUTH); }
+    /** Exercise the HTTP enqueue and the independently scheduled worker as two explicit phases. */
+    private ManagerControlConcreteItemResponse reply(Long id) {
+        int before = sends.get();
+        var accepted = workflow.reply(id, new ManagerControlClientReplyRequest(MESSAGE), PRINCIPAL, AUTH);
+        assertThat(accepted.delivery().status()).isEqualTo("QUEUED");
+        assertThat(sends.get()).isEqualTo(before);
+        token.set(accepted.delivery().operationId());
+        for (int attempt = 0; attempt < 5; attempt++) {
+            if (attempt > 0) {
+                var advance = new TransactionTemplate(transactionManager);
+                advance.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+                advance.executeWithoutResult(status -> jdbc.update("UPDATE manager_client_message_queue SET next_attempt_at=CURRENT_TIMESTAMP(6) WHERE operation_id=?", token.get()));
+            }
+            worker.drain();
+            if (!"RETRYABLE".equals(queue.status(id, token.get()).status())) break;
+        }
+        var delivered = queue.status(id, token.get());
+        if (!"SENT".equals(delivered.status()) || delivered.errorCode() != null)
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Background operation held: " + delivered.status());
+        return accepted.withDelivery(delivered);
+    }
     private ManagerClientReplyResolutionResponse reconcile() { return workflow.reconcile(1L, token.get(), new ManagerClientReplyResolutionRequest("Проверка результата по операции"), PRINCIPAL, AUTH); }
     private void successProof() { proof.set(new WhatsAppOperationStatus(token.get(), "SUCCEEDED", "fixture-provider-message",
             WhatsAppOperationEnvelope.groupHash("fixture-client", "120000000000@g.us", MESSAGE))); }
     private void newInbound() { jdbc.update("UPDATE mc_reply_source SET message_id=701,message_at=?,status='OPEN'", LocalDateTime.now()); }
     private void restartWorkflow() { workflow = proxy(new ManagerControlClientReplyWorkflow(proxy(new ManagerControlTransactionRunner()), cards,
-            controls, sources, operations, sender, whatsapp, tracker, access, lifecycle, presenter)); }
+            controls, sources, operations, sender, queue, actors, whatsapp, tracker, access, lifecycle, presenter));
+        worker = proxy(new ManagerClientMessageWorker(queue, mock(ManagerControlClientSendWorkflow.class), workflow, sender,
+                actors, () -> true, proxy(new ManagerControlTransactionRunner())));
+    }
     private String state() { return jdbc.queryForObject("SELECT state FROM manager_client_reply_operations WHERE operation_token=?", String.class, token.get()); }
     private String sourceStatus() { return jdbc.queryForObject("SELECT status FROM mc_reply_source", String.class); }
     private String comment() { return jdbc.queryForObject("SELECT comment FROM mc_reply_card WHERE id=1", String.class); }

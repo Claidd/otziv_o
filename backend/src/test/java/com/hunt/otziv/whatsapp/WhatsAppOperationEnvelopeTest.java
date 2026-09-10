@@ -14,6 +14,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class WhatsAppOperationEnvelopeTest {
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings={"79990000000", "+7 (999) 000-00-00", "89990000000"})
+    void phoneNormalizationMatchesActualGatewayIdentity(String phone) {
+        assertEquals("5c6f69e4336bb6cecac822993f746533c48d307248f86d2d6918e027e790425a",
+                WhatsAppOperationEnvelope.phoneHash("client",phone,"1200 руб."));
+    }
+
     @TestFactory
     Stream<DynamicTest> matchesGatewayWireIdentity() throws Exception {
         JsonNode fixtures = new ObjectMapper().readTree(Path.of("..", "contracts", "fixtures",

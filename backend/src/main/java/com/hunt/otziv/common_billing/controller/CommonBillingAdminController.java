@@ -1,6 +1,7 @@
 package com.hunt.otziv.common_billing.controller;
 
 import com.hunt.otziv.common_billing.dto.CommonBillingAccountRequest;
+import com.hunt.otziv.config.api.DeliveryResponseCompatibility;
 import com.hunt.otziv.common_billing.dto.CommonBillingAccountResponse;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceArchivePreviewResponse;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceCloseRequest;
@@ -27,6 +28,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -103,9 +105,12 @@ public class CommonBillingAdminController {
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     @PostMapping("/api/common-billing/invoices/{invoiceId}/send")
-    public CommonInvoiceDetailsResponse sendInvoice(@PathVariable Long invoiceId) {
+    public CommonInvoiceDetailsResponse sendInvoice(@PathVariable Long invoiceId,
+            @RequestHeader(name = DeliveryResponseCompatibility.HEADER, required = false) String deliveryProtocol) {
         requireCanMutateInvoice(invoiceId);
-        return commonBillingService.sendInvoice(invoiceId, true);
+        var response = commonBillingService.sendInvoice(invoiceId, true);
+        DeliveryResponseCompatibility.requireUnderstoodOutcome(deliveryProtocol, response.delivery());
+        return response;
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
@@ -162,9 +167,12 @@ public class CommonBillingAdminController {
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     @PostMapping("/api/common-billing/invoices/{invoiceId}/remind")
-    public CommonInvoiceDetailsResponse remind(@PathVariable Long invoiceId) {
+    public CommonInvoiceDetailsResponse remind(@PathVariable Long invoiceId,
+            @RequestHeader(name = DeliveryResponseCompatibility.HEADER, required = false) String deliveryProtocol) {
         requireCanMutateInvoice(invoiceId);
-        return commonBillingService.sendManualReminder(invoiceId);
+        var response = commonBillingService.sendManualReminder(invoiceId);
+        DeliveryResponseCompatibility.requireUnderstoodOutcome(deliveryProtocol, response.delivery());
+        return response;
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")

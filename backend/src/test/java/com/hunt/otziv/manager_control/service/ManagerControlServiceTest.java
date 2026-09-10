@@ -134,6 +134,12 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class ManagerControlServiceTest {
+    private MemoryManagerMessageQueue deliveryQueue;
+    private ManagerClientMessageWorker deliveryWorker;
+    private void drainManagerDelivery() {
+        for (int attempt = 0; attempt < 5; attempt++) { deliveryQueue.advance(); deliveryWorker.drain(); }
+    }
+
 
     @Mock
     private ManagerRepository managerRepository;
@@ -254,8 +260,23 @@ class ManagerControlServiceTest {
     ManagerControlClientMessageText clientMessageText = new ManagerControlClientMessageText(scheduledClientMessageService, orderRepository);
     ManagerControlSlaPolicy slaPolicy = new ManagerControlSlaPolicy(appSettingService);
     ManagerControlConcretePresenter concretePresenter = new ManagerControlConcretePresenter(riskIncidentRepository, workerTaskLookup, invoiceDiagnostics, scheduledClientMessageStateRepository, companyRepository, slaPolicy);
-    var clientSendWorkflow = new ManagerControlClientSendWorkflow(managerControlTransactionRunner, dailyControlConcreteItemRepository, dailyControlRepository, orderRepository, orderService, clientChatMessageSender, paymentInstructionOrchestrator, accessPolicy, cardLifecycle, clientMessageText, concretePresenter);
-    var clientReplyWorkflow = new ManagerControlClientReplyWorkflow(managerControlTransactionRunner, dailyControlConcreteItemRepository, dailyControlRepository, clientChatUnansweredItemRepository, replyOperations, clientChatMessageSender, org.mockito.Mockito.mock(com.hunt.otziv.whatsapp.service.service.WhatsAppService.class), clientChatMessageTrackerService, accessPolicy, cardLifecycle, concretePresenter);
+    deliveryQueue = new MemoryManagerMessageQueue();
+    var deliveryActors = org.mockito.Mockito.mock(com.hunt.otziv.u_users.api.DeferredUserAuthority.class);
+    lenient().when(deliveryActors.capture(any())).thenReturn(new com.hunt.otziv.u_users.api.DeferredUserAuthority.Actor(1L, "fixture", 0, java.util.Set.of("ROLE_ADMIN")));
+    lenient().when(deliveryActors.revalidate(any())).thenReturn(adminAuth());
+    lenient().when(clientChatMessageSender.deliverWithOperationId(any(), any(), any(), any(), any(), anyString())).thenAnswer(call -> {
+        var t = (com.hunt.otziv.client_messages.api.ClientMessageDelivery.Target) call.getArgument(0);
+        var company = t == null ? null : new ManagerControlMessageCompany(t.companyId(), t.title(), t.urlChat(), t.telegramChatId(), t.maxChatId()).toMessageCompany();
+        return clientChatMessageSender.sendWithOperationId(company, call.getArgument(1), call.getArgument(2), call.getArgument(3), call.getArgument(4), call.getArgument(5));
+    });
+    lenient().when(clientChatMessageSender.deliverToPlatformWithOperationId(any(), any(), any(), any(), any(), anyString())).thenAnswer(call -> {
+        var t = (com.hunt.otziv.client_messages.api.ClientMessageDelivery.Target) call.getArgument(1);
+        var company = new ManagerControlMessageCompany(t.companyId(), t.title(), t.urlChat(), t.telegramChatId(), t.maxChatId()).toMessageCompany();
+        return clientChatMessageSender.sendToPlatformWithOperationId(com.hunt.otziv.client_chat_control.model.ClientChatPlatform.valueOf(call.getArgument(0)),
+                company, call.getArgument(2), call.getArgument(3), call.getArgument(3), call.getArgument(4), call.getArgument(5));
+    });
+    var clientSendWorkflow = new ManagerControlClientSendWorkflow(managerControlTransactionRunner, dailyControlConcreteItemRepository, dailyControlRepository, orderRepository, orderService, clientChatMessageSender, deliveryQueue, deliveryActors, paymentInstructionOrchestrator, accessPolicy, cardLifecycle, clientMessageText, concretePresenter);
+    var clientReplyWorkflow = new ManagerControlClientReplyWorkflow(managerControlTransactionRunner, dailyControlConcreteItemRepository, dailyControlRepository, clientChatUnansweredItemRepository, replyOperations, clientChatMessageSender, deliveryQueue, deliveryActors, org.mockito.Mockito.mock(com.hunt.otziv.whatsapp.service.service.WhatsAppService.class), clientChatMessageTrackerService, accessPolicy, cardLifecycle, concretePresenter);
     var clientConversationWorkflow = new ManagerControlClientConversationWorkflow(dailyControlConcreteItemRepository, dailyControlRepository, clientChatUnansweredItemRepository, clientChatMessageTrackerService, clientChatReplySuggestionService, clientChatMessageReconciliationService, replyOperations, accessPolicy, cardLifecycle, concretePresenter);
     var problemExamples = new ManagerControlProblemExamples(clientMessageText, concretePresenter, new ManagerControlOrderAutomationDiagnostics(orderRepository, scheduledClientMessageStateRepository), orderService, clientMessageOrderStatusService, appSettingService, clientChatMessageTrackerService, badReviewTaskService, reviewRecoveryTaskService, reviewRepository, orderRepository, companyRepository, paymentLinkRepository, invoiceDiagnostics, managerAutomationFailureService, riskIncidentRepository, dailyControlRepository, dailyControlConcreteItemRepository);
     var concreteSnapshot = new ManagerControlConcreteSnapshotWorkflow(problemExamples, cardLifecycle, slaPolicy, concretePresenter, dailyControlConcreteItemRepository);
@@ -279,6 +300,8 @@ class ManagerControlServiceTest {
     ReflectionTestUtils.setField(service, "dayLifecycle", dayLifecycle);
     ReflectionTestUtils.setField(service, "concreteSnapshot", concreteSnapshot);
     ReflectionTestUtils.setField(service, "problemExamples", problemExamples);
+    deliveryWorker = new ManagerClientMessageWorker(deliveryQueue, clientSendWorkflow, clientReplyWorkflow, clientChatMessageSender,
+            deliveryActors, () -> true, managerControlTransactionRunner);
     ReflectionTestUtils.setField(service, "clientSendWorkflow", clientSendWorkflow);
     ReflectionTestUtils.setField(service, "clientReplyWorkflow", clientReplyWorkflow);
     ReflectionTestUtils.setField(service, "clientConversationWorkflow", clientConversationWorkflow);
@@ -705,7 +728,7 @@ class ManagerControlServiceTest {
     }
 
     @Test
-    void successfulClientMessageClosesConcreteCardImmediately() {
+    void acceptedClientMessageClosesConcreteCardOnlyAfterWorkerConfirmation() {
         ManagerDailyControl control = control();
         ManagerDailyControlItem parent = actionParent(control);
         ManagerDailyControlConcreteItem concrete = concrete(control, parent, "ORDER");
@@ -739,11 +762,14 @@ class ManagerControlServiceTest {
                 adminAuth()
         );
 
+        assertEquals("QUEUED", response.delivery().status());
+        assertEquals(ManagerDailyControlItemStatus.ACTION_TAKEN.name(), response.itemStatus());
+        verify(clientChatMessageSender, never()).sendWithOperationId(any(), any(), any(), any(), any(), anyString());
+        drainManagerDelivery();
         assertEquals(ManagerDailyControlItemStatus.RESOLVED, concrete.getStatus());
         assertEquals(ManagerDailyControlActionType.RESOLVED, concrete.getActionType());
         assertNotNull(concrete.getResolvedAt());
         assertNull(concrete.getFollowUpAt());
-        assertEquals(ManagerDailyControlItemStatus.RESOLVED.name(), response.itemStatus());
         ArgumentCaptor<Company> destination = ArgumentCaptor.forClass(Company.class);
         verify(clientChatMessageSender).sendWithOperationId(
                 destination.capture(), any(), any(), eq("canonical payment"), eq(copyButton), anyString());
@@ -776,12 +802,10 @@ class ManagerControlServiceTest {
             return ClientMessageSendResult.sent("WhatsApp", "fixture-provider-message");
         });
 
-        ResponseStatusException failure = assertThrows(
-                ResponseStatusException.class,
-                () -> service.sendClientMessage(concrete.getId(), principal(), adminAuth())
-        );
-
-        assertEquals(org.springframework.http.HttpStatus.CONFLICT, failure.getStatusCode());
+        var accepted = service.sendClientMessage(concrete.getId(), principal(), adminAuth());
+        assertEquals("QUEUED", accepted.delivery().status());
+        drainManagerDelivery();
+        assertEquals("finalization_required", deliveryQueue.status(concrete.getId(), accepted.delivery().operationId()).errorCode());
         assertEquals(ManagerDailyControlItemStatus.ACTION_TAKEN, concrete.getStatus());
         assertTrue(concrete.getComment().startsWith("client_message_delivery_unknown:"));
         verify(paymentInstructionOrchestrator, never()).releaseKnownUnsent(any(), any());
@@ -810,8 +834,9 @@ class ManagerControlServiceTest {
         when(clientChatMessageSender.sendWithOperationId(any(), any(), any(), eq("payment"), isNull(), anyString()))
                 .thenReturn(ClientMessageSendResult.failed("gateway_not_ready", "unavailable"));
 
-        assertThrows(ResponseStatusException.class,
-                () -> service.sendClientMessage(concrete.getId(), principal(), adminAuth()));
+        var accepted = service.sendClientMessage(concrete.getId(), principal(), adminAuth());
+        assertEquals("QUEUED", accepted.delivery().status());
+        drainManagerDelivery();
 
         assertEquals(ManagerDailyControlItemStatus.OPEN, concrete.getStatus());
         verify(paymentInstructionOrchestrator).releaseKnownUnsent(eq(prepared), any(Authentication.class));
@@ -838,8 +863,9 @@ class ManagerControlServiceTest {
         when(clientChatMessageSender.sendWithOperationId(any(), any(), any(), eq("payment"), isNull(), anyString()))
                 .thenThrow(new IllegalStateException("timeout"));
 
-        assertThrows(ResponseStatusException.class,
-                () -> service.sendClientMessage(concrete.getId(), principal(), adminAuth()));
+        var accepted = service.sendClientMessage(concrete.getId(), principal(), adminAuth());
+        assertEquals("QUEUED", accepted.delivery().status());
+        drainManagerDelivery();
 
         assertTrue(concrete.getComment().startsWith("client_message_delivery_unknown:"));
         verify(paymentInstructionOrchestrator, never()).releaseKnownUnsent(any(), any());
@@ -2545,8 +2571,10 @@ class ManagerControlServiceTest {
                 adminAuth()
         );
 
-        assertEquals(ManagerDailyControlItemStatus.RESOLVED.name(), response.itemStatus());
-        assertEquals(ManagerDailyControlActionType.RESOLVED.name(), response.actionType());
+        assertEquals("QUEUED", response.delivery().status());
+        drainManagerDelivery();
+        assertEquals(ManagerDailyControlItemStatus.RESOLVED, concrete.getStatus());
+        assertEquals(ManagerDailyControlActionType.RESOLVED, concrete.getActionType());
         verify(clientChatMessageTrackerService).markAuditReplySent(
                 audited.getId(),
                 1L,

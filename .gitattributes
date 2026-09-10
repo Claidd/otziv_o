@@ -21,6 +21,10 @@ infrastructure/runtime-security/reviewed-images-c14-*.json text eol=lf
 infrastructure/runtime-security/reviewed-images-c15-*.json text eol=lf
 infrastructure/runtime-security/builds/*.Dockerfile text eol=lf
 infrastructure/keycloak/security-generation/c15-netty/** text eol=lf
+# Keep the exact executed harnesses and runtime receipts byte-identical in the evidence graph.
+infrastructure/keycloak/security-generation/c15-netty/proofs/** -text
+infrastructure/keycloak/security-generation/c15-netty/replay-actual.py -text
+infrastructure/keycloak/security-generation/container-proof.mjs -text
 infrastructure/runtime-security/adjudications/grafana-tempo-c15/** -text
 infrastructure/runtime-security/adjudications/alloy-daemon-c15/** -text
 infrastructure/runtime-security/builds/minio/** text eol=lf

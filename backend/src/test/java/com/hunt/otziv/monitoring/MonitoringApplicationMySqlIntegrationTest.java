@@ -43,7 +43,9 @@ class MonitoringApplicationMySqlIntegrationTest {
     }
     @Test void realHttpAuthenticatesOnlyExactReadRouteAndSerializesCurrentMysqlProjections() throws Exception {
         lead.sample();performers.refresh();sessions.refresh();service.sampleProjections();
-        assertThat(service.snapshot().queues()).hasSize(5).allMatch(q->q.state().equals("AVAILABLE"));
+        assertThat(service.snapshot().queues()).allMatch(q->q.state().equals("AVAILABLE"))
+            .extracting(q->q.name()).containsExactlyInAnyOrder("integration_outbox", "workload", "lead",
+                "performer", "session_revocation", "common_invoice", "manager_client", "whatsapp_reply");
         String path=MonitoringSecurityConfiguration.PATH,token="fixture-monitoring-application-0000000000";
         assertThat(request("GET",path,null).statusCode()).isEqualTo(401);
         assertThat(request("GET",path,"wrong-fixture").statusCode()).isEqualTo(401);

@@ -993,6 +993,9 @@
                       >
                         <span class="material-icons-sharp">{{ exampleIcon(example) }}</span>
                         <div class="detail-example-body">
+                          @if (deliveryMessage(example); as deliveryText) {
+                            <p role="status">{{ deliveryText }}</p>
+                          }
                           <a class="detail-example-link" [href]="detailExamplePrimaryUrl(example, item.targetUrl)">
                             <header class="detail-example-head">
                               <strong>{{ example.title }}</strong>
@@ -1171,7 +1174,7 @@
                                   type="button"
                                   class="review-action send-action"
                                   (click)="sendClientMessage(example)"
-                                  [disabled]="isConcreteUpdating(example.controlEntityId)"
+                                  [disabled]="isConcreteUpdating(example.controlEntityId) || deliveryBlocked(example)"
                                   title="Отправить сообщение клиенту автоматически"
                                 >
                                   <span class="material-icons-sharp">send</span>
@@ -1291,7 +1294,7 @@
                                   type="button"
                                   class="review-action send-action"
                                   (click)="sendClientMessage(example)"
-                                  [disabled]="isConcreteUpdating(example.controlEntityId)"
+                                  [disabled]="isConcreteUpdating(example.controlEntityId) || deliveryBlocked(example)"
                                   title="Попросить клиента прислать тексты"
                                 >
                                   <span class="material-icons-sharp">send</span>
@@ -1503,7 +1506,7 @@
                                   type="button"
                                   class="review-action send-action"
                                   (click)="sendUnansweredReply(example)"
-                                  [disabled]="isConcreteUpdating(example.controlEntityId) || unansweredReplyDraft(example.controlEntityId).trim().length === 0"
+                                  [disabled]="deliveryBlocked(example) || isConcreteUpdating(example.controlEntityId) || unansweredReplyDraft(example.controlEntityId).trim().length === 0"
                                   title="Отправить ответ в этот чат и закрыть карточку"
                                 >
                                   <span class="material-icons-sharp">send</span>

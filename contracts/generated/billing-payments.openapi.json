@@ -762,6 +762,38 @@
             ]
           }
         }
+      },
+      "DeliveryOperation": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "operationId",
+          "status",
+          "attempts",
+          "errorCode"
+        ],
+        "properties": {
+          "operationId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "attempts": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "errorCode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
       }
     }
   },
@@ -872,6 +904,7 @@
       "manualPaymentButtonLabel",
       "manualComment",
       "receiptStatus"
-    ]
+    ],
+    "DeliveryOperation": []
   }
 }

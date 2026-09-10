@@ -17,7 +17,7 @@ const config=()=>({schema:'otziv-signals-publisher-v1',intervalMs:30000,sourceTi
   taskSources:[{alias:'worker',kind:'worker',enabled:true,url:'https://worker.test/api/internal/task-metrics',tokenEnv:'WORKER_MONITOR_TOKEN'}],
   mysqlReceiptsFile:'mysql-fixture',postgresReceiptsFile:'pg-fixture',bindAddress:'127.0.0.1',port:9444});
 const backend=()=>({schema:'otziv-runtime-observed-v1',observedAt:time,requests:{state:'NO_TRAFFIC',observedAt:time,samples:0,errorRate:null,latencyP95Ms:null},
-  saturation:{observedAt:time,ratio:.4},queues:['lead','performer','session_revocation','integration_outbox','workload'].map(name=>({name,state:'AVAILABLE',observedAt:time,dispatchEnabled:false,backlog:4,dead:name==='session_revocation'?null:1,unknown:['integration_outbox','workload'].includes(name)?null:2,oldestDueSeconds:10}))});
+  saturation:{observedAt:time,ratio:.4},queues:['lead','performer','session_revocation','integration_outbox','workload','common_invoice','manager_client','whatsapp_reply'].map(name=>({name,state:'AVAILABLE',observedAt:time,dispatchEnabled:false,backlog:4,dead:name==='session_revocation'?null:1,unknown:['integration_outbox','workload'].includes(name)?null:2,oldestDueSeconds:10}))});
 const task=()=>({schema:'otziv-task-metrics-v1',measuredAt:time,active:1,running:0,cleanup:1,limit:1,oldestCleanupSeconds:12,accepting:true,timedOutTotal:1,cancelledTotal:0,rejectedTotal:{busy:2,draining:0,not_ready:0}});
 const options=(b=backend(),t=task())=>({now,readRecords:async()=>[],request:async(url,request)=>{
   if(url.includes('backend')){assert.equal(request.authHeader,'X-Otziv-Monitor-Token');return b;}
@@ -25,7 +25,7 @@ const options=(b=backend(),t=task())=>({now,readRecords:async()=>[],request:asyn
 }});
 test('collector consumes observed sources, retains queue occupancy despite disabled dispatch and never invents backup success',async()=>{
   const result=await collectSignals(config(),env,options());
-  assert.equal(result.metrics.deadCount,4);assert.equal(result.metrics.unknownCount,6);assert.equal(result.metrics.oldestCleanupSeconds,12);
+  assert.equal(result.metrics.deadCount,7);assert.equal(result.metrics.unknownCount,12);assert.equal(result.metrics.oldestCleanupSeconds,12);
   assert.equal(result.metrics.errorRate,null);assert.equal(result.metricStates.errorRate,'NO_TRAFFIC');
   assert.equal(result.backups.mysql.remoteVerified,false);
   assert.equal(result.queues[0].dispatchEnabled,false);assert.equal(result.queues[0].backlog,4);
@@ -100,6 +100,6 @@ test('real TLS publication requires auth, serves only cached bounded signals and
   const input=join(directory,'publisher.json');await writeFile(input,JSON.stringify(observed));
   const code=`import {readFile} from 'node:fs/promises';const {collectSignals}=await import(${JSON.stringify(new URL('./collect.mjs',import.meta.url).href)});console.log(JSON.stringify(await collectSignals(JSON.parse(await readFile(process.argv[1],'utf8')))));`;
   const output=await promisify(execFile)(process.execPath,['--input-type=module','-e',code,input],{env:{...process.env,...env,NODE_EXTRA_CA_CERTS:cert},timeout:10000});
-  assert.equal(JSON.parse(output.stdout).metrics.unknownCount,6);
+  assert.equal(JSON.parse(output.stdout).metrics.unknownCount,12);
   assert.equal(JSON.parse(output.stdout).metrics.oldestCleanupSeconds,12);
 });

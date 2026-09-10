@@ -1,0 +1,36 @@
+groups:
+  - name: durable-client-delivery
+    interval: 30s
+    rules:
+      - alert: ClientDeliveryQueueDelayed
+        expr: otziv_delivery_queue_oldest_seconds{state=~"QUEUED|RETRYABLE"} > 300
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Очередь {{ $labels.queue }} ожидает отправки более 5 минут"
+          description: "Проверьте режим отправки и готовность шлюза. Сохранённые команды повторяются только при доказанном отказе до отправки."
+      - alert: ClientDeliveryRequiresReconciliation
+        expr: otziv_delivery_queue_jobs{state=~"UNKNOWN|FAILED"} > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Очередь {{ $labels.queue }} требует сверки"
+          description: "Проверьте сохранённую операцию и квитанцию провайдера. Отсутствие подтверждения не разрешает повторную рассылку."
+      - alert: ClientDeliveryLeaseExpired
+        expr: otziv_delivery_queue_expired_leases > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "В очереди {{ $labels.queue }} не восстанавливается истёкшая аренда задания"
+          description: "Проверьте планировщик, БД и доступность чтения квитанций. Не переводите UNKNOWN в очередь вручную."
+      - alert: ClientDeliveryInspectionUnavailable
+        expr: otziv_delivery_queue_collector_healthy == 0 or absent(otziv_delivery_queue_collector_healthy)
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Проверка очередей отправки недоступна"
+          description: "Проверьте приложение, сбор метрик и БД. Отсутствие метрик не означает, что очереди пусты."

@@ -27,7 +27,8 @@ export class CommonBillingApi {
   sendCommonInvoice(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
     return this.http.post<CommonInvoiceDetailsResponse>(
       this.apiUrl(`/api/common-billing/invoices/${invoiceId}/send`),
-      {}
+      {},
+      { headers: { "X-Otziv-Delivery-Protocol": "queued-v1" } }
     );
   }
 
@@ -81,7 +82,8 @@ export class CommonBillingApi {
   remindCommonInvoice(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
     return this.http.post<CommonInvoiceDetailsResponse>(
       this.apiUrl(`/api/common-billing/invoices/${invoiceId}/remind`),
-      {}
+      {},
+      { headers: { "X-Otziv-Delivery-Protocol": "queued-v1" } }
     );
   }
 

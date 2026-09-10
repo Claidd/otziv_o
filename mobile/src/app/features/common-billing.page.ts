@@ -1,4 +1,4 @@
-import { commonInvoiceDeliveryWarning } from '@otziv/client-common/billing-payments';
+import { commonInvoiceDeliveryWarning, deliveryOperationMessage, DeliveryStatusWatcher } from '@otziv/client-common/billing-payments';
 import { CommonBillingApi } from '../core/common-billing.api';
 import { inject, Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -68,6 +68,9 @@ type InvoiceAction =
             <p class="state-card">Загружаю общий счет...</p>
           }
 
+          @if (details()?.delivery; as delivery) {
+            <p class="state-card" role="status">{{ deliveryStatusText(delivery) }}</p>
+          }
           @if (error()) {
             <button class="state-card state-card--error" type="button" (click)="reload()">
               <span class="material-icons-sharp">error</span>
@@ -649,6 +652,8 @@ type InvoiceAction =
   `]
 })
 export class CommonBillingPage implements OnInit, OnDestroy {
+  readonly deliveryStatusText = deliveryOperationMessage;
+  private readonly deliveryWatcher = new DeliveryStatusWatcher();
   private readonly commonBillingApi = inject(CommonBillingApi);
   readonly paymentInitNoPaymentActionLabel = COMMON_INVOICE_NO_PAYMENT_ACTION_LABEL;
   readonly paymentInitNoPaymentActionHint = commonInvoiceNoPaymentActionHint();
@@ -717,6 +722,7 @@ export class CommonBillingPage implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.deliveryWatcher.cancel();
     this.readRun += 1;
     this.routeGuard.destroy();
     this.routeSubscription?.unsubscribe();
@@ -812,8 +818,10 @@ export class CommonBillingPage implements OnInit, OnDestroy {
         return;
       }
       this.details.set(details);
+      this.deliveryWatcher.watch(details, () => firstValueFrom(this.commonBillingApi.getCommonInvoice(invoiceId)),
+        updated => this.details.set(updated), () => this.routeGuard.accepts(ticket));
       this.error.set(action === 'send' || action === 'remind'
-        ? commonInvoiceDeliveryWarning(details.summary.lastError) : null);
+        ? (details.delivery ? null : commonInvoiceDeliveryWarning(details.summary.lastError)) : null);
     } catch (error) {
       if (this.routeGuard.accepts(ticket)) {
         this.error.set(this.errorMessage(error, 'Не удалось обновить общий счет.'));

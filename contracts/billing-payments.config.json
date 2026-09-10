@@ -5,7 +5,8 @@
     "CommonBillingCompanyResponse": "backend/src/main/java/com/hunt/otziv/common_billing/dto/CommonBillingCompanyResponse.java",
     "CommonInvoiceSummaryResponse": "backend/src/main/java/com/hunt/otziv/common_billing/dto/CommonInvoiceSummaryResponse.java",
     "CommonBillingAccountResponse": "backend/src/main/java/com/hunt/otziv/common_billing/dto/CommonBillingAccountResponse.java",
-    "PublicPaymentLinkResponse": "backend/src/main/java/com/hunt/otziv/payments/dto/PublicPaymentLinkResponse.java"
+    "PublicPaymentLinkResponse": "backend/src/main/java/com/hunt/otziv/payments/dto/PublicPaymentLinkResponse.java",
+    "DeliveryOperation": "backend/src/main/java/com/hunt/otziv/client_messages/api/DeliveryOperation.java"
   },
   "nullable": {
     "CommonBillingCompanyResponse": [],
@@ -56,6 +57,9 @@
       "manualComment",
       "receiptStatus",
       "expiresAt"
+    ],
+    "DeliveryOperation": [
+      "errorCode"
     ]
   },
   "optionalForCompatibility": {
@@ -111,7 +115,8 @@
       "manualPaymentButtonLabel",
       "manualComment",
       "receiptStatus"
-    ]
+    ],
+    "DeliveryOperation": []
   },
   "enums": {
     "CommonInvoiceStatus": "backend/src/main/java/com/hunt/otziv/common_billing/model/CommonInvoiceStatus.java",
@@ -144,5 +149,9 @@
       "controller": "backend/src/main/java/com/hunt/otziv/payments/controller/PublicPaymentController.java"
     }
   ],
-  "nonNegative": {}
+  "nonNegative": {
+    "DeliveryOperation": [
+      "attempts"
+    ]
+  }
 }

@@ -14,7 +14,8 @@ import com.hunt.otziv.client_chat_control.model.ClientChatUnansweredStatus;
 import com.hunt.otziv.client_chat_control.repository.ClientChatUnansweredItemRepository;
 import com.hunt.otziv.client_chat_control.service.ClientChatMessageTrackerService;
 import com.hunt.otziv.client_messages.dto.ClientMessageSendResult;
-import com.hunt.otziv.client_messages.service.ClientChatMessageSender;
+import com.hunt.otziv.client_messages.api.ClientMessageDelivery;
+import com.hunt.otziv.u_users.api.DeferredUserAuthority;
 import com.hunt.otziv.manager_control.dto.ManagerControlClientReplyRequest;
 import com.hunt.otziv.manager_control.dto.ManagerControlConcreteItemResponse;
 import com.hunt.otziv.manager_control.model.*;
@@ -51,7 +52,9 @@ public class ManagerControlClientReplyWorkflow {
     private final ManagerDailyControlRepository controls;
     private final ClientChatUnansweredItemRepository unanswered;
     private final ManagerClientReplyOperationRepository operations;
-    private final ClientChatMessageSender sender;
+    private final ClientMessageDelivery sender;
+    private final ManagerClientMessageQueue queue;
+    private final DeferredUserAuthority actors;
     private final WhatsAppService whatsapp;
     private final ClientChatMessageTrackerService tracker;
     private final ManagerControlAccessPolicy access;
@@ -63,32 +66,93 @@ public class ManagerControlClientReplyWorkflow {
                                                   Principal principal, Authentication authentication) {
         String text = request == null || request.message() == null ? "" : request.message().trim();
         if (text.isBlank() || text.length() > 4000) throw badRequest("Введите ответ клиенту длиной от 1 до 4000 символов");
-        Preparation preparation = transactions.required(() -> prepare(cardId, text, principal, authentication));
-        // Rejections after a stale preparation commit its UNKNOWN state before returning a conflict.
-        if (preparation.rejection() != null) throw conflict(preparation.rejection());
-        Prepared reply = preparation.reply();
-        ClientMessageSendResult result;
-        try {
-            Source source = reply.source();
-            result = sender.sendToPlatformWithOperationId(source.platform(), source.company().toMessageCompany(),
-                    source.clientId(), source.chatId(), source.chatId(), reply.message(), reply.operation().token());
-        } catch (Exception unconfirmed) {
-            finishFailure(reply, true, "sender_exception");
-            throw conflict("Исход ответа не подтвержден; проверьте операцию " + reply.operation().token());
-        }
-        if (result == null || !result.sent() || result.messageId() == null || result.messageId().isBlank() || result.messageId().length() > 512) {
-            boolean unknown = !ClientChatMessageSender.isKnownUnsent(result);
-            finishFailure(reply, unknown, safeCode(result == null ? null : result.errorCode()));
-            throw conflict((unknown ? "Исход ответа не подтвержден; проверьте операцию "
-                    : "Ответ достоверно не отправлен; повтор доступен для операции ") + reply.operation().token());
-        }
-        try {
-            return transactions.required(() -> finishSuccess(reply, result, principal, authentication));
-        } catch (RuntimeException failedFinalization) {
-            finishFailure(reply, true, "finalization_failed");
-            throw conflict("Ответ доставлен, но карточка изменилась; проверьте операцию " + reply.operation().token());
-        }
+        var outcome = transactions.required(() -> {
+            Preparation preparation = prepare(cardId, text, principal, authentication);
+            if (preparation.rejection() != null) return new Queued(null, preparation.rejection());
+            Prepared reply = preparation.reply();
+            queue.enqueue(new ManagerClientMessageQueue.Command(reply.operation().token(), cardId, "REPLY",
+                    queue.encode(reply), actors.capture(authentication)));
+            return new Queued(presenter.concreteItemResponse(lockedCard(cardId, principal, authentication), reply.message())
+                    .withDelivery(queue.status(cardId, reply.operation().token())), null);
+        });
+        if (outcome.rejection() != null) throw conflict(outcome.rejection());
+        return outcome.response();
     }
+
+    void validateQueued(ManagerClientMessageQueue.Command command, Authentication authentication) {
+        Prepared reply = queuedSnapshot(command);
+        transactions.required(() -> {
+            var card = lockedCard(command.cardId(), authentication, authentication);
+            var item = lockedSource(card, authentication, authentication);
+            var current = operations.findTokenForUpdate(command.operationId()).orElseThrow();
+            requirePrepared(reply, current, card);
+            if (!reply.source().equals(source(card, item))) throw conflict("Источник ответа изменился");
+            requireOpenSource(reply.source());
+            return null;
+        });
+    }
+
+    ClientMessageSendResult dispatchQueued(ManagerClientMessageQueue.Command command) {
+        Prepared reply = queuedSnapshot(command);
+        Source source = reply.source();
+        return sender.deliverToPlatformWithOperationId(source.platform().name(), source.company().target(),
+                source.clientId(), source.chatId(), reply.message(), reply.operation().token());
+    }
+
+    void completeQueued(ManagerClientMessageQueue.Claim claim, ManagerClientMessageQueue.Command command,
+                        ClientMessageSendResult result, Authentication authentication, String state, String code, int delay) {
+        Prepared reply = queuedSnapshot(command);
+        transactions.required(() -> {
+            var card = cards.findByIdForUpdate(command.cardId()).orElseThrow();
+            var item = unanswered.findByIdForUpdate(reply.operation().itemId()).orElseThrow();
+            var current = operations.findTokenForUpdate(command.operationId()).orElseThrow();
+            if (!queue.owns(claim)) return null;
+            if ("UNKNOWN".equals(state) || "finalization_required".equals(code) || "context_changed".equals(code)) {
+                if ("PREPARED".equals(current.state())) operations.finish(current, "UNKNOWN", null, code);
+                if ((PREPARED + current.token()).equals(card.getComment())) {
+                    card.setComment(UNKNOWN + current.token()); cards.save(card);
+                }
+                queue.finish(claim, state, code, delay);
+                return null;
+            }
+            access.requireControlAccess(card.getControl(), authentication, authentication);
+            access.requireClientMessageAccess(item, card.getControl(), authentication, authentication);
+            if ("UNKNOWN".equals(current.state()) && !claim.mayDispatch()
+                    && ("RETRYABLE".equals(state) || "FAILED".equals(state)) && ClientMessageDelivery.isKnownUnsent(result)) {
+                if (!(UNKNOWN + current.token()).equals(card.getComment()) || !reply.source().equals(source(card, item)))
+                    throw conflict("Источник сохранённой операции изменился; требуется сверка");
+                requireOpenSource(reply.source());
+                current = operations.resumeAfterKnownUnsentReceipt(current, safeCode(code));
+                card.setComment(PREPARED + current.token()); cards.save(card);
+            }
+            if ("RETRYABLE".equals(state)) requirePrepared(reply, current, card);
+            if ("SENT".equals(state)) {
+                if ("UNKNOWN".equals(current.state())) {
+                    boolean ownsCard = (UNKNOWN + current.token()).equals(card.getComment()) || (PREPARED + current.token()).equals(card.getComment());
+                    boolean apply = ownsCard && reply.source().equals(source(card, item));
+                    if (apply) { requireOpenSource(reply.source()); applySuccess(reply, result, card, item); }
+                    else if (ownsCard) { reply.previous().restore(card); cards.save(card); }
+                    operations.confirmDelivery(current, result.messageId(), apply, reply.actorId(), "Background receipt reconciliation");
+                } else if (!"SUCCEEDED".equals(current.state())) finishSuccess(reply, result, authentication, authentication);
+            } else if ("FAILED".equals(state)) {
+                requirePrepared(reply, current, card);
+                operations.finish(current, "FAILED_KNOWN", null, code);
+                reply.previous().restore(card);
+                cards.save(card);
+            }
+            queue.finish(claim, state, code, delay);
+            return null;
+        });
+    }
+
+    private Prepared queuedSnapshot(ManagerClientMessageQueue.Command command) {
+        Prepared reply = queue.decode(command.preparedJson(), Prepared.class);
+        if (!Objects.equals(command.operationId(), reply.operation().token()) || command.cardId() != reply.operation().cardId())
+            throw new IllegalStateException("Manager reply identity mismatch");
+        return reply;
+    }
+
+    private record Queued(ManagerControlConcreteItemResponse response, String rejection) { }
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public ManagerClientReplyResolutionResponse reconcile(Long cardId, String token,
@@ -178,7 +242,8 @@ public class ManagerControlClientReplyWorkflow {
         var blocking = operations.findBlockingForUpdate(item.getId());
         if (blocking.isPresent()) {
             Operation operation = blocking.get();
-            if ("PREPARED".equals(operation.state()) && operation.preparedAt().isBefore(LocalDateTime.now().minusMinutes(15))) {
+            if ("PREPARED".equals(operation.state()) && queue.status(operation.cardId(), operation.token()) == null
+                    && operation.preparedAt().isBefore(LocalDateTime.now().minusMinutes(15))) {
                 operations.finish(operation, "UNKNOWN", null, "stale_preparation");
                 if (Objects.equals(card.getId(), operation.cardId()) && (PREPARED + operation.token()).equals(card.getComment())) {
                     card.setComment(UNKNOWN + operation.token());
@@ -198,6 +263,20 @@ public class ManagerControlClientReplyWorkflow {
         PreviousCard previous = PreviousCard.capture(card);
         LocalDateTime now = LocalDateTime.now();
         Long actorId = access.actorUserId(principal);
+        if (existing.isPresent() && queue.status(existing.get().cardId(), existing.get().token()) != null) {
+            Prepared original = queuedSnapshot(queue.snapshot(existing.get().token()));
+            if (!Objects.equals(cardId, original.operation().cardId()) || !source.equals(original.source())
+                    || !previous.equals(original.previous()) || !Objects.equals(actorId, original.actorId())
+                    || !Objects.equals(card.getControl().getId(), original.controlId()))
+                throw conflict("Источник сохранённой операции изменился; требуется сверка");
+            operations.retryKnownUnsent(existing.get(), cardId, now, original.operation().snapshot());
+            queue.retryKnownUnsent(existing.get().token());
+            card.setStatus(ManagerDailyControlItemStatus.ACTION_TAKEN);
+            card.setActionType(ManagerDailyControlActionType.ACTION_TAKEN);
+            card.setLastManualTouchAt(now);
+            card.setComment(PREPARED + existing.get().token()); cards.save(card);
+            return new Preparation(original, null);
+        }
         Snapshot snapshot = new Snapshot(source, message, previous, actorId, card.getControl().getId());
         String serialized = encode(snapshot);
         Operation operation = existing.isPresent() ? operations.retryKnownUnsent(existing.get(), card.getId(), now, serialized)
@@ -345,7 +424,7 @@ public class ManagerControlClientReplyWorkflow {
     private static ResponseStatusException conflict(String message) { return new ResponseStatusException(HttpStatus.CONFLICT, message); }
     private static ResponseStatusException badRequest(String message) { return new ResponseStatusException(HttpStatus.BAD_REQUEST, message); }
     private record Preparation(Prepared reply, String rejection) { }
-    private record Prepared(Operation operation, Source source, String message, PreviousCard previous, Long actorId, Long controlId) { }
+    record Prepared(Operation operation, Source source, String message, PreviousCard previous, Long actorId, Long controlId) { }
     public record Snapshot(Source source, String message, PreviousCard previous, Long actorId, Long controlId) { }
     public record Source(Long itemId, ClientChatPlatform platform, String chatId, Long managerId, String clientId,
                           ManagerControlMessageCompany company, Long messageId, LocalDateTime messageAt,

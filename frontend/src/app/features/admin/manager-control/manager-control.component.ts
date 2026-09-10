@@ -1,3 +1,5 @@
+import { firstValueFrom } from 'rxjs';
+import { CardDeliveryTracker, managerCardDelivery, deliveryOperationMessage, type DeliveryOperation } from '@otziv/client-common/delivery-operations';
 import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { Component, DestroyRef, Input, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -189,6 +191,29 @@ export class ManagerControlComponent implements OnInit {
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
   readonly updatingItemIds = signal<Set<number>>(new Set());
+  private readonly deliveryTracker = new CardDeliveryTracker();
+  readonly deliveries = signal<Record<number, DeliveryOperation>>({});
+  deliveryMessage(card: ManagerControlConcreteItem): string | null {
+    return deliveryOperationMessage(this.deliveries()[card.controlEntityId ?? 0] ?? managerCardDelivery(card));
+  }
+  deliveryBlocked(card: ManagerControlConcreteItem): boolean {
+    const operation = this.deliveries()[card.controlEntityId ?? 0] ?? managerCardDelivery(card);
+    return !!operation && (operation.status !== 'FAILED' || !!operation.errorCode && ['context_changed', 'finalization_required'].includes(operation.errorCode));
+  }
+  private observeDelivery(card: ManagerControlConcreteItem): void {
+    const id = card.controlEntityId, operation = managerCardDelivery(card);
+    const managerId = this.detail()?.managerId;
+    if (!id || !operation) return;
+    this.deliveryTracker.track(id, operation, () => firstValueFrom(this.api.deliveryOperation(id, operation.operationId)),
+      value => {
+        const previous = this.deliveries()[id];
+        this.deliveries.update(values => ({ ...values, [id]: value }));
+        if (previous && previous.status !== 'SENT' && value.status === 'SENT' && !value.errorCode && managerId) {
+          this.loadDetails(managerId);
+          this.load({ silent: true });
+        }
+      }, () => !this.destroyRef.destroyed && this.detail()?.managerId === managerId);
+  }
   readonly detail = signal<ManagerControlManagerDetail | null>(null);
   readonly detailLoading = signal(false);
   readonly detailError = signal<string | null>(null);
@@ -246,6 +271,7 @@ export class ManagerControlComponent implements OnInit {
     const clockTimer = window.setInterval(() => this.clock.set(Date.now()), 1000);
     this.destroyRef.onDestroy(() => {
       window.clearInterval(clockTimer);
+      this.deliveryTracker.cancelAll();
       for (const timer of this.telegramBindingPollTimers.values()) {
         window.clearTimeout(timer);
       }
@@ -1182,7 +1208,10 @@ export class ManagerControlComponent implements OnInit {
   }
 
   private applyDetail(detail: ManagerControlManagerDetail): void {
+    this.deliveryTracker.cancelAll();
+    this.deliveries.set({});
     this.detail.set(detail);
+    for (const item of detail.items) for (const card of item.examples) this.observeDelivery(card);
     this.detailComments.set(Object.fromEntries(
       detail.items.map((item) => [item.itemId, item.comment ?? ''])
     ));
@@ -1474,7 +1503,7 @@ export class ManagerControlComponent implements OnInit {
       this.toast.error('Карточка еще синхронизируется', 'Подождите пару секунд: карточка подготавливается автоматически.');
       return;
     }
-    if (this.isConcreteUpdating(itemId)) {
+    if (this.isConcreteUpdating(itemId) || this.deliveryBlocked(example)) {
       return;
     }
     if (!this.canSendClientMessage(example)) {
@@ -1490,6 +1519,11 @@ export class ManagerControlComponent implements OnInit {
           return next;
         });
         const merged = this.patchDetailConcreteItem(example, updated);
+        if (updated.delivery) {
+          this.toast.info('Сообщение в очереди', deliveryOperationMessage(updated.delivery) ?? 'Запрос сохранён');
+          this.observeDelivery(merged);
+          return;
+        }
         this.toast.success('Сообщение отправлено', 'Карточка закрыта');
         this.removeConcreteItemFromDetail(merged);
         this.load({ silent: true });
@@ -1822,7 +1856,7 @@ export class ManagerControlComponent implements OnInit {
       this.toast.error('Карточка еще синхронизируется', 'Подождите пару секунд: карточка подготавливается автоматически.');
       return;
     }
-    if (this.isConcreteUpdating(itemId)) {
+    if (this.isConcreteUpdating(itemId) || this.deliveryBlocked(example)) {
       return;
     }
     if (!message) {
@@ -1843,6 +1877,11 @@ export class ManagerControlComponent implements OnInit {
           return next;
         });
         const merged = this.patchDetailConcreteItem(example, updated);
+        if (updated.delivery) {
+          this.toast.info('Ответ в очереди', deliveryOperationMessage(updated.delivery) ?? 'Запрос сохранён');
+          this.observeDelivery(merged);
+          return;
+        }
         this.toast.success(
           'Ответ отправлен',
           this.isClientChatAudit(example)

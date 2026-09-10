@@ -14,7 +14,33 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @RequiredArgsConstructor
-public class AppSettingService {
+public class AppSettingService implements com.hunt.otziv.config.settings.api.OutboundMessagePolicy,
+        com.hunt.otziv.config.settings.api.PublicationProgressSettings {
+
+    @Override
+    @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
+    public boolean immediatePublicationMessagesEnabled() {
+        return getBooleanFreshFailClosed(CLIENT_MESSAGES_IMMEDIATE_ENABLED, true);
+    }
+
+    @Override
+    @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
+    public boolean publicationProgressReportsEnabled() {
+        return getBooleanFreshFailClosed(CLIENT_PUBLICATION_PROGRESS_REPORTS_ENABLED, true);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public String publicationProgressTemplate() {
+        return getString(CLIENT_PUBLICATION_PROGRESS_REPORT_TEXT, DEFAULT_TEMPLATE);
+    }
+
+    @Override
+    @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
+    public boolean clientMessagesEnabled() {
+        try { return getBooleanFreshFailClosed(CLIENT_MESSAGES_LIVE_ENABLED, true); }
+        catch (RuntimeException unavailable) { return false; }
+    }
 
     public static final String NAGUL_COOLDOWN_MINUTES = "nagul.cooldown.minutes";
     public static final String NAGUL_LOOKAHEAD_DAYS = "nagul.lookahead.days";

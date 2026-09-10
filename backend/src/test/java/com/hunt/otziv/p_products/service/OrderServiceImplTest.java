@@ -6,7 +6,8 @@ import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.service.CompanyService;
 import com.hunt.otziv.c_companies.service.CompanyStatusService;
-import com.hunt.otziv.config.settings.service.AppSettingService;
+import com.hunt.otziv.config.settings.api.PublicationProgressSettings;
+import com.hunt.otziv.p_products.status.service.PublicationProgressMessage;
 import com.hunt.otziv.gamification.service.GamificationEventService;
 import com.hunt.otziv.p_products.board.service.OrderBoardQueryService;
 import com.hunt.otziv.p_products.deletion.service.OrderDeletionService;
@@ -112,7 +113,7 @@ class OrderServiceImplTest {
     private OrderPublicationOutbox publicationOutbox;
 
     @Mock
-    private AppSettingService appSettingService;
+    private PublicationProgressSettings publicationSettings;
 
     @Mock
     private BusinessAuditService businessAuditService;
@@ -132,6 +133,13 @@ class OrderServiceImplTest {
     @InjectMocks
     private OrderServiceImpl orderService;
 
+    @org.junit.jupiter.api.BeforeEach
+    void publicationPreparation() {
+        org.springframework.test.util.ReflectionTestUtils.setField(orderService, "publicationProgressMessage",
+                new PublicationProgressMessage(publicationSettings));
+    }
+
+
     @Test
     void changeStatusAndOrderCounterSynchronizesCounterToActualPublishedReviews() throws Exception {
         Order order = order(10L, 0);
@@ -145,9 +153,9 @@ class OrderServiceImplTest {
         when(orderRepository.findByIdForCounterUpdate(10L)).thenReturn(Optional.of(order));
         when(reviewRepository.findByIdForPublication(2L)).thenReturn(Optional.of(reviewToPublish));
         when(reviewRepository.countPublishedByOrderId(10L)).thenReturn(2);
-        when(appSettingService.getBooleanFreshFailClosed(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true))
+        when(publicationSettings.immediatePublicationMessagesEnabled())
                 .thenReturn(true);
-        when(appSettingService.getBooleanFreshFailClosed(AppSettingService.CLIENT_PUBLICATION_PROGRESS_REPORTS_ENABLED, true))
+        when(publicationSettings.publicationProgressReportsEnabled())
                 .thenReturn(true);
         doAnswer(invocation -> {
             Order synchronizedOrder = invocation.getArgument(0);
@@ -188,9 +196,9 @@ class OrderServiceImplTest {
         when(orderRepository.findByIdForCounterUpdate(10L)).thenReturn(Optional.of(order));
         when(reviewRepository.findByIdForPublication(2L)).thenReturn(Optional.of(reviewToPublish));
         when(reviewRepository.countPublishedByOrderId(10L)).thenReturn(1);
-        when(appSettingService.getBooleanFreshFailClosed(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true))
+        when(publicationSettings.immediatePublicationMessagesEnabled())
                 .thenReturn(true);
-        when(appSettingService.getBooleanFreshFailClosed(AppSettingService.CLIENT_PUBLICATION_PROGRESS_REPORTS_ENABLED, true))
+        when(publicationSettings.publicationProgressReportsEnabled())
                 .thenReturn(true);
         doAnswer(invocation -> {
             Order synchronizedOrder = invocation.getArgument(0);

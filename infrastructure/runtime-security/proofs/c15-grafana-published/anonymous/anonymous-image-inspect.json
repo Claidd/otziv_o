@@ -1,0 +1,92 @@
+[
+    {
+        "Id": "sha256:cb38b5dafbf775f05b455a551fd56047084aaa6dd8b99975322530ef0b7ea2ec",
+        "RepoTags": [],
+        "RepoDigests": [
+            "ghcr.io/claidd/otziv-security@sha256:a9a36b873c7f4d424937a95f6d6c4c1f12f9d5f7556e23a1c81d6b649b570488"
+        ],
+        "Parent": "",
+        "Comment": "buildkit.dockerfile.v0",
+        "Created": "2026-09-10T17:25:20.53483749Z",
+        "DockerVersion": "",
+        "Author": "",
+        "Config": {
+            "Hostname": "",
+            "Domainname": "",
+            "User": "472",
+            "AttachStdin": false,
+            "AttachStdout": false,
+            "AttachStderr": false,
+            "ExposedPorts": {
+                "3000/tcp": {}
+            },
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "PATH=/usr/share/grafana/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "GF_PATHS_CONFIG=/etc/grafana/grafana.ini",
+                "GF_PATHS_DATA=/var/lib/grafana",
+                "GF_PATHS_HOME=/usr/share/grafana",
+                "GF_PATHS_LOGS=/var/log/grafana",
+                "GF_PATHS_PLUGINS=/var/lib/grafana/plugins",
+                "GF_PATHS_PROVISIONING=/etc/grafana/provisioning"
+            ],
+            "Cmd": null,
+            "Image": "",
+            "Volumes": null,
+            "WorkingDir": "/usr/share/grafana",
+            "Entrypoint": [
+                "/run.sh"
+            ],
+            "OnBuild": null,
+            "Labels": {
+                "com.otziv.publication.revision": "d226d3da31750443aeab15afc9fef68bc52e0c2a",
+                "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+                "com.otziv.reviewed-component": "grafana",
+                "com.otziv.security.patch": "Go1.27.1; grpc1.83.2; thrift0.24.0; exact required MVS; OpenSSL3.5.8; official CGO0 modernc SQLite",
+                "maintainer": "Grafana Labs <hello@grafana.com>",
+                "org.opencontainers.image.revision": "81407c71e96e8351b4600164c1b4d30c8baf41d6",
+                "org.opencontainers.image.source": "https://github.com/grafana/grafana",
+                "org.opencontainers.image.version": "12.4.10+otziv.1"
+            }
+        },
+        "Architecture": "amd64",
+        "Os": "linux",
+        "Size": 1319141420,
+        "GraphDriver": {
+            "Data": {
+                "LowerDir": "/var/lib/docker/overlay2/63ff511f72f1066d94e57abaad09ffd8c24f0daaf1a14c75cfcf93bfc5635fc7/diff:/var/lib/docker/overlay2/4a046a48dcc6cf29c7bce13782c25f523a01fab78f3ce53f15c367fd27fb2ed6/diff:/var/lib/docker/overlay2/67effc4f7909cab37ac2f835cd4cc5da324f390e772a6b43932c99d3f8e8e7f6/diff:/var/lib/docker/overlay2/1d21fe8275e29711c4c5dd1a0b16359ecca5684639d4cf522e8b027ab0d0c33d/diff:/var/lib/docker/overlay2/2d8134128191e0d1b018ae4a7cbea3cbe30baa6a566b3faea238f9592ad6019b/diff:/var/lib/docker/overlay2/a560fc40503b7c48ba02ade7d570e8b61d0b736fe4fffe58e032eb0effe0ad1f/diff:/var/lib/docker/overlay2/eedb51813b4fb9d93ceb93472cdf6c164bc00bbcc7d0a8ce2109400fe3f35d10/diff:/var/lib/docker/overlay2/333e683f76bcdc7d764c02a46f94e753cbea148f4e4f31b7626061912eea9aee/diff:/var/lib/docker/overlay2/0febcd467f33038e25d5f312be6b264d767d76e6e431aa136bf5f758f9314b76/diff:/var/lib/docker/overlay2/fe16a312861f0113a44aca6baf0041401c33bc10b7c4fa698cf2b64f9d343b85/diff:/var/lib/docker/overlay2/a5b4b96d2c0ce2feddc39d5da18c24697d6a4fb3ce46778070046f82f517d1e0/diff:/var/lib/docker/overlay2/499a487d65d04b56e42ff35d9cb3bed5bfaae0a4e3339a08b8d9c9b5f3504c32/diff:/var/lib/docker/overlay2/e2b45c3ad334e0b4eaee7778fda4012131ad28a55eb6317164551bafbe890b66/diff:/var/lib/docker/overlay2/95dad774aa2cb560c0c712929262addcdded13af60cbe00d7f3fe46e25dd1087/diff:/var/lib/docker/overlay2/e9933c2b159c2bcb25a4554612fda49900e11f933acc106869234f6413d6d2d3/diff:/var/lib/docker/overlay2/074287a7727e880b294989b4dc607cc8e0c65f53ee699bbbdb1f29cc471c22c4/diff",
+                "MergedDir": "/var/lib/docker/overlay2/779102a5742fbc4f2e11ab4ec72796d126ccaf9e69bc41f0a0776c64969a634f/merged",
+                "UpperDir": "/var/lib/docker/overlay2/779102a5742fbc4f2e11ab4ec72796d126ccaf9e69bc41f0a0776c64969a634f/diff",
+                "WorkDir": "/var/lib/docker/overlay2/779102a5742fbc4f2e11ab4ec72796d126ccaf9e69bc41f0a0776c64969a634f/work"
+            },
+            "Name": "overlay2"
+        },
+        "RootFS": {
+            "Type": "layers",
+            "Layers": [
+                "sha256:34884abbe92863fce933ed7c39c0e045631af0ed86d5cc0dfbdf9fdca426ce3c",
+                "sha256:c1441942540397e032cc9cc8b661d7405a919237510ccea816423c0efedf229b",
+                "sha256:9d5bc56d08132318ac48d0ed1d1171bf4501124fe2bfa16f525453e359eabd58",
+                "sha256:5af453789f077f7547b019aeb688333b72d44fb09a4dcbe3e9b7d353ffba4485",
+                "sha256:e7cdbb62f52d7c449ef416946aae725bb1ae919968327bcc858b42627c824f62",
+                "sha256:4a7d43c43fa18b5646e1f12b4851b0f99413328dcbd125c809b25f2824f0008f",
+                "sha256:246b00f99a2be64801d09c34eb6b4412c9ff1ae551d896b779af4d23ac4826d8",
+                "sha256:688d8694fdc32ea80063260cc568cb7373077b80b486ee2666ebcad9ee3f890d",
+                "sha256:63bbe1591037b0ad7058cf0ff633f2b7f14375738c9fd80de755cc3761dbaed9",
+                "sha256:149704ffb34d395efbb6415416fc8a2e7b8c0e6f948a2385f8c7014b59b0e714",
+                "sha256:bcf4f613ca0ca36e4819d10b113072a3a04c84b405095c5ab959f57d7509c6c7",
+                "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef",
+                "sha256:7406c3ac52874e1a234310b446ddb4d6a5f1d2f3097e4727b66cc39f6d0210fe",
+                "sha256:e9fd2c19ac6ce8cf7f28ab9bc8a33fc6f94e317b441764c8352f28254cb8bdc9",
+                "sha256:0485b081a028c88f5f47eac44b08facea472c27a8df6e8513a69e73330343061",
+                "sha256:0ba274c7d52776e9376c7163fd06d68a6ed31d21571830cef2f96655bb4a8c1f",
+                "sha256:be3196c5704e62c99c698a3973be06a3b9f77c152030fa945126034440acb5cd"
+            ]
+        },
+        "Metadata": {
+            "LastTagTime": "0001-01-01T00:00:00Z"
+        }
+    }
+]

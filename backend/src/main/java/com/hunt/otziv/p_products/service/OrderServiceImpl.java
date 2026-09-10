@@ -5,13 +5,13 @@ import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.c_companies.dto.CompanyDTO;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
-import com.hunt.otziv.c_companies.service.CompanyService;
+import com.hunt.otziv.c_companies.api.CompanyOrderInputs;
 import com.hunt.otziv.c_companies.service.CompanyStatusService;
 import com.hunt.otziv.client_messages.model.ClientMessageScenario;
 import com.hunt.otziv.client_messages.model.ScheduledMessageStateStatus;
 import com.hunt.otziv.client_messages.service.ScheduledClientMessageService;
 import com.hunt.otziv.common_billing.model.CommonInvoiceStatus;
-import com.hunt.otziv.config.settings.service.AppSettingService;
+import com.hunt.otziv.p_products.status.service.PublicationProgressMessage;
 import com.hunt.otziv.gamification.service.GamificationEventService;
 import com.hunt.otziv.p_products.board.service.OrderBoardQueryService;
 import com.hunt.otziv.p_products.deletion.service.OrderDeletionService;
@@ -53,7 +53,6 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
-import static com.hunt.otziv.client_messages.service.ScheduledClientMessageService.DEFAULT_PUBLICATION_PROGRESS_REPORT_TEXT;
 import static com.hunt.otziv.p_products.utils.OrderReviewGraph.getAllReviews;
 import static com.hunt.otziv.r_review.utils.ReviewBotPolicy.hasRealPublicationBot;
 import static com.hunt.otziv.r_review.utils.ReviewTextPolicy.isBlankOrPlaceholder;
@@ -66,7 +65,7 @@ public class OrderServiceImpl implements OrderService {
 
     private final OrderRepository orderRepository;
     private final OrderDetailsRepository orderDetailsRepository;
-    private final CompanyService companyService;
+    private final CompanyOrderInputs companyService;
     private final ReviewService reviewService;
     private final ReviewRepository reviewRepository;
     private final OrderStatusService orderStatusService;
@@ -82,7 +81,7 @@ public class OrderServiceImpl implements OrderService {
     private final OrderStatusTransitionService orderStatusTransitionService;
     private final OrderReviewMutationService orderReviewMutationService;
     private final OrderStatusNotificationService orderStatusNotificationService;
-    private final AppSettingService appSettingService;
+    private final PublicationProgressMessage publicationProgressMessage;
     private final BusinessAuditService businessAuditService;
     private final GamificationEventService gamificationEventService;
     private final ReviewBotCooldownService botCooldownService;
@@ -637,11 +636,17 @@ public class OrderServiceImpl implements OrderService {
 
     private void enqueuePublishedReviewClientUpdates(Order order, int actualPublished, String occurrence) {
         OrderStatusNotificationService.PreparedPublicationProgress progress = null;
-        if (shouldSendPublishedReviewProgress(order, actualPublished)) {
+        String message = publicationProgressMessage.prepare(order.getAmount(), actualPublished, () -> {
+            Company company = order.getCompany();
+            Filial filial = order.getFilial();
+            return new PublicationProgressMessage.Context(company == null || company.isPublicationProgressReportsEnabled(),
+                    company == null ? null : company.getTitle(), filial == null ? null : filial.getTitle());
+        });
+        if (message != null) {
             progress = orderStatusNotificationService.preparePublicationProgress(order,
                     order.getManager() == null ? null : order.getManager().getClientId(),
                     order.getCompany() == null ? null : order.getCompany().getGroupId(),
-                    buildPublishedReviewProgressMessage(order, actualPublished), actualPublished == 1, occurrence);
+                    message, actualPublished == 1, occurrence);
         }
         // A failed intent write fails the publication transaction; neither the event
         // nor completion is allowed to disappear into a best-effort afterCommit callback.
@@ -672,77 +677,6 @@ public class OrderServiceImpl implements OrderService {
         }
 
         return -1;
-    }
-
-    private boolean shouldSendPublishedReviewProgress(Order order, int actualPublished) {
-        if (order == null) {
-            return false;
-        }
-        if (!appSettingService.getBooleanFreshFailClosed(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true)) {
-            log.info("Короткий отчёт о публикации пропущен: моментальные клиентские сообщения выключены");
-            return false;
-        }
-
-        int total = order.getAmount();
-        if (total > 0 && actualPublished >= total) {
-            log.info("Короткий отчёт о публикации пропущен: заказ {} дошел до финального отзыва", order.getId());
-            return false;
-        }
-
-        if (!appSettingService.getBooleanFreshFailClosed(AppSettingService.CLIENT_PUBLICATION_PROGRESS_REPORTS_ENABLED, true)) {
-            log.info("Короткий отчёт о публикации пропущен: глобальная настройка выключена");
-            return false;
-        }
-
-        Company company = order.getCompany();
-        if (company != null && !company.isPublicationProgressReportsEnabled()) {
-            log.info("Короткий отчёт о публикации пропущен: отчеты выключены для компании id={}", company.getId());
-            return false;
-        }
-
-        return true;
-    }
-
-    private String buildPublishedReviewProgressMessage(Order order, int actualPublished) {
-        int total = order != null && order.getAmount() > 0 ? order.getAmount() : actualPublished;
-        String progress = actualPublished + " / " + total;
-        String companyTitle = Optional.ofNullable(order)
-                .map(Order::getCompany)
-                .map(Company::getTitle)
-                .map(String::trim)
-                .filter(value -> !value.isEmpty())
-                .orElse("");
-        String filialTitle = Optional.ofNullable(order)
-                .map(Order::getFilial)
-                .map(Filial::getTitle)
-                .map(String::trim)
-                .filter(value -> !value.isEmpty())
-                .orElse("");
-
-        String subject = companyTitle;
-        if (!filialTitle.isEmpty()) {
-            subject = subject.isEmpty() ? filialTitle : subject + " - " + filialTitle;
-        }
-
-        if (subject.isEmpty()) {
-            subject = "Компания";
-        }
-
-        String template = appSettingService.getString(
-                AppSettingService.CLIENT_PUBLICATION_PROGRESS_REPORT_TEXT,
-                DEFAULT_PUBLICATION_PROGRESS_REPORT_TEXT
-        );
-        if (template == null || template.isBlank()) {
-            template = DEFAULT_PUBLICATION_PROGRESS_REPORT_TEXT;
-        }
-        return template
-                .replace("{company}", companyTitle)
-                .replace("{filial}", filialTitle)
-                .replace("{companyAndFilial}", subject)
-                .replace("{published}", String.valueOf(actualPublished))
-                .replace("{total}", String.valueOf(total))
-                .replace("{progress}", progress)
-                .trim();
     }
 
     private ReviewPublicationTarget validateAndRetrievePublicationTarget(Long reviewId) {

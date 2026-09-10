@@ -11,6 +11,9 @@ public interface ClientMessageDelivery {
     ClientMessageSendResult deliverPublicationProgressWithOperationId(Target target,String clientId,String groupId,
             String message,boolean includePreferenceControls,String operationId);
 
+    ClientMessageSendResult deliverToPlatformWithOperationId(String platform, Target target, String clientId,
+            String chatId, String message, String operationId);
+
     /** Receipt-only lookup. Missing evidence never authorizes another provider call. */
     ClientMessageSendResult recordedOutcome(String operationId);
 

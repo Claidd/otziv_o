@@ -147,6 +147,70 @@
         "x-automatic-retry" : false
       }
     },
+    "/api/admin/manager-control/concrete-items/{concreteItemId}/delivery-operations/{operationId}" : {
+      "get" : {
+        "operationId" : "ApiManagerControlController_deliveryOperation",
+        "x-java-handler" : "com.hunt.otziv.manager_control.controller.ApiManagerControlController#deliveryOperation",
+        "parameters" : [ {
+          "name" : "concreteItemId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer"
+          }
+        }, {
+          "name" : "operationId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "x-preauthorize" : "hasAnyRole('ADMIN', 'OWNER', 'MANAGER')",
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Declared controller response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DeliveryOperationOutput"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Validation or domain rejection",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication rejected; a write is not automatically retried"
+          },
+          "403" : {
+            "description" : "Server denied access; authority is not inferred from client state"
+          },
+          "409" : {
+            "description" : "Conflict; read current state before an explicit user retry",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          }
+        },
+        "x-automatic-retry" : false
+      }
+    },
     "/api/admin/manager-control/concrete-items/{concreteItemId}/mark-staff-message" : {
       "post" : {
         "operationId" : "ApiManagerControlController_markClientMessageMisclassified",
@@ -292,6 +356,13 @@
           "schema" : {
             "type" : "integer"
           }
+        }, {
+          "name" : "X-Otziv-Delivery-Protocol",
+          "in" : "header",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
         } ],
         "x-preauthorize" : "hasAnyRole('ADMIN', 'OWNER', 'MANAGER')",
         "security" : [ {
@@ -405,6 +476,13 @@
           "required" : true,
           "schema" : {
             "type" : "integer"
+          }
+        }, {
+          "name" : "X-Otziv-Delivery-Protocol",
+          "in" : "header",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
           }
         } ],
         "x-preauthorize" : "hasAnyRole('ADMIN', 'OWNER', 'MANAGER')",
@@ -6016,6 +6094,13 @@
           "schema" : {
             "type" : "integer"
           }
+        }, {
+          "name" : "X-Otziv-Delivery-Protocol",
+          "in" : "header",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
         } ],
         "x-preauthorize" : "hasAnyRole('ADMIN', 'OWNER', 'MANAGER')",
         "security" : [ {
@@ -6072,6 +6157,13 @@
           "required" : true,
           "schema" : {
             "type" : "integer"
+          }
+        }, {
+          "name" : "X-Otziv-Delivery-Protocol",
+          "in" : "header",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
           }
         } ],
         "x-preauthorize" : "hasAnyRole('ADMIN', 'OWNER', 'MANAGER')",
@@ -13723,6 +13815,13 @@
         "x-java-type" : "com.hunt.otziv.common_billing.dto.CommonInvoiceDetailsResponse",
         "type" : "object",
         "properties" : {
+          "delivery" : {
+            "anyOf" : [ {
+              "$ref" : "#/components/schemas/DeliveryOperationOutput"
+            }, {
+              "type" : "null"
+            } ]
+          },
           "nextCycleOrders" : {
             "anyOf" : [ {
               "type" : "array",
@@ -13778,7 +13877,7 @@
             } ]
           }
         },
-        "required" : [ "nextCycleOrders", "orderCards", "orders", "paymentEvidenceToken", "paymentRefs", "summary" ],
+        "required" : [ "delivery", "nextCycleOrders", "orderCards", "orders", "paymentEvidenceToken", "paymentRefs", "summary" ],
         "additionalProperties" : true
       },
       "CommonInvoiceManualCardPaymentRequestInput" : {
@@ -16868,6 +16967,38 @@
         "required" : [ "reason", "status", "title", "url" ],
         "additionalProperties" : true
       },
+      "DeliveryOperationOutput" : {
+        "x-java-type" : "com.hunt.otziv.client_messages.api.DeliveryOperation",
+        "type" : "object",
+        "properties" : {
+          "attempts" : {
+            "type" : "integer"
+          },
+          "errorCode" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "operationId" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "status" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        },
+        "required" : [ "attempts", "errorCode", "operationId", "status" ],
+        "additionalProperties" : true
+      },
       "FilialDeletionPreviewOutput" : {
         "x-java-type" : "com.hunt.otziv.c_companies.dto.FilialDeletionPreview",
         "type" : "object",
@@ -17566,6 +17697,13 @@
               "type" : "null"
             } ]
           },
+          "delivery" : {
+            "anyOf" : [ {
+              "$ref" : "#/components/schemas/DeliveryOperationOutput"
+            }, {
+              "type" : "null"
+            } ]
+          },
           "entityId" : {
             "anyOf" : [ {
               "type" : "integer"
@@ -17781,7 +17919,7 @@
             } ]
           }
         },
-        "required" : [ "actionType", "ageDays", "canRollback", "chatUrl", "comment", "contactText", "controlEntityId", "entityId", "firstObservedAt", "followUpAt", "hardDeadlineAt", "itemStatus", "lastManualTouchAt", "orderDetailsId", "penaltyPoints", "reason", "resolvedAt", "riskResolutionAction", "rollbackMessage", "rollbackStatus", "slaState", "specialistName", "status", "subtitle", "targetDeadlineAt", "targetUrl", "title", "type", "updatedAt", "workerExplanation", "workerExplanationAt", "workerNotificationAcceptedAt", "workerNotificationAcceptedByUserId", "workerNotificationAttemptedAt", "workerNotificationFailureReason", "workerNotificationSentAt" ],
+        "required" : [ "actionType", "ageDays", "canRollback", "chatUrl", "comment", "contactText", "controlEntityId", "delivery", "entityId", "firstObservedAt", "followUpAt", "hardDeadlineAt", "itemStatus", "lastManualTouchAt", "orderDetailsId", "penaltyPoints", "reason", "resolvedAt", "riskResolutionAction", "rollbackMessage", "rollbackStatus", "slaState", "specialistName", "status", "subtitle", "targetDeadlineAt", "targetUrl", "title", "type", "updatedAt", "workerExplanation", "workerExplanationAt", "workerNotificationAcceptedAt", "workerNotificationAcceptedByUserId", "workerNotificationAttemptedAt", "workerNotificationFailureReason", "workerNotificationSentAt" ],
         "additionalProperties" : true
       },
       "ManagerControlEventResponseOutput" : {
@@ -25068,11 +25206,14 @@
     "path" : "backend/src/main/java/com/hunt/otziv/client_chat_control/dto/ClientChatReconciliationResult.java",
     "sha256" : "20b5f8a15292751da8ff0c5861c9bc3540bf8cf18a593828e2b339f2e38df450"
   }, {
+    "path" : "backend/src/main/java/com/hunt/otziv/client_messages/api/DeliveryOperation.java",
+    "sha256" : "c7a678a717733809e6991e3ec737a7b974f6fca0b05346b718e5f84c77b41c46"
+  }, {
     "path" : "backend/src/main/java/com/hunt/otziv/client_messages/dto/ClientMessageOrderStatusResponse.java",
     "sha256" : "05942b0d4f2864de138264dc5b85be9dd18c3b85b6b4760bdfa504f0f5089a3c"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/common_billing/controller/CommonBillingAdminController.java",
-    "sha256" : "6bb071df31448a5441b451d2651cf83345e5e46cca0360bf3bc76e3be2bddac1"
+    "sha256" : "1bda6314784e8f0fb7a8dd134083488f454483f12aa07ab28f9afc320e0f1968"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/common_billing/controller/CommonInvoiceArchiveController.java",
     "sha256" : "c641daee6dbb7b81406e67f3fb245c6e142dbadce839675e1d39711cae48382b"
@@ -25114,7 +25255,7 @@
     "sha256" : "32c6802e56d7f2c420b54f6be52f5f4ce559d62f9f2cdcc6fca75634c0f26e4f"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/common_billing/dto/CommonInvoiceDetailsResponse.java",
-    "sha256" : "8aa7b56db987a868983afa2d6cac4f68068a1ecb671f712135bf18954e475d46"
+    "sha256" : "03caad38037f5634b3fea4eb69e3ce1234f36bacf16b70101a33945f9d648516"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/common_billing/dto/CommonInvoiceManualCardPaymentRequest.java",
     "sha256" : "dfb6cdb21eed5e890c80b506df0ca0d3760631bc187e983945bb6d6d95bafcaa"
@@ -25321,7 +25462,7 @@
     "sha256" : "796cc452d2006e0d1028523fd004b3d668364553be7e0d6a7acb7278d7c7c62d"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/manager_control/controller/ApiManagerControlController.java",
-    "sha256" : "3aa8a84ca4dd6e22f041345b42010c6ccd584c2f2586d46c3f1c9f4a495d6adf"
+    "sha256" : "994eef7e9836237cf45805f4643df44bdd44647cdab0b2752ae7484c8078ca1c"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/manager_control/controller/ManagerClientReplyOperationController.java",
     "sha256" : "28f7dfb73d90d3fca83eb5b5d988fe7d0833afb39a152e1f232377a4f73117ba"
@@ -25345,7 +25486,7 @@
     "sha256" : "9d4b050d106692f019c545ecf7beab453e2c3b77a32f1a352f8945bac8a81e11"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/manager_control/dto/ManagerControlConcreteItemResponse.java",
-    "sha256" : "5037d891aa88c683eb515e00755a7a98dac034e7d9cfb93f432c3be09be41f73"
+    "sha256" : "14863291fbb39b3d221403ad958b6ffdaba3d0a6224ba0bd003b7e1942a35395"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/manager_control/dto/ManagerControlEventResponse.java",
     "sha256" : "4e73c4a84ba002441dc4a5d13063da460ba33bfd931728a547c56643d2986df7"
@@ -25639,7 +25780,7 @@
     "sha256" : "adda3e7ac2f221e0ddb2c9a63c927f7f0485c3e1276e25d36016b40d15c2a9aa"
   }, {
     "path" : "contracts/client-api.config.json",
-    "sha256" : "6303b8eab2672519ff2bf2478774d8b68d74fcb7396d94655e7140f8bbef6def"
+    "sha256" : "c6b52f03a84df9a8d0a29abfe006fe6d245d5042af766a74bd4b4a0f1842572a"
   } ],
   "x-source-fingerprint-normalization" : "UTF-8 text with CRLF normalized to LF",
   "x-schema-java-types" : {
@@ -25722,6 +25863,7 @@
     "DeepCompanyResearchReportSectionOutput" : "com.hunt.otziv.reputationai.domain.DeepCompanyResearchReport$Section",
     "DeepCompanyResearchReportSourceOutput" : "com.hunt.otziv.reputationai.domain.DeepCompanyResearchReport$Source",
     "DeepCompanyResearchReportSourceReviewOutput" : "com.hunt.otziv.reputationai.domain.DeepCompanyResearchReport$SourceReview",
+    "DeliveryOperationOutput" : "com.hunt.otziv.client_messages.api.DeliveryOperation",
     "FilialDeletionPreviewOutput" : "com.hunt.otziv.c_companies.dto.FilialDeletionPreview",
     "FilialResponseOutput" : "com.hunt.otziv.manager.dto.api.FilialResponse",
     "FilialUpdateRequestInput" : "com.hunt.otziv.manager.dto.api.FilialUpdateRequest",

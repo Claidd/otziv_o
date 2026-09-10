@@ -20,10 +20,19 @@ public final class WhatsAppOperationEnvelope {
         } else {
             throw invalidEnvelope();
         }
+        return hash(clientId, "send-group", destination, message);
+    }
+
+    public static String phoneHash(String clientId, String phone, String message) {
+        String destination = WhatsAppDestination.normalize("send", phone) + "@c.us";
+        return hash(clientId, "send", destination, message);
+    }
+
+    private static String hash(String clientId, String kind, String destination, String message) {
         String normalizedMessage = trimJavaScript(message);
         if (clientId == null || clientId.isEmpty() || normalizedMessage.isEmpty()) throw invalidEnvelope();
         StringBuilder json = new StringBuilder("[");
-        for (String value : new String[]{clientId, "send-group", destination, normalizedMessage}) {
+        for (String value : new String[]{clientId, kind, destination, normalizedMessage}) {
             if (json.length() > 1) json.append(',');
             appendJsonString(json, value);
         }

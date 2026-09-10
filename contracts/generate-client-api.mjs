@@ -13,10 +13,13 @@ for (const { path: relative, sha256: expected } of readSourceFingerprints(api)) 
   if (actual !== expected) throw new Error(`Compiled client contract source changed: ${relative}. Re-export and review the contract.`);
 }
 const schemas = api.components.schemas;
-const compatibility = Object.assign({}, ...['order-editor.config.json', 'billing-payments.config.json'].map(name => {
+const compatibility = Object.assign({}, ...['order-editor.config.json', 'billing-payments.config.json', 'client-api.config.json'].map(name => {
   const config = JSON.parse(fs.readFileSync(path.join(root, 'contracts', name), 'utf8'));
   return Object.fromEntries(Object.entries(config.optionalForCompatibility ?? {}).map(([type, fields]) => [`${type}Output`, fields]));
 }));
+for (const [type, fields] of Object.entries(compatibility)) for (const field of fields) {
+  if (!schemas[type]?.properties?.[field]) throw new Error(`Unknown compatibility field: ${type}.${field}`);
+}
 
 const refName = ref => ref.split('/').at(-1);
 function ts(schema) {

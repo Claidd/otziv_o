@@ -1,24 +1,15 @@
 package com.hunt.otziv.l_lead.service;
 
 import com.hunt.otziv.l_lead.model.Lead;
-import com.hunt.otziv.whatsapp.api.WhatsAppBusinessOperations;
-import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
-import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 public class LeadWorkNotificationService {
-    private final WhatsAppBusinessOperations operations;
-    private final WhatsAppService whatsapp;
-    private final PlatformTransactionManager transactions;
-    public LeadWorkNotificationService(WhatsAppBusinessOperations operations,WhatsAppService whatsapp,PlatformTransactionManager transactions) {
-        this.operations=operations;this.whatsapp=whatsapp;this.transactions=transactions;
+    private final com.hunt.otziv.whatsapp.api.WhatsAppQueuedMessages queue;
+    public LeadWorkNotificationService(com.hunt.otziv.whatsapp.api.WhatsAppQueuedMessages queue) {
+        this.queue = queue;
     }
 
     @Transactional(propagation=Propagation.MANDATORY)
@@ -30,14 +21,6 @@ public class LeadWorkNotificationService {
         if(group==null||client==null||client.isBlank())return;
         String operation="lead-work:"+lead.getId()+":"+lead.getWhatsappWorkGeneration();
         String text=String.format("📨 Новая фирма:\n📞 %s\n🌆 %s\n💬 %s",lead.getTelephoneLead(),lead.getCityLead(),lead.getCommentsLead());
-        var frozen=operations.freeze(operation,client,"send-group",group,text);
-        if(!TransactionSynchronizationManager.isSynchronizationActive())throw new IllegalStateException("Lead notification requires business transaction synchronization");
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override public void afterCommit() {
-                TransactionTemplate outside=new TransactionTemplate(transactions);
-                outside.setPropagationBehavior(TransactionDefinition.PROPAGATION_NOT_SUPPORTED);
-                outside.executeWithoutResult(status->whatsapp.sendMessageToGroup(frozen.clientId(),frozen.destination(),frozen.message(),frozen.operationId()));
-            }
-        });
+        queue.enqueue(operation,client,group,text);
     }
 }

@@ -79,10 +79,15 @@ class ManagerControlClientSendMySqlIntegrationTest {
     private final AtomicReference<Runnable> deliveryHook = new AtomicReference<>();
     private final AtomicBoolean failAudit = new AtomicBoolean();
     private final AtomicBoolean failRelease = new AtomicBoolean();
+    private final AtomicReference<java.math.BigDecimal> orderSum = new AtomicReference<>();
     private JdbcTemplate jdbc;
     private DataSource dataSource;
     private DataSourceTransactionManager transactions;
     private ManagerControlClientSendWorkflow workflow;
+    private ManagerClientMessageQueue queue;
+    private ManagerClientMessageWorker worker;
+    private ClientChatMessageSender sender;
+
     private BadReviewPaymentInstructionOrchestrator payments;
     private ManagerDailyControlConcreteItemRepository cards;
 
@@ -91,8 +96,9 @@ class ManagerControlClientSendMySqlIntegrationTest {
         dataSource = new DriverManagerDataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword());
         jdbc = new JdbcTemplate(dataSource);
         transactions = new DataSourceTransactionManager(dataSource);
-        sends.set(0); operation.set(null); result.set(ClientMessageSendResult.sent("WhatsApp"));
+        sends.set(0); operation.set(null); result.set(ClientMessageSendResult.sent("WhatsApp", "fixture-provider-message"));
         deliveryHook.set(() -> { }); failAudit.set(false); failRelease.set(false);
+        orderSum.set(new java.math.BigDecimal("1200.00"));
         jdbc.execute("DROP TABLE IF EXISTS mc_send_card, mc_send_parent, mc_send_control, mc_send_source, mc_send_events, mc_send_probe");
         jdbc.execute("CREATE TABLE mc_send_card(id BIGINT PRIMARY KEY,status VARCHAR(30),action_type VARCHAR(30),comment TEXT,touched DATETIME(6),resolved DATETIME(6),follow_up DATETIME(6),automatic BOOLEAN,episodes BIGINT) ENGINE=InnoDB");
         jdbc.execute("CREATE TABLE mc_send_parent(id BIGINT PRIMARY KEY,status VARCHAR(30),action_type VARCHAR(30)) ENGINE=InnoDB");
@@ -113,7 +119,7 @@ class ManagerControlClientSendMySqlIntegrationTest {
         payments = mock(BadReviewPaymentInstructionOrchestrator.class);
         var permissions = mock(ManagerPermissionService.class);
         var users = mock(UserService.class);
-        var sender = mock(ClientChatMessageSender.class);
+        sender = mock(ClientChatMessageSender.class);
         var lookup = mock(ManagerControlWorkerTaskLookup.class);
         when(cards.findByIdForUpdate(1L)).thenAnswer(call -> {
             assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isTrue();
@@ -178,24 +184,83 @@ class ManagerControlClientSendMySqlIntegrationTest {
         var presenter = new ManagerControlConcretePresenter(mock(WorkerRiskIncidentRepository.class), lookup,
                 mock(ManagerControlInvoiceDiagnostics.class), mock(ScheduledClientMessageStateRepository.class),
                 mock(CompanyRepository.class), new ManagerControlSlaPolicy(mock(AppSettingService.class)));
+        jdbc.execute("DROP TABLE IF EXISTS manager_client_message_queue");
+        try { jdbc.execute(java.nio.file.Files.readString(java.nio.file.Path.of("src/main/resources/db/migration/V1_10_313__manager_client_message_queue.sql"))); }
+        catch (java.io.IOException error) { throw new IllegalStateException(error); }
+        var encryption = new com.hunt.otziv.security.credentials.CredentialEncryptionProperties();
+        encryption.setActiveKeyId("test"); encryption.setActiveKeyBase64(java.util.Base64.getEncoder().encodeToString(new byte[32]));
+        queue = proxy(new ManagerClientMessageQueue(jdbc, new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules(),
+                new com.hunt.otziv.security.credentials.CredentialCipher(encryption)));
+        var actors = mock(com.hunt.otziv.u_users.api.DeferredUserAuthority.class);
+        var deferredActor = new com.hunt.otziv.u_users.api.DeferredUserAuthority.Actor(1L, "fixture-manager", 0, java.util.Set.of("ROLE_MANAGER"));
+        when(actors.capture(AUTH)).thenReturn(deferredActor); when(actors.revalidate(deferredActor)).thenReturn(AUTH);
+        when(sender.deliverWithOperationId(any(), any(), any(), any(), any(), anyString())).thenAnswer(call -> {
+            var target = (com.hunt.otziv.client_messages.api.ClientMessageDelivery.Target) call.getArgument(0);
+            var company = new Company(); company.setId(target.companyId()); company.setTitle(target.title());
+            return sender.sendWithOperationId(company, call.getArgument(1), call.getArgument(2), call.getArgument(3), call.getArgument(4), call.getArgument(5));
+        });
         workflow = proxy(new ManagerControlClientSendWorkflow(proxy(new ManagerControlTransactionRunner()), cards,
-                controls, orders, mock(OrderService.class), sender, payments, access, lifecycle, texts, presenter));
+                controls, orders, mock(OrderService.class), sender, queue, actors, payments, access, lifecycle, texts, presenter));
+        worker = proxy(new ManagerClientMessageWorker(queue, workflow, mock(ManagerControlClientReplyWorkflow.class), sender,
+                actors, () -> true, proxy(new ManagerControlTransactionRunner())));
         assertThat(AopUtils.isAopProxy(workflow)).isTrue();
     }
 
+    private com.hunt.otziv.manager_control.dto.ManagerControlConcreteItemResponse enqueue() {
+        int before = sends.get();
+        var response = workflow.sendClientMessage(1L, PRINCIPAL, AUTH);
+        assertThat(response.delivery().status()).isEqualTo("QUEUED");
+        assertThat(response.itemStatus()).isEqualTo("ACTION_TAKEN");
+        assertThat(sends.get()).isEqualTo(before);
+        operation.set(response.delivery().operationId());
+        return response;
+    }
+
+    private void due() { jdbc.update("UPDATE manager_client_message_queue SET next_attempt_at=CURRENT_TIMESTAMP(6)"); }
+    private com.hunt.otziv.client_messages.api.DeliveryOperation deliveryState() { return queue.status(1L, operation.get()); }
+
+    @Test void changedAmountBeforeDispatchCannotSendAnObsoletePaymentMessage() {
+        enqueue(); orderSum.set(new java.math.BigDecimal("1500.00")); worker.drain();
+        assertThat(sends.get()).isZero();
+        assertThat(deliveryState().status()).isEqualTo("FAILED");
+        assertThat(deliveryState().errorCode()).isEqualTo("context_changed");
+        assertThat(state()).isEqualTo("ACTION_TAKEN");
+    }
+
+    @Test void changedAmountDuringIoKeepsProofWithoutClosingTheChangedOrder() {
+        enqueue(); deliveryHook.set(() -> orderSum.set(new java.math.BigDecimal("1500.00"))); worker.drain();
+        assertThat(sends.get()).isEqualTo(1);
+        assertThat(deliveryState().status()).isEqualTo("SENT");
+        assertThat(deliveryState().errorCode()).isEqualTo("finalization_required");
+        assertThat(state()).isEqualTo("ACTION_TAKEN");
+    }
+
+    @Test void knownUnsentReceiptAfterUnknownRetriesTheOriginalOperation() {
+        result.set(ClientMessageSendResult.failed("operation_unknown", "fixture"));
+        enqueue(); worker.drain();
+        String original = operation.get();
+        when(sender.recordedOutcome(original)).thenReturn(ClientMessageSendResult.failed("gateway_not_ready", "not admitted"));
+        due(); worker.drain();
+        assertThat(sends.get()).isEqualTo(1);
+        result.set(ClientMessageSendResult.sent("WhatsApp", "fixture-provider-message"));
+        due(); worker.drain();
+        assertThat(operation.get()).isEqualTo(original);
+        assertThat(sends.get()).isEqualTo(2);
+        assertThat(deliveryState().status()).isEqualTo("SENT");
+    }
+
     @Test
-    void providerIsOutsideCallerTransactionAndCommittedFinalizationSurvivesCallerRollback() {
+    void requestCommitsOnlyTheQueueAndWorkerFinalizationSurvivesCallerRollback() {
         assertThatThrownBy(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
-            Long callerConnection = jdbc.queryForObject("SELECT CONNECTION_ID()", Long.class);
             jdbc.update("INSERT INTO mc_send_probe VALUES('outer')");
-            var response = workflow.sendClientMessage(1L, PRINCIPAL, AUTH);
-            assertThat(response.itemStatus()).isEqualTo("RESOLVED");
-            assertThat(response.contactText()).isEqualTo("frozen fixture message");
+            enqueue();
+            assertThat(sends.get()).isZero();
+            worker.drain();
             assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isTrue();
-            assertThat(jdbc.queryForObject("SELECT CONNECTION_ID()", Long.class)).isEqualTo(callerConnection);
             throw new IllegalStateException("fixture caller rollback");
         })).isInstanceOf(IllegalStateException.class);
         assertThat(state()).isEqualTo("RESOLVED");
+        assertThat(deliveryState().status()).isEqualTo("SENT");
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM mc_send_events", Integer.class)).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM mc_send_probe", Integer.class)).isZero();
         assertThat(sends.get()).isEqualTo(1);
@@ -204,61 +269,80 @@ class ManagerControlClientSendMySqlIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"operation_unknown", "operation_pending", "operation_running", "operation_result_not_durable"})
-    void returnedUnknownAndPendingRetainSourceAndBlockTheNextSend(String code) {
+    void returnedUnknownRetainsSourceAndBlocksAnotherRequest(String code) {
         result.set(ClientMessageSendResult.failed(code, "fixture unconfirmed response"));
-        assertThatThrownBy(() -> workflow.sendClientMessage(1L, PRINCIPAL, AUTH)).isInstanceOf(ResponseStatusException.class);
-        assertThat(state()).isEqualTo("ACTION_TAKEN");
-        assertThat(comment()).startsWith("client_message_delivery_unknown:" + operation.get() + ";");
+        enqueue(); worker.drain();
+        assertThat(deliveryState().status()).isEqualTo("UNKNOWN");
+        assertThat(comment()).isEqualTo("client_message_delivery_unknown:" + operation.get());
         assertThat(sourceReleased()).isFalse();
         assertThatThrownBy(() -> workflow.sendClientMessage(1L, PRINCIPAL, AUTH)).isInstanceOf(ResponseStatusException.class);
+        due(); worker.drain();
         assertThat(sends.get()).isEqualTo(1);
         verify(payments, never()).releaseKnownUnsent(any(), any());
     }
 
     @Test
-    void knownUnsentRestoresCardAndReleasesOnlyInTheSameCommittedFinalization() {
+    void positiveReceiptAfterLostResponseFinalizesWithoutAnotherSend() {
+        result.set(ClientMessageSendResult.failed("operation_unknown", "fixture"));
+        enqueue(); worker.drain();
+        when(sender.recordedOutcome(operation.get())).thenReturn(ClientMessageSendResult.sent("WhatsApp", "fixture-provider-message"));
+        due(); worker.drain();
+        assertThat(deliveryState().status()).isEqualTo("SENT");
+        assertThat(state()).isEqualTo("RESOLVED");
+        assertThat(sends.get()).isEqualTo(1);
+    }
+
+    @Test
+    void admissionRejectionsAreBoundedAndReleaseSourceOnlyAtTerminalFailure() {
         result.set(ClientMessageSendResult.failed("gateway_not_ready", "fixture admission rejection"));
-        assertThatThrownBy(() -> workflow.sendClientMessage(1L, PRINCIPAL, AUTH)).isInstanceOf(ResponseStatusException.class);
+        enqueue(); worker.drain();
+        assertThat(deliveryState().status()).isEqualTo("RETRYABLE");
+        assertThat(sourceReleased()).isFalse();
+        for (int i = 0; i < 4; i++) { due(); worker.drain(); }
+        assertThat(deliveryState().status()).isEqualTo("FAILED");
         assertThat(state()).isEqualTo("OPEN");
         assertThat(comment()).isEqualTo("original");
         assertThat(sourceReleased()).isTrue();
+        assertThat(sends.get()).isEqualTo(5);
     }
 
     @Test
-    void releaseFailureRollsBackSourceAndDoesNotReopenThePreparedCard() {
+    void failedSourceReleaseRollsBackAndCannotReopenTheCard() {
         result.set(ClientMessageSendResult.failed("gateway_not_ready", "fixture admission rejection"));
-        failRelease.set(true);
-        assertThatThrownBy(() -> workflow.sendClientMessage(1L, PRINCIPAL, AUTH)).isInstanceOf(ResponseStatusException.class);
-        assertThat(comment()).isEqualTo("client_message_delivery_prepared:" + operation.get());
+        failRelease.set(true); enqueue();
+        for (int i = 0; i < 5; i++) { due(); worker.drain(); }
+        assertThat(deliveryState().errorCode()).isEqualTo("finalization_required");
+        assertThat(comment()).isEqualTo("client_message_delivery_unknown:" + operation.get());
         assertThat(sourceReleased()).isFalse();
     }
 
     @Test
-    void lateDatabaseFailureAfterDeliveryRollsBackCompletionAndCommitsUnknownFence() {
-        failAudit.set(true);
-        assertThatThrownBy(() -> workflow.sendClientMessage(1L, PRINCIPAL, AUTH)).isInstanceOf(ResponseStatusException.class);
+    void databaseFailureAfterDeliveryRetainsProofButDoesNotPartiallyCloseTheCard() {
+        failAudit.set(true); enqueue(); worker.drain();
+        assertThat(deliveryState().status()).isEqualTo("SENT");
+        assertThat(deliveryState().errorCode()).isEqualTo("finalization_required");
         assertThat(state()).isEqualTo("ACTION_TAKEN");
-        assertThat(comment()).startsWith("client_message_delivery_unknown:" + operation.get() + ";");
         assertThat(jdbc.queryForObject("SELECT episodes FROM mc_send_card", Long.class)).isZero();
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM mc_send_events", Integer.class)).isZero();
         assertThat(sourceReleased()).isFalse();
+        due(); worker.drain(); assertThat(sends.get()).isEqualTo(1);
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    void completionWithAReplacedTokenCannotChangeOrReleaseTheNewAttempt(boolean sent) {
-        result.set(sent ? ClientMessageSendResult.sent("WhatsApp")
+    void replacedCardFenceCannotBeOverwrittenByTheOldDelivery(boolean sent) {
+        result.set(sent ? ClientMessageSendResult.sent("WhatsApp", "fixture-provider-message")
                 : ClientMessageSendResult.failed("gateway_not_ready", "fixture admission rejection"));
         String replacement = "client_message_delivery_prepared:" + UUID.randomUUID();
         deliveryHook.set(() -> jdbc.update("UPDATE mc_send_card SET comment=? WHERE id=1", replacement));
-        assertThatThrownBy(() -> workflow.sendClientMessage(1L, PRINCIPAL, AUTH)).isInstanceOf(ResponseStatusException.class);
+        enqueue(); worker.drain();
         assertThat(comment()).isEqualTo(replacement);
         assertThat(sourceReleased()).isFalse();
         verify(payments, never()).releaseKnownUnsent(any(), any());
     }
 
     @Test
-    void simultaneousRequestDuringOutboundCannotSendTwice() throws Exception {
+    void simultaneousRequestDuringWorkerIoCannotSendTwice() throws Exception {
         CountDownLatch providerEntered = new CountDownLatch(1);
         CountDownLatch providerRelease = new CountDownLatch(1);
         deliveryHook.set(() -> {
@@ -266,8 +350,9 @@ class ManagerControlClientSendMySqlIntegrationTest {
             try { assertThat(providerRelease.await(10, TimeUnit.SECONDS)).isTrue(); }
             catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); throw new IllegalStateException(interrupted); }
         });
+        enqueue();
         try (var executor = Executors.newFixedThreadPool(2)) {
-            var first = executor.submit(() -> workflow.sendClientMessage(1L, PRINCIPAL, AUTH));
+            var first = executor.submit(() -> worker.drain());
             try {
                 assertThat(providerEntered.await(10, TimeUnit.SECONDS)).isTrue();
                 var second = executor.submit(() -> assertThatThrownBy(() -> workflow.sendClientMessage(1L, PRINCIPAL, AUTH))
@@ -275,19 +360,21 @@ class ManagerControlClientSendMySqlIntegrationTest {
                 second.get(10, TimeUnit.SECONDS);
                 assertThat(sends.get()).isEqualTo(1);
             } finally { providerRelease.countDown(); }
-            assertThat(first.get(10, TimeUnit.SECONDS).itemStatus()).isEqualTo("RESOLVED");
+            first.get(10, TimeUnit.SECONDS);
         }
+        assertThat(deliveryState().status()).isEqualTo("SENT");
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM mc_send_events", Integer.class)).isEqualTo(1);
     }
 
     @Test
-    void stalePreparationPreservesItsOperationIdentityWithoutSending() {
+    void oldPreparationWithoutAQueueRecordIsNeverBackfilledOrResent() {
         String token = UUID.randomUUID().toString();
         jdbc.update("UPDATE mc_send_card SET comment=?,touched=? WHERE id=1", "client_message_delivery_prepared:" + token,
                 LocalDateTime.now().minusMinutes(16));
         assertThatThrownBy(() -> workflow.sendClientMessage(1L, PRINCIPAL, AUTH)).isInstanceOf(ResponseStatusException.class);
         assertThat(comment()).startsWith("client_message_delivery_unknown:" + token + ";");
         assertThat(sends.get()).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM manager_client_message_queue", Integer.class)).isZero();
     }
 
     private ManagerDailyControlConcreteItem readCard(boolean locked) {
@@ -322,7 +409,7 @@ class ManagerControlClientSendMySqlIntegrationTest {
         var order = new Order(); order.setId(77L); order.setManager(manager());
         order.setStatus(OrderStatus.builder().title("Не оплачено").build());
         var company = new Company(); company.setId(8L); company.setTitle("fixture company"); company.setGroupId("fixture-group");
-        order.setCompany(company); return order;
+        order.setCompany(company); order.setSum(orderSum.get()); return order;
     }
     private String state() { return jdbc.queryForObject("SELECT status FROM mc_send_card WHERE id=1", String.class); }
     private String comment() { return jdbc.queryForObject("SELECT comment FROM mc_send_card WHERE id=1", String.class); }

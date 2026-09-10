@@ -2,7 +2,8 @@ package com.hunt.otziv.manager_control.service;
 
 import com.hunt.otziv.client_messages.dto.ClientMessageSendResult;
 import com.hunt.otziv.client_messages.dto.TelegramTransferCopyButton;
-import com.hunt.otziv.client_messages.service.ClientChatMessageSender;
+import com.hunt.otziv.client_messages.api.ClientMessageDelivery;
+import com.hunt.otziv.u_users.api.DeferredUserAuthority;
 import com.hunt.otziv.manager_control.dto.ManagerControlConcreteItemResponse;
 import com.hunt.otziv.manager_control.model.ManagerDailyControl;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlActionType;
@@ -22,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.HttpStatus;
 import java.security.Principal;
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Objects;
@@ -45,7 +47,9 @@ public class ManagerControlClientSendWorkflow {
     private final ManagerDailyControlRepository dailyControlRepository;
     private final OrderRepository orderRepository;
     private final OrderService orderService;
-    private final ClientChatMessageSender clientChatMessageSender;
+    private final ClientMessageDelivery delivery;
+    private final ManagerClientMessageQueue queue;
+    private final DeferredUserAuthority actors;
     private final BadReviewPaymentInstructionOrchestrator paymentInstructionOrchestrator;
     private final ManagerControlAccessPolicy accessPolicy;
     private final ManagerControlCardLifecycle cardLifecycle;
@@ -63,51 +67,76 @@ public class ManagerControlClientSendWorkflow {
                     "Предыдущая отправка не завершилась. Карточка переведена на ручную сверку; проверьте чат клиента"
             );
         }
-        PreparedClientMessage prepared = managerControlTransactionRunner.required(
-                () -> prepareClientMessage(concreteItemId, principal, authentication)
-        );
-        long startedAt = System.currentTimeMillis();
-        ClientMessageSendResult result;
-        try {
-            result = clientChatMessageSender.sendWithOperationId(
-                    prepared.company() == null ? null : prepared.company().toMessageCompany(),
-                    prepared.managerClientId(),
-                    prepared.groupId(),
-                    prepared.message(),
-                    telegramCopyButton(prepared.paymentInstruction()),
-                    prepared.deliveryToken()
-            );
-        } catch (Exception e) {
-            finishClientMessageFailure(prepared, readableException(e), true, authentication);
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Исход отправки не подтвержден; проверьте чат клиента", e);
-        }
-        if (result == null || !result.sent()) {
-            boolean unknown = !ClientChatMessageSender.isKnownUnsent(result);
-            finishClientMessageFailure(prepared, clientMessageError(result), unknown, authentication);
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    (unknown ? "Исход отправки не подтвержден; проверьте чат клиента: "
-                            : "Сообщение клиенту не отправлено: ") + clientMessageError(result)
-            );
-        }
-        try {
-            return managerControlTransactionRunner.required(
-                    () -> finishClientMessageSuccess(prepared, result, startedAt, principal, authentication)
-            );
-        } catch (RuntimeException finalizeFailure) {
-            finishClientMessageFailure(
-                    prepared,
-                    "сообщение доставлено, но заказ изменился во время отправки; нужна ручная сверка: "
-                            + readableException(finalizeFailure),
-                    true,
-                    authentication
-            );
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "Сообщение доставлено, но заказ изменился. Проверьте чат и карточку вручную",
-                    finalizeFailure
-            );
-        }
+        return managerControlTransactionRunner.required(() -> {
+            PreparedClientMessage prepared = prepareClientMessage(concreteItemId, principal, authentication);
+            queue.enqueue(new ManagerClientMessageQueue.Command(prepared.deliveryToken(), concreteItemId, "CONTROL",
+                    queue.encode(prepared), actors.capture(authentication)));
+            return concretePresenter.concreteItemResponse(lockedPreparedClientMessage(prepared), prepared.message())
+                    .withDelivery(queue.status(concreteItemId, prepared.deliveryToken()));
+        });
+    }
+
+    void validateQueued(ManagerClientMessageQueue.Command command, Authentication authentication) {
+        PreparedClientMessage prepared = queuedSnapshot(command);
+        managerControlTransactionRunner.required(() -> {
+            var card = lockedPreparedClientMessage(prepared);
+            accessPolicy.requireControlAccess(card.getControl(), authentication, authentication);
+            var order = orderRepository.findByIdForCounterUpdate(prepared.orderId()).orElseThrow();
+            accessPolicy.requireCurrentOrderAccess(order.getId(), authentication);
+            if (!Objects.equals(prepared.orderManagerId(), order.getManager() == null ? null : order.getManager().getId())
+                    || !Objects.equals(prepared.orderStatus(), clientMessageText.orderStatusTitle(order))
+                    || !sameAmount(prepared.orderSum(), order.getSum()) || prepared.orderAmount() != order.getAmount()
+                    || !Objects.equals(prepared.company(), ManagerControlMessageCompany.capture(order.getCompany()))
+                    || !Objects.equals(prepared.managerClientId(), order.getManager() == null ? null : order.getManager().getClientId())
+                    || !Objects.equals(prepared.groupId(), order.getCompany() == null ? null : order.getCompany().getGroupId()))
+                throw new IllegalStateException("Manager command source changed");
+            return null;
+        });
+    }
+
+    ClientMessageSendResult dispatchQueued(ManagerClientMessageQueue.Command command) {
+        PreparedClientMessage p = queuedSnapshot(command);
+        return delivery.deliverWithOperationId(p.company() == null ? null : p.company().target(), p.managerClientId(),
+                p.groupId(), p.message(), telegramCopyButton(p.paymentInstruction()), p.deliveryToken());
+    }
+
+    void completeQueued(ManagerClientMessageQueue.Claim claim, ManagerClientMessageQueue.Command command,
+                        ClientMessageSendResult result, Authentication authentication, String state, String code, int delay) {
+        PreparedClientMessage prepared = queuedSnapshot(command);
+        managerControlTransactionRunner.required(() -> {
+            // Same ordering as enqueue: card, order/payment source, then queue claim.
+            lockedPreparedClientMessage(prepared);
+            orderRepository.findByIdForCounterUpdate(prepared.orderId()).orElseThrow();
+            if (!queue.owns(claim)) return null;
+            if ("finalization_required".equals(code) || "context_changed".equals(code)) {
+                var card = lockedPreparedClientMessage(prepared);
+                card.setComment(CLIENT_MESSAGE_DELIVERY_UNKNOWN_PREFIX + prepared.deliveryToken());
+                dailyControlConcreteItemRepository.save(card);
+                queue.finish(claim, state, code, delay);
+                return null;
+            }
+            if ("SENT".equals(state)) finishClientMessageSuccess(prepared, result, System.currentTimeMillis(), authentication, authentication);
+            else if ("FAILED".equals(state)) restoreKnownUnsent(prepared, authentication);
+            else if ("UNKNOWN".equals(state)) {
+                var card = lockedPreparedClientMessage(prepared);
+                card.setComment(CLIENT_MESSAGE_DELIVERY_UNKNOWN_PREFIX + prepared.deliveryToken());
+                dailyControlConcreteItemRepository.save(card);
+            }
+            else if ("RETRYABLE".equals(state) && !claim.mayDispatch() && ClientMessageDelivery.isKnownUnsent(result)) {
+                var card = lockedPreparedClientMessage(prepared);
+                card.setComment(CLIENT_MESSAGE_DELIVERY_PREPARED_PREFIX + prepared.deliveryToken());
+                dailyControlConcreteItemRepository.save(card);
+            }
+            queue.finish(claim, state, code, delay);
+            return null;
+        });
+    }
+
+    private PreparedClientMessage queuedSnapshot(ManagerClientMessageQueue.Command command) {
+        PreparedClientMessage prepared = queue.decode(command.preparedJson(), PreparedClientMessage.class);
+        if (!Objects.equals(command.operationId(), prepared.deliveryToken()) || command.cardId() != prepared.concreteItemId())
+            throw new IllegalStateException("Manager command identity mismatch");
+        return prepared;
     }
 
     private boolean reconcileStaleClientMessagePreparation(
@@ -124,6 +153,9 @@ public class ManagerControlClientSendWorkflow {
         if (!safe(concreteItem.getComment()).startsWith(CLIENT_MESSAGE_DELIVERY_PREPARED_PREFIX)) {
             return false;
         }
+
+        String queuedToken = safe(concreteItem.getComment()).substring(CLIENT_MESSAGE_DELIVERY_PREPARED_PREFIX.length());
+        if (queue.status(concreteItemId, queuedToken) != null) return false;
 
         LocalDateTime preparedAt = concreteItem.getLastManualTouchAt();
         LocalDateTime now = LocalDateTime.now();
@@ -188,6 +220,8 @@ public class ManagerControlClientSendWorkflow {
                 order.getId(),
                 order.getManager() == null ? null : order.getManager().getId(),
                 clientMessageText.orderStatusTitle(order),
+                order.getSum(),
+                order.getAmount(),
                 ManagerControlMessageCompany.capture(order.getCompany()),
                 order.getManager() == null ? null : order.getManager().getClientId(),
                 order.getCompany() == null ? null : order.getCompany().getGroupId(),
@@ -225,7 +259,8 @@ public class ManagerControlClientSendWorkflow {
         accessPolicy.requireCurrentOrderAccess(order.getId(), authentication);
         Long currentManagerId = order.getManager() == null ? null : order.getManager().getId();
         if (!Objects.equals(prepared.orderManagerId(), currentManagerId)
-                || !Objects.equals(prepared.orderStatus(), clientMessageText.orderStatusTitle(order))) {
+                || !Objects.equals(prepared.orderStatus(), clientMessageText.orderStatusTitle(order))
+                || !sameAmount(prepared.orderSum(), order.getSum()) || prepared.orderAmount() != order.getAmount()) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Менеджер или статус заказа изменился во время отправки"
@@ -267,50 +302,27 @@ public class ManagerControlClientSendWorkflow {
         return concretePresenter.concreteItemResponse(savedConcreteItem, prepared.message());
     }
 
-    private void finishClientMessageFailure(
-            PreparedClientMessage prepared,
-            String error,
-            boolean deliveryOutcomeUnknown,
-            Authentication authentication
-    ) {
-        try {
-            managerControlTransactionRunner.required(() -> {
-                ManagerDailyControlConcreteItem item = lockedPreparedClientMessage(prepared);
-                if (deliveryOutcomeUnknown) {
-                    item.setStatus(ManagerDailyControlItemStatus.ACTION_TAKEN);
-                    item.setActionType(ManagerDailyControlActionType.ACTION_TAKEN);
-                    item.setComment(limit(
-                            CLIENT_MESSAGE_DELIVERY_UNKNOWN_PREFIX + prepared.deliveryToken() + "; исход отправки не подтвержден; "
-                                    + "проверьте чат клиента перед повтором: " + safe(error),
-                            1000
-                    ));
-                } else {
-                    // Keep the card lock until the exact pristine payment source is released.
-                    // A stale finalizer must never release another attempt's source or reopen its card.
-                    if (prepared.paymentInstruction() != null) {
-                        paymentInstructionOrchestrator.releaseKnownUnsent(prepared.paymentInstruction(), authentication);
-                    }
-                    item.setStatus(prepared.previousStatus());
-                    item.setActionType(prepared.previousActionType());
-                    item.setComment(prepared.previousComment());
-                    item.setLastManualTouchAt(prepared.previousLastManualTouchAt());
-                    item.setFollowUpAt(prepared.previousFollowUpAt());
-                    item.setResolvedAt(prepared.previousResolvedAt());
-                    item.setAutomaticResolution(prepared.previousAutomaticResolution());
-                }
-                dailyControlConcreteItemRepository.save(item);
-                return null;
-            });
-        } catch (RuntimeException finalizeFailure) {
-            log.error("Не удалось зафиксировать результат отправки карточки {}", prepared.concreteItemId(), finalizeFailure);
-        }
+    private void restoreKnownUnsent(PreparedClientMessage prepared, Authentication authentication) {
+        ManagerDailyControlConcreteItem item = lockedPreparedClientMessage(prepared);
+        if (prepared.paymentInstruction() != null)
+            paymentInstructionOrchestrator.releaseKnownUnsent(prepared.paymentInstruction(), authentication);
+        item.setStatus(prepared.previousStatus());
+        item.setActionType(prepared.previousActionType());
+        item.setComment(prepared.previousComment());
+        item.setLastManualTouchAt(prepared.previousLastManualTouchAt());
+        item.setFollowUpAt(prepared.previousFollowUpAt());
+        item.setResolvedAt(prepared.previousResolvedAt());
+        item.setAutomaticResolution(prepared.previousAutomaticResolution());
+        dailyControlConcreteItemRepository.save(item);
     }
 
     private ManagerDailyControlConcreteItem lockedPreparedClientMessage(PreparedClientMessage prepared) {
         ManagerDailyControlConcreteItem item = dailyControlConcreteItemRepository.findByIdForUpdate(prepared.concreteItemId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Карточка контроля не найдена"));
         String expected = CLIENT_MESSAGE_DELIVERY_PREPARED_PREFIX + prepared.deliveryToken();
-        if (!expected.equals(safe(item.getComment()))) {
+        String unknown = CLIENT_MESSAGE_DELIVERY_UNKNOWN_PREFIX + prepared.deliveryToken();
+        if (!expected.equals(safe(item.getComment())) && !unknown.equals(safe(item.getComment()))
+                && !safe(item.getComment()).startsWith(unknown + ";")) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Состояние отправки карточки изменилось. Проверьте чат клиента"
@@ -319,11 +331,13 @@ public class ManagerControlClientSendWorkflow {
         return item;
     }
 
-    private record PreparedClientMessage(
+    record PreparedClientMessage(
             Long concreteItemId,
             Long orderId,
             Long orderManagerId,
             String orderStatus,
+            BigDecimal orderSum,
+            int orderAmount,
             ManagerControlMessageCompany company,
             String managerClientId,
             String groupId,
@@ -338,6 +352,10 @@ public class ManagerControlClientSendWorkflow {
             LocalDateTime previousResolvedAt,
             boolean previousAutomaticResolution
     ) {
+    }
+
+    private static boolean sameAmount(BigDecimal left, BigDecimal right) {
+        return left == null ? right == null : right != null && left.compareTo(right) == 0;
     }
 
     private TelegramTransferCopyButton telegramCopyButton(

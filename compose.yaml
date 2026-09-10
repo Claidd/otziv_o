@@ -284,7 +284,7 @@ services:
       - internal_net
 
   keycloak:
-    image: ghcr.io/claidd/otziv-security@sha256:c6ee6afd6750ae0886a608c5837085cb20417a6746ca2ed47b59b1a0fdec1973
+    image: ghcr.io/claidd/otziv-security@sha256:bd5687843becb0cdb232c2b864cc3786fafb8fc91f30f531fa2db7fc4d1fc59d
     container_name: otziv-keycloak
     command: start-dev --import-realm
     ports:
@@ -315,18 +315,19 @@ services:
       - internal_net
 
   prometheus:
-    image: ghcr.io/claidd/otziv-security@sha256:431b45903443dcef3c973e16d4ad76670a5d0f6a61dd8a1cfe15b1fa6dd8334d
+    image: ghcr.io/claidd/otziv-security@sha256:508c918889067ea070d3da34913a81bd6df8092fb18977ca339e2367e3d77692
     profiles: ["observability"]
     container_name: otziv-prometheus
     ports:
       - "127.0.0.1:9090:9090"
     volumes:
       - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infrastructure/prometheus/delivery-rules.yml:/etc/prometheus/delivery-rules.yml:ro
     networks:
       - internal_net
 
   loki:
-    image: ghcr.io/claidd/otziv-security@sha256:afb2d631c2d294ca23fb0ed3f98c9d601a0e72b5d702f5cde2b9522bf8a1ded0
+    image: ghcr.io/claidd/otziv-security@sha256:e1638cc4e592cfc301811518526fbdb7cf0573425ec519af76a6a806816215c9
     profiles: ["observability"]
     container_name: otziv-loki
     command: -config.file=/etc/loki/loki-config.yaml
@@ -346,7 +347,7 @@ services:
       start_period: 40s
 
   tempo:
-    image: ghcr.io/claidd/otziv-security@sha256:82c90ef48d1d1e009b7847fc1a398995758e8dcaa89e7ea90992b599b935f15b
+    image: ghcr.io/claidd/otziv-security@sha256:6e743b30d2eb3c59887e3f04ba56fd20a5e36f15d616c272d7a7ea30076cfa38
     stop_grace_period: 30s
     profiles: ["observability"]
     container_name: otziv-tempo
@@ -369,7 +370,7 @@ services:
       start_period: 40s
 
   alloy:
-    image: ghcr.io/claidd/otziv-security@sha256:a4ce96701d88e336791d1cca7745f5a87060a9834d8f4dd391de2a2072f57852
+    image: ghcr.io/claidd/otziv-security@sha256:d006cedf890ade4915a098a5362ce0cda9a3fd7ec2c02320f15e92ccfd669122
     profiles: ["observability"]
     container_name: otziv-alloy
     command:
@@ -392,7 +393,7 @@ services:
       - internal_net
 
   grafana:
-    image: ghcr.io/claidd/otziv-security@sha256:b13b0abc6fb26fb7b1e55190411f8b6a5d1894fb7a6c27df2352cb5a3adb54ae
+    image: ghcr.io/claidd/otziv-security@sha256:a9a36b873c7f4d424937a95f6d6c4c1f12f9d5f7556e23a1c81d6b649b570488
     profiles: ["observability"]
     container_name: otziv-grafana
     ports:

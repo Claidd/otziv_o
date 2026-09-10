@@ -4,7 +4,12 @@ import { readFile } from 'node:fs/promises';
 import { gunzipSync } from 'node:zlib';
 import { exactProduct, labelsOf, inspectReviewedGoBinary } from './go-binary-inspection.mjs';
 
-const proofRoot = new URL('./adjudications/alloy-daemon/', import.meta.url);
+const C15_CONFIG = 'sha256:8084b7ee093d159c974d88ec56aad2a72f4bb939f974176759ff9233d9b58dfd';
+const PROOFS = new Map([
+  ['sha256:7f5b0079e8c6b13cd2a767cdeb001430bdcf0db400afbaf925285d1ae29dd084', {
+    directory: 'alloy-daemon', binary: '2c21e2c85e1e88c88b3335d39c84ae5414232514aeaaea02457fef54f4c5e3dc' }],
+  [C15_CONFIG, { directory: 'alloy-daemon-c15', binary: '6535f200bc605f313eae5deba4e912d35ff7236f3dd066639d8d52d8eb01e07a' }]
+]);
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 const CVES = ['CVE-2026-41567', 'CVE-2026-42306'];
 const DAEMON = ['github.com/docker/docker/daemon', 'github.com/moby/moby/daemon', 'github.com/moby/moby/v2/daemon'];
@@ -19,8 +24,9 @@ export function validateAlloyProof(review, files, now = new Date()) {
   assert.deepEqual(review.decisions.map(item => item.cve), CVES, 'alloy_review_scope_changed');
   assert.ok(review.decisions.every(item => item.affectedPackage === DAEMON[0]), 'alloy_review_package_changed');
   assert.equal(review.binary.path, 'usr/bin/alloy', 'alloy_review_target_changed');
-  assert.equal(review.imageConfigId, 'sha256:7f5b0079e8c6b13cd2a767cdeb001430bdcf0db400afbaf925285d1ae29dd084', 'alloy_review_image_changed');
-  assert.equal(review.binary.sha256, '2c21e2c85e1e88c88b3335d39c84ae5414232514aeaaea02457fef54f4c5e3dc', 'alloy_review_binary_changed');
+  const identity = PROOFS.get(review.imageConfigId);
+  assert.ok(identity, 'alloy_review_image_changed');
+  assert.equal(review.binary.sha256, identity.binary, 'alloy_review_binary_changed');
   assert.equal(review.module.name, 'github.com/docker/docker', 'alloy_review_module_changed');
   assert.equal(review.module.version, 'v28.5.2+incompatible', 'alloy_review_version_changed');
   assert.equal(review.module.purl, 'pkg:golang/github.com/docker/docker@v28.5.2%2Bincompatible', 'alloy_review_purl_changed');
@@ -86,12 +92,19 @@ export function validateAlloyProof(review, files, now = new Date()) {
   assert.equal(independent.schema, 'otziv-independent-alloy-review-v1', 'alloy_independent_review_schema');
   assert.equal(independent.result, 'PASS_EXACT_ARTIFACT_TWO_CVE_NON_AFFECTED_SCOPE', 'alloy_independent_review_missing');
   assert.equal(independent.checks.length, 56, 'alloy_independent_review_incomplete');
+  assert.equal(independent.binarySha256, review.binary.sha256, 'alloy_independent_review_binary');
+  if (review.imageConfigId === C15_CONFIG) {
+    assert.equal(independent.verificationMode, 'AUTOMATED_SECOND_PARSER', 'alloy_independent_review_mode');
+    checked('independent-verifier.py');
+  }
   checked('independent-review.md');
   return { packageCount: packages.size, importEdges: graph.edges.length, linkedFunctions: functions.functionCount,
     affectedPackagesPresent: 0, affectedFunctionsPresent: 0 };
 }
 
-export async function loadAlloyProof(now = new Date()) {
+export async function loadAlloyProof(now = new Date(), imageConfigId) {
+  const identity = PROOFS.get(imageConfigId) || PROOFS.values().next().value;
+  const proofRoot = new URL('./adjudications/' + identity.directory + '/', import.meta.url);
   const bytes = await readFile(new URL('review.json', proofRoot)), review = json(bytes), files = new Map();
   for (const entry of review.proofFiles) {
     assert.match(entry.path, /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/, 'alloy_proof_path_invalid');
@@ -125,7 +138,7 @@ export async function adjudicateAlloyImage(report, reportBytes, immutableImageId
     imageConfigId: report.Metadata?.ImageID, immutableImageId, rawReportModified: false, decisions: [] };
   if (labelsOf(report)['org.opencontainers.image.source'] !== 'https://github.com/grafana/alloy') return { ...base, status: 'NOT_APPLICABLE' };
   try {
-    const { review, reviewSha256, closure } = await loadAlloyProof();
+    const { review, reviewSha256, closure } = await loadAlloyProof(new Date(), report.Metadata?.ImageID);
     const decisions = matchingAlloyFindings(report, review);
     if (!decisions.length) return { ...base, status: 'NOT_APPLICABLE' };
     const observed = await inspectReviewedGoBinary(report, immutableImageId, scratch, review);

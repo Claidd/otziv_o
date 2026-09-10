@@ -109,6 +109,7 @@ class ScheduledDeliveryTransactionMySqlIntegrationTest {
         ReflectionTestUtils.setField(fresh, "transactionRunner", transactions);
         when(ScheduledDeliveryProtocolTest.dependency(fresh, "slotPlanner", ClientMessageSlotPlanner.class)
                 .nextAllowedAt(any(), nullable(String.class))).thenAnswer(inv -> inv.getArgument(0));
+        ScheduledDeliveryProtocolTest.installRecovery(fresh);
         return fresh;
     }
 
@@ -188,6 +189,30 @@ class ScheduledDeliveryTransactionMySqlIntegrationTest {
         verify(receiptSender, times(2)).recordedOutcome(prepared.operationId());
         verify(receiptSender, never()).deliverWithOperationId(any(), any(), any(), any(), any(), any());
         verifyNoInteractions(sender);
+    }
+
+    @Test void closedStateIsSelectedAndLateConfirmationReleasesItsReservationWithoutReopening() throws Exception {
+        var prepared = prepare();
+        transactions.runInNewTransaction(() -> {
+            var state = states.findByIdForUpdate(stateId).orElseThrow();
+            state.setStatus(ScheduledMessageStateStatus.DONE);
+            state.setLastErrorCode("canceled_by_user");
+        });
+        assertThat(states.findRecoverablePreparedIds(preparedAt.plusMinutes(6), PageRequest.of(0, 20))).contains(stateId);
+        assertThat(states.countReservedDeliveriesSince(preparedAt.toLocalDate().atStartOfDay())).isEqualTo(1);
+        when(sender.recordedOutcome(prepared.operationId())).thenReturn(ClientMessageSendResult.sent("WhatsApp", "confirmed-id"));
+        ReflectionTestUtils.invokeMethod(service, "recoverOrdinaryDeliveries", preparedAt.plusMinutes(6));
+        ReflectionTestUtils.invokeMethod(service, "recoverOrdinaryDeliveries", preparedAt.plusMinutes(12));
+        var confirmed = states.findById(stateId).orElseThrow();
+        assertThat(confirmed.getStatus()).isEqualTo(ScheduledMessageStateStatus.DONE);
+        assertThat(confirmed.getDeliveryStatus()).isEqualTo("SENT");
+        assertThat(confirmed.getLastErrorCode()).isEqualTo("canceled_by_user");
+        assertThat(confirmed.getSentCount()).isEqualTo(1);
+        assertThat(confirmed.getNextAttemptAt()).isNull();
+        assertThat(confirmed.getDeliveryEnvelope()).contains(prepared.operationId());
+        assertThat(states.countReservedDeliveriesSince(preparedAt.toLocalDate().atStartOfDay())).isZero();
+        verify(sender, times(1)).recordedOutcome(prepared.operationId());
+        verifyNoMoreInteractions(sender);
     }
 
     @Test void anotherInstanceCanDisableLiveAfterCommitDespiteWarmOnCacheAndResumeTheSameEnvelope() {

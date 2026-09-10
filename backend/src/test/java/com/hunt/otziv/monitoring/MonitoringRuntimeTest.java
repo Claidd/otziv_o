@@ -39,11 +39,31 @@ class MonitoringRuntimeTest {
     }
     @Test void scrapeDoesNotQueryAndMissingSourceIsUnavailable() {
         var outbox=mock(IntegrationOutboxStatusService.class);var workload=mock(WorkloadShadowHealthService.class);
-        var service=new MonitoringRuntimeService(new SimpleMeterRegistry(),new MockEnvironment(),new RuntimeRequestWindow(),outbox,workload);
+        var service=new MonitoringRuntimeService(new SimpleMeterRegistry(),new MockEnvironment(),new RuntimeRequestWindow(),outbox,workload,
+                java.util.List.of(), mock(com.hunt.otziv.config.settings.api.OutboundMessagePolicy.class));
         assertThat(service.snapshot().queues()).allMatch(value->value.state().equals("UNAVAILABLE"));
         verifyNoInteractions(outbox,workload);
         when(outbox.snapshot()).thenThrow(new IllegalStateException("fixture"));when(workload.snapshot()).thenThrow(new IllegalStateException("fixture"));
         service.sampleProjections();assertThat(service.snapshot().queues()).allMatch(value->value.observedAt()==null);
+    }
+    @Test void durableDeliveryIsSampledOutsideHttpAndFailedInspectionCannotBecomeAnEmptyQueue() {
+        var outbox=mock(IntegrationOutboxStatusService.class);var workload=mock(WorkloadShadowHealthService.class);
+        var queue=mock(com.hunt.otziv.client_messages.api.DeliveryQueueHealth.class);
+        var policy=mock(com.hunt.otziv.config.settings.api.OutboundMessagePolicy.class);
+        when(queue.queueName()).thenReturn("manager_client");
+        when(queue.deliveryQueueHealth()).thenReturn(java.util.List.of(
+                new com.hunt.otziv.client_messages.api.DeliveryQueueHealth.Row(com.hunt.otziv.client_messages.api.DeliveryQueueHealth.State.UNKNOWN, 2, 60, 0),
+                new com.hunt.otziv.client_messages.api.DeliveryQueueHealth.Row(com.hunt.otziv.client_messages.api.DeliveryQueueHealth.State.SENDING, 1, 420, 1)));
+        var service=new MonitoringRuntimeService(new SimpleMeterRegistry(),new MockEnvironment(),new RuntimeRequestWindow(),outbox,workload,java.util.List.of(queue),policy);
+        service.snapshot();verify(queue,never()).deliveryQueueHealth();
+        service.sampleProjections();
+        var sample=service.snapshot().queues().stream().filter(q->q.name().equals("manager_client")).findFirst().orElseThrow();
+        assertThat(sample.state()).isEqualTo("AVAILABLE");assertThat(sample.unknown()).isEqualTo(2);
+        assertThat(sample.backlog()).isEqualTo(3);assertThat(sample.oldestDueSeconds()).isEqualTo(420);
+        assertThat(sample.dispatchEnabled()).isFalse();verify(queue).deliveryQueueHealth();
+        when(queue.deliveryQueueHealth()).thenThrow(new IllegalStateException("fixture"));service.sampleProjections();
+        sample=service.snapshot().queues().stream().filter(q->q.name().equals("manager_client")).findFirst().orElseThrow();
+        assertThat(sample.state()).isEqualTo("UNAVAILABLE");assertThat(sample.observedAt()).isNull();assertThat(sample.backlog()).isNull();
     }
     @Test void monitorSecretIsMandatoryAndMethodOrAmbientBearerCannotBypassItsBoundary() throws Exception {
         assertThatThrownBy(()->new MonitoringSecurityConfiguration.SecretFilter("")).isInstanceOf(IllegalStateException.class);

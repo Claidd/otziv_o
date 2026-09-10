@@ -488,6 +488,9 @@
           }
         </div>
 
+        @if (invoiceDetails()?.delivery; as delivery) {
+          <p role="status">{{ deliveryStatusText(delivery) }}</p>
+        }
         @if (invoice?.paymentRouteSelectedAt || invoice?.sentAt || invoice?.paperInvoiceIssuedAt || invoice?.lastReminderAt || invoice?.nextReminderAt || invoice?.lastError || invoice?.paymentSuccessNotificationError) {
           <div class="invoice-timeline">
             @if (invoice?.paymentRouteSelectedAt && invoice) {

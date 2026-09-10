@@ -9,6 +9,12 @@ public record CommonInvoiceDetailsResponse(
         List<OrderDTOList> orderCards,
         List<CommonInvoiceNextCycleResponse> nextCycleOrders,
         List<CommonInvoicePaymentRefResponse> paymentRefs,
-        String paymentEvidenceToken
+        String paymentEvidenceToken,
+        com.hunt.otziv.client_messages.api.DeliveryOperation delivery
 ) {
+    public CommonInvoiceDetailsResponse(CommonInvoiceSummaryResponse summary, List<CommonInvoiceOrderResponse> orders,
+            List<OrderDTOList> orderCards, List<CommonInvoiceNextCycleResponse> nextCycleOrders,
+            List<CommonInvoicePaymentRefResponse> paymentRefs, String paymentEvidenceToken) {
+        this(summary, orders, orderCards, nextCycleOrders, paymentRefs, paymentEvidenceToken, null);
+    }
 }

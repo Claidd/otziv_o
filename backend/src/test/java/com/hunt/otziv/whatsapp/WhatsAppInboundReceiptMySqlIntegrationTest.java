@@ -43,7 +43,7 @@ class WhatsAppInboundReceiptMySqlIntegrationTest {
         jdbc.execute("DROP TABLE IF EXISTS whatsapp_inbound_reply_outbox");
         jdbc.execute("DROP TABLE IF EXISTS inbound_test_effect");
         jdbc.execute("DROP TABLE IF EXISTS whatsapp_business_send_operations");
-        new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_307__whatsapp_inbound_receipts.sql")).execute(ds);
+        new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_307__whatsapp_inbound_receipts.sql"), new ClassPathResource("db/migration/V1_10_312__whatsapp_reply_queue_claims.sql")).execute(ds);
         jdbc.execute("CREATE TABLE inbound_test_effect(id INT NOT NULL PRIMARY KEY, effect_count INT NOT NULL) ENGINE=InnoDB");
         jdbc.update("INSERT INTO inbound_test_effect VALUES(1,0)");
         jdbc.execute("CREATE TABLE whatsapp_business_send_operations(operation_id VARCHAR(128) PRIMARY KEY, "
@@ -117,25 +117,99 @@ class WhatsAppInboundReceiptMySqlIntegrationTest {
         WhatsAppBusinessOperations operations = proxy(new WhatsAppBusinessOperationService(
                 proxy(new WhatsAppBusinessOperationRepository(jdbc)), new CredentialCipher(properties)));
         var transport = mock(WhatsAppService.class);
-        var outbox = proxy(new WhatsAppInboundReplyOutbox(jdbc, operations, transport, manager));
+        var outbox = proxy(new WhatsAppInboundReplyOutbox(jdbc, operations, transport, manager, () -> true));
         assertThatThrownBy(() -> receiver.execute(reply("one"), () -> {
-            effect(); outbox.enqueue("response", "client", "1@g.us", "reply"); throw new IllegalStateException("rollback");
+            effect(); outbox.enqueue("response", "client", "12345678@g.us", "reply"); throw new IllegalStateException("rollback");
         })).hasMessage("rollback");
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM whatsapp_inbound_reply_outbox", Integer.class)).isZero();
         assertThat(operations.findFrozen("response")).isEmpty();
-        receiver.execute(reply("one"), () -> { effect(); outbox.enqueue("response", "client", "1@g.us", "reply"); });
+        receiver.execute(reply("one"), () -> { effect(); outbox.enqueue("response", "client", "12345678@g.us", "reply"); });
         verifyNoInteractions(transport);
         assertThat(jdbc.queryForObject("SELECT envelope_ciphertext FROM whatsapp_business_send_operations", String.class))
                 .startsWith("enc:v1:").doesNotContain("reply");
-        when(transport.sendMessageToGroup("client", "1@g.us", "reply", "response"))
-                .thenThrow(new IllegalStateException("ACK lost")).thenReturn("ok");
+        when(transport.sendMessageToGroup("client", "12345678@g.us", "reply", "response"))
+                .thenThrow(new IllegalStateException("ACK lost"));
         outbox.dispatchDue();
-        assertThat(jdbc.queryForObject("SELECT state FROM whatsapp_inbound_reply_outbox", String.class)).isEqualTo("PENDING");
+        assertThat(jdbc.queryForObject("SELECT state FROM whatsapp_inbound_reply_outbox", String.class)).isEqualTo("UNKNOWN");
         jdbc.update("UPDATE whatsapp_inbound_reply_outbox SET next_attempt_at=CURRENT_TIMESTAMP(6)");
-        new WhatsAppInboundReplyOutbox(jdbc, operations, transport, manager).dispatchDue();
+        when(transport.getOperationStatus("client", "response")).thenReturn(new com.hunt.otziv.whatsapp.dto.WhatsAppOperationStatus(
+                "response", "SUCCEEDED", "provider-receipt", com.hunt.otziv.whatsapp.dto.WhatsAppOperationEnvelope.groupHash("client","12345678@g.us","reply")));
+        new WhatsAppInboundReplyOutbox(jdbc, operations, transport, manager, () -> true).dispatchDue();
         assertThat(jdbc.queryForObject("SELECT state FROM whatsapp_inbound_reply_outbox", String.class)).isEqualTo("COMPLETE");
-        verify(transport, times(2)).sendMessageToGroup("client", "1@g.us", "reply", "response");
+        verify(transport, times(1)).sendMessageToGroup("client", "12345678@g.us", "reply", "response");
         assertThat(effectCount()).isEqualTo(1);
+    }
+
+    private WhatsAppInboundReplyOutbox replyQueue(WhatsAppService transport, boolean enabled) {
+        var properties = new CredentialEncryptionProperties(); properties.setActiveKeyId("fixture");
+        properties.setActiveKeyBase64(java.util.Base64.getEncoder().encodeToString(new byte[32]));
+        var operations = proxy(new WhatsAppBusinessOperationService(proxy(new WhatsAppBusinessOperationRepository(jdbc)),new CredentialCipher(properties)));
+        return proxy(new WhatsAppInboundReplyOutbox(jdbc,operations,transport,manager,()->enabled));
+    }
+
+    @Test void pausedQueueKeepsTheEnvelopeAndDoesNotSpendRetryBudget() {
+        var transport=mock(WhatsAppService.class);var paused=replyQueue(transport,false);
+        paused.enqueue("paused","client","12345678@g.us","original");
+        paused.dispatchDue();
+        assertThat(jdbc.queryForObject("SELECT attempts FROM whatsapp_inbound_reply_outbox",Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT state FROM whatsapp_inbound_reply_outbox",String.class)).isEqualTo("RETRYABLE");
+        verifyNoInteractions(transport);
+        jdbc.update("UPDATE whatsapp_inbound_reply_outbox SET next_attempt_at=CURRENT_TIMESTAMP(6)");
+        when(transport.sendMessageToGroup(anyString(),anyString(),anyString(),anyString())).thenReturn("ok");
+        replyQueue(transport,true).dispatchDue();
+        verify(transport).sendMessageToGroup("client","12345678@g.us","original","paused");
+    }
+
+    @Test void healthMapsHistoricalQueueStatesWithoutExposingTheEnvelope() {
+        var outbox = replyQueue(mock(WhatsAppService.class), true);
+        assertThat(outbox.deliveryQueueHealth()).isEmpty();
+        outbox.enqueue("health-operation", "client", "12345678@g.us", "private fixture");
+        assertThat(outbox.deliveryQueueHealth()).singleElement().satisfies(row -> {
+            assertThat(row.state()).isEqualTo(com.hunt.otziv.client_messages.api.DeliveryQueueHealth.State.QUEUED);
+            assertThat(row.jobs()).isEqualTo(1);
+        });
+        jdbc.update("UPDATE whatsapp_inbound_reply_outbox SET state='COMPLETE'");
+        assertThat(outbox.deliveryQueueHealth()).isEmpty();
+    }
+
+    @Test void knownAdmissionFailuresHaveABoundedBudgetAndUnknownNeverGetsAnotherDispatch() {
+        var transport=mock(WhatsAppService.class);var outbox=replyQueue(transport,true);
+        outbox.enqueue("bounded","client","12345678@g.us","original");
+        when(transport.sendMessageToGroup(anyString(),anyString(),anyString(),anyString()))
+                .thenReturn("{\"status\":\"error\",\"code\":\"gateway_not_ready\"}");
+        for(int i=0;i<7;i++) {
+            jdbc.update("UPDATE whatsapp_inbound_reply_outbox SET next_attempt_at=CURRENT_TIMESTAMP(6)");
+            outbox.dispatchDue();
+        }
+        verify(transport,times(5)).sendMessageToGroup("client","12345678@g.us","original","bounded");
+        assertThat(jdbc.queryForObject("SELECT state FROM whatsapp_inbound_reply_outbox",String.class)).isEqualTo("FAILED");
+        outbox.enqueue("bounded","another-client","87654321@g.us","changed");
+        outbox.dispatchDue();
+        verifyNoMoreInteractions(transport);
+    }
+
+    @Test void aLateWorkerCannotOverwriteTheNewOwnersPositiveReceipt() throws Exception {
+        var transport=mock(WhatsAppService.class);var outbox=replyQueue(transport,true);
+        outbox.enqueue("fenced","client","12345678@g.us","original");
+        var entered=new CountDownLatch(1);var release=new CountDownLatch(1);
+        when(transport.sendMessageToGroup(anyString(),anyString(),anyString(),anyString())).thenAnswer(call->{
+            assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
+            entered.countDown();await(release);return "unknown";
+        });
+        when(transport.getOperationStatus("client","fenced")).thenReturn(new com.hunt.otziv.whatsapp.dto.WhatsAppOperationStatus(
+                "fenced","SUCCEEDED","provider-receipt",com.hunt.otziv.whatsapp.dto.WhatsAppOperationEnvelope.groupHash("client","12345678@g.us","original")));
+        try(var pool=Executors.newSingleThreadExecutor()) {
+            var first=pool.submit(outbox::dispatchDue);
+            try {
+                assertThat(entered.await(10,TimeUnit.SECONDS)).isTrue();
+                jdbc.update("UPDATE whatsapp_inbound_reply_outbox SET lease_until=TIMESTAMPADD(SECOND,-1,CURRENT_TIMESTAMP(6))");
+                replyQueue(transport,true).dispatchDue();
+            } finally { release.countDown(); }
+            first.get(10,TimeUnit.SECONDS);
+        }
+        assertThat(jdbc.queryForObject("SELECT state FROM whatsapp_inbound_reply_outbox",String.class)).isEqualTo("COMPLETE");
+        verify(transport,times(1)).sendMessageToGroup("client","12345678@g.us","original","fenced");
+        verify(transport).getOperationStatus("client","fenced");
     }
 
     @Test void identityIncludesClientAndChatAndReceiptHasNoExpiry() {

@@ -33,7 +33,7 @@ class CommonInvoiceDetailsAssemblerBatchTest {
         memberships = mock(CommonInvoiceOrderRepository.class);
         requests = mock(NextOrderRequests.class);
         CommonInvoiceSettlementService settlement = mock(CommonInvoiceSettlementService.class);
-        assembler = new CommonInvoiceDetailsAssembler(null, settlement, memberships, null,
+        assembler = new CommonInvoiceDetailsAssembler(null, org.mockito.Mockito.mock(CommonInvoiceMessageQueue.class), settlement, memberships, null,
                 null, requests, null, null, null);
     }
 

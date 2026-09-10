@@ -1,12 +1,12 @@
 import {
   billingPaymentEnums, billingPaymentSchemas, billingPaymentOptionalFields,
-  type CommonBillingAccountResponse, type PublicPaymentLinkResponse
+  type CommonBillingAccountResponse, type PublicPaymentLinkResponse, type DeliveryOperation
 } from './billing-payments.generated';
 import { ClientContractError, validateWire } from './wire-schema';
 
 export { ClientContractError } from './wire-schema';
 export { BILLING_PAYMENT_CONTRACT_VERSION } from './billing-payments.generated';
-export type { CommonBillingCompanyResponse, CommonBillingAccountResponse, CommonInvoiceSummaryResponse, InvoicePaymentMode } from './billing-payments.generated';
+export type { DeliveryOperation, CommonBillingCompanyResponse, CommonBillingAccountResponse, CommonInvoiceSummaryResponse, InvoicePaymentMode } from './billing-payments.generated';
 export type PublicPaymentLink = PublicPaymentLinkResponse;
 
 function known(value: string, values: readonly string[]): boolean { return values.includes(value); }
@@ -63,3 +63,5 @@ export function commonInvoiceDeliveryWarning(lastError: string | null | undefine
   const detail = lastError?.trim();
   return detail ? `Отправка не подтверждена. ${detail}` : null;
 }
+
+export { deliveryOperationMessage, deliveryOperationPending, DeliveryStatusWatcher } from './delivery-operations';

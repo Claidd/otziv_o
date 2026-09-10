@@ -1,0 +1,65 @@
+{
+  "schema": "otziv-postgres-keycloak-patch-acceptance-v1",
+  "result": "PASS",
+  "scope": "EXACT_PUBLISHED_PATCH_COMPATIBILITY_ON_RETAINED_SOURCE_DUMP",
+  "productionAccess": false,
+  "vpsCutoverExecuted": false,
+  "parentAcceptance": {
+    "path": "infrastructure/keycloak/security-generation/c14-migration-fix/proofs/publication-acceptance.json",
+    "sha256": "b4f1ce533dd116b4546d8fa6cd6e27731e357865d08cb100e9f33332511b1dfd"
+  },
+  "published": {
+    "postgresReference": "ghcr.io/claidd/otziv-security@sha256:07834abbfd80ed7183afa9096db99afc4d93b99fd51aae726e550d07ade65dbf",
+    "postgresConfigId": "sha256:d257683e1d6febdfb869b77c60683bc598b272788d60e65893a109adaf0a2db4",
+    "keycloakReference": "ghcr.io/claidd/otziv-security@sha256:bd5687843becb0cdb232c2b864cc3786fafb8fc91f30f531fa2db7fc4d1fc59d",
+    "keycloakConfigId": "sha256:34e7587586d4d0a8d8330845f43cc58db9196d4dc6c4f120ac70519541453e5e"
+  },
+  "sourceDumpSha256": "0f7d9a89469ff7042e7603052b5de36a8e1a6b374e2e4f9dce44e3657e0d33df",
+  "completedAt": "2026-09-10T18:18:04.641654+00:00",
+  "evidence": {
+    "keycloakPublication": {
+      "path": "infrastructure/runtime-security/proofs/c15-keycloak-published/publication/publication.json",
+      "sha256": "96cf33a0826fa91185846f098b97de00fdd466cab88035aa27e700937f6ccb98"
+    },
+    "keycloakAnonymous": {
+      "path": "infrastructure/runtime-security/proofs/c15-keycloak-published/anonymous/anonymous-download.json",
+      "sha256": "63e2c25c83705a083ae478f0eb7e46e7a0fb42f759ad8415351fd36b3c32d8b9"
+    },
+    "actualMigration": {
+      "path": "infrastructure/keycloak/security-generation/c15-netty/proofs/actual-source-sha256-bd5687843becb0cdb.json",
+      "sha256": "eb3696cf4f7096ac6eb49eeb405e653110f98f8717d21399c81898164c5e968e"
+    },
+    "issuerProtocol": {
+      "path": "infrastructure/keycloak/security-generation/c15-netty/proofs/issuer-protocol-sha256-bd5687843becb0cdb.json",
+      "sha256": "e62051219cb126e3291fe2b6497306597ca2c36c04686f7f626d14d6cc3ae305"
+    },
+    "executedReplay": {
+      "path": "infrastructure/keycloak/security-generation/c15-netty/replay-actual.py",
+      "sha256": "6d0b5c60a8b4852573d987dee47dba9db00c18b686892b546c7e50992d64862d"
+    },
+    "executedReplayHelper": {
+      "path": "infrastructure/keycloak/security-generation/c14-migration-fix/private-runtime.py",
+      "sha256": "f8bee667af239ac739f7912634d1b657ae29c7eecb9f71b73c31b78be2f1189b"
+    },
+    "issuerHarness": {
+      "path": "infrastructure/keycloak/security-generation/container-proof.mjs",
+      "sha256": "c461daf8875f06e6c1ebf05858e9eebd80af34fe09939ca04830d595cb07b5e4"
+    },
+    "runtimePatch": {
+      "path": "infrastructure/keycloak/security-generation/c15-netty/proofs/patch-runtime.json",
+      "sha256": "b667d698481f80656f38533887abe4f61c6ddd6e15390413c349b59374fe6083"
+    },
+    "recipe": {
+      "path": "infrastructure/keycloak/security-generation/c15-netty/Dockerfile",
+      "sha256": "2e5c1a3196ff0106a5eece29b92ed37e9366131ce2bd374e8df3a4e6c5e2da9a"
+    },
+    "rawSecurityScan": {
+      "path": "infrastructure/runtime-security/proofs/c15-keycloak-published/publication/vulnerabilities.json",
+      "sha256": "5809154ee63cef6f536233681f2aa7d7cba5a0c60372024bd1cd9be12afc9846"
+    }
+  },
+  "limitations": [
+    "Retained pre-upgrade source dump; no claim that current production rows equal this snapshot.",
+    "Fresh production database smoke, backup and release preflight remain required before deployment."
+  ]
+}

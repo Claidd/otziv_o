@@ -604,7 +604,13 @@
         "terminalKey" : "contract-example",
         "reason" : "contract-example"
       } ],
-      "paymentEvidenceToken" : "contract-example"
+      "paymentEvidenceToken" : "contract-example",
+      "delivery" : {
+        "operationId" : "contract-example",
+        "status" : "contract-example",
+        "attempts" : 2,
+        "errorCode" : "contract-example"
+      }
     },
     "CommonInvoiceNextCycleResponseOutput" : {
       "sourceOrderId" : 2,
@@ -1336,6 +1342,12 @@
       "status" : "contract-example",
       "reason" : "contract-example"
     },
+    "DeliveryOperationOutput" : {
+      "operationId" : "contract-example",
+      "status" : "contract-example",
+      "attempts" : 2,
+      "errorCode" : "contract-example"
+    },
     "FilialDeletionPreviewOutput" : {
       "filialId" : 2,
       "orderCount" : 2,
@@ -1723,7 +1735,13 @@
       "firstObservedAt" : "2026-09-07T08:00:00",
       "targetDeadlineAt" : "2026-09-07T08:00:00",
       "hardDeadlineAt" : "2026-09-07T08:00:00",
-      "slaState" : "contract-example"
+      "slaState" : "contract-example",
+      "delivery" : {
+        "operationId" : "contract-example",
+        "status" : "contract-example",
+        "attempts" : 2,
+        "errorCode" : "contract-example"
+      }
     },
     "ManagerControlEventResponseOutput" : {
       "eventId" : 2,
@@ -1786,7 +1804,13 @@
         "firstObservedAt" : "2026-09-07T08:00:00",
         "targetDeadlineAt" : "2026-09-07T08:00:00",
         "hardDeadlineAt" : "2026-09-07T08:00:00",
-        "slaState" : "contract-example"
+        "slaState" : "contract-example",
+        "delivery" : {
+          "operationId" : "contract-example",
+          "status" : "contract-example",
+          "attempts" : 2,
+          "errorCode" : "contract-example"
+        }
       } ],
       "hiddenExampleCount" : 2,
       "createdAt" : "2026-09-07T08:00:00",
@@ -1875,7 +1899,13 @@
           "firstObservedAt" : "2026-09-07T08:00:00",
           "targetDeadlineAt" : "2026-09-07T08:00:00",
           "hardDeadlineAt" : "2026-09-07T08:00:00",
-          "slaState" : "contract-example"
+          "slaState" : "contract-example",
+          "delivery" : {
+            "operationId" : "contract-example",
+            "status" : "contract-example",
+            "attempts" : 2,
+            "errorCode" : "contract-example"
+          }
         } ],
         "hiddenExampleCount" : 2,
         "createdAt" : "2026-09-07T08:00:00",

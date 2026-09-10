@@ -63,7 +63,15 @@ class ScheduledDeliveryProtocolTest {
                 .map(type -> mock(type)).toArray());
         when(dependency(instance, "appSettingService", AppSettingService.class)
                 .getBooleanFreshFailClosed(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(true);
+        installRecovery(instance);
         return instance;
+    }
+
+    static void installRecovery(ScheduledClientMessageService instance) {
+        ReflectionTestUtils.setField(instance, "deliveryRecovery", new ScheduledDeliveryRecovery(
+                dependency(instance, "stateRepository", ScheduledClientMessageStateRepository.class),
+                dependency(instance, "transactionRunner", ClientMessageTransactionRunner.class),
+                dependency(instance, "messageSender", ClientChatMessageSender.class)));
     }
 
     static <T> T dependency(Object service, String name, Class<T> type) {
@@ -204,6 +212,60 @@ class ScheduledDeliveryProtocolTest {
         assertThat(state.getDeliveryEnvelope()).isNull();
         verify(sender, times(1)).recordedOutcome(prepared.operationId());
         verify(sender, never()).deliverWithOperationId(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test void lateReceiptForClosedTaskIsRecordedOnceWithoutBusinessEffectsOrResend() {
+        state.setScenario(ClientMessageScenario.REVIEW_RECOVERY_NOTICE);
+        var prepared = ReflectionTestUtils.<ScheduledClientMessageService.PreparedScheduledDelivery>invokeMethod(service,
+                "persistScheduledDelivery", state, company, manager, "recovered", null, null,
+                "REVIEW_RECOVERY_NOTICE", 52L, null, null, NOW);
+        state.setStatus(ScheduledMessageStateStatus.DONE);
+        state.setLastErrorCode("canceled_by_user");
+        String envelope = state.getDeliveryEnvelope();
+        when(states.findRecoverablePreparedIds(any(), any())).thenReturn(List.of(71L));
+        when(sender.recordedOutcome(prepared.operationId())).thenAnswer(inv -> {
+            assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
+            return ClientMessageSendResult.sent("WhatsApp", "confirmed-id");
+        });
+        ReflectionTestUtils.invokeMethod(service, "recoverOrdinaryDeliveries", NOW.plusMinutes(6));
+        ReflectionTestUtils.invokeMethod(service, "recoverOrdinaryDeliveries", NOW.plusMinutes(12));
+        assertThat(state.getDeliveryStatus()).isEqualTo("SENT");
+        assertThat(state.getStatus()).isEqualTo(ScheduledMessageStateStatus.DONE);
+        assertThat(state.getLastErrorCode()).isEqualTo("canceled_by_user");
+        assertThat(state.getNextAttemptAt()).isNull();
+        assertThat(state.getDeliveryEnvelope()).isEqualTo(envelope);
+        assertThat(state.getSentCount()).isEqualTo(1);
+        verify(sender, times(1)).recordedOutcome(prepared.operationId());
+        verifyNoMoreInteractions(sender);
+        verifyNoInteractions(dependency(service, "reviewRecoveryTaskService", ReviewRecoveryTaskService.class));
+        verifyNoInteractions(dependency(service, "whatsAppAuthAlertService", com.hunt.otziv.whatsapp.service.WhatsAppAuthAlertService.class));
+    }
+
+    @Test void closedTaskWithNoReceiptOrProvenUnsentNeverReopens() {
+        var prepared = prepare("message", null);
+        state.setStatus(ScheduledMessageStateStatus.DONE);
+        state.setLastErrorCode("canceled_by_user");
+        when(states.findRecoverablePreparedIds(any(), any())).thenReturn(List.of(71L));
+        when(sender.recordedOutcome(prepared.operationId())).thenReturn(ClientMessageOperationFence.unknown(),
+                ClientMessageSendResult.failed("gateway_not_ready", "before dispatch"));
+        ReflectionTestUtils.invokeMethod(service, "recoverOrdinaryDeliveries", NOW.plusMinutes(6));
+        ReflectionTestUtils.invokeMethod(service, "recoverOrdinaryDeliveries", NOW.plusMinutes(12));
+        assertThat(state.getDeliveryStatus()).isEqualTo("UNKNOWN");
+        assertThat(state.getStatus()).isEqualTo(ScheduledMessageStateStatus.DONE);
+        assertThat(state.getLastErrorCode()).isEqualTo("canceled_by_user");
+        assertThat(state.getSentCount()).isZero();
+        assertThat(state.getNextAttemptAt()).isNull();
+        verify(sender, times(2)).recordedOutcome(prepared.operationId());
+        verifyNoMoreInteractions(sender);
+    }
+
+    @Test void aNewerPreparationAfterCandidateSelectionCannotBeReclassifiedUnknown() {
+        prepare("message", null);
+        when(states.findRecoverablePreparedIds(any(), any())).thenReturn(List.of(71L));
+        state.setDeliveryPreparedAt(NOW.plusMinutes(6));
+        ReflectionTestUtils.invokeMethod(service, "recoverOrdinaryDeliveries", NOW.plusMinutes(6));
+        assertThat(state.getDeliveryStatus()).isEqualTo("PREPARED");
+        verifyNoInteractions(sender);
     }
 
     @Test void corruptSnapshotRetainsUnknownBackoffAndNeverCallsProvider() {

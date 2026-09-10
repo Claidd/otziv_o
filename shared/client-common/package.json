@@ -9,7 +9,8 @@
     "./manual-payment-task-visibility": "./src/manual-payment-task-visibility.ts",
     "./billing-payments": "./src/billing-payments.ts",
     "./client-api": "./src/client-api.ts",
-    "./public-payments": "./src/public-payments.ts"
+    "./public-payments": "./src/public-payments.ts",
+    "./delivery-operations": "./src/delivery-operations.ts"
   },
   "files": [
     "src"

@@ -23,3 +23,7 @@ com.hunt.otziv.integration.outbox.service.IntegrationOutboxStatusService
 com.hunt.otziv.integration.outbox.dto.IntegrationOutboxStatusResponse
 com.hunt.otziv.workload_shadow.health.service.WorkloadShadowHealthService
 com.hunt.otziv.workload_shadow.health.dto.WorkloadShadowHealthSnapshot
+com.hunt.otziv.config.settings.api.OutboundMessagePolicy
+com.hunt.otziv.config.settings.api.PublicationProgressSettings
+com.hunt.otziv.config.api.DeliveryResponseCompatibility
+com.hunt.otziv.u_users.api.DeferredUserAuthority

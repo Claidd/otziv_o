@@ -1,7 +1,7 @@
 import { requestJson } from './watch.mjs';
 import { latestVerified, records } from './export-signals.mjs';
 
-const QUEUES = ['lead','performer','session_revocation','integration_outbox','workload'];
+const QUEUES = ['lead','performer','session_revocation','integration_outbox','workload','common_invoice','manager_client','whatsapp_reply'];
 const tokenName = name => typeof name === 'string' && /^[A-Z][A-Z0-9_]{2,79}$/.test(name);
 export function validateCollector(config, env = process.env) {
   if (config.schema !== 'otziv-signals-publisher-v1') throw new Error('publisher_schema_invalid');

@@ -1,0 +1,123 @@
+[
+  {
+    "run": "34503395600",
+    "artifactId": 10162925402,
+    "artifactName": "anonymous-download-keycloak-attempt-1",
+    "archiveSha256": "ece5293477676d8632d4ce3b12e571d75cced1f49ef0fecdd101148467e7c465",
+    "files": [
+      {
+        "file": "anonymous-download.json",
+        "sha256": "63e2c25c83705a083ae478f0eb7e46e7a0fb42f759ad8415351fd36b3c32d8b9",
+        "bytes": 3125
+      },
+      {
+        "file": "anonymous-image-inspect.json",
+        "sha256": "35a212262d0efeaecbf886ba6faab25c8dbed8b198e7e9fd0d955ebf485925e9",
+        "bytes": 9049
+      },
+      {
+        "file": "docker-client-isolation.json",
+        "sha256": "43059db9428713e407d8c2a7b353bcbc8716be2df54dc5e7a1d3798b413f8271",
+        "bytes": 128
+      },
+      {
+        "file": "registry-amd64-config.json",
+        "sha256": "34e7587586d4d0a8d8330845f43cc58db9196d4dc6c4f120ac70519541453e5e",
+        "bytes": 17188
+      },
+      {
+        "file": "registry-amd64-manifest.json",
+        "sha256": "3be6b3a31f5567b1289f9d808e84a22424bf095b01297eabcf58b66755c7d4ab",
+        "bytes": 6583
+      },
+      {
+        "file": "registry-attestation-0-payload-0.json",
+        "sha256": "0159bd9d5b8fcc250fa205ba77826ace299f2b2c778cb9d36150cb18c8d08cb6",
+        "bytes": 5928324
+      },
+      {
+        "file": "registry-attestation-0-payload-1.json",
+        "sha256": "212fd5e720c7ed61498e9ad4f4b60a6c8cb675f4865861b5486ce31a229819aa",
+        "bytes": 28929
+      },
+      {
+        "file": "registry-attestation-0.json",
+        "sha256": "d3778265b8c95bed88f4c37afa56d1477d8bb476773bb8fd597df42598a84166",
+        "bytes": 1112
+      },
+      {
+        "file": "registry-index.json",
+        "sha256": "bd5687843becb0cdb232c2b864cc3786fafb8fc91f30f531fa2db7fc4d1fc59d",
+        "bytes": 857
+      }
+    ]
+  },
+  {
+    "run": "34503395600",
+    "artifactId": 10162903597,
+    "artifactName": "reviewed-publication-keycloak-attempt-1",
+    "archiveSha256": "17dbee896541fd299a19857960bcd7bee28e522154649a897e47821585cd8f8b",
+    "files": [
+      {
+        "file": "known-runtime-dependencies.json",
+        "sha256": "98a9fa4cf776625894761b67357a3a0a7171b14805cc7be1d1357a999e442112",
+        "bytes": 5262
+      },
+      {
+        "file": "publication.json",
+        "sha256": "96cf33a0826fa91185846f098b97de00fdd466cab88035aa27e700937f6ccb98",
+        "bytes": 9007
+      },
+      {
+        "file": "build-metadata.json",
+        "sha256": "a4c572f5c23e9fd817fa59ad4c698d0935f3a27402e8ceb02777405985a3bd17",
+        "bytes": 12189
+      },
+      {
+        "file": "registry-amd64-config.json",
+        "sha256": "34e7587586d4d0a8d8330845f43cc58db9196d4dc6c4f120ac70519541453e5e",
+        "bytes": 17188
+      },
+      {
+        "file": "registry-amd64-manifest.json",
+        "sha256": "3be6b3a31f5567b1289f9d808e84a22424bf095b01297eabcf58b66755c7d4ab",
+        "bytes": 6583
+      },
+      {
+        "file": "registry-attestation-0-payload-0.json",
+        "sha256": "0159bd9d5b8fcc250fa205ba77826ace299f2b2c778cb9d36150cb18c8d08cb6",
+        "bytes": 5928324
+      },
+      {
+        "file": "registry-attestation-0-payload-1.json",
+        "sha256": "212fd5e720c7ed61498e9ad4f4b60a6c8cb675f4865861b5486ce31a229819aa",
+        "bytes": 28929
+      },
+      {
+        "file": "registry-attestation-0.json",
+        "sha256": "d3778265b8c95bed88f4c37afa56d1477d8bb476773bb8fd597df42598a84166",
+        "bytes": 1112
+      },
+      {
+        "file": "registry-index.json",
+        "sha256": "bd5687843becb0cdb232c2b864cc3786fafb8fc91f30f531fa2db7fc4d1fc59d",
+        "bytes": 857
+      },
+      {
+        "file": "vulnerabilities.adjudications.json",
+        "sha256": "2ec5b63155e804429a7f7ad55055980b51b287af890bc7e9eb079f5bab8e0274",
+        "bytes": 838
+      },
+      {
+        "file": "vulnerabilities.json",
+        "sha256": "5809154ee63cef6f536233681f2aa7d7cba5a0c60372024bd1cd9be12afc9846",
+        "bytes": 986513
+      },
+      {
+        "file": "vulnerabilities.triage.json",
+        "sha256": "0abd747b91d4bd19cad2d5e5ed3fff44e2c62fd2c7fbeaf9e570d710436dacd5",
+        "bytes": 365
+      }
+    ]
+  }
+]

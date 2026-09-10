@@ -86,6 +86,7 @@ export interface ManagerControlItemDetail {
 }
 
 export interface ManagerControlConcreteItem {
+  delivery?: import('@otziv/client-common/delivery-operations').DeliveryOperation | null;
   controlEntityId?: number | null;
   type: 'ORDER' | 'RISK' | string;
   entityId?: number | null;
@@ -533,17 +534,24 @@ export class ManagerControlApi {
     );
   }
 
+  deliveryOperation(concreteItemId: number, operationId: string): Observable<import('@otziv/client-common/delivery-operations').DeliveryOperation> {
+    return this.http.get<import('@otziv/client-common/delivery-operations').DeliveryOperation>(
+      `${appEnvironment.apiBaseUrl}/api/admin/manager-control/concrete-items/${concreteItemId}/delivery-operations/${encodeURIComponent(operationId)}`);
+  }
+
   sendClientMessage(concreteItemId: number): Observable<ManagerControlConcreteItem> {
     return this.http.post<ManagerControlConcreteItem>(
       `${appEnvironment.apiBaseUrl}/api/admin/manager-control/concrete-items/${concreteItemId}/send-client-message`,
-      {}
+      {},
+      { headers: { "X-Otziv-Delivery-Protocol": "queued-v1" } }
     );
   }
 
   replyToClientMessage(concreteItemId: number, payload: ManagerControlClientReplyPayload): Observable<ManagerControlConcreteItem> {
     return this.http.post<ManagerControlConcreteItem>(
       `${appEnvironment.apiBaseUrl}/api/admin/manager-control/concrete-items/${concreteItemId}/reply`,
-      payload
+      payload,
+      { headers: { "X-Otziv-Delivery-Protocol": "queued-v1" } }
     );
   }
 

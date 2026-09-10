@@ -260,14 +260,7 @@ public class CommonBillingService {
     }
 
     public CommonInvoiceDetailsResponse sendManualReminder(Long invoiceId) {
-        PreparedCommonInvoiceMessage prepared = writeTransaction(() -> preparePaymentMessage(invoiceId, true, true, false, null, true));
-        if (prepared != null) {
-            ClientMessageSendResult result = sendPreparedPaymentMessage(prepared);
-            writeTransaction(() -> {
-                finishPaymentMessageSend(prepared, result);
-                return null;
-            });
-        }
+        invoiceDelivery.queuePaymentMessage(invoiceId, true, true, false, null, false, true);
         return writeTransaction(() -> invoice(invoiceId));
     }
 

@@ -13,7 +13,7 @@ const settle = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(
 const details = (status: string, lastError: string | null = null) => ({
   ...fixtures.responses.CommonInvoiceDetailsResponseOutput,
   summary: { ...fixtures.responses.CommonInvoiceSummaryResponseOutput, id: 41, status, lastError, totalOrders: 1, readyOrders: 1, paidOrders: 0, paidKopecks: 0 },
-  orders: [], orderCards: []
+  orders: [], orderCards: [], delivery: null
 }) as CommonInvoiceDetailsResponse;
 
 describe('invoice delivery outcome in the mobile detail page', () => {

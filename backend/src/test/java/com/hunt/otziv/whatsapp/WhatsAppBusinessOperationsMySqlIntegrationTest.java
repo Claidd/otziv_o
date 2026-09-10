@@ -44,9 +44,9 @@ class WhatsAppBusinessOperationsMySqlIntegrationTest {
 
     @BeforeEach void setup() {
         var ds=new DriverManagerDataSource(MYSQL.getJdbcUrl(),MYSQL.getUsername(),MYSQL.getPassword());jdbc=new JdbcTemplate(ds);
-        for(String table:List.of("whatsapp_manual_send_operations","whatsapp_business_send_operations","performer_legacy_maintenance_rows","performer_legacy_maintenance_runs","leads"))jdbc.execute("DROP TABLE IF EXISTS "+table);
+        for(String table:List.of("whatsapp_inbound_receipts","whatsapp_inbound_reply_outbox","whatsapp_manual_send_operations","whatsapp_business_send_operations","performer_legacy_maintenance_rows","performer_legacy_maintenance_runs","leads"))jdbc.execute("DROP TABLE IF EXISTS "+table);
         jdbc.execute("CREATE TABLE leads(id BIGINT PRIMARY KEY)");
-        new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_302__maintenance_checkpoints_and_legacy_send_operations.sql")).execute(ds);
+        new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_302__maintenance_checkpoints_and_legacy_send_operations.sql"), new ClassPathResource("db/migration/V1_10_307__whatsapp_inbound_receipts.sql"), new ClassPathResource("db/migration/V1_10_312__whatsapp_reply_queue_claims.sql")).execute(ds);
         manager=new DataSourceTransactionManager(ds);tx=new TransactionTemplate(manager);
         CredentialEncryptionProperties encryption=new CredentialEncryptionProperties();encryption.setActiveKeyId("fixture");encryption.setActiveKeyBase64(Base64.getEncoder().encodeToString(new byte[32]));
         cipher=new CredentialCipher(encryption);operations=createOperations(cipher);
@@ -116,7 +116,8 @@ class WhatsAppBusinessOperationsMySqlIntegrationTest {
 
     @Test void leadPrepareRollsBackWithBusinessMutationAndReplayKeepsFrozenEnvelopeOutsideTransaction() {
         var transport=mock(com.hunt.otziv.whatsapp.service.service.WhatsAppService.class);
-        var notifier=proxy(new com.hunt.otziv.l_lead.service.LeadWorkNotificationService(operations,transport,manager));
+        var outbox=proxy(new com.hunt.otziv.whatsapp.service.WhatsAppInboundReplyOutbox(jdbc,operations,transport,manager,()->true));
+        var notifier=proxy(new com.hunt.otziv.l_lead.service.LeadWorkNotificationService(outbox));
         var lead=new com.hunt.otziv.l_lead.model.Lead();lead.setId(71L);lead.setWhatsappWorkGeneration(1);
         var owner=new com.hunt.otziv.u_users.model.Manager();owner.setId(3L);owner.setClientId("client1");lead.setManager(owner);
         lead.setTelephoneLead("79990000000");lead.setCityLead("Город");lead.setCommentsLead("Original");
@@ -129,15 +130,19 @@ class WhatsAppBusinessOperationsMySqlIntegrationTest {
             return "unknown";
         });
         tx.executeWithoutResult(status->notifier.prepare(lead));
+        verifyNoInteractions(transport);
+        outbox.dispatchDue();
         lead.setCommentsLead("New template");owner.setClientId("client2");
         tx.executeWithoutResult(status->notifier.prepare(lead));
-        verify(transport,times(2)).sendMessageToGroup(eq("client1"),eq("120363399937937645@g.us"),contains("Original"),eq("lead-work:71:1"));
+        outbox.dispatchDue();
+        verify(transport,times(1)).sendMessageToGroup(eq("client1"),eq("120363399937937645@g.us"),contains("Original"),eq("lead-work:71:1"));
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM whatsapp_business_send_operations",Integer.class)).isEqualTo(1);
     }
 
     @Test void legacyLeadGenerationDoesNotInventHistoricalNonDelivery() {
         var transport=mock(com.hunt.otziv.whatsapp.service.service.WhatsAppService.class);
-        var notifier=proxy(new com.hunt.otziv.l_lead.service.LeadWorkNotificationService(operations,transport,manager));
+        var outbox=proxy(new com.hunt.otziv.whatsapp.service.WhatsAppInboundReplyOutbox(jdbc,operations,transport,manager,()->true));
+        var notifier=proxy(new com.hunt.otziv.l_lead.service.LeadWorkNotificationService(outbox));
         var lead=new com.hunt.otziv.l_lead.model.Lead();lead.setId(71L);
         tx.executeWithoutResult(status->notifier.prepare(lead));
         verifyNoInteractions(transport);assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM whatsapp_business_send_operations",Integer.class)).isZero();
@@ -145,7 +150,8 @@ class WhatsAppBusinessOperationsMySqlIntegrationTest {
 
     @Test void realManualControllerRetainsOperationAfterUnknownAndRejectsChangedFormOrActor() {
         var transport=mock(com.hunt.otziv.whatsapp.service.service.WhatsAppService.class);
-        var controller=new com.hunt.otziv.whatsapp.controller.SendMessageController(transport,operations);
+        var outbox=proxy(new com.hunt.otziv.whatsapp.service.WhatsAppInboundReplyOutbox(jdbc,operations,transport,manager,()->true));
+        var controller=new com.hunt.otziv.whatsapp.controller.SendMessageController(outbox,operations);
         var form=new java.util.HashMap<String,Object>();controller.showForm(form,()->"operator-A");
         String id=(String)form.get("operationId");
         when(transport.sendMessage(anyString(),anyString(),anyString(),anyString())).thenReturn("unknown");
@@ -155,9 +161,26 @@ class WhatsAppBusinessOperationsMySqlIntegrationTest {
         controller.sendMessage("client1","79990000000","changed",id,()->"operator-A",model);
         assertThat(model.get("operationId")).isEqualTo(id);assertThat(model.get("result").toString()).contains("operation_invalid");
         controller.sendMessage("client1","79990000000","original",id,()->"operator-B",model);
-        verify(transport,times(2)).sendMessage("client1","79990000000","original",id);
+        verifyNoInteractions(transport);
+        outbox.dispatchDue();
+        verify(transport,times(1)).sendMessage("client1","79990000000","original",id);
+        jdbc.update("UPDATE whatsapp_inbound_reply_outbox SET next_attempt_at=CURRENT_TIMESTAMP(6)");
+        outbox.dispatchDue();
+        verify(transport,times(1)).sendMessage("client1","79990000000","original",id);
+        verify(transport).getOperationStatus("client1",id);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM whatsapp_business_send_operations",Integer.class)).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM whatsapp_manual_send_operations",Integer.class)).isEqualTo(1);
+    }
+
+    @Test void anOldSynchronousEnvelopeCanOnlyBeReconciledWhenAddedToTheQueue() {
+        var transport=mock(com.hunt.otziv.whatsapp.service.service.WhatsAppService.class);
+        var queue=proxy(new com.hunt.otziv.whatsapp.service.WhatsAppInboundReplyOutbox(jdbc,operations,transport,manager,()->true));
+        operations.freeze("historical","client1","send-group","12345678","original");
+        queue.enqueue("historical","client1","12345678","original");
+        queue.dispatchDue();
+        assertThat(jdbc.queryForObject("SELECT state FROM whatsapp_inbound_reply_outbox",String.class)).isEqualTo("UNKNOWN");
+        verify(transport).getOperationStatus("client1","historical");
+        verifyNoMoreInteractions(transport);
     }
 
     @Test void optionalLookupValidatesStoredEnvelopeIntegrityRatherThanReturningUntrustedCiphertext() {

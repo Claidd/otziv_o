@@ -22,7 +22,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 @RequestMapping("/whatsapp")
 public class SendMessageController {
-    private final WhatsAppService whatsAppService;
+    private final com.hunt.otziv.whatsapp.service.WhatsAppInboundReplyOutbox queue;
     private final com.hunt.otziv.whatsapp.api.WhatsAppBusinessOperations operations;
 
 
@@ -43,10 +43,9 @@ public class SendMessageController {
     ) {
         String result;
         try {
-            operations.requireManualOwner(operationId, principal.getName());
-            var frozen=operations.freeze(operationId,clientId,"send",phone,message);
-            operations.requireMatches(operationId,clientId,"send",phone,message);
-            result=whatsAppService.sendMessage(frozen.clientId(),frozen.destination(),frozen.message(),frozen.operationId());
+            var delivery=queue.enqueueManual(operationId,principal.getName(),clientId,phone,message);
+            model.addAttribute("delivery",delivery);
+            result=deliveryMessage(delivery.status());
             model.addAttribute("operationId",operationId);
         } catch(IllegalArgumentException error) {
             result=com.hunt.otziv.whatsapp.dto.WhatsAppSendResult.error("operation_invalid", "Откройте новую форму отправки; содержимое существующей операции менять нельзя").toJson();
@@ -54,6 +53,29 @@ public class SendMessageController {
         }
         model.addAttribute("result", result);
         return "lead/layouts/whatsapp";
+    }
+
+    @GetMapping("/operations/{operationId}")
+    @org.springframework.web.bind.annotation.ResponseBody
+    public com.hunt.otziv.client_messages.api.DeliveryOperation deliveryStatus(
+            @org.springframework.web.bind.annotation.PathVariable String operationId, java.security.Principal principal) {
+        try {
+            var status=queue.manualStatus(operationId,principal.getName());
+            if(status==null) throw new IllegalArgumentException("operation_missing");
+            return status;
+        } catch(IllegalArgumentException missing) {
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND);
+        }
+    }
+
+    private static String deliveryMessage(String state) {
+        return switch(state) {
+            case "SENT" -> "Отправка подтверждена.";
+            case "UNKNOWN" -> "Исход отправки уточняется. Повторная рассылка заблокирована.";
+            case "FAILED" -> "Сообщение не отправлено. Требуется проверка.";
+            case "SENDING" -> "Сообщение отправляется. Можно продолжать работу.";
+            default -> "Сообщение сохранено в очереди.";
+        };
     }
 
     @GetMapping("/toChat")

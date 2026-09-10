@@ -31,7 +31,7 @@ export async function validateAlloyReassessment(image, entry, publication, proof
   // The original C7 publication remains immutable. This later finding review is
   // allowed only for the single reproduced Alloy executable, never other images.
   assert.equal(image.component, 'alloy', 'activation_unresolved_security_review');
-  const { review, reviewSha256, files, closure } = await loadAlloyProof();
+  const { review, reviewSha256, files, closure } = await loadAlloyProof(new Date(), publication.imageId);
   assert.equal(publication.reference, review.reference, 'activation_reassessment_reference');
   assert.equal(publication.imageId, review.imageConfigId, 'activation_reassessment_image');
   const reassessment = entry.securityReassessment;
@@ -148,7 +148,7 @@ export async function validateActivation(image, entry, manifestBytes, read) {
       await read(dirname(entry.publication.path).replaceAll('\\', '/') + '/vulnerabilities.json'), publication.value.imageId);
     assert.deepEqual(checked, publication.value.knownRuntimeDependencies, 'activation_known_dependencies_changed');
   }
-  if (selected.manifestSet === 'c14-keycloak') {
+  if (['c14-keycloak', 'c15-keycloak'].includes(selected.manifestSet)) {
     await validatePublishedKeycloakMigrationAcceptance(publication.value, entry, read);
   }
   assert.equal(entry.reference, publication.value.reference, 'activation_registered_reference_mismatch');
@@ -259,21 +259,23 @@ const SPLIT_EVIDENCE_FILE = /^registry-attestation-[0-9]+-payload-[0-9]+\.json$/
 export async function createEvidenceReader(root) {
   root = await realpath(root);
   const allowedRoots = ['infrastructure/runtime-security',
-    'infrastructure/keycloak/security-generation/c14-migration-fix'];
+    'infrastructure/keycloak/security-generation/c14-migration-fix',
+    'infrastructure/keycloak/security-generation/c15-netty'];
+  const allowedFiles = ['infrastructure/keycloak/security-generation/container-proof.mjs'];
   const evidenceRoot = await realpath(resolve(root, 'infrastructure/runtime-security'));
   const evidenceRelative = relative(root, evidenceRoot);
   assert.ok(evidenceRelative && !isAbsolute(evidenceRelative) && evidenceRelative !== '..'
     && !evidenceRelative.startsWith('..' + sep)
     && relative(resolve(root, allowedRoots[0]), evidenceRoot) === '', 'activation_evidence_root_symlink_escape');
   function pathInScope(path) {
-    assert.ok(typeof path === 'string' && allowedRoots.some(prefix => path.startsWith(prefix + '/')) && !isAbsolute(path)
+    assert.ok(typeof path === 'string' && (allowedFiles.includes(path) || allowedRoots.some(prefix => path.startsWith(prefix + '/'))) && !isAbsolute(path)
       && !path.includes('\\') && !path.includes(':')
       && path.split('/').every(part => part && part !== '.' && part !== '..'), 'activation_path_outside_evidence_scope');
     return resolve(root, path);
   }
   async function physicalPath(path) {
     const actual = await realpath(pathInScope(path));
-    const prefix = allowedRoots.find(prefix => path.startsWith(prefix + '/'));
+    const prefix = allowedFiles.includes(path) ? dirname(path) : allowedRoots.find(prefix => path.startsWith(prefix + '/'));
     const selectedRoot = prefix === allowedRoots[0] ? evidenceRoot : await realpath(resolve(root, prefix));
     const rootInside = relative(root, selectedRoot);
     assert.ok(rootInside && !isAbsolute(rootInside) && rootInside !== '..'

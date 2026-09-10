@@ -7,7 +7,8 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
-import { Subscription } from 'rxjs';
+import { Subscription, firstValueFrom } from 'rxjs';
+import { CardDeliveryTracker, managerCardDelivery, deliveryOperationMessage, type DeliveryOperation } from '@otziv/client-common/delivery-operations';
 import {
   IonContent,
   IonRefresher,
@@ -539,7 +540,9 @@ import {
                         </p>
                       }
 
-                      @if (card.comment) {
+                      @if (deliveryMessage(card); as deliveryText) {
+                        <p class="comment-text" role="status">{{ deliveryText }}</p>
+                      } @else if (card.comment) {
                         <p class="comment-text">{{ card.comment }}</p>
                       }
 
@@ -608,7 +611,7 @@ import {
                           </button>
                         </div>
                       } @else if (card.contactText) {
-                        <button type="button" class="send-message" (click)="sendClientMessage(card)" [disabled]="!card.controlEntityId || mutatingId() === card.controlEntityId">
+                        <button type="button" class="send-message" (click)="sendClientMessage(card)" [disabled]="!card.controlEntityId || mutatingId() === card.controlEntityId || deliveryBlocked(card)">
                           <span class="material-icons-sharp">send</span>
                           Отправить клиенту
                         </button>
@@ -949,7 +952,32 @@ export class ManagerControlPage implements OnInit, OnDestroy {
     });
   }
 
+  private readonly deliveryTracker = new CardDeliveryTracker();
+  readonly deliveries = signal<Record<number, DeliveryOperation>>({});
+  private deliveryDestroyed = false;
+  deliveryMessage(card: ManagerControlConcreteItem): string | null {
+    return deliveryOperationMessage(this.deliveries()[card.controlEntityId ?? 0] ?? managerCardDelivery(card));
+  }
+  deliveryBlocked(card: ManagerControlConcreteItem): boolean {
+    const operation = this.deliveries()[card.controlEntityId ?? 0] ?? managerCardDelivery(card);
+    return !!operation && (operation.status !== 'FAILED' || !!operation.errorCode && ['context_changed', 'finalization_required'].includes(operation.errorCode));
+  }
+  private observeDelivery(card: ManagerControlConcreteItem): void {
+    const id = card.controlEntityId, operation = managerCardDelivery(card), managerId = this.selectedManagerId();
+    if (!id || !operation) return;
+    this.deliveryTracker.track(id, operation, () => firstValueFrom(this.managerControlApi.deliveryOperation(id, operation.operationId)),
+      value => {
+        const previous = this.deliveries()[id];
+        this.deliveries.update(values => ({ ...values, [id]: value }));
+        if (previous && previous.status !== 'SENT' && value.status === 'SENT' && !value.errorCode && managerId) {
+          void this.loadDetails(managerId).catch(() => { /* Keep the confirmed receipt until the next refresh. */ });
+        }
+      }, () => !this.deliveryDestroyed && this.selectedManagerId() === managerId);
+  }
+
   ngOnDestroy(): void {
+    this.deliveryDestroyed = true;
+    this.deliveryTracker.cancelAll();
     this.routeSubscription?.unsubscribe();
     if (this.clockTimer) {
       clearInterval(this.clockTimer);
@@ -1527,6 +1555,7 @@ export class ManagerControlPage implements OnInit, OnDestroy {
   }
 
   canReply(card: ManagerControlConcreteItem): boolean {
+    if (this.deliveryBlocked(card)) return false;
     const id = card.controlEntityId;
     return Boolean(id && this.replyText(card).trim() && this.mutatingId() !== id);
   }
@@ -1640,7 +1669,7 @@ export class ManagerControlPage implements OnInit, OnDestroy {
 
   async sendClientMessage(card: ManagerControlConcreteItem): Promise<void> {
     const id = card.controlEntityId;
-    if (!id || this.mutatingId() === id) {
+    if (!id || this.mutatingId() === id || this.deliveryBlocked(card)) {
       return;
     }
     await this.runCardMutation(id, () => this.managerControlApi.sendManagerControlClientMessage(id).toPromise(), 'Сообщение клиенту отправлено.');
@@ -1649,7 +1678,7 @@ export class ManagerControlPage implements OnInit, OnDestroy {
   async replyClient(card: ManagerControlConcreteItem): Promise<void> {
     const id = card.controlEntityId;
     const message = this.replyText(card).trim();
-    if (!id || !message || this.mutatingId() === id) {
+    if (!id || !message || this.mutatingId() === id || this.deliveryBlocked(card)) {
       return;
     }
     await this.runCardMutation(
@@ -1798,7 +1827,10 @@ export class ManagerControlPage implements OnInit, OnDestroy {
   }
 
   private applyDetail(detail: ManagerControlManagerDetail | null): void {
+    this.deliveryTracker.cancelAll();
+    this.deliveries.set({});
     this.detail.set(detail);
+    for (const item of detail?.items ?? []) for (const card of item.examples) this.observeDelivery(card);
     this.preparedContactItemIds.set(new Set());
     if (!detail) {
       this.itemComments.set({});
@@ -1892,8 +1924,11 @@ export class ManagerControlPage implements OnInit, OnDestroy {
     this.mutatingId.set(id);
     this.error.set(null);
     try {
-      await action();
-      this.notice.set(successMessage);
+      const updated = await action();
+      if (updated?.delivery) {
+        this.notice.set(deliveryOperationMessage(updated.delivery));
+        this.observeDelivery(updated);
+      } else this.notice.set(successMessage);
       const managerId = this.selectedManagerId();
       if (managerId) {
         await this.loadDetails(managerId);

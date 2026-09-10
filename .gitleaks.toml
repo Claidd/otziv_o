@@ -178,11 +178,12 @@ regexes = [
 ]
 
 [[allowlists]]
-description = "Reviewed public Keycloak FIPS package names in exact C7 publication scan"
+description = "Reviewed public Keycloak FIPS package names in exact C7/C15 publication scans"
 targetRules = ["generic-api-key"]
 condition = "AND"
 regexTarget = "line"
-paths = ['''(^|/)infrastructure/runtime\-security/proofs/c7\-published/keycloak/publication/vulnerabilities\.json$''']
+paths = [
+  '''(^|/)infrastructure/runtime\-security/proofs/c15\-keycloak\-published/publication/vulnerabilities\.json$''','''(^|/)infrastructure/runtime\-security/proofs/c7\-published/keycloak/publication/vulnerabilities\.json$''']
 regexes = [
   '''^\n?          "Name": "org\.keycloak:keycloak\-crypto\-fips1402",\r?$''',
 ]
@@ -303,11 +304,12 @@ regexes = [
 
 # Reviewed C12 public metadata: detector AND complete artifact path AND exact public line/value.
 [[allowlists]]
-description = "Reviewed C12 public Go checksums in collector.go.sum.after.txt"
+description = "Reviewed identical C12/C15 public Go checksums in collector.go.sum.after.txt"
 targetRules = ["generic-api-key"]
 condition = "AND"
 regexTarget = "line"
 paths = [
+  '''(^|/)infrastructure/runtime\-security/adjudications/alloy\-daemon\-c15/collector\.go\.sum\.after\.txt$''',
   '''(^|/)infrastructure/runtime\-security/adjudications/alloy\-daemon/collector\.go\.sum\.after\.txt$''',
 ]
 regexes = [
@@ -346,11 +348,12 @@ regexes = [
 ]
 
 [[allowlists]]
-description = "Reviewed C12 public Go checksums in collector.go.sum.before.txt"
+description = "Reviewed identical C12/C15 public Go checksums in collector.go.sum.before.txt"
 targetRules = ["generic-api-key"]
 condition = "AND"
 regexTarget = "line"
 paths = [
+  '''(^|/)infrastructure/runtime\-security/adjudications/alloy\-daemon\-c15/collector\.go\.sum\.before\.txt$''',
   '''(^|/)infrastructure/runtime\-security/adjudications/alloy\-daemon/collector\.go\.sum\.before\.txt$''',
 ]
 regexes = [
@@ -389,11 +392,12 @@ regexes = [
 ]
 
 [[allowlists]]
-description = "Reviewed C12 public Go checksums in reviewed-buildinfo.txt"
+description = "Reviewed identical C12/C15 public Go checksums in reviewed-buildinfo.txt"
 targetRules = ["generic-api-key"]
 condition = "AND"
 regexTarget = "line"
 paths = [
+  '''(^|/)infrastructure/runtime\-security/adjudications/alloy\-daemon\-c15/reviewed\-buildinfo\.txt$''',
   '''(^|/)infrastructure/runtime\-security/adjudications/alloy\-daemon/reviewed\-buildinfo\.txt$''',
 ]
 regexes = [
@@ -429,11 +433,12 @@ regexes = [
 ]
 
 [[allowlists]]
-description = "Reviewed C12 public Go checksums in root.go.sum.after.txt"
+description = "Reviewed identical C12/C15 public Go checksums in root.go.sum.after.txt"
 targetRules = ["generic-api-key"]
 condition = "AND"
 regexTarget = "line"
 paths = [
+  '''(^|/)infrastructure/runtime\-security/adjudications/alloy\-daemon\-c15/root\.go\.sum\.after\.txt$''',
   '''(^|/)infrastructure/runtime\-security/adjudications/alloy\-daemon/root\.go\.sum\.after\.txt$''',
 ]
 regexes = [
@@ -472,11 +477,12 @@ regexes = [
 ]
 
 [[allowlists]]
-description = "Reviewed C12 public Go checksums in root.go.sum.before.txt"
+description = "Reviewed identical C12/C15 public Go checksums in root.go.sum.before.txt"
 targetRules = ["generic-api-key"]
 condition = "AND"
 regexTarget = "line"
 paths = [
+  '''(^|/)infrastructure/runtime\-security/adjudications/alloy\-daemon\-c15/root\.go\.sum\.before\.txt$''',
   '''(^|/)infrastructure/runtime\-security/adjudications/alloy\-daemon/root\.go\.sum\.before\.txt$''',
 ]
 regexes = [
@@ -515,11 +521,13 @@ regexes = [
 ]
 
 [[allowlists]]
-description = "Public empty-content package verification value in the two exact C7 Alloy SPDX proofs"
+description = "Public empty-content package verification value in the exact C7/C15 Alloy SPDX proofs"
 targetRules = ["sourcegraph-access-token"]
 condition = "AND"
 regexTarget = "secret"
 paths = [
+  '''(^|/)infrastructure/runtime\-security/proofs/c15\-alloy\-published/anonymous/registry\-attestation\-0\-payload\-0\.json$''',
+  '''(^|/)infrastructure/runtime\-security/proofs/c15\-alloy\-published/publication/registry\-attestation\-0\-payload\-0\.json$''',
   '''(^|/)infrastructure/runtime\-security/proofs/c7\-published/alloy/anonymous/registry\-attestation\-0\-payload\-0\.json$''',
   '''(^|/)infrastructure/runtime\-security/proofs/c7\-published/alloy/publication/registry\-attestation\-0\-payload\-0\.json$''',
 ]

@@ -9,6 +9,10 @@ public record ManagerControlMessageCompany(Long id, String title, String urlChat
                 company.getUrlChat(), company.getTelegramGroupChatId(), company.getMaxGroupChatId());
     }
 
+    com.hunt.otziv.client_messages.api.ClientMessageDelivery.Target target() {
+        return new com.hunt.otziv.client_messages.api.ClientMessageDelivery.Target(id, title, urlChat, telegramGroupChatId, maxGroupChatId);
+    }
+
     Company toMessageCompany() {
         Company company = new Company();
         company.setId(id);

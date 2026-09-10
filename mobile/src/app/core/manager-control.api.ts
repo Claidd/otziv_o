@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
 import { Observable, map } from 'rxjs';
-import type { ManagerControlActionPayload, ManagerControlClientMessageReconciliation, ManagerControlClientReplyPayload, ManagerControlClosePayload, ManagerControlCloseResponse, ManagerControlConcreteItem, ManagerControlManagerDetail, ManagerControlStagePayload, ManagerControlSummary } from './api.service';
+import type { ManagerControlActionPayload, ManagerControlClientMessageReconciliation, ManagerControlClientReplyPayload, ManagerControlClosePayload, ManagerControlCloseResponse, ManagerControlConcreteItem, ManagerControlManagerDetail, ManagerControlStagePayload, ManagerControlSummary } from './manager-control.models';
 import { mobileEnvironment } from './mobile-environment';
 
 /** Stateless feature transport; authentication and error handling stay in Angular interceptors. */
@@ -73,10 +73,16 @@ export class ManagerControlApi {
     );
   }
 
+  deliveryOperation(concreteItemId: number, operationId: string): Observable<import('@otziv/client-common/delivery-operations').DeliveryOperation> {
+    return this.http.get<import('@otziv/client-common/delivery-operations').DeliveryOperation>(
+      this.apiUrl(`/api/admin/manager-control/concrete-items/${concreteItemId}/delivery-operations/${encodeURIComponent(operationId)}`));
+  }
+
   sendManagerControlClientMessage(concreteItemId: number): Observable<ManagerControlConcreteItem> {
     return this.http.post<ManagerControlConcreteItem>(
       this.apiUrl(`/api/admin/manager-control/concrete-items/${concreteItemId}/send-client-message`),
-      {}
+      {},
+      { headers: { "X-Otziv-Delivery-Protocol": "queued-v1" } }
     );
   }
 
@@ -86,7 +92,8 @@ export class ManagerControlApi {
   ): Observable<ManagerControlConcreteItem> {
     return this.http.post<ManagerControlConcreteItem>(
       this.apiUrl(`/api/admin/manager-control/concrete-items/${concreteItemId}/reply`),
-      payload
+      payload,
+      { headers: { "X-Otziv-Delivery-Protocol": "queued-v1" } }
     );
   }
 

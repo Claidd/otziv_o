@@ -27,7 +27,10 @@ for (const name of inventory.entries) {
   }
   // New client reading the published backend, and published wire schema reading
   // candidate JSON. This is serialization compatibility, not an installed-native test.
-  for (const [type, value] of Object.entries(previousValues.responses)) sdk.validateClientJson(value, { $ref: `#/components/schemas/${type}` }, 'response');
+  for (const [type, value] of Object.entries(previousValues.responses)) {
+    try { sdk.validateClientJson(value, { $ref: `#/components/schemas/${type}` }, 'response'); }
+    catch (error) { throw new Error(`Candidate cannot read published ${name} response ${type}: ${error.message}`, { cause: error }); }
+  }
   for (const type of Object.keys(previousValues.responses)) sdk.validateClientJson(fixtures.responses[type], { $ref: `#/components/schemas/${type}` }, 'response', '$', previous.components.schemas);
   for (const [type, value] of Object.entries(previousValues.requests)) sdk.validateClientJson(value, { $ref: `#/components/schemas/${type}` }, 'request');
   for (const [type, oldSchema] of Object.entries(previous.components.schemas)) {

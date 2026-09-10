@@ -100,7 +100,7 @@ public class ScheduledClientMessageService {
     public static final String DEFAULT_REVIEW_REMINDER_TEXT = "{companyAndFilial}\n\nЗдравствуйте! Напоминаем, пожалуйста, проверьте шаблоны отзывов и внесите правки, если они нужны.\n\nСсылка на проверку отзывов: {reviewLink}";
     public static final String DEFAULT_CLIENT_TEXT_REMINDER_TEXT = "{companyAndFilial}\n\nЗдравствуйте! Напоминаем, пожалуйста, пришлите текст или пожелания для отзывов по заказу №{orderId}, чтобы мы могли продолжить работу.";
     public static final String DEFAULT_PUBLICATION_STARTED_TEXT = "{companyAndFilial}\n\nСпасибо, правки получили. Отзывы переданы в публикацию. Будем присылать короткие отчёты по мере публикации.";
-    public static final String DEFAULT_PUBLICATION_PROGRESS_REPORT_TEXT = "{companyAndFilial}. Опубликован новый отзыв {progress}.";
+    public static final String DEFAULT_PUBLICATION_PROGRESS_REPORT_TEXT = com.hunt.otziv.config.settings.api.PublicationProgressSettings.DEFAULT_TEMPLATE;
     public static final String DEFAULT_PAYMENT_INSTRUCTION_SOURCE = "MANAGER_TEXT";
     public static final String DEFAULT_PAYMENT_REMINDER_TEXT = "{companyAndFilial}\n\n{managerPayText} К оплате: {sum} руб.";
     public static final String DEFAULT_PAYMENT_LINK_COPY_TEXT = "{companyAndFilial}\n\nЗдравствуйте, ваш заказ выполнен. К оплате: {sum} руб.\n\n{paymentInstruction}\n\n{paymentAfterword}";
@@ -188,6 +188,7 @@ public class ScheduledClientMessageService {
     private final ObjectProvider<CommonBillingService> commonBillingServiceProvider;
     private final OrderPaymentIntegrityService orderPaymentIntegrityService;
     private final ClientMessageTransactionRunner transactionRunner;
+    private final ScheduledDeliveryRecovery deliveryRecovery;
     private final SchedulerLeaseService schedulerLeaseService;
     private final Clock clock = Clock.systemDefaultZone();
     @Value("${client.messages.reconcile-interval:PT5M}")
@@ -1895,10 +1896,27 @@ public class ScheduledClientMessageService {
             LocalDateTime nowStorage, long durationMs) {
         Order order = prepared.orderId() == null ? null : orderRepository.findByIdForMutation(prepared.orderId()).orElse(null);
         ScheduledClientMessageState state = stateRepository.findByIdForUpdate(prepared.stateId()).orElse(null);
-        if (state == null || state.getStatus() != ScheduledMessageStateStatus.ACTIVE
+        if (state == null
                 || !Objects.equals(state.getDeliveryToken(), prepared.token()) || state.getScenario() != prepared.scenario()
                 || !Objects.equals(state.getTargetKey(), prepared.targetKey())
+                || !Objects.equals(state.getOrderId(), prepared.orderId())
                 || !("PREPARED".equals(state.getDeliveryStatus()) || "UNKNOWN".equals(state.getDeliveryStatus()))) return false;
+        if (state.getStatus() != ScheduledMessageStateStatus.ACTIVE) {
+            // The task may close while delivery is in flight. Retain the immutable
+            // envelope and the reason for closure; only record the late receipt.
+            // In particular never reschedule or repeat a completed business action.
+            if (result.sent()) {
+                stateRepository.lockDispatchBudget();
+                state.setDeliveryStatus("SENT");
+                state.setDeliveryChannel(result.channel());
+                state.setSentCount(state.getSentCount() + 1);
+                state.setLastSuccessAt(nowStorage);
+                recordAttempt(state, ScheduledMessageAttemptStatus.SENT, result.channel(),
+                        "late_delivery_confirmed", "Подтверждение получено после завершения задачи", prepared.message(), durationMs);
+                stateRepository.save(state);
+            }
+            return false;
+        }
         stateRepository.lockDispatchBudget();
         if (!result.sent() && !ClientChatMessageSender.isKnownUnsent(result)) {
             state.setDeliveryStatus("UNKNOWN");
@@ -1953,35 +1971,13 @@ public class ScheduledClientMessageService {
     }
 
     private void recoverOrdinaryDeliveries(LocalDateTime nowStorage) {
-        requireNoBusinessTransaction();
-        for (Long stateId : stateRepository.findRecoverablePreparedIds(nowStorage.minusMinutes(DEFAULT_LOCK_MINUTES), PageRequest.of(0, 20))) {
-            try {
-                String envelope = transactionRunner.callInNewTransaction(() -> {
-                    ScheduledClientMessageState state = stateRepository.findByIdForUpdate(stateId).orElse(null);
-                    if (state == null || state.getStatus() != ScheduledMessageStateStatus.ACTIVE
-                            || !hasText(state.getDeliveryEnvelope()) || !("PREPARED".equals(state.getDeliveryStatus())
-                            || "UNKNOWN".equals(state.getDeliveryStatus()))) return null;
-                    state.setDeliveryStatus("UNKNOWN");
-                    // Rotate bounded recovery batches even when old UNKNOWN receipts
-                    // remain unavailable, so they cannot starve later operations.
-                    state.setDeliveryRecoveryCheckedAt(nowStorage);
-                    state.setLastErrorCode(ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN);
-                    state.setNextAttemptAt(null);
-                    state.setLockedUntil(null);
-                    stateRepository.save(state);
-                    return state.getDeliveryEnvelope();
-                });
-                if (envelope == null) continue;
-                // Decode after commit: a corrupt/older snapshot must retain its
-                // UNKNOWN barrier and recovery backoff instead of rolling them back.
-                PreparedScheduledDelivery prepared = decodeScheduledDelivery(envelope);
-                ClientMessageSendResult receipt = messageSender.recordedOutcome(prepared.operationId());
-                if (receipt != null && (receipt.sent() || ClientChatMessageSender.isKnownUnsent(receipt))) {
-                    boolean finalized = transactionRunner.callInNewTransaction(() -> finalizeScheduledDelivery(prepared, receipt, nowStorage, 0));
+        deliveryRecovery.recover(nowStorage, nowStorage.minusMinutes(DEFAULT_LOCK_MINUTES),
+                envelope -> decodeScheduledDelivery(envelope).operationId(), (envelope, receipt) -> {
+                    PreparedScheduledDelivery prepared = decodeScheduledDelivery(envelope);
+                    boolean finalized = transactionRunner.callInNewTransaction(
+                            () -> finalizeScheduledDelivery(prepared, receipt, nowStorage, 0));
                     if (finalized) notifyScheduledDeliveryOutcome(prepared, receipt, nowStorage);
-                }
-            } catch (RuntimeException recoveryFailed) { log.warn("Scheduled delivery recovery held for review: stateId={}", stateId, recoveryFailed); }
-        }
+                });
     }
 
     private PreparedScheduledDelivery processClaimedState(

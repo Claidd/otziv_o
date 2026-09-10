@@ -13,6 +13,9 @@ const ACCEPTANCE_PATH=CONTEXT+'proofs/publication-acceptance.json';
 // checks, issuer 20 checks and a fresh post-run source/cleanup observation.
 // A new build must repeat those checks; rehashing an outer PASS is insufficient.
 const REVIEWED_PUBLISHED_ACCEPTANCE_SHA256='b4f1ce533dd116b4546d8fa6cd6e27731e357865d08cb100e9f33332511b1dfd';
+const PATCH_CONTEXT='infrastructure/keycloak/security-generation/c15-netty/';
+const PATCH_ACCEPTANCE_PATH=PATCH_CONTEXT+'proofs/publication-acceptance.json';
+const PATCH_ACCEPTANCE_SHA256='e328234dec6fc203281becb48cb985456d0d73af46da46fe71e14984c72aed85';
 const PG_ROOT='infrastructure/runtime-security/proofs/c14-postgres-published/';
 // Failed/cancelled publication attempts remain separate historical evidence.
 // The accepted pair also binds exact run/attempt/commit in both OCI receipts.
@@ -60,7 +63,8 @@ function evidenceReader(read){
   assert.equal(typeof read,'function','postgres_transition_reader');
   const cache=new Map();
   async function bytes(path){
-    assert.ok(typeof path==='string'&&(path.startsWith(CONTEXT)||path.startsWith('infrastructure/runtime-security/'))&&
+    assert.ok(typeof path==='string'&&(path.startsWith(CONTEXT)||path.startsWith(PATCH_CONTEXT)||
+      path==='infrastructure/keycloak/security-generation/container-proof.mjs'||path.startsWith('infrastructure/runtime-security/'))&&
       !path.includes('\\')&&!path.includes(':')&&path.split('/').every(part=>part&&part!=='.'&&part!=='..'),'postgres_transition_evidence_path');
     if(!cache.has(path))cache.set(path,Promise.resolve(read(path)).then(value=>Buffer.from(value)));
     return cache.get(path);
@@ -209,6 +213,7 @@ export async function validatePostgresTransitionFoundation(read){
 }
 
 async function acceptance(ref,read){
+  if(ref?.path===PATCH_ACCEPTANCE_PATH)return patchAcceptance(ref,read);
   assert.equal(ref?.path,ACCEPTANCE_PATH,'postgres_transition_published_acceptance_required');
   const reader=evidenceReader(read),proof=await reader.json(ref);
   assert.equal(proof.schema,'otziv-postgres-keycloak-published-acceptance-v1','postgres_transition_acceptance_schema');
@@ -263,6 +268,73 @@ async function acceptance(ref,read){
     vpsCutoverExecuted:false,ordinaryDeploymentUpgradeAuthorized:false};
 }
 
+/** A patch repeats the real runtime tests; the original database transition stays immutable. */
+async function patchAcceptance(ref,read){
+  const reader=evidenceReader(read),proof=await reader.json(ref);
+  assert.equal(proof.schema,'otziv-postgres-keycloak-patch-acceptance-v1','postgres_transition_patch_schema');
+  assert.equal(proof.result,'PASS','postgres_transition_patch_failed');
+  assert.equal(proof.scope,'EXACT_PUBLISHED_PATCH_COMPATIBILITY_ON_RETAINED_SOURCE_DUMP','postgres_transition_patch_scope');
+  assert.equal(proof.productionAccess,false,'postgres_transition_patch_production');
+  assert.equal(proof.vpsCutoverExecuted,false,'postgres_transition_patch_cutover');
+  assert.deepEqual(proof.parentAcceptance,{path:ACCEPTANCE_PATH,sha256:REVIEWED_PUBLISHED_ACCEPTANCE_SHA256},'postgres_transition_patch_parent');
+  const parent=await acceptance(proof.parentAcceptance,read),p=proof.published,e=proof.evidence;
+  const foundationReview=await reader.json({path:FOUNDATION_PATH,sha256:FOUNDATION_SHA256});
+  assert.equal(proof.sourceDumpSha256,foundationReview.source.dumpSha256,'postgres_transition_patch_dump');
+  assert.equal(p.postgresReference,PG_REFERENCE,'postgres_transition_patch_postgres');
+  assert.equal(p.postgresConfigId,PG_CONFIG,'postgres_transition_patch_postgres_config');
+  assert.deepEqual(Object.keys(e||{}).sort(),['keycloakPublication','keycloakAnonymous','actualMigration','issuerProtocol',
+    'executedReplay','executedReplayHelper','issuerHarness','runtimePatch','recipe','rawSecurityScan'].sort(),'postgres_transition_patch_coverage');
+  for(const value of Object.values(e))await reader.bound(value);
+  assert.equal(e.executedReplay.path,PATCH_CONTEXT+'replay-actual.py','postgres_transition_patch_harness');
+  assert.deepEqual(e.executedReplayHelper,foundationReview.evidence.executedReplayHelper,'postgres_transition_patch_helper');
+  assert.equal(e.issuerHarness.path,'infrastructure/keycloak/security-generation/container-proof.mjs','postgres_transition_patch_issuer_harness');
+  const [publication,anonymous,actual,issuer,runtime,raw]=await Promise.all([
+    e.keycloakPublication,e.keycloakAnonymous,e.actualMigration,e.issuerProtocol,e.runtimePatch,e.rawSecurityScan].map(x=>reader.json(x)));
+  assert.equal(publication.manifestSet,'c15-keycloak','postgres_transition_patch_set');
+  assert.equal(publication.reference,p.keycloakReference,'postgres_transition_patch_reference');
+  assert.equal(publication.imageId,p.keycloakConfigId,'postgres_transition_patch_config');
+  assert.equal(publication.result,'PASS','postgres_transition_patch_publication');
+  assert.equal(anonymous.result,'PASS','postgres_transition_patch_anonymous');
+  for(const key of ['reference','imageId','component','commit','run','attempt'])assert.equal(anonymous[key],publication[key],'postgres_transition_patch_anonymous_identity');
+  assert.equal(anonymous.sourcePublicationSha256,e.keycloakPublication.sha256,'postgres_transition_patch_anonymous_pair');
+  assert.equal(anonymous.publicDownloadReadiness,'VERIFIED_ANONYMOUS_DIGEST_PULL','postgres_transition_patch_anonymous_pull');
+  checkKeycloakMigrationRuntime(actual,issuer,{keycloakReference:p.keycloakReference,keycloakImageId:digest(p.keycloakReference),
+    dumpSha256:proof.sourceDumpSha256,scriptSha256:e.executedReplay.sha256});
+  assert.equal(proof.completedAt,actual.completedAt,'postgres_transition_patch_completion');
+  assert.ok(time(actual.startedAt,'patch_started')>time(parent.proof.completedAt,'parent_completed'),'postgres_transition_patch_old_runtime');
+  assert.equal(e.recipe.path,PATCH_CONTEXT+'Dockerfile','postgres_transition_patch_recipe');
+  assert.equal(e.recipe.sha256,publication.dockerfileSha256,'postgres_transition_patch_recipe_hash');
+  assert.match((await reader.bound(e.recipe)).toString(),new RegExp('FROM '+parent.requiredKeycloakReference.replaceAll('.','\\.')),'postgres_transition_patch_recipe_parent');
+  assert.equal(runtime.schema,'otziv-keycloak-netty-patch-runtime-v1','postgres_transition_patch_runtime_schema');
+  assert.equal(runtime.result,'PASS','postgres_transition_patch_runtime_failed');
+  assert.equal(runtime.productionAccess,false,'postgres_transition_patch_runtime_production');
+  assert.equal(runtime.ownedContainersRemaining,0,'postgres_transition_patch_runtime_cleanup');
+  assert.equal(runtime.images?.length,2,'postgres_transition_patch_runtime_pair');
+  const preserved=['opt/keycloak/providers/otziv-security-generation.jar',
+    'opt/keycloak/lib/lib/main/org.keycloak.keycloak-model-infinispan-26.7.3.jar',
+    'opt/keycloak/lib/lib/main/org.keycloak.keycloak-model-storage-private-26.7.3.jar'];
+  const patched='opt/keycloak/lib/lib/main/io.netty.netty-handler-4.1.136.Final.jar';
+  assert.deepEqual(runtime.preservedFiles,preserved,'postgres_transition_patch_preserved_coverage');
+  assert.equal(runtime.patchedFile,patched,'postgres_transition_patch_jar');
+  for(const [index,expected]of [parent.publication,publication].entries()){
+    const image=runtime.images[index];
+    assert.equal(image.reference,expected.reference,'postgres_transition_patch_runtime_reference');
+    assert.equal(image.imageConfigId,expected.imageId,'postgres_transition_patch_runtime_config');
+    assert.ok([expected.imageId,digest(expected.reference)].includes(image.inspectedImageId),'postgres_transition_patch_inspection_identity');
+    assert.equal(image.registryRootfsAndLabelsMatch,true,'postgres_transition_patch_registry_identity');
+    assert.equal(image.containerExecuted,false,'postgres_transition_patch_stopped_inspection');
+    assert.equal(image.files[preserved[0]],expected.providerJarSha256,'postgres_transition_patch_provider');
+  }
+  for(const path of preserved){assert.match(runtime.images[0].files[path],HASH);assert.equal(runtime.images[1].files[path],runtime.images[0].files[path],'postgres_transition_patch_preserved_jar');}
+  assert.equal(runtime.images[1].files[patched],'d0e4c6ee4779f59f6ab2fb5d388e4f57147c82270164b37945764bb9bda96a44','postgres_transition_patch_netty');
+  assert.equal(raw.Metadata?.ImageID,p.keycloakConfigId,'postgres_transition_patch_scan_identity');
+  const summary=summarizeReport(raw);for(const key of ['high','critical'])assert.equal(summary[key],0,'postgres_transition_patch_scan_findings');
+  assert.deepEqual(checkKeycloakRuntimeDependencies(await reader.bound(e.rawSecurityScan),p.keycloakConfigId),publication.knownRuntimeDependencies,'postgres_transition_patch_dependencies');
+  assert.equal(ref.sha256,PATCH_ACCEPTANCE_SHA256,'postgres_transition_patch_acceptance_anchor');
+  return {...parent,proof,publication,proofSha256:ref.sha256,acceptancePath:PATCH_ACCEPTANCE_PATH,
+    requiredKeycloakReference:p.keycloakReference,requiredKeycloakConfigId:p.keycloakConfigId};
+}
+
 /** The caller still validates the complete OCI publication/anonymous pair. */
 export async function validatePostgresTransitionReadiness(entry,image,read){
   assert.equal(entry.component,'postgres','postgres_transition_entry_component');assert.equal(image.component,'postgres','postgres_transition_image_component');
@@ -289,7 +361,7 @@ export function assertPostgresKeycloakCoupling(readiness,keycloakEntry,rows,keyc
   assert.equal(keycloakEntry?.component,'keycloak','postgres_transition_coupling_registry_missing');
   assert.match(readiness.requiredKeycloakReference||'',IMAGE,'postgres_transition_coupling_reference');
   assert.equal(keycloakEntry.reference,readiness.requiredKeycloakReference,'postgres_transition_coupling_registry_reference');
-  assert.deepEqual(keycloakEntry.migrationAcceptance,{path:ACCEPTANCE_PATH,sha256:readiness.proofSha256},'postgres_transition_coupling_acceptance');
+  assert.deepEqual(keycloakEntry.migrationAcceptance,{path:readiness.acceptancePath??ACCEPTANCE_PATH,sha256:readiness.proofSha256},'postgres_transition_coupling_acceptance');
   assert.equal(keycloakImage?.component,'keycloak','postgres_transition_coupling_manifest');
   assert.equal(keycloakImage.sourceBeforeRef,SOURCE_KC,'postgres_transition_coupling_source');
   const coverage=keycloakImage.defaultReferencesBefore.map(({path,service})=>({path,service}));

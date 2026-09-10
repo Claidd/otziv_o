@@ -1,0 +1,62 @@
+{
+  "schema": "otziv-image-adjudication-v1",
+  "rawReportSha256": "1f44717cabdad957dc27390e229dcf0d6fa6122cd184a9d64c018393c9a73197",
+  "imageConfigId": "sha256:8084b7ee093d159c974d88ec56aad2a72f4bb939f974176759ff9233d9b58dfd",
+  "immutableImageId": "sha256:d006cedf890ade4915a098a5362ce0cda9a3fd7ec2c02320f15e92ccfd669122",
+  "rawReportModified": false,
+  "decisions": [],
+  "status": "NOT_APPLICABLE",
+  "alloy": {
+    "schema": "otziv-alloy-adjudication-v1",
+    "rawReportSha256": "1f44717cabdad957dc27390e229dcf0d6fa6122cd184a9d64c018393c9a73197",
+    "imageConfigId": "sha256:8084b7ee093d159c974d88ec56aad2a72f4bb939f974176759ff9233d9b58dfd",
+    "immutableImageId": "sha256:d006cedf890ade4915a098a5362ce0cda9a3fd7ec2c02320f15e92ccfd669122",
+    "rawReportModified": false,
+    "decisions": [
+      {
+        "resultIndex": 1,
+        "findingIndex": 0,
+        "cve": "CVE-2026-41567",
+        "target": "usr/bin/alloy",
+        "package": "github.com/docker/docker",
+        "version": "v28.5.2+incompatible",
+        "state": "not_affected",
+        "justification": "vulnerable_code_not_present",
+        "fixedHighOrCritical": false,
+        "unfixedHighOrCritical": true
+      },
+      {
+        "resultIndex": 1,
+        "findingIndex": 1,
+        "cve": "CVE-2026-42306",
+        "target": "usr/bin/alloy",
+        "package": "github.com/docker/docker",
+        "version": "v28.5.2+incompatible",
+        "state": "not_affected",
+        "justification": "vulnerable_code_not_present",
+        "fixedHighOrCritical": false,
+        "unfixedHighOrCritical": true
+      }
+    ],
+    "status": "EXACT_BINARY_AFFECTED_CODE_ABSENT",
+    "reviewSha256": "d706da6aed5f6e2978b91c439c064b1866b054aae0186cebfd097c8bfee6571d",
+    "validUntil": "2027-01-01T00:00:00Z",
+    "binarySha256": "6535f200bc605f313eae5deba4e912d35ff7236f3dd066639d8d52d8eb01e07a",
+    "canonicalBuildInfoSha256": "e141ba84ffec1943c64baa7c086c8a269d5cb391e133a3aa5dee7764ba351d4f",
+    "buildInfoReader": "golang:1.27.1-bookworm@sha256:648f440f42a0958804efb24df176f806f9d353b41f1c0627f666428e40310f6b",
+    "inspectedBinaryExecuted": false,
+    "closure": {
+      "packageCount": 5199,
+      "importEdges": 53420,
+      "linkedFunctions": 418393,
+      "affectedPackagesPresent": 0,
+      "affectedFunctionsPresent": 0
+    },
+    "module": {
+      "name": "github.com/docker/docker",
+      "version": "v28.5.2+incompatible",
+      "sum": "h1:DBX0Y0zAjZbSrm1uzOkdr1onVghKaftjlSWt4AFexzM=",
+      "purl": "pkg:golang/github.com/docker/docker@v28.5.2%2Bincompatible"
+    }
+  }
+}

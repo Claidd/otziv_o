@@ -30,6 +30,13 @@ test('feature API transports do not depend on screens or UI state', () => {
   }
 });
 
+test('manager control transport and its screen models cannot depend on the compatibility API', () => {
+  for (const name of ['manager-control.api.ts', 'manager-control.models.ts']) {
+    const source = fs.readFileSync(new URL('../src/app/core/' + name, import.meta.url), 'utf8');
+    assert.doesNotMatch(source, /from\s+['"]\.\/api\.service['"]/);
+  }
+});
+
 test('the compatibility API cannot regain HTTP ownership of migrated manager, order or payment domains', () => {
   const source = fs.readFileSync(new URL('../src/app/core/api.service.ts', import.meta.url), 'utf8');
   const tree = ts.createSourceFile('api.service.ts', source, ts.ScriptTarget.Latest, true);
