@@ -26,19 +26,8 @@ RUN --mount=type=cache,id=otziv-monitoring-go-mod,target=/go/pkg/mod,sharing=loc
     && tar --exclude=.git --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner \
       -czf /out/corresponding-source.tar.gz .
 
-FROM registry.access.redhat.com/ubi9/ubi-minimal@sha256:7fbeae18dc9476399f565e68255f602a3374ea8614ba3d14843565131a13ff93 AS runtime
-COPY runtime-packages.lock /usr/share/otziv-build/runtime-packages.lock
-RUN microdnf --refresh upgrade --nodocs --assumeyes \
-    && microdnf install --nodocs --assumeyes ca-certificates curl-minimal coreutils-single \
-    && mkdir -p /usr/share/otziv-build/mc \
-    && rpm -qa --qf '%{NAME}=%{EPOCHNUM}:%{VERSION}-%{RELEASE}.%{ARCH}\n' | sort > /usr/share/otziv-build/runtime-packages.txt \
-    && test "$(sha256sum /usr/share/otziv-build/runtime-packages.lock | cut -d ' ' -f 1)" = "$(sha256sum /usr/share/otziv-build/runtime-packages.txt | cut -d ' ' -f 1)" \
-    && microdnf clean all \
-    && microdnf remove --assumeyes curl-minimal libcurl-minimal microdnf libdnf librepo rpm rpm-libs libmodulemd libsolv \
-    && test ! -e /usr/bin/curl && test ! -e /usr/lib64/libcurl.so.4 \
-    && test ! -e /usr/bin/rpm && test ! -e /usr/bin/microdnf \
-    && test -s /var/lib/rpm/rpmdb.sqlite \
-    && mv /usr/share/otziv-build/runtime-packages.txt /usr/share/otziv-build/runtime-packages.before-removal.txt
+# Preserve the already scanned C14 runtime packages; this release replaces only the Go client.
+FROM ghcr.io/claidd/otziv-security@sha256:d163502c0d23dd3d76ec9fab63d9697317c9a2aaa39d1a3d783a70044bb803c0 AS runtime
 LABEL org.opencontainers.image.source="https://github.com/Claidd/otziv_o" \
       org.opencontainers.image.revision="77f82e18b5401a65958f1619df6ebb994634bd88" \
       org.opencontainers.image.licenses="AGPL-3.0-or-later" \

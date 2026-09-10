@@ -8,7 +8,7 @@
       "component": "mc",
       "context": "infrastructure/runtime-security/builds/mc-c15",
       "dockerfile": "infrastructure/runtime-security/builds/mc-c15/mc.Dockerfile",
-      "dockerfileSha256": "07b32c3b9f3a7440a829ce099c162d3e89a825e6687d63157bbb7262b8b20e98",
+      "dockerfileSha256": "cad72cd1c7c02954c893db9f7875cfa79776e6d82a9bfd914cd89fa162974e67",
       "platform": "linux/amd64",
       "sourceBeforeRef": "minio/mc@sha256:aead63c77f9db9107f1696fb08ecb0faeda23729cde94b0f663edf4fe09728e3",
       "defaultReferencesBefore": [
@@ -17,7 +17,7 @@
           "service": "minio-init"
         }
       ],
-      "candidateBaseRef": "registry.access.redhat.com/ubi9/ubi-minimal@sha256:7fbeae18dc9476399f565e68255f602a3374ea8614ba3d14843565131a13ff93",
+      "candidateBaseRef": "ghcr.io/claidd/otziv-security@sha256:d163502c0d23dd3d76ec9fab63d9697317c9a2aaa39d1a3d783a70044bb803c0",
       "buildArgs": {}
     }
   ]
