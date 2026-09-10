@@ -18,8 +18,8 @@ RUN mkdir /out && cp go.mod /out/root.go.mod.before.txt && cp go.sum /out/root.g
     && cp collector/go.mod /out/collector.go.mod.before.txt && cp collector/go.sum /out/collector.go.sum.before.txt
 RUN --mount=type=cache,id=otziv-monitoring-go-mod,target=/go/pkg/mod,sharing=locked \
     --mount=type=cache,id=otziv-monitoring-go-build,target=/root/.cache/go-build,sharing=locked \
-    go get google.golang.org/grpc@v1.83.1 \
-    && go -C collector get google.golang.org/grpc@v1.83.1 \
+    go get google.golang.org/grpc@v1.83.2 \
+    && go -C collector get google.golang.org/grpc@v1.83.2 \
     && sed '/google.golang.org\/grpc /d' /out/root.go.mod.before.txt > /tmp/before \
     && sed '/google.golang.org\/grpc /d' go.mod > /tmp/after && cmp /tmp/before /tmp/after \
     && sed '/google.golang.org\/grpc /d' /out/collector.go.mod.before.txt > /tmp/before \
@@ -38,6 +38,6 @@ FROM grafana/alloy@sha256:1eeba15ef3193438c72f66efd3d76f769c523a4c661db0fae6eddd
 LABEL org.opencontainers.image.source="https://github.com/grafana/alloy" \
       org.opencontainers.image.revision="becfd489a7bb459c0496893b555fb87a003296b1" \
       org.opencontainers.image.version="1.19.2-otziv.1" \
-      com.otziv.security.patch="Go1.27.1; google.golang.org/grpc1.83.1; original UI lock and vendor build tags"
+      com.otziv.security.patch="Go1.27.1; google.golang.org/grpc1.83.2; original UI lock and vendor build tags"
 COPY --from=build /src/build/alloy /bin/alloy
 COPY --from=build /out/*.txt /out/LICENSE /usr/share/otziv-build/

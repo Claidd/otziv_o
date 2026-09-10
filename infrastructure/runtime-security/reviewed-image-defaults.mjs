@@ -71,7 +71,7 @@ export async function resolveActivationManifest(image, entry, manifestBytes, pro
   if (entry.manifest === undefined) return { image, manifestBytes, manifestSet: 'baseline' };
   assert.ok(entry.manifest && typeof entry.manifest === 'object', 'activation_versioned_manifest_missing');
   assert.deepEqual(Object.keys(entry.manifest).sort(), ['path', 'sha256'], 'activation_versioned_manifest_fields');
-  const selected = reviewedImageSetForComponent(image.component);
+  const selected = reviewedImageSetForComponent(image.component, entry.manifest.path);
   assert.equal(entry.manifest.path, selected.path, 'activation_versioned_manifest_path');
   const loaded = await proof(entry.manifest);
   const manifest = validateReviewedImageSet(selected.name, loaded.bytes, manifestBytes);

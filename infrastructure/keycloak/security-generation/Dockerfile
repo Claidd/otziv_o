@@ -90,6 +90,10 @@ ADD --chown=1000:0 --checksum=sha256:9fe4f941ba14dfa49b6120a0f2c307b06bfd60bce79
 ADD --chown=1000:0 --checksum=sha256:03dc4dc834a928730d52a50952de0f30c35e0daf048889132be19ee1e5053a6c \
     https://repo.maven.apache.org/maven2/org/eclipse/parsson/parsson/1.1.9/parsson-1.1.9.jar \
     /opt/keycloak/lib/lib/boot/org.eclipse.parsson.parsson-1.1.7.jar
+# Netty patch for CVE-2026-75595. Preserve Quarkus registered paths and original vendor metadata.
+ADD --chown=1000:0 --checksum=sha256:d0e4c6ee4779f59f6ab2fb5d388e4f57147c82270164b37945764bb9bda96a44 \
+    https://repo.maven.apache.org/maven2/io/netty/netty-handler/4.1.137.Final/netty-handler-4.1.137.Final.jar \
+    /opt/keycloak/lib/lib/main/io.netty.netty-handler-4.1.136.Final.jar
 COPY --from=provider-build --chown=1000:0 /provider/target/otziv-security-generation.jar /opt/keycloak/providers/otziv-security-generation.jar
 ENV KC_RUN_IN_CONTAINER=true
 WORKDIR /opt/keycloak

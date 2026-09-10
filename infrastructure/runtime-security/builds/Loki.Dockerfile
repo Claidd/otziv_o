@@ -7,8 +7,8 @@ RUN tar xzf /tmp/source.tar.gz --strip-components=1 && mkdir /out \
     && cp go.mod /out/go.mod.before.txt && cp go.sum /out/go.sum.before.txt
 RUN --mount=type=cache,id=otziv-monitoring-go-mod,target=/go/pkg/mod,sharing=locked \
     --mount=type=cache,id=otziv-monitoring-go-build,target=/root/.cache/go-build,sharing=locked \
-    go get google.golang.org/grpc@v1.83.1 \
-    && sed -e 's|google.golang.org/grpc v1.82.1|google.golang.org/grpc v1.83.1|' \
+    go get google.golang.org/grpc@v1.83.2 \
+    && sed -e 's|google.golang.org/grpc v1.82.1|google.golang.org/grpc v1.83.2|' \
        -e 's|github.com/spiffe/go-spiffe/v2 v2.6.0|github.com/spiffe/go-spiffe/v2 v2.7.0|' \
        -e 's|go.opentelemetry.io/contrib/detectors/gcp v1.43.0|go.opentelemetry.io/contrib/detectors/gcp v1.44.0|' \
        -e 's|github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.32.0|github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.33.0|' \
@@ -30,7 +30,7 @@ FROM grafana/loki@sha256:550d599ec4efacd8ebc0a5871766855057cba2bd0c669c0711d898c
 LABEL org.opencontainers.image.source="https://github.com/grafana/loki" \
       org.opencontainers.image.revision="7a40404f32b3e6464c9cfc6cc7dd75a40f3931da" \
       org.opencontainers.image.version="3.7.7-otziv.1" \
-      com.otziv.security.patch="Go1.27.1; google.golang.org/grpc1.83.1; loopback HTTP200 readiness helper"
+      com.otziv.security.patch="Go1.27.1; google.golang.org/grpc1.83.2; loopback HTTP200 readiness helper"
 COPY --from=build /out/loki /usr/bin/loki
 COPY --from=build /out/http-ready /usr/bin/http-ready
 COPY --from=build /out/*.txt /out/LICENSE /usr/share/otziv-build/

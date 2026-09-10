@@ -8,8 +8,8 @@ RUN tar xzf /tmp/source.tar.gz --strip-components=1 && mkdir /out \
     && cp go.mod /out/go.mod.before.txt && cp go.sum /out/go.sum.before.txt
 RUN --mount=type=cache,id=otziv-monitoring-go-mod,target=/go/pkg/mod,sharing=locked \
     --mount=type=cache,id=otziv-monitoring-go-build,target=/root/.cache/go-build,sharing=locked \
-    go get google.golang.org/grpc@v1.83.1 github.com/apache/thrift@v0.24.0 golang.org/x/crypto@v0.55.0 \
-    && sed -e 's|google.golang.org/grpc v1.82.1|google.golang.org/grpc v1.83.1|' \
+    go get google.golang.org/grpc@v1.83.2 github.com/apache/thrift@v0.24.0 golang.org/x/crypto@v0.55.0 \
+    && sed -e 's|google.golang.org/grpc v1.82.1|google.golang.org/grpc v1.83.2|' \
        -e 's|github.com/apache/thrift v0.23.0|github.com/apache/thrift v0.24.0|' \
        -e 's|golang.org/x/crypto v0.53.0|golang.org/x/crypto v0.55.0|' \
        -e 's|github.com/spiffe/go-spiffe/v2 v2.6.0|github.com/spiffe/go-spiffe/v2 v2.7.0|' \
@@ -60,7 +60,7 @@ FROM grafana/tempo@sha256:b18e2bf60dd852ae891d721f906c15eb6af558c0e785fe82c019da
 LABEL org.opencontainers.image.source="https://github.com/grafana/tempo" \
       org.opencontainers.image.revision="f0f3ed59197bfe9f54f3b0f8015ccca112f9e544" \
       org.opencontainers.image.version="2.10.8-otziv.2" \
-      com.otziv.security.patch="Go1.27.1; grpc1.83.1; thrift0.24.0; xcrypto0.55.0; exact required transitive versions; request queue drain patch; loopback HTTP200 readiness"
+      com.otziv.security.patch="Go1.27.1; grpc1.83.2; thrift0.24.0; xcrypto0.55.0; exact required transitive versions; request queue drain patch; loopback HTTP200 readiness"
 COPY --from=build /out/tempo /tempo
 COPY --from=build /out/http-ready /usr/bin/http-ready
 COPY --from=build /out/*.txt /out/LICENSE /usr/share/otziv-build/

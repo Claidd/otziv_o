@@ -20,6 +20,12 @@ on:
           - c14-local-s3
           - c14-postgres
           - c14-keycloak
+          - c15-prometheus
+          - c15-loki
+          - c15-alloy
+          - c15-tempo
+          - c15-grafana
+          - c15-keycloak
   pull_request:
   push:
 
@@ -335,7 +341,7 @@ jobs:
         working-directory: backend
         run: bash ./mvnw -f ../infrastructure/keycloak/security-generation/pom.xml -B -ntp verify
       - name: Build the real issuer release image
-        run: docker build -t otziv-issuer-ci infrastructure/keycloak/security-generation/c14-migration-fix
+        run: docker build -t otziv-issuer-ci infrastructure/keycloak/security-generation/c15-netty
       - name: Build and scan reviewed database candidates
         run: |
           docker build -t otziv-mysql-ci infrastructure/mysql

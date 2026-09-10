@@ -10,7 +10,7 @@ RUN tar xzf /tmp/source.tar.gz --strip-components=1 && tar xzf /tmp/ui.tar.gz -C
     && mkdir /out && cp go.mod /out/go.mod.before.txt && cp go.sum /out/go.sum.before.txt
 RUN --mount=type=cache,id=otziv-monitoring-go-mod,target=/go/pkg/mod,sharing=locked \
     --mount=type=cache,id=otziv-monitoring-go-build,target=/root/.cache/go-build,sharing=locked \
-    go get google.golang.org/grpc@v1.83.1 \
+    go get google.golang.org/grpc@v1.83.2 \
     && sed '/google.golang.org\/grpc /d' /out/go.mod.before.txt > /tmp/before \
     && sed '/google.golang.org\/grpc /d' go.mod > /tmp/after && cmp /tmp/before /tmp/after \
     && go mod verify \
@@ -28,7 +28,7 @@ FROM prom/prometheus@sha256:595c907995955f2d5fda19fae66392680921d9501cad0be5270b
 LABEL org.opencontainers.image.source="https://github.com/prometheus/prometheus" \
       org.opencontainers.image.revision="b273ae3adeb64ad630d65ef7f16440df95658410" \
       org.opencontainers.image.version="3.13.3-otziv.1" \
-      com.otziv.security.patch="Go1.27.1; google.golang.org/grpc1.83.1; unmodified official web assets"
+      com.otziv.security.patch="Go1.27.1; google.golang.org/grpc1.83.2; unmodified official web assets"
 COPY --from=build /out/prometheus /bin/prometheus
 COPY --from=build /out/promtool /bin/promtool
 COPY --from=build /out/*.txt /out/LICENSE /out/NOTICE /usr/share/otziv-build/

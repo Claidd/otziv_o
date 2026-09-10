@@ -14,7 +14,7 @@ RUN for binary in grafana grafana-cli grafana-server; do go version -m /upstream
 RUN --mount=type=cache,id=otziv-monitoring-go-mod,target=/go/pkg/mod,sharing=locked \
     --mount=type=cache,id=otziv-monitoring-go-build,target=/root/.cache/go-build,sharing=locked \
     go list -m all > /out/modules.before.txt \
-    && go get google.golang.org/grpc@v1.83.1 github.com/apache/thrift@v0.24.0 \
+    && go get google.golang.org/grpc@v1.83.2 github.com/apache/thrift@v0.24.0 \
     && go mod verify && go list -m all > /out/modules.after.txt \
     && cp go.mod /out/go.mod.after.txt && cp go.sum /out/go.sum.after.txt \
     && cp go.work /out/go.work.after.txt && cp go.work.sum /out/go.work.sum.after.txt \
@@ -25,8 +25,8 @@ COPY --from=dependencies /out /
 
 FROM dependencies AS build
 # These are the two requested fixes and the four minimum versions required by
-# grpc 1.83.1. Reject any additional root or workspace dependency changes.
-RUN sed -e 's|google.golang.org/grpc v1.82.1|google.golang.org/grpc v1.83.1|' \
+# grpc 1.83.2. Reject any additional root or workspace dependency changes.
+RUN sed -e 's|google.golang.org/grpc v1.82.1|google.golang.org/grpc v1.83.2|' \
       -e 's|github.com/apache/thrift v0.23.1-0.20260429145742-d2acd3c49e58|github.com/apache/thrift v0.24.0|' \
       -e 's|cel.dev/expr v0.25.1|cel.dev/expr v0.25.2|' \
       -e 's|github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.32.0|github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.33.0|' \
@@ -65,7 +65,7 @@ USER 0
 RUN apk add --no-cache --upgrade 'libcrypto3=3.5.8-r0' 'libssl3=3.5.8-r0'
 LABEL org.opencontainers.image.revision="81407c71e96e8351b4600164c1b4d30c8baf41d6" \
       org.opencontainers.image.version="12.4.10+otziv.1" \
-      com.otziv.security.patch="Go1.27.1; grpc1.83.1; thrift0.24.0; exact required MVS; OpenSSL3.5.8; official CGO0 modernc SQLite"
+      com.otziv.security.patch="Go1.27.1; grpc1.83.2; thrift0.24.0; exact required MVS; OpenSSL3.5.8; official CGO0 modernc SQLite"
 COPY --from=build /out/grafana /out/grafana-cli /out/grafana-server /usr/share/grafana/bin/
 COPY --from=build /out/*.txt /out/LICENSE /usr/share/otziv-build/
 RUN grafana server -v | sed -e 's/Version //' > /.grafana-version && chmod 644 /.grafana-version

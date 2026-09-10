@@ -19,6 +19,12 @@ const RELEASE_SETS = Object.freeze({
   'c14-keycloak': { component: 'keycloak', path: 'infrastructure/runtime-security/reviewed-images-c14-keycloak.json',
     context: 'infrastructure/keycloak/security-generation/c14-migration-fix',
     dockerfile: 'infrastructure/keycloak/security-generation/c14-migration-fix/Dockerfile' },
+  'c15-prometheus': { component: 'prometheus', path: 'infrastructure/runtime-security/reviewed-images-c15-prometheus.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/Prometheus.Dockerfile' },
+  'c15-loki': { component: 'loki', path: 'infrastructure/runtime-security/reviewed-images-c15-loki.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/Loki.Dockerfile' },
+  'c15-alloy': { component: 'alloy', path: 'infrastructure/runtime-security/reviewed-images-c15-alloy.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/Alloy.Dockerfile' },
+  'c15-tempo': { component: 'tempo', path: 'infrastructure/runtime-security/reviewed-images-c15-tempo.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/Tempo.Dockerfile' },
+  'c15-grafana': { component: 'grafana', path: 'infrastructure/runtime-security/reviewed-images-c15-grafana.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/Grafana.Dockerfile' },
+  'c15-keycloak': { component: 'keycloak', path: 'infrastructure/runtime-security/reviewed-images-c15-keycloak.json', context: 'infrastructure/keycloak/security-generation/c15-netty', dockerfile: 'infrastructure/keycloak/security-generation/c15-netty/Dockerfile' },
 });
 // These two local-stack dependencies were absent from the immutable C7 manifest.
 // Keep their original pins and service coverage explicit when adding publication.
@@ -38,8 +44,8 @@ export function reviewedImageSet(name = 'baseline') {
   return Object.freeze({ name, path: name === 'baseline' ? BASELINE_PATH : RELEASE_SETS[name].path });
 }
 
-export function reviewedImageSetForComponent(component) {
-  const match = Object.entries(RELEASE_SETS).find(([, value]) => value.component === component);
+export function reviewedImageSetForComponent(component, manifestPath) {
+  const match = Object.entries(RELEASE_SETS).find(([, value]) => value.component === component && (manifestPath === undefined || value.path === manifestPath));
   assert.ok(match, 'activation_versioned_manifest_component');
   return reviewedImageSet(match[0]);
 }
