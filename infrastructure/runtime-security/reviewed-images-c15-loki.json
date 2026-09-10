@@ -29,7 +29,7 @@
       "candidateBaseRef": "grafana/loki@sha256:550d599ec4efacd8ebc0a5871766855057cba2bd0c669c0711d898c00d6d901f",
       "context": "infrastructure/runtime-security",
       "dockerfile": "infrastructure/runtime-security/builds/Loki.Dockerfile",
-      "dockerfileSha256": "c3467e5dbc0ad118b49fd61c801451095524c55db78e301a767759cbe1c498cc",
+      "dockerfileSha256": "84531137a1d3cf18a84f4376999106bb7e67449f3e1a9bf2f997d79e6035bcdc",
       "version": "3.7.7-otziv.1-grpc1.83.2"
     }
   ]

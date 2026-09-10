@@ -11,7 +11,7 @@ RUN tar xzf /tmp/source.tar.gz --strip-components=1 && tar xzf /tmp/ui.tar.gz -C
 RUN --mount=type=cache,id=otziv-monitoring-go-mod,target=/go/pkg/mod,sharing=locked \
     --mount=type=cache,id=otziv-monitoring-go-build,target=/root/.cache/go-build,sharing=locked \
     go get google.golang.org/grpc@v1.83.2 \
-    && sed '/google.golang.org\/grpc /d' /out/go.mod.before.txt > /tmp/before \
+    && sed -e '/google.golang.org\/grpc /d' -e 's|golang.org/x/net v0.57.0|golang.org/x/net v0.58.0|' /out/go.mod.before.txt > /tmp/before \
     && sed '/google.golang.org\/grpc /d' go.mod > /tmp/after && cmp /tmp/before /tmp/after \
     && go mod verify \
     && go build -p 2 -trimpath -tags netgo,builtinassets \

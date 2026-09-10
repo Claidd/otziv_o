@@ -29,7 +29,7 @@
       "candidateBaseRef": "prom/prometheus@sha256:595c907995955f2d5fda19fae66392680921d9501cad0be5270b3fee959780b1",
       "context": "infrastructure/runtime-security",
       "dockerfile": "infrastructure/runtime-security/builds/Prometheus.Dockerfile",
-      "dockerfileSha256": "da31aea9b0540d0e205b08a3b66f344ec6fe60b73d061f202d5e902fdb3f4f13",
+      "dockerfileSha256": "5617b6cfd1ca80617792839a05a93f93f7ea7a38058c99ef2768c0937a25ec50",
       "version": "3.13.3-otziv.1-grpc1.83.2"
     }
   ]

@@ -29,7 +29,7 @@
       "candidateBaseRef": "grafana/alloy@sha256:1eeba15ef3193438c72f66efd3d76f769c523a4c661db0fae6eddde906004bc8",
       "context": "infrastructure/runtime-security",
       "dockerfile": "infrastructure/runtime-security/builds/Alloy.Dockerfile",
-      "dockerfileSha256": "92e7230079d4e8b50a745bbb3541b1e6bb460ae1073f03d9e3781f8b9d412c01",
+      "dockerfileSha256": "240aa5e4206a5a6076d9de6cb522e24672fa9b3bc98ab619cad2484286ae546b",
       "version": "1.19.2-otziv.1-grpc1.83.2"
     }
   ]

@@ -27,6 +27,7 @@ FROM dependencies AS build
 # These are the two requested fixes and the four minimum versions required by
 # grpc 1.83.2. Reject any additional root or workspace dependency changes.
 RUN sed -e 's|google.golang.org/grpc v1.82.1|google.golang.org/grpc v1.83.2|' \
+       -e 's|golang.org/x/net v0.57.0|golang.org/x/net v0.58.0|' \
       -e 's|github.com/apache/thrift v0.23.1-0.20260429145742-d2acd3c49e58|github.com/apache/thrift v0.24.0|' \
       -e 's|cel.dev/expr v0.25.1|cel.dev/expr v0.25.2|' \
       -e 's|github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.32.0|github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.33.0|' \

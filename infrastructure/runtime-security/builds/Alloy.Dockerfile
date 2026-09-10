@@ -20,9 +20,9 @@ RUN --mount=type=cache,id=otziv-monitoring-go-mod,target=/go/pkg/mod,sharing=loc
     --mount=type=cache,id=otziv-monitoring-go-build,target=/root/.cache/go-build,sharing=locked \
     go get google.golang.org/grpc@v1.83.2 \
     && go -C collector get google.golang.org/grpc@v1.83.2 \
-    && sed '/google.golang.org\/grpc /d' /out/root.go.mod.before.txt > /tmp/before \
+    && sed -e '/google.golang.org\/grpc /d' -e 's|golang.org/x/net v0.57.0|golang.org/x/net v0.58.0|' /out/root.go.mod.before.txt > /tmp/before \
     && sed '/google.golang.org\/grpc /d' go.mod > /tmp/after && cmp /tmp/before /tmp/after \
-    && sed '/google.golang.org\/grpc /d' /out/collector.go.mod.before.txt > /tmp/before \
+    && sed -e '/google.golang.org\/grpc /d' -e 's|golang.org/x/net v0.57.0|golang.org/x/net v0.58.0|' /out/collector.go.mod.before.txt > /tmp/before \
     && sed '/google.golang.org\/grpc /d' collector/go.mod > /tmp/after && cmp /tmp/before /tmp/after \
     && go mod verify && go -C collector mod verify \
     && RELEASE_BUILD=1 VERSION=1.19.2-otziv.1 GO_TAGS='netgo embedalloyui promtail_journal_enabled' \

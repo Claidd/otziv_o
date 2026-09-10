@@ -29,7 +29,7 @@
       "candidateBaseRef": "grafana/tempo@sha256:b18e2bf60dd852ae891d721f906c15eb6af558c0e785fe82c019da4f2006f071",
       "context": "infrastructure/runtime-security",
       "dockerfile": "infrastructure/runtime-security/builds/Tempo.Dockerfile",
-      "dockerfileSha256": "788a83675876718663d50065da626c40d5761d9cb0241fc2369748990de89be8",
+      "dockerfileSha256": "aeebe2f1d7f3d23f1052b81c045f97f5ca3cf60c431482f0c3638879340854bb",
       "version": "2.10.8-otziv.2-grpc1.83.2"
     }
   ]

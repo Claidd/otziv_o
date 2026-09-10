@@ -29,7 +29,7 @@
       "candidateBaseRef": "grafana/grafana@sha256:27e80e0f4fa3d423bcbbbb3418f2a6475833f94a2a88b6f2547c74830ce4286e",
       "context": "infrastructure/runtime-security",
       "dockerfile": "infrastructure/runtime-security/builds/Grafana.Dockerfile",
-      "dockerfileSha256": "56d48e1c131d21e0fe1ac881d2b60b6542c9db8906a8a8735993974c4abb01db",
+      "dockerfileSha256": "a8d297a72bbbd0e674870f95d684ac90a603f67af4bd6fc0b6a07621ba5a318b",
       "version": "12.4.10+otziv.1-grpc1.83.2"
     }
   ]

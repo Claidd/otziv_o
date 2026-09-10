@@ -15,7 +15,7 @@ RUN --mount=type=cache,id=otziv-monitoring-go-mod,target=/go/pkg/mod,sharing=loc
        -e 's|github.com/spiffe/go-spiffe/v2 v2.6.0|github.com/spiffe/go-spiffe/v2 v2.7.0|' \
        -e 's|go.opentelemetry.io/contrib/detectors/gcp v1.43.0|go.opentelemetry.io/contrib/detectors/gcp v1.44.0|' \
        -e 's|github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.32.0|github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.33.0|' \
-       -e 's|golang.org/x/net v0.56.0|golang.org/x/net v0.57.0|' \
+       -e 's|golang.org/x/net v0.56.0|golang.org/x/net v0.58.0|' \
        -e 's|golang.org/x/sys v0.46.0|golang.org/x/sys v0.47.0|' \
        -e 's|golang.org/x/term v0.44.0|golang.org/x/term v0.45.0|' \
        -e 's|golang.org/x/text v0.39.0|golang.org/x/text v0.41.0|' \
