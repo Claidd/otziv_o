@@ -6,6 +6,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.time.Duration;
 import java.util.List;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterEach;
@@ -14,11 +15,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.mysql.MySQLContainer;
 import static org.assertj.core.api.Assertions.*;
+import static org.awaitility.Awaitility.await;
 
 @Testcontainers
 class PerformerLegacyMaintenanceMySqlIntegrationTest {
@@ -27,13 +29,12 @@ class PerformerLegacyMaintenanceMySqlIntegrationTest {
             .withDatabaseName("performer_upgrade").withUsername("root").withPassword("root");
     @TempDir Path migrations;
     private JdbcTemplate jdbc;
-    private DriverManagerDataSource dataSource;
+    private SingleConnectionDataSource dataSource;
     private Connection connection;
     private PerformerLegacyMaintenance tool;
 
     @BeforeEach void setup() throws Exception {
-        dataSource=new DriverManagerDataSource(MYSQL.getJdbcUrl(),MYSQL.getUsername(),MYSQL.getPassword());
-        jdbc=new JdbcTemplate(dataSource);
+        connectFixture();
         jdbc.execute("SET GLOBAL read_only=OFF"); jdbc.execute("SET GLOBAL event_scheduler=OFF");
         for(String table:List.of("performer_legacy_maintenance_rows","performer_legacy_maintenance_runs","performer_notification_resolutions","performer_notification_intents","review_performer_offers","review_performer_assignments","flyway_schema_history")) jdbc.execute("DROP TABLE IF EXISTS "+table);
         jdbc.execute("CREATE TABLE review_performer_assignments(assignment_id BIGINT PRIMARY KEY,status VARCHAR(32),publish_available_at DATETIME(6))");
@@ -54,11 +55,12 @@ class PerformerLegacyMaintenanceMySqlIntegrationTest {
             jdbc.execute("ALTER USER '"+account.get("user")+"'@'"+account.get("host")+"' ACCOUNT LOCK");
         }
         jdbc.execute("SET GLOBAL read_only=ON");
-        connection=DriverManager.getConnection(MYSQL.getJdbcUrl(),MYSQL.getUsername(),MYSQL.getPassword());
-        tool=new PerformerLegacyMaintenance(connection,"maintenance_fixture_app","%");
     }
 
-    @AfterEach void close() throws Exception {if(connection!=null)connection.close();jdbc.execute("SET GLOBAL read_only=OFF");}
+    @AfterEach void close() throws Exception {
+        try {if(connection!=null && !connection.isClosed()) jdbc.execute("SET GLOBAL read_only=OFF");}
+        finally {if(connection!=null) connection.close();}
+    }
 
     @Test void startupCannotBypassOldHistoryMaintenanceButEmptySchemaCanMigrateNormally() {
         assertThatThrownBy(()->PerformerMaintenanceStartupGuard.assertReady(dataSource)).hasMessageContaining("Offline performer legacy maintenance required");
@@ -132,6 +134,18 @@ class PerformerLegacyMaintenanceMySqlIntegrationTest {
         PerformerMaintenanceStartupGuard.assertReady(dataSource);
     }
 
+    @Test void realAdditionalConnectionBlocksMaintenanceUntilServerConfirmsItClosed() throws Exception {
+        long otherId;
+        try (Connection other=DriverManager.getConnection(MYSQL.getJdbcUrl(),MYSQL.getUsername(),MYSQL.getPassword())) {
+            var otherJdbc=new JdbcTemplate(new SingleConnectionDataSource(other,true));
+            otherId=otherJdbc.queryForObject("SELECT CONNECTION_ID()",Long.class);
+            assertThatThrownBy(()->tool.begin("operator")).hasMessageContaining("connections have not drained");
+            assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='performer_legacy_maintenance_runs'",Integer.class)).isZero();
+        }
+        awaitConnectionClosed(otherId);
+        assertThat(tool.begin("operator")).isNotBlank();
+    }
+
     @Test void interruptedStagingCanAbortWithoutMigrationOrLostOriginals() {
         String run=tool.begin("operator");tool.stage(run,3);reconnectUnchecked();
         tool.restore(run,1,true);reconnectUnchecked();
@@ -169,6 +183,26 @@ class PerformerLegacyMaintenanceMySqlIntegrationTest {
         return Flyway.configure().dataSource(dataSource).locations("filesystem:"+migrations.toAbsolutePath())
                 .baselineVersion("1.10.287").target(target).cleanDisabled(true).load();
     }
-    private void reconnect() throws Exception {connection.close();connection=DriverManager.getConnection(MYSQL.getJdbcUrl(),MYSQL.getUsername(),MYSQL.getPassword());tool=new PerformerLegacyMaintenance(connection,"maintenance_fixture_app","%");}
+    private void connectFixture() throws Exception {
+        connection=DriverManager.getConnection(MYSQL.getJdbcUrl(),MYSQL.getUsername(),MYSQL.getPassword());
+        // All fixture queries use the maintenance session. Opening and immediately
+        // closing a connection per JdbcTemplate call races MySQL's COM_QUIT cleanup.
+        dataSource=new SingleConnectionDataSource(connection,true);
+        jdbc=new JdbcTemplate(dataSource);
+        tool=new PerformerLegacyMaintenance(connection,"maintenance_fixture_app","%");
+    }
+    private void reconnect() throws Exception {
+        long previousId=jdbc.queryForObject("SELECT CONNECTION_ID()",Long.class);
+        connection.close();
+        connectFixture();
+        awaitConnectionClosed(previousId);
+    }
+    private void awaitConnectionClosed(long id) {
+        // Wait for this known, explicitly closed fixture connection only. The
+        // production write fence remains immediate and rejects every live peer.
+        await().alias("closed fixture session removed from MySQL processlist")
+                .pollInterval(Duration.ofMillis(25)).atMost(Duration.ofSeconds(10))
+                .until(()->jdbc.queryForObject("SELECT COUNT(*) FROM information_schema.processlist WHERE ID=?",Long.class,id)==0);
+    }
     private void reconnectUnchecked() {try{reconnect();}catch(Exception error){throw new IllegalStateException(error);}}
 }
