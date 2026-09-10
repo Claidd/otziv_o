@@ -47,6 +47,8 @@ function fixtureClient(options) {
 async function exercise(client) {
   await client.initialize();
   assert.equal(client.pupBrowser.isConnected(), true);
+  assert.ok(process.env.OTZIV_BROWSER_VERSION, "Release browser version must be pinned");
+  assert.equal(await client.pupBrowser.version(), `Chrome/${process.env.OTZIV_BROWSER_VERSION}`);
   const cdp = await client.pupPage.createCDPSession();
   try {
     const command = await cdp.send("Browser.getBrowserCommandLine");

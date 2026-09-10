@@ -36,6 +36,8 @@ try {
     try {
       browser=await cancellation.own(await chromium.launch({chromiumSandbox:true,
         executablePath:process.env.CHROMIUM_EXECUTABLE_PATH||undefined,headless:true,args:chromiumLaunchArgs(),timeout:30000}));
+      assert.ok(process.env.OTZIV_BROWSER_VERSION, "Release browser version must be pinned");
+      assert.equal(browser.version(), process.env.OTZIV_BROWSER_VERSION);
       ocr=await cancellation.own(new OcrRuntime({cacheDirectory,modelDirectory}));await ocr.ready;
       prepared();await finish;
     } finally {await cancellation.close();}

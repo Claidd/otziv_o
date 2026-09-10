@@ -114,6 +114,8 @@ class CapacityTests(unittest.TestCase):
         self.assertIn('"infrastructure\\scripts\\prod\\deployment_capacity.py"', source)
         self.assertIn('$appImage = $capacityPlan.releaseImages.app', source)
         self.assertIn('$webImage = $capacityPlan.releaseImages.nginx', source)
+        self.assertIn('"infrastructure\\runtime-security\\chromium-seccomp.json"', source)
+        self.assertNotIn('"infrastructure\\runtime-security",', source)
 
 
 if __name__ == '__main__': unittest.main()

@@ -1,0 +1,16 @@
+{
+  "schema": "otziv-browser-artifact-v1",
+  "capturedAt": "2026-09-10T21:25:40.408858+00:00",
+  "packageIndex": "https://dl.google.com/linux/chrome/deb/dists/stable/main/binary-amd64/Packages.gz",
+  "indexSha256": "b025fb10364a84833f4e1cfbcfb441dbf01f6a7505941134f29dfa0dd4122fa7",
+  "packageStanzaSha256": "1d9b87ff5ad299bd251aad345772a61f042c5d212a3659c37ec1023900a8c5a2",
+  "version": "153.0.8010.36",
+  "packageVersion": "153.0.8010.36-1",
+  "architecture": "amd64",
+  "artifactUrl": "https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_153.0.8010.36-1_amd64.deb",
+  "artifactSha256": "9bb44e33031c2f2857cf36b4343051a12f93058e4b781e3c76313df87f6c8d32",
+  "artifactBytes": 141931876,
+  "upstreamVersionEvidence": "https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json",
+  "debianAdvisories": "https://security-tracker.debian.org/tracker/source-package/chromium",
+  "scanCoverage": "Trivy Debian package counts do not prove Google Chrome CVE coverage. Verify vendor browser advisories separately; this record grants no risk exception."
+}

@@ -455,7 +455,7 @@ rm -f "`$images_tar"
 require_compose_service whatsapp_lika
 require_compose_service whatsapp_vika
 compose build whatsapp_lika whatsapp_vika
-if ! compose run --rm --no-deps --interactive=false -T --entrypoint /usr/bin/chromium whatsapp_lika --headless --disable-gpu --dump-dom about:blank </dev/null >/dev/null 2>&1; then
+if ! compose run --rm --no-deps --interactive=false -T --entrypoint node whatsapp_lika /app/chromium-smoke.js </dev/null >/dev/null 2>&1; then
   echo "WhatsApp Chromium sandbox preflight failed; existing containers were not stopped." >&2
   exit 1
 fi

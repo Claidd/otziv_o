@@ -1,22 +1,24 @@
-FROM node:22-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5
+FROM node:22-trixie-slim@sha256:7b8a0c89c54499bee567618f96578e1a12a800f062fbdbfd1fb6a443fa6f6284
 
+# Identical browser layer in both images; provenance: runtime-security/proofs/chrome153.
+RUN printf 'Acquire::Retries "1"; Acquire::http::Timeout "20"; Acquire::https::Timeout "20"; Acquire::ForceIPv4 "true";\n' > /etc/apt/apt.conf.d/80-bounded-network && \
+    test "$(dpkg --print-architecture)" = amd64 && \
+    apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends curl ca-certificates fonts-liberation fonts-dejavu && \
+    curl --fail --location --retry 3 --connect-timeout 20 --max-time 300 'https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_153.0.8010.36-1_amd64.deb' --output /tmp/chrome.deb && \
+    printf '%s  /tmp/chrome.deb\n' '9bb44e33031c2f2857cf36b4343051a12f93058e4b781e3c76313df87f6c8d32' | sha256sum --check --strict && \
+    apt-get install -y --no-install-recommends /tmp/chrome.deb && \
+    test "$(dpkg-query -W -f='${Version}' google-chrome-stable)" = "153.0.8010.36-1" && \
+    /usr/bin/google-chrome-stable --version | grep -Fx "Google Chrome 153.0.8010.36 " && \
+    rm /tmp/chrome.deb && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+ENV OTZIV_BROWSER_VERSION=153.0.8010.36
 ENV NODE_ENV=production \
     PORT=3097 \
     PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
-    CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium \
+    CHROMIUM_EXECUTABLE_PATH=/usr/bin/google-chrome-stable \
     HOME=/tmp/worker-home \
     XDG_CACHE_HOME=/tmp/otziv-cache \
     TESSERACT_CACHE_PATH=/tmp/tesseract-cache
-
-RUN printf 'Acquire::Retries "5";\nAcquire::http::Timeout "60";\nAcquire::https::Timeout "60";\n' > /etc/apt/apt.conf.d/80-retries && \
-    apt-get update && apt-get upgrade -y && apt-get install -y --fix-missing \
-    chromium \
-    ca-certificates \
-    fonts-liberation \
-    fonts-dejavu \
-    --no-install-recommends && \
-    update-ca-certificates && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 

@@ -1030,7 +1030,9 @@ $deployBundlePaths = @(
     "infrastructure\tempo",
     "infrastructure\alloy",
     "infrastructure\docker-observer",
-    "infrastructure\runtime-security",
+    # Scan reports/source proofs stay with the release evidence in Git. Only the
+    # runtime seccomp policy is mounted by production containers.
+    "infrastructure\runtime-security\chromium-seccomp.json",
     "infrastructure\monitoring",
     "infrastructure\grafana",
     "infrastructure\systemd\otziv-prod-up.timer",
