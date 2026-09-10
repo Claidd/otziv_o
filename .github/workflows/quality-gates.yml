@@ -183,7 +183,7 @@ jobs:
         shell: pwsh
         run: ./infrastructure/scripts/security/check-deploy-release-contract.ps1
       - name: Exercise database image continuity and startup guards
-        run: python3 -m unittest discover -s infrastructure/scripts/prod -p "test_database_image_guard.py" -v
+        run: python3 -m unittest discover -s infrastructure/scripts/prod -p "test_*.py" -v
       - name: Reject unsafe local restore targets before any Docker mutation
         shell: pwsh
         run: ./infrastructure/scripts/local/test-restore-contract.ps1

@@ -10,6 +10,8 @@ shared/client-common/src/*.generated.ts text eol=lf
 infrastructure/runtime-security/reviewed-images.json text eol=lf
 infrastructure/runtime-security/history/** -text
 infrastructure/runtime-security/proofs/** -text
+# Retained upstream source/patch bytes include upstream whitespace; do not rewrite evidence.
+infrastructure/runtime-security/proofs/c15-postgres-libxml/upstream-* -whitespace
 infrastructure/keycloak/security-generation/proofs/** -text
 infrastructure/runtime-security/KEYCLOAK_ADVISORY_VALIDATION_2026-09-08.json -text
 

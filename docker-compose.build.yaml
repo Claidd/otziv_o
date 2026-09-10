@@ -18,3 +18,9 @@ services:
     build:
       context: ./backend/external-review-worker
       dockerfile: Dockerfile
+
+  whatsapp:
+    image: ${WHATSAPP_IMAGE:-claid38/otziv-whatsapp:build-local}
+    build:
+      context: .
+      dockerfile: Dockerfile.whatsapp

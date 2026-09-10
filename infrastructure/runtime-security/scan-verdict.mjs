@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { effectiveScanSummary } from './grafana-tempo-adjudication.mjs';
 import { effectiveAlloySummary } from './alloy-daemon-adjudication.mjs';
-import { effectivePostgresSummary } from './postgres-c14-adjudication.mjs';
+import { effectivePostgresSummary } from './postgres-c15-adjudication.mjs';
 
 // Accept the raw counter summary, never an earlier verdict or pre-subtracted counters.
 // Inspection failures and finding counts are separate inputs to the final verdict.

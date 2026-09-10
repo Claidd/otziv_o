@@ -1,0 +1,43 @@
+{
+  "schema": "otziv-postgres-libxml-python-review-v1",
+  "cve": "CVE-2026-74860",
+  "reviewedAt": "2026-09-10T19:58:15.452326+00:00",
+  "validUntil": "2027-01-01T00:00:00Z",
+  "parentReviewSha256": "8a78fb92b557c7557568a39ce2c31ab31b2c1361558840e77459f2072397c264",
+  "sourceArchiveSha256": "98087fd181d9070724f3fbc65c7377db03038eb92bd882374daff44940138821",
+  "sourceVersion": "2.15.4",
+  "finding": {
+    "package": "libxml2-16",
+    "source": "libxml2",
+    "version": "2.15.4",
+    "reason": "vulnerable_python_bindings_absent"
+  },
+  "upstreamFix": "f41e1865781f74d1cadfe2fbdfeefed946026f12",
+  "fixedUpstreamVersion": "2.15.3",
+  "basis": [
+    "Debian identifies the vulnerable Python SAX attributeDecl binding and the fix in 2.15.3.",
+    "The verified 2.15.4 source archive contains the same python/libxml.c as the pinned upstream release commit.",
+    "The unchanged reviewed recipe configures --without-python; the full byte-bound runtime inventory contains no Python interpreter, runtime or libxml2mod bindings.",
+    "Every scan must re-export the stopped image and validate the complete original runtime identity before applying this single supplemental finding decision."
+  ],
+  "files": {
+    "debian.html": {
+      "url": "https://security-tracker.debian.org/tracker/CVE-2026-74860",
+      "sha256": "c3d4ecfbecc4e6945883c9ae91a3ce69b95766e54ee64078484eaed3b5b5ba3e"
+    },
+    "upstream-fix.patch": {
+      "url": "https://github.com/GNOME/libxml2/commit/f41e1865781f74d1cadfe2fbdfeefed946026f12.patch",
+      "sha256": "50e1ef0fb2dd96d45c6bca6703e47fe054390b1d2a2b2f2e7600ea6676c54e87"
+    },
+    "upstream-python.c": {
+      "url": "https://raw.githubusercontent.com/GNOME/libxml2/96498992efa48d52b0e8b83058bd88dbdaf153c1/python/libxml.c",
+      "sha256": "c3e9fd94702702f1aacbc8474b233a14e8257748ea3dce03b15d39d3145d0de6"
+    },
+    "ci-report.json.gz": {
+      "sha256": "70270b08d0aeaf0c71a3a43be85973cbfe4a87d66075a2bcc3050d7375261384"
+    },
+    "observed-runtime.json.gz": {
+      "sha256": "99cdf6aa9b4b41b598f7d9f3791047d57e0ec76611f05b8d9ff1706ac3658e34"
+    }
+  }
+}
