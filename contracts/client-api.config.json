@@ -15,6 +15,7 @@
     "GET /api/payments/public/tbank-status": 404
   },
   "optionalForCompatibility": {
+    "DailyWorkProgressResponse": ["calculatedAt"],
     "ManagerControlConcreteItemResponse": ["delivery"],
     "CommonInvoiceDetailsResponse": ["delivery"]
   },

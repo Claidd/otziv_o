@@ -104,6 +104,42 @@ public class SchedulerLeaseService {
                 .addValue("fencingToken", lease.fencingToken()));
     }
 
+    /** Locks the fence through the caller's write transaction, preventing an expired owner from publishing. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void holdForTransaction(Lease lease, Duration duration) {
+        int renewed = jdbc.update("""
+                UPDATE scheduler_leases
+                SET heartbeat_at = CURRENT_TIMESTAMP(6),
+                    lease_until = TIMESTAMPADD(SECOND, :seconds, CURRENT_TIMESTAMP(6))
+                WHERE lease_name = :name AND owner_token = :owner AND fencing_token = :fence
+                  AND lease_until > CURRENT_TIMESTAMP(6)
+                """, new MapSqlParameterSource().addValue("seconds", boundedSeconds(duration))
+                .addValue("name", lease.leaseName()).addValue("owner", lease.ownerToken())
+                .addValue("fence", lease.fencingToken()));
+        if (renewed != 1) throw new IllegalStateException("Projection refresh lease lost");
+    }
+
+    /** Caller holds the lease row until commit; the checkpoint commits with the derived rows. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public long projectionCursor(Lease lease, java.time.LocalDate date) {
+        return jdbc.query("""
+                SELECT last_id FROM projection_refresh_checkpoints
+                WHERE job_name=:name AND source_date=:date
+                """, new MapSqlParameterSource("name", lease.leaseName()).addValue("date", date),
+                (rs, row) -> rs.getLong(1)).stream().findFirst().orElse(0L);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void advanceProjectionCursor(Lease lease, java.time.LocalDate date, long lastId) {
+        holdForTransaction(lease, Duration.ofMinutes(2));
+        jdbc.update("""
+                INSERT INTO projection_refresh_checkpoints(job_name, source_date, last_id)
+                VALUES (:name,:date,:id)
+                ON DUPLICATE KEY UPDATE source_date=VALUES(source_date), last_id=VALUES(last_id),
+                    updated_at=CURRENT_TIMESTAMP(6)
+                """, new MapSqlParameterSource("name", lease.leaseName()).addValue("date", date).addValue("id", lastId));
+    }
+
     private String requireLeaseName(String value) {
         String normalized = value == null ? "" : value.trim();
         if (normalized.isEmpty() || normalized.length() > 128 || !normalized.matches("[A-Za-z0-9._:-]+")) {

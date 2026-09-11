@@ -110,16 +110,30 @@ public interface ManagerRepository extends CrudRepository<Manager, Long> {
     LEFT JOIN FETCH u.image
     LEFT JOIN FETCH u.workers w
     LEFT JOIN FETCH w.user
-    LEFT JOIN FETCH u.operators o
-    LEFT JOIN FETCH o.user
-    LEFT JOIN FETCH u.marketologs mk
-    LEFT JOIN FETCH mk.user
     JOIN u.roles r
     WHERE m IN :managers
       AND u.active = true
       AND r.name = 'ROLE_MANAGER'
 """)
-    List<Manager> findAllManagersWorkers(List<Manager> managers);
+    List<Manager> findManagersWithWorkers(@Param("managers") List<Manager> managers);
+
+    @Query("SELECT DISTINCT m FROM Manager m JOIN FETCH m.user u LEFT JOIN FETCH u.operators o LEFT JOIN FETCH o.user WHERE m IN :managers")
+    List<Manager> fetchManagerOperators(@Param("managers") List<Manager> managers);
+
+    @Query("SELECT DISTINCT m FROM Manager m JOIN FETCH m.user u LEFT JOIN FETCH u.marketologs mk LEFT JOIN FETCH mk.user WHERE m IN :managers")
+    List<Manager> fetchManagerMarketologs(@Param("managers") List<Manager> managers);
+
+    /** Three bounded collection fetches avoid workers × operators × marketers row multiplication. */
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    default List<Manager> findAllManagersWorkers(List<Manager> managers) {
+        if (managers == null || managers.isEmpty()) return List.of();
+        List<Manager> visible = findManagersWithWorkers(managers);
+        if (!visible.isEmpty()) {
+            fetchManagerOperators(visible);
+            fetchManagerMarketologs(visible);
+        }
+        return visible;
+    }
 
     @Query("""
     SELECT m

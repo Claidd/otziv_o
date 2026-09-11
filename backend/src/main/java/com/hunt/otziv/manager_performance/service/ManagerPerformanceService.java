@@ -64,32 +64,58 @@ public class ManagerPerformanceService {
     private final ClientChatUnansweredItemRepository unansweredItemRepository;
     private final WorkerRiskIncidentRepository riskIncidentRepository;
     private final ManagerTeamProgressService managerTeamProgressService;
+    private final com.hunt.otziv.u_users.api.CabinetCacheScope cacheScope;
 
-    private volatile LocalDate cachedScoreDate;
-    private volatile Instant cachedScoreAt;
-    private volatile List<ManagerPerformanceScoreResponse> cachedScore = List.of();
+    private final java.util.concurrent.atomic.AtomicLong scoreRevision = new java.util.concurrent.atomic.AtomicLong();
+    private final com.github.benmanes.caffeine.cache.Cache<ScoreKey, List<ManagerPerformanceScoreResponse>> scores =
+            com.github.benmanes.caffeine.cache.Caffeine.newBuilder().maximumSize(512)
+                    .expireAfterWrite(SCORE_CACHE_TTL).build();
+    private record ScoreKey(LocalDate date, Long userId, long revision, String accessScope) {}
 
     public void invalidate() {
-        cachedScoreDate = null;
-        cachedScoreAt = null;
-        cachedScore = List.of();
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                    new org.springframework.transaction.support.TransactionSynchronization() {
+                        @Override public void afterCommit() { invalidateScores(); }
+                    });
+        } else { invalidateScores(); }
     }
+
+    private void invalidateScores() { scoreRevision.incrementAndGet(); scores.invalidateAll(); }
 
     @Transactional(readOnly = true)
     public List<ManagerPerformanceScoreResponse> score(LocalDate selectedDate) {
+        return cachedScores(selectedDate, null);
+    }
+
+    /** Same calculation as the ranking, limited to the already authorized user's manager. */
+    @Transactional(readOnly = true)
+    public ManagerPerformanceScoreResponse scoreForUser(LocalDate selectedDate, Long userId) {
+        if (userId == null) return null;
+        return cachedScores(selectedDate, userId).stream().findFirst().orElse(null);
+    }
+
+    private List<ManagerPerformanceScoreResponse> cachedScores(LocalDate selectedDate, Long userId) {
+        LocalDate date = selectedDate == null ? LocalDate.now(PERFORMANCE_ZONE) : selectedDate;
+        // A command can call score before commit; never publish its uncommitted state into a shared cache.
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()
+                && !org.springframework.transaction.support.TransactionSynchronizationManager.isCurrentTransactionReadOnly())
+            return calculateScore(date, userId);
+        return scores.get(new ScoreKey(date, userId, scoreRevision.get(), cacheScope.fingerprint()),
+                key -> calculateScore(key.date(), key.userId()));
+    }
+
+    private List<ManagerPerformanceScoreResponse> calculateScore(LocalDate selectedDate, Long userId) {
         LocalDate today = LocalDate.now(PERFORMANCE_ZONE);
         LocalDate date = selectedDate == null ? today : selectedDate;
-        List<ManagerPerformanceScoreResponse> cached = cachedScoreIfFresh(date);
-        if (cached != null) {
-            return cached;
-        }
         LocalDate fromDate = date.withDayOfMonth(1);
         LocalDate toDate = date;
         LocalDateTime from = fromDate.atStartOfDay();
         LocalDateTime to = toDate.plusDays(1).atStartOfDay().minusNanos(1);
         LocalDateTime evaluatedAt = date.equals(today) ? LocalDateTime.now(PERFORMANCE_ZONE) : to;
 
-        List<Manager> managers = managerRepository.findAllWithUserAndImage();
+        List<Manager> managers = userId == null ? managerRepository.findAllWithUserAndImage()
+                : managerRepository.findAllByUserIdsForAdminList(Set.of(userId));
         if (managers.isEmpty()) {
             return List.of();
         }
@@ -104,7 +130,9 @@ public class ManagerPerformanceService {
                                 teamProgressTo
                         );
 
-        List<ManagerDailyControl> controls = controlRepository.findByControlDateBetween(fromDate, toDate);
+        List<ManagerDailyControl> controls = userId == null
+                ? controlRepository.findByControlDateBetween(fromDate, toDate)
+                : controlRepository.findByManagerInAndControlDateBetween(managers, fromDate, toDate);
         List<ManagerDailyControlItem> items = controls.isEmpty()
                 ? List.of()
                 : itemRepository.findByControlIn(controls);
@@ -121,6 +149,10 @@ public class ManagerPerformanceService {
         Map<Long, List<ManagerDailyControl>> controlsByManagerId = controls.stream()
                 .filter(control -> control.getManager() != null && control.getManager().getId() != null)
                 .collect(Collectors.groupingBy(control -> control.getManager().getId()));
+        Map<Long, Long> reopenEvents = controls.isEmpty() ? Map.of() : controlEventRepository
+                .countEventsByManager(controls, ManagerDailyControlEventType.CONTROL_REOPENED).stream()
+                .collect(Collectors.toMap(ManagerDailyControlEventRepository.ManagerEventCount::getManagerId,
+                        ManagerDailyControlEventRepository.ManagerEventCount::getTotal));
         Map<Long, List<ManagerDailyControlItem>> itemsByControlId = items.stream()
                 .filter(item -> item.getControl() != null && item.getControl().getId() != null)
                 .collect(Collectors.groupingBy(item -> item.getControl().getId()));
@@ -142,6 +174,7 @@ public class ManagerPerformanceService {
                         clientItemsByManagerId.getOrDefault(manager.getId(), List.of()),
                         riskAssignments,
                         evaluatedAt,
+                        reopenEvents.getOrDefault(manager.getId(), 0L),
                         teamProgressByManagerId.getOrDefault(
                                 manager.getId(),
                                 ManagerTeamProgressService.TeamProgressStats.empty()
@@ -153,21 +186,7 @@ public class ManagerPerformanceService {
                         .thenComparing(ManagerPerformanceScoreResponse::workloadIndex, Comparator.reverseOrder())
                         .thenComparing(ManagerPerformanceScoreResponse::managerId, Comparator.nullsLast(Long::compareTo)))
                 .toList();
-        cachedScoreDate = date;
-        cachedScoreAt = Instant.now();
-        cachedScore = result;
         return result;
-    }
-
-    private List<ManagerPerformanceScoreResponse> cachedScoreIfFresh(LocalDate date) {
-        Instant cachedAt = cachedScoreAt;
-        if (cachedAt == null || cachedScoreDate == null || !cachedScoreDate.equals(date)) {
-            return null;
-        }
-        if (cachedAt.plus(SCORE_CACHE_TTL).isBefore(Instant.now())) {
-            return null;
-        }
-        return cachedScore;
     }
 
     private ManagerPerformanceScoreResponse managerScore(
@@ -178,6 +197,7 @@ public class ManagerPerformanceService {
             List<ClientChatUnansweredItem> clientItems,
             RiskAssignments riskAssignments,
             LocalDateTime evaluatedAt,
+            long reopened,
             ManagerTeamProgressService.TeamProgressStats teamProgress
     ) {
         List<ManagerDailyControlItem> items = controls.stream()
@@ -265,7 +285,7 @@ public class ManagerPerformanceService {
         double overdueBase = Math.max(1.0, Math.max(overdueOrderCount,
                 Math.max(actionTotal, eligibleOrderEpisodes)));
         double overdueRate = round1(Math.min(100.0, (overdueOrderCount * 100.0) / overdueBase));
-        double reopenRate = round1(reopenRate(controls));
+        double reopenRate = round1(controls.isEmpty() ? 0 : Math.min(100.0, reopened * 100.0 / controls.size()));
         double riskResolutionAvgHours = round1(averageRiskResolutionHours(riskIncidents));
         double clientReplyMedianMinutes = round1(clientReplyPercentileMinutes(clientItems, 0.50));
         double clientReplyP90Minutes = round1(clientReplyPercentileMinutes(clientItems, 0.90));
@@ -525,17 +545,6 @@ public class ManagerPerformanceService {
                 .mapToLong(Long::longValue)
                 .average()
                 .orElse(0);
-    }
-
-    private double reopenRate(List<ManagerDailyControl> controls) {
-        if (controls.isEmpty()) {
-            return 0;
-        }
-        long reopened = controlEventRepository.countByControlInAndEventType(
-                controls,
-                ManagerDailyControlEventType.CONTROL_REOPENED
-        );
-        return Math.min(100.0, (reopened * 100.0) / controls.size());
     }
 
     private double deferredRate(List<ManagerDailyControlItem> items) {

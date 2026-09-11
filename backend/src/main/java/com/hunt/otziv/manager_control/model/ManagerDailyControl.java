@@ -112,6 +112,8 @@ public class ManagerDailyControl {
         }
     }
 
+    public Long managerId() { return manager == null ? null : manager.getId(); }
+
     @PreUpdate
     void onUpdate() {
         updatedAt = LocalDateTime.now();

@@ -71,6 +71,8 @@ public class ManagerControlBoardWorkflow {
     private final ManagerDailyControlItemRepository dailyControlItemRepository;
 
     private final ManagerPerformanceService managerPerformanceService;
+    private final ManagerControlReadSnapshots readSnapshots;
+    private final com.hunt.otziv.u_users.api.CabinetCacheScope cacheScope;
 
     //ok
     @Transactional(readOnly = true)
@@ -83,10 +85,12 @@ public class ManagerControlBoardWorkflow {
         reconcileClientMessagesForControl();
         cardLifecycle.invalidateManagerPerformance();
         LocalDate today = LocalDate.now();
-        for (Manager manager : accessPolicy.visibleManagers(principal, authentication)) {
+        List<Manager> visible = accessPolicy.visibleManagers(principal, authentication);
+        for (Manager manager : visible) {
             managerControl(manager, today, null, true, false);
             syncManagerActionConcreteItems(manager, today);
         }
+        readSnapshots.invalidate(visible.stream().map(Manager::getId).toList());
         return today(principal, authentication, false);
     }
 
@@ -102,7 +106,16 @@ public class ManagerControlBoardWorkflow {
 
     ManagerControlSummaryResponse today(Principal principal, Authentication authentication, boolean persist) {
         LocalDate today = LocalDate.now();
-        List<ManagerControlManagerResponse> managers = accessPolicy.visibleManagers(principal, authentication).stream().map(manager -> managerControl(manager, today, null, persist, true)).sorted(Comparator.comparingInt((ManagerControlManagerResponse manager) -> statusRank(manager.status())).thenComparing(ManagerControlManagerResponse::totalAttentionCount, Comparator.reverseOrder()).thenComparing(ManagerControlManagerResponse::name, String.CASE_INSENSITIVE_ORDER)).toList();
+        List<Manager> visible = com.hunt.otziv.config.metrics.PerformanceMetrics.segment(
+                "manager-control.today", "access", () -> accessPolicy.visibleManagers(principal, authentication));
+        Map<Long, ManagerControlReadSnapshots.Snapshot> prepared = persist ? Map.of() :
+                com.hunt.otziv.config.metrics.PerformanceMetrics.segment("manager-control.today", "projection",
+                        () -> readSnapshots.fresh(visible.stream().map(Manager::getId).toList(), today, cacheScope.fingerprint()));
+        List<ManagerControlManagerResponse> managers = visible.stream().map(manager -> {
+            var snapshot = prepared.get(manager.getId());
+            return snapshot == null ? com.hunt.otziv.config.metrics.PerformanceMetrics.segment(
+                    "manager-control.today", "fallback", () -> managerControl(manager, today, null, persist, true)) : snapshot.response();
+        }).sorted(Comparator.comparingInt((ManagerControlManagerResponse manager) -> statusRank(manager.status())).thenComparing(ManagerControlManagerResponse::totalAttentionCount, Comparator.reverseOrder()).thenComparing(ManagerControlManagerResponse::name, String.CASE_INSENSITIVE_ORDER)).toList();
         if (managerPermissionService.hasAnyRole(authentication, "ADMIN", "OWNER")) {
             Map<Long, ManagerPerformanceScoreResponse> performanceByManagerId = managerPerformanceService.score(today).stream().filter(score -> score.managerId() != null).collect(Collectors.toMap(ManagerPerformanceScoreResponse::managerId, score -> score, (left, right) -> left));
             managers = managers.stream().map(manager -> withManagerPerformance(manager, performanceByManagerId.get(manager.managerId()))).toList();
@@ -114,8 +127,20 @@ public class ManagerControlBoardWorkflow {
         long warning = managers.stream().mapToLong(ManagerControlManagerResponse::warningCount).sum();
         long workload = managers.stream().mapToLong(ManagerControlManagerResponse::workloadCount).sum();
         long attention = managers.stream().mapToLong(ManagerControlManagerResponse::totalAttentionCount).sum();
-        return new ManagerControlSummaryResponse(today, LocalDateTime.now(), true, managerPermissionService.hasRole(authentication, "MANAGER") && !managerPermissionService.hasAnyRole(authentication, "ADMIN", "OWNER"), managers.size(), green, yellow, red, critical, warning, workload, attention, managers);
+        LocalDateTime generatedAt = prepared.values().stream().map(ManagerControlReadSnapshots.Snapshot::generatedAt)
+                .min(LocalDateTime::compareTo).orElseGet(LocalDateTime::now);
+        return new ManagerControlSummaryResponse(today, generatedAt, true, managerPermissionService.hasRole(authentication, "MANAGER") && !managerPermissionService.hasAnyRole(authentication, "ADMIN", "OWNER"), managers.size(), green, yellow, red, critical, warning, workload, attention, managers);
     }
+
+    @Transactional(readOnly = true)
+    public List<Long> snapshotManagerIds() { return managerRepository.findAllWithUserAndImage().stream().map(Manager::getId).toList(); }
+
+    @Transactional(readOnly = true)
+    public ManagerControlManagerResponse snapshotManager(Long id, LocalDate date) {
+        return managerRepository.findByIdWithUser(id).map(manager -> managerControl(manager,date,null,false,true)).orElse(null);
+    }
+
+    public void warmSnapshotScore(LocalDate date) { managerPerformanceService.score(date); }
 
     ManagerControlManagerResponse withManagerPerformance(ManagerControlManagerResponse manager, ManagerPerformanceScoreResponse managerPerformance) {
         return new ManagerControlManagerResponse(manager.managerId(), manager.userId(), manager.username(), manager.name(), manager.active(), manager.dailyControlId(), manager.dailyControlStatus(), manager.startedAt(), manager.closedAt(), manager.morningStartedAt(), manager.morningCompletedAt(), manager.dayCheckedAt(), manager.finalCheckedAt(), manager.qualityScore(), manager.qualityGrade(), manager.riskScore(), manager.fastClickRisk(), manager.canCloseDay(), manager.openItemCount(), manager.handledItemCount(), manager.actionTotalCount(), manager.actionCompletedCount(), manager.actionProgressPercent(), manager.actionAutoClosedCount(), manager.actionRemainingCount(), manager.actionResolvedCount(), manager.actionTakenCount(), manager.actionDeferredCount(), manager.actionAcknowledgedCount(), manager.actionOverdueRemainingCount(), manager.actionRiskRemainingCount(), manager.actionUnansweredRemainingCount(), manager.actionOtherRemainingCount(), manager.leadActionCount(), manager.status(), manager.criticalCount(), manager.warningCount(), manager.workloadCount(), manager.totalAttentionCount(), manager.overdueOrderCount(), manager.openRiskCount(), manager.orderAttentionCount(), manager.workerSectionCount(), manager.problems(), manager.workerSections(), manager.overdueStatuses(), manager.workerExplanationStats(), manager.activeWorkSeconds(), manager.averageDailyWorkSeconds(), manager.averageReactionSeconds(), manager.reactionCount(), managerPerformance);

@@ -24,4 +24,7 @@ public interface ManagerDailyControlRepository extends CrudRepository<ManagerDai
     List<ManagerDailyControl> findByControlDate(LocalDate controlDate);
 
     List<ManagerDailyControl> findByControlDateBetween(LocalDate from, LocalDate to);
+
+    List<ManagerDailyControl> findByManagerInAndControlDateBetween(
+            java.util.Collection<Manager> managers, LocalDate from, LocalDate to);
 }

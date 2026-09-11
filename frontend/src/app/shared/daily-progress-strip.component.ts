@@ -7,7 +7,7 @@ import { DailyWorkProgress } from '../core/daily-progress';
     @if (progress?.visible) {
       <section
         class="daily-progress-strip"
-        [class.complete]="progress?.checked"
+        [class.complete]="progress?.checked && !isUnavailable()"
         [class.empty]="isEmpty()"
         [class.updating]="progress?.updating"
         [attr.aria-label]="tooltipText()"
@@ -17,8 +17,13 @@ import { DailyWorkProgress } from '../core/daily-progress';
         <div class="daily-progress-bar" aria-hidden="true">
           <i [style.width.%]="safePercent()"></i>
         </div>
-        <strong>{{ progress?.completed || 0 }}/{{ progress?.total || 0 }}</strong>
-        <em>{{ safePercent() }}%</em>
+        @if (isUnavailable()) {
+          <strong>Нет данных</strong>
+          <em>—</em>
+        } @else {
+          <strong>{{ progress?.completed || 0 }}/{{ progress?.total || 0 }}</strong>
+          <em>{{ safePercent() }}%</em>
+        }
         @if (progress?.updating) {
           <span class="material-icons-sharp daily-progress-refresh" aria-label="Прогресс обновляется">sync</span>
         } @else if (progress?.checked) {
@@ -147,6 +152,7 @@ export class DailyProgressStripComponent {
   @Input() label = '';
 
   safePercent(): number {
+    if (this.isUnavailable()) return 0;
     const raw = Number(this.progress?.percent || 0);
     if (!Number.isFinite(raw)) {
       return 0;
@@ -156,6 +162,10 @@ export class DailyProgressStripComponent {
 
   isEmpty(): boolean {
     return (this.progress?.total || 0) <= 0;
+  }
+
+  isUnavailable(): boolean {
+    return this.progress?.updating === true && this.progress.calculatedAt === null;
   }
 
   defaultLabel(): string {
@@ -173,10 +183,14 @@ export class DailyProgressStripComponent {
     const total = progress.total || 0;
     const percent = this.safePercent();
     const name = this.label || this.defaultLabel();
-    const base = `${completed}/${total} — ${percent}%, осталось ${active}.`;
+    const updated = progress.calculatedAt ? ` Рассчитано: ${new Date(progress.calculatedAt).toLocaleString('ru-RU')}.` : '';
+    const base = `${completed}/${total} — ${percent}%, осталось ${active}.${updated}`;
 
     if (progress.updating) {
-      return `Прогресс обновляется после последнего действия. Текущие данные: ${base}`;
+      if (progress.calculatedAt === null) {
+        return 'Статистика пока недоступна.';
+      }
+      return `Прогресс обновляется. Текущие данные: ${base}`;
     }
 
     if (progress.periodType === 'MONTH' || progress.roleType === 'WORKER_MONTH' || progress.roleType === 'WORKER_TEAM_MONTH') {

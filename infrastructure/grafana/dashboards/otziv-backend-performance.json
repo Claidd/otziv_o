@@ -15,7 +15,7 @@
   ],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 5,
+  "version": 6,
   "refresh": "10s",
   "time": {
     "from": "now-30m",
@@ -254,7 +254,7 @@
         {
           "id": 4,
           "type": "stat",
-          "title": "Максимум P95",
+          "title": "Текущий максимум P95 среди разделов",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -308,12 +308,13 @@
             "y": 1,
             "w": 5,
             "h": 4
-          }
+          },
+          "description": "Последний максимум по разделам за $__rate_interval. Не максимум за весь выбранный период. При малом N процентиль нестабилен."
         },
         {
           "id": 5,
           "type": "stat",
-          "title": "Максимум P99",
+          "title": "Текущий максимум P99 среди разделов",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -367,7 +368,8 @@
             "y": 1,
             "w": 5,
             "h": 4
-          }
+          },
+          "description": "Последний максимум по разделам за $__rate_interval. Не максимум за весь выбранный период. При малом N процентиль нестабилен."
         }
       ],
       "gridPos": {
@@ -2952,6 +2954,646 @@
         "w": 12,
         "h": 9
       }
+    },
+    {
+      "id": 100,
+      "type": "row",
+      "title": "Интерактивные разделы: Специалист / Компании / Заказы",
+      "collapsed": true,
+      "gridPos": {
+        "x": 0,
+        "y": 21,
+        "w": 24,
+        "h": 1
+      },
+      "panels": [
+        {
+          "id": 101,
+          "type": "timeseries",
+          "title": "HTTP P95 успешных ответов",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95,sum(increase(otziv_http_duration_seconds_bucket{status=\"2xx\"}[$__range])) by (le,endpoint)) and on(endpoint) (sum(increase(otziv_http_duration_seconds_count{status=\"2xx\"}[$__range])) by(endpoint) >= 100)",
+              "legendFormat": "{{endpoint}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "decimals": 3,
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "showPoints": "never",
+                "spanNulls": false
+              },
+              "noValue": "Insufficient sample"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 22,
+            "w": 12,
+            "h": 8
+          },
+          "description": "Фильтры безопасности, контроллер, сериализация. Не включает RTT клиента и очередь перед servlet. Цель P95 ≤100 мс; отказы учитываются отдельно. Quantile requires N >= 100 in the selected lookback; see adjacent N panel. This is a display safeguard, not a statistical confidence guarantee."
+        },
+        {
+          "id": 102,
+          "type": "timeseries",
+          "title": "HTTP P99 успешных ответов",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.99,sum(increase(otziv_http_duration_seconds_bucket{status=\"2xx\"}[$__range])) by (le,endpoint)) and on(endpoint) (sum(increase(otziv_http_duration_seconds_count{status=\"2xx\"}[$__range])) by(endpoint) >= 1000)",
+              "legendFormat": "{{endpoint}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "decimals": 3,
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "showPoints": "never",
+                "spanNulls": false
+              },
+              "noValue": "Insufficient sample"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 22,
+            "w": 12,
+            "h": 8
+          },
+          "description": " Quantile requires N >= 1000 in the selected lookback; see adjacent N panel. This is a display safeguard, not a statistical confidence guarantee."
+        },
+        {
+          "id": 103,
+          "type": "timeseries",
+          "title": "Успешные HTTP за период (N)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum(increase(otziv_http_duration_seconds_count{status=\"2xx\"}[$__range])) by (endpoint)",
+              "legendFormat": "{{endpoint}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "decimals": 3,
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "showPoints": "never",
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 30,
+            "w": 12,
+            "h": 8
+          },
+          "description": "Для оценки P95/P99 нужны достаточная выборка и отдельные холодные/тёплые прогоны. Пустые series означают отсутствие данных."
+        },
+        {
+          "id": 104,
+          "type": "timeseries",
+          "title": "Доля успешных HTTP ≤100 мс",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "100 * sum(increase(otziv_http_duration_seconds_bucket{status=\"2xx\",le=\"0.1\"}[$__range])) by(endpoint) / sum(increase(otziv_http_duration_seconds_count{status=\"2xx\"}[$__range])) by (endpoint)",
+              "legendFormat": "{{endpoint}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "decimals": 3,
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "showPoints": "never",
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 30,
+            "w": 12,
+            "h": 8
+          },
+          "description": ""
+        },
+        {
+          "id": 105,
+          "type": "timeseries",
+          "title": "SQL: выполнений на HTTP",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum(rate(otziv_http_sql_executions_sum{status=\"2xx\"}[$__rate_interval])) by(endpoint) / sum(rate(otziv_http_sql_executions_count{status=\"2xx\"}[$__rate_interval])) by(endpoint)",
+              "legendFormat": "{{endpoint}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "decimals": 3,
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "showPoints": "never",
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 38,
+            "w": 12,
+            "h": 8
+          },
+          "description": ""
+        },
+        {
+          "id": 106,
+          "type": "timeseries",
+          "title": "SQL: среднее время на HTTP",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum(rate(otziv_http_sql_duration_seconds_sum{status=\"2xx\"}[$__rate_interval])) by(endpoint) / sum(rate(otziv_http_sql_duration_seconds_count{status=\"2xx\"}[$__rate_interval])) by(endpoint)",
+              "legendFormat": "{{endpoint}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "decimals": 3,
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "showPoints": "never",
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 38,
+            "w": 12,
+            "h": 8
+          },
+          "description": ""
+        },
+        {
+          "id": 107,
+          "type": "timeseries",
+          "title": "Сегменты и загрузка кэша: среднее время",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum(rate(otziv_service_segment_duration_seconds_sum[$__rate_interval])) by(component,segment,result) / sum(rate(otziv_service_segment_duration_seconds_count[$__rate_interval])) by(component,segment,result)",
+              "legendFormat": "{{component}} / {{segment}} / {{result}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "decimals": 3,
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "showPoints": "never",
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 46,
+            "w": 12,
+            "h": 8
+          },
+          "description": ""
+        },
+        {
+          "id": 108,
+          "type": "timeseries",
+          "title": "HTTP по кодам результата",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum(rate(otziv_http_duration_seconds_count[$__rate_interval])) by(endpoint,status)",
+              "legendFormat": "{{endpoint}} {{status}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps",
+              "decimals": 3,
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "showPoints": "never",
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 46,
+            "w": 12,
+            "h": 8
+          },
+          "description": ""
+        },
+        {
+          "id": 109,
+          "type": "timeseries",
+          "title": "Возраст последнего полного фонового прохода",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "time() - otziv_projection_last_success_epoch",
+              "legendFormat": "{{projection}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "decimals": 3,
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "showPoints": "never",
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 54,
+            "w": 12,
+            "h": 8
+          },
+          "description": "До первого успеха epoch=0. Сводки старше допустимого срока показывают updating или используют актуальный расчёт. Пропуск lease не является успешным проходом."
+        },
+        {
+          "id": 110,
+          "type": "timeseries",
+          "title": "Ошибки обновления сводок",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum(increase(otziv_projection_refresh_total{result=\"error\"}[$__range])) by(projection)",
+              "legendFormat": "{{projection}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "decimals": 3,
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "showPoints": "never",
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 54,
+            "w": 12,
+            "h": 8
+          },
+          "description": ""
+        },
+        {
+          "id": 111,
+          "type": "timeseries",
+          "title": "CPU: доля периодов с throttling",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "100 * rate(otziv_container_cpu_throttled_periods_total[$__rate_interval]) / rate(otziv_container_cpu_periods_total[$__rate_interval])",
+              "legendFormat": "{{job}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "decimals": 3,
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "showPoints": "never",
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 62,
+            "w": 12,
+            "h": 8
+          },
+          "description": ""
+        },
+        {
+          "id": 112,
+          "type": "timeseries",
+          "title": "Ожидание ресурсов контейнера (PSI some)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "rate(otziv_container_pressure_seconds_total[$__rate_interval])",
+              "legendFormat": "{{resource}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "decimals": 3,
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "showPoints": "never",
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 62,
+            "w": 12,
+            "h": 8
+          },
+          "description": "Доля времени, когда хотя бы одна задача ждала CPU, память или I/O. Недоступная cgroup v2 метрика остаётся отсутствующей."
+        }
+      ]
     }
   ]
 }

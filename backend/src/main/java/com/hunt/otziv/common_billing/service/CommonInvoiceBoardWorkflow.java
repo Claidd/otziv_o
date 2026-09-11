@@ -170,9 +170,15 @@ public class CommonInvoiceBoardWorkflow {
         Map<Long, CommonInvoice> invoicesById = invoiceRepository.findBoardInvoicesByIds(selection.invoiceIds()).stream().filter(invoice -> invoice != null && invoice.getId() != null).collect(Collectors.toMap(CommonInvoice::getId, Function.identity()));
         Map<Long, List<CommonInvoiceOrder>> itemsByInvoiceId = invoiceOrderRepository.findByInvoiceIdsWithOrders(selection.invoiceIds()).stream().filter(item -> item != null && item.getInvoice() != null && item.getInvoice().getId() != null).collect(Collectors.groupingBy(item -> item.getInvoice().getId()));
         List<BoardInvoiceView> selectedCards = selection.invoiceIds().stream().map(invoicesById::get).filter(Objects::nonNull).map(invoice -> new BoardInvoiceView(invoice, itemsByInvoiceId.getOrDefault(invoice.getId(), List.of()))).toList();
+        List<Order> selectedOrders = selectedCards.stream().flatMap(view -> view.items().stream())
+                .map(CommonInvoiceOrder::getOrder).filter(Objects::nonNull).toList();
+        Map<Long, BigDecimal> preparedAmounts = badReviewTaskService.getPayableSums(selectedOrders);
+        Map<Long, Boolean> preparedRecovery = settlementService.prepareBoardRecoveryState(selectedOrders);
+        Map<Long, BadReviewTaskSummary> preparedSummaries = badReviewTaskService.getSummaryByOrderIds(
+                selectedOrders.stream().map(Order::getId).filter(Objects::nonNull).distinct().toList());
         List<OrderDTOList> cards = selectedCards.stream().map(view -> {
-            refreshInvoiceAmounts(view.invoice(), view.items());
-            return toManagerBoardCard(view.invoice(), view.items());
+            settlementService.refreshInvoiceAmounts(view.invoice(), view.items(), preparedAmounts, preparedRecovery);
+            return toManagerBoardCard(view.invoice(), view.items(), preparedSummaries);
         }).toList();
         return new ManagerBoardPage(cards, selection.totalCards(), selection.linkedOrderCount());
     }
@@ -314,8 +320,13 @@ public class CommonInvoiceBoardWorkflow {
     }
 
     OrderDTOList toManagerBoardCard(CommonInvoice invoice, List<CommonInvoiceOrder> items) {
+        return toManagerBoardCard(invoice, items, null);
+    }
+
+    OrderDTOList toManagerBoardCard(CommonInvoice invoice, List<CommonInvoiceOrder> items,
+                                  Map<Long, BadReviewTaskSummary> preparedSummaries) {
         CommonInvoiceSummaryResponse summary = toInvoiceSummary(invoice, items);
-        BadReviewTaskSummary badReviewSummary = aggregateBadReviewSummary(items);
+        BadReviewTaskSummary badReviewSummary = aggregateBadReviewSummary(items, preparedSummaries);
         Company company = chatCompany(invoice, items);
         Manager invoiceManager = manager(invoice, items);
         LocalDate changed = invoice.getUpdatedAt() == null ? LocalDate.now() : invoice.getUpdatedAt().toLocalDate();
@@ -323,11 +334,18 @@ public class CommonInvoiceBoardWorkflow {
     }
 
     BadReviewTaskSummary aggregateBadReviewSummary(List<CommonInvoiceOrder> items) {
+        return aggregateBadReviewSummary(items, null);
+    }
+
+    BadReviewTaskSummary aggregateBadReviewSummary(List<CommonInvoiceOrder> items, Map<Long, BadReviewTaskSummary> preparedSummaries) {
         List<Long> orderIds = items == null ? List.of() : items.stream().map(CommonInvoiceOrder::getOrder).filter(order -> order != null && order.getId() != null).map(Order::getId).toList();
         if (orderIds.isEmpty()) {
             return BadReviewTaskSummary.empty();
         }
-        Map<Long, BadReviewTaskSummary> summaries = badReviewTaskService.getSummaryByOrderIds(orderIds);
+        Map<Long, BadReviewTaskSummary> summaries = preparedSummaries == null
+                ? badReviewTaskService.getSummaryByOrderIds(orderIds)
+                : orderIds.stream().distinct().filter(preparedSummaries::containsKey)
+                    .collect(Collectors.toMap(Function.identity(), preparedSummaries::get));
         if (summaries == null || summaries.isEmpty()) {
             return BadReviewTaskSummary.empty();
         }

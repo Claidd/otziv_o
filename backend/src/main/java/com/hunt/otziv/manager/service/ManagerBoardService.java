@@ -40,6 +40,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.security.Principal;
+import static com.hunt.otziv.config.metrics.PerformanceMetrics.segment;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
@@ -118,6 +119,7 @@ public class ManagerBoardService {
     private final CommonBillingService commonBillingService;
     private final ClientMessageOrderStatusService clientMessageOrderStatusService;
     private final StaffDailyProgressService staffDailyProgressService;
+    private final com.hunt.otziv.u_users.api.CabinetCacheScope cabinetCacheScope;
     private final Cache<MetricsCacheKey, List<ManagerMetricResponse>> metricsCache = Caffeine.newBuilder()
             .maximumSize(2_000)
             .expireAfterWrite(METRICS_CACHE_TTL)
@@ -172,11 +174,11 @@ public class ManagerBoardService {
         boolean managerControlOverdue = CONTROL_MANAGER_OVERDUE.equalsIgnoreCase(control == null ? "" : control.trim());
 
         Page<CompanyListDTO> companies = SECTION_COMPANIES.equals(normalizedSection)
-                ? loadCompanies(principal, authentication, trimmedKeyword, normalizedStatus, safePageNumber, safePageSize, normalizedSortDirection)
+                ? segment("manager.board", "companies", () -> loadCompanies(principal, authentication, trimmedKeyword, normalizedStatus, safePageNumber, safePageSize, normalizedSortDirection))
                 : emptyCompanyPage(safePageNumber, safePageSize);
 
         Page<OrderDTOList> orders = SECTION_ORDERS.equals(normalizedSection)
-                ? loadOrders(principal, authentication, trimmedKeyword, normalizedStatus, safePageNumber, safePageSize, companyId, managerFilter, managerControlOverdue, normalizedSortDirection)
+                ? segment("manager.board", "orders", () -> loadOrders(principal, authentication, trimmedKeyword, normalizedStatus, safePageNumber, safePageSize, companyId, managerFilter, managerControlOverdue, normalizedSortDirection))
                 : emptyOrderPage(safePageNumber, safePageSize);
         badReviewTaskService.enrichOrderList(orders.getContent());
         clientMessageOrderStatusService.enrichOrderList(orders.getContent());
@@ -188,12 +190,12 @@ public class ManagerBoardService {
                 toPageResponse(orders),
                 ManagerBoardStatusCatalog.companyStatuses(),
                 ManagerBoardStatusCatalog.orderStatuses(),
-                buildMetrics(principal, authentication, managerFilter, managerControlOverdue),
+                segment("manager.board", "metrics", () -> buildMetrics(principal, authentication, managerFilter, managerControlOverdue)),
                 promoTextService.getPromoTextsForManager(
                         resolvePromoManagerId(principal, authentication),
                         promoSectionCode(normalizedSection)
                 ),
-                managerDailyProgress(principal, authentication, managerFilter)
+                segment("manager.board", "progress", () -> managerDailyProgress(principal, authentication, managerFilter))
         );
     }
 
@@ -487,7 +489,8 @@ public class ManagerBoardService {
                 principalName,
                 authorities,
                 managerFilter == null ? null : managerFilter.getId(),
-                managerControlOverdue
+                managerControlOverdue,
+                cabinetCacheScope.fingerprint()
         );
     }
 
@@ -744,7 +747,8 @@ public class ManagerBoardService {
             String principalName,
             String authorities,
             Long managerId,
-            boolean managerControlOverdue
+            boolean managerControlOverdue,
+            String authorizationScope
     ) {
     }
 

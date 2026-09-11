@@ -34,3 +34,14 @@ groups:
         annotations:
           summary: "Проверка очередей отправки недоступна"
           description: "Проверьте приложение, сбор метрик и БД. Отсутствие метрик не означает, что очереди пусты."
+  - name: interactive-projections
+    interval: 30s
+    rules:
+      - alert: InteractiveProjectionRefreshStale
+        expr: (time() - otziv_projection_last_success_epoch > 180) and on(projection, job, instance) (otziv_projection_enabled == 1)
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Сводка {{ $labels.projection }} не завершает обновление"
+          description: "Проверьте ошибки расчёта, checkpoint, lease и БД. Интерфейс помечает старый прогресс как обновляющийся; команды продолжают проверять исходные данные."

@@ -42,4 +42,5 @@ export interface DailyWorkProgress {
   reached100Days?: number;
   closedPeriod?: boolean;
   updating?: boolean;
+  calculatedAt?: string | null;
 }

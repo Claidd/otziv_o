@@ -179,7 +179,7 @@ class ManagerControlClientSendMySqlIntegrationTest {
         });
         var access = new ManagerControlAccessPolicy(mock(ManagerRepository.class), users,
                 mock(ManagerAccessService.class), permissions);
-        var lifecycle = new ManagerControlCardLifecycle(cards, items, events, mock(ManagerPerformanceService.class));
+        var lifecycle = new ManagerControlCardLifecycle(cards, items, events, mock(ManagerPerformanceService.class), mock(ManagerControlReadSnapshots.class));
         var texts = new ManagerControlClientMessageText(mock(ScheduledClientMessageService.class), orders);
         var presenter = new ManagerControlConcretePresenter(mock(WorkerRiskIncidentRepository.class), lookup,
                 mock(ManagerControlInvoiceDiagnostics.class), mock(ScheduledClientMessageStateRepository.class),

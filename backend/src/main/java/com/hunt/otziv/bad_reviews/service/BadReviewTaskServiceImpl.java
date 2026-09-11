@@ -919,6 +919,27 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public Map<Long, BigDecimal> getPayableSums(Collection<Order> orders) {
+        if (orders == null || orders.isEmpty()) return Map.of();
+        List<Long> ids = orders.stream().filter(Objects::nonNull).map(Order::getId)
+                .filter(Objects::nonNull).distinct().toList();
+        Map<Long, BadReviewTaskSummary> summaries = getSummaryByOrderIds(ids);
+        Map<Long, BigDecimal> amounts = new HashMap<>();
+        for (Order order : orders) {
+            if (order == null || order.getId() == null) continue;
+            try {
+                amounts.put(order.getId(), payableSum(order,
+                        summaries.getOrDefault(order.getId(), BadReviewTaskSummary.empty())));
+            } catch (ResponseStatusException invalidAmount) {
+                // Preserve the caller's original per-invoice error/attention handling.
+                // A missing entry is recalculated by getPayableSum; it is never treated as zero.
+            }
+        }
+        return Map.copyOf(amounts);
+    }
+
+    @Override
     public int getPayableAmount(Order order) {
         int baseAmount = order != null ? order.getAmount() : 0;
         BadReviewTaskSummary summary = order == null ? BadReviewTaskSummary.empty() : getSummaryForOrder(order.getId());

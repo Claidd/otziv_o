@@ -1015,7 +1015,7 @@ public class PersonalServiceImpl implements PersonalService {
         }
         try {
             Map<Long, DailyWorkProgressResponse> progressByWorker = staffDailyProgressService.progressEnabled()
-                    ? staffDailyProgressService.workerProgressByWorkers(workers, date)
+                    ? staffDailyProgressService.workerProgressSnapshotByWorkers(workers, date)
                     : Map.of();
             for (Worker worker : workers) {
                 if (worker == null || worker.getId() == null || worker.getUser() == null) {

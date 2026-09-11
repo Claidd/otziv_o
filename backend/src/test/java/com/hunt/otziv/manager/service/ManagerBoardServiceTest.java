@@ -61,6 +61,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class ManagerBoardServiceTest {
 
+    @Mock private com.hunt.otziv.u_users.api.CabinetCacheScope cabinetCacheScope;
+
     @Mock
     private CompanyService companyService;
 

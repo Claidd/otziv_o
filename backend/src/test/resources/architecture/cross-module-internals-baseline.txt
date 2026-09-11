@@ -64,7 +64,6 @@ com.hunt.otziv.admin.controller.ApiCabinetController -> com.hunt.otziv.analytics
 com.hunt.otziv.admin.controller.ApiCabinetController -> com.hunt.otziv.analytics.service.AnalyticsAggregateStatsService
 com.hunt.otziv.admin.controller.ApiCabinetController -> com.hunt.otziv.analytics.service.AnalyticsAggregateTeamService
 com.hunt.otziv.admin.controller.ApiCabinetController -> com.hunt.otziv.analytics.service.AnalyticsAggregateUserStatsService
-com.hunt.otziv.admin.controller.ApiCabinetController -> com.hunt.otziv.config.metrics.PerformanceMetrics
 com.hunt.otziv.admin.controller.ApiCabinetController -> com.hunt.otziv.contractor_payments.dto.ContractorPaymentAdminSummaryResponse
 com.hunt.otziv.admin.controller.ApiCabinetController -> com.hunt.otziv.contractor_payments.service.ContractorPaymentVisibilityService
 com.hunt.otziv.admin.controller.ApiCabinetController -> com.hunt.otziv.manager_daily_summary.service.ManagerActivityMetricsService
@@ -121,7 +120,6 @@ com.hunt.otziv.admin.service.PersonalService -> com.hunt.otziv.u_users.model.Wor
 com.hunt.otziv.admin.service.PersonalServiceImpl -> com.hunt.otziv.analytics.service.AnalyticsSalarySourceService
 com.hunt.otziv.admin.service.PersonalServiceImpl -> com.hunt.otziv.bad_reviews.service.BadReviewTaskService
 com.hunt.otziv.admin.service.PersonalServiceImpl -> com.hunt.otziv.c_companies.service.CompanyService
-com.hunt.otziv.admin.service.PersonalServiceImpl -> com.hunt.otziv.config.metrics.PerformanceMetrics
 com.hunt.otziv.admin.service.PersonalServiceImpl -> com.hunt.otziv.l_lead.service.LeadService
 com.hunt.otziv.admin.service.PersonalServiceImpl -> com.hunt.otziv.p_products.service.OrderService
 com.hunt.otziv.admin.service.PersonalServiceImpl -> com.hunt.otziv.r_review.service.ReviewService
@@ -305,7 +303,6 @@ com.hunt.otziv.c_companies.controller.ApiCompanyCreateController -> com.hunt.otz
 com.hunt.otziv.c_companies.controller.ApiCompanyCreateController -> com.hunt.otziv.c_cities.dto.CityDTO
 com.hunt.otziv.c_companies.controller.ApiCompanyCreateController -> com.hunt.otziv.c_cities.model.City
 com.hunt.otziv.c_companies.controller.ApiCompanyCreateController -> com.hunt.otziv.c_cities.service.CityService
-com.hunt.otziv.c_companies.controller.ApiCompanyCreateController -> com.hunt.otziv.config.metrics.PerformanceMetrics
 com.hunt.otziv.c_companies.controller.ApiCompanyCreateController -> com.hunt.otziv.l_lead.service.LeadAccessService
 com.hunt.otziv.c_companies.controller.ApiCompanyCreateController -> com.hunt.otziv.l_lead.service.LeadService
 com.hunt.otziv.c_companies.controller.ApiCompanyCreateController -> com.hunt.otziv.l_lead.utils.LeadPhoneNormalizer
@@ -498,7 +495,6 @@ com.hunt.otziv.client_messages.service.ScheduledClientMessageService -> com.hunt
 com.hunt.otziv.client_messages.service.ScheduledClientMessageService -> com.hunt.otziv.review_recovery.repository.ReviewRecoveryBatchRepository
 com.hunt.otziv.client_messages.service.ScheduledClientMessageService -> com.hunt.otziv.review_recovery.service.ReviewRecoveryHoldService
 com.hunt.otziv.client_messages.service.ScheduledClientMessageService -> com.hunt.otziv.review_recovery.service.ReviewRecoveryTaskService
-com.hunt.otziv.client_messages.service.ScheduledClientMessageService -> com.hunt.otziv.scheduler.service.SchedulerLeaseService
 com.hunt.otziv.client_messages.service.ScheduledClientMessageService -> com.hunt.otziv.u_users.model.Manager
 com.hunt.otziv.common_billing.api.CommonInvoicePaymentOperations -> com.hunt.otziv.payments.model.PaymentLinkStatus
 com.hunt.otziv.common_billing.api.CommonInvoicePaymentOperations -> com.hunt.otziv.payments.tochka.dto.TochkaAcquiringInternetPaymentWebhook
@@ -1039,7 +1035,6 @@ com.hunt.otziv.gamification.service.GamificationUserProgressService -> com.hunt.
 com.hunt.otziv.gamification.service.GamificationUserProgressService -> com.hunt.otziv.u_users.service.UserService
 com.hunt.otziv.l_lead.controller.ApiAdminPhoneController -> com.hunt.otziv.u_users.model.Operator
 com.hunt.otziv.l_lead.controller.ApiAdminPhoneController -> com.hunt.otziv.u_users.model.User
-com.hunt.otziv.l_lead.controller.ApiLeadBoardController -> com.hunt.otziv.config.metrics.PerformanceMetrics
 com.hunt.otziv.l_lead.controller.ApiLeadBoardController -> com.hunt.otziv.u_users.model.Manager
 com.hunt.otziv.l_lead.controller.ApiLeadBoardController -> com.hunt.otziv.u_users.model.Marketolog
 com.hunt.otziv.l_lead.controller.ApiLeadBoardController -> com.hunt.otziv.u_users.model.Operator
@@ -1048,7 +1043,6 @@ com.hunt.otziv.l_lead.controller.ApiLeadBoardController -> com.hunt.otziv.u_user
 com.hunt.otziv.l_lead.controller.ApiLeadBoardController -> com.hunt.otziv.u_users.service.MarketologService
 com.hunt.otziv.l_lead.controller.ApiLeadBoardController -> com.hunt.otziv.u_users.service.OperatorService
 com.hunt.otziv.l_lead.controller.ApiLeadBoardController -> com.hunt.otziv.u_users.service.UserService
-com.hunt.otziv.l_lead.controller.ApiOperatorBoardController -> com.hunt.otziv.config.metrics.PerformanceMetrics
 com.hunt.otziv.l_lead.controller.ApiOperatorBoardController -> com.hunt.otziv.u_users.model.Manager
 com.hunt.otziv.l_lead.controller.ApiOperatorBoardController -> com.hunt.otziv.u_users.model.Marketolog
 com.hunt.otziv.l_lead.controller.ApiOperatorBoardController -> com.hunt.otziv.u_users.model.Operator
@@ -1132,7 +1126,6 @@ com.hunt.otziv.l_lead.service.LeadSyncServiceImpl -> com.hunt.otziv.u_users.repo
 com.hunt.otziv.l_lead.service.LeadWorkNotificationService -> com.hunt.otziv.u_users.model.Manager
 com.hunt.otziv.l_lead.service.TelephoneServiceImpl -> com.hunt.otziv.u_users.model.Operator
 com.hunt.otziv.l_lead.service.TelephoneServiceImpl -> com.hunt.otziv.u_users.repository.OperatorRepository
-com.hunt.otziv.manager.controller.ApiManagerBoardController -> com.hunt.otziv.config.metrics.PerformanceMetrics
 com.hunt.otziv.manager.controller.ApiManagerCompanyController -> com.hunt.otziv.c_categories.dto.CategoryDTO
 com.hunt.otziv.manager.controller.ApiManagerCompanyController -> com.hunt.otziv.c_categories.dto.SubCategoryDTO
 com.hunt.otziv.manager.controller.ApiManagerCompanyController -> com.hunt.otziv.c_categories.service.CategoryService
@@ -1317,7 +1310,6 @@ com.hunt.otziv.manager.service.ManagerBoardService -> com.hunt.otziv.u_users.ser
 com.hunt.otziv.manager.service.ManagerBoardService -> com.hunt.otziv.worker_performance.dto.DailyWorkProgressResponse
 com.hunt.otziv.manager.service.ManagerBoardService -> com.hunt.otziv.worker_performance.service.StaffDailyProgressService
 com.hunt.otziv.manager_control.controller.ApiManagerControlController -> com.hunt.otziv.client_chat_control.dto.ClientChatReconciliationResult
-com.hunt.otziv.manager_control.controller.ApiManagerControlController -> com.hunt.otziv.config.metrics.PerformanceMetrics
 com.hunt.otziv.manager_control.dto.ManagerControlManagerResponse -> com.hunt.otziv.manager_performance.dto.ManagerPerformanceScoreResponse
 com.hunt.otziv.manager_control.model.ManagerDailyControl -> com.hunt.otziv.u_users.model.Manager
 com.hunt.otziv.manager_control.model.ManagerQueueStateEvent -> com.hunt.otziv.u_users.model.Manager
@@ -1894,7 +1886,6 @@ com.hunt.otziv.p_products.controller.ApiWorkerBoardController -> com.hunt.otziv.
 com.hunt.otziv.p_products.controller.ApiWorkerBoardController -> com.hunt.otziv.c_cities.model.City
 com.hunt.otziv.p_products.controller.ApiWorkerBoardController -> com.hunt.otziv.c_companies.model.Company
 com.hunt.otziv.p_products.controller.ApiWorkerBoardController -> com.hunt.otziv.c_companies.model.Filial
-com.hunt.otziv.p_products.controller.ApiWorkerBoardController -> com.hunt.otziv.config.metrics.PerformanceMetrics
 com.hunt.otziv.p_products.controller.ApiWorkerBoardController -> com.hunt.otziv.config.settings.service.AppSettingService
 com.hunt.otziv.p_products.controller.ApiWorkerBoardController -> com.hunt.otziv.l_lead.service.PromoTextService
 com.hunt.otziv.p_products.controller.ApiWorkerBoardController -> com.hunt.otziv.manager.dto.api.ManagerOverdueOrdersResponse
@@ -2738,9 +2729,7 @@ com.hunt.otziv.review_recovery.service.ReviewRecoveryTaskServiceImpl -> com.hunt
 com.hunt.otziv.review_recovery.service.ReviewRecoveryTaskServiceImpl -> com.hunt.otziv.u_users.repository.ManagerRepository
 com.hunt.otziv.review_recovery.service.ReviewRecoveryTaskServiceImpl -> com.hunt.otziv.u_users.repository.WorkerRepository
 com.hunt.otziv.review_recovery.service.ReviewRecoveryTaskServiceImpl -> com.hunt.otziv.worker_activity.account_action.WorkerAccountActionCooldownService
-com.hunt.otziv.s3.backup.service.BackupScheduler -> com.hunt.otziv.scheduler.service.SchedulerLeaseService
 com.hunt.otziv.s3.backup.service.DatabaseBackupService -> com.hunt.otziv.config.email.service.EmailService
-com.hunt.otziv.s3.cleanup.service.S3ObjectCleanupQueue -> com.hunt.otziv.scheduler.service.SchedulerLeaseService
 com.hunt.otziv.s3.controller.ReviewFileController -> com.hunt.otziv.config.legacy.LegacyMvc
 com.hunt.otziv.security.credentials.CredentialRevealResponse -> com.hunt.otziv.worker_activity.dto.WorkerCredentialPreparationResponse
 com.hunt.otziv.security.credentials.service.CredentialRevealService -> com.hunt.otziv.b_bots.model.Bot

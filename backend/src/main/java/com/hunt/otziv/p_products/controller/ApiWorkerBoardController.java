@@ -79,6 +79,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.security.Principal;
+import static com.hunt.otziv.config.metrics.PerformanceMetrics.segment;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -222,24 +223,25 @@ public class ApiWorkerBoardController {
             String normalizedSortDirection = normalizeSortDirection(sortDirection);
             String trimmedKeyword = keyword == null ? "" : keyword.trim();
 
-            Page<OrderDTOList> orders = isOrderSection(normalizedSection)
-                    ? loadOrders(principal, authentication, selectedWorker, normalizedSection, trimmedKeyword, safePageNumber, safePageSize, normalizedSortDirection)
+            String boardSection = normalizedSection;
+            Page<OrderDTOList> orders = isOrderSection(boardSection)
+                    ? segment("worker.board", "orders", () -> loadOrders(principal, authentication, selectedWorker, boardSection, trimmedKeyword, safePageNumber, safePageSize, normalizedSortDirection))
                     : emptyPage(safePageNumber, safePageSize);
             if (hasOnlyWorkerRole(authentication)) {
                 orders.forEach(this::removeFinancialData);
             }
 
-            PageResponse<WorkerReviewResponse> reviews = isReviewSection(normalizedSection)
-                    ? loadReviewResponses(principal, authentication, selectedWorker, normalizedSection, trimmedKeyword, safePageNumber, safePageSize, normalizedSortDirection)
+            PageResponse<WorkerReviewResponse> reviews = isReviewSection(boardSection)
+                    ? segment("worker.board", "reviews", () -> loadReviewResponses(principal, authentication, selectedWorker, boardSection, trimmedKeyword, safePageNumber, safePageSize, normalizedSortDirection))
                     : emptyReviewResponsePage(safePageNumber, safePageSize);
 
             return new WorkerBoardResponse(
-                    normalizedSection,
-                    title(normalizedSection),
+                    boardSection,
+                    title(boardSection),
                     toPageResponse(orders),
                     reviews,
                     List.of(),
-                    metrics != null ? metrics : buildMetrics(principal, authentication, selectedWorker),
+                    metrics != null ? metrics : segment("worker.board", "metrics", () -> buildMetrics(principal, authentication, selectedWorker)),
                     promoTextService.getAllPromoTexts(),
                     buildPermissions(authentication),
                     workerSelection.options(),
@@ -247,9 +249,9 @@ public class ApiWorkerBoardController {
                     workerSelection.available(),
                     message,
                     warning,
-                    activeCredentialPreparation(authentication, normalizedSection),
+                    activeCredentialPreparation(authentication, boardSection),
                     workerPublicationGateService.sessionState(principal, authentication),
-                    workerDailyProgress(principal, authentication, selectedWorker),
+                    segment("worker.board", "progress", () -> workerDailyProgress(principal, authentication, selectedWorker)),
                     accessRestriction
             );
         });

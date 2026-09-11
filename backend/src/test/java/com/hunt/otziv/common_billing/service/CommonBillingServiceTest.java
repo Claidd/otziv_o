@@ -4010,6 +4010,35 @@ class CommonBillingServiceTest {
     }
 
     @Test
+    void managerBoardBatchAmountsPreserveInvoiceMoneyAndOnlyReadSelectedOrders() {
+        CommonInvoice invoice = invoice(account());
+        invoice.setStatus(CommonInvoiceStatus.INVOICED);
+        CommonInvoiceOrder first = item(invoice, order(101L));
+        CommonInvoiceOrder second = item(invoice, order(102L));
+        first.setReady(false);
+        second.setReady(false);
+        first.getOrder().setStatus(status(CommonInvoiceSettlementService.STATUS_PUBLIC));
+        second.getOrder().setStatus(status(CommonInvoiceSettlementService.STATUS_PUBLIC));
+        when(invoiceRepository.findAccountIdsWithDuplicateCurrentInvoices(any())).thenReturn(List.of());
+        when(invoiceBoardQueryRepository.findPage(any(),any(),any(),any(),eq(false),eq(0),eq(10),any()))
+                .thenReturn(new CommonInvoiceBoardQueryRepository.PageSelection(List.of(10L),1,2));
+        when(invoiceRepository.findBoardInvoicesByIds(List.of(10L))).thenReturn(List.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdsWithOrders(List.of(10L))).thenReturn(List.of(first,second));
+        when(badReviewTaskService.getPayableSums(List.of(first.getOrder(),second.getOrder())))
+                .thenReturn(Map.of(101L,new BigDecimal("1125.50"),102L,new BigDecimal("1000.00")));
+        when(recoveryGateService.activeRecoveryOrderIds(List.of(101L,102L))).thenReturn(Set.of(102L));
+        var page = service.managerBoardPage("Все","",null,null,"desc",0,10);
+        assertEquals(1,page.cards().size());
+        assertEquals(new BigDecimal("2125.50"),page.cards().getFirst().getCommonInvoiceAmount());
+        assertEquals(new BigDecimal("2125.50"),page.cards().getFirst().getCommonInvoiceRemaining());
+        verify(badReviewTaskService,never()).getPayableSum(any());
+        verify(badReviewTaskService).getSummaryByOrderIds(List.of(101L,102L));
+        assertTrue(first.isReady());
+        assertFalse(second.isReady());
+        verify(recoveryGateService,never()).hasActiveRecoveryTasks(any());
+    }
+
+    @Test
     void deleteInvoiceRejectsClientReportedContractorRouteBeforeDetachingAnything() {
         CommonBillingAccount account = account();
         CommonInvoice invoice = invoice(account);
