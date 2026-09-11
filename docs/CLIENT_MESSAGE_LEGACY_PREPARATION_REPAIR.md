@@ -46,6 +46,20 @@ rows. It does not clear unrelated uncertain sends. A genuinely unverified histor
 order remains held; the UI explains that evidence is required instead of promising
 an unconditional retry.
 
+Order locks, generation writes, migration cutover and occurrence checks belong to
+`OrderNotificationRecovery`, the public transaction-scoped order API. Recovery uses
+an immutable cycle snapshot; it cannot access the order repository or JPA entities.
+Manager presentation uses the public recovery-advice contract. Architecture gates
+enforce these boundaries without adding internal-access baseline exceptions.
+
+An operator may explicitly pass `-AllowWhatsAppQrPending whatsapp_vika` to the
+supported production deploy script when that phone will be linked later. Only a
+running gateway with a current QR, protected metrics, and healthy operation/inbox
+storage qualifies. Authenticated startup failures and storage failures still block
+the release. This option changes neither `/ready` nor Docker health checks; the
+deployment records `OTZIV_WHATSAPP_QR_PENDING`, and delivery remains unavailable
+until linking. It does not reset sessions or repeat unknown operations.
+
 ## Validation and release
 
 Tests cover real MySQL migrations, both affected scenarios, concurrent repair,

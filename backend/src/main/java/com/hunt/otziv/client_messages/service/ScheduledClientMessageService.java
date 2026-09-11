@@ -2057,7 +2057,7 @@ public class ScheduledClientMessageService {
                     );
                     return;
                 }
-                boolean preparationFailure = failure instanceof com.hunt.otziv.p_products.status.service.LegacyOrderNotificationException
+                boolean preparationFailure = failure instanceof com.hunt.otziv.p_products.api.LegacyOrderNotificationException
                         && LegacyOrderMessagePreparationRecovery.hasNoDeliveryEvidence(state);
                 String errorCode = preparationFailure ? ClientMessageStateSafety.LEGACY_PREPARATION_UNVERIFIED
                         : ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN;
@@ -2296,7 +2296,7 @@ public class ScheduledClientMessageService {
             return null;
         }
 
-        if (order.getClientMessageGeneration() == 0) legacyPreparationRecovery.establishCurrentCycle(order, state);
+        if (order.getClientMessageGeneration() == 0) legacyPreparationRecovery.establishCurrentCycle(order.getId(), state);
         var action = orderStatusNotificationService.prepareAction(STATUS_TO_CHECK, order,
                 order.getManager() == null ? null : order.getManager().getClientId(),
                 order.getCompany() == null ? null : order.getCompany().getGroupId(), message, STATUS_IN_CHECK, null);
@@ -2348,7 +2348,7 @@ public class ScheduledClientMessageService {
             return null;
         }
 
-        if (order.getClientMessageGeneration() == 0) legacyPreparationRecovery.establishCurrentCycle(order, state);
+        if (order.getClientMessageGeneration() == 0) legacyPreparationRecovery.establishCurrentCycle(order.getId(), state);
         var action = orderStatusNotificationService.prepareAction(STATUS_PUBLIC, order,
                 order.getManager() == null ? null : order.getManager().getClientId(),
                 order.getCompany() == null ? null : order.getCompany().getGroupId(),

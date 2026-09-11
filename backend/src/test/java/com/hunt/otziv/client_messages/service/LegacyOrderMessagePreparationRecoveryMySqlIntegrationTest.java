@@ -98,7 +98,7 @@ class LegacyOrderMessagePreparationRecoveryMySqlIntegrationTest {
                         attempt_status,channel,error_code,error_message,attempted_at) VALUES(?,?,?,?,?,?,?,?,?,?)
                     """,a.getStateId(),a.getScenario().name(),a.getTargetType().name(),a.getTargetKey(),a.getOrderId(),
                     a.getStatus().name(),a.getChannel(),a.getErrorCode(),a.getErrorMessage(),a.getAttemptedAt());return a;});
-        recovery=new LegacyOrderMessagePreparationRecovery(jdbc,orders,states,attempts,transactions);
+        recovery=new LegacyOrderMessagePreparationRecovery(jdbc,new com.hunt.otziv.p_products.application.OrderNotificationRecoveryService(orders,jdbc),states,attempts,transactions);
     }
 
     @ParameterizedTest @ValueSource(strings={"REVIEW_CHECK_DELIVERY_RETRY","PAYMENT_INVOICE_RETRY"})

@@ -1,4 +1,4 @@
-package com.hunt.otziv.p_products.status.service;
+package com.hunt.otziv.p_products.api;
 
 /** Raised before allocating an operation or contacting any delivery provider. */
 public final class LegacyOrderNotificationException extends IllegalStateException {

@@ -3,8 +3,7 @@ package com.hunt.otziv.client_messages.service;
 import com.hunt.otziv.client_messages.model.*;
 import com.hunt.otziv.client_messages.repository.ScheduledClientMessageAttemptRepository;
 import com.hunt.otziv.client_messages.repository.ScheduledClientMessageStateRepository;
-import com.hunt.otziv.p_products.model.Order;
-import com.hunt.otziv.p_products.repository.OrderRepository;
+import com.hunt.otziv.p_products.api.OrderNotificationRecovery;
 import java.time.LocalDateTime;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
@@ -18,7 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class LegacyOrderMessagePreparationRecovery {
     private final JdbcTemplate jdbc;
-    private final OrderRepository orders;
+    private final OrderNotificationRecovery orders;
     private final ScheduledClientMessageStateRepository states;
     private final ScheduledClientMessageAttemptRepository attempts;
     private final ClientMessageTransactionRunner transactions;
@@ -44,14 +43,14 @@ public class LegacyOrderMessagePreparationRecovery {
         return Boolean.TRUE.equals(transactions.callInNewTransaction(() -> {
             // Same canonical lock order as the normal worker and order transitions.
             // Read State only after acquiring Order, in a fresh persistence context.
-            var order = orders.findByIdForMutation(orderId).orElse(null);
+            var cycle = orders.lockLegacyCycle(orderId).orElse(null);
             var state = states.findByIdForUpdate(stateId).orElse(null);
             if (state == null || state.getStatus() != ScheduledMessageStateStatus.ACTIVE
                     || !Objects.equals(state.getOrderId(), orderId)
                     || !ClientMessageStateSafety.isLegacyPreparationFailure(state)
                     || (state.getLockedUntil() != null && state.getLockedUntil().isAfter(now))) return false;
             state.setDeliveryRecoveryCheckedAt(now);
-            if (!establishCurrentCycle(order, state)) {
+            if (!establishCurrentCycle(cycle, state)) {
                 states.save(state);
                 return false;
             }
@@ -73,18 +72,16 @@ public class LegacyOrderMessagePreparationRecovery {
 
     /** Caller holds Order then State; no provider calls or operation allocations happen here. */
     @Transactional(propagation=Propagation.MANDATORY)
-    public boolean establishCurrentCycle(Order order, ScheduledClientMessageState state) {
-        if (order == null || order.getClientMessageGeneration() != 0 || state == null
+    public boolean establishCurrentCycle(long orderId, ScheduledClientMessageState state) {
+        return establishCurrentCycle(orders.lockLegacyCycle(orderId).orElse(null), state);
+    }
+
+    private boolean establishCurrentCycle(OrderNotificationRecovery.LegacyCycle cycle, ScheduledClientMessageState state) {
+        if (cycle == null || state == null
                 || state.getId() == null || state.getId() <= 0 || state.getStatus() != ScheduledMessageStateStatus.ACTIVE
-                || !Objects.equals(order.getId(), state.getOrderId()) || !hasNoDeliveryEvidence(state)
-                || !isCurrentCycle(order, state)) return false;
-        var cutovers = jdbc.query("SELECT installed_on FROM flyway_schema_history WHERE version='1.10.305' AND success=TRUE",
-                (rs, row) -> rs.getTimestamp(1).toLocalDateTime());
-        if (cutovers.size() != 1 || !order.getStatusChangedAt().isAfter(cutovers.getFirst())
-                || state.getCreatedAt() == null || state.getCreatedAt().isBefore(order.getStatusChangedAt())) return false;
-        Integer occurrences = jdbc.queryForObject("SELECT COUNT(*) FROM order_client_message_occurrences WHERE order_id=?",
-                Integer.class, order.getId());
-        if (occurrences == null || occurrences != 0) return false;
+                || !Objects.equals(cycle.orderId(), state.getOrderId()) || !hasNoDeliveryEvidence(state)
+                || !isCurrentCycle(cycle, state)) return false;
+        if (state.getCreatedAt() == null || state.getCreatedAt().isBefore(cycle.startedAt())) return false;
         // A missing operation alone is insufficient: retained attempts must prove preparation failed before a channel call.
         Integer otherAttempts = jdbc.queryForObject("""
                 SELECT COUNT(*) FROM scheduled_client_message_attempts WHERE state_id=? AND NOT COALESCE((
@@ -99,9 +96,7 @@ public class LegacyOrderMessagePreparationRecovery {
                     Integer.class, state.getId());
             if (retained == null || retained == 0) return false;
         }
-        order.setClientMessageGeneration(1);
-        orders.save(order);
-        return true;
+        return orders.beginLegacyCycle(cycle.orderId(), cycle.startedAt());
     }
 
     static boolean hasNoDeliveryEvidence(ScheduledClientMessageState state) {
@@ -112,11 +107,11 @@ public class LegacyOrderMessagePreparationRecovery {
                 && state.getDeliveryTaskId() == null && state.getDeliveryPreparedAt() == null;
     }
 
-    private static boolean isCurrentCycle(Order order, ScheduledClientMessageState state) {
+    private static boolean isCurrentCycle(OrderNotificationRecovery.LegacyCycle cycle, ScheduledClientMessageState state) {
         String expectedStatus = state.getScenario() == ClientMessageScenario.REVIEW_CHECK_DELIVERY_RETRY ? "В проверку"
                 : state.getScenario() == ClientMessageScenario.PAYMENT_INVOICE_RETRY ? "Опубликовано" : null;
-        return expectedStatus != null && order.getStatus() != null && expectedStatus.equals(order.getStatus().getTitle())
-                && order.getStatusChangedAt() != null && state.getTargetType() == ClientMessageTargetType.ORDER
-                && ("order:" + order.getId() + ":" + order.getStatusChangedAt().withNano(0)).equals(state.getTargetKey());
+        return expectedStatus != null && expectedStatus.equals(cycle.status())
+                && cycle.startedAt() != null && state.getTargetType() == ClientMessageTargetType.ORDER
+                && ("order:" + cycle.orderId() + ":" + cycle.startedAt().withNano(0)).equals(state.getTargetKey());
     }
 }

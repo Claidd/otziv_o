@@ -1,5 +1,7 @@
 package com.hunt.otziv.p_products.status.service;
 
+import com.hunt.otziv.p_products.api.LegacyOrderNotificationException;
+
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;

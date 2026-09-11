@@ -1477,7 +1477,7 @@ class ScheduledClientMessageServiceTest {
         if (prepared) state.setDeliveryEnvelope("existing-operation-envelope");
         when(stateRepository.findByIdForUpdate(5819L)).thenReturn(Optional.of(state));
         ReflectionTestUtils.invokeMethod(service,"quarantineRolledBackState",5819L,state.getLockedUntil(),now,
-                new com.hunt.otziv.p_products.status.service.LegacyOrderNotificationException());
+                new com.hunt.otziv.p_products.api.LegacyOrderNotificationException());
         assertEquals(prepared ? ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN
                 : ClientMessageStateSafety.LEGACY_PREPARATION_UNVERIFIED,state.getLastErrorCode());
         assertTrue(ClientMessageStateSafety.blocksAutomaticRearm(state));

@@ -20,6 +20,7 @@ param(
     [switch]$SkipBuildPush,
     [switch]$SkipEnvUpload,
     [switch]$EnableExternalReviewWorker,
+    [ValidateSet('whatsapp_lika', 'whatsapp_vika')][string[]]$AllowWhatsAppQrPending = @(),
     [string]$MobileApkPath = "",
     [switch]$SkipMobileApkUpload,
     [string]$PreDeployBackupDirectory = "",
@@ -58,6 +59,8 @@ Useful options:
   -SkipBuildPush                 Skip build/push and deploy already published images for enabled services.
   -SkipEnvUpload                 Keep VPS env and update app/web/external-worker image tags in it.
   -EnableExternalReviewWorker    Opt in to building and running the external review checker (disabled by default).
+  -AllowWhatsAppQrPending        Named gateways may await phone QR if their operation and inbox storage pass checks.
+                                Delivery remains unavailable and readiness alerts remain active for those gateways.
   -MobileApkPath <path>          Publish this signed release APK. By default uses the highest code from mobile/builds.
   -SkipMobileApkUpload           Do not include a mobile APK in this deployment.
   -PreDeployBackupDirectory      Local directory for the mandatory encrypted pre-migration DB backup.
@@ -1044,6 +1047,7 @@ $deployBundlePaths = @(
     "infrastructure\scripts\prod\otziv-prod-up.sh",
     "infrastructure\scripts\prod\database_image_guard.py",
     "infrastructure\scripts\prod\deployment_capacity.py",
+    "infrastructure\scripts\prod\whatsapp_deploy_state.py",
     "infrastructure\scripts\prod\image_layer_capacity.py",
     "infrastructure\scripts\prod\register-max-webhook.sh",
     "infrastructure\scripts\prod\init-letsencrypt.sh",
@@ -1461,6 +1465,7 @@ chmod 600 $remoteBundleForUploadQuoted
     $uploadedEnv = if ($SkipEnvUpload) { "0" } else { "1" }
     $deployExternalReviewWorker = if ($EnableExternalReviewWorker) { "1" } else { "0" }
     $deployWhatsAppChangedFlag = if ($deployWhatsAppChanged) { "1" } else { "0" }
+    $whatsAppQrPendingQuoted = ConvertTo-BashSingleQuoted ($AllowWhatsAppQrPending -join ',')
 
     # Create and independently download a verified encrypted DB backup before
     # the remote rollout can start Flyway. The deploy bundle is only read here;
@@ -2681,6 +2686,7 @@ publish_bundled_mobile_release() {
   echo "Published mobile APK code `$incoming_code and removed older APK files."
 }
 
+whatsapp_qr_pending=$whatsAppQrPendingQuoted
 wait_service_healthy() {
   service_name="`$1"
   timeout_seconds="`$2"
@@ -2702,6 +2708,16 @@ wait_service_healthy() {
         echo "`$service_name is ready (`$state/`$health)."
         return 0
       fi
+
+      # Explicit release-scoped QR wait only. Never mask authenticated startup or storage failures.
+      case ",`$whatsapp_qr_pending," in
+        *,"`$service_name",*)
+          if python3 infrastructure/scripts/prod/whatsapp_deploy_state.py "`$container_id" "`$service_name"; then
+            echo "WARNING: `$service_name requires phone linking; delivery readiness remains unavailable."
+            return 0
+          fi
+          ;;
+      esac
 
       if [ "`$state" = "exited" ] || [ "`$state" = "dead" ]; then
         echo "`$service_name stopped while waiting (`$state/`$health)." >&2

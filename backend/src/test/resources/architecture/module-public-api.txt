@@ -27,3 +27,7 @@ com.hunt.otziv.config.settings.api.OutboundMessagePolicy
 com.hunt.otziv.config.settings.api.PublicationProgressSettings
 com.hunt.otziv.config.api.DeliveryResponseCompatibility
 com.hunt.otziv.u_users.api.DeferredUserAuthority
+
+# Transaction-scoped notification recovery exposes immutable order cycle data only.
+com.hunt.otziv.p_products.api.OrderNotificationRecovery
+com.hunt.otziv.p_products.api.LegacyOrderNotificationException
