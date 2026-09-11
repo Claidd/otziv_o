@@ -19,7 +19,8 @@ class ContainerPressureMetricsTest {
     void readsUpdatedCountersAfterGarbageCollection() throws Exception {
         writeCounters(10, 2, 500_000);
         var metrics = new ContainerPressureMetrics(cgroup);
-        try (var registry = new SimpleMeterRegistry()) {
+        var registry = new SimpleMeterRegistry();
+        try {
             metrics.bindTo(registry);
             assertEquals(10, registry.get("otziv.container.cpu.periods").functionCounter().count());
 
@@ -40,14 +41,19 @@ class ContainerPressureMetricsTest {
                         .tag("resource", resource).functionCounter().count());
             }
             Reference.reachabilityFence(metrics);
+        } finally {
+            registry.close();
         }
     }
 
     @Test
     void unsupportedHostRegistersNoCounters() {
-        try (var registry = new SimpleMeterRegistry()) {
+        var registry = new SimpleMeterRegistry();
+        try {
             new ContainerPressureMetrics(cgroup).bindTo(registry);
             assertTrue(registry.getMeters().isEmpty());
+        } finally {
+            registry.close();
         }
     }
 

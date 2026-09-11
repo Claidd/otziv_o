@@ -115,7 +115,8 @@ spans очищаются до имени класса без message/cause/stack
 непривилегированно; отсутствие поддержки не отображается как нулевая нагрузка.
 Объекты файлов cgroup удерживаются самим singleton binder: FunctionCounter
 Micrometer хранит только слабую ссылку и иначе после GC оставляет последнее
-значение. Штатный deploy пересоздаёт Prometheus с сохранением TSDB volume,
+значение ([реализация Micrometer](https://github.com/micrometer-metrics/micrometer/blob/main/micrometer-core/src/main/java/io/micrometer/core/instrument/cumulative/CumulativeFunctionCounter.java)).
+Штатный deploy пересоздаёт Prometheus с сохранением TSDB volume,
 чтобы заменённые при доставке inode файлов конфигурации и правил попали в mount.
 Сегмент `worker.board/cellular-access` отдельно измеряет прежнюю проверку сети,
 включая запись нарушения: её нельзя исключать из HTTP-измерения защищённых вкладок.
