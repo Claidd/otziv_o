@@ -1465,7 +1465,7 @@ chmod 600 $remoteBundleForUploadQuoted
     $uploadedEnv = if ($SkipEnvUpload) { "0" } else { "1" }
     $deployExternalReviewWorker = if ($EnableExternalReviewWorker) { "1" } else { "0" }
     $deployWhatsAppChangedFlag = if ($deployWhatsAppChanged) { "1" } else { "0" }
-    $whatsAppQrPendingQuoted = ConvertTo-BashSingleQuoted ($AllowWhatsAppQrPending -join ',')
+    $whatsAppQrPendingQuoted = if ($AllowWhatsAppQrPending.Count -eq 0) { "''" } else { ConvertTo-BashSingleQuoted ($AllowWhatsAppQrPending -join ',') }
 
     # Create and independently download a verified encrypted DB backup before
     # the remote rollout can start Flyway. The deploy bundle is only read here;

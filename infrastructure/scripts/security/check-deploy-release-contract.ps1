@@ -38,6 +38,21 @@ $buildCompose = [IO.File]::ReadAllText($buildComposePath)
 $productionCompose = [IO.File]::ReadAllText($productionComposePath)
 . $snapshotPath
 
+# Exercise the real argument preparation without invoking deployment or SSH.
+$deployAst = [Management.Automation.Language.Parser]::ParseInput($deploy, [ref]$null, [ref]$null)
+$quoteFunction = $deployAst.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'ConvertTo-BashSingleQuoted' }, $true)
+. ([scriptblock]::Create($quoteFunction.Extent.Text))
+$qrArgument = $deployAst.Find({ param($node) $node -is [Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -eq '$whatsAppQrPendingQuoted' }, $true)
+foreach ($case in @(
+    @{ Names = @(); Expected = "''" },
+    @{ Names = @('whatsapp_vika'); Expected = "'whatsapp_vika'" },
+    @{ Names = @('whatsapp_lika', 'whatsapp_vika'); Expected = "'whatsapp_lika,whatsapp_vika'" }
+)) {
+    $AllowWhatsAppQrPending = $case.Names
+    . ([scriptblock]::Create($qrArgument.Extent.Text))
+    if ($whatsAppQrPendingQuoted -ne $case.Expected) { throw 'QR wait argument preparation must preserve strict default and named opt-ins.' }
+}
+
 function Assert-Match {
     param([string]$Text, [string]$Pattern, [string]$Message)
     if (-not [regex]::IsMatch($Text, $Pattern, [Text.RegularExpressions.RegexOptions]::Singleline)) {
