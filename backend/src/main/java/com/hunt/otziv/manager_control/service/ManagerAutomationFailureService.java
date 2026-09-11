@@ -190,6 +190,11 @@ public class ManagerAutomationFailureService {
             reasonParts.add("Нажмите «Привязать Telegram»: если бот еще не добавлен, выберите группу по ссылке; "
                     + "если бот уже в группе, отправьте в ней одноразовую команду. "
                     + "После подтверждения задача повторится автоматически");
+        } else if (com.hunt.otziv.client_messages.service.ClientMessageStateSafety.isLegacyPreparationFailure(state)) {
+            reasonParts.add("Нажмите «Починить»: система проверит цикл заказа и журнал операций. "
+                    + "Задача вернется в очередь только при подтверждении, что отправка еще не начиналась");
+        } else if (com.hunt.otziv.client_messages.service.ClientMessageStateSafety.blocksAutomaticRearm(state)) {
+            reasonParts.add("Требуется восстановить подтверждение доставки. Повторная отправка заблокирована, чтобы не продублировать сообщение клиенту");
         } else if (existingPaymentConflict) {
             reasonParts.add("Нажмите «Починить»: система проверит состояние существующего платежа в T-Bank "
                     + "и, если он по-прежнему ожидает оплату, повторно отправит клиенту эту же ссылку; "

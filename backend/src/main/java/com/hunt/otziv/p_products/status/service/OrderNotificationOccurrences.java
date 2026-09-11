@@ -27,7 +27,7 @@ public class OrderNotificationOccurrences {
         if(orderId<=0||kind==null||kind.isBlank()||kind.length()>180||businessGeneration<0)
             throw new IllegalArgumentException("Invalid order notification occurrence");
         if (businessGeneration == 0) {
-            throw new IllegalStateException("legacy_operation_unverified");
+            throw new LegacyOrderNotificationException();
         }
         jdbc.update("INSERT INTO order_client_message_occurrences(order_id,logical_kind,operation_id,generation,business_generation) VALUES(?,?,?,1,?) ON DUPLICATE KEY UPDATE order_id=order_id",
                 orderId,kind,UUID.randomUUID().toString(),businessGeneration);

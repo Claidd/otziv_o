@@ -26,6 +26,18 @@ public class OrderPublicationOutbox {
 
     @Transactional(propagation=Propagation.MANDATORY)
     public void enqueue(long orderId, String occurrence, PreparedPublicationProgress progress) {
+        enqueue(orderId, occurrence, progress, false);
+    }
+
+    /** Starting publication sends an informational message, without completing or billing the order. */
+    @Transactional(propagation=Propagation.MANDATORY)
+    public void enqueueNotification(long orderId, String occurrence, PreparedPublicationProgress progress) {
+        if (progress == null || !progress.publicationStarted())
+            throw new IllegalArgumentException("Expected publication-start notification");
+        enqueue(orderId, occurrence, progress, true);
+    }
+
+    private void enqueue(long orderId, String occurrence, PreparedPublicationProgress progress, boolean notificationOnly) {
         if (orderId <= 0 || occurrence == null || occurrence.isBlank() || occurrence.length() > 180)
             throw new IllegalArgumentException("Invalid publication event");
         if (progress != null && (progress.orderId() != orderId || !progress.kind().equals("progress:" + occurrence)
@@ -35,11 +47,11 @@ public class OrderPublicationOutbox {
         catch (JsonProcessingException invalid) { throw new IllegalStateException("Cannot freeze publication envelope", invalid); }
         jdbc.update("""
                 INSERT INTO order_publication_client_updates
-                    (order_id, publication_occurrence, operation_id, delivery_envelope, delivery_state)
-                VALUES (?, ?, ?, ?, ?)
+                    (order_id, publication_occurrence, operation_id, delivery_envelope, delivery_state, completion_done, billing_done)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE id=id
                 """, orderId, occurrence, progress == null ? null : progress.operationId(), envelope,
-                progress == null ? "SKIPPED" : "READY");
+                progress == null ? "SKIPPED" : "READY", notificationOnly, notificationOnly);
         var existing = jdbc.queryForObject("""
                 SELECT operation_id,delivery_envelope FROM order_publication_client_updates
                 WHERE order_id=? AND publication_occurrence=?

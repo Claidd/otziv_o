@@ -93,6 +93,9 @@ class OrderStatusTransitionServiceTest {
     private OrderStatusNotificationService orderStatusNotificationService;
 
     @Mock
+    private OrderPublicationOutbox orderPublicationOutbox;
+
+    @Mock
     private OrderBotLifecycleService orderBotLifecycleService;
 
     @Mock
@@ -1172,7 +1175,7 @@ class OrderStatusTransitionServiceTest {
     }
 
     @Test
-    void toPublishFromInCheckSendsPublicationStartedMessageToClientChat() throws Exception {
+    void legacyOrderNewTransitionStartsLineageAndQueuesPublicationStartedWithoutSending() throws Exception {
         OrderStatusTransitionService service = service();
         Order order = orderWithReview(84L, "На проверке", 840L, "Готовый текст отзыва");
         OrderStatus toPublish = status("Публикация");
@@ -1182,30 +1185,28 @@ class OrderStatusTransitionServiceTest {
         when(orderStatusService.getOrderStatusByTitle("Публикация")).thenReturn(toPublish);
         when(orderReviewCheckMessageBuilder.publicationStartedMessage(order))
                 .thenReturn("Компания. Филиал\n\nОтзывы переданы в публикацию");
-        when(orderStatusNotificationService.sendInformationalMessageToClientChat(
+        var prepared = new OrderStatusNotificationService.PreparedPublicationProgress(84L,
+                "progress:publication-start:1", UUID.randomUUID().toString(), null, "client", "group", "frozen", false, List.of());
+        when(orderStatusNotificationService.preparePublicationProgress(
                 same(order),
                 eq("client"),
                 eq("group"),
                 contains("Отзывы переданы в публикацию"),
-                eq("заказ передан в публикацию")
-        )).thenReturn(true);
+                eq(false), eq("publication-start:1")
+        )).thenReturn(prepared);
 
         assertTrue(service.changeStatusForOrder(84L, "Публикация"));
 
         assertSame(toPublish, order.getStatus());
         verify(orderCompanyStatusService).autoManageCompanyStatus(order, "Публикация");
         verify(orderRepository).save(order);
-        verify(orderStatusNotificationService).sendInformationalMessageToClientChat(
-                same(order),
-                eq("client"),
-                eq("group"),
-                contains("Отзывы переданы в публикацию"),
-                eq("заказ передан в публикацию")
-        );
+        assertEquals(1, order.getClientMessageGeneration());
+        verify(orderPublicationOutbox).enqueueNotification(84L, "publication-start:1", prepared);
+        verify(orderStatusNotificationService, never()).dispatchPublicationProgress(prepared);
     }
 
     @Test
-    void toPublishFromInCheckKeepsStatusWhenPublicationStartedMessageFails() throws Exception {
+    void publicationStartedEnqueueFailurePropagatesForBusinessTransactionRollback() throws Exception {
         OrderStatusTransitionService service = service();
         Order order = orderWithReview(85L, "На проверке", 850L, "Готовый текст отзыва");
         OrderStatus toPublish = status("Публикация");
@@ -1215,25 +1216,29 @@ class OrderStatusTransitionServiceTest {
         when(orderStatusService.getOrderStatusByTitle("Публикация")).thenReturn(toPublish);
         when(orderReviewCheckMessageBuilder.publicationStartedMessage(order))
                 .thenReturn("Компания. Филиал\n\nОтзывы переданы в публикацию");
-        when(orderStatusNotificationService.sendInformationalMessageToClientChat(
+        var prepared = new OrderStatusNotificationService.PreparedPublicationProgress(85L,
+                "progress:publication-start:1", UUID.randomUUID().toString(), null, "client", "group", "frozen", false, List.of());
+        when(orderStatusNotificationService.preparePublicationProgress(
                 same(order),
                 eq("client"),
                 eq("group"),
                 contains("Отзывы переданы в публикацию"),
-                eq("заказ передан в публикацию")
-        )).thenReturn(false);
+                eq(false), eq("publication-start:1")
+        )).thenReturn(prepared);
+        doThrow(new IllegalStateException("intent write failed")).when(orderPublicationOutbox)
+                .enqueueNotification(85L, "publication-start:1", prepared);
 
-        assertTrue(service.changeStatusForOrder(85L, "Публикация"));
+        assertThrows(RuntimeException.class, () -> service.changeStatusForOrder(85L, "Публикация"));
+        verify(orderStatusNotificationService, never()).dispatchPublicationProgress(prepared);
+    }
 
-        assertSame(toPublish, order.getStatus());
-        verify(orderRepository).save(order);
-        verify(orderStatusNotificationService).sendInformationalMessageToClientChat(
-                same(order),
-                eq("client"),
-                eq("group"),
-                contains("Отзывы переданы в публикацию"),
-                eq("заказ передан в публикацию")
-        );
+    @Test
+    void noOpRequestCannotInitializeAnUnverifiedHistoricalLineage() throws Exception {
+        Order order = order(84L, "Публикация");
+        when(orderRepository.findByIdForMutation(84L)).thenReturn(Optional.of(order));
+        assertTrue(service().changeStatusForOrder(84L, "Публикация"));
+        assertEquals(0, order.getClientMessageGeneration());
+        verifyNoInteractions(orderPublicationOutbox, orderStatusNotificationService);
     }
 
     @Test
@@ -1331,6 +1336,7 @@ class OrderStatusTransitionServiceTest {
                 telegramService,
                 orderCompanyStatusService,
                 orderStatusNotificationService,
+                orderPublicationOutbox,
                 orderBotLifecycleService,
                 reviewArchiveService,
                 reviewRepository,

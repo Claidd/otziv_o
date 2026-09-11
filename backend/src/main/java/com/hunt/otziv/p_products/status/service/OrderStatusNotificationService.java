@@ -41,6 +41,10 @@ public class OrderStatusNotificationService {
     }
 
     public ClientMessageSendResult dispatchPublicationProgress(PreparedPublicationProgress prepared) {
+        if (prepared.publicationStarted()) {
+            return sender.deliverWithOperationId(prepared.target(), prepared.clientId(), prepared.groupId(),
+                    prepared.message(), null, prepared.operationId());
+        }
         return sender.deliverPublicationProgressWithOperationId(prepared.target(), prepared.clientId(), prepared.groupId(),
                 prepared.message(), prepared.includePreferenceControls(), prepared.operationId());
     }
@@ -58,7 +62,9 @@ public class OrderStatusNotificationService {
 
     public record PreparedPublicationProgress(Long orderId, String kind, String operationId, ClientMessageDelivery.Target target,
             String clientId, String groupId, String message, boolean includePreferenceControls,
-            List<WhatsAppAuthAlertService.Recipient> recipients) {}
+            List<WhatsAppAuthAlertService.Recipient> recipients) {
+        public boolean publicationStarted() { return kind != null && kind.startsWith("progress:publication-start:"); }
+    }
 
     /** Called under the order's mutation lock; transport data is frozen before commit. */
     public PreparedAction prepareAction(String title, Order order, String clientId, String groupId,

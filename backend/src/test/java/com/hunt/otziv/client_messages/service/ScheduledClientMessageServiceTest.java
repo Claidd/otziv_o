@@ -62,6 +62,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.Mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.test.util.ReflectionTestUtils;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -107,6 +108,8 @@ class ScheduledClientMessageServiceTest {
     private OrderStatusTransitionService orderStatusTransitionService;
     @Mock
     private OrderStatusNotificationService orderStatusNotificationService;
+    @Mock
+    private LegacyOrderMessagePreparationRecovery legacyPreparationRecovery;
     @Mock
     private OrderPaymentMessageBuilder orderPaymentMessageBuilder;
     @Mock
@@ -1461,6 +1464,39 @@ class ScheduledClientMessageServiceTest {
 
         assertEquals(Boolean.FALSE, created);
         assertNull(state.getNextAttemptAt());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans={false,true})
+    void legacyPreparationExceptionIsNotAnUnknownSendUnlessDeliveryEvidenceExists(boolean prepared) {
+        LocalDateTime now=LocalDateTime.of(2026,9,11,10,0);
+        var state=ScheduledClientMessageState.builder().id(5819L).scenario(ClientMessageScenario.PAYMENT_INVOICE_RETRY)
+                .targetType(ClientMessageTargetType.ORDER).targetKey("order:7:2026-09-10T10:00").orderId(7L)
+                .status(ScheduledMessageStateStatus.ACTIVE).lastErrorCode(ClientMessageStateSafety.TRANSACTION_IN_PROGRESS)
+                .deliveryStatus("CLAIMED").lockedUntil(now.plusMinutes(5)).build();
+        if (prepared) state.setDeliveryEnvelope("existing-operation-envelope");
+        when(stateRepository.findByIdForUpdate(5819L)).thenReturn(Optional.of(state));
+        ReflectionTestUtils.invokeMethod(service,"quarantineRolledBackState",5819L,state.getLockedUntil(),now,
+                new com.hunt.otziv.p_products.status.service.LegacyOrderNotificationException());
+        assertEquals(prepared ? ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN
+                : ClientMessageStateSafety.LEGACY_PREPARATION_UNVERIFIED,state.getLastErrorCode());
+        assertTrue(ClientMessageStateSafety.blocksAutomaticRearm(state));
+        assertNull(state.getNextAttemptAt());
+        verifyNoInteractions(messageSender);
+    }
+
+    @Test
+    void repairRechecksLegacyProofBeforeBlockingAndReloadsRecoveredState() {
+        var held=ScheduledClientMessageState.builder().id(5911L).orderId(7L).status(ScheduledMessageStateStatus.ACTIVE)
+                .lastErrorCode(ClientMessageStateSafety.LEGACY_PREPARATION_UNVERIFIED).build();
+        var recovered=ScheduledClientMessageState.builder().id(5911L).orderId(7L).status(ScheduledMessageStateStatus.ACTIVE).build();
+        when(stateRepository.findById(5911L)).thenReturn(Optional.of(held),Optional.of(recovered));
+        when(legacyPreparationRecovery.recover(eq(5911L),any(LocalDateTime.class))).thenReturn(true);
+        // Disabled worker still blocks delivery, after the safe repair rather than with a misleading unknown-send error.
+        var error=assertThrows(org.springframework.web.server.ResponseStatusException.class,() -> service.retryNow(5911L));
+        assertTrue(error.getReason().contains("выключена"));
+        verify(legacyPreparationRecovery).recover(eq(5911L),any(LocalDateTime.class));
+        verifyNoInteractions(messageSender);
     }
 
     @Test

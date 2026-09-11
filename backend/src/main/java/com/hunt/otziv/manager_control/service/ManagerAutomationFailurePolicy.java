@@ -48,7 +48,8 @@ public class ManagerAutomationFailurePolicy {
             return false;
         }
         LocalDateTime effectiveNow = now == null ? LocalDateTime.now() : now;
-        if (ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN.equals(code)) {
+        if (ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN.equals(code)
+                || ClientMessageStateSafety.LEGACY_PREPARATION_UNVERIFIED.equals(code)) {
             return true;
         }
         if (ClientMessageStateSafety.TRANSACTION_IN_PROGRESS.equals(code)) {

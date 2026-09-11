@@ -26,6 +26,8 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.*;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.aop.framework.ProxyFactory;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -379,6 +381,58 @@ class PublicationClientUpdatesMySqlIntegrationTest {
         jdbc.update("UPDATE order_publication_client_updates SET billing_next_attempt_at=CURRENT_TIMESTAMP(6)");
         worker.completeBilling(id);assertThat(jdbc.queryForObject("SELECT billing_done FROM order_publication_client_updates",Boolean.class)).isTrue();
         assertThat(finalizations).hasValue(1);
+    }
+
+    @Test void publicationStartIntentRollsBackWithBusinessChangeAndNeverSchedulesCompletionOrBilling() {
+        jdbc.update("UPDATE orders SET status='На проверке'");
+        tx.executeWithoutResult(status -> {
+            jdbc.update("UPDATE orders SET status='Публикация',client_message_generation=1");
+            enqueueStart();
+            status.setRollbackOnly();
+        });
+        assertThat(text("SELECT status FROM orders")).isEqualTo("На проверке");
+        assertThat(number("SELECT client_message_generation FROM orders")).isZero();
+        assertThat(allIds()).isEmpty();
+        assertThat(number("SELECT COUNT(*) FROM order_client_message_occurrences")).isZero();
+        tx.executeWithoutResult(status -> {
+            jdbc.update("UPDATE orders SET status='Публикация',client_message_generation=1");
+            enqueueStart();
+        });
+        assertThat(outbox.dueCompletions(20)).isEmpty();
+        assertThat(outbox.dueBilling(20)).isEmpty();
+        assertThat(outbox.dueDeliveries(20)).containsExactly(first());
+        verifyNoInteractions(telegram, billing);
+    }
+
+    @ParameterizedTest @ValueSource(strings={"MAX","WhatsApp"})
+    void publicationStartRetriesSameOperationOutsideTransactionWithoutProgressPreference(String channel) throws Exception {
+        tx.executeWithoutResult(status -> enqueueStart());
+        long id=first();String operation=operation(id);
+        companyEnabled.set(false);
+        when(settings.getBooleanFreshFailClosed(AppSettingService.CLIENT_PUBLICATION_PROGRESS_REPORTS_ENABLED,true)).thenReturn(false);
+        var transport=mock(ClientMessageDelivery.class);
+        var calls=new AtomicInteger();
+        when(transport.deliverWithOperationId(any(),anyString(),anyString(),anyString(),isNull(),eq(operation)))
+            .thenAnswer(call -> {
+                assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
+                return calls.getAndIncrement()==0 ? ClientMessageSendResult.failed("gateway_busy","not admitted")
+                    : ClientMessageSendResult.sent(channel,"fixture-confirmed");
+            });
+        var service=construct(OrderStatusNotificationService.class,Map.of(ClientMessageDelivery.class,transport));
+        worker(outbox,transport,service).deliver(id);
+        assertThat(state(id)).isEqualTo("READY");due(id);
+        worker(outbox,transport,service).deliver(id);
+        assertThat(state(id)).isEqualTo("SENT");assertThat(operation(id)).isEqualTo(operation);
+        assertThat(calls).hasValue(2);
+        verify(transport,never()).publicationProgressEnabled(any());
+        verify(transport,never()).deliverPublicationProgressWithOperationId(any(),any(),any(),any(),anyBoolean(),any());
+        assertThat(outbox.dueCompletions(20)).isEmpty();assertThat(outbox.dueBilling(20)).isEmpty();
+    }
+
+    private void enqueueStart() {
+        var order=order(7,0,3,"Публикация");order.setClientMessageGeneration(1);
+        var prepared=notifications.preparePublicationProgress(order,"client-original","group-original","Publication started",false,"publication-start:1");
+        outbox.enqueueNotification(7,"publication-start:1",prepared);
     }
 
     private ScheduledClientMessageStateRepository invoiceRepository() {

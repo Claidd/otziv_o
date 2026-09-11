@@ -175,6 +175,7 @@ public class ScheduledClientMessageService {
     private final ClientMessageSlotPlanner slotPlanner;
     private final OrderStatusTransitionService orderStatusTransitionService;
     private final OrderStatusNotificationService orderStatusNotificationService;
+    private final LegacyOrderMessagePreparationRecovery legacyPreparationRecovery;
     private final OrderPaymentMessageBuilder orderPaymentMessageBuilder;
     private final PaymentLinkService paymentLinkService;
     private final PaymentIssueReminderService paymentIssueReminderService;
@@ -256,6 +257,7 @@ public class ScheduledClientMessageService {
                 releaseReenabledBadReviewScenarios(nowStorage);
             });
             recoverOrdinaryDeliveries(nowStorage);
+            legacyPreparationRecovery.recoverDue(nowStorage);
         } catch (RuntimeException e) {
             log.error("Bad-review delivery recovery transaction failed", e);
         }
@@ -330,10 +332,16 @@ public class ScheduledClientMessageService {
         if (state.getStatus() != ScheduledMessageStateStatus.ACTIVE) {
             return manualRetryResult(state, false);
         }
+        if (ClientMessageStateSafety.isLegacyPreparationFailure(state)
+                && legacyPreparationRecovery.recover(stateId, databaseTimestamp(LocalDateTime.now(clock)))) {
+            state = transactionRunner.callInNewTransaction(() -> stateRepository.findById(stateId).orElseThrow());
+        }
         if (ClientMessageStateSafety.blocksAutomaticRearm(state)) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "Исход предыдущей отправки не определен. Проверьте чат клиента перед повтором."
+                    ClientMessageStateSafety.isLegacyPreparationFailure(state)
+                            ? "Подготовка остановлена: пока недостаточно данных, чтобы подтвердить новый цикл заказа без риска повторной отправки."
+                            : "Исход предыдущей отправки не определен. Требуется восстановить подтверждение доставки; автоматический повтор заблокирован."
             );
         }
         if (!appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_WORKER_ENABLED, true)) {
@@ -355,7 +363,7 @@ public class ScheduledClientMessageService {
         }
         LocalDateTime claimedUntil = nowStorage.plus(Duration.ofMinutes(DEFAULT_LOCK_MINUTES));
         boolean claimed = transactionRunner.callInNewTransaction(
-                () -> lockActiveState(state.getId(), nowStorage, claimedUntil)
+                () -> lockActiveState(stateId, nowStorage, claimedUntil)
         );
         if (!claimed) {
             throw new ResponseStatusException(
@@ -2049,20 +2057,26 @@ public class ScheduledClientMessageService {
                     );
                     return;
                 }
-                String message = "Транзакция обработки откатилась. Результат внешней отправки не определен; "
+                boolean preparationFailure = failure instanceof com.hunt.otziv.p_products.status.service.LegacyOrderNotificationException
+                        && LegacyOrderMessagePreparationRecovery.hasNoDeliveryEvidence(state);
+                String errorCode = preparationFailure ? ClientMessageStateSafety.LEGACY_PREPARATION_UNVERIFIED
+                        : ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN;
+                String message = preparationFailure
+                        ? "Сообщение не отправлялось: требуется подтвердить новый цикл старого заказа перед подготовкой."
+                        : "Транзакция обработки откатилась. Результат внешней отправки не определен; "
                         + "автоматический повтор остановлен до ручной проверки. Причина: "
                         + readableException(failure);
                 recordAttempt(
                         state,
                         ScheduledMessageAttemptStatus.FAILED,
                         null,
-                        ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN,
+                        errorCode,
                         message,
                         message,
                         0
                 );
                 state.setLastAttemptAt(nowStorage);
-                state.setLastErrorCode(ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN);
+                state.setLastErrorCode(errorCode);
                 state.setLastErrorMessage(limit(message, 1000));
                 state.setConsecutiveFailures(state.getConsecutiveFailures() + 1);
                 state.setNextAttemptAt(null);
@@ -2282,6 +2296,7 @@ public class ScheduledClientMessageService {
             return null;
         }
 
+        if (order.getClientMessageGeneration() == 0) legacyPreparationRecovery.establishCurrentCycle(order, state);
         var action = orderStatusNotificationService.prepareAction(STATUS_TO_CHECK, order,
                 order.getManager() == null ? null : order.getManager().getClientId(),
                 order.getCompany() == null ? null : order.getCompany().getGroupId(), message, STATUS_IN_CHECK, null);
@@ -2333,6 +2348,7 @@ public class ScheduledClientMessageService {
             return null;
         }
 
+        if (order.getClientMessageGeneration() == 0) legacyPreparationRecovery.establishCurrentCycle(order, state);
         var action = orderStatusNotificationService.prepareAction(STATUS_PUBLIC, order,
                 order.getManager() == null ? null : order.getManager().getClientId(),
                 order.getCompany() == null ? null : order.getCompany().getGroupId(),

@@ -124,6 +124,7 @@ public class OrderStatusTransitionService {
     private final TelegramService telegramService;
     private final OrderCompanyStatusService orderCompanyStatusService;
     private final OrderStatusNotificationService orderStatusNotificationService;
+    private final OrderPublicationOutbox orderPublicationOutbox;
     private final OrderBotLifecycleService orderBotLifecycleService;
     private final ReviewArchiveService reviewArchiveService;
     private final ReviewRepository reviewRepository;
@@ -235,11 +236,10 @@ public class OrderStatusTransitionService {
                 );
             }
             synchronizeAndRequireCompleteCounter(order, title);
-            // Only a post-cutover lineage may advance; legacy generation zero remains quarantined.
+            // A real, validated business transition starts a new lineage even for a legacy order.
+            // No-op requests returned above; existing unconfirmed operations retain their identity.
             long previousMessageGeneration = order.getClientMessageGeneration();
-            if (previousMessageGeneration > 0) {
-                order.setClientMessageGeneration(Math.addExact(previousMessageGeneration, 1));
-            }
+            order.setClientMessageGeneration(Math.addExact(previousMessageGeneration, 1));
             boolean changed = switch (title) {
                 case STATUS_PAYMENT -> handlePaymentStatus(order);
                 case STATUS_ARCHIVE -> handleArchiveStatus(order);
@@ -568,27 +568,14 @@ public class OrderStatusTransitionService {
             return;
         }
 
-        try {
-            String clientId = order.getManager() != null ? order.getManager().getClientId() : null;
-            String groupId = order.getCompany() != null ? order.getCompany().getGroupId() : null;
-            String message = orderReviewCheckMessageBuilder.publicationStartedMessage(order);
-
-            boolean sent = orderStatusNotificationService.sendInformationalMessageToClientChat(
-                    order,
-                    clientId,
-                    groupId,
-                    message,
-                    "заказ передан в публикацию"
-            );
-            if (sent) {
-                log.info("Уведомление клиенту о передаче заказа ID {} в публикацию отправлено", order.getId());
-            } else {
-                log.warn("Уведомление клиенту о передаче заказа ID {} в публикацию не отправлено", order.getId());
-            }
-        } catch (Exception e) {
-            log.warn("Уведомление клиенту о передаче заказа ID {} в публикацию не отправлено из-за ошибки. Статус уже изменен.",
-                    order.getId(), e);
-        }
+        String clientId = order.getManager() != null ? order.getManager().getClientId() : null;
+        String groupId = order.getCompany() != null ? order.getCompany().getGroupId() : null;
+        String occurrence = "publication-start:" + order.getClientMessageGeneration();
+        var prepared = orderStatusNotificationService.preparePublicationProgress(order, clientId, groupId,
+                orderReviewCheckMessageBuilder.publicationStartedMessage(order), false, occurrence);
+        // Order, operation identity and immutable intent commit together. Enqueue failure must roll back.
+        orderPublicationOutbox.enqueueNotification(order.getId(), occurrence, prepared);
+        log.info("Уведомление о начале публикации поставлено в очередь, orderId={}", order.getId());
     }
 
     private boolean handleArchiveStatus(Order order) {

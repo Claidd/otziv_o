@@ -132,14 +132,15 @@ public class OrderPublicationOutboxWorker {
 
     private boolean maySend(PreparedPublicationProgress prepared) {
         try {
-            return prepared.target() != null && delivery.publicationProgressEnabled(prepared.target().companyId()) && liveEnabled();
+            return prepared.target() != null && (prepared.publicationStarted()
+                    || (settings.getBooleanFreshFailClosed(AppSettingService.CLIENT_PUBLICATION_PROGRESS_REPORTS_ENABLED, true)
+                    && delivery.publicationProgressEnabled(prepared.target().companyId()))) && liveEnabled();
         } catch (RuntimeException unavailable) { return false; }
     }
 
     private boolean liveEnabled() {
         try {
-            return settings.getBooleanFreshFailClosed(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true)
-                    && settings.getBooleanFreshFailClosed(AppSettingService.CLIENT_PUBLICATION_PROGRESS_REPORTS_ENABLED, true);
+            return settings.getBooleanFreshFailClosed(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true);
         } catch (RuntimeException unavailable) { return false; }
     }
 }

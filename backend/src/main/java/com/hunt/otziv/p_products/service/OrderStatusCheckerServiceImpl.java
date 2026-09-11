@@ -124,7 +124,7 @@ public class OrderStatusCheckerServiceImpl implements OrderStatusCheckerService 
         String clientId = order.getManager().getClientId();
         String groupId = order.getCompany().getGroupId();
         if (orderPaymentMessageBuilder.shouldSkipPublishedPayment(order)) {
-            order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_PUBLIC));
+            markPublished(order);
             orderRepository.save(order);
             log.info("Счет после публикации пропущен: заказ {} по продукту 'Восстановление' без суммы к оплате",
                     order.getId());
@@ -143,14 +143,14 @@ public class OrderStatusCheckerServiceImpl implements OrderStatusCheckerService 
         }
 
         if (!immediateClientMessagesEnabled()) {
-            order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_PUBLIC));
+            markPublished(order);
             orderRepository.save(order);
             log.info("Счет после публикации не отправлен: моментальные клиентские сообщения выключены, orderId={}",
                     order.getId());
             return STATUS_PUBLIC;
         }
 
-        order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_PUBLIC));
+        markPublished(order);
         orderRepository.save(order);
         if (queuedPublication) paymentInvoiceRetryScheduler.scheduleInitialInvoiceIfAbsent(order);
         else paymentInvoiceRetryScheduler.scheduleInitialInvoice(order);
@@ -161,6 +161,13 @@ public class OrderStatusCheckerServiceImpl implements OrderStatusCheckerService 
 
     private boolean immediateClientMessagesEnabled() {
         return appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true);
+    }
+
+    private void markPublished(Order order) {
+        if (order.getStatus() == null || !STATUS_PUBLIC.equals(order.getStatus().getTitle())) {
+            order.setClientMessageGeneration(Math.addExact(order.getClientMessageGeneration(), 1));
+        }
+        order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_PUBLIC));
     }
 
     private String safeCompanyTitle(Order order) {
