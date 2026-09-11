@@ -52,6 +52,23 @@ class ClientMessageOrderStatusServiceTest {
     }
 
     @Test
+    void missingQueueStateIsReportedWithoutRunningRepairCommandsOrReloadingEachOrder() {
+        var first = order(100L, null, null);
+        var second = order(101L, null, null);
+        for (var order : List.of(first, second)) {
+            order.setStatus("Опубликовано");
+            order.setDayToChangeStatusAgo(2);
+        }
+        when(stateRepository.findByOrderIdIn(List.of(100L, 101L))).thenReturn(List.of());
+        service.enrichOrderList(List.of(first, second));
+        assertNotNull(first.getClientMessageStatus());
+        assertNotNull(second.getClientMessageStatus());
+        verify(stateRepository).findByOrderIdIn(List.of(100L, 101L));
+        org.mockito.Mockito.verifyNoMoreInteractions(stateRepository);
+        org.mockito.Mockito.verifyNoInteractions(scheduledClientMessageService);
+    }
+
+    @Test
     void reportsMissingTelegramBindingWithoutTryingToRepairItDuringBoardLoad() {
         OrderDTOList order = order(10L, 1L, "https://t.me/company_chat");
         when(stateRepository.findByOrderIdIn(anyCollection())).thenReturn(List.of());

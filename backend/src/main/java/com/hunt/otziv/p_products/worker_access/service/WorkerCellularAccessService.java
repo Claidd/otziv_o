@@ -65,6 +65,13 @@ public class WorkerCellularAccessService {
         enforceSection(section, SecurityContextHolder.getContext().getAuthentication());
     }
 
+    public void prefetchForUnprotectedSection(String section, Authentication authentication) {
+        if (PROTECTED_SECTIONS.contains(normalizeSection(section)) || !isWorkerOnly(authentication)
+                || accessPolicy().mode() == WorkerCellularAccessProperties.Mode.OFF) return;
+        HttpServletRequest request = currentRequest();
+        if (request != null) ipIntelligenceClient.prefetch(request.getRemoteAddr());
+    }
+
     public void enforceSection(String section, Authentication authentication) {
         String normalized = normalizeSection(section);
         if (!PROTECTED_SECTIONS.contains(normalized)) {

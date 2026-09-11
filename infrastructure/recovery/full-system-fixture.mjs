@@ -28,7 +28,8 @@ const imageRefs = {
   app: appImage, keycloak: keycloakImage,
   mysql: process.env.OTZIV_SYSTEM_FIXTURE_MYSQL_IMAGE || 'mysql@sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383',
   postgres: process.env.OTZIV_SYSTEM_FIXTURE_POSTGRES_IMAGE || 'postgres@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d',
-  objects: 'minio/minio:RELEASE.2025-04-22T22-12-26Z@sha256:a1ea29fa28355559ef137d71fc570e508a214ec84ff8083e39bc5428980b015e',
+  // The official Quay mirror serves the identical fixture digest after Docker Hub stopped serving it.
+  objects: 'quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z@sha256:a1ea29fa28355559ef137d71fc570e508a214ec84ff8083e39bc5428980b015e',
   runner: process.env.OTZIV_SYSTEM_FIXTURE_NODE_IMAGE || 'otziv-observer-rollout:20260907'
 };
 const images = {}, allocated = new Set(), volumes = new Set(); let networkAllocated = false, phase = 'preflight';

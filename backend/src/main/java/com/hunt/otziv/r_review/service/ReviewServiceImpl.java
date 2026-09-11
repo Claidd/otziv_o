@@ -561,6 +561,26 @@ public class ReviewServiceImpl implements ReviewService {
             String badStatus,
             Principal principal
     ) {
+        ReviewMetricScope resolved = reviewMetricScope(scope, principal);
+        if (resolved == null) return Map.of();
+        Map<String, Integer> result = new HashMap<>(reviewBoardQueryService.countPublicationMetrics(
+                scope, publishDate, vigulDate, resolved.worker(), resolved.manager(), resolved.workers()));
+        result.put("bad", toIntCount(reviewBoardQueryService.countReviewIdsForBoard(
+                ReviewBoardMode.ORDER_STATUS, scope, null, badStatus, resolved.worker(), resolved.manager(), resolved.workers())));
+        return result;
+    }
+
+    @Override
+    public Map<String, Integer> countBoardPublicationMetrics(LocalDate publishDate, LocalDate vigulDate, Principal principal, String role) {
+        ReviewBoardScope scope = ReviewBoardScope.fromRole(role);
+        ReviewMetricScope resolved = reviewMetricScope(scope, principal);
+        return resolved == null ? Map.of() : reviewBoardQueryService.countPublicationMetrics(
+                scope, publishDate, vigulDate, resolved.worker(), resolved.manager(), resolved.workers());
+    }
+
+    private record ReviewMetricScope(Worker worker, Manager manager, Set<Worker> workers) {}
+
+    private ReviewMetricScope reviewMetricScope(ReviewBoardScope scope, Principal principal) {
         Worker worker = null;
         Manager manager = null;
         Set<Worker> workers = null;
@@ -570,14 +590,14 @@ public class ReviewServiceImpl implements ReviewService {
                 User user = requireUser(principal);
                 worker = workerService.getWorkerByUserId(user.getId());
                 if (worker == null) {
-                    return Map.of();
+                    return null;
                 }
             }
             case MANAGER -> {
                 User user = requireUser(principal);
                 manager = managerService.getManagerByUserId(user.getId());
                 if (manager == null || manager.getUser() == null || manager.getUser().getWorkers() == null) {
-                    return Map.of();
+                    return null;
                 }
                 workers = manager.getUser().getWorkers();
             }
@@ -585,7 +605,7 @@ public class ReviewServiceImpl implements ReviewService {
                 User user = requireUser(principal);
                 List<Manager> managerList = user.getManagers() == null ? List.of() : user.getManagers().stream().toList();
                 if (managerList.isEmpty()) {
-                    return Map.of();
+                    return null;
                 }
                 workers = workerService.getAllWorkersToManagerList(managerList);
             }
@@ -594,17 +614,9 @@ public class ReviewServiceImpl implements ReviewService {
         }
 
         if ((scope == ReviewBoardScope.OWNER || scope == ReviewBoardScope.MANAGER) && (workers == null || workers.isEmpty())) {
-            return Map.of();
+            return null;
         }
-
-        Map<String, Integer> result = new HashMap<>();
-        result.put("publish", toIntCount(reviewBoardQueryService.countReviewIdsForBoard(
-                ReviewBoardMode.PUBLISH, scope, publishDate, null, worker, manager, workers)));
-        result.put("nagul", toIntCount(reviewBoardQueryService.countReviewIdsForBoard(
-                ReviewBoardMode.VIGUL, scope, vigulDate, null, worker, manager, workers)));
-        result.put("bad", toIntCount(reviewBoardQueryService.countReviewIdsForBoard(
-                ReviewBoardMode.ORDER_STATUS, scope, null, badStatus, worker, manager, workers)));
-        return result;
+        return new ReviewMetricScope(worker, manager, workers);
     }
 
     private int toIntCount(long count) {

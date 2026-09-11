@@ -115,23 +115,15 @@ class ContractorPaymentVisibilityServiceTest {
         user.setFio("Исторический профиль");
         ContractorPaymentProfile profile = profile(42L, user, ContractorRole.SPECIALIST);
         when(profileRepository.findAllWithUser()).thenReturn(List.of(profile));
-        when(ledgerService.totalAccrued(profile)).thenReturn(38_595L);
-        when(ledgerService.accruedInPeriod(profile, augustStart, septemberStart)).thenReturn(16_425L);
-        when(allocationRepository.sumOutstandingExposure(any(), any(), anySet()))
-                .thenReturn(15_000L, 3_500L, 500L);
-        when(accountingService.confirmedGross(profile, ContractorAllocationMode.SHADOW)).thenReturn(18_800L);
-        when(accountingService.confirmedGrossInPeriod(
-                profile,
-                ContractorAllocationMode.SHADOW,
-                augustStart.atStartOfDay(),
-                septemberStart.atStartOfDay()
-        )).thenReturn(4_100L);
-        when(accountingService.returnedInPeriod(
-                profile,
-                ContractorAllocationMode.SHADOW,
-                augustStart.atStartOfDay(),
-                septemberStart.atStartOfDay()
-        )).thenReturn(600L);
+        when(ledgerService.totalsForProfiles(List.of(profile), augustStart, septemberStart))
+                .thenReturn(java.util.Map.of(42L, new ContractorRewardLedgerService.AccrualTotals(38_595L, 16_425L)));
+        when(accountingService.totalsForProfiles(List.of(42L), ContractorAllocationMode.SHADOW,
+                augustStart.atStartOfDay(), septemberStart.atStartOfDay()))
+                .thenReturn(java.util.Map.of(42L, new ContractorPaymentAccountingService.PeriodTotals(18_800L, 4_100L, 0, 600L, 0, 0)));
+        when(allocationRepository.sumOutstandingForProfiles(any(), any(), anySet()))
+                .thenReturn(List.of(exposure(42L, ContractorAllocationStatus.RESERVED, 15_000L),
+                        exposure(42L, ContractorAllocationStatus.CLIENT_REPORTED, 3_500L),
+                        exposure(42L, ContractorAllocationStatus.PARTIALLY_CONFIRMED, 500L)));
         when(attributionRepository.summarizeProfileActualTransfersInPeriod(
                 Set.of(42L),
                 ContractorAllocationMode.SHADOW,
@@ -149,13 +141,21 @@ class ContractorPaymentVisibilityServiceTest {
         assertEquals(19_795L, response.outstandingDebtKopecks());
         assertEquals(19_000L, response.outstandingReservedKopecks());
         assertEquals(795L, response.availableKopecks());
-        verify(ledgerService).accruedInPeriod(profile, augustStart, septemberStart);
+        verify(ledgerService).totalsForProfiles(List.of(profile), augustStart, septemberStart);
         verify(attributionRepository).summarizeProfileActualTransfersInPeriod(
                 Set.of(42L),
                 ContractorAllocationMode.SHADOW,
                 augustStart.atStartOfDay(),
                 septemberStart.atStartOfDay()
         );
+    }
+
+    private ContractorPaymentAllocationRepository.ProfileExposure exposure(long id, ContractorAllocationStatus status, long amount) {
+        return new ContractorPaymentAllocationRepository.ProfileExposure() {
+            public Long getProfileId() { return id; }
+            public ContractorAllocationStatus getStatus() { return status; }
+            public long getOutstanding() { return amount; }
+        };
     }
 
     @Test

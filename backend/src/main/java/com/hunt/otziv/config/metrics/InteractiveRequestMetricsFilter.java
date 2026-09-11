@@ -15,6 +15,10 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 20)
 public class InteractiveRequestMetricsFilter extends OncePerRequestFilter {
+    static final Set<String> ENDPOINTS = Set.of("manager.orders", "manager.companies",
+            "worker.new", "worker.correct", "worker.nagul", "worker.recovery", "worker.publish", "worker.bad",
+            "worker.all", "worker.current", "worker.other", "cabinet.profile", "cabinet.team", "cabinet.score",
+            "cabinet.analyse", "admin.manager-control.today");
     private final PerformanceMetrics metrics;
     public InteractiveRequestMetricsFilter(PerformanceMetrics metrics) { this.metrics = metrics; }
     @Override protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
@@ -23,8 +27,8 @@ public class InteractiveRequestMetricsFilter extends OncePerRequestFilter {
         if (!"GET".equals(request.getMethod())) { chain.doFilter(request, response); return; }
         String endpoint = endpoint(request.getRequestURI(), request.getParameter("section"));
         if (endpoint == null) { chain.doFilter(request, response); return; }
-        metrics.beginRequest();
         long started = System.nanoTime();
+        metrics.beginRequest(endpoint);
         boolean failed = true;
         try { chain.doFilter(request, response); failed = false; }
         finally { metrics.finishRequest(endpoint, failed ? 500 : response.getStatus(), System.nanoTime() - started); }

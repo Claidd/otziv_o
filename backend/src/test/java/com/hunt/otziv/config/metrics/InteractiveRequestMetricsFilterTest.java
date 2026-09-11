@@ -11,6 +11,58 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class InteractiveRequestMetricsFilterTest {
+    @Test void startupZerosAndFirstCallRemainVisibleWithoutASecondScrape() throws Exception {
+        var registry = new SimpleMeterRegistry();
+        var metrics = new PerformanceMetrics(registry);
+        metrics.initializeInteractiveMeters();
+        assertThat(registry.get("otziv.http.duration").tags("endpoint", "worker.publish", "status", "2xx").timer().count()).isZero();
+        var request = new MockHttpServletRequest("GET", "/api/worker/board");
+        request.setParameter("section", "publish");
+        new InteractiveRequestMetricsFilter(metrics).doFilter(request, new MockHttpServletResponse(), (req, res) ->
+                metrics.recordEndpoint("worker.board", () -> PerformanceMetrics.segment("worker.board", "reviews", () -> "ok")));
+        assertThat(registry.get("otziv.http.duration").tags("endpoint", "worker.publish", "status", "2xx").timer().count()).isOne();
+        assertThat(registry.get("otziv.http.last.request.epoch").tag("endpoint", "worker.publish").gauge().value()).isPositive();
+        assertThat(registry.get("otziv.http.phase.duration").tag("phase", "after-controller").timer().count()).isOne();
+    }
+
+    @Test void segmentBelongsToTheHttpObservationAndScopeIsClosedAfterFailure() throws Exception {
+        var registry = io.micrometer.observation.ObservationRegistry.create();
+        var contexts = new java.util.ArrayList<io.micrometer.observation.Observation.Context>();
+        registry.observationConfig().observationHandler(new io.micrometer.observation.ObservationHandler<io.micrometer.observation.Observation.Context>() {
+            public boolean supportsContext(io.micrometer.observation.Observation.Context context) { return true; }
+            public void onStop(io.micrometer.observation.Observation.Context context) { contexts.add(context); }
+        });
+        var metrics = new PerformanceMetrics(new SimpleMeterRegistry());
+        metrics.observationRegistry(registry);
+        var request = new MockHttpServletRequest("GET", "/api/worker/board");
+        assertThatThrownBy(() -> new InteractiveRequestMetricsFilter(metrics).doFilter(request, new MockHttpServletResponse(), (req, res) ->
+                PerformanceMetrics.segment("worker.board", "reviews", () -> { throw new IllegalStateException("private"); })))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(contexts).hasSize(2);
+        assertThat(contexts.getFirst().getParentObservation().getContextView()).isSameAs(contexts.getLast());
+        assertThat(contexts.getLast().getLowCardinalityKeyValue("endpoint").getValue()).isEqualTo("worker.new");
+        assertThat(registry.getCurrentObservation()).isNull();
+        assertThat(PerformanceMetrics.collectingSql()).isFalse();
+    }
+
+    @Test void resultIterationIsCountedWithoutRetainingRows() throws Exception {
+        var registry = new SimpleMeterRegistry();
+        var metrics = new PerformanceMetrics(registry);
+        var statement = mock(PreparedStatement.class);
+        var rows = mock(java.sql.ResultSet.class);
+        when(statement.executeQuery()).thenReturn(rows);
+        when(rows.next()).thenReturn(true, false);
+        var filter = new InteractiveRequestMetricsFilter(metrics);
+        filter.doFilter(new MockHttpServletRequest("GET", "/api/worker/board"), new MockHttpServletResponse(), (req, res) -> {
+            try {
+                var wrapped = ((PreparedStatement) SqlTimingConfiguration.wrapStatement(statement)).executeQuery();
+                assertThat(wrapped.next()).isTrue();
+                assertThat(wrapped.next()).isFalse();
+            } catch (SQLException failure) { throw new jakarta.servlet.ServletException(failure); }
+        });
+        assertThat(registry.get("otziv.http.sql.executions").summary().totalAmount()).isOne();
+        assertThat(registry.get("otziv.http.phase.duration").tag("phase", "result-next").timer().totalTime(java.util.concurrent.TimeUnit.NANOSECONDS)).isPositive();
+    }
     @Test void preflightHeadAndOtherMethodsDoNotDiluteInteractiveGetSlo() throws Exception {
         var registry = new SimpleMeterRegistry();
         var filter = new InteractiveRequestMetricsFilter(new PerformanceMetrics(registry));

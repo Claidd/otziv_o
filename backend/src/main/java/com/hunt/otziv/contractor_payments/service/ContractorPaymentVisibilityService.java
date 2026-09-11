@@ -96,10 +96,28 @@ public class ContractorPaymentVisibilityService {
     public List<ContractorPaymentAdminSummaryResponse> adminSummary(LocalDate selectedDate) {
         LocalDate monthStart = monthStart(selectedDate);
         List<ContractorPaymentProfile> profiles = profileRepository.findAllWithUser();
+        if (profiles.isEmpty()) return List.of();
+        SummaryPolicy policy = summaryPolicy();
+        var ids = profiles.stream().map(ContractorPaymentProfile::getId).toList();
+        var accruals = ledgerService.totalsForProfiles(profiles, monthStart, monthStart.plusMonths(1));
+        var events = accountingService.totalsForProfiles(ids, policy.mode(), monthStart.atStartOfDay(), monthStart.plusMonths(1).atStartOfDay());
+        var exposures = allocationRepository.sumOutstandingForProfiles(ids, policy.mode(),
+                EnumSet.of(ContractorAllocationStatus.RESERVED, ContractorAllocationStatus.CLIENT_REPORTED, ContractorAllocationStatus.PARTIALLY_CONFIRMED))
+                .stream().collect(Collectors.groupingBy(row -> row.getProfileId(),
+                        Collectors.toMap(row -> row.getStatus(), row -> row.getOutstanding())));
         Map<Long, ActualTransferStats> actualTransfers = actualTransfersByProfile(profiles, monthStart);
         return profiles.stream()
                 .map(profile -> {
-                    ContractorPaymentSummaryResponse summary = summary(profile, monthStart);
+                    var accrued = accruals.getOrDefault(profile.getId(), new ContractorRewardLedgerService.AccrualTotals(profile.getOpeningBalanceKopecks(), 0));
+                    var event = events.getOrDefault(profile.getId(), ContractorPaymentAccountingService.PeriodTotals.empty());
+                    var exposure = exposures.getOrDefault(profile.getId(), Map.of());
+                    var amounts = new SummaryAmounts(accrued.total(), accrued.month(),
+                            exposure.getOrDefault(ContractorAllocationStatus.RESERVED, 0L),
+                            exposure.getOrDefault(ContractorAllocationStatus.CLIENT_REPORTED, 0L),
+                            exposure.getOrDefault(ContractorAllocationStatus.PARTIALLY_CONFIRMED, 0L),
+                            event.confirmedMonth(), event.confirmedTotal(), event.returnedMonth(), event.returnedTotal(),
+                            event.closedMonth(), event.closedTotal());
+                    ContractorPaymentSummaryResponse summary = summary(profile, monthStart, policy, amounts);
                     ActualTransferStats transferStats = actualTransfers.getOrDefault(
                             profile.getId(),
                             ActualTransferStats.empty()
@@ -208,47 +226,45 @@ public class ContractorPaymentVisibilityService {
                 ));
     }
 
-    private ContractorPaymentSummaryResponse summary(ContractorPaymentProfile profile) {
-        return summary(profile, monthStart(null));
+    private record SummaryPolicy(boolean shadow, boolean liveRouting, ContractorAllocationMode mode) {}
+    private record SummaryAmounts(long accruedTotal, long accruedMonth, long reserved, long clientReported,
+                                  long partiallyConfirmedOutstanding, long grossConfirmedMonth, long grossConfirmedTotal,
+                                  long returnedMonth, long returnedTotal, long closedWithoutPaymentMonth, long closedWithoutPaymentTotal) {}
+
+    private SummaryPolicy summaryPolicy() {
+        return new SummaryPolicy(appSettingService.getBoolean(AppSettingService.CONTRACTOR_PAYMENTS_SHADOW_ENABLED, true),
+                runtimeSwitch.status().liveRoutingEnabled(), accountingPhaseService.current());
     }
 
-    private ContractorPaymentSummaryResponse summary(
-            ContractorPaymentProfile profile,
-            LocalDate monthStart
-    ) {
-        LocalDate nextMonth = monthStart.plusMonths(1);
-        LocalDateTime monthStartTime = monthStart.atStartOfDay();
-        LocalDateTime nextMonthTime = nextMonth.atStartOfDay();
-        LocalDateTime trackingStartedAt = profile.getTrackingStartedAt();
-        boolean currentMonthCoverageComplete = trackingStartedAt != null
-                && !trackingStartedAt.isAfter(monthStartTime);
-        boolean shadowMode = appSettingService.getBoolean(
-                AppSettingService.CONTRACTOR_PAYMENTS_SHADOW_ENABLED,
-                true
-        );
-        boolean liveRouting = runtimeSwitch.status().liveRoutingEnabled();
-        ContractorAllocationMode balanceMode = accountingPhaseService.current();
+    private ContractorPaymentSummaryResponse summary(ContractorPaymentProfile profile) {
+        LocalDate from = monthStart(null), to = from.plusMonths(1);
+        SummaryPolicy policy = summaryPolicy();
+        var mode = policy.mode();
+        var amounts = new SummaryAmounts(ledgerService.totalAccrued(profile), ledgerService.accruedInPeriod(profile, from, to),
+                allocationRepository.sumOutstandingExposure(profile.getId(), mode, RESERVED),
+                allocationRepository.sumOutstandingExposure(profile.getId(), mode, CLIENT_REPORTED),
+                allocationRepository.sumOutstandingExposure(profile.getId(), mode, PARTIALLY_CONFIRMED),
+                accountingService.confirmedGrossInPeriod(profile, mode, from.atStartOfDay(), to.atStartOfDay()),
+                accountingService.confirmedGross(profile, mode),
+                accountingService.returnedInPeriod(profile, mode, from.atStartOfDay(), to.atStartOfDay()),
+                accountingService.returned(profile, mode),
+                accountingService.closedWithoutPaymentInPeriod(profile, mode, from.atStartOfDay(), to.atStartOfDay()),
+                accountingService.closedWithoutPayment(profile, mode));
+        return summary(profile, from, policy, amounts);
+    }
 
-        long accruedTotal = ledgerService.totalAccrued(profile);
-        long reserved = allocationRepository.sumOutstandingExposure(profile.getId(), balanceMode, RESERVED);
-        long clientReported = allocationRepository.sumOutstandingExposure(
-                profile.getId(), balanceMode, CLIENT_REPORTED
-        );
-        long partiallyConfirmedOutstanding = allocationRepository.sumOutstandingExposure(
-                profile.getId(), balanceMode, PARTIALLY_CONFIRMED
-        );
-        long grossConfirmedMonth = accountingService.confirmedGrossInPeriod(
-                profile, balanceMode, monthStartTime, nextMonthTime
-        );
-        long grossConfirmedTotal = accountingService.confirmedGross(profile, balanceMode);
-        long returnedMonth = accountingService.returnedInPeriod(
-                profile, balanceMode, monthStartTime, nextMonthTime
-        );
-        long returnedTotal = accountingService.returned(profile, balanceMode);
-        long closedWithoutPaymentMonth = accountingService.closedWithoutPaymentInPeriod(
-                profile, balanceMode, monthStartTime, nextMonthTime
-        );
-        long closedWithoutPaymentTotal = accountingService.closedWithoutPayment(profile, balanceMode);
+    /** The same financial arithmetic is used by batch finance reads and the own-profile path. */
+    private ContractorPaymentSummaryResponse summary(ContractorPaymentProfile profile, LocalDate monthStart,
+            SummaryPolicy policy, SummaryAmounts amounts) {
+        LocalDateTime trackingStartedAt = profile.getTrackingStartedAt();
+        boolean currentMonthCoverageComplete = trackingStartedAt != null && !trackingStartedAt.isAfter(monthStart.atStartOfDay());
+        boolean shadowMode = policy.shadow(), liveRouting = policy.liveRouting();
+        ContractorAllocationMode balanceMode = policy.mode();
+        long accruedTotal = amounts.accruedTotal(), reserved = amounts.reserved(), clientReported = amounts.clientReported();
+        long partiallyConfirmedOutstanding = amounts.partiallyConfirmedOutstanding();
+        long grossConfirmedMonth = amounts.grossConfirmedMonth(), grossConfirmedTotal = amounts.grossConfirmedTotal();
+        long returnedMonth = amounts.returnedMonth(), returnedTotal = amounts.returnedTotal();
+        long closedWithoutPaymentMonth = amounts.closedWithoutPaymentMonth(), closedWithoutPaymentTotal = amounts.closedWithoutPaymentTotal();
         long netReceivedMonth = Math.subtractExact(grossConfirmedMonth, returnedMonth);
         long netReceivedTotal = Math.subtractExact(grossConfirmedTotal, returnedTotal);
         long netPaid = Math.max(0L, netReceivedTotal);
@@ -273,7 +289,7 @@ public class ContractorPaymentVisibilityService {
                 profile.getPaymentPhone(),
                 profile.getBankName(),
                 profile.getPaymentComment(),
-                ledgerService.accruedInPeriod(profile, monthStart, nextMonth),
+                amounts.accruedMonth(),
                 accruedTotal,
                 reserved,
                 clientReported,

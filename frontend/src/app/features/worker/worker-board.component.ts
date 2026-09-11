@@ -1,7 +1,7 @@
 import { Component, HostListener, OnDestroy, computed, effect, inject, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, Subject, takeUntil } from 'rxjs';
 import { AuthService } from '../../core/auth.service';
 import { WorkerAccountActionCooldownService } from '../../core/worker-account-action-cooldown.service';
 import {
@@ -373,6 +373,8 @@ export class WorkerBoardComponent implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.cancelBoardLoad.next();
+    this.cancelBoardLoad.complete();
     this.boardLoadEpoch += 1;
     this.clearSearchTimer();
     this.clearBoardNoticeTimer();
@@ -386,7 +388,10 @@ export class WorkerBoardComponent implements OnDestroy {
     this.closeReviewEdit();
   }
 
+  private readonly cancelBoardLoad = new Subject<void>();
+
   loadBoard(section: WorkerBoardSectionQuery = this.boardSectionForLoad()): void {
+    this.cancelBoardLoad.next();
     const requestId = ++this.boardLoadEpoch;
     this.storeBoardState();
     this.loading.set(true);
@@ -400,7 +405,7 @@ export class WorkerBoardComponent implements OnDestroy {
       pageSize: this.pageSize(),
       sortDirection: this.sortDirection(),
       workerId: this.selectedWorkerId()
-    }).subscribe({
+    }).pipe(takeUntil(this.cancelBoardLoad)).subscribe({
       next: (board) => {
         if (requestId !== this.boardLoadEpoch) {
           return;

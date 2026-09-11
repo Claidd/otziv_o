@@ -16,9 +16,15 @@ public class SqlTimingConfiguration {
             @Override public Object postProcessAfterInitialization(Object bean, String name) {
                 if (!(bean instanceof DataSource source)) return bean;
                 return new DelegatingDataSource(source) {
-                    @Override public Connection getConnection() throws SQLException { return wrap(super.getConnection()); }
+                    @Override public Connection getConnection() throws SQLException {
+                        long started = System.nanoTime();
+                        try { return wrap(super.getConnection()); }
+                        finally { PerformanceMetrics.recordConnection(System.nanoTime() - started); }
+                    }
                     @Override public Connection getConnection(String user, String password) throws SQLException {
-                        return wrap(super.getConnection(user, password));
+                        long started = System.nanoTime();
+                        try { return wrap(super.getConnection(user, password)); }
+                        finally { PerformanceMetrics.recordConnection(System.nanoTime() - started); }
                     }
                 };
             }
@@ -39,10 +45,26 @@ public class SqlTimingConfiguration {
                 : statement instanceof PreparedStatement ? PreparedStatement.class : Statement.class;
         return (Statement) Proxy.newProxyInstance(Statement.class.getClassLoader(), new Class<?>[]{type},
                 (proxy, method, args) -> {
-                    if (!method.getName().startsWith("execute")) return invoke(method, statement, args);
+                    if (!method.getName().startsWith("execute")) {
+                        Object result = invoke(method, statement, args);
+                        return result instanceof ResultSet rows ? wrapRows(rows) : result;
+                    }
                     long started = System.nanoTime();
-                    try { return invoke(method, statement, args); }
+                    try {
+                        Object result = invoke(method, statement, args);
+                        return result instanceof ResultSet rows ? wrapRows(rows) : result;
+                    }
                     finally { PerformanceMetrics.recordSql(System.nanoTime() - started); }
+                });
+    }
+    static ResultSet wrapRows(ResultSet rows) {
+        return (ResultSet) Proxy.newProxyInstance(ResultSet.class.getClassLoader(), new Class<?>[]{ResultSet.class},
+                (proxy, method, args) -> {
+                    if (!method.getName().equals("next")) return invoke(method, rows, args);
+                    long started = System.nanoTime();
+                    boolean found = false;
+                    try { found = (boolean) invoke(method, rows, args); return found; }
+                    finally { PerformanceMetrics.recordFetch(System.nanoTime() - started, found); }
                 });
     }
     private static Object invoke(Method method, Object target, Object[] arguments) throws Throwable {

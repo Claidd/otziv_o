@@ -38,7 +38,7 @@ public class ManagerControlSnapshotJob {
             // This read directory lives in the existing management workflow; no foreign repository exposure.
             var ids=board.snapshotManagerIds().stream().sorted().toList();
             long deadline=System.nanoTime()+Duration.ofSeconds(20).toNanos();
-            for(int batch=0; batch<10 && System.nanoTime()<deadline; batch++) {
+            for(int batch=0; batch<25 && System.nanoTime()<deadline; batch++) {
                 Boolean completed=transaction.execute(status -> {
                     leases.holdForTransaction(lease,Duration.ofMinutes(2));
                     long after=leases.projectionCursor(lease,date);
@@ -51,8 +51,12 @@ public class ManagerControlSnapshotJob {
                     long generation=snapshots.generation(id,date);
                     var response=board.snapshotManager(id,date);
                     if(response!=null) snapshots.save(date,fingerprint,generation,response);
-                    leases.advanceProjectionCursor(lease,date,id);
-                    return false;
+                    // Finish the pass in the last real batch. Previously exactly ten
+                    // managers consumed the whole tick and waited another 30 seconds
+                    // just to discover EOF, allowing otherwise valid snapshots to expire.
+                    boolean last = id.equals(ids.getLast());
+                    leases.advanceProjectionCursor(lease,date,last ? 0 : id);
+                    return last;
                 });
                 if(Boolean.TRUE.equals(completed)) {
                     board.warmSnapshotScore(date);

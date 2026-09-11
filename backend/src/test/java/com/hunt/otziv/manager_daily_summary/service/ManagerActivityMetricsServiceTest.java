@@ -39,6 +39,44 @@ class ManagerActivityMetricsServiceTest {
     }
 
     @Test
+    void batchKeepsManagersSeparateAndUsesTheSameIntervalArithmetic() {
+        LocalDate date = LocalDate.of(2026, 7, 3);
+        var from = date.withDayOfMonth(1).atStartOfDay();
+        var until = date.atTime(12, 0);
+        var ids = List.of(20L, 21L, 22L);
+        when(activityRepository.pointsForManagers(ids, from, until)).thenReturn(List.of(
+                point(20, date.atTime(11, 0), "HEARTBEAT"),
+                point(20, date.atTime(11, 1), "HEARTBEAT"),
+                point(21, date.minusDays(1).atTime(10, 0), "HEARTBEAT")));
+        when(messageRepository.staffPointsForManagers(ids, from, until)).thenReturn(List.of(
+                messagePoint(20, date.atTime(11, 0, 30)), messagePoint(20, date.atTime(11, 10))));
+        var result = service.dailyAndMonthAverages(ids, date, until);
+        assertEquals(180, result.get(20L).daily().confirmedSeconds());
+        assertEquals(60, result.get(20L).averageDailyConfirmedSeconds());
+        assertEquals(0, result.get(21L).daily().confirmedSeconds());
+        assertEquals(20, result.get(21L).averageDailyConfirmedSeconds());
+        assertEquals(0, result.get(22L).averageDailyConfirmedSeconds());
+        org.mockito.Mockito.verify(activityRepository).pointsForManagers(ids, from, until);
+        org.mockito.Mockito.verify(messageRepository).staffPointsForManagers(ids, from, until);
+        org.mockito.Mockito.verifyNoMoreInteractions(activityRepository, messageRepository);
+    }
+
+    private ManagerSiteActivityEventRepository.ActivityPoint point(long id, LocalDateTime at, String type) {
+        return new ManagerSiteActivityEventRepository.ActivityPoint() {
+            public Long getManagerId() { return id; }
+            public LocalDateTime getOccurredAt() { return at; }
+            public String getActivityType() { return type; }
+        };
+    }
+
+    private ClientChatMessageRepository.ManagerMessagePoint messagePoint(long id, LocalDateTime at) {
+        return new ClientChatMessageRepository.ManagerMessagePoint() {
+            public Long getManagerId() { return id; }
+            public LocalDateTime getMessageAt() { return at; }
+        };
+    }
+
+    @Test
     void mergesSiteAndMessengerWithoutDoubleCountingAndCalculatesMonthAverage() {
         Long managerId = 20L;
         LocalDate date = LocalDate.of(2026, 7, 3);

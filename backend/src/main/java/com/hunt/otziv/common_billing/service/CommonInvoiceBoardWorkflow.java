@@ -176,8 +176,10 @@ public class CommonInvoiceBoardWorkflow {
         Map<Long, Boolean> preparedRecovery = settlementService.prepareBoardRecoveryState(selectedOrders);
         Map<Long, BadReviewTaskSummary> preparedSummaries = badReviewTaskService.getSummaryByOrderIds(
                 selectedOrders.stream().map(Order::getId).filter(Objects::nonNull).distinct().toList());
+        var preparedPayments = settlementService.prepareBoardPaymentState(selection.invoiceIds());
         List<OrderDTOList> cards = selectedCards.stream().map(view -> {
-            settlementService.refreshInvoiceAmounts(view.invoice(), view.items(), preparedAmounts, preparedRecovery);
+            settlementService.refreshInvoiceAmounts(view.invoice(), view.items(), preparedAmounts, preparedRecovery,
+                    preparedPayments.get(view.invoice().getId()));
             return toManagerBoardCard(view.invoice(), view.items(), preparedSummaries);
         }).toList();
         return new ManagerBoardPage(cards, selection.totalCards(), selection.linkedOrderCount());

@@ -124,6 +124,13 @@ public class CommonManualPaymentAttributionCoordinator {
                 );
     }
 
+    @Transactional(readOnly = true)
+    public Set<Long> recordedAttributionInvoiceIds(java.util.Collection<Long> ids) {
+        if (ids.isEmpty()) return Set.of();
+        return Set.copyOf(attributionRepository.findSourcesWithLegacyAttribution(
+                ContractorActualPaymentSourceKind.COMMON_INVOICE, ids));
+    }
+
     /**
      * Recognizes a network retry after the outer common-invoice transaction
      * has already committed. No new key is allowed for a terminal invoice.

@@ -42,9 +42,9 @@ public class AnalyticsSalarySourceService {
                     salary.metric_date,
                     salary.user_id,
                     COALESCE(SUM(salary.salary_sum), 0) AS salary_sum,
-                    COUNT(DISTINCT salary.source_zp_id) AS salary_entry_count,
+                    COALESCE(SUM(salary.salary_entry_count), 0) AS salary_entry_count,
                     COALESCE(SUM(salary.salary_review_count), 0) AS salary_review_count
-                FROM analytics_salary_source salary
+                FROM analytics_salary_daily_source salary
                 WHERE salary.user_id IN (:userIds)
                   AND salary.metric_date BETWEEN :fromInclusive AND :toInclusive
                 GROUP BY salary.metric_date, salary.user_id
@@ -72,9 +72,9 @@ public class AnalyticsSalarySourceService {
                     salary.metric_date,
                     salary.user_id,
                     COALESCE(SUM(salary.salary_sum), 0) AS salary_sum,
-                    COUNT(DISTINCT salary.source_zp_id) AS salary_entry_count,
+                    COALESCE(SUM(salary.salary_entry_count), 0) AS salary_entry_count,
                     COALESCE(SUM(salary.salary_review_count), 0) AS salary_review_count
-                FROM analytics_salary_source salary
+                FROM analytics_salary_daily_source salary
                 WHERE salary.metric_date BETWEEN :fromInclusive AND :toInclusive
                 GROUP BY salary.metric_date, salary.user_id
                 ORDER BY salary.metric_date, salary.user_id

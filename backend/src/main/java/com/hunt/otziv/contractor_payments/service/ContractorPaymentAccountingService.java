@@ -259,6 +259,35 @@ public class ContractorPaymentAccountingService {
         );
     }
 
+    public record PeriodTotals(long confirmedTotal, long confirmedMonth, long returnedTotal,
+                               long returnedMonth, long closedTotal, long closedMonth) {
+        public static PeriodTotals empty() { return new PeriodTotals(0, 0, 0, 0, 0, 0); }
+    }
+
+    public java.util.Map<Long, PeriodTotals> totalsForProfiles(java.util.Collection<Long> ids,
+            ContractorAllocationMode mode, LocalDateTime from, LocalDateTime to) {
+        if (ids.isEmpty()) return java.util.Map.of();
+        var confirmed = mode == ContractorAllocationMode.SHADOW ? SHADOW_CONFIRMED : LIVE_CONFIRMED;
+        var types = EnumSet.copyOf(confirmed); types.addAll(RETURNED); types.addAll(CLOSED_WITHOUT_PAYMENT);
+        var grouped = eventRepository.summarizeProfiles(ids, mode, types, from, to).stream()
+                .collect(java.util.stream.Collectors.groupingBy(row -> row.getProfileId()));
+        var result = new java.util.HashMap<Long, PeriodTotals>();
+        grouped.forEach((id, rows) -> {
+            long gross = 0, grossMonth = 0, returned = 0, returnedMonth = 0, closed = 0, closedMonth = 0;
+            for (var row : rows) {
+                if (confirmed.contains(row.getType())) {
+                    gross = Math.addExact(gross, row.getTotal()); grossMonth = Math.addExact(grossMonth, row.getMonth());
+                } else if (RETURNED.contains(row.getType())) {
+                    returned = Math.addExact(returned, row.getTotal()); returnedMonth = Math.addExact(returnedMonth, row.getMonth());
+                } else if (CLOSED_WITHOUT_PAYMENT.contains(row.getType())) {
+                    closed = Math.addExact(closed, row.getTotal()); closedMonth = Math.addExact(closedMonth, row.getMonth());
+                }
+            }
+            result.put(id, new PeriodTotals(gross, grossMonth, returned, returnedMonth, closed, closedMonth));
+        });
+        return result;
+    }
+
     public long confirmedGrossInPeriod(
             ContractorPaymentProfile profile,
             ContractorAllocationMode mode,

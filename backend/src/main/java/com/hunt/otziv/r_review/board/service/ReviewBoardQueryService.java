@@ -129,11 +129,12 @@ public class ReviewBoardQueryService {
         String orderBy = " ORDER BY r.publishedDate " + direction + ", r.id " + direction;
 
         TypedQuery<Long> idQuery = entityManager.createQuery(
-                "SELECT r.id FROM Review r " + joins + where + " GROUP BY r.id, r.publishedDate" + orderBy,
+                // Every join is to-one, so each review already occurs at most once.
+                "SELECT r.id FROM Review r " + joins + where + orderBy,
                 Long.class
         );
         TypedQuery<Long> countQuery = entityManager.createQuery(
-                "SELECT COUNT(DISTINCT r.id) FROM Review r " + joins + where,
+                "SELECT COUNT(r.id) FROM Review r " + joins + where,
                 Long.class
         );
 
@@ -210,6 +211,20 @@ public class ReviewBoardQueryService {
                     : " ";
             case ORDER_STATUS -> " JOIN r.orderDetails d JOIN d.order o JOIN o.status os ";
         };
+    }
+
+    /** Keep separate index ranges for vigul=true/false; a CASE scan regresses on real data. */
+    public java.util.Map<String, Integer> countPublicationMetrics(ReviewBoardScope scope, LocalDate publishDate,
+            LocalDate vigulDate, Worker worker, Manager manager, Set<Worker> workers) {
+        if ((scope == ReviewBoardScope.MANAGER || scope == ReviewBoardScope.OWNER) && (workers == null || workers.isEmpty()))
+            return java.util.Map.of();
+        return java.util.Map.of(
+                "publish", boundedCount(countReviewIdsForBoard(ReviewBoardMode.PUBLISH, scope, publishDate, "", worker, manager, workers)),
+                "nagul", boundedCount(countReviewIdsForBoard(ReviewBoardMode.VIGUL, scope, vigulDate, "", worker, manager, workers)));
+    }
+
+    private int boundedCount(Object count) {
+        return (int) Math.min(Integer.MAX_VALUE, ((Number) count).longValue());
     }
 
     private void bindReviewBoardCountParameters(

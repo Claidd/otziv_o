@@ -178,6 +178,19 @@ public interface CommonInvoicePaymentRefRepository extends CrudRepository<Common
 
     boolean existsByInvoice_Id(Long invoiceId);
 
+    interface InvoicePrepayment {
+        Long getInvoiceId();
+        long getAmount();
+    }
+
+    @Query("""
+        SELECT ref.invoice.id AS invoiceId, COALESCE(SUM(ref.amountKopecks),0) AS amount
+        FROM CommonInvoicePaymentRef ref WHERE ref.invoice.id IN :ids AND ref.status = :status
+        GROUP BY ref.invoice.id
+        """)
+    java.util.List<InvoicePrepayment> sumForInvoices(@Param("ids") java.util.Collection<Long> ids,
+                                                  @Param("status") String status);
+
     /** Current read used after the parent invoice mutex is held. */
     @Query(value = """
         SELECT payment_ref.payment_ref_id

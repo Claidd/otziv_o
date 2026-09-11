@@ -86,11 +86,11 @@ class ReviewBoardQueryServiceTest {
         when(entityManager.createQuery(
                 argThat((String query) -> query != null
                         && query.startsWith("SELECT r.id")
-                        && query.contains("GROUP BY r.id, r.publishedDate")),
+                        && query.contains("ORDER BY r.publishedDate")),
                 eq(Long.class)
         )).thenReturn(idQuery);
         when(entityManager.createQuery(
-                argThat((String query) -> query != null && query.startsWith("SELECT COUNT(DISTINCT r.id)")),
+                argThat((String query) -> query != null && query.startsWith("SELECT COUNT(r.id)")),
                 eq(Long.class)
         )).thenReturn(countQuery);
         stubQueryParameters(idQuery);

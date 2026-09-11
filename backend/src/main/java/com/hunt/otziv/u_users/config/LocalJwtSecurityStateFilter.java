@@ -65,7 +65,8 @@ public class LocalJwtSecurityStateFilter extends OncePerRequestFilter {
             return;
         }
 
-        User user = userRepository.findByUsername(token.getName()).orElse(null);
+        User user = com.hunt.otziv.config.metrics.PerformanceMetrics.segment("security", "local-user",
+                () -> userRepository.findByUsername(token.getName()).orElse(null));
         if (user == null || !user.isActive()) {
             rejectOrContinueAnonymously(
                     request,
@@ -98,7 +99,8 @@ public class LocalJwtSecurityStateFilter extends OncePerRequestFilter {
             increment("otziv.security.jwt.auth_epoch_missing", "accepted");
         }
 
-        var sessionDecision = sessionSecurity.verify(user, token.getToken());
+        var sessionDecision = com.hunt.otziv.config.metrics.PerformanceMetrics.segment("security", "session-authority",
+                () -> sessionSecurity.verify(user, token.getToken()));
         increment("otziv.security.jwt.session_authority", sessionDecision.reason());
         if (!sessionDecision.allowed()) {
             if (sessionDecision.unavailable() && !isPublicCapabilityPath(applicationPath(request))) {

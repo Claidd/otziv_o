@@ -201,6 +201,7 @@ public interface ReviewService {
     int countBoardReviewsByOrderStatus(String status, Principal principal, String role);
 
     Map<String, Integer> countBoardReviewMetrics(LocalDate publishDate, LocalDate vigulDate, String badStatus, Principal principal, String role);
+    Map<String, Integer> countBoardPublicationMetrics(LocalDate publishDate, LocalDate vigulDate, Principal principal, String role);
 
     int findAllByReviewListStatus(String name);
 }

@@ -218,6 +218,7 @@ public class ApiWorkerBoardController {
                 }
 
                 String boardSection = normalizedSection;
+                workerCellularAccessService.prefetchForUnprotectedSection(boardSection, authentication);
                 segment("worker.board", "cellular-access", () -> {
                     workerCellularAccessService.enforceSection(boardSection);
                     return null;
@@ -974,10 +975,9 @@ public class ApiWorkerBoardController {
                         SECTION_PUBLISH, reviewService.countOrdersByWorkerAndStatusPublish(selectedWorker, LocalDate.now()),
                         SECTION_NAGUL, reviewService.countOrdersByWorkerAndStatusVigul(selectedWorker, nagulLookaheadDate())
                 )
-                : reviewService.countBoardReviewMetrics(
+                : reviewService.countBoardPublicationMetrics(
                         LocalDate.now(),
                         nagulLookaheadDate(),
-                        ORDER_STATUS_UNPAID,
                         principal,
                         primaryBoardRole(authentication)
                 );
