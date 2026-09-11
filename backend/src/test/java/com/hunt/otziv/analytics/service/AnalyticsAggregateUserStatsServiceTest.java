@@ -24,6 +24,15 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class AnalyticsAggregateUserStatsServiceTest {
+    @Test void completeEmptyCanonicalReadProducesZeroStatsAndDatabaseFailurePropagates() {
+        User user = user(10L, "New worker", "1.0", 1L);
+        when(salarySourceService.dailyForUsers(anyCollection(), any(), any())).thenReturn(List.of());
+        var result = service.buildUserStats(DATE, user).orElseThrow();
+        assertEquals(0, result.getSum1Month());
+        assertEquals(10L, result.getId());
+        when(salarySourceService.dailyForUsers(anyCollection(), any(), any())).thenThrow(new IllegalStateException("unavailable"));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class, () -> service.buildUserStats(DATE, user));
+    }
 
     private static final LocalDate DATE = LocalDate.of(2026, 5, 9);
 

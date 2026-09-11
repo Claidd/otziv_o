@@ -13,9 +13,11 @@ def server_snapshot():
         'http://localhost:8080/actuator/prometheus'],capture_output=True,text=True,timeout=15,check=True)
     # Persist only the fixed, non-sensitive interactive HTTP metric allowlist.
     return {line.rsplit(' ',1)[0]:float(line.rsplit(' ',1)[1]) for line in result.stdout.splitlines()
-        if re.match(r'^otziv_http_(duration_seconds_(bucket|sum|count)|sql_duration_seconds_(sum|count)|sql_executions_(sum|count))\{',line)}
+        if re.match(r'^otziv_http_(duration_seconds_(bucket|sum|count)|phase_duration_seconds_(sum|count)|sql_duration_seconds_(sum|count)|sql_executions_(sum|count))\{',line)}
 
 def server_delta(before,after):
+    if set(before) - set(after):
+        raise RuntimeError('Server metric series disappeared or runtime changed; comparison is invalid')
     delta={key:value-before.get(key,0) for key,value in after.items()}
     if any(value < -1e-6 for value in delta.values()): raise RuntimeError('Server counters reset during run; comparison is invalid')
     endpoints={re.search(r'endpoint="([^"]+)"',key)[1] for key in delta}
@@ -33,11 +35,17 @@ def server_delta(before,after):
                     return None if upper==float('inf') else 1000*(lower+(upper-lower)*(q*count-previous)/(cumulative-previous))
                 lower,previous=upper,cumulative
             return None
+        phases={}
+        for key,value in rows.items():
+            if key.startswith('otziv_http_phase_duration_seconds_count{') and value:
+                phase=re.search(r'phase="([^"]+)"',key)[1]
+                phases[phase]=1000*rows.get(key.replace('_count{','_sum{'),0)/value
         report[endpoint]=dict(count=count,meanMs=1000*scalar('otziv_http_duration_seconds_sum')/count,
             estimatedP95Ms=quantile(.95),estimatedP99Ms=quantile(.99),
             fractionAtMost100Ms=sum(value for upper,value in buckets if upper==.1)/count,
             sqlMeanMs=1000*scalar('otziv_http_sql_duration_seconds_sum')/count,
-            sqlExecutionsMean=scalar('otziv_http_sql_executions_sum')/count)
+            sqlExecutionsMean=scalar('otziv_http_sql_executions_sum')/count,
+            phaseMeanMs=phases)
     return dict(boundary='servlet filter before security through serialization; excludes proxy/network/connector queue',
         quantiles='estimates interpolated within histogram buckets; <=100 ms fraction is exact',endpoints=report)
 

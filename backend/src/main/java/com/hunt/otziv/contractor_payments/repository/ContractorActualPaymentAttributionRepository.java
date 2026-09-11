@@ -26,6 +26,13 @@ public interface ContractorActualPaymentAttributionRepository
             Long evidenceId
     );
 
+    @Query("""
+        SELECT DISTINCT a.sourceId FROM ContractorActualPaymentAttribution a
+        WHERE a.sourceKind = :kind AND a.sourceId IN :ids AND a.evidenceId IS NULL
+        """)
+    List<Long> findSourcesWithLegacyAttribution(@Param("kind") ContractorActualPaymentSourceKind kind,
+                                               @Param("ids") Collection<Long> ids);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT a FROM ContractorActualPaymentAttribution a WHERE a.attributionKey = :key")
     Optional<ContractorActualPaymentAttribution> findByAttributionKeyForUpdate(@Param("key") String key);

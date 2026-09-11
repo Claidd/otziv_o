@@ -1633,11 +1633,17 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
     }
 
     void recalculateInvoice(CommonInvoice invoice, List<CommonInvoiceOrder> items) {
+        recalculateInvoice(invoice, items, null);
+    }
+
+    private void recalculateInvoice(CommonInvoice invoice, List<CommonInvoiceOrder> items, BoardPaymentState prepared) {
         boolean preserveRecordedAttentionPayment = invoice.getStatus() == CommonInvoiceStatus.NEEDS_ATTENTION && !hasAttentionError(invoice, "late_tbank_payment") && invoice.getAmountKopecks() > 0 && invoice.getPaidKopecks() >= invoice.getAmountKopecks();
         long recordedPaid = invoice.getPaidKopecks();
-        boolean preserveExactContractorPayment = hasExactContractorSourceEvidence(invoice) || commonManualPaymentAttributionCoordinator.hasRecordedAttribution(invoice.getId());
+        boolean preserveExactContractorPayment = hasExactContractorSourceEvidence(invoice)
+                || (prepared == null ? commonManualPaymentAttributionCoordinator.hasRecordedAttribution(invoice.getId()) : prepared.recordedAttribution());
         long amount = items.stream().mapToLong(CommonInvoiceOrder::getAmountKopecks).sum();
-        long paid = items.stream().filter(CommonInvoiceOrder::isPaid).mapToLong(CommonInvoiceOrder::getAmountKopecks).sum() + confirmedCommonInvoicePrepaymentKopecks(invoice);
+        long paid = items.stream().filter(CommonInvoiceOrder::isPaid).mapToLong(CommonInvoiceOrder::getAmountKopecks).sum()
+                + (prepared == null ? confirmedCommonInvoicePrepaymentKopecks(invoice) : prepared.prepaymentKopecks());
         invoice.setAmountKopecks(amount);
         invoice.setPaidKopecks(Math.min(amount, (preserveRecordedAttentionPayment || preserveExactContractorPayment) ? Math.max(recordedPaid, paid) : paid));
         boolean preserveMigrationPaymentEvidence = isMigrationPaymentRegistryAttention(invoice);
@@ -1678,8 +1684,26 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
         return ids.stream().collect(Collectors.toMap(Function.identity(), activeIds::contains));
     }
 
+    record BoardPaymentState(boolean recordedAttribution, long prepaymentKopecks) {}
+
+    /** Request-local facts from the board transaction; never retained or used by payment commands. */
+    Map<Long, BoardPaymentState> prepareBoardPaymentState(Collection<Long> ids) {
+        if (ids.isEmpty()) return Map.of();
+        Set<Long> attributed = commonManualPaymentAttributionCoordinator.recordedAttributionInvoiceIds(ids);
+        Map<Long, Long> prepaid = paymentRefRepository.sumForInvoices(ids, PAYMENT_REF_PREPAID).stream()
+                .collect(Collectors.toMap(row -> row.getInvoiceId(), row -> row.getAmount()));
+        return ids.stream().collect(Collectors.toMap(Function.identity(),
+                id -> new BoardPaymentState(attributed.contains(id), prepaid.getOrDefault(id, 0L))));
+    }
+
     void refreshInvoiceAmounts(CommonInvoice invoice, List<CommonInvoiceOrder> items,
                                Map<Long, BigDecimal> preparedAmounts, Map<Long, Boolean> preparedRecovery) {
+        refreshInvoiceAmounts(invoice, items, preparedAmounts, preparedRecovery, null);
+    }
+
+    void refreshInvoiceAmounts(CommonInvoice invoice, List<CommonInvoiceOrder> items,
+                               Map<Long, BigDecimal> preparedAmounts, Map<Long, Boolean> preparedRecovery,
+                               BoardPaymentState preparedPayment) {
         java.util.function.Predicate<CommonInvoiceOrder> recovery = item -> {
             Order order = item == null ? null : item.getOrder();
             Boolean active = order == null ? null : preparedRecovery.get(order.getId());
@@ -1730,7 +1754,7 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
         // Amount calculation must succeed before immutable zero/no-recipient
         // markers can be written. If completion accrual then fails, this whole
         // transaction rolls back both item amounts and routing state.
-        recalculateInvoice(invoice, items);
+        recalculateInvoice(invoice, items, preparedPayment);
         if (invoice != null) {
             if (allOrdersReady(items, recovery) && applyCommonInvoicePrepaymentIfReady(invoice, items)) {
                 return;

@@ -2,7 +2,7 @@ import { commonInvoiceDeliveryWarning, deliveryOperationMessage } from '@otziv/c
 import { Component, HostListener, OnDestroy, computed, effect, inject, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, Subject, takeUntil } from 'rxjs';
 import { AuthService } from '../../core/auth.service';
 import { CompanyDeepReportLaunchService } from '../../core/company-deep-report-launch.service';
 import { CompanyCreateResult, CompanyCreateSource } from '../../core/company-create.api';
@@ -346,6 +346,8 @@ export class ManagerBoardComponent implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.cancelBoardLoad.next();
+    this.cancelBoardLoad.complete();
     this.boardLoadEpoch += 1;
     this.clearSearchTimer();
     for (const timer of this.chatBotLinkPollTimers.values()) {
@@ -374,7 +376,10 @@ export class ManagerBoardComponent implements OnDestroy {
     }
   }
 
+  private readonly cancelBoardLoad = new Subject<void>();
+
   loadBoard(): void {
+    this.cancelBoardLoad.next();
     const requestId = ++this.boardLoadEpoch;
     this.loading.set(true);
     this.error.set(null);
@@ -389,7 +394,7 @@ export class ManagerBoardComponent implements OnDestroy {
       pageNumber: this.pageNumber(),
       pageSize: this.pageSize(),
       sortDirection: this.sortDirection()
-    }).subscribe({
+    }).pipe(takeUntil(this.cancelBoardLoad)).subscribe({
       next: (board) => {
         if (requestId !== this.boardLoadEpoch) {
           return;

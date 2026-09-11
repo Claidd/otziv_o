@@ -16,6 +16,10 @@ const routes = {
   profile_refresh: ['/api/cabinet/profile?refresh=true', 'profile'],
   team: ['/api/cabinet/team', 'team'],
   team_refresh: ['/api/cabinet/team?refresh=true', 'team'],
+  score: ['/api/cabinet/score', 'score'],
+  score_refresh: ['/api/cabinet/score?refresh=true', 'score'],
+  analytics: ['/api/cabinet/analyse', 'analytics'],
+  analytics_refresh: ['/api/cabinet/analyse?refresh=true', 'analytics'],
   today: ['/api/admin/manager-control/today', 'today'],
 };
 const selected = (__ENV.SECTIONS || 'companies,orders,specialist_new').split(',');
@@ -55,8 +59,11 @@ export default function () {
         && Array.isArray(body.managers) && typeof body.canEditUsers==='boolean';
       else if (field==='today') correct=!!body?.date && !!body.generatedAt
         && Array.isArray(body.managers) && body.managersTotal===body.managers.length;
+      else if (field==='score') correct=!!body?.date && !!body.user && !!body.groups;
+      else if (field==='analytics') correct=!!body?.date && !!body.user && !!body.stats;
       else correct=!!body && !!body[field] && Array.isArray(body[field].content)
-        && body[field].content.length<=10 && body[field].totalElements>=body[field].content.length;
+        && body[field].content.length<=10 && body[field].totalElements>=body[field].content.length
+        && body.section===section.replace(/^specialist_/, '') && body.warning!==true;
     } catch (_) { correct=false; }
   }
   valid.add(correct,{section});

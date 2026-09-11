@@ -13,6 +13,25 @@ import org.springframework.data.repository.query.Param;
 public interface ContractorPaymentAllocationEventRepository
         extends JpaRepository<ContractorPaymentAllocationEvent, Long> {
 
+    interface ProfileEventTotals {
+        Long getProfileId();
+        ContractorAllocationEventType getType();
+        long getTotal();
+        long getMonth();
+    }
+
+    @Query("""
+        SELECT e.allocation.recipientProfile.id AS profileId, e.eventType AS type,
+          SUM(e.amountKopecks) AS total,
+          SUM(CASE WHEN e.effectiveAt >= :from AND e.effectiveAt < :to THEN e.amountKopecks ELSE 0 END) AS month
+        FROM ContractorPaymentAllocationEvent e
+        WHERE e.allocation.recipientProfile.id IN :ids AND e.allocation.mode = :mode AND e.eventType IN :types
+        GROUP BY e.allocation.recipientProfile.id, e.eventType
+        """)
+    List<ProfileEventTotals> summarizeProfiles(@Param("ids") Collection<Long> ids,
+            @Param("mode") ContractorAllocationMode mode, @Param("types") Collection<ContractorAllocationEventType> types,
+            @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
     boolean existsByAllocationIdAndExternalRef(Long allocationId, String externalRef);
 
     List<ContractorPaymentAllocationEvent> findAllByAllocationIdOrderByEffectiveAtAscIdAsc(Long allocationId);

@@ -181,8 +181,8 @@ public class ManagerBoardService {
             Page<OrderDTOList> orders = SECTION_ORDERS.equals(normalizedSection)
                     ? segment("manager.board", "orders", () -> loadOrders(principal, authentication, trimmedKeyword, normalizedStatus, safePageNumber, safePageSize, companyId, managerFilter, managerControlOverdue, normalizedSortDirection))
                     : emptyOrderPage(safePageNumber, safePageSize);
-            badReviewTaskService.enrichOrderList(orders.getContent());
-            clientMessageOrderStatusService.enrichOrderList(orders.getContent());
+            segment("manager.board", "bad-review-status", () -> { badReviewTaskService.enrichOrderList(orders.getContent()); return null; });
+            segment("manager.board", "client-message-status", () -> { clientMessageOrderStatusService.enrichOrderList(orders.getContent()); return null; });
 
             return new ManagerBoardResponse(
                     normalizedSection,

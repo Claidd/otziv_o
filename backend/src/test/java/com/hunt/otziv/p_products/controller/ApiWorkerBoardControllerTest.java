@@ -263,10 +263,9 @@ class ApiWorkerBoardControllerTest {
                 anySet(),
                 any(LocalDate.class)
         )).thenReturn(Map.of());
-        lenient().when(reviewService.countBoardReviewMetrics(
+        lenient().when(reviewService.countBoardPublicationMetrics(
                 any(LocalDate.class),
                 any(LocalDate.class),
-                eq("Не оплачено"),
                 eq(principal),
                 eq("WORKER")
         )).thenReturn(Map.of());
@@ -1527,10 +1526,9 @@ class ApiWorkerBoardControllerTest {
 
     @Test
     void currentRequestStillChoosesNearestMetricStep() {
-        when(reviewService.countBoardReviewMetrics(
+        when(reviewService.countBoardPublicationMetrics(
                 any(LocalDate.class),
                 any(LocalDate.class),
-                eq("Не оплачено"),
                 eq(principal),
                 eq("WORKER")
         )).thenReturn(Map.of("nagul", 2, "publish", 5));
@@ -1577,10 +1575,9 @@ class ApiWorkerBoardControllerTest {
                 eq("desc"),
                 eq("")
         );
-        verify(reviewService).countBoardReviewMetrics(
+        verify(reviewService).countBoardPublicationMetrics(
                 eq(LocalDate.now()),
                 eq(expectedDate),
-                eq("Не оплачено"),
                 eq(principal),
                 eq("WORKER")
         );

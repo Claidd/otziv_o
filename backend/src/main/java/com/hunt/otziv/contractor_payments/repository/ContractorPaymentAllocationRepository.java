@@ -625,6 +625,24 @@ public interface ContractorPaymentAllocationRepository extends JpaRepository<Con
                                 @Param("mode") ContractorAllocationMode mode,
                                 @Param("statuses") Collection<ContractorAllocationStatus> statuses);
 
+    interface ProfileExposure {
+        Long getProfileId();
+        ContractorAllocationStatus getStatus();
+        long getOutstanding();
+    }
+
+    @Query("""
+        SELECT a.recipientProfile.id AS profileId, a.status AS status,
+          SUM(CASE WHEN a.amountKopecks > (a.confirmedKopecks - a.returnedKopecks)
+            THEN a.amountKopecks - (a.confirmedKopecks - a.returnedKopecks) ELSE 0 END) AS outstanding
+        FROM ContractorPaymentAllocation a
+        WHERE a.recipientProfile.id IN :ids AND a.mode = :mode AND a.status IN :statuses
+        GROUP BY a.recipientProfile.id, a.status
+        """)
+    List<ProfileExposure> sumOutstandingForProfiles(@Param("ids") Collection<Long> ids,
+            @Param("mode") ContractorAllocationMode mode,
+            @Param("statuses") Collection<ContractorAllocationStatus> statuses);
+
     @Query("""
         SELECT a
         FROM ContractorPaymentAllocation a

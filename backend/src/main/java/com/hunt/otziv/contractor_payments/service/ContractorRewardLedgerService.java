@@ -256,6 +256,23 @@ public class ContractorRewardLedgerService {
         return ledgerRepository.sumActiveByProfileIdAndPeriod(profile.getId(), from, to);
     }
 
+    public record AccrualTotals(long total, long month) {}
+
+    public java.util.Map<Long, AccrualTotals> totalsForProfiles(java.util.List<ContractorPaymentProfile> profiles,
+            LocalDate from, LocalDate to) {
+        var totals = new java.util.HashMap<Long, AccrualTotals>();
+        if (profiles.isEmpty()) return totals;
+        var rows = ledgerRepository.sumActiveForProfiles(profiles.stream().map(ContractorPaymentProfile::getId).toList(), from, to)
+                .stream().collect(java.util.stream.Collectors.toMap(row -> row.getProfileId(), row -> row));
+        for (var profile : profiles) {
+            var row = rows.get(profile.getId());
+            totals.put(profile.getId(), new AccrualTotals(
+                    Math.addExact(profile.getOpeningBalanceKopecks(), row == null ? 0 : row.getTotal()),
+                    row == null ? 0 : row.getMonth()));
+        }
+        return totals;
+    }
+
     /**
      * Last-resort reconciliation for a derivative ledger row whose source ZP
      * is already inactive or missing from the active set. Normal mutations

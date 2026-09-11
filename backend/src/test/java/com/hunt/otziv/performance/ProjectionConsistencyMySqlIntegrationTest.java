@@ -38,7 +38,7 @@ class ProjectionConsistencyMySqlIntegrationTest {
         jdbc=new JdbcTemplate(ds); tx=new TransactionTemplate(new DataSourceTransactionManager(ds));
         var named=new NamedParameterJdbcTemplate(ds);
         leases=new SchedulerLeaseService(named);
-        snapshots=new ManagerControlReadSnapshots(named,new ObjectMapper().findAndRegisterModules());
+        snapshots=new ManagerControlReadSnapshots(named,new ObjectMapper().findAndRegisterModules(), new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
     }
     static ManagerControlManagerResponse response(long id) throws Exception {
         return new ObjectMapper().findAndRegisterModules().readValue("{\"managerId\":"+id+"}",ManagerControlManagerResponse.class);

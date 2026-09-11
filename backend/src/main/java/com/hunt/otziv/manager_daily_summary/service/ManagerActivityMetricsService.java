@@ -105,23 +105,18 @@ public class ManagerActivityMetricsService {
                 ? selectedDayStart
                 : until.isAfter(selectedDayEnd) ? selectedDayEnd : until;
 
-        Map<LocalDate, List<ManagerSiteActivityEvent>> siteByDate = activityRepository
-                .findByManager_IdAndOccurredAtBetweenOrderByOccurredAt(managerId, from, end).stream()
-                .filter(event -> event.getOccurredAt() != null)
-                .sorted(Comparator.comparing(ManagerSiteActivityEvent::getOccurredAt))
-                .collect(Collectors.groupingBy(
-                        event -> event.getOccurredAt().toLocalDate(),
-                        LinkedHashMap::new,
-                        Collectors.toList()
-                ));
-        Map<LocalDate, List<LocalDateTime>> messengerByDate = staffMessagePoints(
-                messageRepository.findByActorManagerIdAndMessageAtBetweenOrderByMessageAtAscIdAsc(managerId, from, end)
-        ).stream().collect(Collectors.groupingBy(
-                LocalDateTime::toLocalDate,
-                LinkedHashMap::new,
-                Collectors.toList()
-        ));
+        var site = activityRepository.findByManager_IdAndOccurredAtBetweenOrderByOccurredAt(managerId, from, end);
+        var points = staffMessagePoints(messageRepository.findByActorManagerIdAndMessageAtBetweenOrderByMessageAtAscIdAsc(managerId, from, end));
+        return dailyAndAverage(site, points, date, end);
+    }
 
+    private DailyAndAverage dailyAndAverage(List<ManagerSiteActivityEvent> events, List<LocalDateTime> points,
+            LocalDate date, LocalDateTime end) {
+        LocalDate monthStart = date.withDayOfMonth(1);
+        LocalDateTime selectedDayStart = date.atStartOfDay();
+        var siteByDate = events.stream().filter(event -> event.getOccurredAt() != null)
+                .collect(Collectors.groupingBy(event -> event.getOccurredAt().toLocalDate()));
+        var messengerByDate = points.stream().collect(Collectors.groupingBy(LocalDateTime::toLocalDate));
         Metrics daily = calculateFromEvents(
                 siteByDate.getOrDefault(date, List.of()),
                 messengerByDate.getOrDefault(date, List.of()),
@@ -143,6 +138,43 @@ public class ManagerActivityMetricsService {
                 daily,
                 Math.round(monthConfirmedSeconds / (double) elapsedDays)
         );
+    }
+
+    @Transactional(readOnly = true)
+    public Map<Long, DailyAndAverage> dailyAndMonthAverages(java.util.Collection<Long> ids, LocalDate date, LocalDateTime until) {
+        if (ids == null || ids.isEmpty() || date == null || until == null) return Map.of();
+        LocalDateTime start = date.atStartOfDay(), limit = date.plusDays(1).atStartOfDay();
+        LocalDateTime end = until.isBefore(start) ? start : until.isAfter(limit) ? limit : until;
+        var activity = loadBatch(ids, date.withDayOfMonth(1).atStartOfDay(), end);
+        Map<Long, DailyAndAverage> result = new LinkedHashMap<>();
+        ids.forEach(id -> result.put(id, dailyAndAverage(activity.site().getOrDefault(id, List.of()),
+                activity.messages().getOrDefault(id, List.of()), date, end)));
+        return result;
+    }
+
+    @Transactional(readOnly = true)
+    public Map<Long, Metrics> calculateForManagers(java.util.Collection<Long> ids, LocalDateTime from, LocalDateTime to) {
+        if (ids == null || ids.isEmpty() || from == null || to == null || !to.isAfter(from)) return Map.of();
+        var activity = loadBatch(ids, from, to);
+        Map<Long, Metrics> result = new LinkedHashMap<>();
+        ids.forEach(id -> result.put(id, calculateFromEvents(activity.site().getOrDefault(id, List.of()),
+                activity.messages().getOrDefault(id, List.of()), from, to)));
+        return result;
+    }
+
+    private record BatchActivity(Map<Long, List<ManagerSiteActivityEvent>> site, Map<Long, List<LocalDateTime>> messages) {}
+
+    private BatchActivity loadBatch(java.util.Collection<Long> ids, LocalDateTime from, LocalDateTime to) {
+        // Only activity timestamps/types cross the read boundary; message bodies and identities are not loaded.
+        Map<Long, List<ManagerSiteActivityEvent>> site = new LinkedHashMap<>();
+        for (var row : activityRepository.pointsForManagers(ids, from, to)) {
+            var event = new ManagerSiteActivityEvent(); event.setOccurredAt(row.getOccurredAt()); event.setActivityType(row.getActivityType());
+            site.computeIfAbsent(row.getManagerId(), ignored -> new ArrayList<>()).add(event);
+        }
+        Map<Long, List<LocalDateTime>> messages = new LinkedHashMap<>();
+        for (var row : messageRepository.staffPointsForManagers(ids, from, to))
+            messages.computeIfAbsent(row.getManagerId(), ignored -> new ArrayList<>()).add(row.getMessageAt());
+        return new BatchActivity(site, messages);
     }
 
     private Metrics calculateFromEvents(

@@ -15,7 +15,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class ManagerControlReadSnapshots {
     private final NamedParameterJdbcTemplate jdbc;
     private final ObjectMapper json;
-    public ManagerControlReadSnapshots(NamedParameterJdbcTemplate jdbc, ObjectMapper json) { this.jdbc = jdbc; this.json = json; }
+    private final io.micrometer.core.instrument.MeterRegistry metrics;
+    public ManagerControlReadSnapshots(NamedParameterJdbcTemplate jdbc, ObjectMapper json,
+                                      io.micrometer.core.instrument.MeterRegistry metrics) {
+        this.jdbc = jdbc; this.json = json; this.metrics = metrics;
+    }
     public record Snapshot(ManagerControlManagerResponse response, LocalDateTime generatedAt) {}
 
     public long generation(Long managerId, LocalDate date) {
@@ -27,15 +31,27 @@ public class ManagerControlReadSnapshots {
     public Map<Long, Snapshot> fresh(Collection<Long> authorizedManagerIds, LocalDate date, String scope) {
         if (authorizedManagerIds.isEmpty()) return Map.of();
         Map<Long, Snapshot> result = new HashMap<>();
+        Set<Long> present = new HashSet<>();
         jdbc.query("""
-                SELECT manager_id, payload, generated_at FROM manager_control_read_snapshots
-                WHERE manager_id IN (:ids) AND snapshot_date = :date AND access_scope = :scope
-                  AND generated_at >= TIMESTAMPADD(SECOND, -60, CURRENT_TIMESTAMP(6))
+                SELECT manager_id, generated_at,
+                  CASE WHEN access_scope = :scope AND generated_at >= TIMESTAMPADD(SECOND, -60, CURRENT_TIMESTAMP(6))
+                       THEN payload ELSE NULL END AS payload,
+                  CASE WHEN payload IS NULL OR generated_at IS NULL THEN 'invalidated'
+                       WHEN access_scope IS NULL OR access_scope <> :scope THEN 'scope'
+                       WHEN generated_at < TIMESTAMPADD(SECOND, -60, CURRENT_TIMESTAMP(6)) THEN 'expired'
+                       ELSE 'fresh' END AS freshness
+                FROM manager_control_read_snapshots WHERE manager_id IN (:ids) AND snapshot_date = :date
                 """, new MapSqlParameterSource("ids", authorizedManagerIds).addValue("date", date).addValue("scope", scope),
                 (org.springframework.jdbc.core.RowCallbackHandler) row -> {
+                    present.add(row.getLong("manager_id"));
+                    String freshness = row.getString("freshness");
+                    metrics.counter("otziv.projection.read", "projection", "manager-control", "result", freshness).increment();
+                    if (!"fresh".equals(freshness)) return;
                     try { result.put(row.getLong("manager_id"), new Snapshot(json.readValue(row.getString("payload"), ManagerControlManagerResponse.class), row.getTimestamp("generated_at").toLocalDateTime())); }
                     catch (com.fasterxml.jackson.core.JsonProcessingException failure) { throw new IllegalStateException("Invalid manager read projection", failure); }
                 });
+        long missing = authorizedManagerIds.stream().distinct().filter(id -> !present.contains(id)).count();
+        if (missing > 0) metrics.counter("otziv.projection.read", "projection", "manager-control", "result", "absent").increment(missing);
         return result;
     }
     @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)

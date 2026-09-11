@@ -25,13 +25,26 @@ public class WorkerIpIntelligenceClient {
     private final WorkerCellularAccessProperties properties;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
-    private final Cache<String, IpIntelligence> resultCache;
+    private final Cache<String, WorkerIpClassificationStore.Entry> resultCache;
     private final Cache<String, IpIntelligence> failureCache;
+    private final WorkerIpClassificationStore store;
+    private final java.util.concurrent.ThreadPoolExecutor prefetch = new java.util.concurrent.ThreadPoolExecutor(
+            1, 1, 30, java.util.concurrent.TimeUnit.SECONDS, new java.util.concurrent.ArrayBlockingQueue<>(64),
+            task -> { Thread thread = new Thread(task, "worker-ip-prefetch"); thread.setDaemon(true); return thread; },
+            new java.util.concurrent.ThreadPoolExecutor.AbortPolicy());
+    private final java.util.Set<String> pendingPrefetch = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     public WorkerIpIntelligenceClient(
             WorkerCellularAccessProperties properties,
             ObjectMapper objectMapper
     ) {
+        this(properties, objectMapper, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public WorkerIpIntelligenceClient(WorkerCellularAccessProperties properties, ObjectMapper objectMapper,
+                                      WorkerIpClassificationStore store) {
+        this.store = store;
         this.properties = properties;
         this.objectMapper = objectMapper;
         this.httpClient = HttpClient.newBuilder()
@@ -56,26 +69,77 @@ public class WorkerIpIntelligenceClient {
             return UNKNOWN;
         }
 
-        IpIntelligence cached = resultCache.getIfPresent(ip);
-        if (cached != null) {
-            return cached;
+        String identity = storageKey(ip);
+        WorkerIpClassificationStore.Entry cached = resultCache.getIfPresent(identity);
+        if (cached != null && fresh(cached)) {
+            return cached.intelligence();
         }
-        IpIntelligence recentFailure = failureCache.getIfPresent(ip);
+        if (cached != null) resultCache.asMap().remove(identity, cached);
+        IpIntelligence recentFailure = failureCache.getIfPresent(identity);
         if (recentFailure != null) {
             return recentFailure;
         }
 
-        IpIntelligence loaded = resultCache.get(ip, key -> {
+        WorkerIpClassificationStore.Entry loaded = resultCache.get(identity, key -> {
             // One provider call per IP on a miss. A failed load is not retained
             // in the long-lived success cache; waiting callers recheck the
             // existing one-minute failure cache before making another request.
             if (failureCache.getIfPresent(key) != null) return null;
-            IpIntelligence response = request(key);
-            if (response.known()) return response;
+            String storageKey = key;
+            if (store != null) {
+                try {
+                    var saved = store.find(storageKey, safeCacheTtl(properties.getIpIntelligenceCacheTtl()));
+                    if (saved.isPresent() && fresh(saved.get())) return saved.get();
+                } catch (RuntimeException failure) {
+                    log.warn("IP classification cache read failed: {}", failure.getClass().getSimpleName());
+                }
+            }
+            java.time.Instant observedAt = java.time.Instant.now();
+            IpIntelligence response = request(ip);
+            if (response.known()) {
+                var entry = new WorkerIpClassificationStore.Entry(response, observedAt,
+                        observedAt.plus(safeCacheTtl(properties.getIpIntelligenceCacheTtl())));
+                if (store != null) {
+                    try { store.save(storageKey, entry); }
+                    catch (RuntimeException failure) { log.warn("IP classification cache write failed: {}", failure.getClass().getSimpleName()); }
+                }
+                return entry;
+            }
             failureCache.put(key, response);
             return null;
         });
-        return loaded == null ? UNKNOWN : loaded;
+        return loaded == null ? UNKNOWN : loaded.intelligence();
+    }
+
+    /** Starts classification while the authenticated worker views an unprotected tab. */
+    public void prefetch(String rawIp) {
+        if (!properties.isIpIntelligenceEnabled()) return;
+        String ip = normalizeLiteralIp(rawIp);
+        if (ip == null || !pendingPrefetch.add(ip)) return;
+        try {
+            prefetch.execute(() -> {
+                try { lookup(ip); }
+                finally { pendingPrefetch.remove(ip); }
+            });
+        } catch (java.util.concurrent.RejectedExecutionException full) { pendingPrefetch.remove(ip); }
+    }
+
+    @jakarta.annotation.PreDestroy
+    void close() { prefetch.shutdownNow(); }
+
+    private boolean fresh(WorkerIpClassificationStore.Entry entry) {
+        java.time.Instant now = java.time.Instant.now();
+        return entry.intelligence().known() && entry.expiresAt().isAfter(now)
+                && entry.observedAt().plus(safeCacheTtl(properties.getIpIntelligenceCacheTtl())).isAfter(now);
+    }
+
+    private String storageKey(String ip) {
+        try {
+            // Internal pseudonymous lookup key; no IP, URI, or organization enters telemetry.
+            String identity = "ipquery-v1\n" + safe(properties.getIpIntelligenceBaseUrl()) + "\n" + ip;
+            return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(identity.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        } catch (java.security.NoSuchAlgorithmException impossible) { throw new IllegalStateException(impossible); }
     }
 
     private IpIntelligence request(String ip) {
@@ -97,6 +161,7 @@ public class WorkerIpIntelligenceClient {
             IpQueryRisk risk = payload.risk();
             boolean risky = risk.isVpn() || risk.isProxy() || risk.isTor() || risk.isDatacenter();
             String organization = payload.isp() == null ? "" : safe(payload.isp().organization());
+            if (organization.length() > 500) organization = organization.substring(0, 500);
             return new IpIntelligence(true, risk.isMobile(), risky, organization, "ipquery");
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();

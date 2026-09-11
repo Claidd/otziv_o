@@ -69,5 +69,20 @@ public interface ContractorRewardLedgerRepository extends JpaRepository<Contract
                                        @Param("from") LocalDate from,
                                        @Param("to") LocalDate to);
 
+    interface ProfileAccrualTotals {
+        Long getProfileId();
+        long getTotal();
+        long getMonth();
+    }
+
+    @Query("""
+        SELECT e.profile.id AS profileId, SUM(e.amountKopecks) AS total,
+          SUM(CASE WHEN e.occurredOn >= :from AND e.occurredOn < :to THEN e.amountKopecks ELSE 0 END) AS month
+        FROM ContractorRewardLedgerEntry e
+        WHERE e.profile.id IN :ids AND e.active = true GROUP BY e.profile.id
+        """)
+    List<ProfileAccrualTotals> sumActiveForProfiles(@Param("ids") java.util.Collection<Long> ids,
+            @Param("from") LocalDate from, @Param("to") LocalDate to);
+
     List<ContractorRewardLedgerEntry> findAllByProfileIdAndActiveTrueOrderByOccurredOnAscIdAsc(Long profileId);
 }

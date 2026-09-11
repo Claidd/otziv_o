@@ -36,6 +36,7 @@ class AnalyticsSalarySourceServiceMySqlIntegrationTest {
                 MYSQL.getPassword()
         );
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+        jdbc.execute("DROP VIEW IF EXISTS analytics_salary_daily_source");
         jdbc.execute("DROP TABLE IF EXISTS analytics_salary_source");
         jdbc.execute("DROP TABLE IF EXISTS users_roles");
         jdbc.execute("DROP TABLE IF EXISTS roles");
@@ -80,6 +81,12 @@ class AnalyticsSalarySourceServiceMySqlIntegrationTest {
                     ('2026-09-01', 1, 10, 100.00, 1, 2),
                     ('2026-09-02', 1, 11, 50.00, 1, 1),
                     ('2026-09-02', 3, 12, 900.00, 1, 9)
+                """);
+        jdbc.execute("""
+                CREATE VIEW analytics_salary_daily_source AS
+                SELECT metric_date,user_id,SUM(salary_sum) salary_sum,
+                       COUNT(DISTINCT source_zp_id) salary_entry_count,SUM(salary_review_count) salary_review_count
+                FROM analytics_salary_source GROUP BY metric_date,user_id
                 """);
 
         service = new AnalyticsSalarySourceService(new NamedParameterJdbcTemplate(dataSource));

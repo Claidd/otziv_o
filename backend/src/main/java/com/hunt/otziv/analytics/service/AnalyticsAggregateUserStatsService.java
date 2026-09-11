@@ -43,9 +43,8 @@ public class AnalyticsAggregateUserStatsService {
         List<DailySalary> salaryRows = salarySourceService.dailyForUsers(
                 List.of(user.getId()), historyStart, selectedDate
         );
-        if (salaryRows.isEmpty()) {
-            return Optional.empty();
-        }
+        // A successful canonical query with no rows is a complete zero result.
+        // Database errors still propagate; they must never masquerade as zero.
 
         LocalDate firstDayOfMonth = selectedDate.withDayOfMonth(1);
         LocalDate firstDayOfPreviousMonth = firstDayOfMonth.minusMonths(1);

@@ -377,7 +377,7 @@ export class CabinetApi {
   private readonly teamCache = new Map<string, CacheEntry<TeamResponse>>();
   private readonly scoreCache = new Map<string, CacheEntry<ScoreResponse>>();
   private readonly analyticsCache = new Map<string, CacheEntry<AnalyticsResponse>>();
-  private readonly cabinetCacheTtlMs = 3 * 60 * 60_000;
+  private readonly cabinetCacheTtlMs = 30_000;
   private readonly cabinetCacheMaxEntries = 200;
 
   constructor(
@@ -577,7 +577,9 @@ export class CabinetApi {
 
     const request$ = requestFactory().pipe(
       catchError((error: unknown) => {
-        cache.delete(key);
+        if (cache.get(key)?.request$ === request$) {
+          cache.delete(key);
+        }
         return throwError(() => error);
       }),
       shareReplay({ bufferSize: 1, refCount: false })
@@ -612,10 +614,11 @@ export class CabinetApi {
 
   private cacheKey(scope: string, ...parts: string[]): string {
     const token = this.auth.tokenParsed();
-    const username = token?.['preferred_username'] ?? 'anonymous';
+    const subject = token?.['sub'] ?? token?.['preferred_username'] ?? 'anonymous';
+    const session = token?.['sid'] ?? token?.['session_state'] ?? 'no-session';
     const realmAccess = token?.['realm_access'] as { roles?: string[] } | undefined;
-    const roles = realmAccess?.roles?.join(',') ?? 'no-roles';
+    const roles = realmAccess?.roles ? [...realmAccess.roles].sort().join(',') : 'no-roles';
 
-    return [scope, username, roles, ...parts].join(':');
+    return JSON.stringify([scope, subject, session, roles, ...parts]);
   }
 }

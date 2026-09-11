@@ -780,7 +780,6 @@ class ApiCabinetControllerTest {
     private void stubOwnerTeamContext(TeamFixture fixture) {
         when(userService.findByUserName("alex")).thenReturn(Optional.of(fixture.owner()));
         when(userService.findManagersByUserName("alex")).thenReturn(Set.of(fixture.manager()));
-        when(personalService.findAllManagersWorkers(List.of(fixture.manager()))).thenReturn(List.of(fixture.expandedManager()));
         when(personalService.findCurrentMarketologsForManagers(List.of(fixture.manager())))
                 .thenReturn(List.of(fixture.marketolog()));
         when(personalService.findCurrentWorkersForManagers(List.of(fixture.manager())))

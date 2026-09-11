@@ -66,39 +66,13 @@ public class ClientMessageOrderStatusService {
                     statesByOrder.get(order.getId())
             ));
             ClientMessageOrderStatusResponse missingStateStatus = savedStatus == null ? missingScheduledStateStatus(order) : null;
-            if (bindingStatus == null && savedStatus == null && missingStateStatus != null) {
-                savedStatus = recoverMissingScheduledState(order);
-                if (savedStatus != null) {
-                    missingStateStatus = null;
-                }
-            }
+            // Reads report the committed state. The existing leased reconciliation
+            // worker scans canonical orders and durably repairs missing automation;
+            // opening a page must not run that command once per missing order.
             order.setClientMessageStatus(bindingStatus != null
                     ? bindingStatus
                     : savedStatus != null ? savedStatus : missingStateStatus);
         });
-    }
-
-    private ClientMessageOrderStatusResponse recoverMissingScheduledState(OrderDTOList order) {
-        if (order == null || order.getId() == null || order.getId() <= 0) {
-            return null;
-        }
-        try {
-            scheduledClientMessageService.recoverMissingClientMessageStateForOrderId(order.getId());
-            return latestStatusForOrder(order);
-        } catch (Exception e) {
-            log.warn("Не удалось автоматически восстановить очередь автоответчика для заказа {}", order.getId(), e);
-            return null;
-        }
-    }
-
-    private ClientMessageOrderStatusResponse latestStatusForOrder(OrderDTOList order) {
-        if (order == null || order.getId() == null || order.getId() <= 0) {
-            return null;
-        }
-        return toResponse(selectRelevantState(
-                order,
-                stateRepository.findByOrderIdIn(List.of(order.getId()))
-        ));
     }
 
     private ScheduledClientMessageState selectRelevantState(
