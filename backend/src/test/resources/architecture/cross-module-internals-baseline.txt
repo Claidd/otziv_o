@@ -2160,7 +2160,6 @@ com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardSer
 com.hunt.otziv.p_products.worker_access.service.WorkerCellularAccessRuntimeSettingsService -> com.hunt.otziv.business_audit.service.BusinessAuditService
 com.hunt.otziv.p_products.worker_access.service.WorkerCellularAccessRuntimeSettingsService -> com.hunt.otziv.config.settings.service.AppSettingService
 com.hunt.otziv.p_products.worker_access.service.WorkerCellularAccessService -> com.hunt.otziv.config.metrics.R0ObservabilityMetrics
-com.hunt.otziv.p_products.worker_access.service.WorkerNetworkViolationService -> com.hunt.otziv.u_users.model.User
 com.hunt.otziv.p_products.worker_access.service.WorkerNetworkViolationService -> com.hunt.otziv.u_users.repository.UserRepository
 com.hunt.otziv.p_products.worker_flow.service.WorkerPublicationGateRolloutService -> com.hunt.otziv.bad_reviews.model.BadReviewTaskStatus
 com.hunt.otziv.p_products.worker_flow.service.WorkerPublicationGateRolloutService -> com.hunt.otziv.bad_reviews.repository.BadReviewTaskRepository

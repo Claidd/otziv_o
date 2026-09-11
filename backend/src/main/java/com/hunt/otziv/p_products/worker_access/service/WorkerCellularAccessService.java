@@ -19,6 +19,7 @@ import java.util.Locale;
 import java.util.Set;
 
 import static org.springframework.http.HttpStatus.FORBIDDEN;
+import static com.hunt.otziv.config.metrics.PerformanceMetrics.segment;
 
 @Service
 @Slf4j
@@ -92,7 +93,8 @@ public class WorkerCellularAccessService {
         ClientTelemetry telemetry = ClientTelemetry.from(request);
         boolean mobileDevice = mobileDevice(request, telemetry);
         boolean cidrMatch = cidrMatcher.matches(clientIp);
-        WorkerIpIntelligenceClient.IpIntelligence intelligence = ipIntelligenceClient.lookup(clientIp);
+        WorkerIpIntelligenceClient.IpIntelligence intelligence = segment("worker.network", "ip-intelligence",
+                () -> ipIntelligenceClient.lookup(clientIp));
         boolean serverCellularNetwork = !intelligence.risky() && (cidrMatch || intelligence.mobile());
         String reason = accessReason(mobileDevice, serverCellularNetwork, telemetry, intelligence);
         boolean allowed = REASON_ALLOWED.equals(reason);
@@ -128,16 +130,19 @@ public class WorkerCellularAccessService {
         );
 
         if (!allowed) {
-            networkViolationService.recordViolation(
-                    authentication.getName(),
-                    normalizeScope(scope),
-                    mode,
-                    reason,
-                    intelligence.organization(),
-                    maskedAddress(clientIp),
-                    telemetry.evidence(),
-                    blocked
-            );
+            segment("worker.network", "violation-write", () -> {
+                networkViolationService.recordViolation(
+                        authentication.getName(),
+                        normalizeScope(scope),
+                        mode,
+                        reason,
+                        intelligence.organization(),
+                        maskedAddress(clientIp),
+                        telemetry.evidence(),
+                        blocked
+                );
+                return null;
+            });
         }
 
         if (blocked) {

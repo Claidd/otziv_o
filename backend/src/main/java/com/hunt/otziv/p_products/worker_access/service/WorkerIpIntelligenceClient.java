@@ -65,13 +65,17 @@ public class WorkerIpIntelligenceClient {
             return recentFailure;
         }
 
-        IpIntelligence loaded = request(ip);
-        if (loaded.known()) {
-            resultCache.put(ip, loaded);
-        } else {
-            failureCache.put(ip, loaded);
-        }
-        return loaded;
+        IpIntelligence loaded = resultCache.get(ip, key -> {
+            // One provider call per IP on a miss. A failed load is not retained
+            // in the long-lived success cache; waiting callers recheck the
+            // existing one-minute failure cache before making another request.
+            if (failureCache.getIfPresent(key) != null) return null;
+            IpIntelligence response = request(key);
+            if (response.known()) return response;
+            failureCache.put(key, response);
+            return null;
+        });
+        return loaded == null ? UNKNOWN : loaded;
     }
 
     private IpIntelligence request(String ip) {

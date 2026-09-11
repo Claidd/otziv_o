@@ -4,7 +4,6 @@ import com.hunt.otziv.p_products.worker_access.config.WorkerCellularAccessProper
 import com.hunt.otziv.p_products.worker_access.dto.WorkerNetworkViolationStatsResponse;
 import com.hunt.otziv.p_products.worker_access.repository.WorkerNetworkViolationRepository;
 import com.hunt.otziv.p_products.worker_access.repository.WorkerNetworkViolationRepository.ViolationRowProjection;
-import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.repository.UserRepository;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -54,10 +53,7 @@ class WorkerNetworkViolationServiceTest {
 
     @Test
     void recordsViolationAsEpisodeUpsert() {
-        when(userRepository.findByUsername("worker")).thenReturn(Optional.of(User.builder()
-                .id(42L)
-                .username("worker")
-                .build()));
+        when(userRepository.findIdByUsername("worker")).thenReturn(Optional.of(42L));
 
         service.recordViolation(
                 "worker",
@@ -100,7 +96,7 @@ class WorkerNetworkViolationServiceTest {
                 false
         );
 
-        verify(userRepository, never()).findByUsername(anyString());
+        verify(userRepository, never()).findIdByUsername(anyString());
         verify(violationRepository, never()).upsertEpisode(
                 anyLong(),
                 anyString(),
@@ -171,9 +167,7 @@ class WorkerNetworkViolationServiceTest {
 
     @Test
     void repositoryWriteFailureDoesNotBreakWorkerRequest() {
-        when(userRepository.findByUsername("worker")).thenReturn(Optional.of(
-                User.builder().id(42L).username("worker").build()
-        ));
+        when(userRepository.findIdByUsername("worker")).thenReturn(Optional.of(42L));
         doThrow(new IllegalStateException("database unavailable"))
                 .when(violationRepository)
                 .upsertEpisode(

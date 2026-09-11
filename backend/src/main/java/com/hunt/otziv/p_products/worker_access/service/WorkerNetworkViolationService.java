@@ -57,11 +57,11 @@ public class WorkerNetworkViolationService {
         }
 
         try {
-            userRepository.findByUsername(username).ifPresent(user -> {
+            userRepository.findIdByUsername(username).ifPresent(userId -> {
                 LocalDateTime now = LocalDateTime.now(WORKER_ZONE);
                 LocalDateTime episodeSlot = episodeSlot(now, properties.getViolationEpisodeWindow());
                 violationRepository.upsertEpisode(
-                        user.getId(),
+                        userId,
                         trim(username, 150),
                         trim(reason, 64),
                         trim(scope, 64),
