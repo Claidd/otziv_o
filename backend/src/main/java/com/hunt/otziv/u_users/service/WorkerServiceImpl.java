@@ -32,7 +32,8 @@ public class WorkerServiceImpl implements WorkerService {
 
     @Override
     public Worker getWorkerByUserId(Long id) {
-        return workerRepository.findByUserIdWithUserAndImage(id).orElse(null);
+        return com.hunt.otziv.u_users.readmodel.BoardIdentityReadContext.worker(id,
+                () -> workerRepository.findByUserIdWithUserAndImage(id)).orElse(null);
     }
 
     @Override

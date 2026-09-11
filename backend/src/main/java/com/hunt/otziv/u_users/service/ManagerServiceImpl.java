@@ -33,7 +33,8 @@ public class ManagerServiceImpl implements ManagerService {
 
     @Override
     public Manager getManagerByUserId(Long userId) { // Взять менеджера по Id юзера
-        return managerRepository.findByUserId(userId).orElse(null);
+        return com.hunt.otziv.u_users.readmodel.BoardIdentityReadContext.manager(userId,
+                () -> managerRepository.findByUserId(userId)).orElse(null);
     } // Взять менеджера по Id юзера
 
     @Override

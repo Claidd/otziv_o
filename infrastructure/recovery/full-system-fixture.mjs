@@ -105,7 +105,7 @@ async function mysqlSql(sql, allowFailure = false) {
   try { return (await docker(['exec', '-i', '-e', 'MYSQL_PWD=' + secret.dbPassword, mysql, 'mysql', '-uroot', '--batch', '--skip-column-names', 'otziv'], { input: stdin(sql) })).trim(); }
   catch (error) { if (allowFailure) return null; throw error; }
 }
-const pgSql = sql => docker(['exec', '-i', pg, 'psql', '-U', 'keycloak', '-d', 'keycloak', '-X', '-At', '-v', 'ON_ERROR_STOP=1'], { input: stdin(sql) });
+const pgSql = sql => docker(['exec', '-i', '-e', 'PGPASSWORD=' + secret.dbPassword, pg, 'psql', '-h', '127.0.0.1', '-U', 'keycloak', '-d', 'keycloak', '-X', '-At', '-v', 'ON_ERROR_STOP=1'], { input: stdin(sql) });
 async function startDatabases(suffix) {
   mysql = await container(suffix + '-mysql', 'mysql', ['--network-alias', 'mysql', '--memory', '768m', '-e', 'MYSQL_DATABASE=otziv',
     '-e', 'MYSQL_ROOT_PASSWORD=' + secret.dbPassword, '-e', 'MYSQL_USER=fixture', '-e', 'MYSQL_PASSWORD=' + secret.dbPassword],
@@ -118,7 +118,11 @@ async function startDatabases(suffix) {
       if ((await docker(['inspect', '--format', '{{.State.Running}}', service])).trim() !== 'true')
         throw Error('fixture_database_exited_before_readiness');
     }
-    try { if (await mysqlSql('SELECT 1') === '1' && (await pgSql('SELECT 1')).trim() === '1') return; } catch {}
+    // Both entrypoints start a temporary socket-only server while initializing.
+    // A successful socket SELECT alone can race its shutdown during restore.
+    // Keep MySQL root restricted to its socket; verify networking is enabled
+    // before accepting it. PostgreSQL readiness uses authenticated TCP.
+    try { if (await mysqlSql('SELECT IF(@@skip_networking, 0, 1)') === '1' && (await pgSql('SELECT 1')).trim() === '1') return; } catch {}
     await pause(1000);
   }
   throw Error('fixture_database_readiness_timeout');
@@ -304,9 +308,13 @@ try {
   const restored = await openSystemBundle(join(output, 'bundle'), join(local, 'restore'), recoveryKey, images);
   secret = JSON.parse(await readFile(restored.files.secrets, 'utf8'));
   assert.deepEqual(restored.metadata.images, images);
+  phase = 'restore-database-readiness';
   await startDatabases('restored');
+  phase = 'restore-mysql';
   await docker(['exec', '-i', '-e', 'MYSQL_PWD=' + secret.dbPassword, mysql, 'mysql', '-uroot', 'otziv'], { input: createReadStream(restored.files.mysql), timeoutMs: 180000 });
-  await docker(['exec', '-i', pg, 'pg_restore', '-U', 'keycloak', '-d', 'keycloak', '--exit-on-error', '--no-owner', '--no-acl'], { input: createReadStream(restored.files.keycloak), timeoutMs: 180000 });
+  phase = 'restore-postgres';
+  await docker(['exec', '-i', '-e', 'PGPASSWORD=' + secret.dbPassword, pg, 'pg_restore', '-h', '127.0.0.1', '-U', 'keycloak', '-d', 'keycloak', '--exit-on-error', '--no-owner', '--no-acl'], { input: createReadStream(restored.files.keycloak), timeoutMs: 180000 });
+  phase = 'restore-objects';
   objectVolume = await createVolume('restored-objects'); await archiveObjects(objectVolume, restored.files.objects, true);
   check('actual_mysql_postgres_and_versioned_object_volume_restored', true);
   await startKeycloak('restored');

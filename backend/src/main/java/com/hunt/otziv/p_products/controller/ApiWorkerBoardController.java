@@ -169,91 +169,96 @@ public class ApiWorkerBoardController {
             Authentication authentication
     ) {
         return performanceMetrics.recordEndpoint("worker.board", () -> {
-            String normalizedSection = normalizeSection(section);
-            String message = "";
-            boolean warning = false;
-            List<WorkerMetricResponse> metrics = null;
-            WorkerSelection workerSelection = resolveWorkerSelection(principal, authentication, workerId);
-            Worker selectedWorker = workerSelection.selectedWorker();
-            WorkerRiskAccessPolicy.Status accessRestriction = workerRiskAccessPolicy.status(principal.getName());
-            if (accessRestriction == null) {
-                accessRestriction = WorkerRiskAccessPolicy.Status.allowed();
-            }
+            try (var identityReads = com.hunt.otziv.u_users.api.BoardIdentityReadScope.open()) {
+                String normalizedSection = normalizeSection(section);
+                String message = "";
+                boolean warning = false;
+                List<WorkerMetricResponse> metrics = null;
+                WorkerSelection workerSelection = resolveWorkerSelection(principal, authentication, workerId);
+                Worker selectedWorker = workerSelection.selectedWorker();
+                WorkerRiskAccessPolicy.Status accessRestriction = workerRiskAccessPolicy.status(principal.getName());
+                if (accessRestriction == null) {
+                    accessRestriction = WorkerRiskAccessPolicy.Status.allowed();
+                }
 
-            if (accessRestriction.restricted()) {
+                if (accessRestriction.restricted()) {
+                    int safePageNumber = Math.max(pageNumber, 0);
+                    int safePageSize = Math.max(1, Math.min(pageSize, MAX_PAGE_SIZE));
+                    return new WorkerBoardResponse(
+                            normalizedSection,
+                            title(normalizedSection),
+                            toPageResponse(emptyPage(safePageNumber, safePageSize)),
+                            emptyReviewResponsePage(safePageNumber, safePageSize),
+                            List.of(),
+                            List.of(),
+                            List.of(),
+                            buildPermissions(authentication),
+                            workerSelection.options(),
+                            workerId(selectedWorker),
+                            workerSelection.available(),
+                            accessRestriction.message(),
+                            true,
+                            null,
+                            null,
+                            null,
+                            accessRestriction
+                    );
+                }
+
+                if (isCurrentSectionRequest(section)) {
+                    metrics = buildMetrics(principal, authentication, selectedWorker);
+                    normalizedSection = currentWorkSection(metrics);
+                } else {
+                    WorkerFlowRedirect redirect = workerFlowRedirect(principal, authentication, normalizedSection);
+                    if (redirect != null) {
+                        normalizedSection = redirect.section();
+                        message = redirect.message();
+                        warning = true;
+                    }
+                }
+
+                String boardSection = normalizedSection;
+                segment("worker.board", "cellular-access", () -> {
+                    workerCellularAccessService.enforceSection(boardSection);
+                    return null;
+                });
+
                 int safePageNumber = Math.max(pageNumber, 0);
                 int safePageSize = Math.max(1, Math.min(pageSize, MAX_PAGE_SIZE));
+                String normalizedSortDirection = normalizeSortDirection(sortDirection);
+                String trimmedKeyword = keyword == null ? "" : keyword.trim();
+
+                Page<OrderDTOList> orders = isOrderSection(boardSection)
+                        ? segment("worker.board", "orders", () -> loadOrders(principal, authentication, selectedWorker, boardSection, trimmedKeyword, safePageNumber, safePageSize, normalizedSortDirection))
+                        : emptyPage(safePageNumber, safePageSize);
+                if (hasOnlyWorkerRole(authentication)) {
+                    orders.forEach(this::removeFinancialData);
+                }
+
+                PageResponse<WorkerReviewResponse> reviews = isReviewSection(boardSection)
+                        ? segment("worker.board", "reviews", () -> loadReviewResponses(principal, authentication, selectedWorker, boardSection, trimmedKeyword, safePageNumber, safePageSize, normalizedSortDirection))
+                        : emptyReviewResponsePage(safePageNumber, safePageSize);
+
                 return new WorkerBoardResponse(
-                        normalizedSection,
-                        title(normalizedSection),
-                        toPageResponse(emptyPage(safePageNumber, safePageSize)),
-                        emptyReviewResponsePage(safePageNumber, safePageSize),
+                        boardSection,
+                        title(boardSection),
+                        toPageResponse(orders),
+                        reviews,
                         List.of(),
-                        List.of(),
-                        List.of(),
+                        metrics != null ? metrics : segment("worker.board", "metrics", () -> buildMetrics(principal, authentication, selectedWorker)),
+                        promoTextService.getAllPromoTexts(),
                         buildPermissions(authentication),
                         workerSelection.options(),
                         workerId(selectedWorker),
                         workerSelection.available(),
-                        accessRestriction.message(),
-                        true,
-                        null,
-                        null,
-                        null,
+                        message,
+                        warning,
+                        activeCredentialPreparation(authentication, boardSection),
+                        workerPublicationGateService.sessionState(principal, authentication),
+                        segment("worker.board", "progress", () -> workerDailyProgress(principal, authentication, selectedWorker)),
                         accessRestriction
                 );
             }
-
-            if (isCurrentSectionRequest(section)) {
-                metrics = buildMetrics(principal, authentication, selectedWorker);
-                normalizedSection = currentWorkSection(metrics);
-            } else {
-                WorkerFlowRedirect redirect = workerFlowRedirect(principal, authentication, normalizedSection);
-                if (redirect != null) {
-                    normalizedSection = redirect.section();
-                    message = redirect.message();
-                    warning = true;
-                }
-            }
-
-            workerCellularAccessService.enforceSection(normalizedSection);
-
-            int safePageNumber = Math.max(pageNumber, 0);
-            int safePageSize = Math.max(1, Math.min(pageSize, MAX_PAGE_SIZE));
-            String normalizedSortDirection = normalizeSortDirection(sortDirection);
-            String trimmedKeyword = keyword == null ? "" : keyword.trim();
-
-            String boardSection = normalizedSection;
-            Page<OrderDTOList> orders = isOrderSection(boardSection)
-                    ? segment("worker.board", "orders", () -> loadOrders(principal, authentication, selectedWorker, boardSection, trimmedKeyword, safePageNumber, safePageSize, normalizedSortDirection))
-                    : emptyPage(safePageNumber, safePageSize);
-            if (hasOnlyWorkerRole(authentication)) {
-                orders.forEach(this::removeFinancialData);
-            }
-
-            PageResponse<WorkerReviewResponse> reviews = isReviewSection(boardSection)
-                    ? segment("worker.board", "reviews", () -> loadReviewResponses(principal, authentication, selectedWorker, boardSection, trimmedKeyword, safePageNumber, safePageSize, normalizedSortDirection))
-                    : emptyReviewResponsePage(safePageNumber, safePageSize);
-
-            return new WorkerBoardResponse(
-                    boardSection,
-                    title(boardSection),
-                    toPageResponse(orders),
-                    reviews,
-                    List.of(),
-                    metrics != null ? metrics : segment("worker.board", "metrics", () -> buildMetrics(principal, authentication, selectedWorker)),
-                    promoTextService.getAllPromoTexts(),
-                    buildPermissions(authentication),
-                    workerSelection.options(),
-                    workerId(selectedWorker),
-                    workerSelection.available(),
-                    message,
-                    warning,
-                    activeCredentialPreparation(authentication, boardSection),
-                    workerPublicationGateService.sessionState(principal, authentication),
-                    segment("worker.board", "progress", () -> workerDailyProgress(principal, authentication, selectedWorker)),
-                    accessRestriction
-            );
         });
     }
 
