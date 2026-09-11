@@ -118,6 +118,36 @@ class LegacyOrderMessagePreparationRecoveryMySqlIntegrationTest {
         assertThat(recovery.recover(11,NOW)).isFalse();
     }
 
+    @Test
+    void newCycleAdvancesBeyondConfirmedHistoryWithoutChangingPreviousOperations() {
+        String operation = UUID.randomUUID().toString();
+        jdbc.update("""
+                INSERT INTO order_client_message_occurrences(order_id,logical_kind,operation_id,generation,business_generation,
+                    confirmed,created_at,updated_at) VALUES(7,'progress:review:previous',?,1,4,TRUE,
+                    '2026-09-10 08:49:00','2026-09-10 08:49:05')
+                """, operation);
+        assertThat(recovery.recover(11,NOW)).isTrue();
+        assertThat(number("SELECT client_message_generation FROM orders")).isEqualTo(5);
+        assertThat(jdbc.queryForObject("SELECT operation_id FROM order_client_message_occurrences",String.class)).isEqualTo(operation);
+        assertThat(number("SELECT COUNT(*) FROM order_client_message_occurrences WHERE confirmed=TRUE AND business_generation=4")).isEqualTo(1);
+        assertThat(number("SELECT COUNT(*) FROM scheduled_client_message_attempts WHERE error_code='legacy_preparation_recovered'")).isEqualTo(1);
+    }
+
+    @ParameterizedTest @ValueSource(strings={"unconfirmed","current-cycle","overflow","invalid-generation"})
+    void historicalOccurrenceMustBeConfirmedAndStrictlyBeforeCurrentCycle(String condition) {
+        long generation = condition.equals("overflow") ? Long.MAX_VALUE : condition.equals("invalid-generation") ? 0 : 1;
+        boolean confirmed = !condition.equals("unconfirmed");
+        String updated = condition.equals("current-cycle") ? "2026-09-10 10:00:00" : "2026-09-10 08:49:05";
+        jdbc.update("""
+                INSERT INTO order_client_message_occurrences(order_id,logical_kind,operation_id,generation,business_generation,
+                    confirmed,created_at,updated_at) VALUES(7,'progress:review:previous',?,1,?,?,
+                    '2026-09-10 08:49:00',?)
+                """,UUID.randomUUID().toString(),generation,confirmed,updated);
+        assertThat(recovery.recover(11,NOW)).isFalse();
+        assertThat(number("SELECT client_message_generation FROM orders")).isZero();
+        assertThat(number("SELECT COUNT(*) FROM scheduled_client_message_attempts WHERE error_code='legacy_preparation_recovered'")).isZero();
+    }
+
     @ParameterizedTest @ValueSource(strings={"unknown","envelope","token","provider","sent","old-cycle","before-cutover",
             "occurrence","attempt-sent","attempt-ambiguous","history-missing","cutover-missing","active-claim"})
     void incompleteOrContradictoryEvidenceNeverRearms(String condition) {

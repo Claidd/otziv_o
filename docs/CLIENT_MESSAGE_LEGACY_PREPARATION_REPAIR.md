@@ -34,7 +34,9 @@ and requires all of the following before returning a held action to the normal q
   current order status cycle.
 - That cycle began after successful migration `1.10.305`, and the state was created
   after the status change. No fallback date is accepted as proof.
-- The order generation is zero and no order notification occurrence exists.
+- The order generation is zero. Occurrences are either absent or all confirmed
+  strictly before the current cycle; unresolved or current-cycle history blocks
+  recovery. The next generation exceeds every confirmed historical generation.
 - There is no envelope, delivery token, prepared timestamp, channel, task, message,
   successful delivery, or active processing lease.
 - Retained attempts prove only the specific pre-provider legacy preparation failure.
