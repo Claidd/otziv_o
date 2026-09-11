@@ -41,18 +41,21 @@ export class AuthService {
       return;
     }
 
+    const publicPayment = isPublicPaymentPath(window.location.pathname);
     const returnedFromAuthentication = hasKeycloakAuthenticationCallback(window.location.href);
     this.registerKeycloakCallbacks();
     this.registerBrowserResumeHandlers();
 
     try {
       const authenticated = await this.keycloak.init({
-        onLoad: 'check-sso',
+        // Checkout is anonymous: initialize only the local adapter, without SSO.
+        // Explicit sign-in and OAuth callbacks remain supported.
+        onLoad: publicPayment ? undefined : 'check-sso',
         pkceMethod: 'S256',
         responseMode: 'fragment',
         checkLoginIframe: false,
-        silentCheckSsoRedirectUri: `${window.location.origin}/silent-check-sso.html`,
-        silentCheckSsoFallback: true
+        silentCheckSsoRedirectUri: publicPayment ? undefined : `${window.location.origin}/silent-check-sso.html`,
+        silentCheckSsoFallback: !publicPayment
       });
 
       this.initialized = true;
@@ -377,6 +380,13 @@ export class AuthService {
   protected replaceBrowserLocation(url: string): void {
     window.location.replace(url);
   }
+}
+
+export function isPublicPaymentPath(pathname: string): boolean {
+  const canonicalPath = canonicalAuthPath(pathname);
+  return canonicalPath !== null
+    && /^\/pay(?:\/[^/]+|\/group\/[^/]+)?\/?$/.test(canonicalPath)
+    && !canonicalPath.split('/').some((segment) => segment === '.' || segment === '..');
 }
 
 export function safeAuthTarget(value: string | null | undefined): string {

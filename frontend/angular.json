@@ -30,7 +30,9 @@
                 "input": "public"
               }
             ],
+            "scripts": ["src/app-startup.js"],
             "styles": [
+              "src/app-startup.scss",
               "src/styles.scss"
             ]
           },

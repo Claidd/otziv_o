@@ -36,6 +36,15 @@
   <link rel="manifest" href="site.webmanifest">
 </head>
 <body>
+  <section id="app-startup" role="status" aria-live="polite">
+    <div class="app-startup__card">
+      <p class="app-startup__brand">Компания О!</p>
+      <h1 id="app-startup-title">Открываем страницу</h1>
+      <p id="app-startup-message">Если загрузка не завершается, обновите страницу или проверьте подключение к интернету.</p>
+      <button id="app-startup-retry" type="button" hidden>Обновить</button>
+      <noscript><p class="app-startup__noscript">Для открытия страницы включите JavaScript в настройках браузера.</p></noscript>
+    </div>
+  </section>
   <app-root></app-root>
 </body>
 </html>

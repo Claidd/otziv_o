@@ -1,3 +1,4 @@
+import { watchAppStartup } from './core/app-startup';
 import { ApplicationConfig, inject, provideAppInitializer, provideBrowserGlobalErrorListeners } from '@angular/core';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { provideRouter } from '@angular/router';
@@ -17,6 +18,9 @@ export const appConfig: ApplicationConfig = {
     provideBrowserGlobalErrorListeners(),
     provideRouter(routes),
     provideHttpClient(withInterceptors([workerAccountActionCooldownInterceptor, authInterceptor, clientApiContractInterceptor])),
-    provideAppInitializer(() => inject(AuthService).init())
+    provideAppInitializer(() => {
+      watchAppStartup();
+      return inject(AuthService).init();
+    })
   ]
 };
