@@ -40,6 +40,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.security.Principal;
+import static com.hunt.otziv.config.metrics.PerformanceMetrics.segment;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
@@ -118,6 +119,7 @@ public class ManagerBoardService {
     private final CommonBillingService commonBillingService;
     private final ClientMessageOrderStatusService clientMessageOrderStatusService;
     private final StaffDailyProgressService staffDailyProgressService;
+    private final com.hunt.otziv.u_users.api.CabinetCacheScope cabinetCacheScope;
     private final Cache<MetricsCacheKey, List<ManagerMetricResponse>> metricsCache = Caffeine.newBuilder()
             .maximumSize(2_000)
             .expireAfterWrite(METRICS_CACHE_TTL)
@@ -162,39 +164,41 @@ public class ManagerBoardService {
             Principal principal,
             Authentication authentication
     ) {
-        String normalizedSection = normalizeSection(section);
-        String normalizedStatus = normalizeStatus(status);
-        String normalizedSortDirection = normalizeSortDirection(sortDirection);
-        int safePageNumber = Math.max(pageNumber, 0);
-        int safePageSize = Math.max(1, Math.min(pageSize, MAX_PAGE_SIZE));
-        String trimmedKeyword = keyword == null ? "" : keyword.trim();
-        Manager managerFilter = resolveManagerFilter(managerId, principal, authentication);
-        boolean managerControlOverdue = CONTROL_MANAGER_OVERDUE.equalsIgnoreCase(control == null ? "" : control.trim());
+        try (var identityReads = com.hunt.otziv.u_users.api.BoardIdentityReadScope.open()) {
+            String normalizedSection = normalizeSection(section);
+            String normalizedStatus = normalizeStatus(status);
+            String normalizedSortDirection = normalizeSortDirection(sortDirection);
+            int safePageNumber = Math.max(pageNumber, 0);
+            int safePageSize = Math.max(1, Math.min(pageSize, MAX_PAGE_SIZE));
+            String trimmedKeyword = keyword == null ? "" : keyword.trim();
+            Manager managerFilter = resolveManagerFilter(managerId, principal, authentication);
+            boolean managerControlOverdue = CONTROL_MANAGER_OVERDUE.equalsIgnoreCase(control == null ? "" : control.trim());
 
-        Page<CompanyListDTO> companies = SECTION_COMPANIES.equals(normalizedSection)
-                ? loadCompanies(principal, authentication, trimmedKeyword, normalizedStatus, safePageNumber, safePageSize, normalizedSortDirection)
-                : emptyCompanyPage(safePageNumber, safePageSize);
+            Page<CompanyListDTO> companies = SECTION_COMPANIES.equals(normalizedSection)
+                    ? segment("manager.board", "companies", () -> loadCompanies(principal, authentication, trimmedKeyword, normalizedStatus, safePageNumber, safePageSize, normalizedSortDirection))
+                    : emptyCompanyPage(safePageNumber, safePageSize);
 
-        Page<OrderDTOList> orders = SECTION_ORDERS.equals(normalizedSection)
-                ? loadOrders(principal, authentication, trimmedKeyword, normalizedStatus, safePageNumber, safePageSize, companyId, managerFilter, managerControlOverdue, normalizedSortDirection)
-                : emptyOrderPage(safePageNumber, safePageSize);
-        badReviewTaskService.enrichOrderList(orders.getContent());
-        clientMessageOrderStatusService.enrichOrderList(orders.getContent());
+            Page<OrderDTOList> orders = SECTION_ORDERS.equals(normalizedSection)
+                    ? segment("manager.board", "orders", () -> loadOrders(principal, authentication, trimmedKeyword, normalizedStatus, safePageNumber, safePageSize, companyId, managerFilter, managerControlOverdue, normalizedSortDirection))
+                    : emptyOrderPage(safePageNumber, safePageSize);
+            badReviewTaskService.enrichOrderList(orders.getContent());
+            clientMessageOrderStatusService.enrichOrderList(orders.getContent());
 
-        return new ManagerBoardResponse(
-                normalizedSection,
-                normalizedStatus,
-                toPageResponse(companies),
-                toPageResponse(orders),
-                ManagerBoardStatusCatalog.companyStatuses(),
-                ManagerBoardStatusCatalog.orderStatuses(),
-                buildMetrics(principal, authentication, managerFilter, managerControlOverdue),
-                promoTextService.getPromoTextsForManager(
-                        resolvePromoManagerId(principal, authentication),
-                        promoSectionCode(normalizedSection)
-                ),
-                managerDailyProgress(principal, authentication, managerFilter)
-        );
+            return new ManagerBoardResponse(
+                    normalizedSection,
+                    normalizedStatus,
+                    toPageResponse(companies),
+                    toPageResponse(orders),
+                    ManagerBoardStatusCatalog.companyStatuses(),
+                    ManagerBoardStatusCatalog.orderStatuses(),
+                    segment("manager.board", "metrics", () -> buildMetrics(principal, authentication, managerFilter, managerControlOverdue)),
+                    promoTextService.getPromoTextsForManager(
+                            resolvePromoManagerId(principal, authentication),
+                            promoSectionCode(normalizedSection)
+                    ),
+                    segment("manager.board", "progress", () -> managerDailyProgress(principal, authentication, managerFilter))
+            );
+        }
     }
 
     public ManagerOverdueOrdersResponse getOverdueOrders(
@@ -487,7 +491,8 @@ public class ManagerBoardService {
                 principalName,
                 authorities,
                 managerFilter == null ? null : managerFilter.getId(),
-                managerControlOverdue
+                managerControlOverdue,
+                cabinetCacheScope.fingerprint()
         );
     }
 
@@ -744,7 +749,8 @@ public class ManagerBoardService {
             String principalName,
             String authorities,
             Long managerId,
-            boolean managerControlOverdue
+            boolean managerControlOverdue,
+            String authorizationScope
     ) {
     }
 

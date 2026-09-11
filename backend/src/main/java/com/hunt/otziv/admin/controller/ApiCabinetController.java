@@ -98,6 +98,7 @@ public class ApiCabinetController {
     private final WorkerService workerService;
     private final PerformanceMetrics performanceMetrics;
     private final CacheManager cacheManager;
+    private final com.hunt.otziv.u_users.api.CabinetCacheScope cabinetCacheScope;
     private final AnalyticsAggregateStatsService analyticsAggregateStatsService;
     private final AnalyticsAggregateScoreService analyticsAggregateScoreService;
     private final AnalyticsAggregateUserStatsService analyticsAggregateUserStatsService;
@@ -133,11 +134,11 @@ public class ApiCabinetController {
                         User user = currentUser(principal);
                         return new CabinetProfileResponse(
                                 selectedDate,
-                                personalService.getUserLK(principal),
-                                workerStats(selectedDate, user),
-                                managerPerformance(selectedDate, user, principal),
-                                workerDailyProgress(selectedDate, user),
-                                managerTeamDailyProgress(selectedDate, user, principal)
+                                performanceMetrics.recordSegment("cabinet.profile", "identity", () -> personalService.getUserLK(principal)),
+                                performanceMetrics.recordSegment("cabinet.profile", "worker-stats", () -> workerStats(selectedDate, user)),
+                                performanceMetrics.recordSegment("cabinet.profile", "manager-score", () -> managerPerformance(selectedDate, user, principal)),
+                                performanceMetrics.recordSegment("cabinet.profile", "worker-progress", () -> workerDailyProgress(selectedDate, user)),
+                                performanceMetrics.recordSegment("cabinet.profile", "team-progress", () -> managerTeamDailyProgress(selectedDate, user, principal))
                         );
                     }
             );
@@ -275,11 +276,12 @@ public class ApiCabinetController {
                     CacheConfig.CABINET_TEAM,
                     cabinetKey("team", principal.getName(), role, selectedDate, selectedMonth, aggregateAnalyticsReadEnabled),
                     refresh,
-                    () -> withTeamInsights(
-                            teamResponse(principal, authentication, selectedDate, selectedMonth, role),
-                            selectedDate,
-                            selectedMonth
-                    )
+                    () -> {
+                        TeamResponse team = performanceMetrics.recordSegment("cabinet.team", "assemble",
+                                () -> teamResponse(principal, authentication, selectedDate, selectedMonth, role));
+                        return performanceMetrics.recordSegment("cabinet.team", "insights",
+                                () -> withTeamInsights(team, selectedDate, selectedMonth));
+                    }
             );
         });
     }
@@ -469,11 +471,16 @@ public class ApiCabinetController {
             return valueLoader.get();
         }
 
+        Authentication currentAuthentication = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        String authorities = currentAuthentication == null ? "" : currentAuthentication.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority).sorted().collect(Collectors.joining(","));
+        String scopedKey = key + ':' + cabinetCacheScope.fingerprint() + ':' + authorities;
         if (refresh) {
-            cache.evict(key);
+            cache.evict(scopedKey);
         }
 
-        return cache.get(key, valueLoader::get);
+        return performanceMetrics.recordSegment("cache." + cacheName, refresh ? "refresh" : "get",
+                () -> cache.get(scopedKey, () -> performanceMetrics.recordSegment("cache." + cacheName, "load", valueLoader)));
     }
 
     private void evictCache(String cacheName, String key) {
@@ -591,6 +598,11 @@ public class ApiCabinetController {
     }
 
     private TeamResponse withTeamDailyProgress(TeamResponse response, LocalDate selectedDate, boolean visible) {
+        return performanceMetrics.recordSegment("cabinet.team", "daily-progress",
+                () -> withTeamDailyProgressInternal(response, selectedDate, visible));
+    }
+
+    private TeamResponse withTeamDailyProgressInternal(TeamResponse response, LocalDate selectedDate, boolean visible) {
         if (!visible || response == null || !staffDailyProgressService.progressEnabled()) {
             return response;
         }
@@ -608,7 +620,7 @@ public class ApiCabinetController {
                                 firstNonBlank(worker.getFio(), worker.getLogin())
                         )
                 ));
-        Map<Long, DailyWorkProgressResponse> workerProgress = staffDailyProgressService.workerProgressBySubjects(
+        Map<Long, DailyWorkProgressResponse> workerProgress = staffDailyProgressService.workerProgressSnapshotBySubjects(
                 workerSubjectsById.values(),
                 selectedDate
         );
@@ -654,6 +666,11 @@ public class ApiCabinetController {
     }
 
     private TeamResponse withTeamMonthlyProgress(TeamResponse response, LocalDate selectedMonth, boolean visible) {
+        return performanceMetrics.recordSegment("cabinet.team", "monthly-progress",
+                () -> withTeamMonthlyProgressInternal(response, selectedMonth, visible));
+    }
+
+    private TeamResponse withTeamMonthlyProgressInternal(TeamResponse response, LocalDate selectedMonth, boolean visible) {
         if (!visible || response == null || !staffDailyProgressService.progressEnabled()) {
             return response;
         }
@@ -672,7 +689,7 @@ public class ApiCabinetController {
                                 firstNonBlank(worker.getFio(), worker.getLogin())
                         )
                 ));
-        Map<Long, DailyWorkProgressResponse> workerProgress = staffDailyProgressService.monthlyWorkerProgressBySubjects(
+        Map<Long, DailyWorkProgressResponse> workerProgress = staffDailyProgressService.monthlyWorkerProgressSnapshotBySubjects(
                 workerSubjectsById.values(),
                 monthStart
         );
@@ -974,10 +991,7 @@ public class ApiCabinetController {
             return null;
         }
 
-        return managerPerformanceService.score(selectedDate).stream()
-                .filter(score -> Objects.equals(score.managerUserId(), user.getId()))
-                .findFirst()
-                .orElse(null);
+        return managerPerformanceService.scoreForUser(selectedDate, user.getId());
     }
 
     private DailyWorkProgressResponse workerDailyProgress(LocalDate selectedDate, User user) {
@@ -990,7 +1004,7 @@ public class ApiCabinetController {
             return null;
         }
 
-        return staffDailyProgressService.workerProgressByWorkers(List.of(worker), selectedDate)
+        return staffDailyProgressService.workerProgressSnapshotByWorkers(List.of(worker), selectedDate)
                 .get(worker.getId());
     }
 
@@ -1017,7 +1031,7 @@ public class ApiCabinetController {
                         firstNonBlank(worker.getFio(), worker.getLogin())
                 ))
                 .toList();
-        Map<Long, DailyWorkProgressResponse> progress = staffDailyProgressService.workerProgressBySubjects(
+        Map<Long, DailyWorkProgressResponse> progress = staffDailyProgressService.workerProgressSnapshotBySubjects(
                 subjects,
                 selectedDate
         );

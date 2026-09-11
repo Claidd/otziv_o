@@ -16359,6 +16359,14 @@
           "botChangeCount" : {
             "type" : "integer"
           },
+          "calculatedAt" : {
+            "anyOf" : [ {
+              "type" : "string",
+              "format" : "date-time"
+            }, {
+              "type" : "null"
+            } ]
+          },
           "checked" : {
             "type" : "boolean"
           },
@@ -16511,7 +16519,7 @@
             "type" : "integer"
           }
         },
-        "required" : [ "active", "activeWorkSeconds", "activityEvents", "averageCloseSeconds", "badCompletedCount", "botBlockCount", "botChangeCount", "checked", "checkedDays", "closedPeriod", "completed", "date", "disciplineScore", "efficiencyScore", "firstActivityAt", "firstCompletedAt", "firstReached100At", "lastActivityAt", "lastCompletedAt", "lastReached100At", "loadScore", "medianCloseSeconds", "nagulCompletedCount", "openedCount", "orderCompletedCount", "orderOverdueCount", "p90CloseSeconds", "percent", "periodType", "publishCompletedCount", "reached100", "reached100Days", "recoveryCompletedCount", "recoveryCreatedCount", "roleType", "speedScore", "total", "totalOverdueCount", "updating", "visible", "workWindowSeconds", "workingDays", "workloadScore" ],
+        "required" : [ "active", "activeWorkSeconds", "activityEvents", "averageCloseSeconds", "badCompletedCount", "botBlockCount", "botChangeCount", "calculatedAt", "checked", "checkedDays", "closedPeriod", "completed", "date", "disciplineScore", "efficiencyScore", "firstActivityAt", "firstCompletedAt", "firstReached100At", "lastActivityAt", "lastCompletedAt", "lastReached100At", "loadScore", "medianCloseSeconds", "nagulCompletedCount", "openedCount", "orderCompletedCount", "orderOverdueCount", "p90CloseSeconds", "percent", "periodType", "publishCompletedCount", "reached100", "reached100Days", "recoveryCompletedCount", "recoveryCreatedCount", "roleType", "speedScore", "total", "totalOverdueCount", "updating", "visible", "workWindowSeconds", "workingDays", "workloadScore" ],
         "additionalProperties" : true
       },
       "DeepCompanyResearchJobStatusOutput" : {
@@ -25162,7 +25170,7 @@
     "sha256" : "8dd8667c358f1a9932491b0be5524b7645f8b26980d87b01ebb377c875f9dde3"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/admin/controller/ApiCabinetController.java",
-    "sha256" : "14bc70738d625c1352e3192000569e6ce83457fad2be4e3238212dfee8735fc5"
+    "sha256" : "f6035e06277310afe0774d5de2989eb9ebcb05110119772abfce3a2e6d073ac4"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/archive/controller/ApiManagerArchiveController.java",
     "sha256" : "98c52aac4dbb394fba629e48679d2af6cfaaab7c318041c41ffbbfd64f8a1560"
@@ -25777,10 +25785,10 @@
     "sha256" : "ebe4d52a55395dc9b33ac8ca2edd94da899101f8b22b7c6573d119c81619a2ed"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/worker_performance/dto/DailyWorkProgressResponse.java",
-    "sha256" : "adda3e7ac2f221e0ddb2c9a63c927f7f0485c3e1276e25d36016b40d15c2a9aa"
+    "sha256" : "ec632e21d38c13762c66e4a42ee20e6cd042b058049eaf136f806eacb479b39d"
   }, {
     "path" : "contracts/client-api.config.json",
-    "sha256" : "c6b52f03a84df9a8d0a29abfe006fe6d245d5042af766a74bd4b4a0f1842572a"
+    "sha256" : "bddc6184f3458346d2d72e458fb727521fcd1bb58863d403a2e952ab0e9c7b09"
   } ],
   "x-source-fingerprint-normalization" : "UTF-8 text with CRLF normalized to LF",
   "x-schema-java-types" : {

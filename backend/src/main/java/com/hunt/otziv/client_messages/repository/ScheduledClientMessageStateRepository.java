@@ -568,9 +568,12 @@ public interface ScheduledClientMessageStateRepository extends CrudRepository<Sc
     @Query(value = """
         UPDATE scheduled_client_message_state state
         JOIN (
-            SELECT state_id, MAX(attempted_at) AS latest_attempted_at
-            FROM scheduled_client_message_attempts
-            GROUP BY state_id
+            SELECT history.state_id, MAX(history.attempted_at) AS latest_attempted_at
+            FROM scheduled_client_message_attempts history
+            JOIN scheduled_client_message_state eligible ON eligible.state_id = history.state_id
+            WHERE eligible.state_status = 'ACTIVE'
+              AND eligible.next_attempt_at > :now
+            GROUP BY history.state_id
         ) latest_attempt ON latest_attempt.state_id = state.state_id
         JOIN scheduled_client_message_attempts attempt
           ON attempt.state_id = state.state_id

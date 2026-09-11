@@ -1175,7 +1175,8 @@
       "checkedDays" : 2,
       "reached100Days" : 2,
       "closedPeriod" : false,
-      "updating" : false
+      "updating" : false,
+      "calculatedAt" : "2026-09-07T00:00:00Z"
     },
     "DeepCompanyResearchJobStatusOutput" : {
       "jobId" : 2,
@@ -1677,7 +1678,8 @@
         "checkedDays" : 2,
         "reached100Days" : 2,
         "closedPeriod" : false,
-        "updating" : false
+        "updating" : false,
+        "calculatedAt" : "2026-09-07T00:00:00Z"
       }
     },
     "ManagerClientReplyResolutionResponseOutput" : {

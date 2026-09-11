@@ -300,13 +300,15 @@ public class StaffDailyProgressService {
                   AND worker_id IN (:workerIds)
                 """, params).forEach(row -> result.put(
                 longValue(row.get("worker_id")),
-                dailyResponse(safeDate, row)
+                dailyResponse(safeDate, row).withCalculatedAt(snapshotCalculatedAt(row)).withUpdating(safeDate.equals(progressToday())
+                        && (toLocalDateTime(row.get("updated_at")) == null
+                        || toLocalDateTime(row.get("updated_at")).isBefore(LocalDateTime.now(PROGRESS_ZONE).minusMinutes(2))))
         ));
 
         // A fresh workload projection is the authoritative source for today's
         // completed/eligible totals. Keep the remaining efficiency fields from
         // the persisted daily snapshot.
-        workerIds.forEach(workerId -> result.putIfAbsent(workerId, emptyWorkerProgress(safeDate)));
+        workerIds.forEach(workerId -> result.putIfAbsent(workerId, emptyWorkerProgress(safeDate).withUpdating(true)));
         if (safeDate.equals(progressToday())
                 && appSettingService.getBoolean(WORKLOAD_SHADOW_OBSERVATION_ENABLED, true)) {
             CurrentProgress current = workloadShadowProgressReadService
@@ -321,6 +323,29 @@ public class StaffDailyProgressService {
             );
         }
         return Map.copyOf(result);
+    }
+
+    @Transactional(readOnly = true)
+    public Map<Long, DailyWorkProgressResponse> workerProgressSnapshotBySubjects(
+            Collection<WorkerProgressSubject> subjects, LocalDate date) {
+        if (subjects == null || subjects.isEmpty()) return Map.of();
+        return workerProgressSnapshotByWorkers(subjects.stream().filter(Objects::nonNull)
+                .map(subject -> { Worker worker = new Worker(); worker.setId(subject.workerId()); return worker; }).toList(), date);
+    }
+
+    /** Scheduler-only recalculation. One bounded batch; monthly aggregation runs once after all batches. */
+    @Transactional(timeout = 45)
+    public long refreshSnapshotBatch(long afterWorkerId, LocalDate date) {
+        var workers = jdbc.query("""
+                SELECT w.worker_id, w.user_id, u.fio, u.username
+                FROM workers w JOIN users u ON u.id = w.user_id
+                WHERE w.worker_id > :after ORDER BY w.worker_id LIMIT 25
+                """, new MapSqlParameterSource("after", afterWorkerId), (row, index) ->
+                new WorkerProgressSubject(row.getLong("worker_id"), row.getLong("user_id"),
+                        row.getString("fio") == null ? row.getString("username") : row.getString("fio")));
+        if (workers.isEmpty()) return 0;
+        workerProgressBySubjectsInternal(workers, date, null, true, false);
+        return workers.getLast().workerId();
     }
 
     @Transactional
@@ -411,6 +436,12 @@ public class StaffDailyProgressService {
             LocalDateTime ignoreOpenedAtOrAfter,
             boolean persist
     ) {
+        return workerProgressBySubjectsInternal(workers, date, ignoreOpenedAtOrAfter, persist, persist);
+    }
+
+    private Map<Long, DailyWorkProgressResponse> workerProgressBySubjectsInternal(
+            Collection<WorkerProgressSubject> workers, LocalDate date,
+            LocalDateTime ignoreOpenedAtOrAfter, boolean persist, boolean updateMonthly) {
         if (!progressEnabled() || workers == null || workers.isEmpty()) {
             return Map.of();
         }
@@ -462,7 +493,7 @@ public class StaffDailyProgressService {
                 saveDaily(worker, response);
             }
         }
-        if (persist) {
+        if (updateMonthly) {
             rebuildMonthly(safeDate.withDayOfMonth(1), false);
         }
         return result;
@@ -533,6 +564,17 @@ public class StaffDailyProgressService {
             Collection<WorkerProgressSubject> workers,
             LocalDate monthStart
     ) {
+        return monthlyWorkerProgress(workers, monthStart, true);
+    }
+
+    @Transactional(readOnly = true)
+    public Map<Long, DailyWorkProgressResponse> monthlyWorkerProgressSnapshotBySubjects(
+            Collection<WorkerProgressSubject> workers, LocalDate monthStart) {
+        return monthlyWorkerProgress(workers, monthStart, false);
+    }
+
+    private Map<Long, DailyWorkProgressResponse> monthlyWorkerProgress(
+            Collection<WorkerProgressSubject> workers, LocalDate monthStart, boolean rebuild) {
         if (!progressEnabled() || workers == null || workers.isEmpty()) {
             return Map.of();
         }
@@ -545,7 +587,7 @@ public class StaffDailyProgressService {
             return Map.of();
         }
 
-        rebuildMonthly(
+        if (rebuild) rebuildMonthly(
                 safeMonthStart,
                 safeMonthStart.isBefore(progressToday().withDayOfMonth(1))
         );
@@ -562,8 +604,13 @@ public class StaffDailyProgressService {
                   AND worker_id IN (:workerIds)
                 """, params).forEach(row -> {
             Long workerId = longValue(row.get("worker_id"));
-            result.put(workerId, monthlyResponse(safeMonthStart, row));
+            result.put(workerId, monthlyResponse(safeMonthStart, row).withCalculatedAt(snapshotCalculatedAt(row)).withUpdating(!rebuild
+                    && safeMonthStart.equals(progressToday().withDayOfMonth(1))
+                    && (toLocalDateTime(row.get("updated_at")) == null
+                    || toLocalDateTime(row.get("updated_at")).isBefore(progressNow().minusMinutes(2)))));
         });
+        if (!rebuild) visibleWorkers.forEach(worker -> result.computeIfAbsent(worker.workerId(),
+                id -> emptyWorkerProgress(safeMonthStart).withUpdating(true)));
         return result;
     }
 
@@ -730,7 +777,14 @@ public class StaffDailyProgressService {
                 visible.stream().mapToInt(DailyWorkProgressResponse::checkedDays).sum(),
                 visible.stream().mapToInt(DailyWorkProgressResponse::reached100Days).sum(),
                 visible.stream().allMatch(DailyWorkProgressResponse::closedPeriod)
-        ).withUpdating(visible.stream().anyMatch(DailyWorkProgressResponse::updating));
+        ).withUpdating(visible.stream().anyMatch(DailyWorkProgressResponse::updating))
+                .withCalculatedAt(visible.stream().anyMatch(value -> value.calculatedAt() == null) ? null
+                        : visible.stream().map(DailyWorkProgressResponse::calculatedAt).min(java.time.Instant::compareTo).orElse(null));
+    }
+
+    private java.time.Instant snapshotCalculatedAt(Map<String, Object> row) {
+        LocalDateTime value = toLocalDateTime(row.get("updated_at"));
+        return value == null ? null : value.atZone(PROGRESS_ZONE).toInstant();
     }
 
     private DailyWorkProgressResponse monthlyResponse(LocalDate monthStart, Map<String, Object> row) {
@@ -1754,7 +1808,8 @@ public class StaffDailyProgressService {
                     bot_block_count = VALUES(bot_block_count),
                     load_score = VALUES(load_score),
                     efficiency_score = VALUES(efficiency_score),
-                    aggregation_status = VALUES(aggregation_status)
+                    aggregation_status = VALUES(aggregation_status),
+                    updated_at = CURRENT_TIMESTAMP(6)
                 """, params);
     }
 
@@ -1890,7 +1945,8 @@ public class StaffDailyProgressService {
                     bot_block_count = VALUES(bot_block_count),
                     load_score = VALUES(load_score),
                     average_efficiency_score = VALUES(average_efficiency_score),
-                    closed_period = VALUES(closed_period)
+                    closed_period = VALUES(closed_period),
+                    updated_at = CURRENT_TIMESTAMP(6)
                 """, params);
     }
 

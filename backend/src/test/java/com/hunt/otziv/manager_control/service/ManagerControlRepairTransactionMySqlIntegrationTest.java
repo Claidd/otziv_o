@@ -180,7 +180,7 @@ class ManagerControlRepairTransactionMySqlIntegrationTest {
         });
 
         var access = new ManagerControlAccessPolicy(mock(ManagerRepository.class), users, mock(ManagerAccessService.class), permissions);
-        var lifecycle = new ManagerControlCardLifecycle(cards, items, events, mock(ManagerPerformanceService.class));
+        var lifecycle = new ManagerControlCardLifecycle(cards, items, events, mock(ManagerPerformanceService.class), mock(ManagerControlReadSnapshots.class));
         var lookup = mock(ManagerControlWorkerTaskLookup.class);
         when(lookup.userDisplayName(any())).thenReturn("");
         var presenter = new ManagerControlConcretePresenter(mock(WorkerRiskIncidentRepository.class), lookup,

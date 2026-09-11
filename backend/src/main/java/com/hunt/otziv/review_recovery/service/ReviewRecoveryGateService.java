@@ -5,6 +5,10 @@ import com.hunt.otziv.review_recovery.model.ReviewRecoveryBatchStatus;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryTaskStatus;
 import com.hunt.otziv.review_recovery.repository.ReviewRecoveryTaskRepository;
 import java.time.LocalDate;
+import java.util.Collection;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,6 +32,15 @@ public class ReviewRecoveryGateService {
                 ReviewRecoveryTaskStatus.PLANNED,
                 ReviewRecoveryBatchStatus.OPEN
         ) > 0;
+    }
+
+    /** One consistent read for a caller's current transaction; never cached between requests. */
+    @Transactional(readOnly = true)
+    public Set<Long> activeRecoveryOrderIds(Collection<Long> orderIds) {
+        List<Long> ids = orderIds == null ? List.of() : orderIds.stream().filter(Objects::nonNull).distinct().toList();
+        if (ids.isEmpty()) return Set.of();
+        return Set.copyOf(taskRepository.findActiveOrderIds(
+                ids, ReviewRecoveryTaskStatus.PLANNED, ReviewRecoveryBatchStatus.OPEN));
     }
 
     @Transactional(readOnly = true)

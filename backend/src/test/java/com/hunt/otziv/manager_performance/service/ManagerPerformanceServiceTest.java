@@ -57,9 +57,23 @@ class ManagerPerformanceServiceTest {
     private WorkerRiskIncidentRepository riskIncidentRepository;
     @Mock
     private ManagerTeamProgressService managerTeamProgressService;
+    @Mock
+    private com.hunt.otziv.u_users.api.CabinetCacheScope cacheScope;
 
     @InjectMocks
     private ManagerPerformanceService service;
+
+    @Test
+    void committedIdentityChangeCannotReuseThePreviousRanking() {
+        Manager manager = manager(1L,101L);
+        stubManagers(manager);
+        when(cacheScope.fingerprint()).thenReturn("before","before","after");
+        when(managerRepository.findAllWithUserAndImage()).thenReturn(List.of(manager),List.of());
+        assertEquals(1,service.score(DATE).size());
+        assertEquals(1,service.score(DATE).size());
+        assertTrue(service.score(DATE).isEmpty());
+        org.mockito.Mockito.verify(managerRepository,org.mockito.Mockito.times(2)).findAllWithUserAndImage();
+    }
 
     @Test
     void noPerformanceDataDoesNotProduceExcellentScore() {
@@ -211,8 +225,12 @@ class ManagerPerformanceServiceTest {
         ManagerDailyControl control = control(manager, DATE);
         when(controlRepository.findByControlDateBetween(DATE.withDayOfMonth(1), DATE)).thenReturn(List.of(control));
         when(itemRepository.findByControlIn(List.of(control))).thenReturn(List.of());
-        when(controlEventRepository.countByControlInAndEventType(
-                List.of(control), ManagerDailyControlEventType.CONTROL_REOPENED)).thenReturn(1L);
+        when(controlEventRepository.countEventsByManager(
+                List.of(control), ManagerDailyControlEventType.CONTROL_REOPENED)).thenReturn(List.of(
+                new ManagerDailyControlEventRepository.ManagerEventCount() {
+                    public Long getManagerId() { return manager.getId(); }
+                    public long getTotal() { return 1; }
+                }));
 
         ManagerPerformanceScoreResponse score = service.score(DATE).getFirst();
 
@@ -243,6 +261,39 @@ class ManagerPerformanceServiceTest {
         ManagerPerformanceScoreResponse score = service.score(DATE).getFirst();
 
         assertEquals(0, score.problemSpeedScore());
+    }
+
+    @Test
+    void scopedScoreMatchesRankingAndCachesDatesIndependently() {
+        Manager manager = manager(1L, 101L);
+        stubManagers(manager);
+        when(managerRepository.findAllByUserIdsForAdminList(java.util.Set.of(101L))).thenReturn(List.of(manager));
+        assertEquals(service.score(DATE).getFirst(), service.scoreForUser(DATE,101L));
+        service.score(DATE.minusDays(1));
+        service.score(DATE);
+        org.mockito.Mockito.verify(controlRepository,org.mockito.Mockito.times(1))
+                .findByControlDateBetween(DATE.withDayOfMonth(1),DATE);
+        org.mockito.Mockito.verify(controlRepository).findByManagerInAndControlDateBetween(List.of(manager),DATE.withDayOfMonth(1),DATE);
+        org.mockito.Mockito.verify(managerRepository,org.mockito.Mockito.never()).findByUserId(org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test
+    void invalidationWaitsForCommitAndCommandReadsDoNotFillSharedCache() {
+        Manager manager=manager(1L,101L); stubManagers(manager);
+        service.score(DATE);
+        org.springframework.transaction.support.TransactionSynchronizationManager.initSynchronization();
+        org.springframework.transaction.support.TransactionSynchronizationManager.setActualTransactionActive(true);
+        try {
+            service.invalidate();
+            service.score(DATE); // Uncommitted command reads bypass the cache.
+            org.springframework.transaction.support.TransactionSynchronizationManager.setCurrentTransactionReadOnly(true);
+            service.score(DATE); // Existing committed value remains until afterCommit.
+            org.mockito.Mockito.verify(controlRepository,org.mockito.Mockito.times(2)).findByControlDateBetween(DATE.withDayOfMonth(1),DATE);
+            org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations().forEach(
+                    org.springframework.transaction.support.TransactionSynchronization::afterCommit);
+            service.score(DATE);
+            org.mockito.Mockito.verify(controlRepository,org.mockito.Mockito.times(3)).findByControlDateBetween(DATE.withDayOfMonth(1),DATE);
+        } finally { org.springframework.transaction.support.TransactionSynchronizationManager.clear(); }
     }
 
     private void stubManagers(Manager manager) {

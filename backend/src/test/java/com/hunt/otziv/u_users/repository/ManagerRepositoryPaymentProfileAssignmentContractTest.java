@@ -30,9 +30,21 @@ class ManagerRepositoryPaymentProfileAssignmentContractTest {
     void workerManagerExpansionCannotReintroduceHistoricalManagerIdentities() throws Exception {
         assertCurrentManagerQuery(query(
                 ManagerRepository.class,
-                "findAllManagersWorkers",
+                "findManagersWithWorkers",
                 List.class
         ));
+    }
+
+    @Test
+    void collectionExpansionUsesOnlyManagersAcceptedByTheActiveRoleQuery() {
+        var current = new com.hunt.otziv.u_users.model.Manager(); current.setId(1L);
+        var historical = new com.hunt.otziv.u_users.model.Manager(); historical.setId(2L);
+        var repository = org.mockito.Mockito.mock(ManagerRepository.class, org.mockito.Mockito.CALLS_REAL_METHODS);
+        org.mockito.Mockito.when(repository.findManagersWithWorkers(List.of(current,historical)))
+                .thenReturn(List.of(current));
+        org.junit.jupiter.api.Assertions.assertEquals(List.of(current),repository.findAllManagersWorkers(List.of(current,historical)));
+        org.mockito.Mockito.verify(repository).fetchManagerOperators(List.of(current));
+        org.mockito.Mockito.verify(repository).fetchManagerMarketologs(List.of(current));
     }
 
     @Test

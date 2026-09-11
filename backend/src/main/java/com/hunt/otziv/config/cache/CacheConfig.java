@@ -37,6 +37,12 @@ public class CacheConfig {
                 .maximumSize(10_000)
                 .expireAfterWrite(cabinetCacheTtl)
                 .recordStats());
+        // Frequently changing screen DTOs must not outlive their prepared snapshots.
+        // Statistics with an explicit date keep their separately configured policy.
+        for (String name : java.util.List.of(CABINET_PROFILE, CABINET_TEAM)) {
+            cacheManager.registerCustomCache(name, Caffeine.newBuilder().maximumSize(2_000)
+                    .expireAfterWrite(Duration.ofSeconds(30)).recordStats().build());
+        }
         return cacheManager;
     }
 }

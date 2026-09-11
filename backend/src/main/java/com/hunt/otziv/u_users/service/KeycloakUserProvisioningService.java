@@ -1026,13 +1026,20 @@ public class KeycloakUserProvisioningService {
     }
 
     private void clearCabinetCaches() {
-        List.of(
+        Runnable invalidate = () -> List.of(
                 CacheConfig.CABINET_PROFILE,
                 CacheConfig.CABINET_USER_INFO,
                 CacheConfig.CABINET_TEAM,
                 CacheConfig.CABINET_SCORE,
                 CacheConfig.CABINET_ANALYTICS
         ).forEach(this::clearCache);
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()
+                && org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                    new org.springframework.transaction.support.TransactionSynchronization() {
+                        @Override public void afterCommit() { invalidate.run(); }
+                    });
+        } else invalidate.run();
     }
 
     private void clearCache(String cacheName) {

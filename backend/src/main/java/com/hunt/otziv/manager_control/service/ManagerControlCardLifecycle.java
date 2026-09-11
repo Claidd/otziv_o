@@ -27,6 +27,7 @@ public class ManagerControlCardLifecycle {
     private final ManagerDailyControlItemRepository dailyControlItemRepository;
     private final ManagerDailyControlEventRepository dailyControlEventRepository;
     private final ManagerPerformanceService managerPerformanceService;
+    private final ManagerControlReadSnapshots readSnapshots;
 
     void recordItemEpisode(
             ManagerDailyControlItem item,
@@ -175,6 +176,9 @@ public class ManagerControlCardLifecycle {
         event.setActionType(actionType);
         event.setComment(limit(comment, 1000));
         dailyControlEventRepository.save(event);
+        if (control != null && control.managerId() != null) {
+            readSnapshots.invalidate(List.of(control.managerId()));
+        }
         invalidateManagerPerformance();
     }
 

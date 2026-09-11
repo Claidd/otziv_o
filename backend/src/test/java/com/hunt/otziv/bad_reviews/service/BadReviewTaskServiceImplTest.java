@@ -1097,6 +1097,30 @@ class BadReviewTaskServiceImplTest {
         verify(badReviewTaskRepository, never()).summarizeByOrderId(any());
     }
 
+    @Test
+    void batchPayableAmountsUseTheSameFormulaAndDoNotTurnInvalidMoneyIntoZero() {
+        Order first = order(21L);
+        Order second = order(22L);
+        Order invalid = order(23L);
+        invalid.setSum(null);
+        when(badReviewTaskRepository.summarizeByOrderIds(List.of(21L,22L,23L))).thenReturn(List.<Object[]>of(
+                new Object[]{21L, BadReviewTaskStatus.DONE, 2L, new BigDecimal("125.50")},
+                new Object[]{21L, BadReviewTaskStatus.NEW, 1L, new BigDecimal("90.00")},
+                new Object[]{22L, BadReviewTaskStatus.CANCELED, 1L, new BigDecimal("200.00")}));
+        var amounts = service.getPayableSums(List.of(first,second,invalid));
+        assertEquals(new BigDecimal("1125.50"), amounts.get(21L));
+        assertEquals(0, new BigDecimal("1000").compareTo(amounts.get(22L)));
+        assertFalse(amounts.containsKey(23L));
+        assertThrows(ResponseStatusException.class, () -> service.getPayableSum(invalid));
+        verify(badReviewTaskRepository, never()).summarizeByOrderId(any());
+    }
+
+    @Test
+    void batchPayableReadFailurePropagatesBeforeAnyPreparedAmountCanBeUsed() {
+        when(badReviewTaskRepository.summarizeByOrderIds(any())).thenThrow(new IllegalStateException("unavailable"));
+        assertThrows(IllegalStateException.class, () -> service.getPayableSums(List.of(order(21L))));
+    }
+
     private Order order(Long id) {
         User user = new User();
         user.setId(5L);

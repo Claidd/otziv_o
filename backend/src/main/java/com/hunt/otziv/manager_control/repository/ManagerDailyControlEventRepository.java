@@ -21,6 +21,17 @@ public interface ManagerDailyControlEventRepository extends CrudRepository<Manag
             ManagerDailyControlEventType eventType
     );
 
+    interface ManagerEventCount { Long getManagerId(); long getTotal(); }
+
+    @Query("""
+            SELECT event.control.manager.id AS managerId, COUNT(event) AS total
+            FROM ManagerDailyControlEvent event
+            WHERE event.control IN :controls AND event.eventType = :eventType
+            GROUP BY event.control.manager.id
+            """)
+    List<ManagerEventCount> countEventsByManager(@Param("controls") Collection<ManagerDailyControl> controls,
+                                               @Param("eventType") ManagerDailyControlEventType eventType);
+
     @Query("""
         SELECT event
         FROM ManagerDailyControlEvent event

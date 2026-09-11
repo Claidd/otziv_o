@@ -46,8 +46,59 @@ public record DailyWorkProgressResponse(
         int checkedDays,
         int reached100Days,
         boolean closedPeriod,
-        boolean updating
+        boolean updating,
+        java.time.Instant calculatedAt
 ) {
+    /** Compatibility constructor for live calculations without a persisted snapshot timestamp. */
+    public DailyWorkProgressResponse(
+            boolean visible,
+            String roleType,
+            LocalDate date,
+            long completed,
+            long active,
+            long total,
+            int percent,
+            boolean checked,
+            LocalDateTime firstCompletedAt,
+            LocalDateTime lastCompletedAt,
+            long averageCloseSeconds,
+            long medianCloseSeconds,
+            long p90CloseSeconds,
+            LocalDateTime firstActivityAt,
+            LocalDateTime lastActivityAt,
+            long activeWorkSeconds,
+            long workWindowSeconds,
+            long activityEvents,
+            long loadScore,
+            int efficiencyScore,
+            long openedCount,
+            long orderCompletedCount,
+            long nagulCompletedCount,
+            long publishCompletedCount,
+            long badCompletedCount,
+            long recoveryCompletedCount,
+            long recoveryCreatedCount,
+            long orderOverdueCount,
+            long totalOverdueCount,
+            int speedScore,
+            int disciplineScore,
+            int workloadScore,
+            long botChangeCount,
+            long botBlockCount,
+            boolean reached100,
+            LocalDateTime firstReached100At,
+            LocalDateTime lastReached100At,
+            String periodType,
+            int workingDays,
+            int checkedDays,
+            int reached100Days,
+            boolean closedPeriod,
+            boolean updating
+    ) {
+        this(visible, roleType, date, completed, active, total, percent, checked, firstCompletedAt, lastCompletedAt, averageCloseSeconds, medianCloseSeconds, p90CloseSeconds, firstActivityAt, lastActivityAt, activeWorkSeconds, workWindowSeconds, activityEvents, loadScore, efficiencyScore, openedCount, orderCompletedCount, nagulCompletedCount, publishCompletedCount, badCompletedCount, recoveryCompletedCount, recoveryCreatedCount, orderOverdueCount, totalOverdueCount, speedScore, disciplineScore, workloadScore, botChangeCount, botBlockCount, reached100, firstReached100At, lastReached100At, periodType, workingDays, checkedDays, reached100Days, closedPeriod, updating, null);
+    }
+
+
     public DailyWorkProgressResponse(
             boolean visible,
             String roleType,
@@ -298,7 +349,8 @@ public record DailyWorkProgressResponse(
                 checkedDays,
                 reached100Days,
                 closedPeriod,
-                updating
+                updating,
+                calculatedAt
         );
     }
 
@@ -356,7 +408,8 @@ public record DailyWorkProgressResponse(
                 checkedDays,
                 reached100Days,
                 closedPeriod,
-                updating
+                updating,
+                calculatedAt
         );
     }
 
@@ -407,8 +460,13 @@ public record DailyWorkProgressResponse(
                 checkedDays,
                 reached100Days,
                 closedPeriod,
-                value
+                value,
+                calculatedAt
         );
+    }
+
+    public DailyWorkProgressResponse withCalculatedAt(java.time.Instant value) {
+        return new DailyWorkProgressResponse(visible, roleType, date, completed, active, total, percent, checked, firstCompletedAt, lastCompletedAt, averageCloseSeconds, medianCloseSeconds, p90CloseSeconds, firstActivityAt, lastActivityAt, activeWorkSeconds, workWindowSeconds, activityEvents, loadScore, efficiencyScore, openedCount, orderCompletedCount, nagulCompletedCount, publishCompletedCount, badCompletedCount, recoveryCompletedCount, recoveryCreatedCount, orderOverdueCount, totalOverdueCount, speedScore, disciplineScore, workloadScore, botChangeCount, botBlockCount, reached100, firstReached100At, lastReached100At, periodType, workingDays, checkedDays, reached100Days, closedPeriod, updating, value);
     }
 
 }

@@ -57,7 +57,8 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public Optional<User> findByUserName(String username) {
-        return userRepository.findByUsername(username);
+        return com.hunt.otziv.u_users.readmodel.BoardIdentityReadContext.user(username,
+                () -> userRepository.findByUsername(username));
     }
 
     @Override

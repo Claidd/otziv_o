@@ -887,7 +887,13 @@ public interface WorkloadShadowProjectionRepository
     );
 
     @Query(value = """
-            WITH actor_workers AS (
+            WITH published_reviews AS (
+                SELECT DISTINCT review_id
+                FROM worker_activity_events
+                WHERE action = 'REVIEW_PUBLISH'
+                  AND created_at >= :from AND created_at < :to
+                  AND review_id IS NOT NULL
+            ), actor_workers AS (
                 SELECT worker.user_id, MIN(worker.worker_id) AS worker_id
                 FROM workers worker
                 WHERE worker.user_id IS NOT NULL
@@ -956,11 +962,8 @@ public interface WorkloadShadowProjectionRepository
                   AND review.review_published_marked_at < :to
                   AND NOT EXISTS (
                       SELECT 1
-                      FROM worker_activity_events publish_activity
+                      FROM published_reviews publish_activity
                       WHERE publish_activity.review_id = review.review_id
-                        AND publish_activity.action = 'REVIEW_PUBLISH'
-                        AND publish_activity.created_at >= :from
-                        AND publish_activity.created_at < :to
                   )
 
                 UNION ALL
@@ -975,11 +978,8 @@ public interface WorkloadShadowProjectionRepository
                   AND review.review_changed = :today
                   AND NOT EXISTS (
                       SELECT 1
-                      FROM worker_activity_events publish_activity
+                      FROM published_reviews publish_activity
                       WHERE publish_activity.review_id = review.review_id
-                        AND publish_activity.action = 'REVIEW_PUBLISH'
-                        AND publish_activity.created_at >= :from
-                        AND publish_activity.created_at < :to
                   )
 
                 UNION ALL

@@ -69,6 +69,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.Supplier;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
 import org.springframework.transaction.TransactionDefinition;
@@ -1309,7 +1310,11 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
     }
 
     boolean areInvoiceItemsReady(List<CommonInvoiceOrder> items) {
-        return items != null && !items.isEmpty() && items.stream().allMatch(CommonInvoiceOrder::isReady) && items.stream().map(CommonInvoiceOrder::getOrder).noneMatch(order -> ACTIVE_WORK_STATUSES.contains(statusTitle(order))) && !hasActiveRecovery(items);
+        return areInvoiceItemsReady(items, this::hasActiveRecovery);
+    }
+
+    private boolean areInvoiceItemsReady(List<CommonInvoiceOrder> items, java.util.function.Predicate<CommonInvoiceOrder> recovery) {
+        return items != null && !items.isEmpty() && items.stream().allMatch(CommonInvoiceOrder::isReady) && items.stream().map(CommonInvoiceOrder::getOrder).noneMatch(order -> ACTIVE_WORK_STATUSES.contains(statusTitle(order))) && items.stream().noneMatch(recovery);
     }
 
     boolean hasAttentionError(CommonInvoice invoice, String prefix) {
@@ -1659,6 +1664,27 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
     }
 
     void refreshInvoiceAmounts(CommonInvoice invoice, List<CommonInvoiceOrder> items) {
+        refreshInvoiceAmounts(invoice, items, Map.of());
+    }
+
+    /** Board-only batch inputs belong to this transaction. Commands always use fresh owner reads above. */
+    void refreshInvoiceAmounts(CommonInvoice invoice, List<CommonInvoiceOrder> items, Map<Long, BigDecimal> preparedAmounts) {
+        refreshInvoiceAmounts(invoice, items, preparedAmounts, Map.of());
+    }
+
+    Map<Long, Boolean> prepareBoardRecoveryState(Collection<Order> orders) {
+        List<Long> ids = orders.stream().filter(Objects::nonNull).map(Order::getId).filter(Objects::nonNull).distinct().toList();
+        Set<Long> activeIds = recoveryGateService.activeRecoveryOrderIds(ids);
+        return ids.stream().collect(Collectors.toMap(Function.identity(), activeIds::contains));
+    }
+
+    void refreshInvoiceAmounts(CommonInvoice invoice, List<CommonInvoiceOrder> items,
+                               Map<Long, BigDecimal> preparedAmounts, Map<Long, Boolean> preparedRecovery) {
+        java.util.function.Predicate<CommonInvoiceOrder> recovery = item -> {
+            Order order = item == null ? null : item.getOrder();
+            Boolean active = order == null ? null : preparedRecovery.get(order.getId());
+            return active == null ? hasActiveRecovery(item) : active;
+        };
         // Standalone confirmations are synchronized separately and only while
         // a LockedInvoicePaymentPrelude owns Order and PaymentLink locks.
         if (isMigrationPaymentRegistryAttention(invoice)) {
@@ -1677,7 +1703,9 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
             }
             long payable;
             try {
-                payable = amountKopecks(payableSum(item.getOrder()));
+                Order order = item.getOrder();
+                BigDecimal prepared = order == null ? null : preparedAmounts.get(order.getId());
+                payable = amountKopecks(prepared == null ? payableSum(order) : prepared);
             } catch (AmountCalculationException e) {
                 amountFailures.add(orderFailureLabel(item));
                 log.warn("Не удалось посчитать сумму общего счета {} для заказа {}", invoice == null ? null : invoice.getId(), item.getOrder() == null ? null : item.getOrder().getId(), e);
@@ -1687,7 +1715,7 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
                 item.setAmountKopecks(payable);
                 changed = true;
             }
-            if (!item.isReady() && canMarkCommonInvoiceItemReady(item.getOrder())) {
+            if (!item.isReady() && canMarkCommonInvoiceItemReady(item.getOrder(), recovery.test(item))) {
                 item.setReady(true);
                 changed = true;
             }
@@ -1704,14 +1732,14 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
         // transaction rolls back both item amounts and routing state.
         recalculateInvoice(invoice, items);
         if (invoice != null) {
-            if (allOrdersReady(items) && applyCommonInvoicePrepaymentIfReady(invoice, items)) {
+            if (allOrdersReady(items, recovery) && applyCommonInvoicePrepaymentIfReady(invoice, items)) {
                 return;
             }
-            if (invoice.getStatus() == CommonInvoiceStatus.COLLECTING && areInvoiceItemsReady(items)) {
+            if (invoice.getStatus() == CommonInvoiceStatus.COLLECTING && areInvoiceItemsReady(items, recovery)) {
                 invoice.setStatus(CommonInvoiceStatus.READY);
                 invoiceRepository.save(invoice);
                 markInvoiceOrdersPublished(items);
-            } else if (invoice.getStatus() == CommonInvoiceStatus.READY && !allOrdersReady(items)) {
+            } else if (invoice.getStatus() == CommonInvoiceStatus.READY && !allOrdersReady(items, recovery)) {
                 invoice.setStatus(CommonInvoiceStatus.COLLECTING);
                 invoiceRepository.save(invoice);
             }
@@ -1719,10 +1747,14 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
     }
 
     boolean canMarkCommonInvoiceItemReady(Order order) {
+        return canMarkCommonInvoiceItemReady(order, order != null && order.getId() != null && recoveryGateService.hasActiveRecoveryTasks(order.getId()));
+    }
+
+    private boolean canMarkCommonInvoiceItemReady(Order order, boolean activeRecovery) {
         if (order == null || order.getId() == null) {
             return false;
         }
-        if (recoveryGateService.hasActiveRecoveryTasks(order.getId())) {
+        if (activeRecovery) {
             return false;
         }
         String status = statusTitle(order);
@@ -1769,7 +1801,11 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
     }
 
     boolean allOrdersReady(List<CommonInvoiceOrder> items) {
-        return items != null && !items.isEmpty() && items.stream().allMatch(CommonInvoiceOrder::isReady) && !hasActiveRecovery(items);
+        return allOrdersReady(items, this::hasActiveRecovery);
+    }
+
+    private boolean allOrdersReady(List<CommonInvoiceOrder> items, java.util.function.Predicate<CommonInvoiceOrder> recovery) {
+        return items != null && !items.isEmpty() && items.stream().allMatch(CommonInvoiceOrder::isReady) && items.stream().noneMatch(recovery);
     }
 
     boolean hasActiveRecovery(List<CommonInvoiceOrder> items) {

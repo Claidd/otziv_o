@@ -114,6 +114,7 @@ class ApiCabinetControllerTest {
     private ContractorPaymentVisibilityService contractorPaymentVisibilityService;
 
     private ApiCabinetController controller;
+    @Mock private com.hunt.otziv.u_users.api.CabinetCacheScope cacheScope;
     private Principal principal;
     private Authentication authentication;
 
@@ -126,6 +127,7 @@ class ApiCabinetControllerTest {
                 workerService,
                 new PerformanceMetrics(new SimpleMeterRegistry()),
                 new ConcurrentMapCacheManager(),
+                cacheScope,
                 analyticsAggregateStatsService,
                 analyticsAggregateScoreService,
                 analyticsAggregateUserStatsService,
@@ -306,7 +308,7 @@ class ApiCabinetControllerTest {
         when(personalService.gerWorkersToManager(manager)).thenReturn(List.of(worker));
         when(personalService.gerOperatorsToManager(manager)).thenReturn(List.of());
         when(staffDailyProgressService.progressEnabled()).thenReturn(true);
-        when(staffDailyProgressService.workerProgressBySubjects(
+        when(staffDailyProgressService.workerProgressSnapshotBySubjects(
                 org.mockito.ArgumentMatchers.anyCollection(),
                 org.mockito.ArgumentMatchers.eq(DATE)
         )).thenReturn(Map.of(300L, progress));
@@ -314,7 +316,7 @@ class ApiCabinetControllerTest {
                 org.mockito.ArgumentMatchers.anyCollection(),
                 org.mockito.ArgumentMatchers.eq(DATE)
         )).thenReturn(Map.of(300L, 1_800L));
-        when(staffDailyProgressService.monthlyWorkerProgressBySubjects(
+        when(staffDailyProgressService.monthlyWorkerProgressSnapshotBySubjects(
                 org.mockito.ArgumentMatchers.anyCollection(),
                 org.mockito.ArgumentMatchers.eq(DATE.withDayOfMonth(1))
         )).thenReturn(Map.of(300L, progress));
@@ -347,6 +349,21 @@ class ApiCabinetControllerTest {
 
         assertEquals(100, response.workerZp().getSum1Month());
         verify(analyticsAggregateUserStatsService, never()).buildUserStats(DATE, user);
+    }
+
+    @Test
+    void profileDoesNotReuseDtoAfterCommittedAccessScopeChanges() {
+        User user=user(10L,"Worker One");
+        ReflectionTestUtils.setField(controller,"aggregateAnalyticsReadEnabled",false);
+        when(userService.findByUserName("alex")).thenReturn(Optional.of(user));
+        when(personalService.getWorkerReviews(user,DATE)).thenReturn(workerStats(100),workerStats(200));
+        when(cacheScope.fingerprint()).thenReturn("scope-v1","scope-v1","scope-v2","scope-v2");
+        var before=controller.profile(principal,DATE,false);
+        assertSame(before,controller.profile(principal,DATE,false));
+        var after=controller.profile(principal,DATE,false);
+        assertEquals(200,after.workerZp().getSum1Month());
+        assertSame(after,controller.profile(principal,DATE,false));
+        verify(personalService,times(2)).getWorkerReviews(user,DATE);
     }
 
     @Test
@@ -406,7 +423,7 @@ class ApiCabinetControllerTest {
         when(personalService.getWorkerReviews(user, DATE)).thenReturn(workerStats(100));
         when(staffDailyProgressService.progressEnabled()).thenReturn(true);
         when(workerService.getWorkerByUserId(10L)).thenReturn(worker);
-        when(staffDailyProgressService.workerProgressByWorkers(List.of(worker), DATE))
+        when(staffDailyProgressService.workerProgressSnapshotByWorkers(List.of(worker), DATE))
                 .thenReturn(Map.of(77L, progress));
 
         ApiCabinetController.CabinetProfileResponse response = controller.profile(principal, DATE, true);
@@ -478,7 +495,7 @@ class ApiCabinetControllerTest {
         when(managerService.getManagerByUserId(10L)).thenReturn(manager);
         when(personalService.gerWorkersToManager(manager)).thenReturn(List.of(worker));
         when(staffDailyProgressService.progressEnabled()).thenReturn(true);
-        when(staffDailyProgressService.workerProgressBySubjects(
+        when(staffDailyProgressService.workerProgressSnapshotBySubjects(
                 org.mockito.ArgumentMatchers.anyCollection(),
                 org.mockito.ArgumentMatchers.eq(DATE)
         )).thenReturn(Map.of(300L, workerProgress));
