@@ -13,6 +13,8 @@ git pull --ff-only origin main
 `.otziv/env` относительно основной папки проекта. Для другой структуры передайте
 `-ProjectFilesRoot` или явные пути. Нужны Git с входом в GitHub через Credential
 Manager, Python 3, Docker Desktop и SSH. PowerShell 7 запускается командой `pwsh`.
+Из Windows PowerShell 5 скрипт сам запускает установленный PowerShell 7: использует
+PATH, путь из соседнего `otziv-deploy/powershell.path` или стандартную папку установки.
 Если политика Windows блокирует запуск, разрешите его только для отдельного
 процесса: `pwsh -NoProfile -ExecutionPolicy Bypass -File .\deploy.ps1 -Tag '30.00'`.
 
@@ -48,7 +50,7 @@ SSH-туннель. Доступ на запись в Docker Hub не требу
 сохраняется; новый подписанный APK можно передать через `-MobileApkPath`.
 
 Локальные отчёты CI, состояние реестра и резервная копия сохраняются вне Git в
-`.otziv/releases/<тег>-<идентификатор>/`. Старую команду с
+`otziv-deploy/releases/<тег>-<идентификатор>/`. Старую команду с
 `-SkipAutoSnapshotValidation` для обычных выпусков использовать не следует.
 
 Перед слиянием изменений локальная проверка выполняется через

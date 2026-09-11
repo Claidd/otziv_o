@@ -23,7 +23,26 @@ if ($Help) {
     return
 }
 if ($PSVersionTable.PSVersion.Major -lt 7) {
-    throw 'Open PowerShell 7 and run this command again. Windows PowerShell 5 is not supported for deployment.'
+    $runtime = Get-Command pwsh -ErrorAction SilentlyContinue
+    $runtimePath = if ($runtime) { $runtime.Source } else { '' }
+    $filesRoot = if ($ProjectFilesRoot) { $ProjectFilesRoot } else { Split-Path -Parent $PSScriptRoot }
+    $runtimeConfig = Join-Path $filesRoot 'otziv-deploy/powershell.path'
+    if (-not $runtimePath -and (Test-Path -LiteralPath $runtimeConfig -PathType Leaf)) {
+        $runtimePath = ([IO.File]::ReadAllText($runtimeConfig)).Trim()
+    }
+    if (-not $runtimePath) { $runtimePath = Join-Path $env:ProgramFiles 'PowerShell/7/pwsh.exe' }
+    if (-not (Test-Path -LiteralPath $runtimePath -PathType Leaf)) {
+        throw 'PowerShell 7 was not found. Install it or save its full path in otziv-deploy/powershell.path beside the project.'
+    }
+    $forward = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath)
+    foreach ($name in $PSBoundParameters.Keys) {
+        $value = $PSBoundParameters[$name]
+        if ($value -is [Management.Automation.SwitchParameter]) {
+            if ($value.IsPresent) { $forward += "-$name" }
+        } else { $forward += @("-$name", [string]$value) }
+    }
+    & $runtimePath @forward
+    exit $LASTEXITCODE
 }
 if ($VpsHost -notmatch '^[A-Za-z0-9][A-Za-z0-9.-]*$' -or $VpsUser -notmatch '^[a-z_][a-z0-9_-]*$') {
     throw 'Invalid SSH destination.'
@@ -50,7 +69,7 @@ if (-not $EnvFile) { $EnvFile = Join-Path $ProjectFilesRoot '.otziv/env/prod.env
 foreach ($path in @($SshKey, $SshKnownHostsFile, $EnvFile)) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Required local file missing: $path" }
 }
-$directory = Join-Path $ProjectFilesRoot ('.otziv/releases/' + $Tag + '-' + [guid]::NewGuid().ToString('N'))
+$directory = Join-Path $ProjectFilesRoot ('otziv-deploy/releases/' + $Tag + '-' + [guid]::NewGuid().ToString('N'))
 $record = Join-Path $directory 'registry.json'
 $registryHelper = Join-Path $helpers 'release_registry.py'
 $tunnel = $null
