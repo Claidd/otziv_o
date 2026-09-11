@@ -5,6 +5,7 @@ import android.app.ApplicationExitInfo;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Build;
+import androidx.annotation.RequiresApi;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -110,6 +111,7 @@ public class AppDiagnosticsPlugin extends Plugin {
         call.resolve();
     }
 
+    @RequiresApi(Build.VERSION_CODES.R)
     private JSObject exitJson(ApplicationExitInfo exit, boolean allowLocalStateFallback) {
         JSObject result = new JSObject();
         result.put("timestamp", exit.getTimestamp());
@@ -142,6 +144,7 @@ public class AppDiagnosticsPlugin extends Plugin {
         return result;
     }
 
+    @RequiresApi(Build.VERSION_CODES.R)
     private boolean isMainProcess(ApplicationExitInfo exit) {
         String processName = exit.getProcessName();
         return processName == null || processName.equals(getContext().getPackageName());

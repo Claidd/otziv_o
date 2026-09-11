@@ -14,13 +14,41 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @RequiredArgsConstructor
-public class AppSettingService {
+public class AppSettingService implements com.hunt.otziv.config.settings.api.OutboundMessagePolicy,
+        com.hunt.otziv.config.settings.api.PublicationProgressSettings {
+
+    @Override
+    @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
+    public boolean immediatePublicationMessagesEnabled() {
+        return getBooleanFreshFailClosed(CLIENT_MESSAGES_IMMEDIATE_ENABLED, true);
+    }
+
+    @Override
+    @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
+    public boolean publicationProgressReportsEnabled() {
+        return getBooleanFreshFailClosed(CLIENT_PUBLICATION_PROGRESS_REPORTS_ENABLED, true);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public String publicationProgressTemplate() {
+        return getString(CLIENT_PUBLICATION_PROGRESS_REPORT_TEXT, DEFAULT_TEMPLATE);
+    }
+
+    @Override
+    @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
+    public boolean clientMessagesEnabled() {
+        try { return getBooleanFreshFailClosed(CLIENT_MESSAGES_LIVE_ENABLED, true); }
+        catch (RuntimeException unavailable) { return false; }
+    }
 
     public static final String NAGUL_COOLDOWN_MINUTES = "nagul.cooldown.minutes";
     public static final String NAGUL_LOOKAHEAD_DAYS = "nagul.lookahead.days";
     public static final String REVIEW_ACCOUNT_WALKED_COUNTER_THRESHOLD = "review.account.walked-counter-threshold";
     public static final String REVIEW_ACCOUNT_WALK_DELAY_DAYS = "review.account.walk-delay-days";
     public static final String REVIEW_ACCOUNT_COOLDOWN_DAYS = "review.account.cooldown-days";
+    public static final String WORKER_ACCOUNT_ACTION_COOLDOWN_SECONDS = "worker.account-action.cooldown-seconds";
+    public static final String WORKER_ACCOUNT_ACTION_COOLDOWN_ENABLED = "worker.account-action.cooldown-enabled";
     public static final String WORKER_PUBLICATION_SPECIAL_TASK_GATE_ENABLED = "worker.publication.special-task-gate.enabled";
     public static final String WORKER_PUBLICATION_SPECIAL_TASK_GATE_ROLLOUT_STARTED_ON = "worker.publication.special-task-gate.rollout-started-on";
     public static final String WORKER_PUBLICATION_SPECIAL_TASK_GATE_ACTIVATE_ON = "worker.publication.special-task-gate.activate-on";

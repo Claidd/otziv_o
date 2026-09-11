@@ -6,7 +6,8 @@ import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.service.CompanyService;
 import com.hunt.otziv.c_companies.service.CompanyStatusService;
-import com.hunt.otziv.config.settings.service.AppSettingService;
+import com.hunt.otziv.config.settings.api.PublicationProgressSettings;
+import com.hunt.otziv.p_products.status.service.PublicationProgressMessage;
 import com.hunt.otziv.gamification.service.GamificationEventService;
 import com.hunt.otziv.p_products.board.service.OrderBoardQueryService;
 import com.hunt.otziv.p_products.deletion.service.OrderDeletionService;
@@ -22,6 +23,7 @@ import com.hunt.otziv.p_products.service.OrderStatusService;
 import com.hunt.otziv.p_products.statistics.service.OrderStatisticsService;
 import com.hunt.otziv.p_products.status.service.OrderBotLifecycleService;
 import com.hunt.otziv.p_products.status.service.OrderStatusNotificationService;
+import com.hunt.otziv.p_products.status.service.OrderPublicationOutbox;
 import com.hunt.otziv.p_products.status.service.OrderStatusTransitionService;
 import com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService;
 import com.hunt.otziv.r_review.model.Review;
@@ -108,7 +110,10 @@ class OrderServiceImplTest {
     private OrderStatusNotificationService orderStatusNotificationService;
 
     @Mock
-    private AppSettingService appSettingService;
+    private OrderPublicationOutbox publicationOutbox;
+
+    @Mock
+    private PublicationProgressSettings publicationSettings;
 
     @Mock
     private BusinessAuditService businessAuditService;
@@ -128,6 +133,13 @@ class OrderServiceImplTest {
     @InjectMocks
     private OrderServiceImpl orderService;
 
+    @org.junit.jupiter.api.BeforeEach
+    void publicationPreparation() {
+        org.springframework.test.util.ReflectionTestUtils.setField(orderService, "publicationProgressMessage",
+                new PublicationProgressMessage(publicationSettings));
+    }
+
+
     @Test
     void changeStatusAndOrderCounterSynchronizesCounterToActualPublishedReviews() throws Exception {
         Order order = order(10L, 0);
@@ -141,9 +153,9 @@ class OrderServiceImplTest {
         when(orderRepository.findByIdForCounterUpdate(10L)).thenReturn(Optional.of(order));
         when(reviewRepository.findByIdForPublication(2L)).thenReturn(Optional.of(reviewToPublish));
         when(reviewRepository.countPublishedByOrderId(10L)).thenReturn(2);
-        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true))
+        when(publicationSettings.immediatePublicationMessagesEnabled())
                 .thenReturn(true);
-        when(appSettingService.getBoolean(AppSettingService.CLIENT_PUBLICATION_PROGRESS_REPORTS_ENABLED, true))
+        when(publicationSettings.publicationProgressReportsEnabled())
                 .thenReturn(true);
         doAnswer(invocation -> {
             Order synchronizedOrder = invocation.getArgument(0);
@@ -159,14 +171,16 @@ class OrderServiceImplTest {
         verify(reviewArchiveService).saveNewReviewArchive(2L, ReviewArchiveSourceReason.PUBLISHED);
         verify(reviewRepository).countPublishedByOrderId(10L);
         verify(orderStatusCheckerService).validateCounterConsistency(order, 2);
-        verify(orderStatusNotificationService).sendProgressMessageToClientChat(
-                order,
-                null,
-                null,
-                "Company - Main filial. Опубликован новый отзыв 2 / 5.",
-                false
+        verify(orderStatusNotificationService).preparePublicationProgress(
+                eq(order),
+                eq(null),
+                eq(null),
+                eq("Company - Main filial. Опубликован новый отзыв 2 / 5."),
+                eq(false),
+                org.mockito.ArgumentMatchers.startsWith("review:")
         );
-        verify(orderStatusCheckerService).checkAndMarkOrderCompleted(order);
+        verify(publicationOutbox).enqueue(eq(10L), org.mockito.ArgumentMatchers.startsWith("review:2:"), eq(null));
+        verify(orderStatusCheckerService, never()).checkAndMarkOrderCompleted(order);
         verify(reviewService, never()).save(reviewToPublish);
     }
 
@@ -182,9 +196,9 @@ class OrderServiceImplTest {
         when(orderRepository.findByIdForCounterUpdate(10L)).thenReturn(Optional.of(order));
         when(reviewRepository.findByIdForPublication(2L)).thenReturn(Optional.of(reviewToPublish));
         when(reviewRepository.countPublishedByOrderId(10L)).thenReturn(1);
-        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true))
+        when(publicationSettings.immediatePublicationMessagesEnabled())
                 .thenReturn(true);
-        when(appSettingService.getBoolean(AppSettingService.CLIENT_PUBLICATION_PROGRESS_REPORTS_ENABLED, true))
+        when(publicationSettings.publicationProgressReportsEnabled())
                 .thenReturn(true);
         doAnswer(invocation -> {
             Order synchronizedOrder = invocation.getArgument(0);
@@ -195,12 +209,13 @@ class OrderServiceImplTest {
 
         assertTrue(orderService.changeStatusAndOrderCounter(2L));
 
-        verify(orderStatusNotificationService).sendProgressMessageToClientChat(
-                order,
-                null,
-                null,
-                "Company - Main filial. Опубликован новый отзыв 1 / 5.",
-                true
+        verify(orderStatusNotificationService).preparePublicationProgress(
+                eq(order),
+                eq(null),
+                eq(null),
+                eq("Company - Main filial. Опубликован новый отзыв 1 / 5."),
+                eq(true),
+                org.mockito.ArgumentMatchers.startsWith("review:")
         );
     }
 
@@ -219,14 +234,16 @@ class OrderServiceImplTest {
 
         assertTrue(orderService.changeStatusAndOrderCounter(2L));
 
-        verify(orderStatusNotificationService, never()).sendProgressMessageToClientChat(
+        verify(orderStatusNotificationService, never()).preparePublicationProgress(
                 same(order),
                 eq(null),
                 eq(null),
                 org.mockito.ArgumentMatchers.anyString(),
-                org.mockito.ArgumentMatchers.anyBoolean()
+                org.mockito.ArgumentMatchers.anyBoolean(),
+                org.mockito.ArgumentMatchers.anyString()
         );
-        verify(orderStatusCheckerService).checkAndMarkOrderCompleted(order);
+        verify(publicationOutbox).enqueue(eq(10L), org.mockito.ArgumentMatchers.startsWith("review:2:"), eq(null));
+        verify(orderStatusCheckerService, never()).checkAndMarkOrderCompleted(order);
     }
 
     @Test
@@ -245,7 +262,7 @@ class OrderServiceImplTest {
 
         verify(orderRepository, never()).findByIdForCounterUpdate(10L);
         verify(reviewRepository, never()).save(publishedReview);
-        verifyNoInteractions(orderBotLifecycleService, reviewArchiveService, orderStatusCheckerService, orderStatusNotificationService);
+        verifyNoInteractions(orderBotLifecycleService, reviewArchiveService, orderStatusCheckerService, orderStatusNotificationService, publicationOutbox);
     }
 
     @Test
@@ -424,7 +441,8 @@ class OrderServiceImplTest {
         verify(reviewArchiveService, never()).existsByTextExcludingOwnSource(shortText, 2L, 12L);
         verify(reviewRepository).save(reviewToPublish);
         verify(reviewArchiveService).saveNewReviewArchive(2L, ReviewArchiveSourceReason.PUBLISHED);
-        verify(orderStatusCheckerService).checkAndMarkOrderCompleted(order);
+        verify(publicationOutbox).enqueue(eq(12L), org.mockito.ArgumentMatchers.startsWith("review:2:"), eq(null));
+        verify(orderStatusCheckerService, never()).checkAndMarkOrderCompleted(order);
     }
 
     private Order order(Long id, int counter) {

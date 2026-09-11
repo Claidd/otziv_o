@@ -12,6 +12,7 @@ import java.util.Locale;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -25,6 +26,18 @@ public class CredentialRevealService {
     private final BusinessAuditService businessAuditService;
 
     public CredentialRevealResponse revealReview(Review review, CredentialRevealRequest request) {
+        return revealReview(review, request, null, false);
+    }
+
+    public CredentialRevealResponse revealReview(
+            Review review, CredentialRevealRequest request, Authentication authentication
+    ) {
+        return revealReview(review, request, authentication, true);
+    }
+
+    private CredentialRevealResponse revealReview(
+            Review review, CredentialRevealRequest request, Authentication authentication, boolean explicitActor
+    ) {
         if (review == null || review.getId() == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Отзыв не найден");
         }
@@ -37,13 +50,25 @@ public class CredentialRevealService {
                 bot == null ? null : bot.getId(),
                 bot == null ? null : bot.getLogin(),
                 bot == null ? null : bot.getPassword(),
-                request
+                request, authentication, explicitActor
         );
     }
 
     public CredentialRevealResponse revealBadReviewTask(
             BadReviewTask task,
             CredentialRevealRequest request
+    ) {
+        return revealBadReviewTask(task, request, null, false);
+    }
+
+    public CredentialRevealResponse revealBadReviewTask(
+            BadReviewTask task, CredentialRevealRequest request, Authentication authentication
+    ) {
+        return revealBadReviewTask(task, request, authentication, true);
+    }
+
+    private CredentialRevealResponse revealBadReviewTask(
+            BadReviewTask task, CredentialRevealRequest request, Authentication authentication, boolean explicitActor
     ) {
         if (task == null || task.getId() == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Плохая задача не найдена");
@@ -68,13 +93,25 @@ public class CredentialRevealService {
                         taskBot == null ? null : taskBot.getPassword(),
                         sourceBot == null ? null : sourceBot.getPassword()
                 ),
-                request
+                request, authentication, explicitActor
         );
     }
 
     public CredentialRevealResponse revealRecoveryTask(
             ReviewRecoveryTask task,
             CredentialRevealRequest request
+    ) {
+        return revealRecoveryTask(task, request, null, false);
+    }
+
+    public CredentialRevealResponse revealRecoveryTask(
+            ReviewRecoveryTask task, CredentialRevealRequest request, Authentication authentication
+    ) {
+        return revealRecoveryTask(task, request, authentication, true);
+    }
+
+    private CredentialRevealResponse revealRecoveryTask(
+            ReviewRecoveryTask task, CredentialRevealRequest request, Authentication authentication, boolean explicitActor
     ) {
         if (task == null || task.getId() == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Задача восстановления не найдена");
@@ -89,7 +126,7 @@ public class CredentialRevealService {
                 bot == null ? null : bot.getId(),
                 firstNonBlank(bot == null ? null : bot.getLogin(), task.getBotLoginSnapshot()),
                 firstNonBlank(bot == null ? null : bot.getPassword(), task.getBotPasswordSnapshot()),
-                request
+                request, authentication, explicitActor
         );
     }
 
@@ -101,7 +138,9 @@ public class CredentialRevealService {
             Long botId,
             String login,
             String password,
-            CredentialRevealRequest request
+            CredentialRevealRequest request,
+            Authentication authentication,
+            boolean explicitActor
     ) {
         String field = normalizeField(request);
         String value = "login".equals(field) ? login : password;
@@ -111,16 +150,17 @@ public class CredentialRevealService {
 
         // The audit transaction must commit before the decrypted value can be
         // returned to the controller. The credential itself is never audited.
-        businessAuditService.recordStrict(
-                "CREDENTIAL_REVEAL",
-                entityType,
-                entityId,
-                orderId,
-                reviewId,
-                null,
-                null,
-                auditDetails(field, botId, request)
-        );
+        if (explicitActor) {
+            businessAuditService.recordStrict(
+                    authentication, "CREDENTIAL_REVEAL", entityType, entityId, orderId, reviewId,
+                    null, null, auditDetails(field, botId, request)
+            );
+        } else {
+            businessAuditService.recordStrict(
+                    "CREDENTIAL_REVEAL", entityType, entityId, orderId, reviewId,
+                    null, null, auditDetails(field, botId, request)
+            );
+        }
         return new CredentialRevealResponse(value);
     }
 

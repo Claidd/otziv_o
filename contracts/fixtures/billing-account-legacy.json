@@ -1,0 +1,32 @@
+{
+  "id": 41,
+  "name": "Общий счет",
+  "enabled": true,
+  "autoRepeatOrders": true,
+  "companies": [
+    {
+      "companyId": 91,
+      "companyTitle": "Компания",
+      "enabled": true
+    }
+  ],
+  "currentInvoice": {
+    "id": 301,
+    "accountId": 41,
+    "accountName": "Общий счет",
+    "title": "Счет 301",
+    "token": "invoice-token",
+    "publicUrl": "/pay/group/invoice-token",
+    "status": "PARTIALLY_PAID",
+    "totalOrders": 2,
+    "readyOrders": 2,
+    "paidOrders": 1,
+    "amount": 1250.5,
+    "paid": 250.5,
+    "remaining": 1000,
+    "amountKopecks": 125050,
+    "paidKopecks": 25050,
+    "remainingKopecks": 100000,
+    "contractorPaymentRoute": true
+  }
+}

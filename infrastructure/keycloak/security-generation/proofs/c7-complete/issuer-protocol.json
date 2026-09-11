@@ -1,0 +1,94 @@
+{
+  "schema": "otziv-issuer-generation-proof-v1",
+  "startedAt": "2026-09-08T01:35:40.431Z",
+  "image": "sha256:d773e1d0de1ef972ba01443a8217d23d6060d2b20d474b3ff84ae2dc840baa54",
+  "production": false,
+  "realProviderLogin": true,
+  "checks": [
+    {
+      "name": "provision_plan_is_read_only",
+      "passed": true
+    },
+    {
+      "name": "production_provisioner_preserves_nested_otp_flow_and_realm_policy",
+      "passed": true
+    },
+    {
+      "name": "provision_reentry_does_not_clone_another_authenticator",
+      "passed": true
+    },
+    {
+      "name": "actual_password_login_captures_current_generation",
+      "passed": true
+    },
+    {
+      "name": "browser_password_pkce_login_captures_immutable_generation",
+      "passed": true
+    },
+    {
+      "name": "ordinary_user_cannot_read_generation_authority",
+      "passed": true
+    },
+    {
+      "name": "remove_then_restore_role_does_not_revive_old_generation",
+      "passed": true
+    },
+    {
+      "name": "refresh_preserves_original_generation",
+      "passed": true
+    },
+    {
+      "name": "new_login_after_role_change_is_usable",
+      "passed": true
+    },
+    {
+      "name": "disable_then_enable_does_not_revive_old_generation",
+      "passed": true
+    },
+    {
+      "name": "offline_login_has_immutable_generation",
+      "passed": true
+    },
+    {
+      "name": "offline_refresh_cannot_acquire_current_generation",
+      "passed": true
+    },
+    {
+      "name": "late_exact_session_delete_does_not_revoke_fresh_login",
+      "passed": true
+    },
+    {
+      "name": "issuer_restart_preserves_generation_tombstone",
+      "passed": true
+    },
+    {
+      "name": "fresh_login_after_restart_works",
+      "passed": true
+    },
+    {
+      "name": "listener_disable_and_reenable_cannot_erase_security_history",
+      "passed": true
+    },
+    {
+      "name": "disabled_authority_fails_closed_and_reactivation_fences_existing_sessions",
+      "passed": true
+    },
+    {
+      "name": "failed_journal_rejects_admin_security_mutation",
+      "passed": true
+    },
+    {
+      "name": "failed_journal_rolls_back_actual_user_state",
+      "passed": true
+    },
+    {
+      "name": "failed_mutation_does_not_advance_generation",
+      "passed": true
+    }
+  ],
+  "postgresImageId": "sha256:84631285605c9dea134ddb89a1986ba30bcdfef1f16a5c1664b06bb6f9303097",
+  "imageId": "sha256:d773e1d0de1ef972ba01443a8217d23d6060d2b20d474b3ff84ae2dc840baa54",
+  "postgresImage": "sha256:84631285605c9dea134ddb89a1986ba30bcdfef1f16a5c1664b06bb6f9303097",
+  "result": "PASS",
+  "finishedAt": "2026-09-08T01:37:48.968Z"
+}

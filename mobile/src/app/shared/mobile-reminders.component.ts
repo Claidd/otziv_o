@@ -1,3 +1,6 @@
+import { inject } from '@angular/core';
+import { ManagerReviewTasksApi } from '../core/manager-review-tasks.api';
+import { ManagerOrdersApi } from '../core/manager-orders.api';
 import { Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { IonModal } from '@ionic/angular/standalone';
@@ -248,6 +251,8 @@ export function dispatchMobileRecoveryClientNotified(detail: MobileRecoveryClien
   `
 })
 export class MobileRemindersComponent implements OnInit, OnDestroy {
+  private readonly managerReviewTasksApi = inject(ManagerReviewTasksApi);
+  private readonly managerOrdersApi = inject(ManagerOrdersApi);
   private readonly recoveryClientNotifiedHandler = (event: Event) => this.handleRecoveryClientNotified(event);
 
   readonly reminders = signal<PersonalReminder[]>([]);
@@ -423,7 +428,7 @@ export class MobileRemindersComponent implements OnInit, OnDestroy {
     this.notifyingRecoveryReminderId.set(reminder.id);
     this.error.set(null);
     try {
-      await firstValueFrom(this.api.markManagerRecoveryClientNotified(orderId, batchId));
+      await firstValueFrom(this.managerReviewTasksApi.markManagerRecoveryClientNotified(orderId, batchId));
       dispatchMobileRecoveryClientNotified({ orderId, batchId });
       this.reminders.update((reminders) => reminders.filter((item) => item.id !== reminder.id));
     } catch (error) {
@@ -461,7 +466,7 @@ export class MobileRemindersComponent implements OnInit, OnDestroy {
     this.banningBadReviewReminderId.set(reminder.id);
     this.error.set(null);
     try {
-      await firstValueFrom(this.api.updateManagerOrderStatus(orderId, 'Бан'));
+      await firstValueFrom(this.managerOrdersApi.updateManagerOrderStatus(orderId, 'Бан'));
       this.reminders.update((reminders) => reminders.filter((item) => item.id !== reminder.id));
     } catch (error) {
       this.error.set(error instanceof Error ? error.message : 'Не удалось перевести заказ в Бан.');

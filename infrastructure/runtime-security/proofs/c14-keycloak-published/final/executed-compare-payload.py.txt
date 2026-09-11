@@ -1,0 +1,81 @@
+import datetime, hashlib, io, json, pathlib, subprocess, tarfile, uuid, zipfile
+REPO=pathlib.Path.cwd();ROOT=pathlib.Path(__file__).resolve().parent
+PROOF=REPO/'infrastructure/runtime-security/proofs/c14-keycloak-published/final';OUT=PROOF/'runtime';OUT.mkdir(exist_ok=True)
+V3=REPO/'infrastructure/keycloak/security-generation/c14-migration-fix/proofs/security-v3'
+pub=json.loads((PROOF/'publication/publication.json').read_bytes());TARGET=pub['reference'];OWNER=uuid.uuid4().hex
+def sha(data):return hashlib.sha256(data).hexdigest()
+def docker(args,timeout=60):
+ p=subprocess.run(['docker',*args],capture_output=True,text=True,encoding='utf-8',errors='replace',timeout=timeout)
+ if p.returncode:raise RuntimeError('docker_'+args[0]+'_failed')
+ return p.stdout.strip()
+def write(name,data):
+ (OUT/name).write_text(json.dumps(data,indent=2,sort_keys=True)+'\n',encoding='utf-8',newline='\n')
+review=json.loads((V3/'review.json').read_bytes())
+for path,digest in review['files'].items():assert sha((V3/path).read_bytes())==digest,path
+for path,digest in review['buildInputSha256'].items():assert sha((V3.parent.parent/path).read_bytes())==digest,path
+local_inventory=json.loads((V3/'target-rootfs-inventory.json').read_bytes())
+config_bytes=(PROOF/'publication/registry-amd64-config.json').read_bytes();config=json.loads(config_bytes)
+assert 'sha256:'+sha(config_bytes)==pub['imageId']
+actual=json.loads(docker(['image','inspect',TARGET]))[0]
+assert actual['Id'] in [pub['imageId'],TARGET.split('@')[1]] and actual['Os']=='linux' and actual['Architecture']=='amd64'
+assert actual['RootFS']['Layers']==config['rootfs']['diff_ids']
+assert not actual['Config'].get('Volumes')
+for key in ['Env','Entrypoint','Cmd','WorkingDir','User','ExposedPorts','Volumes','Labels','Healthcheck','StopSignal']:
+ assert actual['Config'].get(key)==config['config'].get(key),key
+local_config=json.loads((V3/'target-oci-config.json').read_bytes())
+runtime_config_differences=[k for k in sorted(local_config['config'].keys()|config['config'].keys()) if local_config['config'].get(k)!=config['config'].get(k)]
+assert set(runtime_config_differences)<= {'Labels'}
+a=local_config['config'].get('Labels',{});b=config['config'].get('Labels',{})
+label_differences=[k for k in sorted(a.keys()|b.keys()) if a.get(k)!=b.get(k)]
+assert set(label_differences)<= {'com.otziv.publication.revision','com.otziv.publication.source','com.otziv.reviewed-component'}
+assert b['com.otziv.publication.revision']==pub['commit'] and b['com.otziv.reviewed-component']=='keycloak'
+cid=docker(['create','--name','otziv-kc-published-export-'+OWNER[:10],'--label','com.otziv.kc-published-export-owner='+OWNER,'--network','none','--entrypoint','/bin/true',TARGET])
+archive=ROOT/'published-rootfs.tar'
+try:docker(['export','--output',str(archive),cid],timeout=300)
+finally:
+ inspected=json.loads(docker(['inspect',cid]))[0]
+ assert inspected['Id']==cid and inspected['Config']['Labels']['com.otziv.kc-published-export-owner']==OWNER and not inspected['State']['Running'] and not inspected['Mounts']
+ docker(['rm',cid])
+inventory={};jars={}
+with tarfile.open(archive) as tf:
+ for member in tf:
+  name=member.name.removeprefix('./').rstrip('/')
+  if not name:continue
+  row={'type':member.type.decode('ascii'),'mode':member.mode,'uid':member.uid,'gid':member.gid}
+  if member.isfile():
+   row.update(size=member.size,sha256=hashlib.file_digest(tf.extractfile(member),'sha256').hexdigest())
+   if name.startswith('opt/keycloak/') and name.endswith('.jar'):jars[name]=row['sha256']
+  elif member.issym() or member.islnk():row['linkname']=member.linkname
+  assert name not in inventory;inventory[name]=row
+ for path in ['opt/keycloak/otziv-realm-migration-provenance.json','opt/keycloak/otziv-realm-migration-proof/causal-baseline.txt','opt/keycloak/otziv-realm-migration-proof/causal-patched.txt']:
+  (OUT/path.split('/')[-1]).write_bytes(tf.extractfile(path).read())
+write('published-rootfs-inventory.json',inventory);write('published-keycloak-jars.json',jars)
+excluded=['etc/hosts','etc/hostname','etc/resolv.conf']
+differences=[{'path':p,'localV3':local_inventory.get(p),'published':inventory.get(p)} for p in sorted(local_inventory.keys()|inventory.keys()) if p not in excluded and local_inventory.get(p)!=inventory.get(p)]
+allowed={'opt/keycloak/lib/quarkus/generated-bytecode.jar','opt/keycloak/lib/quarkus/transformed-bytecode.jar','opt/keycloak/lib/quarkus/quarkus-application.dat'}
+unexpected=[r['path'] for r in differences if r['path'] not in allowed]
+v3_jars=json.loads((V3/'target-keycloak-jars.json').read_bytes())
+jar_differences=[p for p in sorted(v3_jars.keys()|jars.keys()) if v3_jars.get(p)!=jars.get(p)]
+modules=['opt/keycloak/lib/lib/main/org.keycloak.keycloak-model-storage-private-26.7.3.jar','opt/keycloak/lib/lib/main/org.keycloak.keycloak-model-infinispan-26.7.3.jar']
+module_equality={p:v3_jars[p]==jars[p] for p in modules}
+augmentation={}
+v3_tar=REPO/'.codex-tmp/release-readiness-20260908/keycloak-security-v3/target-rootfs.tar'
+for name in ['generated-bytecode.jar','transformed-bytecode.jar']:
+ path='opt/keycloak/lib/quarkus/'+name;entries={}
+ for label,file in [('localV3',v3_tar),('published',archive)]:
+  with tarfile.open(file) as tf:
+   data=tf.extractfile(path).read()
+   assert sha(data)==(local_inventory if label=='localV3' else inventory)[path]['sha256']
+   with zipfile.ZipFile(io.BytesIO(data)) as z:entries[label]={n:sha(z.read(n)) for n in z.namelist() if not n.endswith('/')}
+ x=entries['localV3'];y=entries['published']
+ augmentation[name]={'localV3Entries':len(x),'publishedEntries':len(y),'differences':[{'entry':n,'localV3':x.get(n),'published':y.get(n)} for n in sorted(x.keys()|y.keys()) if x.get(n)!=y.get(n)]}
+write('augmentation-entry-comparison.json',augmentation)
+sidecar=(OUT/'otziv-realm-migration-provenance.json').read_bytes()
+provenance=json.loads(sidecar)
+assert sidecar==(V3/'otziv-realm-migration-provenance.json').read_bytes()
+for module in provenance['modules']:
+ path='opt/keycloak/lib/lib/main/org.keycloak.'+module['module']+'-26.7.3.jar'
+ assert module['patchedSha256']==jars[path]
+result={'schema':'otziv-published-keycloak-v3-rootfs-comparison-v1','result':'PASS' if not unexpected and all(module_equality.values()) else 'FAIL','completedAt':datetime.datetime.now(datetime.timezone.utc).isoformat(),'image':TARGET,'config':pub['imageId'],'localV3Image':review['image'],'localV3Config':review['config'],'sourceReviewSha256':sha((V3/'review.json').read_bytes()),'sourceBuildInputsSha256':review['buildInputSha256'],'actualPulledRootfsMatchesRegistry':True,'actualPulledConfigurationMatchesRegistry':True,'runtimeConfigurationChangedKeys':runtime_config_differences,'publicationLabelChangedKeys':label_differences,'dockerGeneratedFilesExcluded':excluded,'mtimeExcluded':True,'differences':differences,'unexpectedPaths':unexpected,'totalJarFiles':len(jars),'byteIdenticalJarFiles':len(jars)-len(jar_differences),'changedJarPaths':jar_differences,'patchedVendorJarsByteEqual':module_equality,'actualProvenanceByteEqual':True,'localV3RuntimeReceiptTransferAllowed':not differences,'publishedRuntimeReplayRequired':bool(differences),'runtimeInventorySha256':sha((OUT/'published-rootfs-inventory.json').read_bytes()),'rootfsExportSha256':sha(archive.read_bytes()),'executedScriptSha256':sha(pathlib.Path(__file__).read_bytes())}
+write('comparison.json',result)
+print(json.dumps({'result':result['result'],'changedPaths':[r['path'] for r in differences],'unexpectedPaths':unexpected,'totalJars':len(jars),'identicalJars':result['byteIdenticalJarFiles'],'vendorModulesEqual':all(module_equality.values()),'augmentationEntryDifferences':{k:len(v['differences']) for k,v in augmentation.items()},'publishedRuntimeReplayRequired':result['publishedRuntimeReplayRequired']}))

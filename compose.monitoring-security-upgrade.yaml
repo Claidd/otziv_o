@@ -1,0 +1,25 @@
+# Opt in only after publishing the tested derivatives and validating immutable references.
+services:
+  prometheus:
+    image: ${OTZIV_PROMETHEUS_SECURITY_IMAGE:?published immutable Prometheus image required}
+  loki:
+    image: ${OTZIV_LOKI_SECURITY_IMAGE:?published immutable Loki image required}
+    healthcheck:
+      test: ["CMD", "/usr/bin/http-ready", "http://127.0.0.1:3100/ready"]
+      interval: 30s
+      timeout: 3s
+      retries: 5
+      start_period: 40s
+  alloy:
+    image: ${OTZIV_ALLOY_SECURITY_IMAGE:?published immutable Alloy image required}
+  tempo:
+    image: ${OTZIV_TEMPO_SECURITY_IMAGE:?published immutable Tempo image required}
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD", "/usr/bin/http-ready", "http://127.0.0.1:3200/ready"]
+      interval: 30s
+      timeout: 3s
+      retries: 5
+      start_period: 40s
+  grafana:
+    image: ${OTZIV_GRAFANA_SECURITY_IMAGE:?published immutable Grafana image required}

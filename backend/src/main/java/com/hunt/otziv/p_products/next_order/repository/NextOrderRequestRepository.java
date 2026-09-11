@@ -47,22 +47,52 @@ public interface NextOrderRequestRepository extends CrudRepository<NextOrderRequ
     """)
     List<NextOrderRequest> findByCreatedOrderIdForUpdate(@Param("createdOrderId") Long createdOrderId);
 
+    boolean existsByCompanyIdAndStatusIn(Long companyId, Collection<NextOrderRequestStatus> statuses);
+
+    boolean existsBySourceOrderIdAndStatusIn(Long sourceOrderId, Collection<NextOrderRequestStatus> statuses);
+
     @Query("""
-        SELECT r
+        SELECT r.company.id AS companyId, r.status AS status, r.updatedAt AS updatedAt,
+               filial.title AS filialTitle, r.errorMessage AS errorMessage
         FROM NextOrderRequest r
-        JOIN FETCH r.sourceOrder sourceOrder
-        LEFT JOIN FETCH r.createdOrder createdOrder
-        LEFT JOIN FETCH createdOrder.company
-        LEFT JOIN FETCH createdOrder.filial
-        LEFT JOIN FETCH createdOrder.status
-        WHERE sourceOrder.id IN :sourceOrderIds
+        LEFT JOIN r.filial filial
+        WHERE r.company.id IN :companyIds AND r.status IN :statuses
+        ORDER BY r.id
+    """)
+    List<CompanyActivityView> findCompanyActivity(@Param("companyIds") Collection<Long> companyIds,
+                                                 @Param("statuses") Collection<NextOrderRequestStatus> statuses);
+
+    @Query("""
+        SELECT source.id AS sourceOrderId, created.id AS orderId,
+               CASE WHEN company.id IS NULL THEN '' ELSE company.title END AS companyTitle,
+               CASE WHEN filial.id IS NULL THEN '' ELSE filial.title END AS filialTitle,
+               COALESCE(status.title, '') AS statusTitle
+        FROM NextOrderRequest r
+        JOIN r.sourceOrder source
+        JOIN r.createdOrder created
+        LEFT JOIN created.company company
+        LEFT JOIN created.filial filial
+        LEFT JOIN created.status status
+        WHERE source.id IN :sourceOrderIds
         ORDER BY r.createdAt, r.id
     """)
-    List<NextOrderRequest> findBySourceOrderIdsWithCreatedOrder(
-            @Param("sourceOrderIds") Collection<Long> sourceOrderIds
-    );
+    List<CreatedOrderView> findCreatedOrderViews(@Param("sourceOrderIds") Collection<Long> sourceOrderIds);
 
-    boolean existsByCompanyIdAndStatusIn(Long companyId, Collection<NextOrderRequestStatus> statuses);
+    interface CompanyActivityView {
+        Long getCompanyId();
+        NextOrderRequestStatus getStatus();
+        LocalDateTime getUpdatedAt();
+        String getFilialTitle();
+        String getErrorMessage();
+    }
+
+    interface CreatedOrderView {
+        Long getSourceOrderId();
+        Long getOrderId();
+        String getCompanyTitle();
+        String getFilialTitle();
+        String getStatusTitle();
+    }
 
     @Query("""
         SELECT r

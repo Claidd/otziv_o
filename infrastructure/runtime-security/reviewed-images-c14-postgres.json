@@ -1,0 +1,37 @@
+{
+  "schema": "otziv-reviewed-images-v1",
+  "repository": "ghcr.io/claidd/otziv-security",
+  "publicationSet": "c14-postgres",
+  "baselineManifestSha256": "d48bdb7d6d869cde5d6f1a7b089491765e3eeaf46e0b0b6bb51b7719b38d3ef2",
+  "images": [
+    {
+      "component": "postgres",
+      "platform": "linux/amd64",
+      "sourceBeforeRef": "postgres@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d",
+      "defaultReferencesBefore": [
+        {
+          "path": "compose.yaml",
+          "line": 258,
+          "service": "keycloak-postgres"
+        },
+        {
+          "path": "compose.prod-local.yaml",
+          "line": 101,
+          "service": "keycloak-postgres"
+        },
+        {
+          "path": "docker-compose.yaml",
+          "line": 108,
+          "service": "keycloak-postgres"
+        }
+      ],
+      "candidateBaseRef": "postgres:17.11@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675",
+      "buildArgs": {
+        "TARGETARCH": "amd64"
+      },
+      "context": "infrastructure/runtime-security/builds/postgres-c14",
+      "dockerfile": "infrastructure/runtime-security/builds/postgres-c14/Dockerfile",
+      "dockerfileSha256": "ae177dbdb62c801d00426ff32e5cbe98f5cd6db34c178eec837275b41d98f3c4"
+    }
+  ]
+}

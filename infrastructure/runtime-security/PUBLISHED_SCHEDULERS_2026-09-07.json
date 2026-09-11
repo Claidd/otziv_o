@@ -1,0 +1,2886 @@
+{
+  "schema": "otziv-published-scheduler-definitions-v1",
+  "generatedAt": "2026-09-07T15:24:04.441127+00:00",
+  "sourceRevision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+  "jarSha256": "031ca4a794cfdb40718fdcdabf2c5ed44fbffe814efdb3d6534f59b56284be1b",
+  "bytecodeMetadataSha256": "24b2afa33f6ff43576736e377a0cc160463eafe34604c16feab85b73ea5596f0",
+  "extractorSha256": "0c2d594c9f03ed5e2c4b54510a0ea08ef5339c763342180889322674ac2d64ea",
+  "verifiedClassEntries": 2702,
+  "methodCount": 68,
+  "classCount": 58,
+  "definitionSetSha256": "9dbe6286c3ee195e30fea20d36d219beabf55e89df535eb388a20c5198d6ddd8",
+  "runtimeRegistrationObservation": {
+    "schema": "otziv-scheduler-runtime-observation-v1",
+    "observedAt": "2026-09-07T14:58:25.555141+00:00",
+    "container": "otziv-prod-app-1",
+    "method": "GET",
+    "path": "/actuator/scheduledtasks",
+    "authenticated": false,
+    "httpStatus": 401,
+    "remoteMutations": 0,
+    "registration": "NOT_OBSERVED",
+    "responseBodyRetained": false,
+    "artifact": ".codex-tmp/finalization-20260907/scheduler-runtime-observation.json",
+    "sha256": "ede7fd0cc34af929702546dd52abe9fdafc55850ddfdea9be7f9caeb62c55960",
+    "authenticatedRetryPerformed": false
+  },
+  "definitions": [
+    {
+      "className": "com.hunt.otziv.analytics.service.AnalyticsAggregateScheduledRebuildJob",
+      "methodName": "runScheduledRebuild",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "cron": "${otziv.analytics.rebuild.schedule.cron:0 30 3 * * *}",
+          "zone": "${otziv.analytics.rebuild.schedule.zone:Asia/Irkutsk}"
+        }
+      ],
+      "classConditions": [
+        {
+          "type": "Lorg/springframework/boot/autoconfigure/condition/ConditionalOnProperty;",
+          "prefix": "otziv.analytics.rebuild.schedule",
+          "name": [
+            "enabled"
+          ],
+          "havingValue": "true"
+        }
+      ],
+      "methodConditions": [],
+      "classSha256": "a34920fccb4d5d91efaa7b47683ce8b7700bb446ef65337f99c4879db3aa7c9f",
+      "definitionSha256": "ede9ca36fa956da09386686adcac17af2a157be0a8197dce26e9adc4100d76b4",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/analytics/service/AnalyticsAggregateScheduledRebuildJob.java",
+        "sha256": "c43df85c13f3d1778df5cd666a5d192d69e51e938b0e6ae99ea96af0b0af4fef",
+        "methodNameCandidateLines": [
+          59
+        ]
+      },
+      "conditionalPropertyObservedInputs": [
+        {
+          "source": "observed_env_via_published_properties",
+          "property": "otziv.analytics.rebuild.schedule.enabled",
+          "envKey": "OTZIV_ANALYTICS_REBUILD_SCHEDULE_ENABLED",
+          "value": "true"
+        }
+      ],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 25,
+        "truncatedOrFurtherCalls": false,
+        "unresolvedApplicationCallCount": 0,
+        "observedFlagReferences": [
+          {
+            "source": "observed_env_via_published_properties",
+            "property": "otziv.analytics.rebuild.schedule.enabled",
+            "envKey": "OTZIV_ANALYTICS_REBUILD_SCHEDULE_ENABLED",
+            "value": "true"
+          }
+        ]
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.analytics.service.PaymentFinancialAnalyticsRepairService",
+      "methodName": "repairPending",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "initialDelayString": "${otziv.analytics.payment-repair.initial-delay-ms:5000}",
+          "fixedDelayString": "${otziv.analytics.payment-repair.retry-delay-ms:21600000}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "e00d4e78708ce08d3cb70312b2d7ee5e74263116b0f1a960acff0d01c3bf90c7",
+      "definitionSha256": "aebf326b2204699720b0d9877155e109252c627b0a4c51001fa8272906683387",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/analytics/service/PaymentFinancialAnalyticsRepairService.java",
+        "sha256": "9dac2e99d6bed99c2d670df9527f13c26f01edde0cbafd18a21be5aefc76c307",
+        "methodNameCandidateLines": [
+          35
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 24,
+        "truncatedOrFurtherCalls": false,
+        "unresolvedApplicationCallCount": 0,
+        "observedFlagReferences": []
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.archive.service.OrderArchiveDryRunScheduledJob",
+      "methodName": "runScheduledDryRun",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "fixedDelayString": "${otziv.archive.orders.schedule.poll-delay-ms:30000}",
+          "initialDelayString": "${otziv.archive.orders.schedule.initial-delay-ms:30000}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "39f42d4f4cf611c6bfbd681f0db99c8870c7e906457182473dc50fb2f5efb95b",
+      "definitionSha256": "c1093c92a1efae4f9a66f89630a9e496426e8dfca68a8a6ebc2e432de2f543a0",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/archive/service/OrderArchiveDryRunScheduledJob.java",
+        "sha256": "9e09e36dcc395fbe5fe48c93a6363aced7e0b4f8763b451c285a4ed87b988c51",
+        "methodNameCandidateLines": [
+          36
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 87,
+        "truncatedOrFurtherCalls": true,
+        "unresolvedApplicationCallCount": 3,
+        "observedFlagReferences": [
+          {
+            "source": "observed_mysql_app_settings",
+            "key": "archive.orders.apply.enabled",
+            "value": "true"
+          },
+          {
+            "source": "observed_mysql_app_settings",
+            "key": "archive.orders.schedule.enabled",
+            "value": "true"
+          },
+          {
+            "source": "observed_mysql_app_settings",
+            "key": "archive.orders.schedule.worker.enabled",
+            "value": "true"
+          },
+          {
+            "source": "observed_env_via_published_properties",
+            "property": "otziv.archive.orders.apply-enabled",
+            "envKey": "OTZIV_ARCHIVE_ORDERS_APPLY_ENABLED",
+            "value": "false"
+          },
+          {
+            "source": "observed_env_via_published_properties",
+            "property": "otziv.archive.orders.schedule.enabled",
+            "envKey": "OTZIV_ARCHIVE_ORDERS_SCHEDULE_ENABLED",
+            "value": "false"
+          }
+        ]
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.b_bots.service.BotBrowserSessionService",
+      "methodName": "sweepExpiredSessions",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "fixedDelayString": "${multibrowser.session-sweep-delay-ms:30000}",
+          "initialDelayString": "${multibrowser.session-sweep-initial-delay-ms:45000}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "39b5e87cf7985a5593d6a1b8ad107bda92ab8736e8d8704d68076ee48b0e3ed1",
+      "definitionSha256": "44d3d29fe2be696cb9ff9cb70918c5290153064c66fdc5db97f7390722d9e0c5",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/b_bots/service/BotBrowserSessionService.java",
+        "sha256": "05be498691a8a35bc6b3c6b4b8af963ca44c1a9c9b46a8b1814e1621b0e18d4e",
+        "methodNameCandidateLines": [
+          289
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 23,
+        "truncatedOrFurtherCalls": false,
+        "unresolvedApplicationCallCount": 1,
+        "observedFlagReferences": [
+          {
+            "source": "observed_env_via_published_properties",
+            "property": "multibrowser.enabled",
+            "envKey": "MULTIBROWSER_ENABLED",
+            "value": "false"
+          }
+        ]
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.b_bots.service.ReviewAccountPoolAlertScheduler",
+      "methodName": "scheduledCheck",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "initialDelayString": "${otziv.review-account-pool-alert.initial-delay-ms:60000}",
+          "fixedDelayString": "${otziv.review-account-pool-alert.fixed-delay-ms:60000}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "a2ef490bbcee5baae5ecd8a1ec38b2bcfd384b829fc346244096b000abe8e5dc",
+      "definitionSha256": "4874d72bc08befc79569ed293afa24560537334eae6d337bd43a68930fbdc212",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/b_bots/service/ReviewAccountPoolAlertScheduler.java",
+        "sha256": "cab7c3a2c24d6a1ada22cd976d25bc07bd078d5344333986b9a3bd6f246aa128",
+        "methodNameCandidateLines": [
+          32
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 25,
+        "truncatedOrFurtherCalls": false,
+        "unresolvedApplicationCallCount": 1,
+        "observedFlagReferences": []
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.client_messages.service.ScheduledClientMessageService",
+      "methodName": "tick",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "fixedDelayString": "${client.messages.tick-delay-ms:30000}",
+          "initialDelayString": "${client.messages.initial-delay-ms:90000}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "5fe26b57783cc7650494c79859e77276bd0d070d9ea98a5919ef5680e1f08d9b",
+      "definitionSha256": "fddb8c1324725e21ec2b33de6438dd5213f8aab32f4f8604134d1146e8940c8f",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/client_messages/service/ScheduledClientMessageService.java",
+        "sha256": "28f7df36d1ffbe11daa0e149739f3c902a953a9acf4b50e1d5bffe781d1d3230",
+        "methodNameCandidateLines": [
+          200
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 103,
+        "truncatedOrFurtherCalls": true,
+        "unresolvedApplicationCallCount": 5,
+        "observedFlagReferences": [
+          {
+            "source": "observed_mysql_app_settings",
+            "key": "client.messages.live.enabled",
+            "value": "true"
+          },
+          {
+            "source": "observed_mysql_app_settings",
+            "key": "client.messages.worker.enabled",
+            "value": "true"
+          }
+        ]
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.common_billing.service.CommonBillingReminderScheduler",
+      "methodName": "sendDueReminders",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "fixedDelayString": "${common-billing.reminders.fixed-delay:PT5M}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "bf52006d9f6d00d49ef30a3c3cd7453c6c8eebe7f343d0bd3a7edc16fd03b11f",
+      "definitionSha256": "4237d9347fe027a178df6e45c05e5b35949c4ff74f68deda546edd38bbbcb21b",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/common_billing/service/CommonBillingReminderScheduler.java",
+        "sha256": "826a2a4b1d25e0b798adc1f872e4361fc63681f0040bbbdfec58d62517ae92b0",
+        "methodNameCandidateLines": [
+          17,
+          18
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 37,
+        "truncatedOrFurtherCalls": true,
+        "unresolvedApplicationCallCount": 1,
+        "observedFlagReferences": [
+          {
+            "source": "observed_mysql_app_settings",
+            "key": "client.messages.payment-reminder.enabled",
+            "value": "true"
+          }
+        ]
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.common_billing.service.CommonBillingReminderScheduler",
+      "methodName": "sendUnsentInvoices",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "fixedDelayString": "${common-billing.unsent-invoices.fixed-delay:PT5M}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "bf52006d9f6d00d49ef30a3c3cd7453c6c8eebe7f343d0bd3a7edc16fd03b11f",
+      "definitionSha256": "e7944e8f77188e852166e560fa154cd9b7f3b261bc7498ce86031476efcc6060",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/common_billing/service/CommonBillingReminderScheduler.java",
+        "sha256": "826a2a4b1d25e0b798adc1f872e4361fc63681f0040bbbdfec58d62517ae92b0",
+        "methodNameCandidateLines": [
+          25
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 39,
+        "truncatedOrFurtherCalls": true,
+        "unresolvedApplicationCallCount": 1,
+        "observedFlagReferences": [
+          {
+            "source": "observed_mysql_app_settings",
+            "key": "client.messages.immediate.enabled",
+            "value": "true"
+          }
+        ]
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.common_billing.service.CommonBillingReminderScheduler",
+      "methodName": "notifyManagersAboutPaperInvoices",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "fixedDelayString": "${common-billing.paper-invoice-manager-notifications.fixed-delay:PT5M}",
+          "initialDelayString": "${common-billing.paper-invoice-manager-notifications.initial-delay:PT30S}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "bf52006d9f6d00d49ef30a3c3cd7453c6c8eebe7f343d0bd3a7edc16fd03b11f",
+      "definitionSha256": "ecf40501a6d0a218d3ff520a24973901553d856e4d6762e430ed4b298fa5b932",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/common_billing/service/CommonBillingReminderScheduler.java",
+        "sha256": "826a2a4b1d25e0b798adc1f872e4361fc63681f0040bbbdfec58d62517ae92b0",
+        "methodNameCandidateLines": [
+          36
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 4,
+        "truncatedOrFurtherCalls": false,
+        "unresolvedApplicationCallCount": 0,
+        "observedFlagReferences": []
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.common_billing.service.CommonBillingReminderScheduler",
+      "methodName": "cancelArchivedPaymentRefs",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "fixedDelayString": "${common-billing.payment-cancel.fixed-delay:PT1M}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "bf52006d9f6d00d49ef30a3c3cd7453c6c8eebe7f343d0bd3a7edc16fd03b11f",
+      "definitionSha256": "60c534dec4898893ab4e39bbedb815758a6b755f770417c1b63adf1254433603",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/common_billing/service/CommonBillingReminderScheduler.java",
+        "sha256": "826a2a4b1d25e0b798adc1f872e4361fc63681f0040bbbdfec58d62517ae92b0",
+        "methodNameCandidateLines": [
+          44
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 33,
+        "truncatedOrFurtherCalls": true,
+        "unresolvedApplicationCallCount": 0,
+        "observedFlagReferences": [
+          {
+            "source": "observed_env_via_published_properties",
+            "property": "otziv.payments.tbank.enabled",
+            "envKey": "OTZIV_PAYMENTS_TBANK_ENABLED",
+            "value": "true"
+          },
+          {
+            "source": "observed_mysql_app_settings",
+            "key": "payments.tbank.enabled",
+            "value": "true"
+          }
+        ]
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.common_billing.service.CommonBillingReminderScheduler",
+      "methodName": "reconcileTochkaPaymentRefs",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "fixedDelayString": "${common-billing.tochka-reconcile.fixed-delay:PT1M}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "bf52006d9f6d00d49ef30a3c3cd7453c6c8eebe7f343d0bd3a7edc16fd03b11f",
+      "definitionSha256": "7236ffdff77a8573dad0c86281ed642c9a7a083e5e6b2076f36ce50d5558eb22",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/common_billing/service/CommonBillingReminderScheduler.java",
+        "sha256": "826a2a4b1d25e0b798adc1f872e4361fc63681f0040bbbdfec58d62517ae92b0",
+        "methodNameCandidateLines": [
+          52,
+          53
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 83,
+        "truncatedOrFurtherCalls": true,
+        "unresolvedApplicationCallCount": 0,
+        "observedFlagReferences": []
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.common_billing.service.CommonBillingReminderScheduler",
+      "methodName": "reconcilePendingCompanyLinks",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "fixedDelayString": "${common-billing.company-reconcile.fixed-delay:PT1M}",
+          "initialDelayString": "${common-billing.company-reconcile.initial-delay:PT30S}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "bf52006d9f6d00d49ef30a3c3cd7453c6c8eebe7f343d0bd3a7edc16fd03b11f",
+      "definitionSha256": "e80954f7de669b615d53350e4f61f70662d009fc28ceea04a4849c5d85b4babd",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/common_billing/service/CommonBillingReminderScheduler.java",
+        "sha256": "826a2a4b1d25e0b798adc1f872e4361fc63681f0040bbbdfec58d62517ae92b0",
+        "methodNameCandidateLines": [
+          63,
+          64
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 10,
+        "truncatedOrFurtherCalls": false,
+        "unresolvedApplicationCallCount": 0,
+        "observedFlagReferences": []
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.common_billing.service.CommonInvoicePaymentNotificationDeliveryService",
+      "methodName": "retryPendingNotifications",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "fixedDelayString": "${common-billing.payment-notifications.fixed-delay:PT15S}",
+          "initialDelayString": "${common-billing.payment-notifications.initial-delay:PT30S}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "b04a8c50c0bbd65ca7416cfdffffa28f7574850d484149aedd87ea037bbb484c",
+      "definitionSha256": "421c3364b7edd2d0ba60d8fc240c68480bb66c4c42cb533df7ab7e1fca321e0f",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/common_billing/service/CommonInvoicePaymentNotificationDeliveryService.java",
+        "sha256": "faa16f8e796a91555b25d103568d95402fc49d79dfad667143a7342dc45a3520",
+        "methodNameCandidateLines": [
+          32
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 31,
+        "truncatedOrFurtherCalls": true,
+        "unresolvedApplicationCallCount": 2,
+        "observedFlagReferences": []
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.common_billing.service.CommonInvoicePublicationBlockerService",
+      "methodName": "reconcileScheduled",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "fixedDelayString": "${common-billing.publication-blockers.delay-ms:300000}",
+          "initialDelay": 60000
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "f57b79c82bd5e2f393a36771e8c89ec56ad772b19b29016c4eef82cd803ee69e",
+      "definitionSha256": "27587a0dc695f970ce5ed3ad4b298d98ca336ae297ff62513ecf2049ad147b3b",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/common_billing/service/CommonInvoicePublicationBlockerService.java",
+        "sha256": "76910323f0deda9c4db913bc0833acfc045a496a3cc00c90dac306a0c24343a1",
+        "methodNameCandidateLines": [
+          62
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 15,
+        "truncatedOrFurtherCalls": false,
+        "unresolvedApplicationCallCount": 1,
+        "observedFlagReferences": []
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.config.jwt.service.LeadTokenReplayGuard",
+      "methodName": "cleanupExpiredClaims",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "initialDelayString": "${lead.integration.replay-cleanup-initial-delay-ms:60000}",
+          "fixedDelayString": "${lead.integration.replay-cleanup-delay-ms:600000}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "c44b803aa03c3fd6ef9094272c43ffa504bdce5778858e66cfed13f0cf9cf40d",
+      "definitionSha256": "05840fd74ab1720e80e12b27af1070b980d8872994b888f30c0ec571f1a42b64",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/config/jwt/service/LeadTokenReplayGuard.java",
+        "sha256": "a860426a5ae86a478d87dcd7a3290bea377e746e4dee083232b90f2188850ae7",
+        "methodNameCandidateLines": [
+          96
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 1,
+        "truncatedOrFurtherCalls": false,
+        "unresolvedApplicationCallCount": 0,
+        "observedFlagReferences": []
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.contractor_payments.service.ContractorCompletionRewardRepairService",
+      "methodName": "repairCompletedUnpaidOrders",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "initialDelayString": "${otziv.contractor-payments.completion-repair-initial-delay-ms:45000}",
+          "fixedDelayString": "${otziv.contractor-payments.completion-repair-delay-ms:60000}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "11e71681e535c13091d3e6da301e3c357e2be2748ee30c5068c66d6144bf5bc7",
+      "definitionSha256": "9ba715351106b6abd4105f969fe91312b7c10de81959fa48a615f457cf101578",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/contractor_payments/service/ContractorCompletionRewardRepairService.java",
+        "sha256": "442a6b1ffa87c8687a2237b11964621bc8865818107eaf20d05ea7ca9922d760",
+        "methodNameCandidateLines": [
+          41
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 94,
+        "truncatedOrFurtherCalls": true,
+        "unresolvedApplicationCallCount": 9,
+        "observedFlagReferences": [
+          {
+            "source": "observed_mysql_app_settings",
+            "key": "zp.product-reward-percent.enabled",
+            "value": "false"
+          }
+        ]
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.contractor_payments.service.ContractorPaymentReconciliationDispatcher",
+      "methodName": "reconcile",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "fixedDelayString": "${otziv.contractor-payments.reconcile-delay-ms:60000}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "ea84163d55762c7d037c59ace846097df84ff0a92fd5c7a79ebbc29257e602e4",
+      "definitionSha256": "70c41f19d56154525cd51045098e65e7a555435d224dc283a5886e8d6cef8af6",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/contractor_payments/service/ContractorPaymentReconciliationDispatcher.java",
+        "sha256": "56459bfb234eae80f7b9d7409969190af8f2b197090117ba38724493bc2e9910",
+        "methodNameCandidateLines": [
+          43
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 58,
+        "truncatedOrFurtherCalls": true,
+        "unresolvedApplicationCallCount": 3,
+        "observedFlagReferences": []
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.contractor_payments.service.ContractorPaymentRuntimeHealthMonitor",
+      "methodName": "monitor",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "fixedDelayString": "${otziv.contractor-payments.runtime-health-delay-ms:60000}",
+          "initialDelayString": "${otziv.contractor-payments.runtime-health-initial-delay-ms:120000}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "eb326dd53eb3891454ec2e25a2b0bce2c01d19f6b6a21c1b484887ff41ad5c25",
+      "definitionSha256": "c96586d8b0a8664f7a0f142d01b3021e48dbe642e0cad9a1dacad423e2b221ca",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/contractor_payments/service/ContractorPaymentRuntimeHealthMonitor.java",
+        "sha256": "4c2aaf670f47330f97999ba8fdb3eba3e53521803accf58540a7de4757ea468d",
+        "methodNameCandidateLines": [
+          42
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 38,
+        "truncatedOrFurtherCalls": true,
+        "unresolvedApplicationCallCount": 3,
+        "observedFlagReferences": [
+          {
+            "source": "observed_mysql_app_settings",
+            "key": "client.messages.live.enabled",
+            "value": "true"
+          },
+          {
+            "source": "observed_mysql_app_settings",
+            "key": "client.messages.worker.enabled",
+            "value": "true"
+          },
+          {
+            "source": "observed_mysql_app_settings",
+            "key": "contractor-payments.live-readiness-confirmed",
+            "value": "true"
+          },
+          {
+            "source": "observed_mysql_app_settings",
+            "key": "contractor-payments.live-routing-enabled",
+            "value": "true"
+          },
+          {
+            "source": "observed_mysql_app_settings",
+            "key": "contractor-payments.reward-attribution-live-enabled",
+            "value": "true"
+          },
+          {
+            "source": "observed_mysql_app_settings",
+            "key": "contractor-payments.shadow-enabled",
+            "value": "true"
+          },
+          {
+            "source": "observed_mysql_app_settings",
+            "key": "payments.tbank.payment-links-enabled",
+            "value": "true"
+          }
+        ]
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.contractor_payments.service.ContractorRewardInitialMonthSyncDispatcher",
+      "methodName": "synchronizeEnabledProfiles",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "initialDelayString": "${otziv.contractor-payments.initial-month-sync-initial-delay-ms:15000}",
+          "fixedDelayString": "${otziv.contractor-payments.initial-month-sync-delay-ms:60000}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "07f6e9b55ee70d1aec9f7c9d23622dfd32f072ed3b6dcc55320eaf305bb2d9d9",
+      "definitionSha256": "b85ec919174945317e0f21e357ac65de492807f6b7b37e3cbacb505131e3d6e6",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/contractor_payments/service/ContractorRewardInitialMonthSyncDispatcher.java",
+        "sha256": "b43d80f5b98a80bac369ca57dd305ca382f1c20d93e856abee158490cc0d5261",
+        "methodNameCandidateLines": [
+          24
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 3,
+        "truncatedOrFurtherCalls": false,
+        "unresolvedApplicationCallCount": 0,
+        "observedFlagReferences": []
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.contractor_payments.service.ContractorRewardLedgerRepairDispatcher",
+      "methodName": "reconcileMissingLedgerEntries",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "fixedDelayString": "${otziv.contractor-payments.reward-ledger-reconcile-delay-ms:60000}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "b4a338b262d2ccfc23109d31a9543ad3b05ab1a7c37c7bf72c1dae071e07c5c3",
+      "definitionSha256": "bd02c6a09f45de80bef6e010f2f5f87239e48942c61e710ecc112dd002658c65",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/contractor_payments/service/ContractorRewardLedgerRepairDispatcher.java",
+        "sha256": "fbf819769818f975811fb85925b59b4d0be6ef70c8ae0b3c7d1682e5e8690e0b",
+        "methodNameCandidateLines": [
+          25
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 21,
+        "truncatedOrFurtherCalls": true,
+        "unresolvedApplicationCallCount": 4,
+        "observedFlagReferences": []
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.external_review_checks.service.ExternalReviewCheckScheduler",
+      "methodName": "tick",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "fixedDelayString": "${external-review-check.scheduler.fixed-delay-ms:3600000}",
+          "initialDelayString": "${external-review-check.scheduler.initial-delay-ms:120000}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "912610d654bb4b57f9cf1935c315d1513a363396671e19bf9893bec979608d6f",
+      "definitionSha256": "6442bcec2007c7445c76e7273b64e55e15d4566e817e0954a0cad0fe7142ae59",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/external_review_checks/service/ExternalReviewCheckScheduler.java",
+        "sha256": "0407f1c436eef58ac744d8c519902c4dab4c9dc4363165cee96d2fcaff6c7833",
+        "methodNameCandidateLines": [
+          20
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 146,
+        "truncatedOrFurtherCalls": true,
+        "unresolvedApplicationCallCount": 5,
+        "observedFlagReferences": []
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.integration.outbox.service.IntegrationOutboxScheduler",
+      "methodName": "tick",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "fixedDelayString": "${otziv.integration.outbox.scheduler.fixed-delay-ms:5000}",
+          "initialDelayString": "${otziv.integration.outbox.scheduler.initial-delay-ms:30000}"
+        }
+      ],
+      "classConditions": [
+        {
+          "type": "Lorg/springframework/boot/autoconfigure/condition/ConditionalOnProperty;",
+          "prefix": "otziv.integration.outbox",
+          "name": [
+            "relay-enabled"
+          ],
+          "havingValue": "true",
+          "matchIfMissing": false
+        }
+      ],
+      "methodConditions": [],
+      "classSha256": "8512359516e82d58134eef3994f53c1644e7790d14a2b48bf6d6942aa5e4e727",
+      "definitionSha256": "dd7b8d3638c229ce529e51bc61a9d60740fe22b4f63f042c8a03b1467330e833",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/integration/outbox/service/IntegrationOutboxScheduler.java",
+        "sha256": "aa2cc74507ed015b14400791b51dfb0776e835efb2c9ceb9ea8293e9ac055439",
+        "methodNameCandidateLines": [
+          32
+        ]
+      },
+      "conditionalPropertyObservedInputs": [
+        {
+          "source": "observed_env_via_published_properties",
+          "property": "otziv.integration.outbox.relay-enabled",
+          "envKey": "OTZIV_INTEGRATION_OUTBOX_RELAY_ENABLED",
+          "value": "false"
+        }
+      ],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 56,
+        "truncatedOrFurtherCalls": true,
+        "unresolvedApplicationCallCount": 2,
+        "observedFlagReferences": [
+          {
+            "source": "observed_env_via_published_properties",
+            "property": "otziv.integration.outbox.relay-enabled",
+            "envKey": "OTZIV_INTEGRATION_OUTBOX_RELAY_ENABLED",
+            "value": "false"
+          }
+        ]
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.l_lead.service.LeadSyncServiceImpl",
+      "methodName": "syncModifiedLeads",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "fixedRate": 300000
+        }
+      ],
+      "classConditions": [
+        {
+          "type": "Lorg/springframework/boot/autoconfigure/condition/ConditionalOnProperty;",
+          "name": [
+            "lead.sync.outbound.enabled"
+          ],
+          "havingValue": "true",
+          "matchIfMissing": false
+        }
+      ],
+      "methodConditions": [],
+      "classSha256": "7f71448fbdc6f4e7aaab00d4e1173ece280c6b6fcf31a460f4d687b02269aec1",
+      "definitionSha256": "4cd2e9a9a73fbe4c6a4f9f8da25a423dfa00809854e9175ce2ef9f87ba35736e",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/l_lead/service/LeadSyncServiceImpl.java",
+        "sha256": "ee28fc0ab961eee8718b65f6f46aa5d9132456d23a0a9d12be9478854a51e03a",
+        "methodNameCandidateLines": [
+          59,
+          135
+        ]
+      },
+      "conditionalPropertyObservedInputs": [
+        {
+          "source": "observed_env_via_published_properties",
+          "property": "lead.sync.outbound.enabled",
+          "envKey": "LEAD_SYNC_OUTBOUND_ENABLED",
+          "value": "false"
+        }
+      ],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 64,
+        "truncatedOrFurtherCalls": false,
+        "unresolvedApplicationCallCount": 5,
+        "observedFlagReferences": [
+          {
+            "source": "observed_env_via_published_properties",
+            "property": "lead.sync.outbound.enabled",
+            "envKey": "LEAD_SYNC_OUTBOUND_ENABLED",
+            "value": "false"
+          }
+        ]
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.l_lead.service.VpsSyncService",
+      "methodName": "retryFailedSync",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "fixedRateString": "${lead.vps.retry.period.ms:1800000}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "d761a74dd40083f4de4298812155637bb819469e49f54f77abd1554691b6ec3c",
+      "definitionSha256": "954c8c0d88572810c6c10539abd18a27a7d774425a0d929b24b49b1ac9c7cf96",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/l_lead/service/VpsSyncService.java",
+        "sha256": "724ab31bf7983459b851d87d6d4f0cc02f997caa93afe113c1bde8997fba04b5",
+        "methodNameCandidateLines": [
+          124,
+          241
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 30,
+        "truncatedOrFurtherCalls": false,
+        "unresolvedApplicationCallCount": 2,
+        "observedFlagReferences": []
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.manager_control.service.ManagerControlService",
+      "methodName": "runTestModeNotifications",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "fixedDelay": 600000,
+          "initialDelay": 120000
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "273a8447a306be1f871ada37d2994ef153b0b461e5d919392c435a0043447394",
+      "definitionSha256": "b49369f4550e995705d7b931567e5d88ab0ff5449edbbe2318ec52ff0b8b0571",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/manager_control/service/ManagerControlService.java",
+        "sha256": "2a71c0e1abb6815c5809bc3dfb00ff2b5ee60640d151b2403a8e6cd05871c010",
+        "methodNameCandidateLines": [
+          470
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 278,
+        "truncatedOrFurtherCalls": true,
+        "unresolvedApplicationCallCount": 7,
+        "observedFlagReferences": [
+          {
+            "source": "observed_mysql_app_settings",
+            "key": "manager-control.unanswered-client-messages.enabled",
+            "value": "true"
+          }
+        ]
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.manager_control.service.ManagerControlWorkerReminderScheduler",
+      "methodName": "remindPendingExplanations",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "fixedDelayString": "${manager.worker-explanation-reminders.fixed-delay-ms:300000}",
+          "initialDelayString": "${manager.worker-explanation-reminders.initial-delay-ms:60000}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "9f7e49b1a8c1f8366113a3a5090d461a0ce15c07e729710ff04062955df585f6",
+      "definitionSha256": "73391dae08452f8b9a4fee0d3e1bf23067b7092b3f12debe63ea92e5a871259b",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/manager_control/service/ManagerControlWorkerReminderScheduler.java",
+        "sha256": "a53fc2dc33e773084cd1571cb0efa9165b4d899f9595af64af75fb0debb49887",
+        "methodNameCandidateLines": [
+          29
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 78,
+        "truncatedOrFurtherCalls": true,
+        "unresolvedApplicationCallCount": 8,
+        "observedFlagReferences": []
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.manager_control.service.ManagerQueueStateService",
+      "methodName": "observeToday",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "fixedDelayString": "${manager.sla.observer-delay-ms:60000}",
+          "initialDelay": 30000
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "f4826b01f583d0812a9dbcd6ad554d63cd9238ff7c58a2ebdb9f520d411f97b4",
+      "definitionSha256": "d395cb65ede90583fabc59ada4ab3765c1d29068520f7cd343051afb89731c12",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/manager_control/service/ManagerQueueStateService.java",
+        "sha256": "fff8776d601e6ce724887bc7a263abf34c8ee2a2fd44b9f21eee5559342c5998",
+        "methodNameCandidateLines": [
+          49
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 67,
+        "truncatedOrFurtherCalls": true,
+        "unresolvedApplicationCallCount": 2,
+        "observedFlagReferences": [
+          {
+            "source": "observed_mysql_app_settings",
+            "key": "manager.sla.enabled",
+            "value": "true"
+          }
+        ]
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.manager_daily_summary.service.ManagerDailySummaryScheduler",
+      "methodName": "calculateSnapshot",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "cron": "${manager.summary.snapshot-cron:0 55 21 * * *}",
+          "zone": "${manager.summary.zone:Asia/Irkutsk}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "152c8ab6a65aaa289239263cd6cc4e4f0d5fb4f320257b80f01ba58c8aad8cb4",
+      "definitionSha256": "3127abcb0190eb297c6c1a0ef2cdde5a7f9a7be4786e5a8885caf819c8628b55",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/manager_daily_summary/service/ManagerDailySummaryScheduler.java",
+        "sha256": "1ebf8275d3106c90f3c27faeb74e6b15f05cb77f1e199bef57f9775728de8aa9",
+        "methodNameCandidateLines": [
+          25
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 2,
+        "truncatedOrFurtherCalls": false,
+        "unresolvedApplicationCallCount": 0,
+        "observedFlagReferences": []
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.manager_daily_summary.service.ManagerDailySummaryScheduler",
+      "methodName": "calculateAndSendCurrentDay",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "cron": "${manager.summary.delivery-cron:0 0 22 * * *}",
+          "zone": "${manager.summary.zone:Asia/Irkutsk}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "152c8ab6a65aaa289239263cd6cc4e4f0d5fb4f320257b80f01ba58c8aad8cb4",
+      "definitionSha256": "ee4b09dd25631e5af772e55d9b0b87c28e3713338ff01794452d65a2d351b0c1",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/manager_daily_summary/service/ManagerDailySummaryScheduler.java",
+        "sha256": "1ebf8275d3106c90f3c27faeb74e6b15f05cb77f1e199bef57f9775728de8aa9",
+        "methodNameCandidateLines": [
+          37
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 57,
+        "truncatedOrFurtherCalls": true,
+        "unresolvedApplicationCallCount": 2,
+        "observedFlagReferences": [
+          {
+            "source": "observed_mysql_app_settings",
+            "key": "manager.summary.ai-analysis-enabled",
+            "value": "true"
+          },
+          {
+            "source": "observed_mysql_app_settings",
+            "key": "manager.summary.enabled",
+            "value": "true"
+          }
+        ]
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.manager_daily_summary.service.ManagerDailySummaryScheduler",
+      "methodName": "calculateCurrentDayAndSendPersonalResults",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "cron": "${manager.summary.personal-delivery-cron:0 5 22 * * *}",
+          "zone": "${manager.summary.zone:Asia/Irkutsk}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "152c8ab6a65aaa289239263cd6cc4e4f0d5fb4f320257b80f01ba58c8aad8cb4",
+      "definitionSha256": "6b11608c188377334537e5daca6b1f06d808e04a874b2cbc325c7218adae4f0b",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/manager_daily_summary/service/ManagerDailySummaryScheduler.java",
+        "sha256": "1ebf8275d3106c90f3c27faeb74e6b15f05cb77f1e199bef57f9775728de8aa9",
+        "methodNameCandidateLines": [
+          53
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 115,
+        "truncatedOrFurtherCalls": true,
+        "unresolvedApplicationCallCount": 6,
+        "observedFlagReferences": [
+          {
+            "source": "observed_mysql_app_settings",
+            "key": "manager.report-review.enabled",
+            "value": "true"
+          },
+          {
+            "source": "observed_mysql_app_settings",
+            "key": "manager.summary.manager-groups-enabled",
+            "value": "true"
+          }
+        ]
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.manager_daily_summary.service.ManagerDailySummaryScheduler",
+      "methodName": "finalizePreviousDay",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "cron": "${manager.summary.finalize-cron:0 0 0 * * *}",
+          "zone": "${manager.summary.zone:Asia/Irkutsk}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "152c8ab6a65aaa289239263cd6cc4e4f0d5fb4f320257b80f01ba58c8aad8cb4",
+      "definitionSha256": "33f45c3af23a7bc2cd653d83631a1231a012c1ea89eb7746a06425504b7ae4cf",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/manager_daily_summary/service/ManagerDailySummaryScheduler.java",
+        "sha256": "1ebf8275d3106c90f3c27faeb74e6b15f05cb77f1e199bef57f9775728de8aa9",
+        "methodNameCandidateLines": [
+          69
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 2,
+        "truncatedOrFurtherCalls": false,
+        "unresolvedApplicationCallCount": 0,
+        "observedFlagReferences": []
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.manager_daily_summary.service.ManagerReportReviewReminderJob",
+      "methodName": "remind",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "cron": "${manager.report-review.reminder-cron:0 */10 * * * *}",
+          "zone": "${manager.summary.zone:Asia/Irkutsk}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "3ebde6cb8be51f3b350d54b89cd60e03674b4e2203fa28ff87d9f237ebe10c22",
+      "definitionSha256": "97b242e485b52f8ee450fa7c854c3a955b8df44f37a9dfd89ea86d33a367f6f0",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/manager_daily_summary/service/ManagerReportReviewReminderJob.java",
+        "sha256": "14f6fae55759f06b4b79bdfa4b97f83a0b02a0f2748e5dc8311405177c11ddec",
+        "methodNameCandidateLines": [
+          48
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 90,
+        "truncatedOrFurtherCalls": true,
+        "unresolvedApplicationCallCount": 6,
+        "observedFlagReferences": [
+          {
+            "source": "observed_mysql_app_settings",
+            "key": "manager.report-review.enabled",
+            "value": "true"
+          }
+        ]
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.manager_daily_summary.service.ManagerSummaryRetentionJob",
+      "methodName": "cleanup",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "cron": "${manager.summary.cleanup-cron:0 45 3 * * *}",
+          "zone": "${manager.summary.zone:Asia/Irkutsk}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "f608c5021811f15b4a5c166b59412421b93e5efd49808151455f6c0dfa9ac849",
+      "definitionSha256": "a89cfab744e724d6d3650869bae917d76af4cf6397826313063d7e0a387ff365",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/manager_daily_summary/service/ManagerSummaryRetentionJob.java",
+        "sha256": "977d819c0bc0484616a8e4055b329da32e55695631a014d035d6b78b012421d8",
+        "methodNameCandidateLines": [
+          33
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 16,
+        "truncatedOrFurtherCalls": false,
+        "unresolvedApplicationCallCount": 0,
+        "observedFlagReferences": [
+          {
+            "source": "observed_mysql_app_settings",
+            "key": "manager.summary.cleanup-enabled",
+            "value": "true"
+          }
+        ]
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.manager_performance.service.ManagerTeamProgressEndOfDayJob",
+      "methodName": "prepareFinalProjection",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "cron": "${manager.performance.team-progress-prepare-cron:45 59 23 * * *}",
+          "zone": "${worker.progress.zone:Asia/Irkutsk}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "7ff0a3e4e861e79d04618bb38f562b167ddc412249c4179ebc889d07a209630b",
+      "definitionSha256": "0977ebdc89e39143e698da872db44b396be5e681f325bde4605fc1e2e48ad6bf",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/manager_performance/service/ManagerTeamProgressEndOfDayJob.java",
+        "sha256": "d5986cb812694e4d6176f0a94ce2231d3e55185928b46529e71e68057e945d97",
+        "methodNameCandidateLines": [
+          45
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 49,
+        "truncatedOrFurtherCalls": true,
+        "unresolvedApplicationCallCount": 0,
+        "observedFlagReferences": []
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.manager_performance.service.ManagerTeamProgressEndOfDayJob",
+      "methodName": "capture",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "cron": "${manager.performance.team-progress-cron:10 4 0 * * *}",
+          "zone": "${worker.progress.zone:Asia/Irkutsk}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "7ff0a3e4e861e79d04618bb38f562b167ddc412249c4179ebc889d07a209630b",
+      "definitionSha256": "517286e43cc4e2aeae5df32dc3dacebbef5bd89ad3c4c5e1873aa1e6ebe48066",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/manager_performance/service/ManagerTeamProgressEndOfDayJob.java",
+        "sha256": "d5986cb812694e4d6176f0a94ce2231d3e55185928b46529e71e68057e945d97",
+        "methodNameCandidateLines": [
+          53
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 188,
+        "truncatedOrFurtherCalls": true,
+        "unresolvedApplicationCallCount": 4,
+        "observedFlagReferences": [
+          {
+            "source": "observed_mysql_app_settings",
+            "key": "worker.progress.enabled",
+            "value": "true"
+          },
+          {
+            "source": "observed_mysql_app_settings",
+            "key": "worker.progress.monthly-aggregate-enabled",
+            "value": "true"
+          },
+          {
+            "source": "observed_mysql_app_settings",
+            "key": "workload.shadow.observation-enabled",
+            "value": "true"
+          }
+        ]
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.maxbot.service.MaxBotLongPollingService",
+      "methodName": "pollUpdates",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "fixedDelayString": "${max.bot.long-polling.fixed-delay-ms:30000}"
+        }
+      ],
+      "classConditions": [
+        {
+          "type": "Lorg/springframework/boot/autoconfigure/condition/ConditionalOnProperty;",
+          "prefix": "max.bot.long-polling",
+          "name": [
+            "enabled"
+          ],
+          "havingValue": "true"
+        }
+      ],
+      "methodConditions": [],
+      "classSha256": "ab3e91d0e99b0f90d06ba609e5e0a0bebec343d83b86646036d470e990c7ee85",
+      "definitionSha256": "089789327a85446433ccfe1d693f80c2bc265a2bc3c432d378c983ccf7a48b34",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/maxbot/service/MaxBotLongPollingService.java",
+        "sha256": "cfd9d338aebabe0a174a28cb98899566544fb89c51c9937484c5d507f1ba3202",
+        "methodNameCandidateLines": [
+          28
+        ]
+      },
+      "conditionalPropertyObservedInputs": [
+        {
+          "source": "observed_env_via_published_properties",
+          "property": "max.bot.long-polling.enabled",
+          "envKey": "MAX_BOT_LONG_POLLING_ENABLED",
+          "value": "false"
+        }
+      ],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 7,
+        "truncatedOrFurtherCalls": false,
+        "unresolvedApplicationCallCount": 0,
+        "observedFlagReferences": [
+          {
+            "source": "observed_env_via_published_properties",
+            "property": "max.bot.long-polling.enabled",
+            "envKey": "MAX_BOT_LONG_POLLING_ENABLED",
+            "value": "false"
+          }
+        ]
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.metric_snapshots.service.DiskSpaceAlertScheduler",
+      "methodName": "scheduledCheck",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "initialDelayString": "${otziv.monitoring.disk.initial-delay-ms:60000}",
+          "fixedDelayString": "${otziv.monitoring.disk.fixed-delay-ms:300000}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "62fca1fef6c20689e0ccb8c0a5f0ca6360340f41325a40a78e4797f3b628c0c8",
+      "definitionSha256": "490d338113de8cce92399f2b02a3effc7926b316e0e7b92a917c2c845777b2c0",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/metric_snapshots/service/DiskSpaceAlertScheduler.java",
+        "sha256": "9c33496dcd43bd6c8bf1b74e1f310fe2fdd8903b7a24bb7e8e63293f5ac85d9e",
+        "methodNameCandidateLines": [
+          30
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 21,
+        "truncatedOrFurtherCalls": false,
+        "unresolvedApplicationCallCount": 2,
+        "observedFlagReferences": [
+          {
+            "source": "observed_env_via_published_properties",
+            "property": "otziv.monitoring.disk.enabled",
+            "envKey": "OTZIV_MONITORING_DISK_ENABLED",
+            "value": "true"
+          }
+        ]
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.notification_media.service.ThematicStaffNotificationJob",
+      "methodName": "dispatch",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "cron": "${worker.thematic-notifications.cron:0 0 11,13,16,17 * * *}",
+          "zone": "${worker.progress.zone:Asia/Irkutsk}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "b542c9f2c8f18e6a0a8dea562b7eb6d5384bcaf292ef3bf700b3aab26a43de1f",
+      "definitionSha256": "bb55d301b534665ec394b15c75166d5d602a9dfa731d0fbf093dd4f1e0244933",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/notification_media/service/ThematicStaffNotificationJob.java",
+        "sha256": "12e6dc9827b3d88b9bd21061c49691856396ec93758a05ab497dce37f93a387d",
+        "methodNameCandidateLines": [
+          53
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 55,
+        "truncatedOrFurtherCalls": true,
+        "unresolvedApplicationCallCount": 1,
+        "observedFlagReferences": [
+          {
+            "source": "observed_mysql_app_settings",
+            "key": "worker.progress.enabled",
+            "value": "true"
+          },
+          {
+            "source": "observed_mysql_app_settings",
+            "key": "worker.thematic-notifications.enabled",
+            "value": "true"
+          },
+          {
+            "source": "observed_mysql_app_settings",
+            "key": "workload.shadow.observation-enabled",
+            "value": "true"
+          }
+        ]
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.payments.service.ConfirmedPrepaymentRecoveryService",
+      "methodName": "recoverReadyPrepayments",
+      "descriptor": "()I",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "fixedDelayString": "${otziv.payments.prepayment-recovery.delay-ms:300000}",
+          "initialDelayString": "${otziv.payments.prepayment-recovery.initial-delay-ms:120000}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "9ce4f854a1599717b5091a3ffe427a0b364f5aa14c01f61c68003d381ea95f0e",
+      "definitionSha256": "47743c22d63237db4d99143d0b8ed1632e70d2e8358d2d2ea215c7f880c115ca",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/payments/service/ConfirmedPrepaymentRecoveryService.java",
+        "sha256": "24f98eb130b60c444764fb5fa802a1d0927bfe3d1cb210148597eaa675e5009b",
+        "methodNameCandidateLines": [
+          61,
+          71
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 6,
+        "truncatedOrFurtherCalls": false,
+        "unresolvedApplicationCallCount": 0,
+        "observedFlagReferences": []
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.payments.service.ContractorShadowRouteBackfillService",
+      "methodName": "backfillMissingShadowRoutes",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "fixedDelayString": "${otziv.contractor-payments.backfill-delay-ms:60000}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "b7c60f6dda7585b1ce1553546951ef0fffcef2217a1c8a9a399dc0b203bed797",
+      "definitionSha256": "a2905ba9afd3d7fd39917693c273c9c61c426ee42ee7ace4fa524a20bbe9d4fb",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/payments/service/ContractorShadowRouteBackfillService.java",
+        "sha256": "86827423f91f34de1c25d336c3b9f79c8e2661dc5262eb345ba9ba88591837d5",
+        "methodNameCandidateLines": [
+          42
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 84,
+        "truncatedOrFurtherCalls": true,
+        "unresolvedApplicationCallCount": 6,
+        "observedFlagReferences": [
+          {
+            "source": "observed_mysql_app_settings",
+            "key": "contractor-payments.shadow-enabled",
+            "value": "true"
+          }
+        ]
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.payments.service.PaymentAccountingReconciliationService",
+      "methodName": "reconcile",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "cron": "${otziv.payments.accounting-reconciliation.cron:0 15 4 * * *}",
+          "zone": "Asia/Irkutsk"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "9b4ea4cae206729136567ce4176aaed6d769b354a9555b203ed7cb43137fa26e",
+      "definitionSha256": "9ee2cb0509ac457e8af32509357171723847018eed59a7d9c5f717c14f1bcc3e",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/payments/service/PaymentAccountingReconciliationService.java",
+        "sha256": "97c7cbf40c6f15cfa377db7f8a0db45dc0523a320397163aa9a7c9511e5d762d",
+        "methodNameCandidateLines": [
+          49,
+          62
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 15,
+        "truncatedOrFurtherCalls": false,
+        "unresolvedApplicationCallCount": 0,
+        "observedFlagReferences": []
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.payments.service.PaymentBankStatusReconciliationService",
+      "methodName": "reconcileStaleBankPayments",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "fixedDelayString": "${otziv.payments.bank-reconciliation.delay-ms:300000}",
+          "initialDelayString": "${otziv.payments.bank-reconciliation.initial-delay-ms:120000}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "27619ecf878c60fb0b0b53e8caf8448dec0834fa430b4973d4cafd2afb9c9575",
+      "definitionSha256": "e8025951db74fcb1953d78627f80ad75077fd4c706a012324b1c09679c52a384",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/payments/service/PaymentBankStatusReconciliationService.java",
+        "sha256": "9afe6043888f28168fbbc9e4f82d6422b8aee0aee33c439d39b9b86347299268",
+        "methodNameCandidateLines": [
+          43
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 72,
+        "truncatedOrFurtherCalls": true,
+        "unresolvedApplicationCallCount": 1,
+        "observedFlagReferences": []
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.payments.service.PaymentLinkArchiveService",
+      "methodName": "scheduledArchive",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "cron": "0 35 3 * * *",
+          "zone": "Asia/Irkutsk"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "9f34eef174edb4aaab99adda83ac5fb8c01f1c07e60894757173a94be7acca73",
+      "definitionSha256": "8f62a0b691f251d04d01fe962243ada053103803860e378d91848cb0d24e7c32",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/payments/service/PaymentLinkArchiveService.java",
+        "sha256": "729b9d9d13eba3fce0172a9ed0f86a18acbcabc25376e9b301a9c06e36416171",
+        "methodNameCandidateLines": [
+          223
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 20,
+        "truncatedOrFurtherCalls": false,
+        "unresolvedApplicationCallCount": 0,
+        "observedFlagReferences": [
+          {
+            "source": "observed_mysql_app_settings",
+            "key": "payment.links.archive.enabled",
+            "value": "false"
+          }
+        ]
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.payments.service.PaymentLinkReturnOutboxWorker",
+      "methodName": "processDue",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "fixedDelayString": "${otziv.payments.return-outbox.fixed-delay-ms:5000}",
+          "initialDelayString": "${otziv.payments.return-outbox.initial-delay-ms:30000}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "bf513f43a4b41e5de4af37280b37d7446602eed8a647d5211b293ef7332a6a91",
+      "definitionSha256": "1200197134544746c8995088011c7f69657b021ba002b2201f3b89665d9be041",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/payments/service/PaymentLinkReturnOutboxWorker.java",
+        "sha256": "220cda41ece3190b778af8c4ec704fcd2bdbbd231fc7b50d46ad3752537af6c1",
+        "methodNameCandidateLines": [
+          46
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 197,
+        "truncatedOrFurtherCalls": true,
+        "unresolvedApplicationCallCount": 6,
+        "observedFlagReferences": []
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.payments.service.PaymentRouteChangeNotificationRetryService",
+      "methodName": "retryPendingNotifications",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "fixedDelayString": "${otziv.payments.route-change-notification.delay-ms:15000}",
+          "initialDelayString": "${otziv.payments.route-change-notification.initial-delay-ms:30000}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "a9c1c70e66b740860dcb8cbac2f06e1cc47ae4f0dfdb88e2527f1bfce4286605",
+      "definitionSha256": "ec73fd1298a657a1e36c2bf038b6b6f2e9c78e77aa7bd96dbd081a7ee5aefff2",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/payments/service/PaymentRouteChangeNotificationRetryService.java",
+        "sha256": "03db4d802e9c8273ea1a7e1bfafb83db10b7cff34c8e4219065e50bc38bf3b70",
+        "methodNameCandidateLines": [
+          25
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 52,
+        "truncatedOrFurtherCalls": true,
+        "unresolvedApplicationCallCount": 3,
+        "observedFlagReferences": []
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.payments.service.PaymentSuccessNotificationRetryService",
+      "methodName": "retryPendingSuccessNotifications",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "fixedDelayString": "${otziv.payments.success-notification-retry.delay-ms:300000}",
+          "initialDelayString": "${otziv.payments.success-notification-retry.initial-delay-ms:180000}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "ef9d9b8fe0a6806fbaf1692f7b66f52f90d5c09d3d4c17747cf99feb4b747c08",
+      "definitionSha256": "f25297e36c7dc4725ffbd68eebe70ef83453b440e7e08c91cba8f71346b128c7",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/payments/service/PaymentSuccessNotificationRetryService.java",
+        "sha256": "92f6e0220354bb7cffd84ff399c7898d495aadcf94e589bac4a11b7968e12ae3",
+        "methodNameCandidateLines": [
+          26
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 43,
+        "truncatedOrFurtherCalls": true,
+        "unresolvedApplicationCallCount": 0,
+        "observedFlagReferences": [
+          {
+            "source": "observed_mysql_app_settings",
+            "key": "client.messages.immediate.enabled",
+            "value": "true"
+          }
+        ]
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.performers.service.PerformerAssignmentScheduler",
+      "methodName": "tick",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "fixedDelayString": "${performers.scheduler.fixed-delay-ms:60000}",
+          "initialDelayString": "${performers.scheduler.initial-delay-ms:60000}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "4e7601a403d9f9a3a378b02c0cc5296d24b71ef8020a75606e2d1876441c9cee",
+      "definitionSha256": "0b398466821b0f13a5fbf2c6a76c1b3c825db69103f5bc97977658b48a4b9167",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/performers/service/PerformerAssignmentScheduler.java",
+        "sha256": "019f18e7995669e40edc9b4d43b8992e0db38e460337796487f9f25351451091",
+        "methodNameCandidateLines": [
+          19
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 109,
+        "truncatedOrFurtherCalls": true,
+        "unresolvedApplicationCallCount": 5,
+        "observedFlagReferences": [
+          {
+            "source": "observed_mysql_app_settings",
+            "key": "performers.rollout.enabled",
+            "value": "false"
+          }
+        ]
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.performers.service.PerformerRegistrationExpiryService",
+      "methodName": "expirePendingRegistrations",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "fixedDelayString": "${performer.registration.expiry-scan-ms:900000}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "c1744d75d128794b4488c0ff161487bbd46cb0be449572e141c6af52fa7f255d",
+      "definitionSha256": "a804687ebf6021dd9d160954f8d848da100e650203fcc5d12e39291f73e0b448",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/performers/service/PerformerRegistrationExpiryService.java",
+        "sha256": "fe49ea787e4950b5c7ec4e953d42481d69ffc673e5f255266933670307834690",
+        "methodNameCandidateLines": [
+          21,
+          22
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 2,
+        "truncatedOrFurtherCalls": false,
+        "unresolvedApplicationCallCount": 0,
+        "observedFlagReferences": []
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.p_products.next_order.service.NextOrderRequestRecoveryScheduler",
+      "methodName": "recoverScheduled",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "fixedDelayString": "${next-order.recovery.fixed-delay:PT5M}",
+          "initialDelayString": "${next-order.recovery.initial-delay:PT1M}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "40a67a3b238f7792cae25ba900c942c0e08da4f82d01f99c7c25a1021231f696",
+      "definitionSha256": "d10707d12ead533e07d685a6e7e0da05abe8c72314582753a55110a171e2df29",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/p_products/next_order/service/NextOrderRequestRecoveryScheduler.java",
+        "sha256": "cf4c239c6a49890b6a31ef54d297876db69d909e3ff992b040df901b789e720f",
+        "methodNameCandidateLines": [
+          30
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 4,
+        "truncatedOrFurtherCalls": false,
+        "unresolvedApplicationCallCount": 0,
+        "observedFlagReferences": []
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.p_products.worker_access.service.WorkerNetworkViolationRetentionJob",
+      "methodName": "cleanup",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "cron": "${otziv.worker.cellular-access.violation-cleanup-cron:0 50 3 * * *}",
+          "zone": "Asia/Irkutsk"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "0ad4e50a0c8609ad1e882c6385b478cabea8df1dd8e99a065a9ff74f935cb376",
+      "definitionSha256": "6014c25af52fb1d702264d3f89fd0f13bf36ded1a3fd6373c8721c365621e525",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/p_products/worker_access/service/WorkerNetworkViolationRetentionJob.java",
+        "sha256": "e2279e6b1af9405799b63607125a43436fcdbb644497545a6fc8ce5b754e3cac",
+        "methodNameCandidateLines": [
+          22
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 4,
+        "truncatedOrFurtherCalls": false,
+        "unresolvedApplicationCallCount": 0,
+        "observedFlagReferences": [
+          {
+            "source": "observed_env_via_published_properties",
+            "property": "otziv.worker.cellular-access.violation-statistics-enabled",
+            "envKey": "OTZIV_WORKER_CELLULAR_VIOLATION_STATISTICS_ENABLED",
+            "value": "true"
+          }
+        ]
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.p_products.worker_flow.service.WorkerPublicationSessionService",
+      "methodName": "closeExpiredSessions",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "fixedDelayString": "${worker.publication-session.cleanup-delay-ms:300000}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "2f0740c1aba0617a83ff0fc89eb4af54b4df2795ade89d94ef31101b959e0307",
+      "definitionSha256": "842d493d6e3595745d573319db14ff6ffd8a8ecec21c9deb9036b2aa7050aa97",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/p_products/worker_flow/service/WorkerPublicationSessionService.java",
+        "sha256": "8d59ba02588b7f48f43b3aae171cac087443b6b26e42a627184c5b79bcabf258",
+        "methodNameCandidateLines": [
+          113
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 24,
+        "truncatedOrFurtherCalls": false,
+        "unresolvedApplicationCallCount": 1,
+        "observedFlagReferences": []
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.review_recovery.service.ReviewRecoveryArchiveScheduler",
+      "methodName": "archiveOldClientNotifiedBatches",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "cron": "${otziv.review-recovery.archive.cron:0 20 4 * * *}",
+          "zone": "${otziv.review-recovery.archive.zone:Asia/Irkutsk}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "7026ae138d8e9876f5a1502e47995749b1a28c65723b4f198e17cad705277737",
+      "definitionSha256": "5ee406552a1e349f96d6eed29d2b89c72ec1e214970c504532b5f5654016277a",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/review_recovery/service/ReviewRecoveryArchiveScheduler.java",
+        "sha256": "78483d5d9929e35ddee25661aaad5158ddd09710d54158dc52ce057499e0c054",
+        "methodNameCandidateLines": [
+          26
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 2,
+        "truncatedOrFurtherCalls": false,
+        "unresolvedApplicationCallCount": 0,
+        "observedFlagReferences": []
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.r_review.bot.service.ReviewBotAssignmentExclusionCleanupJob",
+      "methodName": "cleanup",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "cron": "${app.review.bot-assignment-exclusion-cleanup-cron:0 35 3 * * *}",
+          "zone": "Asia/Irkutsk"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "7f7ae438ac9c72beb6b88e1bced6f513e72ec1c173a201b450f15300db929bc3",
+      "definitionSha256": "498551afdc1482925033088d94de1f863145545d4fb3624ce9c2e548ad116b8d",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/r_review/bot/service/ReviewBotAssignmentExclusionCleanupJob.java",
+        "sha256": "781fa53edb81adbfa44bbcaf9a9b2589fb0aec78a51717b3b1f24d331cc28c99",
+        "methodNameCandidateLines": [
+          27
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 3,
+        "truncatedOrFurtherCalls": false,
+        "unresolvedApplicationCallCount": 0,
+        "observedFlagReferences": []
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.r_review.bot.service.ReviewWalkReadinessReconciliationJob",
+      "methodName": "reconcile",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "cron": "${app.review.walk-readiness-reconciliation-cron:0 20 3 * * *}",
+          "zone": "Asia/Irkutsk"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "ea2a7561990841fc65c9d667a4fbe8c3972f65e5f154d7b862a146446b9d07e9",
+      "definitionSha256": "7a8e767cb2e6f104df381a0878729ea15946bd94b57991bd0e8a5e9c136fb2d7",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/r_review/bot/service/ReviewWalkReadinessReconciliationJob.java",
+        "sha256": "f540df0ad6ba46079eea1c9fc2b07589129f836ef58a75134d84b0c3a13e0c1b",
+        "methodNameCandidateLines": [
+          20
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 2,
+        "truncatedOrFurtherCalls": false,
+        "unresolvedApplicationCallCount": 0,
+        "observedFlagReferences": []
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.s3.cleanup.service.S3ObjectCleanupQueue",
+      "methodName": "cleanupDueObjects",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "fixedDelayString": "${s3.cleanup.fixed-delay:PT1M}",
+          "initialDelayString": "${s3.cleanup.initial-delay:PT30S}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "cbd8ea4d7c4b1484165fa69a38794dc074659dbd4dba99327b51e3ca4ca4bd67",
+      "definitionSha256": "c5481a866e5201f68843888ad3bc3f17b8a68c1a81a6b5eea647edd739f19260",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/s3/cleanup/service/S3ObjectCleanupQueue.java",
+        "sha256": "6d9431b193055794e517da95689d44934997ce3958f9bc9855f14e8e727cd49a",
+        "methodNameCandidateLines": [
+          96
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 20,
+        "truncatedOrFurtherCalls": false,
+        "unresolvedApplicationCallCount": 0,
+        "observedFlagReferences": []
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.t_telegrambot.service.NotificationSchedulerToTelegramImpl",
+      "methodName": "sendConfiguredDailyReports",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "fixedDelayString": "${telegram.reports.schedule.poll-delay-ms:30000}",
+          "initialDelayString": "${telegram.reports.schedule.initial-delay-ms:30000}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "eda10d8006e7539f1d29894bf8ffa75c6396be35165678353c44b8c2079d6694",
+      "definitionSha256": "e3081a744e5f714dca09bde8378c7886ec436d37b93443b0cda797b95d62c34d",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/t_telegrambot/service/NotificationSchedulerToTelegramImpl.java",
+        "sha256": "84350bad31d2eee364bbd191a1d0b4a8c5f41785368cdb1fc9fd6a55b2bfcb09",
+        "methodNameCandidateLines": [
+          52
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 57,
+        "truncatedOrFurtherCalls": true,
+        "unresolvedApplicationCallCount": 3,
+        "observedFlagReferences": [
+          {
+            "source": "observed_mysql_app_settings",
+            "key": "telegram.reports.evening.enabled",
+            "value": "true"
+          },
+          {
+            "source": "observed_mysql_app_settings",
+            "key": "telegram.reports.morning.enabled",
+            "value": "true"
+          }
+        ]
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.whatsapp.service.WhatsAppGroupLinkSyncService",
+      "methodName": "syncKnownGroups",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "fixedDelayString": "${whatsapp.group-sync.tick-delay-ms:60000}",
+          "initialDelayString": "${whatsapp.group-sync.initial-delay-ms:120000}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "e3d3dc01bc960fca0d0992b9024314bb71b56f5201d443ad8077d5421155cdaa",
+      "definitionSha256": "ca2fa55bd707b34f01ee5c639fd1d8486f0c768f61f3ea6ccd0524103912dba5",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/whatsapp/service/WhatsAppGroupLinkSyncService.java",
+        "sha256": "809e70795ccfd1277a94ff5187efa83899843da7661e19f222903ab179943e1c",
+        "methodNameCandidateLines": [
+          50
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 75,
+        "truncatedOrFurtherCalls": true,
+        "unresolvedApplicationCallCount": 5,
+        "observedFlagReferences": [
+          {
+            "source": "observed_mysql_app_settings",
+            "key": "whatsapp.group-sync.enabled",
+            "value": "true"
+          }
+        ]
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.whatsapp.service.WhatsAppHealthMonitorService",
+      "methodName": "checkAllClientsHealth",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "fixedDelayString": "${whatsapp.health-monitor.fixed-delay-ms:720000}",
+          "initialDelayString": "${whatsapp.health-monitor.initial-delay-ms:120000}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "2e5b85f2d279df45053ba384e97e72d492333bc3616017606a1b71cb9403db7f",
+      "definitionSha256": "bd2794f94055af017732e106c5a1dbf0a5c0c7c97990e3b01868fd7759fec799",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/whatsapp/service/WhatsAppHealthMonitorService.java",
+        "sha256": "4bae13ecb77da76f921868d52b9f2850a70c40811c96ef6adad22713bbb942ca",
+        "methodNameCandidateLines": [
+          46
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 34,
+        "truncatedOrFurtherCalls": true,
+        "unresolvedApplicationCallCount": 2,
+        "observedFlagReferences": []
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.worker_activity.service.WorkerActivityCleanupJob",
+      "methodName": "cleanup",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "cron": "${worker.activity.cleanup.cron:0 45 3 * * *}",
+          "zone": "Asia/Irkutsk"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "b417ba212b15e5358ea451b23b466e6d7e608d15c7b4ef474eefe1ffe1ee0ef0",
+      "definitionSha256": "3485a2b5ad71ba3123b52470536b2a58492eab33ab6796451909ca4196ad5776",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/worker_activity/service/WorkerActivityCleanupJob.java",
+        "sha256": "4da126a31c3fea2ed3879ffbe7f319016f92fa385d81557562dc755dde7a22ef",
+        "methodNameCandidateLines": [
+          30
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 3,
+        "truncatedOrFurtherCalls": false,
+        "unresolvedApplicationCallCount": 0,
+        "observedFlagReferences": []
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.worker_activity.service.WorkerRiskResponseSlaJob",
+      "methodName": "process",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "fixedDelayString": "${worker-risk.response-sla.poll-ms:300000}",
+          "initialDelayString": "${worker-risk.response-sla.initial-delay-ms:60000}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "cc67cc2deaf7dae5b9a429ae15a88d1c8921e277361527be79d86cf5b63faf4b",
+      "definitionSha256": "dd224c454c3662b702549bd91e1a88a8e63b306e20d38a50ca4d20c3677e52c7",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/worker_activity/service/WorkerRiskResponseSlaJob.java",
+        "sha256": "98a930e03a0802c90c42c9c755b93f7a56cf9b64de62dbdc32576cfa65000475",
+        "methodNameCandidateLines": [
+          49
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 13,
+        "truncatedOrFurtherCalls": false,
+        "unresolvedApplicationCallCount": 0,
+        "observedFlagReferences": [
+          {
+            "source": "observed_mysql_app_settings",
+            "key": "worker-risk.specialist-section-restriction-enabled",
+            "value": "true"
+          }
+        ]
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.worker_performance.service.WorkerProgressRetentionJob",
+      "methodName": "cleanup",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "cron": "${worker.progress.cleanup-cron:0 35 3 * * *}",
+          "zone": "${worker.progress.zone:Asia/Irkutsk}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "5b0f3294a5072dc12dae4d4283a6d3efa6866abb436c253f014575da50eb8b56",
+      "definitionSha256": "09872817ec05d7679d0c8c32047845ce5cbddfcfd367a88dadc9819e05dffb4d",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/worker_performance/service/WorkerProgressRetentionJob.java",
+        "sha256": "72329229f45370019e64195483abfb5ed929c216fea2038cbe1e656f7e50e1f7",
+        "methodNameCandidateLines": [
+          26
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 10,
+        "truncatedOrFurtherCalls": false,
+        "unresolvedApplicationCallCount": 0,
+        "observedFlagReferences": [
+          {
+            "source": "observed_mysql_app_settings",
+            "key": "worker.progress.cleanup-enabled",
+            "value": "true"
+          },
+          {
+            "source": "observed_mysql_app_settings",
+            "key": "worker.progress.monthly-aggregate-enabled",
+            "value": "true"
+          }
+        ]
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.workload_shadow.health.service.WorkloadShadowHealthMonitorJob",
+      "methodName": "refreshMetrics",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "fixedDelayString": "${workload.shadow.health-delay-ms:300000}",
+          "initialDelayString": "${workload.shadow.health-initial-delay-ms:120000}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "1cd6b9b393c0e6518f72926354e460d451bfa8d89827ddbf91e569d3301a5c2c",
+      "definitionSha256": "f7177395fbe0e9f5dc386728afb19d33bd382da3aec53754bb274ecac28a85cc",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/workload_shadow/health/service/WorkloadShadowHealthMonitorJob.java",
+        "sha256": "457093267ac6a2fd6a28d1f18ad501cb369f46046666c03bcadfc2bf762ea4c2",
+        "methodNameCandidateLines": [
+          21
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 79,
+        "truncatedOrFurtherCalls": true,
+        "unresolvedApplicationCallCount": 0,
+        "observedFlagReferences": [
+          {
+            "source": "observed_mysql_app_settings",
+            "key": "workload.shadow.group-notifications-enabled",
+            "value": "true"
+          }
+        ]
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.workload_shadow.maintenance.service.WorkloadShadowMaintenanceJob",
+      "methodName": "repairStaleState",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "fixedDelayString": "${workload.shadow.repair-delay-ms:300000}",
+          "initialDelayString": "${workload.shadow.repair-initial-delay-ms:180000}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "9ab722d060579e096ea3a22c59721f8127616f88a7dbe7ab88a22556160fea15",
+      "definitionSha256": "94ccdf2d4b928dffb38897fcaf4fd637e37afc6d0bc5e3ff16730555b5c139f9",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/workload_shadow/maintenance/service/WorkloadShadowMaintenanceJob.java",
+        "sha256": "8f9b281035c46f555793ed6275e322468117417206c209056324d71afd66c6a4",
+        "methodNameCandidateLines": [
+          19,
+          22,
+          53
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 48,
+        "truncatedOrFurtherCalls": true,
+        "unresolvedApplicationCallCount": 1,
+        "observedFlagReferences": []
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.workload_shadow.maintenance.service.WorkloadShadowMaintenanceJob",
+      "methodName": "cleanupRetention",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "cron": "${workload.shadow.maintenance-cron:0 40 4 * * *}",
+          "zone": "${workload.shadow.maintenance-zone:Asia/Irkutsk}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "9ab722d060579e096ea3a22c59721f8127616f88a7dbe7ab88a22556160fea15",
+      "definitionSha256": "9d77eb2d09854fa7e1542ad768bce2695f2fcdc683baf98899b1ed9b64fc2088",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/workload_shadow/maintenance/service/WorkloadShadowMaintenanceJob.java",
+        "sha256": "8f9b281035c46f555793ed6275e322468117417206c209056324d71afd66c6a4",
+        "methodNameCandidateLines": [
+          50,
+          63
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 70,
+        "truncatedOrFurtherCalls": true,
+        "unresolvedApplicationCallCount": 1,
+        "observedFlagReferences": []
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.workload_shadow.notification.service.WorkloadShadowNotificationScheduler",
+      "methodName": "dispatch",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "fixedDelayString": "${workload.shadow.notification-delay-ms:60000}",
+          "initialDelayString": "${workload.shadow.notification-initial-delay-ms:90000}"
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "393505df0cb246bac67e39b77d30008b8a57272ac22fe60b831d07d9e6828003",
+      "definitionSha256": "436e884f2029391dd90d1be89ad5389f034472e53c4427a3d2e69a40475a27a4",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/workload_shadow/notification/service/WorkloadShadowNotificationScheduler.java",
+        "sha256": "ddfdcc9d6da7b4d438d81f3abdde88901b9f5c044f1cdefcdd02594fbd2a4d69",
+        "methodNameCandidateLines": [
+          19
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 62,
+        "truncatedOrFurtherCalls": true,
+        "unresolvedApplicationCallCount": 1,
+        "observedFlagReferences": [
+          {
+            "source": "observed_mysql_app_settings",
+            "key": "workload.shadow.group-notifications-enabled",
+            "value": "true"
+          }
+        ]
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.workload_shadow.service.WorkloadEmergencyNotificationScheduler",
+      "methodName": "deliverPending",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "fixedDelay": 60000,
+          "initialDelay": 210000
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "45917abb1c394a1f55f16e1524e67dd2bcb808e80175fb55daf6147e491b7bbb",
+      "definitionSha256": "d481056ed1cf4c4584fa325448e3c4c7b24d8a4d577ed5e69bdfaaf08697dde9",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/workload_shadow/service/WorkloadEmergencyNotificationScheduler.java",
+        "sha256": "ebdc4704c9715712e3bf34540d7532ef95cb8b061dfd00d3fc4a0d190b991cdc",
+        "methodNameCandidateLines": [
+          16
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 41,
+        "truncatedOrFurtherCalls": true,
+        "unresolvedApplicationCallCount": 1,
+        "observedFlagReferences": []
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.workload_shadow.service.WorkloadShadowScheduler",
+      "methodName": "tick",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "fixedDelay": 60000,
+          "initialDelay": 120000
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "0bf1b1995262a8bb9ac7115025d6f5656b7686e9d7fa3f6ad55b8830f4d224a9",
+      "definitionSha256": "2c73cb82cb0dda8a8c21baaf1035672e811996d530aee63411f5961ee68c7336",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/workload_shadow/service/WorkloadShadowScheduler.java",
+        "sha256": "3cd6ab229bd9ce6122bb18628544f4a06c4620ed18561f79bb52aa6bc425b90f",
+        "methodNameCandidateLines": [
+          22
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 147,
+        "truncatedOrFurtherCalls": true,
+        "unresolvedApplicationCallCount": 0,
+        "observedFlagReferences": []
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    },
+    {
+      "className": "com.hunt.otziv.workload_shadow.service.WorkloadTransferLiveScheduler",
+      "methodName": "tick",
+      "descriptor": "()V",
+      "schedules": [
+        {
+          "type": "Lorg/springframework/scheduling/annotation/Scheduled;",
+          "fixedDelay": 60000,
+          "initialDelay": 180000
+        }
+      ],
+      "classConditions": [],
+      "methodConditions": [],
+      "classSha256": "8371e115a63cc44c966318dfd56e52e6a976fe16b991e9e0de6fcb956a0d26cd",
+      "definitionSha256": "3afbe5fe2dab050e47b3f19aa75b2faaa357076febb7dfeba8f4f026c3084527",
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/workload_shadow/service/WorkloadTransferLiveScheduler.java",
+        "sha256": "a7bb726391d823e608aa261efa067847cb28ac749492cd877bca0cf3300ea8c0",
+        "methodNameCandidateLines": [
+          21
+        ]
+      },
+      "conditionalPropertyObservedInputs": [],
+      "flagReferences": {
+        "mode": "Bounded static call/field references, not effective boolean evaluation",
+        "maxCallDepth": 4,
+        "visitedMethods": 462,
+        "truncatedOrFurtherCalls": true,
+        "unresolvedApplicationCallCount": 2,
+        "observedFlagReferences": []
+      },
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401",
+      "runtimeInvocationOrSuccess": "NOT_OBSERVED",
+      "scheduleResolution": "Literal annotation values exact; placeholder values are definitions/defaults, not observed effective cron/delay overrides"
+    }
+  ],
+  "dynamicSchedulingConfigurers": [
+    {
+      "className": "com.hunt.otziv.s3.backup.service.BackupScheduler",
+      "classSha256": "3c9032c4fec9ed34f9fc8908885de972e54370dab35c71ce4cc3a3424d8ae905",
+      "classConditions": [
+        {
+          "type": "Lorg/springframework/boot/autoconfigure/condition/ConditionalOnProperty;",
+          "name": [
+            "backup.enabled"
+          ],
+          "havingValue": "true"
+        }
+      ],
+      "source": {
+        "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+        "path": "backend/src/main/java/com/hunt/otziv/s3/backup/service/BackupScheduler.java",
+        "sha256": "557b23e0420b76dfb79855b17d8f4448039f0bf13a1ed91166fbace187d9075b"
+      },
+      "registeredByCode": "configureTasks: CronTrigger daily plus FixedDelayTask catchUp when corresponding settings permit",
+      "observedInputs": [
+        {
+          "source": "observed_env_via_published_properties",
+          "property": "backup.enabled",
+          "envKey": "BACKUP_ENABLED",
+          "value": "true"
+        },
+        {
+          "source": "observed_env_via_published_properties",
+          "property": "backup.schedule.enabled",
+          "envKey": "BACKUP_SCHEDULE_ENABLED",
+          "value": "true"
+        },
+        {
+          "source": "observed_env_via_published_properties",
+          "property": "backup.schedule.catch-up-enabled",
+          "envKey": "BACKUP_SCHEDULE_CATCH_UP_ENABLED",
+          "value": "true"
+        }
+      ],
+      "effectiveCronAndZone": "UNKNOWN_NOT_IN_ENV_WHITELIST",
+      "runtimeRegistration": "UNKNOWN_ACTUATOR_401"
+    }
+  ]
+}

@@ -1,0 +1,66 @@
+{
+  "schema": "otziv-mysql-vps-fixture-preparation-failures-v1",
+  "result": "RETAINED_FAILURES",
+  "failures": [
+    {
+      "run": 1,
+      "result": "FAIL",
+      "startedAt": "2026-09-08T13:53:51.603Z",
+      "completedAt": "2026-09-08T13:55:52.953Z",
+      "failurePhase": "captured_data_before_baseline_app",
+      "failureCode": "representative_tables_missing",
+      "sourceWrites": false,
+      "ownedResourcesStopped": true,
+      "rawPrivateProofSha256": "7ad746fc0d08598d1e338e22c845febd89bc4d537737207761671951c4b893e3",
+      "reviewedCause": "Snapshot expected post287 table names; corrected schema-specific mandatory table inventory."
+    },
+    {
+      "run": 2,
+      "result": "FAIL",
+      "startedAt": "2026-09-08T14:02:56.562Z",
+      "completedAt": "2026-09-08T14:05:53.930Z",
+      "failurePhase": "app_migration_9_0",
+      "failureCode": "app_container_exited",
+      "sourceWrites": false,
+      "ownedResourcesStopped": true,
+      "rawPrivateProofSha256": "d2783d340e63f9f6dc3f00583a66a1f79b5b415941c8bf4b1972c83452f48d37",
+      "reviewedCause": "Read-only fixture root made the original backup work directory unwritable; redirected fixture work directory to tmpfs."
+    },
+    {
+      "run": 3,
+      "result": "FAIL",
+      "startedAt": "2026-09-08T14:08:29.485Z",
+      "completedAt": "2026-09-08T14:11:19.771Z",
+      "failurePhase": "app_migration_9_0",
+      "failureCode": "app_container_exited",
+      "sourceWrites": false,
+      "ownedResourcesStopped": true,
+      "rawPrivateProofSha256": "791807c98d61b421e312dcef53a6ff968297427f9847d6a06cbe09843e898708",
+      "reviewedCause": "Original env catch-up backup flag remained enabled while the fixture disabled the schedule; all fixture backup dispatch flags are explicitly OFF."
+    },
+    {
+      "run": 4,
+      "result": "FAIL",
+      "startedAt": "2026-09-08T14:12:12.535Z",
+      "completedAt": "2026-09-08T14:15:51.567Z",
+      "failurePhase": "app_migration_9_0",
+      "failureCode": "baseline_app_preserves_capture_rows",
+      "sourceWrites": false,
+      "ownedResourcesStopped": true,
+      "rawPrivateProofSha256": "1eb2be20c40c9d429b95237c77c8a60f7061e15d2b3c839e76be4ea9a601ac17",
+      "reviewedCause": "Immediate old-app contractor shadow backfill inserted22 coordination claims. All required business checksums remained unchanged; baseline/rollback validation now has verified MySQL read_only and super_read_only fences instead of excluding tables."
+    },
+    {
+      "run": 5,
+      "result": "FAIL",
+      "startedAt": "2026-09-08T14:21:55.125Z",
+      "completedAt": "2026-09-08T14:25:19.364Z",
+      "failurePhase": "snapshot_9_0",
+      "failureCode": "unknown_table_requires_stable_primary_key",
+      "sourceWrites": false,
+      "ownedResourcesStopped": true,
+      "rawPrivateProofSha256": "09fa1413e155c5c26ab44453d1bc0c2c7fdec542116812e4b3fc782a7bafc279",
+      "reviewedCause": "Historical copied backup snapshots have no primary key. Their complete UNKNOWN row multisets remain covered by type-aware binary serialization/hash plus full-row tie-breaker; operational tables still require a primary key."
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "originalHarnessSha256": "8f76a2990f73aea59a0656fcc56c31ade4b4e61c404be6bb881a15c3ef0ccb96",
+  "executedHarnessSha256": "5eecaeef3f683d7b2689e3604b9b0f5b837e04cfd70b8409c44af4347a8c3a7c",
+  "provisionSha256": "ce407ac3cecf147e400f8b5286c0e75acc5ef004c10c910eea46abb172746b88",
+  "onlyHarnessChange": "CPU resource limits for existing three containers",
+  "cpuLimits": {
+    "postgres": 0.5,
+    "keycloak": 1,
+    "http": 0.25
+  }
+}

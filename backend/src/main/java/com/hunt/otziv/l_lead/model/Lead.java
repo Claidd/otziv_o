@@ -55,6 +55,10 @@ public class Lead {
     @Column(name = "id")
     private Long id;
 
+    @Column(name = "whatsapp_work_generation", nullable = false)
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    private long whatsappWorkGeneration;
+
     //    телефон нового лида, который откликнулся на рассылку
     @Column(name = "telephone_lead", length = 20, nullable = false, unique = true)
     private String telephoneLead;

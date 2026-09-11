@@ -1,0 +1,15 @@
+{
+  "id": 10038664771,
+  "name": "reviewed-publication-mysql",
+  "bytes": 448617,
+  "sha256": "93547501e95ffcc4e1d10b23a2fc7abc294e92759e399bc79694d7deb801ab29",
+  "apiDigestPresent": true,
+  "apiDigestVerified": true,
+  "artifactRunAttemptVerified": false,
+  "path": "run-34178760576/20260908T023255Z-8b8bab9e7d/artifact-10038664771.zip",
+  "extraction": {
+    "entries": 13,
+    "extractedBytes": 4098524,
+    "path": "run-34178760576/20260908T023255Z-8b8bab9e7d/artifact-10038664771"
+  }
+}

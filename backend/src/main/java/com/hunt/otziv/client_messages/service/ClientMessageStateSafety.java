@@ -6,6 +6,7 @@ public final class ClientMessageStateSafety {
 
     public static final String TRANSACTION_IN_PROGRESS = "state_transaction_in_progress";
     public static final String TRANSACTION_OUTCOME_UNCERTAIN = "state_transaction_outcome_uncertain";
+    public static final String LEGACY_PREPARATION_UNVERIFIED = "legacy_operation_unverified";
     public static final String DELIVERY_PREPARED = "PREPARED";
     public static final String DELIVERY_OUTCOME_UNKNOWN = "UNKNOWN";
 
@@ -27,7 +28,15 @@ public final class ClientMessageStateSafety {
         }
         String code = state.getLastErrorCode().trim();
         return TRANSACTION_IN_PROGRESS.equalsIgnoreCase(code)
-                || TRANSACTION_OUTCOME_UNCERTAIN.equalsIgnoreCase(code);
+                || TRANSACTION_OUTCOME_UNCERTAIN.equalsIgnoreCase(code)
+                || LEGACY_PREPARATION_UNVERIFIED.equalsIgnoreCase(code);
+    }
+
+    public static boolean isLegacyPreparationFailure(ScheduledClientMessageState state) {
+        return state != null && (LEGACY_PREPARATION_UNVERIFIED.equals(state.getLastErrorCode())
+                || (TRANSACTION_OUTCOME_UNCERTAIN.equals(state.getLastErrorCode())
+                && state.getLastErrorMessage() != null
+                && state.getLastErrorMessage().endsWith("Причина: legacy_operation_unverified")));
     }
 
     public static boolean isTransactionInProgress(ScheduledClientMessageState state) {

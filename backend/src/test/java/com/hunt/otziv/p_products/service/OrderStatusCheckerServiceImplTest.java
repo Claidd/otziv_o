@@ -22,6 +22,8 @@ import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
 import java.time.LocalDate;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.ObjectProvider;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.Mock;
@@ -162,6 +164,20 @@ class OrderStatusCheckerServiceImplTest {
 
         verify(paymentInvoiceRetryScheduler).scheduleInitialInvoice(order);
         verify(orderPaymentMessageBuilder, never()).publishedOrderPaymentMessage(order);
+        verifyNoInteractions(orderStatusNotificationService);
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs={0,5})
+    void completionCreatesOneNewGenerationAndRepeatedCheckKeepsIt(long previous) throws Exception {
+        Order order=payableOrder(51L);
+        order.setStatus(orderStatus(5L,"Публикация"));order.setClientMessageGeneration(previous);
+        enableImmediateMessages();
+        when(orderStatusService.getOrderStatusByTitle("Опубликовано")).thenReturn(orderStatus(6L,"Опубликовано"));
+        service().checkAndMarkOrderCompleted(order);
+        assertEquals(previous+1,order.getClientMessageGeneration());
+        service().checkAndMarkOrderCompleted(order);
+        assertEquals(previous+1,order.getClientMessageGeneration());
         verifyNoInteractions(orderStatusNotificationService);
     }
 

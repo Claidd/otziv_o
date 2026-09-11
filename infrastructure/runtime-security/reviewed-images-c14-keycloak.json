@@ -1,0 +1,36 @@
+{
+  "schema": "otziv-reviewed-images-v1",
+  "repository": "ghcr.io/claidd/otziv-security",
+  "publicationSet": "c14-keycloak",
+  "baselineManifestSha256": "d48bdb7d6d869cde5d6f1a7b089491765e3eeaf46e0b0b6bb51b7719b38d3ef2",
+  "images": [
+    {
+      "component": "keycloak",
+      "platform": "linux/amd64",
+      "sourceBeforeRef": "quay.io/keycloak/keycloak@sha256:4883630ef9db14031cde3e60700c9a9a8eaf1b5c24db1589d6a2d43de38ba2a9",
+      "defaultReferencesBefore": [
+        {
+          "path": "compose.yaml",
+          "line": 275,
+          "service": "keycloak"
+        },
+        {
+          "path": "compose.prod-local.yaml",
+          "line": 120,
+          "service": "keycloak"
+        },
+        {
+          "path": "docker-compose.yaml",
+          "line": 131,
+          "service": "keycloak"
+        }
+      ],
+      "buildArgs": {},
+      "context": "infrastructure/keycloak/security-generation/c14-migration-fix",
+      "dockerfile": "infrastructure/keycloak/security-generation/c14-migration-fix/Dockerfile",
+      "dockerfileSha256": "d9224dbd0089302f8010beabb55f48b0274924bdaa99965fdd79a7b890a4831f",
+      "candidateBaseRef": "ghcr.io/claidd/otziv-security@sha256:93dd42a5379a80fc0673bc1d0c5601d3b35009c8250394b1e2b45082388c82cc",
+      "version": "26.7.3-otziv.2-realm-migration.1"
+    }
+  ]
+}

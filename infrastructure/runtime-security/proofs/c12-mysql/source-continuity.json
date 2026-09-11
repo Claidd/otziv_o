@@ -1,0 +1,60 @@
+{
+  "result": "PASS",
+  "observedAt": "2026-09-08T07:20:04.098273+00:00",
+  "sourceDmlDdlIssuedByThisTask": false,
+  "containerIdentityStartImageMountsUnchanged": true,
+  "containers": [
+    {
+      "name": "otziv-prod-local-mysql-1",
+      "id": "d1435762ab854cb50fea3070a4458336c92ca253c9de4c3fc9d5258407ae6191",
+      "image": "sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383",
+      "startedAt": "2026-09-08T03:10:20.864597811Z",
+      "mounts": [
+        {
+          "type": "bind",
+          "name": null,
+          "destination": "/backup",
+          "rw": true
+        },
+        {
+          "type": "volume",
+          "name": "otziv-prod-local_mysql_data",
+          "destination": "/var/lib/mysql",
+          "rw": true
+        },
+        {
+          "type": "bind",
+          "name": null,
+          "destination": "/var/lib/mysql-files",
+          "rw": true
+        }
+      ]
+    },
+    {
+      "name": "otziv-prod-local-app-1",
+      "id": "9a3774d3f126c016270563f9c223abbf87f5a08df232a94de9a77c290a7009d0",
+      "image": "sha256:eb5419e630ed6bd3f21c9c510c3961797b7faf5e6a81ed400e0ba4ebd7d38a0f",
+      "startedAt": "2026-09-08T03:15:07.878621353Z",
+      "mounts": [
+        {
+          "type": "bind",
+          "name": null,
+          "destination": "/app/backup",
+          "rw": true
+        },
+        {
+          "type": "bind",
+          "name": null,
+          "destination": "/app/logs",
+          "rw": true
+        },
+        {
+          "type": "bind",
+          "name": null,
+          "destination": "/app/mobile-releases",
+          "rw": true
+        }
+      ]
+    }
+  ]
+}

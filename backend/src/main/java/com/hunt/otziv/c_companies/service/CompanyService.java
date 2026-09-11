@@ -17,7 +17,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-public interface CompanyService {
+public interface CompanyService extends com.hunt.otziv.c_companies.api.CompanyOrderInputs {
 
     CompanyDTO convertToDtoToManager(Long leadId, Principal principal); //    подготовка нового DTO на основе лида
     boolean save(CompanyDTO companyDTO); //    сохранить компанию

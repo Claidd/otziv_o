@@ -1,0 +1,3448 @@
+{
+  "schema": "otziv-cve-review-index-v1",
+  "generatedAt": "2026-09-07T14:28:13.379Z",
+  "scope": "Latest retained worker/WhatsApp/publisher HIGH/CRITICAL triage rows only; not a fresh scan or complete-fleet review",
+  "sourceReports": [
+    {
+      "runtime": "worker",
+      "scanCreatedAt": "2026-09-07T11:35:59.172184452Z",
+      "imageId": "sha256:38b5fdcfdc53b7db5ed2d2286d9c9d64a017e9c8a9ac2e2fbf2a96f627ab9435",
+      "triagePath": ".codex-tmp/remediation-completion-20260907/worker-vulnerabilities.triage.json",
+      "triageSha256": "f2b95e6dca88f68c2b4fc61e626826c50ed2e79a79d5606c2aa50282d013730e",
+      "rawPath": ".codex-tmp/remediation-completion-20260907/worker-vulnerabilities.json",
+      "rawSha256": "e0ae4ecbe7654e6f6a1c24046ec49807526bd60c6321f1381b8b77f6ffbbee66",
+      "rows": 91,
+      "distinctCves": 41
+    },
+    {
+      "runtime": "whatsapp",
+      "scanCreatedAt": "2026-09-07T11:34:55.82112676Z",
+      "imageId": "sha256:978665b367ada523abc19d8c882a82506bf17c964f03df2fe23418cc9d40c6b0",
+      "triagePath": ".codex-tmp/remediation-completion-20260907/whatsapp-vulnerabilities.triage.json",
+      "triageSha256": "21ad7b41d98d92d3356d8765918805e9f8f6ca612a9a563527d7d1d17f79cfd3",
+      "rawPath": ".codex-tmp/remediation-completion-20260907/whatsapp-vulnerabilities.json",
+      "rawSha256": "2ce9c6d91e157d2c0c0249eb90187e72caedc6f0fcb62d29224101b5bdf4a599",
+      "rows": 105,
+      "distinctCves": 49
+    },
+    {
+      "runtime": "publisher",
+      "scanCreatedAt": "2026-09-07T11:32:54.861917164Z",
+      "imageId": "sha256:e020032ea3a37269d6a577d8a10709faada067b2e474109169b8522f7bc95d7d",
+      "triagePath": ".codex-tmp/remediation-completion-20260907/publisher-vulnerabilities.triage.json",
+      "triageSha256": "59e02415183505ea3477b6e11f7dd6560c8c515ad4a760e431fbe6b679bc2097",
+      "rawPath": ".codex-tmp/remediation-completion-20260907/publisher-vulnerabilities.json",
+      "rawSha256": "3b1d402b2a45411af483a039a07d68aa82e2c61652198a9a2703a4186bd042a4",
+      "rows": 56,
+      "distinctCves": 18
+    }
+  ],
+  "totalPackageImageCveRows": 252,
+  "distinctCves": 49,
+  "policy": "No exclusions, accepted risks, named owner assignment or expiry approvals are created.",
+  "findings": [
+    {
+      "cve": "CVE-2022-4055",
+      "severity": "HIGH",
+      "title": "xdg-utils: improper parse of mailto URIs allows bypass of Thunderbird security mechanism for attachments",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2022-4055",
+      "occurrences": [
+        {
+          "runtime": "worker",
+          "package": "xdg-utils",
+          "installed": "1.1.3-4.1",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "xdg-utils",
+          "installed": "1.1.3-4.1",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "SYSTEM_TOOL_PRECONDITIONS_REQUIRE_REVIEW"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify actual executable and privilege prerequisites in the exact image; remove unused package only with runtime probes, or update. Do not assume an unused entrypoint proves all code paths unreachable."
+    },
+    {
+      "cve": "CVE-2023-25193",
+      "severity": "HIGH",
+      "title": "harfbuzz: allows attackers to trigger O(n^2) growth via consecutive marks",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2023-25193",
+      "occurrences": [
+        {
+          "runtime": "worker",
+          "package": "libharfbuzz-subset0",
+          "installed": "6.0.0+dfsg-3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "libharfbuzz0b",
+          "installed": "6.0.0+dfsg-3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libharfbuzz-subset0",
+          "installed": "6.0.0+dfsg-3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libharfbuzz0b",
+          "installed": "6.0.0+dfsg-3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "NATIVE_LIBRARY_REACHABILITY_UNPROVEN"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify distro/source-package applicability, shipped binary/architecture and runtime callers; update or record reviewed VEX evidence. Sandbox alone is not proof of unreachability."
+    },
+    {
+      "cve": "CVE-2023-2953",
+      "severity": "HIGH",
+      "title": "openldap: null pointer dereference in  ber_memalloc_x  function",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2023-2953",
+      "occurrences": [
+        {
+          "runtime": "whatsapp",
+          "package": "libldap-2.5-0",
+          "installed": "2.5.13+dfsg-5",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "NATIVE_LIBRARY_REACHABILITY_UNPROVEN"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify distro/source-package applicability, shipped binary/architecture and runtime callers; update or record reviewed VEX evidence. Sandbox alone is not proof of unreachability."
+    },
+    {
+      "cve": "CVE-2023-45853",
+      "severity": "CRITICAL",
+      "title": "zlib: integer overflow and resultant heap-based buffer overflow in zipOpenNewFileInZip4_6",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2023-45853",
+      "occurrences": [
+        {
+          "runtime": "worker",
+          "package": "zlib1g",
+          "installed": "1:1.2.13.dfsg-1",
+          "vendorStatus": "will_not_fix",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "zlib1g",
+          "installed": "1:1.2.13.dfsg-1",
+          "vendorStatus": "will_not_fix",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "zlib1g",
+          "installed": "1:1.2.13.dfsg-1",
+          "vendorStatus": "will_not_fix",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "NATIVE_LIBRARY_REACHABILITY_UNPROVEN"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify distro/source-package applicability, shipped binary/architecture and runtime callers; update or record reviewed VEX evidence. Sandbox alone is not proof of unreachability."
+    },
+    {
+      "cve": "CVE-2023-52355",
+      "severity": "HIGH",
+      "title": "libtiff: TIFFRasterScanlineSize64 produce too-big size and could cause OOM",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2023-52355",
+      "occurrences": [
+        {
+          "runtime": "worker",
+          "package": "libtiff6",
+          "installed": "4.5.0-6+deb12u4",
+          "vendorStatus": "will_not_fix",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libtiff6",
+          "installed": "4.5.0-6+deb12u4",
+          "vendorStatus": "will_not_fix",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "NATIVE_LIBRARY_REACHABILITY_UNPROVEN"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify distro/source-package applicability, shipped binary/architecture and runtime callers; update or record reviewed VEX evidence. Sandbox alone is not proof of unreachability."
+    },
+    {
+      "cve": "CVE-2025-59375",
+      "severity": "HIGH",
+      "title": "firefox: thunderbird: expat: libexpat in Expat allows attackers to trigger large dynamic memory allocations via a small document that is submitted for parsing",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2025-59375",
+      "occurrences": [
+        {
+          "runtime": "worker",
+          "package": "libexpat1",
+          "installed": "2.5.0-1+deb12u3",
+          "vendorStatus": "will_not_fix",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libexpat1",
+          "installed": "2.5.0-1+deb12u3",
+          "vendorStatus": "will_not_fix",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "NATIVE_LIBRARY_REACHABILITY_UNPROVEN"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify distro/source-package applicability, shipped binary/architecture and runtime callers; update or record reviewed VEX evidence. Sandbox alone is not proof of unreachability."
+    },
+    {
+      "cve": "CVE-2025-69720",
+      "severity": "HIGH",
+      "title": "ncurses: ncurses: Buffer overflow vulnerability may lead to arbitrary code execution.",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2025-69720",
+      "occurrences": [
+        {
+          "runtime": "worker",
+          "package": "libncursesw6",
+          "installed": "6.4-4",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "libtinfo6",
+          "installed": "6.4-4",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "ncurses-base",
+          "installed": "6.4-4",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "ncurses-bin",
+          "installed": "6.4-4",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libncursesw6",
+          "installed": "6.4-4",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libtinfo6",
+          "installed": "6.4-4",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "ncurses-base",
+          "installed": "6.4-4",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "ncurses-bin",
+          "installed": "6.4-4",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "libtinfo6",
+          "installed": "6.4-4",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "ncurses-base",
+          "installed": "6.4-4",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "ncurses-bin",
+          "installed": "6.4-4",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "NATIVE_LIBRARY_REACHABILITY_UNPROVEN",
+        "SYSTEM_TOOL_PRECONDITIONS_REQUIRE_REVIEW"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify distro/source-package applicability, shipped binary/architecture and runtime callers; update or record reviewed VEX evidence. Sandbox alone is not proof of unreachability."
+    },
+    {
+      "cve": "CVE-2025-7458",
+      "severity": "CRITICAL",
+      "title": "sqlite: SQLite integer overflow",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2025-7458",
+      "occurrences": [
+        {
+          "runtime": "worker",
+          "package": "libsqlite3-0",
+          "installed": "3.40.1-2+deb12u2",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libsqlite3-0",
+          "installed": "3.40.1-2+deb12u2",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "NATIVE_LIBRARY_REACHABILITY_UNPROVEN"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify distro/source-package applicability, shipped binary/architecture and runtime callers; update or record reviewed VEX evidence. Sandbox alone is not proof of unreachability."
+    },
+    {
+      "cve": "CVE-2026-11822",
+      "severity": "HIGH",
+      "title": "sqlite: SQLite: Arbitrary code execution via crafted FTS5 full-text search data",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2026-11822",
+      "occurrences": [
+        {
+          "runtime": "worker",
+          "package": "libsqlite3-0",
+          "installed": "3.40.1-2+deb12u2",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libsqlite3-0",
+          "installed": "3.40.1-2+deb12u2",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "NATIVE_LIBRARY_REACHABILITY_UNPROVEN"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify distro/source-package applicability, shipped binary/architecture and runtime callers; update or record reviewed VEX evidence. Sandbox alone is not proof of unreachability."
+    },
+    {
+      "cve": "CVE-2026-11824",
+      "severity": "HIGH",
+      "title": "sqlite: SQLite: Arbitrary code execution and crash via heap-based buffer overflow in FTS5",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2026-11824",
+      "occurrences": [
+        {
+          "runtime": "worker",
+          "package": "libsqlite3-0",
+          "installed": "3.40.1-2+deb12u2",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libsqlite3-0",
+          "installed": "3.40.1-2+deb12u2",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "NATIVE_LIBRARY_REACHABILITY_UNPROVEN"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify distro/source-package applicability, shipped binary/architecture and runtime callers; update or record reviewed VEX evidence. Sandbox alone is not proof of unreachability."
+    },
+    {
+      "cve": "CVE-2026-12064",
+      "severity": "HIGH",
+      "title": "curl: curl: SSH host verification bypass when using schemeless URLs with SFTP/SCP",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2026-12064",
+      "occurrences": [
+        {
+          "runtime": "whatsapp",
+          "package": "curl",
+          "installed": "7.88.1-10+deb12u15",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libcurl4",
+          "installed": "7.88.1-10+deb12u15",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "NATIVE_LIBRARY_REACHABILITY_UNPROVEN"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify distro/source-package applicability, shipped binary/architecture and runtime callers; update or record reviewed VEX evidence. Sandbox alone is not proof of unreachability."
+    },
+    {
+      "cve": "CVE-2026-12912",
+      "severity": "HIGH",
+      "title": "libtiff: libtiff: Heap-based buffer overflow via crafted PixarLog-compressed TIFF image",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2026-12912",
+      "occurrences": [
+        {
+          "runtime": "worker",
+          "package": "libtiff6",
+          "installed": "4.5.0-6+deb12u4",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libtiff6",
+          "installed": "4.5.0-6+deb12u4",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "NATIVE_LIBRARY_REACHABILITY_UNPROVEN"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify distro/source-package applicability, shipped binary/architecture and runtime callers; update or record reviewed VEX evidence. Sandbox alone is not proof of unreachability."
+    },
+    {
+      "cve": "CVE-2026-13221",
+      "severity": "CRITICAL",
+      "title": "perl: Perl: Incorrect regular expression processing via large regular expressions",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2026-13221",
+      "occurrences": [
+        {
+          "runtime": "worker",
+          "package": "perl-base",
+          "installed": "5.36.0-7+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "perl-base",
+          "installed": "5.36.0-7+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "perl-base",
+          "installed": "5.36.0-7+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "SYSTEM_TOOL_PRECONDITIONS_REQUIRE_REVIEW"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify actual executable and privilege prerequisites in the exact image; remove unused package only with runtime probes, or update. Do not assume an unused entrypoint proves all code paths unreachable."
+    },
+    {
+      "cve": "CVE-2026-16742",
+      "severity": "HIGH",
+      "title": "systemd: systemd-homed: Local privilege escalation via missing home-record signature verification",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2026-16742",
+      "occurrences": [
+        {
+          "runtime": "worker",
+          "package": "libpam-systemd",
+          "installed": "252.39-1~deb12u2",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "libsystemd-shared",
+          "installed": "252.39-1~deb12u2",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "libsystemd0",
+          "installed": "252.39-1~deb12u2",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "libudev1",
+          "installed": "252.39-1~deb12u2",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "systemd",
+          "installed": "252.39-1~deb12u2",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "systemd-sysv",
+          "installed": "252.39-1~deb12u2",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libpam-systemd",
+          "installed": "252.39-1~deb12u2",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libsystemd-shared",
+          "installed": "252.39-1~deb12u2",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libsystemd0",
+          "installed": "252.39-1~deb12u2",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libudev1",
+          "installed": "252.39-1~deb12u2",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "systemd",
+          "installed": "252.39-1~deb12u2",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "systemd-sysv",
+          "installed": "252.39-1~deb12u2",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "libsystemd0",
+          "installed": "252.39-1~deb12u2",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "libudev1",
+          "installed": "252.39-1~deb12u2",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "NATIVE_LIBRARY_REACHABILITY_UNPROVEN",
+        "SYSTEM_TOOL_PRECONDITIONS_REQUIRE_REVIEW"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify distro/source-package applicability, shipped binary/architecture and runtime callers; update or record reviewed VEX evidence. Sandbox alone is not proof of unreachability."
+    },
+    {
+      "cve": "CVE-2026-25210",
+      "severity": "HIGH",
+      "title": "libexpat: libexpat: Information disclosure and data integrity issues due to integer overflow in buffer reallocation",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2026-25210",
+      "occurrences": [
+        {
+          "runtime": "worker",
+          "package": "libexpat1",
+          "installed": "2.5.0-1+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libexpat1",
+          "installed": "2.5.0-1+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "NATIVE_LIBRARY_REACHABILITY_UNPROVEN"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify distro/source-package applicability, shipped binary/architecture and runtime callers; update or record reviewed VEX evidence. Sandbox alone is not proof of unreachability."
+    },
+    {
+      "cve": "CVE-2026-34980",
+      "severity": "HIGH",
+      "title": "cups: OpenPrinting CUPS: Shared PostScript queue lets anonymous Print-Job requests reach `lp` code execution over the network",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2026-34980",
+      "occurrences": [
+        {
+          "runtime": "worker",
+          "package": "libcups2",
+          "installed": "2.4.2-3+deb12u9",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libcups2",
+          "installed": "2.4.2-3+deb12u9",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "NATIVE_LIBRARY_REACHABILITY_UNPROVEN"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify distro/source-package applicability, shipped binary/architecture and runtime callers; update or record reviewed VEX evidence. Sandbox alone is not proof of unreachability."
+    },
+    {
+      "cve": "CVE-2026-36849",
+      "severity": "HIGH",
+      "title": "[Denial of Service via large SamplesPerPixel tag]",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2026-36849",
+      "occurrences": [
+        {
+          "runtime": "worker",
+          "package": "libtiff6",
+          "installed": "4.5.0-6+deb12u4",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libtiff6",
+          "installed": "4.5.0-6+deb12u4",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "NATIVE_LIBRARY_REACHABILITY_UNPROVEN"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify distro/source-package applicability, shipped binary/architecture and runtime callers; update or record reviewed VEX evidence. Sandbox alone is not proof of unreachability."
+    },
+    {
+      "cve": "CVE-2026-37555",
+      "severity": "HIGH",
+      "title": "libsndfile: integer overflow in ima_reader_init()",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2026-37555",
+      "occurrences": [
+        {
+          "runtime": "worker",
+          "package": "libsndfile1",
+          "installed": "1.2.0-1+deb12u1",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libsndfile1",
+          "installed": "1.2.0-1+deb12u1",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "NATIVE_LIBRARY_REACHABILITY_UNPROVEN"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify distro/source-package applicability, shipped binary/architecture and runtime callers; update or record reviewed VEX evidence. Sandbox alone is not proof of unreachability."
+    },
+    {
+      "cve": "CVE-2026-41992",
+      "severity": "HIGH",
+      "title": "gzip: gzip: Information disclosure via global buffer overflow in LZH decompression",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2026-41992",
+      "occurrences": [
+        {
+          "runtime": "worker",
+          "package": "gzip",
+          "installed": "1.12-1",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "gzip",
+          "installed": "1.12-1",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "gzip",
+          "installed": "1.12-1",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "SYSTEM_TOOL_PRECONDITIONS_REQUIRE_REVIEW"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify actual executable and privilege prerequisites in the exact image; remove unused package only with runtime probes, or update. Do not assume an unused entrypoint proves all code paths unreachable."
+    },
+    {
+      "cve": "CVE-2026-42496",
+      "severity": "CRITICAL",
+      "title": "perl-archive-tar: perl-archive-tar: Path traversal via crafted symlinks allows arbitrary file access",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2026-42496",
+      "occurrences": [
+        {
+          "runtime": "worker",
+          "package": "perl-base",
+          "installed": "5.36.0-7+deb12u3",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "perl-base",
+          "installed": "5.36.0-7+deb12u3",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "perl-base",
+          "installed": "5.36.0-7+deb12u3",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "SYSTEM_TOOL_PRECONDITIONS_REQUIRE_REVIEW"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify actual executable and privilege prerequisites in the exact image; remove unused package only with runtime probes, or update. Do not assume an unused entrypoint proves all code paths unreachable."
+    },
+    {
+      "cve": "CVE-2026-42497",
+      "severity": "HIGH",
+      "title": "perl-Archive-Tar: perl-Archive-Tar: Arbitrary file modification via crafted hardlinks during archive extraction",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2026-42497",
+      "occurrences": [
+        {
+          "runtime": "worker",
+          "package": "perl-base",
+          "installed": "5.36.0-7+deb12u3",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "perl-base",
+          "installed": "5.36.0-7+deb12u3",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "perl-base",
+          "installed": "5.36.0-7+deb12u3",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "SYSTEM_TOOL_PRECONDITIONS_REQUIRE_REVIEW"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify actual executable and privilege prerequisites in the exact image; remove unused package only with runtime probes, or update. Do not assume an unused entrypoint proves all code paths unreachable."
+    },
+    {
+      "cve": "CVE-2026-45186",
+      "severity": "HIGH",
+      "title": "libexpat: denial of service via crafted XML input",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2026-45186",
+      "occurrences": [
+        {
+          "runtime": "worker",
+          "package": "libexpat1",
+          "installed": "2.5.0-1+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libexpat1",
+          "installed": "2.5.0-1+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "NATIVE_LIBRARY_REACHABILITY_UNPROVEN"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify distro/source-package applicability, shipped binary/architecture and runtime callers; update or record reviewed VEX evidence. Sandbox alone is not proof of unreachability."
+    },
+    {
+      "cve": "CVE-2026-48962",
+      "severity": "HIGH",
+      "title": "perl-IO-Compress: perl-IO-Compress: Arbitrary code execution via attacker-controlled output glob",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2026-48962",
+      "occurrences": [
+        {
+          "runtime": "worker",
+          "package": "perl-base",
+          "installed": "5.36.0-7+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "perl-base",
+          "installed": "5.36.0-7+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "perl-base",
+          "installed": "5.36.0-7+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "SYSTEM_TOOL_PRECONDITIONS_REQUIRE_REVIEW"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify actual executable and privilege prerequisites in the exact image; remove unused package only with runtime probes, or update. Do not assume an unused entrypoint proves all code paths unreachable."
+    },
+    {
+      "cve": "CVE-2026-52490",
+      "severity": "HIGH",
+      "title": "libtiff: libtiff: Arbitrary code execution via process_command_opts() function",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2026-52490",
+      "occurrences": [
+        {
+          "runtime": "worker",
+          "package": "libtiff6",
+          "installed": "4.5.0-6+deb12u4",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libtiff6",
+          "installed": "4.5.0-6+deb12u4",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "NATIVE_LIBRARY_REACHABILITY_UNPROVEN"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify distro/source-package applicability, shipped binary/architecture and runtime callers; update or record reviewed VEX evidence. Sandbox alone is not proof of unreachability."
+    },
+    {
+      "cve": "CVE-2026-53613",
+      "severity": "HIGH",
+      "title": "util-linux: util-linux: TOCTOU in the mount program via ancestor directory swap on target path",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2026-53613",
+      "occurrences": [
+        {
+          "runtime": "worker",
+          "package": "bsdutils",
+          "installed": "1:2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "libblkid1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "libfdisk1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "libmount1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "libsmartcols1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "libuuid1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "mount",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "util-linux",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "util-linux-extra",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "bsdutils",
+          "installed": "1:2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libblkid1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libfdisk1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libmount1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libsmartcols1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libuuid1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "mount",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "util-linux",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "util-linux-extra",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "bsdutils",
+          "installed": "1:2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "libblkid1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "libmount1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "libsmartcols1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "libuuid1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "mount",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "util-linux",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "util-linux-extra",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "SYSTEM_TOOL_PRECONDITIONS_REQUIRE_REVIEW",
+        "NATIVE_LIBRARY_REACHABILITY_UNPROVEN"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify distro/source-package applicability, shipped binary/architecture and runtime callers; update or record reviewed VEX evidence. Sandbox alone is not proof of unreachability."
+    },
+    {
+      "cve": "CVE-2026-54369",
+      "severity": "HIGH",
+      "title": "acl: Symlink traversal privilege escalation via libacl functions",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2026-54369",
+      "occurrences": [
+        {
+          "runtime": "worker",
+          "package": "libacl1",
+          "installed": "2.3.1-3",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libacl1",
+          "installed": "2.3.1-3",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "libacl1",
+          "installed": "2.3.1-3",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "NATIVE_LIBRARY_REACHABILITY_UNPROVEN"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify distro/source-package applicability, shipped binary/architecture and runtime callers; update or record reviewed VEX evidence. Sandbox alone is not proof of unreachability."
+    },
+    {
+      "cve": "CVE-2026-57432",
+      "severity": "HIGH",
+      "title": "perl: Perl: Information disclosure via integer overflow in pack/unpack operations",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2026-57432",
+      "occurrences": [
+        {
+          "runtime": "worker",
+          "package": "perl-base",
+          "installed": "5.36.0-7+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "perl-base",
+          "installed": "5.36.0-7+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "perl-base",
+          "installed": "5.36.0-7+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "SYSTEM_TOOL_PRECONDITIONS_REQUIRE_REVIEW"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify actual executable and privilege prerequisites in the exact image; remove unused package only with runtime probes, or update. Do not assume an unused entrypoint proves all code paths unreachable."
+    },
+    {
+      "cve": "CVE-2026-57433",
+      "severity": "HIGH",
+      "title": "Storable: Storable: Denial of Service via signed integer overflow in deserialization",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2026-57433",
+      "occurrences": [
+        {
+          "runtime": "worker",
+          "package": "perl-base",
+          "installed": "5.36.0-7+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "perl-base",
+          "installed": "5.36.0-7+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "perl-base",
+          "installed": "5.36.0-7+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "SYSTEM_TOOL_PRECONDITIONS_REQUIRE_REVIEW"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify actual executable and privilege prerequisites in the exact image; remove unused package only with runtime probes, or update. Do not assume an unused entrypoint proves all code paths unreachable."
+    },
+    {
+      "cve": "CVE-2026-58010",
+      "severity": "HIGH",
+      "title": "glib: buffer over-read in glib/gvariant-serialiser.c via gvs_tuple_is_normal()",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2026-58010",
+      "occurrences": [
+        {
+          "runtime": "worker",
+          "package": "libglib2.0-0",
+          "installed": "2.74.6-2+deb12u9",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libglib2.0-0",
+          "installed": "2.74.6-2+deb12u9",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "NATIVE_LIBRARY_REACHABILITY_UNPROVEN"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify distro/source-package applicability, shipped binary/architecture and runtime callers; update or record reviewed VEX evidence. Sandbox alone is not proof of unreachability."
+    },
+    {
+      "cve": "CVE-2026-58011",
+      "severity": "HIGH",
+      "title": "glib: out-of-bounds read in glib/gdatetime.c:g_date_time_get_ymd via invalid GDateTime",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2026-58011",
+      "occurrences": [
+        {
+          "runtime": "worker",
+          "package": "libglib2.0-0",
+          "installed": "2.74.6-2+deb12u9",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libglib2.0-0",
+          "installed": "2.74.6-2+deb12u9",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "NATIVE_LIBRARY_REACHABILITY_UNPROVEN"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify distro/source-package applicability, shipped binary/architecture and runtime callers; update or record reviewed VEX evidence. Sandbox alone is not proof of unreachability."
+    },
+    {
+      "cve": "CVE-2026-58012",
+      "severity": "HIGH",
+      "title": "glib: buffer over-read in g_regex_replace() via glib/gregex.c:string_append() and g_utf8_next_char()",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2026-58012",
+      "occurrences": [
+        {
+          "runtime": "worker",
+          "package": "libglib2.0-0",
+          "installed": "2.74.6-2+deb12u9",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libglib2.0-0",
+          "installed": "2.74.6-2+deb12u9",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "NATIVE_LIBRARY_REACHABILITY_UNPROVEN"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify distro/source-package applicability, shipped binary/architecture and runtime callers; update or record reviewed VEX evidence. Sandbox alone is not proof of unreachability."
+    },
+    {
+      "cve": "CVE-2026-58013",
+      "severity": "HIGH",
+      "title": "glib: buffer over-read in glib/giochannel.c via \"g_io_channel_read_line_backend\"",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2026-58013",
+      "occurrences": [
+        {
+          "runtime": "worker",
+          "package": "libglib2.0-0",
+          "installed": "2.74.6-2+deb12u9",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libglib2.0-0",
+          "installed": "2.74.6-2+deb12u9",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "NATIVE_LIBRARY_REACHABILITY_UNPROVEN"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify distro/source-package applicability, shipped binary/architecture and runtime callers; update or record reviewed VEX evidence. Sandbox alone is not proof of unreachability."
+    },
+    {
+      "cve": "CVE-2026-58014",
+      "severity": "HIGH",
+      "title": "glib: off-by-one error in glib/gkeyfile.c via \"g_key_file_get_locale_string_list\"",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2026-58014",
+      "occurrences": [
+        {
+          "runtime": "worker",
+          "package": "libglib2.0-0",
+          "installed": "2.74.6-2+deb12u9",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libglib2.0-0",
+          "installed": "2.74.6-2+deb12u9",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "NATIVE_LIBRARY_REACHABILITY_UNPROVEN"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify distro/source-package applicability, shipped binary/architecture and runtime callers; update or record reviewed VEX evidence. Sandbox alone is not proof of unreachability."
+    },
+    {
+      "cve": "CVE-2026-58015",
+      "severity": "HIGH",
+      "title": "glib: path traversal in glib/gio/gdbusauthmechanismsha1.c via keyring_lookup_entry and mechanism_client_data_receive",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2026-58015",
+      "occurrences": [
+        {
+          "runtime": "worker",
+          "package": "libglib2.0-0",
+          "installed": "2.74.6-2+deb12u9",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libglib2.0-0",
+          "installed": "2.74.6-2+deb12u9",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "NATIVE_LIBRARY_REACHABILITY_UNPROVEN"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify distro/source-package applicability, shipped binary/architecture and runtime callers; update or record reviewed VEX evidence. Sandbox alone is not proof of unreachability."
+    },
+    {
+      "cve": "CVE-2026-58016",
+      "severity": "CRITICAL",
+      "title": "glib: integer underflow in gio/gdbusintrospection.c via \"g_dbus_node_info_new_for_xml\"",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2026-58016",
+      "occurrences": [
+        {
+          "runtime": "worker",
+          "package": "libglib2.0-0",
+          "installed": "2.74.6-2+deb12u9",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libglib2.0-0",
+          "installed": "2.74.6-2+deb12u9",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "NATIVE_LIBRARY_REACHABILITY_UNPROVEN"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify distro/source-package applicability, shipped binary/architecture and runtime callers; update or record reviewed VEX evidence. Sandbox alone is not proof of unreachability."
+    },
+    {
+      "cve": "CVE-2026-58471",
+      "severity": "HIGH",
+      "title": "wget: GNU Wget: Heap buffer overflow via server-supplied filename leads to memory corruption",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2026-58471",
+      "occurrences": [
+        {
+          "runtime": "whatsapp",
+          "package": "wget",
+          "installed": "1.21.3-1+deb12u1",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "NATIVE_LIBRARY_REACHABILITY_UNPROVEN"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify distro/source-package applicability, shipped binary/architecture and runtime callers; update or record reviewed VEX evidence. Sandbox alone is not proof of unreachability."
+    },
+    {
+      "cve": "CVE-2026-58472",
+      "severity": "HIGH",
+      "title": "wget: GNU Wget: Arbitrary code execution or denial of service via crafted HTML attribute",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2026-58472",
+      "occurrences": [
+        {
+          "runtime": "whatsapp",
+          "package": "wget",
+          "installed": "1.21.3-1+deb12u1",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "NATIVE_LIBRARY_REACHABILITY_UNPROVEN"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify distro/source-package applicability, shipped binary/architecture and runtime callers; update or record reviewed VEX evidence. Sandbox alone is not proof of unreachability."
+    },
+    {
+      "cve": "CVE-2026-6276",
+      "severity": "HIGH",
+      "title": "curl: libcurl: Information disclosure due to cookie leak when reusing connections with custom Host headers",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2026-6276",
+      "occurrences": [
+        {
+          "runtime": "whatsapp",
+          "package": "curl",
+          "installed": "7.88.1-10+deb12u15",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libcurl4",
+          "installed": "7.88.1-10+deb12u15",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "NATIVE_LIBRARY_REACHABILITY_UNPROVEN"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify distro/source-package applicability, shipped binary/architecture and runtime callers; update or record reviewed VEX evidence. Sandbox alone is not proof of unreachability."
+    },
+    {
+      "cve": "CVE-2026-6653",
+      "severity": "CRITICAL",
+      "title": "libxml2: mingw-libxml2: libxml2: Denial of Service via crafted XML input due to use-after-free",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2026-6653",
+      "occurrences": [
+        {
+          "runtime": "worker",
+          "package": "libxml2",
+          "installed": "2.9.14+dfsg-1.3~deb12u6",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libxml2",
+          "installed": "2.9.14+dfsg-1.3~deb12u6",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "NATIVE_LIBRARY_REACHABILITY_UNPROVEN"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify distro/source-package applicability, shipped binary/architecture and runtime callers; update or record reviewed VEX evidence. Sandbox alone is not proof of unreachability."
+    },
+    {
+      "cve": "CVE-2026-76642",
+      "severity": "HIGH",
+      "title": "util-linux: util-linux: failed external mount helper still runs privileged X-mount post-hooks",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2026-76642",
+      "occurrences": [
+        {
+          "runtime": "worker",
+          "package": "bsdutils",
+          "installed": "1:2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "libblkid1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "libfdisk1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "libmount1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "libsmartcols1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "libuuid1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "mount",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "util-linux",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "util-linux-extra",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "bsdutils",
+          "installed": "1:2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libblkid1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libfdisk1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libmount1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libsmartcols1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libuuid1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "mount",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "util-linux",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "util-linux-extra",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "bsdutils",
+          "installed": "1:2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "libblkid1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "libmount1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "libsmartcols1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "libuuid1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "mount",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "util-linux",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "util-linux-extra",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "SYSTEM_TOOL_PRECONDITIONS_REQUIRE_REVIEW",
+        "NATIVE_LIBRARY_REACHABILITY_UNPROVEN"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify distro/source-package applicability, shipped binary/architecture and runtime callers; update or record reviewed VEX evidence. Sandbox alone is not proof of unreachability."
+    },
+    {
+      "cve": "CVE-2026-78408",
+      "severity": "HIGH",
+      "title": "util-linux: util-linux: nsenter --join-cgroup leaks root cgroup migration authority",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2026-78408",
+      "occurrences": [
+        {
+          "runtime": "worker",
+          "package": "bsdutils",
+          "installed": "1:2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "libblkid1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "libfdisk1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "libmount1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "libsmartcols1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "libuuid1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "mount",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "util-linux",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "util-linux-extra",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "bsdutils",
+          "installed": "1:2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libblkid1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libfdisk1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libmount1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libsmartcols1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libuuid1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "mount",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "util-linux",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "util-linux-extra",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "bsdutils",
+          "installed": "1:2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "libblkid1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "libmount1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "libsmartcols1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "libuuid1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "mount",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "util-linux",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "util-linux-extra",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "SYSTEM_TOOL_PRECONDITIONS_REQUIRE_REVIEW",
+        "NATIVE_LIBRARY_REACHABILITY_UNPROVEN"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify distro/source-package applicability, shipped binary/architecture and runtime callers; update or record reviewed VEX evidence. Sandbox alone is not proof of unreachability."
+    },
+    {
+      "cve": "CVE-2026-78409",
+      "severity": "HIGH",
+      "title": "util-linux: util-linux: X-mount.subdir detached-tree resolution can escape via intermediate symlinks",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2026-78409",
+      "occurrences": [
+        {
+          "runtime": "worker",
+          "package": "bsdutils",
+          "installed": "1:2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "libblkid1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "libfdisk1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "libmount1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "libsmartcols1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "libuuid1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "mount",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "util-linux",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "util-linux-extra",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "bsdutils",
+          "installed": "1:2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libblkid1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libfdisk1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libmount1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libsmartcols1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libuuid1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "mount",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "util-linux",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "util-linux-extra",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "bsdutils",
+          "installed": "1:2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "libblkid1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "libmount1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "libsmartcols1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "libuuid1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "mount",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "util-linux",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "util-linux-extra",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "SYSTEM_TOOL_PRECONDITIONS_REQUIRE_REVIEW",
+        "NATIVE_LIBRARY_REACHABILITY_UNPROVEN"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify distro/source-package applicability, shipped binary/architecture and runtime callers; update or record reviewed VEX evidence. Sandbox alone is not proof of unreachability."
+    },
+    {
+      "cve": "CVE-2026-78410",
+      "severity": "HIGH",
+      "title": "util-linux: util-linux: restricted bind mounts do not pin the source, allowing X-mount.owner/group/mode redirection",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2026-78410",
+      "occurrences": [
+        {
+          "runtime": "worker",
+          "package": "bsdutils",
+          "installed": "1:2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "libblkid1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "libfdisk1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "libmount1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "libsmartcols1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "libuuid1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "mount",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "util-linux",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "util-linux-extra",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "bsdutils",
+          "installed": "1:2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libblkid1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libfdisk1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libmount1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libsmartcols1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libuuid1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "mount",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "util-linux",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "util-linux-extra",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "bsdutils",
+          "installed": "1:2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "libblkid1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "libmount1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "libsmartcols1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "libuuid1",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "mount",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "util-linux",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "util-linux-extra",
+          "installed": "2.38.1-5+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "SYSTEM_TOOL_PRECONDITIONS_REQUIRE_REVIEW",
+        "NATIVE_LIBRARY_REACHABILITY_UNPROVEN"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify distro/source-package applicability, shipped binary/architecture and runtime callers; update or record reviewed VEX evidence. Sandbox alone is not proof of unreachability."
+    },
+    {
+      "cve": "CVE-2026-8286",
+      "severity": "HIGH",
+      "title": "curl: curl: Insecure connection establishment due to TLS configuration mismatch",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2026-8286",
+      "occurrences": [
+        {
+          "runtime": "whatsapp",
+          "package": "curl",
+          "installed": "7.88.1-10+deb12u15",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libcurl4",
+          "installed": "7.88.1-10+deb12u15",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "NATIVE_LIBRARY_REACHABILITY_UNPROVEN"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify distro/source-package applicability, shipped binary/architecture and runtime callers; update or record reviewed VEX evidence. Sandbox alone is not proof of unreachability."
+    },
+    {
+      "cve": "CVE-2026-8376",
+      "severity": "CRITICAL",
+      "title": "perl: Perl: Heap buffer overflow when compiling regular expressions on 32-bit builds",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2026-8376",
+      "occurrences": [
+        {
+          "runtime": "worker",
+          "package": "perl-base",
+          "installed": "5.36.0-7+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "perl-base",
+          "installed": "5.36.0-7+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "perl-base",
+          "installed": "5.36.0-7+deb12u3",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "SYSTEM_TOOL_PRECONDITIONS_REQUIRE_REVIEW"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify actual executable and privilege prerequisites in the exact image; remove unused package only with runtime probes, or update. Do not assume an unused entrypoint proves all code paths unreachable."
+    },
+    {
+      "cve": "CVE-2026-8458",
+      "severity": "HIGH",
+      "title": "curl: libcurl: Unauthorized connection reuse due to a logical error",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2026-8458",
+      "occurrences": [
+        {
+          "runtime": "whatsapp",
+          "package": "curl",
+          "installed": "7.88.1-10+deb12u15",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libcurl4",
+          "installed": "7.88.1-10+deb12u15",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "NATIVE_LIBRARY_REACHABILITY_UNPROVEN"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify distro/source-package applicability, shipped binary/architecture and runtime callers; update or record reviewed VEX evidence. Sandbox alone is not proof of unreachability."
+    },
+    {
+      "cve": "CVE-2026-85049",
+      "severity": "HIGH",
+      "title": "chromium-browser: skia: chromium-browser: skia: Use after free in Skia",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2026-85049",
+      "occurrences": [
+        {
+          "runtime": "worker",
+          "package": "chromium",
+          "installed": "152.0.7977.82-1~deb12u1",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "worker",
+          "package": "chromium-common",
+          "installed": "152.0.7977.82-1~deb12u1",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "chromium",
+          "installed": "152.0.7977.82-1~deb12u1",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "chromium-common",
+          "installed": "152.0.7977.82-1~deb12u1",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "chromium-sandbox",
+          "installed": "152.0.7977.82-1~deb12u1",
+          "vendorStatus": "affected",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "BROWSER_UNTRUSTED_CONTENT_SURFACE"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer",
+        "Worker/WhatsApp browser integration maintainer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify the vendor Chromium fix for the exact build, update/rebuild when available and repeat sandbox/browser smokes. Do not infer unreachability for third-party page content."
+    },
+    {
+      "cve": "CVE-2026-8927",
+      "severity": "HIGH",
+      "title": "curl: Information disclosure due to uncleared proxy authentication state",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2026-8927",
+      "occurrences": [
+        {
+          "runtime": "whatsapp",
+          "package": "curl",
+          "installed": "7.88.1-10+deb12u15",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "libcurl4",
+          "installed": "7.88.1-10+deb12u15",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "NATIVE_LIBRARY_REACHABILITY_UNPROVEN"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify distro/source-package applicability, shipped binary/architecture and runtime callers; update or record reviewed VEX evidence. Sandbox alone is not proof of unreachability."
+    },
+    {
+      "cve": "CVE-2026-9538",
+      "severity": "HIGH",
+      "title": "perl-Archive-Tar: perl-Archive-Tar: Denial of Service via crafted tar header with large entry size",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2026-9538",
+      "occurrences": [
+        {
+          "runtime": "worker",
+          "package": "perl-base",
+          "installed": "5.36.0-7+deb12u3",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "whatsapp",
+          "package": "perl-base",
+          "installed": "5.36.0-7+deb12u3",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        },
+        {
+          "runtime": "publisher",
+          "package": "perl-base",
+          "installed": "5.36.0-7+deb12u3",
+          "vendorStatus": "fix_deferred",
+          "fixedVersion": null,
+          "sourceType": "debian",
+          "sourceClass": "os-pkgs"
+        }
+      ],
+      "contexts": [
+        "SYSTEM_TOOL_PRECONDITIONS_REQUIRE_REVIEW"
+      ],
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "reviewOwnerRoles": [
+        "Runtime/base-image maintainer",
+        "Security release reviewer"
+      ],
+      "assignedPerson": null,
+      "reviewDue": "Before the next release decision; concrete calendar date not approved",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null,
+      "approvalStatus": "NOT_REQUESTED_OR_GRANTED_BY_THIS_DOCUMENT",
+      "nextAction": "Verify actual executable and privilege prerequisites in the exact image; remove unused package only with runtime probes, or update. Do not assume an unused entrypoint proves all code paths unreachable."
+    }
+  ]
+}

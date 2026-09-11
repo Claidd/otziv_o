@@ -1,0 +1,18 @@
+{
+  "id": 202,
+  "companyId": 91,
+  "companyTitle": "Компания",
+  "status": "НЕИЗВЕСТНЫЙ_СТАТУС",
+  "created": "2026-09-07",
+  "changed": "2026-09-07",
+  "payDay": "",
+  "orderComments": "Комментарий",
+  "commentsCompany": "",
+  "complete": false,
+  "filials": [],
+  "managers": [],
+  "workers": [],
+  "canComplete": false,
+  "canDelete": false,
+  "futureField": "additive response fields are ignored"
+}

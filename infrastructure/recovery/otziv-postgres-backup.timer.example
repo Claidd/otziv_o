@@ -1,0 +1,9 @@
+# REQUIRED is an explicit policy decision: no production schedule is guessed.
+[Unit]
+Description=PostgreSQL backup cadence (RPO and operator schedule required)
+[Timer]
+OnCalendar=REQUIRED
+Persistent=true
+Unit=otziv-postgres-backup.service
+[Install]
+WantedBy=timers.target

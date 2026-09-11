@@ -3,12 +3,13 @@ import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { Observable, Subject, of } from 'rxjs';
 import { AuthService } from '../../core/auth.service';
+import { WorkerAccountActionCooldownService } from '../../core/worker-account-action-cooldown.service';
 import {
   CompanyDeepReportState,
   ManagerApi,
   OrderDetailsPayload
 } from '../../core/manager.api';
-import { PaymentsApi } from '../../core/payments.api';
+import { PaymentsApi, type ManagerPaymentLinkResponse } from '../../core/payments.api';
 import { ReputationDeepReportMonitorService } from '../../core/reputation-deep-report-monitor.service';
 import { PersonalRemindersService } from '../../shared/personal-reminders.service';
 import { ToastService } from '../../shared/toast.service';
@@ -21,7 +22,7 @@ describe('OrderDetailsComponent route reads', () => {
     getOrderCompanyReport: ReturnType<typeof vi.fn>;
     addOrderReview: ReturnType<typeof vi.fn>;
   };
-  let paymentsApi: { getTbankStatus: ReturnType<typeof vi.fn> };
+  let paymentsApi: { getTbankStatus: ReturnType<typeof vi.fn>; createOrderPaymentLink: ReturnType<typeof vi.fn> };
   let authService: {
     authenticated: WritableSignal<boolean>;
     hasRealmRole: ReturnType<typeof vi.fn>;
@@ -35,7 +36,7 @@ describe('OrderDetailsComponent route reads', () => {
       getOrderCompanyReport: vi.fn(),
       addOrderReview: vi.fn()
     };
-    paymentsApi = { getTbankStatus: vi.fn(() => of(null)) };
+    paymentsApi = { getTbankStatus: vi.fn(() => of(null)), createOrderPaymentLink: vi.fn() };
     authService = {
       authenticated: signal(false),
       hasRealmRole: vi.fn(() => false),
@@ -45,6 +46,7 @@ describe('OrderDetailsComponent route reads', () => {
     await TestBed.configureTestingModule({
       imports: [OrderDetailsComponent],
       providers: [
+        { provide: WorkerAccountActionCooldownService, useValue: { locked: signal(false), title: signal('') } },
         provideRouter([]),
         {
           provide: ActivatedRoute,
@@ -112,6 +114,53 @@ describe('OrderDetailsComponent route reads', () => {
     const adminFixture = TestBed.createComponent(OrderDetailsComponent);
     expect(paymentsApi.getTbankStatus).toHaveBeenCalledTimes(2);
     adminFixture.destroy();
+  });
+
+  it('owns payment state per route and never copies a late link from the previous order', () => {
+    authService.authenticated.set(true); authService.hasAnyRealmRole.mockReturnValue(true);
+    paymentsApi.getTbankStatus.mockReturnValue(of({ managerUiEnabled: true, paymentLinksEnabled: true, runtimeMode: 'TEST' }));
+    managerApi.getOrderDetails.mockImplementation((id: number) => of(orderDetails(id)));
+    managerApi.getOrderCompanyReport.mockImplementation((id: number) => of(companyReport(id)));
+    const first = new Subject<ManagerPaymentLinkResponse>(), second = new Subject<ManagerPaymentLinkResponse>();
+    paymentsApi.createOrderPaymentLink.mockReturnValueOnce(first).mockReturnValueOnce(second);
+    const fixture = TestBed.createComponent(OrderDetailsComponent), component = fixture.componentInstance;
+    const copy = vi.spyOn(component as unknown as { copyText: (text: string, ...args: string[]) => Promise<boolean> }, 'copyText').mockResolvedValue(true);
+    routeParams.next(convertToParamMap({ orderId: '1' })); component.createPaymentLink(); component.createPaymentLink();
+    expect(paymentsApi.createOrderPaymentLink).toHaveBeenCalledTimes(1);
+    routeParams.next(convertToParamMap({ orderId: '2' })); component.createPaymentLink();
+    first.next({ url: 'old', copyText: 'old' } as ManagerPaymentLinkResponse);
+    expect(component.paymentLink()).toBeNull(); expect(component.isMutating('payment-link')).toBe(true); expect(copy).not.toHaveBeenCalled();
+    second.next({ url: 'current', copyText: 'current', orderId: 2 } as ManagerPaymentLinkResponse);
+    expect(component.paymentLink()?.orderId).toBe(2); expect(component.isMutating('payment-link')).toBe(false);
+    expect(copy).toHaveBeenCalledTimes(1); component.createPaymentLink();
+    expect(copy).toHaveBeenCalledTimes(2); expect(paymentsApi.createOrderPaymentLink).toHaveBeenCalledTimes(2);
+    fixture.destroy();
+  });
+
+  it('suppresses clipboard feedback when the payment route changes during the asynchronous copy', async () => {
+    authService.authenticated.set(true); authService.hasAnyRealmRole.mockReturnValue(true);
+    paymentsApi.getTbankStatus.mockReturnValue(of({ managerUiEnabled: true, paymentLinksEnabled: true }));
+    managerApi.getOrderDetails.mockImplementation((id: number) => of(orderDetails(id)));
+    managerApi.getOrderCompanyReport.mockImplementation((id: number) => of(companyReport(id)));
+    paymentsApi.createOrderPaymentLink.mockReturnValue(of({ url: 'old', copyText: 'old' }));
+    let resolveCopy!: () => void;
+    const oldClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+    const oldSecure = Object.getOwnPropertyDescriptor(window, 'isSecureContext');
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: () => new Promise<void>(resolve => { resolveCopy = resolve; }) } });
+    Object.defineProperty(window, 'isSecureContext', { configurable: true, value: true });
+    const fixture = TestBed.createComponent(OrderDetailsComponent), component = fixture.componentInstance;
+    try {
+      routeParams.next(convertToParamMap({ orderId: '1' })); component.createPaymentLink();
+      routeParams.next(convertToParamMap({ orderId: '2' })); resolveCopy();
+      await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
+      expect(component.copied()).toBeNull(); expect(component.paymentLink()).toBeNull();
+      expect(TestBed.inject(ToastService).success).not.toHaveBeenCalled();
+      expect(TestBed.inject(ToastService).error).not.toHaveBeenCalled();
+    } finally {
+      fixture.destroy();
+      if (oldClipboard) Object.defineProperty(navigator, 'clipboard', oldClipboard); else Reflect.deleteProperty(navigator, 'clipboard');
+      if (oldSecure) Object.defineProperty(window, 'isSecureContext', oldSecure); else Reflect.deleteProperty(window, 'isSecureContext');
+    }
   });
 
   it('cancels stale details and dependent report GETs when the route id changes', () => {

@@ -1,0 +1,23 @@
+{
+  "packageId": "com.hunt.otziv",
+  "versionCode": 73,
+  "versionName": "1.0.73",
+  "apkSha256": "CE3560902EEE6F98F3E934901FC444A1EA05E3C649E38AA2D213573AE9BF9150",
+  "signerCertificateSha256": "a15a162afe1f808f9586dd3f129f9e61f4be49ccff708ca99c6a0714004251d5",
+  "publishedBackend": {
+    "sourceRevision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+    "imageId": "sha256:dd0585b6b55e4159a927683386b557fa38c3bd590c1c262694a52d94818a00ba",
+    "imageVersion": "6.21-account-cooldown-20260907-fc191ac23cfe",
+    "registryDigest": null,
+    "jarSha256": "031ca4a794cfdb40718fdcdabf2c5ed44fbffe814efdb3d6534f59b56284be1b",
+    "observedAt": "2026-09-07T11:47:49.460793+00:00"
+  },
+  "proof": {
+    "artifact": "APK manifest/signature/hash checked; JAR hash matched production container without running application code",
+    "backendFixtures": "202 actual DTO schemas round-tripped with published BOOT-INF classes and its own Spring/Jackson libraries",
+    "clientRuntime": "Unmodified APK73 web assets rendered candidate response, sent observed consent body once, displayed UNKNOWN and later CONFIRMED GET",
+    "nativeUpgrade": false,
+    "historicalBackendAtApkPublish": false,
+    "verifiedMinimumVersionCode": null
+  }
+}

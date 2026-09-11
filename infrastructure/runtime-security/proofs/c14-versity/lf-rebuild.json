@@ -1,0 +1,22 @@
+{
+  "schema": "otziv-local-s3-lf-rebuild-v1",
+  "result": "PASS",
+  "timestamp": "2026-09-08T14:19:09.956Z",
+  "buildExitCode": 0,
+  "buildCacheReused": true,
+  "localAttestationRegenerated": true,
+  "previousLocalImageId": "sha256:25d625d20bc19627cdf7680aadb702dcdae239fe10dd289c4017ca40f22b5b32",
+  "rebuiltLocalImageId": "sha256:d8d54f2db3478fde37ac6e7a2d44e7fa09fdfbb05e644bb8034be019827cc44e",
+  "imageConfigDigest": "sha256:3a9c4905bd44d29665849aa1258d1442660f9bc8e050898a7b5888582366b191",
+  "imageConfigDigestEvidence": "lf-build.log",
+  "rootFilesystemEqual": true,
+  "imageConfigurationFieldsEqual": true,
+  "binarySha256": "a44bb13582e9f62da5cf6f0c24285b7f575c68cab2959e12e547d3841c172bc5",
+  "runtimeRerun": false,
+  "runtimeEvidence": "runtime/candidate.json",
+  "runtimeSourceBinding": "runtime/executed-runner-before-lf.mjs",
+  "runtimeSourceChange": "Canonical runner is the historical executed runner with CRLF normalized to LF only; no logic change.",
+  "scanRerun": false,
+  "scanEvidence": "after/raw.json",
+  "scanBinding": "The regenerated OCI index differs because of a new local attestation; image configuration digest and root filesystem remain identical to the previously scanned and runtime-tested candidate."
+}

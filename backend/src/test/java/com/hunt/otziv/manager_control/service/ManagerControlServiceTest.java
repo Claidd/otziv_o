@@ -96,6 +96,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
@@ -114,6 +116,7 @@ import org.springframework.web.server.ResponseStatusException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -131,6 +134,12 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class ManagerControlServiceTest {
+    private MemoryManagerMessageQueue deliveryQueue;
+    private ManagerClientMessageWorker deliveryWorker;
+    private void drainManagerDelivery() {
+        for (int attempt = 0; attempt < 5; attempt++) { deliveryQueue.advance(); deliveryWorker.drain(); }
+    }
+
 
     @Mock
     private ManagerRepository managerRepository;
@@ -198,9 +207,8 @@ class ManagerControlServiceTest {
     private CommonInvoicePublicationBlockerService commonInvoicePublicationBlockerService;
     @Mock
     private CommonBillingService commonBillingService;
-    @Spy
-    private ManagerControlInvoiceOperationExecutor invoiceOperationExecutor =
-            new ManagerControlInvoiceOperationExecutor();
+    private ManagerControlInvoiceDiagnostics invoiceDiagnostics;
+    private ManagerControlInvoiceRepairWorkflow invoiceRepairWorkflow;
     @Mock
     private OrderPublicationApprovalService publicationApprovalService;
     @Mock
@@ -232,6 +240,114 @@ class ManagerControlServiceTest {
 
     @InjectMocks
     private ManagerControlService service;
+
+    @Mock
+    private com.hunt.otziv.manager_performance.service.ManagerPerformanceService managerPerformanceService;
+
+    @Mock
+    private com.hunt.otziv.manager_control.repository.ManagerClientReplyOperationRepository replyOperations;
+
+    @BeforeEach
+    void wireInvoiceScenario() {
+    ManagerControlWorkerTaskLookup workerTaskLookup = new ManagerControlWorkerTaskLookup(badReviewTaskService, reviewRecoveryTaskService, reviewRepository, orderRepository, riskIncidentRepository, userRepository);
+    var workerExplanationQueries = new ManagerControlWorkerExplanationQueries(dailyControlConcreteItemRepository, riskIncidentRepository, userRepository, workerTaskLookup);
+    var qualityQueries = new ManagerControlQualityQueries(dailyControlEventRepository, appSettingService);
+    var orderAutomationDiagnostics = new ManagerControlOrderAutomationDiagnostics(orderRepository, scheduledClientMessageStateRepository);
+    invoiceDiagnostics = new ManagerControlInvoiceDiagnostics(commonInvoiceRepository, commonInvoiceOrderRepository, commonInvoicePublicationBlockerService, paymentLinkRepository, appSettingService);
+    invoiceRepairWorkflow = new ManagerControlInvoiceRepairWorkflow(commonInvoiceRepository, commonInvoiceOrderRepository, commonInvoicePublicationBlockerService, commonBillingService, invoiceDiagnostics);
+    ManagerControlAccessPolicy accessPolicy = new ManagerControlAccessPolicy(managerRepository, userService, managerAccessService, managerPermissionService);
+    ManagerControlCardLifecycle cardLifecycle = new ManagerControlCardLifecycle(dailyControlConcreteItemRepository, dailyControlItemRepository, dailyControlEventRepository, managerPerformanceService);
+    ManagerControlClientMessageText clientMessageText = new ManagerControlClientMessageText(scheduledClientMessageService, orderRepository);
+    ManagerControlSlaPolicy slaPolicy = new ManagerControlSlaPolicy(appSettingService);
+    ManagerControlConcretePresenter concretePresenter = new ManagerControlConcretePresenter(riskIncidentRepository, workerTaskLookup, invoiceDiagnostics, scheduledClientMessageStateRepository, companyRepository, slaPolicy);
+    deliveryQueue = new MemoryManagerMessageQueue();
+    var deliveryActors = org.mockito.Mockito.mock(com.hunt.otziv.u_users.api.DeferredUserAuthority.class);
+    lenient().when(deliveryActors.capture(any())).thenReturn(new com.hunt.otziv.u_users.api.DeferredUserAuthority.Actor(1L, "fixture", 0, java.util.Set.of("ROLE_ADMIN")));
+    lenient().when(deliveryActors.revalidate(any())).thenReturn(adminAuth());
+    lenient().when(clientChatMessageSender.deliverWithOperationId(any(), any(), any(), any(), any(), anyString())).thenAnswer(call -> {
+        var t = (com.hunt.otziv.client_messages.api.ClientMessageDelivery.Target) call.getArgument(0);
+        var company = t == null ? null : new ManagerControlMessageCompany(t.companyId(), t.title(), t.urlChat(), t.telegramChatId(), t.maxChatId()).toMessageCompany();
+        return clientChatMessageSender.sendWithOperationId(company, call.getArgument(1), call.getArgument(2), call.getArgument(3), call.getArgument(4), call.getArgument(5));
+    });
+    lenient().when(clientChatMessageSender.deliverToPlatformWithOperationId(any(), any(), any(), any(), any(), anyString())).thenAnswer(call -> {
+        var t = (com.hunt.otziv.client_messages.api.ClientMessageDelivery.Target) call.getArgument(1);
+        var company = new ManagerControlMessageCompany(t.companyId(), t.title(), t.urlChat(), t.telegramChatId(), t.maxChatId()).toMessageCompany();
+        return clientChatMessageSender.sendToPlatformWithOperationId(com.hunt.otziv.client_chat_control.model.ClientChatPlatform.valueOf(call.getArgument(0)),
+                company, call.getArgument(2), call.getArgument(3), call.getArgument(3), call.getArgument(4), call.getArgument(5));
+    });
+    var clientSendWorkflow = new ManagerControlClientSendWorkflow(managerControlTransactionRunner, dailyControlConcreteItemRepository, dailyControlRepository, orderRepository, orderService, clientChatMessageSender, deliveryQueue, deliveryActors, paymentInstructionOrchestrator, accessPolicy, cardLifecycle, clientMessageText, concretePresenter);
+    var clientReplyWorkflow = new ManagerControlClientReplyWorkflow(managerControlTransactionRunner, dailyControlConcreteItemRepository, dailyControlRepository, clientChatUnansweredItemRepository, replyOperations, clientChatMessageSender, deliveryQueue, deliveryActors, org.mockito.Mockito.mock(com.hunt.otziv.whatsapp.service.service.WhatsAppService.class), clientChatMessageTrackerService, accessPolicy, cardLifecycle, concretePresenter);
+    var clientConversationWorkflow = new ManagerControlClientConversationWorkflow(dailyControlConcreteItemRepository, dailyControlRepository, clientChatUnansweredItemRepository, clientChatMessageTrackerService, clientChatReplySuggestionService, clientChatMessageReconciliationService, replyOperations, accessPolicy, cardLifecycle, concretePresenter);
+    var problemExamples = new ManagerControlProblemExamples(clientMessageText, concretePresenter, new ManagerControlOrderAutomationDiagnostics(orderRepository, scheduledClientMessageStateRepository), orderService, clientMessageOrderStatusService, appSettingService, clientChatMessageTrackerService, badReviewTaskService, reviewRecoveryTaskService, reviewRepository, orderRepository, companyRepository, paymentLinkRepository, invoiceDiagnostics, managerAutomationFailureService, riskIncidentRepository, dailyControlRepository, dailyControlConcreteItemRepository);
+    var concreteSnapshot = new ManagerControlConcreteSnapshotWorkflow(problemExamples, cardLifecycle, slaPolicy, concretePresenter, dailyControlConcreteItemRepository);
+    var dayLifecycle = new ManagerControlDayLifecycle(problemExamples, accessPolicy, cardLifecycle, qualityQueries, dailyControlRepository, dailyControlItemRepository, dailyControlConcreteItemRepository);
+    var dailySnapshot = new ManagerControlDailySnapshotWorkflow(dayLifecycle, problemExamples, cardLifecycle, slaPolicy, workerTaskLookup, workerExplanationQueries, orderAutomationDiagnostics, orderService, clientChatMessageTrackerService, badReviewTaskService, reviewRecoveryTaskService, reviewService, reviewRepository, orderRepository, companyRepository, invoiceDiagnostics, managerAutomationFailureService, riskIncidentRepository, dailyControlRepository, dailyControlItemRepository, dailyControlConcreteItemRepository, managerActionBalanceService, managerOperationalMetricsService, leadsRepository);
+    var boardWorkflow = new ManagerControlBoardWorkflow(dailySnapshot, dayLifecycle, concreteSnapshot, problemExamples, accessPolicy, cardLifecycle, workerExplanationQueries, qualityQueries, managerRepository, managerPermissionService, scheduledClientMessageService, dailyControlRepository, dailyControlItemRepository, managerPerformanceService);
+    var dayActions = new ManagerControlDayActions(boardWorkflow, dayLifecycle, problemExamples, accessPolicy, cardLifecycle, dailyControlRepository, dailyControlItemRepository);
+    var reminderWorkflow = new ManagerControlReminderWorkflow(dailySnapshot, dayLifecycle, problemExamples, accessPolicy, cardLifecycle, clientMessageText, managerRepository, userRepository, personalReminderService, telegramService, dailyControlRepository, dailyControlItemRepository);
+    var workerTaskWorkflow = new ManagerControlWorkerTaskWorkflow(concreteSnapshot, problemExamples, workerTaskLookup, personalReminderService, notificationMediaDeliveryService, riskIncidentRepository);
+    var itemActions = new ManagerControlItemActions(workerTaskWorkflow, reminderWorkflow, dayLifecycle, problemExamples, accessPolicy, cardLifecycle, slaPolicy, concretePresenter, workerTaskLookup, managerPermissionService, orderService, clientChatMessageTrackerService, orderRepository, invoiceDiagnostics, managerAutomationFailureService, dailyControlRepository, dailyControlItemRepository, dailyControlConcreteItemRepository, gamificationEventService);
+    var repairOutcome = new ManagerControlRepairOutcome(problemExamples, accessPolicy, cardLifecycle, concretePresenter, dailyControlRepository, dailyControlConcreteItemRepository);
+    var chatRepairWorkflow = new ManagerControlChatRepairWorkflow(repairOutcome, problemExamples, orderAutomationDiagnostics, telegramService, scheduledClientMessageStateRepository, orderRepository, companyRepository, whatsAppGroupLinkSyncService, sharedChatLinkSyncService, telegramGroupLinkService, maxGroupLinkService);
+    var automationRepairWorkflow = new ManagerControlAutomationRepairWorkflow(chatRepairWorkflow, repairOutcome, problemExamples, orderAutomationDiagnostics, scheduledClientMessageService, scheduledClientMessageStateRepository, clientChatMessageReconciliationService, managerAutomationFailureService);
+    var repairWorkflow = new ManagerControlRepairWorkflow(automationRepairWorkflow, chatRepairWorkflow, repairOutcome, problemExamples, accessPolicy, clientMessageText, concretePresenter, orderAutomationDiagnostics, scheduledClientMessageService, reviewRepository, orderRepository, companyRepository, orderPaymentIntegrityService, invoiceRepairWorkflow, publicationApprovalService, dailyControlConcreteItemRepository);
+    ReflectionTestUtils.setField(service, "repairWorkflow", repairWorkflow);
+    ReflectionTestUtils.setField(service, "itemActions", itemActions);
+    ReflectionTestUtils.setField(service, "reminderWorkflow", reminderWorkflow);
+    ReflectionTestUtils.setField(service, "dayActions", dayActions);
+    ReflectionTestUtils.setField(service, "boardWorkflow", boardWorkflow);
+    ReflectionTestUtils.setField(service, "dailySnapshot", dailySnapshot);
+    ReflectionTestUtils.setField(service, "dayLifecycle", dayLifecycle);
+    ReflectionTestUtils.setField(service, "concreteSnapshot", concreteSnapshot);
+    ReflectionTestUtils.setField(service, "problemExamples", problemExamples);
+    deliveryWorker = new ManagerClientMessageWorker(deliveryQueue, clientSendWorkflow, clientReplyWorkflow, clientChatMessageSender,
+            deliveryActors, () -> true, managerControlTransactionRunner);
+    ReflectionTestUtils.setField(service, "clientSendWorkflow", clientSendWorkflow);
+    ReflectionTestUtils.setField(service, "clientReplyWorkflow", clientReplyWorkflow);
+    ReflectionTestUtils.setField(service, "clientConversationWorkflow", clientConversationWorkflow);
+    ReflectionTestUtils.setField(service, "qualityQueries", qualityQueries);
+    ReflectionTestUtils.setField(service, "orderAutomationDiagnostics", orderAutomationDiagnostics);
+    ReflectionTestUtils.setField(service, "telegramGroupLinkService", telegramGroupLinkService);
+    ReflectionTestUtils.setField(service, "maxGroupLinkService", maxGroupLinkService);
+}
+
+
+    @Test
+    void managerCannotReadAnotherManagersHistoryOrExplanationReport() {
+        var authentication = new UsernamePasswordAuthenticationToken("manager", "", List.of(new SimpleGrantedAuthority("ROLE_MANAGER")));
+        User user = new User();
+        user.setId(17L);
+        Manager ownManager = new Manager();
+        ownManager.setId(10L);
+        when(managerPermissionService.hasRole(eq(authentication), anyString()))
+                .thenAnswer(call -> "MANAGER".equals(call.getArgument(1)));
+        when(userService.findByUserName("manager")).thenReturn(Optional.of(user));
+        when(managerRepository.findByUserId(17L)).thenReturn(Optional.of(ownManager));
+
+        assertThrows(ResponseStatusException.class, () -> service.managerDetails(99L, () -> "manager", authentication));
+
+        org.mockito.Mockito.verifyNoInteractions(dailyControlRepository, dailyControlConcreteItemRepository, dailyControlEventRepository);
+    }
+
+    @Test
+    void qualityApplicationIsIdempotentAndDoesNotPersistIndependently() {
+        ManagerDailyControl control = new ManagerDailyControl();
+        ManagerDailyControlItem item = new ManagerDailyControlItem();
+        item.setGroup(ManagerDailyControlGroup.ACTION);
+        item.setSeverity(ManagerDailyControlSeverity.CRITICAL);
+        item.setStatus(ManagerDailyControlItemStatus.OPEN);
+        item.setCount(1);
+        when(dailyControlEventRepository.findByControlOrderByCreatedAtDesc(control)).thenReturn(List.of());
+
+        Boolean changed = ReflectionTestUtils.invokeMethod(service, "updateQuality", control, List.of(item));
+        assertTrue(changed);
+        assertEquals(28, control.getRiskScore());
+        assertEquals(54, control.getQualityScore());
+        Boolean repeated = ReflectionTestUtils.invokeMethod(service, "updateQuality", control, List.of(item));
+        assertFalse(repeated);
+        verify(dailyControlRepository, never()).save(any());
+        verify(dailyControlEventRepository, never()).save(any());
+    }
 
     @Test
     void fastClickRiskUsesOnlyManagerClientMessageResolutions() throws Exception {
@@ -292,13 +408,8 @@ class ManagerControlServiceTest {
         when(appSettingService.getInt("manager.sla.target.control-card-minutes", 30)).thenReturn(30);
         when(appSettingService.getInt("manager.sla.hard.control-card-minutes", 60)).thenReturn(480);
 
-        Method method = ManagerControlService.class.getDeclaredMethod(
-                "decorateConcreteSla",
-                ManagerDailyControlItem.class,
-                ManagerControlConcreteItemResponse.class
-        );
-        method.setAccessible(true);
-        ManagerControlConcreteItemResponse response = (ManagerControlConcreteItemResponse) method.invoke(service, parent, concrete);
+        ManagerControlConcreteItemResponse response = new ManagerControlSlaPolicy(appSettingService)
+                .decorateConcreteSla(parent, concrete);
 
         assertEquals(firstObservedAt, response.firstObservedAt());
         assertEquals(firstObservedAt.plusMinutes(30), response.targetDeadlineAt());
@@ -362,10 +473,10 @@ class ManagerControlServiceTest {
                 any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(0L);
 
-        Method method = ManagerControlService.class.getDeclaredMethod("commonInvoiceActionCount", Manager.class);
+        Method method = ManagerControlInvoiceDiagnostics.class.getDeclaredMethod("countActions", Manager.class);
         method.setAccessible(true);
 
-        assertEquals(0L, method.invoke(service, manager));
+        assertEquals(0L, method.invoke(invoiceDiagnostics, manager));
         verify(commonInvoiceRepository).countManagerControlInvoices(
                 eq(manager),
                 any(),
@@ -383,16 +494,16 @@ class ManagerControlServiceTest {
     @Test
     void paperInvoiceWithoutDeliveryConfirmationBecomesManagerRemarkAfterTwentyFourHours() throws Exception {
         CommonInvoice invoice = paperInvoicePendingSince(LocalDateTime.now().minusHours(25));
-        Method problemMethod = ManagerControlService.class.getDeclaredMethod(
+        Method problemMethod = ManagerControlInvoiceDiagnostics.class.getDeclaredMethod(
                 "isCommonInvoiceManagerControlProblem",
                 CommonInvoice.class,
                 LocalDateTime.class
         );
         problemMethod.setAccessible(true);
 
-        assertTrue((Boolean) problemMethod.invoke(service, invoice, LocalDateTime.now()));
+        assertTrue((Boolean) problemMethod.invoke(invoiceDiagnostics, invoice, LocalDateTime.now()));
 
-        Method reasonMethod = ManagerControlService.class.getDeclaredMethod(
+        Method reasonMethod = ManagerControlInvoiceDiagnostics.class.getDeclaredMethod(
                 "commonInvoiceReason",
                 CommonInvoice.class,
                 LocalDate.class,
@@ -401,7 +512,7 @@ class ManagerControlServiceTest {
         );
         reasonMethod.setAccessible(true);
         String reason = (String) reasonMethod.invoke(
-                service,
+                invoiceDiagnostics,
                 invoice,
                 LocalDate.now(),
                 List.of(),
@@ -420,14 +531,14 @@ class ManagerControlServiceTest {
         invoice.setUpdatedAt(LocalDateTime.now());
         when(commonInvoiceOrderRepository.findByInvoiceIdWithOrders(invoice.getId())).thenReturn(List.of());
 
-        Method problemMethod = ManagerControlService.class.getDeclaredMethod(
+        Method problemMethod = ManagerControlInvoiceDiagnostics.class.getDeclaredMethod(
                 "isCommonInvoiceManagerControlProblem",
                 CommonInvoice.class,
                 LocalDateTime.class
         );
         problemMethod.setAccessible(true);
 
-        assertFalse((Boolean) problemMethod.invoke(service, invoice, LocalDateTime.now()));
+        assertFalse((Boolean) problemMethod.invoke(invoiceDiagnostics, invoice, LocalDateTime.now()));
     }
 
     private CommonInvoice paperInvoicePendingSince(LocalDateTime sentAt) {
@@ -617,7 +728,7 @@ class ManagerControlServiceTest {
     }
 
     @Test
-    void successfulClientMessageClosesConcreteCardImmediately() {
+    void acceptedClientMessageClosesConcreteCardOnlyAfterWorkerConfirmation() {
         ManagerDailyControl control = control();
         ManagerDailyControlItem parent = actionParent(control);
         ManagerDailyControlConcreteItem concrete = concrete(control, parent, "ORDER");
@@ -642,8 +753,8 @@ class ManagerControlServiceTest {
         TelegramTransferCopyButton copyButton = TelegramTransferCopyButton
                 .fromFrozenTransferNumber("2202208238396676")
                 .orElseThrow();
-        when(clientChatMessageSender.send(any(), any(), any(), any(), eq(copyButton)))
-                .thenReturn(ClientMessageSendResult.sent("WhatsApp"));
+        when(clientChatMessageSender.sendWithOperationId(any(), any(), any(), any(), eq(copyButton), anyString()))
+                .thenReturn(ClientMessageSendResult.sent("WhatsApp", "fixture-provider-message"));
 
         ManagerControlConcreteItemResponse response = service.sendClientMessage(
                 concrete.getId(),
@@ -651,14 +762,19 @@ class ManagerControlServiceTest {
                 adminAuth()
         );
 
+        assertEquals("QUEUED", response.delivery().status());
+        assertEquals(ManagerDailyControlItemStatus.ACTION_TAKEN.name(), response.itemStatus());
+        verify(clientChatMessageSender, never()).sendWithOperationId(any(), any(), any(), any(), any(), anyString());
+        drainManagerDelivery();
         assertEquals(ManagerDailyControlItemStatus.RESOLVED, concrete.getStatus());
         assertEquals(ManagerDailyControlActionType.RESOLVED, concrete.getActionType());
         assertNotNull(concrete.getResolvedAt());
         assertNull(concrete.getFollowUpAt());
-        assertEquals(ManagerDailyControlItemStatus.RESOLVED.name(), response.itemStatus());
-        verify(clientChatMessageSender).send(
-                eq(company), any(), any(), eq("canonical payment"), eq(copyButton)
-        );
+        ArgumentCaptor<Company> destination = ArgumentCaptor.forClass(Company.class);
+        verify(clientChatMessageSender).sendWithOperationId(
+                destination.capture(), any(), any(), eq("canonical payment"), eq(copyButton), anyString());
+        assertEquals(company.getTitle(), destination.getValue().getTitle());
+        assertNotSame(company, destination.getValue());
     }
 
     @Test
@@ -681,17 +797,15 @@ class ManagerControlServiceTest {
         when(orderRepository.findByIdForCounterUpdate(82L)).thenReturn(Optional.of(order));
         when(paymentInstructionOrchestrator.prepareAuthorized(eq(82L), any(Authentication.class)))
                 .thenReturn(prepared);
-        when(clientChatMessageSender.send(any(), any(), any(), eq("payment"), isNull())).thenAnswer(invocation -> {
+        when(clientChatMessageSender.sendWithOperationId(any(), any(), any(), eq("payment"), isNull(), anyString())).thenAnswer(invocation -> {
             order.setStatus(OrderStatus.builder().title("Бан").build());
-            return ClientMessageSendResult.sent("WhatsApp");
+            return ClientMessageSendResult.sent("WhatsApp", "fixture-provider-message");
         });
 
-        ResponseStatusException failure = assertThrows(
-                ResponseStatusException.class,
-                () -> service.sendClientMessage(concrete.getId(), principal(), adminAuth())
-        );
-
-        assertEquals(org.springframework.http.HttpStatus.CONFLICT, failure.getStatusCode());
+        var accepted = service.sendClientMessage(concrete.getId(), principal(), adminAuth());
+        assertEquals("QUEUED", accepted.delivery().status());
+        drainManagerDelivery();
+        assertEquals("finalization_required", deliveryQueue.status(concrete.getId(), accepted.delivery().operationId()).errorCode());
         assertEquals(ManagerDailyControlItemStatus.ACTION_TAKEN, concrete.getStatus());
         assertTrue(concrete.getComment().startsWith("client_message_delivery_unknown:"));
         verify(paymentInstructionOrchestrator, never()).releaseKnownUnsent(any(), any());
@@ -717,11 +831,12 @@ class ManagerControlServiceTest {
         when(dailyControlConcreteItemRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(orderRepository.findByIdForCounterUpdate(80L)).thenReturn(Optional.of(order));
         when(paymentInstructionOrchestrator.prepareAuthorized(eq(80L), any(Authentication.class))).thenReturn(prepared);
-        when(clientChatMessageSender.send(any(), any(), any(), eq("payment"), isNull()))
-                .thenReturn(ClientMessageSendResult.failed("DOWN", "unavailable"));
+        when(clientChatMessageSender.sendWithOperationId(any(), any(), any(), eq("payment"), isNull(), anyString()))
+                .thenReturn(ClientMessageSendResult.failed("gateway_not_ready", "unavailable"));
 
-        assertThrows(ResponseStatusException.class,
-                () -> service.sendClientMessage(concrete.getId(), principal(), adminAuth()));
+        var accepted = service.sendClientMessage(concrete.getId(), principal(), adminAuth());
+        assertEquals("QUEUED", accepted.delivery().status());
+        drainManagerDelivery();
 
         assertEquals(ManagerDailyControlItemStatus.OPEN, concrete.getStatus());
         verify(paymentInstructionOrchestrator).releaseKnownUnsent(eq(prepared), any(Authentication.class));
@@ -745,11 +860,12 @@ class ManagerControlServiceTest {
         when(dailyControlConcreteItemRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(orderRepository.findByIdForCounterUpdate(81L)).thenReturn(Optional.of(order));
         when(paymentInstructionOrchestrator.prepareAuthorized(eq(81L), any(Authentication.class))).thenReturn(prepared);
-        when(clientChatMessageSender.send(any(), any(), any(), eq("payment"), isNull()))
+        when(clientChatMessageSender.sendWithOperationId(any(), any(), any(), eq("payment"), isNull(), anyString()))
                 .thenThrow(new IllegalStateException("timeout"));
 
-        assertThrows(ResponseStatusException.class,
-                () -> service.sendClientMessage(concrete.getId(), principal(), adminAuth()));
+        var accepted = service.sendClientMessage(concrete.getId(), principal(), adminAuth());
+        assertEquals("QUEUED", accepted.delivery().status());
+        drainManagerDelivery();
 
         assertTrue(concrete.getComment().startsWith("client_message_delivery_unknown:"));
         verify(paymentInstructionOrchestrator, never()).releaseKnownUnsent(any(), any());
@@ -780,7 +896,7 @@ class ManagerControlServiceTest {
                 () -> service.sendClientMessage(concrete.getId(), principal(), adminAuth())
         );
 
-        verify(clientChatMessageSender, never()).send(any(), any(), any(), any());
+        verify(clientChatMessageSender, never()).sendWithOperationId(any(), any(), any(), any(), isNull(), anyString());
     }
 
     @Test
@@ -807,7 +923,7 @@ class ManagerControlServiceTest {
         verify(orderRepository, never()).findByIdForCounterUpdate(anyLong());
         verify(paymentInstructionOrchestrator, never())
                 .prepareAuthorized(anyLong(), any(Authentication.class));
-        verify(clientChatMessageSender, never()).send(any(), any(), any(), any());
+        verify(clientChatMessageSender, never()).sendWithOperationId(any(), any(), any(), any(), isNull(), anyString());
     }
 
     @Test
@@ -857,7 +973,7 @@ class ManagerControlServiceTest {
         verify(orderRepository).findByIdForCounterUpdate(79L);
         verify(paymentInstructionOrchestrator, never())
                 .prepareAuthorized(anyLong(), any(Authentication.class));
-        verify(clientChatMessageSender, never()).send(any(), any(), any(), any());
+        verify(clientChatMessageSender, never()).sendWithOperationId(any(), any(), any(), any(), isNull(), anyString());
     }
 
     @Test
@@ -1398,11 +1514,11 @@ class ManagerControlServiceTest {
 
     @Test
     void commonInvoiceRepairSuspendsControlTransactionAndResolvesOnlyAfterSend() throws Exception {
-        Transactional controlTransaction = ManagerControlService.class
+        Transactional controlTransaction = ManagerControlRepairWorkflow.class
                 .getMethod("repairConcreteItem", Long.class, Principal.class, Authentication.class)
                 .getAnnotation(Transactional.class);
-        Transactional invoiceBoundary = ManagerControlInvoiceOperationExecutor.class
-                .getMethod("execute", java.util.function.Supplier.class)
+        Transactional invoiceBoundary = ManagerControlInvoiceRepairWorkflow.class
+                .getMethod("repair", Long.class)
                 .getAnnotation(Transactional.class);
         assertNotNull(controlTransaction);
         assertNotNull(invoiceBoundary);
@@ -1575,14 +1691,14 @@ class ManagerControlServiceTest {
         when(paymentLinkRepository.findByOrderIdInForRead(List.of(101L)))
                 .thenReturn(List.of(cancelReserved));
 
-        Method method = ManagerControlService.class.getDeclaredMethod(
+        Method method = ManagerControlInvoiceDiagnostics.class.getDeclaredMethod(
                 "commonInvoiceLastErrorReason",
                 CommonInvoice.class,
                 String.class,
                 List.class
         );
         method.setAccessible(true);
-        String reason = (String) method.invoke(service, invoice, invoice.getLastError(), List.of(item));
+        String reason = (String) method.invoke(invoiceDiagnostics, invoice, invoice.getLastError(), List.of(item));
 
         assertTrue(reason.contains("отдельный незавершенный платеж"));
         assertFalse(reason.contains("нажмите «Починить»"));
@@ -1596,14 +1712,14 @@ class ManagerControlServiceTest {
         invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
         invoice.setLastError("standalone_payment_route_conflict: order=23293; link=940; status=CREATED");
 
-        Method method = ManagerControlService.class.getDeclaredMethod(
+        Method method = ManagerControlInvoiceDiagnostics.class.getDeclaredMethod(
                 "commonInvoiceLastErrorReason",
                 CommonInvoice.class,
                 String.class,
                 List.class
         );
         method.setAccessible(true);
-        String reason = (String) method.invoke(service, invoice, invoice.getLastError(), List.of());
+        String reason = (String) method.invoke(invoiceDiagnostics, invoice, invoice.getLastError(), List.of());
 
         assertTrue(reason.contains("Нажмите «Починить»"));
         assertTrue(reason.contains("сверит начатые платежи"));
@@ -2428,12 +2544,25 @@ class ManagerControlServiceTest {
         audited.setAuditRequired(true);
         audited.setPlatform(com.hunt.otziv.client_chat_control.model.ClientChatPlatform.WHATSAPP);
         audited.setChatId("12001@g.us");
+        audited.setLastClientMessageAt(LocalDateTime.now().minusHours(1));
+        Company replyCompany = new Company();
+        replyCompany.setId(81L);
+        audited.setCompany(replyCompany);
         stubSuccessfulConcreteAction(concrete, parent);
-        when(clientChatUnansweredItemRepository.findById(concrete.getEntityId()))
+        when(dailyControlConcreteItemRepository.findByIdForUpdate(concrete.getId())).thenReturn(Optional.of(concrete));
+        when(clientChatUnansweredItemRepository.findByIdForUpdate(concrete.getEntityId()))
                 .thenReturn(Optional.of(audited));
-        when(clientChatMessageSender.sendToPlatform(
-                any(), any(), any(), any(), any(), any()
-        )).thenReturn(ClientMessageSendResult.sent("WhatsApp"));
+        var operation = new java.util.concurrent.atomic.AtomicReference<com.hunt.otziv.manager_control.repository.ManagerClientReplyOperationRepository.Operation>();
+        when(replyOperations.create(any(), any(), anyString(), any(), anyString())).thenAnswer(call -> {
+            operation.set(new com.hunt.otziv.manager_control.repository.ManagerClientReplyOperationRepository.Operation(
+                    java.util.UUID.randomUUID().toString(), call.getArgument(0), call.getArgument(1),
+                    call.getArgument(2), "PREPARED", call.getArgument(3), call.getArgument(4), null, false));
+            return operation.get();
+        });
+        when(replyOperations.findTokenForUpdate(anyString())).thenAnswer(call -> Optional.of(operation.get()));
+        when(clientChatMessageSender.sendToPlatformWithOperationId(
+                any(), any(), any(), any(), any(), any(), anyString()
+        )).thenReturn(ClientMessageSendResult.sent("WhatsApp", "fixture-provider-message"));
 
         ManagerControlConcreteItemResponse response = service.replyToClientMessage(
                 concrete.getId(),
@@ -2442,8 +2571,10 @@ class ManagerControlServiceTest {
                 adminAuth()
         );
 
-        assertEquals(ManagerDailyControlItemStatus.RESOLVED.name(), response.itemStatus());
-        assertEquals(ManagerDailyControlActionType.RESOLVED.name(), response.actionType());
+        assertEquals("QUEUED", response.delivery().status());
+        drainManagerDelivery();
+        assertEquals(ManagerDailyControlItemStatus.RESOLVED, concrete.getStatus());
+        assertEquals(ManagerDailyControlActionType.RESOLVED, concrete.getActionType());
         verify(clientChatMessageTrackerService).markAuditReplySent(
                 audited.getId(),
                 1L,
@@ -2456,7 +2587,7 @@ class ManagerControlServiceTest {
             ManagerDailyControlConcreteItem concrete,
             ManagerDailyControlItem parent
     ) {
-        when(dailyControlConcreteItemRepository.findById(concrete.getId())).thenReturn(Optional.of(concrete));
+        lenient().when(dailyControlConcreteItemRepository.findById(concrete.getId())).thenReturn(Optional.of(concrete));
         lenient().when(dailyControlConcreteItemRepository.findByIdForUpdate(concrete.getId()))
                 .thenReturn(Optional.of(concrete));
         when(managerPermissionService.hasRole(any(), eq("ADMIN"))).thenReturn(true);

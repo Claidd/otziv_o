@@ -7,6 +7,8 @@ x-default-logging: &default-logging
     max-file: "5"
 
 networks:
+  docker_observer_net:
+    internal: true
   internal_net:
     driver: bridge
   external_review_net:
@@ -26,10 +28,27 @@ volumes:
   prometheus_data:
 
 services:
+  docker-observer:
+    image: ${DOCKER_OBSERVER_IMAGE:-otziv-docker-observer:local}
+    build:
+      context: ./infrastructure/docker-observer
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 64
+    mem_limit: 128m
+    cpus: 0.5
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - docker_observer_net
+
   mysql:
-    # Production-verified MySQL 9.0.0; pin the registry digest to prevent an
-    # unattended major upgrade when somebody refreshes the former latest tag.
-    image: mysql@sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383
+    # A different running DB image is blocked by the ordinary deployment guard.
+    # Upgrade the retained volume only through the reviewed coordinated cutover.
+    image: ghcr.io/claidd/otziv-security@sha256:3a3caaab4e71b3bfdec9da21c17c00ed10ca237151919aeddac8e5ce4b8b7baa
+    user: "999:999"
     container_name: my-mysql
     restart: unless-stopped
     logging: *default-logging
@@ -37,11 +56,18 @@ services:
     mem_limit: ${MYSQL_MEMORY_LIMIT:-4g}
     cpus: ${MYSQL_CPU_LIMIT:-4.0}
     command:
+      - mysqld
+      - --user=999
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
       - --default-time-zone=+08:00
       - --restrict-fk-on-non-standard-key=OFF
       - --binlog-expire-logs-seconds=${MYSQL_BINLOG_EXPIRE_LOGS_SECONDS:-604800}
+      - --gtid-mode=OFF
+      - --enforce-gtid-consistency=OFF
+      - --log-bin=mysql-bin
+      - --binlog-format=ROW
+      - --event-scheduler=ON
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
@@ -49,9 +75,15 @@ services:
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
       TZ: ${TZ:-Asia/Irkutsk}
     volumes:
-      - mysql_data:/var/lib/mysql
+      - type: volume
+        source: mysql_data
+        target: /var/lib/mysql
+        volume:
+          nocopy: true
       - ./data/mysql_backup:/backup
       - ./data/bots:/var/lib/mysql-files
+    tmpfs:
+      - /var/run/mysqld:rw,noexec,nosuid,size=16m,uid=999,gid=999,mode=0755
     healthcheck:
       test: ["CMD-SHELL", "mysql --protocol=TCP -h 127.0.0.1 -u$${MYSQL_USER} -p$${MYSQL_PASSWORD} $${MYSQL_DATABASE} -e 'SELECT 1' >/dev/null 2>&1"]
       interval: 10s
@@ -62,7 +94,7 @@ services:
       - internal_net
 
   phpmyadmin:
-    image: phpmyadmin@sha256:b68f318c5fd85541795ed8eb4ced28ea6908a89910871783b3e479cc6c6d1e1b
+    image: ghcr.io/claidd/otziv-security@sha256:0d805ad3b104f2a377b6e39f3e30e5707d8c6875a155a40d2c01e4ad608b5835
     profiles: ["db-admin"]
     restart: unless-stopped
     logging: *default-logging
@@ -88,7 +120,7 @@ services:
       start_period: 20s
 
   keycloak-postgres:
-    image: postgres@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d
+    image: ghcr.io/claidd/otziv-security@sha256:07834abbfd80ed7183afa9096db99afc4d93b99fd51aae726e550d07ade65dbf
     container_name: keycloak-postgres
     restart: unless-stopped
     logging: *default-logging
@@ -111,7 +143,7 @@ services:
       - internal_net
 
   keycloak:
-    image: quay.io/keycloak/keycloak@sha256:4883630ef9db14031cde3e60700c9a9a8eaf1b5c24db1589d6a2d43de38ba2a9
+    image: ${OTZIV_KEYCLOAK_IMAGE:-ghcr.io/claidd/otziv-security@sha256:bd5687843becb0cdb232c2b864cc3786fafb8fc91f30f531fa2db7fc4d1fc59d}
     restart: unless-stopped
     logging: *default-logging
     mem_limit: ${KEYCLOAK_MEMORY_LIMIT:-2g}
@@ -159,6 +191,7 @@ services:
       - internal_net
 
   app:
+    stop_grace_period: 120s
     image: ${APP_IMAGE:?APP_IMAGE must be an immutable release tag or digest}
     restart: unless-stopped
     init: true
@@ -197,6 +230,14 @@ services:
       OTZIV_AUTH_LEGACY_MIGRATION_RATE_LIMIT_WINDOW: ${OTZIV_AUTH_LEGACY_MIGRATION_RATE_LIMIT_WINDOW:-PT15M}
       OTZIV_AUTH_LEGACY_MIGRATION_RATE_LIMIT_MAX_BUCKETS: ${OTZIV_AUTH_LEGACY_MIGRATION_RATE_LIMIT_MAX_BUCKETS:-10000}
       OTZIV_SECURITY_LOCAL_STATE_EXEMPT_CLIENT_IDS: ${OTZIV_SECURITY_LOCAL_STATE_EXEMPT_CLIENT_IDS:-}
+      OTZIV_SECURITY_SESSION_REVOCATION_MODE: ${OTZIV_SECURITY_SESSION_REVOCATION_MODE:-off}
+      OTZIV_SECURITY_SESSION_REVOCATION_DISPATCH_ENABLED: ${OTZIV_SECURITY_SESSION_REVOCATION_DISPATCH_ENABLED:-false}
+      OTZIV_SECURITY_SESSION_REVOCATION_CUTOVER_CONFIRMED: ${OTZIV_SECURITY_SESSION_REVOCATION_CUTOVER_CONFIRMED:-false}
+      OTZIV_SECURITY_ISSUER_GENERATION_REQUIRED: ${OTZIV_SECURITY_ISSUER_GENERATION_REQUIRED:-false}
+      PERFORMERS_NOTIFICATIONS_DISPATCH_ENABLED: ${PERFORMERS_NOTIFICATIONS_DISPATCH_ENABLED:-false}
+      LEAD_COMMANDS_DISPATCH_ENABLED: ${LEAD_COMMANDS_DISPATCH_ENABLED:-false}
+      SERVER_SHUTDOWN: graceful
+      SPRING_LIFECYCLE_TIMEOUT_PER_SHUTDOWN_PHASE: 90s
       OTZIV_CREDENTIAL_ENCRYPTION_REQUIRED: ${OTZIV_CREDENTIAL_ENCRYPTION_REQUIRED:-true}
       OTZIV_CREDENTIAL_ENCRYPTION_ACTIVE_KEY_ID: ${OTZIV_CREDENTIAL_ENCRYPTION_ACTIVE_KEY_ID:-primary}
       OTZIV_CREDENTIAL_ENCRYPTION_ACTIVE_KEY_BASE64: ${OTZIV_CREDENTIAL_ENCRYPTION_ACTIVE_KEY_BASE64:-}
@@ -587,6 +628,7 @@ services:
       - messaging_net
 
   external-review-worker:
+    stop_grace_period: 400s
     profiles: ["external-review"]
     image: ${EXTERNAL_REVIEW_WORKER_IMAGE:?EXTERNAL_REVIEW_WORKER_IMAGE must be an explicit deployment tag or digest}
     build:
@@ -598,6 +640,7 @@ services:
     read_only: true
     security_opt:
       - no-new-privileges:true
+      - seccomp=./infrastructure/runtime-security/chromium-seccomp.json
     cap_drop:
       - ALL
     pids_limit: ${EXTERNAL_REVIEW_WORKER_PIDS_LIMIT:-256}
@@ -635,6 +678,7 @@ services:
       - external_review_net
 
   whatsapp_lika:
+    stop_grace_period: 330s
     image: ${WHATSAPP_IMAGE:?WHATSAPP_IMAGE must be an explicit deployment tag}
     build:
       context: .
@@ -646,14 +690,12 @@ services:
     read_only: true
     security_opt:
       - no-new-privileges:true
+      - seccomp=./infrastructure/runtime-security/chromium-seccomp.json
     cap_drop:
       - ALL
     # These entries admit the namespace/chroot syscalls through Docker's
     # default seccomp policy. USER node + no-new-privileges keeps the gateway
     # process itself on an empty effective capability set.
-    cap_add:
-      - SYS_ADMIN
-      - SYS_CHROOT
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=512m,mode=1777
     pids_limit: ${WHATSAPP_PIDS_LIMIT:-512}
@@ -686,10 +728,13 @@ services:
       WHATSAPP_PUPPETEER_TIMEOUT_MS: ${WHATSAPP_PUPPETEER_TIMEOUT_MS:-300000}
       WHATSAPP_READY_AFTER_AUTH_TIMEOUT_MS: ${WHATSAPP_READY_AFTER_AUTH_TIMEOUT_MS:-300000}
       WHATSAPP_STARTUP_READY_TIMEOUT_MS: ${WHATSAPP_STARTUP_READY_TIMEOUT_MS:-600000}
-      WHATSAPP_WEBHOOK_ATTEMPTS: ${WHATSAPP_WEBHOOK_ATTEMPTS:-3}
       WHATSAPP_WEBHOOK_TIMEOUT_MS: ${WHATSAPP_WEBHOOK_TIMEOUT_MS:-10000}
-      WHATSAPP_WEBHOOK_RETRY_DELAY_MS: ${WHATSAPP_WEBHOOK_RETRY_DELAY_MS:-500}
-      WHATSAPP_MESSAGE_DEDUP_TTL_MS: ${WHATSAPP_MESSAGE_DEDUP_TTL_MS:-86400000}
+      WHATSAPP_INBOUND_HISTORY_SINCE: ${WHATSAPP_INBOUND_HISTORY_SINCE:-}
+      WHATSAPP_INBOUND_HISTORY_MAX_MESSAGES: ${WHATSAPP_INBOUND_HISTORY_MAX_MESSAGES:-10000}
+      WHATSAPP_INBOUND_HISTORY_INTERVAL_MS: ${WHATSAPP_INBOUND_HISTORY_INTERVAL_MS:-60000}
+      WHATSAPP_INBOUND_MAX_RECORDS: ${WHATSAPP_INBOUND_MAX_RECORDS:-100000}
+      WHATSAPP_OPERATION_LEDGER_MAX_RECORDS: ${WHATSAPP_OPERATION_LEDGER_MAX_RECORDS:-100000}
+      WHATSAPP_OPERATION_LEDGER_RESTORE_ID: ${WHATSAPP_OPERATION_LEDGER_RESTORE_ID:-}
       WHATSAPP_OUTBOUND_MARK_TTL_MS: ${WHATSAPP_OUTBOUND_MARK_TTL_MS:-600000}
       WHATSAPP_OUTBOUND_DURABLE_TTL_MS: ${WHATSAPP_OUTBOUND_DURABLE_TTL_MS:-2592000000}
       WHATSAPP_LID_PHONE_CACHE_TTL_MS: ${WHATSAPP_LID_PHONE_CACHE_TTL_MS:-604800000}
@@ -709,6 +754,7 @@ services:
       - messaging_net
 
   whatsapp_vika:
+    stop_grace_period: 330s
     image: ${WHATSAPP_IMAGE:?WHATSAPP_IMAGE must be an explicit deployment tag}
     build:
       context: .
@@ -720,11 +766,9 @@ services:
     read_only: true
     security_opt:
       - no-new-privileges:true
+      - seccomp=./infrastructure/runtime-security/chromium-seccomp.json
     cap_drop:
       - ALL
-    cap_add:
-      - SYS_ADMIN
-      - SYS_CHROOT
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=512m,mode=1777
     pids_limit: ${WHATSAPP_PIDS_LIMIT:-512}
@@ -757,10 +801,13 @@ services:
       WHATSAPP_PUPPETEER_TIMEOUT_MS: ${WHATSAPP_PUPPETEER_TIMEOUT_MS:-300000}
       WHATSAPP_READY_AFTER_AUTH_TIMEOUT_MS: ${WHATSAPP_READY_AFTER_AUTH_TIMEOUT_MS:-300000}
       WHATSAPP_STARTUP_READY_TIMEOUT_MS: ${WHATSAPP_STARTUP_READY_TIMEOUT_MS:-600000}
-      WHATSAPP_WEBHOOK_ATTEMPTS: ${WHATSAPP_WEBHOOK_ATTEMPTS:-3}
       WHATSAPP_WEBHOOK_TIMEOUT_MS: ${WHATSAPP_WEBHOOK_TIMEOUT_MS:-10000}
-      WHATSAPP_WEBHOOK_RETRY_DELAY_MS: ${WHATSAPP_WEBHOOK_RETRY_DELAY_MS:-500}
-      WHATSAPP_MESSAGE_DEDUP_TTL_MS: ${WHATSAPP_MESSAGE_DEDUP_TTL_MS:-86400000}
+      WHATSAPP_INBOUND_HISTORY_SINCE: ${WHATSAPP_INBOUND_HISTORY_SINCE:-}
+      WHATSAPP_INBOUND_HISTORY_MAX_MESSAGES: ${WHATSAPP_INBOUND_HISTORY_MAX_MESSAGES:-10000}
+      WHATSAPP_INBOUND_HISTORY_INTERVAL_MS: ${WHATSAPP_INBOUND_HISTORY_INTERVAL_MS:-60000}
+      WHATSAPP_INBOUND_MAX_RECORDS: ${WHATSAPP_INBOUND_MAX_RECORDS:-100000}
+      WHATSAPP_OPERATION_LEDGER_MAX_RECORDS: ${WHATSAPP_OPERATION_LEDGER_MAX_RECORDS:-100000}
+      WHATSAPP_OPERATION_LEDGER_RESTORE_ID: ${WHATSAPP_OPERATION_LEDGER_RESTORE_ID:-}
       WHATSAPP_OUTBOUND_MARK_TTL_MS: ${WHATSAPP_OUTBOUND_MARK_TTL_MS:-600000}
       WHATSAPP_OUTBOUND_DURABLE_TTL_MS: ${WHATSAPP_OUTBOUND_DURABLE_TTL_MS:-2592000000}
       WHATSAPP_LID_PHONE_CACHE_TTL_MS: ${WHATSAPP_LID_PHONE_CACHE_TTL_MS:-604800000}
@@ -809,13 +856,11 @@ services:
         condition: service_healthy
       keycloak:
         condition: service_healthy
-      grafana:
-        condition: service_healthy
     networks:
       - internal_net
 
   certbot:
-    image: certbot/certbot@sha256:34ee91d2f43008eb78a007d22f23ed4b2eaa9a454cb27ca2c042b49527a695b4
+    image: ghcr.io/claidd/otziv-security@sha256:74afe2ca053c338fe4d14ed36397b4ccea286efc52a3db4fc5a5c07289a9c360
     logging: *default-logging
     profiles:
       - certbot
@@ -827,7 +872,7 @@ services:
       - internal_net
 
   dozzle:
-    image: amir20/dozzle@sha256:1c1060cfb5402093c4e0f03f3534d7deaffeb0a6f6dd034e7c5f244603f35fb3
+    image: amir20/dozzle@sha256:27128281cc1f93b0f849f2a5fb4ef9c12a0cce1135ab3b6fede27f9867c8a1c2
     container_name: log-viewer
     restart: unless-stopped
     logging: *default-logging
@@ -836,11 +881,14 @@ services:
     cpus: ${DOZZLE_CPU_LIMIT:-1.0}
     ports:
       - "127.0.0.1:8081:8080"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
+      DOZZLE_REMOTE_HOST: tcp://docker-observer:2375
       DOZZLE_LEVEL: info
+    depends_on:
+      docker-observer:
+        condition: service_healthy
     networks:
+      - docker_observer_net
       - internal_net
     healthcheck:
       test: [ "CMD", "/dozzle", "healthcheck" ]
@@ -850,7 +898,7 @@ services:
       start_period: 10s
 
   prometheus:
-    image: prom/prometheus@sha256:2659f4c2ebb718e7695cb9b25ffa7d6be64db013daba13e05c875451cf51b0d3
+    image: ghcr.io/claidd/otziv-security@sha256:508c918889067ea070d3da34913a81bd6df8092fb18977ca339e2367e3d77692
     container_name: prometheus
     restart: unless-stopped
     logging: *default-logging
@@ -864,6 +912,7 @@ services:
       - --web.enable-lifecycle
     volumes:
       - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infrastructure/prometheus/delivery-rules.yml:/etc/prometheus/delivery-rules.yml:ro
       - prometheus_data:/prometheus
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:9090/-/ready"]
@@ -880,7 +929,7 @@ services:
       - internal_net
 
   loki:
-    image: grafana/loki@sha256:8b5bd7748d0e4da66cd741ac276e485517514af0bea32167e27c0e1a95bcf8aa
+    image: ghcr.io/claidd/otziv-security@sha256:e1638cc4e592cfc301811518526fbdb7cf0573425ec519af76a6a806816215c9
     container_name: loki
     restart: unless-stopped
     logging: *default-logging
@@ -892,16 +941,17 @@ services:
       - ./infrastructure/loki/loki-config.yaml:/etc/loki/loki-config.yaml:ro
       - loki_data:/loki
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3100/ready"]
+      test: ["CMD", "/usr/bin/http-ready", "http://127.0.0.1:3100/ready"]
       interval: 30s
-      timeout: 5s
+      timeout: 3s
       retries: 5
-      start_period: 30s
+      start_period: 40s
     networks:
       - internal_net
 
   tempo:
-    image: grafana/tempo@sha256:ef4384fce6e8ad22b95b243d8fc165628cda655376fd50e7850536ad89d71d50
+    image: ghcr.io/claidd/otziv-security@sha256:6e743b30d2eb3c59887e3f04ba56fd20a5e36f15d616c272d7a7ea30076cfa38
+    stop_grace_period: 30s
     container_name: tempo
     restart: unless-stopped
     logging: *default-logging
@@ -913,16 +963,16 @@ services:
       - ./infrastructure/tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
       - tempo_data:/var/tempo
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3200/ready"]
+      test: ["CMD", "/usr/bin/http-ready", "http://127.0.0.1:3200/ready"]
       interval: 30s
-      timeout: 5s
+      timeout: 3s
       retries: 5
-      start_period: 30s
+      start_period: 40s
     networks:
       - internal_net
 
   alloy:
-    image: grafana/alloy@sha256:6e00cf7c5a692ff5f24844529416ed017d76fce922f8199004e73d5eca46b6b8
+    image: ghcr.io/claidd/otziv-security@sha256:d006cedf890ade4915a098a5362ce0cda9a3fd7ec2c02320f15e92ccfd669122
     container_name: alloy
     restart: unless-stopped
     logging: *default-logging
@@ -937,7 +987,6 @@ services:
     volumes:
       - ./infrastructure/alloy/config.alloy:/etc/alloy/config.alloy:ro
       - ./data/app-logs:/var/log/otziv-app:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
       - alloy_data:/var/lib/alloy/data
     healthcheck:
       test: ["CMD-SHELL", "alloy validate /etc/alloy/config.alloy >/dev/null"]
@@ -948,11 +997,14 @@ services:
     depends_on:
       loki:
         condition: service_healthy
+      docker-observer:
+        condition: service_healthy
     networks:
+      - docker_observer_net
       - internal_net
 
   grafana:
-    image: grafana/grafana@sha256:7567a7c70a3c1d75aeeedc968d1304174a16651e55a60d1fb132a05e1e63a054
+    image: ghcr.io/claidd/otziv-security@sha256:a9a36b873c7f4d424937a95f6d6c4c1f12f9d5f7556e23a1c81d6b649b570488
     restart: unless-stopped
     logging: *default-logging
     pids_limit: ${GRAFANA_PIDS_LIMIT:-512}

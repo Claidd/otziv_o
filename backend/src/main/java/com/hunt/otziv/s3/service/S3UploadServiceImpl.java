@@ -2,6 +2,7 @@ package com.hunt.otziv.s3.service;
 
 import com.hunt.otziv.uploads.service.FileUploadGuard;
 import com.hunt.otziv.s3.cleanup.service.S3ObjectCleanupQueue;
+import com.hunt.otziv.s3.cleanup.service.S3UploadRegistry;
 import lombok.RequiredArgsConstructor;
 
 import lombok.extern.slf4j.Slf4j;
@@ -43,6 +44,32 @@ public class S3UploadServiceImpl implements S3UploadService {
     private final S3Client s3Client;
     private final FileUploadGuard fileUploadGuard;
     private final S3ObjectCleanupQueue cleanupQueue;
+    private final S3UploadRegistry uploadRegistry;
+
+    public S3UploadRegistry.Upload stageReviewPhoto(MultipartFile file, long reviewId) {
+        FileUploadGuard.ImageCheck checked = fileUploadGuard.requireSupportedImage(file);
+        byte[] bytes = processImage(checked.bytes());
+        String key = "reviews/" + generatedImageName(reviewId);
+        S3UploadRegistry.Upload upload = uploadRegistry.reserve(bucket, key, publicObjectBaseUrl() + "/" + key, reviewId);
+        try {
+            s3Client.putObject(PutObjectRequest.builder().bucket(bucket).key(key)
+                    .acl("public-read").contentType("image/jpeg")
+                    .overrideConfiguration(builder -> builder.apiCallTimeout(java.time.Duration.ofSeconds(60))
+                            .apiCallAttemptTimeout(java.time.Duration.ofSeconds(30))).build(), RequestBody.fromBytes(bytes));
+            uploadRegistry.uploaded(upload);
+            return upload;
+        } catch (RuntimeException failure) {
+            try { uploadRegistry.abandon(upload); }
+            catch (RuntimeException cleanupFailure) { failure.addSuppressed(cleanupFailure); }
+            throw failure;
+        }
+    }
+
+    public void enqueueReplacedReviewPhoto(String url, long reviewId) {
+        if (url == null || url.isBlank()) return;
+        String key = extractOwnedObjectKey(url, "reviews", reviewId);
+        if (key != null) cleanupQueue.enqueueRequired(bucket, key, "replaced-review-photo");
+    }
 
     @Override
     public String uploadFile(MultipartFile file, String folder, @Nullable String oldUrl, Long reviewId) {
@@ -165,18 +192,36 @@ public class S3UploadServiceImpl implements S3UploadService {
     }
 
     private String extractObjectKey(String oldUrl) {
-        String normalizedUrl = oldUrl.trim();
-        String publicPrefix = publicObjectBaseUrl() + "/";
-        if (normalizedUrl.startsWith(publicPrefix)) {
-            return normalizedUrl.substring(publicPrefix.length());
-        }
+        String key = keyUnderBase(oldUrl, publicObjectBaseUrl());
+        return key != null ? key : keyUnderBase(oldUrl, legacyObjectBaseUrl());
+    }
 
-        String legacyPrefix = legacyObjectBaseUrl() + "/";
-        if (normalizedUrl.startsWith(legacyPrefix)) {
-            return normalizedUrl.substring(legacyPrefix.length());
+    private String keyUnderBase(String url, String baseUrl) {
+        try {
+            var candidate = java.net.URI.create(url.trim());
+            var base = java.net.URI.create(baseUrl);
+            if (candidate.getHost() == null || base.getHost() == null
+                    || candidate.getScheme() == null || base.getScheme() == null
+                    || !candidate.getHost().equalsIgnoreCase(base.getHost())
+                    || !candidate.getScheme().equalsIgnoreCase(base.getScheme())
+                    || effectivePort(candidate) != effectivePort(base)
+                    || candidate.getUserInfo() != null) return null;
+            String prefix = trimTrailingSlash(base.getPath()) + "/";
+            String path = candidate.getPath();
+            if (path == null || !path.startsWith(prefix)) return null;
+            String key = path.substring(prefix.length());
+            for (String segment : key.split("/", -1)) {
+                if (segment.equals(".") || segment.equals("..") || segment.isEmpty()) return null;
+            }
+            return key;
+        } catch (IllegalArgumentException invalidUrl) {
+            return null;
         }
+    }
 
-        return null;
+    private int effectivePort(java.net.URI uri) {
+        if (uri.getPort() >= 0) return uri.getPort();
+        return "https".equalsIgnoreCase(uri.getScheme()) ? 443 : 80;
     }
 
     private String extractOwnedObjectKey(String oldUrl, String folder, Long ownerId) {

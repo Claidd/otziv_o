@@ -64,9 +64,10 @@ public class AdminPaymentController {
             @RequestParam(defaultValue = "") String search,
             @RequestParam(defaultValue = "LIVE") String source,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(defaultValue = "desc") String sortDirection
     ) {
-        return paymentLinkService.adminLinks(page, size, status, search, from, to, source);
+        return paymentLinkService.adminLinks(page, size, status, search, from, to, source, sortDirection);
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")

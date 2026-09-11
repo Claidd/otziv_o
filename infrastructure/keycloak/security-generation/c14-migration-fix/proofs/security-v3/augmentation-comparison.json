@@ -1,0 +1,718 @@
+{
+  "generated-bytecode.jar": {
+    "baseCount": 1628,
+    "targetCount": 1628,
+    "changed": [
+      {
+        "entry": "META-INF/keycloak-persisted.properties",
+        "base": "1c59f8890492378885d3d4606f681d371cd17cac1a0a2016860e2129a6b9197f",
+        "target": "85178c40bf2317e4b02dfa973c500cc8a2b41a6368037d5fd75f2a28b57323ea"
+      },
+      {
+        "entry": "com/hunt/otziv/issuer/SecurityGenerationEntity$HibernateProxy.class",
+        "base": "9dc36cdf302040c5aca3ac35e0f161c5720e0d5011108ec13f2513ad14d9c2c3",
+        "target": "71ddb68b8af0ee9af93eff6dd99c5bf0e8ca06b17adc71242346137cbcc766c3"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/AgroalMetricsProcessor$registerMetrics817528544.class",
+        "base": "fd3d063436df71c58536ab5a3c55129b4d87a022abadc92fbafc76a0ac00bfb8",
+        "target": "448354c637e98c144a27adb7d9cb0ddff2d081f03339b8ffca05209c486a650a"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/AgroalProcessor$generateDataSourceBeans121882814.class",
+        "base": "8ef39a2b7b5b608d422bb545aed292b5273b14dfd6484e502ef118cc5f2efa68",
+        "target": "b927e34a08d4e7bf6d234e259c6d6ca1b5d28bb66c2db6189c177001cd358fd9"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/AgroalProcessor$generateDataSourceSupportBean1262883253.class",
+        "base": "f2417c843b472662e396b360e8e62a738d33ca99ca0e869f2b4b1a44557bd5de",
+        "target": "5d1e5164894d368e703e639f500672e417497c50954a9b82163349ac85ca763f"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/ArcProcessor$initializeContainer643029769.class",
+        "base": "bebb39848d6a29d536c07a7562e2c1b74320f3156a02f8ca6c4fa73b1d062172",
+        "target": "8ac84447249b7cd431f39f96eb26880a4be08cbc37d0b14a900b6c9465b2156c"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/ArcProcessor$notifyBeanContainerListeners1304312071.class",
+        "base": "9b313a23fc71ac04c4eb284b8040fe1a8679dfbf08545831dd5c8f481f064f3c",
+        "target": "477d74e1d2109e484c8ca5fb72972f7359fd4834093f94390bdd673880099215"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/ArcProcessor$setupExecutor1831044820.class",
+        "base": "29162c4b9830d5f11fe23d36e82fdc641054b2318b84cfc48bc1b1364aa9b6f0",
+        "target": "26b0ff53dc3466ba7fc39f9207674959969162d74bbaa761e11fb6fdd5b0e53c"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/BlockingOperationControlBuildStep$blockingOP558072755.class",
+        "base": "c4abddd859082fbe3c566ac0b221033732a2c9798fd27d04209fadc47e4dee91",
+        "target": "6d8fcfbb32b712ef3cfcc419ce6cd0f133e0194b553e5c1bc45eacd34e49d8c0"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/CertificatesProcessor$initializeCertificate829381569.class",
+        "base": "52ea5ce94dc5802fb3a2ade4d9b5b240275340b6fd9fbeaf1fb832542333558d",
+        "target": "37c7342bf74c89c2d1df457851984b15932b1430187b1fcbcbaec10effa9d697"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/DataSourcesExcludedFromHealthChecksProcessor$produceBean1426500354.class",
+        "base": "8cef4a3eed4a7bfa47a2824475f4ff46c9f65fcf6d01263def361c4c2c11fcbd",
+        "target": "a4fb970a0ad9a0ebbc2d9c6a3f9c6506f45c22824dc4ee37abd93b08cc1b8a3f"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/HibernateOrmCdiProcessor$generateHibernateBeans83597823.class",
+        "base": "cacaf53dae8cb82a802865689626acca2a750bfa93b0da828b2aefb4b0dba7a5",
+        "target": "a5a25e3e5da9969104e7374a044c8292ef28e4f76f0bbe37289a56e1936e3096"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/HibernateOrmCdiProcessor$generateJpaConfigBean819074305.class",
+        "base": "eaf42183c6e54bf4233ccbaff87661cd441b253d98056b63e13d5cb693ee714d",
+        "target": "f83504760e3e24663d65a5953fe014da49c86042ec8a106410405d720161b083"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/HibernateOrmProcessor$build1311493863.class",
+        "base": "5691f478a1ff397eb3653e22015c114bf28b503d5c9bd383a45b42fdb08a9bc4",
+        "target": "f04bcfc5b0f939b0b5270b4ae816d2e90e4b1d04a093ea89d1cfb47319f743e0"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/HibernateOrmProcessor$setupPersistenceProvider1654292682.class",
+        "base": "ec2269efc89019b8a76930e0c6d3e1616d7b640194bb73e39f1d9c724870af2f",
+        "target": "6644e364fa43df88f0428d27c9815838e4b952894262271908054563509b646c"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/HttpBinderProcessor$enableHttpBinders55378937.class",
+        "base": "bd00034529f6aec82ace54f46c900c1aed7051c115b12af2ec4d941e20b95cb5",
+        "target": "1c77069e83c954bb601e613fd1e1549e77da15cefd89e84ec14f6c9ebff0d584"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/HttpSecurityProcessor$initBasicAuth285971087.class",
+        "base": "2944eb84f4d405db708f5a8fe3ae49f809d47b741a1e334aa8a35430a325c0d7",
+        "target": "f77db6f58317e0d85cf9c1015204c64a13dc73f83dd45ab864faca376e337266"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/JacksonProcessor$jacksonSupport1304410591.class",
+        "base": "29122f5e95d1a11073a85ed58aa959b0de363744753c82499ff739dcc37e6718",
+        "target": "2b3e3a52572aac35b166c518d1793c2b1ec77ea7fb680b554c3b7f22be79caee"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/KeycloakProcessor$configureKeycloakSessionFactory1939554146.class",
+        "base": "b002a7edc8e405736610f25f81251dbe78536c761fe5110718521062fb19a138",
+        "target": "fc9cd640e9c1ee39d79cd092cc11a1ebe04afa26547c4b658cdb8ea8892fa7bd"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/KeycloakProcessor$configureManagementInterface1889426056.class",
+        "base": "2b8c90e247c9f27b29b8b777aa922da5717a7ecadb94b309881d7e745aba005b",
+        "target": "4b1b36852fe7ae7887311b0f66c4ddc8e36da4f86cf91743c6a127a1b46bab67"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/KeycloakProcessor$configurePersistenceUnits107374185.class",
+        "base": "7d999bd3219744bd4e175192e1319c502eb5556a672d87e568186409f04e0fc0",
+        "target": "66e0252432a41ab9616023d6a6c97d17b425f5cb4d23691c2961f15017d51600"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/KeycloakProcessor$filterAllManagementRequests452126209.class",
+        "base": "3d652ba398a5d2359ce3d5316b1027363ab57757cabaeeef0d65aecca8a939ac",
+        "target": "951102fa9b53e9a6e39861a88d7544d563a959b738e7eec66b4b25c31f80219d"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/KeycloakProcessor$filterAllRequests561667388.class",
+        "base": "55ef2ae3c3c36e4dc1308bfac44652bb084ebbbe878a43a188ef068edfc98374",
+        "target": "922e14b69674499c4dd36811ba7c8fa1c7d0ff0b06d3f0319d1a10bbce37275f"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/LiquibaseProcessor$configure1103454684.class",
+        "base": "4a3748b934696aee3dcb92c7ebb57addfb90720e5234125a5d2cfd637ab42408",
+        "target": "056a24f8e490ead0627c84ca9be755c7088714a1772f4ab824b5a67251b888b2"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/LoggingJsonProcessor$setUpConsoleFormatter1902619606.class",
+        "base": "362bf3c2f4be013f530d8d5a703299ce07b26259246062f0d3c9f2132549ae9a",
+        "target": "8bf881fe484325faecca6aef1cc117c7c5e4cdcd5d6a27bf96ebd1bccc8da9b8"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/LoggingJsonProcessor$setUpFileFormatter422776940.class",
+        "base": "b97fc6ff747b6a26b381bb962628e018ea7e98e3a1c644ded60082f580dd46ab",
+        "target": "bbd0bddcb27af9a27c92f1551503f122585fc6b3c58ff01c871d486c077a94cd"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/LoggingJsonProcessor$setUpSocketFormatter280384652.class",
+        "base": "38d99d2587717372dd59c2dd47656dc981cc296575e022275a7bd9bd3b6994b0",
+        "target": "7bdd85d8c7fcfd8a1de97d4feae98d3b5af63aa766e5bdd5c312b93a848d58c6"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/LoggingJsonProcessor$setUpSyslogFormatter94478860.class",
+        "base": "8acccc178a5a248ca0310691a87d42643e1bb0ff7da333e3e6b3d7402b0346f5",
+        "target": "389918be3d7a299d153c048d3f655a140d0d5ed4e54e60b9cb32827e1b9714db"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/LoggingResourceProcessor$setupLoggingRuntimeInit1072790680.class",
+        "base": "12f6256f12c340956f2117511a7185fb0986c0ca82a27752746505cdf8d24dc9",
+        "target": "fb3fc4c93ed336faffb321c5d80035612217c37cc02b570892b11ce0d054985f"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/MicrometerProcessor$configureRegistry478634845.class",
+        "base": "5a8c22651c73cc2fc94a470c36f4ab76efb76d083455bce1a70eb86e0d278730",
+        "target": "4374792f26d0129aa57ab31996972b5163a9941f743e28283e8ee4fc6f426f22"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/MicrometerProcessor$createRootRegistry1392014435.class",
+        "base": "cd0b3872d078a813f5a2e8cf8c14623c2d1bb7cdbbbe2bfc5bbafc1727b5478a",
+        "target": "e3bf5f1ca29dfcd383b64ece6cd564f933f79ec7085feb5acd63ed436c201914"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/MutinyProcessor$runtimeInit1954432886.class",
+        "base": "897b43036be3be68f92065a7b8ac7f23ffcff29a58a86770c065b87b36c5cb2a",
+        "target": "0eb805227bedb544c580c26c0cc77f84790c3020f25ba00caa9d3f67b3aad3dd"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/ObservabilityProcessor$preAuthFailureFilter417866889.class",
+        "base": "bd5348bb895cf92b0d7007f0578ac38a5c8903249c39de3dfbe01da63f225ba3",
+        "target": "9efd2c6273ce919c1ae997674ea7d1a62e445ddd084cf8fbef96bd9540db8ce6"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/PrometheusRegistryProcessor$createPrometheusRoute1795006667.class",
+        "base": "abd55cca6f277640800e6b1580ebf4949c4d602635e33c25be9951fb4e5a6f59",
+        "target": "eaf9f690cc047d3d7ccc9ba5431ce849b82a133477b2b1328189418d882da76b"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/ResteasyReactiveProcessor$addDefaultAuthFailureHandler1048820038.class",
+        "base": "5c742acfbd1155d4791626e294ef1727af0e9de05342615ea8300ab1c72a7721",
+        "target": "f2fe62e2c2a60fe2d210afd1f4bf67e84a07b0437554c66a47c350d34d0e8038"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/ResteasyReactiveProcessor$configureHandlers184057458.class",
+        "base": "5ed31d9ec0fa647e694ae2c8cf7d26bc14300b6a7bc5ba1fba11eb24c384ea5d",
+        "target": "b2fea1023f491f0e594e45224fc9b4a6d45e234f06a5497141a769ce815872d5"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/ResteasyReactiveProcessor$runtimeConfiguration1367520872.class",
+        "base": "1b5d1e53237d9738d328666af09b8d68946c0ea9d51afb617258781e8b9c9af8",
+        "target": "9c062faeb3e0450062f35717e47e49a90f759539aa291fc8df6b16499f7fdeaf"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/ResteasyReactiveProcessor$serverSerializers1997124575.class",
+        "base": "8b93acc566579f1501c3a2704026530a523c4b3dc330703e429b0c5b70f96214",
+        "target": "5a66f603dc573d76a7843f4321daaebc329a94054064c65785827c597a0dbb67"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/ResteasyReactiveProcessor$setupDeployment944680882.class",
+        "base": "f96f63adecec06bee788faa37061668c10390e06e50715c5b48182f543f247dc",
+        "target": "4b945c2a421eb69a98f8f5146acc72bfabe1d1bc5702fb74af8650c82a328f7d"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/ResteasyReactiveProcessor$setupEndpoints239807676.class",
+        "base": "79eb3938564476e070e77c58d37c13e3d6313445ea1b5500c29c4aee452de9dd",
+        "target": "d85092820eba5be2c1537bac9604c9d230dd131e6a0c3d18e6c45b2c6f8cdd79"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/ShutdownListenerBuildStep$setupShutdown1533204416.class",
+        "base": "434f722662f46a83437bfd0e3952aeccbad20b11cca8c2bec36c3cfb21273113",
+        "target": "a0e4c4f0a5bec47833cfa85c9be0ed2d5253a1503262e2e1978dcd739c21132e"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/SmallRyeContextPropagationProcessor$build1909893707.class",
+        "base": "9273c43bad60036e47e6bebab9e99979ef191799d98975f3c24426d438770ce6",
+        "target": "b22d5a4723c66946bd51acf526ff99d88ca75402e8b9217cdd5dc5c6fad57331"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/SmallRyeContextPropagationProcessor$createSynthBeansForConfiguredInjectionPoints324342005.class",
+        "base": "49fd85c8234c1e374511230a999387c8c2a72be20aba9d7ad732c30296167484",
+        "target": "8f63d96261e33e947321135c292de1b40a2c9abfa4448ba8180163a4404b26a7"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/SyntheticBeansProcessor$initRuntime975230615.class",
+        "base": "cd7442dd1d895b2b98ebb02a15d9c297edbd509f1ec7eb4f0aa0045ffda4845c",
+        "target": "9440017e92dce2f17ca875067895949211155bd548148c200a89f1a694b0410b"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/SyntheticBeansProcessor$initStatic1190120725.class",
+        "base": "8ec2e107012f88d82be3ccd398d3f23c87bf7b202dffca47e5d765afd9d11b83",
+        "target": "338f4dcf44a03c5b1410b1472d9163ad59087d3576ad993f79c20147e0d1e391"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/ThreadPoolSetup$createExecutor2117483448.class",
+        "base": "378b4545d282889b1bad201c2d2affa1d5e134b92a7a351ca5f3de29e3223d78",
+        "target": "f41d31edd783a900a333404e4947b62f1163c263d7d2cfd1e50715ed42c48db0"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/ValueRegistryProcessor$runtimeInfo1469417849.class",
+        "base": "be39e57429e6a898742d1c435c45fd36ec39b694a2b0b96266bc27533c346011",
+        "target": "4550aa4abfab8eb4878a41e28b6def693d5c033f6df0e982c66147a2bf72efe0"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/ValueRegistryProcessor$valueRegistry295811999.class",
+        "base": "e509d0f2aa9bd1cb92a765d2536093ba9e5b42729afd703361743b399061c0da",
+        "target": "6fee75dd6cc96637ff4f8447d9c37449f75e53f2e8f48e89e8a052c6f325b090"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/VertxCoreProcessor$build216427889.class",
+        "base": "b6580bd18b25864f87a875ba7cf346eaf5c40bd4e11663b432f684e42156d624",
+        "target": "557e68c71d715818378891fff527f8495cb5377772bd14b0270e84e77b4ef229"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/VertxCoreProcessor$createVertxContextHandlers911410617.class",
+        "base": "632c53fe92d07b8b71660320e3bdd9a0c50936cbf1bbe2468137c786dfc043e0",
+        "target": "8b97ded914eeb4e8072adaf57986e3636ac0ddb50fbe3d065e0b93c0bcd8de8a"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/VertxCoreProcessor$createVertxThreadFactory1036986175.class",
+        "base": "4afb2f78d8f5984b5c83b0d9010383396d73c5ebb56237599422419909675594",
+        "target": "da54c327835e969ed65dbc1335bebbd5b3b02cbc364eeb70913dbf144c173614"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/VertxCoreProcessor$dontPropagateCdiContext731300267.class",
+        "base": "f615af62b1eec72e80b95dbabd1b5c6004fa1bd60f51b08cc0a085df2e87bd52",
+        "target": "df5dd37ef23dac8d1e77b823f2b1e62d96ef801262c22fbf2d3e2326f88d12c9"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/VertxCoreProcessor$eventLoopCount141325562.class",
+        "base": "61227566b0474889a7df598f4535cd630e9b895176113c7cf37345e02e468c15",
+        "target": "ac91fd4d2132e7225446354a413fc0e5c09a6e279f7cd449524cd4354ccf37b4"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/VertxCoreProcessor$ioThreadDetector1463825589.class",
+        "base": "0ca5e9cb80d64ca1a45762650673719cee6eca7d24bc4525a24c09fdb33753da",
+        "target": "cc3f28c3e2441e2964b5ecb1e076d2ca8fc389291360279c853422159e681baa"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/VertxHttpProcessor$bodyHandler1176441513.class",
+        "base": "fd4b378fe3a95764d49ad36ae115bab0970ba85c01f27f8c0d898babe38ca9be",
+        "target": "5f16c4bc030ef24218f186105ab2dd9e91cca4e3a3204eb5872ac4b6d6617115"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/VertxHttpProcessor$cors1160642915.class",
+        "base": "ab454d6fdeead7f7347191c594dd0835abbd5f18c0f566f2a81dd03bffc39ab6",
+        "target": "6a8b15d3b561d7c159305103343dd90ade8979312c03a5f8324f23a501504f15"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/VertxHttpProcessor$finalizeRouter1664818879.class",
+        "base": "d9842112515e43c5ab2d3427dff83bf46783e425e8ddd5e3c6be5669de0d3759",
+        "target": "a1948c3a58ff6dfe837236f7634113a2a6cb4146cf62bb72377039274d20d815"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/VertxHttpProcessor$initializeRouter1170558285.class",
+        "base": "e25cd383c946884c373737cda76c589ec4785c526593b75e3e7243346121d1a9",
+        "target": "9f93be4e773643f39f60808176f956e8113490f027a072e6e5e69774ba44daff"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/VertxHttpProcessor$openSocket1873327713.class",
+        "base": "ba74eb624ce68f31d0865b83e97851f4f77fb400a81c891381b4e783f37c5d70",
+        "target": "40c131c7d8f5e8f2c5d89d555e5961ebeebcb413365aa36511588617e5d6afad"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/VertxHttpProcessor$preinitializeRouter1141331088.class",
+        "base": "d6d0a852d76c8a82505dd141d2fcf15ac232abe11206389e006463d1a55edadc",
+        "target": "79387b8002d38ddf1b6b44330b6e5828b1738b591bde2738f0fc84b4f13a1047"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/VertxProcessor$build1135732207.class",
+        "base": "791bec6218574c444f145c64ea390892317ddcd2d0559c81a8628c24b782983b",
+        "target": "ca4847a169ec708c34210582c8ee8ca3060ce3ae640bcc31016677439087f1a3"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/VertxProcessor$currentContextFactory166049300.class",
+        "base": "39bab620d819301e5b9ae0cf8245ed3b766b59cd38330909ce880eeb1897de73",
+        "target": "26a2c13c276d7b8b04f30a45fecf64fed8290fd107789d1af18a7223474241c7"
+      },
+      {
+        "entry": "io/quarkus/runner/recorded/VirtualThreadsProcessor$setup1414761027.class",
+        "base": "856ec012ed33ff136b037905601db5f33c2b75a803779f0edc923a0dd7df9436",
+        "target": "e7be1bb6fe68010001fc358c3143a4c7cd64492d5dc8b2232233909bf860fbe3"
+      },
+      {
+        "entry": "io/quarkus/runtime/generated/RunTimeConfigCustomizer.class",
+        "base": "4b3e6579c6c54d530d5ec0ed86942ae2ef501fbffd171f3d9812fb1f3ab9a401",
+        "target": "b00623e2e564319af91e6033bedb568db126f1dc4afbc703b169c66bd735ed5e"
+      },
+      {
+        "entry": "io/quarkus/runtime/generated/SharedConfig.class",
+        "base": "2ccfd65ba7f3a8266c2ba86af1cdc355daddfe8c791c4e7029c9d8f3c973a4b2",
+        "target": "6254197ce4fef4de5de8f8123d9ec40d86b668b28f11fc42233a147e97a406dd"
+      },
+      {
+        "entry": "io/quarkus/runtime/generated/StaticInitConfigCustomizer.class",
+        "base": "6bfedbba46999b08a32798c723a0ac12ed0e0fb7871626a1ffceb23678a31118",
+        "target": "105ff1c617dba07b08f8f31bc169d28f5f8f544f07147f00500d77298a05eb3e"
+      },
+      {
+        "entry": "org/keycloak/authentication/jpa/AuthenticationSessionEntity$HibernateProxy.class",
+        "base": "3c6867640d7411430b89bb68ba2b61c66d56c993224c189fb530b0697cbd8d25",
+        "target": "c40b99ce3509a5d784c6ec900c870350a082e3612eba15091d10f211d6385411"
+      },
+      {
+        "entry": "org/keycloak/authentication/jpa/RootAuthenticationSessionEntity$HibernateProxy.class",
+        "base": "cd622567367fb1c40cf2f39369334588d966499fab7afd8fec043fc37a92cb4f",
+        "target": "c8012944c49222975ee33a547cbb0edeb6a58458df79747040edbd2dbe85f449"
+      },
+      {
+        "entry": "org/keycloak/authorization/jpa/entities/PermissionTicketEntity$HibernateProxy.class",
+        "base": "3bdf991c30b9d2caef52ba3c5884eda8cca106311654ef4dce177b4845e436dc",
+        "target": "62a363a89579f0429417e870d10f848344df73970f6dbe973cf42cb40f5c9e0f"
+      },
+      {
+        "entry": "org/keycloak/authorization/jpa/entities/PolicyEntity$HibernateProxy.class",
+        "base": "a1c95cd031b3c6e35ca2e6d71ccdba0b0abb66c065e37e8b2fe62928783aba96",
+        "target": "cd7cb38205c151d3634cc9f8d4c80d124ac188330d0ec629c027c48b8d14d86f"
+      },
+      {
+        "entry": "org/keycloak/authorization/jpa/entities/ResourceAttributeEntity$HibernateProxy.class",
+        "base": "84bb7a61e9945a6ebfed777729e6b3eabf67b329501abb98920708841764f9ed",
+        "target": "863f0d4d55c9f159b41937a3052e019eb64dfe4f9c21608002e5a6f12d77122f"
+      },
+      {
+        "entry": "org/keycloak/authorization/jpa/entities/ResourceEntity$HibernateProxy.class",
+        "base": "52b43c4080852b7b44ac692d64d7719d6cb91c500a0621bdcb28ed8c8f80dcd0",
+        "target": "ee68460b3e4871b732680a258114bc45795bb1eed28af75a31977340104782db"
+      },
+      {
+        "entry": "org/keycloak/authorization/jpa/entities/ResourceServerEntity$HibernateProxy.class",
+        "base": "d19e63272b56724472db9f2d081046383e26149bbc285710163b34c203f629aa",
+        "target": "6716a6f60aa2b8d8cbc5087c492a5527d1e0021b76985f6fb3897bd51a8de8fe"
+      },
+      {
+        "entry": "org/keycloak/authorization/jpa/entities/ScopeEntity$HibernateProxy.class",
+        "base": "a98a188d325c1cc12fe7697559e69087f4a8543fb3588c0b6c4c13e85583a8c3",
+        "target": "cc9694a06140ebe66ccf13ec690e81fb28e9d0637e063939ab48678c10efe40c"
+      },
+      {
+        "entry": "org/keycloak/cluster/jpa/ClusterEventEntity$HibernateProxy.class",
+        "base": "be506419f655b2e15a1366a95357b69c3066639185b440ca9cfe1a693242b128",
+        "target": "d03394721590f71d72871221bbc20a6d6d5503dea4836a791a7b54f77745cefa"
+      },
+      {
+        "entry": "org/keycloak/events/jpa/AdminEventEntity$HibernateProxy.class",
+        "base": "810bb2d8e2f87e139c359c68978c870c4fef0b1fa782be2eb8c2a6924d143f51",
+        "target": "5c7a0e5e68540a9c3ac724f238d2f044ba37c363b7ec9192d7c1e1ea921e535a"
+      },
+      {
+        "entry": "org/keycloak/events/jpa/EventEntity$HibernateProxy.class",
+        "base": "64df51f7decb9cc5df2f49a6934d63db967fa7b19f542e9853dc4207e2df5d9b",
+        "target": "cc382c5290e9b63172432d8b96a6f61e19a7cb0b5fb207924905ac14beabc639"
+      },
+      {
+        "entry": "org/keycloak/loginfailures/jpa/LoginFailureEntity$HibernateProxy.class",
+        "base": "b4b88620a1517af3d7d01d2fc1049afeb2de13ddc1c6c992a60b42054cdcb94f",
+        "target": "373d5845fa107d0fa78dc4962c4c5438f5084a8834ded8f1391428c1d4b9bad5"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/AuthenticationExecutionEntity$HibernateProxy.class",
+        "base": "9d828dbdd99bed90ca98d80150f8d0ae90634687177115d89bec246d75300993",
+        "target": "d8dbd4992d70590376a9192e9b9c1f7bc30a9853384615aabab583edf62786f5"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/AuthenticationFlowEntity$HibernateProxy.class",
+        "base": "35a026c52916dd8f9c99961e08dda1b853059ae285097606f0f662b793127acb",
+        "target": "9d6bd6df2f58038207f497254543c90dd8c509dbb642073191f88d82c78aae0d"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/AuthenticatorConfigEntity$HibernateProxy.class",
+        "base": "f10dda040ba09facd732588c2c956e05165be86f1cc0589e07e7ca6452c59889",
+        "target": "7a8477743e66d6e4529fc0061b98db28fe192dbedead613a1640122a207c8ba8"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/ClientAttributeEntity$HibernateProxy.class",
+        "base": "4a4616efd8ffbf619c1bddb90e4911fcd153da079bf6b27952eab94ac0e6593f",
+        "target": "c0f5c8340f0133fd196f1513dcb4279d150f4a078923beb08a5965c6b801f97d"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/ClientEntity$HibernateProxy.class",
+        "base": "f854553b1fbbcc0033d50f6a530a7e9d798019c615cfbfd12a61d98adf7c07d2",
+        "target": "c11d8cb90509f0aa1b9c34242421a180ebf606b9ea7a08115cde3c9db1a51f4d"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/ClientInitialAccessEntity$HibernateProxy.class",
+        "base": "a326f77b695fc497242c3c78016b964f299b8b430a2a7d7081b061feb9e05e89",
+        "target": "38c07251564157afe5ab4a7f0ca577174e5fe3e89d95fc604fb5e65b6403d9da"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/ClientScopeAttributeEntity$HibernateProxy.class",
+        "base": "eeb704f73284e48c5f056a1d3da149d5b75ca7052b279a967c01c089f7186c9d",
+        "target": "fe75c83e43013c1d7dfb97985312d0903d42c305304227f21eb96684167f1584"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/ClientScopeClientMappingEntity$HibernateProxy.class",
+        "base": "c3cb6476dbada857c0ddb2ae321bb48d3e4dab8977cf96f94cbb9217cda6b06f",
+        "target": "c94576186ab78fcc577b44e5b4de4050d378e918a0e79761e4ef7ee199c5f2f5"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/ClientScopeEntity$HibernateProxy.class",
+        "base": "e1a85246afc4fc861292f8ebd95e8adac3048c06fa68afa4a95746a72a05bb20",
+        "target": "b4067fd8910f743099c64560a2ec9476cb0c22c75f6cb94e35184ab28f3bb8c3"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/ClientScopeRoleMappingEntity$HibernateProxy.class",
+        "base": "581fa47b54ee33459fca3131ed7e1aeebbfd5833ebce77423942de577531c84c",
+        "target": "5e5c43541c31d39ffd8af1f6beadbccad5e498d94d401a94596855abe408fc22"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/ComponentConfigEntity$HibernateProxy.class",
+        "base": "31db4a093294280e6e6cf35fe270a2170870823d574c12b8eb4ba8e70f2ee656",
+        "target": "5bf64ef622493b12771a206114f4e575c6e4db5ab821c10178470e25ce7ca410"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/ComponentEntity$HibernateProxy.class",
+        "base": "7aae7c1817ce4ac96120a7102e0f5daa229895cd0cb668f68f9220fbb0cccf5d",
+        "target": "12db414cd0f24a3731f2b2a1a67d35ee0a7cf48f4011d72f4829fe2a741157b2"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/CompositeRoleEntity$HibernateProxy.class",
+        "base": "9ffa20ee2a80ab505d23b02ff730f6ae9f3b784cc00d54d2741ef7b67d51577e",
+        "target": "6e8c3a841e180a6058c244c675f7ca0580b5facb68800cc094ca1118558222f5"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/CredentialEntity$HibernateProxy.class",
+        "base": "1dd6623883bbd9dcb11248d3de3759915d33d43140d28ac5bf571eaec6246101",
+        "target": "9caf96839a3fc070e8994c5182385f73e12b70d9be4a903d2c0380f63be12bf9"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/DefaultClientScopeRealmMappingEntity$HibernateProxy.class",
+        "base": "4f457511757dace3a5941ef7329868c4980b9304c63b489a9b87b91de5804173",
+        "target": "e1fa0cf7bf3f009e2aeb2bcfb1173139d921fd4e0d03008f43d7f05d38bfa22b"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/FederatedIdentityEntity$HibernateProxy.class",
+        "base": "915b7aa3808ba06fab4fcf4900c7757dd515698518badbc31452445f45d9b5b8",
+        "target": "3ad660bb743e80a06f5a7fffb6558cf42bc147347979ae060ea772005906519d"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/GroupAttributeEntity$HibernateProxy.class",
+        "base": "6470ba866b393688c84ca59e71a7cc55b8a5ce6adf2a447830d2ea2bad0f10fc",
+        "target": "06403e9b0422d3b952a1164feddc1ea4d2758fed857a546c1de8ea9b2a0aa19a"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/GroupEntity$HibernateProxy.class",
+        "base": "3bf9c4dacec4a037921d4e433020e4706536665c266137db10f088552930f160",
+        "target": "e9cd671f8c58617414c099326901b8696e36cfff0a9f7e4f2dbfdde58a5040d3"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/GroupRoleMappingEntity$HibernateProxy.class",
+        "base": "933cbc99bae04e8d22f44d3247b75d8c7e56207800b3f266115089631bfbc332",
+        "target": "ea2b6c66e2eda28c2cc0f22872181d865cd6a5d9e8113869f4d4d2e295cea7ee"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/IdentityProviderEntity$HibernateProxy.class",
+        "base": "9a5b0e0a57d08bd8bce4c28bc86c7b3c962611e2e2797246fbeccc1ef1ebdd20",
+        "target": "d14d30054da95bc77836b0d945d3e01c0c52294173f525070772b494b5946445"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/IdentityProviderMapperEntity$HibernateProxy.class",
+        "base": "bff9fdcee691386c7d2d7db5236e49442616dc2c4471373f079449375f6398f6",
+        "target": "56189e35552cafb5a0ceff21a5945b1bfcba68a40a14541e407e356f4d8ed89c"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/IssuedVerifiableCredentialEntity$HibernateProxy.class",
+        "base": "37d4b6e9f667e7bc6e64a9007977d096738ea25d1b7d8be1c990d4ef6fc7c5d2",
+        "target": "a58c8f5724f7e3162a77c86c23c491ab1b49cc932478ad5a30df47a8767a90b1"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/MigrationModelEntity$HibernateProxy.class",
+        "base": "25078c5e7efed06c5693399e2bfcde87950a41e7ba66885554385079eccf815c",
+        "target": "bab9c82cc891c07cbfccbcc0897bf59607d32a979c5889da914df776b6478650"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/OrganizationDomainEntity$HibernateProxy.class",
+        "base": "3c3e8b6f4e5d85312151e7ee5f6fd6bd92cd07cff8ff16d1862e192310b74a6b",
+        "target": "3bcf5785a635edc02a5764847a5e7ce582a88a9b41c9c5f352c4bddafd2a5d3e"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/OrganizationEntity$HibernateProxy.class",
+        "base": "60347b83f6e0e6aff8026ecd43c721d71d49aa12f37bb36067df2118f391ae80",
+        "target": "dc118d4946bfeb9f5374565454fc144723c887b056be7dfbae4b6911c534d71e"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/OrganizationInvitationEntity$HibernateProxy.class",
+        "base": "9aca03bc3bf5586a6304ae743cb2ef1ffd169057b4176af907a89ad0c6a7cb99",
+        "target": "8cdd2f4c2034960b9f677a5ab6ef0f78e0f92984f5f9dc743c9fec26ee548d1f"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/OutboxEntryEntity$HibernateProxy.class",
+        "base": "74217a2e72c740521132b6b8894b11e66fb7dfa6e377a41ccb9d78a397dd1519",
+        "target": "b108c78772ae34d86bb7b04d762b307c38084052826096ebcd71ccc7146735c1"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/ProtocolMapperEntity$HibernateProxy.class",
+        "base": "bc27d4c94fa7b456ca89a39f9c21f938b09c72854e3214901b1e47786d0a3cf8",
+        "target": "60726e6bae6ee4b38f9e221f50fe41fd098d2548c6acc43a4c7fa27d38e9162e"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/RealmAttributeEntity$HibernateProxy.class",
+        "base": "07df375a62821465fb677774bc864772165a0983eceb11956e94f83c4174406c",
+        "target": "f2386fa26e4206ae00cd7c1d1d0667e314c5acc7fa0535e55d1934eb5d254902"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/RealmEntity$HibernateProxy.class",
+        "base": "f954169d8439a2ae16ecbf3054dcfcfcac7e4e04e3e90034343242cd2ec7acd6",
+        "target": "ba1deab48cc166adccf6d193d0851a87e8ea2ec583f04caab8b0df675a1e54c7"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/RealmLocalizationTextsEntity$HibernateProxy.class",
+        "base": "c94897e89c29adec1eacd9e10295c3e5df060e7ac2654fd86cbd51eab7f6662e",
+        "target": "8880cdc22b55c820280523f3851016ec8846edc1754972883fa0b6d75e1b122b"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/RequiredActionProviderEntity$HibernateProxy.class",
+        "base": "714dbc81cd05217bcb5a2b50db0eeb0b5f04134af9d4a99847c3569ea45795bb",
+        "target": "f12050add5f116c3944c688ec272c03d0af71eb72aac40f9b1f9a29b4bdb6e02"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/RequiredCredentialEntity$HibernateProxy.class",
+        "base": "e674b0ec4d91f04b75974717fe2bf1f4eee6d3e75a395ab95f8adc820e81e5dc",
+        "target": "f4a6b2ac7063c0db2ecbf608778b555caf1c2ce08c4b93084a61a199fc1dda24"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/RevokedTokenEntity$HibernateProxy.class",
+        "base": "873c426549a5514fbd7b7025b945570d6ae65f36b9b07e075d62cb2325ac3a0c",
+        "target": "9616ff568afc63bdce2841b8fc8fddfd6a52dbe471362599948ea9967e9e2058"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/RoleAttributeEntity$HibernateProxy.class",
+        "base": "b8bbef07b5758d6fb41ab1ad65cb08e8ac96d9e4a494ca6a0452b8796083bb30",
+        "target": "22d046fa6cd80534b5bff92c6e5b7283b02d9df86db7f12b0143f18196780d84"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/RoleEntity$HibernateProxy.class",
+        "base": "e3bd5ae67fa0ed81fe13fdcaa3d8982a431c069d1372920604daa5be09ae5f07",
+        "target": "185ef6106ca0f5b7e4a5b519f999ec5746a4202c9f2ea7aea14ec9377b215974"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/UserAttributeEntity$HibernateProxy.class",
+        "base": "930ad2536ddfe717aa4a5b907c5d88d8daffee4e24c199692028b0e66666a9c4",
+        "target": "f63845f020492db579435696dc3ef5dc234b53f66257f742969fe742208adc0a"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/UserConsentClientScopeEntity$HibernateProxy.class",
+        "base": "487ca2bafa35dd187112bc80182a8eb32cf88d925bdc6791d912aaf8b103de4a",
+        "target": "db6d7f001b2741e3c91543c5e14d2072b9a798a15d036b02fc550c61e5910e95"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/UserConsentEntity$HibernateProxy.class",
+        "base": "4490b509a7a5feed2f4efd02e7499c4f0a22129e6967867de206f35cace02553",
+        "target": "3845366e7e232ac0f5875959602c9b3fde969048765647a6f681183a9c7b1886"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/UserEntity$HibernateProxy.class",
+        "base": "016900bb7d2a1b9c4d81e21695ad770d7d5e2aad6ff4152dde5a83ddc4229427",
+        "target": "7e00ac7a9ab77803408089dd219f70994a7d632aca0e5db86183878fd4a6b280"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/UserFederationMapperEntity$HibernateProxy.class",
+        "base": "962b2f334e630053d2499268f0424a106ccfe7fee8b4bb59b04edf66debd4df5",
+        "target": "ddebf0490f05987e9553ff6c5bf47edb9cbe6c804f7f23f5dbe1205cfc17e069"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/UserFederationProviderEntity$HibernateProxy.class",
+        "base": "e5d3142220a2980bb356257d4ee88f5a96c1fd10f1f0c7bd96ad19b42c309d1f",
+        "target": "6ee7066292481e80fade541e9c076bd4491332bdb9d5a0408d1216d8bdf92cd9"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/UserGroupMembershipEntity$HibernateProxy.class",
+        "base": "12d77672f2618e37a69cf40243f2d5d17821523bd91767cb555eaba4b6483b38",
+        "target": "5f32d87288ec299deba85a48554caa77311c639f7f9d68298fa8e9e75ff9f61e"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/UserRequiredActionEntity$HibernateProxy.class",
+        "base": "78ea7ff54f45d4f50de255109a1324b9d3c66e126ac849bb2f81db54bb6eaef5",
+        "target": "8c35c7403c33becc48a67cc86b962bfb01b7c46bc7293bbc45da702fabf1b48c"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/UserRoleMappingEntity$HibernateProxy.class",
+        "base": "58565ddce80457c05fd1887a06bafa3ecca8e97c2a5a17dae0438fcdf7dfef77",
+        "target": "ac8db093c13f96e21a210c16c65d3122fcf5539a6116bf12845c1c811c69cf94"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/entities/UserVerifiableCredentialEntity$HibernateProxy.class",
+        "base": "7a97b006b6f4fe84655117e832604999dca048c731e1c7bb0a5f830f34da79c5",
+        "target": "cf43273d14241d862d033e44c169b348be9e304375de93a9aae515f0cfaf4b43"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/session/PersistentClientSessionEntity$HibernateProxy.class",
+        "base": "32ebd50e32d153d521e706057eceb10c8ea7fcc26695839e3b8e70977ece2479",
+        "target": "a8d003a2fe35c086e562388716a00ab0bda0fbe9b1a10b6b1b249f8746f4870d"
+      },
+      {
+        "entry": "org/keycloak/models/jpa/session/PersistentUserSessionEntity$HibernateProxy.class",
+        "base": "fa969322910284fd3c1740e7a3b28d5f34b91c735ad79ad8ca1ee20909d26ed8",
+        "target": "d254d0a0f2d0179efc371781c2a51ecba208e1baface3b4137f2be51e2fc829c"
+      },
+      {
+        "entry": "org/keycloak/models/workflow/WorkflowStateEntity$HibernateProxy.class",
+        "base": "bf1294693628f4e48e2a2412d8d0f922a911306f70ccfd8c3f99c9dc680190df",
+        "target": "cabd9a159076dd4fb3df3e2778d36fc14aaea2ac1d253b12724fff982906ced7"
+      },
+      {
+        "entry": "org/keycloak/singleobject/jpa/SingleUseObjectEntity$HibernateProxy.class",
+        "base": "ac8710a073a5bb2da3bb8a86fbda6133faf74830a08865f913f360794d2f064c",
+        "target": "a83d84c00a22a32ffd24f90ce2428201cafaf77f0b14f63e2e95a3a1181d356a"
+      },
+      {
+        "entry": "org/keycloak/storage/configuration/jpa/entity/ServerConfigEntity$HibernateProxy.class",
+        "base": "2afbea3b16edf9ad213cf68e169fe53b6b371f0dca49aee3e8d22d30bc2ad234",
+        "target": "abaca3dec36f280d70f3ca6dd6b52d024b9a276de5ed80e727d106892ba9cab0"
+      },
+      {
+        "entry": "org/keycloak/storage/jpa/entity/BrokerLinkEntity$HibernateProxy.class",
+        "base": "af3156d0f460fc133132e7cc68825e207305119fb87f5d37772f8e4da278bee6",
+        "target": "88ad167604ab01d5d873ad274e42f45a02282ec6fed31794e2b6a1a5bb08465a"
+      },
+      {
+        "entry": "org/keycloak/storage/jpa/entity/FederatedUser$HibernateProxy.class",
+        "base": "df85f2f8276c99cc3fc1abff0257d99ef9f3ec2882b7f18164c7a52813583c0e",
+        "target": "9a5f7f66bd23aaae951cf176e1ac7c7c29cc5dabd989c290ed88ef7e5fc3a5ab"
+      },
+      {
+        "entry": "org/keycloak/storage/jpa/entity/FederatedUserAttributeEntity$HibernateProxy.class",
+        "base": "9b1777e6b2590222217aa7c5afb52724975120dbb9bd6b3f383b86d5cc685646",
+        "target": "dfee2e7907c509a0fb576b495dd1a71e156e7d348c51a9d663dc5331170e7ac3"
+      },
+      {
+        "entry": "org/keycloak/storage/jpa/entity/FederatedUserConsentClientScopeEntity$HibernateProxy.class",
+        "base": "3ef4ee27beab60b7f192abcfa126e4151dcc9415da416ccda8676f8864e07aaa",
+        "target": "c291edee707985d23072761662899272cc2aa0bb9544d52811d3f5d46d00b7ed"
+      },
+      {
+        "entry": "org/keycloak/storage/jpa/entity/FederatedUserConsentEntity$HibernateProxy.class",
+        "base": "f67c7d38d9f9932dfd0840bcee80648cd5b00d438e0339312f781a87e9cbc191",
+        "target": "7045895480a7bbb19dc228bf7f640e141f634c6509cb5ab471877d7f7c649f18"
+      },
+      {
+        "entry": "org/keycloak/storage/jpa/entity/FederatedUserCredentialEntity$HibernateProxy.class",
+        "base": "80e90365e9b139d6a40ba8f63955a229f82876cce1420880a01b1ac16fc2b239",
+        "target": "5de1ee55928ecc0a55041832f2125fd4fa91295eefe93fcc557ed4ad19bf7790"
+      },
+      {
+        "entry": "org/keycloak/storage/jpa/entity/FederatedUserGroupMembershipEntity$HibernateProxy.class",
+        "base": "280ebb5932b9d72ce3ec4731db2a6feac1e24beabff441996ba5b9974286f125",
+        "target": "3f41a23f94b4fe96af2e9d522841e06efd1f9a6e6e8916e7d0f578b5a574626b"
+      },
+      {
+        "entry": "org/keycloak/storage/jpa/entity/FederatedUserIssuedVerifiableCredentialEntity$HibernateProxy.class",
+        "base": "0e4cd5b7e6ce4d6ec7fa93e2787979d86bad946a379228f40e4c98d856612add",
+        "target": "72302db28a4ef3604a167bb6801f4e3f85a911712a842438f353a330a86967c1"
+      },
+      {
+        "entry": "org/keycloak/storage/jpa/entity/FederatedUserRequiredActionEntity$HibernateProxy.class",
+        "base": "919639a1618c57032ea4bec92140c9e8683d74c5c7e5c2cb5a18cca811264ff9",
+        "target": "ae762bbc125f83569991a3d0dba20fe6c6bed56aaf518b15908ce2f9ee92bb08"
+      },
+      {
+        "entry": "org/keycloak/storage/jpa/entity/FederatedUserRoleMappingEntity$HibernateProxy.class",
+        "base": "1c371e82561ba4a1ebc6cbcd0288be9c048343dcfcebcef4d3c6ad9d9b059dbe",
+        "target": "fe5ce89790571f8d19c927751fcbf24183232b156c1253add198d608fbdce905"
+      },
+      {
+        "entry": "org/keycloak/storage/jpa/entity/FederatedUserVerifiableCredentialEntity$HibernateProxy.class",
+        "base": "ab2eb82be37b9ef8b2d9cfd52ca0cb8b2a83bcd5d508dea887f1494282e284cc",
+        "target": "62c5913fb16d33cd6b1798dd3b35f0a28894abedc642c48d94af3146176997cc"
+      }
+    ]
+  },
+  "transformed-bytecode.jar": {
+    "baseCount": 171,
+    "targetCount": 171,
+    "changed": []
+  },
+  "configBinding": {
+    "targetSha256": "b1b695fb74f983c010819b25ef5f402622f20cf865fbbb31133d9a7c69b2538b",
+    "baseSha256": "b5c718b887b315d3da78784a64d9d2966aac62e30117ceca620f08a7f57139ae",
+    "exactRootfsDiffIdsMatched": true
+  }
+}

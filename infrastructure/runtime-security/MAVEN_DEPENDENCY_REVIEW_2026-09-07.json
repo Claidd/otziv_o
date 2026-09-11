@@ -1,0 +1,3409 @@
+{
+  "schemaVersion": 1,
+  "reviewedAt": "2026-09-07T15:53:29.039885+00:00",
+  "reportScope": "12.2.2 baseline before runtime BOM fixes: resolved project runtime/test/provided/system dependencies plus configured/default build plugins, including scanner plugin itself once. This is not the final runtime artifact scan.",
+  "sourceReport": ".codex-tmp/rc26/security-audit-v2/target/dependency-check-report.json",
+  "sourceReportSha256": "9e82cb9e68681883dc9173beac8cb4b2aad8dfbe6d8bdf82eba574a3841062b3",
+  "dependencyEntries": 547,
+  "vulnerableEntries": 55,
+  "findingRows": 171,
+  "analyzerLimitationsAtBaseline": [
+    "AssemblyAnalyzer failed: .NET8 absent at baseline; verified portable runtime was subsequently provisioned for the next candidate.",
+    "Sonatype Guide analyzer did not run: credentials missing. NVD feeds and remaining reported analysis completed."
+  ],
+  "suppressionPolicy": "No risk acceptance. Incorrect artifact/product findings may only be suppressed by exact package/version and listed individual advisory; never whole ecosystem, score, wildcard version or unreachable-code assertion. This review JSON itself does not enable suppressions.",
+  "artifacts": [
+    {
+      "file": "commons-beanutils-1.7.0.jar",
+      "sha256": "24bcaa20ccbdc7c856ce0c0aea144566943403e2e9f27bd9779cda1d76823ef4",
+      "packages": [
+        "pkg:maven/commons-beanutils/commons-beanutils@1.7.0"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:apache:commons_beanutils:1.7.0:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/org.apache.maven.plugins/maven-site-plugin@3.12.1",
+          "type": "plugins"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2025-48734",
+          "reportedSeverity": "HIGH",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2014-0114",
+          "reportedSeverity": "HIGH",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2019-10086",
+          "reportedSeverity": "HIGH",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 111,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "commons-compress-1.20.jar",
+      "sha256": "0aeb625c948c697ea7b205156e112363b59ed5e2551212cd4e460bdb72c7c06e",
+      "packages": [
+        "pkg:maven/org.apache.commons/commons-compress@1.20"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:apache:commons_compress:1.20:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/org.apache.maven.plugins/maven-site-plugin@3.12.1",
+          "type": "plugins"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2021-35515",
+          "reportedSeverity": "HIGH",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2021-35516",
+          "reportedSeverity": "HIGH",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2021-35517",
+          "reportedSeverity": "HIGH",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2021-36090",
+          "reportedSeverity": "HIGH",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2024-25710",
+          "reportedSeverity": "MEDIUM",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 359,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "commons-io-2.11.0.jar",
+      "sha256": "961b2f6d87dbacc5d54abf45ab7a6e2495f89b75598962d8c723cea9bc210908",
+      "packages": [
+        "pkg:maven/commons-io/commons-io@2.11.0"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:apache:commons_io:2.11.0:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/org.apache.maven.plugins/maven-compiler-plugin@3.14.1",
+          "type": "plugins"
+        },
+        {
+          "reference": "pkg:maven/org.apache.maven.plugins/maven-resources-plugin@3.3.1",
+          "type": "plugins"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2024-47554",
+          "reportedSeverity": "MEDIUM",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 201,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "commons-io-2.6.jar",
+      "sha256": "f877d304660ac2a142f3865badfc971dec7ed73c747c7f8d5d2f5139ca736513",
+      "packages": [
+        "pkg:maven/commons-io/commons-io@2.6"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:apache:commons_io:2.6:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/org.apache.maven.plugins/maven-site-plugin@3.12.1",
+          "type": "plugins"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2021-29425",
+          "reportedSeverity": "MEDIUM",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2024-47554",
+          "reportedSeverity": "MEDIUM",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 127,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "commons-lang-2.4.jar",
+      "sha256": "2c73b940c91250bc98346926270f13a6a10bb6e29d2c9316a70d134e382c873e",
+      "packages": [
+        "pkg:maven/commons-lang/commons-lang@2.4"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:apache:commons_lang:2.4:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/org.apache.maven.plugins/maven-site-plugin@3.12.1",
+          "type": "plugins"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2025-48924",
+          "reportedSeverity": "MEDIUM",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 127,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "commons-lang3-3.12.0.jar",
+      "sha256": "d919d904486c037f8d193412da0c92e22a9fa24230b9d67a57855c5c31c7e94e",
+      "packages": [
+        "pkg:maven/org.apache.commons/commons-lang3@3.12.0"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:apache:commons_lang:3.12.0:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/org.apache.maven.plugins/maven-resources-plugin@3.3.1",
+          "type": "plugins"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2025-48924",
+          "reportedSeverity": "MEDIUM",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 345,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "commons-lang3-3.14.0.jar",
+      "sha256": "7b96bf3ee68949abb5bc465559ac270e0551596fa34523fddf890ec418dde13c",
+      "packages": [
+        "pkg:maven/org.apache.commons/commons-lang3@3.14.0"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:apache:commons_lang:3.14.0:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/org.apache.maven.plugins/maven-jar-plugin@3.4.2",
+          "type": "plugins"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2025-48924",
+          "reportedSeverity": "MEDIUM",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 404,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "commons-lang3-3.16.0.jar",
+      "sha256": "08709dd74d602b705ce4017d26544210056a4ba583d5b20c09373406fe7a00f8",
+      "packages": [
+        "pkg:maven/org.apache.commons/commons-lang3@3.16.0"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:apache:commons_lang:3.16.0:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/org.springframework.boot/spring-boot-maven-plugin@4.0.7",
+          "type": "plugins"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2025-48924",
+          "reportedSeverity": "MEDIUM",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 396,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "commons-lang3-3.8.1.jar",
+      "sha256": "dac807f65b07698ff39b1b07bfef3d87ae3fd46d91bbf8a2bc02b2a831616f68",
+      "packages": [
+        "pkg:maven/org.apache.commons/commons-lang3@3.8.1"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:apache:commons_lang:3.8.1:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/org.apache.maven.plugins/maven-site-plugin@3.12.1",
+          "type": "plugins"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2025-48924",
+          "reportedSeverity": "MEDIUM",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 272,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "docker-java-transport-zerodep-3.7.1.jar (shaded: org.apache.httpcomponents.client5:httpclient5:5.5.1)",
+      "sha256": "f381d1bde581bb36992f14674a9ac88f7362b3e35c48a99805bc56e1df931647",
+      "packages": [
+        "pkg:maven/org.apache.httpcomponents.client5/httpclient5@5.5.1"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:apache:httpclient:5.5.1:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [],
+      "findings": [
+        {
+          "advisory": "CVE-2026-71290",
+          "reportedSeverity": "CRITICAL",
+          "decision": "OPEN_TEST_SHADED_DEPENDENCY",
+          "reason": "Testcontainers 2.0.5 uses latest docker-java-transport-zerodep 3.7.1, embedding HttpClient 5.5.1. DependencyManagement cannot replace relocated bytecode. Official transport factory hardcodes ZerodepDockerHttpClient; no custom provider or artifact rewrite was introduced.",
+          "primarySources": [
+            "https://raw.githubusercontent.com/testcontainers/testcontainers-java/2.0.5/core/src/main/java/org/testcontainers/dockerclient/DockerClientProviderStrategy.java",
+            "https://repo.maven.apache.org/maven2/com/github/docker-java/docker-java-transport-zerodep/maven-metadata.xml"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-64607",
+          "reportedSeverity": "MEDIUM",
+          "decision": "OPEN_TEST_SHADED_DEPENDENCY",
+          "reason": "Testcontainers 2.0.5 uses latest docker-java-transport-zerodep 3.7.1, embedding HttpClient 5.5.1. DependencyManagement cannot replace relocated bytecode. Official transport factory hardcodes ZerodepDockerHttpClient; no custom provider or artifact rewrite was introduced.",
+          "primarySources": [
+            "https://raw.githubusercontent.com/testcontainers/testcontainers-java/2.0.5/core/src/main/java/org/testcontainers/dockerclient/DockerClientProviderStrategy.java",
+            "https://repo.maven.apache.org/maven2/com/github/docker-java/docker-java-transport-zerodep/maven-metadata.xml"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ]
+    },
+    {
+      "file": "dom4j-1.1.jar",
+      "sha256": "50bd5c21b5fbd27b8bbb5f8050544b53f49a4480fd347ce9c46d55c706015156",
+      "packages": [
+        "pkg:maven/dom4j/dom4j@1.1"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:dom4j_project:dom4j:1.1:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/org.apache.maven.plugins/maven-site-plugin@3.12.1",
+          "type": "plugins"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2020-10683",
+          "reportedSeverity": "CRITICAL",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 333,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "doxia-module-twiki-1.11.1.jar",
+      "sha256": "a7e31a73a8cb6d72a25bd1f221b9a8a65dd399a794cb246d065713ff05f291f2",
+      "packages": [
+        "pkg:maven/org.apache.maven.doxia/doxia-module-twiki@1.11.1"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:twiki:twiki:1.11.1:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/org.apache.maven.plugins/maven-site-plugin@3.12.1",
+          "type": "plugins"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2013-1751",
+          "reportedSeverity": "CRITICAL",
+          "decision": "INCORRECT_PRODUCT_MATCH",
+          "reason": "Apache Doxia is a Java TWiki-format document parser. Reported CPE names the separate Perl TWiki server and its CGI, login, upload and Perl macro execution code.",
+          "primarySources": [
+            "https://raw.githubusercontent.com/apache/maven-doxia/doxia-1.11.1/doxia-modules/doxia-module-twiki/pom.xml"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2008-5305",
+          "reportedSeverity": "HIGH",
+          "decision": "INCORRECT_PRODUCT_MATCH",
+          "reason": "Apache Doxia is a Java TWiki-format document parser. Reported CPE names the separate Perl TWiki server and its CGI, login, upload and Perl macro execution code.",
+          "primarySources": [
+            "https://raw.githubusercontent.com/apache/maven-doxia/doxia-1.11.1/doxia-modules/doxia-module-twiki/pom.xml"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2006-6071",
+          "reportedSeverity": "HIGH",
+          "decision": "INCORRECT_PRODUCT_MATCH",
+          "reason": "Apache Doxia is a Java TWiki-format document parser. Reported CPE names the separate Perl TWiki server and its CGI, login, upload and Perl macro execution code.",
+          "primarySources": [
+            "https://raw.githubusercontent.com/apache/maven-doxia/doxia-1.11.1/doxia-modules/doxia-module-twiki/pom.xml"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2008-3195",
+          "reportedSeverity": "MEDIUM",
+          "decision": "INCORRECT_PRODUCT_MATCH",
+          "reason": "Apache Doxia is a Java TWiki-format document parser. Reported CPE names the separate Perl TWiki server and its CGI, login, upload and Perl macro execution code.",
+          "primarySources": [
+            "https://raw.githubusercontent.com/apache/maven-doxia/doxia-1.11.1/doxia-modules/doxia-module-twiki/pom.xml"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2009-4898",
+          "reportedSeverity": "MEDIUM",
+          "decision": "INCORRECT_PRODUCT_MATCH",
+          "reason": "Apache Doxia is a Java TWiki-format document parser. Reported CPE names the separate Perl TWiki server and its CGI, login, upload and Perl macro execution code.",
+          "primarySources": [
+            "https://raw.githubusercontent.com/apache/maven-doxia/doxia-1.11.1/doxia-modules/doxia-module-twiki/pom.xml"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2014-7237",
+          "reportedSeverity": "MEDIUM",
+          "decision": "INCORRECT_PRODUCT_MATCH",
+          "reason": "Apache Doxia is a Java TWiki-format document parser. Reported CPE names the separate Perl TWiki server and its CGI, login, upload and Perl macro execution code.",
+          "primarySources": [
+            "https://raw.githubusercontent.com/apache/maven-doxia/doxia-1.11.1/doxia-modules/doxia-module-twiki/pom.xml"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2009-1339",
+          "reportedSeverity": "MEDIUM",
+          "decision": "INCORRECT_PRODUCT_MATCH",
+          "reason": "Apache Doxia is a Java TWiki-format document parser. Reported CPE names the separate Perl TWiki server and its CGI, login, upload and Perl macro execution code.",
+          "primarySources": [
+            "https://raw.githubusercontent.com/apache/maven-doxia/doxia-1.11.1/doxia-modules/doxia-module-twiki/pom.xml"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2012-6330",
+          "reportedSeverity": "MEDIUM",
+          "decision": "INCORRECT_PRODUCT_MATCH",
+          "reason": "Apache Doxia is a Java TWiki-format document parser. Reported CPE names the separate Perl TWiki server and its CGI, login, upload and Perl macro execution code.",
+          "primarySources": [
+            "https://raw.githubusercontent.com/apache/maven-doxia/doxia-1.11.1/doxia-modules/doxia-module-twiki/pom.xml"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2008-5304",
+          "reportedSeverity": "MEDIUM",
+          "decision": "INCORRECT_PRODUCT_MATCH",
+          "reason": "Apache Doxia is a Java TWiki-format document parser. Reported CPE names the separate Perl TWiki server and its CGI, login, upload and Perl macro execution code.",
+          "primarySources": [
+            "https://raw.githubusercontent.com/apache/maven-doxia/doxia-1.11.1/doxia-modules/doxia-module-twiki/pom.xml"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2010-3841",
+          "reportedSeverity": "MEDIUM",
+          "decision": "INCORRECT_PRODUCT_MATCH",
+          "reason": "Apache Doxia is a Java TWiki-format document parser. Reported CPE names the separate Perl TWiki server and its CGI, login, upload and Perl macro execution code.",
+          "primarySources": [
+            "https://raw.githubusercontent.com/apache/maven-doxia/doxia-1.11.1/doxia-modules/doxia-module-twiki/pom.xml"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2011-1838",
+          "reportedSeverity": "MEDIUM",
+          "decision": "INCORRECT_PRODUCT_MATCH",
+          "reason": "Apache Doxia is a Java TWiki-format document parser. Reported CPE names the separate Perl TWiki server and its CGI, login, upload and Perl macro execution code.",
+          "primarySources": [
+            "https://raw.githubusercontent.com/apache/maven-doxia/doxia-1.11.1/doxia-modules/doxia-module-twiki/pom.xml"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2011-3010",
+          "reportedSeverity": "MEDIUM",
+          "decision": "INCORRECT_PRODUCT_MATCH",
+          "reason": "Apache Doxia is a Java TWiki-format document parser. Reported CPE names the separate Perl TWiki server and its CGI, login, upload and Perl macro execution code.",
+          "primarySources": [
+            "https://raw.githubusercontent.com/apache/maven-doxia/doxia-1.11.1/doxia-modules/doxia-module-twiki/pom.xml"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 56,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "grizzly-http-4.0.2.jar",
+      "sha256": "83bec0f6c3cf65642bd60f92f69999c8e5f962c31a8c31921f9343dd3451c691",
+      "packages": [
+        "pkg:maven/org.glassfish.grizzly/grizzly-http@4.0.2"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:eclipse:grizzly:4.0.2:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/org.telegram/telegrambots@6.9.7.1"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2026-12606",
+          "reportedSeverity": "MEDIUM",
+          "decision": "REMOVED_UNUSED_DEPENDENCY",
+          "reason": "CVE is genuine. Removed Telegram jersey-container-grizzly2-http because this app constructs only the long-polling session. Actual local HTTP session/update callback and Grizzly absence tests pass. No Grizzly suppression.",
+          "primarySources": [
+            "https://github.com/eclipse-ee4j/glassfish-grizzly/releases/tag/5.0.2",
+            "https://raw.githubusercontent.com/rubenlagus/TelegramBots/v6.9.7.1/telegrambots-meta/src/main/java/org/telegram/telegrambots/meta/TelegramBotsApi.java"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 166,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "grizzly-http-server-4.0.2.jar",
+      "sha256": "b407e6745b0981f1f6e70b12f73e077bad8c587ca939f1567a0c66479ec1a21c",
+      "packages": [
+        "pkg:maven/org.glassfish.grizzly/grizzly-http-server@4.0.2"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:eclipse:grizzly:4.0.2:*:*:*:*:*:*:*",
+        "cpe:2.3:a:oracle:http_server:4.0.2:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/org.telegram/telegrambots@6.9.7.1"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2026-12606",
+          "reportedSeverity": "MEDIUM",
+          "decision": "REMOVED_UNUSED_DEPENDENCY",
+          "reason": "CVE is genuine. Removed Telegram jersey-container-grizzly2-http because this app constructs only the long-polling session. Actual local HTTP session/update callback and Grizzly absence tests pass. No Grizzly suppression.",
+          "primarySources": [
+            "https://github.com/eclipse-ee4j/glassfish-grizzly/releases/tag/5.0.2",
+            "https://raw.githubusercontent.com/rubenlagus/TelegramBots/v6.9.7.1/telegrambots-meta/src/main/java/org/telegram/telegrambots/meta/TelegramBotsApi.java"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 173,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "grpc-opentelemetry-1.76.3.jar",
+      "sha256": "5a1218a54c149540b48c28762438cddabb0ba502f1a7ec87c63b1ea191d9920f",
+      "packages": [
+        "pkg:maven/io.grpc/grpc-opentelemetry@1.76.3"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:grpc:grpc:1.76.3:*:*:*:*:*:*:*",
+        "cpe:2.3:a:opentelemetry:opentelemetry:1.76.3:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/com.google.firebase/firebase-admin@9.9.0"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2026-54285",
+          "reportedSeverity": "MEDIUM",
+          "decision": "INCORRECT_LANGUAGE_PRODUCT_MATCH",
+          "reason": "The advisory affects JavaScript W3C baggage propagator; the exact detected Maven artifact is a Java implementation, not that independently versioned product.",
+          "primarySources": [
+            "https://github.com/open-telemetry/opentelemetry-js/security/advisories/GHSA-8988-4f7v-96qf"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 43,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "guava-16.0.1.jar",
+      "sha256": "a896857d07845d38c7dc5bbc0457b6d9b0f62ecffda010e5e9ec12d561f676d3",
+      "packages": [
+        "pkg:maven/com.google.guava/guava@16.0.1"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:google:guava:16.0.1:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/org.apache.maven.plugins/maven-site-plugin@3.12.1",
+          "type": "plugins"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2023-2976",
+          "reportedSeverity": "HIGH",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2018-10237",
+          "reportedSeverity": "MEDIUM",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2020-8908",
+          "reportedSeverity": "LOW",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 1678,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "httpclient5-5.5.2.jar",
+      "sha256": "5aec3f3447ec816e593e380b59fbe3e42083318af6b215bc177386f7742f6146",
+      "packages": [
+        "pkg:maven/org.apache.httpcomponents.client5/httpclient5@5.5.2"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:apache:httpclient:5.5.2:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/com.hunt/otziv@1"
+        },
+        {
+          "reference": "pkg:maven/org.springframework.boot/spring-boot-maven-plugin@4.0.7",
+          "type": "plugins"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2026-71290",
+          "reportedSeverity": "CRITICAL",
+          "decision": "RUNTIME_DEPENDENCY_UPDATED_PENDING_FINAL_SCAN",
+          "targetVersion": "5.6.4",
+          "reason": "Runtime dependency resolved to patched maintenance version; final candidate scan is still required. Plugin realms, if any, are separate and not fixed by runtime BOM overrides.",
+          "primarySources": [
+            "https://raw.githubusercontent.com/apache/httpcomponents-client/rel/v5.6.4/RELEASE_NOTES.txt"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-64607",
+          "reportedSeverity": "MEDIUM",
+          "decision": "RUNTIME_DEPENDENCY_UPDATED_PENDING_FINAL_SCAN",
+          "targetVersion": "5.6.4",
+          "reason": "Runtime dependency resolved to patched maintenance version; final candidate scan is still required. Plugin realms, if any, are separate and not fixed by runtime BOM overrides.",
+          "primarySources": [
+            "https://raw.githubusercontent.com/apache/httpcomponents-client/rel/v5.6.4/RELEASE_NOTES.txt"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 548,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "httpclient5-5.6.1.jar",
+      "sha256": "1e3d8444c3c27772e4b9d42a790f06b3345a8ece4fd16d00981f2f2460e1e772",
+      "packages": [
+        "pkg:maven/org.apache.httpcomponents.client5/httpclient5@5.6.1"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:apache:httpclient:5.6.1:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/org.owasp/dependency-check-maven@12.2.2",
+          "type": "plugins"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2026-71290",
+          "reportedSeverity": "CRITICAL",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-64607",
+          "reportedSeverity": "MEDIUM",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 593,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "httpcore5-5.3.6.jar",
+      "sha256": "8fb4528d3e970aca440523a1bd698a389fa710ecfea4c5c6096698b86d1669ce",
+      "packages": [
+        "pkg:maven/org.apache.httpcomponents.core5/httpcore5@5.3.6"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:apache:httpcomponents_core:5.3.6:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/org.springframework.boot/spring-boot-maven-plugin@4.0.7",
+          "type": "plugins"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2026-54399",
+          "reportedSeverity": "HIGH",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-54428",
+          "reportedSeverity": "HIGH",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 657,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "httpcore5-5.4.2.jar",
+      "sha256": "7c34a25506e7207b6748cef9e91163ed03081bee805cef930d82e1d8761d62f1",
+      "packages": [
+        "pkg:maven/org.apache.httpcomponents.core5/httpcore5@5.4.2"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:apache:httpcomponents_core:5.4.2:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/org.owasp/dependency-check-maven@12.2.2",
+          "type": "plugins"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2026-54399",
+          "reportedSeverity": "HIGH",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-54428",
+          "reportedSeverity": "HIGH",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 678,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "httpcore5-h2-5.4.jar",
+      "sha256": "2e0f4ace15db2d1609c2b06eca6012e7582afe4a99ad8d15073f62dd8edb3460",
+      "packages": [
+        "pkg:maven/org.apache.httpcomponents.core5/httpcore5-h2@5.4"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:apache:httpcomponents_core:5.4:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/org.owasp/dependency-check-maven@12.2.2",
+          "type": "plugins"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2026-54399",
+          "reportedSeverity": "HIGH",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-54428",
+          "reportedSeverity": "HIGH",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 160,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "jackson-databind-2.21.3.jar",
+      "sha256": "f397563d8e67630c10cab8c2334ca0e55af832fa3ebde160a379c2c96d43bf25",
+      "packages": [
+        "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.21.3"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:fasterxml:jackson-core:2.21.3:*:*:*:*:*:*:*",
+        "cpe:2.3:a:fasterxml:jackson-databind:2.21.3:*:*:*:*:*:*:*",
+        "cpe:2.3:a:fasterxml:jackson-modules-java8:2.21.3:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/org.owasp/dependency-check-maven@12.2.2",
+          "type": "plugins"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2026-54512",
+          "reportedSeverity": "HIGH",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-54513",
+          "reportedSeverity": "HIGH",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-54518",
+          "reportedSeverity": "MEDIUM",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-54514",
+          "reportedSeverity": "MEDIUM",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-54515",
+          "reportedSeverity": "MEDIUM",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-54516",
+          "reportedSeverity": "MEDIUM",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-54517",
+          "reportedSeverity": "MEDIUM",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 813,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "jackson-databind-2.21.4.jar",
+      "sha256": "3888e9e69ab66fbacaacc9aea0e9ffbf15368288e4aca468b024dba11c09fbf9",
+      "packages": [
+        "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.21.4"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:fasterxml:jackson-core:2.21.4:*:*:*:*:*:*:*",
+        "cpe:2.3:a:fasterxml:jackson-databind:2.21.4:*:*:*:*:*:*:*",
+        "cpe:2.3:a:fasterxml:jackson-modules-java8:2.21.4:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/io.jsonwebtoken/jjwt-jackson@0.13.0"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2026-54515",
+          "reportedSeverity": "MEDIUM",
+          "decision": "RUNTIME_DEPENDENCY_UPDATED_PENDING_FINAL_SCAN",
+          "targetVersion": "2.21.5",
+          "reason": "Runtime dependency resolved to patched maintenance version; final candidate scan is still required. Plugin realms, if any, are separate and not fixed by runtime BOM overrides.",
+          "primarySources": [
+            "https://github.com/spring-projects/spring-boot/releases/tag/v4.0.8"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 812,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "jetty-io-9.4.46.v20220331.jar",
+      "sha256": "72b060ab6afa645660212880a7c073315cd4ca5022be85a16c749dac4e2f9726",
+      "packages": [
+        "pkg:maven/org.eclipse.jetty/jetty-io@9.4.46.v20220331"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:eclipse:jetty:9.4.46:20220331:*:*:*:*:*:*",
+        "cpe:2.3:a:jetty:jetty:9.4.46:20220331:*:*:*:*:*:*",
+        "cpe:2.3:a:mortbay_jetty:jetty:9.4.46:20220331:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/org.apache.maven.plugins/maven-site-plugin@3.12.1",
+          "type": "plugins"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2026-2332",
+          "reportedSeverity": "CRITICAL",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-10050",
+          "reportedSeverity": "HIGH",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2025-5115",
+          "reportedSeverity": "HIGH",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2022-2048",
+          "reportedSeverity": "HIGH",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2023-36478",
+          "reportedSeverity": "HIGH",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2023-44487",
+          "reportedSeverity": "HIGH",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2024-22201",
+          "reportedSeverity": "HIGH",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2024-9823",
+          "reportedSeverity": "HIGH",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-5795",
+          "reportedSeverity": "HIGH",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2024-13009",
+          "reportedSeverity": "HIGH",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2024-8184",
+          "reportedSeverity": "MEDIUM",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2025-11143",
+          "reportedSeverity": "MEDIUM",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2023-26048",
+          "reportedSeverity": "MEDIUM",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2023-26049",
+          "reportedSeverity": "MEDIUM",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2023-40167",
+          "reportedSeverity": "MEDIUM",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2024-6763",
+          "reportedSeverity": "MEDIUM",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-6790",
+          "reportedSeverity": "MEDIUM",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2023-41900",
+          "reportedSeverity": "MEDIUM",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2023-36479",
+          "reportedSeverity": "LOW",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 113,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "jetty-server-9.4.46.v20220331.jar",
+      "sha256": "da8100240eef4b493c6bdb6a794bbc26bca1dbd115ca35d15764fb3a4220e533",
+      "packages": [
+        "pkg:maven/org.eclipse.jetty/jetty-server@9.4.46.v20220331"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:eclipse:jetty:9.4.46:20220331:*:*:*:*:*:*",
+        "cpe:2.3:a:jetty:jetty:9.4.46:20220331:*:*:*:*:*:*",
+        "cpe:2.3:a:jetty:jetty_http_server:9.4.46:20220331:*:*:*:*:*:*",
+        "cpe:2.3:a:mortbay_jetty:jetty:9.4.46:20220331:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/org.apache.maven.plugins/maven-site-plugin@3.12.1",
+          "type": "plugins"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2026-2332",
+          "reportedSeverity": "CRITICAL",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-10050",
+          "reportedSeverity": "HIGH",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2025-5115",
+          "reportedSeverity": "HIGH",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2022-2048",
+          "reportedSeverity": "HIGH",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2023-36478",
+          "reportedSeverity": "HIGH",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2023-44487",
+          "reportedSeverity": "HIGH",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2024-22201",
+          "reportedSeverity": "HIGH",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2024-9823",
+          "reportedSeverity": "HIGH",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-5795",
+          "reportedSeverity": "HIGH",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2024-13009",
+          "reportedSeverity": "HIGH",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2024-8184",
+          "reportedSeverity": "MEDIUM",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2025-11143",
+          "reportedSeverity": "MEDIUM",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2023-26048",
+          "reportedSeverity": "MEDIUM",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2023-26049",
+          "reportedSeverity": "MEDIUM",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2023-40167",
+          "reportedSeverity": "MEDIUM",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2024-6763",
+          "reportedSeverity": "MEDIUM",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-6790",
+          "reportedSeverity": "MEDIUM",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2023-41900",
+          "reportedSeverity": "MEDIUM",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2023-36479",
+          "reportedSeverity": "LOW",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 361,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "jsoup-1.10.2.jar",
+      "sha256": "6ebe6abd7775c10a49407ae22db45c840cd2cdaf715866a5b0b5af70941c3f4a",
+      "packages": [
+        "pkg:maven/org.jsoup/jsoup@1.10.2"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:jsoup:jsoup:1.10.2:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/org.apache.maven.plugins/maven-site-plugin@3.12.1",
+          "type": "plugins"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2021-37714",
+          "reportedSeverity": "HIGH",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2022-36033",
+          "reportedSeverity": "MEDIUM",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 238,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "kotlin-stdlib-2.2.21.jar",
+      "sha256": "6558a3d233da56a20934b32159f9db5f86ed5816ef098f78a2c223dc6abb79dd",
+      "packages": [
+        "pkg:maven/org.jetbrains.kotlin/kotlin-stdlib@2.2.21"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:jetbrains:kotlin:2.2.21:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/com.openai/openai-java@4.34.0"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2026-53914",
+          "reportedSeverity": "CRITICAL",
+          "decision": "INCORRECT_MODULE_MATCH",
+          "reason": "Vendor patch changes KAPT incremental-cache deserialization in plugins/kapt3/kapt3-base; kotlin-stdlib does not contain org/jetbrains/kotlin/kapt3 classes. No Kotlin Gradle plugin or KAPT artifact is in this Maven project dependency graph.",
+          "primarySources": [
+            "https://github.com/JetBrains/kotlin/commit/bf51df665b458fda7c3eaf436c4d88dc119d7ec6"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 974,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "log4j-api-2.25.4.jar",
+      "sha256": "c4b642a7f047275215de117e0e3847eb2c7711d84a0aa7433e7b3c096daf341d",
+      "packages": [
+        "pkg:maven/org.apache.logging.log4j/log4j-api@2.25.4"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:apache:log4j:2.25.4:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/org.apache.poi/poi@5.5.1"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2026-49844",
+          "reportedSeverity": "MEDIUM",
+          "decision": "RUNTIME_DEPENDENCY_UPDATED_PENDING_FINAL_SCAN",
+          "targetVersion": "2.25.5",
+          "reason": "Runtime dependency resolved to patched maintenance version; final candidate scan is still required. Plugin realms, if any, are separate and not fixed by runtime BOM overrides.",
+          "primarySources": [
+            "https://github.com/spring-projects/spring-boot/releases/tag/v4.0.8"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 214,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "maven-core-3.2.5.jar",
+      "sha256": "4f1a0af8997e1daf778b91c5ae9e973f92df699439d909fdec7fc6055c09de12",
+      "packages": [
+        "pkg:maven/org.apache.maven/maven-core@3.2.5"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:apache:maven:3.2.5:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/org.apache.maven.plugins/maven-site-plugin@3.12.1",
+          "type": "plugins"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2021-26291",
+          "reportedSeverity": "CRITICAL",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 372,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "maven-core-3.6.3.jar",
+      "sha256": "f572ed9e2a6ea3e30522d13448c5d9b3b80ce62a23dac652111952d4941e2a3b",
+      "packages": [
+        "pkg:maven/org.apache.maven/maven-core@3.6.3"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:apache:maven:3.6.3:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/org.owasp/dependency-check-maven@12.2.2",
+          "type": "plugins"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2021-26291",
+          "reportedSeverity": "CRITICAL",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 403,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "maven-shared-utils-3.2.1.jar",
+      "sha256": "3ba9c619893c767db0f9c3e826d5118b57c35229301bcd16d865a89cec16a7e5",
+      "packages": [
+        "pkg:maven/org.apache.maven.shared/maven-shared-utils@3.2.1"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:apache:maven_shared_utils:3.2.1:*:*:*:*:*:*:*",
+        "cpe:2.3:a:utils_project:utils:3.2.1:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/org.owasp/dependency-check-maven@12.2.2",
+          "type": "plugins"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2022-29599",
+          "reportedSeverity": "CRITICAL",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 84,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "mysql-connector-j-9.7.0.jar",
+      "sha256": "0353648eaa1c91e0f4020c959abf756bc866ffd583df22ae6b6f6e0cbd43eb44",
+      "packages": [
+        "pkg:maven/com.mysql/mysql-connector-j@9.7.0"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:oracle:mysql_connector\\/j:9.7.0:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/com.hunt/otziv@1"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2026-60586",
+          "reportedSeverity": "HIGH",
+          "decision": "RUNTIME_DEPENDENCY_UPDATED_PENDING_FINAL_SCAN",
+          "targetVersion": "26.7.0",
+          "reason": "Runtime dependency resolved to patched maintenance version; final candidate scan is still required. Plugin realms, if any, are separate and not fixed by runtime BOM overrides.",
+          "primarySources": [
+            "https://dev.mysql.com/doc/relnotes/connector-j/en/news-26-7-0.html"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-60623",
+          "reportedSeverity": "HIGH",
+          "decision": "RUNTIME_DEPENDENCY_UPDATED_PENDING_FINAL_SCAN",
+          "targetVersion": "26.7.0",
+          "reason": "Runtime dependency resolved to patched maintenance version; final candidate scan is still required. Plugin realms, if any, are separate and not fixed by runtime BOM overrides.",
+          "primarySources": [
+            "https://dev.mysql.com/doc/relnotes/connector-j/en/news-26-7-0.html"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-60624",
+          "reportedSeverity": "MEDIUM",
+          "decision": "RUNTIME_DEPENDENCY_UPDATED_PENDING_FINAL_SCAN",
+          "targetVersion": "26.7.0",
+          "reason": "Runtime dependency resolved to patched maintenance version; final candidate scan is still required. Plugin realms, if any, are separate and not fixed by runtime BOM overrides.",
+          "primarySources": [
+            "https://dev.mysql.com/doc/relnotes/connector-j/en/news-26-7-0.html"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-61082",
+          "reportedSeverity": "MEDIUM",
+          "decision": "RUNTIME_DEPENDENCY_UPDATED_PENDING_FINAL_SCAN",
+          "targetVersion": "26.7.0",
+          "reason": "Runtime dependency resolved to patched maintenance version; final candidate scan is still required. Plugin realms, if any, are separate and not fixed by runtime BOM overrides.",
+          "primarySources": [
+            "https://dev.mysql.com/doc/relnotes/connector-j/en/news-26-7-0.html"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 1066,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "netty-codec-protobuf-4.2.16.Final.jar",
+      "sha256": "bb66f23ccb543dd842ddda91b6c8e97e222220d2efa5459f6a46a22ade3b2170",
+      "packages": [
+        "pkg:maven/io.netty/netty-codec-protobuf@4.2.16.Final"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:netty:netty:4.2.16:*:*:*:*:*:*:*",
+        "cpe:2.3:a:protobuf:protobuf:4.2.16:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/software.amazon.awssdk/s3@2.44.1"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2026-62380",
+          "reportedSeverity": "MEDIUM",
+          "decision": "RUNTIME_DEPENDENCY_UPDATED_PENDING_FINAL_SCAN",
+          "targetVersion": "4.2.17.Final",
+          "reason": "Runtime dependency resolved to patched maintenance version; final candidate scan is still required. Plugin realms, if any, are separate and not fixed by runtime BOM overrides.",
+          "primarySources": [
+            "https://github.com/spring-projects/spring-boot/releases/tag/v4.0.8"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 7,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "netty-transport-4.2.16.Final.jar",
+      "sha256": "cfa3f654caff906653385f4b7ddaa539d795b78f5711a622482b17d2b73484c0",
+      "packages": [
+        "pkg:maven/io.netty/netty-transport@4.2.16.Final"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:netty:netty:4.2.16:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/com.google.firebase/firebase-admin@9.9.0"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2026-62380",
+          "reportedSeverity": "MEDIUM",
+          "decision": "RUNTIME_DEPENDENCY_UPDATED_PENDING_FINAL_SCAN",
+          "targetVersion": "4.2.17.Final",
+          "reason": "Runtime dependency resolved to patched maintenance version; final candidate scan is still required. Plugin realms, if any, are separate and not fixed by runtime BOM overrides.",
+          "primarySources": [
+            "https://github.com/spring-projects/spring-boot/releases/tag/v4.0.8"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 389,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "opentelemetry-api-1.55.0.jar",
+      "sha256": "387b4bf98631fc2ede9470879a8ff28dd8c5cb2d3dcf5b6ef77f5ee2bdb7b4f1",
+      "packages": [
+        "pkg:maven/io.opentelemetry/opentelemetry-api@1.55.0"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:opentelemetry:opentelemetry:1.55.0:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/org.springframework.boot/spring-boot-starter-opentelemetry@4.0.7"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2026-54285",
+          "reportedSeverity": "MEDIUM",
+          "decision": "INCORRECT_LANGUAGE_PRODUCT_MATCH",
+          "reason": "The advisory affects JavaScript W3C baggage propagator; the exact detected Maven artifact is a Java implementation, not that independently versioned product.",
+          "primarySources": [
+            "https://github.com/open-telemetry/opentelemetry-js/security/advisories/GHSA-8988-4f7v-96qf"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 166,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "opentelemetry-extension-incubator-1.35.0-alpha.jar",
+      "sha256": "5ca38a9ecdf2c93183069dae1d7d76ec12e9cf4feb3c2209d04566e82fc4df3c",
+      "packages": [
+        "pkg:maven/io.opentelemetry/opentelemetry-extension-incubator@1.35.0-alpha"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:opentelemetry:opentelemetry:1.35.0:alpha:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/com.google.firebase/firebase-admin@9.9.0"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2026-39883",
+          "reportedSeverity": "HIGH",
+          "decision": "INCORRECT_LANGUAGE_PRODUCT_MATCH",
+          "reason": "The advisory affects Go SDK resource detector; the exact detected Maven artifact is a Java implementation, not that independently versioned product.",
+          "primarySources": [
+            "https://github.com/open-telemetry/opentelemetry-go/security/advisories/GHSA-hfvc-g4fc-pqhx"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-24051",
+          "reportedSeverity": "HIGH",
+          "decision": "INCORRECT_LANGUAGE_PRODUCT_MATCH",
+          "reason": "The advisory affects Go SDK resource detector; the exact detected Maven artifact is a Java implementation, not that independently versioned product.",
+          "primarySources": [
+            "https://github.com/open-telemetry/opentelemetry-go/security/advisories/GHSA-9h8m-3fm2-qjrq"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-39882",
+          "reportedSeverity": "MEDIUM",
+          "decision": "INCORRECT_LANGUAGE_PRODUCT_MATCH",
+          "reason": "The advisory affects Go OTLP HTTP exporters; the exact detected Maven artifact is a Java implementation, not that independently versioned product.",
+          "primarySources": [
+            "https://github.com/open-telemetry/opentelemetry-go/security/advisories/GHSA-w8rr-5gcm-pp58"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-41178",
+          "reportedSeverity": "MEDIUM",
+          "decision": "INCORRECT_LANGUAGE_PRODUCT_MATCH",
+          "reason": "The advisory affects Go baggage parser; the exact detected Maven artifact is a Java implementation, not that independently versioned product.",
+          "primarySources": [
+            "https://github.com/open-telemetry/opentelemetry-go/security/advisories/GHSA-5wrp-cwcj-q835"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-54285",
+          "reportedSeverity": "MEDIUM",
+          "decision": "INCORRECT_LANGUAGE_PRODUCT_MATCH",
+          "reason": "The advisory affects JavaScript W3C baggage propagator; the exact detected Maven artifact is a Java implementation, not that independently versioned product.",
+          "primarySources": [
+            "https://github.com/open-telemetry/opentelemetry-js/security/advisories/GHSA-8988-4f7v-96qf"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 32,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "opentelemetry-gcp-resources-1.37.0-alpha.jar",
+      "sha256": "f7b6baddfbbe57f0e3e1e3cc08eb68bb61c29ef6c17898ce7ce35b1f3029d3e6",
+      "packages": [
+        "pkg:maven/io.opentelemetry.contrib/opentelemetry-gcp-resources@1.37.0-alpha"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:opentelemetry:opentelemetry:1.37.0:alpha:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/com.google.firebase/firebase-admin@9.9.0"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2026-29181",
+          "reportedSeverity": "HIGH",
+          "decision": "INCORRECT_LANGUAGE_PRODUCT_MATCH",
+          "reason": "The advisory affects Go baggage propagator; the exact detected Maven artifact is a Java implementation, not that independently versioned product.",
+          "primarySources": [
+            "https://github.com/open-telemetry/opentelemetry-go/security/advisories/GHSA-mh2q-q3fh-2475"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-39883",
+          "reportedSeverity": "HIGH",
+          "decision": "INCORRECT_LANGUAGE_PRODUCT_MATCH",
+          "reason": "The advisory affects Go SDK resource detector; the exact detected Maven artifact is a Java implementation, not that independently versioned product.",
+          "primarySources": [
+            "https://github.com/open-telemetry/opentelemetry-go/security/advisories/GHSA-hfvc-g4fc-pqhx"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-24051",
+          "reportedSeverity": "HIGH",
+          "decision": "INCORRECT_LANGUAGE_PRODUCT_MATCH",
+          "reason": "The advisory affects Go SDK resource detector; the exact detected Maven artifact is a Java implementation, not that independently versioned product.",
+          "primarySources": [
+            "https://github.com/open-telemetry/opentelemetry-go/security/advisories/GHSA-9h8m-3fm2-qjrq"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-39882",
+          "reportedSeverity": "MEDIUM",
+          "decision": "INCORRECT_LANGUAGE_PRODUCT_MATCH",
+          "reason": "The advisory affects Go OTLP HTTP exporters; the exact detected Maven artifact is a Java implementation, not that independently versioned product.",
+          "primarySources": [
+            "https://github.com/open-telemetry/opentelemetry-go/security/advisories/GHSA-w8rr-5gcm-pp58"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-41178",
+          "reportedSeverity": "MEDIUM",
+          "decision": "INCORRECT_LANGUAGE_PRODUCT_MATCH",
+          "reason": "The advisory affects Go baggage parser; the exact detected Maven artifact is a Java implementation, not that independently versioned product.",
+          "primarySources": [
+            "https://github.com/open-telemetry/opentelemetry-go/security/advisories/GHSA-5wrp-cwcj-q835"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-54285",
+          "reportedSeverity": "MEDIUM",
+          "decision": "INCORRECT_LANGUAGE_PRODUCT_MATCH",
+          "reason": "The advisory affects JavaScript W3C baggage propagator; the exact detected Maven artifact is a Java implementation, not that independently versioned product.",
+          "primarySources": [
+            "https://github.com/open-telemetry/opentelemetry-js/security/advisories/GHSA-8988-4f7v-96qf"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 4,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "opentelemetry-grpc-1.6-2.1.0-alpha.jar",
+      "sha256": "7c033f0c8c8c8159c396b21922460ecfb7a5f004258f8fcdc4ce9979261e1ac9",
+      "packages": [
+        "pkg:maven/io.opentelemetry.instrumentation/opentelemetry-grpc-1.6@2.1.0-alpha"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:opentelemetry:opentelemetry:2.1.0:alpha:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/com.google.firebase/firebase-admin@9.9.0"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2026-54285",
+          "reportedSeverity": "MEDIUM",
+          "decision": "INCORRECT_LANGUAGE_PRODUCT_MATCH",
+          "reason": "The advisory affects JavaScript W3C baggage propagator; the exact detected Maven artifact is a Java implementation, not that independently versioned product.",
+          "primarySources": [
+            "https://github.com/open-telemetry/opentelemetry-js/security/advisories/GHSA-8988-4f7v-96qf"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 21,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "opentelemetry-instrumentation-api-2.1.0.jar",
+      "sha256": "4f6ac1247c7372c103c23ef2594413418a496b114e13ef237031255a2d3ce361",
+      "packages": [
+        "pkg:maven/io.opentelemetry.instrumentation/opentelemetry-instrumentation-api@2.1.0"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:opentelemetry:opentelemetry:2.1.0:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/com.google.firebase/firebase-admin@9.9.0"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2026-54285",
+          "reportedSeverity": "MEDIUM",
+          "decision": "INCORRECT_LANGUAGE_PRODUCT_MATCH",
+          "reason": "The advisory affects JavaScript W3C baggage propagator; the exact detected Maven artifact is a Java implementation, not that independently versioned product.",
+          "primarySources": [
+            "https://github.com/open-telemetry/opentelemetry-js/security/advisories/GHSA-8988-4f7v-96qf"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 181,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "opentelemetry-proto-1.8.0-alpha.jar",
+      "sha256": "c551873983e22b308c738860da0903cdff2e47182140cf2a8dd9abb1adf31d08",
+      "packages": [
+        "pkg:maven/io.opentelemetry.proto/opentelemetry-proto@1.8.0-alpha"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:opentelemetry:opentelemetry:1.8.0:alpha:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/org.springframework.boot/spring-boot-starter-opentelemetry@4.0.7"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2026-39882",
+          "reportedSeverity": "MEDIUM",
+          "decision": "INCORRECT_LANGUAGE_PRODUCT_MATCH",
+          "reason": "The advisory affects Go OTLP HTTP exporters; the exact detected Maven artifact is a Java implementation, not that independently versioned product.",
+          "primarySources": [
+            "https://github.com/open-telemetry/opentelemetry-go/security/advisories/GHSA-w8rr-5gcm-pp58"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-40894",
+          "reportedSeverity": "MEDIUM",
+          "decision": "INCORRECT_LANGUAGE_PRODUCT_MATCH",
+          "reason": "The advisory affects .NET OpenTelemetry.Api; the exact detected Maven artifact is a Java implementation, not that independently versioned product.",
+          "primarySources": [
+            "https://github.com/open-telemetry/opentelemetry-dotnet/security/advisories/GHSA-g94r-2vxg-569j"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-41178",
+          "reportedSeverity": "MEDIUM",
+          "decision": "INCORRECT_LANGUAGE_PRODUCT_MATCH",
+          "reason": "The advisory affects Go baggage parser; the exact detected Maven artifact is a Java implementation, not that independently versioned product.",
+          "primarySources": [
+            "https://github.com/open-telemetry/opentelemetry-go/security/advisories/GHSA-5wrp-cwcj-q835"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-44967",
+          "reportedSeverity": "MEDIUM",
+          "decision": "INCORRECT_LANGUAGE_PRODUCT_MATCH",
+          "reason": "The advisory affects C++ OTLP HTTP exporter; the exact detected Maven artifact is a Java implementation, not that independently versioned product.",
+          "primarySources": [
+            "https://github.com/open-telemetry/opentelemetry-cpp/issues/3958"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-54285",
+          "reportedSeverity": "MEDIUM",
+          "decision": "INCORRECT_LANGUAGE_PRODUCT_MATCH",
+          "reason": "The advisory affects JavaScript W3C baggage propagator; the exact detected Maven artifact is a Java implementation, not that independently versioned product.",
+          "primarySources": [
+            "https://github.com/open-telemetry/opentelemetry-js/security/advisories/GHSA-8988-4f7v-96qf"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 334,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "pdfbox-3.0.7.jar",
+      "sha256": "7cefa717622330951b4343abf1e5d36bccb11f4ba245d78aaa73251d08fec623",
+      "packages": [
+        "pkg:maven/org.apache.pdfbox/pdfbox@3.0.7"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:apache:pdfbox:3.0.7:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/com.hunt/otziv@1"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2026-23907",
+          "reportedSeverity": "MEDIUM",
+          "decision": "RUNTIME_DEPENDENCY_UPDATED_PENDING_FINAL_SCAN",
+          "targetVersion": "3.0.8",
+          "reason": "Updated core maintenance version to 3.0.8. Vendor CVE-2026-33929 affects the separate examples module; CVE-2026-23907 was already fixed in 3.0.7. This is not evidence that core 3.0.7 was exploitable by these two findings.",
+          "primarySources": [
+            "https://pdfbox.apache.org/security.html"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-33929",
+          "reportedSeverity": "MEDIUM",
+          "decision": "RUNTIME_DEPENDENCY_UPDATED_PENDING_FINAL_SCAN",
+          "targetVersion": "3.0.8",
+          "reason": "Updated core maintenance version to 3.0.8. Vendor CVE-2026-33929 affects the separate examples module; CVE-2026-23907 was already fixed in 3.0.7. This is not evidence that core 3.0.7 was exploitable by these two findings.",
+          "primarySources": [
+            "https://pdfbox.apache.org/security.html"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 765,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "plexus-archiver-4.2.7.jar",
+      "sha256": "5e0c49de4c56a25aa242e2de2b5fea1c0368826c2a8ab73764a0c91d3631633b",
+      "packages": [
+        "pkg:maven/org.codehaus.plexus/plexus-archiver@4.2.7"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:codehaus-plexus:plexus-archiver:4.2.7:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/org.apache.maven.plugins/maven-site-plugin@3.12.1",
+          "type": "plugins"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2023-37460",
+          "reportedSeverity": "CRITICAL",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 132,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "plexus-utils-3.4.2.jar",
+      "sha256": "f957f13604ea1686de805801862f339dbbb6eab9a66f9cc7e4a5c5b27e4fcecc",
+      "packages": [
+        "pkg:maven/org.codehaus.plexus/plexus-utils@3.4.2"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:codehaus-plexus:plexus-utils:3.4.2:*:*:*:*:*:*:*",
+        "cpe:2.3:a:utils_project:utils:3.4.2:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/org.apache.maven.plugins/maven-site-plugin@3.12.1",
+          "type": "plugins"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2025-67030",
+          "reportedSeverity": "HIGH",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 109,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "plexus-utils-3.5.1.jar",
+      "sha256": "86e0255d4c879c61b4833ed7f13124e8bb679df47debb127326e7db7dd49a07b",
+      "packages": [
+        "pkg:maven/org.codehaus.plexus/plexus-utils@3.5.1"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:codehaus-plexus:plexus-utils:3.5.1:*:*:*:*:*:*:*",
+        "cpe:2.3:a:utils_project:utils:3.5.1:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/org.apache.maven.plugins/maven-resources-plugin@3.3.1",
+          "type": "plugins"
+        },
+        {
+          "reference": "pkg:maven/org.springframework.boot/spring-boot-maven-plugin@4.0.7",
+          "type": "plugins"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2025-67030",
+          "reportedSeverity": "HIGH",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 111,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "plexus-utils-4.0.1.jar",
+      "sha256": "96b9cc44439191d2d0635974e2d44e768736b4fb2abcb65f94cd95e41912fa8b",
+      "packages": [
+        "pkg:maven/org.codehaus.plexus/plexus-utils@4.0.1"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:codehaus-plexus:plexus-utils:4.0.1:*:*:*:*:*:*:*",
+        "cpe:2.3:a:utils_project:utils:4.0.1:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/org.apache.maven.plugins/maven-deploy-plugin@3.1.4",
+          "type": "plugins"
+        },
+        {
+          "reference": "pkg:maven/org.apache.maven.plugins/maven-install-plugin@3.1.4",
+          "type": "plugins"
+        },
+        {
+          "reference": "pkg:maven/org.apache.maven.plugins/maven-jar-plugin@3.4.2",
+          "type": "plugins"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2025-67030",
+          "reportedSeverity": "HIGH",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 89,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "plexus-utils-4.0.2.jar",
+      "sha256": "8957274e75fe2c278b1428dd16a0daeee1dd38152cb6eff816177ac28fccb697",
+      "packages": [
+        "pkg:maven/org.codehaus.plexus/plexus-utils@4.0.2"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:codehaus-plexus:plexus-utils:4.0.2:*:*:*:*:*:*:*",
+        "cpe:2.3:a:utils_project:utils:4.0.2:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/org.apache.maven.plugins/maven-clean-plugin@3.5.0",
+          "type": "plugins"
+        },
+        {
+          "reference": "pkg:maven/org.apache.maven.plugins/maven-compiler-plugin@3.14.1",
+          "type": "plugins"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2025-67030",
+          "reportedSeverity": "HIGH",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 89,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "snappy-0.4.jar",
+      "sha256": "46a0c87d504ce9d6063e1ff6e4d20738feb49d8abf85b5071a7d18df4f11bac9",
+      "packages": [
+        "pkg:maven/org.iq80.snappy/snappy@0.4"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:dain:snappy:0.4:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/org.apache.maven.plugins/maven-jar-plugin@3.4.2",
+          "type": "plugins"
+        },
+        {
+          "reference": "pkg:maven/org.apache.maven.plugins/maven-site-plugin@3.12.1",
+          "type": "plugins"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2024-36124",
+          "reportedSeverity": "MEDIUM",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 24,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "spring-boot-devtools-4.0.7.jar",
+      "sha256": "e86d444aa89640c719ed57d63bf4536bff34218200fcf19a8a2e55f6446abddb",
+      "packages": [
+        "pkg:maven/org.springframework.boot/spring-boot-devtools@4.0.7"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:vmware:spring_boot:4.0.7:*:*:*:*:*:*:*",
+        "cpe:2.3:a:vmware:spring_boot_tools:4.0.7:*:*:*:*:*:*:*",
+        "cpe:2.3:a:vmware:spring_tools:4.0.7:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/com.hunt/otziv@1"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2022-31691",
+          "reportedSeverity": "CRITICAL",
+          "decision": "INCORRECT_PRODUCT_MATCH",
+          "reason": "The vendor advisory names STS4 Eclipse and VSCode editor extensions, not Spring Boot Devtools application library.",
+          "primarySources": [
+            "https://spring.io/security/cve-2022-31691/"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 137,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "spring-core-7.0.8.jar",
+      "sha256": "726ba2a5130833644bdf267a55ff26e1f52e8dcc9aa1ffa06904ca9c14619f25",
+      "packages": [
+        "pkg:maven/org.springframework/spring-core@7.0.8"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:pivotal_software:spring_framework:7.0.8:*:*:*:*:*:*:*",
+        "cpe:2.3:a:springsource:spring_framework:7.0.8:*:*:*:*:*:*:*",
+        "cpe:2.3:a:vmware:spring_framework:7.0.8:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/org.springframework.boot/spring-boot-starter-test@4.0.7"
+        },
+        {
+          "reference": "pkg:maven/org.springframework.boot/spring-boot-maven-plugin@4.0.7",
+          "type": "plugins"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2026-47890",
+          "reportedSeverity": "CRITICAL",
+          "decision": "RUNTIME_DEPENDENCY_UPDATED_PENDING_FINAL_SCAN",
+          "targetVersion": "7.0.9",
+          "reason": "Runtime dependency resolved to patched maintenance version; final candidate scan is still required. Plugin realms, if any, are separate and not fixed by runtime BOM overrides.",
+          "primarySources": [
+            "https://spring.io/security/cve-2026-47892/"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-47891",
+          "reportedSeverity": "CRITICAL",
+          "decision": "RUNTIME_DEPENDENCY_UPDATED_PENDING_FINAL_SCAN",
+          "targetVersion": "7.0.9",
+          "reason": "Runtime dependency resolved to patched maintenance version; final candidate scan is still required. Plugin realms, if any, are separate and not fixed by runtime BOM overrides.",
+          "primarySources": [
+            "https://spring.io/security/cve-2026-47892/"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-47892",
+          "reportedSeverity": "CRITICAL",
+          "decision": "RUNTIME_DEPENDENCY_UPDATED_PENDING_FINAL_SCAN",
+          "targetVersion": "7.0.9",
+          "reason": "Runtime dependency resolved to patched maintenance version; final candidate scan is still required. Plugin realms, if any, are separate and not fixed by runtime BOM overrides.",
+          "primarySources": [
+            "https://spring.io/security/cve-2026-47892/"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-59313",
+          "reportedSeverity": "CRITICAL",
+          "decision": "RUNTIME_DEPENDENCY_UPDATED_PENDING_FINAL_SCAN",
+          "targetVersion": "7.0.9",
+          "reason": "Runtime dependency resolved to patched maintenance version; final candidate scan is still required. Plugin realms, if any, are separate and not fixed by runtime BOM overrides.",
+          "primarySources": [
+            "https://spring.io/security/cve-2026-47892/"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-59283",
+          "reportedSeverity": "CRITICAL",
+          "decision": "RUNTIME_DEPENDENCY_UPDATED_PENDING_FINAL_SCAN",
+          "targetVersion": "7.0.9",
+          "reason": "Runtime dependency resolved to patched maintenance version; final candidate scan is still required. Plugin realms, if any, are separate and not fixed by runtime BOM overrides.",
+          "primarySources": [
+            "https://spring.io/security/cve-2026-47892/"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-47893",
+          "reportedSeverity": "HIGH",
+          "decision": "RUNTIME_DEPENDENCY_UPDATED_PENDING_FINAL_SCAN",
+          "targetVersion": "7.0.9",
+          "reason": "Runtime dependency resolved to patched maintenance version; final candidate scan is still required. Plugin realms, if any, are separate and not fixed by runtime BOM overrides.",
+          "primarySources": [
+            "https://spring.io/security/cve-2026-47892/"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-59282",
+          "reportedSeverity": "HIGH",
+          "decision": "RUNTIME_DEPENDENCY_UPDATED_PENDING_FINAL_SCAN",
+          "targetVersion": "7.0.9",
+          "reason": "Runtime dependency resolved to patched maintenance version; final candidate scan is still required. Plugin realms, if any, are separate and not fixed by runtime BOM overrides.",
+          "primarySources": [
+            "https://spring.io/security/cve-2026-47892/"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-59281",
+          "reportedSeverity": "MEDIUM",
+          "decision": "RUNTIME_DEPENDENCY_UPDATED_PENDING_FINAL_SCAN",
+          "targetVersion": "7.0.9",
+          "reason": "Runtime dependency resolved to patched maintenance version; final candidate scan is still required. Plugin realms, if any, are separate and not fixed by runtime BOM overrides.",
+          "primarySources": [
+            "https://spring.io/security/cve-2026-47892/"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-59280",
+          "reportedSeverity": "MEDIUM",
+          "decision": "RUNTIME_DEPENDENCY_UPDATED_PENDING_FINAL_SCAN",
+          "targetVersion": "7.0.9",
+          "reason": "Runtime dependency resolved to patched maintenance version; final candidate scan is still required. Plugin realms, if any, are separate and not fixed by runtime BOM overrides.",
+          "primarySources": [
+            "https://spring.io/security/cve-2026-47892/"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-59314",
+          "reportedSeverity": "LOW",
+          "decision": "RUNTIME_DEPENDENCY_UPDATED_PENDING_FINAL_SCAN",
+          "targetVersion": "7.0.9",
+          "reason": "Runtime dependency resolved to patched maintenance version; final candidate scan is still required. Plugin realms, if any, are separate and not fixed by runtime BOM overrides.",
+          "primarySources": [
+            "https://spring.io/security/cve-2026-47892/"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 1223,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "spring-data-jpa-4.0.6.jar",
+      "sha256": "aea149b28e2f6f15b70cc85aaeb8cf1a6f82ad9064d5015c1bde9a319c4f1630",
+      "packages": [
+        "pkg:maven/org.springframework.data/spring-data-jpa@4.0.6"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:pivotal_software:spring_data_jpa:4.0.6:*:*:*:*:*:*:*",
+        "cpe:2.3:a:vmware:spring_data_jpa:4.0.6:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/org.springframework.boot/spring-boot-starter-data-jpa@4.0.7"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2026-47834",
+          "reportedSeverity": "MEDIUM",
+          "decision": "RUNTIME_DEPENDENCY_UPDATED_PENDING_FINAL_SCAN",
+          "targetVersion": "4.0.7",
+          "reason": "Runtime dependency resolved to patched maintenance version; final candidate scan is still required. Plugin realms, if any, are separate and not fixed by runtime BOM overrides.",
+          "primarySources": [
+            "https://spring.io/security/cve-2026-47834/"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 1064,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "spring-security-core-7.0.6.jar",
+      "sha256": "f9e1aebb39e051f6f92be029a6fca31e2977a06d417aa51504bfb298bc2a7c69",
+      "packages": [
+        "pkg:maven/org.springframework.security/spring-security-core@7.0.6"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:pivotal_software:spring_security:7.0.6:*:*:*:*:*:*:*",
+        "cpe:2.3:a:vmware:spring_security:7.0.6:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/org.springframework.boot/spring-boot-starter-oauth2-resource-server@4.0.7"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2026-59270",
+          "reportedSeverity": "CRITICAL",
+          "decision": "RUNTIME_DEPENDENCY_UPDATED_PENDING_FINAL_SCAN",
+          "targetVersion": "7.0.7",
+          "reason": "Runtime dependency resolved to patched maintenance version; final candidate scan is still required. Plugin realms, if any, are separate and not fixed by runtime BOM overrides.",
+          "primarySources": [
+            "https://spring.io/security/cve-2026-59270/"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-47841",
+          "reportedSeverity": "HIGH",
+          "decision": "RUNTIME_DEPENDENCY_UPDATED_PENDING_FINAL_SCAN",
+          "targetVersion": "7.0.7",
+          "reason": "Runtime dependency resolved to patched maintenance version; final candidate scan is still required. Plugin realms, if any, are separate and not fixed by runtime BOM overrides.",
+          "primarySources": [
+            "https://spring.io/security/cve-2026-59270/"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-47842",
+          "reportedSeverity": "MEDIUM",
+          "decision": "RUNTIME_DEPENDENCY_UPDATED_PENDING_FINAL_SCAN",
+          "targetVersion": "7.0.7",
+          "reason": "Runtime dependency resolved to patched maintenance version; final candidate scan is still required. Plugin realms, if any, are separate and not fixed by runtime BOM overrides.",
+          "primarySources": [
+            "https://spring.io/security/cve-2026-59270/"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-47877",
+          "reportedSeverity": "MEDIUM",
+          "decision": "RUNTIME_DEPENDENCY_UPDATED_PENDING_FINAL_SCAN",
+          "targetVersion": "7.0.7",
+          "reason": "Runtime dependency resolved to patched maintenance version; final candidate scan is still required. Plugin realms, if any, are separate and not fixed by runtime BOM overrides.",
+          "primarySources": [
+            "https://spring.io/security/cve-2026-59270/"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-59276",
+          "reportedSeverity": "MEDIUM",
+          "decision": "RUNTIME_DEPENDENCY_UPDATED_PENDING_FINAL_SCAN",
+          "targetVersion": "7.0.7",
+          "reason": "Runtime dependency resolved to patched maintenance version; final candidate scan is still required. Plugin realms, if any, are separate and not fixed by runtime BOM overrides.",
+          "primarySources": [
+            "https://spring.io/security/cve-2026-59270/"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 442,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "spring-security-oauth2-resource-server-7.0.6.jar",
+      "sha256": "4c53ad5b6a06b9f6272212b5a0a71d003b4ba01dd16de691fd63ddf37554f098",
+      "packages": [
+        "pkg:maven/org.springframework.security/spring-security-oauth2-resource-server@7.0.6"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:pivotal:spring_security_oauth:7.0.6:*:*:*:*:*:*:*",
+        "cpe:2.3:a:pivotal_software:spring_security:7.0.6:*:*:*:*:*:*:*",
+        "cpe:2.3:a:pivotal_software:spring_security_oauth:7.0.6:*:*:*:*:*:*:*",
+        "cpe:2.3:a:vmware:spring_security:7.0.6:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/org.springframework.boot/spring-boot-starter-oauth2-resource-server@4.0.7"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2026-59270",
+          "reportedSeverity": "CRITICAL",
+          "decision": "RUNTIME_DEPENDENCY_UPDATED_PENDING_FINAL_SCAN",
+          "targetVersion": "7.0.7",
+          "reason": "Runtime dependency resolved to patched maintenance version; final candidate scan is still required. Plugin realms, if any, are separate and not fixed by runtime BOM overrides.",
+          "primarySources": [
+            "https://spring.io/security/cve-2026-59270/"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-47841",
+          "reportedSeverity": "HIGH",
+          "decision": "RUNTIME_DEPENDENCY_UPDATED_PENDING_FINAL_SCAN",
+          "targetVersion": "7.0.7",
+          "reason": "Runtime dependency resolved to patched maintenance version; final candidate scan is still required. Plugin realms, if any, are separate and not fixed by runtime BOM overrides.",
+          "primarySources": [
+            "https://spring.io/security/cve-2026-59270/"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-47842",
+          "reportedSeverity": "MEDIUM",
+          "decision": "RUNTIME_DEPENDENCY_UPDATED_PENDING_FINAL_SCAN",
+          "targetVersion": "7.0.7",
+          "reason": "Runtime dependency resolved to patched maintenance version; final candidate scan is still required. Plugin realms, if any, are separate and not fixed by runtime BOM overrides.",
+          "primarySources": [
+            "https://spring.io/security/cve-2026-59270/"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-47877",
+          "reportedSeverity": "MEDIUM",
+          "decision": "RUNTIME_DEPENDENCY_UPDATED_PENDING_FINAL_SCAN",
+          "targetVersion": "7.0.7",
+          "reason": "Runtime dependency resolved to patched maintenance version; final candidate scan is still required. Plugin realms, if any, are separate and not fixed by runtime BOM overrides.",
+          "primarySources": [
+            "https://spring.io/security/cve-2026-59270/"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2026-59276",
+          "reportedSeverity": "MEDIUM",
+          "decision": "RUNTIME_DEPENDENCY_UPDATED_PENDING_FINAL_SCAN",
+          "targetVersion": "7.0.7",
+          "reason": "Runtime dependency resolved to patched maintenance version; final candidate scan is still required. Plugin realms, if any, are separate and not fixed by runtime BOM overrides.",
+          "primarySources": [
+            "https://spring.io/security/cve-2026-59270/"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 73,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "telegrambots-6.9.7.1.jar",
+      "sha256": "bfcca1f6b2c4a0d4e0fd85288f7cbda9483af2415e66d1db69c2661c35ff511f",
+      "packages": [
+        "pkg:maven/org.telegram/telegrambots@6.9.7.1"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:telegram:telegram:6.9.7.1:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/com.hunt/otziv@1"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2019-10044",
+          "reportedSeverity": "HIGH",
+          "decision": "INCORRECT_PRODUCT_MATCH",
+          "reason": "The exact artifact is RubenLaguses Java Telegram Bot SDK; the reported CPE represents Telegram Android/iOS/macOS/Desktop messenger applications. Their native media/UI/client-session code is not this Java Bot API SDK.",
+          "primarySources": [
+            "https://github.com/rubenlagus/TelegramBots/tree/v6.9.7.1",
+            "https://repo.maven.apache.org/maven2/org/telegram/telegrambots/6.9.7.1/telegrambots-6.9.7.1.pom"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2021-31320",
+          "reportedSeverity": "HIGH",
+          "decision": "INCORRECT_PRODUCT_MATCH",
+          "reason": "The exact artifact is RubenLaguses Java Telegram Bot SDK; the reported CPE represents Telegram Android/iOS/macOS/Desktop messenger applications. Their native media/UI/client-session code is not this Java Bot API SDK.",
+          "primarySources": [
+            "https://github.com/rubenlagus/TelegramBots/tree/v6.9.7.1",
+            "https://repo.maven.apache.org/maven2/org/telegram/telegrambots/6.9.7.1/telegrambots-6.9.7.1.pom"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2021-31321",
+          "reportedSeverity": "HIGH",
+          "decision": "INCORRECT_PRODUCT_MATCH",
+          "reason": "The exact artifact is RubenLaguses Java Telegram Bot SDK; the reported CPE represents Telegram Android/iOS/macOS/Desktop messenger applications. Their native media/UI/client-session code is not this Java Bot API SDK.",
+          "primarySources": [
+            "https://github.com/rubenlagus/TelegramBots/tree/v6.9.7.1",
+            "https://repo.maven.apache.org/maven2/org/telegram/telegrambots/6.9.7.1/telegrambots-6.9.7.1.pom"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2024-7014",
+          "reportedSeverity": "HIGH",
+          "decision": "INCORRECT_PRODUCT_MATCH",
+          "reason": "The exact artifact is RubenLaguses Java Telegram Bot SDK; the reported CPE represents Telegram Android/iOS/macOS/Desktop messenger applications. Their native media/UI/client-session code is not this Java Bot API SDK.",
+          "primarySources": [
+            "https://github.com/rubenlagus/TelegramBots/tree/v6.9.7.1",
+            "https://repo.maven.apache.org/maven2/org/telegram/telegrambots/6.9.7.1/telegrambots-6.9.7.1.pom"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2021-27204",
+          "reportedSeverity": "MEDIUM",
+          "decision": "INCORRECT_PRODUCT_MATCH",
+          "reason": "The exact artifact is RubenLaguses Java Telegram Bot SDK; the reported CPE represents Telegram Android/iOS/macOS/Desktop messenger applications. Their native media/UI/client-session code is not this Java Bot API SDK.",
+          "primarySources": [
+            "https://github.com/rubenlagus/TelegramBots/tree/v6.9.7.1",
+            "https://repo.maven.apache.org/maven2/org/telegram/telegrambots/6.9.7.1/telegrambots-6.9.7.1.pom"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2021-27205",
+          "reportedSeverity": "MEDIUM",
+          "decision": "INCORRECT_PRODUCT_MATCH",
+          "reason": "The exact artifact is RubenLaguses Java Telegram Bot SDK; the reported CPE represents Telegram Android/iOS/macOS/Desktop messenger applications. Their native media/UI/client-session code is not this Java Bot API SDK.",
+          "primarySources": [
+            "https://github.com/rubenlagus/TelegramBots/tree/v6.9.7.1",
+            "https://repo.maven.apache.org/maven2/org/telegram/telegrambots/6.9.7.1/telegrambots-6.9.7.1.pom"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2021-31315",
+          "reportedSeverity": "MEDIUM",
+          "decision": "INCORRECT_PRODUCT_MATCH",
+          "reason": "The exact artifact is RubenLaguses Java Telegram Bot SDK; the reported CPE represents Telegram Android/iOS/macOS/Desktop messenger applications. Their native media/UI/client-session code is not this Java Bot API SDK.",
+          "primarySources": [
+            "https://github.com/rubenlagus/TelegramBots/tree/v6.9.7.1",
+            "https://repo.maven.apache.org/maven2/org/telegram/telegrambots/6.9.7.1/telegrambots-6.9.7.1.pom"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2021-31317",
+          "reportedSeverity": "MEDIUM",
+          "decision": "INCORRECT_PRODUCT_MATCH",
+          "reason": "The exact artifact is RubenLaguses Java Telegram Bot SDK; the reported CPE represents Telegram Android/iOS/macOS/Desktop messenger applications. Their native media/UI/client-session code is not this Java Bot API SDK.",
+          "primarySources": [
+            "https://github.com/rubenlagus/TelegramBots/tree/v6.9.7.1",
+            "https://repo.maven.apache.org/maven2/org/telegram/telegrambots/6.9.7.1/telegrambots-6.9.7.1.pom"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2021-31318",
+          "reportedSeverity": "MEDIUM",
+          "decision": "INCORRECT_PRODUCT_MATCH",
+          "reason": "The exact artifact is RubenLaguses Java Telegram Bot SDK; the reported CPE represents Telegram Android/iOS/macOS/Desktop messenger applications. Their native media/UI/client-session code is not this Java Bot API SDK.",
+          "primarySources": [
+            "https://github.com/rubenlagus/TelegramBots/tree/v6.9.7.1",
+            "https://repo.maven.apache.org/maven2/org/telegram/telegrambots/6.9.7.1/telegrambots-6.9.7.1.pom"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2021-31319",
+          "reportedSeverity": "MEDIUM",
+          "decision": "INCORRECT_PRODUCT_MATCH",
+          "reason": "The exact artifact is RubenLaguses Java Telegram Bot SDK; the reported CPE represents Telegram Android/iOS/macOS/Desktop messenger applications. Their native media/UI/client-session code is not this Java Bot API SDK.",
+          "primarySources": [
+            "https://github.com/rubenlagus/TelegramBots/tree/v6.9.7.1",
+            "https://repo.maven.apache.org/maven2/org/telegram/telegrambots/6.9.7.1/telegrambots-6.9.7.1.pom"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2021-31322",
+          "reportedSeverity": "MEDIUM",
+          "decision": "INCORRECT_PRODUCT_MATCH",
+          "reason": "The exact artifact is RubenLaguses Java Telegram Bot SDK; the reported CPE represents Telegram Android/iOS/macOS/Desktop messenger applications. Their native media/UI/client-session code is not this Java Bot API SDK.",
+          "primarySources": [
+            "https://github.com/rubenlagus/TelegramBots/tree/v6.9.7.1",
+            "https://repo.maven.apache.org/maven2/org/telegram/telegrambots/6.9.7.1/telegrambots-6.9.7.1.pom"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2021-31323",
+          "reportedSeverity": "MEDIUM",
+          "decision": "INCORRECT_PRODUCT_MATCH",
+          "reason": "The exact artifact is RubenLaguses Java Telegram Bot SDK; the reported CPE represents Telegram Android/iOS/macOS/Desktop messenger applications. Their native media/UI/client-session code is not this Java Bot API SDK.",
+          "primarySources": [
+            "https://github.com/rubenlagus/TelegramBots/tree/v6.9.7.1",
+            "https://repo.maven.apache.org/maven2/org/telegram/telegrambots/6.9.7.1/telegrambots-6.9.7.1.pom"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2021-27351",
+          "reportedSeverity": "MEDIUM",
+          "decision": "INCORRECT_PRODUCT_MATCH",
+          "reason": "The exact artifact is RubenLaguses Java Telegram Bot SDK; the reported CPE represents Telegram Android/iOS/macOS/Desktop messenger applications. Their native media/UI/client-session code is not this Java Bot API SDK.",
+          "primarySources": [
+            "https://github.com/rubenlagus/TelegramBots/tree/v6.9.7.1",
+            "https://repo.maven.apache.org/maven2/org/telegram/telegrambots/6.9.7.1/telegrambots-6.9.7.1.pom"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        },
+        {
+          "advisory": "CVE-2021-36769",
+          "reportedSeverity": "MEDIUM",
+          "decision": "INCORRECT_PRODUCT_MATCH",
+          "reason": "The exact artifact is RubenLaguses Java Telegram Bot SDK; the reported CPE represents Telegram Android/iOS/macOS/Desktop messenger applications. Their native media/UI/client-session code is not this Java Bot API SDK.",
+          "primarySources": [
+            "https://github.com/rubenlagus/TelegramBots/tree/v6.9.7.1",
+            "https://repo.maven.apache.org/maven2/org/telegram/telegrambots/6.9.7.1/telegrambots-6.9.7.1.pom"
+          ],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 28,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "velocity-1.7.jar",
+      "sha256": "ec92dae810034f4b46dbb16ef4364a4013b0efb24a8c5dd67435cae46a290d8e",
+      "packages": [
+        "pkg:maven/org.apache.velocity/velocity@1.7"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:apache:velocity_engine:1.7:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/org.apache.maven.plugins/maven-site-plugin@3.12.1",
+          "type": "plugins"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2020-13936",
+          "reportedSeverity": "HIGH",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 270,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    },
+    {
+      "file": "velocity-tools-2.0.jar",
+      "sha256": "b174eb36bc48c25dce10571c7d3d5dca4e4c1b3e2e31a92b9ed68fe9dea688d9",
+      "packages": [
+        "pkg:maven/org.apache.velocity/velocity-tools@2.0"
+      ],
+      "observedCpes": [
+        "cpe:2.3:a:apache:velocity_tools:2.0:*:*:*:*:*:*:*"
+      ],
+      "includedBy": [
+        {
+          "reference": "pkg:maven/org.apache.maven.plugins/maven-site-plugin@3.12.1",
+          "type": "plugins"
+        }
+      ],
+      "findings": [
+        {
+          "advisory": "CVE-2020-13959",
+          "reportedSeverity": "MEDIUM",
+          "decision": "OPEN_BUILD_PLUGIN_DEPENDENCY",
+          "reason": "Finding belongs to the includedBy plugin realm. Preserved for isolated maintained-plugin candidate audit; no exemption or runtime-BOM closure claim.",
+          "primarySources": [],
+          "assignedOwner": null,
+          "proposedOwnerRole": "Application security and build engineering",
+          "riskAccepted": false,
+          "acceptanceExpiresAt": null
+        }
+      ],
+      "jarIdentityEvidence": {
+        "classCount": 187,
+        "kaptClassCount": 0,
+        "foreignExecutableEntries": []
+      }
+    }
+  ]
+}

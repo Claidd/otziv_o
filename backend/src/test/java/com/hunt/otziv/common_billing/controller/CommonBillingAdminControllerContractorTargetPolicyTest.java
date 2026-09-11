@@ -47,12 +47,12 @@ class CommonBillingAdminControllerContractorTargetPolicyTest {
 
         List<Executable> mutations = List.of(
                 () -> controller.deleteInvoice(INVOICE_ID, null),
-                () -> controller.sendInvoice(INVOICE_ID),
+                () -> controller.sendInvoice(INVOICE_ID, null),
                 () -> controller.changePaymentMode(INVOICE_ID, null, null),
                 () -> controller.changePaymentRoute(INVOICE_ID, null, null),
                 () -> controller.markPaperInvoiceIssued(INVOICE_ID, null),
                 () -> controller.markPaperInvoicePaid(INVOICE_ID, null, null),
-                () -> controller.remind(INVOICE_ID),
+                () -> controller.remind(INVOICE_ID, null),
                 () -> controller.markPaid(INVOICE_ID, null, null),
                 () -> controller.confirmContractorPaymentSource(
                         INVOICE_ID,

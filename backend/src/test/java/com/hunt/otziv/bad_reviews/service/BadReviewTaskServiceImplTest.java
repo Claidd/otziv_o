@@ -1,5 +1,7 @@
 package com.hunt.otziv.bad_reviews.service;
 
+import com.hunt.otziv.worker_activity.account_action.WorkerAccountActionCooldownService;
+
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.b_bots.service.BotService;
 import com.hunt.otziv.bad_reviews.model.BadReviewTask;
@@ -74,6 +76,8 @@ import org.mockito.InOrder;
 
 @ExtendWith(MockitoExtension.class)
 class BadReviewTaskServiceImplTest {
+    @Mock
+    private WorkerAccountActionCooldownService accountActionCooldownService;
 
     @Mock
     private BadReviewTaskRepository badReviewTaskRepository;
@@ -396,6 +400,7 @@ class BadReviewTaskServiceImplTest {
 
         BadReviewTask updated = service.deactivateAndChangeTaskBot(42L, 7L);
 
+        verify(accountActionCooldownService).admitCurrentAction();
         assertFalse(currentBot.isActive());
         assertSame(nextBot, updated.getBot());
         assertSame(nextBot, review.getBot());

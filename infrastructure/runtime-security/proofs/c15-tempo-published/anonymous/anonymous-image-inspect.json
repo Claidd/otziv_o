@@ -1,0 +1,97 @@
+[
+    {
+        "Id": "sha256:2295d8f7966e18233d0ceef5b505a02cd1cdfe671689dee05dcacf39f37c3794",
+        "RepoTags": [],
+        "RepoDigests": [
+            "ghcr.io/claidd/otziv-security@sha256:6e743b30d2eb3c59887e3f04ba56fd20a5e36f15d616c272d7a7ea30076cfa38"
+        ],
+        "Parent": "",
+        "Comment": "buildkit.dockerfile.v0",
+        "Created": "2026-09-10T16:52:13.859367121Z",
+        "DockerVersion": "",
+        "Author": "",
+        "Config": {
+            "Hostname": "",
+            "Domainname": "",
+            "User": "10001:10001",
+            "AttachStdin": false,
+            "AttachStdout": false,
+            "AttachStderr": false,
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt"
+            ],
+            "Cmd": null,
+            "Healthcheck": {
+                "Test": [
+                    "CMD",
+                    "/usr/bin/http-ready",
+                    "http://127.0.0.1:3200/ready"
+                ],
+                "Interval": 10000000000,
+                "Timeout": 3000000000,
+                "StartPeriod": 40000000000,
+                "Retries": 12
+            },
+            "Image": "",
+            "Volumes": null,
+            "WorkingDir": "/",
+            "Entrypoint": [
+                "/tempo"
+            ],
+            "OnBuild": null,
+            "Labels": {
+                "com.otziv.publication.revision": "e5b1de2299e9b3d1c58429c941e8013a5ece5143",
+                "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+                "com.otziv.reviewed-component": "tempo",
+                "com.otziv.security.patch": "Go1.27.1; grpc1.83.2; thrift0.24.0; xcrypto0.55.0; exact required transitive versions; request queue drain patch; loopback HTTP200 readiness",
+                "org.opencontainers.image.revision": "f0f3ed59197bfe9f54f3b0f8015ccca112f9e544",
+                "org.opencontainers.image.source": "https://github.com/grafana/tempo",
+                "org.opencontainers.image.version": "2.10.8-otziv.2"
+            }
+        },
+        "Architecture": "amd64",
+        "Os": "linux",
+        "Size": 247725207,
+        "GraphDriver": {
+            "Data": {
+                "LowerDir": "/var/lib/docker/overlay2/822be4aedc68cb925b3e7454eebccbbc0fdcdc2c0b01602d609e6d5f96dc02dd/diff:/var/lib/docker/overlay2/bb1f7cb20864dabd5e0e5285cdb4ed12f6308fa24f472996e2c0912e4771b78d/diff:/var/lib/docker/overlay2/f00d80cf5722026923fd5151af55812aceb92fcdb0c813b026e3169a6bdc8f25/diff:/var/lib/docker/overlay2/a70d7d57291f1c135679bfd1ac13b505c32957e363e0329a4777a39b1aa2370f/diff:/var/lib/docker/overlay2/4530c1eb36ff599f34a725bf63ef34ab3d13c8d815b3eac29949b59b9be2adde/diff:/var/lib/docker/overlay2/cbc35ccfd1937f9c95162acb356b0df7bd76ed89a48b2d2555d99eb79b5a15f6/diff:/var/lib/docker/overlay2/9dc64285dff8465becee921f0196cc2def70896b1cedccb4d22b4e71565c26be/diff:/var/lib/docker/overlay2/28ff458c3a444f5de5ff5f0bfc84546eb8c148b32bd5f9c85d217f83c703bd80/diff:/var/lib/docker/overlay2/5772ccf7c47bd8b0126adbee603f688283bb09f8417eb674352627166aef9ca8/diff:/var/lib/docker/overlay2/5f792b2a3c2b66ecf1a164656c0b5b3b0e4074ba3f31cf5f8fdc4943b348420e/diff:/var/lib/docker/overlay2/a8fea4b0acf25fd3b246571e42753ede4119acfdedde09825053206e4bb479fa/diff:/var/lib/docker/overlay2/f58ed2e8489b95175f553eb305d46a0fd4a5d867f65cd9ec560f3389162de196/diff:/var/lib/docker/overlay2/9075effb15274ab3ae076c4447d9adb55f66963dce03d5308d22a62588e7c4f1/diff:/var/lib/docker/overlay2/4a215cbcc14f0370c01a4e8f344f0cbd638a2cebccb61d50a611bfd2e65cab45/diff:/var/lib/docker/overlay2/0655a0eede744f1038915efb01c3e506d21b87e8699c5a43bbf94cfa69be15db/diff:/var/lib/docker/overlay2/a28502ca636b03ed49582f7b77881e3247837c26dfaefffc3ac86990bed891b9/diff:/var/lib/docker/overlay2/6aaccdb4acbe0c374c16cc1a804e309b3df251d343492d79781a84b4239741d3/diff:/var/lib/docker/overlay2/8a8be6ee8f1a356171443f9ac65c3ea2874c3c6626be24aa1a55a586a2312d16/diff:/var/lib/docker/overlay2/e2061e695426e1816b787ed018ea5cb13987689833290d99d6ade2e82283506c/diff",
+                "MergedDir": "/var/lib/docker/overlay2/4d713042f27f3de7083a7e4be748d577cf36104838abbc50199f9282d4c4aedb/merged",
+                "UpperDir": "/var/lib/docker/overlay2/4d713042f27f3de7083a7e4be748d577cf36104838abbc50199f9282d4c4aedb/diff",
+                "WorkDir": "/var/lib/docker/overlay2/4d713042f27f3de7083a7e4be748d577cf36104838abbc50199f9282d4c4aedb/work"
+            },
+            "Name": "overlay2"
+        },
+        "RootFS": {
+            "Type": "layers",
+            "Layers": [
+                "sha256:a33ba213ad26a605d904a741f67154f3904c74a43182c872c35f36b10fa005e0",
+                "sha256:8fa10c0194df9b7c054c90dbe482585f768a54428fc90a5b78a0066a123b1bba",
+                "sha256:4840c7c54023c867f19564429c89ddae4e9589c83dce82492183a7e9f7dab1fa",
+                "sha256:114dde0fefebbca13165d0da9c500a66190e497a82a53dcaabc3172d630be1e9",
+                "sha256:4d049f83d9cf21d1f5cc0e11deaf36df02790d0e60c1a3829538fb4b61685368",
+                "sha256:af5aa97ebe6ce1604747ec1e21af7136ded391bcabe4acef882e718a87c86bcc",
+                "sha256:6f1cdceb6a3146f0ccb986521156bef8a422cdbb0863396f7f751f575ba308f4",
+                "sha256:bd3cdfae1d3fdd83a2231d608969b38b82349777c2fff9a7c12d54f8ac5c9b38",
+                "sha256:4cde6b0bb6f50a5f255eef7b2a42162c661cf776b803225dcac9a659e396bb6b",
+                "sha256:1a73b54f556b477f0a8b939d13c504a3b4f4db71f7a09c63afbc10acb3de5849",
+                "sha256:6e7fbcf090d09b73a4aa85f9dce690d0ace73877c150b7c56955487b6e7a822a",
+                "sha256:33b37ab0b0901175c2699d81c10b0c887f0dff944de74763cca00c155904d6fb",
+                "sha256:596aa4748482ec32a76ae870304063db963c2489a1f6c5e3ce25f7f029289798",
+                "sha256:35d2912c7ea8879bab20da64c13d2d5ee082ee764442d5a91dd69c0a968a14d2",
+                "sha256:348188802106e4ac68166057b5a1dabc82c4eadcb89ac284a5a14eae46346fbf",
+                "sha256:f5e1041c62c395a6ad21a611252a63c07af127c56d176fbbb52a369e77bef76a",
+                "sha256:0a05f870951d1056bf73f0d6669a4a651e647944cd08f04a4bc6b3976000aba7",
+                "sha256:5e75a17dd6bb6e5bd65030f87add7d5917b23f0bcd7ec28bc0c1bed60410c98c",
+                "sha256:33f37006055909373701fb99e11f63414b698808cfc064ef6876eaaea3c777e5",
+                "sha256:221b963947d6700c14664ab6a7fa929af36b64b6bee879e3f080b0c3d43ecff4"
+            ]
+        },
+        "Metadata": {
+            "LastTagTime": "0001-01-01T00:00:00Z"
+        }
+    }
+]

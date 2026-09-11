@@ -1,0 +1,22 @@
+{
+  "version": "1.1.0",
+  "generatorVersion": "1.0.0",
+  "pathPrefixes": [
+    "/api/manager/",
+    "/api/common-billing/",
+    "/api/payments/public/",
+    "/api/admin/payments/",
+    "/api/admin/manager-control/",
+    "/api/admin/manager-daily-summary/",
+    "/api/cabinet/payment-profile/",
+    "/api/cabinet/manual-payment-tasks"
+  ],
+  "statusOverrides": {
+    "GET /api/payments/public/tbank-status": 404
+  },
+  "optionalForCompatibility": {
+    "ManagerControlConcreteItemResponse": ["delivery"],
+    "CommonInvoiceDetailsResponse": ["delivery"]
+  },
+  "releaseEvidence": "releases/inventory.json records actual latest published Android/backend artifacts; no minimum supported release is inferred."
+}

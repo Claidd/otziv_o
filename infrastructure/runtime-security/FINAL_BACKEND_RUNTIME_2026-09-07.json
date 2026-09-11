@@ -1,0 +1,118 @@
+{
+  "schema": "otziv-final-runtime-security-review-v1",
+  "completedAt": "2026-09-07T16:10:56.633901+00:00",
+  "scope": "Exact final local backend image, OS and complete nested runtime JAR closure. Does not cover whole Maven test/build-plugin graph or authorize deployment.",
+  "imageIndexId": "sha256:43e9b33cd152c4f567ea199a91777abd7165fd35349b841972407e5e95ce77e1",
+  "imageConfigId": "sha256:75a02f4ed6b0de1ecd83c7b0758eb631fc76718504ec806a4827c32dbb18a8cd",
+  "jarSha256": "baf750d0616b2ebd4c680d9477934d81f85319b11992d18d0d24fa5e03b1339d",
+  "scannerImage": "aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969",
+  "high": 0,
+  "critical": 0,
+  "allFindingCount": 146,
+  "resultClasses": [
+    {
+      "type": "ubuntu",
+      "class": "os-pkgs",
+      "packages": 132,
+      "severityCounts": {
+        "MEDIUM": 111,
+        "LOW": 32
+      }
+    },
+    {
+      "type": "jar",
+      "class": "lang-pkgs",
+      "packages": 342,
+      "severityCounts": {
+        "MEDIUM": 3
+      }
+    }
+  ],
+  "nestedJarFiles": 330,
+  "unrecognizedNestedJarFiles": [],
+  "sbomComponents": 475,
+  "javaRemainingAdvisories": [
+    {
+      "VulnerabilityID": "CVE-2026-45292",
+      "PkgName": "io.opentelemetry:opentelemetry-api",
+      "InstalledVersion": "1.55.0",
+      "FixedVersion": "1.62.0",
+      "Severity": "MEDIUM",
+      "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-45292"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-45292",
+      "PkgName": "io.opentelemetry:opentelemetry-extension-trace-propagators",
+      "InstalledVersion": "1.55.0",
+      "FixedVersion": "1.62.0",
+      "Severity": "MEDIUM",
+      "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-45292"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-71497",
+      "PkgName": "org.jsoup:jsoup",
+      "InstalledVersion": "1.22.2",
+      "FixedVersion": "1.23.1",
+      "Severity": "MEDIUM",
+      "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-71497"
+    }
+  ],
+  "riskAcceptance": null,
+  "assignedRiskOwner": null,
+  "proposedOwnerRole": "Application security and build engineering",
+  "acceptedRiskExpiry": null,
+  "remainingDisposition": "Retain all lower-severity findings for review; no risk acceptance or suppression was used in the Trivy image scan. Full Maven gate remains open.",
+  "evidenceRoot": ".codex-tmp/finalization-20260907/",
+  "evidence": [
+    {
+      "path": "final-backend-image-vulnerabilities.json",
+      "bytes": 1206252,
+      "sha256": "a0a15b5b37a91047e1db12edf4ee46ba206f55ed13e8e57890d6169cf97639f5"
+    },
+    {
+      "path": "final-backend-image-vulnerabilities.triage.json",
+      "bytes": 365,
+      "sha256": "21de89edf27dba951e1b4a0c7be210728cb6b60d3adf7587354dcc51287a4e09"
+    },
+    {
+      "path": "final-backend-image-vulnerabilities.sbom.cdx.json",
+      "bytes": 943582,
+      "sha256": "1e910d59563f1348a9a7ec5873ec1e2ea0ea5af19bc4a3c38c97a18477a0c481"
+    },
+    {
+      "path": "final-backend-image-vulnerabilities.scanner.log",
+      "bytes": 218431,
+      "sha256": "d9f6a642ff5af1c943125b182916d0794b2bff8631e7ac633a0adda5036c34a1"
+    },
+    {
+      "path": "final-backend-image-scan.log",
+      "bytes": 288,
+      "sha256": "da0981504f6e704424b9693c0f3229c97255f50fcd5e44c8b718fbab6be82105"
+    },
+    {
+      "path": "final-backend-jar-scan.log",
+      "bytes": 54,
+      "sha256": "06b8f3c5bc46c9481706e1148896d2cbfa67e145b347f17212aac27e70d28a92"
+    },
+    {
+      "path": "final-runtime-scan-summary.json",
+      "bytes": 1769,
+      "sha256": "019337ef91b428d0bee431616a7523e44836c8fac7d1c84c2fa7bd3d5e550566"
+    },
+    {
+      "path": "final-runtime-image-jar-provenance.json",
+      "bytes": 1683,
+      "sha256": "439fb03ac1e01cacfbb8e0f07af633d6df834090ecbe1890b678f6b3e470ac69"
+    },
+    {
+      "path": "final-runtime-export-descriptors.json",
+      "bytes": 3206,
+      "sha256": "971537e4e0c54b77c7839fa038fbd6889fa45697810619bfabef414a46089422"
+    },
+    {
+      "path": "standalone-java-scan-skipped.json",
+      "bytes": 523,
+      "sha256": "90f0cb44672a3326cf7493a401b581a9464f4cc00a436e217a0e06edd16febb8"
+    }
+  ]
+}

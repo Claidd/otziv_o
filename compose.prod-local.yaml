@@ -7,6 +7,8 @@ x-default-logging: &default-logging
     max-file: "5"
 
 networks:
+  docker_observer_net:
+    internal: true
   internal_net:
     driver: bridge
   external_review_net:
@@ -16,7 +18,7 @@ networks:
 
 volumes:
   mysql_data:
-    name: ${LOCAL_MYSQL_VOLUME:-otziv-prod-local_mysql_data}
+    name: ${LOCAL_MYSQL_VOLUME:-otziv-prod-local_mysql_973_data}
   keycloak_pg_data:
   loki_data:
   tempo_data:
@@ -24,18 +26,44 @@ volumes:
   grafana_data:
   prometheus_data:
   minio_data:
+  versity_data:
 
 services:
+  docker-observer:
+    build:
+      context: ./infrastructure/docker-observer
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 64
+    mem_limit: 128m
+    cpus: 0.5
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - docker_observer_net
+
   mysql:
-    # Keep prod-like checks on the exact MySQL 9.0.0 image used in production.
-    image: mysql@sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383
+    # The local restore script initializes a separate empty, versioned volume.
+    image: ghcr.io/claidd/otziv-security@sha256:3a3caaab4e71b3bfdec9da21c17c00ed10ca237151919aeddac8e5ce4b8b7baa
+    user: "999:999"
     restart: unless-stopped
     logging: *default-logging
+    mem_limit: 1536m
+    cpus: 2
     command:
+      - mysqld
+      - --user=999
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
       - --default-time-zone=+08:00
       - --restrict-fk-on-non-standard-key=OFF
+      - --gtid-mode=OFF
+      - --enforce-gtid-consistency=OFF
+      - --log-bin=mysql-bin
+      - --binlog-format=ROW
+      - --event-scheduler=OFF
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
@@ -45,9 +73,15 @@ services:
     ports:
       - "127.0.0.1:${LOCAL_MYSQL_PORT:-3307}:3306"
     volumes:
-      - mysql_data:/var/lib/mysql
+      - type: volume
+        source: mysql_data
+        target: /var/lib/mysql
+        volume:
+          nocopy: true
       - ./data/mysql_backup:/backup
       - ./data/bots:/var/lib/mysql-files
+    tmpfs:
+      - /var/run/mysqld:rw,noexec,nosuid,size=16m,uid=999,gid=999,mode=0755
     healthcheck:
       test: ["CMD-SHELL", "mysql --protocol=TCP -h 127.0.0.1 -u$${MYSQL_USER} -p$${MYSQL_PASSWORD} $${MYSQL_DATABASE} -e 'SELECT 1' >/dev/null 2>&1"]
       interval: 10s
@@ -58,7 +92,7 @@ services:
       - internal_net
 
   phpmyadmin:
-    image: phpmyadmin@sha256:b68f318c5fd85541795ed8eb4ced28ea6908a89910871783b3e479cc6c6d1e1b
+    image: ghcr.io/claidd/otziv-security@sha256:0d805ad3b104f2a377b6e39f3e30e5707d8c6875a155a40d2c01e4ad608b5835
     profiles: ["db-admin"]
     restart: unless-stopped
     logging: *default-logging
@@ -81,7 +115,7 @@ services:
       - internal_net
 
   keycloak-postgres:
-    image: postgres@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d
+    image: ghcr.io/claidd/otziv-security@sha256:07834abbfd80ed7183afa9096db99afc4d93b99fd51aae726e550d07ade65dbf
     restart: unless-stopped
     logging: *default-logging
     environment:
@@ -100,7 +134,7 @@ services:
       - internal_net
 
   keycloak:
-    image: quay.io/keycloak/keycloak@sha256:4883630ef9db14031cde3e60700c9a9a8eaf1b5c24db1589d6a2d43de38ba2a9
+    image: ${OTZIV_KEYCLOAK_IMAGE:-ghcr.io/claidd/otziv-security@sha256:bd5687843becb0cdb232c2b864cc3786fafb8fc91f30f531fa2db7fc4d1fc59d}
     restart: unless-stopped
     logging: *default-logging
     mem_limit: 1g
@@ -144,20 +178,28 @@ services:
       - internal_net
 
   minio:
-    image: minio/minio:RELEASE.2025-04-22T22-12-26Z@sha256:a1ea29fa28355559ef137d71fc570e508a214ec84ff8083e39bc5428980b015e
+    # Retain the service alias used by local S3 clients; keep old MinIO data separately.
+    image: ghcr.io/claidd/otziv-security@sha256:3bd06e6605d318c852fc56f42d14316b5cd74ed233119d586b078bd4a5e4be21
     restart: unless-stopped
     logging: *default-logging
-    command: server /data --console-address ":9001"
+    mem_limit: 768m
+    cpus: 2
+    pids_limit: 128
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        mkdir -p /var/lib/versity/data /var/lib/versity/versions /var/lib/versity/iam
+        exec /usr/local/bin/versitygw --port :9000 --health /health --iam-dir /var/lib/versity/iam posix --versioning-dir /var/lib/versity/versions /var/lib/versity/data
     environment:
-      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-local}
-      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-local-minio-secret}
+      ROOT_ACCESS_KEY: ${S3_ACCESS_KEY:-local}
+      ROOT_SECRET_KEY: ${S3_SECRET_KEY:-local-minio-secret}
     ports:
       - "127.0.0.1:9001:9000"
-      - "127.0.0.1:9002:9001"
     volumes:
-      - minio_data:/data
+      - versity_data:/var/lib/versity
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9000/minio/health/ready || exit 1"]
+      test: ["CMD", "wget", "-q", "-T", "2", "-O", "/dev/null", "http://127.0.0.1:9000/health"]
       interval: 10s
       timeout: 5s
       retries: 30
@@ -166,9 +208,10 @@ services:
       - internal_net
 
   minio-init:
-    image: minio/mc:RELEASE.2025-04-16T18-13-26Z@sha256:aead63c77f9db9107f1696fb08ecb0faeda23729cde94b0f663edf4fe09728e3
+    image: ghcr.io/claidd/otziv-security@sha256:a0b7303c61b0f3e5b97d126ae34ce6cd53411dab07e721b7ba818706585dcced
     restart: "no"
     logging: *default-logging
+    mem_limit: 384m
     entrypoint:
       - /bin/sh
       - -c
@@ -178,6 +221,7 @@ services:
         mc mb --ignore-existing "local/$$S3_BUCKET"
         mc anonymous set download "local/$$S3_BUCKET"
     environment:
+      GOMEMLIMIT: 256MiB
       S3_ACCESS_KEY: ${S3_ACCESS_KEY:-local}
       S3_SECRET_KEY: ${S3_SECRET_KEY:-local-minio-secret}
       S3_BUCKET: ${S3_BUCKET:-local}
@@ -188,6 +232,7 @@ services:
       - internal_net
 
   app:
+    stop_grace_period: 120s
     image: ${APP_IMAGE:-otziv-app:prod-local}
     build:
       context: ./backend
@@ -227,6 +272,14 @@ services:
       OTZIV_AUTH_LEGACY_MIGRATION_RATE_LIMIT_WINDOW: ${OTZIV_AUTH_LEGACY_MIGRATION_RATE_LIMIT_WINDOW:-PT15M}
       OTZIV_AUTH_LEGACY_MIGRATION_RATE_LIMIT_MAX_BUCKETS: ${OTZIV_AUTH_LEGACY_MIGRATION_RATE_LIMIT_MAX_BUCKETS:-10000}
       OTZIV_SECURITY_LOCAL_STATE_EXEMPT_CLIENT_IDS: ${OTZIV_SECURITY_LOCAL_STATE_EXEMPT_CLIENT_IDS:-otziv-smoke-ai-admin,otziv-smoke-ai-manager,otziv-smoke-ai-marketolog}
+      OTZIV_SECURITY_SESSION_REVOCATION_MODE: ${OTZIV_SECURITY_SESSION_REVOCATION_MODE:-off}
+      OTZIV_SECURITY_SESSION_REVOCATION_DISPATCH_ENABLED: ${OTZIV_SECURITY_SESSION_REVOCATION_DISPATCH_ENABLED:-false}
+      OTZIV_SECURITY_SESSION_REVOCATION_CUTOVER_CONFIRMED: ${OTZIV_SECURITY_SESSION_REVOCATION_CUTOVER_CONFIRMED:-false}
+      OTZIV_SECURITY_ISSUER_GENERATION_REQUIRED: ${OTZIV_SECURITY_ISSUER_GENERATION_REQUIRED:-false}
+      PERFORMERS_NOTIFICATIONS_DISPATCH_ENABLED: ${PERFORMERS_NOTIFICATIONS_DISPATCH_ENABLED:-false}
+      LEAD_COMMANDS_DISPATCH_ENABLED: ${LEAD_COMMANDS_DISPATCH_ENABLED:-false}
+      SERVER_SHUTDOWN: graceful
+      SPRING_LIFECYCLE_TIMEOUT_PER_SHUTDOWN_PHASE: 90s
       OTZIV_CREDENTIAL_ENCRYPTION_REQUIRED: ${OTZIV_CREDENTIAL_ENCRYPTION_REQUIRED:-true}
       OTZIV_CREDENTIAL_ENCRYPTION_ACTIVE_KEY_ID: ${OTZIV_CREDENTIAL_ENCRYPTION_ACTIVE_KEY_ID:-prod-local}
       # Required even for a local production rehearsal; never keep a shared/default encryption key.
@@ -602,6 +655,7 @@ services:
       - messaging_net
 
   external-review-worker:
+    stop_grace_period: 400s
     image: ${EXTERNAL_REVIEW_WORKER_IMAGE:-otziv-external-review-worker:prod-local}
     build:
       context: ./backend/external-review-worker
@@ -612,6 +666,7 @@ services:
     read_only: true
     security_opt:
       - no-new-privileges:true
+      - seccomp=./infrastructure/runtime-security/chromium-seccomp.json
     cap_drop:
       - ALL
     pids_limit: ${EXTERNAL_REVIEW_WORKER_PIDS_LIMIT:-256}
@@ -679,15 +734,14 @@ services:
       - internal_net
 
   dozzle:
-    image: amir20/dozzle@sha256:1c1060cfb5402093c4e0f03f3534d7deaffeb0a6f6dd034e7c5f244603f35fb3
+    image: amir20/dozzle@sha256:27128281cc1f93b0f849f2a5fb4ef9c12a0cce1135ab3b6fede27f9867c8a1c2
     profiles: ["observability"]
     restart: unless-stopped
     logging: *default-logging
     ports:
       - "127.0.0.1:8089:8080"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
+      DOZZLE_REMOTE_HOST: tcp://docker-observer:2375
       DOZZLE_LEVEL: info
     healthcheck:
       test: ["CMD", "/dozzle", "healthcheck"]
@@ -696,10 +750,11 @@ services:
       retries: 3
       start_period: 10s
     networks:
+      - docker_observer_net
       - internal_net
 
   prometheus:
-    image: prom/prometheus@sha256:2659f4c2ebb718e7695cb9b25ffa7d6be64db013daba13e05c875451cf51b0d3
+    image: ghcr.io/claidd/otziv-security@sha256:508c918889067ea070d3da34913a81bd6df8092fb18977ca339e2367e3d77692
     profiles: ["observability"]
     restart: unless-stopped
     logging: *default-logging
@@ -709,6 +764,7 @@ services:
       - --web.enable-lifecycle
     volumes:
       - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infrastructure/prometheus/delivery-rules.yml:/etc/prometheus/delivery-rules.yml:ro
       - prometheus_data:/prometheus
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:9090/-/ready"]
@@ -725,7 +781,7 @@ services:
       - internal_net
 
   loki:
-    image: grafana/loki@sha256:8b5bd7748d0e4da66cd741ac276e485517514af0bea32167e27c0e1a95bcf8aa
+    image: ghcr.io/claidd/otziv-security@sha256:e1638cc4e592cfc301811518526fbdb7cf0573425ec519af76a6a806816215c9
     profiles: ["observability"]
     restart: unless-stopped
     logging: *default-logging
@@ -734,16 +790,17 @@ services:
       - ./infrastructure/loki/loki-config.yaml:/etc/loki/loki-config.yaml:ro
       - loki_data:/loki
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3100/ready"]
+      test: ["CMD", "/usr/bin/http-ready", "http://127.0.0.1:3100/ready"]
       interval: 30s
-      timeout: 5s
+      timeout: 3s
       retries: 5
-      start_period: 30s
+      start_period: 40s
     networks:
       - internal_net
 
   tempo:
-    image: grafana/tempo@sha256:ef4384fce6e8ad22b95b243d8fc165628cda655376fd50e7850536ad89d71d50
+    image: ghcr.io/claidd/otziv-security@sha256:6e743b30d2eb3c59887e3f04ba56fd20a5e36f15d616c272d7a7ea30076cfa38
+    stop_grace_period: 30s
     profiles: ["observability"]
     restart: unless-stopped
     logging: *default-logging
@@ -752,16 +809,16 @@ services:
       - ./infrastructure/tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
       - tempo_data:/var/tempo
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3200/ready"]
+      test: ["CMD", "/usr/bin/http-ready", "http://127.0.0.1:3200/ready"]
       interval: 30s
-      timeout: 5s
+      timeout: 3s
       retries: 5
-      start_period: 30s
+      start_period: 40s
     networks:
       - internal_net
 
   alloy:
-    image: grafana/alloy@sha256:6e00cf7c5a692ff5f24844529416ed017d76fce922f8199004e73d5eca46b6b8
+    image: ghcr.io/claidd/otziv-security@sha256:d006cedf890ade4915a098a5362ce0cda9a3fd7ec2c02320f15e92ccfd669122
     profiles: ["observability"]
     restart: unless-stopped
     logging: *default-logging
@@ -773,7 +830,6 @@ services:
     volumes:
       - ./infrastructure/alloy/config.alloy:/etc/alloy/config.alloy:ro
       - ./data/app-logs:/var/log/otziv-app:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
       - alloy_data:/var/lib/alloy/data
     healthcheck:
       test: ["CMD-SHELL", "alloy validate /etc/alloy/config.alloy >/dev/null"]
@@ -785,10 +841,11 @@ services:
       loki:
         condition: service_healthy
     networks:
+      - docker_observer_net
       - internal_net
 
   grafana:
-    image: grafana/grafana@sha256:7567a7c70a3c1d75aeeedc968d1304174a16651e55a60d1fb132a05e1e63a054
+    image: ghcr.io/claidd/otziv-security@sha256:a9a36b873c7f4d424937a95f6d6c4c1f12f9d5f7556e23a1c81d6b649b570488
     profiles: ["observability"]
     restart: unless-stopped
     logging: *default-logging

@@ -17,7 +17,7 @@ import static org.mockito.ArgumentMatchers.isNull;
 
 import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.c_companies.model.Company;
-import com.hunt.otziv.c_companies.service.CompanyService;
+import com.hunt.otziv.c_companies.api.CompanyRecordOperations;
 import com.hunt.otziv.contractor_payments.service.ContractorCompletionRewardService;
 import com.hunt.otziv.contractor_payments.service.ContractorRewardLedgerService;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceOrderRepository;
@@ -66,7 +66,7 @@ class PaymentReturnOrderRecoveryServiceTest {
     private PaymentCheckRepository paymentCheckRepository;
 
     @Mock
-    private CompanyService companyService;
+    private CompanyRecordOperations companyService;
 
     @Mock
     private ContractorRewardLedgerService contractorRewardLedgerService;

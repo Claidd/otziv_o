@@ -42,7 +42,8 @@ class ApiManagerControlControllerActivityTest {
                 managerControlService,
                 new PerformanceMetrics(new SimpleMeterRegistry()),
                 queueStateService,
-                managerSiteActivityService
+                managerSiteActivityService,
+                mock(com.hunt.otziv.manager_control.service.ManagerClientDeliveryStatus.class)
         );
         principal = () -> "manager";
         authentication = new UsernamePasswordAuthenticationToken("manager", "n/a", List.of());
@@ -53,9 +54,9 @@ class ApiManagerControlControllerActivityTest {
         ManagerControlConcreteItemResponse response = mock(ManagerControlConcreteItemResponse.class);
         when(managerControlService.sendClientMessage(15L, principal, authentication)).thenReturn(response);
 
-        controller.sendClientMessage(15L, principal, authentication);
+        controller.sendClientMessage(15L, principal, authentication, "queued-v1");
 
-        assertActivityType("CLIENT_MESSAGE_SENT");
+        assertActivityType("CLIENT_MESSAGE_QUEUED");
     }
 
     @Test

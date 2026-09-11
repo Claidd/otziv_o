@@ -1,0 +1,74 @@
+{
+  "schema": "otziv-anonymous-download-v1",
+  "component": "loki",
+  "commit": "e5b1de2299e9b3d1c58429c941e8013a5ece5143",
+  "run": "34503945857",
+  "attempt": "1",
+  "manifestSet": "c15-loki",
+  "manifestPath": "infrastructure/runtime-security/reviewed-images-c15-loki.json",
+  "runner": "GitHub Actions 1000003136",
+  "startedAt": "2026-09-10T16:52:59.161Z",
+  "sourcePublicationSha256": "b1c69c5581f0ec49fd805bba89c7cd5a055e7831033e8573ac046102ed175e19",
+  "result": "PASS",
+  "accountCredentialsUsed": false,
+  "dockerCredentialHelpersAvailable": false,
+  "dockerTransport": "unix:///var/run/docker.sock",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:e1638cc4e592cfc301811518526fbdb7cf0573425ec519af76a6a806816215c9",
+  "imageAbsentBeforePull": true,
+  "daemonVersion": "\"28.0.4\"",
+  "attestationEvidence": {
+    "schema": "otziv-registry-evidence-v1",
+    "imageManifestDigest": "sha256:73164a8e0050d69dc7555b75d9931429ab512c59d60594beef3d19af15ede0c2",
+    "predicates": [
+      "https://slsa.dev/provenance/v1",
+      "https://spdx.dev/Document"
+    ],
+    "artifacts": [
+      {
+        "file": "registry-index.json",
+        "digest": "sha256:e1638cc4e592cfc301811518526fbdb7cf0573425ec519af76a6a806816215c9",
+        "size": 857
+      },
+      {
+        "file": "registry-amd64-manifest.json",
+        "digest": "sha256:73164a8e0050d69dc7555b75d9931429ab512c59d60594beef3d19af15ede0c2",
+        "size": 4267
+      },
+      {
+        "file": "registry-amd64-config.json",
+        "digest": "sha256:43ac00547ab6525bcf27088ccbfd1902322fec5afad6a58ddaa73b27cb94e9a6",
+        "size": 6305
+      },
+      {
+        "file": "registry-attestation-0.json",
+        "digest": "sha256:e6f0c4bacbabb5cc3df6770dc1f73954716d3915cda675b323f731f419aae8a0",
+        "size": 1112
+      },
+      {
+        "file": "registry-attestation-0-payload-0.json",
+        "digest": "sha256:82bb397af748f94abe32ee1ffc1b3f03a6d46956ad4aa45c885f5d9d4f37d5de",
+        "size": 1220336
+      },
+      {
+        "file": "registry-attestation-0-payload-1.json",
+        "digest": "sha256:5888aa884dcd847dd9b5b1ab1d12070bcc39e3e497dccae7268c442f911c0141",
+        "size": 38261
+      }
+    ],
+    "sourceBinding": "LOCAL_GIT_METADATA_CHECKED_AGAINST_CLEAN_CHECKOUT_NOT_INDEPENDENT_SOURCE_AUTHENTICATION"
+  },
+  "pullExitCode": 0,
+  "imageId": "sha256:43ac00547ab6525bcf27088ccbfd1902322fec5afad6a58ddaa73b27cb94e9a6",
+  "platform": "linux/amd64",
+  "labels": {
+    "com.otziv.publication.revision": "e5b1de2299e9b3d1c58429c941e8013a5ece5143",
+    "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+    "com.otziv.reviewed-component": "loki",
+    "com.otziv.security.patch": "Go1.27.1; google.golang.org/grpc1.83.2; loopback HTTP200 readiness helper",
+    "org.opencontainers.image.revision": "7a40404f32b3e6464c9cfc6cc7dd75a40f3931da",
+    "org.opencontainers.image.source": "https://github.com/grafana/loki",
+    "org.opencontainers.image.version": "3.7.7-otziv.1"
+  },
+  "publicDownloadReadiness": "VERIFIED_ANONYMOUS_DIGEST_PULL",
+  "finishedAt": "2026-09-10T16:53:05.020Z"
+}

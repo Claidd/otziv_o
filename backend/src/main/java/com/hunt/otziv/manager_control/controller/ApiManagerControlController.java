@@ -1,6 +1,7 @@
 package com.hunt.otziv.manager_control.controller;
 
 import com.hunt.otziv.config.metrics.PerformanceMetrics;
+import com.hunt.otziv.config.api.DeliveryResponseCompatibility;
 import com.hunt.otziv.client_chat_control.dto.ClientChatReconciliationResult;
 import com.hunt.otziv.manager_control.dto.ManagerControlCloseRequest;
 import com.hunt.otziv.manager_control.dto.ManagerControlCloseResponse;
@@ -23,6 +24,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -37,6 +39,15 @@ public class ApiManagerControlController {
     private final PerformanceMetrics performanceMetrics;
     private final ManagerQueueStateService queueStateService;
     private final ManagerSiteActivityService managerSiteActivityService;
+    private final com.hunt.otziv.manager_control.service.ManagerClientDeliveryStatus deliveryStatus;
+
+    @GetMapping("/concrete-items/{concreteItemId}/delivery-operations/{operationId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    public com.hunt.otziv.client_messages.api.DeliveryOperation deliveryOperation(
+            @PathVariable long concreteItemId, @PathVariable String operationId,
+            Principal principal, Authentication authentication) {
+        return deliveryStatus.get(concreteItemId, operationId, principal, authentication);
+    }
 
     @GetMapping("/queue-state/me")
     @PreAuthorize("hasRole('MANAGER')")
@@ -112,14 +123,16 @@ public class ApiManagerControlController {
     public ManagerControlConcreteItemResponse sendClientMessage(
             @PathVariable Long concreteItemId,
             Principal principal,
-            Authentication authentication
+            Authentication authentication,
+            @RequestHeader(name = DeliveryResponseCompatibility.HEADER, required = false) String deliveryProtocol
     ) {
         return performanceMetrics.recordEndpoint(
                 "admin.manager-control.concrete-item-send-client-message",
                 () -> {
                     ManagerControlConcreteItemResponse response =
                             managerControlService.sendClientMessage(concreteItemId, principal, authentication);
-                    recordManagerMessageActivity(principal, "CLIENT_MESSAGE_SENT");
+                    recordManagerMessageActivity(principal, "CLIENT_MESSAGE_QUEUED");
+                    DeliveryResponseCompatibility.requireUnderstoodOutcome(deliveryProtocol, response.delivery());
                     return response;
                 }
         );
@@ -131,14 +144,16 @@ public class ApiManagerControlController {
             @PathVariable Long concreteItemId,
             @RequestBody(required = false) ManagerControlClientReplyRequest request,
             Principal principal,
-            Authentication authentication
+            Authentication authentication,
+            @RequestHeader(name = DeliveryResponseCompatibility.HEADER, required = false) String deliveryProtocol
     ) {
         return performanceMetrics.recordEndpoint(
                 "admin.manager-control.concrete-item-reply",
                 () -> {
                     ManagerControlConcreteItemResponse response =
                             managerControlService.replyToClientMessage(concreteItemId, request, principal, authentication);
-                    recordManagerMessageActivity(principal, "CLIENT_MESSAGE_SENT");
+                    recordManagerMessageActivity(principal, "CLIENT_MESSAGE_QUEUED");
+                    DeliveryResponseCompatibility.requireUnderstoodOutcome(deliveryProtocol, response.delivery());
                     return response;
                 }
         );

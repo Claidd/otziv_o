@@ -1,3 +1,6 @@
+import { inject } from '@angular/core';
+import { ManagerArchiveApi } from '../core/manager-archive.api';
+import { ManagerOrdersApi } from '../core/manager-orders.api';
 import { Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
@@ -9,7 +12,7 @@ import {
 import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import {
-  ApiService,
+  type ApiService,
   ArchiveOrderDetailsPayload,
   ArchiveOrderListItem,
   ArchiveOrderMode,
@@ -982,6 +985,8 @@ const EMPTY_ARCHIVE_PAGE: Page<ArchiveOrderListItem> = {
   `]
 })
 export class ManagerArchivePage implements OnInit, OnDestroy {
+  private readonly managerArchiveApi = inject(ManagerArchiveApi);
+  private readonly managerOrdersApi = inject(ManagerOrdersApi);
   private searchTimer: ReturnType<typeof setTimeout> | null = null;
   private loadingDetailsOrderId: number | null = null;
 
@@ -1018,9 +1023,7 @@ export class ManagerArchivePage implements OnInit, OnDestroy {
     }))
   );
 
-  constructor(
-    private readonly api: ApiService,
-    private readonly auth: AuthService,
+  constructor(private readonly auth: AuthService,
     private readonly router: Router
   ) {}
 
@@ -1164,7 +1167,7 @@ export class ManagerArchivePage implements OnInit, OnDestroy {
     this.loadingDetailsOrderId = order.id;
 
     try {
-      const details = await firstValueFrom(this.api.getManagerArchiveOrder(order.id));
+      const details = await firstValueFrom(this.managerArchiveApi.getManagerArchiveOrder(order.id));
       if (this.loadingDetailsOrderId !== order.id) {
         return;
       }
@@ -1216,7 +1219,7 @@ export class ManagerArchivePage implements OnInit, OnDestroy {
     this.detailsError.set(null);
 
     try {
-      const result = await firstValueFrom(this.api.restoreManagerArchiveOrder(order.id, this.restoreTargetStatus()));
+      const result = await firstValueFrom(this.managerArchiveApi.restoreManagerArchiveOrder(order.id, this.restoreTargetStatus()));
       this.restoreResult.set(result);
       await this.load();
     } catch (error) {
@@ -1243,7 +1246,7 @@ export class ManagerArchivePage implements OnInit, OnDestroy {
     this.error.set(null);
 
     try {
-      await firstValueFrom(this.api.updateManagerOrderStatus(order.id, action.status));
+      await firstValueFrom(this.managerOrdersApi.updateManagerOrderStatus(order.id, action.status));
       await this.load();
     } catch (error) {
       this.error.set(this.apiErrorMessage(error, 'Не удалось изменить статус архивного заказа.'));
@@ -1412,7 +1415,7 @@ export class ManagerArchivePage implements OnInit, OnDestroy {
     this.error.set(null);
 
     try {
-      const page = await firstValueFrom(this.api.getManagerArchiveOrders({
+      const page = await firstValueFrom(this.managerArchiveApi.getManagerArchiveOrders({
         keyword: this.appliedKeyword(),
         mode: this.mode(),
         pageNumber: this.pageNumber(),

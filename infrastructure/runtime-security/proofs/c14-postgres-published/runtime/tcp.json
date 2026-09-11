@@ -1,0 +1,23 @@
+{
+  "schema": "otziv-c14-postgres-tcp-v1",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:07834abbfd80ed7183afa9096db99afc4d93b99fd51aae726e550d07ade65dbf",
+  "startedAt": "2026-09-08T15:13:27.422Z",
+  "resources": {
+    "databaseCpu": 1,
+    "databaseMemoryMiB": 512,
+    "clientMemoryMiB": 128,
+    "network": "internal bridge",
+    "hostPorts": 0
+  },
+  "checks": [
+    "final_pid1_postgres_accepts_authenticated_external_tcp",
+    "official_container_listen_addresses_default_preserved",
+    "external_tcp_rejects_incorrect_password",
+    "external_tcp_transaction_commits",
+    "external_tcp_restart_preserves_committed_row"
+  ],
+  "image": "sha256:07834abbfd80ed7183afa9096db99afc4d93b99fd51aae726e550d07ade65dbf",
+  "result": "PASS",
+  "cleanup": "PASS",
+  "finishedAt": "2026-09-08T15:13:42.539Z"
+}

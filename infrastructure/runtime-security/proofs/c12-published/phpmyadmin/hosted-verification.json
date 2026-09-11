@@ -1,0 +1,293 @@
+{
+  "schema": "otziv-c12-pma-hosted-activation-source-v1",
+  "result": "HOSTED_PAIR_AND_PUBLISHED_RUNTIME_VERIFIED",
+  "publicationSource": {
+    "repository": "Claidd/otziv_o",
+    "branch": "codex/architecture-remediation-20260907",
+    "head": "0f715d08cf4b56ea7788594d5b9aa9295f9d1761",
+    "run": "34206243823",
+    "attempt": "1",
+    "manifestSet": "c12-phpmyadmin",
+    "manifestSha256": "c649c20cef9417905bff3f3bc58f2163edf925a53971eb01ecb6d90d729034b4"
+  },
+  "reference": "ghcr.io/claidd/otziv-security@sha256:0d805ad3b104f2a377b6e39f3e30e5707d8c6875a155a40d2c01e4ad608b5835",
+  "imageConfigId": "sha256:71667e317195ee7292187a1e87dfe5ed52b5f513b016d42466fb580c8d4a284d",
+  "publicationRunUrl": "https://github.com/Claidd/otziv_o/actions/runs/34206243823",
+  "jobs": [
+    {
+      "id": 101996282308,
+      "name": "Inventory reviewed publication candidates",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-09-08T08:48:32Z",
+      "completed_at": "2026-09-08T08:48:48Z",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34206243823/job/101996282308"
+    },
+    {
+      "id": 101997228124,
+      "name": "Publish reviewed candidate (phpmyadmin)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-09-08T08:52:04Z",
+      "completed_at": "2026-09-08T08:53:15Z",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34206243823/job/101997228124"
+    },
+    {
+      "id": 101998556219,
+      "name": "Prove anonymous candidate download (phpmyadmin)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-09-08T08:53:32Z",
+      "completed_at": "2026-09-08T08:53:50Z",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34206243823/job/101998556219"
+    }
+  ],
+  "artifactArchiveDigests": [
+    {
+      "id": 10048132929,
+      "name": "reviewed-publication-phpmyadmin",
+      "bytes": 155852,
+      "sha256": "b16967cb35bdbe477968051b3dbfc5d02093c6fbd3b542d6f5c845d8e461739c",
+      "apiDigestVerified": true
+    },
+    {
+      "id": 10048155578,
+      "name": "anonymous-download-phpmyadmin",
+      "bytes": 114394,
+      "sha256": "371c0026d56ced527911c08974675085d860d8fd64a2734b8ac6351c46e58b42",
+      "apiDigestVerified": true
+    }
+  ],
+  "fullOfflineVerification": {
+    "schema": "otziv-offline-publication-verification-v1",
+    "result": "PASS",
+    "commit": "0f715d08cf4b56ea7788594d5b9aa9295f9d1761",
+    "run": "34206243823",
+    "attempt": "1",
+    "component": "phpmyadmin",
+    "manifestSha256": "c649c20cef9417905bff3f3bc58f2163edf925a53971eb01ecb6d90d729034b4",
+    "manifestSet": "c12-phpmyadmin",
+    "manifestPath": "infrastructure/runtime-security/reviewed-images-c12-phpmyadmin.json",
+    "reference": "ghcr.io/claidd/otziv-security@sha256:0d805ad3b104f2a377b6e39f3e30e5707d8c6875a155a40d2c01e4ad608b5835",
+    "imageId": "sha256:71667e317195ee7292187a1e87dfe5ed52b5f513b016d42466fb580c8d4a284d",
+    "publicationSha256": "01ceaa8945af92c33db9710b4940ec82e4e9c97ef2c546c7813dd8d29e3c1945",
+    "rawScanSha256": "2f1d9b952d7deefeb08a4bfcd96f5990856a155b3a9fb9dd7d23cc0a22fb498c",
+    "registryArtifacts": 6,
+    "rawCounts": {
+      "schema": "otziv-vulnerability-scan-v1",
+      "artifactCount": 3,
+      "high": 0,
+      "critical": 0,
+      "unfixedHighOrCritical": 0,
+      "blockingFixedHighOrCritical": 0
+    },
+    "effectiveCounts": {
+      "schema": "otziv-vulnerability-scan-v1",
+      "artifactCount": 3,
+      "high": 0,
+      "critical": 0,
+      "unfixedHighOrCritical": 0,
+      "blockingFixedHighOrCritical": 0,
+      "adjudicatedFixedHighOrCritical": 0,
+      "effectiveBlockingFixedHighOrCritical": 0,
+      "result": "PASS"
+    },
+    "unresolvedRiskReview": "NONE",
+    "adjudicationBoundary": "NO_ADJUDICATED_FINDINGS",
+    "anonymous": {
+      "result": "PASS",
+      "verifiedByThisCommand": true,
+      "rawReceiptSha256": "3068d918ee89970c18a30c1ff0f89408d80d3e1434fe00f977400081825a28be"
+    },
+    "activationEligibility": "SEPARATE_ACTIVATION_REVIEW_REQUIRED",
+    "productionActivated": false,
+    "networkCalls": 0,
+    "sourceBinding": "LOCAL_GIT_METADATA_CHECKED_AGAINST_CLEAN_CHECKOUT_NOT_INDEPENDENT_SOURCE_AUTHENTICATION",
+    "note": "Offline retained artifact verification; no new pull, scan, binary extraction or activation."
+  },
+  "sbom": {
+    "sha256": "7d9e0a6e892683a0dc875361e05069b5e3349f1884d9db9569c973c8c5c52085",
+    "components": 159,
+    "rawPackagePurlsCovered": 157,
+    "registryPredicates": [
+      {
+        "file": "registry-attestation-0-payload-0.json",
+        "sha256": "f93cac5e48d0a4fa6c0855052b853b08a9f1666f459dc7e7a29aef69f1391146",
+        "predicateType": "https://spdx.dev/Document",
+        "spdxPackages": 159
+      },
+      {
+        "file": "registry-attestation-0-payload-1.json",
+        "sha256": "3b782a7cfb733847a898b5ee04d0d7583781dc7e226c5e0aa4b3e6f75865120f",
+        "predicateType": "https://slsa.dev/provenance/v1",
+        "spdxPackages": 0
+      }
+    ]
+  },
+  "rawSeverityCounts": {
+    "MEDIUM": 2
+  },
+  "retainedFiles": [
+    {
+      "path": "infrastructure/runtime-security/proofs/c12-published/phpmyadmin/publication/build-metadata.json",
+      "sha256": "63385ef948b46bdbe2d0e7a3ca91a40b54171ed8e86514737491e9cb6e75180c",
+      "bytes": 12433
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c12-published/phpmyadmin/publication/publication.json",
+      "sha256": "01ceaa8945af92c33db9710b4940ec82e4e9c97ef2c546c7813dd8d29e3c1945",
+      "bytes": 3394
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c12-published/phpmyadmin/publication/registry-amd64-config.json",
+      "sha256": "71667e317195ee7292187a1e87dfe5ed52b5f513b016d42466fb580c8d4a284d",
+      "bytes": 8295
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c12-published/phpmyadmin/publication/registry-amd64-manifest.json",
+      "sha256": "e57a215c4dbf6b5cb7ea8e9489d583efcc899b4469b69cb3777f99195a6861f1",
+      "bytes": 4261
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c12-published/phpmyadmin/publication/registry-attestation-0-payload-0.json",
+      "sha256": "f93cac5e48d0a4fa6c0855052b853b08a9f1666f459dc7e7a29aef69f1391146",
+      "bytes": 893601
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c12-published/phpmyadmin/publication/registry-attestation-0-payload-1.json",
+      "sha256": "3b782a7cfb733847a898b5ee04d0d7583781dc7e226c5e0aa4b3e6f75865120f",
+      "bytes": 75172
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c12-published/phpmyadmin/publication/registry-attestation-0.json",
+      "sha256": "efb44356c2e980aad19269ea2a4d5f4701fae24eae9cbb4d562fc7e0be347b50",
+      "bytes": 1111
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c12-published/phpmyadmin/publication/registry-index.json",
+      "sha256": "0d805ad3b104f2a377b6e39f3e30e5707d8c6875a155a40d2c01e4ad608b5835",
+      "bytes": 857
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c12-published/phpmyadmin/publication/vulnerabilities.adjudications.json",
+      "sha256": "23cea6529c30d92c1acb69dfcb46db90bb56bf82488446ee1f9e88badc01a0e2",
+      "bytes": 838
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c12-published/phpmyadmin/publication/vulnerabilities.json",
+      "sha256": "2f1d9b952d7deefeb08a4bfcd96f5990856a155b3a9fb9dd7d23cc0a22fb498c",
+      "bytes": 201888
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c12-published/phpmyadmin/publication/vulnerabilities.sbom.cdx.json",
+      "sha256": "7d9e0a6e892683a0dc875361e05069b5e3349f1884d9db9569c973c8c5c52085",
+      "bytes": 227245
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c12-published/phpmyadmin/publication/vulnerabilities.scanner.log",
+      "sha256": "b109d3645b9825ef6aeba4beb0b8b67814c0a252c5d7ea0fc27405d109cd2fc8",
+      "bytes": 5620
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c12-published/phpmyadmin/publication/vulnerabilities.triage.json",
+      "sha256": "d2c485a17d97aae4a0b04277af987408aa61203db34d22bfbf40bf285c9a69ff",
+      "bytes": 364
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c12-published/phpmyadmin/anonymous/anonymous-download.json",
+      "sha256": "3068d918ee89970c18a30c1ff0f89408d80d3e1434fe00f977400081825a28be",
+      "bytes": 2968
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c12-published/phpmyadmin/anonymous/anonymous-image-inspect.json",
+      "sha256": "6f54a7a07a250bbff2750b36ae7778ed41dc90afabf1b407c6852d5ff2b6f351",
+      "bytes": 6763
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c12-published/phpmyadmin/anonymous/anonymous-pull.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c12-published/phpmyadmin/anonymous/anonymous-pull.stdout.log",
+      "sha256": "404a3f9cd578f1c66291596b32ced7821c73d2c776c96e1afe6c36f4bfe188c1",
+      "bytes": 3208
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c12-published/phpmyadmin/anonymous/before-image-ids.txt",
+      "sha256": "d9420b778f91e0dafe7a2f6fb29a7d70b4de6b4da2d281e84cb296f2fc9ef4a2",
+      "bytes": 432
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c12-published/phpmyadmin/anonymous/before-reference-inspect.txt",
+      "sha256": "a5e1e7e95369fee1b071721e1704938e09509a1e21558690d04513169793a699",
+      "bytes": 148
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c12-published/phpmyadmin/anonymous/docker-client-isolation.json",
+      "sha256": "43059db9428713e407d8c2a7b353bcbc8716be2df54dc5e7a1d3798b413f8271",
+      "bytes": 128
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c12-published/phpmyadmin/anonymous/registry-amd64-config.json",
+      "sha256": "71667e317195ee7292187a1e87dfe5ed52b5f513b016d42466fb580c8d4a284d",
+      "bytes": 8295
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c12-published/phpmyadmin/anonymous/registry-amd64-manifest.json",
+      "sha256": "e57a215c4dbf6b5cb7ea8e9489d583efcc899b4469b69cb3777f99195a6861f1",
+      "bytes": 4261
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c12-published/phpmyadmin/anonymous/registry-attestation-0-payload-0.json",
+      "sha256": "f93cac5e48d0a4fa6c0855052b853b08a9f1666f459dc7e7a29aef69f1391146",
+      "bytes": 893601
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c12-published/phpmyadmin/anonymous/registry-attestation-0-payload-1.json",
+      "sha256": "3b782a7cfb733847a898b5ee04d0d7583781dc7e226c5e0aa4b3e6f75865120f",
+      "bytes": 75172
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c12-published/phpmyadmin/anonymous/registry-attestation-0.json",
+      "sha256": "efb44356c2e980aad19269ea2a4d5f4701fae24eae9cbb4d562fc7e0be347b50",
+      "bytes": 1111
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c12-published/phpmyadmin/anonymous/registry-index.json",
+      "sha256": "0d805ad3b104f2a377b6e39f3e30e5707d8c6875a155a40d2c01e4ad608b5835",
+      "bytes": 857
+    }
+  ],
+  "composeChanges": [
+    {
+      "path": "compose.yaml",
+      "service": "phpmyadmin",
+      "before": "phpmyadmin@sha256:b68f318c5fd85541795ed8eb4ced28ea6908a89910871783b3e479cc6c6d1e1b",
+      "after": "ghcr.io/claidd/otziv-security@sha256:0d805ad3b104f2a377b6e39f3e30e5707d8c6875a155a40d2c01e4ad608b5835"
+    },
+    {
+      "path": "compose.prod-local.yaml",
+      "service": "phpmyadmin",
+      "before": "phpmyadmin@sha256:b68f318c5fd85541795ed8eb4ced28ea6908a89910871783b3e479cc6c6d1e1b",
+      "after": "ghcr.io/claidd/otziv-security@sha256:0d805ad3b104f2a377b6e39f3e30e5707d8c6875a155a40d2c01e4ad608b5835"
+    },
+    {
+      "path": "docker-compose.yaml",
+      "service": "phpmyadmin",
+      "before": "phpmyadmin@sha256:b68f318c5fd85541795ed8eb4ced28ea6908a89910871783b3e479cc6c6d1e1b",
+      "after": "ghcr.io/claidd/otziv-security@sha256:0d805ad3b104f2a377b6e39f3e30e5707d8c6875a155a40d2c01e4ad608b5835"
+    }
+  ],
+  "localRuntimeReviewRequired": false,
+  "productionDeployed": false,
+  "mysqlPostgresDefaultsChanged": false,
+  "collectionEvidence": {
+    "sha256": "4b9835f16f5b4a925aba819c74bdac9c922b082a366c10534901c8da6531a3f5",
+    "availability": "Retained private transport receipt; full public image evidence accompanies this record."
+  },
+  "runtimeValidation": {
+    "path": "infrastructure/runtime-security/proofs/c12-published/phpmyadmin/runtime-validation.json",
+    "sha256": "f728ca08cac678008a8ae90544709e745cd239633fdefe8050c34d5866092435"
+  }
+}

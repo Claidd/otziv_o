@@ -62,6 +62,46 @@ $allowList = @(
     }
 )
 
+# SQL004 review of the frozen offline maintenance implementation only:
+# kind is validated before selecting literal offer_id/assignment_id and their
+# literal tables; predicates come only from internal literals/schema booleans.
+# Cursor, upper bound and limit remain JDBC parameters. No caller SQL fragment
+# reaches either expression. Any source change requires a fresh review: the
+# digest is UTF-8 of all scanned lines joined with LF (without a final LF).
+# In staged mode both the lines AND this digest come from git's index.
+$reviewedSql004 = @{
+    Path = 'backend/src/main/java/com/hunt/otziv/performers/maintenance/PerformerLegacyMaintenance.java'
+    SourceSha256 = '616900f0e6f31a0f5dc900e4cfa03d57f46f89545a24ff8cbb1760d56070e399'
+    Lines = @(
+        'var rows=jdbc.query("SELECT "+pk+",("+predicate+") FROM "+table+" WHERE "+pk+">? AND "+pk+"<=? ORDER BY "+pk+" LIMIT ?",',
+        'var ids=jdbc.queryForList("SELECT "+pk+" FROM "+table+" WHERE "+pk+">? AND "+pk+"<=? ORDER BY "+pk+" LIMIT ?",Long.class,after,upper,limit);'
+    )
+}
+
+# A08 archive journal ordering: the repository accepts Sort.Direction and maps
+# it locally to the two literal strings ASC/DESC; request text never reaches
+# SQL syntax. filterWhereClause() contains fixed predicates and binds values.
+# Pin the full source as well as this exact SQL004 line: changing the enum
+# mapping or another predicate requires fresh review, including staged mode.
+$reviewedArchiveOrder = @{
+    Path = 'backend/src/main/java/com/hunt/otziv/payments/repository/PaymentLinkArchiveRepository.java'
+    SourceSha256 = '26b2d85fef4b837c40046b6aad3ad0e797dfb13a4ed445a6cf6b7cd9315ecc60'
+    Lines = @(
+        '""" + filterWhereClause() + " ORDER BY apl.created_at " + order + ", apl.id " + order + """'
+    )
+}
+
+function Get-ScannedSourceSha256 {
+    param([string[]]$Lines)
+    $digest = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes(($Lines -join "`n"))
+        return [BitConverter]::ToString($digest.ComputeHash($bytes)).Replace('-', '').ToLowerInvariant()
+    } finally {
+        $digest.Dispose()
+    }
+}
+
 function Get-RelativePath {
     param([string]$Path)
     $root = $repoRoot.ProviderPath.TrimEnd("\", "/")
@@ -104,9 +144,23 @@ function Get-ScanTargets {
 function Test-AllowListed {
     param(
         [string]$RelativePath,
-        [string]$Line
+        [string]$Line,
+        [string]$RuleId,
+        [string]$SourceSha256
     )
 
+    if ($RuleId -ceq 'SQL004' -and
+            $RelativePath -ceq $reviewedSql004.Path -and
+            $SourceSha256 -ceq $reviewedSql004.SourceSha256 -and
+            $reviewedSql004.Lines -ccontains $Line.Trim()) {
+        return $true
+    }
+    if ($RuleId -ceq 'SQL004' -and
+            $RelativePath -ceq $reviewedArchiveOrder.Path -and
+            $SourceSha256 -ceq $reviewedArchiveOrder.SourceSha256 -and
+            $reviewedArchiveOrder.Lines -ccontains $Line.Trim()) {
+        return $true
+    }
     foreach ($allow in $allowList) {
         if ($RelativePath -eq $allow.Path -and $Line -match $allow.Pattern) {
             return $true
@@ -121,6 +175,9 @@ $targets = @(Get-ScanTargets)
 foreach ($target in $targets) {
     $relativePath = $target.RelativePath
     $lines = $target.Lines
+    $sourceSha256 = if ($relativePath -ceq $reviewedSql004.Path -or $relativePath -ceq $reviewedArchiveOrder.Path) {
+        Get-ScannedSourceSha256 -Lines $lines
+    } else { '' }
 
     for ($index = 0; $index -lt $lines.Count; $index++) {
         $line = $lines[$index]
@@ -129,7 +186,7 @@ foreach ($target in $targets) {
         }
 
         foreach ($rule in $rules) {
-            if ($line -match $rule.Pattern -and -not (Test-AllowListed -RelativePath $relativePath -Line $line)) {
+            if ($line -match $rule.Pattern -and -not (Test-AllowListed -RelativePath $relativePath -Line $line -RuleId $rule.Id -SourceSha256 $sourceSha256)) {
                 $findings.Add([pscustomobject]@{
                     Rule = $rule.Id
                     Path = $relativePath

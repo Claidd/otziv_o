@@ -12,7 +12,6 @@ import com.hunt.otziv.u_users.service.ManagerService;
 import com.hunt.otziv.u_users.service.MarketologService;
 import com.hunt.otziv.u_users.service.OperatorService;
 import com.hunt.otziv.u_users.service.UserService;
-import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
 import com.hunt.otziv.z_zp.service.ZpService;
 import java.time.LocalDate;
 import java.util.List;
@@ -52,7 +51,6 @@ class LeadServiceImplOwnerReadScopeTest {
     @Mock private TelephoneService telephoneService;
     @Mock private LeadMapper leadMapper;
     @Mock private LeadEventPublisher leadEventPublisher;
-    @Mock private WhatsAppService whatsAppService;
     @Mock private GamificationEventService gamificationEventService;
     @Mock private AppSettingService appSettingService;
     @Mock private LeadAccessService leadAccessService;
@@ -73,10 +71,11 @@ class LeadServiceImplOwnerReadScopeTest {
                 telephoneService,
                 leadMapper,
                 leadEventPublisher,
-                whatsAppService,
                 gamificationEventService,
                 appSettingService,
-                leadAccessService
+                leadAccessService,
+                org.mockito.Mockito.mock(LeadWorkNotificationService.class),
+                org.mockito.Mockito.mock(com.hunt.otziv.l_lead.repository.LeadInboundCommandRepository.class)
         );
         owner = new UsernamePasswordAuthenticationToken(
                 "owner-a",

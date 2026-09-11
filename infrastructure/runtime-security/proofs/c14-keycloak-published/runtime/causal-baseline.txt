@@ -1,0 +1,4 @@
+PASS baseline_order_master_application
+PASS baseline_order_application_master
+PASS baseline_order_application_master_without_cache
+PASS boundary unit checks complete; actual database integration is separate

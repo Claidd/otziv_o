@@ -1,0 +1,45 @@
+{
+  "schema": "otziv-runtime-triage-v1",
+  "scanCreatedAt": "2026-09-10T17:02:48.865136628Z",
+  "imageId": "sha256:8084b7ee093d159c974d88ec56aad2a72f4bb939f974176759ff9233d9b58dfd",
+  "reportSHA256": "1f44717cabdad957dc27390e229dcf0d6fa6122cd184a9d64c018393c9a73197",
+  "policy": "Context only. No finding is excluded or accepted by this file.",
+  "findings": [
+    {
+      "package": "github.com/docker/docker",
+      "path": null,
+      "installed": "v28.5.2+incompatible",
+      "cve": "CVE-2026-41567",
+      "severity": "HIGH",
+      "vendorStatus": "affected",
+      "fixedVersion": null,
+      "title": "docker: Moby/Docker Engine: Arbitrary Code Execution via malicious container image and compressed archive upload",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2026-41567",
+      "sourceType": "gobinary",
+      "sourceClass": "lang-pkgs",
+      "context": "APPLICATION_LIBRARY_REVIEW_REQUIRED",
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null
+    },
+    {
+      "package": "github.com/docker/docker",
+      "path": null,
+      "installed": "v28.5.2+incompatible",
+      "cve": "CVE-2026-42306",
+      "severity": "HIGH",
+      "vendorStatus": "affected",
+      "fixedVersion": null,
+      "title": "github.com/docker/docker: github.com/moby/moby: Moby container framework: Host file overwrite via race condition in docker cp mount setup",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2026-42306",
+      "sourceType": "gobinary",
+      "sourceClass": "lang-pkgs",
+      "context": "APPLICATION_LIBRARY_REVIEW_REQUIRED",
+      "disposition": "OPEN_VENDOR_UNFIXED_REVIEW",
+      "reachability": "NOT_PROVEN",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null
+    }
+  ]
+}

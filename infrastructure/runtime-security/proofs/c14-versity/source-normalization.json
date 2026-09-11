@@ -1,0 +1,47 @@
+{
+  "schema": "otziv-source-line-ending-normalization-v1",
+  "files": [
+    {
+      "path": "infrastructure/runtime-security/builds/versity-c14/.gitattributes",
+      "beforeSha256": "ba3d4e0a92188305f7cb5ff36e521d8e5df81a0cf5bc64028d9c86834e5096c0",
+      "afterSha256": "a79691a93b46e49ce460c26ef22afcc03d6eca1e63bf2edbc20e96159510f6c9",
+      "changed": true,
+      "change": "CRLF-to-LF only"
+    },
+    {
+      "path": "infrastructure/runtime-security/builds/versity-c14/Dockerfile",
+      "beforeSha256": "8ef716e30df31f52e0d72796dd88302383b16bcee191e06286d95444a9066ed9",
+      "afterSha256": "f54047c1df5d6e5622593d4f85260c91b8e14037419d215e03e411034bc7d103",
+      "changed": true,
+      "change": "CRLF-to-LF only"
+    },
+    {
+      "path": "infrastructure/runtime-security/builds/versity-c14/candidate.test.mjs",
+      "beforeSha256": "7743d4e67d0c7e4270f42e1e1844c779a1f0698972d6e070b0dffc784ea32bcd",
+      "afterSha256": "7743d4e67d0c7e4270f42e1e1844c779a1f0698972d6e070b0dffc784ea32bcd",
+      "changed": false,
+      "change": "CRLF-to-LF only"
+    },
+    {
+      "path": "infrastructure/runtime-security/builds/versity-c14/README.md",
+      "beforeSha256": "3789f5bb276ce6151ffd793cd27aa3cb55ac293c012b67eacd4341937addff37",
+      "afterSha256": "3789f5bb276ce6151ffd793cd27aa3cb55ac293c012b67eacd4341937addff37",
+      "changed": false,
+      "change": "CRLF-to-LF only"
+    },
+    {
+      "path": "infrastructure/runtime-security/builds/versity-c14/run-compatibility.mjs",
+      "beforeSha256": "6f7ad058ba6d2bc1cf921fffec41e51d5660621095214cf3b501ccda4d8463b1",
+      "afterSha256": "b90224fabb5be690650a23c01875db3b90373567299ae2ec3a56cf86ac49fc55",
+      "changed": true,
+      "change": "CRLF-to-LF only"
+    },
+    {
+      "path": "infrastructure/runtime-security/builds/versity-c14/runtime-apk.lock",
+      "beforeSha256": "fab83a927426ea6b80f9ca6e82e93f181542521fe50fce00337bf1baf669277c",
+      "afterSha256": "fab83a927426ea6b80f9ca6e82e93f181542521fe50fce00337bf1baf669277c",
+      "changed": false,
+      "change": "CRLF-to-LF only"
+    }
+  ]
+}

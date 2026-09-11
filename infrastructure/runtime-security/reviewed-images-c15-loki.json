@@ -1,0 +1,36 @@
+{
+  "schema": "otziv-reviewed-images-v1",
+  "repository": "ghcr.io/claidd/otziv-security",
+  "publicationSet": "c15-loki",
+  "baselineManifestSha256": "d48bdb7d6d869cde5d6f1a7b089491765e3eeaf46e0b0b6bb51b7719b38d3ef2",
+  "images": [
+    {
+      "component": "loki",
+      "platform": "linux/amd64",
+      "sourceBeforeRef": "grafana/loki@sha256:8b5bd7748d0e4da66cd741ac276e485517514af0bea32167e27c0e1a95bcf8aa",
+      "defaultReferencesBefore": [
+        {
+          "path": "compose.yaml",
+          "line": 317,
+          "service": "loki"
+        },
+        {
+          "path": "compose.prod-local.yaml",
+          "line": 756,
+          "service": "loki"
+        },
+        {
+          "path": "docker-compose.yaml",
+          "line": 912,
+          "service": "loki"
+        }
+      ],
+      "buildArgs": {},
+      "candidateBaseRef": "grafana/loki@sha256:550d599ec4efacd8ebc0a5871766855057cba2bd0c669c0711d898c00d6d901f",
+      "context": "infrastructure/runtime-security",
+      "dockerfile": "infrastructure/runtime-security/builds/Loki.Dockerfile",
+      "dockerfileSha256": "84531137a1d3cf18a84f4376999106bb7e67449f3e1a9bf2f997d79e6035bcdc",
+      "version": "3.7.7-otziv.1-grpc1.83.2"
+    }
+  ]
+}

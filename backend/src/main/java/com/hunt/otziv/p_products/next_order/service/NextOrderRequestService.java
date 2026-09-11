@@ -2,7 +2,7 @@ package com.hunt.otziv.p_products.next_order.service;
 
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
-import com.hunt.otziv.c_companies.service.CompanyService;
+import com.hunt.otziv.c_companies.api.CompanyRecordOperations;
 import com.hunt.otziv.c_companies.service.CompanyStatusService;
 import com.hunt.otziv.p_products.next_order.dto.NextOrderRequestFailedEvent;
 import com.hunt.otziv.p_products.next_order.dto.NextOrderRequestedEvent;
@@ -49,7 +49,7 @@ public class NextOrderRequestService {
 
     private final NextOrderRequestRepository requestRepository;
     private final OrderRepository orderRepository;
-    private final CompanyService companyService;
+    private final CompanyRecordOperations companyService;
     private final CompanyStatusService companyStatusService;
     private final ApplicationEventPublisher eventPublisher;
 

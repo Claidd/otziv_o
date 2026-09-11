@@ -1,3 +1,5 @@
+import { inject } from '@angular/core';
+import { ManagerManualPaymentsApi } from '../core/manager-manual-payments.api';
 import { Injectable } from '@angular/core';
 import { ModalController, ToastController } from '@ionic/angular/standalone';
 import { firstValueFrom } from 'rxjs';
@@ -14,14 +16,13 @@ import {
 
 @Injectable({ providedIn: 'root' })
 export class MobileManualCardPaymentFlowService {
-  constructor(
-    private readonly api: ApiService,
-    private readonly modalController: ModalController,
+  private readonly managerManualPaymentsApi = inject(ManagerManualPaymentsApi);
+  constructor(private readonly modalController: ModalController,
     private readonly toastController: ToastController
   ) {}
 
   async confirm(orderId: number, defaultReason = ''): Promise<MobileManualCardPaymentOutcome | null> {
-    const context = await firstValueFrom(this.api.getManagerManualCardPaymentContext(orderId));
+    const context = await firstValueFrom(this.managerManualPaymentsApi.getManagerManualCardPaymentContext(orderId));
     if (!mobileManualCardPaymentSelectionRecipient(context)) {
       throw new Error(context.recipientSelectionFrozen
         ? 'Ранее выбранный получатель отсутствует в списке доступных получателей. Повтор оплаты заблокирован.'

@@ -38,7 +38,120 @@ public class KeycloakAdminClient {
     private static final String PASSWORD_CREDENTIAL_TYPE = "password";
 
     private final KeycloakAdminProperties properties;
-    private final RestClient restClient = RestClient.create();
+    private final RestClient restClient = boundedClient();
+
+    private static RestClient boundedClient() {
+        var http = java.net.http.HttpClient.newBuilder()
+                .connectTimeout(java.time.Duration.ofSeconds(3)).build();
+        var factory = new org.springframework.http.client.JdkClientHttpRequestFactory(http);
+        factory.setReadTimeout(java.time.Duration.ofSeconds(5));
+        return RestClient.builder().requestFactory(factory).build();
+    }
+
+    /** No successful-authority cache: logout must affect the next request. */
+    public Map<String, Object> introspectAccessToken(String token) {
+        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+        form.add("token", token);
+        form.add("token_type_hint", "access_token");
+        form.add("client_id", properties.getClientId());
+        form.add("client_secret", properties.getClientSecret());
+        return restClient.post().uri(realmUri("protocol", "openid-connect", "token", "introspect"))
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED).body(form).retrieve()
+                .body(new org.springframework.core.ParameterizedTypeReference<Map<String, Object>>() {});
+    }
+
+    public List<SessionView> userSessions(String subject) {
+        SessionView[] result = restClient.get().uri(adminUri("users", subject, "sessions"))
+                .headers(this::setBearerAuth).retrieve().body(SessionView[].class);
+        return result == null ? List.of() : List.of(result);
+    }
+
+    public List<SessionView> offlineSessions(String subject, String clientUuid) {
+        SessionView[] result = restClient.get().uri(adminUri("users", subject, "offline-sessions", clientUuid))
+                .headers(this::setBearerAuth).retrieve().body(SessionView[].class);
+        return result == null ? List.of() : List.of(result);
+    }
+
+    public List<CredentialView> credentials(String subject) {
+        CredentialView[] result = restClient.get().uri(adminUri("users", subject, "credentials"))
+                .headers(this::setBearerAuth).retrieve().body(CredentialView[].class);
+        return result == null ? List.of() : List.of(result);
+    }
+
+    /** Includes grants created by offline_access even when interactive consent is disabled. */
+    public List<String> offlineClientUuids(String subject) {
+        List<Map<String, Object>> consents = userConsents(subject);
+        Set<String> ids = new LinkedHashSet<>();
+        for (Map<String, Object> consent : consents) {
+            if (consent.get("additionalGrants") instanceof List<?> grants) {
+                for (Object raw : grants) {
+                    if (raw instanceof Map<?, ?> grant && "Offline Token".equals(grant.get("key"))
+                            && grant.get("client") instanceof String id && !id.isBlank()) ids.add(id);
+                }
+            }
+        }
+        return List.copyOf(ids);
+    }
+
+    public Optional<String> offlineClientUuid(String subject, String clientId) {
+        for (var consent : userConsents(subject)) {
+            if (!clientId.equals(consent.get("clientId"))) continue;
+            if (consent.get("additionalGrants") instanceof List<?> grants) {
+                for (Object raw : grants) {
+                    if (raw instanceof Map<?, ?> grant && "Offline Token".equals(grant.get("key"))
+                            && grant.get("client") instanceof String id && !id.isBlank()) return Optional.of(id);
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    private List<Map<String,Object>> userConsents(String subject) {
+        var result = restClient.get().uri(adminUri("users", subject, "consents"))
+                .headers(this::setBearerAuth).retrieve()
+                .body(new org.springframework.core.ParameterizedTypeReference<List<Map<String,Object>>>() {});
+        if (result == null) throw new IllegalStateException("Keycloak consent lookup unavailable");
+        return result;
+    }
+
+    /** Idempotent exact-session deletion cannot invalidate a subsequent fresh login. */
+    public void deleteSession(String sessionId, boolean offline) {
+        URI uri = UriComponentsBuilder.fromUri(adminUri("sessions", sessionId))
+                .queryParam("isOffline", offline).build().toUri();
+        try {
+            restClient.delete().uri(uri).headers(this::setBearerAuth).retrieve().toBodilessEntity();
+        } catch (RestClientResponseException error) {
+            if (error.getStatusCode().value() != 404) throw error;
+        }
+    }
+
+    public Set<String> currentRealmRoleNames(String subject) {
+        KeycloakRoleRepresentation[] result = restClient.get()
+                .uri(adminUri("users", subject, "role-mappings", "realm", "composite"))
+                .headers(this::setBearerAuth).retrieve().body(KeycloakRoleRepresentation[].class);
+        if (result == null) throw new IllegalStateException("Keycloak roles lookup unavailable");
+        return Arrays.stream(result).map(KeycloakRoleRepresentation::name)
+                .collect(java.util.stream.Collectors.toSet());
+    }
+
+    public String currentSecurityGeneration(String subject) {
+        SecurityGenerationView result = restClient.get()
+                .uri(realmUri("otziv-security", "generation", subject))
+                .headers(this::setBearerAuth).retrieve().body(SecurityGenerationView.class);
+        if (result == null || result.protocolVersion() != 1 || !subject.equals(result.subject())
+                || result.generation() == null || !result.generation().matches("v1:[0-9]{1,19}:[0-9]{1,19}")) {
+            throw new IllegalStateException("Issuer security generation evidence is unavailable");
+        }
+        return result.generation();
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    public record SecurityGenerationView(int protocolVersion, String subject, String generation) {}
+
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    public record SessionView(String id, String userId, long start, Map<String, String> clients) {}
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    public record CredentialView(String id, String type, Long createdDate) {}
 
     private String adminToken;
     private Instant adminTokenExpiresAt = Instant.EPOCH;

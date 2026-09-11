@@ -67,6 +67,18 @@ public class CommonInvoice {
     @Column(nullable = false, length = 180)
     private String title;
 
+    @Column(name = "payment_message_operation_id", length = 128)
+    private String paymentMessageOperationId;
+
+    @Column(name = "payment_message_operation_kind", length = 32)
+    private String paymentMessageOperationKind;
+
+    @Column(name = "payment_message_confirmed", nullable = false)
+    private boolean paymentMessageConfirmed;
+
+    @Column(name = "payment_message_channel", length = 32)
+    private String paymentMessageChannel;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 32)
     private CommonInvoiceStatus status = CommonInvoiceStatus.COLLECTING;

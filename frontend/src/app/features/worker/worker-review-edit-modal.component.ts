@@ -38,6 +38,8 @@ export class WorkerReviewEditModalComponent {
   @Input() deleting = false;
   @Input() uploading = false;
   @Input() newAccountLoading = false;
+  @Input() accountActionCooldownLocked = false;
+  @Input() accountActionCooldownTitle = '';
   @Input() busy = false;
   @Input() error: string | null = null;
   @Input() productOptions: ProductOption[] = [];

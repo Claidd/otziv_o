@@ -1,0 +1,112 @@
+{
+  "schema": "otziv-c14-postgres-same-db-scan-v1",
+  "owner": "otziv-c14-postgres-scan-38202d95-23c1-467e-93d5-8e26b3032f1f",
+  "startedAt": "2026-09-08T14:14:01.696Z",
+  "scannerImage": "aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969",
+  "policy": "All severities and packages retained; no ignores, no risk acceptance. Source coverage is asserted independently of findings.",
+  "images": {
+    "source": {
+      "reference": "postgres@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d",
+      "localId": "sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d",
+      "configId": "sha256:f9cab62aaf3471220dcbdeea5a686fca1c7f9e99621db14fdaebceaffe7a8f24",
+      "postgresVersion": "postgres (PostgreSQL) 17.10 (Debian 17.10-1.pgdg13+1)",
+      "reportSha256": "3ac691fd57d18787382eb2dfaf5488f6fb0615cc64b00031ff91eb8b05a17d3b",
+      "summary": {
+        "schema": "otziv-vulnerability-scan-v1",
+        "artifactCount": 2,
+        "high": 159,
+        "critical": 14,
+        "unfixedHighOrCritical": 87,
+        "blockingFixedHighOrCritical": 86
+      },
+      "postgresPackage": "postgresql-17",
+      "postgresFindingIds": [
+        "CVE-2026-14662",
+        "CVE-2026-14664",
+        "CVE-2026-14668",
+        "CVE-2026-14669",
+        "CVE-2026-14670",
+        "CVE-2026-14671",
+        "CVE-2026-14677",
+        "CVE-2026-14679",
+        "CVE-2026-14680",
+        "CVE-2026-15741",
+        "CVE-2026-15742",
+        "CVE-2026-16239",
+        "CVE-2026-18408",
+        "CVE-2026-19385",
+        "CVE-2026-6464",
+        "CVE-2026-6471",
+        "CVE-2026-6473",
+        "CVE-2026-14663",
+        "CVE-2026-14666",
+        "CVE-2026-14672",
+        "CVE-2026-14678",
+        "CVE-2026-14681",
+        "CVE-2026-18024",
+        "CVE-2026-6470",
+        "CVE-2026-14673",
+        "CVE-2026-16241",
+        "CVE-2026-6469"
+      ]
+    },
+    "candidate": {
+      "reference": "otziv-c14-postgres:source-runtime-v6",
+      "localId": "sha256:ebf646d4a2ed114de7138af57159508770872d10b35ce56f3f5a9193c87f719e",
+      "configId": "sha256:22ce4f32257efd2935cd254d2bc197d71029c8c64e1f1d7c9c3e6204732c75e3",
+      "postgresVersion": "postgres (PostgreSQL) 17.11",
+      "reportSha256": "705e93d99630d4e135df71cbc40045dea7892ed87038edeab93419e8027adf82",
+      "summary": {
+        "schema": "otziv-vulnerability-scan-v1",
+        "artifactCount": 2,
+        "high": 26,
+        "critical": 1,
+        "unfixedHighOrCritical": 10,
+        "blockingFixedHighOrCritical": 17
+      },
+      "postgresPackage": "otziv-postgresql-17",
+      "postgresFindingIds": [
+        "CVE-2026-14662",
+        "CVE-2026-14664",
+        "CVE-2026-14668",
+        "CVE-2026-14669",
+        "CVE-2026-14670",
+        "CVE-2026-14671",
+        "CVE-2026-14677",
+        "CVE-2026-14679",
+        "CVE-2026-14680",
+        "CVE-2026-15741",
+        "CVE-2026-15742",
+        "CVE-2026-16239",
+        "CVE-2026-18408",
+        "CVE-2026-19385",
+        "CVE-2026-6464",
+        "CVE-2026-6471",
+        "CVE-2026-6473",
+        "CVE-2026-14663",
+        "CVE-2026-14666",
+        "CVE-2026-14672",
+        "CVE-2026-14678",
+        "CVE-2026-14681",
+        "CVE-2026-18024",
+        "CVE-2026-6470",
+        "CVE-2026-14673",
+        "CVE-2026-16241",
+        "CVE-2026-6469"
+      ]
+    }
+  },
+  "database": {
+    "metadata": {
+      "Version": 2,
+      "NextUpdate": "2026-09-09T07:08:01.235696486Z",
+      "UpdatedAt": "2026-09-08T07:08:01.235696926Z",
+      "DownloadedAt": "2026-09-08T14:14:58.347049437Z"
+    },
+    "sha256": "852bdc39628443d9415c2df73424d36800e7a11421a826cde575c9b464dc9f88"
+  },
+  "coverageResult": "PASS",
+  "releaseResult": "REQUIRES_EXACT_FINDING_ADJUDICATION",
+  "cleanup": "PASS",
+  "finishedAt": "2026-09-08T14:17:22.779Z"
+}

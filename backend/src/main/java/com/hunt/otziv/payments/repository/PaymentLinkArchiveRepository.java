@@ -420,6 +420,14 @@ public class PaymentLinkArchiveRepository {
             boolean excludePrivilegedTargets,
             String publicBaseUrl
     ) {
+        return findArchivedPage(page, size, statusFilter, search, searchId, from, to, excludePrivilegedTargets,
+                publicBaseUrl, org.springframework.data.domain.Sort.Direction.DESC);
+    }
+
+    public List<AdminPaymentLinkResponse> findArchivedPage(
+            int page, int size, String statusFilter, String search, Long searchId, LocalDate from, LocalDate to,
+            boolean excludePrivilegedTargets, String publicBaseUrl, org.springframework.data.domain.Sort.Direction direction
+    ) {
         MapSqlParameterSource params = filterParams(
                 statusFilter,
                 search,
@@ -430,12 +438,14 @@ public class PaymentLinkArchiveRepository {
         )
                 .addValue("limit", Math.max(1, size))
                 .addValue("offset", Math.max(0, page) * Math.max(1, size));
+        // Only a closed enum determines SQL syntax; no request text is concatenated.
+        String order = direction == org.springframework.data.domain.Sort.Direction.ASC ? "ASC" : "DESC";
         return jdbc.query("""
                 SELECT apl.*, profile.provider AS payment_profile_provider
                 FROM archive_payment_links apl
                 LEFT JOIN payment_profiles profile ON profile.id = apl.payment_profile_id
-                """ + filterWhereClause() + """
-                ORDER BY apl.created_at DESC, apl.id DESC
+                """ + filterWhereClause() + " ORDER BY apl.created_at " + order + ", apl.id " + order + """
+
                 LIMIT :limit OFFSET :offset
                 """, params, (rs, rowNum) -> archivedResponse(rs, publicBaseUrl));
     }

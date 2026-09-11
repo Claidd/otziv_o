@@ -5,7 +5,7 @@ param(
     [string]$SshKey = "",
     [string]$EnvFile = ".env.prod-local",
     [string]$ComposeFile = "compose.prod-local.yaml",
-    [string]$LocalMysqlVolume = "otziv-prod-local_mysql_data",
+    [string]$LocalMysqlVolume = "otziv-prod-local_mysql_973_data",
     [string]$DumpPath = "",
     [switch]$SkipDownload,
     [switch]$KeepRemoteDump,
@@ -26,6 +26,8 @@ Restore the production MySQL database into the local prod-like stack.
 
 The script restores into a dedicated local Docker volume by default and validates
 Flyway checksums before the local backend is started.
+PowerShell 7 is required. The default volume is otziv-prod-local_mysql_973_data;
+legacy MySQL 9.0 volumes are preserved. Gzip decompression runs on the host.
 
 Example:
   .\infrastructure\scripts\local\restore-prod-db-local.ps1 -VpsHost 95.213.248.152 -VpsUser hunt -VpsPort 22022
@@ -142,6 +144,218 @@ function Test-GzipArchive {
     } catch {
         throw "Invalid or truncated gzip archive '$Path': $($_.Exception.Message)"
     } finally {
+        $inputStream.Dispose()
+    }
+}
+
+function Get-LocalRestoreDockerJson {
+    param([Parameter(Mandatory)][string[]]$Arguments)
+
+    # Compose config contains credentials. Neither its output nor Docker errors
+    # belong in a restore log, including when parsing or validation fails.
+    $output = @(& docker @Arguments 2>$null)
+    if ($LASTEXITCODE -ne 0) { throw 'Local restore metadata inspection failed.' }
+    try { return (($output -join "`n") | ConvertFrom-Json -AsHashtable) }
+    catch { throw 'Local restore metadata is not valid JSON.' }
+}
+
+function Assert-LocalRestoreContract {
+    param(
+        [Parameter(Mandatory)][string[]]$ComposeArguments,
+        [Parameter(Mandatory)][string]$RepoRoot,
+        [Parameter(Mandatory)][string]$ComposePath,
+        [Parameter(Mandatory)][string]$VolumeName
+    )
+
+    if ($PSVersionTable.PSVersion.Major -lt 7) { throw 'Local restore requires PowerShell 7 for binary process input.' }
+    $expectedCompose = [IO.Path]::GetFullPath((Join-Path $RepoRoot 'compose.prod-local.yaml'))
+    if ([IO.Path]::GetFullPath($ComposePath) -ne $expectedCompose) { throw 'Restore is restricted to this workspace compose.prod-local.yaml.' }
+    if ($VolumeName -cnotmatch '^otziv-prod-local_mysql_973_[a-z0-9][a-z0-9_-]*$') {
+        throw 'Restore requires a dedicated otziv-prod-local_mysql_973_ volume; legacy MySQL volumes are never reused or removed.'
+    }
+    $image = 'ghcr.io/claidd/otziv-security@sha256:3a3caaab4e71b3bfdec9da21c17c00ed10ca237151919aeddac8e5ce4b8b7baa'
+    $configuration = Get-LocalRestoreDockerJson -Arguments ($ComposeArguments + @('config', '--format', 'json'))
+    $mysql = $configuration.services.mysql
+    $volume = $configuration.volumes.mysql_data
+    $expectedCommand = @('mysqld', '--user=999', '--character-set-server=utf8mb4', '--collation-server=utf8mb4_unicode_ci', '--default-time-zone=+08:00', '--restrict-fk-on-non-standard-key=OFF', '--gtid-mode=OFF', '--enforce-gtid-consistency=OFF', '--log-bin=mysql-bin', '--binlog-format=ROW', '--event-scheduler=OFF')
+    if ($configuration.name -cne 'otziv-prod-local' -or $mysql.image -cne $image -or $mysql.user -cne '999:999' -or
+        $null -ne $mysql['entrypoint'] -or (($mysql.command -join "`n") -cne ($expectedCommand -join "`n"))) {
+        throw 'Local MySQL project, image or native UID 999 launch contract differs from the reviewed 9.7.3 configuration.'
+    }
+    if ($volume.name -cne $VolumeName -or $volume['external'] -eq $true -or $volume['driver_opts'] -or
+        ($volume['driver'] -and $volume['driver'] -cne 'local')) { throw 'Local MySQL volume declaration is not a dedicated local named volume.' }
+    $dataMounts = @($mysql.volumes | Where-Object { $_.target -eq '/var/lib/mysql' })
+    if ($dataMounts.Count -ne 1 -or $dataMounts[0].type -cne 'volume' -or $dataMounts[0].source -cne 'mysql_data' -or
+        $dataMounts[0]['read_only'] -eq $true -or $dataMounts[0]['volume']['nocopy'] -ne $true -or $dataMounts[0]['volume']['subpath']) {
+        throw 'Local MySQL data must use the dedicated volume with nocopy and no subpath.'
+    }
+    if (@($mysql.tmpfs).Count -ne 1 -or $mysql.tmpfs[0] -cne '/var/run/mysqld:rw,noexec,nosuid,size=16m,uid=999,gid=999,mode=0755' -or
+        @($mysql.volumes | Where-Object { $_.target -notin @('/var/lib/mysql', '/backup', '/var/lib/mysql-files') }).Count -ne 0) {
+        throw 'Local MySQL runtime mounts differ from the reviewed native configuration.'
+    }
+    foreach ($binding in @(@{ Target = '/backup'; Directory = 'data/mysql_backup' }, @{ Target = '/var/lib/mysql-files'; Directory = 'data/bots' })) {
+        $mounts = @($mysql.volumes | Where-Object { $_.target -ceq $binding.Target })
+        if ($mounts.Count -ne 1 -or $mounts[0].type -cne 'bind' -or
+            [IO.Path]::GetFullPath($mounts[0].source) -ne [IO.Path]::GetFullPath((Join-Path $RepoRoot $binding.Directory)) -or
+            ($binding.Target -ceq '/var/lib/mysql-files' -and $mounts[0]['read_only'] -eq $true)) {
+            throw 'Local MySQL auxiliary binds must resolve to this workspace backup and writable bots directories.'
+        }
+    }
+    $imageMetadata = @(Get-LocalRestoreDockerJson -Arguments @('image', 'inspect', $image))[0]
+    if ($imageMetadata.Id -notin @('sha256:3a3caaab4e71b3bfdec9da21c17c00ed10ca237151919aeddac8e5ce4b8b7baa', 'sha256:80ee3b50147a329addbaf754abc4dce86dc06636624680d780351e2320a11070') -or
+        $imageMetadata.Os -cne 'linux' -or $imageMetadata.Architecture -cne 'amd64' -or
+        ($imageMetadata.Config.Entrypoint -join "`n") -cne '/entrypoint.sh' -or $image -notin $imageMetadata.RepoDigests) {
+        throw 'The reviewed local MySQL image is not present with the expected immutable identity.'
+    }
+    $containers = @(& docker ps -aq --no-trunc --filter 'label=com.docker.compose.project=otziv-prod-local' 2>$null)
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect local Compose project ownership.' }
+    $managedContainers = @(& docker ps -aq --no-trunc --filter 'label=com.docker.compose.project=otziv-prod-local' --filter 'label=com.docker.compose.config-hash' 2>$null)
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect local Compose managed containers.' }
+    $composeContainers = @(& docker @($ComposeArguments + @('ps', '--all', '--quiet')) 2>$null)
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect the local Compose operation inventory.' }
+    foreach ($inventory in @(@{ Ids = $containers }, @{ Ids = $managedContainers }, @{ Ids = $composeContainers })) {
+        if (@($inventory.Ids | Where-Object { $_ -cnotmatch '^[a-f0-9]{64}$' }).Count -gt 0 -or
+            @($inventory.Ids | Sort-Object -Unique).Count -ne $inventory.Ids.Count) {
+            throw 'Local Compose ownership inventory contains invalid or duplicate identities.'
+        }
+    }
+    if ((($managedContainers | Sort-Object) -join "`n") -cne (($composeContainers | Sort-Object) -join "`n") -or
+        @($managedContainers | Where-Object { $_ -notin $containers }).Count -gt 0) {
+        throw 'Compose and Docker disagree about the local managed container inventory.'
+    }
+    $unmanagedProjectContainers = $false
+    foreach ($containerId in $containers) {
+        $container = @(Get-LocalRestoreDockerJson -Arguments @('inspect', "$containerId"))[0]
+        $labels = $container.Config.Labels
+        if ($container.Id -cne $containerId -or $labels['com.docker.compose.project'] -cne 'otziv-prod-local') {
+            throw 'Local Compose container identity changed during ownership inspection.'
+        }
+        if ($containerId -notin $managedContainers) {
+            # Compose 5.5.0 create/down/restart select project + config-hash,
+            # but its start phase also selects project + oneoff=False. Only
+            # containers without BOTH labels are outside all reviewed paths.
+            # Never ignore a malformed/empty label or a foreign managed replica.
+            if ($labels.ContainsKey('com.docker.compose.config-hash') -or $labels.ContainsKey('com.docker.compose.oneoff')) {
+                throw 'An unverified local project container can be selected by Compose start or reconciliation.'
+            }
+            $unmanagedProjectContainers = $true
+            continue
+        }
+        if (-not $labels['com.docker.compose.project.working_dir'] -or -not $labels['com.docker.compose.project.config_files'] -or
+            [IO.Path]::GetFullPath($labels['com.docker.compose.project.working_dir']) -ne [IO.Path]::GetFullPath($RepoRoot) -or
+            [IO.Path]::GetFullPath($labels['com.docker.compose.project.config_files']) -ne $expectedCompose) {
+            throw 'A local Compose project container belongs to another workspace/configuration; refusing to stop it.'
+        }
+    }
+    if ($unmanagedProjectContainers) {
+        $composeVersion = @(& docker compose version --short 2>$null)
+        if ($LASTEXITCODE -ne 0 -or ($composeVersion -join "`n") -cne '5.5.0') {
+            throw 'Project-only containers require the independently verified Docker Compose 5.5.0 selectors.'
+        }
+    }
+    $existing = @(& docker volume ls -q --filter "name=^${VolumeName}$" 2>$null)
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect local MySQL volumes.' }
+    if ($existing.Count -gt 0) {
+        $metadata = @(Get-LocalRestoreDockerJson -Arguments @('volume', 'inspect', $VolumeName))[0]
+        if ($metadata.Name -cne $VolumeName -or $metadata.Driver -cne 'local' -or ($metadata.Options -and $metadata.Options.Count -gt 0) -or
+            $metadata.Labels['com.docker.compose.project'] -cne 'otziv-prod-local' -or
+            $metadata.Labels['com.docker.compose.volume'] -cne 'mysql_data' -or
+            $metadata.Labels['com.otziv.mysql.local-engine'] -cne '9.7.3') {
+            throw 'Existing local MySQL volume lacks verified 9.7.3 restore ownership; it will not be deleted.'
+        }
+        $users = @(& docker ps -aq --filter "volume=$VolumeName" 2>$null)
+        if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect local MySQL volume users.' }
+        foreach ($containerId in $users) {
+            $container = @(Get-LocalRestoreDockerJson -Arguments @('inspect', "$containerId"))[0]
+            if ($container.Config.Labels['com.docker.compose.project'] -cne 'otziv-prod-local' -or
+                $container.Config.Labels['com.docker.compose.service'] -cne 'mysql' -or $container.Config.Image -cne $image) {
+                throw 'A foreign or legacy MySQL container uses the selected volume; refusing to remove it.'
+            }
+        }
+    }
+    return @{ Image = $image; VolumeExists = ($existing.Count -gt 0) }
+}
+
+function Initialize-EmptyLocalMySqlVolume {
+    param([Parameter(Mandatory)][string]$VolumeName, [Parameter(Mandatory)][string]$Image)
+
+    if ($VolumeName -cnotmatch '^otziv-prod-local_mysql_973_[a-z0-9][a-z0-9_-]*$' -or
+        $Image -cne 'ghcr.io/claidd/otziv-security@sha256:3a3caaab4e71b3bfdec9da21c17c00ed10ca237151919aeddac8e5ce4b8b7baa') {
+        throw 'Empty-volume initialization requires the reviewed local 9.7.3 image and versioned volume.'
+    }
+    $existing = @(& docker volume ls -q --filter "name=^${VolumeName}$" 2>$null)
+    if ($LASTEXITCODE -ne 0 -or $existing.Count -gt 0) { throw 'Empty-volume initialization requires an absent volume.' }
+    $owner = [Guid]::NewGuid().ToString('N')
+    Invoke-External -FilePath 'docker' -Arguments @('volume', 'create', '--label', 'com.docker.compose.project=otziv-prod-local', '--label', 'com.docker.compose.volume=mysql_data', '--label', 'com.otziv.mysql.local-engine=9.7.3', '--label', "com.otziv.mysql.restore-owner=$owner", $VolumeName)
+    $metadata = @(Get-LocalRestoreDockerJson -Arguments @('volume', 'inspect', $VolumeName))[0]
+    if ($metadata.Labels['com.otziv.mysql.restore-owner'] -cne $owner -or $metadata.Driver -cne 'local' -or ($metadata.Options -and $metadata.Options.Count -gt 0)) {
+        throw 'New local MySQL volume ownership changed before initialization.'
+    }
+    # Only the root of a new, empty named volume is changed. The fixed command
+    # fails before chown if any datadir content appeared; never recursive chown.
+    Invoke-External -FilePath 'docker' -Arguments @('run', '--rm', '--pull=never', '--network', 'none', '--user', '0:0', '--mount', "type=volume,source=$VolumeName,target=/data,volume-nocopy", '--entrypoint', 'sh', $Image, '-c', 'test -z "$(ls -A /data)" && chown 999:999 /data && test "$(stat -c %u:%g /data)" = 999:999')
+}
+
+function Import-LocalMySqlGzipStream {
+    param(
+        [Parameter(Mandatory)][string[]]$ComposeArguments,
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][ValidatePattern('^[a-f0-9]{64}$')][string]$ExpectedSha256,
+        [ValidateRange(1, 3600)][int]$TimeoutSeconds = 900
+    )
+
+    $inputStream = [IO.File]::Open($Path, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+    $process = $null
+    $processStarted = $false
+    try {
+        $hash = [Security.Cryptography.SHA256]::Create()
+        try { $actualHash = [Convert]::ToHexString($hash.ComputeHash($inputStream)).ToLowerInvariant() }
+        finally { $hash.Dispose() }
+        if ($actualHash -cne $ExpectedSha256) { throw 'The verified local dump changed before import.' }
+        $inputStream.Position = 0
+        # Validate all gzip bytes before starting mysql. Hold the same read-only
+        # file handle until import ends and send bytes without text re-encoding.
+        $verification = [IO.Compression.GZipStream]::new($inputStream, [IO.Compression.CompressionMode]::Decompress, $true)
+        try {
+            $buffer = [byte[]]::new(1MB)
+            [long]$verifiedBytes = 0
+            while (($count = $verification.Read($buffer, 0, $buffer.Length)) -gt 0) { $verifiedBytes += $count }
+            if ($verifiedBytes -eq 0) { throw 'The local gzip dump is empty.' }
+        } finally { $verification.Dispose() }
+        $inputStream.Position = 0
+        $info = [Diagnostics.ProcessStartInfo]::new()
+        $info.FileName = 'docker'
+        $info.UseShellExecute = $false
+        $info.CreateNoWindow = $true
+        $info.RedirectStandardInput = $true
+        $info.RedirectStandardOutput = $true
+        $info.RedirectStandardError = $true
+        $arguments = $ComposeArguments + @('exec', '-T', 'mysql', 'sh', '-c', 'MYSQL_PWD="$MYSQL_PASSWORD" exec mysql -u"$MYSQL_USER" "$MYSQL_DATABASE"')
+        foreach ($argument in $arguments) { [void]$info.ArgumentList.Add($argument) }
+        $process = [Diagnostics.Process]::new()
+        $process.StartInfo = $info
+        $processStarted = $process.Start()
+        if (-not $processStarted) { throw 'Cannot start local MySQL import.' }
+        # Drain and discard both streams: failed SQL can contain production data.
+        $stdout = $process.StandardOutput.BaseStream.CopyToAsync([IO.Stream]::Null)
+        $stderr = $process.StandardError.BaseStream.CopyToAsync([IO.Stream]::Null)
+        $timer = [Diagnostics.Stopwatch]::StartNew()
+        $gzip = [IO.Compression.GZipStream]::new($inputStream, [IO.Compression.CompressionMode]::Decompress, $true)
+        try {
+            $copy = $gzip.CopyToAsync($process.StandardInput.BaseStream)
+            if (-not $copy.Wait($TimeoutSeconds * 1000)) { throw 'Local MySQL import stream timed out.' }
+            $copy.GetAwaiter().GetResult()
+        } finally { $gzip.Dispose(); $process.StandardInput.Close() }
+        $remaining = [Math]::Max(1, ($TimeoutSeconds * 1000) - $timer.ElapsedMilliseconds)
+        if (-not $process.WaitForExit([int]$remaining)) { throw 'Local MySQL import process timed out.' }
+        $stdout.GetAwaiter().GetResult()
+        $stderr.GetAwaiter().GetResult()
+        if ($process.ExitCode -ne 0) { throw 'Local MySQL import failed; source SQL and credentials are not logged.' }
+    } finally {
+        if ($null -ne $process) {
+            if ($processStarted -and -not $process.HasExited) { $process.Kill($true); [void]$process.WaitForExit(10000) }
+            $process.Dispose()
+        }
         $inputStream.Dispose()
     }
 }
@@ -745,6 +959,8 @@ if (-not (Test-Path -LiteralPath $dumpFullPath)) {
 }
 Protect-SensitiveLocalPath -Path $dumpFullPath
 Test-GzipArchive -Path $dumpFullPath
+$verifiedDumpSha256 = (Get-FileHash -LiteralPath $dumpFullPath -Algorithm SHA256).Hash.ToLowerInvariant()
+if (-not $SkipDownload -and $verifiedDumpSha256 -cne $remoteSha256) { throw 'The downloaded dump changed after verification.' }
 $resolvedDumpPath = (Resolve-Path -LiteralPath $dumpFullPath).Path
 $resolvedMountedDumpPath = if (Test-Path -LiteralPath $mountedDumpPath) { (Resolve-Path -LiteralPath $mountedDumpPath).Path } else { $null }
 if ($resolvedDumpPath -ne $resolvedMountedDumpPath) {
@@ -753,6 +969,9 @@ if ($resolvedDumpPath -ne $resolvedMountedDumpPath) {
         Copy-Item -LiteralPath $dumpFullPath -Destination $mountedPartialPath -Force
         Protect-SensitiveLocalPath -Path $mountedPartialPath
         Test-GzipArchive -Path $mountedPartialPath
+        if ((Get-FileHash -LiteralPath $mountedPartialPath -Algorithm SHA256).Hash.ToLowerInvariant() -cne $verifiedDumpSha256) {
+            throw 'The protected local dump copy differs from the verified source.'
+        }
         Move-Item -LiteralPath $mountedPartialPath -Destination $mountedDumpPath -Force
         Protect-SensitiveLocalPath -Path $mountedDumpPath
     } finally {
@@ -764,34 +983,36 @@ if ($resolvedDumpPath -ne $resolvedMountedDumpPath) {
 
 $envValues = Read-EnvFile -Path $envPath
 $previousVolumeEnv = $env:LOCAL_MYSQL_VOLUME
+foreach ($configuredVolume in @($previousVolumeEnv, $envValues['LOCAL_MYSQL_VOLUME'])) {
+    if (-not [string]::IsNullOrWhiteSpace($configuredVolume) -and $configuredVolume -cnotmatch '^otziv-prod-local_mysql_973_[a-z0-9][a-z0-9_-]*$') {
+        throw 'Remove the legacy LOCAL_MYSQL_VOLUME override before a 9.7.3 local restore; the old volume is preserved.'
+    }
+}
 $env:LOCAL_MYSQL_VOLUME = $LocalMysqlVolume
 $composeArgs = @("compose", "-f", $composePath, "--env-file", $envPath)
 
 try {
     Write-Host "Using local MySQL volume: $LocalMysqlVolume"
-    Invoke-External -FilePath "docker" -Arguments ($composeArgs + @("config", "--quiet"))
+    $restoreContract = Assert-LocalRestoreContract -ComposeArguments $composeArgs -RepoRoot $repoRoot -ComposePath $composePath -VolumeName $LocalMysqlVolume
 
     Write-Host "Stopping local prod-like stack..."
     Invoke-External -FilePath "docker" -Arguments ($composeArgs + @("down"))
 
-    $existingVolume = & docker volume ls -q --filter "name=^${LocalMysqlVolume}$"
-    if ($LASTEXITCODE -ne 0) {
-        throw "Failed to inspect Docker volumes."
-    }
-    if (-not [string]::IsNullOrWhiteSpace($existingVolume)) {
+    # Recheck ownership immediately before deletion as well as before down.
+    $restoreContract = Assert-LocalRestoreContract -ComposeArguments $composeArgs -RepoRoot $repoRoot -ComposePath $composePath -VolumeName $LocalMysqlVolume
+    if ($restoreContract.VolumeExists) {
         Write-Host "Removing existing local MySQL volume $LocalMysqlVolume..."
         Invoke-External -FilePath "docker" -Arguments @("volume", "rm", $LocalMysqlVolume)
     }
+
+    Initialize-EmptyLocalMySqlVolume -VolumeName $LocalMysqlVolume -Image $restoreContract.Image
 
     Write-Host "Starting local MySQL..."
     Invoke-External -FilePath "docker" -Arguments ($composeArgs + @("up", "-d", "mysql"))
     Wait-ComposeServiceHealthy -ComposeArguments $composeArgs -Service "mysql"
 
     Write-Host "Restoring dump into local MySQL..."
-    Invoke-External -FilePath "docker" -Arguments ($composeArgs + @(
-        "exec", "-T", "mysql",
-        "bash", "-o", "pipefail", "-c", "gzip -t /backup/$dumpFileName && gzip -dc /backup/$dumpFileName | MYSQL_PWD=`"`$MYSQL_PASSWORD`" mysql -u`"`$MYSQL_USER`" `"`$MYSQL_DATABASE`""
-    ))
+    Import-LocalMySqlGzipStream -ComposeArguments $composeArgs -Path $resolvedDumpPath -ExpectedSha256 $verifiedDumpSha256
 
     Disable-RestoredDbExternalMessaging -ComposeArguments $composeArgs -EnvValues $envValues
     Sanitize-RestoredExternalCredentials -ComposeArguments $composeArgs -EnvValues $envValues

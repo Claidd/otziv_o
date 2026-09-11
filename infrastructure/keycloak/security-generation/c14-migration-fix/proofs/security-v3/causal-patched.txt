@@ -1,0 +1,7 @@
+PASS patched_order_master_application
+PASS patched_order_application_master
+PASS patched_order_application_master_without_cache
+PASS patched_order_application_master_failure_propagates
+PASS pending_invalidations_survive_clear_and_commit
+PASS pending_invalidations_survive_clear_and_rollback
+PASS boundary unit checks complete; actual database integration is separate

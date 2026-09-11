@@ -6,14 +6,14 @@ import { fileURLToPath } from "node:url";
 
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(testDirectory, "../../..");
-const node22Base = "node:22-bookworm-slim";
-const node22Digest = "sha256:f32b81066cde10a75dbac96646099533316d94bac4150c55da1636e1f0ffdc46";
+const node22Base = "node:22-trixie-slim";
+const node22Digest = "sha256:7b8a0c89c54499bee567618f96578e1a12a800f062fbdbfd1fb6a443fa6f6284";
 
 test("external worker image is Node 22, lockfile based and non-root with writable-path check", () => {
   const rawDockerfile = read("backend/external-review-worker/Dockerfile");
   assert.equal(rawDockerfile.split(/\r?\n/u)[0], `FROM ${node22Base}@${node22Digest}`);
   const dockerfile = rawDockerfile.replace(`@${node22Digest}`, "");
-  assert.match(dockerfile, /^FROM node:22-bookworm-slim$/mu);
+  assert.match(dockerfile, /^FROM node:22-trixie-slim$/mu);
   assert.match(dockerfile, /npm ci --omit=dev/u);
   assert.match(dockerfile, /TESSERACT_CACHE_PATH=\/tmp\/tesseract-cache/u);
   assert.match(dockerfile, /^USER node$/mu);
@@ -27,8 +27,9 @@ test("WhatsApp image upgrades reproducibly and runs as the non-root Node user", 
   const dockerfile = rawDockerfile.replace(`@${node22Digest}`, "");
   const deployScript = read("infrastructure/scripts/prod/deploy-prod.ps1");
   const legacyDeployScript = read("infrastructure/scripts/prod/deploy-prod-ssh-images.ps1");
-  assert.match(dockerfile, /^FROM node:22-bookworm-slim$/mu);
-  assert.match(dockerfile, /^\s*chromium-sandbox \\/mu);
+  assert.match(dockerfile, /^FROM node:22-trixie-slim$/mu);
+  assert.match(dockerfile, /sha256sum --check --strict/u);
+  assert.match(dockerfile, /PUPPETEER_EXECUTABLE_PATH=\/usr\/bin\/google-chrome-stable/u);
   assert.match(dockerfile, /COPY whatsapp\/package\.json whatsapp\/package-lock\.json/u);
   assert.match(dockerfile, /npm ci --omit=dev/u);
   assert.match(dockerfile, /^USER node$/mu);
@@ -68,10 +69,12 @@ test("production compose isolates integration workers and applies compatible bou
   assert.match(worker, /EXTERNAL_REVIEW_WORKER_AUTH_REQUIRED:/u);
   assert.match(whatsAppLika, /no-new-privileges:true/u);
   assert.match(whatsAppLika, /cap_drop:\s+- ALL/u);
-  assert.match(whatsAppLika, /cap_add:\s+- SYS_ADMIN\s+- SYS_CHROOT/u);
   assert.match(whatsAppVika, /no-new-privileges:true/u);
   assert.match(whatsAppVika, /cap_drop:\s+- ALL/u);
-  assert.match(whatsAppVika, /cap_add:\s+- SYS_ADMIN\s+- SYS_CHROOT/u);
+  for (const browserWorker of [worker, whatsAppLika, whatsAppVika]) {
+    assert.match(browserWorker, /- seccomp=\.\/infrastructure\/runtime-security\/chromium-seccomp\.json/u);
+    assert.doesNotMatch(browserWorker, /^\s*cap_add:|^\s*privileged:\s*true|(?:seccomp|apparmor)[=:]unconfined/mu);
+  }
   assert.match(whatsAppLika, /networks:\s+- messaging_net/u);
   assert.doesNotMatch(worker, /messaging_net/u);
   assert.doesNotMatch(whatsAppLika, /external_review_net/u);
@@ -104,14 +107,23 @@ test("production example fails closed until both integration secrets are provisi
   assert.match(env, /^WHATSAPP_GATEWAY_SHARED_SECRET=$/mu);
 });
 
-test("production deploy bundle contains every local WhatsApp runtime require", () => {
+test("production deploy bundle contains every WhatsApp runtime and recovery dependency", () => {
   const deployScript = read("infrastructure/scripts/prod/deploy-prod.ps1");
-  const runtimeFiles = localRequireClosure("whatsapp/index.js");
+  const bundle = /\$deployBundlePaths\s*=\s*@\(([\s\S]*?)\r?\n\)/u.exec(deployScript)?.[1];
+  assert.ok(bundle, "deployBundlePaths must be inspectable");
+  const entries = ["index.js", "chromium-smoke.js", "compatibility-smoke.js", "remote-session-admin.js",
+    "operation-ledger-maintenance.js", "operation-ledger-benchmark.js"];
+  const runtimeFiles = new Set(entries.flatMap(entry => localRequireClosure(`whatsapp/${entry}`)));
+  for (const runbook of ["whatsapp/OPERATION_LEDGER_RECOVERY.md", "whatsapp/OUTBOUND_OPERATIONS.md",
+    "docs/WHATSAPP_INBOUND_DELIVERY_RUNBOOK.md", "docs/WHATSAPP_REMOTE_SESSION_RECOVERY.md"]) {
+    assert.ok(fs.existsSync(path.join(root, runbook)), `missing ${runbook}`);
+    runtimeFiles.add(runbook);
+  }
 
   for (const runtimeFile of runtimeFiles) {
     const windowsPath = runtimeFile.replaceAll("/", "\\");
     assert.match(
-      deployScript,
+      bundle,
       new RegExp(`"${escapeRegExp(windowsPath)}"`, "u"),
       `${runtimeFile} is missing from deployBundlePaths`,
     );
@@ -141,7 +153,7 @@ function localRequireClosure(entry) {
     visited.add(relativePath);
     const source = read(relativePath);
     const directory = path.posix.dirname(relativePath);
-    for (const match of source.matchAll(/require\(["'](\.[^"']+)["']\)/gu)) {
+    for (const match of source.matchAll(/require(?:\.resolve)?\(["'](\.[^"']+)["']\)/gu)) {
       const child = path.posix.normalize(path.posix.join(directory, match[1]));
       const childWithExtension = path.posix.extname(child) ? child : `${child}.js`;
       assert.equal(fs.existsSync(path.join(root, childWithExtension)), true, `missing ${childWithExtension}`);

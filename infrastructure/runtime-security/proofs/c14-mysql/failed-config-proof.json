@@ -1,0 +1,31 @@
+{
+  "schema": "otziv-mysql-ignored-option-file-causal-proof-v1",
+  "originalResult": "FAIL",
+  "failurePhase": "clone_9_0",
+  "originalRuntimeSha256": "80cf7ba20084cc681a8910cfc89730ab5fe706cb46a341735f44b8ed5ad9db1e",
+  "originalLogSha256": "a37188b53ec2fbdd6e0ac60ec0c7f5b9ff99a878c592cd5492056b454099e4f6",
+  "serverWarning": "World-writable config file '/fixture/my.cnf' is ignored.",
+  "expected": {
+    "character_set_server": "utf8mb4",
+    "collation_server": "utf8mb4_unicode_ci",
+    "lower_case_table_names": "0",
+    "restrict_fk_on_non_standard_key": "OFF",
+    "sql_mode": "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION",
+    "time_zone": "+08:00"
+  },
+  "actual": {
+    "character_set_server": "utf8mb4",
+    "collation_server": "utf8mb4_0900_ai_ci",
+    "lower_case_table_names": "0",
+    "restrict_fk_on_non_standard_key": "ON",
+    "sql_mode": "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION",
+    "time_zone": "SYSTEM"
+  },
+  "upgradeCheckerStarted": false,
+  "targetServerStarted": false,
+  "sourceWrites": false,
+  "fix": "Published-mode container copies exact option-file bytes into native /tmp at mode0644, then executes original image entrypoint. Three actual SQL setting assertions prove both upgrade versions and rollback apply the reviewed semantic subset.",
+  "freshSuccessfulRunOwner": "otziv-mysql-c7-rollback-64b8defc-3d46-4ea2-b8ca-41dfebda33b2",
+  "cleanupAfterEvidence": "Original failed stopped owned container/network/volume and exact protected dump/secret removed after label/path verification; original failed JSON retained unchanged.",
+  "historicalC12Limitation": "C12 did not assert these actual SQL settings; its historical result does not establish that a Windows bind-mounted option file was applied."
+}

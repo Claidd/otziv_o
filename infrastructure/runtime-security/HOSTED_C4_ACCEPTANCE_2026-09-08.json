@@ -1,0 +1,1462 @@
+{
+  "schema": "otziv-hosted-c4-acceptance-v1",
+  "documentDate": "2026-09-08",
+  "observedAtUtc": "2026-09-07T20:59:39.827719+00:00",
+  "recordedAtUtc": "2026-09-07T21:02:56.643030+00:00",
+  "testedHead": "c990a5bf0988c9d367c70504f6c4f530e956e3ab",
+  "repository": "Claidd/otziv_o",
+  "pullRequest": {
+    "number": 2,
+    "url": "https://github.com/Claidd/otziv_o/pull/2"
+  },
+  "result": "REQUIRED_SECURITY_GATES_REMAIN_FAILED",
+  "allExpectedRequiredChecksPassed": false,
+  "riskAccepted": false,
+  "releaseApproved": false,
+  "branchProtectionChanged": false,
+  "branchProtectionStatus": "Not asserted by this record. The local expected-check policy is a draft; emitted checks do not prove that branch protection is installed.",
+  "sourceBoundary": "This record describes the exact C4 commit and its completed hosted executions. Later XML, documentation or source corrections require their own evidence and do not change these outcomes.",
+  "runs": [
+    {
+      "id": 34159670695,
+      "name": "Quality gates",
+      "event": "pull_request",
+      "head_sha": "c990a5bf0988c9d367c70504f6c4f530e956e3ab",
+      "status": "completed",
+      "conclusion": "failure",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34159670695",
+      "created_at": "2026-09-07T20:30:30Z",
+      "updated_at": "2026-09-07T20:57:28Z"
+    },
+    {
+      "id": 34159668086,
+      "name": "Quality gates",
+      "event": "push",
+      "head_sha": "c990a5bf0988c9d367c70504f6c4f530e956e3ab",
+      "status": "completed",
+      "conclusion": "failure",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34159668086",
+      "created_at": "2026-09-07T20:30:28Z",
+      "updated_at": "2026-09-07T20:56:25Z"
+    },
+    {
+      "id": 34159670709,
+      "name": "Dependency audit",
+      "event": "pull_request",
+      "head_sha": "c990a5bf0988c9d367c70504f6c4f530e956e3ab",
+      "status": "completed",
+      "conclusion": "failure",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34159670709",
+      "created_at": "2026-09-07T20:30:30Z",
+      "updated_at": "2026-09-07T20:34:24Z"
+    },
+    {
+      "id": 34159670821,
+      "name": "Secret scan",
+      "event": "pull_request",
+      "head_sha": "c990a5bf0988c9d367c70504f6c4f530e956e3ab",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34159670821",
+      "created_at": "2026-09-07T20:30:30Z",
+      "updated_at": "2026-09-07T20:32:06Z"
+    },
+    {
+      "id": 34159670666,
+      "name": "SQL injection guard",
+      "event": "pull_request",
+      "head_sha": "c990a5bf0988c9d367c70504f6c4f530e956e3ab",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34159670666",
+      "created_at": "2026-09-07T20:30:30Z",
+      "updated_at": "2026-09-07T20:31:26Z"
+    },
+    {
+      "id": 34159668082,
+      "name": "Secret scan",
+      "event": "push",
+      "head_sha": "c990a5bf0988c9d367c70504f6c4f530e956e3ab",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34159668082",
+      "created_at": "2026-09-07T20:30:28Z",
+      "updated_at": "2026-09-07T20:31:13Z"
+    },
+    {
+      "id": 34159668077,
+      "name": "SQL injection guard",
+      "event": "push",
+      "head_sha": "c990a5bf0988c9d367c70504f6c4f530e956e3ab",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34159668077",
+      "created_at": "2026-09-07T20:30:28Z",
+      "updated_at": "2026-09-07T20:30:53Z"
+    }
+  ],
+  "expectedRequiredChecks": {
+    "policyPath": "infrastructure/scripts/security/expected-branch-policy.json",
+    "expectedCount": 20,
+    "observedCount": 20,
+    "missing": [],
+    "successCount": 18,
+    "failureCount": 2,
+    "allTerminal": true,
+    "observedApp": {
+      "id": 15368,
+      "slug": "github-actions"
+    },
+    "pullRequestOutcomes": [
+      {
+        "id": 101858650226,
+        "name": "Repository contracts",
+        "status": "completed",
+        "conclusion": "success",
+        "details_url": "https://github.com/Claidd/otziv_o/actions/runs/34159670695/job/101858650226",
+        "started_at": "2026-09-07T20:31:46Z",
+        "completed_at": "2026-09-07T20:32:51Z",
+        "app": {
+          "id": 15368,
+          "slug": "github-actions"
+        },
+        "checkSuiteId": 92536682009
+      },
+      {
+        "id": 101858650350,
+        "name": "Backend (full Testcontainers suite)",
+        "status": "completed",
+        "conclusion": "success",
+        "details_url": "https://github.com/Claidd/otziv_o/actions/runs/34159670695/job/101858650350",
+        "started_at": "2026-09-07T20:32:31Z",
+        "completed_at": "2026-09-07T20:48:55Z",
+        "app": {
+          "id": 15368,
+          "slug": "github-actions"
+        },
+        "checkSuiteId": 92536682009
+      },
+      {
+        "id": 101858650122,
+        "name": "Issuer security generation (real Keycloak and PostgreSQL)",
+        "status": "completed",
+        "conclusion": "success",
+        "details_url": "https://github.com/Claidd/otziv_o/actions/runs/34159670695/job/101858650122",
+        "started_at": "2026-09-07T20:31:52Z",
+        "completed_at": "2026-09-07T20:43:07Z",
+        "app": {
+          "id": 15368,
+          "slug": "github-actions"
+        },
+        "checkSuiteId": 92536682009
+      },
+      {
+        "id": 101858650376,
+        "name": "Frontend (unit and production build)",
+        "status": "completed",
+        "conclusion": "success",
+        "details_url": "https://github.com/Claidd/otziv_o/actions/runs/34159670695/job/101858650376",
+        "started_at": "2026-09-07T20:32:50Z",
+        "completed_at": "2026-09-07T20:34:04Z",
+        "app": {
+          "id": 15368,
+          "slug": "github-actions"
+        },
+        "checkSuiteId": 92536682009
+      },
+      {
+        "id": 101858650293,
+        "name": "Mobile web (unit and production build)",
+        "status": "completed",
+        "conclusion": "success",
+        "details_url": "https://github.com/Claidd/otziv_o/actions/runs/34159670695/job/101858650293",
+        "started_at": "2026-09-07T20:32:17Z",
+        "completed_at": "2026-09-07T20:33:23Z",
+        "app": {
+          "id": 15368,
+          "slug": "github-actions"
+        },
+        "checkSuiteId": 92536682009
+      },
+      {
+        "id": 101858650256,
+        "name": "WhatsApp gateway (unit)",
+        "status": "completed",
+        "conclusion": "success",
+        "details_url": "https://github.com/Claidd/otziv_o/actions/runs/34159670695/job/101858650256",
+        "started_at": "2026-09-07T20:30:56Z",
+        "completed_at": "2026-09-07T20:31:19Z",
+        "app": {
+          "id": 15368,
+          "slug": "github-actions"
+        },
+        "checkSuiteId": 92536682009
+      },
+      {
+        "id": 101858650202,
+        "name": "External review worker (syntax and health)",
+        "status": "completed",
+        "conclusion": "success",
+        "details_url": "https://github.com/Claidd/otziv_o/actions/runs/34159670695/job/101858650202",
+        "started_at": "2026-09-07T20:32:25Z",
+        "completed_at": "2026-09-07T20:32:40Z",
+        "app": {
+          "id": 15368,
+          "slug": "github-actions"
+        },
+        "checkSuiteId": 92536682009
+      },
+      {
+        "id": 101858650277,
+        "name": "Built web and mobile browser scenarios",
+        "status": "completed",
+        "conclusion": "success",
+        "details_url": "https://github.com/Claidd/otziv_o/actions/runs/34159670695/job/101858650277",
+        "started_at": "2026-09-07T20:32:09Z",
+        "completed_at": "2026-09-07T20:34:11Z",
+        "app": {
+          "id": 15368,
+          "slug": "github-actions"
+        },
+        "checkSuiteId": 92536682009
+      },
+      {
+        "id": 101858650357,
+        "name": "Android native tests, lint and debug assembly",
+        "status": "completed",
+        "conclusion": "success",
+        "details_url": "https://github.com/Claidd/otziv_o/actions/runs/34159670695/job/101858650357",
+        "started_at": "2026-09-07T20:32:53Z",
+        "completed_at": "2026-09-07T20:35:26Z",
+        "app": {
+          "id": 15368,
+          "slug": "github-actions"
+        },
+        "checkSuiteId": 92536682009
+      },
+      {
+        "id": 101858650289,
+        "name": "Shared client package and compatibility fixtures",
+        "status": "completed",
+        "conclusion": "success",
+        "details_url": "https://github.com/Claidd/otziv_o/actions/runs/34159670695/job/101858650289",
+        "started_at": "2026-09-07T20:31:32Z",
+        "completed_at": "2026-09-07T20:32:06Z",
+        "app": {
+          "id": 15368,
+          "slug": "github-actions"
+        },
+        "checkSuiteId": 92536682009
+      },
+      {
+        "id": 101858650309,
+        "name": "Built integration image (backend)",
+        "status": "completed",
+        "conclusion": "success",
+        "details_url": "https://github.com/Claidd/otziv_o/actions/runs/34159670695/job/101858650309",
+        "started_at": "2026-09-07T20:32:08Z",
+        "completed_at": "2026-09-07T20:34:59Z",
+        "app": {
+          "id": 15368,
+          "slug": "github-actions"
+        },
+        "checkSuiteId": 92536682009
+      },
+      {
+        "id": 101858650520,
+        "name": "Built integration image (web)",
+        "status": "completed",
+        "conclusion": "success",
+        "details_url": "https://github.com/Claidd/otziv_o/actions/runs/34159670695/job/101858650520",
+        "started_at": "2026-09-07T20:33:12Z",
+        "completed_at": "2026-09-07T20:34:18Z",
+        "app": {
+          "id": 15368,
+          "slug": "github-actions"
+        },
+        "checkSuiteId": 92536682009
+      },
+      {
+        "id": 101858650423,
+        "name": "Built integration image (worker)",
+        "status": "completed",
+        "conclusion": "success",
+        "details_url": "https://github.com/Claidd/otziv_o/actions/runs/34159670695/job/101858650423",
+        "started_at": "2026-09-07T20:32:19Z",
+        "completed_at": "2026-09-07T20:33:51Z",
+        "app": {
+          "id": 15368,
+          "slug": "github-actions"
+        },
+        "checkSuiteId": 92536682009
+      },
+      {
+        "id": 101858650330,
+        "name": "Built integration image (whatsapp)",
+        "status": "completed",
+        "conclusion": "success",
+        "details_url": "https://github.com/Claidd/otziv_o/actions/runs/34159670695/job/101858650330",
+        "started_at": "2026-09-07T20:31:58Z",
+        "completed_at": "2026-09-07T20:33:15Z",
+        "app": {
+          "id": 15368,
+          "slug": "github-actions"
+        },
+        "checkSuiteId": 92536682009
+      },
+      {
+        "id": 101858650335,
+        "name": "Built integration image (observer)",
+        "status": "completed",
+        "conclusion": "success",
+        "details_url": "https://github.com/Claidd/otziv_o/actions/runs/34159670695/job/101858650335",
+        "started_at": "2026-09-07T20:31:46Z",
+        "completed_at": "2026-09-07T20:32:49Z",
+        "app": {
+          "id": 15368,
+          "slug": "github-actions"
+        },
+        "checkSuiteId": 92536682009
+      },
+      {
+        "id": 101858650514,
+        "name": "Built integration image (publisher)",
+        "status": "completed",
+        "conclusion": "success",
+        "details_url": "https://github.com/Claidd/otziv_o/actions/runs/34159670695/job/101858650514",
+        "started_at": "2026-09-07T20:32:56Z",
+        "completed_at": "2026-09-07T20:33:35Z",
+        "app": {
+          "id": 15368,
+          "slug": "github-actions"
+        },
+        "checkSuiteId": 92536682009
+      },
+      {
+        "id": 101859272915,
+        "name": "Dependency audit gate",
+        "status": "completed",
+        "conclusion": "failure",
+        "details_url": "https://github.com/Claidd/otziv_o/actions/runs/34159670709/job/101859272915",
+        "started_at": "2026-09-07T20:34:06Z",
+        "completed_at": "2026-09-07T20:34:23Z",
+        "app": {
+          "id": 15368,
+          "slug": "github-actions"
+        },
+        "checkSuiteId": 92536682036
+      },
+      {
+        "id": 101863622966,
+        "name": "Upstream image security gate",
+        "status": "completed",
+        "conclusion": "failure",
+        "details_url": "https://github.com/Claidd/otziv_o/actions/runs/34159670695/job/101863622966",
+        "started_at": "2026-09-07T20:57:23Z",
+        "completed_at": "2026-09-07T20:57:27Z",
+        "app": {
+          "id": 15368,
+          "slug": "github-actions"
+        },
+        "checkSuiteId": 92536682009
+      },
+      {
+        "id": 101858649790,
+        "name": "gitleaks",
+        "status": "completed",
+        "conclusion": "success",
+        "details_url": "https://github.com/Claidd/otziv_o/actions/runs/34159670821/job/101858649790",
+        "started_at": "2026-09-07T20:31:20Z",
+        "completed_at": "2026-09-07T20:32:06Z",
+        "app": {
+          "id": 15368,
+          "slug": "github-actions"
+        },
+        "checkSuiteId": 92536682307
+      },
+      {
+        "id": 101858649533,
+        "name": "SQL injection guard",
+        "status": "completed",
+        "conclusion": "success",
+        "details_url": "https://github.com/Claidd/otziv_o/actions/runs/34159670666/job/101858649533",
+        "started_at": "2026-09-07T20:30:52Z",
+        "completed_at": "2026-09-07T20:31:25Z",
+        "app": {
+          "id": 15368,
+          "slug": "github-actions"
+        },
+        "checkSuiteId": 92536681950
+      }
+    ],
+    "evidence": {
+      "path": ".codex-tmp/remediation-final-gaps-20260907/hosted-quality-ci/c4/required-checks-final.json",
+      "sha256": "ce4b942a8e144f717dd220dee19934373c8bdd2d99772ceb32de736ecd6bc249"
+    }
+  },
+  "qualityRunMatrix": {
+    "pullRequest": {
+      "runId": 34159670695,
+      "event": "pull_request",
+      "totalJobs": 38,
+      "conclusions": {
+        "success": 22,
+        "failure": 16
+      },
+      "jobs": [
+        {
+          "id": 101858650122,
+          "name": "Issuer security generation (real Keycloak and PostgreSQL)",
+          "conclusion": "success"
+        },
+        {
+          "id": 101858650202,
+          "name": "External review worker (syntax and health)",
+          "conclusion": "success"
+        },
+        {
+          "id": 101858650226,
+          "name": "Repository contracts",
+          "conclusion": "success"
+        },
+        {
+          "id": 101858650238,
+          "name": "Monitoring candidate (alloy)",
+          "conclusion": "success"
+        },
+        {
+          "id": 101858650253,
+          "name": "Inventory pinned upstream images",
+          "conclusion": "success"
+        },
+        {
+          "id": 101858650256,
+          "name": "WhatsApp gateway (unit)",
+          "conclusion": "success"
+        },
+        {
+          "id": 101858650277,
+          "name": "Built web and mobile browser scenarios",
+          "conclusion": "success"
+        },
+        {
+          "id": 101858650289,
+          "name": "Shared client package and compatibility fixtures",
+          "conclusion": "success"
+        },
+        {
+          "id": 101858650293,
+          "name": "Mobile web (unit and production build)",
+          "conclusion": "success"
+        },
+        {
+          "id": 101858650309,
+          "name": "Built integration image (backend)",
+          "conclusion": "success"
+        },
+        {
+          "id": 101858650330,
+          "name": "Built integration image (whatsapp)",
+          "conclusion": "success"
+        },
+        {
+          "id": 101858650335,
+          "name": "Built integration image (observer)",
+          "conclusion": "success"
+        },
+        {
+          "id": 101858650350,
+          "name": "Backend (full Testcontainers suite)",
+          "conclusion": "success"
+        },
+        {
+          "id": 101858650357,
+          "name": "Android native tests, lint and debug assembly",
+          "conclusion": "success"
+        },
+        {
+          "id": 101858650370,
+          "name": "Monitoring candidate (loki)",
+          "conclusion": "success"
+        },
+        {
+          "id": 101858650376,
+          "name": "Frontend (unit and production build)",
+          "conclusion": "success"
+        },
+        {
+          "id": 101858650394,
+          "name": "Monitoring candidate (tempo)",
+          "conclusion": "success"
+        },
+        {
+          "id": 101858650423,
+          "name": "Built integration image (worker)",
+          "conclusion": "success"
+        },
+        {
+          "id": 101858650429,
+          "name": "Monitoring candidate (prometheus)",
+          "conclusion": "success"
+        },
+        {
+          "id": 101858650506,
+          "name": "Monitoring candidate (grafana)",
+          "conclusion": "failure"
+        },
+        {
+          "id": 101858650514,
+          "name": "Built integration image (publisher)",
+          "conclusion": "success"
+        },
+        {
+          "id": 101858650520,
+          "name": "Built integration image (web)",
+          "conclusion": "success"
+        },
+        {
+          "id": 101858872580,
+          "name": "Pinned upstream image (grafana-alloy-55e0abbcef)",
+          "conclusion": "failure"
+        },
+        {
+          "id": 101858872588,
+          "name": "Pinned upstream image (grafana-loki-29ec725d37)",
+          "conclusion": "failure"
+        },
+        {
+          "id": 101858872597,
+          "name": "Pinned upstream image (certbot-certbot-ca5671f150)",
+          "conclusion": "failure"
+        },
+        {
+          "id": 101858872608,
+          "name": "Pinned upstream image (grafana-grafana-2d8f28439f)",
+          "conclusion": "failure"
+        },
+        {
+          "id": 101858872611,
+          "name": "Pinned upstream image (grafana-tempo-eacdf7cd3e)",
+          "conclusion": "failure"
+        },
+        {
+          "id": 101858872628,
+          "name": "Pinned upstream image (minio-minio-fc16a461c7)",
+          "conclusion": "failure"
+        },
+        {
+          "id": 101858872630,
+          "name": "Pinned upstream image (minio-mc-61f87a4bee)",
+          "conclusion": "failure"
+        },
+        {
+          "id": 101858872632,
+          "name": "Pinned upstream image (nginx-e1e08def68)",
+          "conclusion": "failure"
+        },
+        {
+          "id": 101858872634,
+          "name": "Pinned upstream image (phpmyadmin-c9cdf5d6aa)",
+          "conclusion": "failure"
+        },
+        {
+          "id": 101858872648,
+          "name": "Pinned upstream image (amir20-dozzle-63b8e42cb2)",
+          "conclusion": "success"
+        },
+        {
+          "id": 101858872654,
+          "name": "Pinned upstream image (prom-prometheus-a8482dc26f)",
+          "conclusion": "failure"
+        },
+        {
+          "id": 101858872655,
+          "name": "Pinned upstream image (postgres-aca3723006)",
+          "conclusion": "failure"
+        },
+        {
+          "id": 101858872657,
+          "name": "Pinned upstream image (mysql-d494426c1f)",
+          "conclusion": "failure"
+        },
+        {
+          "id": 101858872704,
+          "name": "Pinned upstream image (node-dc8b119ea9)",
+          "conclusion": "failure"
+        },
+        {
+          "id": 101858873305,
+          "name": "Pinned upstream image (quay-io-keycloak-keycloak-61bd1127b1)",
+          "conclusion": "failure"
+        },
+        {
+          "id": 101863622966,
+          "name": "Upstream image security gate",
+          "conclusion": "failure"
+        }
+      ],
+      "evidence": {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/hosted-quality-ci/c4/jobs-34159670695-205819.json",
+        "sha256": "d89784abeb3debf001d3a1c48bbfdd202efd6b807af11b11bd3a8cb381837f71"
+      }
+    },
+    "push": {
+      "runId": 34159668086,
+      "event": "push",
+      "totalJobs": 38,
+      "conclusions": {
+        "success": 22,
+        "failure": 16
+      },
+      "evidence": {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/hosted-quality-ci/c4/jobs-34159668086-205819.json",
+        "sha256": "793a1f5d6e518b786110d9746c5c70a8e5e2f0e426c55132c62f20868ee1660e"
+      }
+    },
+    "groupsOnPullRequest": {
+      "builtIntegrationImages": {
+        "rows": 6,
+        "success": 6
+      },
+      "monitoringCandidates": {
+        "rows": 5,
+        "success": 4,
+        "failure": 1
+      },
+      "pinnedUpstreamImages": {
+        "rows": 15,
+        "success": 1,
+        "failure": 14
+      },
+      "upstreamAggregate": {
+        "rows": 1,
+        "failure": 1
+      }
+    },
+    "headCheckRuns": {
+      "retrieved": 89,
+      "reported": 89,
+      "evidence": {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/hosted-quality-ci/c4/check-runs-final.json",
+        "sha256": "e10e882e9566bbfaa6a518ff7b6c6aa052176c3cb219be1ab71c61b48e53e2ba"
+      }
+    },
+    "contextRule": "Push and pull_request are separate executions. The required-check table uses pull_request outcomes; the push outcome is retained separately."
+  },
+  "backend": {
+    "jobId": 101858650350,
+    "result": "PASS",
+    "fullSuite": {
+      "tests": 4712,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 15
+    },
+    "additionalFinancialCtePlanEvidence": {
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "artifactXmlFiles": 679,
+    "allXmlTotals": {
+      "tests": 4713,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 15
+    },
+    "countingRule": "The additional FinancialCtePlanEvidence invocation is reported separately; it is not counted as another full-suite test.",
+    "skipGroups": [
+      {
+        "class": "com.hunt.otziv.reputationai.application.service.ReputationSingleReviewDraftServiceTest",
+        "count": 13,
+        "reason": "Local fallback behavior is explicitly disabled; current product uses OpenAI drafts."
+      },
+      {
+        "class": "com.hunt.otziv.contractor_payments.service.ContractorPaymentProdLikeUpgradeRehearsalTest",
+        "count": 1,
+        "reason": "Explicit production-like migration rehearsal flag is disabled."
+      },
+      {
+        "class": "com.hunt.otziv.u_users.service.KeycloakSessionProtocolRuntimeIntegrationTest",
+        "count": 1,
+        "reason": "OTZIV_AUTH_KC_RUNTIME is absent in the generic suite; separate issuer protocol proofs are listed below without relabeling this test as executed."
+      }
+    ],
+    "individualSkippedTests": [
+      {
+        "class": "com.hunt.otziv.contractor_payments.service.ContractorPaymentProdLikeUpgradeRehearsalTest",
+        "name": "upgradesExactV217CloneToLatestAndValidatesContractorSchema",
+        "reason": "org.opentest4j.TestAbortedException: Assumption failed: explicit production-like migration rehearsal is disabled"
+      },
+      {
+        "class": "com.hunt.otziv.reputationai.application.service.ReputationSingleReviewDraftServiceTest",
+        "name": "generatesLocalSingleDraftFromDeepReportWhenContentPackIsMissing",
+        "reason": "Локальный fallback временно отключен: выводим только черновики OpenAI."
+      },
+      {
+        "class": "com.hunt.otziv.reputationai.application.service.ReputationSingleReviewDraftServiceTest",
+        "name": "localQuestBatchFallbackDoesNotRepeatSameScenarioRulesSentence",
+        "reason": "Локальный fallback временно отключен: выводим только черновики OpenAI."
+      },
+      {
+        "class": "com.hunt.otziv.reputationai.application.service.ReputationSingleReviewDraftServiceTest",
+        "name": "localFallbackAvoidsBrokenPrepositionWithRawThemes",
+        "reason": "Локальный fallback временно отключен: выводим только черновики OpenAI."
+      },
+      {
+        "class": "com.hunt.otziv.reputationai.application.service.ReputationSingleReviewDraftServiceTest",
+        "name": "localBatchFallbackUsesNaturalTopicPhrasesInsteadOfLongThemeLabels",
+        "reason": "Локальный fallback временно отключен: выводим только черновики OpenAI."
+      },
+      {
+        "class": "com.hunt.otziv.reputationai.application.service.ReputationSingleReviewDraftServiceTest",
+        "name": "localQuestFallbackHandlesNavigationAndFoodWithoutGenericMoment",
+        "reason": "Локальный fallback временно отключен: выводим только черновики OpenAI."
+      },
+      {
+        "class": "com.hunt.otziv.reputationai.application.service.ReputationSingleReviewDraftServiceTest",
+        "name": "localFallbackTurnsAutoServiceFocusIntoNaturalSentence",
+        "reason": "Локальный fallback временно отключен: выводим только черновики OpenAI."
+      },
+      {
+        "class": "com.hunt.otziv.reputationai.application.service.ReputationSingleReviewDraftServiceTest",
+        "name": "keepsLocalFactsInsideSelectedRoadTripTheme",
+        "reason": "Локальный fallback временно отключен: выводим только черновики OpenAI."
+      },
+      {
+        "class": "com.hunt.otziv.reputationai.application.service.ReputationSingleReviewDraftServiceTest",
+        "name": "generatesLocalSingleDraftFromPackAndReportWhenAiDoesNotReturnDraft",
+        "reason": "Локальный fallback временно отключен: выводим только черновики OpenAI."
+      },
+      {
+        "class": "com.hunt.otziv.reputationai.application.service.ReputationSingleReviewDraftServiceTest",
+        "name": "localBatchFallbackDoesNotEmitTaskMetaPhraseForMonumentTopics",
+        "reason": "Локальный fallback временно отключен: выводим только черновики OpenAI."
+      },
+      {
+        "class": "com.hunt.otziv.reputationai.application.service.ReputationSingleReviewDraftServiceTest",
+        "name": "batchDropsGenericBusinessDescriptorThemeAndKeepsAcceptanceDomainSpecific",
+        "reason": "Локальный fallback временно отключен: выводим только черновики OpenAI."
+      },
+      {
+        "class": "com.hunt.otziv.reputationai.application.service.ReputationSingleReviewDraftServiceTest",
+        "name": "localFallbackKeepsIdeaNuanceAfterColon",
+        "reason": "Локальный fallback временно отключен: выводим только черновики OpenAI."
+      },
+      {
+        "class": "com.hunt.otziv.reputationai.application.service.ReputationSingleReviewDraftServiceTest",
+        "name": "mixedBatchFallbackForAutoStarterGeneratorUsesLocalAutoDraft",
+        "reason": "Локальный fallback временно отключен: выводим только черновики OpenAI."
+      },
+      {
+        "class": "com.hunt.otziv.reputationai.application.service.ReputationSingleReviewDraftServiceTest",
+        "name": "localFallbackDoesNotPrintExperienceFocusAsChecklist",
+        "reason": "Локальный fallback временно отключен: выводим только черновики OpenAI."
+      },
+      {
+        "class": "com.hunt.otziv.u_users.service.KeycloakSessionProtocolRuntimeIntegrationTest",
+        "name": "pinnedIssuerOnlineOfflineExternalResetAndDurableRevocation",
+        "reason": "Environment variable [OTZIV_AUTH_KC_RUNTIME] does not exist"
+      }
+    ],
+    "packagedRuntimeLibraryScan": {
+      "result": "PASS",
+      "high": 0,
+      "critical": 0,
+      "evidence": {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/hosted-quality-ci/c4/backend-pr-success-safe.json",
+        "sha256": "6b0f8f836f21eab19b68e649eaa42476abaf835a8587b4b1632cdbfd2976ca3f"
+      }
+    },
+    "artifact": {
+      "id": 10032522052,
+      "archiveSha256": "de133e39829f97604d4c74713bc5de87cca0009495959a9f751e0a8d8d1d89b4",
+      "summary": {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/hosted-quality-ci/c4/backend-pr-xml-summary.json",
+        "sha256": "92ba184e686544b86b1adf9666f8e28c31f43e30fcab3824d9e7fce5fdf6d226"
+      }
+    }
+  },
+  "browser": {
+    "jobId": 101858650277,
+    "result": "PASS",
+    "actualUiCasesPassed": 22,
+    "actualUiDurationSeconds": 14.5,
+    "helperUnitCasesPassed": 7,
+    "projects": [
+      "web",
+      "mobile-web"
+    ],
+    "rendererProof": {
+      "result": "PASS",
+      "version": "149.0.7827.55",
+      "rendererSeccomp": 2,
+      "rendererNoNewPrivs": 1,
+      "isolatedUserNamespace": true,
+      "exactAppArmorProfile": true,
+      "executableSha256": "670ba079b75107746ba41abad131180a31a7c7219aa1bd4061fb471f4535d541",
+      "profileSha256": "44ac10ae505f3d7fac449ebe22763e7220179ef0d1155fad11e4cc9ada30c66f"
+    },
+    "cleanup": "PASS",
+    "coverage": "Built production applications with deterministic loopback fixtures, permissions, editor selection races and public-payment unknown/timeout/leave/return behavior.",
+    "artifact": {
+      "id": 10032229098,
+      "archiveSha256": "635e372ee0cda8c39aceab9da84d6c7fe2a6257171d44832772f5e0cb52c9b81",
+      "summary": {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/hosted-quality-ci/c4/browser-pr-artifact-summary.json",
+        "sha256": "c9cda4675f8a97e026d123af0fed37360cde9677ee01031233ec5110f67aefec"
+      }
+    },
+    "safeLog": {
+      "path": ".codex-tmp/remediation-final-gaps-20260907/hosted-quality-ci/c4/browser-pr-success-safe.json",
+      "sha256": "9d7fff00418f43e79c660be22537020f0c1696f6ce803e9546c025f08d120adb"
+    }
+  },
+  "issuer": {
+    "jobId": 101858650122,
+    "result": "PASS",
+    "imageId": "sha256:ddd11a6522b61ef097e58e898567fe7ee495c68439dcbf219b6c5d0451a5ad84",
+    "causalBuildProof": {
+      "vendorResult": "EXPECTED_RED_CONCURRENT_MODIFICATION",
+      "derivativeResult": "PASS",
+      "annotationChanges": 1,
+      "changedClassEntries": 1,
+      "unchangedMethodCodeAttributes": 73,
+      "completeFixtureClassCount": 4,
+      "otherPersistenceUnitEntityExcluded": true,
+      "realQuarkusAugmentationMilliseconds": 8581,
+      "buildConcurrencyNotSerialized": true,
+      "evidence": {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/hosted-quality-ci/c4/issuer-pr-success-safe.json",
+        "sha256": "df50444fa789a5ece4e10825635a6bf58fccc2237614c829401cab62f3d57387"
+      }
+    },
+    "protocol": {
+      "result": "PASS",
+      "checksPassed": 20,
+      "evidence": {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/hosted-quality-ci/c4/issuer-pr-artifacts/issuer-proof.json",
+        "sha256": "f1625b0e3ae340f88dc892091e4e6004698db09c7286f3383a866e061a8c9c9c"
+      }
+    },
+    "ordinaryStartAndStartDev": {
+      "result": "PASS",
+      "checksPassed": 4,
+      "cleanup": "PASS",
+      "evidence": {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/hosted-quality-ci/c4/issuer-pr-artifacts/issuer-startup-proof.json",
+        "sha256": "7c001df46173f8996d15b863dce632a6b93f93cd5df03cdb1f44951ff8ac5a51"
+      }
+    },
+    "postgresUpgradeAndPairedBackupRollback": {
+      "result": "PASS",
+      "checksPassed": 10,
+      "cleanup": "PASS",
+      "images": {
+        "source": {
+          "reference": "postgres@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d",
+          "id": "sha256:f9cab62aaf3471220dcbdeea5a686fca1c7f9e99621db14fdaebceaffe7a8f24"
+        },
+        "candidate": {
+          "reference": "otziv-postgres-ci",
+          "id": "sha256:81e80e74a5eb9b284bf464d5b1a7f8ab320b6c949aa5dcf0ed14c07f9f4a11d7"
+        }
+      },
+      "evidence": {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/hosted-quality-ci/c4/issuer-pr-artifacts/proof.json",
+        "sha256": "3dff597e83f54e588672c5c7bf4efd9888d841667511a645a2230e0b33983d9b"
+      }
+    },
+    "artifact": {
+      "id": 10032409375,
+      "archiveSha256": "b9bd1c9d4d13b46d4a6aed1090f3f80a4f02ae4924ce2134199ecc346235cf7e",
+      "summary": {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/hosted-quality-ci/c4/issuer-pr-artifact-summary.json",
+        "sha256": "a239519f3b07ab9c4d5e6b2797e87e198eb7a41b1cc792c805cf2a80b456d481"
+      }
+    }
+  },
+  "pairedRecovery": {
+    "jobId": 101858650122,
+    "result": "PASS",
+    "checksPassed": 21,
+    "images": {
+      "app": "sha256:c74e907cd88249613386f2428b670e866f95f7a0dda37d32b571e1456a427aad",
+      "keycloak": "sha256:ddd11a6522b61ef097e58e898567fe7ee495c68439dcbf219b6c5d0451a5ad84",
+      "mysql": "sha256:d4d4a84c70bdf242aaf59563a8fb37fa1124ff0e28dd5f802ad41dc9de282240",
+      "postgres": "sha256:81e80e74a5eb9b284bf464d5b1a7f8ab320b6c949aa5dcf0ed14c07f9f4a11d7",
+      "objects": "sha256:9d668e47f1fc60ea49af4203deee87a657eb1aa0e2761fee2c7c2d1df282c880",
+      "runner": "sha256:6e6261159fd399ebe5a3d556b7d89da9c85c873f3f270918aad6c8107da8b411"
+    },
+    "capturedComponents": [
+      "MySQL database",
+      "Keycloak PostgreSQL database",
+      "versioned object storage",
+      "required configuration and cryptographic keys"
+    ],
+    "authenticatedBundleManifestSha256": "ea21d7ca2d5e2e2422ad7eea130c1c69a530037238809ec3ad324a10d04d5a83",
+    "applicationShutdown": {
+      "pid1": "java",
+      "elapsedMs": 558,
+      "exitCode": 143,
+      "oomKilled": false,
+      "running": false,
+      "logsSha256": "4c661436fff995ec22e5220cb9bcc0ec12bf84237602b50501795a0e80bee27b",
+      "gracefulComplete": true,
+      "entityManagerClosed": true,
+      "poolsStarted": [
+        "HikariPool-1",
+        "worker-account-action-cooldown"
+      ],
+      "poolsClosed": [
+        "HikariPool-1",
+        "worker-account-action-cooldown"
+      ]
+    },
+    "cleanup": "PASS",
+    "observedRestoreSeconds": 61,
+    "elapsedSeconds": 156,
+    "finishedAtUtc": "2026-09-07T20:43:00.844Z",
+    "recoveryKeyCustody": "EPHEMERAL_DESTROYED_AFTER_PROOF",
+    "productionIndependence": "NOT_PROVEN",
+    "agreedBusinessRpoRto": "NOT_PROVIDED",
+    "evidence": {
+      "path": ".codex-tmp/remediation-final-gaps-20260907/hosted-quality-ci/c4/issuer-pr-artifacts/paired-recovery-proof.json",
+      "sha256": "86255d13cd32e6cb01d6cce758f8ed0cff176ff2690149aa25cc1fc81f6937f1"
+    }
+  },
+  "actualHostedImageScans": {
+    "scannerImage": "aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969",
+    "policy": "Fixed HIGH/CRITICAL findings block. Unfixed HIGH/CRITICAL findings remain visible and require risk review; a passing scan gate does not mean zero raw findings.",
+    "issuer": {
+      "imageId": "sha256:ddd11a6522b61ef097e58e898567fe7ee495c68439dcbf219b6c5d0451a5ad84",
+      "high": 0,
+      "critical": 0,
+      "packages": [
+        {
+          "type": "ubuntu",
+          "count": 143
+        },
+        {
+          "type": "jar",
+          "count": 512
+        }
+      ],
+      "result": "PASS",
+      "evidence": {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/hosted-quality-ci/c4/issuer-pr-artifacts/issuer-vulnerabilities.json",
+        "sha256": "63c340709baa78abd060a7c0034723b6ce3f3d5cd0341aa2e75a6160c39f99a1"
+      }
+    },
+    "mysql": {
+      "component": "mysql",
+      "sha256": "b30e157be507a12dd31f3ac6c8f6f42d099b981b5ea9efacd29e6063e14f8fac",
+      "imageId": "sha256:d4d4a84c70bdf242aaf59563a8fb37fa1124ff0e28dd5f802ad41dc9de282240",
+      "high": 0,
+      "critical": 0,
+      "fixed": 0,
+      "unfixed": 0,
+      "packages": {},
+      "gateResult": "PASS",
+      "riskAccepted": false,
+      "evidence": {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/hosted-quality-ci/c4/issuer-pr-artifacts/mysql-vulnerabilities.json",
+        "sha256": "b30e157be507a12dd31f3ac6c8f6f42d099b981b5ea9efacd29e6063e14f8fac"
+      }
+    },
+    "postgres": {
+      "component": "postgres",
+      "sha256": "34d0305e6949615ffd0cf482bcaff04aa2b932e2c9467a8da8735d82a2163703",
+      "imageId": "sha256:81e80e74a5eb9b284bf464d5b1a7f8ab320b6c949aa5dcf0ed14c07f9f4a11d7",
+      "high": 73,
+      "critical": 13,
+      "fixed": 0,
+      "unfixed": 86,
+      "packages": {
+        "bsdutils": 4,
+        "dirmngr": 1,
+        "gnupg": 1,
+        "gnupg-l10n": 1,
+        "gpg": 1,
+        "gpg-agent": 1,
+        "gpgconf": 1,
+        "gpgsm": 1,
+        "gzip": 1,
+        "libacl1": 1,
+        "libblkid1": 4,
+        "liblastlog2-2": 4,
+        "libmount1": 4,
+        "libncursesw6": 1,
+        "libperl5.40": 8,
+        "libsmartcols1": 4,
+        "libsqlite3-0": 2,
+        "libsystemd0": 1,
+        "libtinfo6": 1,
+        "libudev1": 1,
+        "libuuid1": 4,
+        "libxml2": 1,
+        "login": 4,
+        "mount": 4,
+        "ncurses-base": 1,
+        "ncurses-bin": 1,
+        "perl": 8,
+        "perl-base": 8,
+        "perl-modules-5.40": 8,
+        "util-linux": 4
+      },
+      "gateResult": "PASS",
+      "unresolvedRiskReview": "REQUIRED",
+      "riskAccepted": false,
+      "evidence": {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/hosted-quality-ci/c4/issuer-pr-artifacts/postgres-vulnerabilities.json",
+        "sha256": "34d0305e6949615ffd0cf482bcaff04aa2b932e2c9467a8da8735d82a2163703"
+      }
+    },
+    "newScanExceptionsAddedByThisReview": false
+  },
+  "remainingSecurityFailures": {
+    "dependencyAudit": {
+      "runId": 34159670709,
+      "jobId": 101859272915,
+      "name": "Dependency audit gate",
+      "appId": 15368,
+      "result": "FAILURE",
+      "npmJobsPassed": 5,
+      "rawCounts": {
+        "dependencyEntries": 490,
+        "vulnerableEntries": 25,
+        "pairs": 46,
+        "uniqueAdvisories": 24,
+        "severities": {
+          "LOW": 3,
+          "HIGH": 17,
+          "MEDIUM": 19,
+          "CRITICAL": 7
+        },
+        "sources": {
+          "OSSINDEX": 14,
+          "NVD": 32
+        },
+        "reportedSuppressedPairs": 39
+      },
+      "classification": {
+        "RUNTIME_LOWER_SEVERITY_RETAINED": {
+          "entries": 7,
+          "pairs": 9,
+          "highCritical": 0
+        },
+        "PUBLISHED_PLUGIN_POM_ACTUAL_REALM_FIXED": {
+          "entries": 13,
+          "pairs": 18,
+          "highCritical": 13
+        },
+        "SHADED_TEST_TRANSPORT_UNRESOLVED": {
+          "entries": 1,
+          "pairs": 2,
+          "highCritical": 1
+        },
+        "SITE_JETTY_UNRESOLVED": {
+          "entries": 3,
+          "pairs": 16,
+          "highCritical": 9
+        },
+        "KOTLIN_JDK_WRONG_ARTIFACT_REVIEW": {
+          "entries": 1,
+          "pairs": 1,
+          "highCritical": 1
+        }
+      },
+      "riskAccepted": false,
+      "followupBoundary": "Subsequent reviewed Kotlin metadata rules and their local tests do not retroactively turn the C4 dependency check green.",
+      "rawReport": {
+        "path": ".codex-tmp/finalization-20260907/hosted-dependency-audit/c4-report/dependency-check-report.json",
+        "sha256": "191016b378d821b4da87bc86c1dd9d08d7fb5c871b24882f271432bd6b5ed1b5"
+      },
+      "relatedPublicReport": "infrastructure/runtime-security/MAVEN_HOSTED_C4_AUDIT_2026-09-08.json"
+    },
+    "pinnedUpstreamImages": {
+      "scansCompleted": 15,
+      "failures": 14,
+      "successes": 1,
+      "missingScannerResults": 0,
+      "rows": [
+        {
+          "jobId": 101858872580,
+          "name": "Pinned upstream image (grafana-alloy-55e0abbcef)",
+          "conclusion": "failure",
+          "scan": {
+            "schema": "otziv-vulnerability-scan-v1",
+            "artifactCount": 2,
+            "high": 45,
+            "critical": 1,
+            "unfixedHighOrCritical": 3,
+            "blockingFixedHighOrCritical": 43,
+            "result": "FAIL",
+            "unresolvedRiskReview": "REQUIRED",
+            "scannerImage": "aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969"
+          },
+          "diagnostic": null
+        },
+        {
+          "jobId": 101858872588,
+          "name": "Pinned upstream image (grafana-loki-29ec725d37)",
+          "conclusion": "failure",
+          "scan": {
+            "schema": "otziv-vulnerability-scan-v1",
+            "artifactCount": 2,
+            "high": 51,
+            "critical": 4,
+            "unfixedHighOrCritical": 0,
+            "blockingFixedHighOrCritical": 55,
+            "result": "FAIL",
+            "unresolvedRiskReview": "NONE",
+            "scannerImage": "aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969"
+          },
+          "diagnostic": null
+        },
+        {
+          "jobId": 101858872597,
+          "name": "Pinned upstream image (certbot-certbot-ca5671f150)",
+          "conclusion": "failure",
+          "scan": {
+            "schema": "otziv-vulnerability-scan-v1",
+            "artifactCount": 4,
+            "high": 15,
+            "critical": 0,
+            "unfixedHighOrCritical": 0,
+            "blockingFixedHighOrCritical": 15,
+            "result": "FAIL",
+            "unresolvedRiskReview": "NONE",
+            "scannerImage": "aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969"
+          },
+          "diagnostic": null
+        },
+        {
+          "jobId": 101858872608,
+          "name": "Pinned upstream image (grafana-grafana-2d8f28439f)",
+          "conclusion": "failure",
+          "scan": {
+            "schema": "otziv-vulnerability-scan-v1",
+            "artifactCount": 5,
+            "high": 117,
+            "critical": 10,
+            "unfixedHighOrCritical": 0,
+            "blockingFixedHighOrCritical": 127,
+            "result": "FAIL",
+            "unresolvedRiskReview": "NONE",
+            "scannerImage": "aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969"
+          },
+          "diagnostic": null
+        },
+        {
+          "jobId": 101858872611,
+          "name": "Pinned upstream image (grafana-tempo-eacdf7cd3e)",
+          "conclusion": "failure",
+          "scan": {
+            "schema": "otziv-vulnerability-scan-v1",
+            "artifactCount": 2,
+            "high": 73,
+            "critical": 5,
+            "unfixedHighOrCritical": 0,
+            "blockingFixedHighOrCritical": 78,
+            "result": "FAIL",
+            "unresolvedRiskReview": "NONE",
+            "scannerImage": "aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969"
+          },
+          "diagnostic": null
+        },
+        {
+          "jobId": 101858872628,
+          "name": "Pinned upstream image (minio-minio-fc16a461c7)",
+          "conclusion": "failure",
+          "scan": {
+            "schema": "otziv-vulnerability-scan-v1",
+            "artifactCount": 3,
+            "high": 98,
+            "critical": 8,
+            "unfixedHighOrCritical": 6,
+            "blockingFixedHighOrCritical": 100,
+            "result": "FAIL",
+            "unresolvedRiskReview": "REQUIRED",
+            "scannerImage": "aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969"
+          },
+          "diagnostic": null
+        },
+        {
+          "jobId": 101858872630,
+          "name": "Pinned upstream image (minio-mc-61f87a4bee)",
+          "conclusion": "failure",
+          "scan": {
+            "schema": "otziv-vulnerability-scan-v1",
+            "artifactCount": 2,
+            "high": 44,
+            "critical": 3,
+            "unfixedHighOrCritical": 0,
+            "blockingFixedHighOrCritical": 47,
+            "result": "FAIL",
+            "unresolvedRiskReview": "NONE",
+            "scannerImage": "aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969"
+          },
+          "diagnostic": null
+        },
+        {
+          "jobId": 101858872632,
+          "name": "Pinned upstream image (nginx-e1e08def68)",
+          "conclusion": "failure",
+          "scan": {
+            "schema": "otziv-vulnerability-scan-v1",
+            "artifactCount": 1,
+            "high": 32,
+            "critical": 2,
+            "unfixedHighOrCritical": 0,
+            "blockingFixedHighOrCritical": 34,
+            "result": "FAIL",
+            "unresolvedRiskReview": "NONE",
+            "scannerImage": "aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969"
+          },
+          "diagnostic": null
+        },
+        {
+          "jobId": 101858872634,
+          "name": "Pinned upstream image (phpmyadmin-c9cdf5d6aa)",
+          "conclusion": "failure",
+          "scan": {
+            "schema": "otziv-vulnerability-scan-v1",
+            "artifactCount": 3,
+            "high": 327,
+            "critical": 20,
+            "unfixedHighOrCritical": 149,
+            "blockingFixedHighOrCritical": 198,
+            "result": "FAIL",
+            "unresolvedRiskReview": "REQUIRED",
+            "scannerImage": "aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969"
+          },
+          "diagnostic": null
+        },
+        {
+          "jobId": 101858872648,
+          "name": "Pinned upstream image (amir20-dozzle-63b8e42cb2)",
+          "conclusion": "success",
+          "scan": {
+            "schema": "otziv-vulnerability-scan-v1",
+            "artifactCount": 1,
+            "high": 0,
+            "critical": 0,
+            "unfixedHighOrCritical": 0,
+            "blockingFixedHighOrCritical": 0,
+            "result": "PASS",
+            "unresolvedRiskReview": "NONE",
+            "scannerImage": "aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969"
+          },
+          "diagnostic": null
+        },
+        {
+          "jobId": 101858872654,
+          "name": "Pinned upstream image (prom-prometheus-a8482dc26f)",
+          "conclusion": "failure",
+          "scan": {
+            "schema": "otziv-vulnerability-scan-v1",
+            "artifactCount": 2,
+            "high": 94,
+            "critical": 6,
+            "unfixedHighOrCritical": 4,
+            "blockingFixedHighOrCritical": 96,
+            "result": "FAIL",
+            "unresolvedRiskReview": "REQUIRED",
+            "scannerImage": "aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969"
+          },
+          "diagnostic": null
+        },
+        {
+          "jobId": 101858872655,
+          "name": "Pinned upstream image (postgres-aca3723006)",
+          "conclusion": "failure",
+          "scan": {
+            "schema": "otziv-vulnerability-scan-v1",
+            "artifactCount": 2,
+            "high": 158,
+            "critical": 14,
+            "unfixedHighOrCritical": 86,
+            "blockingFixedHighOrCritical": 86,
+            "result": "FAIL",
+            "unresolvedRiskReview": "REQUIRED",
+            "scannerImage": "aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969"
+          },
+          "diagnostic": null
+        },
+        {
+          "jobId": 101858872657,
+          "name": "Pinned upstream image (mysql-d494426c1f)",
+          "conclusion": "failure",
+          "scan": {
+            "schema": "otziv-vulnerability-scan-v1",
+            "artifactCount": 3,
+            "high": 161,
+            "critical": 4,
+            "unfixedHighOrCritical": 0,
+            "blockingFixedHighOrCritical": 165,
+            "result": "FAIL",
+            "unresolvedRiskReview": "NONE",
+            "scannerImage": "aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969"
+          },
+          "diagnostic": null
+        },
+        {
+          "jobId": 101858872704,
+          "name": "Pinned upstream image (node-dc8b119ea9)",
+          "conclusion": "failure",
+          "scan": {
+            "schema": "otziv-vulnerability-scan-v1",
+            "artifactCount": 2,
+            "high": 10,
+            "critical": 1,
+            "unfixedHighOrCritical": 0,
+            "blockingFixedHighOrCritical": 11,
+            "result": "FAIL",
+            "unresolvedRiskReview": "NONE",
+            "scannerImage": "aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969"
+          },
+          "diagnostic": null
+        },
+        {
+          "jobId": 101858873305,
+          "name": "Pinned upstream image (quay-io-keycloak-keycloak-61bd1127b1)",
+          "conclusion": "failure",
+          "scan": {
+            "schema": "otziv-vulnerability-scan-v1",
+            "artifactCount": 2,
+            "high": 69,
+            "critical": 3,
+            "unfixedHighOrCritical": 1,
+            "blockingFixedHighOrCritical": 71,
+            "result": "FAIL",
+            "unresolvedRiskReview": "REQUIRED",
+            "scannerImage": "aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969"
+          },
+          "diagnostic": null
+        }
+      ],
+      "evidence": {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/hosted-quality-ci/c4/upstream-pr-actual-scans.json",
+        "sha256": "6a016192ab025b0087aa0af26209bd4bb5c705a906a25cd58a2652064f0a1acf"
+      }
+    },
+    "grafanaCandidate": {
+      "jobId": 101858650506,
+      "result": "FAILURE",
+      "imageId": "sha256:3dfa59f051df9a607a719034a530ebec79fdc005287f9e117958406f0d2f9ede",
+      "runtime": {
+        "result": "PASS",
+        "checksPassed": 12,
+        "cleanup": "PASS"
+      },
+      "rawHighFindings": [
+        {
+          "VulnerabilityID": "CVE-2026-21728",
+          "PkgName": "github.com/grafana/tempo",
+          "InstalledVersion": "v1.5.1-0.20260427112133-525d1bab07e0",
+          "FixedVersion": "2.8.4, 2.9.2, 2.10.2",
+          "Severity": "HIGH",
+          "Status": "fixed"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-28377",
+          "PkgName": "github.com/grafana/tempo",
+          "InstalledVersion": "v1.5.1-0.20260427112133-525d1bab07e0",
+          "FixedVersion": "2.10.3",
+          "Severity": "HIGH",
+          "Status": "fixed"
+        }
+      ],
+      "high": 2,
+      "critical": 0,
+      "blockingFixedHighOrCritical": 2,
+      "riskAccepted": false,
+      "reviewContext": "The retained Tempo pseudo-version findings have a separate ancestry review. That review does not change the raw scan or passing requirements.",
+      "relatedPublicReviewAtTestedHead": "https://github.com/Claidd/otziv_o/blob/c990a5bf0988c9d367c70504f6c4f530e956e3ab/infrastructure/runtime-security/GRAFANA_DERIVATIVE_2026-09-07.md",
+      "artifact": {
+        "id": 10032686017,
+        "archiveSha256": "b263e60895b80e63aa187659ff904d841b2378fd0d4c2d8ba44a489a18b32d58",
+        "summary": {
+          "path": ".codex-tmp/remediation-final-gaps-20260907/hosted-quality-ci/c4/grafana-pr-artifact-summary.json",
+          "sha256": "61858ccf97df68450e5169685a689fe69af138b96b26265535956ec959542af1"
+        }
+      }
+    },
+    "upstreamAggregate": {
+      "jobId": 101863622966,
+      "name": "Upstream image security gate",
+      "appId": 15368,
+      "result": "FAILURE",
+      "reason": "Fourteen upstream image scans and the Grafana candidate scan failed; their outcomes remain blocking."
+    }
+  },
+  "testedWorkflowSource": {
+    "head": "c990a5bf0988c9d367c70504f6c4f530e956e3ab",
+    "hashInput": "Exact Git blob bytes at tested C4 commit",
+    "files": [
+      {
+        "path": ".github/workflows/quality-gates.yml",
+        "sha256": "049f4b0a5156e82658a2e96e86e96c8922ccc2d775579a9a211470ac98e27f59"
+      },
+      {
+        "path": ".github/workflows/dependency-audit.yml",
+        "sha256": "06c8afbec7ca91746aacc38ac5b2d0637c6ab3515abebd337fcd704c7fbf43cd"
+      },
+      {
+        "path": ".github/workflows/secret-scan.yml",
+        "sha256": "85ad3f6705bd3660f405072817fa1cf04ef070ef38a6cc1bc5ca95617d7acc29"
+      },
+      {
+        "path": ".github/workflows/sql-injection-guard.yml",
+        "sha256": "24145f5693298a500d61e7d42938d8ed45f4b526647e669fed7e66ef8d912f9b"
+      },
+      {
+        "path": "infrastructure/scripts/security/expected-branch-policy.json",
+        "sha256": "1ae33a189cfdd1551be80544aeeba0575fa65a938a1eed2adf2a442a987261a8"
+      }
+    ],
+    "expectedCheckNames": [
+      "Repository contracts",
+      "Backend (full Testcontainers suite)",
+      "Issuer security generation (real Keycloak and PostgreSQL)",
+      "Frontend (unit and production build)",
+      "Mobile web (unit and production build)",
+      "WhatsApp gateway (unit)",
+      "External review worker (syntax and health)",
+      "Built web and mobile browser scenarios",
+      "Android native tests, lint and debug assembly",
+      "Shared client package and compatibility fixtures",
+      "Built integration image (backend)",
+      "Built integration image (web)",
+      "Built integration image (worker)",
+      "Built integration image (whatsapp)",
+      "Built integration image (observer)",
+      "Built integration image (publisher)",
+      "Dependency audit gate",
+      "Upstream image security gate",
+      "gitleaks",
+      "SQL injection guard"
+    ]
+  },
+  "evidenceRetention": {
+    "rawArtifacts": "Preserved under the private paths and hashes referenced above and in the cited GitHub run artifacts. Raw customer data and credentials are not included in this record.",
+    "priorEvidence": "Earlier C3 failures, local image validation and local recovery proofs remain unchanged.",
+    "checksMetadata": {
+      "path": ".codex-tmp/remediation-final-gaps-20260907/hosted-quality-ci/c4/check-runs-final.json",
+      "sha256": "e10e882e9566bbfaa6a518ff7b6c6aa052176c3cb219be1ab71c61b48e53e2ba"
+    },
+    "runMetadata": {
+      "path": ".codex-tmp/remediation-final-gaps-20260907/hosted-quality-ci/c4/runs-final.json",
+      "sha256": "07e1a6b3b102c69a54e5419c4f2f9b6e70dcf6b36e3de1c24ce33910c03c7570"
+    }
+  },
+  "limitations": [
+    "This is an observation record, not approval to merge, publish, deploy or weaken branch protection.",
+    "Two of the twenty expected required checks remain failed; all gates have not passed.",
+    "The hosted recovery used isolated synthetic data and an ephemeral recovery key; it does not prove production recovery-key custody or agreed production RPO/RTO.",
+    "Raw PostgreSQL findings are 73 HIGH and 13 CRITICAL, all without a fixed version in this scan. Its fixed-finding gate passing is not a zero-vulnerability assertion.",
+    "C4 outcomes apply only to the exact tested commit. Later fixes or documentation updates are outside this completed execution."
+  ]
+}

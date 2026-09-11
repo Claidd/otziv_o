@@ -3,6 +3,7 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const { serializedId } = require("./message-identity");
 
 const DELIVERY_STORE_COMPACT_EVERY = 256;
 const DELIVERY_STORE_MAX_ENTRIES = 50_000;
@@ -17,19 +18,6 @@ const SYSTEM_NOTIFICATION_TYPES = new Set([
   "notification_template",
   "protocol",
 ]);
-
-function serializedId(value) {
-  if (!value) {
-    return "";
-  }
-  if (typeof value === "string") {
-    return value.trim();
-  }
-  if (typeof value._serialized === "string") {
-    return value._serialized.trim();
-  }
-  return "";
-}
 
 function messageId(message) {
   return serializedId(message && message.id);
@@ -501,7 +489,8 @@ async function groupMetadata(message, groupId, log) {
   }
 }
 
-function createMessageHandler({ clientId, postWebhook, outboundRegistry, participantResolver, groupWebhookEnabled = true, log }) {
+function createMessageHandler({ clientId, postWebhook, outboundRegistry, participantResolver, groupWebhookEnabled = true,
+  outreachWebhookEnabled = true, log }) {
   if (typeof postWebhook !== "function") {
     throw new Error("postWebhook is required");
   }
@@ -542,20 +531,21 @@ function createMessageHandler({ clientId, postWebhook, outboundRegistry, partici
         systemGenerated,
         message: body,
       };
-      await postWebhook("/webhook/whatsapp-group-reply", payload);
-      return { delivered: true, group: true, systemGenerated };
+      const result = await postWebhook("/webhook/whatsapp-group-reply", payload);
+      return { [result && result.queued ? "queued" : "delivered"]: true, group: true, systemGenerated };
     }
 
-    if (message.fromMe) {
+    if (message.fromMe || !outreachWebhookEnabled) {
       return { ignored: true };
     }
-    await postWebhook("/webhook/outreach-reply", {
+    const result = await postWebhook("/webhook/outreach-reply", {
       clientId,
       from,
       messageId: externalMessageId,
+      timestamp: message.timestamp || null,
       message: body,
     });
-    return { delivered: true, group: false };
+    return { [result && result.queued ? "queued" : "delivered"]: true, group: false };
   };
 }
 

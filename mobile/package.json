@@ -11,7 +11,7 @@
     "build:prod:push": "powershell -ExecutionPolicy Bypass -File ./scripts/assert-android-firebase.ps1 && ng build --configuration production-push",
     "test:unit": "node --test test/*.test.mjs",
     "typecheck": "ng build --configuration development",
-    "verify": "npm run test:unit && npm run build",
+    "verify": "npm run test:unit && npm run test:runtime && npm run build",
     "verify:prod": "npm run build:prod",
     "watch": "ng build --watch --configuration development",
     "cap:sync": "npm run build && npx cap sync",
@@ -26,17 +26,18 @@
     "cap:ios:local": "npm run cap:sync:local && npx cap open ios",
     "cap:ios:prod": "npm run cap:sync:prod && npx cap open ios",
     "android:run:local": "powershell -ExecutionPolicy Bypass -File ./scripts/run-android-local.ps1",
-    "android:run:local:push": "powershell -ExecutionPolicy Bypass -File ./scripts/run-android-local.ps1 -Push"
+    "android:run:local:push": "powershell -ExecutionPolicy Bypass -File ./scripts/run-android-local.ps1 -Push",
+    "test:runtime": "ng test --watch=false"
   },
   "private": true,
   "packageManager": "npm@11.12.1",
   "dependencies": {
-    "@angular/common": "21.2.19",
-    "@angular/compiler": "21.2.19",
-    "@angular/core": "21.2.19",
-    "@angular/forms": "21.2.19",
-    "@angular/platform-browser": "21.2.19",
-    "@angular/router": "21.2.19",
+    "@angular/common": "21.2.23",
+    "@angular/compiler": "21.2.23",
+    "@angular/core": "21.2.23",
+    "@angular/forms": "21.2.23",
+    "@angular/platform-browser": "21.2.23",
+    "@angular/router": "21.2.23",
     "@aparajita/capacitor-secure-storage": "^8.0.0",
     "@capacitor/app": "^8.1.0",
     "@capacitor/app-launcher": "^8.0.1",
@@ -54,20 +55,34 @@
     "@ionic/angular": "^8.8.8",
     "ionicons": "^8.0.13",
     "rxjs": "~7.8.0",
-    "tslib": "^2.3.0"
+    "tslib": "^2.3.0",
+    "@otziv/client-common": "file:../shared/client-common"
   },
   "devDependencies": {
-    "@angular/build": "21.2.19",
-    "@angular/cli": "21.2.19",
-    "@angular/compiler-cli": "21.2.19",
+    "@angular/build": "21.2.23",
+    "@angular/cli": "21.2.23",
+    "@angular/compiler-cli": "21.2.23",
     "@capacitor/android": "^8.3.4",
     "@capacitor/cli": "^8.3.4",
     "@capacitor/ios": "^8.3.4",
+    "jsdom": "28.1.0",
     "prettier": "^3.8.1",
-    "typescript": "~5.9.2"
+    "typescript": "~5.9.2",
+    "vitest": "4.1.11"
   },
   "overrides": {
     "@modelcontextprotocol/sdk": "1.30.0",
-    "@hono/node-server": "2.0.12"
+    "@hono/node-server": "2.0.12",
+    "@angular/build": {
+      "undici": "7.29.0"
+    },
+    "jsdom": {
+      "undici": "7.29.0"
+    },
+    "node-gyp": {
+      "undici": "6.28.0"
+    },
+    "hono": "4.13.5",
+    "ip-address": "10.4.0"
   }
 }

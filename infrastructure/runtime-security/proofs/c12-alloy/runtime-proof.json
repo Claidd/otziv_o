@@ -1,0 +1,154 @@
+{
+  "schema": "otziv-monitoring-upgrade-v1",
+  "component": "alloy",
+  "production": false,
+  "startedAt": "2026-09-08T07:34:37.585Z",
+  "source": "grafana/alloy@sha256:6e00cf7c5a692ff5f24844529416ed017d76fce922f8199004e73d5eca46b6b8",
+  "candidate": "ghcr.io/claidd/otziv-security@sha256:a4ce96701d88e336791d1cca7745f5a87060a9834d8f4dd391de2a2072f57852",
+  "sourcePolicy": "REVIEWED_IMMUTABLE_HISTORICAL_BASELINE",
+  "sourceManifestSha256": "d48bdb7d6d869cde5d6f1a7b089491765e3eeaf46e0b0b6bb51b7719b38d3ef2",
+  "dataScope": "SYNTHETIC_SEEDED_PERSISTENT_VOLUME",
+  "productionHistoricalData": "NOT_TESTED",
+  "checks": [
+    {
+      "name": "source_real_readiness",
+      "passed": true
+    },
+    {
+      "name": "source_existing_compose_http_health_command_works",
+      "passed": true
+    },
+    {
+      "name": "stopped_source_volume_backed_up_before_upgrade",
+      "passed": true
+    },
+    {
+      "name": "candidate_real_readiness",
+      "passed": true
+    },
+    {
+      "name": "candidate_existing_compose_http_health_command_works",
+      "passed": true
+    },
+    {
+      "name": "candidate_reads_original_persisted_data",
+      "passed": true
+    },
+    {
+      "name": "restart_real_readiness",
+      "passed": true
+    },
+    {
+      "name": "restart_existing_compose_http_health_command_works",
+      "passed": true
+    },
+    {
+      "name": "candidate_restart_preserves_original_and_new_data",
+      "passed": true
+    },
+    {
+      "name": "rollback_real_readiness",
+      "passed": true
+    },
+    {
+      "name": "rollback_existing_compose_http_health_command_works",
+      "passed": true
+    },
+    {
+      "name": "restored_cursor_reads_new_append_without_replaying_original",
+      "passed": true
+    },
+    {
+      "name": "rollback_uses_backup_and_reads_only_preupgrade_data",
+      "passed": true
+    }
+  ],
+  "incompatibilities": [],
+  "configurationHashes": {
+    "alloy/config.alloy": "5f42d8586da504955bf5f04a7f1fbbcc87924f7571064fb1607efec5942cf7cf",
+    "grafana/dashboards/otziv-backend-performance.json": "c421c0888b5f016726a1081435d75bb3878ad66cff4967863d31b67a2b2610b3",
+    "grafana/dashboards/postgres-overview.json": "d371c2f0fdd8238720ea95ff0814bc7e71d51c9da0261390532cdf415e3d4d14",
+    "grafana/provisioning/dashboards/dashboards.yml": "951bdf8ca1b6ef6610159e0b84b19f2a251eaf525fbb0c7e33b67ee84575cc75",
+    "grafana/provisioning/datasources/datasources.yaml": "cfcec04f72e8e5ad5a0fc9580a6446afdc6d8ebe13be6b1ac3969ce88259b200",
+    "loki/loki-config.yaml": "39012aa876b2632827ffb02281e1a14081a8c7712b799e2ddf20e5d421c5fa58",
+    "prometheus/prometheus-local.yml": "e03a9680473037bf903502759bc9d0d2deba358a02afe8fe4ee7eedb452d6e90",
+    "prometheus/prometheus.yml": "9117bac93de893a3cb08a6b24265ed441e6f0eaeda8a8f71458b8d30a6fed64d",
+    "tempo/tempo.yaml": "3b1b35ccfe52ab2824bea077e9b9f4cdc4ca32dea75f246984cb2588c822012f"
+  },
+  "harnessSha256": {
+    "monitoring-upgrade.mjs": "d48eb0b97c1e85ca4d3ac65bc29c9a48f2d6fd0367c5dde8b4649b82cd5f385b",
+    "monitoring-source.mjs": "cad5ed316c6199301ec19c554b769bbdaa0dffeb9d67eb96e2df9f9cfc4a33f0",
+    "monitoring-scenarios.mjs": "a7f08ac97e7a38dcce9ae0d6c94b4edac05054d4eb4f2859d8f2638c8d012e85",
+    "monitoring-fixture-http.cjs": "c0192e2395f33f02165603e4ccc7f515fc965483b0c8a5feeae1a4fd0275ea7d",
+    "../docker-observer/consumer-fixture.cjs": "563356dfe7e8d7c683849354a2d91d3fdeefa0cb6cda2f8d034ee07976608ed4"
+  },
+  "sourceImageId": "sha256:6e00cf7c5a692ff5f24844529416ed017d76fce922f8199004e73d5eca46b6b8",
+  "candidateImageId": "sha256:a4ce96701d88e336791d1cca7745f5a87060a9834d8f4dd391de2a2072f57852",
+  "cursorScope": "ACTUAL_FILE_POSITIONS_ACROSS_UPGRADE_RESTART_AND_BACKUP_RESTORE",
+  "cursorFixtureConfigSHA256": "c428243b167c5bdd19438ad6e1e1d5c7500b69f710b0f49b0adfb3246289afb8",
+  "failedDockerOperation": "exec",
+  "diagnostic": "node:internal/deps/undici/undici:15157\n      Error.captureStackTrace(err);\n            ^\n\nTypeError: fetch failed\n    at node:internal/deps/undici/undici:15157:13\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async file:///observer/[eval1]:1:80 {\n  [cause]: Error: connect ECONNREFUSED 172.24.0.3:12345\n      at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1638:16) {\n    errno: -111,\n    code: 'ECONNREFUSED',\n    syscall: 'connect',\n    address: '172.24.0.3',\n    port: 12345\n  }\n}\n\nNode.js v22.23.2\n",
+  "healthCommands": {
+    "source": [
+      "/bin/alloy",
+      "validate",
+      "/etc/alloy/fixture.alloy"
+    ],
+    "candidate": [
+      "/bin/alloy",
+      "validate",
+      "/etc/alloy/fixture.alloy"
+    ],
+    "restart": [
+      "/bin/alloy",
+      "validate",
+      "/etc/alloy/fixture.alloy"
+    ],
+    "rollback": [
+      "/bin/alloy",
+      "validate",
+      "/etc/alloy/fixture.alloy"
+    ]
+  },
+  "sourceFileBackupSHA256": "3305ad828c2932eea95ac9753da70d5622c7317f9644002792e6fe073bdd7210",
+  "shutdowns": {
+    "source": {
+      "exitCode": 0,
+      "oomKilled": false
+    },
+    "candidate": {
+      "exitCode": 0,
+      "oomKilled": false
+    },
+    "restart": {
+      "exitCode": 0,
+      "oomKilled": false
+    },
+    "rollback": {
+      "exitCode": 0,
+      "oomKilled": false
+    }
+  },
+  "sourceVolumeManifest": [
+    {
+      "path": "alloy_seed.json",
+      "size": 112,
+      "mode": 33188,
+      "uid": 0,
+      "gid": 0,
+      "sha256": "f64f7aac0e7be43b8779bf4695aa8ffe4d13c5fe823052a16c167cbff6b552a1"
+    },
+    {
+      "path": "loki.source.file.backend_logs/positions.yml",
+      "size": 622,
+      "mode": 33152,
+      "uid": 0,
+      "gid": 0,
+      "sha256": "4bf8a9663600297373ae47fc3fe3e27749de9db6281c35451fc32b2215295aad"
+    }
+  ],
+  "restoredSourceFileSHA256": "3305ad828c2932eea95ac9753da70d5622c7317f9644002792e6fe073bdd7210",
+  "result": "PASS",
+  "cleanup": "PASS",
+  "finishedAt": "2026-09-08T07:35:34.279Z"
+}

@@ -1,0 +1,19 @@
+{
+  "schema": "otziv-c14-mysql-fresh-security-proof-v1",
+  "result": "PASS",
+  "createdAt": "2026-09-08T13:11:28.02480872Z",
+  "target": "ghcr.io/claidd/otziv-security@sha256:3a3caaab4e71b3bfdec9da21c17c00ed10ca237151919aeddac8e5ce4b8b7baa",
+  "imageConfigurationDigest": "sha256:80ee3b50147a329addbaf754abc4dce86dc06636624680d780351e2320a11070",
+  "scannerVersion": "0.74.0",
+  "scannerImage": "aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969",
+  "high": 0,
+  "critical": 0,
+  "blockingFixedHighOrCritical": 0,
+  "unfixedHighOrCritical": 0,
+  "exclusions": [],
+  "adjudications": [],
+  "freshDatabaseDownload": "Scanner log records fresh vulnerability database download from mirror.gcr.io/aquasec/trivy-db:2 ending2026-09-08T13:09:56Z. Database content-version metadata is not exported separately.",
+  "rawReportSha256": "b2ec3f567cf76fd0adcc85b447104449e250f221ea8a9074e18d641137b8f795",
+  "sbomSha256": "ff9fc42b87bd9975e5eac15afbde3f0990ce8e92af733e0b17e74881976e2b28",
+  "scannerLogSha256": "ef942c3684c76165ceca15aaec8fc7046c7d3bb4acfbeee7f48f9c543d0b424a"
+}

@@ -1,0 +1,103 @@
+{
+  "schema": "otziv-c14-local-s3-review-v1",
+  "result": "PASS",
+  "scope": "local-test-environment-only",
+  "implementation": "VersityGW v1.8.0; legacy service/inventory ID minio",
+  "baseRef": "ghcr.io/versity/versitygw@sha256:30292fc2eeacc67a36993b01f7a7a5e3361a19cced0e80c1d71cfa2a4b0a2499",
+  "localImageId": "sha256:25d625d20bc19627cdf7680aadb702dcdae239fe10dd289c4017ca40f22b5b32",
+  "imageConfigDigest": "sha256:3a9c4905bd44d29665849aa1258d1442660f9bc8e050898a7b5888582366b191",
+  "upstreamBinarySha256": "a44bb13582e9f62da5cf6f0c24285b7f575c68cab2959e12e547d3841c172bc5",
+  "upstreamBinaryUnchanged": true,
+  "scan": {
+    "timestamp": "2026-09-08T14:01:25.33269345Z",
+    "beforeHigh": 2,
+    "beforeCritical": 0,
+    "high": 0,
+    "critical": 0,
+    "totalRetainedFindings": 3,
+    "suppressed": 0,
+    "artifactTypes": [
+      "alpine",
+      "gobinary"
+    ],
+    "rawSha256": "fe2922a55ac2168dd7d019b9f8c6bea62d131feea03fc9d9c92b87cde4d355ed"
+  },
+  "packageChange": {
+    "packages": [
+      "libcrypto3",
+      "libssl3"
+    ],
+    "from": "3.5.7-r0",
+    "to": "3.5.8-r0",
+    "vendorFixedCVE": "CVE-2026-14456",
+    "fullInventoryLocked": true
+  },
+  "tests": {
+    "runtimeChecks": 36,
+    "runtimeResult": "PASS",
+    "runtimeRunnerSha256": "6f7ad058ba6d2bc1cf921fffec41e51d5660621095214cf3b501ccda4d8463b1",
+    "negativeClient192MiB": {
+      "exitCode": 137,
+      "oomKilled": true
+    },
+    "positiveClientMemoryMiB": 384,
+    "positiveClientGOMEMLIMIT": "256MiB",
+    "alteredInventoryLockBuildExitCode": 1
+  },
+  "limitations": [
+    "Versity POSIX versioning is documented as experimental; selected only for local test environment.",
+    "Fresh volume required. Old MinIO volume is preserved; no in-place format migration.",
+    "S3 copy restoration and same-volume restart only; no physical backup/distributed durability/production proof.",
+    "Successful local scan requires a fresh scan and registry/provenance verification for the actual published image."
+  ],
+  "sourceFiles": {
+    "infrastructure/runtime-security/builds/versity-c14/.gitattributes": "a79691a93b46e49ce460c26ef22afcc03d6eca1e63bf2edbc20e96159510f6c9",
+    "infrastructure/runtime-security/builds/versity-c14/candidate.test.mjs": "14eb42b94b997790d77ff117acd1329bdb8a65ff375be6dafd1f790a61a51d4e",
+    "infrastructure/runtime-security/builds/versity-c14/Dockerfile": "f54047c1df5d6e5622593d4f85260c91b8e14037419d215e03e411034bc7d103",
+    "infrastructure/runtime-security/builds/versity-c14/README.md": "a2759c8652d2e404886858152ffc0eb6a4954a35b209457e3e9dc827595bc7f1",
+    "infrastructure/runtime-security/builds/versity-c14/run-compatibility.mjs": "b90224fabb5be690650a23c01875db3b90373567299ae2ec3a56cf86ac49fc55",
+    "infrastructure/runtime-security/builds/versity-c14/runtime-apk.lock": "fab83a927426ea6b80f9ca6e82e93f181542521fe50fce00337bf1baf669277c"
+  },
+  "proofFiles": {
+    ".gitattributes": "8b9c3028d6467ff3be7c793141927841d70f47f52d0590677438f488ca154992",
+    ".gitignore": "a4c24d3909d4fb63885d5b7e32587585c2fa0828f59c9a6ef5b3addf732077e6",
+    "after/raw.json": "fe2922a55ac2168dd7d019b9f8c6bea62d131feea03fc9d9c92b87cde4d355ed",
+    "after/sbom.cdx.json": "2391562c71ccddb241ad45fa158ec9feb3b1c3332ef13f291ccbbb1f4c2dfe07",
+    "after/scanner.log": "cdd4dd33cedf1a7f89ec1a68ccae963104599ed158da587e1aa251945d9d076a",
+    "apk.after.lock": "fab83a927426ea6b80f9ca6e82e93f181542521fe50fce00337bf1baf669277c",
+    "apk.before.lock": "741d48e9d7b078cbbc98f161260cdef7d29b8a829197b7f1c3ff5cce70c78bd4",
+    "before/raw.json": "d2a617b268a2d82034ea47f8249083cbeb6f9f10853df36e7845a5272d2ba528",
+    "before/sbom.cdx.json": "38beae5d7db3a4508836e444e1fa4d962c2dbceb2f3574602f09996a601a2a31",
+    "before/scanner.log": "275525b506033f4456feee5ddfd67298aaf03ab8f8337fbd4e6d59bfcd1d1e5a",
+    "binary.before.sha256": "17c09438d34b7482389b4cad9d68bb5a2a8f3c5eee0937c8f683c3bab1fce647",
+    "binary.candidate.sha256": "a74f34963d3e870c343d63ba9a92970fda29faeb1084865a30c7106a594597f0",
+    "binary.original.sha256": "a74f34963d3e870c343d63ba9a92970fda29faeb1084865a30c7106a594597f0",
+    "build.log": "486e9f17e06541ea06ab8f9769e03c8301fc94d5a24345b0a885d913be6ef572",
+    "lf-build-metadata.json": "ec9da731e99f9a680c539c8a4dc4886c92b2a9991f90b4a360a25e162be2be55",
+    "lf-build.log": "ee19b5a0806a6425163c17e41f43e24fcbb04cfc2d84ec279ad86416d1fb8e55",
+    "lf-image-verification.txt": "e5f4f2b746a03ec60393fe482fb7b0200c23b8917834376a7027d57877e86cd4",
+    "lf-rebuild.json": "c477b5513d915bf8e8f1d796751ef54d367d0fee6cd68187405cd46bda616c8d",
+    "negative-lock.log": "b02db3332a136cc1f71dc6c28e51f4d1a8bdb67abea60087aeeabc0817642216",
+    "negative-runtime-apk.lock": "5d214720dc6a079c52a2c629887b0de2bbf98fd74ebf0ad501701493f547832d",
+    "primary/alpine-v3.24-main.json": "db40dc95af832788db3f4d2abf3b529214a4f92277a3c45eb9f4e9e9aabcb41d",
+    "primary/manifest.txt": "fbc2241a19d3f80d8850d69b57cb54c6073088ad4336c3eae3649480ee3f7545",
+    "primary/versity-Dockerfile": "2c279c47895cf16deda9b5dfa7a927cd550cd8180a41f9ffaa771d1f70ce0d06",
+    "primary/versity-entrypoint.sh": "8f5eb52949e1e348780c5c0a5e3d340bf178792d295465254f91b19d73c9db33",
+    "primary/versity-latest.json": "de4451efbbea0f0c3c78510d9c8c21f9dbff9f8e558b42e1d6d22c4e19c4f280",
+    "primary/versity-repo.json": "5b7cb8a7e9ee1bbd34d9ffce0494ea2327a891a77048586214bbf2c747e872cf",
+    "publication-payload.json": "d20d0b489a1de23b461ef242f2fd3be38251927b19b8eddf34cc66d8ef6cf8a2",
+    "repositories.txt": "7b8b3e6fe030eeb4ee7619b42c9419aa846bff1c632442d3f00ed9fb97c6fa36",
+    "runtime/candidate.json": "06c3e2e52406c05d1aecbc326ace5f8fde0cb1e686b94e0fdc9164bd3a850578",
+    "runtime/executed-runner-before-lf.mjs": "6f7ad058ba6d2bc1cf921fffec41e51d5660621095214cf3b501ccda4d8463b1",
+    "runtime/negative-192MiB-process.json": "37bc47a4b9c3a804953fba805b0a32b200571f6ffcdb1102cd39737b917dbc92",
+    "runtime/negative-192MiB.json": "8e7b7efb7d1170861f10f48ec89f0c2d83fbd01f1d98d7986b5b17283ebb15f8",
+    "runtime/original-published.json": "121395f1ec1c4bf3de525ae960773afeeb8ba7f5792b955df210d139357bab28",
+    "runtime/resources.json": "0985c93d54ccf1ffdb36b7733b0e8077c4ac51f49668c33aa14f3b2a9dfefbe0",
+    "source-normalization.json": "4d0dc2783a2dd70b62979e88cf29f3552d14cd4a9e9b7f526145a86bacc49f1d"
+  },
+  "canonicalSourceRebuild": {
+    "evidence": "lf-rebuild.json",
+    "runtimeRunnerSource": "runtime/executed-runner-before-lf.mjs",
+    "originalRawProofsUnchanged": true
+  }
+}

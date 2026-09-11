@@ -1,0 +1,68 @@
+import datetime, hashlib, io, json, os, pathlib, zipfile
+ROOT=pathlib.Path.cwd()
+SCRATCH=pathlib.Path(__file__).resolve().parent
+PROOF=ROOT/'infrastructure/runtime-security/proofs/c14-keycloak-published/final'
+TARGET=json.loads((SCRATCH/'execution-target.json').read_bytes())
+os.environ['OTZIV_RELEASE_HEAD']=TARGET['head']
+helper=ROOT/'.codex-tmp/release-readiness-20260908/ci/read-ci.py'
+prefix=helper.read_text(encoding='utf-8').split('parser = argparse.ArgumentParser()')[0]
+prefix=prefix.replace("capture_output=True, text=True,\n", "capture_output=True, text=True, encoding='utf-8', errors='replace',\n")
+exec(compile(prefix,str(helper),'exec'))
+OUT=SCRATCH/'api'/datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+OUT.mkdir(parents=True,exist_ok=False)
+RUN=int(TARGET['run'])
+run=get('/actions/runs/'+str(RUN),'run.json')
+assert run['head_sha']==HEAD and run['event']=='workflow_dispatch' and run['run_attempt']==1
+jobs=paged('/actions/runs/'+str(RUN)+'/attempts/1/jobs','jobs','jobs')
+rows=paged('/actions/runs/'+str(RUN)+'/artifacts','artifacts','artifacts')
+selected=[]
+for name in ['Inventory reviewed publication candidates','Publish reviewed candidate (keycloak)','Prove anonymous candidate download (keycloak)']:
+ matches=[j for j in jobs if j['name']==name]
+ assert len(matches)<=1
+ if matches:selected.append({k:matches[0].get(k) for k in ['id','name','status','conclusion']})
+summary={'observedAt':datetime.datetime.now(datetime.timezone.utc).isoformat(),'run':RUN,'head':HEAD,'status':run['status'],'conclusion':run['conclusion'],'jobs':selected,'imported':[]}
+PROOF.mkdir(parents=True,exist_ok=True)
+for name,job_name,directory in [('reviewed-publication-keycloak-attempt-1','Publish reviewed candidate (keycloak)','publication'),('anonymous-download-keycloak-attempt-1','Prove anonymous candidate download (keycloak)','anonymous')]:
+ job=next((j for j in jobs if j['name']==job_name),None)
+ if not job or job['conclusion']!='success':continue
+ matches=[a for a in rows if a['name']==name and not a['expired']]
+ if not matches:continue
+ assert len(matches)==1
+ artifact=matches[0]
+ assert artifact['workflow_run']['id']==RUN and artifact['workflow_run']['head_sha']==HEAD
+ receipt_path=PROOF/(directory+'-artifact-verification.json')
+ if receipt_path.exists():
+  receipt=json.loads(receipt_path.read_bytes())
+  assert receipt['artifactId']==artifact['id'] and receipt['apiDigest']==artifact['digest']
+  assert 'sha256:'+hashlib.sha256((PROOF/(name+'.zip')).read_bytes()).hexdigest()==artifact['digest']
+ else:
+  raw=fetch('/actions/artifacts/'+str(artifact['id'])+'/zip')
+  actual='sha256:'+hashlib.sha256(raw).hexdigest();assert actual==artifact['digest']
+  dest=PROOF/directory;assert not dest.exists()
+  with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+   members=archive.infolist();assert len(members)<1000 and sum(m.file_size for m in members)<100*1024*1024
+   seen=set()
+   for member in members:
+    name_in_zip=member.filename.rstrip('/')
+    assert name_in_zip and not any(c in name_in_zip for c in ['\\',':']) and not name_in_zip.startswith('/')
+    assert all(c not in ['.','..',''] for c in name_in_zip.split('/'))
+    assert name_in_zip not in seen;seen.add(name_in_zip)
+    assert (dest/name_in_zip).resolve().is_relative_to(dest.resolve())
+    assert ((member.external_attr>>16)&0o170000)!=0o120000
+   dest.mkdir();archive.extractall(dest)
+  (PROOF/(name+'.zip')).write_bytes(raw)
+  receipt={'schema':'otziv-github-artifact-hash-verification-v1','artifactId':artifact['id'],'name':name,'apiDigest':artifact['digest'],'actualDigest':actual,'verified':True,'run':str(RUN),'attempt':'1','commit':HEAD,'jobId':job['id'],'files':{str(p.relative_to(dest)).replace('\\','/'):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(dest.rglob('*')) if p.is_file()}}
+  receipt_path.write_text(json.dumps(receipt,indent=2)+'\n',encoding='utf-8',newline='\n')
+ summary['imported'].append({'artifactId':artifact['id'],'name':name,'sha256':artifact['digest']})
+pub=PROOF/'publication/publication.json'
+if pub.exists():
+ publication=json.loads(pub.read_bytes())
+ assert publication['commit']==HEAD and publication['run']==str(RUN) and publication['attempt']=='1' and publication['component']=='keycloak' and publication['manifestSet']=='c14-keycloak'
+ assert publication['result']=='PASS' and publication['security']['result']=='PASS'
+ summary['publication']={k:publication[k] for k in ['reference','imageId','security']}
+if all(any(j['name']==name and j['conclusion']=='success' for j in jobs) for name in ['Publish reviewed candidate (keycloak)','Prove anonymous candidate download (keycloak)']):
+ for name,data in [('hosted-run.json',run),('hosted-jobs.json',jobs),('hosted-artifacts.json',rows)]:
+  target=PROOF/name
+  if not target.exists():target.write_text(json.dumps(data,indent=2)+'\n',encoding='utf-8',newline='\n')
+(OUT/'summary.json').write_text(json.dumps(summary,indent=2)+'\n',encoding='utf-8',newline='\n')
+print(json.dumps(summary))

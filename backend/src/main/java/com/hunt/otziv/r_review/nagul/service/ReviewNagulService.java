@@ -11,8 +11,11 @@ import com.hunt.otziv.u_users.service.UserService;
 import com.hunt.otziv.u_users.service.WorkerService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.security.Principal;
 import java.time.LocalDate;
@@ -69,6 +72,19 @@ public class ReviewNagulService {
     @Transactional
     public void performNagulWithExceptions(Long reviewId, String username) {
         assignmentMutationGuardService.assertReview(reviewId);
+        performNagulInternal(reviewId, username);
+    }
+
+    @Transactional
+    public void performNagulWithExceptions(Long reviewId, String username, Authentication authentication) {
+        assignmentMutationGuardService.assertReview(reviewId, authentication);
+        if (authentication == null || !java.util.Objects.equals(authentication.getName(), username)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Пользователь действия не совпадает с авторизацией");
+        }
+        performNagulInternal(reviewId, username);
+    }
+
+    private void performNagulInternal(Long reviewId, String username) {
         User currentUser = userService.findByUserName(username)
                 .orElseThrow(() -> new RuntimeException("Пользователь не найден"));
 

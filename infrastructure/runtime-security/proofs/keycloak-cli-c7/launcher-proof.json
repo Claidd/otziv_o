@@ -1,0 +1,16 @@
+{
+  "image": "sha256:73f6667a8062cfe7a17d67354a52d6bcd196f18a26bd01dd0faba7be1fbc0562",
+  "launchers": [
+    {
+      "path": "/opt/keycloak/bin/kcadm.sh",
+      "sha256": "3ea0f7cfd658d715ab931c310297840863c6298fc4d2e43e5c6f43da6449246f",
+      "officialSourceVersionFilteringOnly": true
+    },
+    {
+      "path": "/opt/keycloak/bin/kcreg.sh",
+      "sha256": "601fa4e7c7f557828e742ec28ba724c619505f5a9ce23d7f60ad2301832c2ad2",
+      "officialSourceVersionFilteringOnly": true
+    }
+  ],
+  "recipeCopiesOnlyCliJar": true
+}

@@ -1,0 +1,23 @@
+{
+  "schema": "otziv-c12-alloy-published-binary-v1",
+  "createdAt": "2026-09-08T06:44:00.313017+00:00",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:a4ce96701d88e336791d1cca7745f5a87060a9834d8f4dd391de2a2072f57852",
+  "localImageId": "sha256:a4ce96701d88e336791d1cca7745f5a87060a9834d8f4dd391de2a2072f57852",
+  "rawReportSha256": "0ed6934afd2fce73be9eff9ecbfd2ee69c92ab4f210b06e88ca71315dbc8beec",
+  "binarySha256": "2c21e2c85e1e88c88b3335d39c84ae5414232514aeaaea02457fef54f4c5e3dc",
+  "buildInfoSha256": "55691e5409e905eae7a3cf3ffa90754c4649124eb4170f4b1cd75427078d411f",
+  "linkedFunctionsSha256": "6277808c8bdbf83b04225b12979c310367b16f029a148f3e5cfd06a5cf92ebc3",
+  "linkedFunctions": 418393,
+  "dockerModuleFunctions": 474,
+  "daemonFunctions": 0,
+  "dockerFunctionPrefixes": [
+    "github.com/docker/docker",
+    "github.com/docker/docker/api",
+    "github.com/docker/docker/api/types",
+    "github.com/docker/docker/api/types/swarm"
+  ],
+  "rootfsAndLabelsMatch": true,
+  "inspectedBinaryExecuted": false,
+  "sourceClosureRequired": true,
+  "decision": "NO_ADJUDICATION_YET"
+}

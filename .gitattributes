@@ -1,1 +1,42 @@
 *.sh text eol=lf
+backend/mvnw text eol=lf
+
+# Generated contracts are compared byte-for-byte by the drift checks.
+contracts/generated/*.json text eol=lf
+shared/client-common/src/*.generated.ts text eol=lf
+
+# Publication evidence is verified against the exact retained bytes.
+.gitleaks.toml text eol=lf
+infrastructure/runtime-security/reviewed-images.json text eol=lf
+infrastructure/runtime-security/history/** -text
+infrastructure/runtime-security/proofs/** -text
+# Retained upstream source/patch bytes include upstream whitespace; do not rewrite evidence.
+infrastructure/runtime-security/proofs/c15-postgres-libxml/upstream-* -whitespace
+infrastructure/keycloak/security-generation/proofs/** -text
+infrastructure/runtime-security/KEYCLOAK_ADVISORY_VALIDATION_2026-09-08.json -text
+
+infrastructure/runtime-security/adjudications/alloy-daemon/** -text
+
+infrastructure/runtime-security/builds/phpmyadmin-alpine/** text eol=lf
+infrastructure/runtime-security/reviewed-images-c12-phpmyadmin.json text eol=lf
+infrastructure/runtime-security/reviewed-images-c14-*.json text eol=lf
+infrastructure/runtime-security/reviewed-images-c15-*.json text eol=lf
+infrastructure/runtime-security/builds/*.Dockerfile text eol=lf
+infrastructure/keycloak/security-generation/c15-netty/** text eol=lf
+# Keep the exact executed harnesses and runtime receipts byte-identical in the evidence graph.
+infrastructure/keycloak/security-generation/c15-netty/proofs/** -text
+infrastructure/keycloak/security-generation/c15-netty/replay-actual.py -text
+infrastructure/keycloak/security-generation/container-proof.mjs -text
+infrastructure/runtime-security/adjudications/grafana-tempo-c15/** -text
+infrastructure/runtime-security/adjudications/alloy-daemon-c15/** -text
+infrastructure/runtime-security/builds/minio/** text eol=lf
+infrastructure/runtime-security/builds/mc-c15/** text eol=lf
+infrastructure/runtime-security/builds/postgres-c14/** text eol=lf
+infrastructure/runtime-security/builds/versity-c14/** text eol=lf
+infrastructure/keycloak/security-generation/c14-migration-fix/** text eol=lf
+infrastructure/keycloak/security-generation/c14-migration-fix/proofs/** -text
+infrastructure/runtime-security/postgres-c14-adjudication.mjs text eol=lf
+# Executed MySQL rehearsal sources are included in the hashed evidence graph.
+infrastructure/runtime-security/mysql-upgrade-rehearsal.mjs text eol=lf
+infrastructure/runtime-security/mysql-upgrade-rehearsal.test.mjs text eol=lf
+infrastructure/runtime-security/mysql-vps-release-rehearsal.test.mjs text eol=lf

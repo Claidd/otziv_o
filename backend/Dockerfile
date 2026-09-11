@@ -2,9 +2,15 @@
 
 FROM maven:3.9.15-eclipse-temurin-26-alpine@sha256:9b0bc1420b93f3eafb7401dc3030eac01e773d8d709686d3c4ac351fcf6f9f42 AS build
 WORKDIR /app
+COPY build-support ./build-support
 COPY pom.xml .
 COPY src ./src
-RUN --mount=type=cache,target=/root/.m2 mvn -B -ntp clean package -DskipTests
+# A cached RUN layer does not restore the mutable Maven cache mount. Install
+# downstream build artifacts in the same execution that consumes them, including
+# after cache eviction; serialize users of the shared local Maven repository.
+RUN --mount=type=cache,target=/root/.m2,sharing=locked \
+    mvn -B -ntp -f build-support/pom.xml install \
+    && mvn -B -ntp clean package -DskipTests
 
 FROM eclipse-temurin:26-jre-jammy@sha256:3e83fe06950ab45b8fee3c8fccdbb3dc0cc203c4518babdd9e8957c31284c9d5
 RUN apt-get update \
@@ -57,4 +63,4 @@ USER otziv:otziv
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=5 \
     CMD curl -fsS http://localhost:8080/actuator/health || exit 1
 
-ENTRYPOINT ["sh", "-c", "java ${JAVA_OPTS:-} -jar /app/app.jar"]
+ENTRYPOINT ["sh", "-c", "exec java ${JAVA_OPTS:-} -jar /app/app.jar"]

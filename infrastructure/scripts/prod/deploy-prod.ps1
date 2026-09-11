@@ -4,6 +4,8 @@ param(
     [string]$AppRepository = "otziv-app",
     [string]$WebRepository = "otziv-web",
     [string]$ExternalReviewWorkerRepository = "otziv-external-review-worker",
+    [string]$WhatsAppRepository = "otziv-whatsapp",
+    [string]$DockerObserverRepository = "otziv-docker-observer",
     [string]$Tag = (Get-Date -Format "yyyyMMdd-HHmmss"),
     [string]$VpsHost = "",
     [string]$VpsUser = "hunt",
@@ -18,6 +20,7 @@ param(
     [switch]$SkipBuildPush,
     [switch]$SkipEnvUpload,
     [switch]$EnableExternalReviewWorker,
+    [ValidateSet('whatsapp_lika', 'whatsapp_vika')][string[]]$AllowWhatsAppQrPending = @(),
     [string]$MobileApkPath = "",
     [switch]$SkipMobileApkUpload,
     [string]$PreDeployBackupDirectory = "",
@@ -30,6 +33,9 @@ param(
     [string]$DeploySnapshotBaseRevision = "",
     [string]$DeploySnapshotRevision = "",
     [string]$DeployProtectedMainRevision = "",
+    [string]$PrivateRegistryControlFile = "",
+    [switch]$RebuildWhatsApp,
+    [switch]$RequireMainCi,
     [switch]$Help
 )
 
@@ -56,6 +62,8 @@ Useful options:
   -SkipBuildPush                 Skip build/push and deploy already published images for enabled services.
   -SkipEnvUpload                 Keep VPS env and update app/web/external-worker image tags in it.
   -EnableExternalReviewWorker    Opt in to building and running the external review checker (disabled by default).
+  -AllowWhatsAppQrPending        Named gateways may await phone QR if their operation and inbox storage pass checks.
+                                Delivery remains unavailable and readiness alerts remain active for those gateways.
   -MobileApkPath <path>          Publish this signed release APK. By default uses the highest code from mobile/builds.
   -SkipMobileApkUpload           Do not include a mobile APK in this deployment.
   -PreDeployBackupDirectory      Local directory for the mandatory encrypted pre-migration DB backup.
@@ -68,6 +76,9 @@ Useful options:
 When deployment inputs contain local changes, this script automatically creates an
 isolated Git snapshot, validates affected components, and deploys from its clean
 temporary worktree. Your branch, staging area, and working files are not changed.
+Application, web, Docker observer and changed WhatsApp images are built locally. Published tags are
+resolved to immutable digests; disk capacity is checked before backup/autostart
+pause and again before rollout. The script does not delete old images to make room.
 '@ | Write-Host
 }
 
@@ -954,7 +965,7 @@ Write-Host "Deployment revision: $gitRevision"
 Write-Host "Traceable image tag: $Tag"
 
 $deployWhatsAppChanged = $true
-if ($PreparedDeploySnapshot) {
+if ($PreparedDeploySnapshot -and -not $RebuildWhatsApp) {
     $deployChangedFiles = @(& git -C $repoRoot diff --name-only --diff-filter=ACDMRTUXB $DeploySnapshotBaseRevision $gitRevision)
     if ($LASTEXITCODE -ne 0) {
         throw 'Unable to determine deploy snapshot changed files for WhatsApp image policy.'
@@ -977,8 +988,11 @@ $buildCompose = Join-Path $repoRoot "docker-compose.build.yaml"
 $appImage = "${DockerHubNamespace}/${AppRepository}:${Tag}"
 $webImage = "${DockerHubNamespace}/${WebRepository}:${Tag}"
 $externalReviewWorkerImage = "${DockerHubNamespace}/${ExternalReviewWorkerRepository}:${Tag}"
+$whatsAppImage = "${DockerHubNamespace}/${WhatsAppRepository}:${Tag}"
+$dockerObserverImage = "${DockerHubNamespace}/${DockerObserverRepository}:${Tag}"
 $deployBundlePaths = @(
     "docker-compose.yaml",
+    "compose.monitoring.yaml",
     ".dockerignore",
     "Dockerfile.whatsapp",
     "whatsapp\package.json",
@@ -986,26 +1000,58 @@ $deployBundlePaths = @(
     "whatsapp\index.js",
     "whatsapp\chromium-launch.js",
     "whatsapp\chromium-smoke.js",
+    "whatsapp\compatibility-smoke.js",
     "whatsapp\internal-auth.js",
+    "whatsapp\operation-ledger.js",
+    "whatsapp\operation-ledger-index.js",
+    "whatsapp\operation-ledger-owner.js",
+    "whatsapp\operation-ledger-recovery.js",
+    "whatsapp\operation-ledger-maintenance.js",
+    "whatsapp\operation-ledger-benchmark.js",
+    "whatsapp\OPERATION_LEDGER_RECOVERY.md",
+    "whatsapp\OUTBOUND_OPERATIONS.md",
+    "whatsapp\outbound-routes.js",
+    "whatsapp\task-limiter.js",
+    "whatsapp\client-lifecycle.js",
+    "whatsapp\remote-session-fence.js",
+    "whatsapp\remote-session-admin.js",
+    "whatsapp\remote-session-smoke.js",
+    "whatsapp\puppeteer-compatibility.js",
     "whatsapp\message-webhook.js",
+    "whatsapp\message-identity.js",
+    "whatsapp\operation-reconciliation.js",
+    "whatsapp\inbound-inbox.js",
+    "whatsapp\inbound-history.js",
     "whatsapp\raw-chat-reconciliation.js",
     "whatsapp\group-invite.js",
     "whatsapp\groups-cache.js",
     "whatsapp\last-seen.js",
     "whatsapp\remote-browser.js",
+    "docs\WHATSAPP_INBOUND_DELIVERY_RUNBOOK.md",
+    "docs\WHATSAPP_REMOTE_SESSION_RECOVERY.md",
     "infrastructure\nginx",
     "infrastructure\keycloak",
     "infrastructure\prometheus",
     "infrastructure\loki",
     "infrastructure\tempo",
     "infrastructure\alloy",
+    "infrastructure\docker-observer",
+    # Scan reports/source proofs stay with the release evidence in Git. Only the
+    # runtime seccomp policy is mounted by production containers.
+    "infrastructure\runtime-security\chromium-seccomp.json",
+    "infrastructure\monitoring",
     "infrastructure\grafana",
     "infrastructure\systemd\otziv-prod-up.timer",
     "infrastructure\systemd\otziv-prod-up.service.in",
     "infrastructure\scripts\prod\apply-keycloak-prod-settings.sh",
     "infrastructure\scripts\prod\validate-flyway-migrations.sh",
+    "infrastructure\scripts\prod\rollout-docker-observer.sh",
     "infrastructure\scripts\prod\create-pre-deploy-db-backup.sh",
     "infrastructure\scripts\prod\otziv-prod-up.sh",
+    "infrastructure\scripts\prod\database_image_guard.py",
+    "infrastructure\scripts\prod\deployment_capacity.py",
+    "infrastructure\scripts\prod\whatsapp_deploy_state.py",
+    "infrastructure\scripts\prod\image_layer_capacity.py",
     "infrastructure\scripts\prod\register-max-webhook.sh",
     "infrastructure\scripts\prod\init-letsencrypt.sh",
     "infrastructure\scripts\prod\renew-letsencrypt.sh",
@@ -1102,13 +1148,14 @@ Write-Host "  SSH_KEY=$SshKey"
 Write-Host "  SSH_KNOWN_HOSTS=$SshKnownHostsFile"
 Write-Host "  APP_IMAGE=$appImage"
 Write-Host "  WEB_IMAGE=$webImage"
+Write-Host "  DOCKER_OBSERVER_IMAGE=$dockerObserverImage"
 if ($EnableExternalReviewWorker) {
     Write-Host "  EXTERNAL_REVIEW_WORKER_IMAGE=$externalReviewWorkerImage (enabled)"
 } else {
     Write-Host "  EXTERNAL_REVIEW_WORKER=disabled (use -EnableExternalReviewWorker to opt in)"
 }
 if ($deployWhatsAppChanged) {
-    Write-Host "  WHATSAPP_IMAGE=otziv-whatsapp:$Tag (remote build required)"
+    Write-Host "  WHATSAPP_IMAGE=$whatsAppImage (built locally and published before rollout)"
 } else {
     Write-Host "  WHATSAPP_IMAGE=reuse current remote image (sources unchanged)"
 }
@@ -1157,6 +1204,8 @@ if ($DockerLogin) {
 $env:APP_IMAGE = $appImage
 $env:WEB_IMAGE = $webImage
 $env:EXTERNAL_REVIEW_WORKER_IMAGE = $externalReviewWorkerImage
+$env:WHATSAPP_IMAGE = $whatsAppImage
+$env:DOCKER_OBSERVER_IMAGE = $dockerObserverImage
 
 if ($PreparedDeploySnapshot) {
     [void](Assert-OtzivPreparedDeploySnapshotState -Repository $repoRoot `
@@ -1167,10 +1216,11 @@ if (-not $SkipBuildPush) {
     if ($NoBuildCache) {
         $buildArgs += "--no-cache"
     }
-    $buildArgs += @("app", "nginx")
+    $buildArgs += @("app", "nginx", "docker-observer")
     if ($EnableExternalReviewWorker) {
         $buildArgs += "external-review-worker"
     }
+    if ($deployWhatsAppChanged) { $buildArgs += "whatsapp" }
     Invoke-External -FilePath "docker" -Arguments $buildArgs
     if ($PreparedDeploySnapshot) {
         [void](Assert-OtzivPreparedDeploySnapshotState -Repository $repoRoot `
@@ -1180,13 +1230,29 @@ if (-not $SkipBuildPush) {
     Invoke-ExternalWithRetry -FilePath "docker" -Arguments @("push", $appImage) -Attempts 3 -DelaySeconds 10
     Write-Host "Pushing web image..."
     Invoke-ExternalWithRetry -FilePath "docker" -Arguments @("push", $webImage) -Attempts 3 -DelaySeconds 10
+    Write-Host "Pushing Docker observer image..."
+    Invoke-ExternalWithRetry -FilePath "docker" -Arguments @("push", $dockerObserverImage) -Attempts 3 -DelaySeconds 10
     if ($EnableExternalReviewWorker) {
         Write-Host "Pushing external review worker image..."
         Invoke-ExternalWithRetry -FilePath "docker" -Arguments @("push", $externalReviewWorkerImage) -Attempts 3 -DelaySeconds 10
     }
+    if ($deployWhatsAppChanged) {
+        Invoke-ExternalWithRetry -FilePath "docker" -Arguments @("push", $whatsAppImage) -Attempts 3 -DelaySeconds 10
+    }
     Write-Host "Docker images pushed successfully."
 } else {
     Write-Host "Skipping docker build/push; deploying already published images."
+}
+
+if (-not [string]::IsNullOrWhiteSpace($PrivateRegistryControlFile)) {
+    # The normal entry point owns this loopback registry and its SSH tunnel.
+    # Freeze published tags before digest resolution and any rollout action.
+    Invoke-External -FilePath 'python' -Arguments @(
+        (Join-Path $PSScriptRoot 'release_registry.py'), 'seal', $PrivateRegistryControlFile)
+}
+
+if ($RequireMainCi) {
+    Invoke-External -FilePath 'python' -Arguments @((Join-Path $PSScriptRoot 'release_ci.py'), '--repo', $repoRoot)
 }
 
 if ($null -ne $mobileRelease) {
@@ -1346,6 +1412,31 @@ try {
     if (Test-Path -LiteralPath $bundlePath) {
         Remove-Item -LiteralPath $bundlePath -Force
     }
+    # Resolve published tags to immutable digests and inventory their actual sizes.
+    # This happens locally; the VPS never builds Chromium or Maven during rollout.
+    $capacityPlanPath = Join-Path $stageRoot '.deploy-capacity.json'
+    $capacityArguments = @((Join-Path $scriptRoot 'deployment_capacity.py'), 'prepare',
+        '--compose', (Join-Path $repoRoot 'docker-compose.yaml'), '--revision', $gitRevision,
+        '--output', $capacityPlanPath, '--app', $appImage, '--nginx', $webImage,
+        '--docker-observer', $dockerObserverImage)
+    if ($EnableExternalReviewWorker) { $capacityArguments += @('--external-review-worker', $externalReviewWorkerImage) }
+    if ($deployWhatsAppChanged) { $capacityArguments += @('--whatsapp', $whatsAppImage) }
+    Invoke-External -FilePath 'python' -Arguments $capacityArguments
+    $capacityPlan = Get-Content -Raw -Encoding UTF8 -LiteralPath $capacityPlanPath | ConvertFrom-Json
+    $appImage = $capacityPlan.releaseImages.app
+    $webImage = $capacityPlan.releaseImages.nginx
+    $dockerObserverImage = $capacityPlan.releaseImages.'docker-observer'
+    if ($EnableExternalReviewWorker) { $externalReviewWorkerImage = $capacityPlan.releaseImages.'external-review-worker' }
+    if ($deployWhatsAppChanged) { $whatsAppImage = $capacityPlan.releaseImages.whatsapp }
+    $keycloakImage = $capacityPlan.releaseImages.keycloak
+    if (-not $SkipEnvUpload) {
+        Set-EnvFileValue -Path $stageEnv -Name 'APP_IMAGE' -Value $appImage
+        Set-EnvFileValue -Path $stageEnv -Name 'WEB_IMAGE' -Value $webImage
+        Set-EnvFileValue -Path $stageEnv -Name 'DOCKER_OBSERVER_IMAGE' -Value $dockerObserverImage
+        Set-EnvFileValue -Path $stageEnv -Name 'EXTERNAL_REVIEW_WORKER_IMAGE' -Value $externalReviewWorkerImage
+        if ($deployWhatsAppChanged) { Set-EnvFileValue -Path $stageEnv -Name 'WHATSAPP_IMAGE' -Value $whatsAppImage }
+        Set-EnvFileValue -Path $stageEnv -Name 'OTZIV_KEYCLOAK_IMAGE' -Value $keycloakImage
+    }
     Invoke-External -FilePath "tar" -Arguments @("-czf", $bundlePath, "-C", $stageRoot, ".")
     Protect-SensitiveLocalPath -Path $bundlePath
 
@@ -1376,7 +1467,11 @@ chmod 600 $remoteBundleForUploadQuoted
     $webRepoQuoted = ConvertTo-BashSingleQuoted "${DockerHubNamespace}/${WebRepository}"
     $appImageQuoted = ConvertTo-BashSingleQuoted $appImage
     $webImageQuoted = ConvertTo-BashSingleQuoted $webImage
+    $dockerObserverImageQuoted = ConvertTo-BashSingleQuoted $dockerObserverImage
     $externalReviewWorkerImageQuoted = ConvertTo-BashSingleQuoted $externalReviewWorkerImage
+    $whatsAppImageQuoted = ConvertTo-BashSingleQuoted $whatsAppImage
+    $keycloakImageQuoted = ConvertTo-BashSingleQuoted $keycloakImage
+    $gitRevisionQuoted = ConvertTo-BashSingleQuoted $gitRevision
     $remoteEnvFileQuoted = ConvertTo-BashSingleQuoted $RemoteEnvFile
     $deployTagQuoted = ConvertTo-BashSingleQuoted $Tag
     $vpsHostQuoted = ConvertTo-BashSingleQuoted $VpsHost
@@ -1384,6 +1479,7 @@ chmod 600 $remoteBundleForUploadQuoted
     $uploadedEnv = if ($SkipEnvUpload) { "0" } else { "1" }
     $deployExternalReviewWorker = if ($EnableExternalReviewWorker) { "1" } else { "0" }
     $deployWhatsAppChangedFlag = if ($deployWhatsAppChanged) { "1" } else { "0" }
+    $whatsAppQrPendingQuoted = if ($AllowWhatsAppQrPending.Count -eq 0) { "''" } else { ConvertTo-BashSingleQuoted ($AllowWhatsAppQrPending -join ',') }
 
     # Create and independently download a verified encrypted DB backup before
     # the remote rollout can start Flyway. The deploy bundle is only read here;
@@ -1540,8 +1636,11 @@ trap cleanup_preflight EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 preflight_dir="`$(mktemp -d "`$remote_path/.deploy-preflight.XXXXXXXX")"
+tar --warning=no-timestamp -xzf "`$bundle_path" -C "`$preflight_dir" ./infrastructure/scripts/prod/create-pre-deploy-db-backup.sh ./infrastructure/scripts/prod/deployment_capacity.py ./infrastructure/scripts/prod/image_layer_capacity.py ./.deploy-capacity.json
+python3 "`$preflight_dir/infrastructure/scripts/prod/deployment_capacity.py" check \
+  --plan "`$preflight_dir/.deploy-capacity.json" --revision $gitRevisionQuoted \
+  --deploy-path "`$remote_path" --bundle "`$bundle_path" --before-backup
 pause_self_heal
-tar --warning=no-timestamp -xzf "`$bundle_path" -C "`$preflight_dir" ./infrastructure/scripts/prod/create-pre-deploy-db-backup.sh
 backup_env="`$remote_path/`$env_file"
 if [ "`$uploaded_env" = "1" ]; then
   tar --warning=no-timestamp -xzf "`$bundle_path" -C "`$preflight_dir" "./`$env_file"
@@ -1689,7 +1788,11 @@ app_repo=$appRepoQuoted
 web_repo=$webRepoQuoted
 app_image=$appImageQuoted
 web_image=$webImageQuoted
+docker_observer_image=$dockerObserverImageQuoted
 external_review_worker_image=$externalReviewWorkerImageQuoted
+published_whatsapp_image=$whatsAppImageQuoted
+keycloak_image=$keycloakImageQuoted
+release_revision=$gitRevisionQuoted
 deploy_external_review_worker=$deployExternalReviewWorker
 deploy_whatsapp_changed=$deployWhatsAppChangedFlag
 env_file=$remoteEnvFileQuoted
@@ -1712,6 +1815,9 @@ release_payload_complete="0"
 mobile_storage_owner_needs_restore="0"
 active_env_temp=""
 active_systemd_unit_stage=""
+database_guard_temp=""
+capacity_check_dir=""
+database_image_override=""
 
 assert_self_heal_stopped() {
   for unit in "`$self_heal_timer" "`$self_heal_service"; do
@@ -1812,6 +1918,12 @@ deploy_cleanup() {
   fi
   rm -f -- "`$bundle_path" "`$rollout_script_path" || true
   rmdir -- "`$deploy_bundle_dir" 2>/dev/null || true
+  if [ -n "`$database_guard_temp" ]; then
+    rm -f -- "`$database_guard_temp" || true
+  fi
+  if [ -n "`$capacity_check_dir" ]; then
+    rm -rf -- "`$capacity_check_dir" || true
+  fi
   if [ -n "`$active_env_temp" ]; then
     rm -f -- "`$active_env_temp" || true
   fi
@@ -1916,20 +2028,31 @@ self_heal_guard_engaged="1"
 # Docker Compose gives exported shell variables precedence over --env-file.
 # Remove release-critical overrides inherited through SSH and pin the project
 # name so every pull/recreate targets the audited production project.
-unset APP_IMAGE WEB_IMAGE EXTERNAL_REVIEW_WORKER_IMAGE WHATSAPP_IMAGE
+unset APP_IMAGE WEB_IMAGE EXTERNAL_REVIEW_WORKER_IMAGE WHATSAPP_IMAGE OTZIV_KEYCLOAK_IMAGE DOCKER_OBSERVER_IMAGE
 unset EXTERNAL_REVIEW_CHECK_ENABLED COMPOSE_FILE COMPOSE_PROJECT_NAME COMPOSE_PROFILES
 unset COMPOSE_ENV_FILES COMPOSE_DISABLE_ENV_FILE
 compose_project_name="otziv-prod"
 
 compose() {
+  local database_override_args=()
+  if [ -n "`$database_image_override" ]; then
+    database_override_args=(-f "`$database_image_override")
+  fi
   if docker compose version >/dev/null 2>&1; then
-    docker compose --project-name "`$compose_project_name" --project-directory "`$remote_path" -f "`$remote_path/docker-compose.yaml" --env-file "`$remote_path/`$env_file" "`$@"
+    docker compose --project-name "`$compose_project_name" --project-directory "`$remote_path" -f "`$remote_path/docker-compose.yaml" --env-file "`$remote_path/`$env_file" "`${database_override_args[@]}" "`$@"
   elif command -v docker-compose >/dev/null 2>&1; then
-    docker-compose --project-name "`$compose_project_name" --project-directory "`$remote_path" -f "`$remote_path/docker-compose.yaml" --env-file "`$remote_path/`$env_file" "`$@"
+    docker-compose --project-name "`$compose_project_name" --project-directory "`$remote_path" -f "`$remote_path/docker-compose.yaml" --env-file "`$remote_path/`$env_file" "`${database_override_args[@]}" "`$@"
   else
     echo "Docker Compose is not installed. Install docker-compose or the Docker Compose plugin." >&2
     exit 1
   fi
+}
+
+guard_database_images() {
+  database_guard_temp="`$(mktemp "`$remote_path/.deploy-db-images.XXXXXXXX")"
+  chmod 600 "`$database_guard_temp"
+  compose config --format json | python3 infrastructure/scripts/prod/database_image_guard.py > "`$database_guard_temp"
+  database_image_override="`$database_guard_temp"
 }
 
 require_compose_service() {
@@ -2577,6 +2700,7 @@ publish_bundled_mobile_release() {
   echo "Published mobile APK code `$incoming_code and removed older APK files."
 }
 
+whatsapp_qr_pending=$whatsAppQrPendingQuoted
 wait_service_healthy() {
   service_name="`$1"
   timeout_seconds="`$2"
@@ -2598,6 +2722,16 @@ wait_service_healthy() {
         echo "`$service_name is ready (`$state/`$health)."
         return 0
       fi
+
+      # Explicit release-scoped QR wait only. Never mask authenticated startup or storage failures.
+      case ",`$whatsapp_qr_pending," in
+        *,"`$service_name",*)
+          if python3 infrastructure/scripts/prod/whatsapp_deploy_state.py "`$container_id" "`$service_name"; then
+            echo "WARNING: `$service_name requires phone linking; delivery readiness remains unavailable."
+            return 0
+          fi
+          ;;
+      esac
 
       if [ "`$state" = "exited" ] || [ "`$state" = "dead" ]; then
         echo "`$service_name stopped while waiting (`$state/`$health)." >&2
@@ -2809,6 +2943,13 @@ printf '%s\n' \
   "Clean restore always drops/recreates the schema and refuses to run while self-heal autostart, units, or writers are active." > "`$backup_dir/ROLLBACK.txt"
 chmod 600 "`$backup_dir/ROLLBACK.txt" || true
 
+capacity_check_dir="`$(mktemp -d "`$deploy_bundle_dir/capacity.XXXXXXXX")"
+tar --warning=no-timestamp -xzf "`$bundle_path" -C "`$capacity_check_dir" ./infrastructure/scripts/prod/deployment_capacity.py ./infrastructure/scripts/prod/image_layer_capacity.py ./.deploy-capacity.json
+python3 "`$capacity_check_dir/infrastructure/scripts/prod/deployment_capacity.py" check \
+  --plan "`$capacity_check_dir/.deploy-capacity.json" --revision "`$release_revision" \
+  --deploy-path "`$remote_path" --bundle "`$bundle_path"
+rm -rf -- "`$capacity_check_dir"
+capacity_check_dir=""
 rm -rf .deploy-mobile-update
 tar --warning=no-timestamp -xzf "`$bundle_path" -C "`$remote_path"
 rm -f "`$bundle_path"
@@ -2828,13 +2969,15 @@ if [ "`$uploaded_env" != "1" ]; then
   set_env WEB_IMAGE "`$web_image"
 fi
 set_env EXTERNAL_REVIEW_WORKER_IMAGE "`$external_review_worker_image"
+set_env OTZIV_KEYCLOAK_IMAGE "`$keycloak_image"
+set_env DOCKER_OBSERVER_IMAGE "`$docker_observer_image"
 if [ "`$deploy_external_review_worker" = "1" ]; then
   set_env EXTERNAL_REVIEW_CHECK_ENABLED "true"
 else
   set_env EXTERNAL_REVIEW_CHECK_ENABLED "false"
 fi
 if [ "`$deploy_whatsapp_changed" = "1" ]; then
-  whatsapp_image="otziv-whatsapp:`$deploy_tag"
+  whatsapp_image="`$published_whatsapp_image"
 else
   whatsapp_image="`$(docker inspect -f '{{.Config.Image}}' whatsapp_lika 2>/dev/null || true)"
   if [ -z "`$whatsapp_image" ]; then
@@ -2928,6 +3071,8 @@ chmod +x infrastructure/scripts/prod/apply-keycloak-prod-settings.sh || true
 chmod +x infrastructure/scripts/prod/validate-flyway-migrations.sh || true
 chmod +x infrastructure/scripts/prod/create-pre-deploy-db-backup.sh || true
 chmod +x infrastructure/scripts/prod/register-max-webhook.sh || true
+# Refuse database image/storage changes before any rollout startup or retry.
+guard_database_images
 require_compose_service whatsapp_lika
 require_compose_service whatsapp_vika
 assert_compose_service_image app "`$app_image"
@@ -2950,9 +3095,9 @@ if [ "`$current_flyway_sha" != "`$expected_flyway_fingerprint" ]; then
 fi
 bash infrastructure/scripts/prod/validate-flyway-migrations.sh "`$app_image" my-mysql
 if [ "`$deploy_whatsapp_changed" = "1" ]; then
-  compose build whatsapp_lika whatsapp_vika
+  compose pull whatsapp_lika whatsapp_vika
 else
-  echo "Skipping WhatsApp image build because WhatsApp sources are unchanged."
+  echo "Reusing the already installed WhatsApp image because sources are unchanged."
 fi
 if ! compose run --rm --no-deps --interactive=false -T --entrypoint node whatsapp_lika chromium-smoke.js </dev/null >/dev/null 2>&1; then
   echo "WhatsApp Chromium sandbox preflight failed; existing gateway containers were not stopped." >&2
@@ -2989,6 +3134,9 @@ compose run --rm --no-deps --interactive=false -T --cap-add CHOWN --cap-add DAC_
 compose run --rm --no-deps --interactive=false -T --cap-add CHOWN --cap-add DAC_READ_SEARCH --user 0 --entrypoint sh whatsapp_vika -c 'node_uid="`$(id -u node)"; node_gid="`$(id -g node)"; chown -R "`$node_uid:`$node_gid" /auth' </dev/null
 recreate_service_with_retry whatsapp_lika
 recreate_service_with_retry whatsapp_vika
+. infrastructure/scripts/prod/rollout-docker-observer.sh
+rollout_docker_observer
+# Prune obsolete profile services only after each observer consumer passed log flow.
 if [ "`$deploy_external_review_worker" = "1" ]; then
   compose --profile external-review up -d --remove-orphans --no-deps dozzle alloy
 else

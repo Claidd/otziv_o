@@ -238,6 +238,8 @@ try {
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath ".dockerignore"
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "Dockerfile.whatsapp"
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "whatsapp"
+    Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "docs\WHATSAPP_INBOUND_DELIVERY_RUNBOOK.md"
+    Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "docs\WHATSAPP_REMOTE_SESSION_RECOVERY.md"
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\nginx"
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\keycloak"
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\prometheus"
@@ -453,7 +455,7 @@ rm -f "`$images_tar"
 require_compose_service whatsapp_lika
 require_compose_service whatsapp_vika
 compose build whatsapp_lika whatsapp_vika
-if ! compose run --rm --no-deps --interactive=false -T --entrypoint /usr/bin/chromium whatsapp_lika --headless --disable-gpu --dump-dom about:blank </dev/null >/dev/null 2>&1; then
+if ! compose run --rm --no-deps --interactive=false -T --entrypoint node whatsapp_lika /app/chromium-smoke.js </dev/null >/dev/null 2>&1; then
   echo "WhatsApp Chromium sandbox preflight failed; existing containers were not stopped." >&2
   exit 1
 fi

@@ -1,0 +1,1280 @@
+{
+  "schema": "otziv-queue-saturation-summary-v1",
+  "startedAt": "2026-09-07T14:48:36.734455400Z",
+  "finishedAt": "2026-09-07T14:52:31.983214300Z",
+  "result": "PASS",
+  "cleanup": {
+    "verifiedAt": "2026-09-07T14:53:59.593Z",
+    "result": "PASS",
+    "scenarios": 6,
+    "ownedMysqlRemoved": true,
+    "previousResultSha256": "95d26abb7dd3196425592fd2c9d236c963d7232caf7bc906075040b50119064e",
+    "runnerSha256": "6bc60f4504865ad4cb0303be3785f4eb6bb663c9e66ca487973eaea42c99f3f7",
+    "note": "Repository benchmark six scenarios passed. Initial runner cleanup verification used conflicting docker ps --quiet/--format; corrected read-only check now verified. Original runtime/source manifests and scenario data preserved."
+  },
+  "mysqlVersion": "9.0.0",
+  "mysqlImage": "mysql@sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383",
+  "resources": {
+    "mysqlMemoryBytes": 805306368,
+    "mysqlCpus": 2,
+    "jvmMaxHeapBytes": 536870912,
+    "mysqlBufferPoolBytes": 134217728,
+    "hikariMax": 4
+  },
+  "workload": {
+    "initial": 400,
+    "terminalHistoryPerQueue": 20000,
+    "admissionPerSecond": 200,
+    "seed": 20260907,
+    "leadScopes": 256,
+    "providerDelayMs": 20,
+    "arrivals": 1200
+  },
+  "sourceAndClassManifest": {
+    "schema": "otziv-queue-saturation-code-v1",
+    "createdAt": "2026-09-07T14:48:36.263Z",
+    "java": "openjdk version \"26.0.1\" 2026-04-21\r\nOpenJDK Runtime Environment Temurin-26.0.1+8 (build 26.0.1+8)\r\nOpenJDK 64-Bit Server VM Temurin-26.0.1+8 (build 26.0.1+8, mixed mode, sharing)",
+    "source": [
+      {
+        "path": "backend/src/main/java/com/hunt/otziv/l_lead/repository/LeadCommandRepository.java",
+        "sha256": "1805dabcec8c0514b31e558a8e4bd4b53a40c0967c212770ab86b34d0b68f674"
+      },
+      {
+        "path": "backend/src/main/java/com/hunt/otziv/performers/repository/PerformerNotificationRepository.java",
+        "sha256": "a9f2daa711d3f2a7722f3c14babdc42923c020ee865694ef1e98bef8744048d6"
+      },
+      {
+        "path": "infrastructure/runtime-security/QueueSaturationBenchmark.java",
+        "sha256": "327e994a895e7ffc1f592182473fe30115ad66a9d06e93168966ed727831d3fd"
+      },
+      {
+        "path": "infrastructure/runtime-security/queue-saturation.mjs",
+        "sha256": "4cf52e87a79eabba680099d01d76b737b8dfcfd2766f65a8ab12fb1edc1017bd"
+      }
+    ],
+    "compiled": [
+      {
+        "path": "com/hunt/otziv/l_lead/repository/LeadCommandRepository$Claim.class",
+        "sha256": "9c0f892b65421f79d5626a4c0a2b1e59f4a81b135010da336af659d13a58a02e"
+      },
+      {
+        "path": "com/hunt/otziv/l_lead/repository/LeadCommandRepository$DueHealth.class",
+        "sha256": "ed56dbe8fc2fd2a1c529334f61e6284aeae35d22fa57db30e0b5b41271b4dd2f"
+      },
+      {
+        "path": "com/hunt/otziv/l_lead/repository/LeadCommandRepository$Legacy.class",
+        "sha256": "89993bcc824aadd0e20a4163148d4ea385c9f41ab61dea979a7086d9be16d55d"
+      },
+      {
+        "path": "com/hunt/otziv/l_lead/repository/LeadCommandRepository$QueueHealth.class",
+        "sha256": "a559d01c03c18ed8cd9a92da5ef3c8986a4ae209b5da03bca703da63151eefc2"
+      },
+      {
+        "path": "com/hunt/otziv/l_lead/repository/LeadCommandRepository$Stream.class",
+        "sha256": "7f21c6d28418e9c1482edaf543f52153b419ea07a755a23d30a6150f3fd00683"
+      },
+      {
+        "path": "com/hunt/otziv/l_lead/repository/LeadCommandRepository.class",
+        "sha256": "0457c36d4e1e8fe7dec49604bcb6d458da94eca2ffc4e496d40d7e86affb4b53"
+      },
+      {
+        "path": "com/hunt/otziv/performers/repository/PerformerNotificationRepository$Intent.class",
+        "sha256": "4d82aa96a74d04b8ed8494e008782f64c332f2294dd5c60c4a2ae3c2f89d3f5d"
+      },
+      {
+        "path": "com/hunt/otziv/performers/repository/PerformerNotificationRepository$OperationalSnapshot.class",
+        "sha256": "0543b5a50d885ce2c805b0ac1e46aab5831a05bedabb398f341f45252a401349"
+      },
+      {
+        "path": "com/hunt/otziv/performers/repository/PerformerNotificationRepository.class",
+        "sha256": "1e4a54071ab4fcbb877a121f64385e1712b4e713ee98957a2618f6220182a4d1"
+      },
+      {
+        "path": "QueueSaturationBenchmark$Counters.class",
+        "sha256": "10e0fc6c2b3844ec320097401942a4a5f94889cbcc3801d8ef76e2b29bcb8978"
+      },
+      {
+        "path": "QueueSaturationBenchmark$Samples.class",
+        "sha256": "20525ea3ebffa762ec78a0bd6bf4d2bd4b88f29afadbdd8ac397357711b8f1a3"
+      },
+      {
+        "path": "QueueSaturationBenchmark$SqlMeasure.class",
+        "sha256": "352544aa20d79095c210d7c15dfd9f3450232235955eb4d8e145ba56a69a5523"
+      },
+      {
+        "path": "QueueSaturationBenchmark$TrackedDataSource.class",
+        "sha256": "fd08184e3f5da2fcf9845aac2e0837b2ea332e97e2676d748354a483d2d61e2c"
+      },
+      {
+        "path": "QueueSaturationBenchmark.class",
+        "sha256": "03c89eca418f68d7113c67953df8f8f066f7a1ccc437da18874bc3d96db89793"
+      }
+    ],
+    "classpathReport": "E:\\Works\\Projects\\otziv\\.codex-tmp\\remediation-completion-20260907\\lead306\\targeted-v2-reports\\TEST-com.hunt.otziv.l_lead.service.LeadVersionedDeliveryMySqlIntegrationTest.xml",
+    "classpathReportSha256": "d183f06ccc6ef65c14b9b2bc5553475329c601a4bac686fc429770ab8335718c",
+    "profile": "standard",
+    "production": false
+  },
+  "scenarios": [
+    {
+      "domain": "lead",
+      "concurrency": 1,
+      "totalRows": 1600,
+      "historyRows": 20000,
+      "terminalCounts": {
+        "DEAD": 38,
+        "READY": 299,
+        "SUCCEEDED": 1237,
+        "UNKNOWN": 26
+      },
+      "attemptSum": 1301,
+      "saturatedWindow": {
+        "actualAdmissionPerSecond": 82.37641740553565,
+        "handled": 367,
+        "maxAdmissionLagMs": 8560.3661,
+        "requestedAdmissionPerSecond": 200,
+        "statesAtAdmissionEnd": {
+          "DEAD": 19,
+          "PROCESSING": 1,
+          "READY": 1232,
+          "SUCCEEDED": 322,
+          "UNKNOWN": 26
+        },
+        "durationMs": 14567.2759
+      },
+      "drainDurationMs": 37644.1913,
+      "handledPerSecond": 24.914947149747665,
+      "claimLatency": {
+        "p99Ms": 26.0161,
+        "p50Ms": 9.3746,
+        "count": 1335,
+        "p95Ms": 14.7446,
+        "maxMs": 51.7354,
+        "meanMs": 9.851967415730337
+      },
+      "ackLatency": {
+        "p99Ms": 29.3889,
+        "p50Ms": 9.1231,
+        "count": 1301,
+        "p95Ms": 15.3695,
+        "maxMs": 67.7666,
+        "meanMs": 9.83534757878555
+      },
+      "producerLatency": {
+        "p99Ms": 33.5542,
+        "p50Ms": 10.9221,
+        "count": 1200,
+        "p95Ms": 20.5945,
+        "maxMs": 67.3213,
+        "meanMs": 12.127046
+      },
+      "connectionAcquisitionLatency": {
+        "p99Ms": 0.0234,
+        "p50Ms": 0.0042,
+        "count": 3872,
+        "p95Ms": 0.0068,
+        "maxMs": 4.0566,
+        "meanMs": 0.006229726239669421
+      },
+      "confirmedRollbackRetries": {},
+      "peakUnfinished": 1232,
+      "peakPoolActive": 2,
+      "peakPoolAwaiting": 0,
+      "fencedLateAcks": 13,
+      "unknownUnreplayedProbeCount": 32,
+      "dockerStatsAfter": "{\"BlockIO\":\"0B / 0B\",\"CPUPerc\":\"1.02%\",\"Container\":\"b4cb05056a86b3e9bdb6d15a113a270a0d07cffc163184cfb444ae2c026ff4c9\",\"ID\":\"b4cb05056a86\",\"MemPerc\":\"69.82%\",\"MemUsage\":\"536.2MiB / 768MiB\",\"Name\":\"amazing_beaver\",\"NetIO\":\"9.23MB / 4.4MB\",\"PIDs\":\"48\"}",
+      "artifact": ".codex-tmp/remediation-completion-20260907/queue-saturation-standard-v1/lead-c1.json",
+      "artifactSha256": "5a701e46d48ab2a51802339ba78395f1efd0bfeaf7cbbb6b12440be7060054a1",
+      "sqlCounts": [
+        {
+          "phase": "fixture-expiry",
+          "sha256": "e95b0cc0ac105e7f4a6c020e63aefc87858dd19bb28577ae76dd01a3da4dd26a",
+          "executions": 13,
+          "errors": 0,
+          "totalMs": 58.2023
+        },
+        {
+          "phase": "producer",
+          "sha256": "66a4a009c0a2830fa6658c00261a1656a6c1ca901e8006229f9589c5f6c760f0",
+          "executions": 1200,
+          "errors": 0,
+          "totalMs": 1293.7075
+        },
+        {
+          "phase": "producer",
+          "sha256": "a2f03a8c507fd1813ad18a2d27a435e544197a6d7bbb522994f86dadee0b92fa",
+          "executions": 1200,
+          "errors": 0,
+          "totalMs": 1147.0046
+        },
+        {
+          "phase": "producer",
+          "sha256": "cfb1ba2612b48c0445c6bc8f61a298d49153a5411034b9919004f76f754792f7",
+          "executions": 1200,
+          "errors": 0,
+          "totalMs": 1222.1943
+        },
+        {
+          "phase": "producer",
+          "sha256": "e3ff0dda0c73661fc18a2cdbfedc557f370b8e38a8a177ce689ddad47729d693",
+          "executions": 1200,
+          "errors": 0,
+          "totalMs": 1169.9426
+        },
+        {
+          "phase": "producer",
+          "sha256": "e572819703d54579bb6be5b37613a263f564d4dcfe843cfb775c1486fa0f1bfa",
+          "executions": 1200,
+          "errors": 0,
+          "totalMs": 1187.8055
+        },
+        {
+          "phase": "recovery",
+          "sha256": "530f376798e10f87a58e9d87cbf0c13e8c89e24477fb5c37a7efc1fbdfe55351",
+          "executions": 13,
+          "errors": 0,
+          "totalMs": 19.3064
+        },
+        {
+          "phase": "recovery",
+          "sha256": "abdd23de4305fcde765fc159a3cd1e33f9872b913a8e72a41790f0b98d02b503",
+          "executions": 13,
+          "errors": 0,
+          "totalMs": 63.7722
+        },
+        {
+          "phase": "seed",
+          "sha256": "55977da793438ab3ce03f81db0bf3d85e8987f5f903f81ad0f9195aded5611b9",
+          "executions": 1,
+          "errors": 0,
+          "totalMs": 1.8773
+        },
+        {
+          "phase": "validation",
+          "sha256": "00f82a3db8dcf4fedb8287dc8153914e001cfcc466badb611f615864ef26df40",
+          "executions": 2,
+          "errors": 0,
+          "totalMs": 64.4027
+        },
+        {
+          "phase": "validation",
+          "sha256": "5698769d3226eaa4daef4b3fc08da98a7a6baf641ad5a8d1973557fc55b52e59",
+          "executions": 1,
+          "errors": 0,
+          "totalMs": 5.3794
+        },
+        {
+          "phase": "worker-ack",
+          "sha256": "87efc6cb794c1257aa0b936d28e440f5d64d2169b54d8e9eda9d12d87e0767e6",
+          "executions": 1301,
+          "errors": 0,
+          "totalMs": 2089.6305
+        },
+        {
+          "phase": "worker-claim",
+          "sha256": "00f82a3db8dcf4fedb8287dc8153914e001cfcc466badb611f615864ef26df40",
+          "executions": 3,
+          "errors": 0,
+          "totalMs": 63.2884
+        },
+        {
+          "phase": "worker-claim",
+          "sha256": "55977da793438ab3ce03f81db0bf3d85e8987f5f903f81ad0f9195aded5611b9",
+          "executions": 1,
+          "errors": 0,
+          "totalMs": 2.7576
+        },
+        {
+          "phase": "worker-claim",
+          "sha256": "5698769d3226eaa4daef4b3fc08da98a7a6baf641ad5a8d1973557fc55b52e59",
+          "executions": 3,
+          "errors": 0,
+          "totalMs": 18.8292
+        },
+        {
+          "phase": "worker-claim",
+          "sha256": "8174edcc6893b78d679e7a8d0fb412349c3b0e1a2fec2610addcd36f8a77b0aa",
+          "executions": 1301,
+          "errors": 0,
+          "totalMs": 1597.5494
+        },
+        {
+          "phase": "worker-claim",
+          "sha256": "dd15753cbbf7ec84db49810686ed5a66e8a169da0b78751b1758f93cf3548ce0",
+          "executions": 1335,
+          "errors": 0,
+          "totalMs": 2632.9696
+        }
+      ]
+    },
+    {
+      "domain": "lead",
+      "concurrency": 4,
+      "totalRows": 1600,
+      "historyRows": 20000,
+      "terminalCounts": {
+        "DEAD": 38,
+        "READY": 299,
+        "SUCCEEDED": 1237,
+        "UNKNOWN": 26
+      },
+      "attemptSum": 1301,
+      "saturatedWindow": {
+        "actualAdmissionPerSecond": 106.04284441973567,
+        "handled": 1243,
+        "maxAdmissionLagMs": 5311.9504,
+        "requestedAdmissionPerSecond": 200,
+        "statesAtAdmissionEnd": {
+          "DEAD": 38,
+          "PROCESSING": 3,
+          "READY": 354,
+          "SUCCEEDED": 1179,
+          "UNKNOWN": 26
+        },
+        "durationMs": 11316.1808
+      },
+      "drainDurationMs": 634.7168,
+      "handledPerSecond": 108.8449971275295,
+      "claimLatency": {
+        "p99Ms": 23.2141,
+        "p50Ms": 8.2434,
+        "count": 1361,
+        "p95Ms": 15.9131,
+        "maxMs": 47.8878,
+        "meanMs": 8.996454518736222
+      },
+      "ackLatency": {
+        "p99Ms": 20.923,
+        "p50Ms": 6.4925,
+        "count": 1301,
+        "p95Ms": 13.9416,
+        "maxMs": 43.4402,
+        "meanMs": 7.430533743274404
+      },
+      "producerLatency": {
+        "p99Ms": 21.7931,
+        "p50Ms": 8.6502,
+        "count": 1200,
+        "p95Ms": 14.4289,
+        "maxMs": 42.9243,
+        "meanMs": 9.421484666666666
+      },
+      "connectionAcquisitionLatency": {
+        "p99Ms": 3.6572,
+        "p50Ms": 0.0004,
+        "count": 3898,
+        "p95Ms": 0.0181,
+        "maxMs": 13.1982,
+        "meanMs": 0.10850035915854284
+      },
+      "confirmedRollbackRetries": {},
+      "peakUnfinished": 419,
+      "peakPoolActive": 4,
+      "peakPoolAwaiting": 1,
+      "fencedLateAcks": 13,
+      "unknownUnreplayedProbeCount": 32,
+      "dockerStatsAfter": "{\"BlockIO\":\"0B / 0B\",\"CPUPerc\":\"1.38%\",\"Container\":\"b4cb05056a86b3e9bdb6d15a113a270a0d07cffc163184cfb444ae2c026ff4c9\",\"ID\":\"b4cb05056a86\",\"MemPerc\":\"75.57%\",\"MemUsage\":\"580.4MiB / 768MiB\",\"Name\":\"amazing_beaver\",\"NetIO\":\"18.4MB / 8.7MB\",\"PIDs\":\"48\"}",
+      "artifact": ".codex-tmp/remediation-completion-20260907/queue-saturation-standard-v1/lead-c4.json",
+      "artifactSha256": "4b05833d8e5df316a20cc5b8290a2002c3c3b01cfcb2640cd198e95b413e932d",
+      "sqlCounts": [
+        {
+          "phase": "fixture-expiry",
+          "sha256": "e95b0cc0ac105e7f4a6c020e63aefc87858dd19bb28577ae76dd01a3da4dd26a",
+          "executions": 13,
+          "errors": 0,
+          "totalMs": 47.6015
+        },
+        {
+          "phase": "producer",
+          "sha256": "66a4a009c0a2830fa6658c00261a1656a6c1ca901e8006229f9589c5f6c760f0",
+          "executions": 1200,
+          "errors": 0,
+          "totalMs": 1010.9708
+        },
+        {
+          "phase": "producer",
+          "sha256": "a2f03a8c507fd1813ad18a2d27a435e544197a6d7bbb522994f86dadee0b92fa",
+          "executions": 1200,
+          "errors": 0,
+          "totalMs": 858.7839
+        },
+        {
+          "phase": "producer",
+          "sha256": "cfb1ba2612b48c0445c6bc8f61a298d49153a5411034b9919004f76f754792f7",
+          "executions": 1200,
+          "errors": 0,
+          "totalMs": 902.122
+        },
+        {
+          "phase": "producer",
+          "sha256": "e3ff0dda0c73661fc18a2cdbfedc557f370b8e38a8a177ce689ddad47729d693",
+          "executions": 1200,
+          "errors": 0,
+          "totalMs": 881.9955
+        },
+        {
+          "phase": "producer",
+          "sha256": "e572819703d54579bb6be5b37613a263f564d4dcfe843cfb775c1486fa0f1bfa",
+          "executions": 1200,
+          "errors": 0,
+          "totalMs": 867.5799
+        },
+        {
+          "phase": "recovery",
+          "sha256": "530f376798e10f87a58e9d87cbf0c13e8c89e24477fb5c37a7efc1fbdfe55351",
+          "executions": 13,
+          "errors": 0,
+          "totalMs": 24.3824
+        },
+        {
+          "phase": "recovery",
+          "sha256": "abdd23de4305fcde765fc159a3cd1e33f9872b913a8e72a41790f0b98d02b503",
+          "executions": 13,
+          "errors": 0,
+          "totalMs": 25.9981
+        },
+        {
+          "phase": "seed",
+          "sha256": "55977da793438ab3ce03f81db0bf3d85e8987f5f903f81ad0f9195aded5611b9",
+          "executions": 1,
+          "errors": 0,
+          "totalMs": 1.3742
+        },
+        {
+          "phase": "validation",
+          "sha256": "00f82a3db8dcf4fedb8287dc8153914e001cfcc466badb611f615864ef26df40",
+          "executions": 2,
+          "errors": 0,
+          "totalMs": 47.9696
+        },
+        {
+          "phase": "validation",
+          "sha256": "5698769d3226eaa4daef4b3fc08da98a7a6baf641ad5a8d1973557fc55b52e59",
+          "executions": 1,
+          "errors": 0,
+          "totalMs": 5.5326
+        },
+        {
+          "phase": "worker-ack",
+          "sha256": "87efc6cb794c1257aa0b936d28e440f5d64d2169b54d8e9eda9d12d87e0767e6",
+          "executions": 1301,
+          "errors": 0,
+          "totalMs": 1336.6796
+        },
+        {
+          "phase": "worker-claim",
+          "sha256": "00f82a3db8dcf4fedb8287dc8153914e001cfcc466badb611f615864ef26df40",
+          "executions": 3,
+          "errors": 0,
+          "totalMs": 77.3286
+        },
+        {
+          "phase": "worker-claim",
+          "sha256": "55977da793438ab3ce03f81db0bf3d85e8987f5f903f81ad0f9195aded5611b9",
+          "executions": 1,
+          "errors": 0,
+          "totalMs": 2.2226
+        },
+        {
+          "phase": "worker-claim",
+          "sha256": "5698769d3226eaa4daef4b3fc08da98a7a6baf641ad5a8d1973557fc55b52e59",
+          "executions": 3,
+          "errors": 0,
+          "totalMs": 22.1641
+        },
+        {
+          "phase": "worker-claim",
+          "sha256": "8174edcc6893b78d679e7a8d0fb412349c3b0e1a2fec2610addcd36f8a77b0aa",
+          "executions": 1301,
+          "errors": 0,
+          "totalMs": 1982.4978
+        },
+        {
+          "phase": "worker-claim",
+          "sha256": "dd15753cbbf7ec84db49810686ed5a66e8a169da0b78751b1758f93cf3548ce0",
+          "executions": 1361,
+          "errors": 0,
+          "totalMs": 2257.9572
+        }
+      ]
+    },
+    {
+      "domain": "lead",
+      "concurrency": 8,
+      "totalRows": 1600,
+      "historyRows": 20000,
+      "terminalCounts": {
+        "DEAD": 38,
+        "READY": 299,
+        "SUCCEEDED": 1237,
+        "UNKNOWN": 26
+      },
+      "attemptSum": 1301,
+      "saturatedWindow": {
+        "actualAdmissionPerSecond": 66.67295911238556,
+        "handled": 1299,
+        "maxAdmissionLagMs": 11975.3717,
+        "requestedAdmissionPerSecond": 200,
+        "statesAtAdmissionEnd": {
+          "DEAD": 38,
+          "PROCESSING": 1,
+          "READY": 299,
+          "SUCCEEDED": 1236,
+          "UNKNOWN": 26
+        },
+        "durationMs": 17998.3012
+      },
+      "drainDurationMs": 56.1817,
+      "handledPerSecond": 72.05253435014579,
+      "claimLatency": {
+        "p99Ms": 26.4251,
+        "p50Ms": 8.7338,
+        "count": 8938,
+        "p95Ms": 17.7913,
+        "maxMs": 95.3149,
+        "meanMs": 9.82985059297382
+      },
+      "ackLatency": {
+        "p99Ms": 31.4234,
+        "p50Ms": 11.0106,
+        "count": 1301,
+        "p95Ms": 22.4249,
+        "maxMs": 66.8447,
+        "meanMs": 12.095653266717909
+      },
+      "producerLatency": {
+        "p99Ms": 30.5642,
+        "p50Ms": 14.4255,
+        "count": 1200,
+        "p95Ms": 22.7048,
+        "maxMs": 107.0456,
+        "meanMs": 14.9889695
+      },
+      "connectionAcquisitionLatency": {
+        "p99Ms": 16.7406,
+        "p50Ms": 3.582,
+        "count": 11480,
+        "p95Ms": 10.285,
+        "maxMs": 83.9575,
+        "meanMs": 4.301395252613241
+      },
+      "confirmedRollbackRetries": {
+        "worker-claim": 5
+      },
+      "peakUnfinished": 401,
+      "peakPoolActive": 4,
+      "peakPoolAwaiting": 5,
+      "fencedLateAcks": 13,
+      "unknownUnreplayedProbeCount": 32,
+      "dockerStatsAfter": "{\"BlockIO\":\"0B / 0B\",\"CPUPerc\":\"1.10%\",\"Container\":\"b4cb05056a86b3e9bdb6d15a113a270a0d07cffc163184cfb444ae2c026ff4c9\",\"ID\":\"b4cb05056a86\",\"MemPerc\":\"88.62%\",\"MemUsage\":\"680.6MiB / 768MiB\",\"Name\":\"amazing_beaver\",\"NetIO\":\"34.7MB / 21.7MB\",\"PIDs\":\"48\"}",
+      "artifact": ".codex-tmp/remediation-completion-20260907/queue-saturation-standard-v1/lead-c8.json",
+      "artifactSha256": "1d9670a4187e2912cfc7a2b0e53417ba988c4693cb9df3d6889cdcfcc015a514",
+      "sqlCounts": [
+        {
+          "phase": "fixture-expiry",
+          "sha256": "e95b0cc0ac105e7f4a6c020e63aefc87858dd19bb28577ae76dd01a3da4dd26a",
+          "executions": 13,
+          "errors": 0,
+          "totalMs": 59.1808
+        },
+        {
+          "phase": "producer",
+          "sha256": "66a4a009c0a2830fa6658c00261a1656a6c1ca901e8006229f9589c5f6c760f0",
+          "executions": 1200,
+          "errors": 0,
+          "totalMs": 1333.5976
+        },
+        {
+          "phase": "producer",
+          "sha256": "a2f03a8c507fd1813ad18a2d27a435e544197a6d7bbb522994f86dadee0b92fa",
+          "executions": 1200,
+          "errors": 0,
+          "totalMs": 1105.2176
+        },
+        {
+          "phase": "producer",
+          "sha256": "cfb1ba2612b48c0445c6bc8f61a298d49153a5411034b9919004f76f754792f7",
+          "executions": 1200,
+          "errors": 0,
+          "totalMs": 1133.7726
+        },
+        {
+          "phase": "producer",
+          "sha256": "e3ff0dda0c73661fc18a2cdbfedc557f370b8e38a8a177ce689ddad47729d693",
+          "executions": 1200,
+          "errors": 0,
+          "totalMs": 1093.3865
+        },
+        {
+          "phase": "producer",
+          "sha256": "e572819703d54579bb6be5b37613a263f564d4dcfe843cfb775c1486fa0f1bfa",
+          "executions": 1200,
+          "errors": 0,
+          "totalMs": 1098.1998
+        },
+        {
+          "phase": "recovery",
+          "sha256": "530f376798e10f87a58e9d87cbf0c13e8c89e24477fb5c37a7efc1fbdfe55351",
+          "executions": 13,
+          "errors": 0,
+          "totalMs": 65.8892
+        },
+        {
+          "phase": "recovery",
+          "sha256": "abdd23de4305fcde765fc159a3cd1e33f9872b913a8e72a41790f0b98d02b503",
+          "executions": 13,
+          "errors": 0,
+          "totalMs": 37.3739
+        },
+        {
+          "phase": "seed",
+          "sha256": "55977da793438ab3ce03f81db0bf3d85e8987f5f903f81ad0f9195aded5611b9",
+          "executions": 1,
+          "errors": 0,
+          "totalMs": 1.0575
+        },
+        {
+          "phase": "validation",
+          "sha256": "00f82a3db8dcf4fedb8287dc8153914e001cfcc466badb611f615864ef26df40",
+          "executions": 2,
+          "errors": 0,
+          "totalMs": 68.2856
+        },
+        {
+          "phase": "validation",
+          "sha256": "5698769d3226eaa4daef4b3fc08da98a7a6baf641ad5a8d1973557fc55b52e59",
+          "executions": 1,
+          "errors": 0,
+          "totalMs": 6.3953
+        },
+        {
+          "phase": "worker-ack",
+          "sha256": "87efc6cb794c1257aa0b936d28e440f5d64d2169b54d8e9eda9d12d87e0767e6",
+          "executions": 1301,
+          "errors": 0,
+          "totalMs": 1553.7749
+        },
+        {
+          "phase": "worker-claim",
+          "sha256": "00f82a3db8dcf4fedb8287dc8153914e001cfcc466badb611f615864ef26df40",
+          "executions": 3,
+          "errors": 0,
+          "totalMs": 89.8914
+        },
+        {
+          "phase": "worker-claim",
+          "sha256": "55977da793438ab3ce03f81db0bf3d85e8987f5f903f81ad0f9195aded5611b9",
+          "executions": 1,
+          "errors": 0,
+          "totalMs": 1.8072
+        },
+        {
+          "phase": "worker-claim",
+          "sha256": "5698769d3226eaa4daef4b3fc08da98a7a6baf641ad5a8d1973557fc55b52e59",
+          "executions": 3,
+          "errors": 0,
+          "totalMs": 18.1169
+        },
+        {
+          "phase": "worker-claim",
+          "sha256": "8174edcc6893b78d679e7a8d0fb412349c3b0e1a2fec2610addcd36f8a77b0aa",
+          "executions": 1306,
+          "errors": 5,
+          "totalMs": 1923.903
+        },
+        {
+          "phase": "worker-claim",
+          "sha256": "dd15753cbbf7ec84db49810686ed5a66e8a169da0b78751b1758f93cf3548ce0",
+          "executions": 8943,
+          "errors": 0,
+          "totalMs": 17589.968
+        }
+      ]
+    },
+    {
+      "domain": "performer",
+      "concurrency": 1,
+      "totalRows": 1600,
+      "historyRows": 20000,
+      "terminalCounts": {
+        "BLOCKED": 80,
+        "SENT": 1360,
+        "UNKNOWN": 160
+      },
+      "attemptSum": 1600,
+      "saturatedWindow": {
+        "actualAdmissionPerSecond": 111.5434203585184,
+        "handled": 288,
+        "maxAdmissionLagMs": 4754.4444,
+        "requestedAdmissionPerSecond": 200,
+        "statesAtAdmissionEnd": {
+          "BLOCKED": 14,
+          "PENDING": 1311,
+          "PROCESSING": 1,
+          "SENT": 244,
+          "UNKNOWN": 30
+        },
+        "durationMs": 10758.1424
+      },
+      "drainDurationMs": 51162.7648,
+      "handledPerSecond": 25.838752595847886,
+      "claimLatency": {
+        "p99Ms": 24.0504,
+        "p50Ms": 8.1322,
+        "count": 1634,
+        "p95Ms": 14.8313,
+        "maxMs": 73.0201,
+        "meanMs": 8.999598347613219
+      },
+      "ackLatency": {
+        "p99Ms": 28.1105,
+        "p50Ms": 6.9801,
+        "count": 1600,
+        "p95Ms": 15.5878,
+        "maxMs": 69.7083,
+        "meanMs": 8.317796875
+      },
+      "producerLatency": {
+        "p99Ms": 20.4349,
+        "p50Ms": 8.4863,
+        "count": 1200,
+        "p95Ms": 12.4823,
+        "maxMs": 34.2436,
+        "meanMs": 8.9570385
+      },
+      "connectionAcquisitionLatency": {
+        "p99Ms": 0.0018,
+        "p50Ms": 0.0003,
+        "count": 6204,
+        "p95Ms": 0.0015,
+        "maxMs": 1.6554,
+        "meanMs": 0.0010689877498388136
+      },
+      "confirmedRollbackRetries": {},
+      "peakUnfinished": 1312,
+      "peakPoolActive": 2,
+      "peakPoolAwaiting": 0,
+      "fencedLateAcks": 80,
+      "unknownUnreplayedProbeCount": 32,
+      "dockerStatsAfter": "{\"BlockIO\":\"0B / 0B\",\"CPUPerc\":\"0.68%\",\"Container\":\"b4cb05056a86b3e9bdb6d15a113a270a0d07cffc163184cfb444ae2c026ff4c9\",\"ID\":\"b4cb05056a86\",\"MemPerc\":\"90.04%\",\"MemUsage\":\"691.5MiB / 768MiB\",\"Name\":\"amazing_beaver\",\"NetIO\":\"44.9MB / 31.6MB\",\"PIDs\":\"48\"}",
+      "artifact": ".codex-tmp/remediation-completion-20260907/queue-saturation-standard-v1/performer-c1.json",
+      "artifactSha256": "b5a068add9e00850ac2389939eec636a9101fbcc5f4641a868e585f3a23d7e0c",
+      "sqlCounts": [
+        {
+          "phase": "fixture-expiry",
+          "sha256": "623b988e27bc7612dd8b2087dd2c3a926fc1c47816e98c42cac7ba627689eaf2",
+          "executions": 80,
+          "errors": 0,
+          "totalMs": 378.5044
+        },
+        {
+          "phase": "producer",
+          "sha256": "59028d61c822abcf9cfd8479c995cf6094330628dc219cb82703cf083bd5fa80",
+          "executions": 1200,
+          "errors": 0,
+          "totalMs": 1080.0713
+        },
+        {
+          "phase": "producer",
+          "sha256": "5d5b1f14ced4ea195f39f3b2a56413f558a1e2fe8ce774e48972a7733c52bffe",
+          "executions": 1200,
+          "errors": 0,
+          "totalMs": 943.5833
+        },
+        {
+          "phase": "producer",
+          "sha256": "63642bc312094aafe514a5f2c442c84969eddb5ddefbc8574e62df23cd0d0685",
+          "executions": 1200,
+          "errors": 0,
+          "totalMs": 1051.3022
+        },
+        {
+          "phase": "producer",
+          "sha256": "ead81d85df420decaa3d6e19d42b8e4fd3094c9373a7ef3d08388642278b778b",
+          "executions": 1200,
+          "errors": 0,
+          "totalMs": 1190.111
+        },
+        {
+          "phase": "recovery",
+          "sha256": "56ffed02d10a5889982401355a4bddd1f30b8efe0986efebd531f1bd79e23d08",
+          "executions": 80,
+          "errors": 0,
+          "totalMs": 90.9937
+        },
+        {
+          "phase": "seed",
+          "sha256": "55977da793438ab3ce03f81db0bf3d85e8987f5f903f81ad0f9195aded5611b9",
+          "executions": 1,
+          "errors": 0,
+          "totalMs": 1.1627
+        },
+        {
+          "phase": "validation",
+          "sha256": "436f04b777be5541faba45b64513e5890c921fa9becfb7e9aac9a35eb581817b",
+          "executions": 2,
+          "errors": 0,
+          "totalMs": 57.1007
+        },
+        {
+          "phase": "validation",
+          "sha256": "e266faf4862de9b18f6e713d7f34b866206591178583d0d6dee6afec5839d241",
+          "executions": 1,
+          "errors": 0,
+          "totalMs": 7.1873
+        },
+        {
+          "phase": "worker-ack",
+          "sha256": "7c12608ace26afbd1548ca1876a4b01e934b1c9e3864da72d1de7518e5a2e2ac",
+          "executions": 1600,
+          "errors": 0,
+          "totalMs": 2073.8285
+        },
+        {
+          "phase": "worker-claim",
+          "sha256": "436f04b777be5541faba45b64513e5890c921fa9becfb7e9aac9a35eb581817b",
+          "executions": 3,
+          "errors": 0,
+          "totalMs": 96.2173
+        },
+        {
+          "phase": "worker-claim",
+          "sha256": "55977da793438ab3ce03f81db0bf3d85e8987f5f903f81ad0f9195aded5611b9",
+          "executions": 1,
+          "errors": 0,
+          "totalMs": 1.2774
+        },
+        {
+          "phase": "worker-claim",
+          "sha256": "77f4d16337c1fd5b287fcbb772b592de9e11c354a971145b85c08052a0113e1d",
+          "executions": 1600,
+          "errors": 0,
+          "totalMs": 1579.1423
+        },
+        {
+          "phase": "worker-claim",
+          "sha256": "7dc3de326bd2af57125b62b0710f95dfdf47b8f56206f19881528b1330144ca5",
+          "executions": 1634,
+          "errors": 0,
+          "totalMs": 1965.267
+        },
+        {
+          "phase": "worker-claim",
+          "sha256": "9e0e19ed565fc60cffe3922ae2421f1797638c9886825d807a4f23890d51c3fd",
+          "executions": 1600,
+          "errors": 0,
+          "totalMs": 1720.8201
+        },
+        {
+          "phase": "worker-claim",
+          "sha256": "e266faf4862de9b18f6e713d7f34b866206591178583d0d6dee6afec5839d241",
+          "executions": 3,
+          "errors": 0,
+          "totalMs": 15.5556
+        },
+        {
+          "phase": "worker-owns",
+          "sha256": "5a3ef480d7535cf4898b2e49cd41620d1777f1c5844fa2572cb16ad31e23c19f",
+          "executions": 1600,
+          "errors": 0,
+          "totalMs": 1576.9259
+        }
+      ]
+    },
+    {
+      "domain": "performer",
+      "concurrency": 4,
+      "totalRows": 1600,
+      "historyRows": 20000,
+      "terminalCounts": {
+        "BLOCKED": 80,
+        "SENT": 1360,
+        "UNKNOWN": 160
+      },
+      "attemptSum": 1600,
+      "saturatedWindow": {
+        "actualAdmissionPerSecond": 101.48913914400322,
+        "handled": 1207,
+        "maxAdmissionLagMs": 5820.2797,
+        "requestedAdmissionPerSecond": 200,
+        "statesAtAdmissionEnd": {
+          "BLOCKED": 60,
+          "PENDING": 389,
+          "PROCESSING": 3,
+          "SENT": 1027,
+          "UNKNOWN": 121
+        },
+        "durationMs": 11823.9253
+      },
+      "drainDurationMs": 3808.5396,
+      "handledPerSecond": 102.3420851871083,
+      "claimLatency": {
+        "p99Ms": 25.3541,
+        "p50Ms": 8.644,
+        "count": 1654,
+        "p95Ms": 15.3695,
+        "maxMs": 38.1081,
+        "meanMs": 9.281035489721887
+      },
+      "ackLatency": {
+        "p99Ms": 25.3483,
+        "p50Ms": 6.9036,
+        "count": 1600,
+        "p95Ms": 15.9887,
+        "maxMs": 39.0842,
+        "meanMs": 8.2089559375
+      },
+      "producerLatency": {
+        "p99Ms": 23.3422,
+        "p50Ms": 9.0582,
+        "count": 1200,
+        "p95Ms": 14.8919,
+        "maxMs": 43.8194,
+        "meanMs": 9.843768666666666
+      },
+      "connectionAcquisitionLatency": {
+        "p99Ms": 5.6535,
+        "p50Ms": 0.0003,
+        "count": 6225,
+        "p95Ms": 0.9435,
+        "maxMs": 26.9416,
+        "meanMs": 0.19684069076305222
+      },
+      "confirmedRollbackRetries": {
+        "worker-ack": 1
+      },
+      "peakUnfinished": 409,
+      "peakPoolActive": 4,
+      "peakPoolAwaiting": 1,
+      "fencedLateAcks": 80,
+      "unknownUnreplayedProbeCount": 32,
+      "dockerStatsAfter": "{\"BlockIO\":\"0B / 0B\",\"CPUPerc\":\"0.79%\",\"Container\":\"b4cb05056a86b3e9bdb6d15a113a270a0d07cffc163184cfb444ae2c026ff4c9\",\"ID\":\"b4cb05056a86\",\"MemPerc\":\"91.69%\",\"MemUsage\":\"704.2MiB / 768MiB\",\"Name\":\"amazing_beaver\",\"NetIO\":\"55.2MB / 41.6MB\",\"PIDs\":\"48\"}",
+      "artifact": ".codex-tmp/remediation-completion-20260907/queue-saturation-standard-v1/performer-c4.json",
+      "artifactSha256": "7b64c8c638bed604cebbb29b1ce14d1ce4aea72228fdb27281fa6199559b9e61",
+      "sqlCounts": [
+        {
+          "phase": "fixture-expiry",
+          "sha256": "623b988e27bc7612dd8b2087dd2c3a926fc1c47816e98c42cac7ba627689eaf2",
+          "executions": 80,
+          "errors": 0,
+          "totalMs": 350.5873
+        },
+        {
+          "phase": "producer",
+          "sha256": "59028d61c822abcf9cfd8479c995cf6094330628dc219cb82703cf083bd5fa80",
+          "executions": 1200,
+          "errors": 0,
+          "totalMs": 1216.6586
+        },
+        {
+          "phase": "producer",
+          "sha256": "5d5b1f14ced4ea195f39f3b2a56413f558a1e2fe8ce774e48972a7733c52bffe",
+          "executions": 1200,
+          "errors": 0,
+          "totalMs": 968.2958
+        },
+        {
+          "phase": "producer",
+          "sha256": "63642bc312094aafe514a5f2c442c84969eddb5ddefbc8574e62df23cd0d0685",
+          "executions": 1200,
+          "errors": 0,
+          "totalMs": 1094.6693
+        },
+        {
+          "phase": "producer",
+          "sha256": "ead81d85df420decaa3d6e19d42b8e4fd3094c9373a7ef3d08388642278b778b",
+          "executions": 1200,
+          "errors": 0,
+          "totalMs": 1226.5249
+        },
+        {
+          "phase": "recovery",
+          "sha256": "56ffed02d10a5889982401355a4bddd1f30b8efe0986efebd531f1bd79e23d08",
+          "executions": 80,
+          "errors": 0,
+          "totalMs": 166.3894
+        },
+        {
+          "phase": "seed",
+          "sha256": "55977da793438ab3ce03f81db0bf3d85e8987f5f903f81ad0f9195aded5611b9",
+          "executions": 1,
+          "errors": 0,
+          "totalMs": 0.9292
+        },
+        {
+          "phase": "validation",
+          "sha256": "436f04b777be5541faba45b64513e5890c921fa9becfb7e9aac9a35eb581817b",
+          "executions": 2,
+          "errors": 0,
+          "totalMs": 64.1464
+        },
+        {
+          "phase": "validation",
+          "sha256": "e266faf4862de9b18f6e713d7f34b866206591178583d0d6dee6afec5839d241",
+          "executions": 1,
+          "errors": 0,
+          "totalMs": 4.7169
+        },
+        {
+          "phase": "worker-ack",
+          "sha256": "7c12608ace26afbd1548ca1876a4b01e934b1c9e3864da72d1de7518e5a2e2ac",
+          "executions": 1601,
+          "errors": 1,
+          "totalMs": 1816.4958
+        },
+        {
+          "phase": "worker-claim",
+          "sha256": "436f04b777be5541faba45b64513e5890c921fa9becfb7e9aac9a35eb581817b",
+          "executions": 3,
+          "errors": 0,
+          "totalMs": 111.2129
+        },
+        {
+          "phase": "worker-claim",
+          "sha256": "55977da793438ab3ce03f81db0bf3d85e8987f5f903f81ad0f9195aded5611b9",
+          "executions": 1,
+          "errors": 0,
+          "totalMs": 2.3405
+        },
+        {
+          "phase": "worker-claim",
+          "sha256": "77f4d16337c1fd5b287fcbb772b592de9e11c354a971145b85c08052a0113e1d",
+          "executions": 1600,
+          "errors": 0,
+          "totalMs": 1518.1665
+        },
+        {
+          "phase": "worker-claim",
+          "sha256": "7dc3de326bd2af57125b62b0710f95dfdf47b8f56206f19881528b1330144ca5",
+          "executions": 1654,
+          "errors": 0,
+          "totalMs": 1887.6142
+        },
+        {
+          "phase": "worker-claim",
+          "sha256": "9e0e19ed565fc60cffe3922ae2421f1797638c9886825d807a4f23890d51c3fd",
+          "executions": 1600,
+          "errors": 0,
+          "totalMs": 1634.7018
+        },
+        {
+          "phase": "worker-claim",
+          "sha256": "e266faf4862de9b18f6e713d7f34b866206591178583d0d6dee6afec5839d241",
+          "executions": 3,
+          "errors": 0,
+          "totalMs": 19.4449
+        },
+        {
+          "phase": "worker-owns",
+          "sha256": "5a3ef480d7535cf4898b2e49cd41620d1777f1c5844fa2572cb16ad31e23c19f",
+          "executions": 1600,
+          "errors": 0,
+          "totalMs": 1531.7657
+        }
+      ]
+    },
+    {
+      "domain": "performer",
+      "concurrency": 8,
+      "totalRows": 1600,
+      "historyRows": 20000,
+      "terminalCounts": {
+        "BLOCKED": 80,
+        "SENT": 1360,
+        "UNKNOWN": 160
+      },
+      "attemptSum": 1600,
+      "saturatedWindow": {
+        "actualAdmissionPerSecond": 80.44565067036635,
+        "handled": 1596,
+        "maxAdmissionLagMs": 8912.5826,
+        "requestedAdmissionPerSecond": 200,
+        "statesAtAdmissionEnd": {
+          "BLOCKED": 80,
+          "PENDING": 1,
+          "PROCESSING": 3,
+          "SENT": 1356,
+          "UNKNOWN": 160
+        },
+        "durationMs": 14916.9034
+      },
+      "drainDurationMs": 53.124,
+      "handledPerSecond": 106.86686535265217,
+      "claimLatency": {
+        "p99Ms": 24.85,
+        "p50Ms": 6.878,
+        "count": 6525,
+        "p95Ms": 16.8884,
+        "maxMs": 44.8868,
+        "meanMs": 8.087675448275862
+      },
+      "ackLatency": {
+        "p99Ms": 36.6945,
+        "p50Ms": 10.7247,
+        "count": 1600,
+        "p95Ms": 24.8886,
+        "maxMs": 59.6055,
+        "meanMs": 12.52545775
+      },
+      "producerLatency": {
+        "p99Ms": 28.7697,
+        "p50Ms": 11.4981,
+        "count": 1200,
+        "p95Ms": 20.4672,
+        "maxMs": 44.2841,
+        "meanMs": 12.421861666666667
+      },
+      "connectionAcquisitionLatency": {
+        "p99Ms": 17.2653,
+        "p50Ms": 2.1863,
+        "count": 11096,
+        "p95Ms": 9.7697,
+        "maxMs": 42.1608,
+        "meanMs": 3.0319830659697184
+      },
+      "confirmedRollbackRetries": {
+        "worker-ack": 1
+      },
+      "peakUnfinished": 400,
+      "peakPoolActive": 4,
+      "peakPoolAwaiting": 5,
+      "fencedLateAcks": 80,
+      "unknownUnreplayedProbeCount": 32,
+      "dockerStatsAfter": "{\"BlockIO\":\"0B / 0B\",\"CPUPerc\":\"0.90%\",\"Container\":\"b4cb05056a86b3e9bdb6d15a113a270a0d07cffc163184cfb444ae2c026ff4c9\",\"ID\":\"b4cb05056a86\",\"MemPerc\":\"94.27%\",\"MemUsage\":\"724MiB / 768MiB\",\"Name\":\"amazing_beaver\",\"NetIO\":\"69MB / 62.7MB\",\"PIDs\":\"48\"}",
+      "artifact": ".codex-tmp/remediation-completion-20260907/queue-saturation-standard-v1/performer-c8.json",
+      "artifactSha256": "9dbb7fc04d3a2a58b69de747735f3da68ac62fb2cc2d23596f99d7141e735a6e",
+      "sqlCounts": [
+        {
+          "phase": "fixture-expiry",
+          "sha256": "623b988e27bc7612dd8b2087dd2c3a926fc1c47816e98c42cac7ba627689eaf2",
+          "executions": 80,
+          "errors": 0,
+          "totalMs": 367.9722
+        },
+        {
+          "phase": "producer",
+          "sha256": "59028d61c822abcf9cfd8479c995cf6094330628dc219cb82703cf083bd5fa80",
+          "executions": 1200,
+          "errors": 0,
+          "totalMs": 1361.8378
+        },
+        {
+          "phase": "producer",
+          "sha256": "5d5b1f14ced4ea195f39f3b2a56413f558a1e2fe8ce774e48972a7733c52bffe",
+          "executions": 1200,
+          "errors": 0,
+          "totalMs": 1020.1108
+        },
+        {
+          "phase": "producer",
+          "sha256": "63642bc312094aafe514a5f2c442c84969eddb5ddefbc8574e62df23cd0d0685",
+          "executions": 1200,
+          "errors": 0,
+          "totalMs": 1147.1035
+        },
+        {
+          "phase": "producer",
+          "sha256": "ead81d85df420decaa3d6e19d42b8e4fd3094c9373a7ef3d08388642278b778b",
+          "executions": 1200,
+          "errors": 0,
+          "totalMs": 1268.9174
+        },
+        {
+          "phase": "recovery",
+          "sha256": "56ffed02d10a5889982401355a4bddd1f30b8efe0986efebd531f1bd79e23d08",
+          "executions": 80,
+          "errors": 0,
+          "totalMs": 149.1994
+        },
+        {
+          "phase": "seed",
+          "sha256": "55977da793438ab3ce03f81db0bf3d85e8987f5f903f81ad0f9195aded5611b9",
+          "executions": 1,
+          "errors": 0,
+          "totalMs": 1.1183
+        },
+        {
+          "phase": "validation",
+          "sha256": "436f04b777be5541faba45b64513e5890c921fa9becfb7e9aac9a35eb581817b",
+          "executions": 2,
+          "errors": 0,
+          "totalMs": 56.5705
+        },
+        {
+          "phase": "validation",
+          "sha256": "e266faf4862de9b18f6e713d7f34b866206591178583d0d6dee6afec5839d241",
+          "executions": 1,
+          "errors": 0,
+          "totalMs": 11.6873
+        },
+        {
+          "phase": "worker-ack",
+          "sha256": "7c12608ace26afbd1548ca1876a4b01e934b1c9e3864da72d1de7518e5a2e2ac",
+          "executions": 1601,
+          "errors": 1,
+          "totalMs": 2153.1024
+        },
+        {
+          "phase": "worker-claim",
+          "sha256": "436f04b777be5541faba45b64513e5890c921fa9becfb7e9aac9a35eb581817b",
+          "executions": 3,
+          "errors": 0,
+          "totalMs": 80.3625
+        },
+        {
+          "phase": "worker-claim",
+          "sha256": "55977da793438ab3ce03f81db0bf3d85e8987f5f903f81ad0f9195aded5611b9",
+          "executions": 1,
+          "errors": 0,
+          "totalMs": 1.4069
+        },
+        {
+          "phase": "worker-claim",
+          "sha256": "77f4d16337c1fd5b287fcbb772b592de9e11c354a971145b85c08052a0113e1d",
+          "executions": 1600,
+          "errors": 0,
+          "totalMs": 1578.6036
+        },
+        {
+          "phase": "worker-claim",
+          "sha256": "7dc3de326bd2af57125b62b0710f95dfdf47b8f56206f19881528b1330144ca5",
+          "executions": 6525,
+          "errors": 0,
+          "totalMs": 7308.5615
+        },
+        {
+          "phase": "worker-claim",
+          "sha256": "9e0e19ed565fc60cffe3922ae2421f1797638c9886825d807a4f23890d51c3fd",
+          "executions": 1600,
+          "errors": 0,
+          "totalMs": 1675.7787
+        },
+        {
+          "phase": "worker-claim",
+          "sha256": "e266faf4862de9b18f6e713d7f34b866206591178583d0d6dee6afec5839d241",
+          "executions": 3,
+          "errors": 0,
+          "totalMs": 18.008
+        },
+        {
+          "phase": "worker-owns",
+          "sha256": "5a3ef480d7535cf4898b2e49cd41620d1777f1c5844fa2572cb16ad31e23c19f",
+          "executions": 1600,
+          "errors": 0,
+          "totalMs": 1577.5062
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "Actual repository/JDBC/Spring transactions; not whole business workflows or production SLO",
+    "Provider is a bounded local delay outside transactions; no HTTP or real sends",
+    "No heartbeat exists in these repositories; performer owns() is a probe, never a lease extension",
+    "Expired lease injection is explicit fixture SQL; production fencing/recovery is exercised afterwards",
+    "Assignment/offer fixture omits unrelated business fields/FKs; production queue migrations/indexes are applied",
+    "Confirmed MySQL1213/40001 transaction rollback is retried by the benchmark driver with 20ms backoff (max100); no provider action is repeated, and this is not the production scheduler retry policy",
+    "Shared host can have concurrent workloads; timings are descriptive",
+    "Synthetic lead payload is a short sequence marker; throughput is transaction/claim-bound, not a maximum-payload or serialization benchmark."
+  ],
+  "rawEvidence": ".codex-tmp/remediation-completion-20260907/queue-saturation-standard-v1"
+}

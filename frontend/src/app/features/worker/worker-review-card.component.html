@@ -442,15 +442,15 @@
     <button
       type="button"
       (click)="botChangeRequested.emit()"
-      [disabled]="isMutating('review-' + review.id + '-change-bot')"
-      title="Сменить аккаунт"
+      [disabled]="accountActionCooldownLocked || isMutating('review-' + review.id + '-change-bot')"
+      [title]="accountActionCooldownLocked ? accountActionCooldownTitle : 'Сменить аккаунт'"
     >
       {{ isMutating('review-' + review.id + '-change-bot') ? '...' : 'смена' }}
     </button>
     <button
       type="button"
       (click)="botDeactivateRequested.emit()"
-      [disabled]="accountActionLocked() || !review.botId || isMutating('review-' + review.id + '-block-bot')"
+      [disabled]="accountActionCooldownLocked || accountActionLocked() || !review.botId || isMutating('review-' + review.id + '-block-bot')"
       [title]="accountActionTitle()"
     >
       {{ isMutating('review-' + review.id + '-block-bot') ? '...' : 'блок' }}

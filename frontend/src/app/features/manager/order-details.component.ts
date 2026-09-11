@@ -5,6 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { firstValueFrom, Observable } from 'rxjs';
 import { AuthService } from '../../core/auth.service';
+import { WorkerAccountActionCooldownService } from '../../core/worker-account-action-cooldown.service';
 import { LatestRouteRequest } from '../../core/latest-route-request';
 import { ReputationDeepReportMonitorService } from '../../core/reputation-deep-report-monitor.service';
 import type { DeepCompanyResearchJob, ReputationSingleReviewDraftResult } from '../../core/reputation-ai.api';
@@ -21,7 +22,7 @@ import {
   WorkerCredentialPreparation
 } from '../../core/manager.api';
 import { PaymentsApi } from '../../core/payments.api';
-import type { ManagerPaymentLinkResponse, TbankPaymentStatus } from '../../core/payments.api';
+import { OrderPaymentLinkState } from './order-payment-link-state';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { apiErrorMessage } from '../../shared/api-error-message';
 import { copyDeferredTextToClipboard, copyTextToClipboard } from '../../shared/clipboard-copy';
@@ -117,12 +118,26 @@ function formatDateInputValue(date: Date): string {
   styleUrl: './order-details.component.scss'
 })
 export class OrderDetailsComponent {
+  readonly accountActionCooldown = inject(WorkerAccountActionCooldownService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
   private readonly auth = inject(AuthService);
   private readonly managerApi = inject(ManagerApi);
   private readonly paymentsApi = inject(PaymentsApi);
+  private readonly paymentState = new OrderPaymentLinkState(this.paymentsApi, {
+    started: () => { this.mutationKey.set('payment-link'); this.error.set(null); },
+    ready: (text, created, isCurrent) => {
+      if (created && this.mutationKey() === 'payment-link') this.mutationKey.set(null);
+      void this.copyText(text, 'payment-link', 'Ссылка на оплату скопирована', created
+        ? 'Ссылка создана. Если iPhone не дал скопировать, нажмите кнопку еще раз.'
+        : 'Браузер не дал доступ к буферу обмена', isCurrent);
+    },
+    failed: message => {
+      if (this.mutationKey() === 'payment-link') this.mutationKey.set(null);
+      this.error.set(message); this.toastService.error('Ссылка не создана', message);
+    }
+  });
   private readonly deepReportMonitor = inject(ReputationDeepReportMonitorService);
   private readonly toastService = inject(ToastService);
   private readonly remindersService = inject(PersonalRemindersService);
@@ -177,8 +192,8 @@ export class OrderDetailsComponent {
   readonly companyReportLoading = signal(false);
   readonly companyReportError = signal<string | null>(null);
   readonly openedFromWorkerAll = signal(false);
-  readonly tbankStatus = signal<TbankPaymentStatus | null>(null);
-  readonly paymentLink = signal<ManagerPaymentLinkResponse | null>(null);
+  readonly tbankStatus = this.paymentState.status;
+  readonly paymentLink = this.paymentState.link;
   readonly mobileReviewActionBottom = mobileKeyboardActionBottom(this.destroyRef);
   readonly browserOnline = signal(this.readBrowserOnline());
   readonly reviewPublicationGlobalDateMax = localDateInputValue(REVIEW_PUBLICATION_MAX_FUTURE_DAYS);
@@ -257,13 +272,10 @@ export class OrderDetailsComponent {
 
   constructor() {
     this.updateMobileReviewLayout();
-    // The status endpoint is restricted to ADMIN/OWNER. Other order-board roles must not
-    // trigger a guaranteed 403 followed by an unnecessary token refresh.
-    if (this.canManagePayments()) {
-      this.loadTbankStatus();
-    }
+    this.paymentState.initialize(this.canManagePayments());
     this.destroyRef.onDestroy(() => {
       this.orderRouteGeneration += 1;
+      this.paymentState.dispose();
       this.clearReviewPublishWaitTimer();
       this.cancelOrderRouteReads();
     });
@@ -422,6 +434,7 @@ export class OrderDetailsComponent {
   }
 
   reviewAccountActionTitle(review: OrderReviewItem): string {
+    if (this.accountActionCooldown.locked()) return this.accountActionCooldown.title();
     return this.reviewAccountActionLocked(review)
       ? 'В деталях заказа смена доступна только когда аккаунт нужно назначить или заменить'
       : 'Действие с аккаунтом';
@@ -599,64 +612,10 @@ export class OrderDetailsComponent {
   }
 
   createPaymentLink(): void {
-    const orderId = this.orderId();
-    if (!orderId || !this.canShowPaymentLinkAction() || this.isMutating('payment-link')) {
-      return;
-    }
-
-    const existingPaymentLink = this.paymentLink();
-    const existingPaymentText = existingPaymentLink?.copyText || existingPaymentLink?.url;
-    if (existingPaymentText) {
-      void this.copyText(existingPaymentText, 'payment-link', 'Ссылка на оплату скопирована');
-      return;
-    }
-
-    const routeVisit = this.captureActiveOrderRoute();
-    if (!routeVisit) {
-      return;
-    }
-    this.mutationKey.set('payment-link');
-    this.error.set(null);
-    this.paymentsApi.createOrderPaymentLink(orderId)
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (response) => {
-          if (!this.isActiveOrderRoute(routeVisit)) {
-            return;
-          }
-
-          this.paymentLink.set(response);
-          this.mutationKey.set(null);
-          void this.copyText(
-            response.copyText || response.url,
-            'payment-link',
-            'Ссылка на оплату скопирована',
-            'Ссылка создана. Если iPhone не дал скопировать, нажмите кнопку еще раз.'
-          );
-        },
-        error: (err) => {
-          if (!this.isActiveOrderRoute(routeVisit)) {
-            return;
-          }
-
-          const message = this.errorMessage(err, 'Не удалось создать ссылку на оплату');
-          this.mutationKey.set(null);
-          this.error.set(message);
-          this.toastService.error('Ссылка не создана', message);
-        }
-      });
+    this.paymentState.createOrCopy(this.orderId(), this.canShowPaymentLinkAction());
   }
 
-  paymentLinkModeLabel(): string {
-    const status = this.tbankStatus();
-    if (!status) {
-      return 'Проверка';
-    }
-    if (status.runtimeMode === 'TEST') {
-      return 'Тестовый режим';
-    }
-    return status.applyConfirmedPayments ? 'Автоучёт оплаты' : 'Без автоучёта';
-  }
+  paymentLinkModeLabel(): string { return this.paymentState.modeLabel(); }
 
   companyReportActionLabel(): string {
     if (this.companyReportLoading()) {
@@ -762,7 +721,7 @@ export class OrderDetailsComponent {
     this.companyReportVisible.set(false);
     this.companyReportLoading.set(false);
     this.companyReportError.set(null);
-    this.paymentLink.set(null);
+    this.paymentState.resetRoute();
     this.copiedReviewCredentials.set({});
     this.dismissAllReviewFieldDraftToasts();
     this.clearReviewPublishWaitTimer();
@@ -780,15 +739,6 @@ export class OrderDetailsComponent {
 
   private isActiveOrderRoute(visit: OrderRouteVisit): boolean {
     return visit.generation === this.orderRouteGeneration && visit.orderId === this.orderId();
-  }
-
-  private loadTbankStatus(): void {
-    this.paymentsApi.getTbankStatus()
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (status) => this.tbankStatus.set(status),
-        error: () => this.tbankStatus.set(null)
-      });
   }
 
   private startCompanyReport(refresh = false): void {
@@ -1633,6 +1583,7 @@ export class OrderDetailsComponent {
   }
 
   changeBot(review: OrderReviewItem): void {
+    if (this.accountActionCooldown.locked()) return;
     if (this.reviewAccountActionLocked(review)) {
       this.toastService.info('Сначала данные аккаунта', 'Скопируйте логин и пароль перед сменой аккаунта');
       return;
@@ -1675,6 +1626,7 @@ export class OrderDetailsComponent {
   }
 
   assignReviewNewAccount(): void {
+    if (this.accountActionCooldown.locked()) return;
     const review = this.editReview();
 
     if (!review || this.reviewEditNewAccountSaving()) {
@@ -1732,6 +1684,7 @@ export class OrderDetailsComponent {
   }
 
   deactivateBot(review: OrderReviewItem): void {
+    if (this.accountActionCooldown.locked()) return;
     if (this.reviewAccountActionLocked(review)) {
       this.toastService.info('Сначала данные аккаунта', 'Скопируйте логин и пароль перед блокировкой аккаунта');
       return;
@@ -2079,6 +2032,7 @@ export class OrderDetailsComponent {
   }
 
   changeBadReviewTaskBot(task: BadReviewTaskItem): void {
+    if (this.accountActionCooldown.locked()) return;
     const orderId = this.orderId();
     if (!orderId || !this.canEditBadReviewTask(task)) {
       return;
@@ -2852,7 +2806,7 @@ export class OrderDetailsComponent {
   }
 
   isMutating(key: string): boolean {
-    return this.mutationKey() === key;
+    return key === 'payment-link' ? this.paymentState.busy() : this.mutationKey() === key;
   }
 
   pendingReviewFieldCardNumbers(): number[] {
@@ -3213,18 +3167,21 @@ export class OrderDetailsComponent {
     text: string,
     key: string,
     toast: string,
-    failureToast = 'Браузер не дал доступ к буферу обмена'
+    failureToast = 'Браузер не дал доступ к буферу обмена',
+    isCurrent: () => boolean = () => true
   ): Promise<boolean> {
     const value = (text ?? '').trim();
-    if (!value) {
+    if (!value || !isCurrent()) {
       return false;
     }
 
-    if (await copyTextToClipboard(value)) {
+    const wasCopied = await copyTextToClipboard(value);
+    if (!isCurrent()) return false;
+    if (wasCopied) {
       this.copied.set(key);
       this.toastService.success('Скопировано', toast);
       window.setTimeout(() => {
-        if (this.copied() === key) {
+        if (isCurrent() && this.copied() === key) {
           this.copied.set(null);
         }
       }, 1200);

@@ -1,0 +1,50 @@
+=== RUN   TestValidHostURL
+--- PASS: TestValidHostURL (0.00s)
+=== RUN   TestIsValidAPI
+--- PASS: TestIsValidAPI (0.00s)
+=== RUN   TestValidSecretKeys
+--- PASS: TestValidSecretKeys (0.00s)
+=== RUN   TestValidAccessKeys
+--- PASS: TestValidAccessKeys (0.00s)
+=== RUN   TestParseEnvURLStr
+=== RUN   TestParseEnvURLStr/#00
+=== RUN   TestParseEnvURLStr/#01
+=== RUN   TestParseEnvURLStr/#02
+=== RUN   TestParseEnvURLStr/#03
+=== RUN   TestParseEnvURLStr/#04
+=== RUN   TestParseEnvURLStr/#05
+=== RUN   TestParseEnvURLStr/#06
+=== RUN   TestParseEnvURLStr/#07
+=== RUN   TestParseEnvURLStr/#08
+=== RUN   TestParseEnvURLStr/#09
+=== RUN   TestParseEnvURLStr/#10
+=== RUN   TestParseEnvURLStr/#11
+--- PASS: TestParseEnvURLStr (0.00s)
+    --- PASS: TestParseEnvURLStr/#00 (0.00s)
+    --- PASS: TestParseEnvURLStr/#01 (0.00s)
+    --- PASS: TestParseEnvURLStr/#02 (0.00s)
+    --- PASS: TestParseEnvURLStr/#03 (0.00s)
+    --- PASS: TestParseEnvURLStr/#04 (0.00s)
+    --- PASS: TestParseEnvURLStr/#05 (0.00s)
+    --- PASS: TestParseEnvURLStr/#06 (0.00s)
+    --- PASS: TestParseEnvURLStr/#07 (0.00s)
+    --- PASS: TestParseEnvURLStr/#08 (0.00s)
+    --- PASS: TestParseEnvURLStr/#09 (0.00s)
+    --- PASS: TestParseEnvURLStr/#10 (0.00s)
+    --- PASS: TestParseEnvURLStr/#11 (0.00s)
+=== RUN   TestParseEnvURLStrInvalid
+--- PASS: TestParseEnvURLStrInvalid (0.00s)
+=== RUN   TestParseMetaData
+--- PASS: TestParseMetaData (0.00s)
+=== RUN   TestParseStat
+=== RUN   TestParseStat/#00
+=== RUN   TestParseStat/#01
+=== RUN   TestParseStat/#02
+=== RUN   TestParseStat/#03
+--- PASS: TestParseStat (0.00s)
+    --- PASS: TestParseStat/#00 (0.00s)
+    --- PASS: TestParseStat/#01 (0.00s)
+    --- PASS: TestParseStat/#02 (0.00s)
+    --- PASS: TestParseStat/#03 (0.00s)
+PASS
+ok  	github.com/minio/mc/cmd	0.020s

@@ -23,6 +23,10 @@ import java.util.Set;
 @Repository
 public interface LeadsRepository extends CrudRepository<Lead, Long> {
 
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT lead FROM Lead lead WHERE lead.id=:id")
+    Optional<Lead> findByIdForWorkTransition(@Param("id") Long id);
+
     // Выборка всех лидов по телефону, статусу и дате (от самых старых)
     @Query("""
         SELECT l FROM Lead l

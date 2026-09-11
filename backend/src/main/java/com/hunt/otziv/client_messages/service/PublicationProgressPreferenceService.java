@@ -25,6 +25,12 @@ public class PublicationProgressPreferenceService {
 
     private final CompanyRepository companyRepository;
 
+    @Transactional(readOnly=true, propagation=org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public boolean isCompanyEnabled(Long companyId) {
+        return companyId != null && companyRepository.findById(companyId)
+                .map(Company::isPublicationProgressReportsEnabled).orElse(false);
+    }
+
     public String appendPlainOptOutHint(String message) {
         return trimToEmpty(message)
                 + "\n\nНе хотите получать сообщение о каждом опубликованном отзыве?"

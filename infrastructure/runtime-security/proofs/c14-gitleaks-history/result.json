@@ -1,0 +1,123 @@
+{
+  "schema": "otziv-gitleaks-public-history-controls-v1",
+  "result": "PASS",
+  "engine": "ghcr.io/gitleaks/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f",
+  "baselineConfigSha256": "482ee9a0c69bb70aae239615f4c45a15b30c0631d4259817b5dbab089e26b77c",
+  "candidateConfigSha256": "e58db3f4263e9354dcd4e1dbee21aebf2aa544546fb48c75373ee7b661d44450",
+  "sourceSha256": "87b42a6c421e0711981bda5b70d44af0a4333b01592051a3a90cb053e2cacfe9",
+  "provenanceSha256": "4f92a2fffad2fc1f6a18d1e7ba84e72ad2e119604c65835ac8cb5ea242c67de7",
+  "classEntry": "org/keycloak/models/sessions/infinispan/stream/RemoveKeyConsumer.class",
+  "classByteSha256": "ec0f8dbe6b5b0179a51a930e36a441a65b5b55f9ba9f4731ce430391e62fafa5",
+  "publicValueSha256": "babbfb9bc6bbb88bfb1022ec15eaf7ac5d80614c0deacb6219981c757b477b2c",
+  "exactPaths": [
+    "infrastructure/keycloak/security-generation/c14-migration-fix/proofs/security-v3/otziv-realm-migration-provenance.json",
+    "infrastructure/runtime-security/proofs/c14-keycloak-published/final/runtime/otziv-realm-migration-provenance.json",
+    "infrastructure/runtime-security/proofs/c14-keycloak-published/runtime/otziv-realm-migration-provenance.json"
+  ],
+  "cases": [
+    {
+      "case": "raw-baseline-dir",
+      "mode": "dir",
+      "result": "PASS",
+      "findings": 0,
+      "durationSeconds": 59.876,
+      "configSha256": "482ee9a0c69bb70aae239615f4c45a15b30c0631d4259817b5dbab089e26b77c",
+      "reportSha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "redacted": true
+    },
+    {
+      "case": "raw-baseline-git",
+      "mode": "git",
+      "result": "PASS",
+      "findings": 3,
+      "durationSeconds": 107.361,
+      "configSha256": "482ee9a0c69bb70aae239615f4c45a15b30c0631d4259817b5dbab089e26b77c",
+      "reportSha256": "3822ba8177b725edaf61b6a8506f8c63021ef548018c95d213488854dd088904",
+      "redacted": true
+    },
+    {
+      "case": "raw-candidate-git",
+      "mode": "git",
+      "result": "PASS",
+      "findings": 0,
+      "durationSeconds": 104.555,
+      "configSha256": "e58db3f4263e9354dcd4e1dbee21aebf2aa544546fb48c75373ee7b661d44450",
+      "reportSha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "redacted": true
+    },
+    {
+      "case": "exact-match-three-paths",
+      "mode": "git",
+      "result": "PASS",
+      "findings": 0,
+      "durationSeconds": 0.711,
+      "configSha256": "e58db3f4263e9354dcd4e1dbee21aebf2aa544546fb48c75373ee7b661d44450",
+      "reportSha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "redacted": true
+    },
+    {
+      "case": "changed-value-0",
+      "mode": "git",
+      "result": "PASS",
+      "findings": 1,
+      "durationSeconds": 0.682,
+      "configSha256": "e58db3f4263e9354dcd4e1dbee21aebf2aa544546fb48c75373ee7b661d44450",
+      "reportSha256": "d6d8dd05167279a73e4c9ff74b95f34ef76ba7cce6d98f07e1c3ea4d79748dd8",
+      "redacted": true
+    },
+    {
+      "case": "changed-value-1",
+      "mode": "git",
+      "result": "PASS",
+      "findings": 1,
+      "durationSeconds": 0.672,
+      "configSha256": "e58db3f4263e9354dcd4e1dbee21aebf2aa544546fb48c75373ee7b661d44450",
+      "reportSha256": "766cb63e6fdd6b5288479613a0da1ebb35e24c47b3dff7b75cd58ffb2b1ce068",
+      "redacted": true
+    },
+    {
+      "case": "changed-value-2",
+      "mode": "git",
+      "result": "PASS",
+      "findings": 1,
+      "durationSeconds": 0.662,
+      "configSha256": "e58db3f4263e9354dcd4e1dbee21aebf2aa544546fb48c75373ee7b661d44450",
+      "reportSha256": "50a78c25c6ed5b94246862e1faaecd6274eb62dd57d0901f835e92b221a21a18",
+      "redacted": true
+    },
+    {
+      "case": "same-value-other-paths",
+      "mode": "git",
+      "result": "PASS",
+      "findings": 3,
+      "durationSeconds": 0.7,
+      "configSha256": "e58db3f4263e9354dcd4e1dbee21aebf2aa544546fb48c75373ee7b661d44450",
+      "reportSha256": "bfece5493f99b26838e7f6827387008f375f1d3400995080bc2743094bdc3171",
+      "redacted": true
+    },
+    {
+      "case": "additional-secret-same-line",
+      "mode": "git",
+      "result": "PASS",
+      "findings": 3,
+      "durationSeconds": 0.844,
+      "configSha256": "e58db3f4263e9354dcd4e1dbee21aebf2aa544546fb48c75373ee7b661d44450",
+      "reportSha256": "dadcbbc2f6a4502a13b8230758664ce0fc0c57a25241dcf19c465cde377cfcdf",
+      "redacted": true
+    },
+    {
+      "case": "independent-detector-preserved",
+      "mode": "git",
+      "result": "PASS",
+      "findings": 3,
+      "durationSeconds": 0.736,
+      "configSha256": "da4a800af425a156b8b328c8b16de86fe18aa579919c690a43d5be00c3eb2c0d",
+      "reportSha256": "2a6e8b0e6b5d74dde07545e63bbcab54eb33a90603ff993cf1c7c07709d4686d",
+      "redacted": true
+    }
+  ],
+  "caseCount": 10,
+  "rootGitWrites": false,
+  "rawProofFilesModified": false,
+  "reportsRedacted": true
+}

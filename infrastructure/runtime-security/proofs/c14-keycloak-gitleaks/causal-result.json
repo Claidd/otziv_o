@@ -1,0 +1,370 @@
+{
+  "schema": "otziv-c14-public-metadata-gitleaks-causal-v1",
+  "result": "PASS",
+  "engine": "ghcr.io/gitleaks/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f",
+  "configSha256": "482ee9a0c69bb70aae239615f4c45a15b30c0631d4259817b5dbab089e26b77c",
+  "originalConfigurationPrefixSha256": "9cbc81f58896e5839c87ed7b09649e18f0992dfe4cc2ce4aa4180ba1770488e1",
+  "groups": 19,
+  "exactSelectors": 483,
+  "cases": [
+    {
+      "case": "baseline-public",
+      "result": "PASS",
+      "mode": "dir",
+      "findings": 483,
+      "rules": [
+        "generic-api-key",
+        "sentry-access-token"
+      ],
+      "reportSha256": "dc6516ac27d261b8f82439cad4b286b1924bd6d331c27781fca5a864c207a24b",
+      "configSha256": "9cbc81f58896e5839c87ed7b09649e18f0992dfe4cc2ce4aa4180ba1770488e1"
+    },
+    {
+      "case": "candidate-public",
+      "result": "PASS",
+      "mode": "dir",
+      "findings": 0,
+      "rules": [],
+      "reportSha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "configSha256": "482ee9a0c69bb70aae239615f4c45a15b30c0631d4259817b5dbab089e26b77c"
+    },
+    {
+      "case": "candidate-public-crlf",
+      "result": "PASS",
+      "mode": "dir",
+      "findings": 0,
+      "rules": [],
+      "reportSha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "configSha256": "482ee9a0c69bb70aae239615f4c45a15b30c0631d4259817b5dbab089e26b77c"
+    },
+    {
+      "case": "baseline-unbound-controls",
+      "result": "PASS",
+      "mode": "dir",
+      "findings": 1,
+      "rules": [
+        "generic-api-key"
+      ],
+      "reportSha256": "8b81e850071f3dd315c53ef0808102c0777fe6b211bce8e88cd9f021742b4c7d",
+      "configSha256": "9cbc81f58896e5839c87ed7b09649e18f0992dfe4cc2ce4aa4180ba1770488e1"
+    },
+    {
+      "case": "changed-value-0",
+      "result": "PASS",
+      "mode": "dir",
+      "findings": 1,
+      "rules": [
+        "generic-api-key"
+      ],
+      "reportSha256": "f0cb326e5c173f0cbc667e18bbe44e729f8ade9aac53ae7f54c1722d59679948",
+      "configSha256": "482ee9a0c69bb70aae239615f4c45a15b30c0631d4259817b5dbab089e26b77c"
+    },
+    {
+      "case": "changed-value-1",
+      "result": "PASS",
+      "mode": "dir",
+      "findings": 2,
+      "rules": [
+        "generic-api-key"
+      ],
+      "reportSha256": "a4b535ba26c353190e8db1da911254ea48f6cbd39d6c0c248793e77c6bcfe765",
+      "configSha256": "482ee9a0c69bb70aae239615f4c45a15b30c0631d4259817b5dbab089e26b77c"
+    },
+    {
+      "case": "changed-value-2",
+      "result": "PASS",
+      "mode": "dir",
+      "findings": 1,
+      "rules": [
+        "generic-api-key"
+      ],
+      "reportSha256": "0811442e5328d42e77aab59b2949ceb3fc37c608668696d3b9cab8e5dcfe890b",
+      "configSha256": "482ee9a0c69bb70aae239615f4c45a15b30c0631d4259817b5dbab089e26b77c"
+    },
+    {
+      "case": "changed-value-3",
+      "result": "PASS",
+      "mode": "dir",
+      "findings": 1,
+      "rules": [
+        "sentry-access-token"
+      ],
+      "reportSha256": "21bebc27aca44d7d5142918bd10294338dabd315c5a69153d18635e6e71d9f2c",
+      "configSha256": "482ee9a0c69bb70aae239615f4c45a15b30c0631d4259817b5dbab089e26b77c"
+    },
+    {
+      "case": "changed-value-4",
+      "result": "PASS",
+      "mode": "dir",
+      "findings": 1,
+      "rules": [
+        "generic-api-key"
+      ],
+      "reportSha256": "450f1d985db24caddedf2ce67c90e3887050d4a7ebb6507d43f6aaa86c1a0c1d",
+      "configSha256": "482ee9a0c69bb70aae239615f4c45a15b30c0631d4259817b5dbab089e26b77c"
+    },
+    {
+      "case": "changed-value-5",
+      "result": "PASS",
+      "mode": "dir",
+      "findings": 1,
+      "rules": [
+        "generic-api-key"
+      ],
+      "reportSha256": "447878de3a1502e3712dade1f4af4a9e756bc371cd322f0a775c80ab94cd3921",
+      "configSha256": "482ee9a0c69bb70aae239615f4c45a15b30c0631d4259817b5dbab089e26b77c"
+    },
+    {
+      "case": "changed-value-6",
+      "result": "PASS",
+      "mode": "dir",
+      "findings": 2,
+      "rules": [
+        "generic-api-key"
+      ],
+      "reportSha256": "70ff0bf282ca041ee914004a2251cfd150db9ad13d167c54e4af68b1375809a3",
+      "configSha256": "482ee9a0c69bb70aae239615f4c45a15b30c0631d4259817b5dbab089e26b77c"
+    },
+    {
+      "case": "changed-value-7",
+      "result": "PASS",
+      "mode": "dir",
+      "findings": 1,
+      "rules": [
+        "generic-api-key"
+      ],
+      "reportSha256": "614d2b0345080a5a753ce4efa9c71b50ee7d553800a215f9b33b2ec6193ce355",
+      "configSha256": "482ee9a0c69bb70aae239615f4c45a15b30c0631d4259817b5dbab089e26b77c"
+    },
+    {
+      "case": "changed-value-8",
+      "result": "PASS",
+      "mode": "dir",
+      "findings": 1,
+      "rules": [
+        "generic-api-key"
+      ],
+      "reportSha256": "09a732a2df772993c0dd0eab126c2544dd4767570be195ccbcd38a6d0d101215",
+      "configSha256": "482ee9a0c69bb70aae239615f4c45a15b30c0631d4259817b5dbab089e26b77c"
+    },
+    {
+      "case": "changed-value-9",
+      "result": "PASS",
+      "mode": "dir",
+      "findings": 1,
+      "rules": [
+        "generic-api-key"
+      ],
+      "reportSha256": "091daeeddcde08a21baca6433817489cb2077d3f35f141e6eca9ec01a6788f0b",
+      "configSha256": "482ee9a0c69bb70aae239615f4c45a15b30c0631d4259817b5dbab089e26b77c"
+    },
+    {
+      "case": "changed-value-10",
+      "result": "PASS",
+      "mode": "dir",
+      "findings": 1,
+      "rules": [
+        "generic-api-key"
+      ],
+      "reportSha256": "08bde444df7086db679008c31a2f8ba53630ca7eee71c3857ecda722124e3771",
+      "configSha256": "482ee9a0c69bb70aae239615f4c45a15b30c0631d4259817b5dbab089e26b77c"
+    },
+    {
+      "case": "changed-value-11",
+      "result": "PASS",
+      "mode": "dir",
+      "findings": 1,
+      "rules": [
+        "sentry-access-token"
+      ],
+      "reportSha256": "09deba4f722180cf8c8df04f266890c5b9fd52e363db9fcd6ba1377b87d1eecd",
+      "configSha256": "482ee9a0c69bb70aae239615f4c45a15b30c0631d4259817b5dbab089e26b77c"
+    },
+    {
+      "case": "changed-value-12",
+      "result": "PASS",
+      "mode": "dir",
+      "findings": 1,
+      "rules": [
+        "generic-api-key"
+      ],
+      "reportSha256": "83070a7e0855fadec163bd074a2c1714f46933485c783d179895560f145ff75d",
+      "configSha256": "482ee9a0c69bb70aae239615f4c45a15b30c0631d4259817b5dbab089e26b77c"
+    },
+    {
+      "case": "changed-value-13",
+      "result": "PASS",
+      "mode": "dir",
+      "findings": 2,
+      "rules": [
+        "generic-api-key"
+      ],
+      "reportSha256": "673508b532f55a2e537084856bedbeee8d63f36c6ee79b4b558902f7bf0d665d",
+      "configSha256": "482ee9a0c69bb70aae239615f4c45a15b30c0631d4259817b5dbab089e26b77c"
+    },
+    {
+      "case": "changed-value-14",
+      "result": "PASS",
+      "mode": "dir",
+      "findings": 1,
+      "rules": [
+        "generic-api-key"
+      ],
+      "reportSha256": "db1a2d477ee05cfcbe9807d9a4137858385111fe49bf3bfa9b112c707133d2b3",
+      "configSha256": "482ee9a0c69bb70aae239615f4c45a15b30c0631d4259817b5dbab089e26b77c"
+    },
+    {
+      "case": "changed-value-15",
+      "result": "PASS",
+      "mode": "dir",
+      "findings": 1,
+      "rules": [
+        "generic-api-key"
+      ],
+      "reportSha256": "e724fb9d7d15dc2f239612299ae4e6ae0c14b6fcfee2db5caa5be500b18b0ed2",
+      "configSha256": "482ee9a0c69bb70aae239615f4c45a15b30c0631d4259817b5dbab089e26b77c"
+    },
+    {
+      "case": "changed-value-16",
+      "result": "PASS",
+      "mode": "dir",
+      "findings": 1,
+      "rules": [
+        "sentry-access-token"
+      ],
+      "reportSha256": "f28ed85a3d926345316945756d0e45a66d432e0fb548bc8840d35c18ca70aa16",
+      "configSha256": "482ee9a0c69bb70aae239615f4c45a15b30c0631d4259817b5dbab089e26b77c"
+    },
+    {
+      "case": "changed-value-17",
+      "result": "PASS",
+      "mode": "dir",
+      "findings": 1,
+      "rules": [
+        "generic-api-key"
+      ],
+      "reportSha256": "7de4c1ed2bfb3c1fd478fdc7d4d7193b2a47d0486a60595c028f8779185a9808",
+      "configSha256": "482ee9a0c69bb70aae239615f4c45a15b30c0631d4259817b5dbab089e26b77c"
+    },
+    {
+      "case": "changed-value-18",
+      "result": "PASS",
+      "mode": "dir",
+      "findings": 2,
+      "rules": [
+        "generic-api-key"
+      ],
+      "reportSha256": "da59c0bb45770eac039728585dd25dd401d00e79a5f3313b2cc7219b53014895",
+      "configSha256": "482ee9a0c69bb70aae239615f4c45a15b30c0631d4259817b5dbab089e26b77c"
+    },
+    {
+      "case": "same-line-unknown",
+      "result": "PASS",
+      "mode": "dir",
+      "findings": 2,
+      "rules": [
+        "generic-api-key"
+      ],
+      "reportSha256": "408d6ee30980f63754f3c436d5e421b6f1f7df17160bde9d66c6259fa59b1e70",
+      "configSha256": "482ee9a0c69bb70aae239615f4c45a15b30c0631d4259817b5dbab089e26b77c"
+    },
+    {
+      "case": "before-unknown",
+      "result": "PASS",
+      "mode": "dir",
+      "findings": 1,
+      "rules": [
+        "generic-api-key"
+      ],
+      "reportSha256": "8b81e850071f3dd315c53ef0808102c0777fe6b211bce8e88cd9f021742b4c7d",
+      "configSha256": "482ee9a0c69bb70aae239615f4c45a15b30c0631d4259817b5dbab089e26b77c"
+    },
+    {
+      "case": "after-unknown",
+      "result": "PASS",
+      "mode": "dir",
+      "findings": 1,
+      "rules": [
+        "generic-api-key"
+      ],
+      "reportSha256": "8be7c74780aa19db451890e3edbdad3fea58cd992424ee899c42e76306cdb58c",
+      "configSha256": "482ee9a0c69bb70aae239615f4c45a15b30c0631d4259817b5dbab089e26b77c"
+    },
+    {
+      "case": "provenance-unknown",
+      "result": "PASS",
+      "mode": "dir",
+      "findings": 1,
+      "rules": [
+        "sentry-access-token"
+      ],
+      "reportSha256": "f6595b894264836b9a6f9b3c49a3199226032329f7d6aa9c82cfb096a66d6735",
+      "configSha256": "482ee9a0c69bb70aae239615f4c45a15b30c0631d4259817b5dbab089e26b77c"
+    },
+    {
+      "case": "other-path",
+      "result": "PASS",
+      "mode": "dir",
+      "findings": 56,
+      "rules": [
+        "generic-api-key"
+      ],
+      "reportSha256": "783400a8033895c94a64248dc2e242ed34b68fadc1bafa9de886b8cdd18b879e",
+      "configSha256": "482ee9a0c69bb70aae239615f4c45a15b30c0631d4259817b5dbab089e26b77c"
+    },
+    {
+      "case": "provenance-other-path",
+      "result": "PASS",
+      "mode": "dir",
+      "findings": 81,
+      "rules": [
+        "generic-api-key",
+        "sentry-access-token"
+      ],
+      "reportSha256": "06c4e39868d6f7f439c8e9fdf1daccea410e40b67eb201813b04df4695060d2a",
+      "configSha256": "482ee9a0c69bb70aae239615f4c45a15b30c0631d4259817b5dbab089e26b77c"
+    },
+    {
+      "case": "other-detector",
+      "result": "PASS",
+      "mode": "dir",
+      "findings": 1,
+      "rules": [
+        "otziv-independent-control"
+      ],
+      "reportSha256": "955a40081fea2b2affebc90f864b1514dbc49b6fdab7a4b64da631da136faa22",
+      "configSha256": "f9a1326267bfc96f951642fcf5f3824b220643cace13804dfb6f6a32784d04ec"
+    },
+    {
+      "case": "staged-absolute",
+      "result": "PASS",
+      "mode": "dir",
+      "findings": 0,
+      "rules": [],
+      "reportSha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "configSha256": "482ee9a0c69bb70aae239615f4c45a15b30c0631d4259817b5dbab089e26b77c"
+    },
+    {
+      "case": "git-public",
+      "result": "PASS",
+      "mode": "git",
+      "findings": 0,
+      "rules": [],
+      "reportSha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "configSha256": "482ee9a0c69bb70aae239615f4c45a15b30c0631d4259817b5dbab089e26b77c"
+    },
+    {
+      "case": "git-unknown",
+      "result": "PASS",
+      "mode": "git",
+      "findings": 1,
+      "rules": [
+        "sentry-access-token"
+      ],
+      "reportSha256": "6d579ee03c51a9af3b117c72f97ef20b88c77fbbfe6f39e8c82d26f209b5999f",
+      "configSha256": "482ee9a0c69bb70aae239615f4c45a15b30c0631d4259817b5dbab089e26b77c"
+    }
+  ],
+  "syntheticTokens": "Deterministic unbound bytes; reports redacted.",
+  "reproducerSha256": "3a0709be9a40055988f683a7dc1d43840d4a3cc5eb93f39783b3bd389724a8ea"
+}

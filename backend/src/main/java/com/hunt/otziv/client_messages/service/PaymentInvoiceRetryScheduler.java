@@ -143,6 +143,15 @@ public class PaymentInvoiceRetryScheduler {
         );
     }
 
+    /** Durable publication replay may create a missing cycle, never reopen an existing one. */
+    @Transactional
+    public void scheduleInitialInvoiceIfAbsent(Order order) {
+        if (!canSchedule(order)) return;
+        String target = orderTargetKey(order);
+        if (stateRepository.findByScenarioAndTargetKeyForUpdate(ClientMessageScenario.PAYMENT_INVOICE_RETRY, target).isPresent()) return;
+        scheduleOrderRetry(order, ClientMessageScenario.PAYMENT_INVOICE_RETRY, target, 0);
+    }
+
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void cancelBadReviewAutoBanInNewTransaction(Long orderId, String reason) {
         if (orderId == null || orderId <= 0) {

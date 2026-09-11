@@ -38,8 +38,54 @@ public record ManagerControlConcreteItemResponse(
         LocalDateTime firstObservedAt,
         LocalDateTime targetDeadlineAt,
         LocalDateTime hardDeadlineAt,
-        String slaState
+        String slaState,
+        com.hunt.otziv.client_messages.api.DeliveryOperation delivery
 ) {
+    public ManagerControlConcreteItemResponse(
+        Long controlEntityId,
+        String type,
+        Long entityId,
+        String title,
+        String subtitle,
+        String status,
+        Long ageDays,
+        String reason,
+        String targetUrl,
+        String orderDetailsId,
+        String chatUrl,
+        LocalDateTime followUpAt,
+        LocalDateTime lastManualTouchAt,
+        String itemStatus,
+        String actionType,
+        String comment,
+        LocalDateTime updatedAt,
+        LocalDateTime resolvedAt,
+        LocalDateTime workerNotificationAttemptedAt,
+        LocalDateTime workerNotificationSentAt,
+        LocalDateTime workerNotificationAcceptedAt,
+        Long workerNotificationAcceptedByUserId,
+        String workerNotificationFailureReason,
+        String contactText,
+        String riskResolutionAction,
+        String workerExplanation,
+        LocalDateTime workerExplanationAt,
+        Integer penaltyPoints,
+        String rollbackStatus,
+        String rollbackMessage,
+        Boolean canRollback,
+        String specialistName,
+        LocalDateTime firstObservedAt,
+        LocalDateTime targetDeadlineAt,
+        LocalDateTime hardDeadlineAt,
+        String slaState
+    ) {
+        this(controlEntityId, type, entityId, title, subtitle, status, ageDays, reason, targetUrl, orderDetailsId, chatUrl, followUpAt, lastManualTouchAt, itemStatus, actionType, comment, updatedAt, resolvedAt, workerNotificationAttemptedAt, workerNotificationSentAt, workerNotificationAcceptedAt, workerNotificationAcceptedByUserId, workerNotificationFailureReason, contactText, riskResolutionAction, workerExplanation, workerExplanationAt, penaltyPoints, rollbackStatus, rollbackMessage, canRollback, specialistName, firstObservedAt, targetDeadlineAt, hardDeadlineAt, slaState, null);
+    }
+
+    public ManagerControlConcreteItemResponse withDelivery(com.hunt.otziv.client_messages.api.DeliveryOperation delivery) {
+        return new ManagerControlConcreteItemResponse(controlEntityId, type, entityId, title, subtitle, status, ageDays, reason, targetUrl, orderDetailsId, chatUrl, followUpAt, lastManualTouchAt, itemStatus, actionType, comment, updatedAt, resolvedAt, workerNotificationAttemptedAt, workerNotificationSentAt, workerNotificationAcceptedAt, workerNotificationAcceptedByUserId, workerNotificationFailureReason, contactText, riskResolutionAction, workerExplanation, workerExplanationAt, penaltyPoints, rollbackStatus, rollbackMessage, canRollback, specialistName, firstObservedAt, targetDeadlineAt, hardDeadlineAt, slaState, delivery);
+    }
+
     public ManagerControlConcreteItemResponse(
             Long controlEntityId,
             String type,

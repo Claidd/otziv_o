@@ -14,6 +14,7 @@ import com.hunt.otziv.p_products.service.BotAssignmentService;
 import com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
+import com.hunt.otziv.worker_activity.account_action.WorkerAccountActionCooldownService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,12 +40,15 @@ import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class ReviewBotChangeServiceTest {
+    @Mock
+    private WorkerAccountActionCooldownService accountActionCooldownService;
 
     @Mock
     private ReviewRepository reviewRepository;
@@ -109,6 +113,7 @@ class ReviewBotChangeServiceTest {
 
         service.changeBot(15L);
 
+        verify(accountActionCooldownService).admitCurrentAction();
         assertSame(selectedBot, review.getBot());
         assertTrue(review.isVigul());
         verify(accountWalkScheduleService).synchronizeAfterAccountChange(review);
@@ -198,6 +203,7 @@ class ReviewBotChangeServiceTest {
         verify(assignmentExclusionService, never()).rejectCurrentBot(any(), any());
         verify(botAssignmentService, never()).assignBotForReviewChange(any(), anyCollection());
         verify(reviewRepository, never()).save(any());
+        verify(accountActionCooldownService, never()).admitCurrentAction();
     }
 
     @Test
@@ -506,8 +512,25 @@ class ReviewBotChangeServiceTest {
                 assignmentGuardService,
                 businessAuditService,
                 assignmentExclusionService,
-                assignmentMutationGuardService
+                assignmentMutationGuardService,
+                accountActionCooldownService
         );
+    }
+
+    @Test
+    void coolingDownRejectsChangeBeforeRejectingTheCurrentAccount() {
+        Review review = new Review();
+        Bot oldBot = bot(6L, "Текущий аккаунт", 2);
+        review.setBot(oldBot);
+        when(reviewRepository.findById(15L)).thenReturn(Optional.of(review));
+        ResponseStatusException cooldown = new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "Ожидайте");
+        doThrow(cooldown).when(accountActionCooldownService).admitCurrentAction();
+
+        assertSame(cooldown, assertThrows(ResponseStatusException.class, () -> service().changeBot(15L)));
+        assertSame(oldBot, review.getBot());
+        verify(assignmentExclusionService, never()).rejectCurrentBot(any(), any());
+        verify(botAssignmentService, never()).assignBotForReviewChange(any(), anyCollection());
+        verify(reviewRepository, never()).save(any());
     }
 
     private Bot bot(Long id, String fio, int counter) {

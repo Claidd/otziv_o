@@ -1,0 +1,70 @@
+{
+  "schema": "otziv-c14-mc-review-v1",
+  "result": "PASS",
+  "source": {
+    "repository": "https://github.com/minio/mc",
+    "commit": "77f82e18b5401a65958f1619df6ebb994634bd88",
+    "archiveSha256": "167415edd21bc29f5360943dac64272aa5cda0a39f3070b15cfeca671c43d975",
+    "license": "AGPL-3.0-or-later",
+    "archived": true
+  },
+  "image": {
+    "localManifestId": "sha256:6564a3b3ce6655e72f0c6b484508869eb84b54b8604e19c478a69dceaecba202",
+    "configDigest": "sha256:8800708e4f8a2feb937d15567eec56978e0da56e5c5c4ae7f96308b8b924b2bf",
+    "binarySha256": "6776804d929fca1c8426ee253517a27581b5e9250c0a0f90c762f5303c9d0e2c",
+    "correspondingSourceSha256": "bbe0785989c83ad4bf9041857178c4bb4615409f8fcdfb47110396c41771ded6"
+  },
+  "scan": {
+    "createdAt": "2026-09-08T13:29:45.436388215Z",
+    "high": 0,
+    "critical": 0,
+    "totalVulnerabilities": 75,
+    "rawSha256": "893551b113888ec3ae722c4788b66cf7f977b9e3b46c118063b8f27e9d349ae3",
+    "scanner": "aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969",
+    "suppressed": 0
+  },
+  "tests": {
+    "upstreamTopLevel": 8,
+    "runtimeChecks": 22,
+    "runtimeResult": "PASS"
+  },
+  "reproducibility": {
+    "completeModuleLocks": true,
+    "readonlyBuild": true,
+    "runtimeResolutionLockBeforeExplicitRemoval": true,
+    "binaryEqualAcrossResolverAndLockedRecipe": true,
+    "repositoryAvailabilityRequired": true
+  },
+  "limits": [
+    "Local synthetic standalone compatibility only; production and MinIO server acceptance are separate.",
+    "Publication and registry provenance/activation must be completed by the reviewed-image workflow.",
+    "Archived upstream has no vendor maintenance guarantee."
+  ],
+  "sourceFiles": {
+    "infrastructure/runtime-security/builds/minio/.gitattributes": "ee60cbf71ae23986dc94425c2846dd9e8bdeebe84c8735d52fd86d1b69c1db36",
+    "infrastructure/runtime-security/builds/minio/mc.Dockerfile": "b3df87ba8541ea3d17b43b27be7fcadb601439330a5f5ad7c58267e5a78f1cae",
+    "infrastructure/runtime-security/builds/minio/mc.go.mod": "844daaee37dd491752e0fa6c012dc268377c34264b512a449754120fe544f14c",
+    "infrastructure/runtime-security/builds/minio/mc.go.sum": "75681baffad3d33c97551996ea3a17e829240cf5fa6b468e49146a33280c0296",
+    "infrastructure/runtime-security/builds/minio/runtime-packages.lock": "e3cc8afecc2a9f2378985b2faf2c5728f50626c202d823e49de581947a68e422",
+    "infrastructure/runtime-security/builds/minio/run-mc-proof.mjs": "f56413da0ebbb6c13fc0d0aa231eef86419b478e63005bfd9c69af0d0edc393c",
+    "infrastructure/runtime-security/builds/minio/MC-README.md": "9db5d9c9be9bd2fd155f5c18685cc18880296d9325097fb739f1539303c91ffb",
+    "infrastructure/runtime-security/builds/minio/mc-candidate.test.mjs": "0ffb17478239bf13b25a0744d378e2e6c12af69616d2b94fcda7637592c9ee01"
+  },
+  "proofFiles": {
+    ".gitattributes": "8b9c3028d6467ff3be7c793141927841d70f47f52d0590677438f488ca154992",
+    ".gitignore": "15c4437080db4ec4be5ef2b2dde82e82749b1bb6379ee7f82d0fa7c87feba804",
+    "binary.sha256": "d7635231258bc88b2303ebcc11b13bae8751e39597556a6a1035328c7adf5de6",
+    "build.log": "614463bdb68d4719fa1383bdb7d213980373b03c8ecb9ccf32c8b92653e380e6",
+    "buildinfo.txt": "36c6925e3a701400b9ad0aa2b557ae599b145f9b3656b813773d465c55a2ea7c",
+    "dependency.patch": "b9ab01ecd723552ea3ea4e1652e17ed1995d51663744b8557419195fa9761113",
+    "modules.json": "777c66e2737bba4365f28ff033eb9f1045edee348a01c63ad762e2e649927a74",
+    "publication-payload.json": "5a146136caecd2e712b53d94724ac0abd2634b6ab29d5476a552e5b996a605b2",
+    "raw.json": "893551b113888ec3ae722c4788b66cf7f977b9e3b46c118063b8f27e9d349ae3",
+    "runtime.json": "6b2924610eea1fc7a1fb7d0d3275cbcdd4ed401af935c9b1e14a5c2b3c1b30fe",
+    "sbom.cdx.json": "687425dfde071ef25c61eb5daabbb75170ad271688fd310edb52af4fe19f8da5",
+    "scanner.log": "e5685cf2ad801c45f09829cae2285e17bd3bf6798d44f93e2a48558a3d2afea6",
+    "triage.json": "9a905da8245d70cffd1db200fb7156969c72775b08a46bdbe0478c69e19720f6",
+    "unit-tests.txt": "cf355a418be19a11ad05bed07e7452a2f8d6daa5d6c12a1ddf62b06815701b8a",
+    "upstream.txt": "dad499e674f46a2f0fb2075145725ce8d8e7193b6b4a24499974dea9c79c6cb9"
+  }
+}

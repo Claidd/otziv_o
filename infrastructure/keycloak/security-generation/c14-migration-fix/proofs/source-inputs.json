@@ -1,0 +1,19 @@
+{
+  "schema": "otziv-keycloak-c14-source-inputs-v1",
+  "buildInputs": {
+    "Dockerfile": "d9224dbd0089302f8010beabb55f48b0274924bdaa99965fdd79a7b890a4831f",
+    ".dockerignore": "38a1eac944a69b7bf138c91d3072a7366942b430d59cc4f29646dab54b4eb763",
+    "ApplyPatch.java": "74d9ea12fb5ee3b374162429b824ac52b07128a05351cf7dbcede2dd4011a1e2",
+    "ModulePatch.java": "966fa3e2ce06c51b74c91574893f34af189582b0ea5cd6f1320492c86b1d0721",
+    "ManagedModelsProof.java": "41f156be89f9c3112a3ebe5ed3f11b830fc94a2ee55d6e3e7a3a3bf950ab0045",
+    "managed-models.patch": "faed4f4456901b0f9911274d391ccb3c08d47c2335caadde2e196457b3da29cc",
+    "source-before.sha256": "8d61dc0d319f82ea0436e075f2def46556c1ca12401fbd2ea2a0f023323944e0",
+    "source-after.sha256": "369573db3114f35275343721757c441bb098e007ff8f4efeb8b31a624c127e9b",
+    "source-provenance.json": "f1f8195753017612787a0d717aa7a2830bc8f2ec8dd55cfdfc424a87c6d13ba9"
+  },
+  "executedReplay": {
+    "replay-actual.py": "bbed77f45194bd12f5e2ec4d7407bab4e2d5744f8ac611ca7f11f6b78936ca3f",
+    "private-runtime.py": "f8bee667af239ac739f7912634d1b657ae29c7eecb9f71b73c31b78be2f1189b"
+  },
+  "allBuildInputsPhysicalLf": true
+}

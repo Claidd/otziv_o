@@ -1,0 +1,24 @@
+{
+  "errors": [
+    { "input": { "status": 409, "error": { "code": " payment_route_stale " } }, "code": "PAYMENT_ROUTE_STALE", "retryable": true },
+    { "input": { "error": { "properties": { "code": "TASK_TARGET_UNRESOLVED" } } }, "code": "TASK_TARGET_UNRESOLVED", "retryable": false },
+    { "input": { "problemCode": "ACTUAL_RECIPIENT_REQUIRED" }, "code": "ACTUAL_RECIPIENT_REQUIRED", "retryable": true },
+    { "input": { "error": { "code": "FUTURE" } }, "code": null, "retryable": false }
+  ],
+  "recipients": [
+    { "input": { "recipientType": "OWNER", "recipientProfileId": 2, "displayName": "Owner" }, "key": "OWNER:2", "task": false },
+    { "input": { "manualPaymentTaskId": 16, "manualPaymentTaskGeneration": 3, "taskTargetKind": "SPECIALIST", "taskRecipientName": "Test", "accountingTargetLabel": "Employee" }, "key": "TASK:16:3", "task": true },
+    { "input": { "cashDestinationKind": "MANUAL_PAYMENT_TASK", "manualPaymentTaskId": 16, "taskTargetKind": "UNRESOLVED" }, "key": "", "task": true },
+    { "input": { "key": " TASK:16:4 ", "manualPaymentTaskId": 16, "manualPaymentTaskGeneration": 3, "taskTargetKind": "EXTERNAL_TASK" }, "key": "TASK:16:4", "task": true },
+    { "input": { "key": "LEGACY_PRE_CUTOVER_MANUAL_CARD", "displayName": "Legacy" }, "key": "LEGACY_PRE_CUTOVER_MANUAL_CARD", "task": false }
+  ],
+  "bankRoutes": [
+    { "input": null, "web": false, "mobile": true },
+    { "input": "", "web": false, "mobile": true },
+    { "input": " bank_link ", "web": true, "mobile": true },
+    { "input": "TBANK_LINK", "web": true, "mobile": true },
+    { "input": "TOCHKA_LINK", "web": true, "mobile": true },
+    { "input": "MANAGER_TEXT", "web": false, "mobile": false },
+    { "input": "FUTURE", "web": false, "mobile": false }
+  ]
+}

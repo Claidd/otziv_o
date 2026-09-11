@@ -13,6 +13,10 @@ async function main() {
   });
 
   try {
+    if (process.env.OTZIV_BROWSER_VERSION &&
+        await browser.version() !== `Chrome/${process.env.OTZIV_BROWSER_VERSION}`) {
+      throw new Error("Browser version differs from the pinned release artifact");
+    }
     const page = await browser.newPage();
     await page.goto("about:blank", { waitUntil: "load", timeout: 10000 });
   } finally {

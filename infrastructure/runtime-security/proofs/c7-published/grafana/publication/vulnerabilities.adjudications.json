@@ -1,0 +1,44 @@
+{
+  "schema": "otziv-image-adjudication-v1",
+  "rawReportSha256": "e0c812c8326244f448c43a20f674671833e08a79f02793ffd263c7ea1fefa255",
+  "imageConfigId": "sha256:884196c9a81cca9518c21076460cf7697622dc695d2ec4e71bada03d2c6497ca",
+  "immutableImageId": "sha256:884196c9a81cca9518c21076460cf7697622dc695d2ec4e71bada03d2c6497ca",
+  "rawReportModified": false,
+  "decisions": [
+    {
+      "resultIndex": 2,
+      "findingIndex": 0,
+      "cve": "CVE-2026-21728",
+      "target": "usr/share/grafana/bin/grafana",
+      "package": "github.com/grafana/tempo",
+      "version": "v1.5.1-0.20260427112133-525d1bab07e0",
+      "state": "not_affected",
+      "justification": "fixed_code_present",
+      "fixCommit": "650eb1985a0776789c8564122990f588a742356f",
+      "fixedHighOrCritical": true
+    },
+    {
+      "resultIndex": 2,
+      "findingIndex": 1,
+      "cve": "CVE-2026-28377",
+      "target": "usr/share/grafana/bin/grafana",
+      "package": "github.com/grafana/tempo",
+      "version": "v1.5.1-0.20260427112133-525d1bab07e0",
+      "state": "not_affected",
+      "justification": "fixed_code_present",
+      "fixCommit": "bb8ca663db34a0980c9758b40d918fda3b4dbec3",
+      "fixedHighOrCritical": true
+    }
+  ],
+  "status": "EXACT_BINARY_FIXED_CODE_PROVEN",
+  "reviewSha256": "518e062ccb347ad8a62552415f510d245817f3c62f8c7dc1d5f5c3a1a80e7537",
+  "binarySha256": "1b857d1ece48a10e5e1178e1c8d688a069e50b4166e79ed3d993967354c2106c",
+  "canonicalBuildInfoSha256": "dd3ed27690aef6058d4a63a26105ea64eb559e616b953ef18a41a6e19a736472",
+  "buildInfoReader": "golang:1.27.1-bookworm@sha256:648f440f42a0958804efb24df176f806f9d353b41f1c0627f666428e40310f6b",
+  "inspectedBinaryExecuted": false,
+  "module": {
+    "name": "github.com/grafana/tempo",
+    "version": "v1.5.1-0.20260427112133-525d1bab07e0",
+    "sum": "h1:kE5kdMnyPJmlNUdWhahfzqPYB3vM8DtAxgWymbB8nOA="
+  }
+}

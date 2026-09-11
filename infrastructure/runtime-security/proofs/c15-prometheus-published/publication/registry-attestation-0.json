@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 2,
+  "mediaType": "application/vnd.oci.image.manifest.v1+json",
+  "artifactType": "application/vnd.docker.attestation.manifest.v1+json",
+  "config": {
+    "mediaType": "application/vnd.oci.empty.v1+json",
+    "digest": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "size": 2,
+    "data": "e30="
+  },
+  "layers": [
+    {
+      "mediaType": "application/vnd.in-toto+json",
+      "digest": "sha256:d23aba45ab2d3f612b54989478e8e3ecd9cbbc8e98610a1dcf8b6c9b3c80fcd4",
+      "size": 694130,
+      "annotations": {
+        "in-toto.io/predicate-type": "https://spdx.dev/Document"
+      }
+    },
+    {
+      "mediaType": "application/vnd.in-toto+json",
+      "digest": "sha256:8574d8b0cdd1b535d863e39a5fda87a0680fd71a7917451e2a8869811cec3f77",
+      "size": 31613,
+      "annotations": {
+        "in-toto.io/predicate-type": "https://slsa.dev/provenance/v1"
+      }
+    }
+  ],
+  "subject": {
+    "mediaType": "application/vnd.oci.image.manifest.v1+json",
+    "digest": "sha256:ff74b11392fa1b4abd67fd53ff85d82d76a68048d74b8268f5bdc23b205819cb",
+    "size": 2575
+  }
+}

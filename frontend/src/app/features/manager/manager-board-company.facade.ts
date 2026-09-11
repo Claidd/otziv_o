@@ -1,3 +1,4 @@
+import { ClientContractError } from '@otziv/client-common/billing-payments';
 import { signal } from '@angular/core';
 import type {
   CommonBillingAccountResponse,
@@ -623,6 +624,11 @@ export class ManagerBoardCompanyFacade {
         this.billingLoading.set(false);
       },
       error: (err) => {
+        if (err instanceof ClientContractError) {
+          this.billingAccounts.set([]);
+          this.billingSelectedAccountId.set(null);
+          this.applyBillingDraft();
+        }
         const message = this.deps.errorMessage(err, 'Не удалось загрузить общие счета компании');
         this.billingLoading.set(false);
         this.billingError.set(message);

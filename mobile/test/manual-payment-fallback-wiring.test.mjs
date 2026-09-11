@@ -21,7 +21,7 @@ test('worker tries the ordinary paid action before the privileged exact-conflict
   const method = workerSource.match(/private async updatePaidOrderStatus\([\s\S]*?\r?\n  \}\r?\n\r?\n  async toggleOrderClientWaiting/);
   assert.ok(method, 'updatePaidOrderStatus method was not found');
   const source = method[0];
-  const genericIndex = source.indexOf("this.api.updateWorkerOrderStatus(order.id, 'Оплачено')");
+  const genericIndex = source.indexOf("this.workerApi.updateWorkerOrderStatus(order.id, 'Оплачено')");
   const fallbackIndex = source.indexOf('this.manualCardPaymentFlow.confirm');
   assert.ok(genericIndex >= 0 && fallbackIndex > genericIndex);
   assert.match(source, /manualCardPaymentFallbackAccessDecision/);

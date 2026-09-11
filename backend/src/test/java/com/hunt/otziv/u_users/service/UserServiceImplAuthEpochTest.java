@@ -61,6 +61,7 @@ class UserServiceImplAuthEpochTest {
     @Mock private UserAuthEpochService authEpochService;
     @Mock private KeycloakAdminClient keycloakAdminClient;
     @Mock private ContractorPaymentProfileService contractorPaymentProfileService;
+    @Mock private jakarta.persistence.EntityManager entityManager;
     @InjectMocks private UserServiceImpl service;
 
     @AfterEach

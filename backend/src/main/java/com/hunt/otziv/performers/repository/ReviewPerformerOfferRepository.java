@@ -16,6 +16,14 @@ import org.springframework.stereotype.Repository;
 public interface ReviewPerformerOfferRepository extends CrudRepository<ReviewPerformerOffer, Long> {
 
     @Query("""
+        SELECT o.id FROM ReviewPerformerOffer o
+        WHERE o.status = com.hunt.otziv.performers.model.PerformerOfferStatus.OFFERED
+          AND o.deliveryState IN ('DELIVERED', 'LEGACY_CONFIRMED', 'LEGACY_UNKNOWN')
+          AND o.expiresAt <= :now ORDER BY o.expiresAt, o.id
+    """)
+    List<Long> findExpiredIds(@Param("now") LocalDateTime now, Pageable pageable);
+
+    @Query("""
         SELECT DISTINCT o
         FROM ReviewPerformerOffer o
         JOIN FETCH o.assignment a

@@ -1,0 +1,19 @@
+.worker-account-action-cooldown-toast {
+    position: fixed;
+    z-index: 120;
+    top: max(4.5rem, env(safe-area-inset-top));
+    right: 1rem;
+    width: min(24rem, calc(100vw - 2rem));
+    box-sizing: border-box;
+    padding: .85rem 1rem;
+    border: 1px solid #6c9bcf;
+    border-radius: .75rem;
+    background: #e6f2ff;
+    color: #1e456f;
+    box-shadow: 0 .5rem 1.5rem #16333926;
+    pointer-events: none;
+    font-family: inherit;
+}
+.worker-account-action-cooldown-toast[hidden] { display: none; }
+.worker-account-action-cooldown-toast strong { display: block; font-size: .94rem; }
+.worker-account-action-cooldown-toast span { display: block; margin-top: .3rem; font-size: .8rem; }

@@ -1,0 +1,3 @@
+a44bb13582e9f62da5cf6f0c24285b7f575c68cab2959e12e547d3841c172bc5  /usr/local/bin/versitygw
+fab83a927426ea6b80f9ca6e82e93f181542521fe50fce00337bf1baf669277c  /usr/share/otziv-build/versity/apk.after.lock
+fab83a927426ea6b80f9ca6e82e93f181542521fe50fce00337bf1baf669277c  /usr/share/otziv-build/versity/runtime-apk.lock

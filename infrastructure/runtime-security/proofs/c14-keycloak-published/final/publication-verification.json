@@ -1,0 +1,32 @@
+{
+  "schema": "otziv-published-keycloak-publication-verification-v1",
+  "result": "PASS",
+  "commit": "ca1dcaa0b0f8c063f8e541c1623a3f61d68e749e",
+  "run": "34249337258",
+  "attempt": "1",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:c6ee6afd6750ae0886a608c5837085cb20417a6746ca2ed47b59b1a0fdec1973",
+  "config": "sha256:89f560e111619be776f984e2f317a775cb37ce20660271dbb25f638b454ffeab",
+  "rawReportSha256": "731bc286c53dd265d34b8f7d09056f03759c47a095b04a0a5f2566be9d6baad4",
+  "high": 0,
+  "critical": 0,
+  "lowerFindings": 49,
+  "coverage": [
+    {
+      "type": "ubuntu",
+      "class": "os-pkgs",
+      "packages": 143
+    },
+    {
+      "type": "jar",
+      "class": "lang-pkgs",
+      "packages": 512
+    }
+  ],
+  "sbomComponents": 656,
+  "runtimeDependencyResult": "PASS",
+  "runtimeDependencyRecords": 17,
+  "registryEvidenceVerified": true,
+  "artifactZipHashVerified": true,
+  "sourceManifestSha256": "c9750ced022387fcaf23b12409e0c454888d4c5660c75d8e6ec5b03f23f39c5a",
+  "sourceDockerfileSha256": "d9224dbd0089302f8010beabb55f48b0274924bdaa99965fdd79a7b890a4831f"
+}

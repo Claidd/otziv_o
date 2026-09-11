@@ -1,0 +1,147 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from mc.Dockerfile
+#1 transferring dockerfile: 3.94kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/golang:1.27.1-bookworm@sha256:648f440f42a0958804efb24df176f806f9d353b41f1c0627f666428e40310f6b
+#2 DONE 0.0s
+
+#3 [internal] load metadata for registry.access.redhat.com/ubi9/ubi-minimal@sha256:7fbeae18dc9476399f565e68255f602a3374ea8614ba3d14843565131a13ff93
+#3 DONE 1.1s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 2B done
+#4 DONE 0.1s
+
+#5 [internal] load build context
+#5 DONE 0.0s
+
+#6 [build 1/6] FROM docker.io/library/golang:1.27.1-bookworm@sha256:648f440f42a0958804efb24df176f806f9d353b41f1c0627f666428e40310f6b
+#6 resolve docker.io/library/golang:1.27.1-bookworm@sha256:648f440f42a0958804efb24df176f806f9d353b41f1c0627f666428e40310f6b 0.0s done
+#6 DONE 0.0s
+
+#7 [runtime 1/6] FROM registry.access.redhat.com/ubi9/ubi-minimal@sha256:7fbeae18dc9476399f565e68255f602a3374ea8614ba3d14843565131a13ff93
+#7 resolve registry.access.redhat.com/ubi9/ubi-minimal@sha256:7fbeae18dc9476399f565e68255f602a3374ea8614ba3d14843565131a13ff93
+#7 resolve registry.access.redhat.com/ubi9/ubi-minimal@sha256:7fbeae18dc9476399f565e68255f602a3374ea8614ba3d14843565131a13ff93 0.0s done
+#7 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 102B done
+#5 DONE 0.0s
+
+#8 [runtime 2/6] COPY runtime-packages.lock /usr/share/otziv-build/runtime-packages.lock
+#8 CACHED
+
+#9 [build 3/6] RUN git init && git remote add origin https://github.com/minio/mc.git     && git fetch --depth=1 origin 77f82e18b5401a65958f1619df6ebb994634bd88     && git checkout --detach FETCH_HEAD     && test "$(git rev-parse HEAD)" = 77f82e18b5401a65958f1619df6ebb994634bd88     && mkdir /out && cp go.mod /out/go.mod.before.txt && cp go.sum /out/go.sum.before.txt
+#9 CACHED
+
+#10 [build 2/6] WORKDIR /src
+#10 CACHED
+
+#11 [build 4/6] COPY mc.go.mod /src/go.mod
+#11 CACHED
+
+#12 [build 5/6] COPY mc.go.sum /src/go.sum
+#12 CACHED
+
+#13 [build 6/6] RUN --mount=type=cache,id=otziv-monitoring-go-mod,target=/go/pkg/mod,sharing=locked     --mount=type=cache,id=otziv-monitoring-go-build,target=/root/.cache/go-build,sharing=locked     go mod download && go mod verify && go list -mod=readonly -m -json all > /out/modules.json     && go test -mod=readonly -p 2 -count=1 -timeout=120s -v       -run '^(TestParseEnvURLStr|TestParseEnvURLStrInvalid|TestValidHostURL|TestIsValidAPI|TestValidSecretKeys|TestValidAccessKeys|TestParseStat|TestParseMetaData)$' ./cmd       | tee /out/unit-tests.txt     && go build -mod=readonly -p 2 -trimpath -buildvcs=true -tags kqueue       -ldflags '-s -w -X github.com/minio/mc/cmd.Version=2025-11-06T16:25:29Z -X github.com/minio/mc/cmd.ReleaseTag=RELEASE.2025-11-06T16-25-29Z.otziv-c14.1 -X github.com/minio/mc/cmd.CommitID=77f82e18b5401a65958f1619df6ebb994634bd88 -X github.com/minio/mc/cmd.ShortCommitID=77f82e18b540'       -o /out/mc .     && go version -m /out/mc > /out/buildinfo.txt     && cp go.mod /out/go.mod.after.txt && cp go.sum /out/go.sum.after.txt     && git diff -- go.mod go.sum > /out/dependency.patch     && git show -s --format='%H%n%cI%n%s' HEAD > /out/upstream.txt     && sha256sum /out/mc > /out/binary.sha256     && tar --exclude=.git --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner       -czf /out/corresponding-source.tar.gz .
+#13 CACHED
+
+#14 [runtime 3/6] RUN microdnf --refresh upgrade --nodocs --assumeyes     && microdnf install --nodocs --assumeyes ca-certificates curl-minimal coreutils-single     && mkdir -p /usr/share/otziv-build/mc     && rpm -qa --qf '%{NAME}=%{EPOCHNUM}:%{VERSION}-%{RELEASE}.%{ARCH}\n' | sort > /usr/share/otziv-build/runtime-packages.txt     && test "$(sha256sum /usr/share/otziv-build/runtime-packages.lock | cut -d ' ' -f 1)" = "$(sha256sum /usr/share/otziv-build/runtime-packages.txt | cut -d ' ' -f 1)"     && microdnf clean all     && microdnf remove --assumeyes curl-minimal libcurl-minimal microdnf libdnf librepo rpm rpm-libs libmodulemd libsolv     && test ! -e /usr/bin/curl && test ! -e /usr/lib64/libcurl.so.4     && test ! -e /usr/bin/rpm && test ! -e /usr/bin/microdnf     && test -s /var/lib/rpm/rpmdb.sqlite     && mv /usr/share/otziv-build/runtime-packages.txt /usr/share/otziv-build/runtime-packages.before-removal.txt
+#14 0.314 
+#14 0.314 (microdnf:7): librhsm-WARNING **: 13:27:38.725: Found 0 entitlement certificates
+#14 0.316 
+#14 0.316 (microdnf:7): librhsm-WARNING **: 13:27:38.727: Found 0 entitlement certificates
+#14 0.365 Downloading metadata...
+#14 2.274 Downloading metadata...
+#14 5.984 Downloading metadata...
+#14 10.31 Package                                     Repository          Size
+#14 10.31 Upgrading:                                                          
+#14 10.31  glib2-2.68.4-19.el9_8.10.x86_64            ubi-9-baseos-rpms 2.8 MB
+#14 10.31    replacing glib2-2.68.4-19.el9_8.9.x86_64                         
+#14 10.31 Transaction Summary:
+#14 10.31  Installing:        0 packages
+#14 10.31  Reinstalling:      0 packages
+#14 10.31  Upgrading:         1 packages
+#14 10.31  Obsoleting:        0 packages
+#14 10.31  Removing:          0 packages
+#14 10.31  Downgrading:       0 packages
+#14 10.31 Downloading packages...
+#14 11.34 warning: Unsupported version of key: V6
+#14 11.34 
+#14 11.34 (microdnf:7): libdnf-WARNING **: 13:27:49.752: failed to parse public key for /etc/pki/rpm-gpg/RPM-GPG-KEY-PQC-redhat-release
+#14 11.35 Running transaction test...
+#14 11.41 Updating: glib2;2.68.4-19.el9_8.10;x86_64;ubi-9-baseos-rpms
+#14 11.45 Cleanup: glib2;2.68.4-19.el9_8.9;x86_64;installed
+#14 11.52 Complete.
+#14 11.60 
+#14 11.60 (microdnf:70): librhsm-WARNING **: 13:27:50.013: Found 0 entitlement certificates
+#14 11.60 
+#14 11.60 (microdnf:70): librhsm-WARNING **: 13:27:50.014: Found 0 entitlement certificates
+#14 11.65 Nothing to do.
+#14 11.75 
+#14 11.75 (microdnf:81): librhsm-WARNING **: 13:27:50.164: Found 0 entitlement certificates
+#14 11.76 
+#14 11.76 (microdnf:81): librhsm-WARNING **: 13:27:50.168: Found 0 entitlement certificates
+#14 11.77 Complete.
+#14 11.88 
+#14 11.88 (microdnf:83): librhsm-WARNING **: 13:27:50.291: Found 0 entitlement certificates
+#14 11.88 
+#14 11.88 (microdnf:83): librhsm-WARNING **: 13:27:50.293: Found 0 entitlement certificates
+#14 11.90 Package                                   Repository     Size
+#14 11.90 Removing:                                                    
+#14 11.90  curl-minimal-7.76.1-40.el9_8.5.x86_64    @System    245.1 kB
+#14 11.90  libcurl-minimal-7.76.1-40.el9_8.5.x86_64 @System    518.2 kB
+#14 11.90  libdnf-0.69.0-18.el9.x86_64              @System      2.1 MB
+#14 11.90  libmodulemd-2.13.0-2.el9.x86_64          @System    733.9 kB
+#14 11.90  librepo-1.19.0-1.el9.x86_64              @System    229.2 kB
+#14 11.90  libsolv-0.7.24-6.el9_8.x86_64            @System    912.7 kB
+#14 11.90  microdnf-3.9.1-3.el9.x86_64              @System    126.0 kB
+#14 11.90  rpm-4.16.1.3-40.el9.x86_64               @System      2.8 MB
+#14 11.90  rpm-libs-4.16.1.3-40.el9.x86_64          @System    773.1 kB
+#14 11.90 Transaction Summary:
+#14 11.90  Installing:        0 packages
+#14 11.90  Reinstalling:      0 packages
+#14 11.90  Upgrading:         0 packages
+#14 11.90  Obsoleting:        0 packages
+#14 11.90  Removing:          9 packages
+#14 11.90  Downgrading:       0 packages
+#14 11.90 warning: Unsupported version of key: V6
+#14 11.90 
+#14 11.90 (microdnf:83): libdnf-WARNING **: 13:27:50.315: failed to parse public key for /etc/pki/rpm-gpg/RPM-GPG-KEY-PQC-redhat-release
+#14 11.91 Running transaction test...
+#14 11.93 Removing: rpm;4.16.1.3-40.el9;x86_64;installed
+#14 11.96 Removing: microdnf;3.9.1-3.el9;x86_64;installed
+#14 11.97 Removing: libdnf;0.69.0-18.el9;x86_64;installed
+#14 11.97 Removing: librepo;1.19.0-1.el9;x86_64;installed
+#14 11.98 Removing: libsolv;0.7.24-6.el9_8;x86_64;installed
+#14 11.98 Removing: curl-minimal;7.76.1-40.el9_8.5;x86_64;installed
+#14 11.99 Removing: libmodulemd;2.13.0-2.el9;x86_64;installed
+#14 11.99 Removing: rpm-libs;4.16.1.3-40.el9;x86_64;installed
+#14 12.00 Removing: libcurl-minimal;7.76.1-40.el9_8.5;x86_64;installed
+#14 12.01 Complete.
+#14 DONE 12.1s
+
+#15 [runtime 4/6] COPY --from=build /out/mc /usr/bin/mc
+#15 DONE 0.1s
+
+#16 [runtime 5/6] COPY --from=build /out/*.txt /out/*.json /out/*.sha256 /out/dependency.patch /out/corresponding-source.tar.gz /usr/share/otziv-build/mc/
+#16 DONE 0.1s
+
+#17 [runtime 6/6] COPY --from=build /src/LICENSE /src/CREDITS /licenses/
+#17 DONE 0.0s
+
+#18 exporting to image
+#18 exporting layers
+#18 exporting layers 1.3s done
+#18 exporting manifest sha256:bfd3d432816a9608179a725fba97838e4a393b9258e9db2d5b3a6986608e2770 0.0s done
+#18 exporting config sha256:8800708e4f8a2feb937d15567eec56978e0da56e5c5c4ae7f96308b8b924b2bf done
+#18 exporting attestation manifest sha256:6999a5f4e4a9cf8f303fb3feb2fc55fcf4348a2966791f4f85ecf3f0e5ee0320 done
+#18 exporting manifest list sha256:6564a3b3ce6655e72f0c6b484508869eb84b54b8604e19c478a69dceaecba202 0.0s done
+#18 naming to docker.io/library/otziv-c14-mc:candidate3 done
+#18 unpacking to docker.io/library/otziv-c14-mc:candidate3
+#18 unpacking to docker.io/library/otziv-c14-mc:candidate3 0.3s done
+#18 DONE 1.6s
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/yipqc0ar035kclucz5nzoy8bg

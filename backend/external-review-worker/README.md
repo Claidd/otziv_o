@@ -1,5 +1,29 @@
 # External Review Worker
 
+## Runtime readiness and task ownership
+
+`/health` is a lightweight liveness endpoint. `/ready` returns 503 until an
+isolated Chromium rendering and offline English/Russian OCR fixture succeeds;
+it also returns 503 while draining or after failed initialization. API work is
+rejected while not ready. Language data is bundled in lockfile-pinned npm
+packages, so startup and OCR never fetch models from a public CDN.
+
+OCR executes in a dedicated disposable Node process. Timeouts terminate it and
+wait for real exit (Tesseract v5's own terminate promise does not wait for thread
+exit). Browser/proxy/OCR cleanup belongs to the task permit. Neither response
+finish, disconnect nor timeout releases that permit early. A stuck cleanup
+fails the isolated worker process instead of admitting unbounded work.
+
+SIGTERM/SIGINT stop admission and drain. `DRAIN_TIMEOUT_MS` defaults to 160000
+(1000–370000); container stop grace must exceed it plus cleanup margin. Existing
+job fencing and retry decisions remain authoritative in the backend.
+
+Run `npm test` for local behavior/security tests and `npm run smoke:runtime` in
+the production image/hardening profile to exercise a real browser and OCR. The
+smoke uses generated local HTML, no review website, credentials or messages.
+`CHROMIUM_EXECUTABLE_PATH` selects the installed browser as before. The existing
+`smoke:chromium` is a narrower browser-only diagnostic.
+
 Browser worker for post-checking already published reviews on public map cards.
 
 The backend owns scheduling, S3 upload and database state. This worker only opens

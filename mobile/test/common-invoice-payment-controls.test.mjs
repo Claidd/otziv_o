@@ -1,8 +1,9 @@
+import { apiTransportSource } from './api-source.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
 
-const apiSource = fs.readFileSync('src/app/core/api.service.ts', 'utf8');
+const apiSource = apiTransportSource();
 const pageSource = fs.readFileSync('src/app/features/common-billing.page.ts', 'utf8');
 
 test('mobile common invoice exposes the same safe payment-route switches as web', () => {

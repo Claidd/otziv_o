@@ -1,0 +1,4 @@
+#!/bin/sh
+set -eu
+if [ "${1:-}" = configtest ]; then shift; exec /usr/sbin/httpd -t "$@"; fi
+exec /usr/sbin/httpd "$@"

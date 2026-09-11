@@ -1,0 +1,2 @@
+INPUT case=excessive depth=8192 bytes=90218 sha256=2f8a86b9614b01369760075582e92660e21d4dcf49d7dd8e4c6f5d573b6d9c2f
+FAIL unbounded parser recursion: StackOverflowError

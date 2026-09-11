@@ -36,7 +36,8 @@ class FilialServiceImplTest {
                 filialRepository,
                 mock(CityRepository.class),
                 orderRepository,
-                reviewRepository
+                reviewRepository,
+                mock(CompanyOrganizationIdentityService.class)
         );
     }
 

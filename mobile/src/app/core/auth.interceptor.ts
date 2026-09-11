@@ -3,6 +3,7 @@ import { inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { catchError, from, switchMap, throwError } from 'rxjs';
 import { AuthService } from './auth.service';
+import { AuthTemporarilyUnavailableError } from './auth.models';
 import { mobileEnvironment } from './mobile-environment';
 
 export const authInterceptor: HttpInterceptorFn = (request, next) => {
@@ -67,8 +68,10 @@ export const authInterceptor: HttpInterceptorFn = (request, next) => {
     );
   }
 
+  let requestAccessToken: string | null = null;
   return from(auth.getAccessToken()).pipe(
     switchMap((token) => {
+      requestAccessToken = token;
       if (!token) {
         return next(request);
       }
@@ -81,25 +84,45 @@ export const authInterceptor: HttpInterceptorFn = (request, next) => {
     }),
     catchError((error: unknown) => {
       if (error instanceof HttpErrorResponse && error.status === 401) {
+        // This response belongs to the credentials used for this request. A
+        // different login or refresh must not be revoked by a late old 401.
+        if ((auth.tokens()?.accessToken ?? null) !== requestAccessToken) return throwError(() => error);
         return from(auth.refreshTokens()).pipe(
           switchMap((refreshed) => {
-            if (!refreshed) {
-              void auth.handleUnauthorized(false);
+            if (refreshed.status === 'temporary-unavailable') {
+              return throwError(() => new AuthTemporarilyUnavailableError());
+            }
+            if (refreshed.status === 'superseded') {
+              return throwError(() => error);
+            }
+            if (refreshed.status === 'session-invalid') {
+              void auth.handleUnauthorized(false, null);
               return throwError(() => error);
             }
 
-            return from(auth.getAccessToken()).pipe(
-              switchMap((retryToken) => {
-                if (!retryToken) {
-                  void auth.handleUnauthorized(false);
-                  return throwError(() => error);
-                }
+            // The cached token may be time-valid but the server just rejected
+            // it. A failed refresh does not justify retrying that same token.
+            if (!refreshed.refreshed) {
+              return throwError(() => new AuthTemporarilyUnavailableError());
+            }
 
-                return next(request.clone({
-                  setHeaders: {
-                    Authorization: `Bearer ${retryToken}`
-                  }
-                }));
+            // Refresh credentials for subsequent actions, but never replay a
+            // write whose server-side outcome this transport cannot establish.
+            if (request.method !== 'GET' && request.method !== 'HEAD') {
+              return throwError(() => error);
+            }
+            const retryToken = auth.getOptionalAccessToken(0);
+            if (!retryToken) {
+              return throwError(() => error);
+            }
+            return next(request.clone({
+              setHeaders: { Authorization: `Bearer ${retryToken}` }
+            })).pipe(
+              catchError((retryError: unknown) => {
+                if (retryError instanceof HttpErrorResponse && retryError.status === 401) {
+                  void auth.handleUnauthorized(false, retryToken);
+                }
+                return throwError(() => retryError);
               })
             );
           })

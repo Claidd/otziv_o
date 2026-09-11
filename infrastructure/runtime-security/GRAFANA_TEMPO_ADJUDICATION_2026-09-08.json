@@ -1,0 +1,149 @@
+{
+  "schema": "otziv-grafana-tempo-adjudication-validation-v1",
+  "at": "2026-09-07T22:43:28.963169+00:00",
+  "status": "ACTUAL_IMAGE_SCAN_AND_BINARY_CONTROLS_PASS",
+  "publication": "NOT_PUBLISHED",
+  "productionActivation": "NOT_PERFORMED",
+  "riskAcceptance": null,
+  "scanner": "aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969",
+  "scanCreatedAt": "2026-09-07T22:39:42.253837825Z",
+  "image": {
+    "localImageId": "sha256:3a438cefccf81756412057b54c62ed6b5552fd01fc941c3246baf05122ef8ca6",
+    "imageConfigId": "sha256:3e5c0aa2124f7a7d1235529f103ac512a0c070fb67479f2d21c7562c13624bd0",
+    "platform": "linux/amd64",
+    "binarySha256": "1b857d1ece48a10e5e1178e1c8d688a069e50b4166e79ed3d993967354c2106c",
+    "buildInfoSha256": "dd3ed27690aef6058d4a63a26105ea64eb559e616b953ef18a41a6e19a736472"
+  },
+  "rawAndEffectiveCounts": {
+    "schema": "otziv-vulnerability-scan-v1",
+    "artifactCount": 5,
+    "high": 2,
+    "critical": 0,
+    "unfixedHighOrCritical": 0,
+    "blockingFixedHighOrCritical": 2,
+    "adjudicatedFixedHighOrCritical": 2,
+    "effectiveBlockingFixedHighOrCritical": 0,
+    "result": "PASS",
+    "unresolvedRiskReview": "NONE",
+    "scannerImage": "aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969"
+  },
+  "decisionScope": [
+    {
+      "cve": "CVE-2026-21728",
+      "state": "not_affected",
+      "justification": "fixed_code_present",
+      "reason": "fixed default maximum search result limit 262144",
+      "fixCommit": "650eb1985a0776789c8564122990f588a742356f",
+      "fixUrl": "https://github.com/grafana/tempo/commit/650eb1985a0776789c8564122990f588a742356f",
+      "advisoryUrl": "https://grafana.com/security/security-advisories/cve-2026-21728/",
+      "comparisonUrl": "https://github.com/grafana/tempo/compare/650eb1985a0776789c8564122990f588a742356f...525d1bab07e0",
+      "comparisonResponseSha256": "df7c85de417556b58769105fbd67a6f8ab11882810e60dc56eb4363b862257f2",
+      "behindBy": 0,
+      "mergeBase": "650eb1985a0776789c8564122990f588a742356f",
+      "comparisonFile": "ancestor-21728.json.gz",
+      "fixPatchFile": "fix-21728.patch",
+      "fixPatchSha256": "3022861c41a6965f66d0f654a67c01fc02e573061fb4d107c9dbeec96324bf36"
+    },
+    {
+      "cve": "CVE-2026-28377",
+      "state": "not_affected",
+      "justification": "fixed_code_present",
+      "reason": "customer encryption key uses flagext.Secret and correct String extraction",
+      "fixCommit": "bb8ca663db34a0980c9758b40d918fda3b4dbec3",
+      "fixUrl": "https://github.com/grafana/tempo/commit/bb8ca663db34a0980c9758b40d918fda3b4dbec3",
+      "advisoryUrl": "https://grafana.com/security/security-advisories/cve-2026-28377/",
+      "comparisonUrl": "https://github.com/grafana/tempo/compare/bb8ca663db34a0980c9758b40d918fda3b4dbec3...525d1bab07e0",
+      "comparisonResponseSha256": "6c64d825b9b13f965972a0111c4e399fed554663bf726d713ef73a5774352001",
+      "behindBy": 0,
+      "mergeBase": "bb8ca663db34a0980c9758b40d918fda3b4dbec3",
+      "comparisonFile": "ancestor-28377.json.gz",
+      "fixPatchFile": "fix-28377.patch",
+      "fixPatchSha256": "c7bc1d5c8c13c59a7d1df70152be8763ce1614ffe4f1ff1b88d440735a6a8790"
+    }
+  ],
+  "module": {
+    "name": "github.com/grafana/tempo",
+    "version": "v1.5.1-0.20260427112133-525d1bab07e0",
+    "sum": "h1:kE5kdMnyPJmlNUdWhahfzqPYB3vM8DtAxgWymbB8nOA="
+  },
+  "controls": {
+    "nodeTests": 31,
+    "actualTrivyVersionFixtures": 4,
+    "actualDockerArtifactControls": 2,
+    "differentConfigSameReviewedBinary": "PASS",
+    "changedActualBinaryRejected": "PASS",
+    "inspectedGrafanaBinaryExecuted": false,
+    "rawReportAndSbomUnmodified": true
+  },
+  "publicReview": {
+    "path": "infrastructure/runtime-security/adjudications/grafana-tempo/review.json",
+    "sha256": "518e062ccb347ad8a62552415f510d245817f3c62f8c7dc1d5f5c3a1a80e7537",
+    "hashEncoding": "original bytes"
+  },
+  "sourceFiles": [
+    {
+      "path": "infrastructure/runtime-security/scan.mjs",
+      "sha256": "94127bd40ab9792642a66f9f2cda2e48aaea275ab68699fdc4fdf64c74cd795c",
+      "hashEncoding": "UTF-8 LF-normalized"
+    },
+    {
+      "path": "infrastructure/runtime-security/grafana-tempo-adjudication.mjs",
+      "sha256": "8b5ea36138fbafb8b11409d8a580e9ba898bbf4178bea640b75f90c271db2793",
+      "hashEncoding": "UTF-8 LF-normalized"
+    },
+    {
+      "path": "infrastructure/runtime-security/grafana-tempo-adjudication.test.mjs",
+      "sha256": "05aa0c68aef4dcb364cf395fc803583d951559694efe480750f3a0fa838c860b",
+      "hashEncoding": "UTF-8 LF-normalized"
+    }
+  ],
+  "evidence": [
+    {
+      "path": ".codex-tmp/security-closure-20260908/upstream/grafana-adjudication/integrated-v1.json",
+      "sha256": "a4d41a8872ca2bab40c448f9a828452771d97b85b1dc219d7267b36add4a1e6c",
+      "hashEncoding": "original bytes"
+    },
+    {
+      "path": ".codex-tmp/security-closure-20260908/upstream/grafana-adjudication/integrated-v1.sbom.cdx.json",
+      "sha256": "3ffdada40e771752751137b654bcdd9ebbf0f76ab9fcc89cb9bb8fb694e1c13e",
+      "hashEncoding": "original bytes"
+    },
+    {
+      "path": ".codex-tmp/security-closure-20260908/upstream/grafana-adjudication/integrated-v1.triage.json",
+      "sha256": "c398da38a8664d4b037441460b2f5b2d765bde04e03477bbe6a126ddbc495934",
+      "hashEncoding": "original bytes"
+    },
+    {
+      "path": ".codex-tmp/security-closure-20260908/upstream/grafana-adjudication/integrated-v1.adjudications.json",
+      "sha256": "03378ae9792da16cae61c2606bfd840b1a9eb5c6a5c3bf4db55924529d5fc68c",
+      "hashEncoding": "original bytes"
+    },
+    {
+      "path": ".codex-tmp/security-closure-20260908/upstream/grafana-adjudication/integrated-v1.scanner.log",
+      "sha256": "1d0a9157204690eaf36e04d40d1b15afb0dd66f0b0cd5275e8289e6dc469aec2",
+      "hashEncoding": "original bytes"
+    },
+    {
+      "path": ".codex-tmp/security-closure-20260908/upstream/grafana-adjudication/actual-negative-proof.json",
+      "sha256": "865ec0cb0dc63f963493fe58971f9eb58feca72719b1be424415e6e121381440",
+      "hashEncoding": "original bytes"
+    },
+    {
+      "path": ".codex-tmp/security-closure-20260908/upstream/grafana-adjudication/integrated-tests.log",
+      "sha256": "b5713a85f8a162db5989a280d37ed6fedc19996677386f2493e73872fab23f20",
+      "hashEncoding": "original bytes"
+    },
+    {
+      "path": ".codex-tmp/security-closure-20260908/upstream/grafana-adjudication/proof.json",
+      "sha256": "228b0450c17bc1048071be3fbc58ccd48ca43e1d62b4594917fcfd9f8c0248b7",
+      "hashEncoding": "original bytes"
+    }
+  ],
+  "evidenceAvailability": "Full image reports, logs and Docker fixture results retained as private local artifacts at listed paths and hashes. Complete upstream source/patch/ancestry and actual Trivy version controls are bundled publicly under adjudications/grafana-tempo.",
+  "limits": [
+    "This does not approve old default Grafana, any changed executable, a different Tempo version or another CVE.",
+    "Hosted rebuilds must produce the reviewed exact executable bytes or fail closed for a fresh binary review.",
+    "No vulnerability version is rewritten; no --ignorefile exception is added.",
+    "Source identities are pinned; refreshed advisory data still requires review if advisory scope changes."
+  ]
+}

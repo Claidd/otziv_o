@@ -79,7 +79,7 @@ public class ScheduledClientMessageStateBatchRepository {
                             AND scheduled_client_message_state.next_attempt_at IS NULL
                             AND LOWER(TRIM(COALESCE(scheduled_client_message_state.last_error_code, ''))) NOT IN (
                                 'state_transaction_in_progress',
-                                'state_transaction_outcome_uncertain'
+                                'state_transaction_outcome_uncertain', 'legacy_operation_unverified'
                             )
                         ) OR (
                             scheduled_client_message_state.archive_order_id IS NULL
@@ -92,7 +92,7 @@ public class ScheduledClientMessageStateBatchRepository {
                          AND scheduled_client_message_state.next_attempt_at IS NULL
                          AND LOWER(TRIM(COALESCE(scheduled_client_message_state.last_error_code, ''))) NOT IN (
                              'state_transaction_in_progress',
-                             'state_transaction_outcome_uncertain'
+                             'state_transaction_outcome_uncertain', 'legacy_operation_unverified'
                         )
                         THEN incoming.next_attempt_at
                         ELSE scheduled_client_message_state.next_attempt_at

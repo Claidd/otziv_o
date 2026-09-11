@@ -1,0 +1,157 @@
+{
+  "version": "1.1.0",
+  "generatorVersion": "1.0.0",
+  "records": {
+    "CommonBillingCompanyResponse": "backend/src/main/java/com/hunt/otziv/common_billing/dto/CommonBillingCompanyResponse.java",
+    "CommonInvoiceSummaryResponse": "backend/src/main/java/com/hunt/otziv/common_billing/dto/CommonInvoiceSummaryResponse.java",
+    "CommonBillingAccountResponse": "backend/src/main/java/com/hunt/otziv/common_billing/dto/CommonBillingAccountResponse.java",
+    "PublicPaymentLinkResponse": "backend/src/main/java/com/hunt/otziv/payments/dto/PublicPaymentLinkResponse.java",
+    "DeliveryOperation": "backend/src/main/java/com/hunt/otziv/client_messages/api/DeliveryOperation.java"
+  },
+  "nullable": {
+    "CommonBillingCompanyResponse": [],
+    "CommonInvoiceSummaryResponse": [
+      "sentAt",
+      "lastReminderAt",
+      "nextReminderAt",
+      "closedAt",
+      "closedBy",
+      "closeReason",
+      "lastError",
+      "paymentSuccessNotificationError",
+      "tbankOrderId",
+      "tbankPaymentId",
+      "tbankPaymentAmountKopecks",
+      "tbankTerminalLabel",
+      "tbankTerminalKey",
+      "paymentRouteType",
+      "paymentRouteProfileName",
+      "paymentRouteProvider",
+      "paymentRouteRecipient",
+      "paymentRouteManualTaskId",
+      "paymentRouteSelectedAt",
+      "invoicePurpose",
+      "supersedesInvoiceId",
+      "invoicePaymentMode",
+      "paperInvoiceIssuedAt"
+    ],
+    "CommonBillingAccountResponse": [
+      "managerId",
+      "managerName",
+      "invoiceCompanyId",
+      "invoiceCompanyTitle",
+      "currentInvoice",
+      "invoicePaymentMode"
+    ],
+    "PublicPaymentLinkResponse": [
+      "provider",
+      "sbpBankSelectionSupported",
+      "orderId",
+      "payerEmail",
+      "manualPaymentType",
+      "manualPhone",
+      "manualRecipientName",
+      "manualBankName",
+      "manualPaymentUrl",
+      "manualPaymentButtonLabel",
+      "manualComment",
+      "receiptStatus",
+      "expiresAt"
+    ],
+    "DeliveryOperation": [
+      "errorCode"
+    ]
+  },
+  "optionalForCompatibility": {
+    "CommonBillingCompanyResponse": [],
+    "CommonInvoiceSummaryResponse": [
+      "sentAt",
+      "lastReminderAt",
+      "nextReminderAt",
+      "closedAt",
+      "closedBy",
+      "closeReason",
+      "lastError",
+      "paymentSuccessNotificationError",
+      "tbankOrderId",
+      "tbankPaymentId",
+      "tbankPaymentAmountKopecks",
+      "tbankTerminalLabel",
+      "tbankTerminalKey",
+      "paymentRouteType",
+      "paymentRouteProfileName",
+      "paymentRouteProvider",
+      "paymentRouteRecipient",
+      "paymentRouteManualTaskId",
+      "paymentRouteSelectedAt",
+      "invoicePurpose",
+      "supersedesInvoiceId",
+      "invoicePaymentMode",
+      "paperInvoiceIssuedAt"
+    ],
+    "CommonBillingAccountResponse": [
+      "managerId",
+      "managerName",
+      "invoiceCompanyId",
+      "invoiceCompanyTitle",
+      "currentInvoice",
+      "invoicePaymentMode"
+    ],
+    "PublicPaymentLinkResponse": [
+      "provider",
+      "sbpBankSelectionSupported",
+      "orderId",
+      "payerEmail",
+      "paymentMethod",
+      "paymentPageMode",
+      "tpayEnabled",
+      "sberpayEnabled",
+      "mirpayEnabled",
+      "manualPaymentType",
+      "manualPhone",
+      "manualRecipientName",
+      "manualBankName",
+      "manualPaymentUrl",
+      "manualPaymentButtonLabel",
+      "manualComment",
+      "receiptStatus"
+    ],
+    "DeliveryOperation": []
+  },
+  "enums": {
+    "CommonInvoiceStatus": "backend/src/main/java/com/hunt/otziv/common_billing/model/CommonInvoiceStatus.java",
+    "InvoicePaymentMode": "backend/src/main/java/com/hunt/otziv/payments/model/InvoicePaymentMode.java",
+    "PaymentLinkStatus": "backend/src/main/java/com/hunt/otziv/payments/model/PaymentLinkStatus.java",
+    "PaymentMethod": "backend/src/main/java/com/hunt/otziv/payments/model/PaymentMethod.java",
+    "TbankPaymentPageMode": "backend/src/main/java/com/hunt/otziv/payments/model/TbankPaymentPageMode.java"
+  },
+  "operations": [
+    {
+      "path": "/api/common-billing/accounts",
+      "response": "CommonBillingAccountResponse",
+      "array": true,
+      "controller": "backend/src/main/java/com/hunt/otziv/common_billing/controller/CommonBillingAdminController.java"
+    },
+    {
+      "path": "/api/common-billing/accounts/by-company/{companyId}",
+      "response": "CommonBillingAccountResponse",
+      "array": true,
+      "controller": "backend/src/main/java/com/hunt/otziv/common_billing/controller/CommonBillingAdminController.java"
+    },
+    {
+      "path": "/api/common-billing/accounts/{accountId}",
+      "response": "CommonBillingAccountResponse",
+      "controller": "backend/src/main/java/com/hunt/otziv/common_billing/controller/CommonBillingAdminController.java"
+    },
+    {
+      "path": "/api/payments/public/{token}",
+      "response": "PublicPaymentLinkResponse",
+      "controller": "backend/src/main/java/com/hunt/otziv/payments/controller/PublicPaymentController.java"
+    }
+  ],
+  "nonNegative": {
+    "DeliveryOperation": [
+      "attempts"
+    ]
+  }
+}

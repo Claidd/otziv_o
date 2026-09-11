@@ -1,0 +1,11 @@
+# Install only after the owner chooses a cadence consistent with detection SLO.
+# Replace REQUIRED before copying to /etc/systemd/system/otziv-monitor.timer.
+[Unit]
+Description=External Otziv monitor cadence (operator policy required)
+[Timer]
+OnBootSec=REQUIRED
+OnUnitActiveSec=REQUIRED
+AccuracySec=1s
+Unit=otziv-monitor.service
+[Install]
+WantedBy=timers.target

@@ -3,6 +3,7 @@ package com.hunt.otziv.manager_control.service;
 import com.hunt.otziv.client_messages.model.ScheduledClientMessageState;
 import com.hunt.otziv.client_messages.model.ScheduledMessageStateStatus;
 import com.hunt.otziv.client_messages.service.ClientMessageStateSafety;
+import com.hunt.otziv.client_messages.api.ClientMessageRecoveryAdvice;
 import java.time.LocalDateTime;
 import java.util.Locale;
 import java.util.Set;
@@ -48,7 +49,8 @@ public class ManagerAutomationFailurePolicy {
             return false;
         }
         LocalDateTime effectiveNow = now == null ? LocalDateTime.now() : now;
-        if (ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN.equals(code)) {
+        if (ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN.equals(code)
+                || ClientMessageStateSafety.LEGACY_PREPARATION_UNVERIFIED.equals(code)) {
             return true;
         }
         if (ClientMessageStateSafety.TRANSACTION_IN_PROGRESS.equals(code)) {
@@ -74,6 +76,19 @@ public class ManagerAutomationFailurePolicy {
 
     boolean isTransientWait(ScheduledClientMessageState state) {
         return state != null && TRANSIENT_ERROR_CODES.contains(normalize(state.getLastErrorCode()));
+    }
+
+    boolean isLegacyPreparationFailure(ScheduledClientMessageState state) {
+        return recoveryAdvice(state) == ClientMessageRecoveryAdvice.VERIFY_PREPARATION;
+    }
+
+    boolean requiresDeliveryReceipt(ScheduledClientMessageState state) {
+        return recoveryAdvice(state) == ClientMessageRecoveryAdvice.VERIFY_RECEIPT;
+    }
+
+    private ClientMessageRecoveryAdvice recoveryAdvice(ScheduledClientMessageState state) {
+        return state == null ? ClientMessageRecoveryAdvice.NONE : ClientMessageRecoveryAdvice.classify(
+                state.getDeliveryStatus(), state.getLastErrorCode(), state.getLastErrorMessage());
     }
 
     private boolean isExpectedControlState(String code) {

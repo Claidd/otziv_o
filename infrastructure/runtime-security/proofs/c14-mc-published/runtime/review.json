@@ -1,0 +1,24 @@
+{
+  "schema": "otziv-published-mc-runtime-v1",
+  "result": "PASS",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:d163502c0d23dd3d76ec9fab63d9697317c9a2aaa39d1a3d783a70044bb803c0",
+  "imageConfigDigest": "sha256:7019698d09d0fd6d38c9800a453806ebb788b9bbaa9e7555bb6d41d50670b308",
+  "binarySha256": "6776804d929fca1c8426ee253517a27581b5e9250c0a0f90c762f5303c9d0e2c",
+  "binaryEqualsReviewedLocalCandidate": true,
+  "checks": 29,
+  "clientMemoryBytes": 402653184,
+  "initial192MiBAttempt": "Client exit 137; OOM state was not retained by the historical harness. Failed result retained.",
+  "productionChanged": false,
+  "files": {
+    "client-1-state.json": "1b4af82b399d45624fb98846c7b9d12c6da7cb5dc8d39b4a59f2ec35f7280bf3",
+    "client-2-state.json": "1b4af82b399d45624fb98846c7b9d12c6da7cb5dc8d39b4a59f2ec35f7280bf3",
+    "client-3-state.json": "1b4af82b399d45624fb98846c7b9d12c6da7cb5dc8d39b4a59f2ec35f7280bf3",
+    "client-4-state.json": "1b4af82b399d45624fb98846c7b9d12c6da7cb5dc8d39b4a59f2ec35f7280bf3",
+    "client-5-state.json": "1b4af82b399d45624fb98846c7b9d12c6da7cb5dc8d39b4a59f2ec35f7280bf3",
+    "client-6-state.json": "1b4af82b399d45624fb98846c7b9d12c6da7cb5dc8d39b4a59f2ec35f7280bf3",
+    "client-7-state.json": "1b4af82b399d45624fb98846c7b9d12c6da7cb5dc8d39b4a59f2ec35f7280bf3",
+    "executed-harness.mjs.txt": "c68852e84ac405ec64ad9a0c5872c66ba6198b4505e550251b6f8cf0b73daf13",
+    "initial-192MiB-result.json": "8dbfe9699186e54d5ba8e50aa97950474989b82ea6c3f189587068466b34e089",
+    "result.json": "7ec208749fe8b46debf0260a2430bc7e7a479e3cb78d39a4395bb0d6bec19c39"
+  }
+}

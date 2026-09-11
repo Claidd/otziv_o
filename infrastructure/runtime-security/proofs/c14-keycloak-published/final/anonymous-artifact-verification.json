@@ -1,0 +1,27 @@
+{
+  "schema": "otziv-github-artifact-hash-verification-v1",
+  "artifactId": 10065516474,
+  "name": "anonymous-download-keycloak-attempt-1",
+  "apiDigest": "sha256:f30f18773ef8526718a90f22257e9a133e7f42198158b7ffaed2047215fc67b1",
+  "actualDigest": "sha256:f30f18773ef8526718a90f22257e9a133e7f42198158b7ffaed2047215fc67b1",
+  "verified": true,
+  "run": "34249337258",
+  "attempt": "1",
+  "commit": "ca1dcaa0b0f8c063f8e541c1623a3f61d68e749e",
+  "jobId": 102140211171,
+  "files": {
+    "anonymous-download.json": "8137c9a085f58d57227399a294d215108c2818c7a4013ab50b7c65b6986de53d",
+    "anonymous-image-inspect.json": "dd8037d1910943b4a483ec620159ecc65ace4f3cb1db57f75af36c72b8645bcd",
+    "anonymous-pull.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "anonymous-pull.stdout.log": "b2c6cb67316957a2d4f3b15a40a29c7aa1d52f08ec669ca9ac86411cb80711b0",
+    "before-image-ids.txt": "d9420b778f91e0dafe7a2f6fb29a7d70b4de6b4da2d281e84cb296f2fc9ef4a2",
+    "before-reference-inspect.txt": "e2114fca867615dee0fdbb644ac53e8b0ce9c19035ad81fd701aaa8dac674d7a",
+    "docker-client-isolation.json": "43059db9428713e407d8c2a7b353bcbc8716be2df54dc5e7a1d3798b413f8271",
+    "registry-amd64-config.json": "89f560e111619be776f984e2f317a775cb37ce20660271dbb25f638b454ffeab",
+    "registry-amd64-manifest.json": "63305543aec054fde42615d7cb06aebb48291b2ed93945dc23a6873beccc385b",
+    "registry-attestation-0-payload-0.json": "fc5b457ff5060c8c1ad29ad16da704f95e03bbb56626b64a9ed262f52f85e605",
+    "registry-attestation-0-payload-1.json": "8da7622fc420a760ded1bb71bd6bde21fec03c9760b1e3e1748d36bb41b7312a",
+    "registry-attestation-0.json": "80bf36ebcd01b15274ff279ebbb9f2569fef1a1a177474179ca117e097a4f9ae",
+    "registry-index.json": "c6ee6afd6750ae0886a608c5837085cb20417a6746ca2ed47b59b1a0fdec1973"
+  }
+}

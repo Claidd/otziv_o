@@ -1,0 +1,92 @@
+{
+  "actualProvenanceByteEqual": true,
+  "actualPulledConfigurationMatchesRegistry": true,
+  "actualPulledRootfsMatchesRegistry": true,
+  "byteIdenticalJarFiles": 474,
+  "changedJarPaths": [
+    "opt/keycloak/lib/quarkus/generated-bytecode.jar",
+    "opt/keycloak/lib/quarkus/transformed-bytecode.jar"
+  ],
+  "completedAt": "2026-09-08T16:03:51.572007+00:00",
+  "config": "sha256:56c9f321ccf3bfa646c781f94dd8a4efe32e9c06283bfe5c3c323ba38057a706",
+  "differences": [
+    {
+      "localV3": {
+        "gid": 0,
+        "mode": 420,
+        "sha256": "be82c5bb178c6834168d5747514b491b916c7b0acb4ed668f04384b8b68860a2",
+        "size": 2349906,
+        "type": "0",
+        "uid": 1000
+      },
+      "path": "opt/keycloak/lib/quarkus/generated-bytecode.jar",
+      "published": {
+        "gid": 0,
+        "mode": 420,
+        "sha256": "6ff2ca2371cb4fd99540a9112108f97e838262356cdc7bb8e1b9fae17c8a817e",
+        "size": 2350195,
+        "type": "0",
+        "uid": 1000
+      }
+    },
+    {
+      "localV3": {
+        "gid": 0,
+        "mode": 420,
+        "sha256": "ce33e61c4025bd044ebd3707e00a977f351a033ece0329019168295dbd31f669",
+        "size": 722671,
+        "type": "0",
+        "uid": 1000
+      },
+      "path": "opt/keycloak/lib/quarkus/transformed-bytecode.jar",
+      "published": {
+        "gid": 0,
+        "mode": 420,
+        "sha256": "16f6a0d26adf9320bf8759e496c4cf667ec058424548144dbe125488076aa42f",
+        "size": 722671,
+        "type": "0",
+        "uid": 1000
+      }
+    }
+  ],
+  "dockerGeneratedFilesExcluded": [
+    "etc/hosts",
+    "etc/hostname",
+    "etc/resolv.conf"
+  ],
+  "executedScriptSha256": "eb07b6265fc2d822f972c138a998e83270b677748f8de22b40f45e610f837282",
+  "image": "ghcr.io/claidd/otziv-security@sha256:949f59488d0a83174708ad52e8f8353c410bce6d0107e9660fbb77a0e3d48f9c",
+  "localV3Config": "sha256:b1b695fb74f983c010819b25ef5f402622f20cf865fbbb31133d9a7c69b2538b",
+  "localV3Image": "sha256:367c57af165ab4e46a36eaaea592a81575e782ce4d0a1a6695b13cdc99d4be2b",
+  "localV3RuntimeReceiptTransferAllowed": false,
+  "mtimeExcluded": true,
+  "patchedVendorJarsByteEqual": {
+    "opt/keycloak/lib/lib/main/org.keycloak.keycloak-model-infinispan-26.7.3.jar": true,
+    "opt/keycloak/lib/lib/main/org.keycloak.keycloak-model-storage-private-26.7.3.jar": true
+  },
+  "publicationLabelChangedKeys": [
+    "com.otziv.publication.revision"
+  ],
+  "publishedRuntimeReplayRequired": true,
+  "result": "PASS",
+  "rootfsExportSha256": "07199bd2dfb8ee2be6a294830b37bbdfb60a3fad59d6abe378dd49fca27090a7",
+  "runtimeConfigurationChangedKeys": [
+    "Labels"
+  ],
+  "runtimeInventorySha256": "3ac3202c3ff8e30cf457297d426068a77c5acf68cd6922c0645233858eaa55ed",
+  "schema": "otziv-published-keycloak-v3-rootfs-comparison-v1",
+  "sourceBuildInputsSha256": {
+    ".dockerignore": "38a1eac944a69b7bf138c91d3072a7366942b430d59cc4f29646dab54b4eb763",
+    "ApplyPatch.java": "74d9ea12fb5ee3b374162429b824ac52b07128a05351cf7dbcede2dd4011a1e2",
+    "Dockerfile": "d9224dbd0089302f8010beabb55f48b0274924bdaa99965fdd79a7b890a4831f",
+    "ManagedModelsProof.java": "41f156be89f9c3112a3ebe5ed3f11b830fc94a2ee55d6e3e7a3a3bf950ab0045",
+    "ModulePatch.java": "966fa3e2ce06c51b74c91574893f34af189582b0ea5cd6f1320492c86b1d0721",
+    "managed-models.patch": "faed4f4456901b0f9911274d391ccb3c08d47c2335caadde2e196457b3da29cc",
+    "source-after.sha256": "369573db3114f35275343721757c441bb098e007ff8f4efeb8b31a624c127e9b",
+    "source-before.sha256": "8d61dc0d319f82ea0436e075f2def46556c1ca12401fbd2ea2a0f023323944e0",
+    "source-provenance.json": "f1f8195753017612787a0d717aa7a2830bc8f2ec8dd55cfdfc424a87c6d13ba9"
+  },
+  "sourceReviewSha256": "624be5eac9a020c4d609e29ed15baae3e41e2d71b9c5d6ed4375c62973b67285",
+  "totalJarFiles": 476,
+  "unexpectedPaths": []
+}

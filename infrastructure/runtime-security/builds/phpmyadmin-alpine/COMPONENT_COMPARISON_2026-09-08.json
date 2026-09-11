@@ -1,0 +1,48 @@
+{
+  "schema": "otziv-c12-pma-distro-comparison-v1",
+  "sourceReference": "ghcr.io/claidd/otziv-security@sha256:ea9c7f5a1340e33094ce3576d67d220d1baa5b933e69d1b916b3f0bd43e712b7",
+  "sourceRawSha256": "ba641540910e71159726ce704e2fd4b99fb6c29babd5d678775ac1557ca20b2e",
+  "sourceApiZipSha256": "00928c7015270caaaad0822dd70dba4071908569f23266d8b112512f521a7239",
+  "candidateRawSha256": "3dd9e9cb1e920577b5a70ca1fc990642e54cc5e8774e88c74c636f82ecefc498",
+  "before": {
+    "distribution": {
+      "Family": "debian",
+      "Name": "13.6"
+    },
+    "histogram": {
+      "CRITICAL": 14,
+      "HIGH": 135,
+      "LOW": 731,
+      "MEDIUM": 588,
+      "UNKNOWN": 27
+    },
+    "osPackages": 211
+  },
+  "after": {
+    "distribution": {
+      "Family": "alpine",
+      "Name": "3.24.1"
+    },
+    "histogram": {
+      "MEDIUM": 2
+    },
+    "osPackages": 98
+  },
+  "composerPackagesUnchanged": 58,
+  "applicationPackageUnchanged": true,
+  "composerFindingsUnchanged": [
+    [
+      "CVE-2025-69277",
+      "paragonie/sodium_compat",
+      "v1.23.0",
+      "MEDIUM"
+    ],
+    [
+      "CVE-2026-24739",
+      "symfony/process",
+      "v5.4.47",
+      "MEDIUM"
+    ]
+  ],
+  "interpretation": "Debian package closure replaced with signed Alpine packages. Debian-specific matches are absent under Alpine package/advisory coverage; this is not a claim that all 149 previous HC entries were individually patched. Exact application and Composer bytes are unchanged; no scanner exclusions or adjudications."
+}

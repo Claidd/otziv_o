@@ -1,0 +1,327 @@
+<?xml version='1.0' encoding='utf-8'?>
+<suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.3.xsd">
+  <suppress>
+    <notes>The advisory affects JavaScript W3C baggage propagator; the exact detected Maven artifact is a Java implementation, not that independently versioned product.
+Artifact SHA-256: 5a1218a54c149540b48c28762438cddabb0ba502f1a7ec87c63b1ea191d9920f
+Observed CPEs:
+cpe:2.3:a:grpc:grpc:1.76.3:*:*:*:*:*:*:*
+cpe:2.3:a:opentelemetry:opentelemetry:1.76.3:*:*:*:*:*:*:*
+Primary evidence:
+https://github.com/open-telemetry/opentelemetry-js/security/advisories/GHSA-8988-4f7v-96qf
+Exact package/version and listed CVEs only. Does not accept a vulnerability or suppress new advisories.</notes>
+    <packageUrl>pkg:maven/io.grpc/grpc-opentelemetry@1.76.3</packageUrl>
+    <cve>CVE-2026-54285</cve>
+  </suppress>
+  <suppress>
+    <notes>Vendor patch changes KAPT incremental-cache deserialization in plugins/kapt3/kapt3-base; kotlin-stdlib does not contain org/jetbrains/kotlin/kapt3 classes. No Kotlin Gradle plugin or KAPT artifact is in this Maven project dependency graph.
+Artifact SHA-256: 6558a3d233da56a20934b32159f9db5f86ed5816ef098f78a2c223dc6abb79dd
+Observed CPEs:
+cpe:2.3:a:jetbrains:kotlin:2.2.21:*:*:*:*:*:*:*
+Primary evidence:
+https://github.com/JetBrains/kotlin/commit/bf51df665b458fda7c3eaf436c4d88dc119d7ec6
+Exact package/version and listed CVEs only. Does not accept a vulnerability or suppress new advisories.</notes>
+    <packageUrl>pkg:maven/org.jetbrains.kotlin/kotlin-stdlib@2.2.21</packageUrl>
+    <cve>CVE-2026-53914</cve>
+  </suppress>
+  <suppress>
+    <notes>The advisory affects JavaScript W3C baggage propagator; the exact detected Maven artifact is a Java implementation, not that independently versioned product.
+Artifact SHA-256: 387b4bf98631fc2ede9470879a8ff28dd8c5cb2d3dcf5b6ef77f5ee2bdb7b4f1
+Observed CPEs:
+cpe:2.3:a:opentelemetry:opentelemetry:1.55.0:*:*:*:*:*:*:*
+Primary evidence:
+https://github.com/open-telemetry/opentelemetry-js/security/advisories/GHSA-8988-4f7v-96qf
+Exact package/version and listed CVEs only. Does not accept a vulnerability or suppress new advisories.</notes>
+    <packageUrl>pkg:maven/io.opentelemetry/opentelemetry-api@1.55.0</packageUrl>
+    <cve>CVE-2026-54285</cve>
+  </suppress>
+  <suppress>
+    <notes>The advisory affects Go OTLP HTTP exporters; the exact detected Maven artifact is a Java implementation, not that independently versioned product.
+The advisory affects Go SDK resource detector; the exact detected Maven artifact is a Java implementation, not that independently versioned product.
+The advisory affects Go baggage parser; the exact detected Maven artifact is a Java implementation, not that independently versioned product.
+The advisory affects JavaScript W3C baggage propagator; the exact detected Maven artifact is a Java implementation, not that independently versioned product.
+Artifact SHA-256: 5ca38a9ecdf2c93183069dae1d7d76ec12e9cf4feb3c2209d04566e82fc4df3c
+Observed CPEs:
+cpe:2.3:a:opentelemetry:opentelemetry:1.35.0:alpha:*:*:*:*:*:*
+Primary evidence:
+https://github.com/open-telemetry/opentelemetry-go/security/advisories/GHSA-5wrp-cwcj-q835
+https://github.com/open-telemetry/opentelemetry-go/security/advisories/GHSA-9h8m-3fm2-qjrq
+https://github.com/open-telemetry/opentelemetry-go/security/advisories/GHSA-hfvc-g4fc-pqhx
+https://github.com/open-telemetry/opentelemetry-go/security/advisories/GHSA-w8rr-5gcm-pp58
+https://github.com/open-telemetry/opentelemetry-js/security/advisories/GHSA-8988-4f7v-96qf
+Exact package/version and listed CVEs only. Does not accept a vulnerability or suppress new advisories.</notes>
+    <packageUrl>pkg:maven/io.opentelemetry/opentelemetry-extension-incubator@1.35.0-alpha</packageUrl>
+    <cve>CVE-2026-39883</cve>
+    <cve>CVE-2026-24051</cve>
+    <cve>CVE-2026-39882</cve>
+    <cve>CVE-2026-41178</cve>
+    <cve>CVE-2026-54285</cve>
+  </suppress>
+  <suppress>
+    <notes>The advisory affects Go OTLP HTTP exporters; the exact detected Maven artifact is a Java implementation, not that independently versioned product.
+The advisory affects Go SDK resource detector; the exact detected Maven artifact is a Java implementation, not that independently versioned product.
+The advisory affects Go baggage parser; the exact detected Maven artifact is a Java implementation, not that independently versioned product.
+The advisory affects Go baggage propagator; the exact detected Maven artifact is a Java implementation, not that independently versioned product.
+The advisory affects JavaScript W3C baggage propagator; the exact detected Maven artifact is a Java implementation, not that independently versioned product.
+Artifact SHA-256: f7b6baddfbbe57f0e3e1e3cc08eb68bb61c29ef6c17898ce7ce35b1f3029d3e6
+Observed CPEs:
+cpe:2.3:a:opentelemetry:opentelemetry:1.37.0:alpha:*:*:*:*:*:*
+Primary evidence:
+https://github.com/open-telemetry/opentelemetry-go/security/advisories/GHSA-5wrp-cwcj-q835
+https://github.com/open-telemetry/opentelemetry-go/security/advisories/GHSA-9h8m-3fm2-qjrq
+https://github.com/open-telemetry/opentelemetry-go/security/advisories/GHSA-hfvc-g4fc-pqhx
+https://github.com/open-telemetry/opentelemetry-go/security/advisories/GHSA-mh2q-q3fh-2475
+https://github.com/open-telemetry/opentelemetry-go/security/advisories/GHSA-w8rr-5gcm-pp58
+https://github.com/open-telemetry/opentelemetry-js/security/advisories/GHSA-8988-4f7v-96qf
+Exact package/version and listed CVEs only. Does not accept a vulnerability or suppress new advisories.</notes>
+    <packageUrl>pkg:maven/io.opentelemetry.contrib/opentelemetry-gcp-resources@1.37.0-alpha</packageUrl>
+    <cve>CVE-2026-29181</cve>
+    <cve>CVE-2026-39883</cve>
+    <cve>CVE-2026-24051</cve>
+    <cve>CVE-2026-39882</cve>
+    <cve>CVE-2026-41178</cve>
+    <cve>CVE-2026-54285</cve>
+  </suppress>
+  <suppress>
+    <notes>The advisory affects JavaScript W3C baggage propagator; the exact detected Maven artifact is a Java implementation, not that independently versioned product.
+Artifact SHA-256: 7c033f0c8c8c8159c396b21922460ecfb7a5f004258f8fcdc4ce9979261e1ac9
+Observed CPEs:
+cpe:2.3:a:opentelemetry:opentelemetry:2.1.0:alpha:*:*:*:*:*:*
+Primary evidence:
+https://github.com/open-telemetry/opentelemetry-js/security/advisories/GHSA-8988-4f7v-96qf
+Exact package/version and listed CVEs only. Does not accept a vulnerability or suppress new advisories.</notes>
+    <packageUrl>pkg:maven/io.opentelemetry.instrumentation/opentelemetry-grpc-1.6@2.1.0-alpha</packageUrl>
+    <cve>CVE-2026-54285</cve>
+  </suppress>
+  <suppress>
+    <notes>The advisory affects JavaScript W3C baggage propagator; the exact detected Maven artifact is a Java implementation, not that independently versioned product.
+Artifact SHA-256: 4f6ac1247c7372c103c23ef2594413418a496b114e13ef237031255a2d3ce361
+Observed CPEs:
+cpe:2.3:a:opentelemetry:opentelemetry:2.1.0:*:*:*:*:*:*:*
+Primary evidence:
+https://github.com/open-telemetry/opentelemetry-js/security/advisories/GHSA-8988-4f7v-96qf
+Exact package/version and listed CVEs only. Does not accept a vulnerability or suppress new advisories.</notes>
+    <packageUrl>pkg:maven/io.opentelemetry.instrumentation/opentelemetry-instrumentation-api@2.1.0</packageUrl>
+    <cve>CVE-2026-54285</cve>
+  </suppress>
+  <suppress>
+    <notes>The advisory affects .NET OpenTelemetry.Api; the exact detected Maven artifact is a Java implementation, not that independently versioned product.
+The advisory affects C++ OTLP HTTP exporter; the exact detected Maven artifact is a Java implementation, not that independently versioned product.
+The advisory affects Go OTLP HTTP exporters; the exact detected Maven artifact is a Java implementation, not that independently versioned product.
+The advisory affects Go baggage parser; the exact detected Maven artifact is a Java implementation, not that independently versioned product.
+The advisory affects JavaScript W3C baggage propagator; the exact detected Maven artifact is a Java implementation, not that independently versioned product.
+Artifact SHA-256: c551873983e22b308c738860da0903cdff2e47182140cf2a8dd9abb1adf31d08
+Observed CPEs:
+cpe:2.3:a:opentelemetry:opentelemetry:1.8.0:alpha:*:*:*:*:*:*
+Primary evidence:
+https://github.com/open-telemetry/opentelemetry-cpp/issues/3958
+https://github.com/open-telemetry/opentelemetry-dotnet/security/advisories/GHSA-g94r-2vxg-569j
+https://github.com/open-telemetry/opentelemetry-go/security/advisories/GHSA-5wrp-cwcj-q835
+https://github.com/open-telemetry/opentelemetry-go/security/advisories/GHSA-w8rr-5gcm-pp58
+https://github.com/open-telemetry/opentelemetry-js/security/advisories/GHSA-8988-4f7v-96qf
+Exact package/version and listed CVEs only. Does not accept a vulnerability or suppress new advisories.</notes>
+    <packageUrl>pkg:maven/io.opentelemetry.proto/opentelemetry-proto@1.8.0-alpha</packageUrl>
+    <cve>CVE-2026-39882</cve>
+    <cve>CVE-2026-40894</cve>
+    <cve>CVE-2026-41178</cve>
+    <cve>CVE-2026-44967</cve>
+    <cve>CVE-2026-54285</cve>
+  </suppress>
+  <suppress>
+    <notes>The vendor advisory names STS4 Eclipse and VSCode editor extensions, not Spring Boot Devtools application library.
+Artifact SHA-256: 66d491824019bfdf19494b21ffd9c52570936f856dc80e5e97daa17ae1748c06
+Observed CPEs:
+cpe:2.3:a:vmware:spring_boot:4.0.8:*:*:*:*:*:*:*
+cpe:2.3:a:vmware:spring_boot_tools:4.0.8:*:*:*:*:*:*:*
+cpe:2.3:a:vmware:spring_tools:4.0.8:*:*:*:*:*:*:*
+Primary evidence:
+https://spring.io/security/cve-2022-31691/
+Exact package/version and listed CVEs only. Does not accept a vulnerability or suppress new advisories.</notes>
+    <packageUrl>pkg:maven/org.springframework.boot/spring-boot-devtools@4.0.8</packageUrl>
+    <cve>CVE-2022-31691</cve>
+  </suppress>
+  <suppress>
+    <notes>The exact artifact is RubenLaguses Java Telegram Bot SDK; the reported CPE represents Telegram Android/iOS/macOS/Desktop messenger applications. Their native media/UI/client-session code is not this Java Bot API SDK.
+Artifact SHA-256: bfcca1f6b2c4a0d4e0fd85288f7cbda9483af2415e66d1db69c2661c35ff511f
+Observed CPEs:
+cpe:2.3:a:telegram:telegram:6.9.7.1:*:*:*:*:*:*:*
+Primary evidence:
+https://github.com/rubenlagus/TelegramBots/tree/v6.9.7.1
+https://repo.maven.apache.org/maven2/org/telegram/telegrambots/6.9.7.1/telegrambots-6.9.7.1.pom
+Exact package/version and listed CVEs only. Does not accept a vulnerability or suppress new advisories.</notes>
+    <packageUrl>pkg:maven/org.telegram/telegrambots@6.9.7.1</packageUrl>
+    <cve>CVE-2019-10044</cve>
+    <cve>CVE-2021-31320</cve>
+    <cve>CVE-2021-31321</cve>
+    <cve>CVE-2024-7014</cve>
+    <cve>CVE-2021-27204</cve>
+    <cve>CVE-2021-27205</cve>
+    <cve>CVE-2021-31315</cve>
+    <cve>CVE-2021-31317</cve>
+    <cve>CVE-2021-31318</cve>
+    <cve>CVE-2021-31319</cve>
+    <cve>CVE-2021-31322</cve>
+    <cve>CVE-2021-31323</cve>
+    <cve>CVE-2021-27351</cve>
+    <cve>CVE-2021-36769</cve>
+  </suppress>
+  <suppress>
+    <notes>Exact Java Telegram Bot API SDK metadata/model artifact; reported advisories concern separately versioned Telegram Android, iOS, macOS, Windows or desktop messenger clients and native rlottie. Existing telegrambots selector does not cover this distinct artifact.
+Artifact SHA-256: 6a87f4a1f3de4fd5371ac69c5371eca5f63076301ca52b03678524d6e69c19a2
+Primary evidence:
+https://repo.maven.apache.org/maven2/org/telegram/telegrambots-meta/6.9.7.1/telegrambots-meta-6.9.7.1.pom
+https://github.com/rubenlagus/TelegramBots/tree/v6.9.7.1/telegrambots-meta
+Exact package/version and listed CVEs only; no other product, version, vulnerability or risk acceptance.</notes>
+    <packageUrl>pkg:maven/org.telegram/telegrambots-meta@6.9.7.1</packageUrl>
+    <cve>CVE-2019-10044</cve>
+    <cve>CVE-2021-31320</cve>
+    <cve>CVE-2021-31321</cve>
+    <cve>CVE-2024-7014</cve>
+    <cve>CVE-2021-27204</cve>
+    <cve>CVE-2021-27205</cve>
+    <cve>CVE-2021-31315</cve>
+    <cve>CVE-2021-31317</cve>
+    <cve>CVE-2021-31318</cve>
+    <cve>CVE-2021-31319</cve>
+    <cve>CVE-2021-31322</cve>
+    <cve>CVE-2021-31323</cve>
+    <cve>CVE-2021-27351</cve>
+    <cve>CVE-2021-36769</cve>
+  </suppress>
+  <suppress>
+    <notes>Boot executable archive packaging tools are not the STS4 Eclipse / VSCode YAML editor products named by the vendor.
+Artifact SHA-256: 260e52aa495965a5833f7568d26f80094bcf4eb73eb7a38f748338ebd72493b8
+Primary evidence:
+https://spring.io/security/cve-2022-31691/
+https://repo.maven.apache.org/maven2/org/springframework/boot/spring-boot-loader-tools/4.0.8/spring-boot-loader-tools-4.0.8.pom
+Exact package/version and listed CVEs only; no other product, version, vulnerability or risk acceptance.</notes>
+    <packageUrl>pkg:maven/org.springframework.boot/spring-boot-loader-tools@4.0.8</packageUrl>
+    <cve>CVE-2022-31691</cve>
+  </suppress>
+  <suppress>
+    <notes>The CNA names Nimbus JOSE JWT and explicitly states this advisory is independent of the Gson issue. Exact Gson artifact is not Nimbus. This correction does not assert Gson recursion is fixed or accept its other findings.
+Artifact SHA-256: c96d60551331a196dac54b745aa642cd078ef89b6f267146b705f2c2cbef052d
+Primary evidence:
+https://raw.githubusercontent.com/CVEProject/cvelistV5/main/cves/2025/53xxx/CVE-2025-53864.json
+Exact package/version and listed CVEs only; no other product, version, vulnerability or risk acceptance.</notes>
+    <packageUrl>pkg:maven/com.google.code.gson/gson@2.9.0</packageUrl>
+    <cve>CVE-2025-53864</cve>
+  </suppress>
+  <suppress>
+    <notes>H2 maintainer states the console-tool authorization flaw is fixed since 1.4.198. Exact 2.4.240 WebApp tools.do still requires checkAdmin; the finding targets the old 1.4.197 behavior.
+Artifact SHA-256: 29b70e427cc1c40cdc376283adbb0cc62853073797bb5fe5761f81fe73d57ce0
+Primary evidence:
+https://github.com/h2database/h2database/issues/1294#issuecomment-1227877194
+https://raw.githubusercontent.com/h2database/h2database/version-2.4.240/h2/src/main/org/h2/server/web/WebApp.java
+Exact package/version and listed CVEs only; no other product, version, vulnerability or risk acceptance.</notes>
+    <packageUrl>pkg:maven/com.h2database/h2@2.4.240</packageUrl>
+    <cve>CVE-2018-14335</cve>
+  </suppress>
+  <suppress>
+    <notes>Apache CNA affected range is [5.6,5.6.1) with other versions unaffected. SCRAM was introduced in 5.6; 5.5.1 has no SCRAM source. Shaded 5.5.1 retains its other real advisories; this is only a version-range correction.
+Artifact SHA-256: f381d1bde581bb36992f14674a9ac88f7362b3e35c48a99805bc56e1df931647
+Primary evidence:
+https://raw.githubusercontent.com/CVEProject/cvelistV5/main/cves/2026/40xxx/CVE-2026-40542.json
+https://github.com/apache/httpcomponents-client/tree/rel/v5.5.1
+Exact package/version and listed CVEs only; no other product, version, vulnerability or risk acceptance.</notes>
+    <packageUrl>pkg:maven/org.apache.httpcomponents.client5/httpclient5@5.5.1</packageUrl>
+    <cve>CVE-2026-40542</cve>
+  </suppress>
+  <suppress>
+    <notes>Apache CNA affected range is [5.6,5.6.1) with other versions unaffected. 5.5.2 is outside that range; other reported HTTP Client advisories remain.
+Artifact SHA-256: 5aec3f3447ec816e593e380b59fbe3e42083318af6b215bc177386f7742f6146
+Primary evidence:
+https://raw.githubusercontent.com/CVEProject/cvelistV5/main/cves/2026/40xxx/CVE-2026-40542.json
+Exact package/version and listed CVEs only; no other product, version, vulnerability or risk acceptance.</notes>
+    <packageUrl>pkg:maven/org.apache.httpcomponents.client5/httpclient5@5.5.2</packageUrl>
+    <cve>CVE-2026-40542</cve>
+  </suppress>
+  <suppress>
+    <notes>The vendor limits this continuation to Spring Security5/6. Its related7.0 issue CVE-2026-22747 affects7.0.0-7.0.4 and is fixed7.0.5. Exact7.0.7 is outside47838 affected branches. This does not assert deprecated SubjectDnX509PrincipalExtractor safe or suppress22747 on another version.
+Artifact SHA-256: b9935b0ab3ddbf4df963b2c7fa8fc98245687398ef3e22253c26e1d53db75388
+Primary evidence:
+https://spring.io/security/cve-2026-47838/
+https://spring.io/security/cve-2026-22747/
+Exact package/version and listed CVE only; no risk acceptance.</notes>
+    <packageUrl>pkg:maven/org.springframework.security/spring-security-web@7.0.7</packageUrl>
+    <cve>CVE-2026-47838</cve>
+  </suppress>
+  <suppress>
+    <notes>The vendor identifies7.0.0-7.0.6 affected and7.0.7 as the OSS fix. Correct the exact version-range finding only. The old deprecated AesBytesEncryptor compatibility API remains unsuitable; applications using it still need the vendor migration. No reachability or blanket-crypto exemption is asserted.
+Artifact SHA-256: e03b7570b6bac4a7d4837542e9317bc65158cfc96485564a29e7bb6747f218aa
+Primary evidence:
+https://spring.io/security/cve-2026-47842/
+Exact package/version and listed CVE only; no risk acceptance.</notes>
+    <packageUrl>pkg:maven/org.springframework.security/spring-security-crypto@7.0.7</packageUrl>
+    <cve>CVE-2026-47842</cve>
+  </suppress>
+  <suppress>
+    <notes>Vendor fix changes KAPT build-cache deserialization. Exact kotlin-reflect JAR contains2144classes and no KAPT/build-cache classes or ObjectInputStream references. This Java runtime reflection artifact is not the independently deployed Kotlin Gradle/KAPT/compiler build tool; those artifacts are not exempt.
+Artifact SHA-256: 44380abf37d245ce5c0f294f43512d1c39a59642bfa463922c74e96877cf49f8
+Primary evidence:
+https://github.com/JetBrains/kotlin/commit/bf51df665b458fda7c3eaf436c4d88dc119d7ec6
+https://www.jetbrains.com/privacy-security/issues-fixed/
+Exact package/version and listed CVE only; no risk acceptance.</notes>
+    <packageUrl>pkg:maven/org.jetbrains.kotlin/kotlin-reflect@2.2.21</packageUrl>
+    <cve>CVE-2026-53914</cve>
+  </suppress>
+  <suppress>
+    <notes>The vendor fix changes KAPT incremental-cache deserialization. This exact 945-byte compatibility JAR contains only META-INF/versions/9/module-info.class, with no executable KAPT implementation or ObjectInputStream reference. The distinct Kotlin Gradle/KAPT/compiler artifacts are not exempt.
+Artifact SHA-256: b785922f11e6d91a6dd1d75cb0aef1ce37b83f8de0e3a2139139dfb823bb8a2c
+Primary evidence:
+https://github.com/JetBrains/kotlin/commit/bf51df665b458fda7c3eaf436c4d88dc119d7ec6
+https://www.jetbrains.com/privacy-security/issues-fixed/
+Exact package/version and listed CVE only; no risk acceptance.</notes>
+    <packageUrl>pkg:maven/org.jetbrains.kotlin/kotlin-stdlib-jdk7@2.2.21</packageUrl>
+    <cve>CVE-2026-53914</cve>
+  </suppress>
+  <suppress>
+    <notes>The vendor fix changes KAPT incremental-cache deserialization. This exact 951-byte compatibility JAR contains only META-INF/versions/9/module-info.class, with no executable KAPT implementation or ObjectInputStream reference. The distinct Kotlin Gradle/KAPT/compiler artifacts are not exempt.
+Artifact SHA-256: c62275c50ee591ca2f82c7ba42696b791600c25844f47e84bd9460302a0d5238
+Primary evidence:
+https://github.com/JetBrains/kotlin/commit/bf51df665b458fda7c3eaf436c4d88dc119d7ec6
+https://www.jetbrains.com/privacy-security/issues-fixed/
+Exact package/version and listed CVE only; no risk acceptance.</notes>
+    <packageUrl>pkg:maven/org.jetbrains.kotlin/kotlin-stdlib-jdk8@2.2.21</packageUrl>
+    <cve>CVE-2026-53914</cve>
+  </suppress>
+  <suppress>
+    <notes>Apache CNA identifies CVE-2023-37895 in jackrabbit-webapp, jackrabbit-standalone and jackrabbit-standalone-components; CVE-2025-58782 identifies jackrabbit-core and jackrabbit-jcr-commons. This exact jackrabbit-webdav test dependency is a distinct Maven artifact. Its 265 classes contain no RMI, RemoteBindingServlet or BeanUtils references. This is component identity correction, not test-scope or reachability acceptance.
+Artifact SHA-256: 1d876e7419e223dd90e921b3c122d0164b33c0e4f060b07aa761fcb0eb7bb5c8
+Primary evidence:
+https://raw.githubusercontent.com/CVEProject/cvelistV5/main/cves/2023/37xxx/CVE-2023-37895.json
+https://raw.githubusercontent.com/CVEProject/cvelistV5/main/cves/2025/58xxx/CVE-2025-58782.json
+https://repo.maven.apache.org/maven2/org/apache/jackrabbit/jackrabbit-webdav/2.14.4/jackrabbit-webdav-2.14.4.pom
+Repository evidence: infrastructure/runtime-security/proofs/C7_MAVEN_ADVISORY_PROOF.json (Apache CNA affected artifacts and exact archive class inventory).
+Reviewed PURL: pkg:maven/org.apache.jackrabbit/jackrabbit-webdav@2.14.4
+Exact SHA1 and two named CVEs only; affected sibling artifact bytes and other advisories remain in scope. The ODC schema permits one artifact selector, so PURL and SHA256 are provenance evidence, not additional XML selectors.</notes>
+    <sha1>8b44cca2d95f7c8ec54126a400d77464194ad481</sha1>
+    <cve>CVE-2023-37895</cve>
+    <cve>CVE-2025-58782</cve>
+  </suppress>
+  <suppress>
+    <notes>Keycloak 26.7.3 officially fixes CVE-2026-18215. The exact JAR matching the hosted report was inspected with javap: the configured tenant is compared with the token tenant and mismatch throws before superclass token exchange. This is a stale affected-version match, not acceptance of a runtime vulnerability.
+Primary evidence: https://www.keycloak.org/2026/08/keycloak-2673-released
+Fix: https://github.com/keycloak/keycloak/pull/51849
+Artifact: keycloak-services-26.7.3.jar
+PURL: pkg:maven/org.keycloak/keycloak-services@26.7.3
+SHA-256: 245127ecae84d509522ec01aefdc7b13aaa577ff645498bac43debc981ef0630
+Repository evidence: infrastructure/runtime-security/proofs/C7_MAVEN_ADVISORY_PROOF.json and infrastructure/runtime-security/proofs/C7_KEYCLOAK_TENANT_GUARD.javap.txt (tenant guard before superclass exchange).
+Only the exact SHA-1 and listed CVE are selected. No other artifact, version or advisory is excluded.</notes>
+    <sha1>009f7fb99f26ba5b43d4a72d7b53f9504c2f1bee</sha1>
+    <cve>CVE-2026-18215</cve>
+  </suppress>
+  <suppress until="2027-01-01Z">
+    <notes>CVE-2023-34623 describes excessive HTML ParseBlock nesting in net.sf.jtidy:jtidy:r938. The maintainer identifies the numeric r938 versus 1.0.4 version comparison as a false positive. This exact com.github.jtidy:jtidy:1.0.5 Maven Central JAR includes the upstream HTML nesting bound before recursive parser dispatch. Its SHA256 matches both failing C13 hosted build-support report occurrences. Independent source, actual bytecode and bounded old/fixed-binary controls are retained below.
+Artifact SHA-256: 7cea4360710adb44c588e13afdcdc0171fc1a3e61cc4562703ddb1f0a36f0ca4
+Reviewed PURL: pkg:maven/com.github.jtidy/jtidy@1.0.5
+Primary issue and maintainer explanation:
+https://github.com/trajano/jtidy/issues/4
+https://github.com/jtidy/jtidy/issues/63#issuecomment-1693710427
+Immutable upstream source:
+https://github.com/jtidy/jtidy/blob/d2f8dd407899c005c12a9df1b5db807bbc0c79c8/src/main/java/org/w3c/tidy/ParserImpl.java
+Repository evidence: infrastructure/runtime-security/proofs/jtidy/review.json and README.md.
+The decision concerns the reported HTML nesting defect only, not XML parsing, all recursion, or all potential parser defects. Dependency use remains in Maven descriptor generation. Only this archive SHA1 AND this one CVE are selected; other bytes, versions, advisories and the old r938 artifact remain in scope. The rule expires on 2027-01-01 UTC. No runtime risk acceptance, analyzer disabling or threshold change.</notes>
+    <sha1>e57994fdeb7077b11a8ba05c93e3cb89c3ad8ed0</sha1>
+    <cve>CVE-2023-34623</cve>
+  </suppress>
+</suppressions>

@@ -62,6 +62,6 @@ test('accepting tokens for another subject resets old push registration state', 
 
   assert.ok(acceptStart >= 0 && acceptEnd > acceptStart);
   assert.match(accept, /const previousSubject = this\.user\(\)\?\.subject/);
-  assert.match(accept, /previousSubject !== undefined && previousSubject !== this\.user\(\)\?\.subject/);
+  assert.match(accept, /previousSubject !== undefined && previousSubject !== user\.subject/);
   assert.match(accept, /this\.resetPushRegistrationState\(\)/);
 });

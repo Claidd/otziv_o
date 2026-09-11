@@ -1,0 +1,67 @@
+{
+  "schema": "otziv-pg-alpine-locale-comparison-v1",
+  "startedAt": "2026-09-08T07:29:06.062868+00:00",
+  "owner": "otziv-c12-pg-alpine-2ba082966867",
+  "candidate": "postgres@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73",
+  "source": {
+    "container": "otziv-prod-local-keycloak-postgres-1",
+    "id": "aea1758b7e9ee95501a92cdce8574604bff15e1ab2254bf6bedfe70ebd953296",
+    "image": "sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d",
+    "startedAt": "2026-09-08T03:12:33.512499703Z",
+    "dataVolume": "otziv-prod-local_keycloak_pg_data"
+  },
+  "checks": [
+    "local_docker_context",
+    "source_identity_unchanged_before",
+    "source_provider_is_reviewed_libc",
+    "candidate_exact_published_index",
+    "candidate_exact_server_version",
+    "candidate_postmaster_uid70",
+    "only_owned_candidate_volume",
+    "isolated_resources_bounded",
+    "candidate_same_named_locale_provider_encoding",
+    "candidate_stored_index_order_consistent_with_own_locale",
+    "candidate_clean_shutdown",
+    "source_identity_unchanged_after"
+  ],
+  "productionAccess": false,
+  "realDataDumpCreated": false,
+  "applicationOrOidcStarted": false,
+  "comparison": {
+    "orderingEqual": false,
+    "caseMappingEqual": false,
+    "equalityEqual": true,
+    "collationVersionEqual": false
+  },
+  "locale": {
+    "source": {
+      "ctype": "en_US.utf8",
+      "collate": "en_US.utf8",
+      "provider": "c",
+      "actualVersion": "2.41",
+      "recordedVersion": "2.41"
+    },
+    "candidate": {
+      "ctype": "en_US.utf8",
+      "collate": "en_US.utf8",
+      "provider": "c",
+      "actualVersion": null,
+      "recordedVersion": null
+    }
+  },
+  "sourceControlSha256": "70770209b8246ff85c67c286cb562454a888c27903777ba9df2ba038249f7a4b",
+  "candidateControlSha256": "b61c8697577e21ddca2e273020baefb3f0504143506b6695c43501ead42369b3",
+  "mismatchedCaseControlIds": [
+    20
+  ],
+  "result": "INCOMPATIBLE_LOCALE_SEMANTICS",
+  "dataTransferDisposition": "NOT_ATTEMPTED_BECAUSE_SEMANTICS_MISMATCH",
+  "notExecuted": [
+    "current-data logical transfer",
+    "candidate compressed real-data backup/restore",
+    "old-image real-data rollback",
+    "application compatibility or authentication flows"
+  ],
+  "cleanup": "PASS",
+  "completedAt": "2026-09-08T07:29:12.316310+00:00"
+}

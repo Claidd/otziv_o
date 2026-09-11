@@ -47,22 +47,17 @@ public class WhatsAppWebhookController {
         }
 
         WhatsAppGroupReplyDTO groupReply = parseBody(requestBody, WhatsAppGroupReplyDTO.class, "group");
-        if (groupReply == null) {
+        if (groupReply == null || !hasText(groupReply.getClientId()) || !hasText(groupReply.getGroupId())
+                || !hasText(groupReply.getMessageId()) || !hasText(groupReply.getMessage())
+                || groupReply.getClientId().length() > 512 || groupReply.getGroupId().length() > 512
+                || groupReply.getMessageId().length() > 512) {
             return ResponseEntity.badRequest().build();
         }
 
         log.info("WhatsApp group webhook accepted from {}", request.getRemoteAddr());
-        if (!groupWebhookDeduplicator.acquire(groupReply)) {
-            log.info("WhatsApp group webhook duplicate ignored: clientId={}, groupId={}, messageId={}",
-                    groupReply.getClientId(), groupReply.getGroupId(), groupReply.getMessageId());
-            return ResponseEntity.ok().build();
-        }
-        try {
-            groupReplyService.processGroupReply(groupReply);
-            groupWebhookDeduplicator.complete(groupReply);
-        } catch (RuntimeException | Error e) {
-            groupWebhookDeduplicator.release(groupReply);
-            throw e;
+        var result = groupWebhookDeduplicator.execute(groupReply, () -> groupReplyService.processGroupReply(groupReply));
+        if (result == WhatsAppGroupWebhookDeduplicator.Result.IN_PROGRESS) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).header("Retry-After", "1").build();
         }
         return ResponseEntity.ok().build();
     }

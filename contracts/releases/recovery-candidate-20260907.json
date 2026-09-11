@@ -1,0 +1,45 @@
+{
+  "formatVersion": 1,
+  "selection": "Previously verified local snapshot chosen as a current-schema-aware recovery candidate",
+  "observedAt": "2026-09-07T14:18:30.126Z",
+  "candidate": {
+    "imageId": "sha256:25180a62f620afd9a47fa8f03fab95bcd4f7bf8c2d37e0caaeb04d8d0538bec8",
+    "jarSha256": "5fd61bbc232d1e4545d35f1c3d805a6312f39a88eb0af8d8c12127cd86edf695",
+    "published": false,
+    "minimumSupported": null,
+    "testedSchema": "1.10.305",
+    "tableCount": 316,
+    "schemaValidationDisabled": false,
+    "health": "UP",
+    "currentClientPublicGetChecks": 6,
+    "clientMutations": 0
+  },
+  "incompatibleBinaryOnlyRollback": {
+    "revision": "fc191ac23cfe600bac3c8b1741970e8cb22143e0",
+    "localMatchingRegistryDigest": "sha256:9fc103a18115b900f908d6f584093f3684025d30a974046deaa00e6b13ab70cb",
+    "jarSha256": "031ca4a794cfdb40718fdcdabf2c5ed44fbffe814efdb3d6534f59b56284be1b",
+    "startupExitCode": 1,
+    "reason": "Schema validation: missing table [lead_sync_queue]",
+    "migrationFence": "V1_10_298__lead_command_consumer_compatibility_fence.sql",
+    "reverseRenameOrAliasAllowed": false
+  },
+  "evidence": [
+    {
+      "path": ".codex-tmp/remediation-completion-20260907/candidate-mobile-recovery-actual-runtime-v2.json",
+      "sha256": "8047296e7eec22b7f52a054bef7d98411e4afd4f8b68448f06f0aaaf5a0acb1c"
+    },
+    {
+      "path": ".codex-tmp/remediation-completion-20260907/candidate-web-recovery-actual-runtime-v2.json",
+      "sha256": "f5779eb81ad815a6b231afaf6a68cc3b4c9fa5bc55497c74d4d5d8fb8f1c08b6"
+    }
+  ],
+  "boundaries": [
+    "Disposable clone from current LOCAL sanitized MySQL, no VPS access or source SQL mutations",
+    "Internal Docker network, synthetic public payment rows, all provider execution disabled",
+    "Current unchanged web/mobile assets rendered actual HTTP CONFIRMED, EXPIRED and 404 responses",
+    "Docker-exec curl relays allowlisted GET response bytes; not deployed proxy/TLS or native acceptance",
+    "No bank execution, authenticated screens, issuer login or production recovery rehearsal",
+    "Old fc191ac on its old schema was not bootstrapped; paired restore remains separate acceptance",
+    "Automatic review blocked cleanup before execution; owned resources and protected temporary configuration remain. See recovery-summary.json and cleanup-blocker.json"
+  ]
+}

@@ -1,0 +1,139 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "version": 1,
+  "components": [
+    {
+      "type": "library",
+      "name": "libxml2",
+      "version": "2.15.4",
+      "purl": "pkg:generic/libxml2@2.15.4",
+      "cpe": "cpe:2.3:a:xmlsoft:libxml2:2.15.4:*:*:*:*:*:*:*",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://download.gnome.org/sources/libxml2/2.15/libxml2-2.15.4.tar.xz",
+          "hashes": [
+            {
+              "alg": "SHA-256",
+              "content": "98087fd181d9070724f3fbc65c7377db03038eb92bd882374daff44940138821"
+            }
+          ]
+        }
+      ],
+      "properties": [
+        {
+          "name": "otziv:runtimeDebSha256",
+          "value": "10484f924ffe99116146df4897fea50ed679c9ab03f13a79d4cbe4584cdaa30d"
+        },
+        {
+          "name": "otziv:packageVersion",
+          "value": "2.15.4"
+        },
+        {
+          "name": "otziv:upstreamPatches",
+          "value": "[]"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libxslt",
+      "version": "1.1.45",
+      "purl": "pkg:generic/libxslt@1.1.45",
+      "cpe": "cpe:2.3:a:xmlsoft:libxslt:1.1.45:*:*:*:*:*:*:*",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://download.gnome.org/sources/libxslt/1.1/libxslt-1.1.45.tar.xz",
+          "hashes": [
+            {
+              "alg": "SHA-256",
+              "content": "9acfe68419c4d06a45c550321b3212762d92f41465062ca4ea19e632ee5d216e"
+            }
+          ]
+        }
+      ],
+      "properties": [
+        {
+          "name": "otziv:runtimeDebSha256",
+          "value": "c0ff012d1b958515acf784d73e03db007d31c7057554ff8580bb8f6cb45d7c6a"
+        },
+        {
+          "name": "otziv:packageVersion",
+          "value": "1.1.45"
+        },
+        {
+          "name": "otziv:upstreamPatches",
+          "value": "[]"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "postgresql",
+      "version": "17.11",
+      "purl": "pkg:generic/postgresql@17.11",
+      "cpe": "cpe:2.3:a:postgresql:postgresql:17.11:*:*:*:*:*:*:*",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://ftp.postgresql.org/pub/source/v17.11/postgresql-17.11.tar.bz2",
+          "hashes": [
+            {
+              "alg": "SHA-256",
+              "content": "dd27f2b3c59e73ed14aa3324901242bf69a032a6347805f274e6260322d42979"
+            }
+          ]
+        }
+      ],
+      "properties": [
+        {
+          "name": "otziv:runtimeDebSha256",
+          "value": "bc54c267ad51b3cbd207a56d7b008466a56ded4da355f6d72700f2c431d50d54"
+        },
+        {
+          "name": "otziv:packageVersion",
+          "value": "17.11"
+        },
+        {
+          "name": "otziv:upstreamPatches",
+          "value": "[]"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "gzip",
+      "version": "1.14",
+      "purl": "pkg:generic/gzip@1.14",
+      "cpe": "cpe:2.3:a:gnu:gzip:1.14:*:*:*:*:*:*:*",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://deb.debian.org/debian/pool/main/g/gzip/gzip_1.14.orig.tar.xz",
+          "hashes": [
+            {
+              "alg": "SHA-256",
+              "content": "01a7b881bd220bfdf615f97b8718f80bdfd3f6add385b993dcf6efd14e8c0ac6"
+            }
+          ]
+        }
+      ],
+      "properties": [
+        {
+          "name": "otziv:runtimeDebSha256",
+          "value": "7c5afad5a13922e0803524839cfe7a6e38eef91de53913a82c2c909c2aa71ca5"
+        },
+        {
+          "name": "otziv:packageVersion",
+          "value": "1.14+otziv.cve202641992.1"
+        },
+        {
+          "name": "otziv:upstreamPatches",
+          "value": "[{\"commit\": \"63dbf6b3b9e6e781df1a6a64e609b10e23969681\", \"sha256\": \"6c9448ef05935ef874a8570b32d9d8c6d24e60a72b1c3b085908dce58e942e35\", \"url\": \"https://cgit.git.savannah.gnu.org/cgit/gzip.git/patch/?id=63dbf6b3b9e6e781df1a6a64e609b10e23969681\"}, {\"commit\": \"e7378c2d421be6a286922374425680bbe9ad8b7d\", \"sha256\": \"de7bb5c805e24517d9e2d4e99f0e51ed75abce004db96124e91ec0f9830d5bfc\", \"url\": \"https://git.savannah.gnu.org/cgit/gzip.git/patch/?id=e7378c2d421be6a286922374425680bbe9ad8b7d\"}]"
+        }
+      ]
+    }
+  ]
+}

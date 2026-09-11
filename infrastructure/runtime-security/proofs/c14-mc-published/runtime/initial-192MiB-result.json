@@ -1,0 +1,40 @@
+{
+  "schema": "otziv-c14-mc-compatibility-v1",
+  "result": "FAIL",
+  "timestamp": "2026-09-08T13:55:07.594Z",
+  "image": "sha256:d163502c0d23dd3d76ec9fab63d9697317c9a2aaa39d1a3d783a70044bb803c0",
+  "baselineServer": "minio/minio@sha256:a1ea29fa28355559ef137d71fc570e508a214ec84ff8083e39bc5428980b015e",
+  "syntheticOnly": true,
+  "checks": [
+    "internal_network",
+    "no_published_ports",
+    "server_ready",
+    "client_1_exit_no_oom",
+    "compose_init_idempotent_0",
+    "client_2_exit_no_oom",
+    "compose_init_idempotent_1",
+    "server_graceful_stop"
+  ],
+  "cleanup": [
+    {
+      "kind": "container",
+      "result": "PASS"
+    },
+    {
+      "kind": "container",
+      "result": "PASS"
+    },
+    {
+      "kind": "volume",
+      "result": "PASS"
+    },
+    {
+      "kind": "network",
+      "result": "PASS"
+    }
+  ],
+  "failure": "docker_command_failed_start_137",
+  "limits": [
+    "CLI compatibility with the pinned current standalone server; full server upgrade and physical backup restoration are a separate proof."
+  ]
+}

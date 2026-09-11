@@ -1,0 +1,187 @@
+{
+  "schema": "otziv-mysql-current-release-readiness-proof-v1",
+  "result": "PASS",
+  "startedAt": "2026-09-08T13:08:06.896Z",
+  "completedAt": "2026-09-08T13:15:36.885Z",
+  "mode": "published-rollback",
+  "production": false,
+  "vpsCutoverExecuted": false,
+  "sourceWrites": false,
+  "images": {
+    "source": "sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383",
+    "targetReference": "ghcr.io/claidd/otziv-security@sha256:3a3caaab4e71b3bfdec9da21c17c00ed10ca237151919aeddac8e5ce4b8b7baa",
+    "targetConfigurationDigest": "sha256:80ee3b50147a329addbaf754abc4dce86dc06636624680d780351e2320a11070",
+    "upgradeCheckerReference": "container-registry.oracle.com/mysql/community-server@sha256:bf955135c21e2c1c153417407fbbbb8efa786f487781b1fb6baaf7aba17d4340",
+    "app": "sha256:f6123a92f20df6125647bdbe181afb50c6bbc14c595e547f1ce3649db5ccd213",
+    "published": {
+      "reference": "ghcr.io/claidd/otziv-security@sha256:3a3caaab4e71b3bfdec9da21c17c00ed10ca237151919aeddac8e5ce4b8b7baa",
+      "configurationDigest": "sha256:80ee3b50147a329addbaf754abc4dce86dc06636624680d780351e2320a11070",
+      "localId": "sha256:3a3caaab4e71b3bfdec9da21c17c00ed10ca237151919aeddac8e5ce4b8b7baa"
+    },
+    "targetLocalId": "sha256:3a3caaab4e71b3bfdec9da21c17c00ed10ca237151919aeddac8e5ce4b8b7baa",
+    "upgradeCheckerLocalId": "sha256:bf955135c21e2c1c153417407fbbbb8efa786f487781b1fb6baaf7aba17d4340"
+  },
+  "runtimeVersion": "9.7.3",
+  "sourceSchema": "1.10.310",
+  "checks": 52,
+  "unitTests": 36,
+  "standaloneConfigurationChecks": 7,
+  "sourceCapture": {
+    "file": "source.sql.gz",
+    "bytes": 101427249,
+    "sha256": "364568b0db60b3b61718e6eda364110dfb6a2130a31d23b41815aef44e6bedd7"
+  },
+  "sourceFlywayHistorySha256": "dcb7d077b997b142589a153d8e341ce2b8457eee2c6ccb020361c2a0fc23a158",
+  "semanticConfiguration": {
+    "source": {
+      "character_set_server": "utf8mb4",
+      "collation_server": "utf8mb4_unicode_ci",
+      "lower_case_table_names": "0",
+      "restrict_fk_on_non_standard_key": "OFF",
+      "sql_mode": "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION",
+      "time_zone": "+08:00"
+    },
+    "sourceSha256": "575e657ac9afa7cc8894813242484951e9cd072c2c5ab362eba89e46ac875305",
+    "fixtureEventScheduler": "OFF",
+    "resourceOptions": "bounded clone only"
+  },
+  "upgradeChecker": {
+    "errors": 0,
+    "warnings": 24,
+    "notices": 0,
+    "completedChecks": 7,
+    "manualChecks": []
+  },
+  "rollback": {
+    "result": "PASS",
+    "sourceImage": "sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383",
+    "restoredVersion": "9.0.0",
+    "backup": {
+      "file": "preupgrade.sql.gz",
+      "sha256": "b84feaab9f3f6d358602b9e9a338879f721db1609c632833fff7683b0ea1ac51",
+      "bytes": 101427195
+    },
+    "originalVolume": "otziv-mysql-c7-rollback-64b8defc-3d46-4ea2-b8ca-41dfebda33b2-data",
+    "restoredVolume": "otziv-mysql-c7-rollback-64b8defc-3d46-4ea2-b8ca-41dfebda33b2-rollback-data",
+    "postUpgradeWriteAbsent": true,
+    "configuredAccountGrantsPreserved": true,
+    "applicationImage": "sha256:f6123a92f20df6125647bdbe181afb50c6bbc14c595e547f1ce3649db5ccd213",
+    "snapshot": {
+      "tableCount": 327,
+      "rows": 1055459,
+      "countsSha256": "40bf0d12aff6a0ecc6d10772c9d6c19a33f2370cec053504dfa36c261bf22b70",
+      "historySha256": "dcb7d077b997b142589a153d8e341ce2b8457eee2c6ccb020361c2a0fc23a158",
+      "checksumsSha256": "d18e95db80610c2a44a27f37e5d262ffdebb30a6c184e3583ca2109fa95144e0",
+      "jsonSha256": "cb15da7f4a8b086c27a437c7a6c49c34dbaf195ff9a7212a056c686200044cb7",
+      "jsonDataSha256": "d13e98d73b3ce976a7c2502707c1be547f620b3c3f29d72c28f9c28b51c1a35b",
+      "jsonColumns": 4,
+      "checksumTables": [
+        "orders",
+        "reviews",
+        "leads",
+        "common_invoices",
+        "payment_links",
+        "lead_command_queue",
+        "performer_notification_intents",
+        "order_publication_client_updates",
+        "order_client_message_occurrences",
+        "client_message_operations",
+        "scheduled_client_message_state"
+      ],
+      "queries": {
+        "json": "SELECT JSON_UNQUOTE(JSON_EXTRACT(JSON_OBJECT('array',JSON_ARRAY(1,true,NULL,'Юникод'),'nested',JSON_OBJECT('amount',12.34)),'$.array[3]')),JSON_CONTAINS(JSON_ARRAY(1,2,3),'2'),JSON_UNQUOTE(JSON_EXTRACT(JSON_OBJECT('status','UNKNOWN'),'$.status'));",
+        "jsonData": [
+          "SELECT 'command_idempotency.response_body',COUNT(`response_body`),COALESCE(SUM(JSON_VALID(`response_body`)),0),BIT_XOR(CRC32(CAST(`response_body` AS CHAR))) FROM `command_idempotency`;",
+          "SELECT 'integration_outbox.payload',COUNT(`payload`),COALESCE(SUM(JSON_VALID(`payload`)),0),BIT_XOR(CRC32(CAST(`payload` AS CHAR))) FROM `integration_outbox`;",
+          "SELECT 'manager_client_reply_operations.delivery_snapshot',COUNT(`delivery_snapshot`),COALESCE(SUM(JSON_VALID(`delivery_snapshot`)),0),BIT_XOR(CRC32(CAST(`delivery_snapshot` AS CHAR))) FROM `manager_client_reply_operations`;",
+          "SELECT 'specialist_transfer_audit.company_ids_json',COUNT(`company_ids_json`),COALESCE(SUM(JSON_VALID(`company_ids_json`)),0),BIT_XOR(CRC32(CAST(`company_ids_json` AS CHAR))) FROM `specialist_transfer_audit`;"
+        ],
+        "queueSelection": "START TRANSACTION; SELECT q.id FROM lead_command_queue q WHERE q.delivery_state='READY' AND q.retry_count<8 AND q.next_attempt_at<=UTC_TIMESTAMP(6) AND NOT EXISTS (SELECT 1 FROM lead_command_queue earlier WHERE earlier.blocking_lead_id=q.lead_id AND earlier.id<q.id) ORDER BY q.next_attempt_at,q.id LIMIT 1 FOR UPDATE SKIP LOCKED; SELECT notification_id FROM performer_notification_intents WHERE status='PENDING' AND due_at<=CURRENT_TIMESTAMP(6) ORDER BY due_at,notification_id LIMIT 1 FOR UPDATE SKIP LOCKED; ROLLBACK;"
+      },
+      "queryHashes": {
+        "json": "bd2456b6f16e984f7df6e17e119cec86860e1afbc67efd343892a1fa63405b3e",
+        "queueSelection": "a31049dae1c286e9a4e268b09f79b7d51ef42ba55da729c81a6e59ab3b6035b3"
+      },
+      "queueProof": "native SELECT FOR UPDATE SKIP LOCKED with ROLLBACK; no claims, sends or saturation assertion"
+    },
+    "binaryDowngradeAttempted": false
+  },
+  "sourceContinuity": "PASS",
+  "cleanup": "PASS",
+  "security": {
+    "schema": "otziv-c14-mysql-fresh-security-proof-v1",
+    "result": "PASS",
+    "createdAt": "2026-09-08T13:11:28.02480872Z",
+    "target": "ghcr.io/claidd/otziv-security@sha256:3a3caaab4e71b3bfdec9da21c17c00ed10ca237151919aeddac8e5ce4b8b7baa",
+    "imageConfigurationDigest": "sha256:80ee3b50147a329addbaf754abc4dce86dc06636624680d780351e2320a11070",
+    "scannerVersion": "0.74.0",
+    "scannerImage": "aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969",
+    "high": 0,
+    "critical": 0,
+    "blockingFixedHighOrCritical": 0,
+    "unfixedHighOrCritical": 0,
+    "exclusions": [],
+    "adjudications": [],
+    "freshDatabaseDownload": "Scanner log records fresh vulnerability database download from mirror.gcr.io/aquasec/trivy-db:2 ending2026-09-08T13:09:56Z. Database content-version metadata is not exported separately.",
+    "rawReportSha256": "b2ec3f567cf76fd0adcc85b447104449e250f221ea8a9074e18d641137b8f795",
+    "sbomSha256": "ff9fc42b87bd9975e5eac15afbde3f0990ce8e92af733e0b17e74881976e2b28",
+    "scannerLogSha256": "ef942c3684c76165ceca15aaec8fc7046c7d3bb4acfbeee7f48f9c543d0b424a"
+  },
+  "evidence": {
+    "runtime": {
+      "path": "infrastructure/runtime-security/proofs/c14-mysql/runtime-proof.json",
+      "sha256": "b7da2f3b408dbd88b993e2bb7afa2c086bb6c4842fe019754618569b4cad4a00"
+    },
+    "upgradeChecker": {
+      "path": "infrastructure/runtime-security/proofs/c14-mysql/upgrade-checker.json",
+      "sha256": "e70e0855505e7f60433f602c368f2d67242af312ff4713742bbae61476b5aae2"
+    },
+    "standaloneConfiguration": {
+      "path": "infrastructure/runtime-security/proofs/c14-mysql/standalone-configuration-proof.json",
+      "sha256": "3525a73038c4be4da391759478f8780d7eb106b370a5770dee571ee462bc3f2c"
+    },
+    "sourceContinuity": {
+      "path": "infrastructure/runtime-security/proofs/c14-mysql/source-continuity.json",
+      "sha256": "8f5442ddab95672dafc5b9bca272773ff496d45731f02757f17222f657045544"
+    },
+    "failedConfiguration": {
+      "path": "infrastructure/runtime-security/proofs/c14-mysql/failed-config-proof.json",
+      "sha256": "fb4455b01eb70ed47e49e7dfabd7a2d816170f1ea89b39ba7035967eaac72192"
+    },
+    "security": {
+      "path": "infrastructure/runtime-security/proofs/c14-mysql/security-result.json",
+      "sha256": "afd70ec62853699acf978d299f5efcc3228473a0f6f21e12a13810687f210cce"
+    },
+    "rawSecurity": {
+      "path": "infrastructure/runtime-security/proofs/c14-mysql/vulnerabilities.json",
+      "sha256": "b2ec3f567cf76fd0adcc85b447104449e250f221ea8a9074e18d641137b8f795"
+    },
+    "sbom": {
+      "path": "infrastructure/runtime-security/proofs/c14-mysql/vulnerabilities.sbom.cdx.json",
+      "sha256": "ff9fc42b87bd9975e5eac15afbde3f0990ce8e92af733e0b17e74881976e2b28"
+    },
+    "unitTests": {
+      "path": "infrastructure/runtime-security/proofs/c14-mysql/unit-tests.txt",
+      "sha256": "276c7d6b8784a846d036f862e5133a241172f9351249844f85c68ace6ff1b99b"
+    },
+    "executionLog": {
+      "path": "infrastructure/runtime-security/proofs/c14-mysql/execution-log.txt",
+      "sha256": "5ecbefce2c1d59d500c732b903226491207a4f4240bded747406272683955941"
+    },
+    "sourceBinding": {
+      "path": "infrastructure/runtime-security/proofs/c14-mysql/source-binding.json",
+      "sha256": "8b32dbb1fa647e20e81f1f8d78d744c7a3ee229f5fbd232f144cbd4c2ba62825"
+    }
+  },
+  "activationBoundary": "LOCAL_REHEARSAL_AND_SECURITY_COMPLETE; production coordinated activation requires fresh paired backup/restore, actual VPS policy inventory and explicit reviewed transition. DATABASE_HOLD and ordinary deployment image-identity guard are not bypassed by this file.",
+  "limitations": [
+    "local sanitized clone; not a production rollout",
+    "no performance SLO or fleet compatibility implied",
+    "application health/Flyway/Hibernate only; Keycloak login and external delivery are not tested",
+    "the configured source account identity and grants are reproduced with a newly generated clone-only password; other source users are not copied",
+    "C14 full upgrade uses the recorded six-option semantic subset. Explicit GTID OFF/enforce OFF/binlog ON/ROW is proved by a separate fresh-target 7-check probe, not claimed as the same full data-directory upgrade invocation.",
+    "Source capture contains zero new publication outbox rows; preservation proof includes its table/checksum but does not claim live publication delivery or populated UNKNOWN crash execution.",
+    "No production SLO, replication, live authentication, external delivery or retained operational recovery point is proved.",
+    "Original C12 historical assertions were not rerun as C12; this is independent current-schema C14 evidence."
+  ]
+}

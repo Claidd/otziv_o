@@ -79,6 +79,22 @@ class ManagerAutomationFailurePolicyTest {
         assertTrue(policy.isActionable(state, now, 3, 60));
     }
 
+    @Test
+    void explainsLegacyPreparationWithoutPromisingAResend() {
+        var state = state("state_transaction_outcome_uncertain", 1, now);
+        state.setLastErrorMessage("Транзакция обработки откатилась. Причина: legacy_operation_unverified");
+        assertTrue(policy.isLegacyPreparationFailure(state));
+        assertFalse(policy.requiresDeliveryReceipt(state));
+    }
+
+    @Test
+    void actualUnknownDeliveryAlwaysRequiresReceiptEvenWithLegacyErrorText() {
+        var state = state("legacy_operation_unverified", 1, now);
+        state.setDeliveryStatus("UNKNOWN");
+        assertFalse(policy.isLegacyPreparationFailure(state));
+        assertTrue(policy.requiresDeliveryReceipt(state));
+    }
+
     private ScheduledClientMessageState state(String code, int failures, LocalDateTime attemptedAt) {
         return ScheduledClientMessageState.builder()
                 .id(1L)

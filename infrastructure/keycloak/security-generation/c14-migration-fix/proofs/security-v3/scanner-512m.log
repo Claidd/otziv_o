@@ -1,0 +1,5 @@
+2026-09-08T15:35:42Z	INFO	[vuln] Vulnerability scanning is enabled
+2026-09-08T15:39:10Z	INFO	Detected OS	family="ubuntu" version="22.04"
+2026-09-08T15:39:10Z	INFO	[ubuntu] Detecting vulnerabilities...	os_version="22.04" pkg_num=143
+2026-09-08T15:39:10Z	INFO	Number of language-specific files	num=1
+2026-09-08T15:39:10Z	INFO	[jar] Detecting vulnerabilities...

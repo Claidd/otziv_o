@@ -1,5 +1,9 @@
 
 target/
+build-support/target/
+build-support/*/target/
+build-support/**/dependency-reduced-pom.xml
+build-support/**/__pycache__/
 .idea/
 .env
 .env.*

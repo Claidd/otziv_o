@@ -6,7 +6,6 @@ const QRCode = require("qrcode");
 const qrcodeTerminal = require("qrcode-terminal");
 const { Client, LocalAuth } = require("whatsapp-web.js");
 const {
-  DeliveredMessageCache,
   FileDeliveryIdempotencyStore,
   ParticipantPhoneResolver,
   RecentOutboundRegistry,
@@ -23,12 +22,21 @@ const {
 const { selectGroupsCache } = require("./groups-cache");
 const {
   boundedBodyBytes,
-  createConcurrencyMiddleware,
   createInternalAuthMiddleware,
 } = require("./internal-auth");
+const { TaskLimiter } = require("./task-limiter");
+const { ClientLifecycle } = require("./client-lifecycle");
+const { RemoteSessionFence } = require("./remote-session-fence");
+const { OperationLedger, OperationLedgerError } = require("./operation-ledger");
+const { createOutboundHandler } = require("./outbound-routes");
+const { createOperationReconciliationHandler } = require("./operation-reconciliation");
+const { serializedId, installMessageIdentityCompatibility } = require("./message-identity");
+const { installPuppeteerCompatibility } = require("./puppeteer-compatibility");
 const { chromiumLaunchArgs } = require("./chromium-launch");
 const { fetchRecentMessagesFromRawChat } = require("./raw-chat-reconciliation");
 const { createLastSeenLookup } = require("./last-seen");
+const { DurableInboundInbox } = require("./inbound-inbox");
+const { recoverHistory } = require("./inbound-history");
 const {
   installRemoteBrowserLifecycle,
   configuredRemoteBrowserUrl,
@@ -79,10 +87,7 @@ const WHATSAPP_PUPPETEER_TIMEOUT_MS = parsePositiveInt(process.env.WHATSAPP_PUPP
 const WHATSAPP_READY_AFTER_AUTH_TIMEOUT_MS = parsePositiveInt(process.env.WHATSAPP_READY_AFTER_AUTH_TIMEOUT_MS, 300000);
 const WHATSAPP_STARTUP_READY_TIMEOUT_MS = parsePositiveInt(process.env.WHATSAPP_STARTUP_READY_TIMEOUT_MS, 600000);
 const WHATSAPP_READY_WATCHDOG_INTERVAL_MS = parsePositiveInt(process.env.WHATSAPP_READY_WATCHDOG_INTERVAL_MS, 15000);
-const WHATSAPP_WEBHOOK_ATTEMPTS = parsePositiveInt(process.env.WHATSAPP_WEBHOOK_ATTEMPTS, 3);
 const WHATSAPP_WEBHOOK_TIMEOUT_MS = parsePositiveInt(process.env.WHATSAPP_WEBHOOK_TIMEOUT_MS, 10000);
-const WHATSAPP_WEBHOOK_RETRY_DELAY_MS = parsePositiveInt(process.env.WHATSAPP_WEBHOOK_RETRY_DELAY_MS, 500);
-const WHATSAPP_MESSAGE_DEDUP_TTL_MS = parsePositiveInt(process.env.WHATSAPP_MESSAGE_DEDUP_TTL_MS, 86400000);
 const WHATSAPP_OUTBOUND_MARK_TTL_MS = parsePositiveInt(process.env.WHATSAPP_OUTBOUND_MARK_TTL_MS, 600000);
 const WHATSAPP_OUTBOUND_DURABLE_TTL_MS = parsePositiveInt(
   process.env.WHATSAPP_OUTBOUND_DURABLE_TTL_MS,
@@ -114,8 +119,9 @@ let lastQrAt = null;
 let lastReadyAt = null;
 let lastState = "starting";
 let lastError = null;
-let restartTimer = null;
 let readyWatchdogTimer = null;
+let inboundHistoryTimer = null;
+let inboundHistoryRunning = false;
 let groupsCache = null;
 let groupsCacheAt = null;
 let groupsRefreshPromise = null;
@@ -136,11 +142,13 @@ const WHATSAPP_LAST_SEEN_HEADER_TIMEOUT_MS = parsePositiveInt(
   20000
 );
 const WHATSAPP_LAST_SEEN_SETTLE_MS = parsePositiveInt(process.env.WHATSAPP_LAST_SEEN_SETTLE_MS, 8000);
-const deliveredMessageCache = new DeliveredMessageCache(
-  WHATSAPP_MESSAGE_DEDUP_TTL_MS,
-  () => Date.now(),
-  deliveryIdempotencyStore
+const inboundInbox = new DurableInboundInbox(
+  process.env.WHATSAPP_INBOUND_INBOX_PATH || path.join(AUTH_PATH, "inbound-inbox"),
+  { clientId: CLIENT_ID, since: process.env.WHATSAPP_INBOUND_HISTORY_SINCE || undefined,
+    maxRecords: parsePositiveInt(process.env.WHATSAPP_INBOUND_MAX_RECORDS, 100000) }
 );
+// Establish available history before draining potentially newer live/backlog events.
+inboundInbox.paused = GROUP_WEBHOOK_ENABLED || OUTREACH_WEBHOOK_ENABLED;
 const participantPhoneResolver = new ParticipantPhoneResolver({
   ttlMs: WHATSAPP_LID_PHONE_CACHE_TTL_MS,
   log,
@@ -156,6 +164,17 @@ const participantPhoneResolver = new ParticipantPhoneResolver({
   },
 });
 
+const taskLimiter = new TaskLimiter(WHATSAPP_HTTP_MAX_CONCURRENCY);
+const operationLedger = new OperationLedger(
+  process.env.WHATSAPP_OPERATION_LEDGER_PATH || path.join(AUTH_PATH, "outbound-operations"),
+  { maxRecords: process.env.WHATSAPP_OPERATION_LEDGER_MAX_RECORDS,
+    restoreId: process.env.WHATSAPP_OPERATION_LEDGER_RESTORE_ID }
+);
+const remoteSessionFence = REMOTE_BROWSER_ENABLED ? new RemoteSessionFence({
+  directory: path.join(AUTH_PATH, "remote-sessions"), clientId: CLIENT_ID,
+  profileId: BROWSER_PROFILE_ID || undefined, browserUrl: WHATSAPP_BROWSER_URL,
+}) : null;
+let shuttingDown = false;
 const app = express();
 
 function log(level, message, extra = {}) {
@@ -221,14 +240,16 @@ function handleProcessError(kind, error) {
 
 async function withTimeout(promiseFactory, timeoutMs, description) {
   let timer = null;
+  const control = taskLimiter.control();
   const timeout = new Promise((_, reject) => {
     timer = setTimeout(() => {
+      control.timeout();
       reject(new Error(`${description} timed out after ${timeoutMs}ms`));
     }, timeoutMs);
   });
 
   try {
-    return await Promise.race([Promise.resolve().then(promiseFactory), timeout]);
+    return await Promise.race([taskLimiter.track(Promise.resolve().then(promiseFactory)), timeout]);
   } finally {
     if (timer) {
       clearTimeout(timer);
@@ -374,7 +395,7 @@ function minimalStatusPayload() {
 }
 
 function requireReady(res) {
-  if (ready && client) {
+  if (ready && client && !shuttingDown && operationLedger.healthy) {
     return true;
   }
   res.status(503).json({
@@ -386,14 +407,13 @@ function requireReady(res) {
 }
 
 function asyncRoute(handler) {
-  return (req, res, next) => {
-    Promise.resolve(handler(req, res, next)).catch(next);
-  };
+  return taskLimiter.wrap(handler);
 }
 
 async function createClient() {
   if (REMOTE_BROWSER_ENABLED) {
     const browserURL = await resolveRemoteBrowserUrl(WHATSAPP_BROWSER_URL);
+    const generation = await remoteSessionFence.begin(browserURL);
     const instance = new Client({
       // Authentication lives in the persistent peoples profile. Disabling the
       // library UA override preserves the fingerprint already applied by peoples.
@@ -408,12 +428,20 @@ async function createClient() {
         protocolTimeout: WHATSAPP_PUPPETEER_TIMEOUT_MS,
       },
     });
-    return installRemoteBrowserLifecycle(instance);
+    const initialize = instance.initialize.bind(instance);
+    instance.initialize = async (...args) => {
+      await initialize(...args);
+      await remoteSessionFence.capture(instance, generation);
+    };
+    return installRemoteBrowserLifecycle(installMessageIdentityCompatibility(installPuppeteerCompatibility(instance)), {
+      beforeDestroy: current => remoteSessionFence.capture(current, generation),
+      afterDestroy: () => remoteSessionFence.complete(browserURL, generation),
+    });
   }
 
   removeStaleChromiumLocks(AUTH_PATH);
   const launchArgs = chromiumLaunchArgs(proxyServerArg());
-  return new Client({
+  return installMessageIdentityCompatibility(installPuppeteerCompatibility(new Client({
     authStrategy: new LocalAuth({
       clientId: CLIENT_ID,
       dataPath: AUTH_PATH,
@@ -431,11 +459,12 @@ async function createClient() {
       protocolTimeout: WHATSAPP_PUPPETEER_TIMEOUT_MS,
       args: launchArgs,
     },
-  });
+  })));
 }
 
-function wireClientEvents(instance) {
+function wireClientEvents(instance, current, trackEvent) {
   instance.on("qr", async (qr) => {
+    if (!current()) return;
     currentQr = qr;
     lastQrAt = new Date().toISOString();
     lastState = "qr";
@@ -443,8 +472,11 @@ function wireClientEvents(instance) {
     authenticated = false;
     authenticatedAt = null;
     try {
-      currentQrDataUrl = await QRCode.toDataURL(qr);
+      const dataUrl = await QRCode.toDataURL(qr);
+      if (!current() || currentQr !== qr) return;
+      currentQrDataUrl = dataUrl;
     } catch (error) {
+      if (!current() || currentQr !== qr) return;
       currentQrDataUrl = null;
       lastError = error.message;
       log("warn", "QR data URL generation failed", { error: error.message });
@@ -456,6 +488,7 @@ function wireClientEvents(instance) {
   });
 
   instance.on("authenticated", () => {
+    if (!current()) return;
     authenticated = true;
     authenticatedAt = new Date().toISOString();
     lastState = "authenticated";
@@ -463,6 +496,7 @@ function wireClientEvents(instance) {
   });
 
   instance.on("auth_failure", (message) => {
+    if (!current()) return;
     authenticated = false;
     ready = false;
     authenticatedAt = null;
@@ -473,6 +507,7 @@ function wireClientEvents(instance) {
   });
 
   instance.on("ready", () => {
+    if (!current()) return;
     ready = true;
     authenticated = true;
     currentQr = null;
@@ -482,14 +517,31 @@ function wireClientEvents(instance) {
     lastState = "ready";
     lastError = null;
     log("info", "WhatsApp client ready");
+    const recover = () => {
+      if (!current() || !ready || inboundHistoryRunning) return;
+      inboundHistoryRunning = true;
+      trackEvent(() => recoverHistory({ client: instance, inbox: inboundInbox, clientId: CLIENT_ID,
+        groupEnabled: GROUP_WEBHOOK_ENABLED, outreachEnabled: OUTREACH_WEBHOOK_ENABLED,
+        outboundRegistry, generatedMessageStore: deliveryIdempotencyStore,
+        participantResolver: participantPhoneResolver, log, current,
+        maxMessages: Math.min(parsePositiveInt(process.env.WHATSAPP_INBOUND_HISTORY_MAX_MESSAGES, 10000), 100000) }))
+        .catch(() => log("warn", "Inbound history discovery failed", { stage: "history_discovery" }))
+        .finally(() => { inboundHistoryRunning = false; });
+    };
+    clearInterval(inboundHistoryTimer);
+    inboundHistoryTimer = setInterval(recover, parsePositiveInt(process.env.WHATSAPP_INBOUND_HISTORY_INTERVAL_MS, 60000));
+    inboundHistoryTimer.unref();
+    recover();
   });
 
   instance.on("change_state", (state) => {
+    if (!current()) return;
     lastState = String(state || "unknown");
     log("info", "State changed", { state: lastState });
   });
 
   instance.on("disconnected", (reason) => {
+    if (!current()) return;
     ready = false;
     authenticated = false;
     authenticatedAt = null;
@@ -500,7 +552,8 @@ function wireClientEvents(instance) {
   });
 
   instance.on("message_create", (message) => {
-    handleIncomingMessage(message).catch((error) => {
+    if (!current()) return;
+    trackEvent(() => handleIncomingMessage(message)).catch((error) => {
       log("warn", "Message webhook failed", {
         stage: error.stage || "delivery",
         path: error.path,
@@ -512,30 +565,44 @@ function wireClientEvents(instance) {
   });
 }
 
-async function startClient() {
-  ready = false;
-  authenticated = false;
-  authenticatedAt = null;
-  currentQr = null;
-  currentQrDataUrl = null;
-  lastQrAt = null;
-  clientStartedAt = new Date().toISOString();
-  lastState = "starting";
-  client = await createClient();
-  wireClientEvents(client);
-  log("info", "Initializing WhatsApp client", {
-    authPath: AUTH_PATH,
-    browserProfileId: BROWSER_PROFILE_ID,
-    browserMode: REMOTE_BROWSER_ENABLED ? "peoples-profile" : "local",
-    groupWebhookEnabled: GROUP_WEBHOOK_ENABLED,
-    proxyEnabled: WHATSAPP_PROXY_ENABLED,
-    proxyConfigured: Boolean(proxyServerArg()),
-    proxyHost: WHATSAPP_PROXY_ENABLED && WHATSAPP_PROXY_HOST ? WHATSAPP_PROXY_HOST : undefined,
-    proxyPort: WHATSAPP_PROXY_ENABLED && WHATSAPP_PROXY_HOST ? WHATSAPP_PROXY_PORT : undefined,
-    proxyType: WHATSAPP_PROXY_ENABLED && WHATSAPP_PROXY_HOST ? WHATSAPP_PROXY_TYPE : undefined,
-  });
-  await client.initialize();
-}
+const clientLifecycle = new ClientLifecycle({
+  limiter: taskLimiter,
+  createClient,
+  wireClient: (instance, current, trackEvent) => {
+    client = instance;
+    wireClientEvents(instance, current, trackEvent);
+  },
+  onStarting: () => {
+    inboundInbox.paused = GROUP_WEBHOOK_ENABLED || OUTREACH_WEBHOOK_ENABLED;
+    ready = false;
+    authenticated = false;
+    authenticatedAt = null;
+    currentQr = null;
+    currentQrDataUrl = null;
+    lastQrAt = null;
+    groupsCache = null;
+    groupsCacheAt = null;
+    clientStartedAt = new Date().toISOString();
+    lastState = "starting";
+    log("info", "Initializing WhatsApp client", { browserMode: REMOTE_BROWSER_ENABLED ? "peoples-profile" : "local" });
+  },
+  onBlocked: () => {
+    ready = false;
+    authenticated = false;
+    currentQr = null;
+    currentQrDataUrl = null;
+    lastState = "draining";
+  },
+  terminate: code => {
+    if (code !== 0) { process.exit(code); return; }
+    // Lifecycle has already drained browser work. Release the writer lock only
+    // after ledger operations and reconciliation maintenance have also settled.
+    operationLedger.close().then(() => process.exit(0), () => process.exit(1));
+  },
+  drainTimeoutMs: Math.min(parsePositiveInt(process.env.WHATSAPP_DRAIN_TIMEOUT_MS, 30000), 300000),
+  cleanupTimeoutMs: 5000,
+  startupTimeoutMs: WHATSAPP_STARTUP_READY_TIMEOUT_MS,
+});
 
 function startReadyWatchdog() {
   if (readyWatchdogTimer) {
@@ -543,7 +610,7 @@ function startReadyWatchdog() {
   }
 
   readyWatchdogTimer = setInterval(() => {
-    if (ready || restartTimer) {
+    if (ready || clientLifecycle.transition || shuttingDown) {
       return;
     }
 
@@ -580,26 +647,8 @@ function startReadyWatchdog() {
 }
 
 function scheduleRestart() {
-  if (restartTimer) {
-    return;
-  }
-  restartTimer = setTimeout(async () => {
-    restartTimer = null;
-    try {
-      if (client) {
-        await client.destroy();
-      }
-    } catch (error) {
-      log("warn", "Destroy before restart failed", { error: error.message });
-    }
-    try {
-      await startClient();
-    } catch (error) {
-      lastError = error.message;
-      log("error", "Restart failed", { error: error.message });
-      scheduleRestart();
-    }
-  }, 5000);
+  // Invalidate the current session synchronously, before its next event/callback.
+  void clientLifecycle.restart();
 }
 
 const handleIncomingMessage = createMessageHandler({
@@ -607,6 +656,7 @@ const handleIncomingMessage = createMessageHandler({
   outboundRegistry,
   participantResolver: participantPhoneResolver,
   groupWebhookEnabled: GROUP_WEBHOOK_ENABLED,
+  outreachWebhookEnabled: OUTREACH_WEBHOOK_ENABLED,
   postWebhook: (webhookPath, payload) => webhookPath === "/webhook/outreach-reply"
     ? postOutreachWebhook(webhookPath, payload)
     : postBackendWebhook(webhookPath, payload),
@@ -617,14 +667,14 @@ async function postBackendWebhook(path, payload) {
   if (!GROUP_WEBHOOK_ENABLED) {
     return { disabled: true };
   }
-  return postSignedWebhook(SERVER_URL, WEBHOOK_SECRET, path, payload);
+  return inboundInbox.enqueue(path, payload);
 }
 
 async function postOutreachWebhook(path, payload) {
   if (!OUTREACH_WEBHOOK_ENABLED) {
     return { disabled: true };
   }
-  return postSignedWebhook(OUTREACH_SERVER_URL, OUTREACH_WEBHOOK_SECRET, path, payload);
+  return inboundInbox.enqueue(path, payload);
 }
 
 async function postSignedWebhook(serverUrl, webhookSecret, path, payload) {
@@ -638,60 +688,13 @@ async function postSignedWebhook(serverUrl, webhookSecret, path, payload) {
       .digest("hex")}`;
   }
 
-  return deliveredMessageCache.deliver(path, payload, async () => {
-    let lastError = null;
-    for (let attempt = 1; attempt <= WHATSAPP_WEBHOOK_ATTEMPTS; attempt += 1) {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), WHATSAPP_WEBHOOK_TIMEOUT_MS);
-      try {
-        const response = await fetch(`${serverUrl}${path}`, {
-          method: "POST",
-          headers,
-          body,
-          signal: controller.signal,
-        });
-        if (response.ok) {
-          if (attempt > 1) {
-            log("info", "Backend webhook delivered after retry", {
-              path,
-              attempt,
-              groupId: payload.groupId,
-              messageId: payload.messageId,
-            });
-          }
-          return { status: response.status, attempt };
-        }
-        const responseText = await response.text().catch(() => "");
-        const error = new Error(`Backend webhook returned ${response.status}${responseText ? `: ${responseText}` : ""}`);
-        error.status = response.status;
-        error.retryable = response.status === 408 || response.status === 429 || response.status >= 500;
-        throw error;
-      } catch (error) {
-        error.path = path;
-        error.stage = error.name === "AbortError" ? "timeout" : "post_webhook";
-        error.attempt = attempt;
-        lastError = error;
-        const retryable = error.retryable !== false && (!error.status || error.status === 408 || error.status === 429 || error.status >= 500);
-        if (!retryable || attempt >= WHATSAPP_WEBHOOK_ATTEMPTS) {
-          throw error;
-        }
-        log("warn", "Backend webhook attempt failed; retry scheduled", {
-          stage: error.stage,
-          path,
-          status: error.status,
-          attempt,
-          nextAttempt: attempt + 1,
-          groupId: payload.groupId,
-          messageId: payload.messageId,
-          error: error.message,
-        });
-        await new Promise((resolve) => setTimeout(resolve, WHATSAPP_WEBHOOK_RETRY_DELAY_MS * attempt));
-      } finally {
-        clearTimeout(timeout);
-      }
-    }
-    throw lastError || new Error(`Backend webhook ${path} failed`);
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), WHATSAPP_WEBHOOK_TIMEOUT_MS);
+  try {
+    const response = await fetch(`${serverUrl}${path}`, { method: "POST", headers, body, signal: controller.signal });
+    await response.body?.cancel();
+    return { status: response.status };
+  } finally { clearTimeout(timeout); }
 }
 
 const lookupLastSeen = createLastSeenLookup({
@@ -927,7 +930,8 @@ app.get("/health", (req, res) => {
 });
 
 app.get("/ready", (req, res) => {
-  if (!ready || !authenticated) {
+  if (!ready || !authenticated || shuttingDown || !operationLedger.admission().acceptingNew || !inboundInbox.healthy
+      || inboundInbox.records.size >= inboundInbox.maxRecords) {
     res.status(503).json(minimalStatusPayload());
     return;
   }
@@ -941,15 +945,44 @@ app.use(createInternalAuthMiddleware({
 }));
 
 app.get("/internal/ready", (req, res) => {
-  if (!ready || !authenticated) {
+  if (!ready || !authenticated || shuttingDown || !operationLedger.admission().acceptingNew || !inboundInbox.healthy
+      || inboundInbox.records.size >= inboundInbox.maxRecords) {
     res.status(503).json(minimalStatusPayload());
     return;
   }
   res.json(minimalStatusPayload());
 });
 
+app.get("/internal/task-metrics", (_req, res) => {
+  res.set("Cache-Control", "no-store");
+  if (!GATEWAY_SHARED_SECRET.trim()) return res.sendStatus(503);
+  res.json(taskLimiter.snapshot());
+});
+
+app.get("/internal/operation-metrics", (_req, res) => {
+  res.set("Cache-Control", "no-store");
+  if (!GATEWAY_SHARED_SECRET.trim()) return res.sendStatus(503);
+  res.json(operationLedger.metrics());
+});
+
 app.use(express.json({ limit: WHATSAPP_HTTP_BODY_LIMIT, strict: true }));
-app.use(createConcurrencyMiddleware(WHATSAPP_HTTP_MAX_CONCURRENCY));
+
+app.get("/internal/inbox-metrics", (_req, res) => {
+  res.set("Cache-Control", "no-store");
+  if (!GATEWAY_SHARED_SECRET.trim()) return res.sendStatus(503);
+  res.json(inboundInbox.snapshot());
+});
+
+app.get("/internal/inbox-dead-letters", (_req, res) => {
+  res.set("Cache-Control", "no-store");
+  if (!GATEWAY_SHARED_SECRET.trim()) return res.sendStatus(503);
+  res.json(inboundInbox.deadLetters());
+});
+
+app.post("/internal/inbox-dead-letters/:key/retry", (req, res) => {
+  if (!GATEWAY_SHARED_SECRET.trim()) return res.sendStatus(503);
+  res.sendStatus(inboundInbox.retry(req.params.key) ? 202 : 404);
+});
 
 app.get("/qr", asyncRoute(async (req, res) => {
   if (!currentQr) {
@@ -972,69 +1005,67 @@ app.get("/qr", asyncRoute(async (req, res) => {
   });
 }));
 
-app.post("/send", asyncRoute(async (req, res) => {
-  if (!requireReady(res)) {
-    return;
+function canStartOutbound() {
+  const allowed = ready && authenticated && client && !shuttingDown && operationLedger.admission().acceptingNew;
+  if (!allowed) taskLimiter.reject("not_ready");
+  return allowed;
+}
+
+async function observedSendMessage(destination, message) {
+  try { return await client.sendMessage(destination, message); }
+  catch (error) {
+    if (/timeout|timed out/iu.test(String(error?.message || ""))) taskLimiter.control().timeout();
+    throw error;
   }
+}
 
-  const phone = normalizePhone(req.body.phone || req.body.to || req.body.number);
-  const message = String(req.body.message || "").trim();
-  if (!phone || !message || message.length > WHATSAPP_MAX_MESSAGE_CHARS) {
-    res.status(400).json({ status: "error", code: "invalid_request" });
-    return;
-  }
+async function sendPersonalMessage(destination, message) {
+  const sent = await observedSendMessage(destination, message);
+  return serializedId(sent?.id) || null;
+}
 
-  const sent = await client.sendMessage(phone, message);
-  res.json({
-    status: "ok",
-    clientId: CLIENT_ID,
-    to: phone,
-    messageId: sent && sent.id ? sent.id._serialized : null,
-  });
-}));
-
-app.post("/send-group", asyncRoute(async (req, res) => {
-  if (!requireReady(res)) {
-    return;
-  }
-
-  const groupId = normalizeGroupId(req.body.groupId || req.body.chatId || req.body.to);
-  const message = String(req.body.message || "").trim();
-  if (!groupId || !message || message.length > WHATSAPP_MAX_MESSAGE_CHARS) {
-    res.status(400).json({ status: "error", code: "invalid_request" });
-    return;
-  }
-
-  const outboundToken = outboundRegistry.begin(groupId, message);
-  let sent;
+async function sendGroupMessage(destination, message) {
+  const outboundToken = outboundRegistry.begin(destination, message);
   try {
-    sent = await client.sendMessage(groupId, message);
-    const sentMessageId = sent && sent.id ? sent.id._serialized : null;
+    const sent = await observedSendMessage(destination, message);
+    const sentMessageId = serializedId(sent?.id) || null;
     outboundRegistry.complete(outboundToken, sentMessageId);
     if (sentMessageId) {
       try {
         await deliveryIdempotencyStore.mark(
-          generatedOutboundKey(sentMessageId),
-          Date.now() + WHATSAPP_OUTBOUND_DURABLE_TTL_MS
+          generatedOutboundKey(sentMessageId), Date.now() + WHATSAPP_OUTBOUND_DURABLE_TTL_MS
         );
-      } catch (error) {
-        log("warn", "Generated outbound identity persistence failed", {
-          messageId: sentMessageId,
-          error: errorMessage(error),
-        });
+      } catch {
+        log("warn", "Generated outbound identity persistence failed");
       }
     }
+    return sentMessageId;
   } catch (error) {
     outboundRegistry.cancel(outboundToken);
     throw error;
   }
-  res.json({
-    status: "ok",
-    clientId: CLIENT_ID,
-    groupId,
-    messageId: sent && sent.id ? sent.id._serialized : null,
-  });
+}
+
+app.post("/send", asyncRoute(createOutboundHandler({
+  ledger: operationLedger, clientId: CLIENT_ID, kind: "send",
+  normalizeDestination: normalizePhone, maximumChars: WHATSAPP_MAX_MESSAGE_CHARS,
+  canStart: canStartOutbound, send: sendPersonalMessage,
+})));
+app.post("/send-group", asyncRoute(createOutboundHandler({
+  ledger: operationLedger, clientId: CLIENT_ID, kind: "send-group",
+  normalizeDestination: normalizeGroupId, maximumChars: WHATSAPP_MAX_MESSAGE_CHARS,
+  canStart: canStartOutbound, send: sendGroupMessage,
+})));
+app.get("/operations/:operationId", asyncRoute(async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  res.json({ operationId: req.params.operationId, ...operationLedger.lookup(req.params.operationId) });
 }));
+app.post("/operations/:operationId/reconcile", asyncRoute(createOperationReconciliationHandler({
+  ledger: operationLedger, clientId: CLIENT_ID,
+  canRead: () => ready && authenticated && client && !shuttingDown,
+  getMessage: id => client.getMessageById(id),
+  onReconciled: id => deliveryIdempotencyStore.mark(generatedOutboundKey(id), Date.now() + WHATSAPP_OUTBOUND_DURABLE_TTL_MS),
+})));
 
 app.get("/groups", asyncRoute(async (req, res) => {
   if (!requireReady(res)) {
@@ -1293,6 +1324,13 @@ app.get("/lastseen/:phone", asyncRoute(async (req, res) => {
 }));
 
 app.use((error, req, res, next) => {
+  if (error instanceof OperationLedgerError) {
+    if (!res.headersSent && !res.destroyed) {
+      res.set("Cache-Control", "no-store");
+      res.status(error.statusCode).json({ status: "error", code: error.code });
+    }
+    return;
+  }
   lastError = errorMessage(error);
   log("error", "HTTP request failed", {
     path: req.path,
@@ -1325,12 +1363,16 @@ process.on("uncaughtException", (error) => {
   handleProcessError("exception", error);
 });
 
-app.listen(PORT, () => {
+const httpServer = app.listen(PORT, () => {
   log("info", "WhatsApp gateway HTTP server started", { port: PORT, serverUrl: SERVER_URL });
 });
 
 startReadyWatchdog();
-startClient().catch((error) => {
+inboundInbox.start((route, payload) => route === "/webhook/outreach-reply"
+  ? postSignedWebhook(OUTREACH_SERVER_URL, OUTREACH_WEBHOOK_SECRET, route, payload)
+  : postSignedWebhook(SERVER_URL, WEBHOOK_SECRET, route, payload),
+() => log("error", "Inbound durable storage failed", { stage: "inbound_storage" }));
+clientLifecycle.start().catch((error) => {
   lastError = error.message;
   lastState = "startup_failed";
   log("error", "Initial WhatsApp client startup failed", { error: error.message });
@@ -1338,24 +1380,15 @@ startClient().catch((error) => {
 });
 
 async function shutdown(signal) {
-  log("info", "Shutting down WhatsApp gateway", { signal });
-  if (restartTimer) {
-    clearTimeout(restartTimer);
-    restartTimer = null;
-  }
-  if (readyWatchdogTimer) {
-    clearInterval(readyWatchdogTimer);
-    readyWatchdogTimer = null;
-  }
-  try {
-    if (client) {
-      await client.destroy();
-    }
-  } catch (error) {
-    log("warn", "Client destroy during shutdown failed", { error: error.message });
-  } finally {
-    process.exit(0);
-  }
+  if (shuttingDown) return;
+  shuttingDown = true;
+  log("info", "Draining WhatsApp gateway", { signal });
+  if (readyWatchdogTimer) clearInterval(readyWatchdogTimer);
+  clearInterval(inboundHistoryTimer);
+  httpServer.close();
+  httpServer.closeIdleConnections();
+  await inboundInbox.stop();
+  await clientLifecycle.shutdown();
 }
 
 process.on("SIGTERM", () => {

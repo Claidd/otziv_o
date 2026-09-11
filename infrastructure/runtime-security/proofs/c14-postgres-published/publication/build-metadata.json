@@ -1,0 +1,269 @@
+{
+  "buildx.build.provenance": {
+    "builder": {
+      "id": ""
+    },
+    "buildType": "https://mobyproject.org/buildkit@v1",
+    "materials": [
+      {
+        "uri": "pkg:docker/docker/buildkit-syft-scanner?digest=sha256:ae4f3b554449e7e25548e7d8ccc029d17357348e30c6e3df01b92bc93654d6a9\u0026platform=linux%2Famd64",
+        "digest": {
+          "sha256": "ae4f3b554449e7e25548e7d8ccc029d17357348e30c6e3df01b92bc93654d6a9"
+        }
+      },
+      {
+        "uri": "pkg:docker/golang@1.27.1-bookworm?digest=sha256:648f440f42a0958804efb24df176f806f9d353b41f1c0627f666428e40310f6b\u0026platform=linux%2Famd64",
+        "digest": {
+          "sha256": "648f440f42a0958804efb24df176f806f9d353b41f1c0627f666428e40310f6b"
+        }
+      },
+      {
+        "uri": "pkg:docker/postgres@17.11?digest=sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675\u0026platform=linux%2Famd64",
+        "digest": {
+          "sha256": "67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675"
+        }
+      },
+      {
+        "uri": "https://codeload.github.com/tianon/gosu/tar.gz/6456aaa0f3c854d199d0f037f068eb97515b7513",
+        "digest": {
+          "sha256": "33d7537d588ea49458b9509bcf4554bdf5ceacc66da71e5caa1058ea3b689c3b"
+        }
+      },
+      {
+        "uri": "https://deb.debian.org/debian/pool/main/g/gzip/gzip_1.14.orig.tar.xz",
+        "digest": {
+          "sha256": "01a7b881bd220bfdf615f97b8718f80bdfd3f6add385b993dcf6efd14e8c0ac6"
+        }
+      },
+      {
+        "uri": "https://download.gnome.org/sources/libxml2/2.15/libxml2-2.15.4.tar.xz",
+        "digest": {
+          "sha256": "98087fd181d9070724f3fbc65c7377db03038eb92bd882374daff44940138821"
+        }
+      },
+      {
+        "uri": "https://download.gnome.org/sources/libxslt/1.1/libxslt-1.1.45.tar.xz",
+        "digest": {
+          "sha256": "9acfe68419c4d06a45c550321b3212762d92f41465062ca4ea19e632ee5d216e"
+        }
+      },
+      {
+        "uri": "https://ftp.postgresql.org/pub/source/v17.11/postgresql-17.11.tar.bz2",
+        "digest": {
+          "sha256": "dd27f2b3c59e73ed14aa3324901242bf69a032a6347805f274e6260322d42979"
+        }
+      }
+    ],
+    "invocation": {
+      "configSource": {
+        "entryPoint": "Dockerfile"
+      },
+      "parameters": {
+        "frontend": "dockerfile.v0",
+        "args": {
+          "build-arg:TARGETARCH": "amd64",
+          "label:com.otziv.publication.revision": "e3d798c423eaa7ee1afab9f77c041286e408fefa",
+          "label:com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+          "label:com.otziv.reviewed-component": "postgres"
+        },
+        "locals": [
+          {
+            "name": "context"
+          },
+          {
+            "name": "dockerfile"
+          }
+        ],
+        "root": {
+          "configSource": {
+            "path": "Dockerfile"
+          },
+          "request": {
+            "args": {
+              "build-arg:TARGETARCH": "amd64",
+              "label:com.otziv.publication.revision": "e3d798c423eaa7ee1afab9f77c041286e408fefa",
+              "label:com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+              "label:com.otziv.reviewed-component": "postgres",
+              "vcs:localdir:context": "infrastructure/runtime-security/builds/postgres-c14",
+              "vcs:localdir:dockerfile": "infrastructure/runtime-security/builds/postgres-c14",
+              "vcs:revision": "e3d798c423eaa7ee1afab9f77c041286e408fefa",
+              "vcs:source": "https://github.com/Claidd/otziv_o"
+            }
+          }
+        },
+        "compatibilityVersion": 30
+      },
+      "environment": {
+        "dockerfileVersion": "1.26.0",
+        "github_actor": "Claidd",
+        "github_actor_id": "121088694",
+        "github_event_name": "workflow_dispatch",
+        "github_event_payload": {
+          "inputs": {
+            "publish-reviewed-images": "true",
+            "reviewed-image-set": "c14-postgres"
+          },
+          "ref": "refs/heads/codex/architecture-correction-20260908",
+          "repository": {
+            "allow_forking": true,
+            "archive_url": "https://api.github.com/repos/Claidd/otziv_o/{archive_format}{/ref}",
+            "archived": false,
+            "assignees_url": "https://api.github.com/repos/Claidd/otziv_o/assignees{/user}",
+            "blobs_url": "https://api.github.com/repos/Claidd/otziv_o/git/blobs{/sha}",
+            "branches_url": "https://api.github.com/repos/Claidd/otziv_o/branches{/branch}",
+            "clone_url": "https://github.com/Claidd/otziv_o.git",
+            "collaborators_url": "https://api.github.com/repos/Claidd/otziv_o/collaborators{/collaborator}",
+            "comments_url": "https://api.github.com/repos/Claidd/otziv_o/comments{/number}",
+            "commits_url": "https://api.github.com/repos/Claidd/otziv_o/commits{/sha}",
+            "compare_url": "https://api.github.com/repos/Claidd/otziv_o/compare/{base}...{head}",
+            "contents_url": "https://api.github.com/repos/Claidd/otziv_o/contents/{+path}",
+            "contributors_url": "https://api.github.com/repos/Claidd/otziv_o/contributors",
+            "created_at": "2023-06-07T18:29:16Z",
+            "default_branch": "main",
+            "deployments_url": "https://api.github.com/repos/Claidd/otziv_o/deployments",
+            "description": null,
+            "disabled": false,
+            "downloads_url": "https://api.github.com/repos/Claidd/otziv_o/downloads",
+            "events_url": "https://api.github.com/repos/Claidd/otziv_o/events",
+            "fork": false,
+            "forks": 0,
+            "forks_count": 0,
+            "forks_url": "https://api.github.com/repos/Claidd/otziv_o/forks",
+            "full_name": "Claidd/otziv_o",
+            "git_commits_url": "https://api.github.com/repos/Claidd/otziv_o/git/commits{/sha}",
+            "git_refs_url": "https://api.github.com/repos/Claidd/otziv_o/git/refs{/sha}",
+            "git_tags_url": "https://api.github.com/repos/Claidd/otziv_o/git/tags{/sha}",
+            "git_url": "git://github.com/Claidd/otziv_o.git",
+            "has_discussions": false,
+            "has_downloads": false,
+            "has_issues": true,
+            "has_pages": false,
+            "has_projects": true,
+            "has_pull_requests": true,
+            "has_wiki": true,
+            "homepage": null,
+            "hooks_url": "https://api.github.com/repos/Claidd/otziv_o/hooks",
+            "html_url": "https://github.com/Claidd/otziv_o",
+            "id": 650754525,
+            "is_template": false,
+            "issue_comment_url": "https://api.github.com/repos/Claidd/otziv_o/issues/comments{/number}",
+            "issue_events_url": "https://api.github.com/repos/Claidd/otziv_o/issues/events{/number}",
+            "issues_url": "https://api.github.com/repos/Claidd/otziv_o/issues{/number}",
+            "keys_url": "https://api.github.com/repos/Claidd/otziv_o/keys{/key_id}",
+            "labels_url": "https://api.github.com/repos/Claidd/otziv_o/labels{/name}",
+            "language": "Java",
+            "languages_url": "https://api.github.com/repos/Claidd/otziv_o/languages",
+            "license": null,
+            "merges_url": "https://api.github.com/repos/Claidd/otziv_o/merges",
+            "milestones_url": "https://api.github.com/repos/Claidd/otziv_o/milestones{/number}",
+            "mirror_url": null,
+            "name": "otziv_o",
+            "node_id": "R_kgDOJsm53Q",
+            "notifications_url": "https://api.github.com/repos/Claidd/otziv_o/notifications{?since,all,participating}",
+            "open_issues": 2,
+            "open_issues_count": 2,
+            "owner": {
+              "avatar_url": "https://avatars.githubusercontent.com/u/121088694?v=4",
+              "events_url": "https://api.github.com/users/Claidd/events{/privacy}",
+              "followers_url": "https://api.github.com/users/Claidd/followers",
+              "following_url": "https://api.github.com/users/Claidd/following{/other_user}",
+              "gists_url": "https://api.github.com/users/Claidd/gists{/gist_id}",
+              "gravatar_id": "",
+              "html_url": "https://github.com/Claidd",
+              "id": 121088694,
+              "login": "Claidd",
+              "node_id": "U_kgDOBzeqtg",
+              "organizations_url": "https://api.github.com/users/Claidd/orgs",
+              "received_events_url": "https://api.github.com/users/Claidd/received_events",
+              "repos_url": "https://api.github.com/users/Claidd/repos",
+              "site_admin": false,
+              "starred_url": "https://api.github.com/users/Claidd/starred{/owner}{/repo}",
+              "subscriptions_url": "https://api.github.com/users/Claidd/subscriptions",
+              "type": "User",
+              "url": "https://api.github.com/users/Claidd",
+              "user_view_type": "public"
+            },
+            "private": false,
+            "pull_request_creation_policy": "all",
+            "pulls_url": "https://api.github.com/repos/Claidd/otziv_o/pulls{/number}",
+            "pushed_at": "2026-09-08T14:39:19Z",
+            "releases_url": "https://api.github.com/repos/Claidd/otziv_o/releases{/id}",
+            "size": 608228,
+            "ssh_url": "git@github.com:Claidd/otziv_o.git",
+            "stargazers_count": 0,
+            "stargazers_url": "https://api.github.com/repos/Claidd/otziv_o/stargazers",
+            "statuses_url": "https://api.github.com/repos/Claidd/otziv_o/statuses/{sha}",
+            "subscribers_url": "https://api.github.com/repos/Claidd/otziv_o/subscribers",
+            "subscription_url": "https://api.github.com/repos/Claidd/otziv_o/subscription",
+            "svn_url": "https://github.com/Claidd/otziv_o",
+            "tags_url": "https://api.github.com/repos/Claidd/otziv_o/tags",
+            "teams_url": "https://api.github.com/repos/Claidd/otziv_o/teams",
+            "topics": [],
+            "trees_url": "https://api.github.com/repos/Claidd/otziv_o/git/trees{/sha}",
+            "updated_at": "2026-09-02T16:35:27Z",
+            "url": "https://api.github.com/repos/Claidd/otziv_o",
+            "visibility": "public",
+            "watchers": 0,
+            "watchers_count": 0,
+            "web_commit_signoff_required": false
+          },
+          "sender": {
+            "avatar_url": "https://avatars.githubusercontent.com/u/121088694?v=4",
+            "events_url": "https://api.github.com/users/Claidd/events{/privacy}",
+            "followers_url": "https://api.github.com/users/Claidd/followers",
+            "following_url": "https://api.github.com/users/Claidd/following{/other_user}",
+            "gists_url": "https://api.github.com/users/Claidd/gists{/gist_id}",
+            "gravatar_id": "",
+            "html_url": "https://github.com/Claidd",
+            "id": 121088694,
+            "login": "Claidd",
+            "node_id": "U_kgDOBzeqtg",
+            "organizations_url": "https://api.github.com/users/Claidd/orgs",
+            "received_events_url": "https://api.github.com/users/Claidd/received_events",
+            "repos_url": "https://api.github.com/users/Claidd/repos",
+            "site_admin": false,
+            "starred_url": "https://api.github.com/users/Claidd/starred{/owner}{/repo}",
+            "subscriptions_url": "https://api.github.com/users/Claidd/subscriptions",
+            "type": "User",
+            "url": "https://api.github.com/users/Claidd",
+            "user_view_type": "public"
+          },
+          "workflow": ".github/workflows/quality-gates.yml"
+        },
+        "github_job": "reviewed-image-publication",
+        "github_ref": "refs/heads/codex/architecture-correction-20260908",
+        "github_ref_name": "codex/architecture-correction-20260908",
+        "github_ref_protected": "false",
+        "github_ref_type": "branch",
+        "github_repository": "Claidd/otziv_o",
+        "github_repository_id": "650754525",
+        "github_repository_owner": "Claidd",
+        "github_repository_owner_id": "121088694",
+        "github_run_attempt": "1",
+        "github_run_id": "34239698507",
+        "github_run_number": "101",
+        "github_runner_arch": "X64",
+        "github_runner_environment": "github-hosted",
+        "github_runner_image_os": "ubuntu24",
+        "github_runner_image_version": "20260831.293.1",
+        "github_runner_name": "GitHub Actions 1000002405",
+        "github_runner_os": "Linux",
+        "github_runner_tracking_id": "github_90a3cda3-7e8f-40e4-8075-818ff0790aa9",
+        "github_server_url": "https://github.com",
+        "github_triggering_actor": "Claidd",
+        "github_workflow": "Quality gates",
+        "github_workflow_ref": "Claidd/otziv_o/.github/workflows/quality-gates.yml@refs/heads/codex/architecture-correction-20260908",
+        "github_workflow_sha": "e3d798c423eaa7ee1afab9f77c041286e408fefa",
+        "platform": "linux/amd64"
+      }
+    }
+  },
+  "buildx.build.ref": "otziv-review-postgres-34239698507-1/otziv-review-postgres-34239698507-10/31ecl38up55odjw4u5jk46f3w",
+  "containerimage.descriptor": {
+    "mediaType": "application/vnd.oci.image.index.v1+json",
+    "digest": "sha256:07834abbfd80ed7183afa9096db99afc4d93b99fd51aae726e550d07ade65dbf",
+    "size": 856
+  },
+  "containerimage.digest": "sha256:07834abbfd80ed7183afa9096db99afc4d93b99fd51aae726e550d07ade65dbf",
+  "image.name": "ghcr.io/claidd/otziv-security:postgres-e3d798c423eaa7ee1afab9f77c041286e408fefa-34239698507-1"
+}

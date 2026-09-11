@@ -1,0 +1,25 @@
+[Unit]
+Description=Encrypted PostgreSQL Keycloak database backup with remote version verification
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=otziv-recovery
+Group=otziv-recovery
+EnvironmentFile=/etc/otziv-recovery/secrets.env
+ExecStart=/usr/bin/node /opt/otziv/infrastructure/recovery/cli.mjs backup /etc/otziv-recovery/config.json
+StateDirectory=otziv-recovery
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+TimeoutStartSec=7200
+
+[Install]
+WantedBy=multi-user.target

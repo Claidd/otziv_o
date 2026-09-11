@@ -1,0 +1,51 @@
+{
+  "buildx.build.provenance": {
+    "builder": {
+      "id": ""
+    },
+    "buildType": "https://mobyproject.org/buildkit@v1",
+    "materials": [
+      {
+        "uri": "pkg:docker/maven?digest=sha256:527989ca6d3279cc9494d665f617374c428eccd7248dbadf0d03bceaa70b9c5d\u0026platform=linux%2Famd64",
+        "digest": {
+          "sha256": "527989ca6d3279cc9494d665f617374c428eccd7248dbadf0d03bceaa70b9c5d"
+        }
+      }
+    ],
+    "invocation": {
+      "configSource": {
+        "entryPoint": "Dockerfile.proof-java17"
+      },
+      "parameters": {
+        "frontend": "dockerfile.v0",
+        "args": {
+          "target": "proof-output"
+        },
+        "locals": [
+          {
+            "name": "context"
+          },
+          {
+            "name": "dockerfile"
+          }
+        ],
+        "root": {
+          "configSource": {
+            "path": "Dockerfile.proof-java17"
+          },
+          "request": {
+            "args": {
+              "target": "proof-output"
+            }
+          }
+        },
+        "compatibilityVersion": 30
+      },
+      "environment": {
+        "dockerfileVersion": "1.26.0",
+        "platform": "linux/amd64"
+      }
+    }
+  },
+  "buildx.build.ref": "desktop-linux/desktop-linux/iv2xbk2gy8uj2c8225rc77af3"
+}

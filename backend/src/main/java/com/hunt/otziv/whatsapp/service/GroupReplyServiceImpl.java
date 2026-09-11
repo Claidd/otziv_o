@@ -10,7 +10,6 @@ import com.hunt.otziv.client_chat_control.service.ClientChatMessageTrackerServic
 import com.hunt.otziv.client_messages.service.PublicationProgressPreferenceService;
 import com.hunt.otziv.whatsapp.dto.WhatsAppGroupReplyDTO;
 import com.hunt.otziv.whatsapp.service.service.GroupReplyService;
-import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -42,7 +41,7 @@ public class GroupReplyServiceImpl implements GroupReplyService {
     private final CompanyService companyService;
     private final WhatsAppGroupCompanyLinker groupCompanyLinker;
     private final PublicationProgressPreferenceService publicationProgressPreferenceService;
-    private final WhatsAppService whatsAppService;
+    private final WhatsAppInboundReplyOutbox replyOutbox;
     private final ClientChatMessageTrackerService clientChatMessageTrackerService;
 
     @Override
@@ -54,6 +53,11 @@ public class GroupReplyServiceImpl implements GroupReplyService {
                     reply == null ? null : reply.getMessage());
             return;
         }
+        if(!Boolean.TRUE.equals(reply.getSystemGenerated())&&!hasText(reply.getMessageId())
+                &&publicationProgressPreferenceService.isPreferenceCommand(reply.getMessage())) {
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST,
+                    "messageId is required for a WhatsApp preference command");
+        }
         log.info("WhatsApp group reply received: groupId={}, groupNamePresent={}, from={}, messageLength={}",
                 reply.getGroupId(), hasText(reply.getGroupName()), maskPhone(reply.getFrom()), textLength(reply.getMessage()));
 
@@ -64,8 +68,8 @@ public class GroupReplyServiceImpl implements GroupReplyService {
         } else {
             log.info("Компания по GroupId {} не найдена, пробуем искать по телефону и названию", reply.getGroupId());
 
-            String telephoneNumber = reply.getFrom().replaceAll("@c\\.us$", "");
-            String rawName = reply.getGroupName();
+            String telephoneNumber = reply.getFrom() == null ? "" : reply.getFrom().replaceAll("@c\\.us$", "");
+            String rawName = reply.getGroupName() == null ? "" : reply.getGroupName();
             String title = rawName.contains(".") ? rawName.substring(0, rawName.indexOf(".")) : rawName;
             log.debug("WhatsApp group reply fallback lookup: phone={}, titlePresent={}",
                     maskPhone(telephoneNumber), hasText(title));
@@ -76,11 +80,13 @@ public class GroupReplyServiceImpl implements GroupReplyService {
                 if (linkedByGroupName > 0) {
                     log.info("GroupId {} привязан к {} компаниям по названию группы '{}'",
                             reply.getGroupId(), linkedByGroupName, reply.getGroupName());
+                    optCompany = companyService.findByGroupId(reply.getGroupId());
+                }
+                if (optCompany.isEmpty()) {
+                    log.warn("WhatsApp group reply ignored: company not found for groupId={}, phone={}, titlePresent={}, groupNamePresent={}",
+                            reply.getGroupId(), maskPhone(telephoneNumber), hasText(title), hasText(reply.getGroupName()));
                     return;
                 }
-                log.warn("WhatsApp group reply ignored: company not found for groupId={}, phone={}, titlePresent={}, groupNamePresent={}",
-                        reply.getGroupId(), maskPhone(telephoneNumber), hasText(title), hasText(reply.getGroupName()));
-                return;
             }
             log.info("WhatsApp group reply company found by fallback: companyId={}, phone={}, titlePresent={}",
                     optCompany.get().getId(), maskPhone(telephoneNumber), hasText(title));
@@ -114,26 +120,22 @@ public class GroupReplyServiceImpl implements GroupReplyService {
         if (reply == null) {
             return;
         }
-        try {
-            ClientChatSenderRole senderRoleOverride = Boolean.TRUE.equals(reply.getSystemGenerated())
-                    ? ClientChatSenderRole.BOT
-                    : reply.isFromMe() && Boolean.FALSE.equals(reply.getSystemGenerated())
-                            ? ClientChatSenderRole.STAFF
-                            : null;
-            clientChatMessageTrackerService.track(new ClientChatMessageCommand(
-                    ClientChatPlatform.WHATSAPP,
-                    reply.isFromMe() ? ClientChatDirection.OUTGOING : ClientChatDirection.INCOMING,
-                    reply.getGroupId(),
-                    reply.getGroupName(),
-                    reply.getMessageId(),
-                    reply.getFrom(),
-                    reply.getFromName(),
-                    reply.getMessage(),
-                    whatsappMessageTime(reply.getTimestamp())
-            ), senderRoleOverride);
-        } catch (Exception exception) {
-            log.warn("WhatsApp group reply tracking failed groupId={}", reply.getGroupId(), exception);
-        }
+        ClientChatSenderRole senderRoleOverride = Boolean.TRUE.equals(reply.getSystemGenerated())
+                ? ClientChatSenderRole.BOT
+                : reply.isFromMe() && Boolean.FALSE.equals(reply.getSystemGenerated())
+                        ? ClientChatSenderRole.STAFF
+                        : null;
+        clientChatMessageTrackerService.track(new ClientChatMessageCommand(
+                ClientChatPlatform.WHATSAPP,
+                reply.isFromMe() ? ClientChatDirection.OUTGOING : ClientChatDirection.INCOMING,
+                reply.getGroupId(),
+                reply.getGroupName(),
+                reply.getMessageId(),
+                reply.getFrom(),
+                reply.getFromName(),
+                reply.getMessage(),
+                whatsappMessageTime(reply.getTimestamp())
+        ), senderRoleOverride);
     }
 
     private void sendGroupPreferenceResponse(WhatsAppGroupReplyDTO reply, String message) {
@@ -141,7 +143,12 @@ public class GroupReplyServiceImpl implements GroupReplyService {
             log.warn("WhatsApp preference response skipped: clientId or groupId is empty");
             return;
         }
-        whatsAppService.sendMessageToGroup(reply.getClientId(), reply.getGroupId(), message);
+        if (!hasText(reply.getMessageId())) {
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST,
+                    "messageId is required for a WhatsApp preference command");
+        }
+        replyOutbox.enqueue(WhatsAppOperationKey.of("group-preference-response-v1", reply.getClientId(), reply.getGroupId(), reply.getMessageId()),
+                reply.getClientId(), reply.getGroupId(), message);
     }
 
     private static int textLength(String value) {

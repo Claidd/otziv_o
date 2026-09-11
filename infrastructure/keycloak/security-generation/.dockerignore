@@ -1,0 +1,12 @@
+*
+!pom.xml
+!src/
+!src/**
+!build-patches/
+build-patches/*
+!build-patches/QuarkusDescriptorOrderingPatch.java
+!build-patches/DescriptorOrderingProof.java
+!build-patches/cli/
+!build-patches/cli/keycloak-admin-cli.pom.xml
+!build-patches/cli/cli-dependencies.sha256
+!build-patches/cli/CliJacksonProof.java

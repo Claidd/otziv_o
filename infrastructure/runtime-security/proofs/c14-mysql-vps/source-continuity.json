@@ -1,0 +1,19 @@
+{
+  "schema": "otziv-mysql-vps-source-continuity-v1",
+  "result": "PASS",
+  "sourceCaptureSha256": "94eb0f3e2422e87ad87c0e20479275984ae8de9cbe6b65c548489520b463377f",
+  "sourceWrites": false,
+  "businessDataUnchangedClaimed": false,
+  "checkedAt": "2026-09-08T14:38:50.158694+00:00",
+  "checks": {
+    "databaseContainerUnchanged": true,
+    "applicationContainerUnchanged": true,
+    "databaseImageUnchanged": true,
+    "applicationImageUnchanged": true,
+    "volumeUnchanged": true,
+    "semanticConfigurationUnchanged": true,
+    "flywayHistoryUnchanged": true
+  },
+  "databaseVersion": "9.0.0",
+  "sourceSchemaVersion": "1.10.287"
+}

@@ -12,6 +12,7 @@ import com.hunt.otziv.p_products.service.BotAssignmentService;
 import com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
+import com.hunt.otziv.worker_activity.account_action.WorkerAccountActionCooldownService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -55,13 +56,24 @@ public class ReviewBotChangeService {
     private final BusinessAuditService businessAuditService;
     private final ReviewBotAssignmentExclusionService assignmentExclusionService;
     private final WorkerAssignmentMutationGuardService assignmentMutationGuardService;
+    private final WorkerAccountActionCooldownService accountActionCooldownService;
 
     @Transactional(noRollbackFor = ResponseStatusException.class)
     public void changeBot(Long reviewId) {
+        changeBot(reviewId, true);
+    }
+
+    /** Automatic reassignment during an ordinary review edit is not a manual account button. */
+    @Transactional(noRollbackFor = ResponseStatusException.class)
+    public void changeBotAfterReviewEdit(Long reviewId) {
+        changeBot(reviewId, false);
+    }
+
+    private void changeBot(Long reviewId, boolean manualAccountAction) {
         assignmentMutationGuardService.assertReview(reviewId);
         try {
             log.info("1. Начинаем замену бота для отзыва ID {}", reviewId);
-            Review review = getReviewToChangeBot(reviewId);
+            Review review = getReviewToChangeBot(reviewId, manualAccountAction);
 
             if (review.getBot() == null) {
                 log.warn("2. Для отзыва ID {} не удалось установить бота (список доступных пуст)", reviewId);
@@ -96,6 +108,7 @@ public class ReviewBotChangeService {
             Long currentBotId = currentBot != null ? currentBot.getId() : null;
 
             assertRequestedBotIsCurrent(botId, currentBotId);
+            accountActionCooldownService.admitCurrentAction();
 
             if ((botId == null || botId == 0L) && currentBotId != null && currentBotId > 0) {
                 botId = currentBotId;
@@ -154,6 +167,8 @@ public class ReviewBotChangeService {
         if (cityId == null) {
             throw new RuntimeException("Город филиала не найден");
         }
+
+        accountActionCooldownService.admitCurrentAction();
 
         Set<Long> excludedBotIds = getUsedBotIdsInCompany(filial, review.getId());
         excludedBotIds.addAll(getReservedBotIdsByUnpublishedReviews(review.getId()));
@@ -262,9 +277,12 @@ public class ReviewBotChangeService {
         return Collections.emptyList();
     }
 
-    private Review getReviewToChangeBot(Long reviewId) {
+    private Review getReviewToChangeBot(Long reviewId, boolean manualAccountAction) {
         Review review = findReviewForBotChange(reviewId)
                 .orElseThrow(() -> new RuntimeException("Отзыв не найден"));
+        if (manualAccountAction) {
+            accountActionCooldownService.admitCurrentAction();
+        }
         boolean wasVigul = review.isVigul();
         Bot oldBot = review.getBot();
         assignmentExclusionService.rejectCurrentBot(review, "CHANGE");

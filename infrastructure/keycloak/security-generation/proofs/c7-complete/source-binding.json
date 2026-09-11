@@ -1,0 +1,135 @@
+{
+  "schema": "otziv-final-issuer-consumed-source-binding-v1",
+  "imageIndexDigest": "sha256:d773e1d0de1ef972ba01443a8217d23d6060d2b20d474b3ff84ae2dc840baa54",
+  "consumedInputsMatchAssembledPublicationBytes": true,
+  "files": [
+    {
+      "path": "infrastructure/keycloak/security-generation/Dockerfile",
+      "sha256": "382cd652923e2abcec902d87bdfb4d1589a264213e8897d4f415d85e70928a63",
+      "bytes": 9130
+    },
+    {
+      "path": "infrastructure/keycloak/security-generation/.dockerignore",
+      "sha256": "3ab94c082ac279fc89f262b7267c740c6cd08591538f7a9148e666ac68582203",
+      "bytes": 301
+    },
+    {
+      "path": "infrastructure/keycloak/security-generation/pom.xml",
+      "sha256": "cca9f8a9060423e5c9c5c3bf061e7a4528e3cba0c41560e74b35e322baa0c28a",
+      "bytes": 11167
+    },
+    {
+      "path": "infrastructure/keycloak/security-generation/build-patches/QuarkusDescriptorOrderingPatch.java",
+      "sha256": "e7e50e598933bbddf0eaa6ca192ead57a086a2042b3eb362347b74a592582331",
+      "bytes": 9800
+    },
+    {
+      "path": "infrastructure/keycloak/security-generation/build-patches/DescriptorOrderingProof.java",
+      "sha256": "3b264342c60a8771a199e3cd4173feb2df34e8db793e79a22bd9c9811151797b",
+      "bytes": 7309
+    },
+    {
+      "path": "infrastructure/keycloak/security-generation/build-patches/cli/keycloak-admin-cli.pom.xml",
+      "sha256": "d6d65e0394707b0282c4d9bb36eb56a09a85d1276dd9566b38e752da3a72ad44",
+      "bytes": 10422
+    },
+    {
+      "path": "infrastructure/keycloak/security-generation/build-patches/cli/cli-dependencies.sha256",
+      "sha256": "7f9b5be5fcd763fcaaaab8d9d594898560d18e5059d34e852fe6b3efccaf8fe2",
+      "bytes": 2367
+    },
+    {
+      "path": "infrastructure/keycloak/security-generation/build-patches/cli/CliJacksonProof.java",
+      "sha256": "1f7786465b6682d81c311ee4b0c3a4479e0a2531557c1d74dc9630078bd65cad",
+      "bytes": 2230
+    },
+    {
+      "path": "infrastructure/keycloak/security-generation/src/main/java/com/hunt/otziv/issuer/GenerationBrowserPassword.java",
+      "sha256": "89fc8d02939eac05f5fad0804b0ed1a1023a2fc0716184afc3e26e9c37a4a5d7",
+      "bytes": 1556
+    },
+    {
+      "path": "infrastructure/keycloak/security-generation/src/main/java/com/hunt/otziv/issuer/GenerationDirectPassword.java",
+      "sha256": "4facac1ba6f4419770eea673b009fcd6421205957857dcf15c24bcf604b29d15",
+      "bytes": 1044
+    },
+    {
+      "path": "infrastructure/keycloak/security-generation/src/main/java/com/hunt/otziv/issuer/GenerationEntities.java",
+      "sha256": "897174f01580165c77322ffce2c0af4ea6665f3e190d289fbf3452e08336d77f",
+      "bytes": 1080
+    },
+    {
+      "path": "infrastructure/keycloak/security-generation/src/main/java/com/hunt/otziv/issuer/GenerationEvents.java",
+      "sha256": "0ec1b7caaf59969b73c060b5bb6e4902be4d8d82d35330f32a66d170afab5f79",
+      "bytes": 3668
+    },
+    {
+      "path": "infrastructure/keycloak/security-generation/src/main/java/com/hunt/otziv/issuer/GenerationResource.java",
+      "sha256": "e9137997f732346df1ba375474fc95530416be0a0d7fb4156fffc119a56a1296",
+      "bytes": 2753
+    },
+    {
+      "path": "infrastructure/keycloak/security-generation/src/main/java/com/hunt/otziv/issuer/GenerationStore.java",
+      "sha256": "107147f737ef0db0e55b0def89acbd85272462ca3f1d7deacdaf806627a52994",
+      "bytes": 3846
+    },
+    {
+      "path": "infrastructure/keycloak/security-generation/src/main/java/com/hunt/otziv/issuer/SecurityGenerationEntity.java",
+      "sha256": "2ddf2869651e6e506d7fd996aeedf983f008237d90b27c151a1735bce56cfc80",
+      "bytes": 701
+    },
+    {
+      "path": "infrastructure/keycloak/security-generation/src/main/resources/META-INF/beans.xml",
+      "sha256": "73317ff4c7855c521fa8e77b5e413e49d6c6518386b0730bd1834d25134618a6",
+      "bytes": 140
+    },
+    {
+      "path": "infrastructure/keycloak/security-generation/src/main/resources/META-INF/otziv-security-generation.xml",
+      "sha256": "9b3992c1934bf5098f6247b21e564cea4d9380f554ef5c08c4781293ba29612c",
+      "bytes": 1031
+    },
+    {
+      "path": "infrastructure/keycloak/security-generation/src/main/resources/META-INF/services/org.keycloak.authentication.AuthenticatorFactory",
+      "sha256": "93133e228aa207cd926f0affd5926dfecec48aa5599c0591ab8227496e3a9dd1",
+      "bytes": 97
+    },
+    {
+      "path": "infrastructure/keycloak/security-generation/src/main/resources/META-INF/services/org.keycloak.connections.jpa.entityprovider.JpaEntityProviderFactory",
+      "sha256": "fb14b336ae457cf7d4ee7d7dbabd91057855e7be19a6379461c32696a58e3652",
+      "bytes": 42
+    },
+    {
+      "path": "infrastructure/keycloak/security-generation/src/main/resources/META-INF/services/org.keycloak.events.EventListenerProviderFactory",
+      "sha256": "f45372fc022fef1bbf8c3b19343a76add05a52f039a3dfa354f34d3cb271f77f",
+      "bytes": 40
+    },
+    {
+      "path": "infrastructure/keycloak/security-generation/src/main/resources/META-INF/services/org.keycloak.services.resource.RealmResourceProviderFactory",
+      "sha256": "e932c13a17986cf985dced2727c32fa722d136119f88c6973b26ad88cb41c39f",
+      "bytes": 42
+    },
+    {
+      "path": "infrastructure/keycloak/security-generation/src/test/java/com/hunt/otziv/issuer/GenerationEventsTest.java",
+      "sha256": "df4a5388a34b7879266d328bd02a3ce977c65a883d6b56fca25f04281de52cf0",
+      "bytes": 2671
+    },
+    {
+      "path": "infrastructure/keycloak/security-generation/src/test/java/com/hunt/otziv/issuer/ProviderDependencySecurityTest.java",
+      "sha256": "b758d86e8934d53f732b4ad04e33f3b89d7f1705288b3ef8c50f01306cc9ab36",
+      "bytes": 5648
+    }
+  ],
+  "localFullContextFiles": 31,
+  "localFullContextManifestSha256": "609829cec4b928f939afda4d9048a1485afab8d8133eebf25e4c6d4cb7172600",
+  "publicationContextDifference": {
+    "path": "infrastructure/keycloak/security-generation/build-patches/cli/README.md",
+    "sha256": "4ac192e5785db8b0896d513aa53b8e53bb18a30b875bcaa6fd739775b8fa0459",
+    "includedInBuildKitContext": true,
+    "consumedByDockerfileCopyOrAdd": false,
+    "qualification": "The assembled publication adds this documentation file. The complete context is not byte-identical to the 31-file local proof context; all 23 consumed/control inputs are byte-identical."
+  },
+  "providerJarSha256": "30c3ab782f32654d75ee635289d630836e5d6175aba0cdc1b74ee7185bd70cbe",
+  "embeddedProviderPomSha256": "cca9f8a9060423e5c9c5c3bf061e7a4528e3cba0c41560e74b35e322baa0c28a",
+  "cliJarSha256": "ee991a6b52d8ba10cd4548410d74f950c40db06dcbfc945f4ae7e327a9cb873d",
+  "generatedArchiveQualification": "The CLI was intentionally rebuilt. Provider and transformed archives changed ZIP metadata only; all payload entries are byte-identical. Quarkus generated-bytecode was re-augmented from frozen inputs and has changed generated class bytes and timestamps; no byte or semantic identity assertion is made for that generated archive. Actual startup/protocol/recovery tests verify the new augmentation."
+}

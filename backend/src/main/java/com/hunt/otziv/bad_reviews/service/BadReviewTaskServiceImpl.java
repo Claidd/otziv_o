@@ -1,5 +1,7 @@
 package com.hunt.otziv.bad_reviews.service;
 
+import com.hunt.otziv.worker_activity.account_action.WorkerAccountActionCooldownService;
+
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.b_bots.service.BotService;
 import com.hunt.otziv.bad_reviews.dto.BadReviewTaskSummary;
@@ -60,6 +62,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.security.core.Authentication;
+import com.hunt.otziv.p_products.worker_access.service.WorkerTaskSchedulePermission;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -96,6 +100,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
     private final ReviewBotAssignmentGuardService assignmentGuardService;
     private final ReviewAccountWalkScheduleService accountWalkScheduleService;
     private final WorkerAssignmentMutationGuardService assignmentMutationGuardService;
+    private final WorkerAccountActionCooldownService accountActionCooldownService;
     private final OrderRepository orderRepository;
     private final ContractorCompletionRewardService contractorCompletionRewardService;
     private final ContractorPaymentBusinessClock contractorPaymentBusinessClock;
@@ -198,26 +203,38 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
     @Override
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public BadReviewTask completeTask(Long taskId) {
-        if (taskStatus(taskId) != BadReviewTaskStatus.NEW) {
-            return transactionRunner.required(() -> requireTask(taskId));
+        return completeTaskWithActor(taskId, null);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public BadReviewTask completeTask(Long taskId, Authentication authentication) {
+        java.util.Objects.requireNonNull(authentication, "authentication");
+        return completeTaskWithActor(taskId, authentication);
+    }
+
+    private BadReviewTask completeTaskWithActor(Long taskId, Authentication authentication) {
+        if (taskStatus(taskId, authentication) != BadReviewTaskStatus.NEW) {
+            return transactionRunner.required(() -> requireTask(taskId, authentication));
         }
 
         // Provider observation opens its own transaction. It must happen before
         // the task transaction acquires the canonical Order lock; otherwise the
         // observation waits on the lock held by this same request until MySQL's
         // lock timeout expires.
-        Long orderId = observeTaskPayableChange(taskId);
-        return transactionRunner.required(() -> completeTaskLocked(taskId, orderId));
+        Long orderId = observeTaskPayableChange(taskId, authentication);
+        return transactionRunner.required(() -> completeTaskLocked(taskId, orderId, authentication));
     }
 
-    private BadReviewTask completeTaskLocked(Long taskId, Long expectedOrderId) {
+    private BadReviewTask completeTaskLocked(Long taskId, Long expectedOrderId, Authentication authentication) {
         PreparedTaskPayableChange preparedChange = prepareTaskPayableChangeLocked(
                 taskId,
                 expectedOrderId,
-                "Выполненная дополнительная задача изменила сумму счета"
+                "Выполненная дополнительная задача изменила сумму счета",
+                authentication
         );
         Long orderId = preparedChange.orderId();
-        BadReviewTask task = requireTask(taskId);
+        BadReviewTask task = requireTask(taskId, authentication);
         if (task.getStatus() != BadReviewTaskStatus.NEW) {
             return task;
         }
@@ -477,7 +494,21 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
     @Override
     @Transactional
     public BadReviewTask updateTask(Long taskId, String taskText, LocalDate scheduledDate) {
-        BadReviewTask task = requireTask(taskId);
+        return updateTaskWithActor(taskId, taskText, scheduledDate, null);
+    }
+
+    @Override
+    @Transactional
+    public BadReviewTask updateTask(Long taskId, String taskText, LocalDate scheduledDate, Authentication authentication) {
+        java.util.Objects.requireNonNull(authentication, "authentication");
+        return updateTaskWithActor(taskId, taskText, scheduledDate, authentication);
+    }
+
+    private BadReviewTask updateTaskWithActor(Long taskId, String taskText, LocalDate scheduledDate, Authentication authentication) {
+        BadReviewTask task = requireTask(taskId, authentication);
+        if (authentication != null && !WorkerTaskSchedulePermission.allows(scheduledDate, task.getScheduledDate(), authentication)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, WorkerTaskSchedulePermission.DENIED_MESSAGE);
+        }
         if (task.getStatus() != BadReviewTaskStatus.NEW) {
             throw new IllegalStateException("Плохую задачу можно менять только пока она активна");
         }
@@ -496,7 +527,18 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
     @Override
     @Transactional
     public BadReviewTask reassignTask(Long taskId, Worker worker) {
-        BadReviewTask task = requireTask(taskId);
+        return reassignTaskWithActor(taskId, worker, null);
+    }
+
+    @Override
+    @Transactional
+    public BadReviewTask reassignTask(Long taskId, Worker worker, Authentication authentication) {
+        java.util.Objects.requireNonNull(authentication, "authentication");
+        return reassignTaskWithActor(taskId, worker, authentication);
+    }
+
+    private BadReviewTask reassignTaskWithActor(Long taskId, Worker worker, Authentication authentication) {
+        BadReviewTask task = requireTask(taskId, authentication);
         if (task.getStatus() != BadReviewTaskStatus.NEW) {
             throw new IllegalStateException("Специалиста можно менять только у активной плохой задачи");
         }
@@ -620,7 +662,11 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
     }
 
     private Long observeTaskPayableChange(Long taskId) {
-        validateTaskIdAndAccess(taskId);
+        return observeTaskPayableChange(taskId, null);
+    }
+
+    private Long observeTaskPayableChange(Long taskId, Authentication authentication) {
+        validateTaskIdAndAccess(taskId, authentication);
         Long orderId = badReviewTaskRepository.findOrderIdById(taskId)
                 .orElseThrow(() -> new EntityNotFoundException("Заказ дополнительной задачи не найден"));
 
@@ -631,12 +677,16 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
         return orderId;
     }
 
-    private PreparedTaskPayableChange prepareTaskPayableChangeLocked(
-            Long taskId,
+    private PreparedTaskPayableChange prepareTaskPayableChangeLocked(Long taskId,
             Long expectedOrderId,
-            String reason
-    ) {
-        validateTaskIdAndAccess(taskId);
+            String reason) {
+        return prepareTaskPayableChangeLocked(taskId, expectedOrderId, reason, null);
+    }
+
+    private PreparedTaskPayableChange prepareTaskPayableChangeLocked(Long taskId,
+            Long expectedOrderId,
+            String reason, Authentication authentication) {
+        validateTaskIdAndAccess(taskId, authentication);
         Long orderId = badReviewTaskRepository.findOrderIdById(taskId)
                 .orElseThrow(() -> new EntityNotFoundException("Заказ дополнительной задачи не найден"));
         if (!Objects.equals(orderId, expectedOrderId)) {
@@ -691,16 +741,25 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
     }
 
     private BadReviewTaskStatus taskStatus(Long taskId) {
-        validateTaskIdAndAccess(taskId);
+        return taskStatus(taskId, null);
+    }
+
+    private BadReviewTaskStatus taskStatus(Long taskId, Authentication authentication) {
+        validateTaskIdAndAccess(taskId, authentication);
         return badReviewTaskRepository.findStatusById(taskId)
                 .orElseThrow(() -> new EntityNotFoundException("Плохая задача не найдена: " + taskId));
     }
 
     private void validateTaskIdAndAccess(Long taskId) {
+        validateTaskIdAndAccess(taskId, null);
+    }
+
+    private void validateTaskIdAndAccess(Long taskId, Authentication authentication) {
         if (taskId == null || taskId <= 0) {
             throw new EntityNotFoundException("Плохая задача не найдена");
         }
-        assignmentMutationGuardService.assertBadTask(taskId);
+        if (authentication == null) assignmentMutationGuardService.assertBadTask(taskId);
+        else assignmentMutationGuardService.assertBadTask(taskId, authentication);
     }
 
     @Override
@@ -733,7 +792,24 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
     @Override
     @Transactional
     public BadReviewTask changeTaskBot(Long taskId) {
-        BadReviewTask task = requireTask(taskId);
+        return changeTaskBotWithActor(taskId, null);
+    }
+
+    @Override
+    @Transactional
+    public BadReviewTask changeTaskBot(Long taskId, Authentication authentication) {
+        java.util.Objects.requireNonNull(authentication, "authentication");
+        return changeTaskBotWithActor(taskId, authentication);
+    }
+
+    private BadReviewTask changeTaskBotWithActor(Long taskId, Authentication authentication) {
+        BadReviewTask task = requireTask(taskId, authentication);
+        if (authentication == null) accountActionCooldownService.admitCurrentAction();
+        else accountActionCooldownService.admitAction(authentication);
+        return changeTaskBot(task);
+    }
+
+    private BadReviewTask changeTaskBot(BadReviewTask task) {
         Bot oldBot = task.getBot();
         BotSelection nextSelection = pickReplacementBot(task);
         Bot nextBot = nextSelection != null ? nextSelection.bot() : null;
@@ -757,9 +833,22 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
     @Override
     @Transactional
     public BadReviewTask deactivateAndChangeTaskBot(Long taskId, Long botId) {
-        BadReviewTask task = requireTask(taskId);
+        return deactivateAndChangeTaskBotWithActor(taskId, botId, null);
+    }
+
+    @Override
+    @Transactional
+    public BadReviewTask deactivateAndChangeTaskBot(Long taskId, Long botId, Authentication authentication) {
+        java.util.Objects.requireNonNull(authentication, "authentication");
+        return deactivateAndChangeTaskBotWithActor(taskId, botId, authentication);
+    }
+
+    private BadReviewTask deactivateAndChangeTaskBotWithActor(Long taskId, Long botId, Authentication authentication) {
+        BadReviewTask task = requireTask(taskId, authentication);
         Long attachedBotId = task.getBot() != null ? task.getBot().getId() : null;
         assertRequestedBotIsCurrent(botId, attachedBotId);
+        if (authentication == null) accountActionCooldownService.admitCurrentAction();
+        else accountActionCooldownService.admitAction(authentication);
         Long currentBotId = botId != null && botId > 0 ? botId : attachedBotId;
 
         if (currentBotId != null && currentBotId > 0) {
@@ -772,7 +861,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
             }
         }
 
-        return changeTaskBot(taskId);
+        return changeTaskBot(task);
     }
 
     private void assertRequestedBotIsCurrent(Long requestedBotId, Long currentBotId) {
@@ -1012,10 +1101,15 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
     }
 
     private BadReviewTask requireTask(Long taskId) {
+        return requireTask(taskId, null);
+    }
+
+    private BadReviewTask requireTask(Long taskId, Authentication authentication) {
         if (taskId == null || taskId <= 0) {
             throw new EntityNotFoundException("Плохая задача не найдена");
         }
-        assignmentMutationGuardService.assertBadTask(taskId);
+        if (authentication == null) assignmentMutationGuardService.assertBadTask(taskId);
+        else assignmentMutationGuardService.assertBadTask(taskId, authentication);
         return badReviewTaskRepository.findByIdForMutation(taskId)
                 .or(() -> badReviewTaskRepository.findById(taskId))
                 .orElseThrow(() -> new EntityNotFoundException("Плохая задача не найдена: " + taskId));

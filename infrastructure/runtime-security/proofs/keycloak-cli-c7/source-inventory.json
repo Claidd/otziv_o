@@ -1,0 +1,583 @@
+{
+  "sourceRepository": "https://github.com/keycloak/keycloak",
+  "tag": "26.7.3",
+  "commit": "6d238b6558037085cc25c915893c3d301a80243e",
+  "files": [
+    {
+      "path": "integration/client-cli/admin-cli/pom.xml",
+      "sha256": "f3311cc54bf919de3c4cb31b3b5af1395bb019fa4f23e4f367c34a0fb697f46a",
+      "bytes": 9940
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/bin/kcadm.bat",
+      "sha256": "05b3ad24a38f6d2ebc3a9ff8ff6740fd92c5fde9bf87ae599dede9a6c3ad65a1",
+      "bytes": 844
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/bin/kcadm.sh",
+      "sha256": "df72fa5f2a48fbba9f10dfd45cd558816ad48acaaf1cddb356b9f7f676ca6e8c",
+      "bytes": 3191
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/bin/kcreg.bat",
+      "sha256": "f54fe875f6da85ab83c1e4445eb8b410202300c68a46e0fa1b30f09f7076e816",
+      "bytes": 851
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/bin/kcreg.sh",
+      "sha256": "b37f439bade409b48dea543ca13f451a8e16b3cb401c13965e6252863650ec41",
+      "bytes": 875
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/admin/cli/CmdStdinContext.java",
+      "sha256": "8fa3cdb465301855fc18aa2038809f67f14306a058f63f333ffc7f652897b01d",
+      "bytes": 3848
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/admin/cli/KcAdmMain.java",
+      "sha256": "37e7cf8e80c7b64ed31ad8b21d83b86de1e403a83f5e13209298fd68d09c9f61",
+      "bytes": 4532
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/admin/cli/ReflectionUtil.java",
+      "sha256": "90c60f66e429c5073eab6aba905382c2fe03e8ab862f63c7f6b93aae72ba65bb",
+      "bytes": 7585
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/admin/cli/commands/AbstractAuthOptionsCmd.java",
+      "sha256": "30f227d1ab26c647056e27fc2428f4b77b7f96fa55f9331a88c82b4e84f9cb3e",
+      "bytes": 1092
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/admin/cli/commands/AbstractRequestCmd.java",
+      "sha256": "eb5a5bf6c51221594c5f67f868367a29ecfc60c611a3d43cbd6f9bf135d9ad53",
+      "bytes": 14774
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/admin/cli/commands/AbstractTargetAuthOptionsCmd.java",
+      "sha256": "c95c3d4c9116c1f9edce4feffa7136a1a1dcb70180212873d3728d60eb1c7a75",
+      "bytes": 1252
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/admin/cli/commands/AddRolesCmd.java",
+      "sha256": "2ed4fce87f3611fae18ced3f07e42d15c6493d5c1721dec9b8bdb1768b8c0ec6",
+      "bytes": 15112
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/admin/cli/commands/ConfigCmd.java",
+      "sha256": "e960903fb6fe0efecdca8b3995e5900582bfe1b04d7b50e08ed16df18071817a",
+      "bytes": 2533
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/admin/cli/commands/ConfigCredentialsCmd.java",
+      "sha256": "f421732c8a3b83bc9d8d1cef07b4334ec90ba239dca7703567f9141c50528e74",
+      "bytes": 2600
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/admin/cli/commands/ConfigTruststoreCmd.java",
+      "sha256": "925b4c9ff6041d351d6cef6d1bec222c876bad7cbff4b0e5201a84b16ff9bf59",
+      "bytes": 1164
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/admin/cli/commands/CreateCmd.java",
+      "sha256": "fea3b0ac0f9e0174deb2c0a10df16fc2c87e12eacf1200e44aac24a49e628be6",
+      "bytes": 9044
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/admin/cli/commands/DeleteCmd.java",
+      "sha256": "928c04e71f281f96ea243588a0b9d0a128b00e105bcdb6af9ec6e7eb654b4f17",
+      "bytes": 4249
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/admin/cli/commands/GetCmd.java",
+      "sha256": "6eef12fdab1fa02af44ccecff32ae770d39dbfb4861ac32497e630c369b4a6eb",
+      "bytes": 9255
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/admin/cli/commands/GetRolesCmd.java",
+      "sha256": "7a11d859ce7102e4a1d2674ac286ed7f5902ddd1dd1dcde46b40b86c7c6e84f7",
+      "bytes": 18113
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/admin/cli/commands/GlobalOptionsCmdHelper.java",
+      "sha256": "8c24d22718cc3a5487069fcb266e9a353ac26d3327c3306a51f4d609464ac219",
+      "bytes": 2144
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/admin/cli/commands/HelpCmd.java",
+      "sha256": "084dfc8340367174e49154476060a42ba77715345c2831fa01a6830f4852a7b8",
+      "bytes": 3004
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/admin/cli/commands/KcAdmCmd.java",
+      "sha256": "c8f7a49f7facdcc0c749e8f1f80c92f5d9b34e951f0bbb11cb832ce1aad2e52d",
+      "bytes": 4151
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/admin/cli/commands/NewObjectCmd.java",
+      "sha256": "c0f0f1137f0df7318962f9a9bddb3d6659d1777c679399688cc7b148b739d880",
+      "bytes": 6472
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/admin/cli/commands/RemoveRolesCmd.java",
+      "sha256": "76ca66561c8303616783a1c00ff31c990c20b9c312a496fcfef5aea7b0aa9f85",
+      "bytes": 15359
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/admin/cli/commands/SetPasswordCmd.java",
+      "sha256": "b09dbaea8a164d5ae48c1b93422f7ec8534527bbc577db9866fb5205f29e8df0",
+      "bytes": 5255
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/admin/cli/commands/UpdateCmd.java",
+      "sha256": "e889b6409e064a439fae59248462200f43ff4caeed94741c6bf2e8dcec038d68",
+      "bytes": 8663
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/admin/cli/operations/ClientOperations.java",
+      "sha256": "2318eef60cbdffed6e38bd56fbf1a64438822212d2450ecc19a2550f3687353d",
+      "bytes": 1058
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/admin/cli/operations/GroupOperations.java",
+      "sha256": "92c28dd0586a99f720fea1cb885717229c42d0a3f58662477b460c3c461efbd5",
+      "bytes": 2707
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/admin/cli/operations/LocalSearch.java",
+      "sha256": "1883311c9e443cc3ff0624ae1fd1ba7810c6e26c434612f749db88292009acda",
+      "bytes": 1754
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/admin/cli/operations/OperationUtils.java",
+      "sha256": "5e09aef6fa9e7ec79986c54f5d7ee11666643012756c7e29c65531499b120dab",
+      "bytes": 3900
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/admin/cli/operations/RoleOperations.java",
+      "sha256": "ed91750afaddc46eead998f46be34f8bd4a219a6865dee6b3f6a919b91b8ca6f",
+      "bytes": 8432
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/admin/cli/operations/UserOperations.java",
+      "sha256": "a616b072643746f65b96ae744988dc254a37107bb6b4852fd788396a0ccf15f0",
+      "bytes": 4107
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/admin/cli/v2/CliJsonOutputHighlighter.java",
+      "sha256": "46548e343b0b1ce576b0d499b569fd80241bac8ed76bf147dd492dce339d0e3b",
+      "bytes": 6895
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/admin/cli/v2/KcAdmV2Cmd.java",
+      "sha256": "c5db7ab4fc47281d4b4dc501c2cf877c7b1c51d922f5ef58f65cb2910f181bfe",
+      "bytes": 8486
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/admin/cli/v2/KcAdmV2CommandBuilder.java",
+      "sha256": "d22da4d4e316d5f59ff5da8a316bf83113bb06396f08c9656ae2c923a017b31b",
+      "bytes": 13058
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/admin/cli/v2/KcAdmV2CommandDescriptor.java",
+      "sha256": "9aeb3547d012634255fb533bd70424c34a7d9ffd8a666092f061a631c57a8d04",
+      "bytes": 7803
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/admin/cli/v2/KcAdmV2Completer.java",
+      "sha256": "2c6a203e2fa61b942e8a2e8a8dabe5651fe0bbe1abd60a8c12fda6d2d9ce2329",
+      "bytes": 2853
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/admin/cli/v2/KcAdmV2ConfigCredentialsCmd.java",
+      "sha256": "3d6caf08bee48ab0463d283cdc46a22c89a5b806c0059ee46f4b7b091e5f1500",
+      "bytes": 3551
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/admin/cli/v2/KcAdmV2ConfigEditorCmd.java",
+      "sha256": "bdbf43708d7556ae51a6d8e6b547adcf5a180243882c1927d11e830fde042f63",
+      "bytes": 1807
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/admin/cli/v2/KcAdmV2ConfigOpenApiCmd.java",
+      "sha256": "1983a88fd26b7f4d7b02548bdc7bad4b508764652f83151a8379c82080fe3d35",
+      "bytes": 4811
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/admin/cli/v2/KcAdmV2DescriptorBuilder.java",
+      "sha256": "f5dbc53825bd8cfb5c6df8bc8dfdccff522b43692c92b3dbca49713c0d87ffd5",
+      "bytes": 21222
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/admin/cli/v2/KcAdmV2DescriptorCache.java",
+      "sha256": "c874a56d014caae34738875443f298e9cdaf747197fee99ac7070177b10e6440",
+      "bytes": 4466
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/admin/cli/v2/KcAdmV2EditCmd.java",
+      "sha256": "564c39f6b21618313d6fe202e96cf82da5930f5d3c44a8bca7784c1ee913d119",
+      "bytes": 6663
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/admin/cli/v2/KcAdmV2RequestExecutor.java",
+      "sha256": "8d1cbcf3ec4a1513ed3a1e6436612f0d3d22a798846eac6c6e904cd16f736100",
+      "bytes": 18079
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/cli/common/AttributeKey.java",
+      "sha256": "cf6795c1112d2d1a74aa973634a335332ae2f9cc734a22bac380196d827beb53",
+      "bytes": 5005
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/cli/common/AttributeOperation.java",
+      "sha256": "88636498105dcde651b7de81bc090e11066ef02128e94f1e65e23325f86f69ee",
+      "bytes": 1564
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/cli/common/BaseAuthOptionsCmd.java",
+      "sha256": "b3c18f8ab5a143ad7e91d5798cc30df55a996edff91c386c558488678ed516e6",
+      "bytes": 11848
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/cli/common/BaseConfigCredentialsCmd.java",
+      "sha256": "31e7bd2474bb41d0fd254225a3989b4a0945ace4afac8ac99b48a8519ffc3ccc",
+      "bytes": 13992
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/cli/common/BaseConfigTruststoreCmd.java",
+      "sha256": "b8ceefb2daa3907b5501a45b7c97e4339e850ba11754c9d26800d8e2cca35a0c",
+      "bytes": 5429
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/cli/common/BaseGlobalOptionsCmd.java",
+      "sha256": "afc8a795e5d3828ef7f1c007ac64bc3fac3e210313441ee6544cebd377c27aa8",
+      "bytes": 2667
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/cli/common/CommandState.java",
+      "sha256": "5eba72b85971d4cad14c93852f886e95ba4dea7263008bba3c7ad82a0d3d7728",
+      "bytes": 848
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/cli/common/ExecutionExceptionHandler.java",
+      "sha256": "09f949dd04537492048be68090e95074b1259ea658122dd6ebd7d8cde5da49e7",
+      "bytes": 1192
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/cli/common/Globals.java",
+      "sha256": "45e05fbd600151d5cb86ff5c4fe3643b844d79bf16bac3b57fa221a3e4211f32",
+      "bytes": 2479
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/cli/common/ShortErrorMessageHandler.java",
+      "sha256": "4ea067e2a78843eed0205165fead7d4f03ddd5cfb29147c914b0796bcd45a1cb",
+      "bytes": 2126
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/cli/config/ConfigData.java",
+      "sha256": "39060f8f3201b30f19b23e48249184e2c6e1a20c7579d65ad549077507bd02dc",
+      "bytes": 5943
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/cli/config/ConfigHandler.java",
+      "sha256": "bcdc41e3b6a7e5f3bb43386dfd394f73662b6845d30c3d77f77bfcfe6ae2c68b",
+      "bytes": 910
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/cli/config/ConfigUpdateOperation.java",
+      "sha256": "cc2296269fc47150e4510574f6fd1f7bf7e51b339cc04619bf1069295ec94914",
+      "bytes": 871
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/cli/config/FileConfigHandler.java",
+      "sha256": "6383396d0e0ca6e393e04db1ad4752bbee269cf3b0fcbaa4073363494acd8b44",
+      "bytes": 4837
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/cli/config/InMemoryConfigHandler.java",
+      "sha256": "306e43562346623b1bae0545c5c37c83e3a955490f2df7739f4c7222396b0b96",
+      "bytes": 1168
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/cli/config/RealmConfigData.java",
+      "sha256": "895df3ecf2a1fffa4c10b3b6ada3be1fd72c0bec7d30b5c81b8e6ed46ab426cc",
+      "bytes": 6000
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/cli/util/AccessibleBufferOutputStream.java",
+      "sha256": "637affda7fffbaf81ebc6ad81c7b8d5db16a147224f69ccb3389407f7d06780a",
+      "bytes": 1988
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/cli/util/AttributeException.java",
+      "sha256": "4d9a19f2ff0af1d037e7efcf8db46651c420ec56a8b4ccc91666d7594adc9d6f",
+      "bytes": 1235
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/cli/util/AuthUtil.java",
+      "sha256": "0b21255788ccc47d13bb89f6ad35563c0226a006a8ae89ada7e1ff6d79e4c519",
+      "bytes": 10209
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/cli/util/ClassLoaderUtil.java",
+      "sha256": "b140815bc93db80f0cde73c5a6a3b090a251c829265545140f894a27231d4f63",
+      "bytes": 2446
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/cli/util/ConfigUtil.java",
+      "sha256": "e2f040d8554085ed9878c3139c40aaace0983cdccb2a71b192cf25a4b10ad1ac",
+      "bytes": 5356
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/cli/util/FilterUtil.java",
+      "sha256": "e1c73e0729d4cc6ac8bfcfe6585c01c8b70ced6df90fe73ce824a608328e4b5d",
+      "bytes": 2083
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/cli/util/Header.java",
+      "sha256": "fab2994e56bfcce73f57899fb8bf54a4253c70b04592577f53baa16a05a8b662",
+      "bytes": 1088
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/cli/util/Headers.java",
+      "sha256": "a1fa4763a147174dbe2c27924d53fc2df421178916d1da823f2b9fb77225129f",
+      "bytes": 1953
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/cli/util/HeadersBody.java",
+      "sha256": "cc66fcdc99dd578a84c79aa977702721dcc37590b9a36ff1cef16e00b254f8fa",
+      "bytes": 1903
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/cli/util/HeadersBodyStatus.java",
+      "sha256": "354921b95ed9062ee97f0423e40e853d83058d075dd5eb2ff8035fdfbfc7f6a2",
+      "bytes": 3197
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/cli/util/HttpDelete.java",
+      "sha256": "2ffb0bd8948f3128a4dd86288d06b1c7fc2392c6232e0d1f986f95be3a2a7ab2",
+      "bytes": 1271
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/cli/util/HttpResponseException.java",
+      "sha256": "6fc3d9166e27c51198450e6483530fbcf10ff70713835434f8475b8b2675749b",
+      "bytes": 1164
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/cli/util/HttpUtil.java",
+      "sha256": "ac9b034449d8dce831e4e94cc6cbba8cd908266ed52231294e5eb6cfdf4cb340",
+      "bytes": 17604
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/cli/util/IoUtil.java",
+      "sha256": "b4c93d6a915a8e711d97bdc1c7389dc9e7949e372676b0a0b71eee8ca1637c7e",
+      "bytes": 7030
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/cli/util/OsArch.java",
+      "sha256": "72d7f57208ca184dea60be3f0faf62d5a5f2f8f255c54536dd796785e0dc4f57",
+      "bytes": 1794
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/cli/util/OsUtil.java",
+      "sha256": "14bcf1dbc1f54ad1a7e9da4087cfc11f21f9ba77d73de05e44e7f4392481cc51",
+      "bytes": 2403
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/cli/util/OutputFormat.java",
+      "sha256": "b9a21cd9675beac92dbf61aa3dc7512d61f785bf906632ec141ce6dea7ff902e",
+      "bytes": 836
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/cli/util/OutputUtil.java",
+      "sha256": "5b3e314b465f04ce2b84e1dc82e4a47d6b9c9a2c8e84d025d92c17497360092c",
+      "bytes": 3928
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/cli/util/ParseUtil.java",
+      "sha256": "de8cd16289d4cbb19ae026934a941fd12ece698511be8c4cadbfe16cacd2ae01",
+      "bytes": 1245
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/cli/util/ReturnFields.java",
+      "sha256": "9efb07208bdba59e402b66ce4b55e108ed1e57150e49633e9e4b7e11ff9a442c",
+      "bytes": 9426
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/registration/cli/CmdStdinContext.java",
+      "sha256": "bf762410b79253f2a162162ce7b2497b16723ea179e3e00abf68b57793d27e83",
+      "bytes": 7588
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/registration/cli/EndpointType.java",
+      "sha256": "a16e0500ed0f9ac37aa9f16b0bd1eaa2a2a7b65ef34ac0ecad800cba86c6045a",
+      "bytes": 2626
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/registration/cli/EndpointTypeConverter.java",
+      "sha256": "f079bc7b50008e8b0ede782a487c0ae0cec0ea61560b20a96920745f85fc8919",
+      "bytes": 371
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/registration/cli/KcRegMain.java",
+      "sha256": "794d5d5675749d6e2a6a3c728cf3843d264179b713913da8a218adb228cf32ca",
+      "bytes": 1263
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/registration/cli/ReflectionUtil.java",
+      "sha256": "16a2688bfa8b4a8a54567777d88048c63406232688f224b7059341be74e193d0",
+      "bytes": 21429
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/registration/cli/commands/AbstractAuthOptionsCmd.java",
+      "sha256": "33e4d116b2c508050faabb23f77eee2fec4a4e1101e1062e6bcdc027f5e4f105",
+      "bytes": 627
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/registration/cli/commands/AttrsCmd.java",
+      "sha256": "58d175cd4e1b5e52c73d7283798df6d3575969d9cd3f3d0ccd7ed6a3b898024c",
+      "bytes": 5887
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/registration/cli/commands/ConfigCmd.java",
+      "sha256": "3a5e939001e3f961d93a7a108749cb68c2cb29faa3302a8eb79f6a319242fc1f",
+      "bytes": 2071
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/registration/cli/commands/ConfigCredentialsCmd.java",
+      "sha256": "df8907c3aa4ffeea98ec89f53e9eae48bc78e96a9491c9a17873fc68ad4126d1",
+      "bytes": 537
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/registration/cli/commands/ConfigInitialTokenCmd.java",
+      "sha256": "7910a17df5172c40a39fb0d38f31ac8dc152e59ac526b4427970c1fd5e11d0e3",
+      "bytes": 5599
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/registration/cli/commands/ConfigRegistrationTokenCmd.java",
+      "sha256": "0f60da6326ca115bc4d2d0f6b50bf947357711ca7f78b1127777ec1a1104af4f",
+      "bytes": 5203
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/registration/cli/commands/ConfigTruststoreCmd.java",
+      "sha256": "d70d9cb9393849d15644744e93e13209f83245a92e160166f7a5cce1d680d3ad",
+      "bytes": 1178
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/registration/cli/commands/CreateCmd.java",
+      "sha256": "fc592af45089cacf8f33fc53235df43891301cb55677dfb717de365c89b0b434",
+      "bytes": 12299
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/registration/cli/commands/DeleteCmd.java",
+      "sha256": "694e98c47b638f78b4c232695a5cac70113fe0f9fb663a830ba9c017666b97f6",
+      "bytes": 4376
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/registration/cli/commands/GetCmd.java",
+      "sha256": "872a06f51560acdfab2fa657ed6ac107f89c9496e9fe515ac9a40085d9e4a9ce",
+      "bytes": 7686
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/registration/cli/commands/HelpCmd.java",
+      "sha256": "468fc435e4dae4b9d3a021882ed6b4d9b8821635c7a47f4243b9e8d320b8c773",
+      "bytes": 2667
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/registration/cli/commands/KcRegCmd.java",
+      "sha256": "87a62101ebb9800d9bcf589a5d640979f8126a4c22aec46482a3ee660dfaabd1",
+      "bytes": 5278
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/registration/cli/commands/UpdateCmd.java",
+      "sha256": "4558fa8f5b352262399aba8061933b59179266d29d933a383ad9ba0f34a155cd",
+      "bytes": 18080
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/registration/cli/commands/UpdateTokenCmd.java",
+      "sha256": "3b13d1feeae373da49e6768a3c87931a65a69be89a158b4b70d851937b7a82be",
+      "bytes": 5742
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/test/java/org/keycloak/client/admin/cli/ReflectionUtilTest.java",
+      "sha256": "b6e237eb4963b253a056d95e0c34551e186f115f0c90a6c2ba677f90af82a48a",
+      "bytes": 1831
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/test/java/org/keycloak/client/admin/cli/commands/KcAdmCliTest.java",
+      "sha256": "ae3cc177149892f40ec6accb91c05eb4b7c11a01d0180c257c9a3aeb0d486a52",
+      "bytes": 820
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/test/java/org/keycloak/client/admin/cli/commands/v2/CliJsonOutputHighlighterTest.java",
+      "sha256": "94932cd74a15bb28e12e3d0edbb35f0f76d14b257dc506b921978418d8b1f367",
+      "bytes": 10225
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/test/java/org/keycloak/client/admin/cli/commands/v2/KcAdmV2CachedDescriptorHelpTest.java",
+      "sha256": "6452e1461519f0f8e51be06517d9f6e552293c1f01e4749a9b5fdf54d5e9fe37",
+      "bytes": 8857
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/test/java/org/keycloak/client/admin/cli/commands/v2/KcAdmV2CompleterTest.java",
+      "sha256": "8d8370b437d76087897c019320c926107514e97f9bc4a2ea4d72b1025fff10da",
+      "bytes": 13033
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/test/java/org/keycloak/client/admin/cli/commands/v2/KcAdmV2DescriptorBuilderTest.java",
+      "sha256": "63ecdaffc77f7c93f12f88cc4af3cebe500f03ae5eb7831582f5b6c3f1630456",
+      "bytes": 8959
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/test/java/org/keycloak/client/admin/cli/commands/v2/KcAdmV2DescriptorCacheTest.java",
+      "sha256": "35164e1dce9d2fbca817e7bdbe12844f14c07be82992918c70741674d2f07cde",
+      "bytes": 7183
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/test/java/org/keycloak/client/admin/cli/commands/v2/KcAdmV2HelpTest.java",
+      "sha256": "278d8cdde7bb616982ec4dacbf84bc3f69982964734041abb5005e4fe7bc7578",
+      "bytes": 36916
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/test/java/org/keycloak/client/cli/util/MergeAttributesTest.java",
+      "sha256": "b2c24e6c44308ad94490bbb91fc4081aec256ca1d08d734e8660c9d5c8515520",
+      "bytes": 4667
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/test/java/org/keycloak/client/cli/util/OuputUtilTest.java",
+      "sha256": "937322cf0423194bbb75f476a48109fb9dab5a0b7b65fe2c1bd1b475b8be8d28",
+      "bytes": 1567
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/test/java/org/keycloak/client/cli/util/ReturnFieldsTest.java",
+      "sha256": "c2385e0e9126e1fb4538de50ab9bb55ecd9f2d77c508c794c02dc37debd3d75b",
+      "bytes": 4397
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/test/java/org/keycloak/client/registration/cli/ReflectionUtilTest.java",
+      "sha256": "372195b845a131ebafa57ac9762395e71d8094df2eb8cdd3ae8e9bfcd5502bd4",
+      "bytes": 11904
+    },
+    {
+      "path": "integration/client-cli/admin-cli/src/test/resources/test-openapi.json",
+      "sha256": "a825eecc6aa7d4dfeaac96edda1c90e83b7d70c614858c2bcc89318a6e322d1c",
+      "bytes": 2493
+    },
+    {
+      "path": "integration/client-cli/pom.xml",
+      "sha256": "9f5c31ded5875ccc132fa2332abd81053a1574ab8aacd17e55a906c5118e66f2",
+      "bytes": 1399
+    },
+    {
+      "path": "integration/pom.xml",
+      "sha256": "53171a32592f4448bf686b43fc808f41aa69e47413e352b8ee96926a41dc1444",
+      "bytes": 1481
+    },
+    {
+      "path": "pom.xml",
+      "sha256": "580b6e662d1ba6f85ec12e1b3f451117300f02876274099892d4d4e0d0fa545c",
+      "bytes": 83840
+    }
+  ],
+  "patchedModulePomSha256": "d6d65e0394707b0282c4d9bb36eb56a09a85d1276dd9566b38e752da3a72ad44"
+}

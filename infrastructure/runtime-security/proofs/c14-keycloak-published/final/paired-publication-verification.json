@@ -1,0 +1,13 @@
+{
+  "schema": "otziv-keycloak-paired-publication-verification-v1",
+  "result": "PASS",
+  "commit": "ca1dcaa0b0f8c063f8e541c1623a3f61d68e749e",
+  "run": "34249337258",
+  "attempt": "1",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:c6ee6afd6750ae0886a608c5837085cb20417a6746ca2ed47b59b1a0fdec1973",
+  "config": "sha256:89f560e111619be776f984e2f317a775cb37ce20660271dbb25f638b454ffeab",
+  "publicationSha256": "de4f82da4252bbbb845afa6a5c6ca22403ba7ccb6736b4fe5a4e0fab2bec4912",
+  "anonymousSha256": "8137c9a085f58d57227399a294d215108c2818c7a4013ab50b7c65b6986de53d",
+  "defaultsChanged": false,
+  "activationApplied": false
+}

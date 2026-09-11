@@ -3,7 +3,7 @@ import { inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { catchError, from, switchMap, throwError } from 'rxjs';
 import { OPTIONAL_AUTH_TOKEN, SKIP_AUTH_REDIRECT_ON_401, SKIP_AUTH_TOKEN } from './auth-http-context';
-import { AuthService } from './auth.service';
+import { AuthService, AuthTemporarilyUnavailableError } from './auth.service';
 
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const auth = inject(AuthService);
@@ -11,6 +11,8 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const shouldAttachToken = req.url.startsWith('/api') && !req.context.get(SKIP_AUTH_TOKEN);
   const optionalAuth = req.context.get(OPTIONAL_AUTH_TOKEN);
   let optionalTokenAttached = false;
+  const generation = auth.captureSession();
+  let requestToken: string | null = null;
 
   if (!shouldAttachToken) {
     return next(req);
@@ -22,6 +24,8 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
 
   return from(token).pipe(
     switchMap((token) => {
+      if (!auth.isCurrentRequest(generation, token)) return throwError(() => new AuthTemporarilyUnavailableError());
+      requestToken = token;
       if (!token) {
         return next(req);
       }
@@ -41,6 +45,8 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
         // controller expose its anonymous public-link permissions.
         return next(req);
       }
+      // A delayed response must not expire a newer login or refreshed token.
+      if (!auth.isCurrentRequest(generation, requestToken)) return throwError(() => error);
       if (isManagerReportReviewRequired(error)) {
         void router?.navigate(['/'], {
           queryParams: { reportReviewRequired: '1' }
@@ -53,11 +59,12 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
             if (!refreshed) {
               return throwError(() => error);
             }
+            // Refresh for subsequent actions; do not replay a write here.
+            if (req.method !== 'GET' && req.method !== 'HEAD') return throwError(() => error);
             return from(auth.getToken()).pipe(
-              switchMap((token) => next(token
-                ? req.clone({ setHeaders: { Authorization: `Bearer ${token}` } })
-                : req
-              ))
+              switchMap((token) => token && auth.isCurrentRequest(generation, token)
+                ? next(req.clone({ setHeaders: { Authorization: `Bearer ${token}` } }))
+                : throwError(() => new AuthTemporarilyUnavailableError()))
             );
           })
         );

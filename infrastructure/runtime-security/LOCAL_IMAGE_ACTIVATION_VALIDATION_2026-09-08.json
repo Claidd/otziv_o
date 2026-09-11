@@ -1,0 +1,207 @@
+{
+  "schema": "otziv-reviewed-image-local-activation-validation-v1",
+  "recordedAt": "2026-09-08T03:39:45.752775+00:00",
+  "result": "PASS_WITH_DECLARED_SCOPE",
+  "imageSourceCommit": "2cd29a17f5ae7c8d7e00d332379c7ac887d5b52f",
+  "publicationRun": "34178760576",
+  "reviewedSource": [
+    {
+      "path": "compose.yaml",
+      "sha256": "44c6d9e225f027549f526a7b426eb426888aff62110022774a7c3d2ec09e98a4"
+    },
+    {
+      "path": "compose.prod-local.yaml",
+      "sha256": "6ac77714ec265f478443661c9da8412a6c628e0da1d90abc722c8d44d66f4f82"
+    },
+    {
+      "path": "docker-compose.yaml",
+      "sha256": "fbc5eac19f7cfe06e3879747072fb296783825e06ab0ac647b0a886e5fa7ca40"
+    },
+    {
+      "path": "infrastructure/runtime-security/reviewed-image-activations.json",
+      "sha256": "20ffff3f07af7d128d089490863b87d0418769ab5e268f2990ae54c704fc0366"
+    },
+    {
+      "path": "infrastructure/runtime-security/reviewed-image-defaults.mjs",
+      "sha256": "f5c35ea62e98e4ec40ef45dc50d003a3618b9f9b29d34995045ecc0b8757cf46"
+    },
+    {
+      "path": "infrastructure/runtime-security/reviewed-image-defaults.test.mjs",
+      "sha256": "3ab66331e5c1840babf19d320b3dd92780d64121bec7f06b295198e1fe2877cb"
+    }
+  ],
+  "sourceTests": {
+    "node": {
+      "total": 215,
+      "passed": 215,
+      "skipped": 0,
+      "failed": 0
+    },
+    "databaseContinuity": {
+      "total": 27,
+      "passed": 27,
+      "skipped": 0,
+      "failed": 0
+    },
+    "contracts": {
+      "infrastructure": "PASS",
+      "deployRelease": "PASS"
+    },
+    "composeDelta": {
+      "reviewedReferences": 30,
+      "activatedReferences": 18,
+      "healthBlocks": 6,
+      "tempoGraceBlocks": 3
+    },
+    "evidence": {
+      "path": ".codex-tmp/security-closure-20260908/image-activation-final-source-checks/result.json",
+      "sha256": "5251ccb0eea5c996631ed1c4a270d6dc408b3467cbf09db766067b126caf18bb",
+      "availability": "Retained private source-check evidence; raw logs are not embedded."
+    }
+  },
+  "stockLocalDeployment": {
+    "schema": "otziv-stock-reviewed-image-safe-aggregate-v1",
+    "recordedAt": "2026-09-08T03:17:02.091492+00:00",
+    "status": "PASS",
+    "startedAt": "2026-09-08T03:08:47.288125+00:00",
+    "completedAt": "2026-09-08T03:16:20.150323+00:00",
+    "exitCode": 0,
+    "runtime": {
+      "imageId": "sha256:eb5419e630ed6bd3f21c9c510c3961797b7faf5e6a81ed400e0ba4ebd7d38a0f",
+      "matchesScannedImage": true,
+      "jarSha256": "b704151a8f4505a4f025fa1540ee293b947dd683aad411445d06959cf54e61c2",
+      "matchesTestedJar": true,
+      "status": "running",
+      "health": "healthy",
+      "oomKilled": false,
+      "restartCount": 0,
+      "nonRoot": true,
+      "readOnlyRootfs": true,
+      "allCapabilitiesDropped": true
+    },
+    "localDatabase": {
+      "mysqlVersion": "9.0.0",
+      "latestVersion": "1.10.306",
+      "failedMigrations": 0,
+      "installedMigrations": 387,
+      "presentSafetySettings": 29,
+      "expectedSafetySettings": 29,
+      "matchingSafetySettings": 29,
+      "imageId": "sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383",
+      "scope": "Stock local MySQL 9.0; this is not the separately tested hardened recovery-database image.",
+      "sameImageAsBefore": true
+    },
+    "httpStatus": {
+      "backend": 200,
+      "issuerDiscovery": 200,
+      "frontend": 200
+    },
+    "dispatchFlags": {
+      "checked": 8,
+      "present": 8,
+      "disabled": 8,
+      "messengerTokensAbsent": true
+    },
+    "freshDump": {
+      "sha256": "ece71ff9b5ab47e0a35d0a64688a6cfd0c9a9eb691325bac24d7f486415ba78a",
+      "bytes": 109173616,
+      "downloadIntegrityVerified": true,
+      "ephemeralLocalDumpAbsentAfterRestore": true
+    },
+    "stockLogSentinels": {
+      "sourceDumpCreatedAndValidated": true,
+      "localDumpRestored": true,
+      "localExternalMessagingDisabled": true,
+      "externalCredentialSanitizationCompleted": true,
+      "flywayChecksumValidationPassed": true,
+      "ephemeralDumpRemoved": true,
+      "stockSmokePassed": true
+    },
+    "stockLogSha256": "ce2f5eaa40417fe1b921218f205d24db99654fef3280216fcc936065777f5b97",
+    "protectedEnvironmentContentPreserved": true,
+    "verificationOperations": [
+      "Local Docker inspect metadata",
+      "Read app.jar SHA256",
+      "Read-only aggregate MySQL SELECT",
+      "Local HTTP GET",
+      "Private log parse to safe booleans and dump integrity metadata"
+    ],
+    "businessRowsOrCredentialsReturned": false,
+    "productionDatabaseWrites": false,
+    "productionServiceLifecycleChanges": false,
+    "maintenanceSqlOrOtherFixturesModified": false,
+    "keycloak": {
+      "version": "Keycloak 26.7.3\nJVM: 21.0.12 (Eclipse Adoptium OpenJDK 64-Bit Server VM 21.0.12+8-LTS)\nOS: Linux 5.15.153.1-microsoft-standard-WSL2 amd64",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:93dd42a5379a80fc0673bc1d0c5601d3b35009c8250394b1e2b45082388c82cc",
+      "engineImageId": "sha256:93dd42a5379a80fc0673bc1d0c5601d3b35009c8250394b1e2b45082388c82cc",
+      "registryReferenceMatchesContainerAndLocalImage": true,
+      "publishedImageConfigDigest": "sha256:b5c718b887b315d3da78784a64d9d2966aac62e30117ceca620f08a7f57139ae",
+      "providerJarSha256": "78645d0aff42d8c6668c88eb2e2bfa239f01d8db4085e4133803bfe7f5e5984a",
+      "providerMatchesPublishedArtifact": true,
+      "health": "healthy",
+      "restartCount": 0,
+      "publicationReceiptSha256": "86b2fff2a14865ead12cc83f5b9558de55e11bfc454cb7f790b835e6f2ea02df",
+      "upgradeFromVersion": "26.2.5",
+      "oldLocalKeycloakStoppedBeforeDatabaseBackup": true
+    },
+    "keycloakDatabase": {
+      "version": "postgres (PostgreSQL) 17.10 (Debian 17.10-1.pgdg13+1)",
+      "imageId": "sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d",
+      "sameImageAsBefore": true,
+      "sameVolumeAsBefore": true,
+      "volume": "otziv-prod-local_keycloak_pg_data",
+      "health": "healthy",
+      "prechangeBackupSha256": "8bd02bee3647cd1a4aafae1baa9b457e080648386111e48e5f22c26755de89ea",
+      "prechangeBackupBytes": 226897,
+      "restorationRehearsalClaimed": false
+    },
+    "scopeLimits": [
+      "Only the stock local profile ran; observability and phpMyAdmin profiles remained disabled.",
+      "The application uses the previously tested exact C6 image; this run does not claim a new C7 backend image build.",
+      "Local Keycloak schema upgrade and stock login probes are validated; production rollout and full recovery rehearsal are not claimed."
+    ]
+  },
+  "executionEvidence": {
+    "path": ".codex-tmp/security-closure-20260908/runtime-image-activation/actual-stock-execution.json",
+    "sha256": "4e4ee65a373391b484abf1622ba7188f492055e64a3f8a439e645e7ed855ce96",
+    "availability": "Retained private evidence; no database, credentials or raw local log is published."
+  },
+  "aggregateEvidence": {
+    "path": ".codex-tmp/security-closure-20260908/runtime-image-activation/actual-stock-safe-aggregate.json",
+    "sha256": "a269d13d2908ba7dee9d9dd2d01ab1adebac980189743a4937754f0bd4562cfe",
+    "availability": "Retained private evidence; no database, credentials or raw local log is published."
+  },
+  "prechangeKeycloakBackupEvidence": {
+    "path": ".codex-tmp/security-closure-20260908/runtime-image-activation/keycloak-local-backup.json",
+    "sha256": "696e991f931e8cd7cb3a46fb9c8cf93b88fe4ed1fa4c3ad87ed2b3f251694ce9",
+    "availability": "Retained private evidence; no database, credentials or raw local log is published."
+  },
+  "backupBoundary": "Old local Keycloak was stopped before a protected custom-format pg_dump. pg_restore --list passed. This is an archive validation, not a restoration rehearsal.",
+  "upgradeReference": "https://www.keycloak.org/docs/latest/upgrading/index.html",
+  "newMavenExceptionIntegrated": false,
+  "productionDeployed": false,
+  "branchProtectionChanged": false,
+  "previousSourceTestEvidence": {
+    "path": ".codex-tmp/security-closure-20260908/c7-activated-compose-verification/freeze.json",
+    "sha256": "d0aeed8c8958080a6bd3e030372816a05ec9d967baf315e84b2a73057e16336c",
+    "availability": "Retained private evidence; no database, credentials or raw local log is published."
+  },
+  "evidenceStorage": {
+    "schema": "otziv-raw-evidence-parts-v1",
+    "logicalArtifacts": 2,
+    "logicalArtifactBytesEach": 5928324,
+    "logicalArtifactSha256": "7211bd888f2546676761993cbc167aa828cfd4ddb5a92a5533906979c14d84aa",
+    "plainTextPartsPerArtifact": 2,
+    "partBytes": [
+      4194304,
+      1734020
+    ],
+    "gitFileLimitMiB": 5,
+    "gitFileLimitChanged": false,
+    "rawOciDescriptorFormatsChanged": false,
+    "completeOciValidationMandatory": true,
+    "sourceTestsTotal": 47,
+    "specificTestEntrypoint": "infrastructure/runtime-security/reviewed-image-defaults.test.mjs",
+    "newMavenExceptionIntegrated": false
+  }
+}

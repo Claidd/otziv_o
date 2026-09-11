@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import {readFile,writeFile} from 'node:fs/promises';
+import {run} from '../../../infrastructure/recovery/process.mjs';
+import {publishedImage} from '../../../infrastructure/runtime-security/mysql-upgrade-rehearsal.mjs';
+const dir='E:/Works/Projects/otziv-release-replay-20260908-7c48510c230d4f368742ae3587421dac/mysql-vps-run6';
+const {owner}=JSON.parse(await readFile(dir+'/owner.json'));assert.equal(owner,'otziv-mysql-vps-release-cb3090ca-df41-40de-815f-e67a12503351');
+const name=owner+'-mysql973';let value;
+for(let count=0;count<450;count++){try{value=JSON.parse(await run('docker',['inspect','--format','{{json .}}',name]));if(value.State.Running)break;}catch{}await new Promise(r=>setTimeout(r,2000));}
+assert.ok(value?.State.Running,'target_never_started');assert.equal(value.Config.Labels['com.otziv.mysql-upgrade.owner'],owner);
+assert.equal(value.Image,publishedImage.split('@')[1]);assert.equal(value.Config.User,'999:999');
+const actualUid=(await run('docker',['exec',name,'id','-u'])).trim();assert.equal(actualUid,'999');
+assert.equal(value.HostConfig.NetworkMode,owner+'-net');assert.equal((await run('docker',['network','inspect','--format','{{.Internal}}',owner+'-net'])).trim(),'true');
+const mount=value.Mounts.find(m=>m.Destination==='/var/lib/mysql');assert.equal(mount.Type,'volume');assert.equal(mount.Name,owner+'-data');
+assert.ok(['no',''].includes(value.HostConfig.RestartPolicy.Name));assert.equal(value.HostConfig.PortBindings&&Object.keys(value.HostConfig.PortBindings).length,0);
+const proof={schema:'otziv-mysql-vps-target-container-policy-v1',result:'PASS',checkedAt:new Date().toISOString(),owner,containerId:value.Id,imageId:value.Image,configuredUser:value.Config.User,actualUid:Number(actualUid),networkInternal:true,network:owner+'-net',sourceVolume:mount.Name,publishedPorts:0,restartPolicy:value.HostConfig.RestartPolicy.Name,sourceContacted:false};
+await writeFile(dir+'/target-container-policy.json',JSON.stringify(proof,null,2)+'\n',{flag:'wx',mode:0o600});console.log(JSON.stringify({result:'TARGET_POLICY_PASS',uid:999,owner}));

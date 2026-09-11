@@ -1,0 +1,10 @@
+{
+  "schema": "otziv-postgres-c14-adjudication-v1",
+  "rawReportSha256": "2224a1e84a17d434a95be0326677df9afb692117156c1fa54d21534e043c2b4e",
+  "imageConfigId": "sha256:bce76251c7b3cb286209868ea88867a38040519e4a5a0fd2961699660d907de0",
+  "immutableImageId": "sha256:7d4075e78dddc1746118ae217bf2c1d328ca75952ff2471dca5082909aaff8c3",
+  "rawReportModified": false,
+  "decisions": [],
+  "status": "REJECTED",
+  "reason": "postgres_proof_validation_failed"
+}

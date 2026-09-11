@@ -1,0 +1,88 @@
+{
+  "schema": "otziv-mysql-upgrade-rehearsal-v1",
+  "mode": "published-rollback",
+  "captureSchema": "otziv-mysql-published-rollback-capture-v1",
+  "owner": "otziv-mysql-c7-rollback-3632d16e-5d78-4cb3-aee8-008e78955b61",
+  "startedAt": "2026-09-08T13:04:44.372Z",
+  "production": false,
+  "sourceContainer": "otziv-prod-local-mysql-1",
+  "sourceWrites": false,
+  "sourceCaptureSha256": "dea1ad2e1e25a5bf57e02d701e3db3f1f7676022b0f2c0d985a6249ca5d43c49",
+  "sourceSchemaAtCapture": "1.10.310",
+  "database": "otziv",
+  "images": {
+    "source": "sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383",
+    "targetReference": "ghcr.io/claidd/otziv-security@sha256:3a3caaab4e71b3bfdec9da21c17c00ed10ca237151919aeddac8e5ce4b8b7baa",
+    "targetConfigurationDigest": "sha256:80ee3b50147a329addbaf754abc4dce86dc06636624680d780351e2320a11070",
+    "upgradeCheckerReference": "container-registry.oracle.com/mysql/community-server@sha256:bf955135c21e2c1c153417407fbbbb8efa786f487781b1fb6baaf7aba17d4340",
+    "app": "sha256:f6123a92f20df6125647bdbe181afb50c6bbc14c595e547f1ce3649db5ccd213",
+    "published": {
+      "reference": "ghcr.io/claidd/otziv-security@sha256:3a3caaab4e71b3bfdec9da21c17c00ed10ca237151919aeddac8e5ce4b8b7baa",
+      "configurationDigest": "sha256:80ee3b50147a329addbaf754abc4dce86dc06636624680d780351e2320a11070",
+      "localId": "sha256:3a3caaab4e71b3bfdec9da21c17c00ed10ca237151919aeddac8e5ce4b8b7baa"
+    },
+    "targetLocalId": "sha256:3a3caaab4e71b3bfdec9da21c17c00ed10ca237151919aeddac8e5ce4b8b7baa",
+    "upgradeCheckerLocalId": "sha256:bf955135c21e2c1c153417407fbbbb8efa786f487781b1fb6baaf7aba17d4340"
+  },
+  "checks": [
+    {
+      "name": "clone_9_0_authenticated",
+      "passed": true,
+      "at": "2026-09-08T13:04:58.874Z"
+    },
+    {
+      "name": "stopped_without_oom_or_forced_kill_mysql90",
+      "passed": true,
+      "at": "2026-09-08T13:05:01.848Z"
+    }
+  ],
+  "resourceLimits": {
+    "mysqlMemoryBytes": 1610612736,
+    "appMemoryBytes": 2147483648,
+    "mysqlCpus": 2,
+    "appCpus": 2
+  },
+  "rollback": "NO_BINARY_DOWNGRADE: restore the pre-upgrade database with its paired application/configuration release",
+  "limitations": [
+    "local sanitized clone; not a production rollout",
+    "no performance SLO or fleet compatibility implied",
+    "application health/Flyway/Hibernate only; Keycloak login and external delivery are not tested",
+    "the configured source account identity and grants are reproduced with a newly generated clone-only password; other source users are not copied"
+  ],
+  "semanticConfiguration": {
+    "source": {
+      "character_set_server": "utf8mb4",
+      "collation_server": "utf8mb4_unicode_ci",
+      "lower_case_table_names": "0",
+      "restrict_fk_on_non_standard_key": "OFF",
+      "sql_mode": "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION",
+      "time_zone": "+08:00"
+    },
+    "sourceSha256": "575e657ac9afa7cc8894813242484951e9cd072c2c5ab362eba89e46ac875305",
+    "fixtureEventScheduler": "OFF",
+    "resourceOptions": "bounded clone only"
+  },
+  "configurationSha256": "bf53712fb29c2c0f78544c79e826c1264726aaae3cd2da424d224701c7ddaf5e",
+  "result": "FAIL",
+  "failurePhase": "clone_9_0",
+  "failureCode": "mysql_upgrade_rehearsal_failed",
+  "failedVolumeRetained": true,
+  "stops": [
+    {
+      "container": "otziv-mysql-c7-rollback-3632d16e-5d78-4cb3-aee8-008e78955b61-mysql90",
+      "elapsedMs": 2076,
+      "exitCode": 0,
+      "oomKilled": false
+    }
+  ],
+  "retainedResources": {
+    "containers": [
+      "otziv-mysql-c7-rollback-3632d16e-5d78-4cb3-aee8-008e78955b61-mysql90"
+    ],
+    "network": "otziv-mysql-c7-rollback-3632d16e-5d78-4cb3-aee8-008e78955b61-net",
+    "volume": "otziv-mysql-c7-rollback-3632d16e-5d78-4cb3-aee8-008e78955b61-data",
+    "rollbackVolume": null,
+    "stopped": true
+  },
+  "completedAt": "2026-09-08T13:05:01.848Z"
+}

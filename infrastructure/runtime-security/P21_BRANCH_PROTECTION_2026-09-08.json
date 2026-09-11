@@ -1,0 +1,375 @@
+{
+  "schema": "otziv-p21-public-branch-protection-evidence-v1",
+  "repository": "Claidd/otziv_o",
+  "branch": "main",
+  "mainRevision": "3458e56f29ec0288925f2a4795105fe863da5158",
+  "appliedAt": "2026-09-08T05:47:54.278290+00:00",
+  "verifiedAt": "2026-09-08T05:48:25.317Z",
+  "result": "ENFORCEMENT_VERIFIED",
+  "protected": true,
+  "requestBody": {
+    "required_status_checks": {
+      "strict": true,
+      "checks": [
+        {
+          "context": "Repository contracts",
+          "app_id": 15368
+        },
+        {
+          "context": "Backend (full Testcontainers suite)",
+          "app_id": 15368
+        },
+        {
+          "context": "Issuer security generation (real Keycloak and PostgreSQL)",
+          "app_id": 15368
+        },
+        {
+          "context": "Frontend (unit and production build)",
+          "app_id": 15368
+        },
+        {
+          "context": "Mobile web (unit and production build)",
+          "app_id": 15368
+        },
+        {
+          "context": "WhatsApp gateway (unit)",
+          "app_id": 15368
+        },
+        {
+          "context": "External review worker (syntax and health)",
+          "app_id": 15368
+        },
+        {
+          "context": "Built web and mobile browser scenarios",
+          "app_id": 15368
+        },
+        {
+          "context": "Android native tests, lint and debug assembly",
+          "app_id": 15368
+        },
+        {
+          "context": "Shared client package and compatibility fixtures",
+          "app_id": 15368
+        },
+        {
+          "context": "Built integration image (backend)",
+          "app_id": 15368
+        },
+        {
+          "context": "Built integration image (web)",
+          "app_id": 15368
+        },
+        {
+          "context": "Built integration image (worker)",
+          "app_id": 15368
+        },
+        {
+          "context": "Built integration image (whatsapp)",
+          "app_id": 15368
+        },
+        {
+          "context": "Built integration image (observer)",
+          "app_id": 15368
+        },
+        {
+          "context": "Built integration image (publisher)",
+          "app_id": 15368
+        },
+        {
+          "context": "Upstream image security gate",
+          "app_id": 15368
+        },
+        {
+          "context": "Dependency audit gate",
+          "app_id": 15368
+        },
+        {
+          "context": "gitleaks",
+          "app_id": 15368
+        },
+        {
+          "context": "SQL injection guard",
+          "app_id": 15368
+        }
+      ]
+    },
+    "enforce_admins": true,
+    "required_pull_request_reviews": null,
+    "restrictions": null,
+    "allow_force_pushes": false,
+    "allow_deletions": false
+  },
+  "bindingSource": {
+    "pullRequest": 2,
+    "branch": "codex/architecture-remediation-20260907",
+    "head": "7141d947ef6b6172c76fdbb9f297895fda107e60"
+  },
+  "verifiedCheckIdentities": [
+    {
+      "context": "Repository contracts",
+      "app_id": 15368,
+      "checkRunId": 101938911172,
+      "jobId": 101938911172,
+      "workflowPath": ".github/workflows/quality-gates.yml",
+      "runId": 34187580408,
+      "runAttempt": 1,
+      "status": "completed",
+      "conclusion": "success",
+      "completedAt": "2026-09-08T04:37:57Z"
+    },
+    {
+      "context": "Backend (full Testcontainers suite)",
+      "app_id": 15368,
+      "checkRunId": 101938911271,
+      "jobId": 101938911271,
+      "workflowPath": ".github/workflows/quality-gates.yml",
+      "runId": 34187580408,
+      "runAttempt": 1,
+      "status": "completed",
+      "conclusion": "success",
+      "completedAt": "2026-09-08T04:54:32Z"
+    },
+    {
+      "context": "Issuer security generation (real Keycloak and PostgreSQL)",
+      "app_id": 15368,
+      "checkRunId": 101938911313,
+      "jobId": 101938911313,
+      "workflowPath": ".github/workflows/quality-gates.yml",
+      "runId": 34187580408,
+      "runAttempt": 1,
+      "status": "completed",
+      "conclusion": "success",
+      "completedAt": "2026-09-08T04:47:55Z"
+    },
+    {
+      "context": "Frontend (unit and production build)",
+      "app_id": 15368,
+      "checkRunId": 101938911398,
+      "jobId": 101938911398,
+      "workflowPath": ".github/workflows/quality-gates.yml",
+      "runId": 34187580408,
+      "runAttempt": 1,
+      "status": "completed",
+      "conclusion": "success",
+      "completedAt": "2026-09-08T04:39:16Z"
+    },
+    {
+      "context": "Mobile web (unit and production build)",
+      "app_id": 15368,
+      "checkRunId": 101938911383,
+      "jobId": 101938911383,
+      "workflowPath": ".github/workflows/quality-gates.yml",
+      "runId": 34187580408,
+      "runAttempt": 1,
+      "status": "completed",
+      "conclusion": "success",
+      "completedAt": "2026-09-08T04:38:45Z"
+    },
+    {
+      "context": "WhatsApp gateway (unit)",
+      "app_id": 15368,
+      "checkRunId": 101938911394,
+      "jobId": 101938911394,
+      "workflowPath": ".github/workflows/quality-gates.yml",
+      "runId": 34187580408,
+      "runAttempt": 1,
+      "status": "completed",
+      "conclusion": "success",
+      "completedAt": "2026-09-08T04:38:29Z"
+    },
+    {
+      "context": "External review worker (syntax and health)",
+      "app_id": 15368,
+      "checkRunId": 101938911352,
+      "jobId": 101938911352,
+      "workflowPath": ".github/workflows/quality-gates.yml",
+      "runId": 34187580408,
+      "runAttempt": 1,
+      "status": "completed",
+      "conclusion": "success",
+      "completedAt": "2026-09-08T04:38:51Z"
+    },
+    {
+      "context": "Built web and mobile browser scenarios",
+      "app_id": 15368,
+      "checkRunId": 101938911341,
+      "jobId": 101938911341,
+      "workflowPath": ".github/workflows/quality-gates.yml",
+      "runId": 34187580408,
+      "runAttempt": 1,
+      "status": "completed",
+      "conclusion": "success",
+      "completedAt": "2026-09-08T04:39:30Z"
+    },
+    {
+      "context": "Android native tests, lint and debug assembly",
+      "app_id": 15368,
+      "checkRunId": 101938911329,
+      "jobId": 101938911329,
+      "workflowPath": ".github/workflows/quality-gates.yml",
+      "runId": 34187580408,
+      "runAttempt": 1,
+      "status": "completed",
+      "conclusion": "success",
+      "completedAt": "2026-09-08T04:40:10Z"
+    },
+    {
+      "context": "Shared client package and compatibility fixtures",
+      "app_id": 15368,
+      "checkRunId": 101938911399,
+      "jobId": 101938911399,
+      "workflowPath": ".github/workflows/quality-gates.yml",
+      "runId": 34187580408,
+      "runAttempt": 1,
+      "status": "completed",
+      "conclusion": "success",
+      "completedAt": "2026-09-08T04:38:35Z"
+    },
+    {
+      "context": "Built integration image (backend)",
+      "app_id": 15368,
+      "checkRunId": 101938911402,
+      "jobId": 101938911402,
+      "workflowPath": ".github/workflows/quality-gates.yml",
+      "runId": 34187580408,
+      "runAttempt": 1,
+      "status": "completed",
+      "conclusion": "success",
+      "completedAt": "2026-09-08T04:40:34Z"
+    },
+    {
+      "context": "Built integration image (web)",
+      "app_id": 15368,
+      "checkRunId": 101938911537,
+      "jobId": 101938911537,
+      "workflowPath": ".github/workflows/quality-gates.yml",
+      "runId": 34187580408,
+      "runAttempt": 1,
+      "status": "completed",
+      "conclusion": "success",
+      "completedAt": "2026-09-08T04:40:10Z"
+    },
+    {
+      "context": "Built integration image (worker)",
+      "app_id": 15368,
+      "checkRunId": 101938911558,
+      "jobId": 101938911558,
+      "workflowPath": ".github/workflows/quality-gates.yml",
+      "runId": 34187580408,
+      "runAttempt": 1,
+      "status": "completed",
+      "conclusion": "success",
+      "completedAt": "2026-09-08T04:40:40Z"
+    },
+    {
+      "context": "Built integration image (whatsapp)",
+      "app_id": 15368,
+      "checkRunId": 101938911503,
+      "jobId": 101938911503,
+      "workflowPath": ".github/workflows/quality-gates.yml",
+      "runId": 34187580408,
+      "runAttempt": 1,
+      "status": "completed",
+      "conclusion": "success",
+      "completedAt": "2026-09-08T04:40:16Z"
+    },
+    {
+      "context": "Built integration image (observer)",
+      "app_id": 15368,
+      "checkRunId": 101938911635,
+      "jobId": 101938911635,
+      "workflowPath": ".github/workflows/quality-gates.yml",
+      "runId": 34187580408,
+      "runAttempt": 1,
+      "status": "completed",
+      "conclusion": "success",
+      "completedAt": "2026-09-08T04:40:48Z"
+    },
+    {
+      "context": "Built integration image (publisher)",
+      "app_id": 15368,
+      "checkRunId": 101938911520,
+      "jobId": 101938911520,
+      "workflowPath": ".github/workflows/quality-gates.yml",
+      "runId": 34187580408,
+      "runAttempt": 1,
+      "status": "completed",
+      "conclusion": "success",
+      "completedAt": "2026-09-08T04:39:39Z"
+    },
+    {
+      "context": "Upstream image security gate",
+      "app_id": 15368,
+      "checkRunId": 101943515454,
+      "jobId": 101943515454,
+      "workflowPath": ".github/workflows/quality-gates.yml",
+      "runId": 34187580408,
+      "runAttempt": 1,
+      "status": "completed",
+      "conclusion": "failure",
+      "completedAt": "2026-09-08T05:03:24Z"
+    },
+    {
+      "context": "Dependency audit gate",
+      "app_id": 15368,
+      "checkRunId": 101939966679,
+      "jobId": 101939966679,
+      "workflowPath": ".github/workflows/dependency-audit.yml",
+      "runId": 34187580370,
+      "runAttempt": 1,
+      "status": "completed",
+      "conclusion": "failure",
+      "completedAt": "2026-09-08T04:42:53Z"
+    },
+    {
+      "context": "gitleaks",
+      "app_id": 15368,
+      "checkRunId": 101938910804,
+      "jobId": 101938910804,
+      "workflowPath": ".github/workflows/secret-scan.yml",
+      "runId": 34187580405,
+      "runAttempt": 1,
+      "status": "completed",
+      "conclusion": "success",
+      "completedAt": "2026-09-08T04:40:23Z"
+    },
+    {
+      "context": "SQL injection guard",
+      "app_id": 15368,
+      "checkRunId": 101938910361,
+      "jobId": 101938910361,
+      "workflowPath": ".github/workflows/sql-injection-guard.yml",
+      "runId": 34187580331,
+      "runAttempt": 1,
+      "status": "completed",
+      "conclusion": "success",
+      "completedAt": "2026-09-08T04:37:03Z"
+    }
+  ],
+  "candidateObservation": {
+    "revision": "219fa48d628c7650651703637b85a53cc5b0f724",
+    "status": "BLOCKED",
+    "scope": "REQUIRED_CI_CHECKS_ONLY",
+    "passed": 18,
+    "failed": 2,
+    "failedChecks": [
+      "Upstream image security gate",
+      "Dependency audit gate"
+    ]
+  },
+  "evidenceSha256": {
+    "applicationReceipt": "87e294966f21cdc659c67ea227ef51e77400a4659ba3608753407eb1f656d514",
+    "independentGetObservation": "017540214fdb9b1eeadbbef2e3d444c72f286612b6baf41dc19b7f4cbf484e13",
+    "requestBody": "11ec4df244e719586033a578b38e96102b51dc09448e7205eb982e2c59a9a32b"
+  },
+  "mutationSummary": {
+    "branchProtectionPuts": 1,
+    "mergePerformed": false,
+    "productionDeployed": false
+  },
+  "limits": [
+    "This records classic branch protection at the stated time. It is not release acceptance.",
+    "Required check identity is bound to the published historical PR source; future workflow changes require reviewed binding maintenance.",
+    "The GitHub protection API does not provide an atomic compare-and-set; server state was checked immediately before the one PUT and read back afterward."
+  ]
+}

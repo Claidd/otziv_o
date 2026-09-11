@@ -128,6 +128,28 @@ public class WorkerActivityService {
         );
     }
 
+    /** Successful command audit is atomic with its business transaction. */
+    @org.springframework.transaction.annotation.Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public void recordTransactional(
+            Authentication authentication, WorkerActivityAction action, String entityType, Long entityId,
+            Long orderId, Long reviewId, String section, String details
+    ) {
+        if (!org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw new IllegalStateException("A business transaction is required for command audit");
+        }
+        if (!isPlainWorker(authentication)) return;
+        User workerUser = userService.findByUserNameWithAssignments(authentication.getName())
+                .orElseThrow(() -> new IllegalStateException("Worker audit actor is missing"));
+        WorkerActivityEvent saved = eventRepository.save(event(workerUser,action,entityType,entityId,orderId,reviewId,section,details));
+        org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                new org.springframework.transaction.support.TransactionSynchronization() {
+                    @Override public void afterCommit() {
+                        riskEvaluationService.evaluateSafely(saved,workerUser);
+                        if (WORKLOAD_CHANGING_ACTIONS.contains(action)) workloadRefreshSignal.markDirty();
+                    }
+                });
+    }
+
     private WorkerActivityEvent event(
             User workerUser,
             WorkerActivityAction action,

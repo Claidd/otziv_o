@@ -13,12 +13,17 @@
                 </div>
             </div>
 
+            <p th:if="${delivery}" id="whatsapp-delivery-status" role="status"
+               th:data-status-url="@{/whatsapp/operations/{id}(id=${operationId})}"
+               th:data-state="${delivery.status}" th:text="${result}"></p>
+            <script defer th:src="@{/js/whatsapp-delivery.js}"></script>
             <div class="menu-container">
 <!--                <button class="menu-toggle" onclick="toggleMenu()">Меню</button>-->
 <!--                <div class="menu-content" id="menu">-->
 
 
                 <form method="post" th:action="@{'/whatsapp/send'}" >
+                    <input type="hidden" name="operationId" th:value="${operationId}" />
                     <label>Клиент:
                         <select name="clientId">
                             <option value="client1">client1</option>
@@ -36,10 +41,11 @@
                     </label>
                     <br><br>
                     <button type="submit">Отправить</button>
+                    <a th:href="@{/whatsapp}">Новое сообщение</a>
                 </form>
 
-                <div style="margin-top: 20px; color: green;">
-                    <p th:if="${result}" th:text="'✅ Ответ: ' + ${result}"></p>
+                <div style="margin-top: 20px;">
+                    <p th:if="${result != null and delivery == null}" role="status" th:text="${result}"></p>
                 </div>
 
 

@@ -77,8 +77,12 @@ public class DeepSeekProvider implements AiProvider {
             JsonNode usage = root.path("usage");
             int inputTokens = usage.path("prompt_tokens").asInt(0);
             int outputTokens = usage.path("completion_tokens").asInt(0);
+            String finishReason = root.path("choices").path(0).path("finish_reason").asText("");
+            if ("length".equals(finishReason) && !text.isBlank()) {
+                return new AiResponse("", providerName(), inputTokens, outputTokens,
+                        "Ответ DeepSeek обрезан, finish_reason=length.");
+            }
             if (text.isBlank()) {
-                String finishReason = root.path("choices").path(0).path("finish_reason").asText("");
                 return new AiResponse(
                         "",
                         providerName(),

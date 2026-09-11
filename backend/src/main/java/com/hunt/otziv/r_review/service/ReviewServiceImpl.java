@@ -1,5 +1,6 @@
 package com.hunt.otziv.r_review.service;
 
+import org.springframework.security.core.Authentication;
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.b_bots.service.BotService;
 import com.hunt.otziv.business_audit.service.BusinessAuditService;
@@ -95,6 +96,7 @@ public class ReviewServiceImpl implements ReviewService {
     private final GamificationEventService gamificationEventService;
     private final OrderAggregateMutationLockService orderAggregateMutationLockService;
     private final WorkerAssignmentMutationGuardService assignmentMutationGuardService;
+    private final com.hunt.otziv.r_review.photo.ReviewPhotoReferencePolicy photoReferences;
     private final ContractorRouteAssignmentGuard contractorRouteAssignmentGuard;
     private final OrderPayableRecalculationService payableRecalculationService;
 
@@ -715,6 +717,7 @@ public class ReviewServiceImpl implements ReviewService {
         Review review = reviewRepository.findById(reviewId)
                 .orElseThrow(() -> new UsernameNotFoundException(String.format("Отзыв '%d' не найден", reviewId)));
 
+        photoReferences.requireAssignable(url);
         review.setUrl(url);
         log.info("Обновляем фото отзыва {}", reviewId);
         return reviewRepository.save(review);
@@ -880,6 +883,7 @@ public class ReviewServiceImpl implements ReviewService {
 
         if (!Objects.equals(reviewDTO.getUrl(), saveReview.getUrl())) {
             log.info("Обновляем url отзыва");
+            photoReferences.requireAssignable(reviewDTO.getUrl());
             saveReview.setUrl(reviewDTO.getUrl());
             isChanged = true;
         }
@@ -958,7 +962,7 @@ public class ReviewServiceImpl implements ReviewService {
             recordReviewAudit(saveReview, oldText, oldPublishedDate, oldPublish);
         }
         if (reassignBotAfterSave) {
-            reviewBotChangeService.changeBot(reviewId);
+            reviewBotChangeService.changeBotAfterReviewEdit(reviewId);
         }
         if (publishChanged) {
             synchronizeOrderCounter(saveReview);
@@ -1588,6 +1592,7 @@ public class ReviewServiceImpl implements ReviewService {
             isChanged = true;
         }
         if (!Objects.equals(reviewDTO.getUrl(), saveReview.getUrl())) {
+            photoReferences.requireAssignable(reviewDTO.getUrl());
             saveReview.setUrl(reviewDTO.getUrl());
             isChanged = true;
         }
@@ -1655,8 +1660,18 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     @Override
+    public boolean updateReviewText(Long orderId, Long reviewId, String text, Authentication authentication) {
+        return reviewEditService.updateReviewText(orderId, reviewId, text, authentication);
+    }
+
+    @Override
     public boolean updateReviewAnswer(Long orderId, Long reviewId, String answer) {
         return reviewEditService.updateReviewAnswer(orderId, reviewId, answer);
+    }
+
+    @Override
+    public boolean updateReviewAnswer(Long orderId, Long reviewId, String answer, Authentication authentication) {
+        return reviewEditService.updateReviewAnswer(orderId, reviewId, answer, authentication);
     }
 
     @Override
@@ -1672,6 +1687,11 @@ public class ReviewServiceImpl implements ReviewService {
     @Override
     public boolean updateReviewNote(Long orderId, Long reviewId, String comment) {
         return reviewEditService.updateReviewNote(orderId, reviewId, comment);
+    }
+
+    @Override
+    public boolean updateReviewNote(Long orderId, Long reviewId, String comment, Authentication authentication) {
+        return reviewEditService.updateReviewNote(orderId, reviewId, comment, authentication);
     }
 
     public Page<ReviewDTOOne> getAllReviewDTOAndDateToAdminToVigul(LocalDate localDate, int pageNumber, int pageSize) {
@@ -1862,6 +1882,11 @@ public class ReviewServiceImpl implements ReviewService {
     @Override
     public void performNagulWithExceptions(Long reviewId, String username) {
         reviewNagulService.performNagulWithExceptions(reviewId, username);
+    }
+
+    @Override
+    public void performNagulWithExceptions(Long reviewId, String username, Authentication authentication) {
+        reviewNagulService.performNagulWithExceptions(reviewId, username, authentication);
     }
 
     public int countOrdersByWorkerAndStatusPublish(Worker worker, LocalDate localDate) {

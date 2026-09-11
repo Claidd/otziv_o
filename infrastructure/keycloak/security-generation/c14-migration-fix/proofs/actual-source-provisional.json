@@ -1,0 +1,139 @@
+{
+  "schema": "otziv-keycloak-actual-migration-fix-v1",
+  "result": "FAIL",
+  "checks": [
+    {
+      "name": "private_acl_exclusive",
+      "passed": true
+    },
+    {
+      "name": "local_docker_only",
+      "passed": true
+    },
+    {
+      "name": "internal_network",
+      "passed": true
+    },
+    {
+      "name": "original_dump_critical_hashes_exact",
+      "passed": true
+    },
+    {
+      "name": "fixed-kc_oidc_discovery",
+      "passed": true
+    },
+    {
+      "name": "fixed-kc_health_ready",
+      "passed": true
+    },
+    {
+      "name": "fixed-kc_existing_admin_read",
+      "passed": true
+    },
+    {
+      "name": "existing_password_login_without_reset",
+      "passed": true
+    },
+    {
+      "name": "clean_migration_realm_unchanged",
+      "passed": true
+    },
+    {
+      "name": "clean_migration_user_entity_unchanged",
+      "passed": true
+    },
+    {
+      "name": "clean_migration_client_unchanged",
+      "passed": true
+    },
+    {
+      "name": "clean_migration_credential_unchanged",
+      "passed": true
+    },
+    {
+      "name": "clean_migration_keycloak_role_existing_records_preserved",
+      "passed": true
+    },
+    {
+      "name": "clean_migration_user_role_mapping_existing_records_preserved",
+      "passed": true
+    },
+    {
+      "name": "clean_migration_only_expected_organization_role_additions",
+      "passed": true
+    },
+    {
+      "name": "clean_migration_all_organization_roles",
+      "passed": true
+    },
+    {
+      "name": "clean_migration_admin_role_composites",
+      "passed": true
+    },
+    {
+      "name": "clean_migration_view_implies_query",
+      "passed": true
+    },
+    {
+      "name": "provider_unauthenticated_endpoint_denied",
+      "passed": true
+    },
+    {
+      "name": "provider_schema_present",
+      "passed": true
+    }
+  ],
+  "productionAccess": false,
+  "privateRowsPublished": false,
+  "startedAt": "2026-09-08T16:14:09.818450+00:00",
+  "candidate": "ghcr.io/claidd/otziv-security@sha256:c6ee6afd6750ae0886a608c5837085cb20417a6746ca2ed47b59b1a0fdec1973",
+  "imageId": "sha256:c6ee6afd6750ae0886a608c5837085cb20417a6746ca2ed47b59b1a0fdec1973",
+  "postgresImageId": "sha256:07834abbfd80ed7183afa9096db99afc4d93b99fd51aae726e550d07ade65dbf",
+  "sourceDumpSha256": "0f7d9a89469ff7042e7603052b5de36a8e1a6b374e2e4f9dce44e3657e0d33df",
+  "keycloakChecks": {
+    "fixed-kc": {
+      "adminCredentialsAvailable": true,
+      "adminRead": true,
+      "realmCount": 2
+    }
+  },
+  "criticalCounts": {
+    "clean_migration": {
+      "realm": {
+        "source": 2,
+        "current": 2
+      },
+      "user_entity": {
+        "source": 32,
+        "current": 32
+      },
+      "client": {
+        "source": 16,
+        "current": 16
+      },
+      "credential": {
+        "source": 31,
+        "current": 31
+      },
+      "keycloak_role": {
+        "source": 89,
+        "current": 98
+      },
+      "user_role_mapping": {
+        "source": 67,
+        "current": 67
+      }
+    }
+  },
+  "organizationRoles": {
+    "clean_migration": {
+      "adminClients": 3,
+      "rolesPresent": 9,
+      "expectedRoles": 9,
+      "adminComposites": 9,
+      "viewQueryComposites": 3
+    }
+  },
+  "providerTableCount": 1,
+  "cleanMigrationResult": "PASS"
+}

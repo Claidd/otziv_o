@@ -1,0 +1,23 @@
+{
+  "schema": "otziv-c14-postgres-tcp-v1",
+  "reference": "otziv-c14-postgres:source-runtime-v6",
+  "startedAt": "2026-09-08T14:13:50.825Z",
+  "resources": {
+    "databaseCpu": 1,
+    "databaseMemoryMiB": 512,
+    "clientMemoryMiB": 128,
+    "network": "internal bridge",
+    "hostPorts": 0
+  },
+  "checks": [
+    "final_pid1_postgres_accepts_authenticated_external_tcp",
+    "official_container_listen_addresses_default_preserved",
+    "external_tcp_rejects_incorrect_password",
+    "external_tcp_transaction_commits",
+    "external_tcp_restart_preserves_committed_row"
+  ],
+  "image": "sha256:ebf646d4a2ed114de7138af57159508770872d10b35ce56f3f5a9193c87f719e",
+  "result": "PASS",
+  "cleanup": "PASS",
+  "finishedAt": "2026-09-08T14:14:01.693Z"
+}

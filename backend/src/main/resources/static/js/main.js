@@ -328,6 +328,7 @@ let pendingFormDeactivate = null;
 /* Замена бота*/
 function changeBot(event, form) {
     event.preventDefault();
+    if (window.workerAccountActionCooldown && !window.workerAccountActionCooldown.begin()) return;
 
     // pageNumber
     const urlParams = new URLSearchParams(window.location.search);
@@ -356,9 +357,11 @@ function changeBot(event, form) {
         headers: csrfToken ? { "X-CSRF-TOKEN": csrfToken } : {}
     })
         .then(async (response) => {
+            window.workerAccountActionCooldown?.response(response);
             const text = await response.text();
 
             if (!response.ok) {
+                if (response.status === 429) return null;
                 console.error("changeBot HTTP error:", response.status, text);
                 alert(`Ошибка смены бота: HTTP ${response.status}`);
                 return null;
@@ -377,12 +380,14 @@ function changeBot(event, form) {
             container.innerHTML = updatedReviewsHtml;
             initModalHandlers();
         })
-        .catch(error => console.error("Ошибка при смене бота:", error));
+        .catch(error => console.error("Ошибка при смене бота:", error))
+        .finally(() => window.workerAccountActionCooldown?.finish());
 }
 
 
 function deActivateBot(event, form) {
     event.preventDefault();
+    if (window.workerAccountActionCooldown?.locked()) return;
     console.log('deActivateBot called');
 
     // Сохраняем ссылку на форму
@@ -416,6 +421,7 @@ function performBotDeactivation() {
         console.error('No pending form!');
         return;
     }
+    if (window.workerAccountActionCooldown && !window.workerAccountActionCooldown.begin()) return;
 
     // Сохраняем форму в локальную переменную
     const form = pendingFormDeactivate;
@@ -456,13 +462,16 @@ function performBotDeactivation() {
         body: formData
     })
         .then(response => {
+            window.workerAccountActionCooldown?.response(response);
             console.log('Response status:', response.status);
+            if (response.status === 429) return null;
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
             return response.text();
         })
         .then(updatedReviewsHtml => {
+            if (!updatedReviewsHtml) return;
             console.log('Request successful');
             // Обновляем контейнер с отзывами
             const container = document.getElementById("reviewsContainer");
@@ -478,7 +487,8 @@ function performBotDeactivation() {
         .catch(error => {
             console.error("Ошибка при блокировке бота:", error);
             alert('Ошибка при блокировке бота: ' + error.message);
-        });
+        })
+        .finally(() => window.workerAccountActionCooldown?.finish());
 }
 
 // Функция инициализации обработчиков модального окна

@@ -1,0 +1,88 @@
+{
+  "schema": "otziv-mysql-standalone-configuration-probe-v1",
+  "owner": "otziv-mysql-c14-standalone-a0822268-3d89-4786-8ba0-280bda5cf934",
+  "startedAt": "2026-09-08T13:20:36.346Z",
+  "production": false,
+  "sourceContacted": false,
+  "target": "ghcr.io/claidd/otziv-security@sha256:3a3caaab4e71b3bfdec9da21c17c00ed10ca237151919aeddac8e5ce4b8b7baa",
+  "targetConfigurationDigest": "sha256:80ee3b50147a329addbaf754abc4dce86dc06636624680d780351e2320a11070",
+  "checks": [
+    {
+      "name": "target_9_7_3_authenticated",
+      "passed": true
+    },
+    {
+      "name": "explicit_standalone_policy_applied",
+      "passed": true
+    },
+    {
+      "name": "write_under_gtid_off_binlog_row",
+      "passed": true
+    },
+    {
+      "name": "clean_stop_0",
+      "passed": true
+    },
+    {
+      "name": "explicit_policy_survives_restart",
+      "passed": true
+    },
+    {
+      "name": "durable_canary_survives_restart",
+      "passed": true
+    },
+    {
+      "name": "clean_stop_1",
+      "passed": true
+    }
+  ],
+  "limitations": [
+    "Fresh isolated target volume; this additional probe does not replay the data-directory upgrade or application suite.",
+    "C14 main rehearsal separately proves the upgrade/rollback with its recorded six-option compatibility subset; this probe proves explicit standalone GTID/binlog policy is accepted and survives restart."
+  ],
+  "optionFileSha256": "0b1198e51252a1357762719767d8d4a415e38c49fb9c9041e8df701a3b82de7c",
+  "freshInitializationIdentity": "user=999 (existing-volume C14 upgrade retains original configuration)",
+  "explicitFlags": [
+    "--gtid-mode=OFF",
+    "--enforce-gtid-consistency=OFF",
+    "--log-bin=mysql-bin",
+    "--binlog-format=ROW",
+    "--event-scheduler=OFF"
+  ],
+  "expectedSettings": {
+    "binlog_format": "ROW",
+    "character_set_server": "utf8mb4",
+    "collation_server": "utf8mb4_unicode_ci",
+    "enforce_gtid_consistency": "OFF",
+    "event_scheduler": "OFF",
+    "gtid_mode": "OFF",
+    "log_bin": "ON",
+    "restrict_fk_on_non_standard_key": "OFF",
+    "time_zone": "+08:00"
+  },
+  "before": {
+    "binlog_format": "ROW",
+    "character_set_server": "utf8mb4",
+    "collation_server": "utf8mb4_unicode_ci",
+    "enforce_gtid_consistency": "OFF",
+    "event_scheduler": "OFF",
+    "gtid_mode": "OFF",
+    "log_bin": "ON",
+    "restrict_fk_on_non_standard_key": "OFF",
+    "time_zone": "+08:00"
+  },
+  "after": {
+    "binlog_format": "ROW",
+    "character_set_server": "utf8mb4",
+    "collation_server": "utf8mb4_unicode_ci",
+    "enforce_gtid_consistency": "OFF",
+    "event_scheduler": "OFF",
+    "gtid_mode": "OFF",
+    "log_bin": "ON",
+    "restrict_fk_on_non_standard_key": "OFF",
+    "time_zone": "+08:00"
+  },
+  "result": "PASS",
+  "cleanup": "OWNED_CONTAINER_AND_FRESH_VOLUME_REMOVED",
+  "completedAt": "2026-09-08T13:20:55.474Z"
+}

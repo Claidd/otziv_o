@@ -39,6 +39,7 @@ $rules = @(
     # additions are still rejected by the base-revision diff gate below.
     [pscustomobject]@{ Name = "mobile/builds retained release debt"; Pattern = '^mobile/builds/'; EnforceCurrent = $false },
     [pscustomobject]@{ Name = "generated-assets retained recovery debt"; Pattern = '^generated-assets/(?!notification-media-v2/(?:import_to_production\.py|manifest\.json)$|notification-media-received-20260801/manifest\.json$)'; EnforceCurrent = $false },
+    [pscustomobject]@{ Name = "build-support generated output"; Pattern = '^backend/build-support/(?:target|(?:dependency-audit|site-plugin|test-transport)/target)/'; EnforceCurrent = $true },
     [pscustomobject]@{ Name = "backend/target"; Pattern = '^backend/target/'; EnforceCurrent = $true },
     [pscustomobject]@{ Name = "frontend/dist"; Pattern = '^frontend/dist/'; EnforceCurrent = $true },
     [pscustomobject]@{ Name = "sensitive payment capture"; Pattern = '^payment-profile-comment-preview\.png$'; EnforceCurrent = $true },

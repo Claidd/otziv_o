@@ -34,6 +34,24 @@ function Test-GitCommit {
     return $LASTEXITCODE -eq 0
 }
 
+function Test-ReviewedFrozenSbom {
+    param([string]$Path, [string]$ObjectId, [long]$Size)
+
+    # Reviewed 2026-09-09: immutable public SPDX attestations, each 658 packages.
+    # Historical publication SHA256: ff7d3aa12697a69ba04ec48fe09d84392191c3665b716c9a524ded249911ce84.
+    # Final publication/anonymous SHA256: fc5b457ff5060c8c1ad29ad16da704f95e03bbb56626b64a9ed262f52f85e605.
+    # An exception requires the exact path AND Git blob identity AND byte size.
+    if ($Size -ne 5928324) { return $false }
+    if ($Path -ceq 'infrastructure/runtime-security/proofs/c14-keycloak-published/publication/registry-attestation-0-payload-0.json') {
+        return $ObjectId -ceq '9dd9bf0dde1160d9b7e5d3eb4c587a73c676102f'
+    }
+    if ($Path -ceq 'infrastructure/runtime-security/proofs/c14-keycloak-published/final/publication/registry-attestation-0-payload-0.json' -or
+            $Path -ceq 'infrastructure/runtime-security/proofs/c14-keycloak-published/final/anonymous/registry-attestation-0-payload-0.json') {
+        return $ObjectId -ceq '18b86fe9a8f30d6060af8f8f700984506a5c97ee'
+    }
+    return $false
+}
+
 function Get-OversizedBlobs {
     param(
         [Parameter(Mandatory = $true)][AllowEmptyCollection()][string[]]$ObjectLines,
@@ -62,12 +80,18 @@ function Get-OversizedBlobs {
         }
 
         $path = $Matches.path
+        $objectId = $Matches.oid
         if ([string]::IsNullOrWhiteSpace($path)) {
             $path = "<path unavailable>"
         }
 
+        # Keep explicitly requested limits below the default 5 MiB strict.
+        if ($MaxBytes -eq 5MB -and (Test-ReviewedFrozenSbom -Path $path -ObjectId $objectId -Size $size)) {
+            continue
+        }
+
         $violations.Add([pscustomobject]@{
-            ObjectId = $Matches.oid
+            ObjectId = $objectId
             Path = $path
             Size = $size
         })

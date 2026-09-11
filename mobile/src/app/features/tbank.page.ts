@@ -1,4 +1,10 @@
-import { Component, OnInit, computed, signal } from '@angular/core';
+import { inject } from '@angular/core';
+import { OrderPaymentApi } from '../core/order-payment.api';
+import { PaymentAdministrationApi } from '../core/payment-administration.api';
+import { PaymentConfigurationApi } from '../core/payment-configuration.api';
+import { ManualPaymentTasksApi } from '../core/manual-payment-tasks.api';
+import { Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
+import { EditorSession } from '../core/editor-session';
 import { FormsModule } from '@angular/forms';
 import {
   IonContent,
@@ -7,12 +13,12 @@ import {
   IonRefresherContent,
   RefresherCustomEvent
 } from '@ionic/angular/standalone';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, forkJoin } from 'rxjs';
 import {
   AdminPaymentLinkResponse,
   AdminPaymentLinkSummaryResponse,
   AdminPaymentLinksPageResponse,
-  ApiService,
+  type ApiService,
   ManualPaymentRecipientMonthlySummaryItem,
   ManualPaymentRecipientMonthlySummaryResponse,
   ManualPaymentTaskAccountingTargetOption,
@@ -125,7 +131,7 @@ function currentMonthInput(): string {
               [showRefresh]="false"
               [hasExtraAction]="true"
               (valueChange)="setSearch($event)"
-              (searchSubmit)="resetPage()"
+              (searchSubmit)="submitSearch()"
             >
               <button
                 mobileSearchActions
@@ -164,10 +170,10 @@ function currentMonthInput(): string {
           />
           }
 
-          @if (error()) {
+          @if (error() || journalError()) {
             <button class="inline-alert" type="button" (click)="load()">
               <span class="material-icons-sharp">error</span>
-              <span>{{ error() }}</span>
+              <span>{{ error() || journalError() }}</span>
             </button>
           }
 
@@ -2166,7 +2172,11 @@ function currentMonthInput(): string {
     }
   `]
 })
-export class TbankPage implements OnInit {
+export class TbankPage implements OnInit, OnDestroy {
+  private readonly orderPaymentApi = inject(OrderPaymentApi);
+  private readonly paymentAdministrationApi = inject(PaymentAdministrationApi);
+  private readonly paymentConfigurationApi = inject(PaymentConfigurationApi);
+  private readonly manualPaymentTasksApi = inject(ManualPaymentTasksApi);
   readonly statusOptions: StatusOption[] = [
     { key: 'all', label: 'Все', icon: 'apps', tone: 'blue' },
     { key: 'active', label: 'Активные', icon: 'bolt', tone: 'yellow' },
@@ -2195,7 +2205,13 @@ export class TbankPage implements OnInit {
   readonly profilePoliciesDirty = signal(false);
   readonly formFieldFocused = signal(false);
   readonly runtimeSettings = signal<TbankRuntimeSettings | null>(null);
-  readonly loading = signal(false);
+  private readonly bootstrapLoading = signal(false);
+  readonly journalLoading = signal(false);
+  readonly loading = computed(() => this.bootstrapLoading() || this.journalLoading());
+  readonly journalError = signal<string | null>(null);
+  private readonly pageReads = new EditorSession();
+  private pageVisible = true;
+  private destroyed = false;
   readonly error = signal<string | null>(null);
   readonly mutatingId = signal<number | null>(null);
   readonly mutatingTaskId = signal<number | null>(null);
@@ -2247,6 +2263,7 @@ export class TbankPage implements OnInit {
   readonly editTaskAccountingTargetError = signal<string | null>(null);
   private adminTaskAccountingPreviewEpoch = 0;
   private editTaskAccountingPreviewEpoch = 0;
+  private manualTaskEditEpoch = 0;
   readonly modeItems = computed<MobileStatusItem[]>(() => [
     {
       key: 'payments',
@@ -2318,14 +2335,8 @@ export class TbankPage implements OnInit {
     }
   ]);
 
-  readonly filteredLinks = computed(() => {
-    const direction = this.sortDirection();
-    return this.links()
-      .sort((a, b) => {
-        const diff = this.timeValue(a.createdAt) - this.timeValue(b.createdAt);
-        return direction === 'asc' ? diff : -diff;
-      });
-  });
+  // Filtering and ordering apply to the complete server journal before paging.
+  readonly filteredLinks = computed(() => this.links());
 
   readonly totalPages = computed(() => Math.max(1, this.paymentTotalPages() || 1));
 
@@ -2463,15 +2474,35 @@ export class TbankPage implements OnInit {
     return 'не выбран';
   });
 
-  constructor(
-    private readonly api: ApiService,
-    private readonly confirm: MobileConfirmService,
+  constructor(private readonly confirm: MobileConfirmService,
     private readonly externalLink: MobileExternalLinkService,
     private readonly manualCardPaymentFlow: MobileManualCardPaymentFlowService
-  ) {}
+  ) { this.pageReads.open(1); }
 
   ngOnInit(): void {
     void this.load();
+  }
+
+  ionViewWillEnter(): void {
+    if (this.pageVisible || this.destroyed) return;
+    this.pageVisible = true;
+    this.pageReads.open(1);
+    if (this.hasUnsavedTbankChanges()) void this.loadPaymentLinks();
+    else void this.load();
+  }
+
+  ionViewWillLeave(): void {
+    this.pageVisible = false;
+    this.pageReads.close();
+    this.recipientSummaryLoadEpoch += 1;
+    this.bootstrapLoading.set(false);
+    this.journalLoading.set(false);
+    this.loadingRecipientSummary.set(false);
+  }
+
+  ngOnDestroy(): void {
+    this.destroyed = true;
+    this.ionViewWillLeave();
   }
 
   async refresh(event: RefresherCustomEvent): Promise<void> {
@@ -2484,32 +2515,32 @@ export class TbankPage implements OnInit {
   }
 
   async load(): Promise<void> {
-    if (this.loading()) {
-      return;
-    }
-
-    this.loading.set(true);
+    if (!this.pageVisible || this.destroyed) return;
+    const ticket = this.pageReads.beginRead('bootstrap');
+    if (!ticket) return;
+    this.bootstrapLoading.set(true);
     this.error.set(null);
     void this.loadRecipientMonthlySummary();
+    const journal = this.loadPaymentLinks();
     try {
-      const [status, linksPage, profiles, manualTasks, runtimeSettings] = await Promise.all([
-        firstValueFrom(this.api.getTbankStatus()),
-        firstValueFrom(this.api.getAdminTbankPaymentLinks(this.paymentLinkQuery())),
-        firstValueFrom(this.api.getAdminTbankPaymentProfiles()),
-        firstValueFrom(this.api.getAdminManualPaymentTasks()),
-        firstValueFrom(this.api.getAdminTbankRuntimeSettings())
-      ]);
+      const state = await this.pageReads.read(ticket, forkJoin({
+        status: this.orderPaymentApi.getTbankStatus(),
+        profiles: this.paymentConfigurationApi.getAdminTbankPaymentProfiles(),
+        manualTasks: this.manualPaymentTasksApi.getAdminManualPaymentTasks(),
+        runtimeSettings: this.paymentConfigurationApi.getAdminTbankRuntimeSettings()
+      }));
+      if (!state || !this.pageReads.accepts(ticket)) return;
+      const { status, profiles, manualTasks, runtimeSettings } = state;
       this.status.set(status);
-      this.applyPaymentLinksPage(linksPage);
       this.manualTasks.set(manualTasks ?? []);
       this.runtimeSettings.set(runtimeSettings);
       this.applyProfilesState(profiles.profiles, profiles.managers);
-      this.keepPageInRange();
     } catch (error) {
-      this.error.set(this.errorMessage(error, 'Не удалось загрузить раздел банка.'));
+      if (this.pageReads.accepts(ticket)) this.error.set(this.errorMessage(error, 'Не удалось загрузить раздел банка.'));
     } finally {
-      this.loading.set(false);
+      if (this.pageReads.accepts(ticket)) this.bootstrapLoading.set(false);
     }
+    await journal;
   }
 
   setMode(mode: TbankMode): void {
@@ -2533,6 +2564,8 @@ export class TbankPage implements OnInit {
     this.search.set(value ?? '');
     this.resetPageAndLoad();
   }
+
+  submitSearch(): void { this.resetPageAndLoad(); }
 
   setStatusFilter(value: PaymentStatusFilter): void {
     this.statusFilter.set(value);
@@ -2613,7 +2646,7 @@ export class TbankPage implements OnInit {
 
   toggleSort(): void {
     this.sortDirection.update((direction) => direction === 'desc' ? 'asc' : 'desc');
-    this.resetPage();
+    this.resetPageAndLoad();
   }
 
   async setRuntimeMode(mode: TbankRuntimeMode): Promise<void> {
@@ -2877,7 +2910,7 @@ export class TbankPage implements OnInit {
     this.savingManualTask.set(true);
     this.error.set(null);
     try {
-      const task = await firstValueFrom(this.api.createAdminManualPaymentTask({
+      const task = await firstValueFrom(this.manualPaymentTasksApi.createAdminManualPaymentTask({
         operationKey: this.adminTaskOperationKey.current(),
         managerId: this.adminTaskManagerId(),
         manualPaymentType: this.adminTaskPaymentType(),
@@ -2919,7 +2952,7 @@ export class TbankPage implements OnInit {
     this.savingProfiles.set(true);
     this.error.set(null);
     try {
-      const state = await firstValueFrom(this.api.updateAdminTbankPaymentProfileAssignments(assignments));
+      const state = await firstValueFrom(this.paymentConfigurationApi.updateAdminTbankPaymentProfileAssignments(assignments));
       this.applyProfilesState(state.profiles, state.managers);
     } catch (error) {
       this.error.set(this.errorMessage(error, 'Не удалось сохранить платежные профили.'));
@@ -2935,7 +2968,7 @@ export class TbankPage implements OnInit {
     this.savingProfilePolicies.set(true);
     this.error.set(null);
     try {
-      const state = await firstValueFrom(this.api.updateAdminPaymentProfilePolicies(this.profilePolicyRequest()));
+      const state = await firstValueFrom(this.paymentConfigurationApi.updateAdminPaymentProfilePolicies(this.profilePolicyRequest()));
       this.applyProfilesState(state.profiles, state.managers);
     } catch (error) {
       this.error.set(this.errorMessage(error, 'Не удалось сохранить политики оплаты.'));
@@ -2957,9 +2990,9 @@ export class TbankPage implements OnInit {
     this.error.set(null);
     let policiesCommitted = false;
     try {
-      await firstValueFrom(this.api.updateAdminPaymentProfilePolicies(this.profilePolicyRequest()));
+      await firstValueFrom(this.paymentConfigurationApi.updateAdminPaymentProfilePolicies(this.profilePolicyRequest()));
       policiesCommitted = true;
-      const state = await firstValueFrom(this.api.updateAdminTbankPaymentProfileAssignments(assignments));
+      const state = await firstValueFrom(this.paymentConfigurationApi.updateAdminTbankPaymentProfileAssignments(assignments));
       this.applyProfilesState(state.profiles, state.managers);
     } catch (error) {
       if (policiesCommitted) {
@@ -2996,8 +3029,9 @@ export class TbankPage implements OnInit {
     this.mutatingId.set(link.id);
     this.error.set(null);
     try {
-      const updated = await firstValueFrom(this.api.cancelAdminTbankPaymentLink(link.id));
+      const updated = await firstValueFrom(this.paymentAdministrationApi.cancelAdminTbankPaymentLink(link.id));
       this.links.update((links) => links.map((item) => item.id === updated.id ? updated : item));
+      void this.loadPaymentLinks();
     } catch (error) {
       this.error.set(this.errorMessage(error, 'Не удалось выполнить возврат.'));
     } finally {
@@ -3021,8 +3055,9 @@ export class TbankPage implements OnInit {
     this.mutatingId.set(link.id);
     this.error.set(null);
     try {
-      const updated = await firstValueFrom(this.api.confirmAdminManualPaymentLink(link.id));
+      const updated = await firstValueFrom(this.paymentAdministrationApi.confirmAdminManualPaymentLink(link.id));
       this.links.update((links) => links.map((item) => item.id === updated.id ? updated : item));
+      void this.loadPaymentLinks();
       await this.loadProfilesOnly();
       await this.loadRecipientMonthlySummary();
     } catch (error) {
@@ -3062,8 +3097,9 @@ export class TbankPage implements OnInit {
     this.mutatingId.set(link.id);
     this.error.set(null);
     try {
-      const updated = await firstValueFrom(this.api.markAdminManualPaymentReceipt(link.id));
+      const updated = await firstValueFrom(this.paymentAdministrationApi.markAdminManualPaymentReceipt(link.id));
       this.links.update((links) => links.map((item) => item.id === updated.id ? updated : item));
+      void this.loadPaymentLinks();
       await this.loadProfilesOnly();
     } catch (error) {
       this.error.set(this.errorMessage(error, 'Не удалось отметить чек.'));
@@ -3080,7 +3116,7 @@ export class TbankPage implements OnInit {
     this.mutatingTaskId.set(task.id);
     this.error.set(null);
     try {
-      const updated = await firstValueFrom(this.api.updateAdminManualPaymentTaskStatus(task.id, status));
+      const updated = await firstValueFrom(this.manualPaymentTasksApi.updateAdminManualPaymentTaskStatus(task.id, status));
       this.manualTasks.update((tasks) => tasks.map((item) => item.id === updated.id ? updated : item));
     } catch (error) {
       this.error.set(this.errorMessage(error, 'Не удалось обновить ручное задание.'));
@@ -3091,6 +3127,7 @@ export class TbankPage implements OnInit {
 
   startManualTaskEdit(task: ManualPaymentTaskResponse): void {
     if (!task?.id || task.status === 'COMPLETED' || task.status === 'CANCELED') return;
+    this.manualTaskEditEpoch += 1;
     this.editingTaskId.set(task.id);
     this.editTaskPaymentType.set(task.manualPaymentType === 'EXTERNAL_LINK' ? 'EXTERNAL_LINK' : 'MOBILE_BANK');
     this.editTaskPhone.set(task.manualPhone ?? '');
@@ -3105,6 +3142,7 @@ export class TbankPage implements OnInit {
   }
 
   cancelManualTaskEdit(): void {
+    this.manualTaskEditEpoch += 1;
     this.editingTaskId.set(null);
     this.editTaskAccountingTargets.set([]);
     this.editTaskAccountingTargetKey.set('');
@@ -3135,7 +3173,7 @@ export class TbankPage implements OnInit {
     const hasBankTarget = this.editTaskPaymentType() === 'EXTERNAL_LINK'
       ? Boolean(this.editTaskPaymentUrl().trim()) && Boolean(this.editTaskRecipient().trim())
       : Boolean(this.editTaskPhone().trim()) && Boolean(this.editTaskRecipient().trim());
-    return this.editingTaskId() === task.id && this.mutatingTaskId() !== task.id
+    return this.pageVisible && !this.destroyed && this.editingTaskId() === task.id && this.mutatingTaskId() == null
       && this.editTaskTargetKopecks() >= Math.max(1, task.reservedAmountKopecks ?? 0)
       && hasBankTarget && !this.editTaskAccountingTargetsLoading()
       && mobileManualTaskTargetValid(this.selectedEditTaskAccountingTarget(), this.editTaskAccountingTargetAcknowledged());
@@ -3144,9 +3182,13 @@ export class TbankPage implements OnInit {
   async saveManualTaskEdit(task: ManualPaymentTaskResponse): Promise<void> {
     const accountingTarget = this.selectedEditTaskAccountingTarget();
     if (!this.canSaveManualTaskEdit(task) || !accountingTarget) return;
+    const pageTicket = this.pageReads.capture();
+    const editEpoch = this.manualTaskEditEpoch;
+    const ownsEditor = () => this.pageReads.accepts(pageTicket) && editEpoch === this.manualTaskEditEpoch
+      && this.editingTaskId() === task.id;
     this.mutatingTaskId.set(task.id);
     try {
-      const updated = await firstValueFrom(this.api.updateAdminManualPaymentTask(task.id, {
+      const updated = await firstValueFrom(this.manualPaymentTasksApi.updateAdminManualPaymentTask(task.id, {
         manualPaymentType: this.editTaskPaymentType(), manualPhone: this.editTaskPhone().trim(),
         manualRecipientName: this.editTaskRecipient().trim(), manualPaymentUrl: this.editTaskPaymentUrl().trim(),
         manualPaymentButtonLabel: this.editTaskPaymentButtonLabel().trim(), targetAmountKopecks: this.editTaskTargetKopecks(),
@@ -3155,12 +3197,14 @@ export class TbankPage implements OnInit {
         accountingTargetKind: accountingTarget.kind, accountingTargetProfileId: accountingTarget.profileId ?? null,
         accountingTargetOverrunAcknowledged: this.editTaskAccountingTargetAcknowledged(), expectedGeneration: task.generation ?? null
       }));
-      this.manualTasks.update(tasks => tasks.map(item => item.id === updated.id ? updated : item));
-      this.cancelManualTaskEdit();
+      if (this.pageReads.accepts(pageTicket)) {
+        this.manualTasks.update(tasks => tasks.map(item => item.id === updated.id ? updated : item));
+      }
+      if (ownsEditor()) this.cancelManualTaskEdit();
     } catch (error) {
-      this.error.set(this.errorMessage(error, 'Не удалось сохранить ручное задание.'));
+      if (ownsEditor()) this.error.set(this.errorMessage(error, 'Не удалось сохранить ручное задание.'));
     } finally {
-      this.mutatingTaskId.set(null);
+      if (this.mutatingTaskId() === task.id) this.mutatingTaskId.set(null);
     }
   }
 
@@ -3437,27 +3481,36 @@ export class TbankPage implements OnInit {
   }
 
   private async loadPaymentLinks(): Promise<void> {
-    if (this.loading()) {
-      return;
-    }
-    this.loading.set(true);
-    this.error.set(null);
+    if (!this.pageVisible || this.destroyed) return;
+    const ticket = this.pageReads.beginRead('journal');
+    if (!ticket) return;
+    const query = this.paymentLinkQuery();
+    this.journalLoading.set(true);
+    this.journalError.set(null);
+    this.links.set([]);
+    this.paymentSummary.set(null);
+    this.paymentTotalElements.set(0);
+    this.paymentTotalPages.set(0);
     try {
-      const page = await firstValueFrom(this.api.getAdminTbankPaymentLinks(this.paymentLinkQuery()));
-      this.applyPaymentLinksPage(page);
+      const page = await this.pageReads.read(ticket, this.paymentAdministrationApi.getAdminTbankPaymentLinks(query));
+      if (page && this.pageReads.accepts(ticket)) this.applyPaymentLinksPage(page);
     } catch (error) {
-      this.error.set(this.errorMessage(error, 'Не удалось обновить журнал платежей.'));
+      if (this.pageReads.accepts(ticket)) this.journalError.set(this.errorMessage(error, 'Не удалось обновить журнал платежей.'));
     } finally {
-      this.loading.set(false);
+      if (this.pageReads.accepts(ticket)) this.journalLoading.set(false);
     }
   }
 
   async loadRecipientMonthlySummary(): Promise<void> {
+    if (!this.pageVisible || this.destroyed) return;
+    const ticket = this.pageReads.beginRead('recipient-summary');
+    if (!ticket) return;
     const loadEpoch = ++this.recipientSummaryLoadEpoch;
     this.loadingRecipientSummary.set(true);
     this.recipientSummaryError.set(null);
     try {
-      const summary = await firstValueFrom(this.api.getAdminManualRecipientMonthlySummary(this.recipientSummaryMonth()));
+      const summary = await this.pageReads.read(ticket, this.manualPaymentTasksApi.getAdminManualRecipientMonthlySummary(this.recipientSummaryMonth()));
+      if (!summary || !this.pageReads.accepts(ticket)) return;
       if (loadEpoch !== this.recipientSummaryLoadEpoch) {
         return;
       }
@@ -3508,6 +3561,7 @@ export class TbankPage implements OnInit {
     source: PaymentLinkListSource;
     from: string;
     to: string;
+    sortDirection: 'asc' | 'desc';
   } {
     return {
       page: this.pageIndex(),
@@ -3516,7 +3570,8 @@ export class TbankPage implements OnInit {
       search: this.search().trim(),
       source: this.paymentSource(),
       from: this.dateFrom(),
-      to: this.dateTo()
+      to: this.dateTo(),
+      sortDirection: this.sortDirection()
     };
   }
 
@@ -3588,7 +3643,7 @@ export class TbankPage implements OnInit {
     this.savingRuntimeSettings.set(true);
     this.error.set(null);
     try {
-      const settings = await firstValueFrom(this.api.updateAdminTbankRuntimeSettings(request));
+      const settings = await firstValueFrom(this.paymentConfigurationApi.updateAdminTbankRuntimeSettings(request));
       this.runtimeSettings.set(settings);
       this.status.update((status) => status ? {
         ...status,
@@ -3609,7 +3664,7 @@ export class TbankPage implements OnInit {
 
   private async loadProfilesOnly(): Promise<boolean> {
     try {
-      const profiles = await firstValueFrom(this.api.getAdminTbankPaymentProfiles());
+      const profiles = await firstValueFrom(this.paymentConfigurationApi.getAdminTbankPaymentProfiles());
       this.applyProfilesState(profiles.profiles, profiles.managers);
       return true;
     } catch {
@@ -3701,7 +3756,7 @@ export class TbankPage implements OnInit {
     }
     this.adminTaskAccountingTargetsLoading.set(true);
     try {
-      const options = await firstValueFrom(this.api.getAdminManualPaymentTaskAccountingTargets(managerId, amount));
+      const options = await firstValueFrom(this.manualPaymentTasksApi.getAdminManualPaymentTaskAccountingTargets(managerId, amount));
       if (epoch !== this.adminTaskAccountingPreviewEpoch) return;
       const normalized = options ?? [];
       this.adminTaskAccountingTargets.set(normalized);
@@ -3732,7 +3787,7 @@ export class TbankPage implements OnInit {
     }
     this.editTaskAccountingTargetsLoading.set(true);
     try {
-      const options = await firstValueFrom(this.api.getAdminManualPaymentTaskAccountingTargets(task.managerId, amount, task.id));
+      const options = await firstValueFrom(this.manualPaymentTasksApi.getAdminManualPaymentTaskAccountingTargets(task.managerId, amount, task.id));
       if (epoch !== this.editTaskAccountingPreviewEpoch) return;
       const normalized = options ?? [];
       const restored = normalized.find(option => option.key === previousKey)

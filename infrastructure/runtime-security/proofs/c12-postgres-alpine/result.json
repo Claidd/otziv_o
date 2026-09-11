@@ -1,0 +1,29 @@
+{
+  "schema": "otziv-postgres-alpine-local-candidate-v1",
+  "recordedAt": "2026-09-08T07:31:35.976395+00:00",
+  "result": "INCOMPATIBLE_CURRENT_LIBC_SEMANTICS_AND_SECURITY_GATE_FAIL",
+  "runtimeBoundaryChecksPassed": 12,
+  "orderingPreserved": false,
+  "caseMappingPreserved": false,
+  "rawHigh": 30,
+  "rawCritical": 1,
+  "rawFixedHighCritical": 31,
+  "unfixedHighCritical": 0,
+  "sourceRowsCopied": false,
+  "sourceWrites": false,
+  "applicationOrOidcStarted": false,
+  "cleanup": "PASS",
+  "sharedSourceChanged": false,
+  "imageCacheRetained": true,
+  "privateCatalog": {
+    "path": "protected/catalog.json",
+    "sha256": "8df0a8f2f33d80698f49bd4712475ad9b65b4a5fbcebf302f24d5f1a118079bd",
+    "protectedAcl": true
+  },
+  "scopeLimits": [
+    "current-data logical transfer",
+    "candidate compressed real-data backup/restore",
+    "old-image real-data rollback",
+    "application compatibility or authentication flows"
+  ]
+}

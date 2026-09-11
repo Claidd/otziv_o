@@ -1,0 +1,52 @@
+[
+  {
+    "artifactId": 10061411510,
+    "name": "reviewed-publication-minio",
+    "apiDigest": "sha256:a3c42e9724decc92a6a322fc4bf2d194a9dadaf3d16564ff946357a56846cd09",
+    "actualDigest": "sha256:a3c42e9724decc92a6a322fc4bf2d194a9dadaf3d16564ff946357a56846cd09",
+    "verified": true,
+    "run": "34238888111",
+    "attempt": "1",
+    "commit": "135747397491454711da71155d50a440fb4d7c97",
+    "files": [
+      "build-metadata.json",
+      "publication.json",
+      "registry-amd64-config.json",
+      "registry-amd64-manifest.json",
+      "registry-attestation-0-payload-0.json",
+      "registry-attestation-0-payload-1.json",
+      "registry-attestation-0.json",
+      "registry-index.json",
+      "vulnerabilities.adjudications.json",
+      "vulnerabilities.json",
+      "vulnerabilities.sbom.cdx.json",
+      "vulnerabilities.scanner.log",
+      "vulnerabilities.triage.json"
+    ]
+  },
+  {
+    "artifactId": 10061732655,
+    "name": "anonymous-download-minio",
+    "apiDigest": "sha256:c128d4eabf1f3e2bebab36d0cdf6f2a04e0cfb9c2589f3ef6aa8f0d97e1c8870",
+    "actualDigest": "sha256:c128d4eabf1f3e2bebab36d0cdf6f2a04e0cfb9c2589f3ef6aa8f0d97e1c8870",
+    "verified": true,
+    "run": "34238888111",
+    "attempt": "1",
+    "commit": "135747397491454711da71155d50a440fb4d7c97",
+    "files": [
+      "anonymous-download.json",
+      "anonymous-image-inspect.json",
+      "anonymous-pull.stderr.log",
+      "anonymous-pull.stdout.log",
+      "before-image-ids.txt",
+      "before-reference-inspect.txt",
+      "docker-client-isolation.json",
+      "registry-amd64-config.json",
+      "registry-amd64-manifest.json",
+      "registry-attestation-0-payload-0.json",
+      "registry-attestation-0-payload-1.json",
+      "registry-attestation-0.json",
+      "registry-index.json"
+    ]
+  }
+]

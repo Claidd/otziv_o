@@ -1,0 +1,607 @@
+{
+  "schema": "otziv-hosted-C7-acceptance-v1",
+  "recordedAt": "2026-09-08T02:46:48.102759+00:00",
+  "repository": "Claidd/otziv_o",
+  "head": "2cd29a17f5ae7c8d7e00d332379c7ac887d5b52f",
+  "branch": "codex/architecture-remediation-20260907",
+  "result": "NOT_ACCEPTED_TWO_FAILED_SECURITY_GATES",
+  "expectedChecks": 20,
+  "successfulChecks": 18,
+  "failedChecks": 2,
+  "checks": [
+    {
+      "name": "Repository contracts",
+      "documentedExpected": true,
+      "enforcedOnMain": false,
+      "job": {
+        "id": 101913297679,
+        "name": "Repository contracts",
+        "status": "completed",
+        "conclusion": "success",
+        "completed_at": "2026-09-08T02:06:13Z",
+        "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178747793/job/101913297679"
+      }
+    },
+    {
+      "name": "Backend (full Testcontainers suite)",
+      "documentedExpected": true,
+      "enforcedOnMain": false,
+      "job": {
+        "id": 101913297672,
+        "name": "Backend (full Testcontainers suite)",
+        "status": "completed",
+        "conclusion": "success",
+        "completed_at": "2026-09-08T02:23:04Z",
+        "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178747793/job/101913297672"
+      }
+    },
+    {
+      "name": "Issuer security generation (real Keycloak and PostgreSQL)",
+      "documentedExpected": true,
+      "enforcedOnMain": false,
+      "job": {
+        "id": 101913297493,
+        "name": "Issuer security generation (real Keycloak and PostgreSQL)",
+        "status": "completed",
+        "conclusion": "success",
+        "completed_at": "2026-09-08T02:16:28Z",
+        "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178747793/job/101913297493"
+      }
+    },
+    {
+      "name": "Frontend (unit and production build)",
+      "documentedExpected": true,
+      "enforcedOnMain": false,
+      "job": {
+        "id": 101913297706,
+        "name": "Frontend (unit and production build)",
+        "status": "completed",
+        "conclusion": "success",
+        "completed_at": "2026-09-08T02:06:40Z",
+        "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178747793/job/101913297706"
+      }
+    },
+    {
+      "name": "Mobile web (unit and production build)",
+      "documentedExpected": true,
+      "enforcedOnMain": false,
+      "job": {
+        "id": 101913297761,
+        "name": "Mobile web (unit and production build)",
+        "status": "completed",
+        "conclusion": "success",
+        "completed_at": "2026-09-08T02:08:50Z",
+        "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178747793/job/101913297761"
+      }
+    },
+    {
+      "name": "WhatsApp gateway (unit)",
+      "documentedExpected": true,
+      "enforcedOnMain": false,
+      "job": {
+        "id": 101913297695,
+        "name": "WhatsApp gateway (unit)",
+        "status": "completed",
+        "conclusion": "success",
+        "completed_at": "2026-09-08T02:05:28Z",
+        "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178747793/job/101913297695"
+      }
+    },
+    {
+      "name": "External review worker (syntax and health)",
+      "documentedExpected": true,
+      "enforcedOnMain": false,
+      "job": {
+        "id": 101913297767,
+        "name": "External review worker (syntax and health)",
+        "status": "completed",
+        "conclusion": "success",
+        "completed_at": "2026-09-08T02:07:13Z",
+        "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178747793/job/101913297767"
+      }
+    },
+    {
+      "name": "Built web and mobile browser scenarios",
+      "documentedExpected": true,
+      "enforcedOnMain": false,
+      "job": {
+        "id": 101913297753,
+        "name": "Built web and mobile browser scenarios",
+        "status": "completed",
+        "conclusion": "success",
+        "completed_at": "2026-09-08T02:09:04Z",
+        "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178747793/job/101913297753"
+      }
+    },
+    {
+      "name": "Android native tests, lint and debug assembly",
+      "documentedExpected": true,
+      "enforcedOnMain": false,
+      "job": {
+        "id": 101913297763,
+        "name": "Android native tests, lint and debug assembly",
+        "status": "completed",
+        "conclusion": "success",
+        "completed_at": "2026-09-08T02:09:11Z",
+        "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178747793/job/101913297763"
+      }
+    },
+    {
+      "name": "Shared client package and compatibility fixtures",
+      "documentedExpected": true,
+      "enforcedOnMain": false,
+      "job": {
+        "id": 101913297805,
+        "name": "Shared client package and compatibility fixtures",
+        "status": "completed",
+        "conclusion": "success",
+        "completed_at": "2026-09-08T02:07:30Z",
+        "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178747793/job/101913297805"
+      }
+    },
+    {
+      "name": "Built integration image (backend)",
+      "documentedExpected": true,
+      "enforcedOnMain": false,
+      "job": {
+        "id": 101913297879,
+        "name": "Built integration image (backend)",
+        "status": "completed",
+        "conclusion": "success",
+        "completed_at": "2026-09-08T02:10:07Z",
+        "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178747793/job/101913297879"
+      }
+    },
+    {
+      "name": "Built integration image (web)",
+      "documentedExpected": true,
+      "enforcedOnMain": false,
+      "job": {
+        "id": 101913297874,
+        "name": "Built integration image (web)",
+        "status": "completed",
+        "conclusion": "success",
+        "completed_at": "2026-09-08T02:08:10Z",
+        "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178747793/job/101913297874"
+      }
+    },
+    {
+      "name": "Built integration image (worker)",
+      "documentedExpected": true,
+      "enforcedOnMain": false,
+      "job": {
+        "id": 101913297844,
+        "name": "Built integration image (worker)",
+        "status": "completed",
+        "conclusion": "success",
+        "completed_at": "2026-09-08T02:08:19Z",
+        "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178747793/job/101913297844"
+      }
+    },
+    {
+      "name": "Built integration image (whatsapp)",
+      "documentedExpected": true,
+      "enforcedOnMain": false,
+      "job": {
+        "id": 101913297732,
+        "name": "Built integration image (whatsapp)",
+        "status": "completed",
+        "conclusion": "success",
+        "completed_at": "2026-09-08T02:06:16Z",
+        "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178747793/job/101913297732"
+      }
+    },
+    {
+      "name": "Built integration image (observer)",
+      "documentedExpected": true,
+      "enforcedOnMain": false,
+      "job": {
+        "id": 101913297937,
+        "name": "Built integration image (observer)",
+        "status": "completed",
+        "conclusion": "success",
+        "completed_at": "2026-09-08T02:09:25Z",
+        "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178747793/job/101913297937"
+      }
+    },
+    {
+      "name": "Built integration image (publisher)",
+      "documentedExpected": true,
+      "enforcedOnMain": false,
+      "job": {
+        "id": 101913297872,
+        "name": "Built integration image (publisher)",
+        "status": "completed",
+        "conclusion": "success",
+        "completed_at": "2026-09-08T02:08:15Z",
+        "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178747793/job/101913297872"
+      }
+    },
+    {
+      "name": "Dependency audit gate",
+      "documentedExpected": true,
+      "enforcedOnMain": false,
+      "job": {
+        "id": 101914254865,
+        "name": "Dependency audit gate",
+        "status": "completed",
+        "conclusion": "failure",
+        "completed_at": "2026-09-08T02:09:41Z",
+        "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178747857/job/101914254865"
+      }
+    },
+    {
+      "name": "Upstream image security gate",
+      "documentedExpected": true,
+      "enforcedOnMain": false,
+      "job": {
+        "id": 101918410471,
+        "name": "Upstream image security gate",
+        "status": "completed",
+        "conclusion": "failure",
+        "completed_at": "2026-09-08T02:33:58Z",
+        "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178747793/job/101918410471"
+      }
+    },
+    {
+      "name": "gitleaks",
+      "documentedExpected": true,
+      "enforcedOnMain": false,
+      "job": {
+        "id": 101913297073,
+        "name": "gitleaks",
+        "status": "completed",
+        "conclusion": "success",
+        "completed_at": "2026-09-08T02:04:53Z",
+        "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178747805/job/101913297073"
+      }
+    },
+    {
+      "name": "SQL injection guard",
+      "documentedExpected": true,
+      "enforcedOnMain": false,
+      "job": {
+        "id": 101913297296,
+        "name": "SQL injection guard",
+        "status": "completed",
+        "conclusion": "success",
+        "completed_at": "2026-09-08T02:04:30Z",
+        "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178747859/job/101913297296"
+      }
+    }
+  ],
+  "mainBranchEnforcement": {
+    "branch": "main",
+    "revision": "3458e56f29ec0288925f2a4795105fe863da5158",
+    "protected": false,
+    "branchSummaryProtection": {
+      "enabled": false,
+      "required_status_checks": {
+        "enforcement_level": "off",
+        "contexts": [],
+        "checks": []
+      }
+    },
+    "repositoryRulesetCount": 0,
+    "effectiveRuleCount": 0,
+    "rulesets": [],
+    "effectiveRuleTypes": [],
+    "serverSettingsChanged": false
+  },
+  "backend": {
+    "runId": 34178744907,
+    "event": "push",
+    "observedRunAttempt": 1,
+    "job": {
+      "id": 101913289203,
+      "name": "Backend (full Testcontainers suite)",
+      "status": "completed",
+      "conclusion": "success",
+      "completed_at": "2026-09-08T02:20:14Z",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178744907/job/101913289203"
+    },
+    "artifact": {
+      "id": 10038447587,
+      "name": "backend-test-reports",
+      "bytes": 9944259,
+      "apiDigest": "sha256:0e9e0c20eae951422ccb98ff72a1b3537f9835205a71fafd939ec2c7638f4d14",
+      "actualSha256": "0e9e0c20eae951422ccb98ff72a1b3537f9835205a71fafd939ec2c7638f4d14",
+      "apiDigestVerified": true,
+      "createdAt": "2026-09-08T02:20:11Z",
+      "expiresAt": "2026-09-15T02:20:09Z",
+      "workflowRun": {
+        "id": 34178744907,
+        "repository_id": 650754525,
+        "head_repository_id": 650754525,
+        "head_branch": "codex/architecture-remediation-20260907",
+        "head_sha": "2cd29a17f5ae7c8d7e00d332379c7ac887d5b52f"
+      },
+      "artifactAttemptFieldProvided": false,
+      "archivePath": ".codex-tmp/security-closure-20260908/c7-hosted-helper/records/run-34178744907/20260908T022225Z-29bda008f4/artifact-10038447587.zip"
+    },
+    "retrieval": {
+      "downloads": 1,
+      "helperSha256": "d931b46c18e2bd0f949700b7a045663829e0f2065f84152d65098ea9f637636d",
+      "initialFilesystemExtraction": "FAILED_FileNotFoundError_LONG_WINDOWS_PATH",
+      "followup": "Retained exact ZIP validated offline with original helper.zip_members, API SHA and ZIP CRC; XML parsed in memory without another download or filesystem extraction.",
+      "failedExtractionNotReclassifiedAsSuccess": true
+    },
+    "xmlFiles": 679,
+    "allXmlCountsMatchActualTestcaseElements": true,
+    "allArtifactXmlCounts": {
+      "total": 4713,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 15,
+      "passed": 4698
+    },
+    "fullVerifyCountsExcludingSeparateBenchmark": {
+      "total": 4712,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 15,
+      "passed": 4697
+    },
+    "separatePostVerifyBenchmark": [
+      {
+        "path": "TEST-com.hunt.otziv.performance.FinancialCtePlanEvidence.xml",
+        "sha256": "4c4760af65241ebf76cd8d9d95a9597792521168e09436aac09d89b8a0e2be2a",
+        "bytes": 936661,
+        "suiteName": "com.hunt.otziv.performance.FinancialCtePlanEvidence",
+        "counts": {
+          "total": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "passed": 1
+        }
+      }
+    ],
+    "duplicateTestcaseIdentityCount": 0
+  },
+  "dependencyAudit": {
+    "run": {
+      "id": 34178747857,
+      "run_attempt": 1,
+      "name": "Dependency audit",
+      "workflow_id": 301871657,
+      "event": "pull_request",
+      "head_sha": "2cd29a17f5ae7c8d7e00d332379c7ac887d5b52f",
+      "head_branch": "codex/architecture-remediation-20260907",
+      "status": "completed",
+      "conclusion": "failure",
+      "created_at": "2026-09-08T02:03:48Z",
+      "updated_at": "2026-09-08T02:09:42Z",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34178747857"
+    },
+    "reports": [
+      {
+        "report": "backend/target/dependency-check-report.json",
+        "sha256": "724e87088a26b196371860ad8398bc595cd3a278e20940573dbdbd1d39c85d31",
+        "bytes": 5869409,
+        "engineVersion": "13.0.0",
+        "dependencyOccurrences": 474,
+        "activeVulnerabilityOccurrences": 9,
+        "activeCvssAtLeast7Occurrences": 0,
+        "suppressedVulnerabilityOccurrences": 37
+      },
+      {
+        "report": "backend/build-support/target/dependency-check-report.json",
+        "sha256": "92fb30fd7c23d875084072e79648e0ad9116d22daaa4d8adc449ff0814152d95",
+        "bytes": 2055473,
+        "engineVersion": "13.0.0",
+        "dependencyOccurrences": 165,
+        "activeVulnerabilityOccurrences": 0,
+        "activeCvssAtLeast7Occurrences": 0,
+        "suppressedVulnerabilityOccurrences": 2
+      },
+      {
+        "report": "backend/build-support/dependency-audit/target/dependency-check-report.json",
+        "sha256": "edad9d514c000c581f23391beb1820073ab27290e36d13ab998ab946df701005",
+        "bytes": 3077374,
+        "engineVersion": "13.0.0",
+        "dependencyOccurrences": 246,
+        "activeVulnerabilityOccurrences": 1,
+        "activeCvssAtLeast7Occurrences": 1,
+        "suppressedVulnerabilityOccurrences": 2
+      },
+      {
+        "report": "backend/build-support/site-plugin/target/dependency-check-report.json",
+        "sha256": "56eec42b98a4a1950991dccd89acd0e4a1a401663cbc64467324aba4afe755e6",
+        "bytes": 2756837,
+        "engineVersion": "13.0.0",
+        "dependencyOccurrences": 216,
+        "activeVulnerabilityOccurrences": 2,
+        "activeCvssAtLeast7Occurrences": 1,
+        "suppressedVulnerabilityOccurrences": 2
+      },
+      {
+        "report": "backend/build-support/test-transport/target/dependency-check-report.json",
+        "sha256": "383addcbd7d72d9b44b0f3bbdfee2839539fcffe7e120586f87fba63b492b3bb",
+        "bytes": 1739467,
+        "engineVersion": "13.0.0",
+        "dependencyOccurrences": 142,
+        "activeVulnerabilityOccurrences": 0,
+        "activeCvssAtLeast7Occurrences": 0,
+        "suppressedVulnerabilityOccurrences": 0
+      },
+      {
+        "report": "infrastructure/keycloak/security-generation/target/dependency-check-report.json",
+        "sha256": "5a1d9048fb648876898cc8978006166d36b6876189e11f7cad17a0a0c922388b",
+        "bytes": 3287673,
+        "engineVersion": "13.0.0",
+        "dependencyOccurrences": 265,
+        "activeVulnerabilityOccurrences": 22,
+        "activeCvssAtLeast7Occurrences": 0,
+        "suppressedVulnerabilityOccurrences": 1
+      }
+    ],
+    "reportsComplete": true,
+    "overlappingDependencyOccurrences": 1508,
+    "activeFindingOccurrences": 34,
+    "activeCvssAtLeast7Occurrences": 2,
+    "existingSuppressedOccurrences": 44,
+    "npm": {
+      "jobs": [
+        {
+          "directory": "infrastructure/browser-smoke",
+          "jobId": 101913404275,
+          "conclusion": "success",
+          "audits": [
+            {
+              "command": "npm audit --audit-level=low",
+              "vulnerabilities": 0,
+              "commandLogLine": 156,
+              "resultLogLine": 160,
+              "stepConclusion": "success"
+            },
+            {
+              "command": "npm audit --omit=dev --audit-level=moderate",
+              "vulnerabilities": 0,
+              "commandLogLine": 161,
+              "resultLogLine": 165,
+              "stepConclusion": "success"
+            }
+          ],
+          "logSha256": "d4a2224de421d0b1abfc9c750ea1a72c79394e4f42320d793bd38554725edf01",
+          "rawJobResponseSha256": "23640ea8e58feb6ba7e052ebf3ecbac2c22bdfcbbc5e73929215fedbec2e3025"
+        },
+        {
+          "directory": "whatsapp",
+          "jobId": 101913404299,
+          "conclusion": "success",
+          "audits": [
+            {
+              "command": "npm audit --audit-level=low",
+              "vulnerabilities": 0,
+              "commandLogLine": 154,
+              "resultLogLine": 158,
+              "stepConclusion": "success"
+            },
+            {
+              "command": "npm audit --omit=dev --audit-level=moderate",
+              "vulnerabilities": 0,
+              "commandLogLine": 159,
+              "resultLogLine": 163,
+              "stepConclusion": "success"
+            }
+          ],
+          "logSha256": "28ade350282e060a3905ac30acd03e1a1287d7392295a70766c9128ba315edae",
+          "rawJobResponseSha256": "e27142f4ab2b4a18198291936c914d7b5468dc5a86f59ae4317486359c9d84c1"
+        },
+        {
+          "directory": "backend/external-review-worker",
+          "jobId": 101913404302,
+          "conclusion": "success",
+          "audits": [
+            {
+              "command": "npm audit --audit-level=low",
+              "vulnerabilities": 0,
+              "commandLogLine": 152,
+              "resultLogLine": 156,
+              "stepConclusion": "success"
+            },
+            {
+              "command": "npm audit --omit=dev --audit-level=moderate",
+              "vulnerabilities": 0,
+              "commandLogLine": 157,
+              "resultLogLine": 161,
+              "stepConclusion": "success"
+            }
+          ],
+          "logSha256": "1ca408f8034d1de41d49aecb59f39639ac3d2d2d9a523758ae134108f0785eff",
+          "rawJobResponseSha256": "b70218f61805245c74e2326b17e0e209d4cb141e74333d7d22a965edbdfcf4fc"
+        },
+        {
+          "directory": "mobile",
+          "jobId": 101913404305,
+          "conclusion": "success",
+          "audits": [
+            {
+              "command": "npm audit --audit-level=low",
+              "vulnerabilities": 0,
+              "commandLogLine": 157,
+              "resultLogLine": 161,
+              "stepConclusion": "success"
+            },
+            {
+              "command": "npm audit --omit=dev --audit-level=moderate",
+              "vulnerabilities": 0,
+              "commandLogLine": 162,
+              "resultLogLine": 166,
+              "stepConclusion": "success"
+            }
+          ],
+          "logSha256": "d04ba9610ae85351aa6e2749d5c9c2777b28fd3950693e0507da4e7e4ba59de4",
+          "rawJobResponseSha256": "31baf070d14042c98566f66e0df4afcd68729dea895abb4761edd6232a91f862"
+        },
+        {
+          "directory": "frontend",
+          "jobId": 101913404321,
+          "conclusion": "success",
+          "audits": [
+            {
+              "command": "npm audit --audit-level=low",
+              "vulnerabilities": 0,
+              "commandLogLine": 157,
+              "resultLogLine": 161,
+              "stepConclusion": "success"
+            },
+            {
+              "command": "npm audit --omit=dev --audit-level=moderate",
+              "vulnerabilities": 0,
+              "commandLogLine": 162,
+              "resultLogLine": 166,
+              "stepConclusion": "success"
+            }
+          ],
+          "logSha256": "17bb5d930c7f292aff9991a2ade5ed0b036b3fc63b5ca08bed05f8caf940451f",
+          "rawJobResponseSha256": "ec5fcbc0324ba279c4624a97ee8313da8664fc588e600ee35678106bc8f9eeb5"
+        }
+      ],
+      "completedJobs": 5,
+      "explicitAuditCommands": 10,
+      "reportedVulnerabilitiesAllCommands": 0
+    },
+    "rulesChangedByThisStatusReport": false,
+    "preparedJTidyExceptionIntegrated": false,
+    "limit": "Independent review of the proposed JTidy exception was rejected by automatic cybersecurity review. It was stopped, not integrated or retried through another tool."
+  },
+  "gitguardian": {
+    "conclusion": "SKIPPED",
+    "reason": "Exact retained official Site-plugin test credential fixture reviewed; not a clean scan PASS.",
+    "dispositionReceipt": {
+      "path": ".codex-tmp/security-closure-20260908/gitguardian-site-fixture/c7-disposition.json",
+      "sha256": "1ddd152fa4379fd0ee1230f0d12e3205a3a6a86e6a0e5eeda3c08cc1b86b04ae",
+      "bytes": 748
+    }
+  },
+  "evidence": {
+    "priorRequiredCheckSnapshot": {
+      "path": ".codex-tmp/security-closure-20260908/c7-required-check-review/required-checks-summary.json",
+      "sha256": "a46cff27107b5f35be9b5aa10b0a41a652c4529503968ad9a21145ec973e0cb3",
+      "bytes": 29756
+    },
+    "finalNormalPullRequestRun": {
+      "path": ".codex-tmp/security-closure-20260908/c7-hosted-helper/records/run-34178747793/20260908T024410Z-f6e3d25b1c/run-evidence.json",
+      "sha256": "740e4c32793a29e50da9f9157701be4127fd9aa61674f6617fdf831ace5ca44f",
+      "bytes": 154827
+    },
+    "completedDependencyRun": {
+      "path": ".codex-tmp/security-closure-20260908/c7-hosted-helper/records/run-34178747857/20260908T021110Z-30e81135b5/run-evidence.json",
+      "sha256": "436cd301627d83969d7ee8a7f52564039b9241dfa419625d00563b1cfeaab0aa",
+      "bytes": 26273
+    },
+    "completeDependencyAggregate": {
+      "path": ".codex-tmp/security-closure-20260908/c7-dependency-audit-monitor/aggregate.json",
+      "sha256": "ae7343a41e36737a72ab402a5fd0b11febe1ffe5ac87400730856898174e744d",
+      "bytes": 49119
+    }
+  },
+  "limits": [
+    "This describes C7 and does not claim subsequent source commits have passed CI.",
+    "Image publication and anonymous download are separate evidence; this status record does not activate an image.",
+    "No production rollout, branch-protection mutation or merge was performed.",
+    "The proposed JTidy exception and blocked MinIO/mc work remain unresolved."
+  ]
+}

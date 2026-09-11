@@ -1,0 +1,9 @@
+*
+!Dockerfile
+!ApplyPatch.java
+!ModulePatch.java
+!ManagedModelsProof.java
+!managed-models.patch
+!source-before.sha256
+!source-after.sha256
+!source-provenance.json

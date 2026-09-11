@@ -1,0 +1,16 @@
+{
+  "schema": "otziv-gitguardian-incident-classification-v1",
+  "observedDate": "2026-09-08",
+  "workspace": "561166",
+  "incident": "37070812",
+  "occurrence": "296614395",
+  "url": "https://dashboard.gitguardian.com/workspace/561166/incidents/37070812?occurrence=296614395",
+  "observedStatus": "Ignored",
+  "observedReason": "Test credential",
+  "verification": "Authenticated GitGuardian incident UI showed Ignored Test credential after classification",
+  "sourceFile": "backend/build-support/site-plugin/src/test/java/org/apache/maven/plugins/site/deploy/SiteDeployWebDavThruProxyWitAuthzInProxyTest.java",
+  "scope": "One known incident with two occurrences of the upstream Apache Maven local proxy test fixture",
+  "globalIgnoreRuleCreated": false,
+  "scannerDisabled": false,
+  "githubCheckRerunProven": false
+}

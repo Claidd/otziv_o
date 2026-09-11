@@ -1,0 +1,244 @@
+{
+  "schema": "otziv-actual-vps-postgres-rehearsal-v1",
+  "result": "FAIL",
+  "startedAt": "2026-09-08T14:58:35.050359+00:00",
+  "checks": [
+    {
+      "name": "private_acl_user_and_system_only",
+      "passed": true
+    },
+    {
+      "name": "local_docker_endpoint",
+      "passed": true
+    },
+    {
+      "name": "custom_dump_stream_complete",
+      "passed": true
+    },
+    {
+      "name": "source_containers_unchanged",
+      "passed": true
+    },
+    {
+      "name": "source_config_role_schema_unchanged",
+      "passed": true
+    },
+    {
+      "name": "source_critical_rows_stable_during_capture",
+      "passed": true
+    },
+    {
+      "name": "candidate_manifest_expected",
+      "passed": true
+    },
+    {
+      "name": "single_captured_login_role",
+      "passed": true
+    },
+    {
+      "name": "local_environment_values_single_line",
+      "passed": true
+    },
+    {
+      "name": "network_internal_without_egress",
+      "passed": true
+    },
+    {
+      "name": "restore_critical_counts_and_hashes_exact",
+      "passed": true
+    },
+    {
+      "name": "restore_all_capture_stable_tables_exact",
+      "passed": true
+    },
+    {
+      "name": "old-kc_oidc_discovery",
+      "passed": true
+    },
+    {
+      "name": "old-kc_health_ready",
+      "passed": true
+    },
+    {
+      "name": "old-kc_existing_admin_read",
+      "passed": true
+    },
+    {
+      "name": "clean_stop_old-kc",
+      "passed": true
+    },
+    {
+      "name": "old_keycloak_preserves_critical_rows",
+      "passed": true
+    },
+    {
+      "name": "clean_stop_old-pg",
+      "passed": true
+    },
+    {
+      "name": "same_volume_pg_upgrade_all_table_hashes_exact",
+      "passed": true
+    },
+    {
+      "name": "candidate_actual_locale_encoding_match",
+      "passed": true
+    },
+    {
+      "name": "candidate_version_17_11",
+      "passed": true
+    },
+    {
+      "name": "old-kc-new-pg_oidc_discovery",
+      "passed": true
+    },
+    {
+      "name": "old-kc-new-pg_health_ready",
+      "passed": true
+    },
+    {
+      "name": "old-kc-new-pg_existing_admin_read",
+      "passed": true
+    },
+    {
+      "name": "clean_stop_old-kc-new-pg",
+      "passed": true
+    },
+    {
+      "name": "old_keycloak_on_candidate_preserves_critical_rows",
+      "passed": true
+    }
+  ],
+  "productionWrites": false,
+  "sourceTemporaryFiles": false,
+  "privateRowsPublished": false,
+  "resources": {
+    "internalNetwork": true,
+    "publishedPorts": 0,
+    "postgresMiB": 512,
+    "keycloakMiB": 1536,
+    "httpRunnerMiB": 256
+  },
+  "captureReused": true,
+  "source": {
+    "containers": {
+      "postgres": {
+        "id": "7856d745adeedfd2bd1cb23c348b1c96810822300e9a35a732ff17b604d52ada",
+        "imageId": "sha256:f9cab62aaf3471220dcbdeea5a686fca1c7f9e99621db14fdaebceaffe7a8f24",
+        "startedAt": "2026-09-05T22:38:45.99491188Z",
+        "restartCount": 0,
+        "composeConfigHash": "6ae3c16984beeb41df791774543a09381dcfe980a613696f388efb050dccacbe"
+      },
+      "keycloak": {
+        "id": "a3f24ed09f8b9780098d878eda859190626eb60807bc90f3f168898d5d2dfd6e",
+        "imageId": "sha256:df8a2a25b1d12325a193a3a52f75a705faa55c76027601a8f04fc86e8ba3b8e5",
+        "startedAt": "2026-09-05T22:38:45.332885946Z",
+        "restartCount": 0,
+        "composeConfigHash": "72bea4b89d9448f2f09a8ef7544ad0d056a6d45cfe19256b8be270521aeb3082"
+      }
+    },
+    "postgresVersion": "17.10 (Debian 17.10-1.pgdg13+1)",
+    "locale": {
+      "ctype": "en_US.utf8",
+      "collate": "en_US.utf8",
+      "provider": "c",
+      "actualVersion": "2.41",
+      "providerLocale": null,
+      "recordedVersion": "2.41"
+    },
+    "encoding": "UTF8",
+    "applicationObjects": {
+      "views": 0,
+      "tables": 88,
+      "indexes": 196,
+      "sequences": 0,
+      "foreignTables": 0,
+      "unloggedTables": 0
+    },
+    "extensions": [
+      {
+        "name": "plpgsql",
+        "version": "1.0"
+      }
+    ],
+    "rolesSha256": "3fdc716841ac445cf2e6dfb8704d936aa9ccc6ee37a19efb620be59eb9fa36ea",
+    "criticalRows": [
+      {
+        "hash": "e7913481077d2b8553cf00628b3af435375c56fe9ca7fea674b55a9413c047f7",
+        "rows": 2,
+        "table": "realm"
+      },
+      {
+        "hash": "49db875d4a730ecb5213b6375242baeb927c9b0f7250020e916a39bbed60a79d",
+        "rows": 32,
+        "table": "user_entity"
+      },
+      {
+        "hash": "891a3412feb6e5d9d4563d585163457b2b035041086b24ea707c79a222f85946",
+        "rows": 16,
+        "table": "client"
+      },
+      {
+        "hash": "c00c821d16451f8e6f8ccef77cb679beede57dc477958ad52e4c3466fe97712f",
+        "rows": 31,
+        "table": "credential"
+      },
+      {
+        "hash": "1faa7699f56b37d46e600f06f6ac1695cea091b1ef0fa6caf793bc1b56fdc419",
+        "rows": 89,
+        "table": "keycloak_role"
+      },
+      {
+        "hash": "dbf3804d9aa8ec69e20b403e66afcb2ce5533dc9aadda58702e36f25aa6255db",
+        "rows": 67,
+        "table": "user_role_mapping"
+      }
+    ],
+    "dumpBytes": 1873669,
+    "dumpSha256": "0f7d9a89469ff7042e7603052b5de36a8e1a6b374e2e4f9dce44e3657e0d33df",
+    "rolesDdlSha256": "7802bf496b089bc8447632682ee0919ec7d316f906b23672e5ef06ad98cdc0ce",
+    "configs": {
+      "configSha256": "d6d8c66b3955ae5400e0fc4b4aea23fc75ed73bc107aed78cfd36d40c96c889f",
+      "hbaSha256": "af0fdb739b67d1a552cd82c19311b813e753d4f651a61e6b563f48b55dca5e74",
+      "identSha256": "b4dfef08731a7d20a3bb724ad4cf3e1cd91ec01fbe51349c6a3acc5704072965"
+    }
+  },
+  "images": {
+    "oldPostgres": {
+      "reference": "postgres@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d",
+      "id": "sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d"
+    },
+    "newPostgres": {
+      "reference": "otziv-c14-postgres:source-runtime-v6",
+      "id": "sha256:ebf646d4a2ed114de7138af57159508770872d10b35ce56f3f5a9193c87f719e"
+    },
+    "oldKeycloak": {
+      "reference": "quay.io/keycloak/keycloak@sha256:4883630ef9db14031cde3e60700c9a9a8eaf1b5c24db1589d6a2d43de38ba2a9",
+      "id": "sha256:4883630ef9db14031cde3e60700c9a9a8eaf1b5c24db1589d6a2d43de38ba2a9"
+    },
+    "newKeycloak": {
+      "reference": "ghcr.io/claidd/otziv-security@sha256:93dd42a5379a80fc0673bc1d0c5601d3b35009c8250394b1e2b45082388c82cc",
+      "id": "sha256:93dd42a5379a80fc0673bc1d0c5601d3b35009c8250394b1e2b45082388c82cc"
+    }
+  },
+  "captureStableTables": 88,
+  "keycloakChecks": {
+    "old-kc": {
+      "adminCredentialsAvailable": true,
+      "adminRead": true,
+      "realmCount": 2
+    },
+    "old-kc-new-pg": {
+      "adminCredentialsAvailable": true,
+      "adminRead": true,
+      "realmCount": 2
+    }
+  },
+  "candidateOptionalJitDifference": {
+    "source": true,
+    "candidate": false,
+    "previouslyApproved": true
+  },
+  "errorCode": "keycloak_early_exit_target-kc",
+  "completedAt": "2026-09-08T15:01:28.681417+00:00",
+  "scriptSha256": "2117ef7870ee52452a7b8b1796590a2eb7b2248daa8d86671bfe2e0c648dfe12"
+}

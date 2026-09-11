@@ -1,0 +1,16 @@
+{
+  "schema": "otziv-keycloak-publication-attempt-failure-v1",
+  "run": "34247828233",
+  "attempt": "1",
+  "commit": "37a593f970406117fba81781ee9034cb89ce2f41",
+  "publicationResult": "PASS",
+  "anonymousJobId": 102135767394,
+  "anonymousResult": "FAIL",
+  "verificationStarted": false,
+  "failureStep": "Download this component's publication from this workflow run",
+  "failure": "ListArtifacts received HTTP 403 Forbidden from intermediary before registry or pull verification.",
+  "anonymousArtifactProduced": false,
+  "privateJobLogSha256": "62cf7231d4b3143ef4a9134156a7ec712a5880a45a46abcc47fbb7b85aad0c8c",
+  "acceptedForActivation": false,
+  "retainedPublishedImage": "ghcr.io/claidd/otziv-security@sha256:949f59488d0a83174708ad52e8f8353c410bce6d0107e9660fbb77a0e3d48f9c"
+}

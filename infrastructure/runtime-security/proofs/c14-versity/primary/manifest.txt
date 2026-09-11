@@ -1,0 +1,26 @@
+Name:      ghcr.io/versity/versitygw:v1.8.0
+MediaType: application/vnd.oci.image.index.v1+json
+Digest:    sha256:30292fc2eeacc67a36993b01f7a7a5e3361a19cced0e80c1d71cfa2a4b0a2499
+           
+Manifests: 
+  Name:        ghcr.io/versity/versitygw:v1.8.0@sha256:97e7d5a35ab758eb1761a9e717644fafc614c5f6026c05482bd1fb77205193a1
+  MediaType:   application/vnd.oci.image.manifest.v1+json
+  Platform:    linux/amd64
+               
+  Name:        ghcr.io/versity/versitygw:v1.8.0@sha256:59c4dfff913e21c192c5f601a6a483218731a7bb571c5a1a7fac40c954c4c800
+  MediaType:   application/vnd.oci.image.manifest.v1+json
+  Platform:    linux/arm64
+               
+  Name:        ghcr.io/versity/versitygw:v1.8.0@sha256:8fc437af48a5dd08777ba24e460bb82e806b74ac309b2a104f5110510a1f6674
+  MediaType:   application/vnd.oci.image.manifest.v1+json
+  Platform:    unknown/unknown
+  Annotations: 
+    vnd.docker.reference.digest: sha256:97e7d5a35ab758eb1761a9e717644fafc614c5f6026c05482bd1fb77205193a1
+    vnd.docker.reference.type:   attestation-manifest
+               
+  Name:        ghcr.io/versity/versitygw:v1.8.0@sha256:7147024ac1b4e3a2a77a35ef9d1eaa3bf8c6761659527fb2f2245a277a633385
+  MediaType:   application/vnd.oci.image.manifest.v1+json
+  Platform:    unknown/unknown
+  Annotations: 
+    vnd.docker.reference.type:   attestation-manifest
+    vnd.docker.reference.digest: sha256:59c4dfff913e21c192c5f601a6a483218731a7bb571c5a1a7fac40c954c4c800

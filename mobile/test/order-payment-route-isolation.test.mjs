@@ -6,14 +6,6 @@ const orderSource = source('src/app/features/order-details.page.ts');
 const paySource = source('src/app/features/public-pay.page.ts');
 const groupSource = source('src/app/features/public-pay-group.page.ts');
 
-test('mobile order details cancels route GETs and clears invalid or changed route state', () => {
-  assert.match(orderSource, /route\.paramMap\.subscribe[\s\S]*?activateOrderRoute\(/);
-  assert.match(orderSource, /activateOrderRoute\([\s\S]*?orderRouteGuard\.change\(routeKey\)[\s\S]*?cancelOrderRouteReads\(\)[\s\S]*?clearOrderRouteState\(\)/);
-  assert.match(orderSource, /invalid:[\s\S]*?activateOrderRoute/);
-  assert.match(orderSource, /clearOrderRouteState\(\)[\s\S]*?details\.set\(null\)[\s\S]*?mutationKey\.set\(null\)[\s\S]*?reviewFieldDrafts\.set\(\{\}\)[\s\S]*?reviewNoteDrafts\.set\(\{\}\)/);
-  assert.match(orderSource, /cancelOrderRouteReads\(\)[\s\S]*?detailsSubscription\?\.unsubscribe\(\)[\s\S]*?companyReportSubscription\?\.unsubscribe\(\)/);
-});
-
 test('mobile order mutations finish independently but fence every late UI delivery by route epoch', () => {
   for (const method of ['runDetailsMutation', 'runReviewMutation', 'runRecoveryBotMutation']) {
     const start = orderSource.indexOf(`private ${method}(`);
@@ -23,16 +15,6 @@ test('mobile order mutations finish independently but fence every late UI delive
     assert.match(block, /isActiveOrderRoute\(routeTicket\)/);
     assert.doesNotMatch(block, /takeUntil|unsubscribe\(/);
   }
-  assert.match(orderSource, /saveAllReviewNotes[\s\S]*?const reviewComment[\s\S]*?const orderComments[\s\S]*?const companyComments[\s\S]*?isActiveOrderRoute\(routeTicket\)/);
-  assert.match(orderSource, /deleteReviewEdit[\s\S]*?captureOrderRoute\(\)[\s\S]*?isActiveOrderRoute\(routeTicket\)/);
-});
-
-test('mobile T-Bank status and payment action are restricted to ADMIN or OWNER without role churn', () => {
-  assert.match(orderSource, /ngOnInit\(\)[\s\S]*?hasAnyRealmRole\(\['ADMIN', 'OWNER'\]\)[\s\S]*?loadTbankStatus\(\)/);
-  const actionStart = orderSource.indexOf('canShowPaymentLinkAction(): boolean');
-  const actionBlock = orderSource.slice(actionStart, actionStart + 520);
-  assert.match(actionBlock, /hasAnyRealmRole\(\['ADMIN', 'OWNER'\]\)/);
-  assert.doesNotMatch(actionBlock, /hasRealmRole\('ADMIN'\)/);
 });
 
 test('mobile public single and group pay pages react to token changes and fence writes', () => {

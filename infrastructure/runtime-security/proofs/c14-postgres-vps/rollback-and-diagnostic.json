@@ -1,0 +1,141 @@
+{
+  "schema": "otziv-actual-vps-postgres-rollback-and-diagnostic-v1",
+  "result": "PASS",
+  "checks": [
+    {
+      "name": "internal_network_no_egress",
+      "passed": true
+    },
+    {
+      "name": "fresh_17_10_restore_all_88_table_hashes_exact",
+      "passed": true
+    },
+    {
+      "name": "fresh_17_10_restore_critical_hashes_exact",
+      "passed": true
+    },
+    {
+      "name": "restored_role_attributes_exact",
+      "passed": true
+    },
+    {
+      "name": "rollback-kc_oidc_discovery",
+      "passed": true
+    },
+    {
+      "name": "rollback-kc_health_ready",
+      "passed": true
+    },
+    {
+      "name": "rollback-kc_existing_admin_read",
+      "passed": true
+    },
+    {
+      "name": "clean_stop_rollback-kc",
+      "passed": true
+    },
+    {
+      "name": "rollback_old_keycloak_critical_hashes_preserved",
+      "passed": true
+    },
+    {
+      "name": "clean_stop_rollback-pg",
+      "passed": true
+    },
+    {
+      "name": "candidate_role_attributes_exact",
+      "passed": true
+    },
+    {
+      "name": "target_diagnostic_stack_collected",
+      "passed": true
+    }
+  ],
+  "productionAccess": false,
+  "privateRowsPublished": false,
+  "startedAt": "2026-09-08T15:03:44.142180+00:00",
+  "keycloakChecks": {
+    "rollback-kc": {
+      "adminCredentialsAvailable": true,
+      "adminRead": true,
+      "realmCount": 2
+    }
+  },
+  "rollbackResult": "PASS",
+  "targetStartupErrorCode": "keycloak_early_exit_target-verbose-kc",
+  "targetFailureReproduced": true,
+  "diagnostic": {
+    "exceptionClasses": [
+      "org.hibernate.LazyInitializationException"
+    ],
+    "stackFrames": [
+      "org.hibernate.collection.spi.AbstractPersistentCollection.throwLazyInitializationException(AbstractPersistentCollection.java:647)",
+      "org.hibernate.collection.spi.AbstractPersistentCollection.withTemporarySessionIfNeeded(AbstractPersistentCollection.java:232)",
+      "org.hibernate.collection.spi.AbstractPersistentCollection.initialize(AbstractPersistentCollection.java:620)",
+      "org.hibernate.collection.spi.AbstractPersistentCollection.read(AbstractPersistentCollection.java:142)",
+      "org.hibernate.collection.spi.PersistentSet.iterator(PersistentSet.java:164)",
+      "java.base/java.util.Spliterators$IteratorSpliterator.estimateSize(Unknown Source)",
+      "java.base/java.util.Spliterator.getExactSizeIfKnown(Unknown Source)",
+      "java.base/java.util.stream.AbstractPipeline.copyIntoWithCancel(Unknown Source)",
+      "java.base/java.util.stream.AbstractPipeline.copyInto(Unknown Source)",
+      "java.base/java.util.stream.AbstractPipeline.wrapAndCopyInto(Unknown Source)",
+      "java.base/java.util.stream.FindOps$FindOp.evaluateSequential(Unknown Source)",
+      "java.base/java.util.stream.AbstractPipeline.evaluate(Unknown Source)",
+      "java.base/java.util.stream.ReferencePipeline.findFirst(Unknown Source)",
+      "org.keycloak.storage.RoleStorageManager.getClientRole(RoleStorageManager.java:245)",
+      "org.keycloak.models.cache.infinispan.RealmCacheSession.getClientRole(RealmCacheSession.java:886)",
+      "org.keycloak.models.cache.infinispan.ClientAdapter.getRole(ClientAdapter.java:556)",
+      "org.keycloak.migration.migrators.MigrationUtils.addAdminRole(MigrationUtils.java:45)",
+      "org.keycloak.migration.migrators.MigrateTo26_7_0.addOrganizationAdminRoles(MigrateTo26_7_0.java:140)",
+      "java.base/java.util.stream.ForEachOps$ForEachOp$OfRef.accept(Unknown Source)",
+      "java.base/java.util.stream.ReferencePipeline$3$1.accept(Unknown Source)",
+      "java.base/java.util.stream.ReferencePipeline$3$1.accept(Unknown Source)",
+      "java.base/java.util.stream.ReferencePipeline$2$1.accept(Unknown Source)",
+      "java.base/java.util.stream.ReferencePipeline$3$1.accept(Unknown Source)",
+      "java.base/java.util.Iterator.forEachRemaining(Unknown Source)",
+      "java.base/java.util.Spliterators$IteratorSpliterator.forEachRemaining(Unknown Source)",
+      "java.base/java.util.stream.AbstractPipeline.copyInto(Unknown Source)",
+      "java.base/java.util.stream.AbstractPipeline.wrapAndCopyInto(Unknown Source)",
+      "java.base/java.util.stream.ForEachOps$ForEachOp.evaluateSequential(Unknown Source)",
+      "java.base/java.util.stream.ForEachOps$ForEachOp$OfRef.evaluateSequential(Unknown Source)",
+      "java.base/java.util.stream.AbstractPipeline.evaluate(Unknown Source)",
+      "java.base/java.util.stream.ReferencePipeline.forEach(Unknown Source)",
+      "org.keycloak.utils.ClosingStream.forEach(ClosingStream.java:128)",
+      "org.keycloak.migration.migrators.MigrateTo26_7_0.migrate(MigrateTo26_7_0.java:42)",
+      "org.keycloak.storage.datastore.DefaultMigrationManager.migrate(DefaultMigrationManager.java:172)",
+      "org.keycloak.migration.MigrationModelManager.migrate(MigrationModelManager.java:33)",
+      "org.keycloak.quarkus.runtime.storage.database.jpa.QuarkusJpaConnectionProviderFactory.migrateModel(QuarkusJpaConnectionProviderFactory.java:235)",
+      "org.keycloak.quarkus.runtime.storage.database.jpa.QuarkusJpaConnectionProviderFactory.initSchema(QuarkusJpaConnectionProviderFactory.java:226)",
+      "org.keycloak.models.utils.KeycloakModelUtils.lambda$runJobInTransaction$1(KeycloakModelUtils.java:366)",
+      "org.keycloak.models.utils.KeycloakModelUtils.runJobInTransactionWithResult(KeycloakModelUtils.java:480)",
+      "org.keycloak.models.utils.KeycloakModelUtils.runJobInTransaction(KeycloakModelUtils.java:365)",
+      "org.keycloak.models.utils.KeycloakModelUtils.runJobInTransaction(KeycloakModelUtils.java:355)",
+      "org.keycloak.quarkus.runtime.storage.database.jpa.QuarkusJpaConnectionProviderFactory.postInit(QuarkusJpaConnectionProviderFactory.java:144)",
+      "org.keycloak.services.DefaultKeycloakSessionFactory.initializeProviders(DefaultKeycloakSessionFactory.java:140)",
+      "org.keycloak.services.DefaultKeycloakSessionFactory.initializeProviders(DefaultKeycloakSessionFactory.java:137)",
+      "org.keycloak.services.DefaultKeycloakSessionFactory.initializeProviders(DefaultKeycloakSessionFactory.java:137)",
+      "org.keycloak.services.DefaultKeycloakSessionFactory.initializeProviders(DefaultKeycloakSessionFactory.java:137)",
+      "org.keycloak.services.DefaultKeycloakSessionFactory.initProviderFactories(DefaultKeycloakSessionFactory.java:114)",
+      "org.keycloak.services.DefaultKeycloakSessionFactory.initProviderFactories(DefaultKeycloakSessionFactory.java:98)",
+      "org.keycloak.services.DefaultKeycloakSessionFactory.init(DefaultKeycloakSessionFactory.java:92)",
+      "org.keycloak.services.resources.KeycloakApplication.runBootstrap(KeycloakApplication.java:88)",
+      "org.keycloak.services.resources.KeycloakApplication.startup(KeycloakApplication.java:82)",
+      "org.keycloak.quarkus.runtime.integration.jaxrs.QuarkusKeycloakApplication.lambda$onStartupEvent$1(QuarkusKeycloakApplication.java:83)",
+      "java.base/java.util.concurrent.CompletableFuture$AsyncRun.run(Unknown Source)",
+      "io.smallrye.context.impl.wrappers.SlowContextualRunnable.run(SlowContextualRunnable.java:19)",
+      "io.quarkus.vertx.core.runtime.VertxCoreRecorder$15.runWith(VertxCoreRecorder.java:700)",
+      "org.jboss.threads.EnhancedQueueExecutor$Task.doRunWith(EnhancedQueueExecutor.java:2651)",
+      "org.jboss.threads.EnhancedQueueExecutor$Task.run(EnhancedQueueExecutor.java:2630)",
+      "org.jboss.threads.EnhancedQueueExecutor.runThreadBody(EnhancedQueueExecutor.java:1622)",
+      "org.jboss.threads.EnhancedQueueExecutor$ThreadBody.run(EnhancedQueueExecutor.java:1589)",
+      "org.jboss.threads.DelegatingRunnable.run(DelegatingRunnable.java:11)",
+      "org.jboss.threads.ThreadLocalResettingRunnable.run(ThreadLocalResettingRunnable.java:11)",
+      "io.netty.util.concurrent.FastThreadLocalRunnable.run(FastThreadLocalRunnable.java:30)",
+      "java.base/java.lang.Thread.run(Unknown Source)"
+    ],
+    "entityCollection": "org.keycloak.models.jpa.entities.RealmEntity.components",
+    "privateRawLogSha256": "d890aae5bbfd0950d4069a4e883b26efb75bd9256745012f61416b652a15c072"
+  },
+  "completedAt": "2026-09-08T15:05:29.450488+00:00",
+  "scriptSha256": "991d55dec4158a86ab863100d2d7bbb4dab2ee3f7aa2a17294277f9b64a6e8c9"
+}

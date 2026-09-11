@@ -45,6 +45,26 @@ describe('WorkerReviewCardComponent', () => {
     }).compileComponents();
   });
 
+  it.each(['publish', 'nagul', 'bad', 'recovery'] as const)('disables both account buttons during cooldown in %s without blocking copying', (section) => {
+    const fixture = TestBed.createComponent(WorkerReviewCardComponent);
+    const component = fixture.componentInstance;
+    component.review = review({ badTask: section === 'bad', recoveryTask: section === 'recovery' });
+    component.activeSection = section;
+    component.accountActionCooldownLocked = true;
+    component.accountActionCooldownTitle = 'Смена и блокировка доступны через 00:42';
+    fixture.detectChanges();
+    const buttons = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button'));
+    const button = (label: string) => buttons.find((item) => item.textContent?.trim() === label)!;
+    expect(button('смена').disabled).toBe(true);
+    expect(button('блок').disabled).toBe(true);
+    expect(button('смена').title).toContain('00:42');
+    expect(button('ответ').disabled).toBe(false);
+    fixture.componentRef.setInput('accountActionCooldownLocked', false);
+    fixture.detectChanges();
+    expect(button('смена').disabled).toBe(false);
+    expect(button('блок').disabled).toBe(false);
+  });
+
   it('renders review data, bot label and task controls', () => {
     const fixture = TestBed.createComponent(WorkerReviewCardComponent);
     fixture.componentInstance.review = review({

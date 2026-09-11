@@ -1,0 +1,63 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.31kB 0.0s done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for ghcr.io/versity/versitygw@sha256:30292fc2eeacc67a36993b01f7a7a5e3361a19cced0e80c1d71cfa2a4b0a2499
+#2 DONE 0.0s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.1s
+
+#4 [internal] load build context
+#4 DONE 0.0s
+
+#5 [1/3] FROM ghcr.io/versity/versitygw@sha256:30292fc2eeacc67a36993b01f7a7a5e3361a19cced0e80c1d71cfa2a4b0a2499
+#5 resolve ghcr.io/versity/versitygw@sha256:30292fc2eeacc67a36993b01f7a7a5e3361a19cced0e80c1d71cfa2a4b0a2499
+#5 resolve ghcr.io/versity/versitygw@sha256:30292fc2eeacc67a36993b01f7a7a5e3361a19cced0e80c1d71cfa2a4b0a2499 0.0s done
+#5 CACHED
+
+#4 [internal] load build context
+#4 transferring context: 1.03kB done
+#4 DONE 0.0s
+
+#6 [2/3] COPY runtime-apk.lock /usr/share/otziv-build/versity/runtime-apk.lock
+#6 DONE 0.1s
+
+#7 [3/3] RUN mkdir -p /usr/share/otziv-build/versity     && sha256sum /usr/local/bin/versitygw > /usr/share/otziv-build/versity/binary.before.sha256     && apk info -vv | sort > /usr/share/otziv-build/versity/apk.before.lock     && apk add --no-cache --upgrade libssl3=3.5.8-r0 libcrypto3=3.5.8-r0     && apk info -vv | sort > /usr/share/otziv-build/versity/apk.after.lock     && test "$(sha256sum /usr/share/otziv-build/versity/apk.after.lock | cut -d ' ' -f 1)" = "$(sha256sum /usr/share/otziv-build/versity/runtime-apk.lock | cut -d ' ' -f 1)"     && sha256sum -c /usr/share/otziv-build/versity/binary.before.sha256     && cp /etc/apk/repositories /usr/share/otziv-build/versity/repositories.txt
+#7 1.003 WARNING: opening from cache https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/APKINDEX.tar.gz: No such file or directory
+#7 1.003 WARNING: opening from cache https://dl-cdn.alpinelinux.org/alpine/v3.24/community/x86_64/APKINDEX.tar.gz: No such file or directory
+#7 2.694 (1/2) Upgrading libcrypto3 (3.5.7-r0 -> 3.5.8-r0)
+#7 3.012 (2/2) Upgrading libssl3 (3.5.7-r0 -> 3.5.8-r0)
+#7 3.129 OK: 8200 KiB in 16 packages
+#7 3.184 WARNING: opening from cache https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/APKINDEX.tar.gz: No such file or directory
+#7 3.184 WARNING: opening from cache https://dl-cdn.alpinelinux.org/alpine/v3.24/community/x86_64/APKINDEX.tar.gz: No such file or directory
+#7 ERROR: process "/bin/sh -c mkdir -p /usr/share/otziv-build/versity     && sha256sum /usr/local/bin/versitygw > /usr/share/otziv-build/versity/binary.before.sha256     && apk info -vv | sort > /usr/share/otziv-build/versity/apk.before.lock     && apk add --no-cache --upgrade libssl3=3.5.8-r0 libcrypto3=3.5.8-r0     && apk info -vv | sort > /usr/share/otziv-build/versity/apk.after.lock     && test \"$(sha256sum /usr/share/otziv-build/versity/apk.after.lock | cut -d ' ' -f 1)\" = \"$(sha256sum /usr/share/otziv-build/versity/runtime-apk.lock | cut -d ' ' -f 1)\"     && sha256sum -c /usr/share/otziv-build/versity/binary.before.sha256     && cp /etc/apk/repositories /usr/share/otziv-build/versity/repositories.txt" did not complete successfully: exit code: 1
+------
+ > [3/3] RUN mkdir -p /usr/share/otziv-build/versity     && sha256sum /usr/local/bin/versitygw > /usr/share/otziv-build/versity/binary.before.sha256     && apk info -vv | sort > /usr/share/otziv-build/versity/apk.before.lock     && apk add --no-cache --upgrade libssl3=3.5.8-r0 libcrypto3=3.5.8-r0     && apk info -vv | sort > /usr/share/otziv-build/versity/apk.after.lock     && test "$(sha256sum /usr/share/otziv-build/versity/apk.after.lock | cut -d ' ' -f 1)" = "$(sha256sum /usr/share/otziv-build/versity/runtime-apk.lock | cut -d ' ' -f 1)"     && sha256sum -c /usr/share/otziv-build/versity/binary.before.sha256     && cp /etc/apk/repositories /usr/share/otziv-build/versity/repositories.txt:
+1.003 WARNING: opening from cache https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/APKINDEX.tar.gz: No such file or directory
+1.003 WARNING: opening from cache https://dl-cdn.alpinelinux.org/alpine/v3.24/community/x86_64/APKINDEX.tar.gz: No such file or directory
+2.694 (1/2) Upgrading libcrypto3 (3.5.7-r0 -> 3.5.8-r0)
+3.012 (2/2) Upgrading libssl3 (3.5.7-r0 -> 3.5.8-r0)
+3.129 OK: 8200 KiB in 16 packages
+3.184 WARNING: opening from cache https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/APKINDEX.tar.gz: No such file or directory
+3.184 WARNING: opening from cache https://dl-cdn.alpinelinux.org/alpine/v3.24/community/x86_64/APKINDEX.tar.gz: No such file or directory
+------
+Dockerfile:3
+--------------------
+   2 |     COPY runtime-apk.lock /usr/share/otziv-build/versity/runtime-apk.lock
+   3 | >>> RUN mkdir -p /usr/share/otziv-build/versity \
+   4 | >>>     && sha256sum /usr/local/bin/versitygw > /usr/share/otziv-build/versity/binary.before.sha256 \
+   5 | >>>     && apk info -vv | sort > /usr/share/otziv-build/versity/apk.before.lock \
+   6 | >>>     && apk add --no-cache --upgrade libssl3=3.5.8-r0 libcrypto3=3.5.8-r0 \
+   7 | >>>     && apk info -vv | sort > /usr/share/otziv-build/versity/apk.after.lock \
+   8 | >>>     && test "$(sha256sum /usr/share/otziv-build/versity/apk.after.lock | cut -d ' ' -f 1)" = "$(sha256sum /usr/share/otziv-build/versity/runtime-apk.lock | cut -d ' ' -f 1)" \
+   9 | >>>     && sha256sum -c /usr/share/otziv-build/versity/binary.before.sha256 \
+  10 | >>>     && cp /etc/apk/repositories /usr/share/otziv-build/versity/repositories.txt
+  11 |     LABEL org.opencontainers.image.source="https://github.com/Claidd/otziv_o" \
+--------------------
+ERROR: failed to build: failed to solve: process "/bin/sh -c mkdir -p /usr/share/otziv-build/versity     && sha256sum /usr/local/bin/versitygw > /usr/share/otziv-build/versity/binary.before.sha256     && apk info -vv | sort > /usr/share/otziv-build/versity/apk.before.lock     && apk add --no-cache --upgrade libssl3=3.5.8-r0 libcrypto3=3.5.8-r0     && apk info -vv | sort > /usr/share/otziv-build/versity/apk.after.lock     && test \"$(sha256sum /usr/share/otziv-build/versity/apk.after.lock | cut -d ' ' -f 1)\" = \"$(sha256sum /usr/share/otziv-build/versity/runtime-apk.lock | cut -d ' ' -f 1)\"     && sha256sum -c /usr/share/otziv-build/versity/binary.before.sha256     && cp /etc/apk/repositories /usr/share/otziv-build/versity/repositories.txt" did not complete successfully: exit code: 1
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/mdoe2fpvl01hqxrsvgewnj21y

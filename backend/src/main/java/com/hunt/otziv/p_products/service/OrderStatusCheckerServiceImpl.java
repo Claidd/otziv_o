@@ -84,32 +84,47 @@ public class OrderStatusCheckerServiceImpl implements OrderStatusCheckerService 
     @Override
     @Transactional
     public void checkAndMarkOrderCompleted(Order order) throws Exception {
+        checkCompletion(order, false);
+    }
+
+    @Override
+    @Transactional
+    public boolean checkPublicationCompletion(Order order) throws Exception {
+        return checkCompletion(order, true);
+    }
+
+    private boolean checkCompletion(Order order, boolean queuedPublication) throws Exception {
         if (order == null || order.getId() == null) {
-            return;
+            return true;
         }
         Order currentOrder = orderRepository.findByIdForCounterUpdate(order.getId()).orElse(order);
+        String currentStatus = currentOrder.getStatus() == null ? null : currentOrder.getStatus().getTitle();
+        if (queuedPublication && !java.util.Set.of("Публикация", STATUS_PUBLIC, CommonBillingService.STATUS_WAITING_COMMON_INVOICE)
+                .contains(currentStatus == null ? "" : currentStatus)) return true;
         if (orderPaymentIntegrityService.hasSettledPaymentEvidence(currentOrder)) {
             log.warn(
                     "Повторный платежный цикл предотвращен: заказ {} уже оплачен, статус не изменен",
                     currentOrder.getId()
             );
-            return;
+            return true;
         }
         if (currentOrder.getAmount() <= currentOrder.getCounter() && !recoveryGateService.hasActiveRecoveryTasks(currentOrder.getId())) {
-            String newStatus = handlePublicStatus(currentOrder);
+            String newStatus = handlePublicStatus(currentOrder, queuedPublication);
             log.info("Счётчик достиг лимита. Статус заказа {} изменён на {}", currentOrder.getId(), newStatus);
         } else if (currentOrder.getAmount() <= currentOrder.getCounter()) {
             log.info("Счётчик заказа {} достиг лимита, но есть активные восстановления. Статус не изменён", currentOrder.getId());
+            return false;
         } else {
             log.info("Счётчик заказа {} не достиг лимита. Статус не изменён", currentOrder.getId());
         }
+        return true;
     }
 
-    private String handlePublicStatus(Order order) {
+    private String handlePublicStatus(Order order, boolean queuedPublication) {
         String clientId = order.getManager().getClientId();
         String groupId = order.getCompany().getGroupId();
         if (orderPaymentMessageBuilder.shouldSkipPublishedPayment(order)) {
-            order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_PUBLIC));
+            markPublished(order);
             orderRepository.save(order);
             log.info("Счет после публикации пропущен: заказ {} по продукту 'Восстановление' без суммы к оплате",
                     order.getId());
@@ -128,16 +143,17 @@ public class OrderStatusCheckerServiceImpl implements OrderStatusCheckerService 
         }
 
         if (!immediateClientMessagesEnabled()) {
-            order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_PUBLIC));
+            markPublished(order);
             orderRepository.save(order);
             log.info("Счет после публикации не отправлен: моментальные клиентские сообщения выключены, orderId={}",
                     order.getId());
             return STATUS_PUBLIC;
         }
 
-        order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_PUBLIC));
+        markPublished(order);
         orderRepository.save(order);
-        paymentInvoiceRetryScheduler.scheduleInitialInvoice(order);
+        if (queuedPublication) paymentInvoiceRetryScheduler.scheduleInitialInvoiceIfAbsent(order);
+        else paymentInvoiceRetryScheduler.scheduleInitialInvoice(order);
         log.info("Финальный счет после публикации поставлен в очередь, orderId={} clientId={} groupId={}",
                 order.getId(), clientId, groupId);
         return STATUS_PUBLIC;
@@ -145,6 +161,13 @@ public class OrderStatusCheckerServiceImpl implements OrderStatusCheckerService 
 
     private boolean immediateClientMessagesEnabled() {
         return appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true);
+    }
+
+    private void markPublished(Order order) {
+        if (order.getStatus() == null || !STATUS_PUBLIC.equals(order.getStatus().getTitle())) {
+            order.setClientMessageGeneration(Math.addExact(order.getClientMessageGeneration(), 1));
+        }
+        order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_PUBLIC));
     }
 
     private String safeCompanyTitle(Order order) {

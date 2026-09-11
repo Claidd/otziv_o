@@ -90,6 +90,8 @@ class KeycloakUserProvisioningServiceTest {
     private CacheManager cacheManager;
     @Mock
     private UserAuthEpochService authEpochService;
+    @Mock private UserPasswordMutationService passwordMutations;
+    @Mock private jakarta.persistence.EntityManager entityManager;
     @Mock
     private ContractorPaymentProfileService contractorPaymentProfileService;
 
@@ -401,7 +403,7 @@ class KeycloakUserProvisioningServiceTest {
         authenticateAs("OWNER");
         User user = userWithRole(6L, "admin-user", "ROLE_ADMIN", "kc-admin");
         ChangeKeycloakPasswordRequest request = passwordRequest("NewPass123");
-        when(userRepository.lockById(6L)).thenReturn(Optional.of(user));
+        authorizePasswordMutation(6L, user);
 
         ResponseStatusException error = assertThrows(
                 ResponseStatusException.class,
@@ -470,13 +472,11 @@ class KeycloakUserProvisioningServiceTest {
         authenticateAs("ADMIN");
         User user = userWithRole(7L, "admin-user", "ROLE_ADMIN", "kc-admin");
         ChangeKeycloakPasswordRequest request = passwordRequest("NewPass123");
-        when(userRepository.lockById(7L)).thenReturn(Optional.of(user));
+        authorizePasswordMutation(7L, user);
 
         service.changePassword(7L, request);
 
-        verify(keycloakAdminClient).resetPassword("kc-admin", "NewPass123", false);
-        verify(keycloakAdminClient).logoutUserSessions("kc-admin");
-        verify(authEpochService).passwordChanged(user);
+        verify(passwordMutations).change(eq(7L), eq(request), any());
     }
 
     @Test
@@ -549,23 +549,21 @@ class KeycloakUserProvisioningServiceTest {
     }
 
     @Test
-    void changePasswordLogsOutUserSessionsAfterPasswordReset() {
-        User user = User.builder()
-                .id(42L)
-                .keycloakId("keycloak-user-42")
-                .build();
-        ChangeKeycloakPasswordRequest request = new ChangeKeycloakPasswordRequest();
-        request.setPassword("NewPass123");
-
-        when(userRepository.lockById(42L)).thenReturn(Optional.of(user));
-
+    void changePasswordDelegatesToDurableProtocol() {
+        User user = User.builder().id(42L).keycloakId("keycloak-user-42").build();
+        ChangeKeycloakPasswordRequest request = passwordRequest("NewPass123");
+        authorizePasswordMutation(42L, user);
         service.changePassword(42L, request);
+        verify(passwordMutations).change(eq(42L), eq(request), any());
+        verify(keycloakAdminClient, never()).logoutUserSessions(anyString());
+    }
 
-        verify(userRepository).lockById(42L);
-        InOrder order = inOrder(keycloakAdminClient);
-        order.verify(keycloakAdminClient).resetPassword("keycloak-user-42", "NewPass123", false);
-        order.verify(keycloakAdminClient).logoutUserSessions("keycloak-user-42");
-        verify(authEpochService).passwordChanged(user);
+    private void authorizePasswordMutation(long userId, User user) {
+        org.mockito.Mockito.doAnswer(invocation -> {
+            java.util.function.Consumer<User> authorization = invocation.getArgument(2);
+            authorization.accept(user);
+            return null;
+        }).when(passwordMutations).change(eq(userId), any(), any());
     }
 
     @Test

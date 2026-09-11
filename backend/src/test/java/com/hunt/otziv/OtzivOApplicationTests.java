@@ -39,6 +39,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.annotation.Transactional;
@@ -51,6 +52,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest
 @ActiveProfiles("test")
 @Testcontainers
+// This class owns its MySQL container. Its schedulers and connection pool must not outlive it in the context cache.
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class OtzivOApplicationTests {
 
 	@Container

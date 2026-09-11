@@ -21,7 +21,7 @@ $whatsappChromiumSmokePath = Join-Path $repoRoot 'whatsapp\chromium-smoke.js'
 $buildComposePath = Join-Path $repoRoot 'docker-compose.build.yaml'
 $productionComposePath = Join-Path $repoRoot 'docker-compose.yaml'
 
-$deploy = [IO.File]::ReadAllText($deployPath)
+$deploy = [IO.File]::ReadAllText($deployPath).Replace("`r`n", "`n")
 $snapshot = [IO.File]::ReadAllText($snapshotPath)
 $snapshotValidator = [IO.File]::ReadAllText($snapshotValidatorPath)
 $legacyDeploy = [IO.File]::ReadAllText($legacyDeployPath)
@@ -37,6 +37,21 @@ $whatsappChromiumSmoke = [IO.File]::ReadAllText($whatsappChromiumSmokePath)
 $buildCompose = [IO.File]::ReadAllText($buildComposePath)
 $productionCompose = [IO.File]::ReadAllText($productionComposePath)
 . $snapshotPath
+
+# Exercise the real argument preparation without invoking deployment or SSH.
+$deployAst = [Management.Automation.Language.Parser]::ParseInput($deploy, [ref]$null, [ref]$null)
+$quoteFunction = $deployAst.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'ConvertTo-BashSingleQuoted' }, $true)
+. ([scriptblock]::Create($quoteFunction.Extent.Text))
+$qrArgument = $deployAst.Find({ param($node) $node -is [Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -eq '$whatsAppQrPendingQuoted' }, $true)
+foreach ($case in @(
+    @{ Names = @(); Expected = "''" },
+    @{ Names = @('whatsapp_vika'); Expected = "'whatsapp_vika'" },
+    @{ Names = @('whatsapp_lika', 'whatsapp_vika'); Expected = "'whatsapp_lika,whatsapp_vika'" }
+)) {
+    $AllowWhatsAppQrPending = $case.Names
+    . ([scriptblock]::Create($qrArgument.Extent.Text))
+    if ($whatsAppQrPendingQuoted -ne $case.Expected) { throw 'QR wait argument preparation must preserve strict default and named opt-ins.' }
+}
 
 function Assert-Match {
     param([string]$Text, [string]$Pattern, [string]$Message)
@@ -80,7 +95,7 @@ function Get-LocalNodeDependencyClosure {
         }
 
         $source = [IO.File]::ReadAllText($currentPath)
-        foreach ($match in [regex]::Matches($source, 'require\(["''](?<relative>\./[^"'']+)["'']\)')) {
+        foreach ($match in [regex]::Matches($source, 'require(?:\.resolve)?\(["''](?<relative>\./[^"'']+)["'']\)')) {
             $dependencyPath = [IO.Path]::GetFullPath((Join-Path ([IO.Path]::GetDirectoryName($currentPath)) $match.Groups['relative'].Value))
             if ([string]::IsNullOrEmpty([IO.Path]::GetExtension($dependencyPath))) {
                 $dependencyPath += '.js'
@@ -318,13 +333,22 @@ Assert-Match $buildCompose 'EXTERNAL_REVIEW_WORKER_IMAGE[\s\S]{0,250}backend/ext
 Assert-Match $productionCompose 'APP_MEMORY_LIMIT:-2304m' 'Production Compose must default backend memory to the audited 2304 MiB floor.'
 Assert-Match $deploy 'APP_MEMORY_LIMIT[\s\S]{0,500}2304' 'Production deploy must reject an omitted or undersized backend memory limit.'
 Assert-Match $deploy '\[switch\]\$EnableExternalReviewWorker' 'External review worker deployment must be an explicit opt-in.'
-Assert-Match $deploy '\$buildArgs \+= @\("app", "nginx"\)[\s\S]{0,200}if \(\$EnableExternalReviewWorker\)[\s\S]{0,100}\$buildArgs \+= "external-review-worker"' 'Default builds must exclude the worker and append it only for an explicit opt-in.'
+Assert-Match $deploy '\$buildArgs \+= @\("app", "nginx", "docker-observer"\)[\s\S]{0,200}if \(\$EnableExternalReviewWorker\)[\s\S]{0,100}\$buildArgs \+= "external-review-worker"' 'Default builds must exclude the worker and append it only for an explicit opt-in.'
 Assert-Match $legacyDeploy '\$buildArgs \+= @\("app", "nginx"\)' 'The quarantined legacy deploy must not build the external review worker implicitly.'
 Assert-Match $deploy 'if \(\$EnableExternalReviewWorker\)[\s\S]{0,200}docker.+push.+\$externalReviewWorkerImage' 'Production deploy must push the worker image only in the opt-in branch.'
 Assert-Match $deploy 'set_env EXTERNAL_REVIEW_WORKER_IMAGE.+external_review_worker_image' 'Production deploy must persist the worker image tag in the active VPS env.'
 Assert-Match $deploy 'if \[ "`\$deploy_external_review_worker" = "1" \]; then[\s\S]{0,300}recreate_service_with_retry external-review-worker external-review[\s\S]{0,200}wait_service_healthy external-review-worker[\s\S]{0,300}assert_running_service_image external-review-worker[\s\S]{0,100}fi' 'Production deploy must start, health-check, and verify the worker image only when opted in.'
 Assert-Match $deploy 'if \[ "`\$deploy_external_review_worker" != "1" \]; then[\s\S]{0,500}stop external-review-worker' 'Production deploy must stop a stale worker when the replacement backend has external checks disabled.'
 Assert-Order $deploy 'wait_service_healthy app 1200' 'compose --profile external-review stop external-review-worker' 'A disabled rollout must keep the previous worker until the replacement backend is healthy.'
+$observerRollout = Get-Content -LiteralPath (Join-Path $repoRoot 'infrastructure/scripts/prod/rollout-docker-observer.sh') -Raw
+Assert-Match $deploy '"infrastructure\\scripts\\prod\\rollout-docker-observer\.sh"' 'Deploy bundle must include the sourced observer rollout owner.'
+Assert-Match $deploy '\. infrastructure/scripts/prod/rollout-docker-observer\.sh\r?\nrollout_docker_observer' 'Deploy must execute the checked-in observer rollout owner.'
+Assert-Order $deploy 'wait_service_healthy app 1200' 'rollout_docker_observer' 'Observer rollout must follow the healthy replacement backend.'
+Assert-Order $deploy 'rollout_docker_observer' '--remove-orphans --no-deps dozzle alloy' 'Consumer log-flow proof must precede orphan cleanup.'
+Assert-Order $observerRollout 'compose pull docker-observer' 'recreate_service_with_retry docker-observer' 'Each deploy must pull the reviewed observer digest before recreation.'
+Assert-Order $observerRollout 'wait_service_healthy docker-observer 120' 'recreate_service_with_retry dozzle' 'The proxy must be ready before its consumers.'
+Assert-Order $observerRollout 'verify_observer_logflow dozzle' 'recreate_service_with_retry alloy' 'Consumer rollout must be sequential with actual Dozzle stream proof.'
+Assert-Order $observerRollout 'wait_service_healthy alloy 120' 'verify_observer_logflow alloy' 'Alloy rollout must verify actual Loki ingestion.'
 Assert-Order $deploy 'wait_service_healthy app 1200' '--remove-orphans --no-deps dozzle alloy' 'Orphan cleanup must not run until the replacement backend is healthy.'
 Assert-Match $deploy 'if \[ "`\$deploy_external_review_worker" = "1" \]; then[\s\S]{0,150}compose --profile external-review up -d --remove-orphans --no-deps dozzle alloy[\s\S]{0,100}else[\s\S]{0,100}compose up -d --remove-orphans --no-deps dozzle alloy' 'Orphan cleanup must preserve the opted-in worker profile.'
 Assert-Match $deploy 'set_env EXTERNAL_REVIEW_CHECK_ENABLED "true"[\s\S]{0,100}set_env EXTERNAL_REVIEW_CHECK_ENABLED "false"' 'Production deploy must persist the backend hard switch consistently with the worker opt-in.'
@@ -467,7 +491,14 @@ Assert-Match $deploy 'assert_compose_service_image external-review-worker "`\$ex
 Assert-Match $deploy 'assert_running_service_image app "`\$app_image"[\s\S]{0,1500}assert_running_service_image nginx "`\$web_image"' 'Backend and frontend image IDs must be verified during the rollout.'
 Assert-Match $deploy 'whatsapp\\chromium-launch\.js' 'Deploy bundle must include the shared audited Chromium launch arguments.'
 Assert-Match $deploy 'whatsapp\\chromium-smoke\.js' 'Deploy bundle must include the real Chromium launch smoke test.'
-$whatsappRuntimeDependencies = Get-LocalNodeDependencyClosure -EntryPath $whatsappIndexPath
+$whatsappRuntimeDependencies = @(
+    foreach ($entry in @('index.js', 'chromium-smoke.js', 'compatibility-smoke.js',
+            'remote-session-admin.js', 'operation-ledger-maintenance.js', 'operation-ledger-benchmark.js')) {
+        Get-LocalNodeDependencyClosure -EntryPath (Join-Path $repoRoot "whatsapp/$entry")
+    }
+) | Sort-Object -Unique
+$deployBundle = [regex]::Match($deploy, '(?s)\$deployBundlePaths\s*=\s*@\((.*?)\r?\n\)').Groups[1].Value
+if ([string]::IsNullOrWhiteSpace($deployBundle)) { throw 'Deploy bundle declaration must be inspectable.' }
 $resolvedRepoRoot = [IO.Path]::GetFullPath($repoRoot)
 $repoRootPrefix = $resolvedRepoRoot.TrimEnd([char[]]@(
         [IO.Path]::DirectorySeparatorChar,
@@ -479,8 +510,18 @@ foreach ($dependencyPath in $whatsappRuntimeDependencies) {
         throw "WhatsApp runtime dependency escapes the repository: $resolvedDependencyPath"
     }
     $relativePath = $resolvedDependencyPath.Substring($repoRootPrefix.Length).Replace('/', '\')
-    Assert-Match $deploy ('"' + [regex]::Escape($relativePath) + '"') "Deploy bundle must include WhatsApp runtime dependency: $relativePath"
+    Assert-Match $deployBundle ('"' + [regex]::Escape($relativePath) + '"') "Deploy bundle must include WhatsApp runtime/maintenance dependency: $relativePath"
 }
+foreach ($runbook in @('whatsapp/OPERATION_LEDGER_RECOVERY.md', 'whatsapp/OUTBOUND_OPERATIONS.md',
+        'docs/WHATSAPP_INBOUND_DELIVERY_RUNBOOK.md', 'docs/WHATSAPP_REMOTE_SESSION_RECOVERY.md')) {
+    if (-not [IO.File]::Exists((Join-Path $repoRoot $runbook))) { throw "WhatsApp runbook is missing: $runbook" }
+    Assert-Match $deployBundle ('"' + [regex]::Escape($runbook.Replace('/', '\')) + '"') "Deploy bundle must include WhatsApp runbook: $runbook"
+    if ($runbook.StartsWith('docs/')) {
+        if ($runbook -notin @(Get-OtzivDeployInputPaths)) { throw "Automatic snapshot must include runbook: $runbook" }
+        Assert-Match $legacyDeploy ('Copy-DeployPath[^\r\n]+-RelativePath "' + [regex]::Escape($runbook.Replace('/', '\')) + '"') "SSH image deploy must include runbook: $runbook"
+    }
+}
+Assert-Match $legacyDeploy 'Copy-DeployPath[^\r\n]+-RelativePath "whatsapp"' 'SSH image deploy must retain the complete WhatsApp runtime and maintenance source tree.'
 Assert-Match $whatsappIndex 'chromiumLaunchArgs\(proxyServerArg\(\)\)' 'WhatsApp clients must use the shared audited Chromium launch arguments.'
 Assert-Match $whatsappIndex 'webVersionCache:\s*\{[\s\S]{0,300}type:\s*"none"' 'WhatsApp Web cache must stay disabled because its default local persistence targets the read-only application directory before READY.'
 Assert-Match $whatsappPackage '"brace-expansion"\s*:\s*"2\.1\.4"' 'WhatsApp must retain the patched brace-expansion override.'
@@ -531,7 +572,8 @@ Assert-Order $deploy 'Creating and verifying mandatory pre-deploy database backu
 Assert-Match $deploy 'deploy_lock_token[\s\S]{0,5000}mkdir "`\$deploy_lock_dir"' 'The rollout must acquire a durable cross-session lock before creating the backup.'
 Assert-Match $deploy 'release_deploy_lock' 'The rollout must explicitly release its durable deployment lock.'
 Assert-Match $deploy 'release_deploy_lock\(\)[\s\S]{0,500}if ! rm -f[\s\S]{0,250}return 1[\s\S]{0,150}if ! rmdir[\s\S]{0,250}return 1' 'Lock release must propagate failures even when called from a conditional cleanup branch.'
-Assert-Match $deploy 'pause_self_heal\s+tar --warning=no-timestamp -xzf[\s\S]{0,800}create-pre-deploy-db-backup\.sh" create' 'Production self-heal must be stopped before the mandatory database backup begins.'
+Assert-Match $deploy '\npause_self_heal\s+backup_env=[\s\S]{0,800}create-pre-deploy-db-backup\.sh" create' 'Production self-heal must be stopped before the mandatory database backup begins.'
+Assert-Order $deploy '--before-backup' "`npause_self_heal`n" 'Capacity preflight must pass before self-heal is paused.'
 Assert-Match $deploy 'trap cleanup_preflight EXIT[\s\S]{0,100}trap ''exit 130'' INT[\s\S]{0,100}trap ''exit 143'' TERM[\s\S]{0,200}preflight_dir="`\$\(mktemp' 'Pre-backup cleanup must be armed with non-zero signal exits before temporary-directory creation can fail.'
 Assert-Match $deploy 'backup_dir="\.deploy-backups/`\$deploy_tag/rollout-`\$deploy_lock_token"' 'Each repeated deploy tag must preserve compose/env rollback files in a unique attempt directory.'
 Assert-Match $deploy 'deploy_cleanup\(\)[\s\S]{0,1500}systemctl disable "`\$self_heal_timer"' 'Failure cleanup must disable self-heal so a reboot cannot continue a failed rollout.'
@@ -652,4 +694,5 @@ foreach ($parser in @{
 if ($LASTEXITCODE -ne 0) {
     throw 'Unable to restore a successful native-command state after deploy release regressions.'
 }
+& (Join-Path $PSScriptRoot 'test-deploy-snapshot-inputs.ps1')
 Write-Output 'Deploy release contract passed: durable lock, encrypted DB backup, optional worker/MAX rollout, and post-health APK publication are ordered safely.'

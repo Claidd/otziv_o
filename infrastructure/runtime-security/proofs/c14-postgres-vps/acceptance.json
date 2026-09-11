@@ -1,0 +1,19 @@
+{
+  "schema": "otziv-actual-vps-postgres-acceptance-v1",
+  "result": "BLOCKED",
+  "postgresContinuity": "PASS",
+  "originalKeycloakOnCandidate": "PASS",
+  "freshPreupgradeRollback": "PASS",
+  "targetKeycloakMigration": "FAIL",
+  "targetFailureReproduced": true,
+  "exceptionClass": "org.hibernate.LazyInitializationException",
+  "sourceWrites": false,
+  "ownedResourcesRemaining": 0,
+  "files": {
+    "actual-rehearsal.json": "ce70d2d7d59324b18598d89e3b719f5a1f3ca70aaf910a1f84be395ec5fe987f",
+    "read-only-inventory.json": "47101539be2d48a354904509f5fd88f29a43583ebf4686c1169df852bf1b4fe0",
+    "README.md": "de4731a16057b5c91d4278f30698876740818c2c563c8641a0d9ca397099249a",
+    "role-preservation.json": "40e088f3b885ffebef6296fc17b649f2e4a29485a204ce12b58d39bf84201641",
+    "rollback-and-diagnostic.json": "44200c2123ee4886c9f2d321ecb9f94e227ce0f4daab0ca9050f4061182d8cfc"
+  }
+}

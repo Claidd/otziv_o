@@ -1,0 +1,91 @@
+{
+  "schema": "otziv-c14-postgres-primary-binding-v1",
+  "capturedAt": "2026-09-08T14:14:14.187Z",
+  "sources": [
+    {
+      "file": "CVE-2026-6653.html",
+      "url": "https://security-tracker.debian.org/tracker/CVE-2026-6653",
+      "sha256": "c45c9fff89a6327d598e39a4e4b8a0563b1d9383396c9f8997bfb2f7dfa4b923"
+    },
+    {
+      "file": "CVE-2026-86140.html",
+      "url": "https://security-tracker.debian.org/tracker/CVE-2026-86140",
+      "sha256": "418e22e0e2b1f94d54aa12e2df92cf34514ea3688a6399ed445f0f543d960622"
+    },
+    {
+      "file": "CVE-2026-41992.html",
+      "url": "https://security-tracker.debian.org/tracker/CVE-2026-41992",
+      "sha256": "783190551880d43ba13c6a02fca84432921846437a47cad7b9e5f8b3725cac2c"
+    },
+    {
+      "file": "CVE-2025-69720.html",
+      "url": "https://security-tracker.debian.org/tracker/CVE-2025-69720",
+      "sha256": "3542be519daaef8f60a0fd662f4a6129a238f59ef9b86155869d49cfd2b3af78"
+    },
+    {
+      "file": "CVE-2026-16742.html",
+      "url": "https://security-tracker.debian.org/tracker/CVE-2026-16742",
+      "sha256": "fd2e348336f07000c7495d76fac75edb36f56dc416d6650301f3bbc11fe90507"
+    },
+    {
+      "file": "CVE-2026-76642.html",
+      "url": "https://security-tracker.debian.org/tracker/CVE-2026-76642",
+      "sha256": "2f8d391c8a7f7fe322471cba571f353b0d36c82cbe0f0dd721087741728f6733"
+    },
+    {
+      "file": "CVE-2026-78408.html",
+      "url": "https://security-tracker.debian.org/tracker/CVE-2026-78408",
+      "sha256": "525b3cd105e5a1acbada6c9fff6bb8157a10ffe275f34a54ca90d3fb30548443"
+    },
+    {
+      "file": "CVE-2026-78409.html",
+      "url": "https://security-tracker.debian.org/tracker/CVE-2026-78409",
+      "sha256": "e4549a2b3910953509a536721a368e0751e5d469e55404b540974f8050528571"
+    },
+    {
+      "file": "CVE-2026-78410.html",
+      "url": "https://security-tracker.debian.org/tracker/CVE-2026-78410",
+      "sha256": "08ebd55e6e1280021ef9948dbe38c5ed7e6d20166a6d4be463814a07276ea9e7"
+    },
+    {
+      "file": "postgresql-17.11-release.html",
+      "url": "https://www.postgresql.org/docs/17/release-17-11.html",
+      "sha256": "2b55df071d89fcfb2464a4659f0f7c323a01b84bba09f47390389b62668b2bfd"
+    },
+    {
+      "file": "postgresql-CVE-2026-6473.html",
+      "url": "https://www.postgresql.org/support/security/CVE-2026-6473/",
+      "sha256": "5a8c0c892a51513d32bc7aa3c81349d15ffb039ff1171c223c237ae34e45db06"
+    },
+    {
+      "file": "libxml2-parser.c",
+      "url": "https://raw.githubusercontent.com/GNOME/libxml2/96498992efa48d52b0e8b83058bd88dbdaf153c1/parser.c",
+      "sha256": "b77dc43e5e284efcdc87d5c6ec4112eb41a810ef19bb05570c3d1880858cb843"
+    },
+    {
+      "file": "libxml2-valid.c",
+      "url": "https://raw.githubusercontent.com/GNOME/libxml2/96498992efa48d52b0e8b83058bd88dbdaf153c1/valid.c",
+      "sha256": "cd6633e52070f2bcd808b745ef55ae7fa2569fb6eb48c672615744d50b09e21a"
+    }
+  ],
+  "checks": [
+    {
+      "name": "libxml2_release_matches_fixed_tag_parser.c",
+      "result": "PASS",
+      "sha256": "b77dc43e5e284efcdc87d5c6ec4112eb41a810ef19bb05570c3d1880858cb843",
+      "commit": "96498992efa48d52b0e8b83058bd88dbdaf153c1"
+    },
+    {
+      "name": "libxml2_release_matches_fixed_tag_valid.c",
+      "result": "PASS",
+      "sha256": "cd6633e52070f2bcd808b745ef55ae7fa2569fb6eb48c672615744d50b09e21a",
+      "commit": "96498992efa48d52b0e8b83058bd88dbdaf153c1"
+    },
+    {
+      "name": "gzip_original_release_lacks_fix_and_requires_recorded_upstream_patches",
+      "result": "PASS",
+      "sha256": "ae315a02ac93b8f4fa38f920c6699e3224d581d83dca1663934d18bafe841eec"
+    }
+  ],
+  "result": "PASS"
+}

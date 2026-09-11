@@ -1,0 +1,101 @@
+{
+  "buildx.build.provenance": {
+    "builder": {
+      "id": ""
+    },
+    "buildType": "https://mobyproject.org/buildkit@v1",
+    "materials": [
+      {
+        "uri": "pkg:docker/golang@1.27.1-bookworm?digest=sha256:648f440f42a0958804efb24df176f806f9d353b41f1c0627f666428e40310f6b\u0026platform=linux%2Famd64",
+        "digest": {
+          "sha256": "648f440f42a0958804efb24df176f806f9d353b41f1c0627f666428e40310f6b"
+        }
+      },
+      {
+        "uri": "pkg:docker/postgres@17.11?digest=sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675\u0026platform=linux%2Famd64",
+        "digest": {
+          "sha256": "67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675"
+        }
+      },
+      {
+        "uri": "https://codeload.github.com/tianon/gosu/tar.gz/6456aaa0f3c854d199d0f037f068eb97515b7513",
+        "digest": {
+          "sha256": "33d7537d588ea49458b9509bcf4554bdf5ceacc66da71e5caa1058ea3b689c3b"
+        }
+      },
+      {
+        "uri": "https://deb.debian.org/debian/pool/main/g/gzip/gzip_1.14.orig.tar.xz",
+        "digest": {
+          "sha256": "01a7b881bd220bfdf615f97b8718f80bdfd3f6add385b993dcf6efd14e8c0ac6"
+        }
+      },
+      {
+        "uri": "https://download.gnome.org/sources/libxml2/2.15/libxml2-2.15.4.tar.xz",
+        "digest": {
+          "sha256": "98087fd181d9070724f3fbc65c7377db03038eb92bd882374daff44940138821"
+        }
+      },
+      {
+        "uri": "https://download.gnome.org/sources/libxslt/1.1/libxslt-1.1.45.tar.xz",
+        "digest": {
+          "sha256": "9acfe68419c4d06a45c550321b3212762d92f41465062ca4ea19e632ee5d216e"
+        }
+      },
+      {
+        "uri": "https://ftp.postgresql.org/pub/source/v17.11/postgresql-17.11.tar.bz2",
+        "digest": {
+          "sha256": "dd27f2b3c59e73ed14aa3324901242bf69a032a6347805f274e6260322d42979"
+        }
+      }
+    ],
+    "invocation": {
+      "configSource": {
+        "entryPoint": "Dockerfile"
+      },
+      "parameters": {
+        "frontend": "dockerfile.v0",
+        "locals": [
+          {
+            "name": "context"
+          },
+          {
+            "name": "dockerfile"
+          }
+        ],
+        "root": {
+          "configSource": {
+            "path": "Dockerfile"
+          },
+          "request": {
+            "args": {
+              "vcs:localdir:context": "infrastructure\\runtime-security\\builds\\postgres-c14",
+              "vcs:localdir:dockerfile": "infrastructure\\runtime-security\\builds\\postgres-c14",
+              "vcs:revision": "3458e56f29ec0288925f2a4795105fe863da5158",
+              "vcs:source": "https://github.com/Claidd/otziv_o.git"
+            }
+          }
+        },
+        "compatibilityVersion": 30
+      },
+      "environment": {
+        "dockerfileVersion": "1.26.0",
+        "platform": "linux/amd64"
+      }
+    }
+  },
+  "buildx.build.ref": "otziv-c14-postgres-builder/otziv-c14-postgres-builder0/s7yxn1r5rby4jrtg3ewvn70vl",
+  "containerimage.descriptor": {
+    "mediaType": "application/vnd.oci.image.manifest.v1+json",
+    "digest": "sha256:ebf646d4a2ed114de7138af57159508770872d10b35ce56f3f5a9193c87f719e",
+    "size": 670,
+    "annotations": {
+      "org.opencontainers.image.created": "2026-09-08T14:12:52Z"
+    },
+    "platform": {
+      "architecture": "amd64",
+      "os": "linux"
+    }
+  },
+  "containerimage.digest": "sha256:ebf646d4a2ed114de7138af57159508770872d10b35ce56f3f5a9193c87f719e",
+  "image.name": "docker.io/library/otziv-c14-postgres:source-runtime-v6"
+}

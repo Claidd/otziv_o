@@ -1,0 +1,70 @@
+{
+  "schema": "otziv-c14-versity-compatibility-v1",
+  "result": "PASS",
+  "timestamp": "2026-09-08T14:04:33.809Z",
+  "image": "sha256:6564a3b3ce6655e72f0c6b484508869eb84b54b8604e19c478a69dceaecba202",
+  "publishedServer": "sha256:25d625d20bc19627cdf7680aadb702dcdae239fe10dd289c4017ca40f22b5b32",
+  "syntheticOnly": true,
+  "limitsApplied": {
+    "serverMemoryMiB": 768,
+    "serverCpus": 2,
+    "clientMemoryMiB": 384,
+    "clientGOMEMLIMIT": "256MiB"
+  },
+  "checks": [
+    "internal_network",
+    "no_published_ports",
+    "server_ready",
+    "client_1_exit_no_oom",
+    "compose_init_idempotent_0",
+    "client_2_exit_no_oom",
+    "compose_init_idempotent_1",
+    "client_3_exit_no_oom",
+    "public_anonymous_http_bytes",
+    "private_anonymous_http_403",
+    "public_anonymous_bytes",
+    "private_anonymous_denied",
+    "private_authenticated_bytes",
+    "client_4_exit_no_oom",
+    "versioned_bucket_created",
+    "client_5_exit_no_oom",
+    "versioning_enabled",
+    "client_6_exit_no_oom",
+    "first_version_written",
+    "client_7_exit_no_oom",
+    "second_version_written",
+    "client_8_exit_no_oom",
+    "two_distinct_object_versions",
+    "client_9_exit_no_oom",
+    "client_10_exit_no_oom",
+    "each_version_readable",
+    "client_11_exit_no_oom",
+    "latest_version_readable",
+    "object_copy_restore_bytes",
+    "restart_graceful_stop",
+    "client_12_exit_no_oom",
+    "client_13_exit_no_oom",
+    "same_version_ids_and_bytes_after_restart",
+    "client_14_exit_no_oom",
+    "copied_object_durable_after_restart",
+    "server_graceful_stop"
+  ],
+  "cleanup": [
+    {
+      "kind": "container",
+      "result": "PASS"
+    },
+    {
+      "kind": "volume",
+      "result": "PASS"
+    },
+    {
+      "kind": "network",
+      "result": "PASS"
+    }
+  ],
+  "failure": null,
+  "limits": [
+    "Versity v1.8.0 derivative (only two vendor Alpine package updates) on new synthetic POSIX storage only. This does not migrate a MinIO volume, prove distributed storage, or establish production durability."
+  ]
+}
