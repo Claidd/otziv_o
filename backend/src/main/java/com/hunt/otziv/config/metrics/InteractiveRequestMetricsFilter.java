@@ -19,6 +19,8 @@ public class InteractiveRequestMetricsFilter extends OncePerRequestFilter {
     public InteractiveRequestMetricsFilter(PerformanceMetrics metrics) { this.metrics = metrics; }
     @Override protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                               FilterChain chain) throws ServletException, IOException {
+        // Preflights and HEAD responses do not execute an interactive page read.
+        if (!"GET".equals(request.getMethod())) { chain.doFilter(request, response); return; }
         String endpoint = endpoint(request.getRequestURI(), request.getParameter("section"));
         if (endpoint == null) { chain.doFilter(request, response); return; }
         metrics.beginRequest();

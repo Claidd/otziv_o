@@ -107,6 +107,8 @@ worker performance. Новые циклы и разрешения на дост�
 
 Servlet filter измеряет security → controller → сериализацию синхронных ответов и
 учитывает ошибки отдельно. Очередь до servlet, proxy и RTT клиента измеряются снаружи.
+В интерактивный SLI входят только GET: OPTIONS/preflight и HEAD не увеличивают N
+и не улучшают latency выполненных чтений страницы.
 JDBC instrumentation хранит только число execute и длительность; SQL, параметры и
 ответы в telemetry не записываются. Spans имеют фиксированные имена; исключения новых
 spans очищаются до имени класса без message/cause/stack. Cgroup v2 счётчики читаются

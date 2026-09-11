@@ -11,6 +11,24 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class InteractiveRequestMetricsFilterTest {
+    @Test void preflightHeadAndOtherMethodsDoNotDiluteInteractiveGetSlo() throws Exception {
+        var registry = new SimpleMeterRegistry();
+        var filter = new InteractiveRequestMetricsFilter(new PerformanceMetrics(registry));
+        var forwarded = new java.util.concurrent.atomic.AtomicInteger();
+        for (String method : new String[]{"OPTIONS", "HEAD", "POST"}) {
+            var request = new MockHttpServletRequest(method, "/api/manager/board");
+            filter.doFilter(request, new MockHttpServletResponse(), (req,res) -> {
+                forwarded.incrementAndGet();
+                assertThat(PerformanceMetrics.collectingSql()).isFalse();
+            });
+        }
+        assertThat(forwarded.get()).isEqualTo(3);
+        assertThat(registry.getMeters()).isEmpty();
+        filter.doFilter(new MockHttpServletRequest("GET", "/api/manager/board"),
+                new MockHttpServletResponse(), (req,res) -> {});
+        assertThat(registry.get("otziv.http.duration").tag("status", "2xx").timer().count()).isOne();
+    }
+
     @Test void segmentTraceRetainsFailureTypeWithoutPrivateExceptionMessage() {
         var registry=io.micrometer.observation.ObservationRegistry.create();
         var errors=new java.util.ArrayList<Throwable>();
