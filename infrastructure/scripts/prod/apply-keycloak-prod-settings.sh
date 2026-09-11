@@ -230,6 +230,9 @@ if [ -z "$mobile_client_uuid" ] || [ "$mobile_client_uuid" = "id" ]; then
 fi
 
 if [ -n "$mobile_client_uuid" ] && [ "$mobile_client_uuid" != "id" ]; then
+  # Online client sessions inherit the realm limits. The 30-day mobile login
+  # uses offline_access; applying that duration to online sessions is invalid.
+  # Repair legacy overrides in the first update, before Keycloak validates them.
   kc_retry update "clients/$mobile_client_uuid" -r "$REALM" \
     -s enabled=true \
     -s publicClient=true \
@@ -238,14 +241,14 @@ if [ -n "$mobile_client_uuid" ] && [ "$mobile_client_uuid" != "id" ]; then
     -s directAccessGrantsEnabled=false \
     -s serviceAccountsEnabled=false \
     -s frontchannelLogout=true \
+    -s 'attributes."client.session.idle.timeout"=0' \
+    -s 'attributes."client.session.max.lifespan"=0' \
     -s 'optionalClientScopes=["offline_access"]' \
     -s "redirectUris=$MOBILE_REDIRECT_URIS" \
     -s "webOrigins=$MOBILE_WEB_ORIGINS"
 
   kc_retry update "clients/$mobile_client_uuid" -r "$REALM" \
     -s "attributes.\"pkce.code.challenge.method\"=S256" \
-    -s "attributes.\"client.session.idle.timeout\"=$MOBILE_SESSION_SECONDS" \
-    -s "attributes.\"client.session.max.lifespan\"=$MOBILE_SESSION_SECONDS" \
     -s "attributes.\"post.logout.redirect.uris\"=$MOBILE_LOGOUT_REDIRECT_URIS" \
     || echo "Warning: could not update optional mobile client attributes." >&2
 

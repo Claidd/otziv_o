@@ -141,8 +141,8 @@
       ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "client.session.idle.timeout": "2592000",
-        "client.session.max.lifespan": "2592000",
+        "client.session.idle.timeout": "0",
+        "client.session.max.lifespan": "0",
         "post.logout.redirect.uris": "http://localhost:4300/*##otziv://logout"
       },
       "protocolMappers": [
