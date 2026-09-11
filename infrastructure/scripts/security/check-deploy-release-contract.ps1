@@ -21,7 +21,7 @@ $whatsappChromiumSmokePath = Join-Path $repoRoot 'whatsapp\chromium-smoke.js'
 $buildComposePath = Join-Path $repoRoot 'docker-compose.build.yaml'
 $productionComposePath = Join-Path $repoRoot 'docker-compose.yaml'
 
-$deploy = [IO.File]::ReadAllText($deployPath)
+$deploy = [IO.File]::ReadAllText($deployPath).Replace("`r`n", "`n")
 $snapshot = [IO.File]::ReadAllText($snapshotPath)
 $snapshotValidator = [IO.File]::ReadAllText($snapshotValidatorPath)
 $legacyDeploy = [IO.File]::ReadAllText($legacyDeployPath)

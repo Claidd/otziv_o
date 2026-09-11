@@ -33,6 +33,9 @@ param(
     [string]$DeploySnapshotBaseRevision = "",
     [string]$DeploySnapshotRevision = "",
     [string]$DeployProtectedMainRevision = "",
+    [string]$PrivateRegistryControlFile = "",
+    [switch]$RebuildWhatsApp,
+    [switch]$RequireMainCi,
     [switch]$Help
 )
 
@@ -962,7 +965,7 @@ Write-Host "Deployment revision: $gitRevision"
 Write-Host "Traceable image tag: $Tag"
 
 $deployWhatsAppChanged = $true
-if ($PreparedDeploySnapshot) {
+if ($PreparedDeploySnapshot -and -not $RebuildWhatsApp) {
     $deployChangedFiles = @(& git -C $repoRoot diff --name-only --diff-filter=ACDMRTUXB $DeploySnapshotBaseRevision $gitRevision)
     if ($LASTEXITCODE -ne 0) {
         throw 'Unable to determine deploy snapshot changed files for WhatsApp image policy.'
@@ -1239,6 +1242,17 @@ if (-not $SkipBuildPush) {
     Write-Host "Docker images pushed successfully."
 } else {
     Write-Host "Skipping docker build/push; deploying already published images."
+}
+
+if (-not [string]::IsNullOrWhiteSpace($PrivateRegistryControlFile)) {
+    # The normal entry point owns this loopback registry and its SSH tunnel.
+    # Freeze published tags before digest resolution and any rollout action.
+    Invoke-External -FilePath 'python' -Arguments @(
+        (Join-Path $PSScriptRoot 'release_registry.py'), 'seal', $PrivateRegistryControlFile)
+}
+
+if ($RequireMainCi) {
+    Invoke-External -FilePath 'python' -Arguments @((Join-Path $PSScriptRoot 'release_ci.py'), '--repo', $repoRoot)
 }
 
 if ($null -ne $mobileRelease) {
