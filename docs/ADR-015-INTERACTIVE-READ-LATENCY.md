@@ -113,6 +113,11 @@ JDBC instrumentation хранит только число execute и длите�
 ответы в telemetry не записываются. Spans имеют фиксированные имена; исключения новых
 spans очищаются до имени класса без message/cause/stack. Cgroup v2 счётчики читаются
 непривилегированно; отсутствие поддержки не отображается как нулевая нагрузка.
+Объекты файлов cgroup удерживаются самим singleton binder: FunctionCounter
+Micrometer хранит только слабую ссылку и иначе после GC оставляет последнее
+значение ([реализация Micrometer](https://github.com/micrometer-metrics/micrometer/blob/main/micrometer-core/src/main/java/io/micrometer/core/instrument/cumulative/CumulativeFunctionCounter.java)).
+Штатный deploy пересоздаёт Prometheus с сохранением TSDB volume,
+чтобы заменённые при доставке inode файлов конфигурации и правил попали в mount.
 Сегмент `worker.board/cellular-access` отдельно измеряет прежнюю проверку сети,
 включая запись нарушения: её нельзя исключать из HTTP-измерения защищённых вкладок.
 Проверка IP объединяет одновременные промахи одного IP через существующий Caffeine
