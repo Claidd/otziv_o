@@ -3123,7 +3123,9 @@ if [ "`$deploy_external_review_worker" != "1" ]; then
   # complete previous release instead of removing one of its dependencies.
   compose --profile external-review stop external-review-worker
 fi
-compose up -d --no-deps prometheus
+# Release extraction can replace the inode behind a single-file bind mount.
+# Recreate to read the uploaded configuration/rules; the TSDB named volume is retained.
+compose up -d --no-deps --force-recreate prometheus
 wait_service_healthy loki 600
 wait_service_healthy tempo 600
 wait_service_healthy prometheus 600
