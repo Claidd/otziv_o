@@ -21,11 +21,13 @@ The old C14 publication proof and validator remain unchanged.
 
 Local evidence: upstream suites pass, 21 database continuity checks pass,
 5 TCP/authentication checks pass, and exact-runtime scanner reassessment passes.
-These results do not authorize production activation by themselves. Publication
-requires the normal `c16-postgres` workflow, provenance/SBOM verification and
-anonymous download. Activation also requires independent inspection of that
-published digest and a fresh restore/issuer/rollback rehearsal with the current
-Keycloak image. Production defaults remain unchanged until those checks pass.
+The normal `c16-postgres` workflow published the exact candidate with verified
+provenance/SBOM and anonymous download. Independent stopped-image inspection
+and 39 checks on a fresh copy of the current 102-table Keycloak database passed,
+including existing-password login and rollback preserving post-upgrade writes.
+The source defaults now select that accepted digest. Production cutover still
+requires a fresh authenticated backup and a coordinated database procedure;
+the ordinary deployment image-change guard remains in force.
 
 Sources:
 

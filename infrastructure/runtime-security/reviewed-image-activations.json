@@ -256,25 +256,25 @@
     },
     {
       "component": "postgres",
-      "reference": "ghcr.io/claidd/otziv-security@sha256:07834abbfd80ed7183afa9096db99afc4d93b99fd51aae726e550d07ade65dbf",
-      "commit": "e3d798c423eaa7ee1afab9f77c041286e408fefa",
-      "run": "34239698507",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:a30a580feb45fce65b87d21a104d407d3d1c5b255ae0e9a05ce9903e10adb270",
+      "commit": "9aeab5dbce420d045411767f830b79755ae9258a",
+      "run": "34690229481",
       "attempt": "1",
       "manifest": {
-        "path": "infrastructure/runtime-security/reviewed-images-c14-postgres.json",
-        "sha256": "192027ac9371afbc0ad3fc6363cab7ea03fab8633e706e56552e77a349aee0b7"
+        "path": "infrastructure/runtime-security/reviewed-images-c16-postgres.json",
+        "sha256": "e21701dc72623adff349c9d14cb2e6d867301fcfc0319a9cbcb3ce6a3dcafad9"
       },
       "publication": {
-        "path": "infrastructure/runtime-security/proofs/c14-postgres-published/publication/publication.json",
-        "sha256": "0a9dcb062b3bb354559878cf84458bc4cc233b7b38e71826a11ec6f98baf74a1"
+        "path": "infrastructure/runtime-security/proofs/c16-postgres-published/publication/publication.json",
+        "sha256": "0cdc9e48bd5f21f0fe88ed274e644ad789d7ba208e6c1f7b569193c612b000d9"
       },
       "anonymous": {
-        "path": "infrastructure/runtime-security/proofs/c14-postgres-published/anonymous/anonymous-download.json",
-        "sha256": "df32819cc16aa4bc706d308e3cbe4351763ec2c9ea7a9be2081a72abd8ed4c5f"
+        "path": "infrastructure/runtime-security/proofs/c16-postgres-published/anonymous/anonymous-download.json",
+        "sha256": "3a3939b99aaee2aa45c2d6d058c1b6a3087b32f75259ecbd00c5b6105243f803"
       },
       "databaseTransition": {
-        "path": "infrastructure/keycloak/security-generation/c15-netty/proofs/publication-acceptance.json",
-        "sha256": "e328234dec6fc203281becb48cb985456d0d73af46da46fe71e14984c72aed85"
+        "path": "infrastructure/runtime-security/proofs/c16-postgres-published/acceptance.json",
+        "sha256": "01e5746ed52eb5f52a0313df7e785047898870ef0c4ffd052f2d016c29fd41d8"
       }
     }
   ]

@@ -1,0 +1,80 @@
+[
+    {
+        "Id": "sha256:9aff3268aa60897853557e45444da2f6c1d45e311eb543e9eb8e0f49339c5f6e",
+        "RepoTags": [],
+        "RepoDigests": [
+            "ghcr.io/claidd/otziv-security@sha256:a30a580feb45fce65b87d21a104d407d3d1c5b255ae0e9a05ce9903e10adb270"
+        ],
+        "Parent": "",
+        "Comment": "buildkit.dockerfile.v0",
+        "Created": "2026-09-12T11:11:52.68983109Z",
+        "DockerVersion": "",
+        "Author": "",
+        "Config": {
+            "Hostname": "",
+            "Domainname": "",
+            "User": "",
+            "AttachStdin": false,
+            "AttachStdout": false,
+            "AttachStderr": false,
+            "ExposedPorts": {
+                "5432/tcp": {}
+            },
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "PATH=/usr/local/pgsql/bin:/usr/local/bin:/usr/bin:/bin",
+                "LANG=en_US.utf8",
+                "PG_MAJOR=17",
+                "PG_VERSION=17.11",
+                "PGDATA=/var/lib/postgresql/data"
+            ],
+            "Cmd": [
+                "postgres"
+            ],
+            "ArgsEscaped": true,
+            "Image": "",
+            "Volumes": {
+                "/var/lib/postgresql/data": {}
+            },
+            "WorkingDir": "/",
+            "Entrypoint": [
+                "docker-entrypoint.sh"
+            ],
+            "OnBuild": null,
+            "Labels": {
+                "com.otziv.gosu.source": "https://github.com/tianon/gosu/tree/6456aaa0f3c854d199d0f037f068eb97515b7513",
+                "com.otziv.postgres.optional-interfaces": "LLVM JIT and systemd-notify omitted; SQL/XML ICU SSL GSS LDAP PAM SELinux UUID lz4 zstd retained",
+                "com.otziv.publication.revision": "9aeab5dbce420d045411767f830b79755ae9258a",
+                "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+                "com.otziv.reviewed-component": "postgres",
+                "com.otziv.security.generation": "c16-pcre2",
+                "com.otziv.security.scope": "C16 PCRE2 10.48; unchanged C14 PostgreSQL17.11, glibc, locales and entrypoint"
+            },
+            "StopSignal": "SIGINT"
+        },
+        "Architecture": "amd64",
+        "Os": "linux",
+        "Size": 204878381,
+        "GraphDriver": {
+            "Data": {
+                "LowerDir": "/var/lib/docker/overlay2/e2aafb58866ebdac753bbfc60aa2b4e21abe935347d244ed9a14f29cf2ab0411/diff",
+                "MergedDir": "/var/lib/docker/overlay2/e49e1145742c37f79cf6d5793499ecda999e392d24ff41a4da04fcc3f7231b02/merged",
+                "UpperDir": "/var/lib/docker/overlay2/e49e1145742c37f79cf6d5793499ecda999e392d24ff41a4da04fcc3f7231b02/diff",
+                "WorkDir": "/var/lib/docker/overlay2/e49e1145742c37f79cf6d5793499ecda999e392d24ff41a4da04fcc3f7231b02/work"
+            },
+            "Name": "overlay2"
+        },
+        "RootFS": {
+            "Type": "layers",
+            "Layers": [
+                "sha256:3412f6e84bf5df2d548131d5a86650e84d37ed1758ea532826a7a25477fc8945",
+                "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef"
+            ]
+        },
+        "Metadata": {
+            "LastTagTime": "0001-01-01T00:00:00Z"
+        }
+    }
+]

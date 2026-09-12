@@ -1,0 +1,9 @@
+{
+  "id": 34690229481,
+  "head_sha": "9aeab5dbce420d045411767f830b79755ae9258a",
+  "event": "workflow_dispatch",
+  "run_attempt": 1,
+  "status": "completed",
+  "conclusion": "success",
+  "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34690229481"
+}

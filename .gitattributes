@@ -35,8 +35,10 @@ infrastructure/runtime-security/builds/postgres-c14/** text eol=lf
 infrastructure/runtime-security/builds/postgres-c16/** text eol=lf
 infrastructure/runtime-security/reviewed-images-c16-*.json text eol=lf
 infrastructure/runtime-security/postgres-c16-*.mjs text eol=lf
+infrastructure/runtime-security/postgres-c16-rehearsal.py text eol=lf
 infrastructure/runtime-security/proofs/c16-postgres/upstream/** -whitespace
 infrastructure/runtime-security/proofs/c16-postgres/pcre2-tests.log -whitespace
+infrastructure/runtime-security/proofs/c16-postgres-published/**/*.log -whitespace
 infrastructure/runtime-security/builds/versity-c14/** text eol=lf
 infrastructure/keycloak/security-generation/c14-migration-fix/** text eol=lf
 infrastructure/keycloak/security-generation/c14-migration-fix/proofs/** -text

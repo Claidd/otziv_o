@@ -1,0 +1,471 @@
+{
+  "schema": "otziv-postgres-c16-rehearsal-v1",
+  "result": "PASS",
+  "checks": [
+    {
+      "name": "complete_custom_dump",
+      "passed": true
+    },
+    {
+      "name": "source_runtime_unchanged",
+      "passed": true
+    },
+    {
+      "name": "source_critical_identity_stable_during_capture",
+      "passed": true
+    },
+    {
+      "name": "source_clusterIdentifier_unchanged",
+      "passed": true
+    },
+    {
+      "name": "source_locale_unchanged",
+      "passed": true
+    },
+    {
+      "name": "source_encoding_unchanged",
+      "passed": true
+    },
+    {
+      "name": "source_extensions_unchanged",
+      "passed": true
+    },
+    {
+      "name": "source_configSha256_unchanged",
+      "passed": true
+    },
+    {
+      "name": "source_hbaSha256_unchanged",
+      "passed": true
+    },
+    {
+      "name": "source_identSha256_unchanged",
+      "passed": true
+    }
+  ],
+  "startedAt": "2026-09-12T11:13:28.731024+00:00",
+  "productionWrites": false,
+  "privateRowsPublished": false,
+  "publishedPorts": 0,
+  "sourcePostgres": "ghcr.io/claidd/otziv-security@sha256:07834abbfd80ed7183afa9096db99afc4d93b99fd51aae726e550d07ade65dbf",
+  "sourcePostgresConfig": "sha256:d257683e1d6febdfb869b77c60683bc598b272788d60e65893a109adaf0a2db4",
+  "keycloak": "ghcr.io/claidd/otziv-security@sha256:bd5687843becb0cdb232c2b864cc3786fafb8fc91f30f531fa2db7fc4d1fc59d",
+  "keycloakConfig": "sha256:34e7587586d4d0a8d8330845f43cc58db9196d4dc6c4f120ac70519541453e5e",
+  "executedScriptSha256": "35ddc61014f87db720d39d314bf279293966ef033366f1f5be00176dc17dc996",
+  "dumpBytes": 1942243,
+  "dumpSha256": "c31034b6952c0cf1de399572de823b50225e1c418d24081f205cc6233d0163d2",
+  "sourceBefore": {
+    "observedAt": "2026-09-12T11:13:33.990999+00:00",
+    "postgres": {
+      "locale": {
+        "ctype": "en_US.utf8",
+        "collate": "en_US.utf8",
+        "provider": "c",
+        "actualVersion": "2.41",
+        "providerLocale": null,
+        "recordedVersion": "2.41"
+      },
+      "encoding": "UTF8",
+      "settings": {
+        "jit": "on",
+        "lc_time": "en_US.utf8",
+        "TimeZone": "Asia/Irkutsk",
+        "wal_level": "replica",
+        "lc_numeric": "en_US.utf8",
+        "lc_messages": "en_US.utf8",
+        "lc_monetary": "en_US.utf8",
+        "archive_mode": "off",
+        "wal_log_hints": "off",
+        "data_checksums": "off",
+        "jit_above_cost": "100000",
+        "max_connections": "100",
+        "max_wal_senders": "10",
+        "max_replication_slots": "10"
+      },
+      "hbaSha256": "af0fdb739b67d1a552cd82c19311b813e753d4f651a61e6b563f48b55dca5e74",
+      "extensions": [
+        {
+          "name": "plpgsql",
+          "version": "1.0"
+        }
+      ],
+      "inRecovery": false,
+      "roleCounts": {
+        "login": 1,
+        "total": 16,
+        "superuser": 1,
+        "replication": 1
+      },
+      "identSha256": "b4dfef08731a7d20a3bb724ad4cf3e1cd91ec01fbe51349c6a3acc5704072965",
+      "replication": {
+        "slots": 0,
+        "activeSlots": 0,
+        "logicalSlots": 0,
+        "physicalSlots": 0
+      },
+      "configSha256": "d6d8c66b3955ae5400e0fc4b4aea23fc75ed73bc107aed78cfd36d40c96c889f",
+      "jitAvailable": false,
+      "publications": 0,
+      "schemaCounts": {
+        "total": 4,
+        "application": 1
+      },
+      "databaseBytes": 41350835,
+      "queryReadOnly": "on",
+      "serverVersion": "17.11",
+      "subscriptions": 0,
+      "foreignServers": 0,
+      "usedCollations": [
+        {
+          "oid": "100",
+          "custom": false,
+          "provider": "d",
+          "catalogName": "default",
+          "actualVersion": "2.41",
+          "deterministic": true,
+          "recordedVersion": null
+        }
+      ],
+      "clusterIdentifier": "7636979737412972581",
+      "customTablespaces": 0,
+      "preloadConfigured": false,
+      "applicationObjects": {
+        "views": 0,
+        "tables": 102,
+        "indexes": 248,
+        "sequences": 0,
+        "foreignTables": 0,
+        "unloggedTables": 0
+      },
+      "availableExtensions": [
+        "amcheck",
+        "autoinc",
+        "bloom",
+        "btree_gin",
+        "btree_gist",
+        "citext",
+        "cube",
+        "dblink",
+        "dict_int",
+        "dict_xsyn",
+        "earthdistance",
+        "file_fdw",
+        "fuzzystrmatch",
+        "hstore",
+        "insert_username",
+        "intagg",
+        "intarray",
+        "isn",
+        "lo",
+        "ltree",
+        "moddatetime",
+        "pageinspect",
+        "pg_buffercache",
+        "pg_freespacemap",
+        "pg_prewarm",
+        "pg_stat_statements",
+        "pg_surgery",
+        "pg_trgm",
+        "pg_visibility",
+        "pg_walinspect",
+        "pgcrypto",
+        "pgrowlocks",
+        "pgstattuple",
+        "plpgsql",
+        "postgres_fdw",
+        "refint",
+        "seg",
+        "sslinfo",
+        "tablefunc",
+        "tcn",
+        "tsm_system_rows",
+        "tsm_system_time",
+        "unaccent",
+        "uuid-ossp",
+        "xml2"
+      ],
+      "serverVersionNumber": "170011",
+      "databaseRoleSettings": 0,
+      "nonTemplateDatabases": [
+        {
+          "oid": "5",
+          "bytes": 7689907,
+          "ctype": "en_US.utf8",
+          "collate": "en_US.utf8",
+          "encoding": "UTF8",
+          "provider": "c",
+          "actualVersion": "2.41",
+          "recordedVersion": "2.41"
+        },
+        {
+          "oid": "16384",
+          "bytes": 41350835,
+          "ctype": "en_US.utf8",
+          "collate": "en_US.utf8",
+          "encoding": "UTF8",
+          "provider": "c",
+          "actualVersion": "2.41",
+          "recordedVersion": "2.41"
+        }
+      ],
+      "localPreloadConfigured": false,
+      "replicationConnections": 0,
+      "archiveCommandConfigured": false,
+      "sessionPreloadConfigured": false
+    },
+    "critical": [
+      {
+        "hash": "e7913481077d2b8553cf00628b3af435375c56fe9ca7fea674b55a9413c047f7",
+        "rows": 2,
+        "table": "realm"
+      },
+      {
+        "hash": "49db875d4a730ecb5213b6375242baeb927c9b0f7250020e916a39bbed60a79d",
+        "rows": 32,
+        "table": "user_entity"
+      },
+      {
+        "hash": "891a3412feb6e5d9d4563d585163457b2b035041086b24ea707c79a222f85946",
+        "rows": 16,
+        "table": "client"
+      },
+      {
+        "hash": "c00c821d16451f8e6f8ccef77cb679beede57dc477958ad52e4c3466fe97712f",
+        "rows": 31,
+        "table": "credential"
+      },
+      {
+        "hash": "823639574309d56a9c96b76240321429edd62b7652824fc1d2aa5e82c465284b",
+        "rows": 98,
+        "table": "keycloak_role"
+      },
+      {
+        "hash": "dbf3804d9aa8ec69e20b403e66afcb2ce5533dc9aadda58702e36f25aa6255db",
+        "rows": 67,
+        "table": "user_role_mapping"
+      }
+    ],
+    "containers": {
+      "postgres": {
+        "id": "48452720ade6aab1df77a29d57dfbb8def22bb8ef1c682c0f45b688063279a02",
+        "imageId": "sha256:d257683e1d6febdfb869b77c60683bc598b272788d60e65893a109adaf0a2db4",
+        "startedAt": "2026-09-10T23:03:00.007215111Z",
+        "restarts": 0
+      },
+      "keycloak": {
+        "id": "c3ceab878da8fd688330f0548431d5110e9e4a314fb4a1d5a0d26de2f0954ff7",
+        "imageId": "sha256:34e7587586d4d0a8d8330845f43cc58db9196d4dc6c4f120ac70519541453e5e",
+        "startedAt": "2026-09-11T05:41:27.258335764Z",
+        "restarts": 0
+      }
+    }
+  },
+  "sourceAfter": {
+    "observedAt": "2026-09-12T11:13:44.574370+00:00",
+    "postgres": {
+      "locale": {
+        "ctype": "en_US.utf8",
+        "collate": "en_US.utf8",
+        "provider": "c",
+        "actualVersion": "2.41",
+        "providerLocale": null,
+        "recordedVersion": "2.41"
+      },
+      "encoding": "UTF8",
+      "settings": {
+        "jit": "on",
+        "lc_time": "en_US.utf8",
+        "TimeZone": "Asia/Irkutsk",
+        "wal_level": "replica",
+        "lc_numeric": "en_US.utf8",
+        "lc_messages": "en_US.utf8",
+        "lc_monetary": "en_US.utf8",
+        "archive_mode": "off",
+        "wal_log_hints": "off",
+        "data_checksums": "off",
+        "jit_above_cost": "100000",
+        "max_connections": "100",
+        "max_wal_senders": "10",
+        "max_replication_slots": "10"
+      },
+      "hbaSha256": "af0fdb739b67d1a552cd82c19311b813e753d4f651a61e6b563f48b55dca5e74",
+      "extensions": [
+        {
+          "name": "plpgsql",
+          "version": "1.0"
+        }
+      ],
+      "inRecovery": false,
+      "roleCounts": {
+        "login": 1,
+        "total": 16,
+        "superuser": 1,
+        "replication": 1
+      },
+      "identSha256": "b4dfef08731a7d20a3bb724ad4cf3e1cd91ec01fbe51349c6a3acc5704072965",
+      "replication": {
+        "slots": 0,
+        "activeSlots": 0,
+        "logicalSlots": 0,
+        "physicalSlots": 0
+      },
+      "configSha256": "d6d8c66b3955ae5400e0fc4b4aea23fc75ed73bc107aed78cfd36d40c96c889f",
+      "jitAvailable": false,
+      "publications": 0,
+      "schemaCounts": {
+        "total": 4,
+        "application": 1
+      },
+      "databaseBytes": 41350835,
+      "queryReadOnly": "on",
+      "serverVersion": "17.11",
+      "subscriptions": 0,
+      "foreignServers": 0,
+      "usedCollations": [
+        {
+          "oid": "100",
+          "custom": false,
+          "provider": "d",
+          "catalogName": "default",
+          "actualVersion": "2.41",
+          "deterministic": true,
+          "recordedVersion": null
+        }
+      ],
+      "clusterIdentifier": "7636979737412972581",
+      "customTablespaces": 0,
+      "preloadConfigured": false,
+      "applicationObjects": {
+        "views": 0,
+        "tables": 102,
+        "indexes": 248,
+        "sequences": 0,
+        "foreignTables": 0,
+        "unloggedTables": 0
+      },
+      "availableExtensions": [
+        "amcheck",
+        "autoinc",
+        "bloom",
+        "btree_gin",
+        "btree_gist",
+        "citext",
+        "cube",
+        "dblink",
+        "dict_int",
+        "dict_xsyn",
+        "earthdistance",
+        "file_fdw",
+        "fuzzystrmatch",
+        "hstore",
+        "insert_username",
+        "intagg",
+        "intarray",
+        "isn",
+        "lo",
+        "ltree",
+        "moddatetime",
+        "pageinspect",
+        "pg_buffercache",
+        "pg_freespacemap",
+        "pg_prewarm",
+        "pg_stat_statements",
+        "pg_surgery",
+        "pg_trgm",
+        "pg_visibility",
+        "pg_walinspect",
+        "pgcrypto",
+        "pgrowlocks",
+        "pgstattuple",
+        "plpgsql",
+        "postgres_fdw",
+        "refint",
+        "seg",
+        "sslinfo",
+        "tablefunc",
+        "tcn",
+        "tsm_system_rows",
+        "tsm_system_time",
+        "unaccent",
+        "uuid-ossp",
+        "xml2"
+      ],
+      "serverVersionNumber": "170011",
+      "databaseRoleSettings": 0,
+      "nonTemplateDatabases": [
+        {
+          "oid": "5",
+          "bytes": 7689907,
+          "ctype": "en_US.utf8",
+          "collate": "en_US.utf8",
+          "encoding": "UTF8",
+          "provider": "c",
+          "actualVersion": "2.41",
+          "recordedVersion": "2.41"
+        },
+        {
+          "oid": "16384",
+          "bytes": 41350835,
+          "ctype": "en_US.utf8",
+          "collate": "en_US.utf8",
+          "encoding": "UTF8",
+          "provider": "c",
+          "actualVersion": "2.41",
+          "recordedVersion": "2.41"
+        }
+      ],
+      "localPreloadConfigured": false,
+      "replicationConnections": 0,
+      "archiveCommandConfigured": false,
+      "sessionPreloadConfigured": false
+    },
+    "critical": [
+      {
+        "hash": "e7913481077d2b8553cf00628b3af435375c56fe9ca7fea674b55a9413c047f7",
+        "rows": 2,
+        "table": "realm"
+      },
+      {
+        "hash": "49db875d4a730ecb5213b6375242baeb927c9b0f7250020e916a39bbed60a79d",
+        "rows": 32,
+        "table": "user_entity"
+      },
+      {
+        "hash": "891a3412feb6e5d9d4563d585163457b2b035041086b24ea707c79a222f85946",
+        "rows": 16,
+        "table": "client"
+      },
+      {
+        "hash": "c00c821d16451f8e6f8ccef77cb679beede57dc477958ad52e4c3466fe97712f",
+        "rows": 31,
+        "table": "credential"
+      },
+      {
+        "hash": "823639574309d56a9c96b76240321429edd62b7652824fc1d2aa5e82c465284b",
+        "rows": 98,
+        "table": "keycloak_role"
+      },
+      {
+        "hash": "dbf3804d9aa8ec69e20b403e66afcb2ce5533dc9aadda58702e36f25aa6255db",
+        "rows": 67,
+        "table": "user_role_mapping"
+      }
+    ],
+    "containers": {
+      "postgres": {
+        "id": "48452720ade6aab1df77a29d57dfbb8def22bb8ef1c682c0f45b688063279a02",
+        "imageId": "sha256:d257683e1d6febdfb869b77c60683bc598b272788d60e65893a109adaf0a2db4",
+        "startedAt": "2026-09-10T23:03:00.007215111Z",
+        "restarts": 0
+      },
+      "keycloak": {
+        "id": "c3ceab878da8fd688330f0548431d5110e9e4a314fb4a1d5a0d26de2f0954ff7",
+        "imageId": "sha256:34e7587586d4d0a8d8330845f43cc58db9196d4dc6c4f120ac70519541453e5e",
+        "startedAt": "2026-09-11T05:41:27.258335764Z",
+        "restarts": 0
+      }
+    }
+  },
+  "stableTableCount": 101,
+  "completedAt": "2026-09-12T11:13:52.679604+00:00"
+}
