@@ -12,8 +12,18 @@ public record TeamPatternAnalysisResponse(
         int workerCount,
         long publicationCount,
         List<PatternInsight> insights,
-        Map<Long, WorkerPattern> workers
+        Map<Long, WorkerPattern> workers,
+        java.time.Instant generatedAt
 ) {
+    public TeamPatternAnalysisResponse(boolean visible, LocalDate from, LocalDate to, String confidence, int workerCount,
+                                       long publicationCount, List<PatternInsight> insights, Map<Long, WorkerPattern> workers) {
+        this(visible, from, to, confidence, workerCount, publicationCount, insights, workers, null);
+    }
+
+    public TeamPatternAnalysisResponse withGeneratedAt(java.time.Instant generatedAt) {
+        return new TeamPatternAnalysisResponse(visible, from, to, confidence, workerCount, publicationCount, insights, workers, generatedAt);
+    }
+
     public static TeamPatternAnalysisResponse empty(LocalDate from, LocalDate to) {
         return new TeamPatternAnalysisResponse(
                 true,

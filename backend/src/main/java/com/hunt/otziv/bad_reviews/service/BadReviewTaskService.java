@@ -67,6 +67,16 @@ public interface BadReviewTaskService {
     /** One database read for a selected board page; invalid amounts use the existing strict single-order path. */
     Map<Long, BigDecimal> getPayableSums(Collection<Order> orders);
 
+    /** Amounts and task counters from the same fresh read; scoped to this assembly. */
+    OrderAmounts prepareOrderAmounts(Collection<Order> orders);
+
+    record OrderAmounts(Map<Long, BigDecimal> payableSums, Map<Long, BadReviewTaskSummary> summaries) {
+        public OrderAmounts {
+            payableSums = Map.copyOf(payableSums);
+            summaries = Map.copyOf(summaries);
+        }
+    }
+
     int getPayableAmount(Order order);
 
     void enrichOrderList(List<OrderDTOList> orders);

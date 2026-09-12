@@ -172,10 +172,10 @@ public class CommonInvoiceBoardWorkflow {
         List<BoardInvoiceView> selectedCards = selection.invoiceIds().stream().map(invoicesById::get).filter(Objects::nonNull).map(invoice -> new BoardInvoiceView(invoice, itemsByInvoiceId.getOrDefault(invoice.getId(), List.of()))).toList();
         List<Order> selectedOrders = selectedCards.stream().flatMap(view -> view.items().stream())
                 .map(CommonInvoiceOrder::getOrder).filter(Objects::nonNull).toList();
-        Map<Long, BigDecimal> preparedAmounts = badReviewTaskService.getPayableSums(selectedOrders);
+        var orderAmounts = badReviewTaskService.prepareOrderAmounts(selectedOrders);
+        Map<Long, BigDecimal> preparedAmounts = orderAmounts.payableSums();
         Map<Long, Boolean> preparedRecovery = settlementService.prepareBoardRecoveryState(selectedOrders);
-        Map<Long, BadReviewTaskSummary> preparedSummaries = badReviewTaskService.getSummaryByOrderIds(
-                selectedOrders.stream().map(Order::getId).filter(Objects::nonNull).distinct().toList());
+        Map<Long, BadReviewTaskSummary> preparedSummaries = orderAmounts.summaries();
         var preparedPayments = settlementService.prepareBoardPaymentState(selection.invoiceIds());
         List<OrderDTOList> cards = selectedCards.stream().map(view -> {
             settlementService.refreshInvoiceAmounts(view.invoice(), view.items(), preparedAmounts, preparedRecovery,

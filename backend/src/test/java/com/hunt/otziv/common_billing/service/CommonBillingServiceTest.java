@@ -309,6 +309,7 @@ class CommonBillingServiceTest {
 
     @BeforeEach
     void setUpLazyDependencies() {
+        lenient().when(badReviewTaskService.prepareOrderAmounts(any())).thenReturn(new BadReviewTaskService.OrderAmounts(Map.of(), Map.of()));
         paymentRefStore.clear();
         queuedMessages.clear(); queuedStates.clear(); queuedClaims.clear();
         nextPaymentRefId = 10_000L;
@@ -4024,15 +4025,16 @@ class CommonBillingServiceTest {
                 .thenReturn(new CommonInvoiceBoardQueryRepository.PageSelection(List.of(10L),1,2));
         when(invoiceRepository.findBoardInvoicesByIds(List.of(10L))).thenReturn(List.of(invoice));
         when(invoiceOrderRepository.findByInvoiceIdsWithOrders(List.of(10L))).thenReturn(List.of(first,second));
-        when(badReviewTaskService.getPayableSums(List.of(first.getOrder(),second.getOrder())))
-                .thenReturn(Map.of(101L,new BigDecimal("1125.50"),102L,new BigDecimal("1000.00")));
+        when(badReviewTaskService.prepareOrderAmounts(List.of(first.getOrder(),second.getOrder())))
+                .thenReturn(new BadReviewTaskService.OrderAmounts(Map.of(101L,new BigDecimal("1125.50"),102L,new BigDecimal("1000.00")), Map.of()));
         when(recoveryGateService.activeRecoveryOrderIds(List.of(101L,102L))).thenReturn(Set.of(102L));
         var page = service.managerBoardPage("Все","",null,null,"desc",0,10);
         assertEquals(1,page.cards().size());
         assertEquals(new BigDecimal("2125.50"),page.cards().getFirst().getCommonInvoiceAmount());
         assertEquals(new BigDecimal("2125.50"),page.cards().getFirst().getCommonInvoiceRemaining());
         verify(badReviewTaskService,never()).getPayableSum(any());
-        verify(badReviewTaskService).getSummaryByOrderIds(List.of(101L,102L));
+        verify(badReviewTaskService).prepareOrderAmounts(List.of(first.getOrder(),second.getOrder()));
+        verify(badReviewTaskService, never()).getSummaryByOrderIds(any());
         assertTrue(first.isReady());
         assertFalse(second.isReady());
         verify(recoveryGateService,never()).hasActiveRecoveryTasks(any());

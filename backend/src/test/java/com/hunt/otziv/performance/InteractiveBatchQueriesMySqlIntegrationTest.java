@@ -42,6 +42,8 @@ class InteractiveBatchQueriesMySqlIntegrationTest {
     @Autowired EntityManager em;
     @Autowired ContractorRewardLedgerService ledger;
     @Autowired ContractorPaymentAccountingService accounting;
+    @Autowired ContractorAdminFinancialReadRepository financialRead;
+    @Autowired com.hunt.otziv.u_users.api.TeamDirectoryReader teamDirectory;
     @Autowired ContractorPaymentAllocationRepository allocations;
     @Autowired ContractorActualPaymentAttributionRepository attributions;
     @Autowired com.hunt.otziv.common_billing.repository.CommonInvoicePaymentRefRepository paymentRefs;
@@ -84,10 +86,17 @@ class InteractiveBatchQueriesMySqlIntegrationTest {
     @Test void progressIdsPreserveActiveRoleAndManagerMembershipWithoutLoadingProfiles() {
         var all = workers.findAllWithUserAndImage();
         assertThat(all).isNotEmpty();
+        assertThat(teamDirectory.allActive(com.hunt.otziv.u_users.api.TeamDirectoryReader.Role.WORKER))
+                .extracting(com.hunt.otziv.u_users.api.TeamDirectoryReader.Member::id)
+                .containsExactlyInAnyOrderElementsOf(all.stream().map(com.hunt.otziv.u_users.model.Worker::getId).toList());
         assertThat(workerDirectory.getActiveWorkerIds()).containsExactlyInAnyOrderElementsOf(
                 all.stream().map(com.hunt.otziv.u_users.model.Worker::getId).toList());
         var visibleManagers = managers.findAll();
         for (var manager : visibleManagers) {
+            assertThat(teamDirectory.forManagers(com.hunt.otziv.u_users.api.TeamDirectoryReader.Role.WORKER, List.of(manager.getId())))
+                    .extracting(com.hunt.otziv.u_users.api.TeamDirectoryReader.Member::id)
+                    .containsExactlyInAnyOrderElementsOf(workers.findAllToManager(manager).stream()
+                            .map(com.hunt.otziv.u_users.model.Worker::getId).toList());
             assertThat(workerDirectory.getActiveWorkerIdsByManagerIds(List.of(manager.getId())))
                     .containsExactlyInAnyOrderElementsOf(workers.findAllToManager(manager).stream()
                             .map(com.hunt.otziv.u_users.model.Worker::getId).toList());
@@ -103,6 +112,10 @@ class InteractiveBatchQueriesMySqlIntegrationTest {
         removed.getUser().setActive(false);
         em.flush();
         assertThat(workerDirectory.getActiveWorkerIds()).doesNotContain(removed.getId());
+        assertThat(teamDirectory.allActive(com.hunt.otziv.u_users.api.TeamDirectoryReader.Role.WORKER))
+                .extracting(com.hunt.otziv.u_users.api.TeamDirectoryReader.Member::id).doesNotContain(removed.getId());
+        assertThat(teamDirectory.forManagers(com.hunt.otziv.u_users.api.TeamDirectoryReader.Role.WORKER, null)).isEmpty();
+        assertThat(teamDirectory.forManagers(com.hunt.otziv.u_users.api.TeamDirectoryReader.Role.WORKER, List.of())).isEmpty();
     }
 
     @Test void invoiceBatchFactsMatchLegacyEvidenceAndPrepaymentFilters() {
@@ -179,10 +192,17 @@ class InteractiveBatchQueriesMySqlIntegrationTest {
         var ids = profiles.stream().map(ContractorPaymentProfile::getId).toList();
         for (var mode : ContractorAllocationMode.values()) {
             var totals = accounting.totalsForProfiles(ids, mode, FROM.atStartOfDay(), TO.atStartOfDay());
+            var facts = financialRead.read(ids, mode, accounting.summaryEventTypes(mode), FROM, TO);
+            assertThat(accounting.totalsFromRows(facts.events(), mode)).isEqualTo(totals);
             var statuses = EnumSet.of(ContractorAllocationStatus.RESERVED, ContractorAllocationStatus.CLIENT_REPORTED,
                     ContractorAllocationStatus.PARTIALLY_CONFIRMED);
             var exposure = allocations.sumOutstandingForProfiles(ids, mode, statuses);
             for (var profile : profiles) {
+                var accrual = facts.accruals().getOrDefault(profile.getId(), new ContractorAdminFinancialReadRepository.Accrual(0, 0));
+                assertThat(accrual.total() + profile.getOpeningBalanceKopecks()).isEqualTo(accruals.get(profile.getId()).total());
+                assertThat(accrual.month()).isEqualTo(accruals.get(profile.getId()).month());
+                for (var status : statuses) assertThat(facts.exposures().getOrDefault(profile.getId(), Map.of()).getOrDefault(status, 0L))
+                        .isEqualTo(allocations.sumOutstandingExposure(profile.getId(), mode, Set.of(status)));
                 var total = totals.getOrDefault(profile.getId(), ContractorPaymentAccountingService.PeriodTotals.empty());
                 assertThat(total.confirmedTotal()).isEqualTo(accounting.confirmedGross(profile, mode));
                 assertThat(total.confirmedMonth()).isEqualTo(accounting.confirmedGrossInPeriod(profile, mode, FROM.atStartOfDay(), TO.atStartOfDay()));
@@ -199,6 +219,38 @@ class InteractiveBatchQueriesMySqlIntegrationTest {
         first.setOpeningBalanceKopecks(2200); em.flush();
         assertThat(ledger.totalsForProfiles(List.of(first), FROM, TO).get(first.getId()).total())
                 .isEqualTo(accruals.get(first.getId()).total() + 1000);
+    }
+
+    @Test void currentFinancialFactsRespectActualRecipientModeDateAndCommittedSourceChanges() {
+        var original = profile(900011L, 0);
+        var actual = profile(900012L, 0);
+        long source = 980000;
+        for (var mode : ContractorAllocationMode.values()) {
+            for (int day : List.of(-1, 0, 31)) {
+                em.persist(ContractorActualPaymentAttribution.create("actual-batch-" + (++source),
+                        ContractorActualPaymentSourceKind.PAYMENT_LINK, source, null, null, null, null, null, mode,
+                        ContractorRecipientType.SPECIALIST, original.getId(), original.getUser().getId(), "Original",
+                        ContractorRecipientType.SPECIALIST, actual.getId(), actual.getUser().getId(), "Actual",
+                        null, null, 120 + day, null, 0, FROM.plusDays(day).atStartOfDay(),
+                        "Test", "proof", null, "test", null));
+            }
+        }
+        em.flush();
+        for (var mode : ContractorAllocationMode.values()) {
+            var facts = financialRead.read(List.of(original.getId(), actual.getId()), mode, accounting.summaryEventTypes(mode), FROM, TO);
+            assertThat(facts.transfers()).containsOnlyKeys(actual.getId());
+            assertThat(facts.transfers().get(actual.getId())).isEqualTo(new ContractorAdminFinancialReadRepository.ActualTransfers(1, 120));
+            var legacy = attributions.summarizeProfileActualTransfersInPeriod(List.of(original.getId(), actual.getId()), mode, FROM.atStartOfDay(), TO.atStartOfDay());
+            assertThat(legacy).hasSize(1);
+            assertThat(legacy.getFirst().getTransferAmountKopecks()).isEqualTo(120);
+        }
+        var reward = new ContractorRewardLedgerEntry(); reward.setProfile(actual); reward.setSourceZpId(++source);
+        reward.setOccurredOn(FROM); reward.setAmountKopecks(501); reward.setActive(true); em.persist(reward); em.flush();
+        assertThat(financialRead.read(List.of(actual.getId()), ContractorAllocationMode.LIVE,
+                accounting.summaryEventTypes(ContractorAllocationMode.LIVE), FROM, TO).accruals().get(actual.getId()).month()).isEqualTo(501);
+        reward.setActive(false); em.flush();
+        assertThat(financialRead.read(List.of(actual.getId()), ContractorAllocationMode.LIVE,
+                accounting.summaryEventTypes(ContractorAllocationMode.LIVE), FROM, TO).accruals()).isEmpty();
     }
 
     private ContractorPaymentProfile profile(long userId, long opening) {

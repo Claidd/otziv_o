@@ -44,6 +44,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 
 class ContractorPaymentVisibilityServiceTest {
+    private final com.hunt.otziv.contractor_payments.repository.ContractorAdminFinancialReadRepository adminRead = mock(com.hunt.otziv.contractor_payments.repository.ContractorAdminFinancialReadRepository.class);
 
     private final ContractorPaymentProfileRepository profileRepository =
             mock(ContractorPaymentProfileRepository.class);
@@ -68,7 +69,6 @@ class ContractorPaymentVisibilityServiceTest {
             profileRepository,
             allocationRepository,
             eventRepository,
-            attributionRepository,
             ledgerService,
             accountingService,
             runtimeSwitch,
@@ -76,11 +76,14 @@ class ContractorPaymentVisibilityServiceTest {
             profileService,
             userRepository,
             appSettingService,
-            targetAccessPolicy
+            targetAccessPolicy, adminRead
     );
 
     @BeforeEach
     void useEffectiveShadowMode() {
+        when(adminRead.read(any(), any(), any(), any(), any())).thenReturn(com.hunt.otziv.contractor_payments.repository.ContractorAdminFinancialReadRepository.Facts.empty());
+        when(accountingService.summaryEventTypes(any())).thenAnswer(call -> new ContractorPaymentAccountingService(eventRepository).summaryEventTypes(call.getArgument(0)));
+        when(accountingService.totalsFromRows(any(), any())).thenAnswer(call -> new ContractorPaymentAccountingService(eventRepository).totalsFromRows(call.getArgument(0), call.getArgument(1)));
         when(appSettingService.getBoolean(AppSettingService.CONTRACTOR_PAYMENTS_SHADOW_ENABLED, true))
                 .thenReturn(true);
         when(runtimeSwitch.status()).thenReturn(new ContractorPaymentRuntimeSwitch.RuntimeStatus(
@@ -97,8 +100,9 @@ class ContractorPaymentVisibilityServiceTest {
         profile.setEnabled(true);
         profile.setLiveEnabled(true);
         when(profileRepository.findAllWithUser()).thenReturn(List.of(profile));
-        when(attributionRepository.summarizeProfileActualTransfersInPeriod(any(), any(), any(), any()))
-                .thenReturn(List.of(actualTransferSummary(41L, 3L, 12_500L)));
+        when(adminRead.read(any(), any(), any(), any(), any())).thenReturn(new com.hunt.otziv.contractor_payments.repository.ContractorAdminFinancialReadRepository.Facts(
+                java.util.Map.of(), List.of(), java.util.Map.of(), java.util.Map.of(41L,
+                new com.hunt.otziv.contractor_payments.repository.ContractorAdminFinancialReadRepository.ActualTransfers(3, 12_500))));
 
         ContractorPaymentAdminSummaryResponse response = service.adminSummary(LocalDate.of(2026, 8, 31)).getFirst();
 
@@ -115,21 +119,14 @@ class ContractorPaymentVisibilityServiceTest {
         user.setFio("Исторический профиль");
         ContractorPaymentProfile profile = profile(42L, user, ContractorRole.SPECIALIST);
         when(profileRepository.findAllWithUser()).thenReturn(List.of(profile));
-        when(ledgerService.totalsForProfiles(List.of(profile), augustStart, septemberStart))
-                .thenReturn(java.util.Map.of(42L, new ContractorRewardLedgerService.AccrualTotals(38_595L, 16_425L)));
-        when(accountingService.totalsForProfiles(List.of(42L), ContractorAllocationMode.SHADOW,
-                augustStart.atStartOfDay(), septemberStart.atStartOfDay()))
-                .thenReturn(java.util.Map.of(42L, new ContractorPaymentAccountingService.PeriodTotals(18_800L, 4_100L, 0, 600L, 0, 0)));
-        when(allocationRepository.sumOutstandingForProfiles(any(), any(), anySet()))
-                .thenReturn(List.of(exposure(42L, ContractorAllocationStatus.RESERVED, 15_000L),
-                        exposure(42L, ContractorAllocationStatus.CLIENT_REPORTED, 3_500L),
-                        exposure(42L, ContractorAllocationStatus.PARTIALLY_CONFIRMED, 500L)));
-        when(attributionRepository.summarizeProfileActualTransfersInPeriod(
-                Set.of(42L),
-                ContractorAllocationMode.SHADOW,
-                augustStart.atStartOfDay(),
-                septemberStart.atStartOfDay()
-        )).thenReturn(List.of(actualTransferSummary(42L, 2L, 3_500L)));
+        when(adminRead.read(List.of(42L), ContractorAllocationMode.SHADOW,
+                new ContractorPaymentAccountingService(eventRepository).summaryEventTypes(ContractorAllocationMode.SHADOW), augustStart, septemberStart))
+                .thenReturn(new com.hunt.otziv.contractor_payments.repository.ContractorAdminFinancialReadRepository.Facts(
+                    java.util.Map.of(42L, new com.hunt.otziv.contractor_payments.repository.ContractorAdminFinancialReadRepository.Accrual(38_595, 16_425)),
+                    List.of(new com.hunt.otziv.contractor_payments.repository.ContractorAdminFinancialReadRepository.EventTotals(42L, ContractorAllocationEventType.SIMULATED_CONFIRMED, 18_800, 4_100),
+                            new com.hunt.otziv.contractor_payments.repository.ContractorAdminFinancialReadRepository.EventTotals(42L, ContractorAllocationEventType.RETURNED, 0, 600)),
+                    java.util.Map.of(42L, java.util.Map.of(ContractorAllocationStatus.RESERVED, 15_000L, ContractorAllocationStatus.CLIENT_REPORTED, 3_500L, ContractorAllocationStatus.PARTIALLY_CONFIRMED, 500L)),
+                    java.util.Map.of(42L, new com.hunt.otziv.contractor_payments.repository.ContractorAdminFinancialReadRepository.ActualTransfers(2, 3_500))));
 
         ContractorPaymentAdminSummaryResponse response = service.adminSummary(selectedDate).getFirst();
 
@@ -141,13 +138,8 @@ class ContractorPaymentVisibilityServiceTest {
         assertEquals(19_795L, response.outstandingDebtKopecks());
         assertEquals(19_000L, response.outstandingReservedKopecks());
         assertEquals(795L, response.availableKopecks());
-        verify(ledgerService).totalsForProfiles(List.of(profile), augustStart, septemberStart);
-        verify(attributionRepository).summarizeProfileActualTransfersInPeriod(
-                Set.of(42L),
-                ContractorAllocationMode.SHADOW,
-                augustStart.atStartOfDay(),
-                septemberStart.atStartOfDay()
-        );
+        verify(adminRead).read(List.of(42L), ContractorAllocationMode.SHADOW,
+                new ContractorPaymentAccountingService(eventRepository).summaryEventTypes(ContractorAllocationMode.SHADOW), augustStart, septemberStart);
     }
 
     private ContractorPaymentAllocationRepository.ProfileExposure exposure(long id, ContractorAllocationStatus status, long amount) {

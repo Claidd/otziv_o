@@ -67,6 +67,7 @@ public class TeamPatternAnalysisService {
     private static final long MIN_PERSONAL_OUTCOMES = 3;
 
     private final NamedParameterJdbcTemplate jdbc;
+    private final TeamPatternReadSnapshots snapshots;
 
     @Transactional(readOnly = true)
     public TeamPatternAnalysisResponse analyze(Collection<WorkerPatternSubject> subjects, LocalDate selectedMonth) {
@@ -86,16 +87,12 @@ public class TeamPatternAnalysisService {
             return TeamPatternAnalysisResponse.empty(monthStart, dataThrough);
         }
 
-        Map<Long, Long> userIdByWorkerId = new HashMap<>();
-        visible.forEach(subject -> userIdByWorkerId.put(subject.workerId(), subject.userId()));
-        Map<Long, WorkerMonth.Mutable> monthByUser = new LinkedHashMap<>();
-        visible.forEach(subject -> monthByUser.put(subject.userId(), new WorkerMonth.Mutable(subject.userId())));
-        Map<WorkerDayKey, WorkerDay.Mutable> days = new HashMap<>();
-
-        loadPublications(visible, userIdByWorkerId, analysisFrom, toExclusive, monthByUser, days);
-        loadBlockedAccounts(visible, analysisFrom, toExclusive, monthByUser, days);
-        loadRecoveries(visible, userIdByWorkerId, analysisFrom, toExclusive, monthByUser, days);
-        loadNetworkViolations(visible, analysisFrom, toExclusive, monthByUser, days);
+        var prepared = snapshots.fresh(visible, monthStart, analysisFrom, toExclusive);
+        Inputs inputs = prepared.map(batch -> restoreInputs(batch.byUserId()))
+                .orElseGet(() -> canonicalInputs(visible, analysisFrom, toExclusive));
+        var generatedAt = prepared.map(TeamPatternReadSnapshots.Batch::generatedAt).orElse(null);
+        var monthByUser = inputs.months();
+        var days = inputs.days();
 
         List<WorkerMonth> monthly = monthByUser.values().stream()
                 .map(WorkerMonth.Mutable::toValue)
@@ -106,7 +103,7 @@ public class TeamPatternAnalysisService {
         long publications = monthly.stream().mapToLong(WorkerMonth::publications).sum();
         String confidence = teamConfidence(comparable.size(), publications, analysisFrom, dataThrough);
         if (comparable.size() < MIN_CORRELATION_WORKERS || publications < MIN_TEAM_PUBLICATIONS) {
-            return insufficientResponse(analysisFrom, dataThrough, monthly, publications);
+            return insufficientResponse(analysisFrom, dataThrough, monthly, publications).withGeneratedAt(generatedAt);
         }
 
         double medianBlocks = median(comparable.stream().map(WorkerMonth::blockRate).toList());
@@ -164,8 +161,61 @@ public class TeamPatternAnalysisService {
                 comparable.size(),
                 publications,
                 List.copyOf(teamInsights),
-                Map.copyOf(workerPatterns)
+                Map.copyOf(workerPatterns),
+                generatedAt
         );
+    }
+
+    private record Inputs(Map<Long, WorkerMonth.Mutable> months, Map<WorkerDayKey, WorkerDay.Mutable> days) {}
+
+    private Inputs canonicalInputs(List<WorkerPatternSubject> visible, LocalDate from, LocalDate to) {
+        Map<Long, Long> userIdByWorkerId = new HashMap<>();
+        visible.forEach(subject -> userIdByWorkerId.put(subject.workerId(), subject.userId()));
+        Map<Long, WorkerMonth.Mutable> months = new LinkedHashMap<>();
+        visible.forEach(subject -> months.put(subject.userId(), new WorkerMonth.Mutable(subject.userId())));
+        Map<WorkerDayKey, WorkerDay.Mutable> days = new HashMap<>();
+        loadPublications(visible, userIdByWorkerId, from, to, months, days);
+        loadBlockedAccounts(visible, from, to, months, days);
+        loadRecoveries(visible, userIdByWorkerId, from, to, months, days);
+        loadNetworkViolations(visible, from, to, months, days);
+        return new Inputs(months, days);
+    }
+
+    private Inputs restoreInputs(Map<Long, TeamPatternReadSnapshots.Facts> values) {
+        Map<Long, WorkerMonth.Mutable> months = new LinkedHashMap<>();
+        Map<WorkerDayKey, WorkerDay.Mutable> days = new HashMap<>();
+        values.forEach((userId, facts) -> {
+            var month = new WorkerMonth.Mutable(userId);
+            month.publications = facts.publications(); month.blockedAccounts = facts.blockedAccounts();
+            month.recoveries = facts.recoveries(); month.networkEpisodes = facts.networkEpisodes(); month.networkAttempts = facts.networkAttempts();
+            months.put(userId, month);
+            facts.days().forEach(fact -> {
+                var day = day(days, userId, fact.date());
+                day.publications = fact.publications(); day.blockedAccounts = fact.blockedAccounts();
+                day.recoveries = fact.recoveries(); day.networkEpisodes = fact.networkEpisodes();
+            });
+        });
+        return new Inputs(months, days);
+    }
+
+    /** Called only by the fenced snapshot job, in its bounded transaction. */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public void rebuildSnapshots(List<WorkerPatternSubject> subjects, LocalDate selectedMonth) {
+        if (subjects.isEmpty()) return;
+        LocalDate month = safeMonth(selectedMonth), from = networkObservationStart(month), to = analysisEnd(month);
+        if (!to.isAfter(from)) return;
+        var capturedAt = snapshots.captureTime();
+        Inputs inputs = canonicalInputs(subjects, from, to);
+        Map<Long, TeamPatternReadSnapshots.Facts> values = new HashMap<>();
+        inputs.months().forEach((userId, total) -> {
+            var daily = inputs.days().entrySet().stream().filter(entry -> entry.getKey().userId().equals(userId))
+                    .sorted(Comparator.comparing(entry -> entry.getKey().date()))
+                    .map(entry -> new TeamPatternReadSnapshots.Day(entry.getKey().date(), entry.getValue().publications,
+                            entry.getValue().blockedAccounts, entry.getValue().recoveries, entry.getValue().networkEpisodes)).toList();
+            values.put(userId, new TeamPatternReadSnapshots.Facts(total.publications, total.blockedAccounts, total.recoveries,
+                    total.networkEpisodes, total.networkAttempts, daily));
+        });
+        snapshots.save(subjects, month, from, to, capturedAt, values);
     }
 
     private LocalDate networkObservationStart(LocalDate monthStart) {

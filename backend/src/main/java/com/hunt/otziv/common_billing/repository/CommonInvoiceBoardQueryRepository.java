@@ -2,6 +2,7 @@ package com.hunt.otziv.common_billing.repository;
 
 import com.hunt.otziv.common_billing.model.CommonInvoiceStatus;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -212,24 +213,21 @@ public class CommonInvoiceBoardQueryRepository {
         ).addValue("limit", safePageSize)
                 .addValue("offset", offset);
 
-        Long totalCards = jdbc.queryForObject(
-                BOARD_ROWS_CTE + "SELECT COUNT(*) " + FILTERED_CARD_SQL,
-                params,
-                Long.class
-        );
-        List<Long> invoiceIds = jdbc.queryForList(
-                BOARD_ROWS_CTE
-                        + "SELECT invoice_id "
-                        + FILTERED_CARD_SQL
-                        + (ascendingSort
-                            ? " ORDER BY updated_at DESC, invoice_id DESC"
-                            : " ORDER BY updated_at ASC, invoice_id ASC")
-                        + " LIMIT :limit OFFSET :offset",
-                params,
-                Long.class
-        );
-        Long linkedOrderCount = jdbc.queryForObject(
-                "SELECT COUNT(DISTINCT item.order_id) "
+        // Keep card and linked-order predicates distinct. The count rows are returned
+        // even for an empty/out-of-range page, in the same database snapshot as the IDs.
+        String pageOrder = ascendingSort
+                ? " ORDER BY updated_at DESC, invoice_id DESC"
+                : " ORDER BY updated_at ASC, invoice_id ASC";
+        String resultOrder = ascendingSort
+                ? " ORDER BY kind, sort_at DESC, value DESC"
+                : " ORDER BY kind, sort_at ASC, value ASC";
+        String sql = BOARD_ROWS_CTE
+                + ", page_rows AS (SELECT invoice_id, updated_at " + FILTERED_CARD_SQL
+                + pageOrder
+                + " LIMIT :limit OFFSET :offset) "
+                + "SELECT 'CARD' AS kind, invoice_id AS value, updated_at AS sort_at FROM page_rows "
+                + "UNION ALL SELECT 'TOTAL', COUNT(*), NULL " + FILTERED_CARD_SQL
+                + " UNION ALL SELECT 'LINKED', COUNT(DISTINCT item.order_id), NULL "
                         + LINKED_ORDER_FROM_SQL
                         + " AND (:allStatuses = 1"
                         + "      OR BINARY TRIM(COALESCE(linked_status.order_status_title, '')) = BINARY :boardStatus)"
@@ -237,15 +235,22 @@ public class CommonInvoiceBoardQueryRepository {
                         + " AND (:keyword = ''"
                         + "      OR LOCATE(:keyword, CAST(linked_order.order_id AS CHAR)) > 0"
                         + "      OR LOCATE(BINARY :keyword, BINARY LOWER(TRIM(COALESCE(linked_company.company_title, '')))) > 0"
-                        + "      OR LOCATE(BINARY :keyword, BINARY LOWER(TRIM(COALESCE(linked_filial.filial_title, '')))) > 0)",
-                params,
-                Long.class
-        );
-        return new PageSelection(
-                invoiceIds,
-                totalCards == null ? 0L : totalCards,
-                Math.toIntExact(linkedOrderCount == null ? 0L : linkedOrderCount)
-        );
+                        + "      OR LOCATE(BINARY :keyword, BINARY LOWER(TRIM(COALESCE(linked_filial.filial_title, '')))) > 0)"
+                + resultOrder;
+        return jdbc.query(sql, params, rows -> {
+            List<Long> invoiceIds = new ArrayList<>();
+            long totalCards = 0;
+            long linkedOrders = 0;
+            while (rows.next()) {
+                switch (rows.getString("kind")) {
+                    case "CARD" -> invoiceIds.add(rows.getLong("value"));
+                    case "TOTAL" -> totalCards = rows.getLong("value");
+                    case "LINKED" -> linkedOrders = rows.getLong("value");
+                    default -> throw new IllegalStateException("Unexpected board row kind");
+                }
+            }
+            return new PageSelection(invoiceIds, totalCards, Math.toIntExact(linkedOrders));
+        });
     }
 
     public BoardMetrics metrics(Set<Long> visibleManagerIds, LocalDateTime blockerCutoff) {

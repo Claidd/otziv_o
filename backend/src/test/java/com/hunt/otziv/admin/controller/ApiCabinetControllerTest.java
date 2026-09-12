@@ -167,6 +167,21 @@ class ApiCabinetControllerTest {
     }
 
     @Test
+    void outerTeamCacheCannotExtendExpiredHistoricalFacts() {
+        User current = new User(); current.setId(1L);
+        when(userService.findByUserName(principal.getName())).thenReturn(Optional.of(current));
+        when(personalService.gerWorkers()).thenReturn(List.of(WorkersListDTO.builder().id(7L).userId(17L).build()));
+        var old = com.hunt.otziv.worker_performance.dto.TeamPatternAnalysisResponse.empty(DATE, DATE)
+                .withGeneratedAt(java.time.Instant.now().minusSeconds(61));
+        var fresh = old.withGeneratedAt(java.time.Instant.now());
+        when(teamPatternAnalysisService.analyze(any(), any())).thenReturn(old, fresh);
+        controller.team(principal, authentication, DATE, null, true);
+        var second = controller.team(principal, authentication, DATE, null, false);
+        assertEquals(fresh, second.patterns());
+        verify(teamPatternAnalysisService, times(2)).analyze(any(), any());
+    }
+
+    @Test
     void ownerTeamUsesLegacyRowsWhenAggregateReadIsDisabled() {
         TeamFixture fixture = teamFixture();
         ReflectionTestUtils.setField(controller, "aggregateAnalyticsReadEnabled", false);

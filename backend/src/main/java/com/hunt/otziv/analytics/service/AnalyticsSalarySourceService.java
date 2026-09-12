@@ -93,13 +93,20 @@ public class AnalyticsSalarySourceService {
             LocalDate toInclusive
     ) {
         Map<Long, SalaryTotal> totals = new LinkedHashMap<>();
-        for (DailySalary daily : dailyForUsers(requestedUserIds, fromInclusive, toInclusive)) {
-            totals.merge(
-                    daily.userId(),
-                    new SalaryTotal(daily.salarySum(), daily.salaryEntryCount(), daily.salaryReviewCount()),
-                    SalaryTotal::add
-            );
-        }
+        List<Long> userIds = normalizedUserIds(requestedUserIds);
+        if (userIds.isEmpty() || fromInclusive == null || toInclusive == null || toInclusive.isBefore(fromInclusive)) return totals;
+        // Preserve canonical per-day source-entry semantics; combine days in SQL instead of transferring them all.
+        jdbc.query("""
+                SELECT salary.user_id, COALESCE(SUM(salary.salary_sum), 0) AS salary_sum,
+                       COALESCE(SUM(salary.salary_entry_count), 0) AS salary_entry_count,
+                       COALESCE(SUM(salary.salary_review_count), 0) AS salary_review_count
+                FROM analytics_salary_daily_source salary
+                WHERE salary.user_id IN (:userIds) AND salary.metric_date BETWEEN :fromInclusive AND :toInclusive
+                GROUP BY salary.user_id
+                """, new MapSqlParameterSource("userIds", userIds).addValue("fromInclusive", fromInclusive).addValue("toInclusive", toInclusive),
+                (org.springframework.jdbc.core.RowCallbackHandler) row -> totals.put(row.getLong("user_id"), new SalaryTotal(
+                        defaultZero(row.getBigDecimal("salary_sum")), row.getBigDecimal("salary_entry_count").longValueExact(),
+                        row.getBigDecimal("salary_review_count").longValueExact())));
         return totals;
     }
 

@@ -93,6 +93,25 @@ class AnalyticsSalarySourceServiceMySqlIntegrationTest {
     }
 
     @Test
+    void groupedUserTotalsEqualCanonicalDailyFoldWithInclusiveDates() {
+        var from = LocalDate.of(2026, 9, 1);
+        var to = from.plusDays(1);
+        var ids = java.util.List.of(1L, 2L, 3L);
+        var daily = service.dailyForUsers(ids, from, to);
+        var totals = service.totalsForUsers(ids, from, to);
+        assertThat(totals.keySet()).containsExactlyInAnyOrder(1L, 3L);
+        for (Long userId : totals.keySet()) {
+            var rows = daily.stream().filter(row -> row.userId() == userId).toList();
+            assertThat(totals.get(userId).salarySum()).isEqualByComparingTo(rows.stream()
+                    .map(AnalyticsSalarySourceService.DailySalary::salarySum).reduce(BigDecimal.ZERO, BigDecimal::add));
+            assertThat(totals.get(userId).salaryEntryCount()).isEqualTo(rows.stream().mapToLong(AnalyticsSalarySourceService.DailySalary::salaryEntryCount).sum());
+            assertThat(totals.get(userId).salaryReviewCount()).isEqualTo(rows.stream().mapToLong(AnalyticsSalarySourceService.DailySalary::salaryReviewCount).sum());
+        }
+        assertThat(service.totalsForUsers(ids, to, from)).isEmpty();
+        assertThat(service.totalsForUsers(java.util.List.of(), from, to)).isEmpty();
+    }
+
+    @Test
     void activeUserTotalsUseCanonicalRowsWithoutMultiplyingSalaryByRoleCount() {
         var rows = service.totalsForActiveUsers(
                 LocalDate.of(2026, 9, 1),

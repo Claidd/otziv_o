@@ -11,7 +11,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 /** Identity-owned values stay internal; the public API exposes only the assembly boundary. */
 public final class BoardIdentityReadContext {
-    private enum Kind { USER_NAME, MANAGER_USER, WORKER_USER }
+    private enum Kind { USER_NAME, MANAGER_USER, WORKER_USER, CACHE_SCOPE }
     private record Key(Kind kind, Object id) {}
     private static final int MAX_ENTRIES = 64;
     private static final ThreadLocal<Map<Key, Object>> CURRENT = new ThreadLocal<>();
@@ -36,6 +36,10 @@ public final class BoardIdentityReadContext {
 
     public static Optional<Worker> worker(Long userId, Supplier<Optional<Worker>> loader) {
         return read(new Key(Kind.WORKER_USER, userId), loader);
+    }
+
+    public static String fingerprint(Supplier<String> loader) {
+        return read(new Key(Kind.CACHE_SCOPE, "committed-memberships"), loader);
     }
 
     @SuppressWarnings("unchecked")

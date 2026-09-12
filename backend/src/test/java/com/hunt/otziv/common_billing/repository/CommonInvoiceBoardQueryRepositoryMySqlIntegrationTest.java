@@ -63,6 +63,19 @@ class CommonInvoiceBoardQueryRepositoryMySqlIntegrationTest {
     }
 
     @Test
+    void outOfRangePageRetainsBothCountsAndTiedDatesRetainIdOrdering() {
+        jdbc.update("UPDATE common_invoices SET updated_at = '2026-03-01 00:00:00'");
+        var forward = repository.findPage("Все", "", null, Set.of(7L), false, 0, 2, BLOCKER_CUTOFF);
+        var reverse = repository.findPage("Все", "", null, Set.of(7L), true, 0, 2, BLOCKER_CUTOFF);
+        var emptyPage = repository.findPage("Все", "", null, Set.of(7L), false, 99, 2, BLOCKER_CUTOFF);
+        assertThat(forward.invoiceIds()).containsExactly(1L, 2L);
+        assertThat(reverse.invoiceIds()).containsExactly(7L, 6L);
+        assertThat(emptyPage.invoiceIds()).isEmpty();
+        assertThat(emptyPage.totalCards()).isEqualTo(6);
+        assertThat(emptyPage.linkedOrderCount()).isEqualTo(6);
+    }
+
+    @Test
     void cardAndLinkedOrderFiltersRetainTheirDifferentExistingSemantics() {
         CommonInvoiceBoardQueryRepository.PageSelection byLinkedCompany = repository.findPage(
                 "Выставлен счет", "alpha", 10L, Set.of(7L), false, 0, 20, BLOCKER_CUTOFF

@@ -13,7 +13,6 @@ import com.hunt.otziv.contractor_payments.model.ContractorPaymentAllocationEvent
 import com.hunt.otziv.contractor_payments.model.ContractorPaymentProfile;
 import com.hunt.otziv.contractor_payments.model.ContractorRole;
 import com.hunt.otziv.contractor_payments.repository.ContractorPaymentAllocationEventRepository;
-import com.hunt.otziv.contractor_payments.repository.ContractorActualPaymentAttributionRepository;
 import com.hunt.otziv.contractor_payments.repository.ContractorPaymentAllocationRepository;
 import com.hunt.otziv.contractor_payments.repository.ContractorPaymentProfileRepository;
 import com.hunt.otziv.u_users.model.User;
@@ -57,7 +56,6 @@ public class ContractorPaymentVisibilityService {
     private final ContractorPaymentProfileRepository profileRepository;
     private final ContractorPaymentAllocationRepository allocationRepository;
     private final ContractorPaymentAllocationEventRepository eventRepository;
-    private final ContractorActualPaymentAttributionRepository attributionRepository;
     private final ContractorRewardLedgerService ledgerService;
     private final ContractorPaymentAccountingService accountingService;
     private final ContractorPaymentRuntimeSwitch runtimeSwitch;
@@ -66,6 +64,7 @@ public class ContractorPaymentVisibilityService {
     private final UserRepository userRepository;
     private final AppSettingService appSettingService;
     private final ContractorPaymentTargetAccessPolicy targetAccessPolicy;
+    private final com.hunt.otziv.contractor_payments.repository.ContractorAdminFinancialReadRepository adminFinancialRead;
 
     @Value("${otziv.contractor-payments.business-zone:Asia/Irkutsk}")
     private String businessZoneId;
@@ -99,18 +98,17 @@ public class ContractorPaymentVisibilityService {
         if (profiles.isEmpty()) return List.of();
         SummaryPolicy policy = summaryPolicy();
         var ids = profiles.stream().map(ContractorPaymentProfile::getId).toList();
-        var accruals = ledgerService.totalsForProfiles(profiles, monthStart, monthStart.plusMonths(1));
-        var events = accountingService.totalsForProfiles(ids, policy.mode(), monthStart.atStartOfDay(), monthStart.plusMonths(1).atStartOfDay());
-        var exposures = allocationRepository.sumOutstandingForProfiles(ids, policy.mode(),
-                EnumSet.of(ContractorAllocationStatus.RESERVED, ContractorAllocationStatus.CLIENT_REPORTED, ContractorAllocationStatus.PARTIALLY_CONFIRMED))
-                .stream().collect(Collectors.groupingBy(row -> row.getProfileId(),
-                        Collectors.toMap(row -> row.getStatus(), row -> row.getOutstanding())));
-        Map<Long, ActualTransferStats> actualTransfers = actualTransfersByProfile(profiles, monthStart);
+        var facts = com.hunt.otziv.config.metrics.PerformanceMetrics.segment("cabinet.score", "financial-facts", () ->
+                adminFinancialRead.read(ids, policy.mode(), accountingService.summaryEventTypes(policy.mode()), monthStart, monthStart.plusMonths(1)));
+        var events = accountingService.totalsFromRows(facts.events(), policy.mode());
         return profiles.stream()
                 .map(profile -> {
-                    var accrued = accruals.getOrDefault(profile.getId(), new ContractorRewardLedgerService.AccrualTotals(profile.getOpeningBalanceKopecks(), 0));
+                    var rawAccrued = facts.accruals().getOrDefault(profile.getId(),
+                            new com.hunt.otziv.contractor_payments.repository.ContractorAdminFinancialReadRepository.Accrual(0, 0));
+                    var accrued = new ContractorRewardLedgerService.AccrualTotals(
+                            Math.addExact(profile.getOpeningBalanceKopecks(), rawAccrued.total()), rawAccrued.month());
                     var event = events.getOrDefault(profile.getId(), ContractorPaymentAccountingService.PeriodTotals.empty());
-                    var exposure = exposures.getOrDefault(profile.getId(), Map.of());
+                    var exposure = facts.exposures().getOrDefault(profile.getId(), Map.of());
                     var amounts = new SummaryAmounts(accrued.total(), accrued.month(),
                             exposure.getOrDefault(ContractorAllocationStatus.RESERVED, 0L),
                             exposure.getOrDefault(ContractorAllocationStatus.CLIENT_REPORTED, 0L),
@@ -118,9 +116,9 @@ public class ContractorPaymentVisibilityService {
                             event.confirmedMonth(), event.confirmedTotal(), event.returnedMonth(), event.returnedTotal(),
                             event.closedMonth(), event.closedTotal());
                     ContractorPaymentSummaryResponse summary = summary(profile, monthStart, policy, amounts);
-                    ActualTransferStats transferStats = actualTransfers.getOrDefault(
+                    var transferStats = facts.transfers().getOrDefault(
                             profile.getId(),
-                            ActualTransferStats.empty()
+                            com.hunt.otziv.contractor_payments.repository.ContractorAdminFinancialReadRepository.ActualTransfers.empty()
                     );
                     long pending = Math.addExact(
                             summary.clientReportedKopecks(),
@@ -191,39 +189,6 @@ public class ContractorPaymentVisibilityService {
                 allocation,
                 eventsByAllocation.getOrDefault(allocation.getId(), List.of())
         ));
-    }
-
-    private Map<Long, ActualTransferStats> actualTransfersByProfile(
-            List<ContractorPaymentProfile> profiles,
-            LocalDate monthStart
-    ) {
-        if (profiles == null || profiles.isEmpty()) {
-            return Map.of();
-        }
-        Set<Long> profileIds = profiles.stream()
-                .map(ContractorPaymentProfile::getId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
-        if (profileIds.isEmpty()) {
-            return Map.of();
-        }
-
-        LocalDateTime from = monthStart.atStartOfDay();
-        LocalDateTime to = monthStart.plusMonths(1).atStartOfDay();
-        ContractorAllocationMode mode = accountingPhaseService.current();
-
-        return attributionRepository
-                .summarizeProfileActualTransfersInPeriod(profileIds, mode, from, to)
-                .stream()
-                .filter(row -> row.getProfileId() != null)
-                .collect(Collectors.toMap(
-                        ContractorActualPaymentAttributionRepository.ProfileActualTransferSummary::getProfileId,
-                        row -> new ActualTransferStats(
-                                safeLong(row.getTransferCount()),
-                                safeLong(row.getTransferAmountKopecks())
-                        ),
-                        ActualTransferStats::merge
-                ));
     }
 
     private record SummaryPolicy(boolean shadow, boolean liveRouting, ContractorAllocationMode mode) {}
@@ -394,23 +359,6 @@ public class ContractorPaymentVisibilityService {
         }
         return userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Пользователь не найден"));
-    }
-
-    private static long safeLong(Long value) {
-        return value == null ? 0L : value;
-    }
-
-    private record ActualTransferStats(long count, long amountKopecks) {
-        private static ActualTransferStats empty() {
-            return new ActualTransferStats(0L, 0L);
-        }
-
-        private static ActualTransferStats merge(ActualTransferStats left, ActualTransferStats right) {
-            return new ActualTransferStats(
-                    Math.addExact(left.count(), right.count()),
-                    Math.addExact(left.amountKopecks(), right.amountKopecks())
-            );
-        }
     }
 
     private Jwt jwt(Authentication authentication) {
