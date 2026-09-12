@@ -14,6 +14,8 @@ import java.util.Set;
 public interface WorkerService {
     Worker getWorkerById (Long id);
     List<Worker> getAllWorkers();
+    List<Long> getActiveWorkerIds();
+    List<Long> getActiveWorkerIdsByManagerIds(java.util.Collection<Long> managerIds);
 
     Worker getWorkerByUserIdToDelete(Long id);
 

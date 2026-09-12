@@ -41,6 +41,19 @@ public class WorkerServiceImpl implements WorkerService {
         return workerRepository.findAllWithUserAndImage();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<Long> getActiveWorkerIds() {
+        return workerRepository.findActiveWorkerIds();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Long> getActiveWorkerIdsByManagerIds(java.util.Collection<Long> managerIds) {
+        if (managerIds == null || managerIds.isEmpty()) return List.of();
+        return workerRepository.findActiveWorkerIdsByManagerIds(managerIds);
+    }
+
     public List<Worker> getAllWorkersToManager(Manager manager) {
         if (manager == null || manager.getId() == null) {
             return Collections.emptyList();

@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Collection;
 import java.util.Optional;
 import java.util.Set;
 
@@ -114,6 +115,18 @@ public interface WorkerRepository extends CrudRepository<Worker, Long> {
               AND r.name = 'ROLE_WORKER'
             """)
     List<Worker> findAllWithUserAndImage();
+
+    @Query("""
+            SELECT DISTINCT w.id FROM Worker w JOIN w.user u JOIN u.roles r
+            WHERE u.active = true AND r.name = 'ROLE_WORKER'
+            """)
+    List<Long> findActiveWorkerIds();
+
+    @Query("""
+            SELECT DISTINCT w.id FROM Worker w JOIN w.user u JOIN u.roles r JOIN u.managers m
+            WHERE u.active = true AND r.name = 'ROLE_WORKER' AND m.id IN :managerIds
+            """)
+    List<Long> findActiveWorkerIdsByManagerIds(@Param("managerIds") Collection<Long> managerIds);
 
     @Query("""
             SELECT w

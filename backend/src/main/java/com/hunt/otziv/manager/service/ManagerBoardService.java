@@ -23,7 +23,6 @@ import com.hunt.otziv.p_products.service.OrderService;
 import com.hunt.otziv.review_recovery.service.ReviewRecoveryTaskService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
-import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.service.ManagerService;
 import com.hunt.otziv.u_users.service.UserService;
 import com.hunt.otziv.u_users.service.WorkerService;
@@ -173,13 +172,16 @@ public class ManagerBoardService {
             String trimmedKeyword = keyword == null ? "" : keyword.trim();
             Manager managerFilter = resolveManagerFilter(managerId, principal, authentication);
             boolean managerControlOverdue = CONTROL_MANAGER_OVERDUE.equalsIgnoreCase(control == null ? "" : control.trim());
+            // Fresh for this authorized assembly; the list total never comes from the metrics TTL cache.
+            var rawOrderCounts = org.springframework.util.function.SingletonSupplier.of(
+                    () -> loadRawOrderCounts(principal, authentication, managerFilter));
 
             Page<CompanyListDTO> companies = SECTION_COMPANIES.equals(normalizedSection)
                     ? segment("manager.board", "companies", () -> loadCompanies(principal, authentication, trimmedKeyword, normalizedStatus, safePageNumber, safePageSize, normalizedSortDirection))
                     : emptyCompanyPage(safePageNumber, safePageSize);
 
             Page<OrderDTOList> orders = SECTION_ORDERS.equals(normalizedSection)
-                    ? segment("manager.board", "orders", () -> loadOrders(principal, authentication, trimmedKeyword, normalizedStatus, safePageNumber, safePageSize, companyId, managerFilter, managerControlOverdue, normalizedSortDirection))
+                    ? segment("manager.board", "orders", () -> loadOrders(principal, authentication, trimmedKeyword, normalizedStatus, safePageNumber, safePageSize, companyId, managerFilter, managerControlOverdue, normalizedSortDirection, rawOrderCounts))
                     : emptyOrderPage(safePageNumber, safePageSize);
             segment("manager.board", "bad-review-status", () -> { badReviewTaskService.enrichOrderList(orders.getContent()); return null; });
             segment("manager.board", "client-message-status", () -> { clientMessageOrderStatusService.enrichOrderList(orders.getContent()); return null; });
@@ -191,7 +193,7 @@ public class ManagerBoardService {
                     toPageResponse(orders),
                     ManagerBoardStatusCatalog.companyStatuses(),
                     ManagerBoardStatusCatalog.orderStatuses(),
-                    segment("manager.board", "metrics", () -> buildMetrics(principal, authentication, managerFilter, managerControlOverdue)),
+                    segment("manager.board", "metrics", () -> buildMetrics(principal, authentication, managerFilter, managerControlOverdue, rawOrderCounts)),
                     promoTextService.getPromoTextsForManager(
                             resolvePromoManagerId(principal, authentication),
                             promoSectionCode(normalizedSection)
@@ -272,7 +274,8 @@ public class ManagerBoardService {
             Long companyId,
             Manager managerFilter,
             boolean managerControlOverdue,
-            String sortDirection
+            String sortDirection,
+            java.util.function.Supplier<Map<String, Integer>> rawOrderCounts
     ) {
         if (companyId != null) {
             managerAccessService.requireCompanyAccess(companyId, authentication);
@@ -305,6 +308,12 @@ public class ManagerBoardService {
         long pageStart = (long) pageNumber * pageSize;
         List<OrderDTOList> visibleCommonCards = commonPage.cards();
         int ordinaryLimit = Math.max(0, pageSize - visibleCommonCards.size());
+        if (ordinaryLimit == 0 && companyId == null && keyword.isBlank() && "Все".equals(status)
+                && rawOrderCounts.get().values().stream().noneMatch(count -> count == Integer.MAX_VALUE)) {
+            long ordinaryCount = rawOrderCounts.get().values().stream().mapToLong(Integer::longValue).sum();
+            long total = Math.max(0L, ordinaryCount - commonPage.linkedOrderCount()) + commonPage.totalCards();
+            return new PageImpl<>(visibleCommonCards, PageRequest.of(pageNumber, pageSize), total);
+        }
         long ordinaryOffset = Math.max(0L, pageStart - commonPage.totalCards());
         int ordinaryPageNumber = (int) (ordinaryOffset / pageSize);
         int ordinarySkip = (int) (ordinaryOffset % pageSize);
@@ -402,7 +411,8 @@ public class ManagerBoardService {
             Principal principal,
             Authentication authentication,
             Manager managerFilter,
-            boolean managerControlOverdue
+            boolean managerControlOverdue,
+            java.util.function.Supplier<Map<String, Integer>> rawOrderCounts
     ) {
         MetricsCacheKey cacheKey = metricsCacheKey(
                 principal,
@@ -412,7 +422,7 @@ public class ManagerBoardService {
         );
         List<ManagerMetricResponse> metrics = metricsCache.get(
                 cacheKey,
-                ignored -> buildMetricValues(principal, authentication, managerFilter, managerControlOverdue)
+                ignored -> buildMetricValues(principal, authentication, managerFilter, managerControlOverdue, rawOrderCounts)
         );
 
         Map<String, Integer> deltas = metricSnapshotService.deltas(
@@ -439,13 +449,14 @@ public class ManagerBoardService {
             Principal principal,
             Authentication authentication,
             Manager managerFilter,
-            boolean managerControlOverdue
+            boolean managerControlOverdue,
+            java.util.function.Supplier<Map<String, Integer>> rawOrderCounts
     ) {
         List<ManagerMetricResponse> metrics = new ArrayList<>();
         Map<String, Integer> companyCounts = countCompanyMetrics(principal, authentication);
         Map<String, Integer> orderCounts = managerControlOverdue && managerFilter != null
                 ? countManagerControlOverdueMetrics(managerFilter)
-                : countOrderMetrics(principal, authentication, managerFilter);
+                : countOrderMetrics(principal, authentication, managerFilter, rawOrderCounts.get());
 
         metrics.add(companyMetric(companyCounts, "Новые", "Новая", "fiber_new", "yellow"));
         metrics.add(companyMetric(companyCounts, "В работе", "В работе", "badge", "green"));
@@ -562,7 +573,7 @@ public class ManagerBoardService {
         return companyService.countCompaniesByStatusToManager(resolveManager(principal));
     }
 
-    private Map<String, Integer> countOrderMetrics(Principal principal, Authentication authentication, Manager managerFilter) {
+    private Map<String, Integer> loadRawOrderCounts(Principal principal, Authentication authentication, Manager managerFilter) {
         Map<String, Integer> counts;
         if (managerFilter != null) {
             counts = orderService.countOrdersByStatusToManager(managerFilter);
@@ -573,7 +584,11 @@ public class ManagerBoardService {
         } else {
             counts = orderService.countOrdersByStatusToManager(resolveManager(principal));
         }
+        return counts == null ? Map.of() : counts;
+    }
 
+    private Map<String, Integer> countOrderMetrics(Principal principal, Authentication authentication, Manager managerFilter,
+            Map<String, Integer> counts) {
         Set<Long> visibleManagerIds = filteredVisibleManagerIds(principal, authentication, managerFilter);
         CommonBillingService.ManagerBoardMetrics commonMetrics = commonBillingService.managerBoardMetrics(
                 visibleManagerIds
@@ -737,12 +752,14 @@ public class ManagerBoardService {
             return null;
         }
 
-        List<Worker> workers = managerProgressWorkers(principal, authentication, managerFilter);
-        if (workers.isEmpty()) {
+        Set<Long> managerIds = filteredVisibleManagerIds(principal, authentication, managerFilter);
+        List<Long> workerIds = managerIds == null ? workerService.getActiveWorkerIds()
+                : workerService.getActiveWorkerIdsByManagerIds(managerIds);
+        if (workerIds.isEmpty()) {
             return null;
         }
 
-        return staffDailyProgressService.aggregateWorkerProgressSnapshot(workers, LocalDate.now());
+        return staffDailyProgressService.aggregateWorkerProgressSnapshotByIds(workerIds, LocalDate.now());
     }
 
     private record MetricsCacheKey(
@@ -752,28 +769,6 @@ public class ManagerBoardService {
             boolean managerControlOverdue,
             String authorizationScope
     ) {
-    }
-
-    private List<Worker> managerProgressWorkers(
-            Principal principal,
-            Authentication authentication,
-            Manager managerFilter
-    ) {
-        if (managerFilter != null) {
-            return workerService.getAllWorkersToManager(managerFilter);
-        }
-
-        if (managerPermissionService.hasRole(authentication, "ADMIN")) {
-            return workerService.getAllWorkers();
-        }
-        if (managerPermissionService.hasRole(authentication, "OWNER")) {
-            List<Manager> managers = resolveOwnerManagers(principal).stream().toList();
-            return managers.isEmpty()
-                    ? List.of()
-                    : workerService.getAllWorkersToManagerList(managers).stream().toList();
-        }
-        Manager manager = resolveManager(principal);
-        return manager == null ? List.of() : workerService.getAllWorkersToManager(manager);
     }
 
     Manager resolveManagerFilter(Long managerId, Principal principal, Authentication authentication) {

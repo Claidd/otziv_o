@@ -54,6 +54,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -152,6 +153,9 @@ class ApiCabinetControllerTest {
                 .role("ADMIN")
                 .build());
         lenient().when(managerPerformanceService.score(DATE)).thenReturn(List.of());
+        lenient().when(managerActivityMetricsService.forTeam(
+                org.mockito.ArgumentMatchers.anyCollection(), any(), any(), any(), any()))
+                .thenReturn(new ManagerActivityMetricsService.TeamActivity(Map.of(), Map.of()));
         lenient().when(workerNetworkViolationService.statsForPeriod(
                 org.mockito.ArgumentMatchers.anyCollection(),
                 org.mockito.ArgumentMatchers.any(),

@@ -162,6 +162,36 @@ public class ManagerActivityMetricsService {
         return result;
     }
 
+    /** One authorized team read, shared only within this assembly; daily and monthly boundaries stay independent. */
+    @Transactional(readOnly = true)
+    public TeamActivity forTeam(java.util.Collection<Long> ids, LocalDate date, LocalDateTime until,
+                                LocalDate month, LocalDateTime monthUntil) {
+        if (ids == null || ids.isEmpty()) return new TeamActivity(Map.of(), Map.of());
+        LocalDateTime dayStart = date.atStartOfDay(), dayLimit = date.plusDays(1).atStartOfDay();
+        LocalDateTime dayEnd = until.isBefore(dayStart) ? dayStart : until.isAfter(dayLimit) ? dayLimit : until;
+        LocalDateTime dailyFrom = date.withDayOfMonth(1).atStartOfDay();
+        LocalDateTime monthFrom = month.withDayOfMonth(1).atStartOfDay();
+        // A historical month picker must not expand a read across all intervening months.
+        if (monthUntil.isBefore(dailyFrom) || dayEnd.isBefore(monthFrom)) {
+            return new TeamActivity(dailyAndMonthAverages(ids, date, dayEnd), calculateForManagers(ids, monthFrom, monthUntil));
+        }
+        LocalDateTime from = dailyFrom.isBefore(monthFrom) ? dailyFrom : monthFrom;
+        LocalDateTime to = dayEnd.isAfter(monthUntil) ? dayEnd : monthUntil;
+        var activity = loadBatch(ids, from, to);
+        Map<Long, DailyAndAverage> daily = new LinkedHashMap<>();
+        Map<Long, Metrics> monthly = new LinkedHashMap<>();
+        ids.forEach(id -> {
+            var site = activity.site().getOrDefault(id, List.of());
+            // The message repository's upper bound is exclusive, including when reusing a wider read.
+            var messages = activity.messages().getOrDefault(id, List.of());
+            daily.put(id, dailyAndAverage(site, messages.stream().filter(at -> at.isBefore(dayEnd)).toList(), date, dayEnd));
+            monthly.put(id, calculateFromEvents(site, messages.stream().filter(at -> at.isBefore(monthUntil)).toList(), monthFrom, monthUntil));
+        });
+        return new TeamActivity(Map.copyOf(daily), Map.copyOf(monthly));
+    }
+
+    public record TeamActivity(Map<Long, DailyAndAverage> daily, Map<Long, Metrics> monthly) {}
+
     private record BatchActivity(Map<Long, List<ManagerSiteActivityEvent>> site, Map<Long, List<LocalDateTime>> messages) {}
 
     private BatchActivity loadBatch(java.util.Collection<Long> ids, LocalDateTime from, LocalDateTime to) {

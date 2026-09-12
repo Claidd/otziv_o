@@ -45,7 +45,34 @@ class InteractiveBatchQueriesMySqlIntegrationTest {
     @Autowired ContractorPaymentAllocationRepository allocations;
     @Autowired ContractorActualPaymentAttributionRepository attributions;
     @Autowired com.hunt.otziv.common_billing.repository.CommonInvoicePaymentRefRepository paymentRefs;
+    @Autowired com.hunt.otziv.u_users.repository.WorkerRepository workers;
+    @Autowired com.hunt.otziv.u_users.repository.ManagerRepository managers;
+    @Autowired com.hunt.otziv.u_users.service.WorkerService workerDirectory;
     static final LocalDate FROM = LocalDate.of(2026, 8, 1), TO = FROM.plusMonths(1);
+
+    @Test void progressIdsPreserveActiveRoleAndManagerMembershipWithoutLoadingProfiles() {
+        var all = workers.findAllWithUserAndImage();
+        assertThat(all).isNotEmpty();
+        assertThat(workerDirectory.getActiveWorkerIds()).containsExactlyInAnyOrderElementsOf(
+                all.stream().map(com.hunt.otziv.u_users.model.Worker::getId).toList());
+        var visibleManagers = managers.findAll();
+        for (var manager : visibleManagers) {
+            assertThat(workerDirectory.getActiveWorkerIdsByManagerIds(List.of(manager.getId())))
+                    .containsExactlyInAnyOrderElementsOf(workers.findAllToManager(manager).stream()
+                            .map(com.hunt.otziv.u_users.model.Worker::getId).toList());
+        }
+        assertThat(workerDirectory.getActiveWorkerIdsByManagerIds(visibleManagers.stream()
+                .map(com.hunt.otziv.u_users.model.Manager::getId).toList()))
+                .containsExactlyInAnyOrderElementsOf(workers.findAllToManagerList(visibleManagers).stream()
+                        .map(com.hunt.otziv.u_users.model.Worker::getId).toList());
+        assertThat(workerDirectory.getActiveWorkerIdsByManagerIds(null)).isEmpty();
+        assertThat(workerDirectory.getActiveWorkerIdsByManagerIds(List.of())).isEmpty();
+        assertThat(workerDirectory.getActiveWorkerIdsByManagerIds(List.of(Long.MAX_VALUE))).isEmpty();
+        var removed = all.getFirst();
+        removed.getUser().setActive(false);
+        em.flush();
+        assertThat(workerDirectory.getActiveWorkerIds()).doesNotContain(removed.getId());
+    }
 
     @Test void invoiceBatchFactsMatchLegacyEvidenceAndPrepaymentFilters() {
         var ids = new ArrayList<Long>();

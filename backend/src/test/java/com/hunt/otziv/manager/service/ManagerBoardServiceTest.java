@@ -156,8 +156,8 @@ class ManagerBoardServiceTest {
         when(promoTextService.getPromoTextsForManager(null, PromoButtonCatalog.SECTION_MANAGER_ORDERS))
                 .thenReturn(List.of("promo"));
         when(staffDailyProgressService.progressEnabled()).thenReturn(true);
-        when(workerService.getAllWorkers()).thenReturn(List.of(worker));
-        when(staffDailyProgressService.aggregateWorkerProgressSnapshot(eq(List.of(worker)), any(LocalDate.class)))
+        when(workerService.getActiveWorkerIds()).thenReturn(List.of(worker.getId()));
+        when(staffDailyProgressService.aggregateWorkerProgressSnapshotByIds(eq(List.of(worker.getId())), any(LocalDate.class)))
                 .thenReturn(dailyProgress);
 
         ManagerBoardResponse response = service.getBoard(
@@ -194,7 +194,7 @@ class ManagerBoardServiceTest {
                 .label());
         verify(badReviewTaskService).enrichOrderList(List.of(order));
         verify(clientMessageOrderStatusService).enrichOrderList(List.of(order));
-        verify(staffDailyProgressService).aggregateWorkerProgressSnapshot(eq(List.of(worker)), any(LocalDate.class));
+        verify(staffDailyProgressService).aggregateWorkerProgressSnapshotByIds(eq(List.of(worker.getId())), any(LocalDate.class));
         verify(staffDailyProgressService, never()).aggregateWorkerProgress(any(), any(LocalDate.class));
         verify(commonBillingService).managerBoardMetrics(null);
         verify(commonBillingService, never()).countLinkedManagerBoardOrders(nullable(Set.class));
@@ -282,6 +282,29 @@ class ManagerBoardServiceTest {
         verify(commonBillingService).managerBoardPage("Все", "needle", null, null, "desc", 0, 2);
         verify(commonBillingService, never())
                 .countLinkedBoardOrdersMatching(any(), any(), nullable(Long.class), nullable(Set.class));
+    }
+
+    @Test
+    void fullCommonPageUsesFreshScopedCountsAndDoesNotHydrateUnusedOrdinaryOrders() {
+        Principal principal = () -> "admin-count-only";
+        var admin = authentication("ROLE_ADMIN");
+        var first = OrderDTOList.builder().id(-101L).status("Выставлен счет").build();
+        var second = OrderDTOList.builder().id(-102L).status("Выставлен счет").build();
+        when(commonBillingService.managerBoardPage("Все", "", null, null, "desc", 1, 2))
+                .thenReturn(new CommonBillingService.ManagerBoardPage(List.of(first, second), 5L, 2));
+        when(orderService.countOrdersByStatus()).thenReturn(Map.of("Новый", 4, "Выставлен счет", 2),
+                Map.of("Новый", 6, "Выставлен счет", 2));
+        when(metricSnapshotService.deltas(eq(principal), eq(UserMetricSnapshotService.PAGE_MANAGER), anyList()))
+                .thenReturn(Map.of());
+        var before = service.getBoard("orders", "Все", "", 1, 2, "desc", null, principal, admin);
+        var after = service.getBoard("orders", "Все", "", 1, 2, "desc", null, principal, admin);
+        assertEquals(List.of(first, second), before.orders().content());
+        assertEquals(9, before.orders().totalElements());
+        assertEquals(11, after.orders().totalElements());
+        // First metrics miss shares the count; the second request has a fresh count despite a metrics hit.
+        verify(orderService, org.mockito.Mockito.times(2)).countOrdersByStatus();
+        verify(orderService, never()).getAllOrderDTOAndKeyword(any(), anyInt(), anyInt(), any());
+        verify(commonBillingService, org.mockito.Mockito.times(1)).managerBoardMetrics(null);
     }
 
     @Test

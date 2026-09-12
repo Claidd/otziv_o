@@ -1303,7 +1303,6 @@ com.hunt.otziv.manager.service.ManagerBoardService -> com.hunt.otziv.p_products.
 com.hunt.otziv.manager.service.ManagerBoardService -> com.hunt.otziv.review_recovery.service.ReviewRecoveryTaskService
 com.hunt.otziv.manager.service.ManagerBoardService -> com.hunt.otziv.u_users.model.Manager
 com.hunt.otziv.manager.service.ManagerBoardService -> com.hunt.otziv.u_users.model.User
-com.hunt.otziv.manager.service.ManagerBoardService -> com.hunt.otziv.u_users.model.Worker
 com.hunt.otziv.manager.service.ManagerBoardService -> com.hunt.otziv.u_users.service.ManagerService
 com.hunt.otziv.manager.service.ManagerBoardService -> com.hunt.otziv.u_users.service.UserService
 com.hunt.otziv.manager.service.ManagerBoardService -> com.hunt.otziv.u_users.service.WorkerService

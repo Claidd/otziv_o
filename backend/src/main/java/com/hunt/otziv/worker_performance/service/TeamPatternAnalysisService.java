@@ -28,6 +28,25 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class TeamPatternAnalysisService {
 
+    static final String PUBLICATIONS_SQL = """
+                SELECT publication.worker_id,
+                       DATE(publication.published_at) AS metric_date,
+                       COUNT(*) AS metric_count
+                FROM (
+                    SELECT r.review_worker AS worker_id, r.review_published_marked_at AS published_at
+                    FROM reviews r
+                    WHERE r.review_worker IN (:workerIds) AND r.review_publish = 1
+                      AND r.review_published_marked_at >= :from AND r.review_published_marked_at < :to
+                    UNION ALL
+                    SELECT r.review_worker, TIMESTAMP(r.review_changed)
+                    FROM reviews r
+                    WHERE r.review_worker IN (:workerIds) AND r.review_publish = 1
+                      AND r.review_published_marked_at IS NULL
+                      AND r.review_changed >= :from AND r.review_changed < :to
+                ) publication
+                GROUP BY publication.worker_id, DATE(publication.published_at)
+                """;
+
     private static final ZoneId ANALYSIS_ZONE = ZoneId.of("Asia/Irkutsk");
     private static final int MIN_WORKER_PUBLICATIONS = 30;
     private static final int MIN_CORRELATION_WORKERS = 8;
@@ -165,17 +184,7 @@ public class TeamPatternAnalysisService {
                 "workerIds",
                 subjects.stream().map(WorkerPatternSubject::workerId).distinct().toList()
         );
-        jdbc.queryForList("""
-                SELECT r.review_worker AS worker_id,
-                       DATE(COALESCE(r.review_published_marked_at, TIMESTAMP(r.review_changed))) AS metric_date,
-                       COUNT(*) AS metric_count
-                FROM reviews r
-                WHERE r.review_worker IN (:workerIds)
-                  AND r.review_publish = 1
-                  AND COALESCE(r.review_published_marked_at, TIMESTAMP(r.review_changed)) >= :from
-                  AND COALESCE(r.review_published_marked_at, TIMESTAMP(r.review_changed)) < :to
-                GROUP BY r.review_worker, DATE(COALESCE(r.review_published_marked_at, TIMESTAMP(r.review_changed)))
-                """, params).forEach(row -> {
+        jdbc.queryForList(PUBLICATIONS_SQL, params).forEach(row -> {
             Long userId = userIdByWorkerId.get(longValue(row.get("worker_id")));
             LocalDate date = dateValue(row.get("metric_date"));
             long count = longValue(row.get("metric_count"));
