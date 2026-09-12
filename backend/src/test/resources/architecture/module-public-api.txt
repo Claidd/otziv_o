@@ -29,6 +29,8 @@ com.hunt.otziv.config.api.DeliveryResponseCompatibility
 com.hunt.otziv.u_users.api.DeferredUserAuthority
 com.hunt.otziv.u_users.api.CabinetCacheScope
 com.hunt.otziv.u_users.api.BoardIdentityReadScope
+# ADR-018: identity-owned display fields; authorized caller scope, read-only REQUIRED transaction.
+com.hunt.otziv.u_users.api.TeamDirectoryReader
 # Low-cardinality timing API; no query text, values, results or identity information.
 com.hunt.otziv.config.metrics.PerformanceMetrics
 # Transaction-fenced platform scheduler capability used by projection refresh jobs.
