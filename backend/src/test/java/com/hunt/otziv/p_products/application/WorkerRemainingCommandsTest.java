@@ -54,7 +54,7 @@ class WorkerRemainingCommandsTest {
     WorkerReviewAccessPolicy access=new WorkerReviewAccessPolicy(reviews,cellular,guard);
     WorkerReviewContentCommands content=new WorkerReviewContentCommands(reviews,activity,access);
     WorkerReviewPublicationCommands publication=new WorkerReviewPublicationCommands(new ReviewPublicationCommandService(new ReviewPublicationMutationService(orders,reviews,guard,activity),reviews,gate,preparation,cellular,guard),reviews,gate,activity,preparation,cellular,guard);
-    WorkerCredentialCommands credentials=new WorkerCredentialCommands(reviews,bad,recovery,gate,activity,preparation,cellular,guard,reveal,access);
+    WorkerCredentialCommands credentials=new WorkerCredentialCommands(reviews,bad,recovery,gate,activity,preparation,cellular,guard,reveal,access,mock(org.springframework.transaction.PlatformTransactionManager.class));
 
     @AfterEach void clearAmbient() { SecurityContextHolder.clearContext(); }
 

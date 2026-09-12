@@ -173,6 +173,16 @@ public class BusinessAuditService {
         return event(currentActor(), action, entityType, entityId, orderId, reviewId, oldValue, newValue, details);
     }
 
+    /** Explicit actor; the enclosing command must commit before returning sensitive data. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void recordRequiredInCurrentTransaction(
+            Authentication authentication, String action, String entityType, Object entityId,
+            Long orderId, Long reviewId, Object oldValue, Object newValue, String details
+    ) {
+        repository.saveAndFlush(event(explicitActor(authentication), action, entityType, entityId,
+                orderId, reviewId, oldValue, newValue, details));
+    }
+
     private BusinessAuditEvent event(
             String actor,
             String action,

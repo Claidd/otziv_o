@@ -220,7 +220,7 @@ class ApiWorkerBoardControllerTest {
                 new com.hunt.otziv.p_products.application.WorkerReviewPublicationCommands(
                         new com.hunt.otziv.p_products.application.ReviewPublicationCommandService(new com.hunt.otziv.p_products.application.ReviewPublicationMutationService(orderService,reviewService,assignmentMutationGuardService,workerActivityService),reviewService,publicationGate,credentialPreparationService,workerCellularAccessService,assignmentMutationGuardService),
                         reviewService,publicationGate,workerActivityService,credentialPreparationService,workerCellularAccessService,assignmentMutationGuardService),
-                new com.hunt.otziv.p_products.application.WorkerCredentialCommands(reviewService, badReviewTaskService, reviewRecoveryTaskService, publicationGate, workerActivityService, credentialPreparationService, workerCellularAccessService, assignmentMutationGuardService, credentialRevealService, reviewAccess),
+                new com.hunt.otziv.p_products.application.WorkerCredentialCommands(reviewService, badReviewTaskService, reviewRecoveryTaskService, publicationGate, workerActivityService, credentialPreparationService, workerCellularAccessService, assignmentMutationGuardService, credentialRevealService, reviewAccess, org.mockito.Mockito.mock(org.springframework.transaction.PlatformTransactionManager.class)),
                 new com.hunt.otziv.p_products.application.WorkerReviewAccountCommands(reviewService,botService,
                         assignmentMutationGuardService,workerCellularAccessService,publicationGate,workerActivityService),
                 orderService,
@@ -876,7 +876,7 @@ class ApiWorkerBoardControllerTest {
                 "all"
         );
         when(reviewService.getReviewById(906L)).thenReturn(review);
-        when(credentialRevealService.revealReview(eq(review), eq(request), any(Authentication.class)))
+        when(credentialRevealService.revealReviewInCurrentTransaction(eq(review), eq(request), any(Authentication.class)))
                 .thenReturn(new CredentialRevealResponse("secret"));
 
         var response = controller.revealReviewCredential(
@@ -890,7 +890,7 @@ class ApiWorkerBoardControllerTest {
         assertTrue(response.getHeaders().getCacheControl().contains("no-store"));
         assertEquals("no-cache", response.getHeaders().getFirst(HttpHeaders.PRAGMA));
         verify(assignmentMutationGuardService).assertReview(eq(906L), any(Authentication.class));
-        verify(credentialRevealService).revealReview(eq(review), eq(request), any(Authentication.class));
+        verify(credentialRevealService).revealReviewInCurrentTransaction(eq(review), eq(request), any(Authentication.class));
     }
 
     @Test

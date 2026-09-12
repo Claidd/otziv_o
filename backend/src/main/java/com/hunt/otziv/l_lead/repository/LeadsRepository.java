@@ -155,6 +155,10 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
     @Query("select l from Lead l where l.lidStatus = :status AND l.manager = :manager")
     List<Lead> findAllByLidListStatus(String status, Manager manager);
 
+    // Keep the list predicate, including SQL's null-manager semantics.
+    @Query("select count(l) from Lead l where l.lidStatus = :status AND l.manager = :manager")
+    long countByLidListStatus(String status, Manager manager);
+
     @Query("""
         SELECT COUNT(l)
         FROM Lead l

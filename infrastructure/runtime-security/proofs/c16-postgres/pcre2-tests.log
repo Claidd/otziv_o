@@ -1,0 +1,30 @@
+make  check-am
+make[1]: Entering directory '/sources/unpacked'
+make  
+make[2]: Entering directory '/sources/unpacked'
+make  all-am
+make[3]: Entering directory '/sources/unpacked'
+make[3]: Nothing to be done for 'all-am'.
+make[3]: Leaving directory '/sources/unpacked'
+make[2]: Leaving directory '/sources/unpacked'
+make  check-TESTS
+make[2]: Entering directory '/sources/unpacked'
+make[3]: Entering directory '/sources/unpacked'
+PASS: pcre2posix_test
+PASS: pcre2_jit_test
+PASS: RunTest
+PASS: RunGrepTest
+============================================================================
+Testsuite summary for PCRE2 10.48
+============================================================================
+# TOTAL: 4
+# PASS:  4
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+make[3]: Leaving directory '/sources/unpacked'
+make[2]: Leaving directory '/sources/unpacked'
+make[1]: Leaving directory '/sources/unpacked'

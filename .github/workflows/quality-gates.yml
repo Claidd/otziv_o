@@ -19,6 +19,7 @@ on:
           - c14-mc
           - c14-local-s3
           - c14-postgres
+          - c16-postgres
           - c14-keycloak
           - c15-prometheus
           - c15-loki
@@ -346,7 +347,7 @@ jobs:
       - name: Build and scan reviewed database candidates
         run: |
           docker build -t otziv-mysql-ci infrastructure/mysql
-          docker build -t otziv-postgres-ci infrastructure/runtime-security/builds/postgres-c14
+          docker build -t otziv-postgres-ci infrastructure/runtime-security/builds/postgres-c16
           node infrastructure/runtime-security/scan.mjs image otziv-mysql-ci "$RUNNER_TEMP/mysql-vulnerabilities.json"
           node infrastructure/runtime-security/scan.mjs image otziv-postgres-ci "$RUNNER_TEMP/postgres-vulnerabilities.json"
       - name: Verify PostgreSQL minor upgrade and separate backup rollback

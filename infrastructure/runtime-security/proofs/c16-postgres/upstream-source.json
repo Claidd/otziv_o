@@ -1,0 +1,37 @@
+{
+  "archiveSha256": "b6c68fdf6f3ac31388b50aa89ff0fc49c00c987c16e7b5146491d12003f2c8ed",
+  "members": {
+    "src/pcre2_dfa_match.c": {
+      "sha256": "abbe0ba7c973ede93733cafdc1168b5ac12d925370d2f3f032e8acbbe769d148",
+      "bytes": 144966
+    },
+    "src/pcre2_jit_match_inc.h": {
+      "sha256": "fb541db739d8d63e03ec248c378bc3e352a3e191fbac2fc2336ee859850ab11b",
+      "bytes": 7371
+    },
+    "testdata/testinput6": {
+      "sha256": "cd8f7a8aab40542b067eda065c6902f52d98642f5d4cf9f7bb8ebe81fd77c93c",
+      "bytes": 93632
+    },
+    "testdata/testoutput6": {
+      "sha256": "bed9d28a83f56f4514e5dae0b99f6d39169b4914f9ceee4a745f9c1f19227327",
+      "bytes": 132421
+    },
+    "testdata/testinput2": {
+      "sha256": "8d69db92c9b0d45666639fcb8553ca28bb4d0b5b98110c358d724b1f9ad35bde",
+      "bytes": 151019
+    },
+    "testdata/testoutput2": {
+      "sha256": "87d785d247cdd4dd63d6825113137f9de3c991142b7127e24fd5d5e6c69cd85c",
+      "bytes": 515978
+    },
+    "LICENCE.md": {
+      "sha256": "197d8a73ffee0d6b09adba2f9c677b5f5aede24edf89258a68e48248d010d811",
+      "bytes": 4011
+    },
+    "ChangeLog": {
+      "sha256": "8b6f088f694f9b6b06999d61ec86928f57150b1fbe722761b1e04be9e47abdbf",
+      "bytes": 163029
+    }
+  }
+}

@@ -16,6 +16,8 @@ const RELEASE_SETS = Object.freeze({
     context: 'infrastructure/runtime-security/builds/versity-c14', dockerfile: 'infrastructure/runtime-security/builds/versity-c14/Dockerfile' },
   'c14-postgres': { component: 'postgres', path: 'infrastructure/runtime-security/reviewed-images-c14-postgres.json',
     context: 'infrastructure/runtime-security/builds/postgres-c14', dockerfile: 'infrastructure/runtime-security/builds/postgres-c14/Dockerfile' },
+  'c16-postgres': { component: 'postgres', path: 'infrastructure/runtime-security/reviewed-images-c16-postgres.json',
+    context: 'infrastructure/runtime-security/builds/postgres-c16', dockerfile: 'infrastructure/runtime-security/builds/postgres-c16/Dockerfile' },
   'c14-keycloak': { component: 'keycloak', path: 'infrastructure/runtime-security/reviewed-images-c14-keycloak.json',
     context: 'infrastructure/keycloak/security-generation/c14-migration-fix',
     dockerfile: 'infrastructure/keycloak/security-generation/c14-migration-fix/Dockerfile' },

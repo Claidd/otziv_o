@@ -1,0 +1,264 @@
+{
+  "original": "sha256:07834abbfd80ed7183afa9096db99afc4d93b99fd51aae726e550d07ade65dbf",
+  "candidate": "sha256:5c306b37066cf72e0ab4dfc4d0fbe4ca437d803b5c1658c55505e78e6b9ccb8b",
+  "originalRuntimeVerified": true,
+  "launchContractIdentical": true,
+  "changed": [
+    {
+      "path": "etc/ld.so.cache",
+      "before": {
+        "kind": "file",
+        "mode": 420,
+        "sha256": "fb9f400d7bd8dfd51e07472d0aab7f4ad1a8c011e6b6c595904991410f0ed9a7",
+        "elf": false,
+        "script": false
+      },
+      "after": {
+        "kind": "file",
+        "mode": 420,
+        "sha256": "4c10c8f3527b75b5231c949e217a287fdd686625a95ecaac2e5c74380b69b20c",
+        "elf": false,
+        "script": false
+      }
+    },
+    {
+      "path": "usr/lib/x86_64-linux-gnu/libpcre2-8.so.0",
+      "before": {
+        "kind": "symlink",
+        "mode": 511,
+        "target": "libpcre2-8.so.0.14.0"
+      },
+      "after": {
+        "kind": "symlink",
+        "mode": 511,
+        "target": "libpcre2-8.so.0.16.0"
+      }
+    },
+    {
+      "path": "usr/lib/x86_64-linux-gnu/libpcre2-8.so.0.14.0",
+      "before": {
+        "kind": "file",
+        "mode": 420,
+        "sha256": "8ee551e7f9645d6212c017df0938062ba046608a5378aab7d7c01c47b81a9f50",
+        "elf": true,
+        "script": false
+      },
+      "after": null
+    },
+    {
+      "path": "usr/lib/x86_64-linux-gnu/libpcre2-8.so.0.16.0",
+      "before": null,
+      "after": {
+        "kind": "file",
+        "mode": 493,
+        "sha256": "ccd4e3bffc722095c9e6f282d44d8ceb3633d16571b7d42daa7a8e8abd85a566",
+        "elf": true,
+        "script": false
+      }
+    },
+    {
+      "path": "usr/local/share/otziv/build/pcre2-build.log",
+      "before": null,
+      "after": {
+        "kind": "file",
+        "mode": 420,
+        "sha256": "4d1631231ec4ee7256b3bc1682687e1199d7295b2ed49733f470c5205bfc7b18",
+        "elf": false,
+        "script": false
+      }
+    },
+    {
+      "path": "usr/local/share/otziv/build/pcre2-component.json",
+      "before": null,
+      "after": {
+        "kind": "file",
+        "mode": 420,
+        "sha256": "155234fe71870f9a52b90b656ad1b543659cb42e2aa08bf70f8677d480d47638",
+        "elf": false,
+        "script": false
+      }
+    },
+    {
+      "path": "usr/local/share/otziv/build/pcre2-configure.log",
+      "before": null,
+      "after": {
+        "kind": "file",
+        "mode": 420,
+        "sha256": "c9358ef7c810e5f83d98091ab74bd21fa39c63829cc84245bb51451eabc4df9a",
+        "elf": false,
+        "script": false
+      }
+    },
+    {
+      "path": "usr/local/share/otziv/build/pcre2-features.txt",
+      "before": null,
+      "after": {
+        "kind": "file",
+        "mode": 420,
+        "sha256": "1a7b7efa8a0a1c9237d068001827ea64f5a321e00ae8e5cab7e359a9ca611ba8",
+        "elf": false,
+        "script": false
+      }
+    },
+    {
+      "path": "usr/local/share/otziv/build/pcre2-install.log",
+      "before": null,
+      "after": {
+        "kind": "file",
+        "mode": 420,
+        "sha256": "7130047b6a4f84f3b988f1e3d57afb09d19a093209267a104f4f20ea0f6b438f",
+        "elf": false,
+        "script": false
+      }
+    },
+    {
+      "path": "usr/local/share/otziv/build/pcre2-tests.log",
+      "before": null,
+      "after": {
+        "kind": "file",
+        "mode": 420,
+        "sha256": "bfcc0548189439598e7675e3b2037418d5dceafe61de8bf3be653edcbbaa9817",
+        "elf": false,
+        "script": false
+      }
+    },
+    {
+      "path": "usr/local/share/otziv/debian-components.json",
+      "before": {
+        "kind": "file",
+        "mode": 420,
+        "sha256": "fcbcdb85757089afdcd90358de6fc10c1bfb3892b1ea95e9730523dfc2ec4b99",
+        "elf": false,
+        "script": false
+      },
+      "after": {
+        "kind": "file",
+        "mode": 420,
+        "sha256": "3905fce1c5ab34bbe850f8d41d9291d522c4997f843dd0efa08f1232b52914af",
+        "elf": false,
+        "script": false
+      }
+    },
+    {
+      "path": "usr/local/share/otziv/runtime-files.json",
+      "before": {
+        "kind": "file",
+        "mode": 420,
+        "sha256": "e420c526cda8b2ea3b1bda2025cf172a237ddba433fbc1c1f53d40cd5f1e6385",
+        "elf": false,
+        "script": false
+      },
+      "after": {
+        "kind": "file",
+        "mode": 420,
+        "sha256": "8ecfe999202e15acf3a3e2cc2ec0d0be48f07776efa998ca28c56b2e5a59f6a8",
+        "elf": false,
+        "script": false
+      }
+    },
+    {
+      "path": "usr/local/share/otziv/upstream-components.json",
+      "before": {
+        "kind": "file",
+        "mode": 420,
+        "sha256": "814a36cd486660fc3c1d116218858a972466e204eb273e83b83a2a66b555571a",
+        "elf": false,
+        "script": false
+      },
+      "after": {
+        "kind": "file",
+        "mode": 420,
+        "sha256": "7933d8f6a0ebefff4402d2ad3620b53f283522a773ed71ba2dbf3c6cf4d55fdd",
+        "elf": false,
+        "script": false
+      }
+    },
+    {
+      "path": "usr/local/share/otziv/upstream.cdx.json",
+      "before": {
+        "kind": "file",
+        "mode": 420,
+        "sha256": "657d44b2fb0d831bbc2961437e9598b1cf1cc7340b9cd629cf1aec8a7905a125",
+        "elf": false,
+        "script": false
+      },
+      "after": {
+        "kind": "file",
+        "mode": 420,
+        "sha256": "a2a35a02ec411d4a666f0a5a82d317b3bf07a315d49eee48bf1947ef550049a3",
+        "elf": false,
+        "script": false
+      }
+    },
+    {
+      "path": "usr/share/doc/libpcre2-8-0/copyright",
+      "before": {
+        "kind": "file",
+        "mode": 420,
+        "sha256": "e915cde4251f96ec6af107ecd2e194440a4e69440893b0c982802f8a1e4ae40a",
+        "elf": false,
+        "script": false
+      },
+      "after": {
+        "kind": "file",
+        "mode": 420,
+        "sha256": "197d8a73ffee0d6b09adba2f9c677b5f5aede24edf89258a68e48248d010d811",
+        "elf": false,
+        "script": false
+      }
+    },
+    {
+      "path": "var/lib/dpkg/info/libpcre2-8-0:amd64.list",
+      "before": {
+        "kind": "file",
+        "mode": 420,
+        "sha256": "a04666eedeb89dd68d5c3255bb080c978f76f1ddd6dbaae3a64679ab405035c2",
+        "elf": false,
+        "script": false
+      },
+      "after": {
+        "kind": "file",
+        "mode": 420,
+        "sha256": "f00e722cdfcb40d91dbe9ca461bf094d0d3fcd1adc8a0cb8d1925441dde53a47",
+        "elf": false,
+        "script": false
+      }
+    },
+    {
+      "path": "var/lib/dpkg/info/libpcre2-8-0:amd64.md5sums",
+      "before": {
+        "kind": "file",
+        "mode": 420,
+        "sha256": "6ff45658639b0cf32761f4b2808fab2b5b7c95339bf9edd0f561817a1a267027",
+        "elf": false,
+        "script": false
+      },
+      "after": {
+        "kind": "file",
+        "mode": 420,
+        "sha256": "3a6fc5a026a54fd6ce80142c8460096d613734f2afcdea3e28390c7d80716d82",
+        "elf": false,
+        "script": false
+      }
+    },
+    {
+      "path": "var/lib/dpkg/status",
+      "before": {
+        "kind": "file",
+        "mode": 420,
+        "sha256": "b6499656159a5fed9deda6719270e988ee96ef641ca3cdb499795159adfc1420",
+        "elf": false,
+        "script": false
+      },
+      "after": {
+        "kind": "file",
+        "mode": 420,
+        "sha256": "091f26dbd1818df4bbb6400d1189626ece74835bf2c9f74eaa866888e391f68c",
+        "elf": false,
+        "script": false
+      }
+    }
+  ],
+  "originalRuntimeIdentitySha256": "b051fc785c95c2123e91b0100b4b4b1d1d1b481d24793cb1fcd2db0473b197e7",
+  "candidateRuntimeIdentitySha256": "69bbe834a8f96cbe5ac9c746bd5a67833d71ea517eb0917da9340a2745a78897"
+}

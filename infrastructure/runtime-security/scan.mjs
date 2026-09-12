@@ -7,7 +7,7 @@ import { assertLocalDocker } from '../recovery/drill.mjs';
 import { buildTriage } from './triage-report.mjs';
 import { adjudicateGrafanaImage } from './grafana-tempo-adjudication.mjs';
 import { adjudicateAlloyImage } from './alloy-daemon-adjudication.mjs';
-import { adjudicatePostgresImage } from './postgres-c15-adjudication.mjs';
+import { adjudicatePostgresImage } from './postgres-c16-adjudication.mjs';
 import { combinedScanSummary } from './scan-verdict.mjs';
 
 export const TRIVY_IMAGE = 'aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969'; // 0.74.0

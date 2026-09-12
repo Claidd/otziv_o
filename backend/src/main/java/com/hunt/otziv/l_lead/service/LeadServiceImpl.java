@@ -1345,6 +1345,14 @@ public class LeadServiceImpl implements LeadService {
     }
 
     @Override
+    public int countNewLeadsForCabinet(String username) {
+        Manager manager = managerService.getManagerByUserId(userService.findByUserName(username).orElseThrow().getId());
+        // The old explicit equality query returned no rows for a missing manager;
+        // a derived count method would instead count unassigned leads (IS NULL).
+        return manager == null ? 0 : Math.toIntExact(leadsRepository.countByLidListStatus("Новый", manager));
+    }
+
+    @Override
     public Long findAllByLidListNew(Marketolog marketolog) {
         LocalDate localDate = LocalDate.now();
         return leadsRepository.findAllByLidListToMarketolog(marketolog, monthStart(localDate), nextMonthStart(localDate));
