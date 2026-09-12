@@ -52,7 +52,7 @@ class TeamPatternAnalysisServiceTest {
                 blocks.add(row(
                         "user_id", 100 + index,
                         "metric_date", Date.valueOf("2026-07-18"),
-                        "bot_id", index + "-" + bot
+                        "metric_count", 1L
                 ));
             }
             recoveries.add(row(
@@ -127,7 +127,7 @@ class TeamPatternAnalysisServiceTest {
             blocks.add(row(
                     "user_id", 101L,
                     "metric_date", Date.valueOf(index <= 2 ? "2026-07-17" : "2026-07-18"),
-                    "bot_id", "bot-" + index
+                    "metric_count", 1L
             ));
         }
         List<Map<String, Object>> recoveries = List.of(
@@ -201,7 +201,7 @@ class TeamPatternAnalysisServiceTest {
                     blocks.add(row(
                             "user_id", 101L,
                             "metric_date", Date.valueOf("2026-07-18"),
-                            "bot_id", bot
+                            "metric_count", 1L
                     ));
                 }
                 return blocks;

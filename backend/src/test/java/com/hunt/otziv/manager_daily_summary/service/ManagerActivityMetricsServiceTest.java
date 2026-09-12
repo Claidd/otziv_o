@@ -61,19 +61,52 @@ class ManagerActivityMetricsServiceTest {
         org.mockito.Mockito.verifyNoMoreInteractions(activityRepository, messageRepository);
     }
 
+    @Test
+    void combinedTeamReadMatchesIndependentPeriodsIncludingExclusiveMessagesAndMidnightCredits() {
+        var ids = List.of(20L, 21L, 22L);
+        var day = LocalDate.of(2026, 7, 3);
+        var end = day.atTime(12, 0);
+        var points = List.of(
+                point(20, day.minusMonths(1).atTime(11, 0), "HEARTBEAT"),
+                point(20, day.withDayOfMonth(1).atStartOfDay(), "HEARTBEAT"),
+                point(20, day.atTime(0, 0, 15), "heartbeat"),
+                point(20, day.atTime(11, 0, 0, 123_000_000), "ACTIVE_HEARTBEAT"),
+                point(20, day.atTime(11, 0, 15, 456_000_000), "INTERACTION"),
+                point(20, end, " STAFF_MESSAGE_SENT "),
+                point(20, end.plusHours(2), "OTHER"),
+                point(21, day.atTime(11, 0), "HEARTBEAT"),
+                point(20, day.plusDays(1).atStartOfDay(), "HEARTBEAT"));
+        var messages = List.of(messagePoint(20, day.atTime(11, 0, 10)),
+                messagePoint(20, end), messagePoint(21, end), messagePoint(20, end.plusHours(2)),
+                messagePoint(20, day.plusDays(1).atStartOfDay()));
+        when(activityRepository.pointsForManagers(org.mockito.ArgumentMatchers.eq(ids), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(call -> points.stream().filter(row -> !row.getOccurredAt().isBefore(call.getArgument(1, LocalDateTime.class))
+                        && !row.getOccurredAt().isAfter(call.getArgument(2, LocalDateTime.class))).toList());
+        when(messageRepository.staffPointsForManagers(org.mockito.ArgumentMatchers.eq(ids), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(call -> messages.stream().filter(row -> !row.getMessageAt().isBefore(call.getArgument(1, LocalDateTime.class))
+                        && row.getMessageAt().isBefore(call.getArgument(2, LocalDateTime.class))).toList());
+        for (var month : List.of(day.withDayOfMonth(1), day.minusMonths(1).withDayOfMonth(1), day.minusMonths(3).withDayOfMonth(1))) {
+            var monthEnd = month.plusMonths(1).atStartOfDay();
+            var actual = service.forTeam(ids, day, end, month, monthEnd);
+            var expectedDaily = service.dailyAndMonthAverages(ids, day, end);
+            var expectedMonthly = service.calculateForManagers(ids, month.atStartOfDay(), monthEnd);
+            assertEquals(expectedDaily, actual.daily());
+            assertEquals(expectedMonthly, actual.monthly());
+            assertEquals(0, actual.daily().get(22L).daily().confirmedSeconds());
+        }
+        org.mockito.Mockito.clearInvocations(activityRepository, messageRepository);
+        service.forTeam(ids, day, end, day.withDayOfMonth(1), end);
+        org.mockito.Mockito.verify(activityRepository).pointsForManagers(ids, day.withDayOfMonth(1).atStartOfDay(), end);
+        org.mockito.Mockito.verify(messageRepository).staffPointsForManagers(ids, day.withDayOfMonth(1).atStartOfDay(), end);
+        org.mockito.Mockito.verifyNoMoreInteractions(activityRepository, messageRepository);
+    }
+
     private ManagerSiteActivityEventRepository.ActivityPoint point(long id, LocalDateTime at, String type) {
-        return new ManagerSiteActivityEventRepository.ActivityPoint() {
-            public Long getManagerId() { return id; }
-            public LocalDateTime getOccurredAt() { return at; }
-            public String getActivityType() { return type; }
-        };
+        return new ManagerSiteActivityEventRepository.ActivityPoint(id, at, type);
     }
 
     private ClientChatMessageRepository.ManagerMessagePoint messagePoint(long id, LocalDateTime at) {
-        return new ClientChatMessageRepository.ManagerMessagePoint() {
-            public Long getManagerId() { return id; }
-            public LocalDateTime getMessageAt() { return at; }
-        };
+        return new ClientChatMessageRepository.ManagerMessagePoint(id, at);
     }
 
     @Test

@@ -45,7 +45,65 @@ class InteractiveBatchQueriesMySqlIntegrationTest {
     @Autowired ContractorPaymentAllocationRepository allocations;
     @Autowired ContractorActualPaymentAttributionRepository attributions;
     @Autowired com.hunt.otziv.common_billing.repository.CommonInvoicePaymentRefRepository paymentRefs;
+    @Autowired com.hunt.otziv.u_users.repository.WorkerRepository workers;
+    @Autowired com.hunt.otziv.u_users.repository.ManagerRepository managers;
+    @Autowired com.hunt.otziv.u_users.service.WorkerService workerDirectory;
+    @Autowired com.hunt.otziv.manager_daily_summary.repository.ManagerSiteActivityEventRepository activityPoints;
+    @Autowired com.hunt.otziv.client_chat_control.repository.ClientChatMessageRepository messagePoints;
     static final LocalDate FROM = LocalDate.of(2026, 8, 1), TO = FROM.plusMonths(1);
+
+    @Test void constructorActivityProjectionsKeepActorScopeAndTimestampEdges() {
+        var manager = managers.findAll().getFirst();
+        var from = FROM.atStartOfDay();
+        var to = from.plusDays(1);
+        for (var at : List.of(from.minusNanos(1000), from, to.minusNanos(1000), to)) {
+            var event = new com.hunt.otziv.manager_daily_summary.model.ManagerSiteActivityEvent();
+            event.setUser(manager.getUser()); event.setManager(manager); event.setOccurredAt(at); event.setActivityType("HEARTBEAT");
+            em.persist(event);
+            var message = new com.hunt.otziv.client_chat_control.model.ClientChatMessage();
+            message.setActorUser(manager.getUser()); message.setManager(null); message.setMessageAt(at);
+            message.setPlatform(com.hunt.otziv.client_chat_control.model.ClientChatPlatform.values()[0]);
+            message.setDirection(com.hunt.otziv.client_chat_control.model.ClientChatDirection.values()[0]);
+            message.setSenderRole(com.hunt.otziv.client_chat_control.model.ClientChatSenderRole.STAFF);
+            message.setChatId("activity-query-fixture"); message.setExternalMessageId(at.toString());
+            em.persist(message);
+        }
+        em.flush(); em.clear();
+        var events = activityPoints.pointsForManagers(List.of(manager.getId()), from, to);
+        assertThat(events).hasSize(3).allSatisfy(row -> {
+            assertThat(row.getManagerId()).isEqualTo(manager.getId());
+            assertThat(row.getActivityType()).isEqualTo("HEARTBEAT");
+        });
+        assertThat(events.stream().map(row -> row.getOccurredAt()).toList()).containsExactlyInAnyOrder(from, to.minusNanos(1000), to);
+        assertThat(messagePoints.staffPointsForManagers(List.of(manager.getId()), from, to).stream().map(row -> row.getMessageAt()).toList())
+                .containsExactlyInAnyOrder(from, to.minusNanos(1000));
+        assertThat(activityPoints.pointsForManagers(List.of(Long.MAX_VALUE), from, to)).isEmpty();
+        assertThat(messagePoints.staffPointsForManagers(List.of(Long.MAX_VALUE), from, to)).isEmpty();
+    }
+
+    @Test void progressIdsPreserveActiveRoleAndManagerMembershipWithoutLoadingProfiles() {
+        var all = workers.findAllWithUserAndImage();
+        assertThat(all).isNotEmpty();
+        assertThat(workerDirectory.getActiveWorkerIds()).containsExactlyInAnyOrderElementsOf(
+                all.stream().map(com.hunt.otziv.u_users.model.Worker::getId).toList());
+        var visibleManagers = managers.findAll();
+        for (var manager : visibleManagers) {
+            assertThat(workerDirectory.getActiveWorkerIdsByManagerIds(List.of(manager.getId())))
+                    .containsExactlyInAnyOrderElementsOf(workers.findAllToManager(manager).stream()
+                            .map(com.hunt.otziv.u_users.model.Worker::getId).toList());
+        }
+        assertThat(workerDirectory.getActiveWorkerIdsByManagerIds(visibleManagers.stream()
+                .map(com.hunt.otziv.u_users.model.Manager::getId).toList()))
+                .containsExactlyInAnyOrderElementsOf(workers.findAllToManagerList(visibleManagers).stream()
+                        .map(com.hunt.otziv.u_users.model.Worker::getId).toList());
+        assertThat(workerDirectory.getActiveWorkerIdsByManagerIds(null)).isEmpty();
+        assertThat(workerDirectory.getActiveWorkerIdsByManagerIds(List.of())).isEmpty();
+        assertThat(workerDirectory.getActiveWorkerIdsByManagerIds(List.of(Long.MAX_VALUE))).isEmpty();
+        var removed = all.getFirst();
+        removed.getUser().setActive(false);
+        em.flush();
+        assertThat(workerDirectory.getActiveWorkerIds()).doesNotContain(removed.getId());
+    }
 
     @Test void invoiceBatchFactsMatchLegacyEvidenceAndPrepaymentFilters() {
         var ids = new ArrayList<Long>();

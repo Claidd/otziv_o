@@ -275,13 +275,15 @@ public class StaffDailyProgressService {
             Collection<Worker> workers,
             LocalDate date
     ) {
-        if (!progressEnabled() || workers == null || workers.isEmpty()) {
-            return Map.of();
-        }
+        return workerProgressSnapshotByIds(workers == null ? List.of() : workers.stream()
+                .filter(Objects::nonNull).map(Worker::getId).toList(), date);
+    }
+
+    @Transactional(readOnly = true)
+    public Map<Long, DailyWorkProgressResponse> workerProgressSnapshotByIds(Collection<Long> ids, LocalDate date) {
+        if (!progressEnabled() || ids == null || ids.isEmpty()) return Map.of();
         LocalDate safeDate = safeDate(date);
-        List<Long> workerIds = workers.stream()
-                .filter(Objects::nonNull)
-                .map(Worker::getId)
+        List<Long> workerIds = ids.stream()
                 .filter(Objects::nonNull)
                 .distinct()
                 .toList();
@@ -557,6 +559,11 @@ public class StaffDailyProgressService {
         // current team snapshot, and the reconstruction is one of the expensive
         // operations deliberately kept out of the HTTP read path.
         return aggregateProgressResponses(progress.values(), date, ROLE_WORKER, null);
+    }
+
+    @Transactional(readOnly = true)
+    public DailyWorkProgressResponse aggregateWorkerProgressSnapshotByIds(Collection<Long> workerIds, LocalDate date) {
+        return aggregateProgressResponses(workerProgressSnapshotByIds(workerIds, date).values(), date, ROLE_WORKER, null);
     }
 
     @Transactional

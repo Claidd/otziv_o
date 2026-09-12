@@ -599,13 +599,21 @@ public class ApiCabinetController {
     private TeamResponse withTeamProgress(TeamResponse response, LocalDate selectedDate, LocalDate selectedMonth, boolean visible) {
         if (!visible || response == null || !staffDailyProgressService.progressEnabled()) return response;
         ManagerWorkerProgressContext context = managerWorkerProgressContext(response.managers());
+        var now = java.time.LocalDateTime.now(CABINET_ZONE);
+        LocalDate monthStart = selectedMonth(selectedMonth, selectedDate);
+        var activity = performanceMetrics.recordSegment("cabinet.team", "manager-activity", () ->
+                managerActivityMetricsService.forTeam(
+                        response.managers().stream().map(ManagersListDTO::getId).filter(Objects::nonNull).toList(),
+                        selectedDate, selectedDate.equals(now.toLocalDate()) ? now : selectedDate.plusDays(1).atStartOfDay(),
+                        monthStart, monthStart.equals(now.toLocalDate().withDayOfMonth(1)) ? now : monthStart.plusMonths(1).atStartOfDay()));
         performanceMetrics.recordSegment("cabinet.team", "daily-progress",
-                () -> withTeamDailyProgressInternal(response, selectedDate, context));
+                () -> withTeamDailyProgressInternal(response, selectedDate, context, activity.daily()));
         return performanceMetrics.recordSegment("cabinet.team", "monthly-progress",
-                () -> withTeamMonthlyProgressInternal(response, selectedMonth, context));
+                () -> withTeamMonthlyProgressInternal(response, selectedMonth, context, activity.monthly()));
     }
 
-    private TeamResponse withTeamDailyProgressInternal(TeamResponse response, LocalDate selectedDate, ManagerWorkerProgressContext managerWorkerContext) {
+    private TeamResponse withTeamDailyProgressInternal(TeamResponse response, LocalDate selectedDate, ManagerWorkerProgressContext managerWorkerContext,
+            Map<Long, ManagerActivityMetricsService.DailyAndAverage> activityByManager) {
         Map<Long, StaffDailyProgressService.WorkerProgressSubject> workerSubjectsById = new LinkedHashMap<>(managerWorkerContext.workerSubjectsById());
 
         response.workers().stream()
@@ -633,9 +641,6 @@ public class ApiCabinetController {
         response.workers().forEach(worker -> worker.setAverageDailyActiveWorkSeconds(
                 workerAverageDailyActivity.getOrDefault(worker.getId(), 0L)
         ));
-        var activityByManager = managerActivityMetricsService.dailyAndMonthAverages(
-                response.managers().stream().map(ManagersListDTO::getId).filter(Objects::nonNull).toList(), selectedDate,
-                selectedDate.equals(LocalDate.now(CABINET_ZONE)) ? java.time.LocalDateTime.now(CABINET_ZONE) : selectedDate.plusDays(1).atStartOfDay());
         response.managers().forEach(manager -> {
             List<DailyWorkProgressResponse> teamProgress = managerWorkerContext.workerIdsByManagerId()
                     .getOrDefault(manager.getId(), List.of()).stream()
@@ -660,7 +665,8 @@ public class ApiCabinetController {
         return response;
     }
 
-    private TeamResponse withTeamMonthlyProgressInternal(TeamResponse response, LocalDate selectedMonth, ManagerWorkerProgressContext managerWorkerContext) {
+    private TeamResponse withTeamMonthlyProgressInternal(TeamResponse response, LocalDate selectedMonth, ManagerWorkerProgressContext managerWorkerContext,
+            Map<Long, ManagerActivityMetricsService.Metrics> activityByManager) {
         LocalDate monthStart = selectedMonth(selectedMonth, response.date());
         Map<Long, StaffDailyProgressService.WorkerProgressSubject> workerSubjectsById = new LinkedHashMap<>(managerWorkerContext.workerSubjectsById());
 
@@ -681,11 +687,6 @@ public class ApiCabinetController {
         response.workers().forEach(worker ->
                 worker.setMonthlyProgress(workerProgress.get(worker.getId()))
         );
-        LocalDate currentMonth = LocalDate.now(CABINET_ZONE).withDayOfMonth(1);
-        java.time.LocalDateTime activityUntil = monthStart.equals(currentMonth)
-                ? java.time.LocalDateTime.now(CABINET_ZONE) : monthStart.plusMonths(1).atStartOfDay();
-        var activityByManager = managerActivityMetricsService.calculateForManagers(
-                response.managers().stream().map(ManagersListDTO::getId).filter(Objects::nonNull).toList(), monthStart.atStartOfDay(), activityUntil);
         response.managers().forEach(manager -> {
             List<DailyWorkProgressResponse> teamProgress = managerWorkerContext.workerIdsByManagerId()
                     .getOrDefault(manager.getId(), List.of()).stream()

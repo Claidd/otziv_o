@@ -7,15 +7,15 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 
 public interface ManagerSiteActivityEventRepository extends JpaRepository<ManagerSiteActivityEvent, Long> {
-    interface ActivityPoint {
-        Long getManagerId();
-        LocalDateTime getOccurredAt();
-        String getActivityType();
+    record ActivityPoint(Long managerId, LocalDateTime occurredAt, String activityType) {
+        public Long getManagerId() { return managerId; }
+        public LocalDateTime getOccurredAt() { return occurredAt; }
+        public String getActivityType() { return activityType; }
     }
     @org.springframework.data.jpa.repository.Query("""
-        SELECT e.manager.id AS managerId, e.occurredAt AS occurredAt, e.activityType AS activityType
+        SELECT new com.hunt.otziv.manager_daily_summary.repository.ManagerSiteActivityEventRepository$ActivityPoint(
+            e.manager.id, e.occurredAt, e.activityType)
         FROM ManagerSiteActivityEvent e WHERE e.manager.id IN :ids AND e.occurredAt BETWEEN :from AND :to
-        ORDER BY e.occurredAt
         """)
     List<ActivityPoint> pointsForManagers(@org.springframework.data.repository.query.Param("ids") java.util.Collection<Long> ids,
             @org.springframework.data.repository.query.Param("from") LocalDateTime from,

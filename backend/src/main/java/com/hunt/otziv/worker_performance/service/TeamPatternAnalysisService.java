@@ -28,7 +28,38 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class TeamPatternAnalysisService {
 
+    static final String PUBLICATIONS_SQL = """
+                SELECT publication.worker_id,
+                       DATE(publication.published_at) AS metric_date,
+                       COUNT(*) AS metric_count
+                FROM (
+                    SELECT r.review_worker AS worker_id, r.review_published_marked_at AS published_at
+                    FROM reviews r
+                    WHERE r.review_worker IN (:workerIds) AND r.review_publish = 1
+                      AND r.review_published_marked_at >= :from AND r.review_published_marked_at < :to
+                    UNION ALL
+                    SELECT r.review_worker, TIMESTAMP(r.review_changed)
+                    FROM reviews r
+                    WHERE r.review_worker IN (:workerIds) AND r.review_publish = 1
+                      AND r.review_published_marked_at IS NULL
+                      AND r.review_changed >= :from AND r.review_changed < :to
+                ) publication
+                GROUP BY publication.worker_id, DATE(publication.published_at)
+                """;
+
     private static final ZoneId ANALYSIS_ZONE = ZoneId.of("Asia/Irkutsk");
+    static final String BLOCKED_ACCOUNTS_SQL = """
+            SELECT first_block.user_id, DATE(first_block.first_at) AS metric_date, COUNT(*) AS metric_count
+            FROM (
+                SELECT e.worker_user_id AS user_id, MIN(e.created_at) AS first_at,
+                       SUBSTRING_INDEX(SUBSTRING_INDEX(e.details, 'botId=', -1), ';', 1) AS bot_id
+                FROM worker_activity_events e
+                WHERE e.worker_user_id IN (:userIds) AND e.created_at >= :from AND e.created_at < :to
+                  AND e.action = 'REVIEW_BOT_DEACTIVATE'
+                GROUP BY e.worker_user_id, SUBSTRING_INDEX(SUBSTRING_INDEX(e.details, 'botId=', -1), ';', 1)
+            ) first_block
+            GROUP BY first_block.user_id, DATE(first_block.first_at)
+            """;
     private static final int MIN_WORKER_PUBLICATIONS = 30;
     private static final int MIN_CORRELATION_WORKERS = 8;
     private static final long MIN_TEAM_PUBLICATIONS = 200;
@@ -165,17 +196,7 @@ public class TeamPatternAnalysisService {
                 "workerIds",
                 subjects.stream().map(WorkerPatternSubject::workerId).distinct().toList()
         );
-        jdbc.queryForList("""
-                SELECT r.review_worker AS worker_id,
-                       DATE(COALESCE(r.review_published_marked_at, TIMESTAMP(r.review_changed))) AS metric_date,
-                       COUNT(*) AS metric_count
-                FROM reviews r
-                WHERE r.review_worker IN (:workerIds)
-                  AND r.review_publish = 1
-                  AND COALESCE(r.review_published_marked_at, TIMESTAMP(r.review_changed)) >= :from
-                  AND COALESCE(r.review_published_marked_at, TIMESTAMP(r.review_changed)) < :to
-                GROUP BY r.review_worker, DATE(COALESCE(r.review_published_marked_at, TIMESTAMP(r.review_changed)))
-                """, params).forEach(row -> {
+        jdbc.queryForList(PUBLICATIONS_SQL, params).forEach(row -> {
             Long userId = userIdByWorkerId.get(longValue(row.get("worker_id")));
             LocalDate date = dateValue(row.get("metric_date"));
             long count = longValue(row.get("metric_count"));
@@ -195,25 +216,15 @@ public class TeamPatternAnalysisService {
             Map<WorkerDayKey, WorkerDay.Mutable> days
     ) {
         MapSqlParameterSource params = baseParams(subjects, from, to);
-        jdbc.queryForList("""
-                SELECT e.worker_user_id AS user_id,
-                       DATE(MIN(e.created_at)) AS metric_date,
-                       SUBSTRING_INDEX(SUBSTRING_INDEX(e.details, 'botId=', -1), ';', 1) AS bot_id
-                FROM worker_activity_events e
-                WHERE e.worker_user_id IN (:userIds)
-                  AND e.created_at >= :from
-                  AND e.created_at < :to
-                  AND e.action = 'REVIEW_BOT_DEACTIVATE'
-                GROUP BY e.worker_user_id,
-                         SUBSTRING_INDEX(SUBSTRING_INDEX(e.details, 'botId=', -1), ';', 1)
-                """, params).forEach(row -> {
+        jdbc.queryForList(BLOCKED_ACCOUNTS_SQL, params).forEach(row -> {
             Long userId = longValue(row.get("user_id"));
             LocalDate date = dateValue(row.get("metric_date"));
             if (!monthByUser.containsKey(userId) || date == null) {
                 return;
             }
-            monthByUser.get(userId).blockedAccounts++;
-            day(days, userId, date).blockedAccounts++;
+            long count = longValue(row.get("metric_count"));
+            monthByUser.get(userId).blockedAccounts += count;
+            day(days, userId, date).blockedAccounts += count;
         });
     }
 
