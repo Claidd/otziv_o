@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { readFileSync, mkdtempSync, writeFileSync, chmodSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -20,7 +20,8 @@ function histogram(endpoint, runtime, values, upper = '0.1', status = '2xx') {
 }
 const sample = (endpoint, runtime, value) => ({ labels: `{endpoint="${endpoint}",runtime="${runtime}"}`, value });
 const expectation = (id, values, ref = 'A', endpoint, runtime, at = '5m') => ({
-  expr: expr(id, ref, endpoint, runtime), eval_time: at, exp_samples: values,
+  expr: expr(id, ref, endpoint, runtime), eval_time: at,
+  exp_samples: [4, 5].includes(id) ? values.map(s => ({ ...s, labels: '{}' })) : values,
 });
 
 test('top cards expose estimates and the matching sample count without stale or green SLO fallback', () => {
@@ -32,6 +33,7 @@ test('top cards expose estimates and the matching sample count without stale or 
     assert.equal(p.fieldConfig.defaults.color.fixedColor, 'blue');
     assert.ok(p.targets.every(t => t.instant && !t.range));
     assert.match(p.targets.find(t => t.refId === 'B').legendFormat, /^N ≈/);
+    assert.deepEqual(p.fieldConfig.overrides[0].matcher, { id: 'byFrameRefID', options: 'B' });
     assert.equal(p.fieldConfig.overrides[0].properties.find(p => p.id === 'unit').value, 'short');
   }
   assert.match(panel(200).options.content, /Малое N/);
@@ -79,11 +81,19 @@ test('actual dashboard PromQL keeps sparse observations, matching N, idle gaps a
       promql_expr_test: [expectation(4, [sample('worker.new', '300', 0.095)]),
         expectation(5, [sample('worker.new', '300', 0.099)]),
         expectation(5, [sample('worker.new', '300', 1500)], 'B')] },
+    { name: 'equal worst estimates show the smaller N without nondeterministic topk pairing', interval: '1m',
+      input_series: [...histogram('manager.orders', '100', '0+100x5'), ...sparse.map(s => ({ ...s, series: s.series.replaceAll('runtime="100"', 'runtime="200"') }))],
+      promql_expr_test: [expectation(4, [sample('', '', 0.095)]), expectation(5, [sample('', '', 0.099)]),
+        expectation(4, [sample('', '', 1)], 'B'), expectation(5, [sample('', '', 1)], 'B')] },
   ];
   const dir = mkdtempSync(join(tmpdir(), 'otziv-dashboard-promql-'));
   try {
     // JSON is a YAML subset. promtool executes the expressions from the actual dashboard.
     writeFileSync(join(dir, 'tests.yml'), JSON.stringify({ rule_files: [], evaluation_interval: '1m', fuzzy_compare: true, tests }));
+    // Only synthetic public test data; allow the unprivileged image UID to read
+    // this owned fixture on Linux, where mkdtemp defaults to owner-only mode.
+    chmodSync(dir, 0o755);
+    chmodSync(join(dir, 'tests.yml'), 0o644);
     const image = 'ghcr.io/claidd/otziv-security@sha256:508c918889067ea070d3da34913a81bd6df8092fb18977ca339e2367e3d77692';
     const run = spawnSync('docker', ['run', '--rm', '--network', 'none', '--read-only', '--tmpfs', '/tmp:rw,noexec,nosuid,size=128m', '--cap-drop', 'ALL',
       '--security-opt', 'no-new-privileges:true', '--mount', `type=bind,source=${dir},target=/fixture,readonly`,

@@ -6,7 +6,9 @@ Sparse traffic is useful diagnostic data: it must not be hidden behind fixed
 100/1000-request display thresholds.
 
 The overview shows the worst endpoint/runtime estimate and **N for that same
-endpoint/runtime**, not the sum of all traffic. Both queries use the same filters,
+endpoint/runtime**, not the sum of all traffic. When maximum estimates tie, show
+the smaller matching N; independently evaluated `topk(1, ...)` queries must not
+pair an estimate with an arbitrary tied endpoint's larger sample. Both queries use the same filters,
 window and evaluation time. `increase` extrapolates to the range boundaries, so N
 is explicitly approximate and can be fractional. The neutral color and visible
 note avoid treating a small observed sample as evidence that the latency SLO is met.
@@ -27,7 +29,8 @@ Dashboard-only rollout: after the exact main revision passes the existing releas
 CI gate, retain a copy/hash of the currently provisioned JSON outside the watched
 directory and atomically replace only this dashboard JSON in the existing Grafana
 directory bind mount. Verify the mounted hash, the Grafana API model and the live
-query results. Record the dashboard revision separately from the running app
+query results. Use the authenticated Grafana admin provisioning reload API when
+filesystem notifications do not arrive through the bind mount. Record the dashboard revision separately from the running app
 revision. Grafana file provisioning reloads the dashboard; application images,
 database state and authentication settings do not need a restart or change.
 If provisioning does not load the file, restore the retained JSON rather than
