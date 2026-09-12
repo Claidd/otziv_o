@@ -102,18 +102,11 @@ class ManagerActivityMetricsServiceTest {
     }
 
     private ManagerSiteActivityEventRepository.ActivityPoint point(long id, LocalDateTime at, String type) {
-        return new ManagerSiteActivityEventRepository.ActivityPoint() {
-            public Long getManagerId() { return id; }
-            public LocalDateTime getOccurredAt() { return at; }
-            public String getActivityType() { return type; }
-        };
+        return new ManagerSiteActivityEventRepository.ActivityPoint(id, at, type);
     }
 
     private ClientChatMessageRepository.ManagerMessagePoint messagePoint(long id, LocalDateTime at) {
-        return new ClientChatMessageRepository.ManagerMessagePoint() {
-            public Long getManagerId() { return id; }
-            public LocalDateTime getMessageAt() { return at; }
-        };
+        return new ClientChatMessageRepository.ManagerMessagePoint(id, at);
     }
 
     @Test

@@ -48,6 +48,18 @@ public class TeamPatternAnalysisService {
                 """;
 
     private static final ZoneId ANALYSIS_ZONE = ZoneId.of("Asia/Irkutsk");
+    static final String BLOCKED_ACCOUNTS_SQL = """
+            SELECT first_block.user_id, DATE(first_block.first_at) AS metric_date, COUNT(*) AS metric_count
+            FROM (
+                SELECT e.worker_user_id AS user_id, MIN(e.created_at) AS first_at,
+                       SUBSTRING_INDEX(SUBSTRING_INDEX(e.details, 'botId=', -1), ';', 1) AS bot_id
+                FROM worker_activity_events e
+                WHERE e.worker_user_id IN (:userIds) AND e.created_at >= :from AND e.created_at < :to
+                  AND e.action = 'REVIEW_BOT_DEACTIVATE'
+                GROUP BY e.worker_user_id, SUBSTRING_INDEX(SUBSTRING_INDEX(e.details, 'botId=', -1), ';', 1)
+            ) first_block
+            GROUP BY first_block.user_id, DATE(first_block.first_at)
+            """;
     private static final int MIN_WORKER_PUBLICATIONS = 30;
     private static final int MIN_CORRELATION_WORKERS = 8;
     private static final long MIN_TEAM_PUBLICATIONS = 200;
@@ -204,25 +216,15 @@ public class TeamPatternAnalysisService {
             Map<WorkerDayKey, WorkerDay.Mutable> days
     ) {
         MapSqlParameterSource params = baseParams(subjects, from, to);
-        jdbc.queryForList("""
-                SELECT e.worker_user_id AS user_id,
-                       DATE(MIN(e.created_at)) AS metric_date,
-                       SUBSTRING_INDEX(SUBSTRING_INDEX(e.details, 'botId=', -1), ';', 1) AS bot_id
-                FROM worker_activity_events e
-                WHERE e.worker_user_id IN (:userIds)
-                  AND e.created_at >= :from
-                  AND e.created_at < :to
-                  AND e.action = 'REVIEW_BOT_DEACTIVATE'
-                GROUP BY e.worker_user_id,
-                         SUBSTRING_INDEX(SUBSTRING_INDEX(e.details, 'botId=', -1), ';', 1)
-                """, params).forEach(row -> {
+        jdbc.queryForList(BLOCKED_ACCOUNTS_SQL, params).forEach(row -> {
             Long userId = longValue(row.get("user_id"));
             LocalDate date = dateValue(row.get("metric_date"));
             if (!monthByUser.containsKey(userId) || date == null) {
                 return;
             }
-            monthByUser.get(userId).blockedAccounts++;
-            day(days, userId, date).blockedAccounts++;
+            long count = longValue(row.get("metric_count"));
+            monthByUser.get(userId).blockedAccounts += count;
+            day(days, userId, date).blockedAccounts += count;
         });
     }
 

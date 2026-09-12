@@ -47,17 +47,17 @@ public interface ClientChatMessageRepository extends JpaRepository<ClientChatMes
             @Param("to") LocalDateTime to
     );
 
-    interface ManagerMessagePoint {
-        Long getManagerId();
-        LocalDateTime getMessageAt();
+    record ManagerMessagePoint(Long managerId, LocalDateTime messageAt) {
+        public Long getManagerId() { return managerId; }
+        public LocalDateTime getMessageAt() { return messageAt; }
     }
 
     @Query("""
-        SELECT manager.id AS managerId, message.messageAt AS messageAt
+        SELECT new com.hunt.otziv.client_chat_control.repository.ClientChatMessageRepository$ManagerMessagePoint(
+            manager.id, message.messageAt)
         FROM Manager manager JOIN ClientChatMessage message ON message.actorUser = manager.user
         WHERE manager.id IN :ids AND message.senderRole = com.hunt.otziv.client_chat_control.model.ClientChatSenderRole.STAFF
           AND message.messageAt >= :from AND message.messageAt < :to
-        ORDER BY message.messageAt, message.id
         """)
     List<ManagerMessagePoint> staffPointsForManagers(@Param("ids") java.util.Collection<Long> ids,
             @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
