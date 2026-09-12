@@ -84,7 +84,9 @@ class TeamPatternAnalysisServiceTest {
             return List.of();
         });
 
-        TeamPatternAnalysisResponse response = new TeamPatternAnalysisService(jdbc).analyze(
+        var snapshots = mock(TeamPatternReadSnapshots.class);
+        var service = new TeamPatternAnalysisService(jdbc, snapshots);
+        TeamPatternAnalysisResponse response = service.analyze(
                 subjects,
                 LocalDate.of(2026, 7, 1)
         );
@@ -104,6 +106,18 @@ class TeamPatternAnalysisServiceTest {
                         && insight.title().contains("задачи восстановления")
         ));
         assertEquals(40.0, response.workers().get(108L).blockRate(), 0.01);
+
+        // The derivative path must preserve every insight, rate and worker row.
+        var generatedAt = java.time.LocalDateTime.of(2026, 8, 1, 0, 0);
+        when(snapshots.captureTime()).thenReturn(generatedAt);
+        org.mockito.Mockito.doAnswer(call -> {
+            Map<Long, TeamPatternReadSnapshots.Facts> values = call.getArgument(5);
+            when(snapshots.fresh(any(), any(), any(), any())).thenReturn(java.util.Optional.of(
+                    new TeamPatternReadSnapshots.Batch(values, generatedAt.toInstant(java.time.ZoneOffset.UTC))));
+            return null;
+        }).when(snapshots).save(any(), any(), any(), any(), any(), any());
+        service.rebuildSnapshots(subjects, LocalDate.of(2026, 7, 1));
+        assertEquals(response, service.analyze(subjects, LocalDate.of(2026, 7, 1)).withGeneratedAt(null));
     }
 
     @Test
@@ -151,7 +165,7 @@ class TeamPatternAnalysisServiceTest {
             return List.of();
         });
 
-        TeamPatternAnalysisResponse response = new TeamPatternAnalysisService(jdbc).analyze(
+        TeamPatternAnalysisResponse response = new TeamPatternAnalysisService(jdbc, mock(TeamPatternReadSnapshots.class)).analyze(
                 subjects,
                 LocalDate.of(2026, 7, 1)
         );
@@ -174,7 +188,7 @@ class TeamPatternAnalysisServiceTest {
         NamedParameterJdbcTemplate jdbc = mock(NamedParameterJdbcTemplate.class);
         when(jdbc.queryForList(anyString(), any(MapSqlParameterSource.class))).thenReturn(List.of());
 
-        TeamPatternAnalysisResponse response = new TeamPatternAnalysisService(jdbc).analyze(
+        TeamPatternAnalysisResponse response = new TeamPatternAnalysisService(jdbc, mock(TeamPatternReadSnapshots.class)).analyze(
                 List.of(new TeamPatternAnalysisService.WorkerPatternSubject(1L, 101L, "worker")),
                 LocalDate.of(2026, 7, 1)
         );
@@ -209,7 +223,7 @@ class TeamPatternAnalysisServiceTest {
             return List.of();
         });
 
-        TeamPatternAnalysisResponse response = new TeamPatternAnalysisService(jdbc).analyze(
+        TeamPatternAnalysisResponse response = new TeamPatternAnalysisService(jdbc, mock(TeamPatternReadSnapshots.class)).analyze(
                 List.of(new TeamPatternAnalysisService.WorkerPatternSubject(1L, 101L, "worker")),
                 LocalDate.of(2026, 7, 1)
         );

@@ -1,5 +1,5 @@
 import { Component, OnDestroy, signal } from '@angular/core';
-import { DecimalPipe } from '@angular/common';
+import { DatePipe, DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import {
@@ -62,7 +62,7 @@ type TeamSection = {
 
 @Component({
   selector: 'app-team',
-  imports: [AdminLayoutComponent, DailyProgressStripComponent, DecimalPipe, FormsModule, LoadErrorCardComponent, RouterLink],
+  imports: [AdminLayoutComponent, DailyProgressStripComponent, DatePipe, DecimalPipe, FormsModule, LoadErrorCardComponent, RouterLink],
   templateUrl: './team.component.html',
   styleUrl: './team.component.scss'
 })

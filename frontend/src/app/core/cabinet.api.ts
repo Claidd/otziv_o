@@ -225,6 +225,7 @@ export interface WorkerPatternAnalysis {
 }
 
 export interface TeamPatternAnalysis {
+  generatedAt?: string | null;
   visible: boolean;
   from: string;
   to: string;

@@ -921,7 +921,13 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
     @Override
     @Transactional(readOnly = true)
     public Map<Long, BigDecimal> getPayableSums(Collection<Order> orders) {
-        if (orders == null || orders.isEmpty()) return Map.of();
+        return prepareOrderAmounts(orders).payableSums();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public OrderAmounts prepareOrderAmounts(Collection<Order> orders) {
+        if (orders == null || orders.isEmpty()) return new OrderAmounts(Map.of(), Map.of());
         List<Long> ids = orders.stream().filter(Objects::nonNull).map(Order::getId)
                 .filter(Objects::nonNull).distinct().toList();
         Map<Long, BadReviewTaskSummary> summaries = getSummaryByOrderIds(ids);
@@ -936,7 +942,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
                 // A missing entry is recalculated by getPayableSum; it is never treated as zero.
             }
         }
-        return Map.copyOf(amounts);
+        return new OrderAmounts(amounts, summaries);
     }
 
     @Override

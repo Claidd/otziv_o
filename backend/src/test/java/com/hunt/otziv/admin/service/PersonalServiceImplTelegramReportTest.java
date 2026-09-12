@@ -12,7 +12,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class PersonalServiceImplTelegramReportTest {
 
     private final PersonalServiceImpl service = new PersonalServiceImpl(
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null
+            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null
     );
 
     @Test

@@ -28,6 +28,23 @@ class BoardIdentityReadScopeTest {
     @Mock WorkerRepository workers;
     @InjectMocks UserServiceImpl userService;
 
+    @Test void scopeFingerprintIsFreshAfterScopeExitAndWritesInvalidateIt() {
+        var current = new AtomicReference<>("initial-membership");
+        try (var scope = BoardIdentityReadScope.open()) {
+            assertThat(com.hunt.otziv.u_users.readmodel.BoardIdentityReadContext.fingerprint(current::get)).isEqualTo("initial-membership");
+            current.set("updated-membership");
+            assertThat(com.hunt.otziv.u_users.readmodel.BoardIdentityReadContext.fingerprint(current::get)).isEqualTo("initial-membership");
+            TransactionSynchronizationManager.setActualTransactionActive(true);
+            TransactionSynchronizationManager.setCurrentTransactionReadOnly(false);
+            try {
+                assertThat(com.hunt.otziv.u_users.readmodel.BoardIdentityReadContext.fingerprint(current::get)).isEqualTo("updated-membership");
+            } finally { TransactionSynchronizationManager.setActualTransactionActive(false); }
+            assertThat(com.hunt.otziv.u_users.readmodel.BoardIdentityReadContext.fingerprint(current::get)).isEqualTo("updated-membership");
+        }
+        current.set("revoked-membership");
+        assertThat(com.hunt.otziv.u_users.readmodel.BoardIdentityReadContext.fingerprint(current::get)).isEqualTo("revoked-membership");
+    }
+
     @Test void deactivationAndDifferentUsersAreVisibleOnTheNextAssembly() {
         User active = new User(); active.setActive(true);
         User revoked = new User(); revoked.setActive(false);

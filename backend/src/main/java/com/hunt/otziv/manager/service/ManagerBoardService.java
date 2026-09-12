@@ -183,8 +183,10 @@ public class ManagerBoardService {
             Page<OrderDTOList> orders = SECTION_ORDERS.equals(normalizedSection)
                     ? segment("manager.board", "orders", () -> loadOrders(principal, authentication, trimmedKeyword, normalizedStatus, safePageNumber, safePageSize, companyId, managerFilter, managerControlOverdue, normalizedSortDirection, rawOrderCounts))
                     : emptyOrderPage(safePageNumber, safePageSize);
-            segment("manager.board", "bad-review-status", () -> { badReviewTaskService.enrichOrderList(orders.getContent()); return null; });
-            segment("manager.board", "client-message-status", () -> { clientMessageOrderStatusService.enrichOrderList(orders.getContent()); return null; });
+            // Common invoices already aggregate their member orders; their synthetic IDs are not order IDs.
+            List<OrderDTOList> ordinaryOrders = orders.getContent().stream().filter(order -> !order.isCommonInvoice()).toList();
+            segment("manager.board", "bad-review-status", () -> { badReviewTaskService.enrichOrderList(ordinaryOrders); return null; });
+            segment("manager.board", "client-message-status", () -> { clientMessageOrderStatusService.enrichOrderList(ordinaryOrders); return null; });
 
             return new ManagerBoardResponse(
                     normalizedSection,

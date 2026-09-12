@@ -69,6 +69,7 @@ public class PersonalServiceImpl implements PersonalService {
     private final BadReviewTaskService badReviewTaskService;
     private final ReviewRecoveryTaskService reviewRecoveryTaskService;
     private final AnalyticsSalarySourceService analyticsSalarySourceService;
+    private final com.hunt.otziv.u_users.api.TeamDirectoryReader teamDirectory;
 
     private static final String ROLE_ADMIN = "ROLE_ADMIN";
     private static final String ROLE_OWNER = "ROLE_OWNER";
@@ -681,16 +682,16 @@ public class PersonalServiceImpl implements PersonalService {
 
     //    ========================================== PERSONAL LIST START ==================================================
     public List<ManagersListDTO> getManagers(){
-        return managerService.getAllManagers().stream().map(this::toManagersListDTO).collect(Collectors.toList());
+        return teamDirectory.allActive(com.hunt.otziv.u_users.api.TeamDirectoryReader.Role.MANAGER).stream().map(this::toManagersListDTO).toList();
     }
     public List<MarketologsListDTO> getMarketologs(){
-        return marketologService.getAllMarketologs().stream().map(this::toMarketologsListDTO).collect(Collectors.toList());
+        return teamDirectory.allActive(com.hunt.otziv.u_users.api.TeamDirectoryReader.Role.MARKETOLOG).stream().map(this::toMarketologsListDTO).toList();
     }
     public List<WorkersListDTO> gerWorkers(){
-        return workerService.getAllWorkers().stream().map(this::toWorkersListDTO).collect(Collectors.toList());
+        return teamDirectory.allActive(com.hunt.otziv.u_users.api.TeamDirectoryReader.Role.WORKER).stream().map(this::toWorkersListDTO).toList();
     }
     public List<OperatorsListDTO> gerOperators(){
-        return operatorService.getAllOperators().stream().map(this::toOperatorsListDTO).collect(Collectors.toList());
+        return teamDirectory.allActive(com.hunt.otziv.u_users.api.TeamDirectoryReader.Role.OPERATOR).stream().map(this::toOperatorsListDTO).toList();
     }
 
     public List<ManagersListDTO> getManagersToManager(Principal principal){
@@ -700,10 +701,12 @@ public class PersonalServiceImpl implements PersonalService {
         return marketologService.getAllMarketologs().stream().map(this::toMarketologsListDTO).collect(Collectors.toList());
     }
     public List<WorkersListDTO> gerWorkersToManager(Manager manager){
-        return workerService.getAllWorkersToManager(manager).stream().map(this::toWorkersListDTO).collect(Collectors.toList());
+        return manager == null || manager.getId() == null ? List.of() : teamDirectory.forManagers(
+                com.hunt.otziv.u_users.api.TeamDirectoryReader.Role.WORKER, List.of(manager.getId())).stream().map(this::toWorkersListDTO).toList();
     }
     public List<OperatorsListDTO> gerOperatorsToManager(Manager manager){
-        return operatorService.getAllOperatorsToManager(manager).stream().map(this::toOperatorsListDTO).collect(Collectors.toList());
+        return manager == null || manager.getId() == null ? List.of() : teamDirectory.forManagers(
+                com.hunt.otziv.u_users.api.TeamDirectoryReader.Role.OPERATOR, List.of(manager.getId())).stream().map(this::toOperatorsListDTO).toList();
     }
 
     @Override
@@ -1541,6 +1544,26 @@ public class PersonalServiceImpl implements PersonalService {
                 .login(manager.getUser().getUsername())
                 .imageId(imageId)
                 .build();
+    }
+
+    private ManagersListDTO toManagersListDTO(com.hunt.otziv.u_users.api.TeamDirectoryReader.Member member) {
+        return ManagersListDTO.builder().id(member.id()).userId(member.userId()).fio(member.fio())
+                .login(member.login()).imageId(member.imageId()).build();
+    }
+
+    private MarketologsListDTO toMarketologsListDTO(com.hunt.otziv.u_users.api.TeamDirectoryReader.Member member) {
+        return MarketologsListDTO.builder().id(member.id()).userId(member.userId()).fio(member.fio())
+                .login(member.login()).imageId(member.imageId()).build();
+    }
+
+    private WorkersListDTO toWorkersListDTO(com.hunt.otziv.u_users.api.TeamDirectoryReader.Member member) {
+        return WorkersListDTO.builder().id(member.id()).userId(member.userId()).fio(member.fio())
+                .login(member.login()).imageId(member.imageId()).acceptsCompanyTransfers(member.acceptsCompanyTransfers()).build();
+    }
+
+    private OperatorsListDTO toOperatorsListDTO(com.hunt.otziv.u_users.api.TeamDirectoryReader.Member member) {
+        return OperatorsListDTO.builder().id(member.id()).userId(member.userId()).fio(member.fio())
+                .login(member.login()).imageId(member.imageId()).build();
     }
 
     private MarketologsListDTO toMarketologsListDTO(Marketolog marketolog){

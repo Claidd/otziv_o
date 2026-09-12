@@ -267,7 +267,7 @@ public class ApiCabinetController {
             @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate month,
             @RequestParam(value = "refresh", defaultValue = "false") boolean refresh
     ) {
-        return performanceMetrics.recordEndpoint("cabinet.team", () -> {
+        return performanceMetrics.recordEndpoint("cabinet.team", () -> withIdentityReads(() -> {
             LocalDate selectedDate = selectedDate(date);
             LocalDate selectedMonth = selectedMonth(month, selectedDate);
             String role = primaryRole(authentication);
@@ -283,7 +283,7 @@ public class ApiCabinetController {
                                 () -> withTeamInsights(team, selectedDate, selectedMonth));
                     }
             );
-        });
+        }));
     }
 
     private TeamResponse teamResponse(
@@ -351,7 +351,7 @@ public class ApiCabinetController {
             @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date,
             @RequestParam(value = "refresh", defaultValue = "false") boolean refresh
     ) {
-        return performanceMetrics.recordEndpoint("cabinet.score", () -> {
+        return performanceMetrics.recordEndpoint("cabinet.score", () -> withIdentityReads(() -> {
             LocalDate selectedDate = selectedDate(date);
             boolean financeVisible = hasAnyRole(authentication, "ROLE_ADMIN", "ROLE_OWNER");
             boolean managerPerformanceVisible = financeVisible;
@@ -362,7 +362,8 @@ public class ApiCabinetController {
                     refresh,
                     () -> {
                         Map<Long, ManagerPerformanceScoreResponse> managerPerformanceByUserId = managerPerformanceVisible
-                                ? managerPerformanceService.score(selectedDate).stream()
+                                ? performanceMetrics.recordSegment("cabinet.score", "manager-performance",
+                                        () -> managerPerformanceService.score(selectedDate)).stream()
                                 .filter(item -> item.managerUserId() != null)
                                 .collect(Collectors.toMap(
                                         ManagerPerformanceScoreResponse::managerUserId,
@@ -370,7 +371,8 @@ public class ApiCabinetController {
                                         (left, right) -> left
                                 ))
                                 : Map.of();
-                        Map<String, List<ScoreUserResponse>> groupedUsers = scoreRows(selectedDate).stream()
+                        Map<String, List<ScoreUserResponse>> groupedUsers = performanceMetrics.recordSegment(
+                                "cabinet.score", "score-rows", () -> scoreRows(selectedDate)).stream()
                                 .sorted(scoreComparator(financeVisible, managerPerformanceByUserId))
                                 .map(user -> ScoreUserResponse.from(user, financeVisible, managerPerformanceByUserId.get(user.getUserId())))
                                 .collect(Collectors.groupingBy(
@@ -394,7 +396,8 @@ public class ApiCabinetController {
                     }
             );
             List<ContractorPaymentAdminSummaryResponse> contractorPayments = financeVisible
-                    ? contractorPaymentVisibilityService.adminSummary(selectedDate)
+                    ? performanceMetrics.recordSegment("cabinet.score", "financial-summary",
+                            () -> contractorPaymentVisibilityService.adminSummary(selectedDate))
                     : List.of();
             return new ScoreResponse(
                     cachedScore.date(),
@@ -404,7 +407,7 @@ public class ApiCabinetController {
                     contractorPayments,
                     cachedScore.groups()
             );
-        });
+        }));
     }
 
     @GetMapping("/analyse")
@@ -478,8 +481,16 @@ public class ApiCabinetController {
             cache.evict(scopedKey);
         }
 
-        return performanceMetrics.recordSegment("cache." + cacheName, refresh ? "refresh" : "get",
+        T value = performanceMetrics.recordSegment("cache." + cacheName, refresh ? "refresh" : "get",
                 () -> cache.get(scopedKey, () -> performanceMetrics.recordSegment("cache." + cacheName, "load", valueLoader)));
+        if (value instanceof TeamResponse team && team.patterns() != null && team.patterns().generatedAt() != null
+                && team.patterns().generatedAt().isBefore(java.time.Instant.now().minusSeconds(
+                        com.hunt.otziv.worker_performance.service.TeamPatternReadSnapshots.MAX_AGE_SECONDS))) {
+            // The outer screen cache must not extend the historical projection's freshness budget.
+            cache.evict(scopedKey);
+            return cache.get(scopedKey, () -> performanceMetrics.recordSegment("cache." + cacheName, "load", valueLoader));
+        }
+        return value;
     }
 
     private void evictCache(String cacheName, String key) {
@@ -589,6 +600,12 @@ public class ApiCabinetController {
         }
         return analyticsAggregateUserStatsService.buildUserStats(selectedDate, user)
                 .orElseGet(() -> personalService.getWorkerReviews(user, selectedDate));
+    }
+
+    private static <T> T withIdentityReads(java.util.function.Supplier<T> read) {
+        try (var scope = com.hunt.otziv.u_users.api.BoardIdentityReadScope.open()) {
+            return read.get();
+        }
     }
 
     private User currentUser(Principal principal) {

@@ -347,6 +347,9 @@
         <span>{{ patternPeriodLabel() }}</span>
         <strong>{{ patternConfidenceLabel(patterns.confidence) }}</strong>
         <small>{{ patterns.workerCount }} сотрудников в выборке · {{ patterns.publicationCount }} публикаций</small>
+        @if (patterns.generatedAt) {
+          <small>Данные на {{ patterns.generatedAt | date:'dd.MM HH:mm:ss':'+0800' }} (Иркутск)</small>
+        }
       </div>
 
       <div class="pattern-view-toggle" role="group" aria-label="Вид закономерностей">

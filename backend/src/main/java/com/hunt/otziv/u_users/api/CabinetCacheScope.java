@@ -17,6 +17,10 @@ public class CabinetCacheScope {
     /** Committed role/membership changes invalidate old DTO keys, including on another replica. */
     @Transactional(readOnly = true)
     public String fingerprint() {
+        return com.hunt.otziv.u_users.readmodel.BoardIdentityReadContext.fingerprint(this::loadFingerprint);
+    }
+
+    private String loadFingerprint() {
         final MessageDigest digest;
         try { digest = MessageDigest.getInstance("SHA-256"); }
         catch (NoSuchAlgorithmException impossible) { throw new IllegalStateException(impossible); }

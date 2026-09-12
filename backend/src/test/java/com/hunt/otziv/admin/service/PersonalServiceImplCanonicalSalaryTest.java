@@ -22,7 +22,7 @@ class PersonalServiceImplCanonicalSalaryTest {
         AnalyticsSalarySourceService salarySourceService = mock(AnalyticsSalarySourceService.class);
         PersonalServiceImpl service = new PersonalServiceImpl(
                 null, null, null, null, null, null, null, null,
-                null, null, null, null, null, null, null, salarySourceService
+                null, null, null, null, null, null, null, salarySourceService, null
         );
         LocalDate selectedDate = LocalDate.of(2026, 9, 2);
         User user = User.builder()

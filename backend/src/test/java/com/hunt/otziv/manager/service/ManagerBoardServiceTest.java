@@ -234,14 +234,17 @@ class ManagerBoardServiceTest {
                 .build();
         OrderDTOList firstCommon = OrderDTOList.builder()
                 .id(-101L)
+                .commonInvoice(true)
                 .status("Выставлен счет")
                 .build();
         OrderDTOList secondCommon = OrderDTOList.builder()
                 .id(-102L)
+                .commonInvoice(true)
                 .status("Выставлен счет")
                 .build();
         OrderDTOList thirdCommon = OrderDTOList.builder()
                 .id(-103L)
+                .commonInvoice(true)
                 .status("Выставлен счет")
                 .build();
 
@@ -277,8 +280,8 @@ class ManagerBoardServiceTest {
         assertEquals(2, response.orders().content().size());
         assertEquals(List.of(firstCommon, secondCommon), response.orders().content());
         assertEquals(5, response.orders().totalElements());
-        verify(badReviewTaskService).enrichOrderList(List.of(firstCommon, secondCommon));
-        verify(clientMessageOrderStatusService).enrichOrderList(List.of(firstCommon, secondCommon));
+        verify(badReviewTaskService).enrichOrderList(List.of());
+        verify(clientMessageOrderStatusService).enrichOrderList(List.of());
         verify(commonBillingService).managerBoardPage("Все", "needle", null, null, "desc", 0, 2);
         verify(commonBillingService, never())
                 .countLinkedBoardOrdersMatching(any(), any(), nullable(Long.class), nullable(Set.class));

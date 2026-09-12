@@ -267,14 +267,26 @@ public class ContractorPaymentAccountingService {
     public java.util.Map<Long, PeriodTotals> totalsForProfiles(java.util.Collection<Long> ids,
             ContractorAllocationMode mode, LocalDateTime from, LocalDateTime to) {
         if (ids.isEmpty()) return java.util.Map.of();
+        return totalsFromRows(eventRepository.summarizeProfiles(ids, mode, summaryEventTypes(mode), from, to), mode);
+    }
+
+    public Set<ContractorAllocationEventType> summaryEventTypes(ContractorAllocationMode mode) {
+        var types = EnumSet.copyOf(mode == ContractorAllocationMode.SHADOW ? SHADOW_CONFIRMED : LIVE_CONFIRMED);
+        types.addAll(RETURNED); types.addAll(CLOSED_WITHOUT_PAYMENT);
+        return Set.copyOf(types);
+    }
+
+    /** Shared financial classification for both existing batch queries and the combined admin read. */
+    public java.util.Map<Long, PeriodTotals> totalsFromRows(
+            java.util.Collection<? extends ContractorPaymentAllocationEventRepository.ProfileEventTotals> rows,
+            ContractorAllocationMode mode) {
         var confirmed = mode == ContractorAllocationMode.SHADOW ? SHADOW_CONFIRMED : LIVE_CONFIRMED;
-        var types = EnumSet.copyOf(confirmed); types.addAll(RETURNED); types.addAll(CLOSED_WITHOUT_PAYMENT);
-        var grouped = eventRepository.summarizeProfiles(ids, mode, types, from, to).stream()
+        var grouped = rows.stream()
                 .collect(java.util.stream.Collectors.groupingBy(row -> row.getProfileId()));
         var result = new java.util.HashMap<Long, PeriodTotals>();
-        grouped.forEach((id, rows) -> {
+        grouped.forEach((id, profileRows) -> {
             long gross = 0, grossMonth = 0, returned = 0, returnedMonth = 0, closed = 0, closedMonth = 0;
-            for (var row : rows) {
+            for (var row : profileRows) {
                 if (confirmed.contains(row.getType())) {
                     gross = Math.addExact(gross, row.getTotal()); grossMonth = Math.addExact(grossMonth, row.getMonth());
                 } else if (RETURNED.contains(row.getType())) {
