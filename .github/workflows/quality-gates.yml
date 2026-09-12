@@ -198,6 +198,8 @@ jobs:
           node infrastructure/scripts/security/verify-remediation-registry.mjs
       - name: Verify scenario comparison invariants
         run: node --test infrastructure/scripts/performance/compare-scenarios.test.mjs
+      - name: Verify sparse-traffic dashboard queries with Prometheus
+        run: node --test infrastructure/grafana/dashboard-queries.test.mjs
       - name: Validate opt-in monitoring overlay and required source configuration
         run: node infrastructure/monitoring/validate-compose.mjs
       - name: Verify Docker observer boundary
