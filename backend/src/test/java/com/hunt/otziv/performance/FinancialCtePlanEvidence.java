@@ -42,9 +42,15 @@ class FinancialCtePlanEvidence extends FinancialScenarioBenchmark {
         List<BoundQuery> queries = QUERIES.values().stream()
                 .filter(query -> query.sql().stripLeading().toLowerCase(Locale.ROOT).startsWith("with"))
                 .sorted(Comparator.comparing(BoundQuery::sql)).toList();
-        assertThat(queries).as("Actual WITH statements captured from service calls").hasSizeGreaterThanOrEqualTo(2);
-        assertThat(queries).anyMatch(query -> normalized(query.sql()).contains("select count(*) from board_rows"));
-        assertThat(queries).anyMatch(query -> normalized(query.sql()).contains("select invoice_id from board_rows"));
+        // The page and both counters now share one statement and one read snapshot.
+        // Require every result branch in the actual captured query, then explain that query.
+        assertThat(queries).as("One combined page and counter CTE captured from service calls").hasSize(1);
+        assertThat(normalized(queries.getFirst().sql())).contains(
+                "page_rows as (select invoice_id, updated_at from board_rows",
+                "limit ? offset ?",
+                "select 'card' as kind, invoice_id as value, updated_at as sort_at from page_rows",
+                "union all select 'total', count(*), null from board_rows",
+                "union all select 'linked', count(distinct item.order_id), null");
         List<Map<String, Object>> plans = new ArrayList<>();
         try (var connection = source.getConnection()) {
             for (BoundQuery query : queries) {
