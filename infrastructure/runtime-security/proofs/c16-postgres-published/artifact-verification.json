@@ -1,0 +1,20 @@
+[
+  {
+    "artifactId": 10296323387,
+    "name": "reviewed-publication-postgres-attempt-1",
+    "sha256": "sha256:323ad5bde4e3c4f643b767458f65dd2edcc08aa1e209bcd18e845f55817dd523",
+    "verified": true,
+    "run": 34690229481,
+    "attempt": 1,
+    "commit": "9aeab5dbce420d045411767f830b79755ae9258a"
+  },
+  {
+    "artifactId": 10297082697,
+    "name": "anonymous-download-postgres-attempt-1",
+    "sha256": "sha256:bb5ef9adaf3454220c03a9d4373c6e850bb33613ce510ee976f001fb43c20ffd",
+    "verified": true,
+    "run": 34690229481,
+    "attempt": 1,
+    "commit": "9aeab5dbce420d045411767f830b79755ae9258a"
+  }
+]

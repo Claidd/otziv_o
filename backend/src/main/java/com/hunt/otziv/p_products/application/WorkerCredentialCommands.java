@@ -31,7 +31,8 @@ import java.util.Set;
 import org.springframework.stereotype.Service;
 import static com.hunt.otziv.p_products.application.WorkerMutationDetails.*;
 
-/** Worker application commands for Credential. Existing domain transactions and best-effort audit ordering are preserved. */
+/** Credential commands commit authorization, preparation and mandatory disclosure audit
+ * before returning a secret; best-effort activity runs after releasing order locks. */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -52,6 +53,7 @@ public class WorkerCredentialCommands {
     private final WorkerAssignmentMutationGuardService assignmentMutationGuardService;
     private final CredentialRevealService credentialRevealService;
     private final WorkerReviewAccessPolicy reviewAccess;
+    private final org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     public WorkerCredentialPreparationResponse logReviewCredentialCopyClick(Long reviewId, ReviewCopyClickRequest request, WorkerOrderActor actor) {
         Authentication authentication = requireActor(actor, "ADMIN", "OWNER", "MANAGER", "WORKER");
@@ -105,92 +107,113 @@ public class WorkerCredentialCommands {
                 : null;
     }
 
-    @Transactional
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NEVER)
     public CredentialRevealResponse revealReviewCredential(Long reviewId, CredentialRevealRequest request, WorkerOrderActor actor) {
         Authentication authentication = requireActor(actor, "ADMIN", "OWNER", "MANAGER", "WORKER");
-        Principal principal = authentication;
-        ReviewCopyClickRequest source = copyRequest(request);
-        String field = normalizeReviewCopyField(source);
-        Review review = reviewService.getReviewById(reviewId);
-        if (review == null) {
-            throw new WorkerOrderCommandException(WorkerOrderCommandException.Kind.NOT_FOUND, "Отзыв не найден");
-        }
-        reviewAccess.enforceReviewSourceAccess(review, source.sourceSection(), authentication);
-        enforcePublicationSessionIfNeeded(source, principal, authentication);
+        java.util.List<Runnable> afterCommit = new java.util.ArrayList<>();
+        CredentialRevealResponse revealed = new org.springframework.transaction.support.TransactionTemplate(transactionManager).execute(status -> {
+            Principal principal = authentication;
+            ReviewCopyClickRequest source = copyRequest(request);
+            String field = normalizeReviewCopyField(source);
+            Review review = reviewService.getReviewById(reviewId);
+            if (review == null) {
+                throw new WorkerOrderCommandException(WorkerOrderCommandException.Kind.NOT_FOUND, "Отзыв не найден");
+            }
+            reviewAccess.enforceReviewSourceAccess(review, source.sourceSection(), authentication);
+            enforcePublicationSessionIfNeeded(source, principal, authentication);
 
-        CredentialRevealResponse response = credentialRevealService.revealReview(review, request, authentication);
-        boolean preparationRecorded = credentialPreparationService.recordCopy(
-                authentication,
-                review,
-                field,
-                source.sourcePage(),
-                source.sourceEntry(),
-                source.sourceSection()
-        );
-        if (credentialPreparationRequired(source) && !preparationRecorded) {
-            throw new WorkerOrderCommandException(WorkerOrderCommandException.Kind.BAD_REQUEST,
-                    "Сервер не подтвердил подготовку аккаунта. Обновите приложение и повторите копирование."
+            CredentialRevealResponse response = credentialRevealService.revealReviewInCurrentTransaction(review, request, authentication);
+            boolean preparationRecorded = credentialPreparationService.recordCopy(
+                    authentication,
+                    review,
+                    field,
+                    source.sourcePage(),
+                    source.sourceEntry(),
+                    source.sourceSection()
             );
-        }
+            if (credentialPreparationRequired(source) && !preparationRecorded) {
+                throw new WorkerOrderCommandException(WorkerOrderCommandException.Kind.BAD_REQUEST,
+                        "Сервер не подтвердил подготовку аккаунта. Обновите приложение и повторите копирование."
+                );
+            }
 
-        Order order = review.getOrderDetails() == null ? null : review.getOrderDetails().getOrder();
-        workerActivityService.recordSafely(
-                authentication,
-                "login".equals(field) ? WorkerActivityAction.REVIEW_COPY_LOGIN : WorkerActivityAction.REVIEW_COPY_PASSWORD,
-                "review",
-                reviewId,
-                order == null ? null : order.getId(),
-                reviewId,
-                "credential_reveal",
-                withSource(credentialCopyDetails(field, review.getBot()), source)
-        );
-        recordPublicationActivityIfNeeded(source, principal, authentication);
-        WorkerCredentialPreparationResponse preparation = preparationRecorded
-                ? activeCredentialPreparation(authentication, source.sourceSection())
-                : null;
-        return response.withCredentialPreparation(preparation);
+            Order order = review.getOrderDetails() == null ? null : review.getOrderDetails().getOrder();
+            afterCommit.add(credentialActivity(
+                    authentication,
+                    "login".equals(field) ? WorkerActivityAction.REVIEW_COPY_LOGIN : WorkerActivityAction.REVIEW_COPY_PASSWORD,
+                    "review",
+                    reviewId,
+                    order == null ? null : order.getId(),
+                    reviewId,
+                    "credential_reveal",
+                    withSource(credentialCopyDetails(field, review.getBot()), source)
+            ));
+            recordPublicationActivityIfNeeded(source, principal, authentication);
+            WorkerCredentialPreparationResponse preparation = preparationRecorded
+                    ? activeCredentialPreparation(authentication, source.sourceSection())
+                    : null;
+            return response.withCredentialPreparation(preparation);
+        });
+        // The order transaction has committed and released its connection here.
+        // Activity/risk recording retains its existing best-effort semantics.
+        afterCommit.forEach(Runnable::run);
+        return revealed;
     }
 
-    @Transactional
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NEVER)
     public CredentialRevealResponse revealRecoveryTaskCredential(Long taskId, CredentialRevealRequest request, WorkerOrderActor actor) {
         Authentication authentication = requireActor(actor, "ADMIN", "OWNER", "MANAGER", "WORKER");
-        workerCellularAccessService.enforceProtectedAccess(SECTION_RECOVERY, authentication);
-        assignmentMutationGuardService.assertRecoveryTask(taskId, authentication);
-        String field = normalizeReviewCopyField(copyRequest(request));
-        ReviewRecoveryTask task = reviewRecoveryTaskService.getTask(taskId);
-        CredentialRevealResponse response = credentialRevealService.revealRecoveryTask(task, request, authentication);
-        workerActivityService.recordSafely(
-                authentication,
-                "login".equals(field) ? WorkerActivityAction.REVIEW_COPY_LOGIN : WorkerActivityAction.REVIEW_COPY_PASSWORD,
-                "recovery_task",
-                task.getId(),
-                orderId(task),
-                reviewId(task),
-                SECTION_RECOVERY,
-                withSource(credentialCopyDetails(field, task.getBot()), copyRequest(request))
-        );
-        return response;
+        java.util.List<Runnable> afterCommit = new java.util.ArrayList<>();
+        CredentialRevealResponse revealed = new org.springframework.transaction.support.TransactionTemplate(transactionManager).execute(status -> {
+            workerCellularAccessService.enforceProtectedAccess(SECTION_RECOVERY, authentication);
+            assignmentMutationGuardService.assertRecoveryTask(taskId, authentication);
+            String field = normalizeReviewCopyField(copyRequest(request));
+            ReviewRecoveryTask task = reviewRecoveryTaskService.getTask(taskId);
+            CredentialRevealResponse response = credentialRevealService.revealRecoveryTaskInCurrentTransaction(task, request, authentication);
+            afterCommit.add(credentialActivity(
+                    authentication,
+                    "login".equals(field) ? WorkerActivityAction.REVIEW_COPY_LOGIN : WorkerActivityAction.REVIEW_COPY_PASSWORD,
+                    "recovery_task",
+                    task.getId(),
+                    orderId(task),
+                    reviewId(task),
+                    SECTION_RECOVERY,
+                    withSource(credentialCopyDetails(field, task.getBot()), copyRequest(request))
+            ));
+            return response;
+        });
+        // The order transaction has committed and released its connection here.
+        // Activity/risk recording retains its existing best-effort semantics.
+        afterCommit.forEach(Runnable::run);
+        return revealed;
     }
 
-    @Transactional
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NEVER)
     public CredentialRevealResponse revealBadReviewTaskCredential(Long taskId, CredentialRevealRequest request, WorkerOrderActor actor) {
         Authentication authentication = requireActor(actor, "ADMIN", "OWNER", "MANAGER", "WORKER");
-        workerCellularAccessService.enforceProtectedAccess(SECTION_BAD, authentication);
-        assignmentMutationGuardService.assertBadTask(taskId, authentication);
-        String field = normalizeReviewCopyField(copyRequest(request));
-        BadReviewTask task = badReviewTaskService.getTask(taskId);
-        CredentialRevealResponse response = credentialRevealService.revealBadReviewTask(task, request, authentication);
-        workerActivityService.recordSafely(
-                authentication,
-                "login".equals(field) ? WorkerActivityAction.REVIEW_COPY_LOGIN : WorkerActivityAction.REVIEW_COPY_PASSWORD,
-                "bad_review_task",
-                task.getId(),
-                orderId(task),
-                reviewId(task),
-                SECTION_BAD,
-                withSource(credentialCopyDetails(field, task.getBot()), copyRequest(request))
-        );
-        return response;
+        java.util.List<Runnable> afterCommit = new java.util.ArrayList<>();
+        CredentialRevealResponse revealed = new org.springframework.transaction.support.TransactionTemplate(transactionManager).execute(status -> {
+            workerCellularAccessService.enforceProtectedAccess(SECTION_BAD, authentication);
+            assignmentMutationGuardService.assertBadTask(taskId, authentication);
+            String field = normalizeReviewCopyField(copyRequest(request));
+            BadReviewTask task = badReviewTaskService.getTask(taskId);
+            CredentialRevealResponse response = credentialRevealService.revealBadReviewTaskInCurrentTransaction(task, request, authentication);
+            afterCommit.add(credentialActivity(
+                    authentication,
+                    "login".equals(field) ? WorkerActivityAction.REVIEW_COPY_LOGIN : WorkerActivityAction.REVIEW_COPY_PASSWORD,
+                    "bad_review_task",
+                    task.getId(),
+                    orderId(task),
+                    reviewId(task),
+                    SECTION_BAD,
+                    withSource(credentialCopyDetails(field, task.getBot()), copyRequest(request))
+            ));
+            return response;
+        });
+        // The order transaction has committed and released its connection here.
+        // Activity/risk recording retains its existing best-effort semantics.
+        afterCommit.forEach(Runnable::run);
+        return revealed;
     }
 
     public void logRecoveryTaskCredentialCopyClick(Long taskId, ReviewCopyClickRequest request, WorkerOrderActor actor) {
@@ -268,6 +291,13 @@ public class WorkerCredentialCommands {
                         request.sourceEntry(),
                         request.sourceSection()
                 );
+    }
+
+    /** Capture scalar audit context while entities are still attached. */
+    private Runnable credentialActivity(Authentication authentication, WorkerActivityAction action,
+            String entityType, Long entityId, Long orderId, Long reviewId, String section, String details) {
+        return () -> workerActivityService.recordSafely(authentication, action, entityType,
+                entityId, orderId, reviewId, section, details);
     }
 
     private String copyFieldLabel(String field) {

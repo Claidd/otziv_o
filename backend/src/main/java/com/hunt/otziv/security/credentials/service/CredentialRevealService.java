@@ -26,17 +26,24 @@ public class CredentialRevealService {
     private final BusinessAuditService businessAuditService;
 
     public CredentialRevealResponse revealReview(Review review, CredentialRevealRequest request) {
-        return revealReview(review, request, null, false);
+        return revealReview(review, request, null, false, false);
     }
 
     public CredentialRevealResponse revealReview(
             Review review, CredentialRevealRequest request, Authentication authentication
     ) {
-        return revealReview(review, request, authentication, true);
+        return revealReview(review, request, authentication, true, false);
+    }
+
+    @org.springframework.transaction.annotation.Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public CredentialRevealResponse revealReviewInCurrentTransaction(
+            Review review, CredentialRevealRequest request, Authentication authentication
+    ) {
+        return revealReview(review, request, authentication, true, true);
     }
 
     private CredentialRevealResponse revealReview(
-            Review review, CredentialRevealRequest request, Authentication authentication, boolean explicitActor
+            Review review, CredentialRevealRequest request, Authentication authentication, boolean explicitActor, boolean currentTransaction
     ) {
         if (review == null || review.getId() == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Отзыв не найден");
@@ -50,7 +57,7 @@ public class CredentialRevealService {
                 bot == null ? null : bot.getId(),
                 bot == null ? null : bot.getLogin(),
                 bot == null ? null : bot.getPassword(),
-                request, authentication, explicitActor
+                request, authentication, explicitActor, currentTransaction
         );
     }
 
@@ -58,17 +65,24 @@ public class CredentialRevealService {
             BadReviewTask task,
             CredentialRevealRequest request
     ) {
-        return revealBadReviewTask(task, request, null, false);
+        return revealBadReviewTask(task, request, null, false, false);
     }
 
     public CredentialRevealResponse revealBadReviewTask(
             BadReviewTask task, CredentialRevealRequest request, Authentication authentication
     ) {
-        return revealBadReviewTask(task, request, authentication, true);
+        return revealBadReviewTask(task, request, authentication, true, false);
+    }
+
+    @org.springframework.transaction.annotation.Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public CredentialRevealResponse revealBadReviewTaskInCurrentTransaction(
+            BadReviewTask task, CredentialRevealRequest request, Authentication authentication
+    ) {
+        return revealBadReviewTask(task, request, authentication, true, true);
     }
 
     private CredentialRevealResponse revealBadReviewTask(
-            BadReviewTask task, CredentialRevealRequest request, Authentication authentication, boolean explicitActor
+            BadReviewTask task, CredentialRevealRequest request, Authentication authentication, boolean explicitActor, boolean currentTransaction
     ) {
         if (task == null || task.getId() == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Плохая задача не найдена");
@@ -93,7 +107,7 @@ public class CredentialRevealService {
                         taskBot == null ? null : taskBot.getPassword(),
                         sourceBot == null ? null : sourceBot.getPassword()
                 ),
-                request, authentication, explicitActor
+                request, authentication, explicitActor, currentTransaction
         );
     }
 
@@ -101,17 +115,24 @@ public class CredentialRevealService {
             ReviewRecoveryTask task,
             CredentialRevealRequest request
     ) {
-        return revealRecoveryTask(task, request, null, false);
+        return revealRecoveryTask(task, request, null, false, false);
     }
 
     public CredentialRevealResponse revealRecoveryTask(
             ReviewRecoveryTask task, CredentialRevealRequest request, Authentication authentication
     ) {
-        return revealRecoveryTask(task, request, authentication, true);
+        return revealRecoveryTask(task, request, authentication, true, false);
+    }
+
+    @org.springframework.transaction.annotation.Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public CredentialRevealResponse revealRecoveryTaskInCurrentTransaction(
+            ReviewRecoveryTask task, CredentialRevealRequest request, Authentication authentication
+    ) {
+        return revealRecoveryTask(task, request, authentication, true, true);
     }
 
     private CredentialRevealResponse revealRecoveryTask(
-            ReviewRecoveryTask task, CredentialRevealRequest request, Authentication authentication, boolean explicitActor
+            ReviewRecoveryTask task, CredentialRevealRequest request, Authentication authentication, boolean explicitActor, boolean currentTransaction
     ) {
         if (task == null || task.getId() == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Задача восстановления не найдена");
@@ -126,7 +147,7 @@ public class CredentialRevealService {
                 bot == null ? null : bot.getId(),
                 firstNonBlank(bot == null ? null : bot.getLogin(), task.getBotLoginSnapshot()),
                 firstNonBlank(bot == null ? null : bot.getPassword(), task.getBotPasswordSnapshot()),
-                request, authentication, explicitActor
+                request, authentication, explicitActor, currentTransaction
         );
     }
 
@@ -140,7 +161,8 @@ public class CredentialRevealService {
             String password,
             CredentialRevealRequest request,
             Authentication authentication,
-            boolean explicitActor
+            boolean explicitActor,
+            boolean currentTransaction
     ) {
         String field = normalizeField(request);
         String value = "login".equals(field) ? login : password;
@@ -148,9 +170,16 @@ public class CredentialRevealService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Данные аккаунта недоступны");
         }
 
-        // The audit transaction must commit before the decrypted value can be
-        // returned to the controller. The credential itself is never audited.
-        if (explicitActor) {
+        // Standalone callers require an independently committed audit. A bounded
+        // worker command writes into its existing transaction and commits before
+        // returning to the controller, avoiding a second connection while holding
+        // the order lock. Neither path ever audits the credential value.
+        if (currentTransaction) {
+            businessAuditService.recordRequiredInCurrentTransaction(
+                    authentication, "CREDENTIAL_REVEAL", entityType, entityId, orderId, reviewId,
+                    null, null, auditDetails(field, botId, request)
+            );
+        } else if (explicitActor) {
             businessAuditService.recordStrict(
                     authentication, "CREDENTIAL_REVEAL", entityType, entityId, orderId, reviewId,
                     null, null, auditDetails(field, botId, request)

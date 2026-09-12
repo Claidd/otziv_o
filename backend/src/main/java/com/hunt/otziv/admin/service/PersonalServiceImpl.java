@@ -86,7 +86,7 @@ public class PersonalServiceImpl implements PersonalService {
         userLKDTO.setUsername(user.getUsername());
         userLKDTO.setRole(user.getRoles().iterator().next().getAuthority().substring("ROLE_".length()));
         userLKDTO.setImage(imageId);
-        userLKDTO.setLeadCount(leadService.findAllByLidListStatus(principal.getName()).size());
+        userLKDTO.setLeadCount(leadService.countNewLeadsForCabinet(principal.getName()));
         userLKDTO.setReviewCount(reviewService.findAllByReviewListStatus(principal.getName()));
         return userLKDTO;
     }

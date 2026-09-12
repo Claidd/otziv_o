@@ -12,7 +12,7 @@ const REVIEW_SHA256='8a78fb92b557c7557568a39ce2c31ab31b2c1361558840e77459f207239
 // A later CVE review supplements, but never rewrites, the C14 publication proof.
 const LIBXML_REVIEW_SHA256='ef3d2b811cb6db96215318467d6a5defed8bd6ac1e211f491405fc30cc2dc983';
 export const POSTGRES_LIBXML_PYTHON_RULE={cve:'CVE-2026-74860',package:'libxml2-16',source:'libxml2',version:'2.15.4',reason:'vulnerable_python_bindings_absent'};
-function matchRules(report,review,rules){
+export function matchRules(report,review,rules){
   const decisions=[];
   for(const [resultIndex,result]of(report.Results||[]).entries()){
     if(result.Class!=='os-pkgs'||result.Type!=='debian')continue;

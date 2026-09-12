@@ -1,0 +1,25 @@
+{
+  "schema": "otziv-postgres-c16-source-manifest-v1",
+  "files": {
+    "infrastructure/runtime-security/builds/postgres-c16/Dockerfile": {
+      "sha256": "12d8227af4817a353cb1266cc2ae7ae978145a78b64072621e47b4e50605ef9d",
+      "bytes": 1639,
+      "gitBlob": "a06c87a5b75d0da27b62e823890ab33dbdb4044a"
+    },
+    "infrastructure/runtime-security/builds/postgres-c16/build-pcre2.sh": {
+      "sha256": "7b86775acdd3ecde59f1aef8e25b582dc5e55f4d961f425e58a5539eb4598a04",
+      "bytes": 1080,
+      "gitBlob": "757bf64d567e74768edf415c52d734c473507feb"
+    },
+    "infrastructure/runtime-security/builds/postgres-c16/component.json": {
+      "sha256": "0f0160afe1eb64666f29cfeea1f6640ac774d6710218c12aa4ad572f562d8489",
+      "bytes": 408,
+      "gitBlob": "16aff182fb60c4838524deb26ab86e954b6af4a8"
+    },
+    "infrastructure/runtime-security/builds/postgres-c16/package-pcre2.py": {
+      "sha256": "61babe747a846e553faa20543db39c8c1645b2ed61574ca75ea9d6ebc37e5a53",
+      "bytes": 5660,
+      "gitBlob": "a9efea976360a9008e3b906657c313645c1cd880"
+    }
+  }
+}

@@ -9,7 +9,7 @@ import { encryptArchive, decryptArchive, sha256File, encryptionKey } from './env
 import { BackupStorage } from './storage.mjs';
 import { buildManifest, verifyManifest, compareIdentities } from './manifest.mjs';
 import { assertLocalDocker, postgresDrill } from './drill.mjs';
-import { validateConfig, assertPostgresImage, REVIEWED_POSTGRES_IMAGE } from './config.mjs';
+import { validateConfig, assertPostgresImage, REVIEWED_POSTGRES_IMAGE, PREVIOUS_REVIEWED_POSTGRES_IMAGE } from './config.mjs';
 import { backup } from './backup.mjs';
 
 async function fixture(t) {
@@ -148,6 +148,7 @@ test('recovery accepts the activated PostgreSQL runtime, not arbitrary shared-re
   const example = JSON.parse(await readFile(new URL('./config.example.json', import.meta.url), 'utf8'));
   assert.equal(example.postgresImage, REVIEWED_POSTGRES_IMAGE);
   assertPostgresImage(REVIEWED_POSTGRES_IMAGE);
+  assertPostgresImage(PREVIOUS_REVIEWED_POSTGRES_IMAGE);
   assertPostgresImage(`postgres:17@sha256:${'a'.repeat(64)}`);
   for (const value of ['postgres:17', 'ghcr.io/claidd/otziv-security:latest',
     `ghcr.io/claidd/otziv-security@sha256:${'a'.repeat(64)}`,

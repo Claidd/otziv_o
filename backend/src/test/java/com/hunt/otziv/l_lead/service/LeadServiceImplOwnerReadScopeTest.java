@@ -91,6 +91,36 @@ class LeadServiceImplOwnerReadScopeTest {
     }
 
     @Test
+    void cabinetCounterUsesTheResolvedManagerAndPreservesExactCount() {
+        var user = com.hunt.otziv.u_users.model.User.builder().id(101L).build();
+        var manager = Manager.builder().id(11L).build();
+        when(userService.findByUserName("owner-a")).thenReturn(java.util.Optional.of(user));
+        when(managerService.getManagerByUserId(101L)).thenReturn(manager);
+        when(leadsRepository.countByLidListStatus("Новый", manager)).thenReturn(127L);
+
+        org.assertj.core.api.Assertions.assertThat(service.countNewLeadsForCabinet("owner-a")).isEqualTo(127);
+        verify(leadsRepository, never()).findAllByLidListStatus(anyString(), any());
+    }
+
+    @Test
+    void cabinetCounterWithoutManagerDoesNotCountUnassignedLeads() {
+        var user = com.hunt.otziv.u_users.model.User.builder().id(102L).build();
+        when(userService.findByUserName("owner-a")).thenReturn(java.util.Optional.of(user));
+        when(managerService.getManagerByUserId(102L)).thenReturn(null);
+
+        org.assertj.core.api.Assertions.assertThat(service.countNewLeadsForCabinet("owner-a")).isZero();
+        org.mockito.Mockito.verifyNoInteractions(leadsRepository);
+    }
+
+    @Test
+    void cabinetCounterCannotReadForAnUnknownUser() {
+        when(userService.findByUserName("missing")).thenReturn(java.util.Optional.empty());
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.countNewLeadsForCabinet("missing"))
+                .isInstanceOf(java.util.NoSuchElementException.class);
+        org.mockito.Mockito.verifyNoInteractions(leadsRepository, managerService);
+    }
+
+    @Test
     void ownManagersModeScopesEveryListCountAndKeywordPath() {
         Manager manager = Manager.builder().id(11L).build();
         List<Manager> managers = List.of(manager);

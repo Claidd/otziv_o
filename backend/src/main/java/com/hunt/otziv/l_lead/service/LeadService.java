@@ -66,6 +66,7 @@ public interface LeadService {
     Long findAllByLidListNew(Operator operator);
 
     List<Lead> findAllByLidListStatus(String name);
+    int countNewLeadsForCabinet(String username);
     Long findAllByLidListStatusInWork(Marketolog marketolog);
 
     Long findAllByLidListStatusInWork(Operator operator);
