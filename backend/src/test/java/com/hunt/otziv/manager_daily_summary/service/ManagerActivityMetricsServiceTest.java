@@ -101,6 +101,39 @@ class ManagerActivityMetricsServiceTest {
         org.mockito.Mockito.verifyNoMoreInteractions(activityRepository, messageRepository);
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    void readsOneCreditPolicyPerAssemblyAndObservesChangesOnTheNextRequest(boolean historicalMonth) {
+        var ids = List.of(20L, 21L, 22L);
+        var date = LocalDate.of(2026, 7, 31);
+        var until = date.atTime(12, 30);
+        var month = historicalMonth ? date.minusMonths(2).withDayOfMonth(1) : date.withDayOfMonth(1);
+        var monthUntil = month.plusMonths(1).atStartOfDay();
+        var event = point(20, date.atTime(12, 0), "HEARTBEAT");
+        when(activityRepository.pointsForManagers(org.mockito.ArgumentMatchers.eq(ids),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(call -> event.getOccurredAt().isBefore(call.getArgument(1, LocalDateTime.class))
+                        || event.getOccurredAt().isAfter(call.getArgument(2, LocalDateTime.class)) ? List.of() : List.of(event));
+        when(messageRepository.staffPointsForManagers(org.mockito.ArgumentMatchers.eq(ids),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())).thenReturn(List.of());
+        when(settings.getInt("manager.summary.heartbeat-credit-seconds", 60)).thenReturn(60, 0, 900);
+
+        for (long expected : new long[] {60, 1, 120}) {
+            var result = service.forTeam(ids, date, until, month, monthUntil);
+            assertEquals(expected, result.daily().get(20L).daily().confirmedSeconds());
+            assertEquals(Math.round(expected / 31.0), result.daily().get(20L).averageDailyConfirmedSeconds());
+            assertEquals(historicalMonth ? 0 : expected, result.monthly().get(20L).confirmedSeconds());
+            assertEquals(0, result.daily().get(21L).daily().confirmedSeconds());
+            assertEquals(0, result.monthly().get(22L).confirmedSeconds());
+        }
+        org.mockito.Mockito.verify(settings, org.mockito.Mockito.times(3)).getInt("manager.summary.heartbeat-credit-seconds", 60);
+        org.mockito.Mockito.verify(settings, org.mockito.Mockito.times(3)).getInt("manager.summary.active-heartbeat-credit-seconds", 30);
+        org.mockito.Mockito.verify(settings, org.mockito.Mockito.times(3)).getInt("manager.summary.interaction-credit-seconds", 30);
+        org.mockito.Mockito.verify(settings, org.mockito.Mockito.times(3)).getInt("manager.summary.action-credit-seconds", 15);
+        org.mockito.Mockito.verify(settings, org.mockito.Mockito.times(3)).getInt("manager.summary.message-credit-seconds", 60);
+        org.mockito.Mockito.verifyNoMoreInteractions(settings);
+    }
+
     private ManagerSiteActivityEventRepository.ActivityPoint point(long id, LocalDateTime at, String type) {
         return new ManagerSiteActivityEventRepository.ActivityPoint(id, at, type);
     }

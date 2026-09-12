@@ -107,31 +107,28 @@ public class ManagerActivityMetricsService {
 
         var site = activityRepository.findByManager_IdAndOccurredAtBetweenOrderByOccurredAt(managerId, from, end);
         var points = staffMessagePoints(messageRepository.findByActorManagerIdAndMessageAtBetweenOrderByMessageAtAscIdAsc(managerId, from, end));
-        return dailyAndAverage(site, points, date, end);
+        return dailyAndAverage(site, points, date, end, activityCredits());
     }
 
     private DailyAndAverage dailyAndAverage(List<ManagerSiteActivityEvent> events, List<LocalDateTime> points,
-            LocalDate date, LocalDateTime end) {
+            LocalDate date, LocalDateTime end, ActivityCredits credits) {
         LocalDate monthStart = date.withDayOfMonth(1);
-        LocalDateTime selectedDayStart = date.atStartOfDay();
         var siteByDate = events.stream().filter(event -> event.getOccurredAt() != null)
                 .collect(Collectors.groupingBy(event -> event.getOccurredAt().toLocalDate()));
         var messengerByDate = points.stream().collect(Collectors.groupingBy(LocalDateTime::toLocalDate));
-        Metrics daily = calculateFromEvents(
-                siteByDate.getOrDefault(date, List.of()),
-                messengerByDate.getOrDefault(date, List.of()),
-                selectedDayStart,
-                end
-        );
+        Metrics daily = Metrics.empty();
         long monthConfirmedSeconds = 0;
         for (LocalDate day = monthStart; !day.isAfter(date); day = day.plusDays(1)) {
             LocalDateTime limit = day.equals(date) ? end : day.plusDays(1).atStartOfDay();
-            monthConfirmedSeconds += calculateFromEvents(
+            Metrics dayMetrics = calculateFromEvents(
                     siteByDate.getOrDefault(day, List.of()),
                     messengerByDate.getOrDefault(day, List.of()),
                     day.atStartOfDay(),
-                    limit
-            ).confirmedSeconds();
+                    limit,
+                    credits
+            );
+            monthConfirmedSeconds += dayMetrics.confirmedSeconds();
+            if (day.equals(date)) daily = dayMetrics;
         }
         long elapsedDays = ChronoUnit.DAYS.between(monthStart, date) + 1;
         return new DailyAndAverage(
@@ -143,22 +140,33 @@ public class ManagerActivityMetricsService {
     @Transactional(readOnly = true)
     public Map<Long, DailyAndAverage> dailyAndMonthAverages(java.util.Collection<Long> ids, LocalDate date, LocalDateTime until) {
         if (ids == null || ids.isEmpty() || date == null || until == null) return Map.of();
+        return dailyAndMonthAverages(ids, date, until, activityCredits());
+    }
+
+    private Map<Long, DailyAndAverage> dailyAndMonthAverages(java.util.Collection<Long> ids, LocalDate date,
+            LocalDateTime until, ActivityCredits credits) {
         LocalDateTime start = date.atStartOfDay(), limit = date.plusDays(1).atStartOfDay();
         LocalDateTime end = until.isBefore(start) ? start : until.isAfter(limit) ? limit : until;
         var activity = loadBatch(ids, date.withDayOfMonth(1).atStartOfDay(), end);
         Map<Long, DailyAndAverage> result = new LinkedHashMap<>();
         ids.forEach(id -> result.put(id, dailyAndAverage(activity.site().getOrDefault(id, List.of()),
-                activity.messages().getOrDefault(id, List.of()), date, end)));
+                activity.messages().getOrDefault(id, List.of()), date, end, credits)));
         return result;
     }
 
     @Transactional(readOnly = true)
     public Map<Long, Metrics> calculateForManagers(java.util.Collection<Long> ids, LocalDateTime from, LocalDateTime to) {
         if (ids == null || ids.isEmpty() || from == null || to == null || !to.isAfter(from)) return Map.of();
+        return calculateForManagers(ids, from, to, activityCredits());
+    }
+
+    private Map<Long, Metrics> calculateForManagers(java.util.Collection<Long> ids, LocalDateTime from,
+            LocalDateTime to, ActivityCredits credits) {
+        if (!to.isAfter(from)) return Map.of();
         var activity = loadBatch(ids, from, to);
         Map<Long, Metrics> result = new LinkedHashMap<>();
         ids.forEach(id -> result.put(id, calculateFromEvents(activity.site().getOrDefault(id, List.of()),
-                activity.messages().getOrDefault(id, List.of()), from, to)));
+                activity.messages().getOrDefault(id, List.of()), from, to, credits)));
         return result;
     }
 
@@ -171,9 +179,12 @@ public class ManagerActivityMetricsService {
         LocalDateTime dayEnd = until.isBefore(dayStart) ? dayStart : until.isAfter(dayLimit) ? dayLimit : until;
         LocalDateTime dailyFrom = date.withDayOfMonth(1).atStartOfDay();
         LocalDateTime monthFrom = month.withDayOfMonth(1).atStartOfDay();
+        // One immutable policy per response, never shared across requests or cached independently.
+        ActivityCredits credits = activityCredits();
         // A historical month picker must not expand a read across all intervening months.
         if (monthUntil.isBefore(dailyFrom) || dayEnd.isBefore(monthFrom)) {
-            return new TeamActivity(dailyAndMonthAverages(ids, date, dayEnd), calculateForManagers(ids, monthFrom, monthUntil));
+            return new TeamActivity(dailyAndMonthAverages(ids, date, dayEnd, credits),
+                    calculateForManagers(ids, monthFrom, monthUntil, credits));
         }
         LocalDateTime from = dailyFrom.isBefore(monthFrom) ? dailyFrom : monthFrom;
         LocalDateTime to = dayEnd.isAfter(monthUntil) ? dayEnd : monthUntil;
@@ -184,8 +195,8 @@ public class ManagerActivityMetricsService {
             var site = activity.site().getOrDefault(id, List.of());
             // The message repository's upper bound is exclusive, including when reusing a wider read.
             var messages = activity.messages().getOrDefault(id, List.of());
-            daily.put(id, dailyAndAverage(site, messages.stream().filter(at -> at.isBefore(dayEnd)).toList(), date, dayEnd));
-            monthly.put(id, calculateFromEvents(site, messages.stream().filter(at -> at.isBefore(monthUntil)).toList(), monthFrom, monthUntil));
+            daily.put(id, dailyAndAverage(site, messages.stream().filter(at -> at.isBefore(dayEnd)).toList(), date, dayEnd, credits));
+            monthly.put(id, calculateFromEvents(site, messages.stream().filter(at -> at.isBefore(monthUntil)).toList(), monthFrom, monthUntil, credits));
         });
         return new TeamActivity(Map.copyOf(daily), Map.copyOf(monthly));
     }
@@ -213,37 +224,33 @@ public class ManagerActivityMetricsService {
             LocalDateTime from,
             LocalDateTime limit
     ) {
-        long heartbeatCredit = activityCreditSeconds(
-                HEARTBEAT_CREDIT_SETTING,
-                DEFAULT_HEARTBEAT_CREDIT_SECONDS
-        );
-        long activeHeartbeatCredit = activityCreditSeconds(
-                ACTIVE_HEARTBEAT_CREDIT_SETTING,
-                DEFAULT_ACTIVE_HEARTBEAT_CREDIT_SECONDS
-        );
-        long interactionCredit = activityCreditSeconds(
-                INTERACTION_CREDIT_SETTING,
-                DEFAULT_INTERACTION_CREDIT_SECONDS
-        );
-        long actionCredit = activityCreditSeconds(
-                ACTION_CREDIT_SETTING,
-                DEFAULT_ACTION_CREDIT_SECONDS
-        );
-        long messageCredit = activityCreditSeconds(
-                MESSAGE_CREDIT_SETTING,
-                DEFAULT_MESSAGE_CREDIT_SECONDS
-        );
+        return calculateFromEvents(siteEvents, messengerPoints, from, limit, activityCredits());
+    }
+
+    private record ActivityCredits(long heartbeat, long activeHeartbeat, long interaction, long action, long message) {}
+
+    private ActivityCredits activityCredits() {
+        return new ActivityCredits(
+                activityCreditSeconds(HEARTBEAT_CREDIT_SETTING, DEFAULT_HEARTBEAT_CREDIT_SECONDS),
+                activityCreditSeconds(ACTIVE_HEARTBEAT_CREDIT_SETTING, DEFAULT_ACTIVE_HEARTBEAT_CREDIT_SECONDS),
+                activityCreditSeconds(INTERACTION_CREDIT_SETTING, DEFAULT_INTERACTION_CREDIT_SECONDS),
+                activityCreditSeconds(ACTION_CREDIT_SETTING, DEFAULT_ACTION_CREDIT_SECONDS),
+                activityCreditSeconds(MESSAGE_CREDIT_SETTING, DEFAULT_MESSAGE_CREDIT_SECONDS));
+    }
+
+    private Metrics calculateFromEvents(List<ManagerSiteActivityEvent> siteEvents,
+            List<LocalDateTime> messengerPoints, LocalDateTime from, LocalDateTime limit, ActivityCredits credits) {
         List<Interval> site = siteIntervals(
                 siteEvents,
                 from,
                 limit,
-                heartbeatCredit,
-                activeHeartbeatCredit,
-                interactionCredit,
-                actionCredit,
-                messageCredit
+                credits.heartbeat(),
+                credits.activeHeartbeat(),
+                credits.interaction(),
+                credits.action(),
+                credits.message()
         );
-        List<Interval> messenger = creditedIntervals(messengerPoints, from, limit, messageCredit);
+        List<Interval> messenger = creditedIntervals(messengerPoints, from, limit, credits.message());
         long siteSeconds = duration(site);
         long messengerSeconds = duration(messenger);
         long confirmedSeconds = duration(merge(concat(site, messenger)));
