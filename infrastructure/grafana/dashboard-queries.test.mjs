@@ -82,7 +82,7 @@ test('actual dashboard PromQL keeps sparse observations, matching N, idle gaps a
         expectation(5, [sample('worker.new', '300', 0.099)]),
         expectation(5, [sample('worker.new', '300', 1500)], 'B')] },
     { name: 'equal worst estimates show the smaller N without nondeterministic topk pairing', interval: '1m',
-      input_series: [...histogram('manager.orders', '100', '0+100x5'), ...sparse.map(s => ({ ...s, series: s.series.replaceAll('runtime="100"', 'runtime="200"') }))],
+      input_series: [...histogram('manager.orders', '100', '0 0 0 0 128 128'), ...sparse.map(s => ({ ...s, series: s.series.replaceAll('runtime="100"', 'runtime="200"') }))],
       promql_expr_test: [expectation(4, [sample('', '', 0.095)]), expectation(5, [sample('', '', 0.099)]),
         expectation(4, [sample('', '', 1)], 'B'), expectation(5, [sample('', '', 1)], 'B')] },
   ];
