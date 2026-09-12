@@ -38,6 +38,9 @@ test('top cards expose estimates and the matching sample count without stale or 
   }
   assert.match(panel(200).options.content, /Малое N/);
   assert.equal(new Set(dashboard.panels.map(p => p.id)).size, dashboard.panels.length);
+  for (const row of dashboard.panels.filter(p => p.panels?.length)) {
+    assert.ok(row.panels.every(p => p.gridPos.y > row.gridPos.y), 'Expanded row panels must remain below their row header');
+  }
 });
 
 test('actual dashboard PromQL keeps sparse observations, matching N, idle gaps and runtime isolation', () => {
