@@ -196,7 +196,7 @@
         "x": 0,
         "y": 1,
         "w": 4,
-        "h": 4
+        "h": 5
       }
     },
     {
@@ -241,7 +241,7 @@
         "x": 4,
         "y": 1,
         "w": 5,
-        "h": 4
+        "h": 5
       }
     },
     {
@@ -303,13 +303,13 @@
         "x": 9,
         "y": 1,
         "w": 5,
-        "h": 4
+        "h": 5
       }
     },
     {
       "id": 4,
       "type": "stat",
-      "title": "HTTP P95: максимум среди разделов (5 мин)",
+      "title": "HTTP P95 ≈: максимум (5 мин)",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -317,9 +317,17 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "max(histogram_quantile(0.95, sum by(le,endpoint,runtime) (rate(otziv_http_duration_seconds_bucket{status=\"2xx\",endpoint=~\"$http_endpoint\",runtime=~\"$http_runtime\"}[5m]))) and on(endpoint,runtime) (sum by(endpoint,runtime) (increase(otziv_http_duration_seconds_count{status=\"2xx\",endpoint=~\"$http_endpoint\",runtime=~\"$http_runtime\"}[5m])) >= 100))",
+          "expr": "topk(1, histogram_quantile(0.95, sum by(le,endpoint,runtime) (rate(otziv_http_duration_seconds_bucket{status=\"2xx\",endpoint=~\"$http_endpoint\",runtime=~\"$http_runtime\"}[5m]))) and on(endpoint,runtime) (sum by(endpoint,runtime) (increase(otziv_http_duration_seconds_count{status=\"2xx\",endpoint=~\"$http_endpoint\",runtime=~\"$http_runtime\"}[5m])) > 0))",
           "instant": true,
-          "range": false
+          "range": false,
+          "legendFormat": "P95 ≈ · {{endpoint}}"
+        },
+        {
+          "refId": "B",
+          "expr": "sum by(endpoint,runtime) (increase(otziv_http_duration_seconds_count{status=\"2xx\",endpoint=~\"$http_endpoint\",runtime=~\"$http_runtime\"}[5m])) and on(endpoint,runtime) (topk(1, histogram_quantile(0.95, sum by(le,endpoint,runtime) (rate(otziv_http_duration_seconds_bucket{status=\"2xx\",endpoint=~\"$http_endpoint\",runtime=~\"$http_runtime\"}[5m]))) and on(endpoint,runtime) (sum by(endpoint,runtime) (increase(otziv_http_duration_seconds_count{status=\"2xx\",endpoint=~\"$http_endpoint\",runtime=~\"$http_runtime\"}[5m])) > 0)))",
+          "instant": true,
+          "range": false,
+          "legendFormat": "N ≈ · {{endpoint}}"
         }
       ],
       "fieldConfig": {
@@ -343,9 +351,30 @@
               }
             ]
           },
-          "noValue": "Нет достаточной свежей выборки"
+          "noValue": "Нет наблюдений за 5 мин",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^N ≈"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "reduceOptions": {
@@ -355,24 +384,29 @@
           ],
           "fields": ""
         },
-        "orientation": "auto",
-        "textMode": "auto",
+        "orientation": "vertical",
+        "textMode": "value_and_name",
         "colorMode": "value",
         "graphMode": "none",
-        "justifyMode": "center"
+        "justifyMode": "center",
+        "wideLayout": false,
+        "text": {
+          "titleSize": 12,
+          "valueSize": 24
+        }
       },
       "gridPos": {
         "x": 14,
         "y": 1,
         "w": 5,
-        "h": 4
+        "h": 5
       },
-      "description": "Полный servlet GET, успешные ответы, последние 5 минут, N≥100 на раздел и запуск. Отсутствие выборки не заменяется прошлым значением. Порог N — ограничение отображения, не гарантия точности. Первые обращения до первого scrape дополнительно видны в накопленных счётчиках запуска."
+      "description": "Оценка P95 по интерполяции histogram, успешные полные HTTP GET. Скользящее окно 5 минут заканчивается в выбранный момент времени. Разделы и запуски backend считаются отдельно. Малое N не скрывается, но не подтверждает устойчивый P95 или достижение SLO. При отсутствии наблюдений нет подстановки нуля или старого значения. Первый запрос до первого scrape может не попасть в increase; он виден в счётчике запуска. N относится именно к разделу и запуску с максимальной оценкой, а не к общему трафику. N может быть дробным из-за экстраполяции increase."
     },
     {
       "id": 5,
       "type": "stat",
-      "title": "HTTP P99: максимум среди разделов (5 мин)",
+      "title": "HTTP P99 ≈: максимум (5 мин)",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -380,9 +414,17 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "max(histogram_quantile(0.99, sum by(le,endpoint,runtime) (rate(otziv_http_duration_seconds_bucket{status=\"2xx\",endpoint=~\"$http_endpoint\",runtime=~\"$http_runtime\"}[5m]))) and on(endpoint,runtime) (sum by(endpoint,runtime) (increase(otziv_http_duration_seconds_count{status=\"2xx\",endpoint=~\"$http_endpoint\",runtime=~\"$http_runtime\"}[5m])) >= 1000))",
+          "expr": "topk(1, histogram_quantile(0.99, sum by(le,endpoint,runtime) (rate(otziv_http_duration_seconds_bucket{status=\"2xx\",endpoint=~\"$http_endpoint\",runtime=~\"$http_runtime\"}[5m]))) and on(endpoint,runtime) (sum by(endpoint,runtime) (increase(otziv_http_duration_seconds_count{status=\"2xx\",endpoint=~\"$http_endpoint\",runtime=~\"$http_runtime\"}[5m])) > 0))",
           "instant": true,
-          "range": false
+          "range": false,
+          "legendFormat": "P99 ≈ · {{endpoint}}"
+        },
+        {
+          "refId": "B",
+          "expr": "sum by(endpoint,runtime) (increase(otziv_http_duration_seconds_count{status=\"2xx\",endpoint=~\"$http_endpoint\",runtime=~\"$http_runtime\"}[5m])) and on(endpoint,runtime) (topk(1, histogram_quantile(0.99, sum by(le,endpoint,runtime) (rate(otziv_http_duration_seconds_bucket{status=\"2xx\",endpoint=~\"$http_endpoint\",runtime=~\"$http_runtime\"}[5m]))) and on(endpoint,runtime) (sum by(endpoint,runtime) (increase(otziv_http_duration_seconds_count{status=\"2xx\",endpoint=~\"$http_endpoint\",runtime=~\"$http_runtime\"}[5m])) > 0)))",
+          "instant": true,
+          "range": false,
+          "legendFormat": "N ≈ · {{endpoint}}"
         }
       ],
       "fieldConfig": {
@@ -406,9 +448,30 @@
               }
             ]
           },
-          "noValue": "Нет достаточной свежей выборки"
+          "noValue": "Нет наблюдений за 5 мин",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^N ≈"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "reduceOptions": {
@@ -418,19 +481,39 @@
           ],
           "fields": ""
         },
-        "orientation": "auto",
-        "textMode": "auto",
+        "orientation": "vertical",
+        "textMode": "value_and_name",
         "colorMode": "value",
         "graphMode": "none",
-        "justifyMode": "center"
+        "justifyMode": "center",
+        "wideLayout": false,
+        "text": {
+          "titleSize": 12,
+          "valueSize": 24
+        }
       },
       "gridPos": {
         "x": 19,
         "y": 1,
         "w": 5,
-        "h": 4
+        "h": 5
       },
-      "description": "Полный servlet GET, успешные ответы, последние 5 минут, N≥1000 на раздел и запуск. Отсутствие выборки не заменяется прошлым значением. Порог N — ограничение отображения, не гарантия точности. Первые обращения до первого scrape дополнительно видны в накопленных счётчиках запуска."
+      "description": "Оценка P99 по интерполяции histogram, успешные полные HTTP GET. Скользящее окно 5 минут заканчивается в выбранный момент времени. Разделы и запуски backend считаются отдельно. Малое N не скрывается, но не подтверждает устойчивый P99 или достижение SLO. При отсутствии наблюдений нет подстановки нуля или старого значения. Первый запрос до первого scrape может не попасть в increase; он виден в счётчике запуска. N относится именно к разделу и запуску с максимальной оценкой, а не к общему трафику. N может быть дробным из-за экстраполяции increase."
+    },
+    {
+      "id": 200,
+      "type": "text",
+      "title": "Как читать P95/P99 при небольшом трафике",
+      "gridPos": {
+        "x": 0,
+        "y": 6,
+        "w": 24,
+        "h": 3
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "**P95/P99 ≈ — оценки, N ≈ — число успешных запросов того же раздела за 5 минут.** Малое N не подтверждает стабильную скорость или SLO. При отсутствии наблюдений значения пусты; окно 5 минут заканчивается в выбранный момент времени."
+      }
     },
     {
       "id": 100,
@@ -439,7 +522,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 5,
+        "y": 9,
         "w": 24,
         "h": 1
       },
@@ -492,7 +575,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 6,
+        "y": 10,
         "w": 12,
         "h": 8
       },
@@ -545,7 +628,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 6,
+        "y": 10,
         "w": 12,
         "h": 8
       },
@@ -554,14 +637,14 @@
     {
       "id": 101,
       "type": "timeseries",
-      "title": "HTTP P95: окно 5 минут",
+      "title": "HTTP P95 ≈: окно 5 минут",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95,sum by(le,endpoint,runtime) (rate(otziv_http_duration_seconds_bucket{status=\"2xx\",endpoint=~\"$http_endpoint\",runtime=~\"$http_runtime\"}[5m]))) and on(endpoint,runtime) (sum by(endpoint,runtime)(increase(otziv_http_duration_seconds_count{status=\"2xx\",endpoint=~\"$http_endpoint\",runtime=~\"$http_runtime\"}[5m])) >= 100)",
+          "expr": "histogram_quantile(0.95, sum by(le,endpoint,runtime) (rate(otziv_http_duration_seconds_bucket{status=\"2xx\",endpoint=~\"$http_endpoint\",runtime=~\"$http_runtime\"}[5m]))) and on(endpoint,runtime) (sum by(endpoint,runtime) (increase(otziv_http_duration_seconds_count{status=\"2xx\",endpoint=~\"$http_endpoint\",runtime=~\"$http_runtime\"}[5m])) > 0)",
           "legendFormat": "{{endpoint}} / {{runtime}}",
           "refId": "A"
         }
@@ -578,7 +661,7 @@
             "showPoints": "never",
             "spanNulls": false
           },
-          "noValue": "Недостаточно запросов"
+          "noValue": "Нет наблюдений за 5 мин"
         },
         "overrides": []
       },
@@ -587,7 +670,7 @@
           "displayMode": "table",
           "placement": "bottom",
           "calcs": [
-            "lastNotNull",
+            "last",
             "max"
           ]
         },
@@ -598,23 +681,23 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 14,
+        "y": 18,
         "w": 12,
         "h": 8
       },
-      "description": "Скользящее окно 5 минут; разные запуски показаны отдельно. Время включает security и сериализацию. N — ограничение отображения, не статистическая гарантия."
+      "description": "Оценка P95 по интерполяции histogram, успешные полные HTTP GET. Скользящее окно 5 минут заканчивается в выбранный момент времени. Разделы и запуски backend считаются отдельно. Малое N не скрывается, но не подтверждает устойчивый P95 или достижение SLO. При отсутствии наблюдений нет подстановки нуля или старого значения. Первый запрос до первого scrape может не попасть в increase; он виден в счётчике запуска."
     },
     {
       "id": 102,
       "type": "timeseries",
-      "title": "HTTP P99: окно 5 минут",
+      "title": "HTTP P99 ≈: окно 5 минут",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.99,sum by(le,endpoint,runtime) (rate(otziv_http_duration_seconds_bucket{status=\"2xx\",endpoint=~\"$http_endpoint\",runtime=~\"$http_runtime\"}[5m]))) and on(endpoint,runtime) (sum by(endpoint,runtime)(increase(otziv_http_duration_seconds_count{status=\"2xx\",endpoint=~\"$http_endpoint\",runtime=~\"$http_runtime\"}[5m])) >= 1000)",
+          "expr": "histogram_quantile(0.99, sum by(le,endpoint,runtime) (rate(otziv_http_duration_seconds_bucket{status=\"2xx\",endpoint=~\"$http_endpoint\",runtime=~\"$http_runtime\"}[5m]))) and on(endpoint,runtime) (sum by(endpoint,runtime) (increase(otziv_http_duration_seconds_count{status=\"2xx\",endpoint=~\"$http_endpoint\",runtime=~\"$http_runtime\"}[5m])) > 0)",
           "legendFormat": "{{endpoint}} / {{runtime}}",
           "refId": "A"
         }
@@ -631,7 +714,7 @@
             "showPoints": "never",
             "spanNulls": false
           },
-          "noValue": "Недостаточно запросов"
+          "noValue": "Нет наблюдений за 5 мин"
         },
         "overrides": []
       },
@@ -640,7 +723,7 @@
           "displayMode": "table",
           "placement": "bottom",
           "calcs": [
-            "lastNotNull",
+            "last",
             "max"
           ]
         },
@@ -651,11 +734,11 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 14,
+        "y": 18,
         "w": 12,
         "h": 8
       },
-      "description": "Скользящее окно 5 минут; разные запуски показаны отдельно. Время включает security и сериализацию. N — ограничение отображения, не статистическая гарантия."
+      "description": "Оценка P99 по интерполяции histogram, успешные полные HTTP GET. Скользящее окно 5 минут заканчивается в выбранный момент времени. Разделы и запуски backend считаются отдельно. Малое N не скрывается, но не подтверждает устойчивый P99 или достижение SLO. При отсутствии наблюдений нет подстановки нуля или старого значения. Первый запрос до первого scrape может не попасть в increase; он виден в счётчике запуска."
     },
     {
       "id": 103,
@@ -703,7 +786,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 22,
+        "y": 26,
         "w": 12,
         "h": 8
       },
@@ -755,7 +838,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 22,
+        "y": 26,
         "w": 12,
         "h": 8
       },
@@ -807,7 +890,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 30,
+        "y": 34,
         "w": 12,
         "h": 8
       },
@@ -859,7 +942,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 30,
+        "y": 34,
         "w": 12,
         "h": 8
       },
@@ -912,7 +995,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 38,
+        "y": 42,
         "w": 12,
         "h": 8
       },
@@ -964,7 +1047,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 38,
+        "y": 42,
         "w": 12,
         "h": 8
       },
@@ -1016,7 +1099,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 46,
+        "y": 50,
         "w": 12,
         "h": 8
       },
@@ -1068,7 +1151,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 46,
+        "y": 50,
         "w": 12,
         "h": 8
       },
@@ -1120,7 +1203,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 54,
+        "y": 58,
         "w": 12,
         "h": 8
       },
@@ -1172,7 +1255,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 54,
+        "y": 58,
         "w": 12,
         "h": 8
       },
@@ -1224,7 +1307,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 62,
+        "y": 66,
         "w": 12,
         "h": 8
       },
@@ -1444,7 +1527,7 @@
       ],
       "gridPos": {
         "x": 0,
-        "y": 70,
+        "y": 74,
         "w": 24,
         "h": 1
       }
@@ -1630,7 +1713,7 @@
       ],
       "gridPos": {
         "x": 0,
-        "y": 71,
+        "y": 75,
         "w": 24,
         "h": 1
       }
@@ -1836,7 +1919,7 @@
       ],
       "gridPos": {
         "x": 0,
-        "y": 72,
+        "y": 76,
         "w": 24,
         "h": 1
       }
@@ -1979,7 +2062,7 @@
       ],
       "gridPos": {
         "x": 0,
-        "y": 73,
+        "y": 77,
         "w": 24,
         "h": 1
       }
@@ -2498,7 +2581,7 @@
       ],
       "gridPos": {
         "x": 0,
-        "y": 74,
+        "y": 78,
         "w": 24,
         "h": 1
       }
@@ -2949,7 +3032,7 @@
       ],
       "gridPos": {
         "x": 0,
-        "y": 75,
+        "y": 79,
         "w": 24,
         "h": 1
       }
@@ -3441,7 +3524,7 @@
       ],
       "gridPos": {
         "x": 0,
-        "y": 76,
+        "y": 80,
         "w": 24,
         "h": 1
       }
@@ -3681,7 +3764,7 @@
       ],
       "gridPos": {
         "x": 0,
-        "y": 77,
+        "y": 81,
         "w": 24,
         "h": 1
       }
@@ -3802,7 +3885,7 @@
       ],
       "gridPos": {
         "x": 0,
-        "y": 78,
+        "y": 82,
         "w": 24,
         "h": 1
       }
