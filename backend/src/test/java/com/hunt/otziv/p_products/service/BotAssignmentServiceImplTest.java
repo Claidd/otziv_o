@@ -20,6 +20,7 @@ import com.hunt.otziv.r_review.bot.service.ReviewBotAssignmentGuardService;
 import com.hunt.otziv.r_review.bot.model.ReviewBotAssignmentMode;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -76,6 +77,9 @@ class BotAssignmentServiceImplTest {
 
     @Mock
     private BusinessAuditService businessAuditService;
+
+    @Mock
+    private EntityManager entityManager;
 
     @BeforeEach
     void allowCompanyLocks() {
@@ -494,7 +498,8 @@ class BotAssignmentServiceImplTest {
                 botCooldownService,
                 accountWalkScheduleService,
                 assignmentGuardService,
-                businessAuditService
+                businessAuditService,
+                entityManager
         );
     }
 
