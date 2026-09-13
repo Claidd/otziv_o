@@ -172,7 +172,7 @@ public class ManagerControlBoardWorkflow {
         List<ManagerDailyControlItem> items = control.getId() == null ? List.of() : dailyControlItemRepository.findByControl(control).stream().filter(this::isActiveControlItem).sorted(Comparator.comparingInt(this::detailItemRank).thenComparing(ManagerDailyControlItem::getLabel, String.CASE_INSENSITIVE_ORDER).thenComparing(ManagerDailyControlItem::getId)).toList();
         User user = manager.getUser();
         List<String> blockers = control.getId() == null ? List.of("Контроль еще не синхронизирован") : closeBlockers(control, items);
-        return new ManagerControlManagerDetailResponse(manager.getId(), user == null ? null : user.getId(), safe(user == null ? null : user.getUsername()), managerName(manager), control.getId(), control.getControlDate(), control.getStatus().name(), control.getStartedAt(), control.getClosedAt(), control.getLastActivityAt(), control.getMorningStartedAt(), control.getMorningCompletedAt(), control.getDayCheckedAt(), control.getFinalCheckedAt(), control.getQualityScore(), control.getQualityGrade(), control.getRiskScore(), control.isFastClickRisk(), blockers.isEmpty(), blockers, items.stream().filter(cardLifecycle::isOpenActionItem).count(), items.stream().filter(cardLifecycle::isHandledActionItem).count(), control.getId() == null ? List.of() : workerExplanationStats(control), items.stream().map(item -> detailItem(manager, item, today, syncConcrete)).toList(), control.getId() == null ? List.of() : events(control));
+        return new ManagerControlManagerDetailResponse(manager.getId(), user == null ? null : user.getId(), safe(user == null ? null : user.getUsername()), managerName(manager), control.getId(), control.getControlDate(), control.getStatus().name(), control.getStartedAt(), control.getClosedAt(), control.getLastActivityAt(), control.getMorningStartedAt(), control.getMorningCompletedAt(), control.getDayCheckedAt(), control.getFinalCheckedAt(), control.getQualityScore(), control.getQualityGrade(), control.getRiskScore(), control.isFastClickRisk(), blockers.isEmpty(), blockers, items.stream().filter(cardLifecycle::isOpenActionItem).count(), items.stream().filter(cardLifecycle::isHandledActionItem).count(), control.getId() == null ? List.of() : workerExplanationStats(control), concreteSnapshot.detailItems(manager, items, today, syncConcrete), control.getId() == null ? List.of() : events(control));
     }
 
     ManagerDailyControl transientControl(Manager manager, LocalDate today) {
@@ -181,8 +181,8 @@ public class ManagerControlBoardWorkflow {
 
     @Transactional
     public ManagerControlManagerDetailResponse syncManagerDetails(Long managerId, Principal principal, Authentication authentication) {
-        reconcileClientMessagesForControl();
         Manager manager = accessPolicy.visibleManagers(principal, authentication).stream().filter(item -> managerId != null && managerId.equals(item.getId())).findFirst().orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Менеджер недоступен"));
+        reconcileClientMessagesForControl();
         managerControl(manager, LocalDate.now(), null, true, false);
         cardLifecycle.invalidateManagerPerformance();
         return managerDetails(manager, true);

@@ -24,6 +24,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
+import com.hunt.otziv.client_chat_control.dto.PreparedNoResponseReview;
 import java.time.temporal.ChronoUnit;
 import java.util.HexFormat;
 import java.util.List;
@@ -326,10 +327,23 @@ public class ClientChatMessageTrackerService {
             String comment,
             Long resolvedByUserId
     ) {
+        markFromManagerControlInternal(unansweredItemId, actionType, comment, resolvedByUserId, null, false);
+    }
+
+    @Transactional
+    public void markFromManagerControlWithReview(Long unansweredItemId, ManagerDailyControlActionType actionType,
+            String comment, Long resolvedByUserId, PreparedNoResponseReview review) {
+        markFromManagerControlInternal(unansweredItemId, actionType, comment, resolvedByUserId, review, true);
+    }
+
+    private void markFromManagerControlInternal(Long unansweredItemId, ManagerDailyControlActionType actionType,
+            String comment, Long resolvedByUserId, PreparedNoResponseReview review, boolean reviewPrepared) {
         if (unansweredItemId == null) {
             return;
         }
-        unansweredRepository.findById(unansweredItemId).ifPresent(item -> {
+        var current = reviewPrepared ? unansweredRepository.findByIdForUpdate(unansweredItemId)
+                : unansweredRepository.findById(unansweredItemId);
+        current.ifPresent(item -> {
             if (item.getStatus() != ClientChatUnansweredStatus.OPEN) {
                 return;
             }
@@ -343,7 +357,13 @@ public class ClientChatMessageTrackerService {
             }
             assertResolutionRateAllowed(item, resolvedByUserId);
             if (actionType == ManagerDailyControlActionType.ACKNOWLEDGED) {
-                markNoResponseNeeded(item, comment, resolvedByUserId);
+                if (reviewPrepared) {
+                    requireMatchingReview(item, review);
+                    markNoResponseNeeded(item, comment, resolvedByUserId, review.review());
+                } else {
+                    markNoResponseNeeded(item, comment, resolvedByUserId,
+                            noResponseAiReviewService.review(item.getLastMessageText()));
+                }
                 return;
             }
             if (actionType == ManagerDailyControlActionType.RESOLVED) {
@@ -765,14 +785,25 @@ public class ClientChatMessageTrackerService {
         }
     }
 
+    private void requireMatchingReview(ClientChatUnansweredItem item, PreparedNoResponseReview review) {
+        Long messageId = item.getLastClientMessage() == null ? null : item.getLastClientMessage().getId();
+        if (review == null || !java.util.Objects.equals(review.itemId(), item.getId())
+                || !java.util.Objects.equals(review.messageId(), messageId)
+                || !java.util.Objects.equals(review.messageText(), item.getLastMessageText())
+                || !java.util.Objects.equals(review.messageAt(), item.getLastClientMessageAt())
+                || !noResponseAiReviewService.stillApplicable(review.review())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Сообщение или условия проверки изменились. Повторите проверку; карточка остаётся открытой");
+        }
+    }
+
     private void markNoResponseNeeded(
             ClientChatUnansweredItem item,
             String comment,
-            Long resolvedByUserId
+            Long resolvedByUserId,
+            ClientChatNoResponseAiReviewService.Review aiReview
     ) {
         ClientChatResolutionPolicy.Assessment assessment = resolutionPolicy.assess(item.getLastMessageText());
-        ClientChatNoResponseAiReviewService.Review aiReview =
-                noResponseAiReviewService.review(item.getLastMessageText());
         if (!aiReview.checked()) {
             throw new ResponseStatusException(
                     HttpStatus.SERVICE_UNAVAILABLE,

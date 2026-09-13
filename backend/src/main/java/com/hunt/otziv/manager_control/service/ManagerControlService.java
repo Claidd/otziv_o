@@ -59,6 +59,8 @@ public class ManagerControlService {
 
     private final ManagerControlItemActions itemActions;
 
+    private final ManagerControlNoResponseReviewWorkflow noResponseReviewWorkflow;
+
     private final ManagerControlReminderWorkflow reminderWorkflow;
 
     private final ManagerControlDayActions dayActions;
@@ -114,6 +116,11 @@ public class ManagerControlService {
     }
 
     public ManagerControlConcreteItemResponse actionConcreteItem(Long concreteItemId, ManagerControlItemActionRequest request, Principal principal, Authentication authentication) {
+        if (request != null && "ACKNOWLEDGED".equalsIgnoreCase(
+                request.actionType() == null ? "" : request.actionType().trim())) {
+            var review = noResponseReviewWorkflow.prepare(concreteItemId, request, principal, authentication);
+            return itemActions.actionConcreteItem(concreteItemId, request, principal, authentication, review);
+        }
         return itemActions.actionConcreteItem(concreteItemId, request, principal, authentication);
     }
 

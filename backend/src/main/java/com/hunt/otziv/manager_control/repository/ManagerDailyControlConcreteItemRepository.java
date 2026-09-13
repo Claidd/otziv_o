@@ -37,6 +37,12 @@ public interface ManagerDailyControlConcreteItemRepository extends CrudRepositor
 
     List<ManagerDailyControlConcreteItem> findByParentItemIn(Collection<ManagerDailyControlItem> parentItems);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT item FROM ManagerDailyControlConcreteItem item WHERE item.parentItem IN :parentItems ORDER BY item.id")
+    List<ManagerDailyControlConcreteItem> findByParentItemInForUpdate(
+            @Param("parentItems") Collection<ManagerDailyControlItem> parentItems);
+
+
     List<ManagerDailyControlConcreteItem> findByControl(ManagerDailyControl control);
 
     List<ManagerDailyControlConcreteItem> findByEntityTypeAndEntityId(String entityType, Long entityId);

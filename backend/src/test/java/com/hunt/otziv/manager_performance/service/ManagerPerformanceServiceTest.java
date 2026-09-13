@@ -296,10 +296,29 @@ class ManagerPerformanceServiceTest {
         } finally { org.springframework.transaction.support.TransactionSynchronizationManager.clear(); }
     }
 
+    @Test
+    void projectedClientInputsPreserveBacklogAndReplyPercentiles() {
+        var manager = manager(1L, 101L);
+        stubManagers(manager);
+        var at = DATE.minusDays(1).atTime(10, 0);
+        when(unansweredItemRepository.findPerformanceSamples(anyCollection(), any(), any(), any())).thenReturn(List.of(
+                new com.hunt.otziv.client_chat_control.dto.ClientChatPerformanceSample(1L, 1L,
+                        com.hunt.otziv.client_chat_control.model.ClientChatUnansweredStatus.ANSWERED, at, at.plusMinutes(10)),
+                new com.hunt.otziv.client_chat_control.dto.ClientChatPerformanceSample(2L, 1L,
+                        com.hunt.otziv.client_chat_control.model.ClientChatUnansweredStatus.ANSWERED, at, at.plusMinutes(100)),
+                new com.hunt.otziv.client_chat_control.dto.ClientChatPerformanceSample(3L, 1L,
+                        com.hunt.otziv.client_chat_control.model.ClientChatUnansweredStatus.OPEN, at, null)));
+        var score = service.score(DATE).getFirst();
+        assertEquals(3L, score.incomingProblemCount());
+        assertEquals(1L, score.backlogCount());
+        assertEquals(10.0, score.clientReplyMedianMinutes());
+        assertEquals(100.0, score.clientReplyP90Minutes());
+    }
+
     private void stubManagers(Manager manager) {
         when(managerRepository.findAllWithUserAndImage()).thenReturn(List.of(manager));
         when(managerRepository.findAllManagersWorkers(List.of(manager))).thenReturn(List.of(manager));
-        lenient().when(unansweredItemRepository.findPerformanceItems(anyCollection(), any(), any(), any()))
+        lenient().when(unansweredItemRepository.findPerformanceSamples(anyCollection(), any(), any(), any()))
                 .thenReturn(List.of());
         lenient().when(managerTeamProgressService.statisticsByManagerIds(anyCollection(), any(), any()))
                 .thenReturn(Map.of());

@@ -36,6 +36,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.HttpStatus;
 import java.security.Principal;
+import com.hunt.otziv.client_chat_control.dto.PreparedNoResponseReview;
 import java.time.LocalDateTime;
 @Service
 @Slf4j
@@ -127,6 +128,17 @@ public class ManagerControlItemActions {
 
     @Transactional
     public ManagerControlConcreteItemResponse actionConcreteItem(Long concreteItemId, ManagerControlItemActionRequest request, Principal principal, Authentication authentication) {
+        return performConcreteAction(concreteItemId, request, principal, authentication, null, false);
+    }
+
+    @Transactional
+    public ManagerControlConcreteItemResponse actionConcreteItem(Long concreteItemId, ManagerControlItemActionRequest request,
+            Principal principal, Authentication authentication, PreparedNoResponseReview review) {
+        return performConcreteAction(concreteItemId, request, principal, authentication, review, true);
+    }
+
+    private ManagerControlConcreteItemResponse performConcreteAction(Long concreteItemId, ManagerControlItemActionRequest request,
+            Principal principal, Authentication authentication, PreparedNoResponseReview review, boolean reviewPrepared) {
         if (concreteItemId == null || concreteItemId <= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Некорректная карточка контроля");
         }
@@ -204,7 +216,12 @@ public class ManagerControlItemActions {
             actionType = ManagerDailyControlActionType.RESOLVED;
         } else if (clientChatUnansweredConcrete) {
             concreteItem.setLastManualTouchAt(now);
-            clientChatMessageTrackerService.markFromManagerControl(concreteItem.getEntityId(), actionType, comment, accessPolicy.actorUserId(principal));
+            if (reviewPrepared && actionType == ManagerDailyControlActionType.ACKNOWLEDGED) {
+                clientChatMessageTrackerService.markFromManagerControlWithReview(concreteItem.getEntityId(),
+                        actionType, comment, accessPolicy.actorUserId(principal), review);
+            } else {
+                clientChatMessageTrackerService.markFromManagerControl(concreteItem.getEntityId(), actionType, comment, accessPolicy.actorUserId(principal));
+            }
             if (actionType == ManagerDailyControlActionType.ACTION_TAKEN || actionType == ManagerDailyControlActionType.ACKNOWLEDGED || actionType == ManagerDailyControlActionType.RESOLVED) {
                 concreteItem.setStatus(ManagerDailyControlItemStatus.RESOLVED);
                 concreteItem.setResolvedAt(now);

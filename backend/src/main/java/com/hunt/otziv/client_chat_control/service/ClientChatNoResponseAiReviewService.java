@@ -9,6 +9,12 @@ import com.hunt.otziv.reputationai.infrastructure.ai.service.AiProviderRouter;
 import java.time.Duration;
 import java.util.Locale;
 import java.util.Map;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -46,11 +52,44 @@ public class ClientChatNoResponseAiReviewService {
     private final AiProviderRouter providerRouter;
     private final ObjectMapper objectMapper;
     private final AppSettingService appSettingService;
+    private final Cache<ReviewKey, Review> reviews = Caffeine.newBuilder()
+            .maximumSize(512).expireAfterWrite(Duration.ofMinutes(5)).build();
 
     public Review review(String messageText) {
         if (!deepSeekAvailable()) {
             return Review.unavailable("DeepSeek временно недоступен");
         }
+        int minimumConfidence = minimumConfidence();
+        ReviewKey key = new ReviewKey(fingerprint(messageText), minimumConfidence);
+        Review result = reviews.get(key, ignored -> {
+            Review evaluated = reviewUncached(messageText, minimumConfidence);
+            // Transient provider failures must be retried, not cached as a decision.
+            return evaluated.checked() ? evaluated : null;
+        });
+        return result == null ? Review.unavailable("DeepSeek не смог проверить сообщение") : result;
+    }
+
+    public boolean stillApplicable(Review review) {
+        return review != null && deepSeekAvailable()
+                && (!review.confirmed() || review.confidence() >= minimumConfidence());
+    }
+
+    private int minimumConfidence() {
+        return Math.max(70, Math.min(100, appSettingService.getInt(MINIMUM_CONFIDENCE_SETTING, 90)));
+    }
+
+    private static String fingerprint(String messageText) {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                    .digest((messageText == null ? "" : messageText).getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 unavailable", exception);
+        }
+    }
+
+    private record ReviewKey(String messageFingerprint, int minimumConfidence) {}
+
+    private Review reviewUncached(String messageText, int minimumConfidence) {
         try {
             int timeoutSeconds = Math.max(5, Math.min(40, appSettingService.getInt(
                     TIMEOUT_SETTING,
@@ -89,10 +128,6 @@ public class ClientChatNoResponseAiReviewService {
             }
 
             int confidence = Math.max(0, Math.min(100, confidenceNode.asInt(-1)));
-            int minimumConfidence = Math.max(70, Math.min(100, appSettingService.getInt(
-                    MINIMUM_CONFIDENCE_SETTING,
-                    90
-            )));
             boolean confirmed = NO_RESPONSE_NEEDED.equals(decision)
                     && confidence >= minimumConfidence;
             if (NO_RESPONSE_NEEDED.equals(decision) && !confirmed) {
@@ -107,7 +142,7 @@ public class ClientChatNoResponseAiReviewService {
                     response.provider()
             );
         } catch (Exception exception) {
-            log.warn("DeepSeek did not verify no-response decision: {}", exception.getMessage());
+            log.warn("DeepSeek did not verify no-response decision; errorType={}", exception.getClass().getSimpleName());
             return Review.unavailable("DeepSeek не смог проверить сообщение");
         }
     }
