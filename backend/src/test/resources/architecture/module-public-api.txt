@@ -39,3 +39,7 @@ com.hunt.otziv.scheduler.service.SchedulerLeaseService
 # Transaction-scoped notification recovery exposes immutable order cycle data only.
 com.hunt.otziv.p_products.api.OrderNotificationRecovery
 com.hunt.otziv.p_products.api.LegacyOrderNotificationException
+# MANAGER_CONTROL_LATENCY_2026-09-13: authorized, server-only AI preparation and scalar score input.
+com.hunt.otziv.client_chat_control.api.ClientChatNoResponseReviews
+com.hunt.otziv.client_chat_control.dto.PreparedNoResponseReview
+com.hunt.otziv.client_chat_control.dto.ClientChatPerformanceSample

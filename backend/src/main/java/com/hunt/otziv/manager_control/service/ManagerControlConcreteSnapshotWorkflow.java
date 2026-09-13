@@ -43,9 +43,29 @@ public class ManagerControlConcreteSnapshotWorkflow {
 
     private final ManagerDailyControlConcreteItemRepository dailyControlConcreteItemRepository;
 
+    List<ManagerControlItemDetailResponse> detailItems(Manager manager, List<ManagerDailyControlItem> items,
+            LocalDate today, boolean syncConcrete) {
+        if (items.isEmpty()) return List.of();
+        List<ManagerDailyControlConcreteItem> stored = syncConcrete
+                ? dailyControlConcreteItemRepository.findByParentItemInForUpdate(items)
+                : dailyControlConcreteItemRepository.findByParentItemIn(items);
+        Map<Long, List<ManagerDailyControlConcreteItem>> byParent = stored.stream()
+                .collect(Collectors.groupingBy(row -> row.getParentItem().getId()));
+        return items.stream().map(item -> detailItem(manager, item, today, syncConcrete,
+                byParent.getOrDefault(item.getId(), List.of()))).toList();
+    }
+
     ManagerControlItemDetailResponse detailItem(Manager manager, ManagerDailyControlItem item, LocalDate today, boolean syncConcrete) {
+        var stored = syncConcrete ? dailyControlConcreteItemRepository.findByParentItemForUpdate(item)
+                : dailyControlConcreteItemRepository.findByParentItem(item);
+        return detailItem(manager, item, today, syncConcrete, stored);
+    }
+
+    private ManagerControlItemDetailResponse detailItem(Manager manager, ManagerDailyControlItem item,
+            LocalDate today, boolean syncConcrete, List<ManagerDailyControlConcreteItem> stored) {
         List<ManagerControlConcreteItemResponse> freshExamples = detailExamples(manager, item, today);
-        List<ManagerControlConcreteItemResponse> examples = syncConcrete ? syncConcreteExamples(item, freshExamples) : readConcreteExamples(item, freshExamples);
+        List<ManagerControlConcreteItemResponse> examples = syncConcrete
+                ? syncConcreteExamples(item, freshExamples, stored) : readConcreteExamples(item, freshExamples, stored);
         examples = examples.stream().map(example -> slaPolicy.decorateConcreteSla(item, example)).toList();
         return new ManagerControlItemDetailResponse(item.getId(), item.getItemKey(), item.getItemType().name(), item.getReasonCode(), reasonLabel(item), item.getSectionCode(), item.getLabel(), item.getTargetUrl(), item.getCount(), item.getSeverity().name(), item.getGroup().name(), item.getStatus().name(), item.getActionType() == null ? null : item.getActionType().name(), item.getComment(), examples, Math.max(0, item.getCount() - examples.size()), item.getCreatedAt(), item.getUpdatedAt(), item.getResolvedAt());
     }
@@ -58,7 +78,11 @@ public class ManagerControlConcreteSnapshotWorkflow {
         if (parentItem == null || parentItem.getId() == null) {
             return List.of();
         }
-        List<ManagerDailyControlConcreteItem> storedExamples = dailyControlConcreteItemRepository.findByParentItem(parentItem);
+        return readConcreteExamples(parentItem, freshExamples, dailyControlConcreteItemRepository.findByParentItem(parentItem));
+    }
+
+    private List<ManagerControlConcreteItemResponse> readConcreteExamples(ManagerDailyControlItem parentItem,
+            List<ManagerControlConcreteItemResponse> freshExamples, List<ManagerDailyControlConcreteItem> storedExamples) {
         if (storedExamples.isEmpty()) {
             return freshExamples;
         }
@@ -99,8 +123,13 @@ public class ManagerControlConcreteSnapshotWorkflow {
         if (parentItem == null) {
             return List.of();
         }
+        return syncConcreteExamples(parentItem, examples, dailyControlConcreteItemRepository.findByParentItemForUpdate(parentItem));
+    }
+
+    private List<ManagerControlConcreteItemResponse> syncConcreteExamples(ManagerDailyControlItem parentItem,
+            List<ManagerControlConcreteItemResponse> examples, List<ManagerDailyControlConcreteItem> storedExamples) {
         Map<String, ManagerControlConcreteItemResponse> uniqueExamples = examples.stream().collect(Collectors.toMap(this::concreteEntityKey, Function.identity(), (left, right) -> left, LinkedHashMap::new));
-        Map<String, ManagerDailyControlConcreteItem> existing = dailyControlConcreteItemRepository.findByParentItemForUpdate(parentItem).stream().collect(Collectors.toMap(ManagerDailyControlConcreteItem::getEntityKey, Function.identity(), (left, right) -> left));
+        Map<String, ManagerDailyControlConcreteItem> existing = storedExamples.stream().collect(Collectors.toMap(ManagerDailyControlConcreteItem::getEntityKey, Function.identity(), (left, right) -> left));
         Set<String> freshKeys = uniqueExamples.keySet();
         resolveStaleConcreteItems(parentItem, existing, freshKeys);
         if (uniqueExamples.isEmpty()) {

@@ -131,6 +131,11 @@ public class ClientChatUnansweredItem {
         updatedAt = now;
     }
 
+    /** Scalar ownership key for application APIs; callers do not receive the identity entity. */
+    public Long managerId() {
+        return manager == null ? null : manager.getId();
+    }
+
     @PreUpdate
     void onUpdate() {
         updatedAt = LocalDateTime.now();

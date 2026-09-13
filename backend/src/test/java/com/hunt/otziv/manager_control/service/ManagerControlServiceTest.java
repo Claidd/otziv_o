@@ -293,12 +293,20 @@ class ManagerControlServiceTest {
     var repairWorkflow = new ManagerControlRepairWorkflow(automationRepairWorkflow, chatRepairWorkflow, repairOutcome, problemExamples, accessPolicy, clientMessageText, concretePresenter, orderAutomationDiagnostics, scheduledClientMessageService, reviewRepository, orderRepository, companyRepository, orderPaymentIntegrityService, invoiceRepairWorkflow, publicationApprovalService, dailyControlConcreteItemRepository);
     ReflectionTestUtils.setField(service, "repairWorkflow", repairWorkflow);
     ReflectionTestUtils.setField(service, "itemActions", itemActions);
+    ReflectionTestUtils.setField(service, "noResponseReviewWorkflow", org.mockito.Mockito.mock(ManagerControlNoResponseReviewWorkflow.class));
     ReflectionTestUtils.setField(service, "reminderWorkflow", reminderWorkflow);
     ReflectionTestUtils.setField(service, "dayActions", dayActions);
     ReflectionTestUtils.setField(service, "boardWorkflow", boardWorkflow);
     ReflectionTestUtils.setField(service, "dailySnapshot", dailySnapshot);
     ReflectionTestUtils.setField(service, "dayLifecycle", dayLifecycle);
     ReflectionTestUtils.setField(service, "concreteSnapshot", concreteSnapshot);
+    org.mockito.Mockito.lenient().when(dailyControlConcreteItemRepository.findByParentItemIn(org.mockito.ArgumentMatchers.anyCollection()))
+        .thenAnswer(call -> ((java.util.Collection<ManagerDailyControlItem>) call.getArgument(0)).stream()
+            .flatMap(parent -> dailyControlConcreteItemRepository.findByParentItem(parent).stream()).toList());
+    org.mockito.Mockito.lenient().when(dailyControlConcreteItemRepository.findByParentItemInForUpdate(org.mockito.ArgumentMatchers.anyCollection()))
+        .thenAnswer(call -> ((java.util.Collection<ManagerDailyControlItem>) call.getArgument(0)).stream()
+            .flatMap(parent -> dailyControlConcreteItemRepository.findByParentItemForUpdate(parent).stream()).toList());
+
     ReflectionTestUtils.setField(service, "problemExamples", problemExamples);
     deliveryWorker = new ManagerClientMessageWorker(deliveryQueue, clientSendWorkflow, clientReplyWorkflow, clientChatMessageSender,
             deliveryActors, () -> true, managerControlTransactionRunner);
@@ -325,8 +333,10 @@ class ManagerControlServiceTest {
         when(managerRepository.findByUserId(17L)).thenReturn(Optional.of(ownManager));
 
         assertThrows(ResponseStatusException.class, () -> service.managerDetails(99L, () -> "manager", authentication));
+        assertThrows(ResponseStatusException.class, () -> service.syncManagerDetails(99L, () -> "manager", authentication));
 
-        org.mockito.Mockito.verifyNoInteractions(dailyControlRepository, dailyControlConcreteItemRepository, dailyControlEventRepository);
+        org.mockito.Mockito.verifyNoInteractions(dailyControlRepository, dailyControlConcreteItemRepository, dailyControlEventRepository,
+                scheduledClientMessageService);
     }
 
     @Test

@@ -1,6 +1,6 @@
 package com.hunt.otziv.manager_performance.service;
 
-import com.hunt.otziv.client_chat_control.model.ClientChatUnansweredItem;
+import com.hunt.otziv.client_chat_control.dto.ClientChatPerformanceSample;
 import com.hunt.otziv.client_chat_control.model.ClientChatUnansweredStatus;
 import com.hunt.otziv.client_chat_control.repository.ClientChatUnansweredItemRepository;
 import com.hunt.otziv.manager_control.model.ManagerDailyControl;
@@ -139,7 +139,7 @@ public class ManagerPerformanceService {
         List<ManagerDailyControlConcreteItem> concreteItems = items.isEmpty()
                 ? List.of()
                 : concreteItemRepository.findByParentItemIn(items);
-        List<ClientChatUnansweredItem> clientItems = unansweredItemRepository.findPerformanceItems(
+        List<ClientChatPerformanceSample> clientItems = unansweredItemRepository.findPerformanceSamples(
                 managers,
                 from,
                 to,
@@ -159,9 +159,9 @@ public class ManagerPerformanceService {
         Map<Long, List<ManagerDailyControlConcreteItem>> concreteByControlId = concreteItems.stream()
                 .filter(item -> item.getControl() != null && item.getControl().getId() != null)
                 .collect(Collectors.groupingBy(item -> item.getControl().getId()));
-        Map<Long, List<ClientChatUnansweredItem>> clientItemsByManagerId = clientItems.stream()
-                .filter(item -> item.getManager() != null && item.getManager().getId() != null)
-                .collect(Collectors.groupingBy(item -> item.getManager().getId()));
+        Map<Long, List<ClientChatPerformanceSample>> clientItemsByManagerId = clientItems.stream()
+                .filter(item -> item.getManagerId() != null)
+                .collect(Collectors.groupingBy(ClientChatPerformanceSample::getManagerId));
 
         RiskAssignments riskAssignments = riskAssignments(managers, from, to);
 
@@ -194,7 +194,7 @@ public class ManagerPerformanceService {
             List<ManagerDailyControl> controls,
             Map<Long, List<ManagerDailyControlItem>> itemsByControlId,
             Map<Long, List<ManagerDailyControlConcreteItem>> concreteByControlId,
-            List<ClientChatUnansweredItem> clientItems,
+            List<ClientChatPerformanceSample> clientItems,
             RiskAssignments riskAssignments,
             LocalDateTime evaluatedAt,
             long reopened,
@@ -438,11 +438,11 @@ public class ManagerPerformanceService {
         return new SlaStats(total, inSla, speedScoreSum);
     }
 
-    private SlaStats clientSla(List<ClientChatUnansweredItem> items, LocalDateTime evaluatedAt) {
+    private SlaStats clientSla(List<ClientChatPerformanceSample> items, LocalDateTime evaluatedAt) {
         long total = 0;
         long inSla = 0;
         long speedScoreSum = 0;
-        for (ClientChatUnansweredItem item : items) {
+        for (ClientChatPerformanceSample item : items) {
             if (item.getLastClientMessageAt() == null) {
                 continue;
             }
@@ -569,7 +569,7 @@ public class ManagerPerformanceService {
                 .orElse(0);
     }
 
-    private double clientReplyPercentileMinutes(List<ClientChatUnansweredItem> items, double percentile) {
+    private double clientReplyPercentileMinutes(List<ClientChatPerformanceSample> items, double percentile) {
         List<Long> durations = items.stream()
                 .filter(item -> item.getLastClientMessageAt() != null && item.getClosedAt() != null)
                 .filter(item -> !item.getClosedAt().isBefore(item.getLastClientMessageAt()))
@@ -655,7 +655,7 @@ public class ManagerPerformanceService {
     private boolean hasPerformanceData(
             List<ManagerDailyControl> controls,
             List<ManagerDailyControlConcreteItem> concreteItems,
-            List<ClientChatUnansweredItem> clientItems,
+            List<ClientChatPerformanceSample> clientItems,
             List<WorkerRiskIncident> riskIncidents
     ) {
         return !controls.isEmpty()

@@ -55,6 +55,12 @@ public interface ScheduledClientMessageStateRepository extends CrudRepository<Sc
     );
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT s FROM ScheduledClientMessageState s WHERE s.scenario = :scenario AND s.targetKey IN :targetKeys ORDER BY s.id")
+    List<ScheduledClientMessageState> findByScenarioAndTargetKeyInForUpdate(
+            @Param("scenario") ClientMessageScenario scenario,
+            @Param("targetKeys") Collection<String> targetKeys);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT s FROM ScheduledClientMessageState s WHERE s.id = :id")
     Optional<ScheduledClientMessageState> findByIdForUpdate(@Param("id") Long id);
 

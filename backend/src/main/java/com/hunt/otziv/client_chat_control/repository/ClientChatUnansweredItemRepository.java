@@ -20,6 +20,24 @@ import org.springframework.data.jpa.repository.Modifying;
 @Repository
 public interface ClientChatUnansweredItemRepository extends JpaRepository<ClientChatUnansweredItem, Long> {
 
+    @Query("""
+        SELECT new com.hunt.otziv.client_chat_control.dto.ClientChatPerformanceSample(
+            item.id, item.manager.id, item.status, item.lastClientMessageAt, item.closedAt)
+        FROM ClientChatUnansweredItem item
+        WHERE item.manager IN :managers
+          AND (
+                item.createdAt BETWEEN :from AND :to
+                OR item.closedAt BETWEEN :from AND :to
+                OR (item.status = :openStatus AND item.lastClientMessageAt <= :to)
+          )
+    """)
+    List<com.hunt.otziv.client_chat_control.dto.ClientChatPerformanceSample> findPerformanceSamples(
+            @Param("managers") Collection<Manager> managers,
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to,
+            @Param("openStatus") ClientChatUnansweredStatus openStatus
+    );
+
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT item FROM ClientChatUnansweredItem item WHERE item.id = :id")
     Optional<ClientChatUnansweredItem> findByIdForUpdate(@Param("id") Long id);

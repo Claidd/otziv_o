@@ -1037,11 +1037,11 @@ public class ScheduledClientMessageService {
         );
         candidates = excludeActiveCommonInvoiceOrders(scenario, candidates);
 
-        int affected = 0;
+        List<StateSeed> seeds = new ArrayList<>(candidates.size());
         for (OrderRepository.ClientMessageCandidate order : candidates) {
             LocalDateTime statusChangedAt = order.getStatusChangedAt();
             LocalDateTime baseDueAt = statusChangedAt.plusDays(intervalDays);
-            if (ensureState(
+            seeds.add(new StateSeed(
                     scenario,
                     ClientMessageTargetType.ORDER,
                     orderTargetKey(order.getId(), statusChangedAt),
@@ -1049,10 +1049,9 @@ public class ScheduledClientMessageService {
                     order.getId(),
                     null,
                     scheduleAtStorage(baseDueAt)
-            )) {
-                affected++;
-            }
+            ));
         }
+        int affected = ensureStates(seeds);
         if (affected > 0) {
             log.info("Client messages reconciled order states scenario={} affectedRows={} candidates={}",
                     scenario, affected, candidates.size());
@@ -1157,6 +1156,38 @@ public class ScheduledClientMessageService {
                 scenario,
                 targetKey
         );
+        return applyStateSeed(existing, new StateSeed(scenario, targetType, targetKey,
+                companyId, orderId, archiveOrderId, nextAttemptAt));
+    }
+
+    private int ensureStates(List<StateSeed> seeds) {
+        if (seeds.isEmpty()) return 0;
+        // Same domain transitions as ensureState, with one current read per bounded batch.
+        Map<String, StateSeed> unique = new LinkedHashMap<>();
+        seeds.forEach(seed -> unique.putIfAbsent(seed.targetKey(), seed));
+        List<StateSeed> rows = new ArrayList<>(unique.values());
+        int affected = 0;
+        for (int offset = 0; offset < rows.size(); offset += 500) {
+            List<StateSeed> batch = rows.subList(offset, Math.min(rows.size(), offset + 500));
+            Map<String, ScheduledClientMessageState> existing = stateRepository
+                    .findByScenarioAndTargetKeyInForUpdate(batch.getFirst().scenario(),
+                            batch.stream().map(StateSeed::targetKey).toList()).stream()
+                    .collect(java.util.stream.Collectors.toMap(ScheduledClientMessageState::getTargetKey, value -> value));
+            for (StateSeed seed : batch) {
+                if (applyStateSeed(Optional.ofNullable(existing.get(seed.targetKey())), seed)) affected++;
+            }
+        }
+        return affected;
+    }
+
+    private boolean applyStateSeed(Optional<ScheduledClientMessageState> existing, StateSeed seed) {
+        ClientMessageScenario scenario = seed.scenario();
+        ClientMessageTargetType targetType = seed.targetType();
+        String targetKey = seed.targetKey();
+        Long companyId = seed.companyId();
+        Long orderId = seed.orderId();
+        Long archiveOrderId = seed.archiveOrderId();
+        LocalDateTime nextAttemptAt = seed.nextAttemptAt();
         if (existing.isPresent()) {
             ScheduledClientMessageState state = existing.get();
             if (state.getStatus() == ScheduledMessageStateStatus.DONE
@@ -2422,10 +2453,10 @@ public class ScheduledClientMessageService {
                 PageRequest.of(0, candidateLimit())
         );
         candidates = excludeActiveCommonInvoiceOrders(ClientMessageScenario.PAYMENT_INVOICE_RETRY, candidates);
-        int affected = 0;
+        List<StateSeed> seeds = new ArrayList<>(candidates.size());
         for (OrderRepository.ClientMessageCandidate order : candidates) {
             LocalDateTime statusChangedAt = order.getStatusChangedAt();
-            if (ensureState(
+            seeds.add(new StateSeed(
                     ClientMessageScenario.PAYMENT_INVOICE_RETRY,
                     ClientMessageTargetType.ORDER,
                     orderTargetKey(order.getId(), statusChangedAt),
@@ -2433,10 +2464,9 @@ public class ScheduledClientMessageService {
                     order.getId(),
                     null,
                     scheduleAtStorage(statusChangedAt.plusHours(delayHours))
-            )) {
-                affected++;
-            }
+            ));
         }
+        int affected = ensureStates(seeds);
         if (affected > 0) {
             log.info("Client messages reconciled payment-invoice states affectedRows={} candidates={}",
                     affected, candidates.size());

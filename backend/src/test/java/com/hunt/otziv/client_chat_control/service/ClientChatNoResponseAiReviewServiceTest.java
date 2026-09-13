@@ -129,6 +129,7 @@ class ClientChatNoResponseAiReviewServiceTest {
     @Test
     void malformedResponseFailsClosedAsUnchecked() {
         stubAvailableDeepSeek();
+        when(appSettingService.getInt(ClientChatNoResponseAiReviewService.MINIMUM_CONFIDENCE_SETTING, 90)).thenReturn(90);
         when(appSettingService.getInt(
                 ClientChatNoResponseAiReviewService.TIMEOUT_SETTING,
                 20
@@ -156,6 +157,30 @@ class ClientChatNoResponseAiReviewServiceTest {
         assertFalse(review.confirmed());
         verify(providerRouter, never()).activeProvider();
         verify(appSettingService, never()).getInt(anyString(), org.mockito.ArgumentMatchers.anyInt());
+    }
+
+    @Test
+    void reusesExactTextButRechecksChangedPolicyAndNeverCachesFailures() {
+        stubAvailableDeepSeek();
+        when(appSettingService.getInt(ClientChatNoResponseAiReviewService.MINIMUM_CONFIDENCE_SETTING, 90))
+                .thenReturn(90);
+        var good = new AiResponse("{\"decision\":\"NO_RESPONSE_NEEDED\",\"confidence\":97,\"reason\":\"Благодарность\"}", "deepseek", 1, 1);
+        when(provider.generate(org.mockito.ArgumentMatchers.any(AiRequest.class))).thenReturn(good);
+        assertTrue(service.review("Спасибо").confirmed());
+        assertTrue(service.review("Спасибо").confirmed());
+        verify(provider).generate(org.mockito.ArgumentMatchers.any(AiRequest.class));
+        assertTrue(service.review("Спасибо большое").confirmed());
+        when(appSettingService.getInt(ClientChatNoResponseAiReviewService.MINIMUM_CONFIDENCE_SETTING, 90))
+                .thenReturn(99);
+        assertFalse(service.review("Спасибо").confirmed());
+        verify(provider, org.mockito.Mockito.times(3)).generate(org.mockito.ArgumentMatchers.any(AiRequest.class));
+        when(provider.generate(org.mockito.ArgumentMatchers.any(AiRequest.class))).thenReturn(
+                new AiResponse("", "deepseek", 0, 0, "unavailable"), good);
+        assertFalse(service.review("До свидания").checked());
+        assertTrue(service.review("До свидания").checked());
+        verify(provider, org.mockito.Mockito.times(5)).generate(org.mockito.ArgumentMatchers.any(AiRequest.class));
+        when(providerRouter.activeProviderAvailable()).thenReturn(false);
+        assertFalse(service.review("Спасибо").checked());
     }
 
     private void stubAvailableDeepSeek() {

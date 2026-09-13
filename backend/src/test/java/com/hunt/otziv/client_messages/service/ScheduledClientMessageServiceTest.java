@@ -72,6 +72,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.springframework.web.server.ResponseStatusException;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
@@ -1531,6 +1532,36 @@ class ScheduledClientMessageServiceTest {
 
         assertEquals(Boolean.FALSE, created);
         assertNull(state.getNextAttemptAt());
+    }
+
+    @Test
+    void batchReconciliationKeepsUncertainAndSentStatesFencedAndUsesOneRead() {
+        var due = LocalDateTime.of(2026, 9, 13, 12, 0);
+        var scenario = ClientMessageScenario.PAYMENT_INVOICE_RETRY;
+        var seeds = new java.util.ArrayList<com.hunt.otziv.client_messages.repository.ScheduledClientMessageStateBatchRepository.StateSeed>();
+        var states = new java.util.ArrayList<ScheduledClientMessageState>();
+        for (int i = 0; i < 200; i++) {
+            String key = "order:" + i + ":fixture";
+            seeds.add(new com.hunt.otziv.client_messages.repository.ScheduledClientMessageStateBatchRepository.StateSeed(
+                    scenario, ClientMessageTargetType.ORDER, key, 100L, (long) i, null, due));
+            states.add(ScheduledClientMessageState.builder().id((long) i + 1).scenario(scenario)
+                    .targetKey(key).targetType(ClientMessageTargetType.ORDER).companyId(100L).orderId((long) i)
+                    .status(ScheduledMessageStateStatus.DONE).sentCount(0).build());
+        }
+        states.get(0).setLastErrorCode(ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN);
+        states.get(1).setLastErrorCode(ClientMessageStateSafety.TRANSACTION_IN_PROGRESS);
+        states.get(2).setSentCount(1);
+        when(stateRepository.findByScenarioAndTargetKeyInForUpdate(eq(scenario), anyCollection())).thenReturn(states);
+        Integer changed = ReflectionTestUtils.invokeMethod(service, "ensureStates", seeds);
+        assertEquals(197, changed);
+        for (int i = 0; i < 3; i++) {
+            assertEquals(ScheduledMessageStateStatus.DONE, states.get(i).getStatus());
+            assertNull(states.get(i).getNextAttemptAt());
+        }
+        assertEquals(ScheduledMessageStateStatus.ACTIVE, states.get(3).getStatus());
+        assertEquals(due, states.get(3).getNextAttemptAt());
+        verify(stateRepository).findByScenarioAndTargetKeyInForUpdate(eq(scenario), anyCollection());
+        verify(stateRepository, never()).findByScenarioAndTargetKeyForUpdate(any(), anyString());
     }
 
     @Test
