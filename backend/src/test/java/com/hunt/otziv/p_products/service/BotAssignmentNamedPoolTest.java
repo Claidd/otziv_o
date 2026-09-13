@@ -63,6 +63,7 @@ class BotAssignmentNamedPoolTest {
         stub = poolBot(1L, 0);
         stub.setActive(false);
         lenient().when(botService.findBotById(1L)).thenReturn(stub);
+        lenient().when(botService.getFindAllByFilialCityId(anyLong())).thenReturn(List.of());
         lenient().when(companyRepository.findByIdForBotAssignmentLock(10L)).thenReturn(Optional.of(company));
         lenient().when(filialService.findByCityId(anyLong())).thenReturn(List.of(filial));
         lenient().when(assignmentGuardService.scope(anyLong(), any()))
