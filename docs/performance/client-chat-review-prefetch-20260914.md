@@ -22,10 +22,19 @@ Paired read-only production SQL trials retained every financial row and all cano
 
 A fixed `analytics.salary/daily-users` segment now isolates the complete canonical salary read from the surrounding worker-stat construction. Post-release HTTP observations must include first loads and cache misses and use the new segment to locate any remaining delay. Profile SQL, history, maps, sums, cache freshness and formulas are unchanged.
 
+## Shared VPS database memory
+
+Production MySQL had a 4 GiB container limit but the default 128 MiB InnoDB buffer pool. A 165-second observation recorded 12,119 physical page reads / 3,864,689 logical requests (73.45 physical reads/s, 0.314% miss ratio). The shared host has about 7.75 GiB RAM; about 1.84 GiB was available. MySQL already used approximately 1.22 GiB, so assigning its full container limit to the buffer would be unsafe.
+
+The reviewed Compose command now sets the buffer pool to 512 MiB. This adds approximately 384 MiB plus allocation overhead and retains headroom for the JVM and browser services. InnoDB's transactionally coherent page cache preserves every record and read-consistency rule; financial SQL and application cache TTLs do not change. Durability settings, isolation, access controls and image digests are unchanged. The ordinary deployment may recreate MySQL to apply its startup configuration; verify actual `innodb_buffer_pool_size`, service health, free memory and physical-read rate afterward. Restore the previous source configuration to roll back the memory tuning.
+
+The small buffer and observed physical reads are a plausible contributor to intermittent slow profiles, not proof that every delay is disk I/O. Compare subsequent physical-read rates and full HTTP latency, retaining cold observations and accounting for different traffic. Read-only diagnostic probes themselves warm database pages; do not treat their speed as an unbiased HTTP before/after result.
+
 ## Design references
 
 - Spring 7 transaction-bound events: https://docs.spring.io/spring-framework/reference/data-access/transaction/event.html
 - AFTER_COMMIT resources remain accessible; separate read transactions and a dedicated worker prevent the provider call retaining them: https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/transaction/event/TransactionalEventListener.html
+- MySQL buffer-pool sizing and online behavior: https://dev.mysql.com/doc/refman/8.4/en/innodb-buffer-pool-resize.html
 - MySQL derived-condition pushdown behavior was verified against actual query plans: https://dev.mysql.com/doc/refman/8.0/en/derived-condition-pushdown-optimization.html
 
 ## Acceptance

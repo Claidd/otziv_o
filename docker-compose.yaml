@@ -61,6 +61,8 @@ services:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
       - --default-time-zone=+08:00
+      # Shared 8 GiB VPS: retain headroom for JVM, browsers and database overhead.
+      - --innodb-buffer-pool-size=536870912
       - --restrict-fk-on-non-standard-key=OFF
       - --binlog-expire-logs-seconds=${MYSQL_BINLOG_EXPIRE_LOGS_SECONDS:-604800}
       - --gtid-mode=OFF
