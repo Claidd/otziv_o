@@ -21,6 +21,22 @@ import org.springframework.data.jpa.repository.Modifying;
 public interface ClientChatUnansweredItemRepository extends JpaRepository<ClientChatUnansweredItem, Long> {
 
     @Query("""
+        SELECT new com.hunt.otziv.client_chat_control.dto.PreparedNoResponseReview(
+            item.id, item.lastClientMessage.id, item.lastMessageText, item.lastClientMessageAt, item.manager.id, null)
+        FROM ClientChatUnansweredItem item WHERE item.id = :id AND item.status = :status
+    """)
+    Optional<com.hunt.otziv.client_chat_control.dto.PreparedNoResponseReview> findReviewSnapshot(
+            @Param("id") Long id, @Param("status") ClientChatUnansweredStatus status);
+
+    @Query("""
+        SELECT item.id FROM ClientChatUnansweredItem item
+        WHERE item.status = :status AND item.lastClientMessageAt >= :from
+        ORDER BY item.lastClientMessageAt DESC, item.id DESC
+    """)
+    List<Long> findRecentReviewCandidateIds(@Param("status") ClientChatUnansweredStatus status,
+            @Param("from") LocalDateTime from, Pageable pageable);
+
+    @Query("""
         SELECT new com.hunt.otziv.client_chat_control.dto.ClientChatPerformanceSample(
             item.id, item.manager.id, item.status, item.lastClientMessageAt, item.closedAt)
         FROM ClientChatUnansweredItem item

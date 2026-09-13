@@ -37,7 +37,7 @@ public class AnalyticsSalarySourceService {
                 .addValue("fromInclusive", fromInclusive)
                 .addValue("toInclusive", toInclusive);
 
-        return jdbc.query("""
+        return com.hunt.otziv.config.metrics.PerformanceMetrics.segment("analytics.salary", "daily-users", () -> jdbc.query("""
                 SELECT
                     salary.metric_date,
                     salary.user_id,
@@ -55,7 +55,7 @@ public class AnalyticsSalarySourceService {
                 defaultZero(rs.getBigDecimal("salary_sum")),
                 rs.getLong("salary_entry_count"),
                 rs.getLong("salary_review_count")
-        ));
+        )));
     }
 
     public List<DailySalary> dailyAll(LocalDate fromInclusive, LocalDate toInclusive) {

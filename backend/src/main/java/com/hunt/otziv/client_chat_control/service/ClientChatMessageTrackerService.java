@@ -56,6 +56,7 @@ public class ClientChatMessageTrackerService {
     private final ClientChatResolutionPolicy resolutionPolicy;
     private final ClientChatReplyQualityService replyQualityService;
     private final ClientChatNoResponseAiReviewService noResponseAiReviewService;
+    private final org.springframework.context.ApplicationEventPublisher events;
 
     @Transactional
     public void track(ClientChatMessageCommand command) {
@@ -523,6 +524,7 @@ public class ClientChatMessageTrackerService {
         item.setReplyQualityReason(null);
         item.setAuditRequired(false);
         unansweredRepository.save(item);
+        events.publishEvent(new ClientChatReviewPrefetch.Requested(item.getId()));
     }
 
     private void closeOpenItems(
@@ -845,14 +847,7 @@ public class ClientChatMessageTrackerService {
     }
 
     private boolean hardNoResponseRejection(ClientChatResolutionPolicy.Assessment assessment) {
-        if (assessment == null || assessment.reasonCode() == null) {
-            return true;
-        }
-        return switch (assessment.reasonCode()) {
-            case "QUESTION", "PROBLEM_OR_COMPLAINT", "ACTION_REQUEST",
-                    "ATTACHMENT_REQUIRES_REVIEW", "EMPTY" -> true;
-            default -> false;
-        };
+        return resolutionPolicy.rejectsNoResponse(assessment);
     }
 
     private void markAnsweredWithEvidence(

@@ -49,6 +49,8 @@ class ManagerPerformanceReadModelMySqlIntegrationTest {
         em = SharedEntityManagerCreator.createSharedEntityManager(factory.getObject());
         var manager = new JpaTransactionManager(factory.getObject()); manager.setDataSource(ds);
         tx = new TransactionTemplate(manager); jdbc = new JdbcTemplate(ds);
+        new org.springframework.jdbc.datasource.init.ResourceDatabasePopulator(new org.springframework.core.io.ClassPathResource(
+                "db/migration/V1_10_319__client_chat_review_prefetch_index.sql")).execute(ds);
         repository = new JpaRepositoryFactory(em).getRepository(ClientChatUnansweredItemRepository.class);
     }
     @AfterAll static void stop() { if (factory != null) factory.destroy(); }
@@ -85,4 +87,46 @@ class ManagerPerformanceReadModelMySqlIntegrationTest {
         assertThat(SQL).hasSize(1);
         assertThat(SQL.getFirst()).doesNotContain("last_message_text", "resolution_reply_text", "sender_name", "join managers");
     }
+    @Test void prefetchSnapshotContainsExactEvidenceAndRecoveryIsBoundedToOpenRecentCards() {
+        var from = LocalDateTime.of(2026, 10, 1, 0, 0);
+        var manager = new Manager();
+        List<Long> open = new ArrayList<>();
+        var message = new ClientChatMessage();
+        tx.executeWithoutResult(status -> {
+            em.persist(manager);
+            message.setPlatform(ClientChatPlatform.TELEGRAM);
+            message.setDirection(ClientChatDirection.INCOMING);
+            message.setSenderRole(ClientChatSenderRole.CLIENT);
+            message.setChatId("prefetch-fixture"); message.setMessageAt(from);
+            message.setMessageText("Спасибо большое"); em.persist(message);
+            for (int n = 0; n < 70; n++) {
+                var item = new ClientChatUnansweredItem(); item.setManager(manager);
+                item.setPlatform(ClientChatPlatform.TELEGRAM); item.setChatId("prefetch-fixture");
+                item.setLastClientMessage(message); item.setLastMessageText(message.getMessageText());
+                item.setLastClientMessageAt(from.plusMinutes(n)); item.setStatus(ClientChatUnansweredStatus.OPEN);
+                em.persist(item); open.add(item.getId());
+            }
+        });
+        var id = open.getFirst(); SQL.clear();
+        var snapshot = tx.execute(status -> repository.findReviewSnapshot(id, ClientChatUnansweredStatus.OPEN)).orElseThrow();
+        assertThat(snapshot.itemId()).isEqualTo(id);
+        assertThat(snapshot.messageId()).isEqualTo(message.getId());
+        assertThat(snapshot.managerId()).isEqualTo(manager.getId());
+        assertThat(snapshot.messageText()).isEqualTo("Спасибо большое");
+        assertThat(snapshot.messageAt()).isEqualTo(from);
+        assertThat(snapshot.review()).isNull();
+        assertThat(SQL).hasSize(1);
+        assertThat(SQL.getFirst()).doesNotContain("join managers", "join client_chat_messages");
+        var ids = tx.execute(status -> repository.findRecentReviewCandidateIds(ClientChatUnansweredStatus.OPEN,
+                from, org.springframework.data.domain.PageRequest.of(0, 64)));
+        var expected = new ArrayList<>(open); Collections.reverse(expected);
+        assertThat(ids).containsExactlyElementsOf(expected.subList(0, 64));
+        tx.executeWithoutResult(status -> {
+            var item = em.find(ClientChatUnansweredItem.class, id);
+            item.setStatus(ClientChatUnansweredStatus.ANSWERED);
+        });
+        var closed = tx.execute(status -> repository.findReviewSnapshot(id, ClientChatUnansweredStatus.OPEN));
+        assertThat(closed).isEmpty();
+    }
+
 }
