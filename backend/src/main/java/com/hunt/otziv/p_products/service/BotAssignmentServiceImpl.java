@@ -22,6 +22,7 @@ import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.r_review.utils.ReviewBotPolicy;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -701,8 +702,9 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
                 continue;
             }
             // The initial pool query may have cached this entity before another
-            // transaction claimed or edited it. Reload under the assignment lock.
-            entityManager.refresh(locked);
+            // transaction claimed or edited it. A locking refresh also avoids
+            // an older repeatable-read snapshot when rechecking the source city.
+            entityManager.refresh(locked, LockModeType.PESSIMISTIC_WRITE);
             if (!isEligibleNamedPoolAccount(locked, mode)) {
                 continue;
             }

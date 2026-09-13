@@ -18,6 +18,7 @@ import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.r_review.utils.ReviewBotPolicy;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -71,7 +72,7 @@ class BotAssignmentNamedPoolTest {
                         call.getArgument(0), call.getArgument(1), null, null));
         lenient().when(assignmentGuardService.blockedBotIds(any())).thenReturn(Set.of());
         lenient().when(assignmentGuardService.lockIfEligible(any(), any()))
-                .thenAnswer(call -> Optional.of(call.getArgument(0, Bot.class)));
+                .thenAnswer(call -> Optional.ofNullable(call.getArgument(0, Bot.class)));
         lenient().when(botService.save(any())).thenAnswer(call -> call.getArgument(0));
         lenient().when(botCooldownService.isAvailableForAssignment(any())).thenAnswer(call -> {
             Bot bot = call.getArgument(0);
@@ -102,7 +103,7 @@ class BotAssignmentNamedPoolTest {
         order.verify(botService).claimNewAccountForCity(eq(targetCity), anyCollection());
         order.verify(botService).getFindAllByFilialCityId(325L);
         order.verify(assignmentGuardService).lockIfEligible(eq(candidate), any());
-        order.verify(entityManager).refresh(candidate);
+        order.verify(entityManager).refresh(candidate, LockModeType.PESSIMISTIC_WRITE);
         order.verify(botService).save(candidate);
     }
 
@@ -137,10 +138,10 @@ class BotAssignmentNamedPoolTest {
         Bot candidate = poolBot(900L, 2);
         when(botService.getFindAllByFilialCityId(325L)).thenReturn(List.of(candidate));
         doAnswer(call -> { invalidate(candidate, concurrentChange); return null; })
-                .when(entityManager).refresh(candidate);
+                .when(entityManager).refresh(candidate, LockModeType.PESSIMISTIC_WRITE);
 
         assertSame(stub, service.assignBotForReviewChange(review(ReviewBotAssignmentMode.PUBLISH_PREFER_WALKED), Set.of()));
-        verify(entityManager).refresh(candidate);
+        verify(entityManager).refresh(candidate, LockModeType.PESSIMISTIC_WRITE);
         verify(botService, never()).save(any());
         assertNotEquals(targetCity.getId(), candidate.getBotCity().getId());
     }
@@ -153,7 +154,7 @@ class BotAssignmentNamedPoolTest {
 
         assertSame(stub, service.assignBotForReviewChange(review(ReviewBotAssignmentMode.PUBLISH_PREFER_WALKED), Set.of()));
         verify(botService, never()).save(any());
-        verify(entityManager, never()).refresh(any());
+        verify(entityManager, never()).refresh(any(), any(LockModeType.class));
         assertEquals(325L, candidate.getBotCity().getId());
     }
 
@@ -198,7 +199,7 @@ class BotAssignmentNamedPoolTest {
 
         assertSame(fresh, service.assignBotForReviewChange(review(mode), Set.of()));
         verify(botService, never()).getFindAllByFilialCityId(325L);
-        verify(entityManager, never()).refresh(any());
+        verify(entityManager, never()).refresh(any(), any(LockModeType.class));
     }
 
     @Test
