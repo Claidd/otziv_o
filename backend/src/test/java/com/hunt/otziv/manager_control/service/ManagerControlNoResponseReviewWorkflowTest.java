@@ -1,6 +1,7 @@
 package com.hunt.otziv.manager_control.service;
 
 import com.hunt.otziv.client_chat_control.dto.PreparedNoResponseReview;
+import com.hunt.otziv.client_chat_control.api.ClientChatNoResponseReviews;
 import com.hunt.otziv.client_chat_control.service.ClientChatNoResponseAiReviewService;
 import com.hunt.otziv.manager_control.dto.ManagerControlItemActionRequest;
 import java.time.LocalDateTime;
@@ -16,13 +17,14 @@ import static org.mockito.Mockito.*;
 class ManagerControlNoResponseReviewWorkflowTest {
     @Test void providerRunsOutsideTransactionAndUnauthorizedReadNeverCallsIt() {
         var snapshot = mock(ManagerControlNoResponseSnapshot.class);
-        var reviews = mock(ClientChatNoResponseAiReviewService.class);
-        var source = new PreparedNoResponseReview(5L, 8L, "Спасибо", LocalDateTime.now(), null);
+        var reviews = mock(ClientChatNoResponseReviews.class);
+        var source = new PreparedNoResponseReview(5L, 8L, "Спасибо", LocalDateTime.now(), 10L, null);
         when(snapshot.read(1L, null, null)).thenReturn(source);
         var answer = new ClientChatNoResponseAiReviewService.Review(true, true, "NO_RESPONSE_NEEDED", 99, "Благодарность", "deepseek");
-        when(reviews.review("Спасибо")).thenAnswer(call -> {
+        when(reviews.review(source)).thenAnswer(call -> {
             assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
-            return answer;
+            return new PreparedNoResponseReview(source.itemId(), source.messageId(), source.messageText(),
+                    source.messageAt(), source.managerId(), answer);
         });
         var manager = new AbstractPlatformTransactionManager() {
             protected Object doGetTransaction() { return new Object(); }
@@ -47,7 +49,7 @@ class ManagerControlNoResponseReviewWorkflowTest {
         when(snapshot.read(2L, null, null)).thenThrow(new org.springframework.security.access.AccessDeniedException("denied"));
         assertThatThrownBy(() -> workflow.prepare(2L, request, null, null))
                 .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
-        verify(reviews, times(1)).review(anyString());
+        verify(reviews, times(1)).review(any());
         assertThat(workflow.prepare(1L, new ManagerControlItemActionRequest("ACTION_TAKEN", "", false), null, null)).isNull();
     }
 }

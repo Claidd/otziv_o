@@ -383,7 +383,7 @@ class ClientChatMessageTrackerServiceTest {
         open.setId(56L);
         var review = aiReview(true, "Благодарность без вопроса");
         var prepared = new com.hunt.otziv.client_chat_control.dto.PreparedNoResponseReview(
-                56L, null, open.getLastMessageText(), open.getLastClientMessageAt(), review);
+                56L, null, open.getLastMessageText(), open.getLastClientMessageAt(), null, review);
         when(unansweredRepository.findByIdForUpdate(56L)).thenReturn(Optional.of(open));
         when(noResponseAiReviewService.stillApplicable(review)).thenReturn(true);
         service.markFromManagerControlWithReview(56L, ManagerDailyControlActionType.ACKNOWLEDGED,
@@ -399,7 +399,25 @@ class ClientChatMessageTrackerServiceTest {
         ClientChatUnansweredItem open = openItem("Когда опубликуете отзывы?");
         open.setId(56L);
         var prepared = new com.hunt.otziv.client_chat_control.dto.PreparedNoResponseReview(
-                56L, null, "Спасибо большое", open.getLastClientMessageAt(), aiReview(true, "Благодарность"));
+                56L, null, "Спасибо большое", open.getLastClientMessageAt(), null, aiReview(true, "Благодарность"));
+        when(unansweredRepository.findByIdForUpdate(56L)).thenReturn(Optional.of(open));
+        var error = assertThrows(ResponseStatusException.class, () ->
+                service.markFromManagerControlWithReview(56L, ManagerDailyControlActionType.ACKNOWLEDGED,
+                        "", 10L, prepared));
+        assertEquals(org.springframework.http.HttpStatus.CONFLICT, error.getStatusCode());
+        assertEquals(ClientChatUnansweredStatus.OPEN, open.getStatus());
+        verify(noResponseAiReviewService, never()).review(any());
+        verify(unansweredRepository, never()).save(any());
+    }
+
+    @Test
+    void reassignedMessageRejectsPreparedReviewEvenWhenTextIsUnchanged() {
+        ClientChatUnansweredItem open = openItem("Спасибо большое");
+        open.setId(56L);
+        Manager reassigned = new Manager(); reassigned.setId(99L); open.setManager(reassigned);
+        var prepared = new com.hunt.otziv.client_chat_control.dto.PreparedNoResponseReview(
+                56L, null, open.getLastMessageText(), open.getLastClientMessageAt(), 10L,
+                aiReview(true, "Благодарность"));
         when(unansweredRepository.findByIdForUpdate(56L)).thenReturn(Optional.of(open));
         var error = assertThrows(ResponseStatusException.class, () ->
                 service.markFromManagerControlWithReview(56L, ManagerDailyControlActionType.ACKNOWLEDGED,

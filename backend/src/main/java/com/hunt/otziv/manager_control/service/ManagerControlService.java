@@ -177,6 +177,7 @@ public class ManagerControlService {
     }
 
     public ManagerControlManagerDetailResponse syncManagerDetails(Long managerId, Principal principal, Authentication authentication) {
+        boardWorkflow.requireManagerAccess(managerId, principal, authentication);
         return boardWorkflow.syncManagerDetails(managerId, principal, authentication);
     }
 

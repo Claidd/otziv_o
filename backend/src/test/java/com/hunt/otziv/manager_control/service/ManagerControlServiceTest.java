@@ -333,8 +333,10 @@ class ManagerControlServiceTest {
         when(managerRepository.findByUserId(17L)).thenReturn(Optional.of(ownManager));
 
         assertThrows(ResponseStatusException.class, () -> service.managerDetails(99L, () -> "manager", authentication));
+        assertThrows(ResponseStatusException.class, () -> service.syncManagerDetails(99L, () -> "manager", authentication));
 
-        org.mockito.Mockito.verifyNoInteractions(dailyControlRepository, dailyControlConcreteItemRepository, dailyControlEventRepository);
+        org.mockito.Mockito.verifyNoInteractions(dailyControlRepository, dailyControlConcreteItemRepository, dailyControlEventRepository,
+                scheduledClientMessageService);
     }
 
     @Test

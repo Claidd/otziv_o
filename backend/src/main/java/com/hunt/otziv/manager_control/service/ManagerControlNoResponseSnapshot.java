@@ -1,8 +1,7 @@
 package com.hunt.otziv.manager_control.service;
 
 import com.hunt.otziv.client_chat_control.dto.PreparedNoResponseReview;
-import com.hunt.otziv.client_chat_control.model.ClientChatUnansweredStatus;
-import com.hunt.otziv.client_chat_control.repository.ClientChatUnansweredItemRepository;
+import com.hunt.otziv.client_chat_control.api.ClientChatNoResponseReviews;
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlConcreteItemRepository;
 import java.security.Principal;
 import lombok.RequiredArgsConstructor;
@@ -16,7 +15,7 @@ import org.springframework.web.server.ResponseStatusException;
 @RequiredArgsConstructor
 public class ManagerControlNoResponseSnapshot {
     private final ManagerDailyControlConcreteItemRepository cards;
-    private final ClientChatUnansweredItemRepository unanswered;
+    private final ClientChatNoResponseReviews reviews;
     private final ManagerControlAccessPolicy access;
 
     @Transactional(readOnly = true)
@@ -30,12 +29,6 @@ public class ManagerControlNoResponseSnapshot {
         if (!"CLIENT_CHAT_UNANSWERED".equals(card.getEntityType()) || card.getEntityId() == null) {
             return null;
         }
-        var item = unanswered.findById(card.getEntityId()).orElse(null);
-        if (item == null || item.getStatus() != ClientChatUnansweredStatus.OPEN) {
-            return null;
-        }
-        return new PreparedNoResponseReview(item.getId(),
-                item.getLastClientMessage() == null ? null : item.getLastClientMessage().getId(),
-                item.getLastMessageText(), item.getLastClientMessageAt(), null);
+        return reviews.snapshot(card.getEntityId(), card.getControl().managerId());
     }
 }

@@ -1,7 +1,7 @@
 package com.hunt.otziv.manager_control.service;
 
 import com.hunt.otziv.client_chat_control.dto.PreparedNoResponseReview;
-import com.hunt.otziv.client_chat_control.service.ClientChatNoResponseAiReviewService;
+import com.hunt.otziv.client_chat_control.api.ClientChatNoResponseReviews;
 import com.hunt.otziv.manager_control.dto.ManagerControlItemActionRequest;
 import java.security.Principal;
 import lombok.RequiredArgsConstructor;
@@ -15,7 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ManagerControlNoResponseReviewWorkflow {
     private final ManagerControlNoResponseSnapshot snapshot;
-    private final ClientChatNoResponseAiReviewService reviews;
+    private final ClientChatNoResponseReviews reviews;
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public PreparedNoResponseReview prepare(Long cardId, ManagerControlItemActionRequest request,
@@ -28,9 +28,7 @@ public class ManagerControlNoResponseReviewWorkflow {
         if (source == null) {
             return null;
         }
-        var review = com.hunt.otziv.config.metrics.PerformanceMetrics.segment(
-                "manager-control.action", "no-response-review", () -> reviews.review(source.messageText()));
-        return new PreparedNoResponseReview(source.itemId(), source.messageId(),
-                source.messageText(), source.messageAt(), review);
+        return com.hunt.otziv.config.metrics.PerformanceMetrics.segment(
+                "manager-control.action", "no-response-review", () -> reviews.review(source));
     }
 }

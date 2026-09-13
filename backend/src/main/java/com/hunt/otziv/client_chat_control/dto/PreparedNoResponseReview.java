@@ -5,5 +5,5 @@ import java.time.LocalDateTime;
 
 /** Server-only evidence: never accepted from an HTTP request or serialized in a response. */
 public record PreparedNoResponseReview(
-        Long itemId, Long messageId, String messageText, LocalDateTime messageAt, Review review
+        Long itemId, Long messageId, String messageText, LocalDateTime messageAt, Long managerId, Review review
 ) {}

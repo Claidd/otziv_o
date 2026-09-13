@@ -791,6 +791,7 @@ public class ClientChatMessageTrackerService {
                 || !java.util.Objects.equals(review.messageId(), messageId)
                 || !java.util.Objects.equals(review.messageText(), item.getLastMessageText())
                 || !java.util.Objects.equals(review.messageAt(), item.getLastClientMessageAt())
+                || !java.util.Objects.equals(review.managerId(), item.getManager() == null ? null : item.getManager().getId())
                 || !noResponseAiReviewService.stillApplicable(review.review())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Сообщение или условия проверки изменились. Повторите проверку; карточка остаётся открытой");

@@ -1707,7 +1707,6 @@ com.hunt.otziv.manager_daily_summary.service.ManagerWorkerDailyProgressService -
 com.hunt.otziv.manager_daily_summary.service.ManagerWorkerDailyProgressService -> com.hunt.otziv.u_users.repository.ManagerRepository
 com.hunt.otziv.manager_daily_summary.service.ManagerWorkerDailyProgressService -> com.hunt.otziv.worker_performance.dto.DailyWorkProgressResponse
 com.hunt.otziv.manager_daily_summary.service.ManagerWorkerDailyProgressService -> com.hunt.otziv.worker_performance.service.StaffDailyProgressService
-com.hunt.otziv.manager_performance.service.ManagerPerformanceService -> com.hunt.otziv.client_chat_control.model.ClientChatUnansweredItem
 com.hunt.otziv.manager_performance.service.ManagerPerformanceService -> com.hunt.otziv.client_chat_control.model.ClientChatUnansweredStatus
 com.hunt.otziv.manager_performance.service.ManagerPerformanceService -> com.hunt.otziv.client_chat_control.repository.ClientChatUnansweredItemRepository
 com.hunt.otziv.manager_performance.service.ManagerPerformanceService -> com.hunt.otziv.manager_control.model.ManagerDailyControl

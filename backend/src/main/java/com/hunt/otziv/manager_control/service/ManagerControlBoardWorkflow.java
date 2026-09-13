@@ -179,10 +179,17 @@ public class ManagerControlBoardWorkflow {
         return dailySnapshot.transientControl(manager, today);
     }
 
+    @Transactional(readOnly = true)
+    public void requireManagerAccess(Long managerId, Principal principal, Authentication authentication) {
+        accessPolicy.visibleManagers(principal, authentication).stream().filter(item -> managerId != null && managerId.equals(item.getId())).findFirst().orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Менеджер недоступен"));
+    }
+
     @Transactional
     public ManagerControlManagerDetailResponse syncManagerDetails(Long managerId, Principal principal, Authentication authentication) {
-        Manager manager = accessPolicy.visibleManagers(principal, authentication).stream().filter(item -> managerId != null && managerId.equals(item.getId())).findFirst().orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Менеджер недоступен"));
+        // The facade completes authorization before this transaction. Read the manager after
+        // reconciliation so MySQL's repeatable-read snapshot includes the reconciled changes.
         reconcileClientMessagesForControl();
+        Manager manager = accessPolicy.visibleManagers(principal, authentication).stream().filter(item -> managerId != null && managerId.equals(item.getId())).findFirst().orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Менеджер недоступен"));
         managerControl(manager, LocalDate.now(), null, true, false);
         cardLifecycle.invalidateManagerPerformance();
         return managerDetails(manager, true);
