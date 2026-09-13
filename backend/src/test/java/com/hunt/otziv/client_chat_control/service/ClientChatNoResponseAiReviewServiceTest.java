@@ -183,6 +183,29 @@ class ClientChatNoResponseAiReviewServiceTest {
         assertFalse(service.review("Спасибо").checked());
     }
 
+    @Test
+    void preparedDecisionSurvivesManagerDelayButExpiresAfterOneDay() {
+        stubAvailableDeepSeek();
+        var elapsed = new java.util.concurrent.atomic.AtomicLong();
+        service = new ClientChatNoResponseAiReviewService(providerRouter, new ObjectMapper(), appSettingService, elapsed::get);
+        when(appSettingService.getInt(ClientChatNoResponseAiReviewService.MINIMUM_CONFIDENCE_SETTING, 90)).thenReturn(90);
+        when(provider.generate(org.mockito.ArgumentMatchers.any(AiRequest.class))).thenReturn(new AiResponse(
+                "{\"decision\":\"NO_RESPONSE_NEEDED\",\"confidence\":97,\"reason\":\"Благодарность\"}", "deepseek", 1, 1));
+        var prepared = service.review("Спасибо");
+        elapsed.set(java.time.Duration.ofHours(2).toNanos());
+        assertTrue(service.hasCachedReview("Спасибо"));
+        assertEquals(prepared, service.review("Спасибо"));
+        verify(provider).generate(org.mockito.ArgumentMatchers.any(AiRequest.class));
+        when(appSettingService.getInt(ClientChatNoResponseAiReviewService.MINIMUM_CONFIDENCE_SETTING, 90)).thenReturn(99);
+        assertFalse(service.hasCachedReview("Спасибо"));
+        assertFalse(service.stillApplicable(prepared));
+        when(appSettingService.getInt(ClientChatNoResponseAiReviewService.MINIMUM_CONFIDENCE_SETTING, 90)).thenReturn(90);
+        elapsed.set(java.time.Duration.ofHours(24).toNanos() + 1);
+        assertFalse(service.hasCachedReview("Спасибо"));
+        service.review("Спасибо");
+        verify(provider, org.mockito.Mockito.times(2)).generate(org.mockito.ArgumentMatchers.any(AiRequest.class));
+    }
+
     private void stubAvailableDeepSeek() {
         when(providerRouter.activeProviderName()).thenReturn("deepseek");
         when(providerRouter.activeProviderAvailable()).thenReturn(true);

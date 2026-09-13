@@ -43,3 +43,6 @@ com.hunt.otziv.p_products.api.LegacyOrderNotificationException
 com.hunt.otziv.client_chat_control.api.ClientChatNoResponseReviews
 com.hunt.otziv.client_chat_control.dto.PreparedNoResponseReview
 com.hunt.otziv.client_chat_control.dto.ClientChatPerformanceSample
+
+# Settings owner -> client chat preparation; read-only flag, no card authority (client-chat-review-prefetch-20260914.md).
+com.hunt.otziv.config.settings.api.ClientChatReviewSettings

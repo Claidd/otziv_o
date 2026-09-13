@@ -55,6 +55,15 @@ public class ClientChatResolutionPolicy {
         return new Assessment(true, false, false, "NEEDS_HUMAN_REVIEW");
     }
 
+    public boolean rejectsNoResponse(Assessment assessment) {
+        if (assessment == null || assessment.reasonCode() == null) return true;
+        return switch (assessment.reasonCode()) {
+            case "QUESTION", "PROBLEM_OR_COMPLAINT", "ACTION_REQUEST",
+                    "ATTACHMENT_REQUIRES_REVIEW", "EMPTY" -> true;
+            default -> false;
+        };
+    }
+
     private boolean isSafeAcknowledgement(String normalized) {
         if (SAFE_PHRASES.contains(normalized)) {
             return true;

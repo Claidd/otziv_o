@@ -15,7 +15,14 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 @RequiredArgsConstructor
 public class AppSettingService implements com.hunt.otziv.config.settings.api.OutboundMessagePolicy,
-        com.hunt.otziv.config.settings.api.PublicationProgressSettings {
+        com.hunt.otziv.config.settings.api.PublicationProgressSettings,
+        com.hunt.otziv.config.settings.api.ClientChatReviewSettings {
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean prefetchEnabled() {
+        return getBoolean("manager-control.unanswered-client-messages.no-response-ai-prefetch-enabled", true);
+    }
 
     @Override
     @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)

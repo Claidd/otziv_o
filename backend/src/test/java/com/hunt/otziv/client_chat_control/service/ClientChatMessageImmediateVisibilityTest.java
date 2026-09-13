@@ -34,6 +34,8 @@ class ClientChatMessageImmediateVisibilityTest {
     @Mock private ClientChatIdentityService identityService;
     @Mock private ClientChatNoResponseAiReviewService noResponseAiReviewService;
 
+    @Mock private org.springframework.context.ApplicationEventPublisher events;
+
     private ClientChatMessageTrackerService service;
 
     @BeforeEach
@@ -49,7 +51,8 @@ class ClientChatMessageImmediateVisibilityTest {
                 identityService,
                 new ClientChatResolutionPolicy(),
                 new ClientChatReplyQualityService(),
-                noResponseAiReviewService
+                noResponseAiReviewService,
+                events
         );
     }
 

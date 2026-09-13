@@ -53,6 +53,8 @@ class ClientChatMessageTrackerServiceTest {
     @Mock private ClientChatIdentityService identityService;
     @Mock private ClientChatNoResponseAiReviewService noResponseAiReviewService;
 
+    @Mock private org.springframework.context.ApplicationEventPublisher events;
+
     private ClientChatMessageTrackerService service;
 
     @BeforeEach
@@ -68,7 +70,8 @@ class ClientChatMessageTrackerServiceTest {
                 identityService,
                 new ClientChatResolutionPolicy(),
                 new ClientChatReplyQualityService(),
-                noResponseAiReviewService
+                noResponseAiReviewService,
+                events
         );
         lenient().when(appSettingService.getBoolean("manager-control.unanswered-client-messages.enabled", true)).thenReturn(true);
         lenient().when(appSettingService.getBoolean(

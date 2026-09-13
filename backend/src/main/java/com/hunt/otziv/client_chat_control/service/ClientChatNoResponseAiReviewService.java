@@ -15,12 +15,10 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class ClientChatNoResponseAiReviewService {
 
@@ -52,8 +50,22 @@ public class ClientChatNoResponseAiReviewService {
     private final AiProviderRouter providerRouter;
     private final ObjectMapper objectMapper;
     private final AppSettingService appSettingService;
-    private final Cache<ReviewKey, Review> reviews = Caffeine.newBuilder()
-            .maximumSize(512).expireAfterWrite(Duration.ofMinutes(5)).build();
+    private final Cache<ReviewKey, Review> reviews;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public ClientChatNoResponseAiReviewService(AiProviderRouter providerRouter, ObjectMapper objectMapper,
+            AppSettingService appSettingService) {
+        this(providerRouter, objectMapper, appSettingService, com.github.benmanes.caffeine.cache.Ticker.systemTicker());
+    }
+
+    ClientChatNoResponseAiReviewService(AiProviderRouter providerRouter, ObjectMapper objectMapper,
+            AppSettingService appSettingService, com.github.benmanes.caffeine.cache.Ticker ticker) {
+        this.providerRouter = providerRouter;
+        this.objectMapper = objectMapper;
+        this.appSettingService = appSettingService;
+        this.reviews = Caffeine.newBuilder().maximumSize(512)
+                .expireAfterWrite(Duration.ofHours(24)).ticker(ticker).build();
+    }
 
     public Review review(String messageText) {
         if (!deepSeekAvailable()) {
@@ -67,6 +79,10 @@ public class ClientChatNoResponseAiReviewService {
             return evaluated.checked() ? evaluated : null;
         });
         return result == null ? Review.unavailable("DeepSeek не смог проверить сообщение") : result;
+    }
+
+    boolean hasCachedReview(String messageText) {
+        return reviews.getIfPresent(new ReviewKey(fingerprint(messageText), minimumConfidence())) != null;
     }
 
     public boolean stillApplicable(Review review) {
