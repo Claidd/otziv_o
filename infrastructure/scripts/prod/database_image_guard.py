@@ -144,6 +144,11 @@ def checked_command(command, service_name, native_mysql=False):
         # Runtime SET GLOBAL during a cutover does not change this launch value.
         require(options.pop("event-scheduler", None) in {"OFF", "ON"},
                 "Reviewed MySQL native event scheduler requires explicit OFF or ON")
+        # Preserve the existing implicit 128 MiB launch for rollback, and permit
+        # only the reviewed 512 MiB shared-VPS memory budget. This is not a
+        # general allowance for arbitrary server or storage configuration.
+        require(options.pop("innodb-buffer-pool-size", None) in {None, "536870912"},
+                "Reviewed MySQL native buffer pool requires exactly 512 MiB or the existing default")
         require(options == NATIVE_MYSQL_OPTIONS, "Reviewed MySQL native command requires exact options")
         return
     options = command[1:] if command[0] == "mysqld" else command

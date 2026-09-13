@@ -30,6 +30,8 @@ The reviewed Compose command now sets the buffer pool to 512 MiB. This adds appr
 
 The small buffer and observed physical reads are a plausible contributor to intermittent slow profiles, not proof that every delay is disk I/O. Compare subsequent physical-read rates and full HTTP latency, retaining cold observations and accounting for different traffic. Read-only diagnostic probes themselves warm database pages; do not treat their speed as an unbiased HTTP before/after result.
 
+The database continuity guard must accept this exact memory option for the reviewed native MySQL image. It permits only the previous implicit default or `--innodb-buffer-pool-size=536870912`, in both target and existing launch metadata, so forward deployment and configuration rollback remain possible. Arbitrary sizes, alternate spellings, duplicate flags, storage paths, image changes and durability changes remain rejected. A regression resolves the repository's real Compose command and runs it through the continuity guard against the previous native launch; synthetic fixtures alone did not detect the initial mismatch.
+
 ## Design references
 
 - Spring 7 transaction-bound events: https://docs.spring.io/spring-framework/reference/data-access/transaction/event.html

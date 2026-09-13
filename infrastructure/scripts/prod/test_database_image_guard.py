@@ -403,6 +403,34 @@ class ContinuityTests(unittest.TestCase):
                     command[-1] = "--event-scheduler=" + value
                     self.reject("native event scheduler")
 
+    def test_native_buffer_pool_allows_only_reviewed_forward_and_rollback_transitions(self):
+        for target in [None, "536870912"]:
+            for existing in [None, "536870912"]:
+                with self.subTest(target=target, existing=existing):
+                    self.state = native_mysql_fixture()
+                    if target is not None:
+                        self.state["config"]["services"]["mysql"]["command"].append("--innodb-buffer-pool-size=" + target)
+                    if existing is not None:
+                        self.state["containers"]["1" * 64]["Config"]["Cmd"].append("--innodb-buffer-pool-size=" + existing)
+                    self.assertEqual(self.evaluate()["services"]["mysql"], {"pull_policy": "never"})
+
+    def test_native_buffer_pool_rejects_unreviewed_sizes_aliases_and_duplicate_flags(self):
+        changes = [["--innodb-buffer-pool-size=" + value] for value in
+                   ["0", "134217728", "1073741824", "512M", "536870912 ", "536870912 --datadir=/new"]]
+        changes += [["--innodb_buffer_pool_size=536870912"], ["--innodb-buffer-pool-s=536870912"],
+                    ["--innodb-buffer-pool-size=536870912", "--innodb-buffer-pool-size=536870912"]]
+        for flags in changes:
+            for existing in [False, True]:
+                with self.subTest(flags=flags, existing=existing):
+                    self.state = native_mysql_fixture()
+                    command = self.state["containers"]["1" * 64]["Config"]["Cmd"] if existing else self.state["config"]["services"]["mysql"]["command"]
+                    command.extend(flags)
+                    self.reject("native (buffer pool|command)")
+
+    def test_buffer_pool_allowance_is_not_exported_to_other_mysql_images(self):
+        self.state["config"]["services"]["mysql"]["command"] = ["mysqld", "--innodb-buffer-pool-size=536870912"]
+        self.reject("Database command")
+
     def test_native_tmpfs_must_be_the_precise_reviewed_runtime_mount_and_never_hide_data_or_config(self):
         alternatives = ["/var/lib/mysql:rw,noexec,nosuid,size=16m,uid=999,gid=999,mode=0755",
                         "/etc:rw,noexec,nosuid,size=16m,uid=999,gid=999,mode=0755",
@@ -639,6 +667,22 @@ class ShellWiringTests(unittest.TestCase):
 
 
 class ActualComposeConfigurationTests(unittest.TestCase):
+    def test_repository_mysql_command_passes_guard_against_existing_native_database(self):
+        # Exercise the actual release command, not a fixture copied from the guard.
+        # Compose config does not pull images, start containers or connect to a DB.
+        repo = HERE.parents[2]
+        result = subprocess.run(["docker", "compose", "--project-name", "otziv-prod",
+                                 "--env-file", str(repo / ".env.example"),
+                                 "-f", str(repo / "docker-compose.yaml"), "config", "--format", "json"],
+                                cwd=repo, capture_output=True, text=True, timeout=45)
+        self.assertEqual(result.returncode, 0, "Repository Compose configuration must resolve")
+        command = json.loads(result.stdout)["services"]["mysql"]["command"]
+        self.assertIn("--innodb-buffer-pool-size=536870912", command)
+        state = native_mysql_fixture()
+        state["config"]["services"]["mysql"]["command"] = command
+        self.assertEqual(guard.checked_override(state["config"], FixtureDocker(state))["services"]["mysql"],
+                         {"pull_policy": "never"})
+
     def test_pull_policy_guard_preserves_actual_compose_service_hash(self):
         # config is read-only: this does not pull an image or contact/create a DB.
         if not shutil.which("docker"):
