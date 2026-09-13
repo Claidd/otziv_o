@@ -19,7 +19,10 @@ import com.hunt.otziv.r_review.bot.service.ReviewBotAssignmentGuardService;
 import com.hunt.otziv.r_review.bot.service.ReviewBotCooldownService;
 import com.hunt.otziv.r_review.bot.model.ReviewBotAssignmentMode;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
+import com.hunt.otziv.r_review.utils.ReviewBotPolicy;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -42,8 +45,10 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
     private final ReviewAccountWalkScheduleService accountWalkScheduleService;
     private final ReviewBotAssignmentGuardService assignmentGuardService;
     private final BusinessAuditService businessAuditService;
+    private final EntityManager entityManager;
 
     private static final Long STUB_BOT_ID = 1L;
+    private static final Long SHARED_POOL_CITY_ID = 325L;
     private static final Set<Long> OWN_CITY_NEW_ACCOUNT_CITY_IDS = Set.of(320L, 326L);
     private static final Set<String> TEMPLATE_BOT_NAMES = Set.of(
             "Впишите Имя Фамилию",
@@ -659,11 +664,75 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
         }
 
         if (assignedBot == null) {
+            assignedBot = claimNamedPoolAccount(filial, usedBotIdsInThisOrder, mode);
+        }
+
+        if (assignedBot == null) {
             assignedBot = getStubBot();
             log.warn("Нет доступных и резервных ботов! Назначена заглушка для отзыва {}", reviewIndex + 1);
         }
 
         return assignedBot;
+    }
+
+    private Bot claimNamedPoolAccount(
+            Filial filial,
+            Set<Long> excludedBotIds,
+            ReviewBotAssignmentMode mode
+    ) {
+        if (mode != ReviewBotAssignmentMode.NAGUL_ONLY
+                && mode != ReviewBotAssignmentMode.PUBLISH_PREFER_WALKED) {
+            return null;
+        }
+        City targetCity = filial != null ? filial.getCity() : null;
+        if (targetCity == null || targetCity.getId() == null
+                || SHARED_POOL_CITY_ID.equals(targetCity.getId())
+                || OWN_CITY_NEW_ACCOUNT_CITY_IDS.contains(targetCity.getId())) {
+            return null;
+        }
+
+        List<Bot> candidates = new ArrayList<>(botService.getFindAllByFilialCityId(SHARED_POOL_CITY_ID));
+        Collections.shuffle(candidates);
+        for (Bot candidate : candidates) {
+            if (!isEligibleNamedPoolAccount(candidate, mode) || excludedBotIds.contains(candidate.getId())) {
+                continue;
+            }
+            Bot locked = lockEligibleCandidate(candidate, filial);
+            if (locked == null) {
+                continue;
+            }
+            // The initial pool query may have cached this entity before another
+            // transaction claimed or edited it. A locking refresh also avoids
+            // an older repeatable-read snapshot when rechecking the source city.
+            entityManager.refresh(locked, LockModeType.PESSIMISTIC_WRITE);
+            if (!isEligibleNamedPoolAccount(locked, mode)) {
+                continue;
+            }
+
+            locked.setBotCity(targetCity);
+            Bot saved = botService.save(locked);
+            excludedBotIds.add(saved.getId());
+            log.info("Аккаунт с заполненным ФИО {} назначен из общего пула городу {} для режима {}",
+                    saved.getId(), targetCity.getId(), mode);
+            return saved;
+        }
+        return null;
+    }
+
+    private boolean isEligibleNamedPoolAccount(Bot bot, ReviewBotAssignmentMode mode) {
+        if (!ReviewBotPolicy.hasUsablePublicationBot(bot)
+                || bot.getBotCity() == null || !SHARED_POOL_CITY_ID.equals(bot.getBotCity().getId())
+                || bot.getFio() == null || bot.getFio().isBlank()
+                || bot.getStatus() == null
+                || !"Новый".equals(Objects.toString(bot.getStatus().getBotStatusTitle(), "").trim())
+                || !botCooldownService.isAvailableForAssignment(bot)) {
+            return false;
+        }
+        return mode == ReviewBotAssignmentMode.NAGUL_ONLY
+                ? bot.getCounter() >= 0 && bot.getCounter() <= 1
+                    && accountWalkScheduleService.isEligibleForNagul(bot)
+                : mode == ReviewBotAssignmentMode.PUBLISH_PREFER_WALKED
+                    && bot.getCounter() >= 2 && accountWalkScheduleService.isWalkedAccount(bot);
     }
 
     private Bot lockEligibleCandidate(Bot candidate, Filial filial) {
