@@ -286,6 +286,7 @@ public class PaymentLinkPreparationWorkflow {
                 if (canReuseContractorLink(link, amountKopecks)) {
                     return new PaymentInstructionPreparation(toManagerResponseWithShadowRoute(link), false);
                 }
+                requireExplicitReplacementOfFrozenRecipient(link, configuredMode, amountKopecks);
                 if (canRetireStaleLink(link)) {
                     retireStaleReusableLink(link);
                     contractorPaymentLiveRoutingService.releaseClosedPaymentLink(link);
@@ -586,7 +587,10 @@ public class PaymentLinkPreparationWorkflow {
 
     private void requireExplicitReplacementOfFrozenRecipient(
             PaymentLink link, InvoicePaymentMode mode, long amountKopecks) {
-        if (mode == InvoicePaymentMode.AUTO_ROUTING && canReuseContractorLink(link, amountKopecks)) {
+        // The client-facing amount and recipient stay binding independently of
+        // an internal reservation correction or release.
+        if (mode == InvoicePaymentMode.AUTO_ROUTING && isFrozenContractorRoute(link)
+                && link.getAmountKopecks() == amountKopecks) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "По этому заказу уже выданы реквизиты сотрудника. Автоматическая смена получателя заблокирована. "
                             + "Если клиент перевёл деньги, нажмите «Оплатили» и укажите фактического получателя. "

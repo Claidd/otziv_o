@@ -122,6 +122,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -1513,14 +1514,17 @@ class PaymentLinkServiceTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = PaymentLinkStatus.class, names = {
-            "WAITING_MANUAL_PAYMENT", "EXPIRED", "CANCELED"
+    @CsvSource({
+            "WAITING_MANUAL_PAYMENT, 400000", "WAITING_MANUAL_PAYMENT, 200000", "WAITING_MANUAL_PAYMENT, 0",
+            "EXPIRED, 400000", "EXPIRED, 200000", "EXPIRED, 0",
+            "CANCELED, 400000", "CANCELED, 200000", "CANCELED, 0"
     })
-    void releasedOrExpiredContractorRequisitesCannotSilentlyChangeRecipient(PaymentLinkStatus status) {
+    void releasedOrExpiredContractorRequisitesCannotSilentlyChangeRecipient(
+            PaymentLinkStatus status, long correctedReservation) {
         PaymentLinkService service = service(properties());
         Order order = order(24539L, "Ранее выданные реквизиты", BigDecimal.valueOf(4000));
         PaymentLink original = contractorManualLink(7148L, order, 400_000L, status, 891L);
-        original.setReservedAmountKopecks(400_000L);
+        original.setReservedAmountKopecks(correctedReservation);
         original.setExpiresAt(LocalDateTime.now().plusDays(1));
         when(orderRepository.findByIdForCounterUpdate(24539L)).thenReturn(Optional.of(order));
         when(paymentLinkRepository.findByOrderIdForUpdate(24539L)).thenReturn(List.of(original));
@@ -1539,9 +1543,38 @@ class PaymentLinkServiceTest {
         assertTrue(error.getReason().contains("Оплатили"));
         assertEquals(status, original.getStatus());
         assertEquals(891L, original.getContractorAllocationId());
+        assertEquals(correctedReservation, original.getReservedAmountKopecks());
         verify(paymentLinkRepository, never()).save(any(PaymentLink.class));
         verify(contractorPaymentLiveRoutingService, never()).reserveForPaymentLink(any());
         verifyNoInteractions(tbankClient);
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = {0L, 200_000L})
+    void correctedReservationOnActiveFrozenSourceCannotTriggerRecipientReplacement(long correctedReservation) {
+        PaymentLinkService service = service(properties());
+        Order order = order(24539L, "Коррекция внутреннего резерва", BigDecimal.valueOf(4000));
+        PaymentLink original = contractorManualLink(
+                7148L, order, 400_000L, PaymentLinkStatus.WAITING_MANUAL_PAYMENT, 891L);
+        original.setReservedAmountKopecks(correctedReservation);
+        original.setExpiresAt(LocalDateTime.now().plusDays(1));
+        when(orderRepository.findByIdForCounterUpdate(24539L)).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByOrderIdForUpdate(24539L)).thenReturn(List.of(original));
+        when(paymentLinkRepository.findFirstByOrder_IdAndStatusInAndExpiresAtAfterOrderByCreatedAtDesc(
+                eq(24539L), anyCollection(), any(LocalDateTime.class))).thenReturn(Optional.of(original));
+        when(contractorPaymentLiveRoutingService.frozenPaymentLinkAction(7148L, 891L))
+                .thenReturn(ContractorPaymentLiveRoutingService.FrozenPaymentLinkAction.KEEP);
+
+        ResponseStatusException error = assertThrows(ResponseStatusException.class,
+                () -> service.createForOrder(24539L));
+
+        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
+        assertTrue(error.getReason().contains("Автоматическая смена получателя заблокирована"));
+        assertEquals(PaymentLinkStatus.WAITING_MANUAL_PAYMENT, original.getStatus());
+        assertEquals(correctedReservation, original.getReservedAmountKopecks());
+        assertEquals(400_000L, original.getAmountKopecks());
+        verify(paymentLinkRepository, never()).save(any());
+        verify(contractorPaymentLiveRoutingService, never()).reserveForPaymentLink(any());
     }
 
     @Test
