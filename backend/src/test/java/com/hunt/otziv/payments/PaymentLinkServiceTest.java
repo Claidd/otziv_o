@@ -122,6 +122,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -431,7 +432,9 @@ class PaymentLinkServiceTest {
         owner.setRecipientType(ContractorRecipientType.OWNER);
 
         when(orderRepository.findByIdForCounterUpdate(24_809L)).thenReturn(Optional.of(order));
-        when(paymentLinkRepository.findByOrderIdForUpdate(24_809L)).thenReturn(List.of());
+        PaymentLink previous = contractorManualLink(
+                7_258L, order, 200_000L, PaymentLinkStatus.EXPIRED, 987L);
+        when(paymentLinkRepository.findByOrderIdForUpdate(24_809L)).thenReturn(List.of(previous));
         when(paymentLinkRepository.findFirstByOrder_IdAndStatusInAndExpiresAtAfterOrderByCreatedAtDesc(
                 eq(24_809L), anyCollection(), any(LocalDateTime.class)
         )).thenReturn(Optional.empty());
@@ -1432,7 +1435,7 @@ class PaymentLinkServiceTest {
 
     @ParameterizedTest
     @EnumSource(value = ManualPaymentSource.class, names = {
-            "CONTRACTOR_PAYMENT_PROFILE", "PROFILE_MONTHLY_LIMIT"
+            "PROFILE_MONTHLY_LIMIT"
     })
     void unpaidReleasedReusableLinkIsRetiredAndRoutedAsNewAttempt(
             ManualPaymentSource oldSource
@@ -1508,6 +1511,70 @@ class PaymentLinkServiceTest {
         assertNull(replacement.getManualComment());
         assertEquals("Новый банк", replacement.getManualBankName());
         assertTrue(response.instructionText().contains("Новая попытка"));
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "WAITING_MANUAL_PAYMENT, 400000", "WAITING_MANUAL_PAYMENT, 200000", "WAITING_MANUAL_PAYMENT, 0",
+            "EXPIRED, 400000", "EXPIRED, 200000", "EXPIRED, 0",
+            "CANCELED, 400000", "CANCELED, 200000", "CANCELED, 0"
+    })
+    void releasedOrExpiredContractorRequisitesCannotSilentlyChangeRecipient(
+            PaymentLinkStatus status, long correctedReservation) {
+        PaymentLinkService service = service(properties());
+        Order order = order(24539L, "Ранее выданные реквизиты", BigDecimal.valueOf(4000));
+        PaymentLink original = contractorManualLink(7148L, order, 400_000L, status, 891L);
+        original.setReservedAmountKopecks(correctedReservation);
+        original.setExpiresAt(LocalDateTime.now().plusDays(1));
+        when(orderRepository.findByIdForCounterUpdate(24539L)).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByOrderIdForUpdate(24539L)).thenReturn(List.of(original));
+        if (status == PaymentLinkStatus.WAITING_MANUAL_PAYMENT) {
+            when(paymentLinkRepository.findFirstByOrder_IdAndStatusInAndExpiresAtAfterOrderByCreatedAtDesc(
+                    eq(24539L), anyCollection(), any(LocalDateTime.class))).thenReturn(Optional.of(original));
+            when(contractorPaymentLiveRoutingService.frozenPaymentLinkAction(7148L, 891L))
+                    .thenReturn(ContractorPaymentLiveRoutingService.FrozenPaymentLinkAction.START_NEW_ATTEMPT);
+        }
+
+        ResponseStatusException error = assertThrows(ResponseStatusException.class,
+                () -> service.createForOrder(24539L));
+
+        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
+        assertTrue(error.getReason().contains("Автоматическая смена получателя заблокирована"));
+        assertTrue(error.getReason().contains("Оплатили"));
+        assertEquals(status, original.getStatus());
+        assertEquals(891L, original.getContractorAllocationId());
+        assertEquals(correctedReservation, original.getReservedAmountKopecks());
+        verify(paymentLinkRepository, never()).save(any(PaymentLink.class));
+        verify(contractorPaymentLiveRoutingService, never()).reserveForPaymentLink(any());
+        verifyNoInteractions(tbankClient);
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = {0L, 200_000L})
+    void correctedReservationOnActiveFrozenSourceCannotTriggerRecipientReplacement(long correctedReservation) {
+        PaymentLinkService service = service(properties());
+        Order order = order(24539L, "Коррекция внутреннего резерва", BigDecimal.valueOf(4000));
+        PaymentLink original = contractorManualLink(
+                7148L, order, 400_000L, PaymentLinkStatus.WAITING_MANUAL_PAYMENT, 891L);
+        original.setReservedAmountKopecks(correctedReservation);
+        original.setExpiresAt(LocalDateTime.now().plusDays(1));
+        when(orderRepository.findByIdForCounterUpdate(24539L)).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByOrderIdForUpdate(24539L)).thenReturn(List.of(original));
+        when(paymentLinkRepository.findFirstByOrder_IdAndStatusInAndExpiresAtAfterOrderByCreatedAtDesc(
+                eq(24539L), anyCollection(), any(LocalDateTime.class))).thenReturn(Optional.of(original));
+        when(contractorPaymentLiveRoutingService.frozenPaymentLinkAction(7148L, 891L))
+                .thenReturn(ContractorPaymentLiveRoutingService.FrozenPaymentLinkAction.KEEP);
+
+        ResponseStatusException error = assertThrows(ResponseStatusException.class,
+                () -> service.createForOrder(24539L));
+
+        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
+        assertTrue(error.getReason().contains("Автоматическая смена получателя заблокирована"));
+        assertEquals(PaymentLinkStatus.WAITING_MANUAL_PAYMENT, original.getStatus());
+        assertEquals(correctedReservation, original.getReservedAmountKopecks());
+        assertEquals(400_000L, original.getAmountKopecks());
+        verify(paymentLinkRepository, never()).save(any());
+        verify(contractorPaymentLiveRoutingService, never()).reserveForPaymentLink(any());
     }
 
     @Test
@@ -5978,6 +6045,59 @@ class PaymentLinkServiceTest {
         verify(tbankClient, never()).getState(any(TbankPaymentProfile.class), anyString());
         verify(tbankClient, never()).cancel(any(TbankPaymentProfile.class), any(TbankCancelCommand.class));
         verify(orderTransactionService).handlePaymentStatus(order);
+    }
+
+    @Test
+    void managerCanConfirmOriginalRecipientAfterUnusedReplacementIsCanceledExactlyOnce() throws Exception {
+        PaymentLinkService service = service(properties());
+        Order order = order(24539L, "Ранее выданные реквизиты менеджера", BigDecimal.valueOf(4000));
+        PaymentLink original = contractorManualLink(7148L, order, 400_000L, PaymentLinkStatus.EXPIRED, 891L);
+        original.setReceiptStatus(PaymentReceiptStatus.PENDING);
+        PaymentLink replacement = new PaymentLink();
+        replacement.setId(7774L);
+        replacement.setOrder(order);
+        replacement.setStatus(PaymentLinkStatus.CANCELED);
+        replacement.setPaymentMethod(PaymentMethod.BANK_FORM);
+        replacement.setAmountKopecks(400_000L);
+        replacement.setContractorAllocationId(1520L);
+        when(orderRepository.findByIdForCounterUpdate(24539L)).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByOrderIdForUpdate(24539L)).thenReturn(List.of(replacement, original));
+        when(paymentLinkRepository.findByIdWithOrder(7148L)).thenReturn(Optional.of(original));
+        when(paymentLinkRepository.findByIdForUpdate(7148L)).thenReturn(Optional.of(original));
+        when(actualPaymentAttributionService.actualRecipientAccountingEnabled()).thenReturn(true);
+        ManualCardPaymentContextResponse expected = new ManualCardPaymentContextResponse(
+                24539L, 400_000L, null, List.of(), null, false, null, null, null);
+        when(actualPaymentAttributionService.manualCardPaymentContext(order, original)).thenReturn(expected);
+        doAnswer(invocation -> {
+            PaymentLink frozen = invocation.getArgument(1);
+            frozen.setManualActualRecipientType(ContractorRecipientType.MANAGER);
+            frozen.setManualActualRecipientProfileId(32L);
+            frozen.setManualActualCashDestinationKind(ContractorCashDestinationKind.CONTRACTOR_PROFILE);
+            frozen.setManualActualReason(invocation.getArgument(5));
+            frozen.setManualActualActor(invocation.getArgument(7));
+            frozen.setManualActualRecipientFrozenAt(LocalDateTime.now());
+            return null;
+        }).when(actualPaymentAttributionService).freezePaymentLinkRecipientIntent(
+                any(), any(), any(), any(), any(), anyString(), any(), anyString());
+        when(orderTransactionService.handlePaymentStatus(order)).thenReturn(true);
+        when(paymentLinkRepository.saveAndFlush(original)).thenReturn(original);
+
+        assertSame(expected, service.manualCardPaymentContextForOrder(24539L, authentication));
+        for (int attempt = 0; attempt < 2; attempt++) {
+            var result = service.submitManagerManualCardPaymentForOrder(
+                    24539L, "Поступление на исходные реквизиты проверено", null,
+                    ContractorRecipientType.MANAGER, 32L, "MANAGER:32", "manager@example.ru", authentication);
+            assertEquals("COMPLETED", result.status());
+        }
+
+        assertEquals(PaymentLinkStatus.CONFIRMED, original.getStatus());
+        assertEquals(400_000L, original.getConfirmedAmountKopecks());
+        assertEquals(32L, original.getManualActualRecipientProfileId());
+        assertEquals(891L, original.getContractorAllocationId());
+        assertEquals(PaymentLinkStatus.CANCELED, replacement.getStatus());
+        verify(orderTransactionService, times(1)).handlePaymentStatus(order);
+        verify(actualPaymentAttributionService, times(1)).recordPaymentLinkFinalAttribution(order, original, original);
+        verifyNoInteractions(ownerManualCardPaymentApprovalRepository, tbankClient);
     }
 
     @Test

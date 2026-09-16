@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.lenient;
@@ -360,6 +361,47 @@ class ContractorActualPaymentAttributionServiceTest {
         assertThat(row.getProjectedOverrunKopecks()).isZero();
         assertThat(actualAllocations()).isEmpty();
         verify(accountingService, never()).recordRelease(any(), any(), any(), anyString(), anyString());
+    }
+
+    @Test
+    void lateTransferToReleasedOriginalManagerIsRecordedOnceEvenWithoutAvailableBalance() {
+        ContractorPaymentAllocation original = sourceAllocation(
+                100L, ContractorAllocationMode.LIVE, manager, ContractorAllocationStatus.RELEASED_UNPAID);
+        original.setReleasedAt(EFFECTIVE_AT.minusDays(6));
+        available.put(manager.getId(), 0L);
+        Order order = new Order();
+        order.setId(ORDER_ID);
+        PaymentLink link = new PaymentLink();
+        link.setId(SOURCE_ID);
+        link.setOrder(order);
+        link.setAmountKopecks(1_000L);
+        link.setManualSource(ManualPaymentSource.CONTRACTOR_PAYMENT_PROFILE);
+        link.setContractorAllocationId(original.getId());
+        when(targetAccessPolicy.canManageUser(manager.getUser().getId())).thenReturn(true);
+        var context = service.manualCardPaymentContext(order, link);
+        assertThat(context.originalRecipient().recipientProfileId()).isEqualTo(manager.getId());
+        assertThat(context.originalRecipient().recipientType()).isEqualTo(ContractorRecipientType.MANAGER);
+        ContractorActualPaymentSource source = source(
+                original.getId(), original.getId(), ContractorRecipientType.MANAGER, manager);
+        ContractorActualPaymentRecipientCommand command = command(ContractorRecipientType.MANAGER, manager);
+
+        ContractorActualPaymentAttribution row = service.recordFinalAttributions(source, List.of(command)).getFirst();
+
+        assertThat(row.getOriginalRecipientProfileId()).isEqualTo(manager.getId());
+        assertThat(row.getActualRecipientProfileId()).isEqualTo(manager.getId());
+        assertThat(row.getAmountKopecks()).isEqualTo(1_000L);
+        assertThat(row.getAvailableBeforeKopecks()).isZero();
+        assertThat(row.getProjectedOverrunKopecks()).isEqualTo(1_000L);
+        verify(accountingService).recordConfirmation(
+                eq(original), eq(1_000L), any(), anyString(), anyString(), eq(false), eq(true));
+        verify(accountingService, never()).recordReservation(any());
+        verify(accountingService, never()).recordRelease(any(), any(), any(), anyString(), anyString());
+        clearInvocations(accountingService, allocationRepository, attributionRepository);
+
+        assertThat(service.recordFinalAttributions(source, List.of(command))).containsExactly(row);
+        verifyNoInteractions(accountingService);
+        verify(attributionRepository, never()).saveAndFlush(any());
+        verify(allocationRepository, never()).saveAndFlush(any());
     }
 
     @Test
