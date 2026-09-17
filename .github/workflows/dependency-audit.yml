@@ -95,10 +95,24 @@ jobs:
       # Cache only the public NVD database.
       # Maven settings, PAT, reports, logs and the rest of target are excluded.
       - name: Restore public NVD data
+        id: nvd-cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ${{ runner.temp }}/otziv-dependency-check-data/odc.mv.db
+          key: ${{ runner.os }}-dependency-check-13-public-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: ${{ runner.os }}-dependency-check-13-public-v1-
+      # Cache versions include the path list. Migrate the public NVD database
+      # from the previous archive on the first run of each eligible branch.
+      # Legacy advisory files are never consulted (OSS Index is disabled) and
+      # are excluded from the new cache saved below. No Sonatype request is made.
+      - name: Migrate legacy public NVD cache
+        if: steps.nvd-cache.outputs.cache-matched-key == ''
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ${{ runner.temp }}/otziv-dependency-check-data/odc.mv.db
+            ${{ runner.temp }}/otziv-dependency-check-data/oss_cache
           key: ${{ runner.os }}-dependency-check-13-public-v1-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: ${{ runner.os }}-dependency-check-13-public-v1-
       - name: Build reviewed Maven tooling and test transport
