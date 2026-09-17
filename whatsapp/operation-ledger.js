@@ -27,7 +27,7 @@ function operationIdFromRequest(req) {
 }
 function envelopeHash({ clientId, kind, destination, message }) {
   if (![clientId, destination, message].every(value => typeof value === "string" && value.length > 0)
-      || !["send", "send-group"].includes(kind)) throw new OperationLedgerError("invalid_operation_envelope", 400);
+      || !["send", "send-group", "send-group-file"].includes(kind)) throw new OperationLedgerError("invalid_operation_envelope", 400);
   return digest("otziv.whatsapp.envelope.v1", JSON.stringify([clientId, kind, destination, message]));
 }
 function digest(domain, value) { return crypto.createHash("sha256").update(domain).update("\0").update(value).digest("hex"); }

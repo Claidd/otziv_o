@@ -20,6 +20,7 @@ on:
           - c14-local-s3
           - c14-postgres
           - c16-postgres
+          - c17-mysql
           - c14-keycloak
           - c15-prometheus
           - c15-loki

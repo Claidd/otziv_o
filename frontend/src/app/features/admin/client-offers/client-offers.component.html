@@ -1,0 +1,102 @@
+<app-admin-layout title="Рассылки предложений" active="client-offers">
+  <main class="offers-page">
+    <header class="panel hero">
+      <div><span class="eyebrow">Автоответчик · предложения услуг</span><h1>Рассылки клиентам</h1>
+        <p>Одно предложение — каждому выбранному чату. Каждый день, по вашему расписанию.</p></div>
+      <a routerLink="/admin/dictionaries" [queryParams]="{tab: 'autoresponder'}">Настройки автоответчика ↗</a>
+    </header>
+    @if (error()) { <div class="banner error" role="alert">{{ error() }}</div> }
+    @if (notice()) { <div class="banner success" role="status">{{ notice() }}</div> }
+    @if (!loading() && !board().liveEnabled) {
+      <div class="banner warning">Отправка клиентских сообщений выключена в настройках автоответчика. Кампании сохраняются, очередь продолжит работу после включения.</div>
+    }
+    <div class="workspace">
+      <aside class="panel campaign-list">
+        <div class="section-heading"><h2>Кампании</h2><button type="button" (click)="newDraft()" [disabled]="busy()">+ Новая</button></div>
+        @if (loading()) { <p>Загрузка…</p> }
+        @for (row of board().campaigns; track row.campaign.id) {
+          <button type="button" class="campaign" [class.selected]="selectedId() === row.campaign.id" (click)="select(row)" [disabled]="busy()">
+            <span class="pill" [class.running]="row.campaign.state === 'RUNNING'">{{ label(row.campaign.state) }}</span>
+            <strong>{{ row.campaign.settings.title }}</strong>
+            <span>{{ row.counts.sent }} из {{ row.counts.total }} отправлено</span>
+            <progress [value]="row.counts.sent" [max]="row.counts.total || 1" aria-label="Отправлено"></progress>
+          </button>
+        } @empty { @if (!loading()) { <p>Создайте первую рассылку. Список получателей сформируется при запуске.</p> } }
+      </aside>
+      <section class="panel editor">
+        <div class="section-heading"><h2>{{ editable() ? 'Новое предложение' : selected()?.campaign?.settings?.title }}</h2>
+          @if (selected(); as row) { <span class="pill">{{ label(row.campaign.state) }}</span> }</div>
+        @if (editable()) {
+          <form (ngSubmit)="save()">
+            <fieldset [disabled]="busy()">
+              <label>Название рассылки<input name="title" [(ngModel)]="draft.title" (ngModelChange)="changed()" maxlength="120" placeholder="Например, новая услуга для клиентов" required></label>
+              <label>Сообщение клиенту<textarea name="message" [(ngModel)]="draft.message" (ngModelChange)="changed()" rows="7" maxlength="1000" placeholder="Расскажите о предложении…" required></textarea>
+                <small>{{ draft.message.length }} / 1000 символов</small></label>
+              <div class="file-panel">
+                <label>Файл к предложению
+                  @for (key of [fileInputKey]; track key) {
+                    <input type="file" accept=".pdf,.txt,.doc,.docx,.xlsx,.pptx,.jpg,.jpeg,.png" (change)="chooseFile($event)">
+                  }
+                </label>
+                <small>PDF, документы, таблицы, презентации или изображения. До 5 МБ.</small>
+                @if (fileName()) { <div class="file-name"><span>{{ fileName() }}</span><button type="button" (click)="clearFile()">Убрать файл</button></div> }
+                <label>Как отправлять файл<select name="fileMode" [(ngModel)]="draft.fileMode"><option value="ATTACHMENT">Вложением к сообщению</option><option value="LINK">Ссылкой на скачивание</option></select></label>
+              </div>
+              <h3>Получатели и очередность</h3>
+              <p class="hint">Включите нужные списки. Общий чат нескольких компаний получит одно сообщение.</p>
+              <div class="audiences">
+                <label class="check"><input type="checkbox" name="active" [(ngModel)]="draft.includeActive" (ngModelChange)="changed()"><span><b>1. В работе</b><small>Активные клиенты</small></span></label>
+                <label class="check"><input type="checkbox" name="stopped" [(ngModel)]="draft.includeStopped" (ngModelChange)="changed()"><span><b>2. На стопе</b><small>После активных</small></span></label>
+                <label class="check"><input type="checkbox" name="banned" [(ngModel)]="draft.includeBanned" (ngModelChange)="changed()"><span><b>3. Бан</b><small>Последняя очередь</small></span></label>
+              </div>
+              <h3>Темп отправки</h3>
+              <div class="schedule">
+                <label>Сообщений в день<input type="number" name="limit" [(ngModel)]="draft.dailyLimit" min="1" max="10000" step="1" required></label>
+                <label>Интервал, минут<input type="number" name="interval" [(ngModel)]="draft.intervalMinutes" min="1" max="1440" step="1" required></label>
+                <label>Начало отправок<input type="time" name="start" [(ngModel)]="draft.windowStart" required></label>
+                <label>Окончание отправок<input type="time" name="end" [(ngModel)]="draft.windowEnd" required></label>
+              </div>
+              <p class="hint">Время Иркутска. Лимит — максимум попыток за день для этой кампании; непотраченный остаток не накапливается. Если интервал не позволяет отправить весь дневной объём, остаток продолжится в следующие дни.</p>
+              <button type="button" class="secondary" (click)="preview()" [disabled]="!valid()">Посчитать получателей</button>
+              @if (audience(); as rows) {
+                <div class="preview-counts">@for (row of rows; track row.audience) {
+                  <span><b>{{ label(row.audience) }}</b>{{ row.reachable }} чатов @if (row.total > row.reachable) { · {{ row.total - row.reachable }} без чата }</span>
+                }</div>
+              }
+              <div class="actions"><button type="submit" class="secondary" [disabled]="!valid()">Сохранить черновик</button>
+                <button type="button" class="primary" (click)="save(true)" [disabled]="!valid() || !board().liveEnabled">Запуск</button></div>
+              <p class="hint">При запуске сохранятся текст, файл, выбранные списки и чаты. Рассылка продолжится на сервере, даже если закрыть страницу.</p>
+            </fieldset>
+          </form>
+        } @else if (selected(); as row) {
+          <div class="stats">
+            <article><b>{{ row.counts.sent }}</b><span>Отправлено</span></article><article><b>{{ row.counts.pending }}</b><span>В очереди</span></article>
+            <article><b>{{ row.usedToday }} / {{ row.campaign.settings.dailyLimit }}</b><span>Попыток сегодня</span></article>
+            <article><b>{{ row.counts.failed + row.counts.unknown }}</b><span>Требуют внимания</span></article>
+          </div>
+          <div class="message-preview">{{ row.campaign.settings.message }}</div>
+          @if (row.campaign.fileName) { <button type="button" class="secondary" (click)="download()">Скачать {{ row.campaign.fileName }}</button>
+            <small>{{ row.campaign.settings.fileMode === 'LINK' ? 'Отправляется ссылкой' : 'Отправляется вложением' }}</small> }
+          <p>Интервал {{ row.campaign.settings.intervalMinutes }} мин. · {{ row.campaign.settings.windowStart }}–{{ row.campaign.settings.windowEnd }}, Иркутск</p>
+          <p>Следующая проверка очереди: {{ date(row.campaign.nextAt) }}</p>
+          <div class="actions">
+            @if (row.campaign.state === 'RUNNING') { <button type="button" (click)="action('pause')" [disabled]="busy()">Пауза</button> }
+            @if (row.campaign.state === 'PAUSED') { <button type="button" class="primary" (click)="action('resume')" [disabled]="busy() || !board().liveEnabled">Продолжить</button> }
+            @if ((row.campaign.state === 'PAUSED' || row.campaign.state === 'COMPLETED') && row.counts.failed > 0) {
+              <button type="button" (click)="action('retry-failed')" [disabled]="busy()">Вернуть ошибки в очередь</button>
+            }
+            @if (row.campaign.state === 'RUNNING' || row.campaign.state === 'PAUSED') { <button type="button" class="danger" (click)="action('cancel')" [disabled]="busy()">Остановить рассылку</button> }
+          </div>
+          <p class="hint">Пауза и остановка действуют на следующие отправки. Уже начатое сообщение может завершиться.</p>
+          @if (row.counts.unknown > 0) { <p class="banner warning">У {{ row.counts.unknown }} сообщений нет подтверждения. Проверьте соответствующие чаты: автоматический повтор заблокирован, чтобы избежать дубликатов.</p> }
+          <div class="section-heading"><h3>Получатели</h3><span>{{ row.counts.total }} всего · {{ row.counts.skipped }} пропущено</span></div>
+          <div class="table-scroll"><table><thead><tr><th>Компания</th><th>Список</th><th>Результат</th></tr></thead><tbody>
+            @for (recipient of recipients(); track recipient.id) { <tr><td>{{ recipient.companyTitle }}</td><td>{{ label(recipient.audience) }}</td><td><b>{{ label(recipient.state) }}</b>@if (recipient.errorMessage) { <small>{{ recipient.errorMessage }}</small> }</td></tr> }
+          </tbody></table></div>
+          <div class="pagination"><button type="button" (click)="setPage(page() - 1)" [disabled]="page() === 0 || recipientLoading()">Назад</button>
+            <span>Страница {{ page() + 1 }}</span><button type="button" (click)="setPage(page() + 1)" [disabled]="(page() + 1) * 100 >= row.counts.total || recipientLoading()">Далее</button></div>
+        }
+      </section>
+    </div>
+  </main>
+</app-admin-layout>

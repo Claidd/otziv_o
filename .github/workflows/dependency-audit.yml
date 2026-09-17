@@ -83,29 +83,31 @@ jobs:
           show-download-progress: true
           cache: maven
           cache-jdk: false
-          server-id: otziv-sonatype
-          server-username-env-var: SONATYPE_GUIDE_USERNAME
-          server-password-env-var: SONATYPE_GUIDE_TOKEN
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: '8.0.x'
-      - name: Require complete analyzer credentials
-        env:
-          SONATYPE_GUIDE_TOKEN: ${{ secrets.SONATYPE_GUIDE_TOKEN }}
-        run: |
-          if [ -z "${SONATYPE_GUIDE_TOKEN}" ]; then
-            echo 'Sonatype Guide token is required: an unauthenticated analyzer must not count as a complete audit.'
-            exit 1
-          fi
       - name: Prepare isolated public analyzer cache
         run: |
           mkdir -p "$RUNNER_TEMP/otziv-dependency-check-data" "$GITHUB_WORKSPACE/backend/target"
           test ! -e "$GITHUB_WORKSPACE/backend/target/dependency-check-data"
           test ! -L "$GITHUB_WORKSPACE/backend/target/dependency-check-data"
           ln -s "$RUNNER_TEMP/otziv-dependency-check-data" "$GITHUB_WORKSPACE/backend/target/dependency-check-data"
-      # Cache only the public NVD database and package vulnerability reports.
+      # Cache only the public NVD database.
       # Maven settings, PAT, reports, logs and the rest of target are excluded.
-      - name: Restore public NVD and OSS Index data
+      - name: Restore public NVD data
+        id: nvd-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ${{ runner.temp }}/otziv-dependency-check-data/odc.mv.db
+          key: ${{ runner.os }}-dependency-check-13-public-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: ${{ runner.os }}-dependency-check-13-public-v1-
+      # Cache versions include the path list. Migrate the public NVD database
+      # from the previous archive on the first run of each eligible branch.
+      # Legacy advisory files are never consulted (OSS Index is disabled) and
+      # are excluded from the new cache saved below. No Sonatype request is made.
+      - name: Migrate legacy public NVD cache
+        if: steps.nvd-cache.outputs.cache-matched-key == ''
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
@@ -122,17 +124,11 @@ jobs:
       - name: OWASP dependency-check (CVSS 7+ blocks)
         id: audit
         if: ${{ !cancelled() && steps.bootstrap.outcome == 'success' }}
-        env:
-          SONATYPE_GUIDE_USERNAME: token
-          SONATYPE_GUIDE_TOKEN: ${{ secrets.SONATYPE_GUIDE_TOKEN }}
         run: bash ./mvnw -B -ntp -Psecurity-audit -DskipTests verify
         working-directory: backend
       - name: Audit every build-support module and its effective plugins
         id: bootstrap-audit
         if: ${{ !cancelled() && steps.bootstrap.outcome == 'success' }}
-        env:
-          SONATYPE_GUIDE_USERNAME: token
-          SONATYPE_GUIDE_TOKEN: ${{ secrets.SONATYPE_GUIDE_TOKEN }}
         run: >-
           python3 backend/build-support/audit.py
           --maven "$GITHUB_WORKSPACE/backend/mvnw"
@@ -147,15 +143,9 @@ jobs:
           distribution: temurin
           java-version: "21"
           show-download-progress: true
-          server-id: otziv-sonatype
-          server-username-env-var: SONATYPE_GUIDE_USERNAME
-          server-password-env-var: SONATYPE_GUIDE_TOKEN
       - name: Audit the standalone issuer including provided and plugin dependencies
         id: issuer-audit
         if: ${{ !cancelled() && steps.bootstrap.outcome == 'success' && steps.issuer-java.outcome == 'success' }}
-        env:
-          SONATYPE_GUIDE_USERNAME: token
-          SONATYPE_GUIDE_TOKEN: ${{ secrets.SONATYPE_GUIDE_TOKEN }}
         run: >-
           python3 backend/build-support/audit.py
           --standalone-project keycloak
@@ -163,17 +153,20 @@ jobs:
           --settings "$HOME/.m2/settings.xml"
           --suppression-file "$GITHUB_WORKSPACE/infrastructure/runtime-security/maven-false-positives.xml"
           --data-directory "$RUNNER_TEMP/otziv-dependency-check-data"
-      # All three audits are blocking and run despite findings in an earlier
+      - name: Audit all effective Maven packages with free OSV
+        id: osv-audit
+        if: ${{ !cancelled() && steps.bootstrap.outcome == 'success' }}
+        run: python3 backend/build-support/osv_audit.py
+      # NVD and OSV audits are independently blocking and run despite findings in an earlier
       # audit, so independent project coverage is never skipped.
       # Findings or remote errors still fail the job. Retain public data after
-      # that failure so the next full audit need not spend the same credits.
-      - name: Save public NVD and OSS Index data
+      # that failure so the next full audit can reuse the public database.
+      - name: Save public NVD data
         if: ${{ !cancelled() && (steps.audit.outcome == 'success' || steps.audit.outcome == 'failure' || steps.bootstrap-audit.outcome == 'success' || steps.bootstrap-audit.outcome == 'failure' || steps.issuer-audit.outcome == 'success' || steps.issuer-audit.outcome == 'failure') }}
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ${{ runner.temp }}/otziv-dependency-check-data/odc.mv.db
-            ${{ runner.temp }}/otziv-dependency-check-data/oss_cache
           key: ${{ runner.os }}-dependency-check-13-public-v1-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Upload dependency-check reports
         if: always()
@@ -183,6 +176,7 @@ jobs:
           path: |
             backend/target/dependency-check-report.html
             backend/target/dependency-check-report.json
+            backend/target/osv-audit.json
             backend/build-support/**/target/dependency-check-report.html
             backend/build-support/**/target/dependency-check-report.json
             backend/build-support/target/audit-policy-verification.json

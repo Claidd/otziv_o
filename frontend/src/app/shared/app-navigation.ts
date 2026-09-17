@@ -165,6 +165,16 @@ const SECONDARY_LINKS: AppNavigationLink[] = [
     roles: ['ADMIN', 'OWNER']
   },
   {
+    id: 'client-offers',
+    label: 'Рассылки',
+    description: 'Предложения услуг клиентам',
+    icon: 'campaign',
+    active: 'client-offers',
+    group: 'home',
+    routerLink: '/admin/client-offers',
+    roles: ['ADMIN', 'OWNER']
+  },
+  {
     id: 'dictionaries',
     label: 'Справочники',
     description: 'Настройки данных и аккаунты',

@@ -1,0 +1,122 @@
+{
+  "schema": "otziv-mysql-same-engine-refresh-v1",
+  "source": "ghcr.io/claidd/otziv-security@sha256:3a3caaab4e71b3bfdec9da21c17c00ed10ca237151919aeddac8e5ce4b8b7baa",
+  "candidate": "ghcr.io/claidd/otziv-security@sha256:d626770288635060a3b150872e75888c2890d7a580392f04c8924a8071bd1a2d",
+  "production": false,
+  "sourceWrites": false,
+  "publishedPorts": 0,
+  "network": "none",
+  "sourceDumpSha256": "48fabd65ac569ec1b277f783af533c220cbd2d154c82cd97d422d8637ad2d279",
+  "executedSourceSha256": "4821f4a123be65b3b9540e93f2532f151fbd7687ac445297d39a6bfbdff2f469",
+  "startedAt": "2026-09-17T12:56:43.629073+00:00",
+  "checks": [
+    {
+      "name": "engine_version_source",
+      "passed": true
+    },
+    {
+      "name": "engine_version_candidate",
+      "passed": true
+    },
+    {
+      "name": "server_binary_unchanged",
+      "passed": true
+    },
+    {
+      "name": "openssl_fixed",
+      "passed": true
+    },
+    {
+      "name": "native_uid_no_network_source",
+      "passed": true
+    },
+    {
+      "name": "restored_nonempty_production_schema",
+      "passed": true
+    },
+    {
+      "name": "clean_stop_source",
+      "passed": true
+    },
+    {
+      "name": "native_uid_no_network_candidate",
+      "passed": true
+    },
+    {
+      "name": "all_tables_schema_history_accounts_and_settings_exact",
+      "passed": true
+    },
+    {
+      "name": "existing_account_login",
+      "passed": true
+    },
+    {
+      "name": "clean_stop_candidate",
+      "passed": true
+    },
+    {
+      "name": "native_uid_no_network_restart",
+      "passed": true
+    },
+    {
+      "name": "restart_preserves_new_writes",
+      "passed": true
+    },
+    {
+      "name": "clean_stop_restart",
+      "passed": true
+    },
+    {
+      "name": "native_uid_no_network_rollback",
+      "passed": true
+    },
+    {
+      "name": "same_volume_rollback_preserves_all_new_writes",
+      "passed": true
+    },
+    {
+      "name": "clean_stop_rollback",
+      "passed": true
+    },
+    {
+      "name": "native_uid_no_network_restored",
+      "passed": true
+    },
+    {
+      "name": "fresh_restore_preserves_all_data_and_schema",
+      "passed": true
+    }
+  ],
+  "sourceLocalId": "sha256:3a3caaab4e71b3bfdec9da21c17c00ed10ca237151919aeddac8e5ce4b8b7baa",
+  "sourceMysqldSha256": "1a928190ad8166bc329b01d4adfba328f4d52083f81569f46c8435710c5e36eb",
+  "sourceOpenSSL": "openssl-libs-3.5.5-6.0.1.el9_8.x86_64",
+  "candidateLocalId": "sha256:d626770288635060a3b150872e75888c2890d7a580392f04c8924a8071bd1a2d",
+  "candidateMysqldSha256": "1a928190ad8166bc329b01d4adfba328f4d52083f81569f46c8435710c5e36eb",
+  "candidateOpenSSL": "openssl-libs-3.5.8-1.0.1.el9_8.x86_64",
+  "before": {
+    "tableCount": 332,
+    "rows": 1131986,
+    "countsSha256": "c730db0586ebade032239b782df619f28fbe84f044ee0365529d029ce68966ff",
+    "checksumsSha256": "f7be406cf442d8253c1367f3cc3a61504cb927bb4560294dd46cd8820c1b4474",
+    "historySha256": "5c0d4ea06a233de7297aa85d16e5ad2272de6294dba75d08ea3a6aa42d060daf",
+    "schemaSha256": "50955e9bf50e48486226c961bb02e57fc0ff544a4047f4df4d3f01c1c00ee6ca",
+    "accountsSha256": "902f03cdc858373cb358df3d535a16252c86aa2b217be947f279426b0c72c3d8",
+    "settingsSha256": "a0570a9a98542227edcb793e338aa272aab3b5d218f42cdd12efab9c9f5b3b72"
+  },
+  "after": {
+    "tableCount": 332,
+    "rows": 1131986,
+    "countsSha256": "c730db0586ebade032239b782df619f28fbe84f044ee0365529d029ce68966ff",
+    "checksumsSha256": "f7be406cf442d8253c1367f3cc3a61504cb927bb4560294dd46cd8820c1b4474",
+    "historySha256": "5c0d4ea06a233de7297aa85d16e5ad2272de6294dba75d08ea3a6aa42d060daf",
+    "schemaSha256": "50955e9bf50e48486226c961bb02e57fc0ff544a4047f4df4d3f01c1c00ee6ca",
+    "accountsSha256": "902f03cdc858373cb358df3d535a16252c86aa2b217be947f279426b0c72c3d8",
+    "settingsSha256": "a0570a9a98542227edcb793e338aa272aab3b5d218f42cdd12efab9c9f5b3b72"
+  },
+  "result": "PASS",
+  "ownedResourcesRemaining": {
+    "containers": 0,
+    "volumes": 0
+  },
+  "completedAt": "2026-09-17T13:01:29.198716+00:00"
+}

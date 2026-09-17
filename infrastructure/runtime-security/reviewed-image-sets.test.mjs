@@ -184,3 +184,12 @@ test('workflow uses the same fixed choice in exactly inventory, publication and 
     assert.match(job,/OTZIV_REVIEWED_IMAGE_SET: \$\{\{ inputs\.reviewed-image-set \|\| 'baseline' \}\}/);
   }
 });
+
+
+test('C17 MySQL refresh keeps the reviewed engine recipe and original service coverage', async () => {
+  const loaded = await readReviewedImageSet(root, 'c17-mysql');
+  const [image] = validateManifest(loaded.manifest);
+  const previous = baseline.images.find(x => x.component === 'mysql');
+  for (const key of Object.keys(image)) assert.deepEqual(image[key], previous[key]);
+  assert.equal(hash((await readFile(new URL('../../' + image.dockerfile, import.meta.url), 'utf8')).replaceAll('\r\n', '\n')), image.dockerfileSha256);
+});

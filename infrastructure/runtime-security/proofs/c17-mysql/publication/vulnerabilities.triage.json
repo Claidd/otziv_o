@@ -1,0 +1,8 @@
+{
+  "schema": "otziv-runtime-triage-v1",
+  "scanCreatedAt": "2026-09-17T12:40:15.339926701Z",
+  "imageId": "sha256:fda36a52c4993d8ddf65678923f45101db4fa64c7786475bf0ae5b8219345b51",
+  "reportSHA256": "34bfa96961c39d6b7abeb4b8f0102f6c7041f90ddd9de28bf723f101554920a0",
+  "policy": "Context only. No finding is excluded or accepted by this file.",
+  "findings": []
+}

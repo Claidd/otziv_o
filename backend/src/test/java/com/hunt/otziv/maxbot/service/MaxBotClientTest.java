@@ -105,4 +105,43 @@ class MaxBotClientTest {
         server.expect(requestTo(ENDPOINT)).andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
         assertThat(client.sendMessageToChat(91L, "fixture")).isTrue();
     }
+
+    @Test
+    void documentUsesUploadedTokenAndCaptionInOneMessage() {
+        server.expect(requestTo("https://max.fixture/messages?chat_id=91"))
+                .andExpect(request -> {
+                    var body = new ObjectMapper().readTree(((org.springframework.mock.http.client.MockClientHttpRequest) request).getBodyAsString());
+                    assertThat(body.path("text").asText()).isEqualTo("Offer");
+                    assertThat(body.path("notify").asBoolean()).isTrue();
+                    assertThat(body.path("attachments").size()).isEqualTo(1);
+                    assertThat(body.path("attachments").get(0).path("type").asText()).isEqualTo("file");
+                    assertThat(body.path("attachments").get(0).path("payload").path("token").asText()).isEqualTo("upload-token");
+                })
+                .andRespond(withSuccess("{\"message\":{\"body\":{\"mid\":\"mid.file\"}}}",MediaType.APPLICATION_JSON));
+        assertThat(client.sendDocumentToChatOnce(91L,"Offer","upload-token").messageId()).isEqualTo("mid.file");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings={"{\"message\":{\"body\":{\"mid\":true}}}","{\"message\":{\"body\":{\"mid\":123}}}",
+            "{\"success\":false,\"message\":{\"body\":{\"mid\":\"mid.file\"}}}"})
+    void invalidDocumentReceiptsStayUnknown(String body) {
+        server.expect(requestTo("https://max.fixture/messages?chat_id=91")).andRespond(withSuccess(body,MediaType.APPLICATION_JSON));
+        assertThat(client.sendDocumentToChatOnce(91L,"Offer","upload-token").errorCode()).isEqualTo("operation_unknown");
+    }
+
+    @Test
+    void uploadUsesProviderHostAndDoesNotDiscloseBotTokenToUploadServer() {
+        server.expect(requestTo("https://max.fixture/uploads?type=file")).andExpect(header("Authorization","fixture-token"))
+                .andRespond(withSuccess("{\"url\":\"https://fu.oneme.ru/upload.do?token=fixture\"}",MediaType.APPLICATION_JSON));
+        server.expect(requestTo("https://fu.oneme.ru/upload.do?token=fixture")).andExpect(headerDoesNotExist("Authorization"))
+                .andRespond(withSuccess("{\"token\":\"uploaded-file\"}",MediaType.APPLICATION_JSON));
+        assertThat(client.uploadDocument(new byte[]{1,2},"offer.txt")).isEqualTo("uploaded-file");
+    }
+
+    @Test
+    void untrustedUploadUrlNeverReceivesFile() {
+        server.expect(requestTo("https://max.fixture/uploads?type=file"))
+                .andRespond(withSuccess("{\"url\":\"https://unknown.example/upload\"}",MediaType.APPLICATION_JSON));
+        assertThatThrownBy(() -> client.uploadDocument(new byte[]{1},"offer.txt")).isInstanceOf(IllegalStateException.class);
+    }
 }

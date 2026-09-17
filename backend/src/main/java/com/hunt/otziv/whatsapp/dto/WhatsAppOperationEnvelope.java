@@ -28,6 +28,22 @@ public final class WhatsAppOperationEnvelope {
         return hash(clientId, "send", destination, message);
     }
 
+    public static String documentPayload(String caption,String filename,String contentType,byte[] bytes) {
+        try {
+            String fileHash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
+            StringBuilder json = new StringBuilder("[");
+            for (String value : new String[]{caption,filename,contentType,fileHash}) {
+                if (json.length() > 1) json.append(',');
+                appendJsonString(json,value);
+            }
+            return json.append(']').toString();
+        } catch (NoSuchAlgorithmException impossible) { throw new IllegalStateException(impossible); }
+    }
+
+    public static String documentHash(String clientId,String groupId,String payload) {
+        return hash(clientId,"send-group-file",WhatsAppDestination.normalize("send-group",groupId),payload);
+    }
+
     private static String hash(String clientId, String kind, String destination, String message) {
         String normalizedMessage = trimJavaScript(message);
         if (clientId == null || clientId.isEmpty() || normalizedMessage.isEmpty()) throw invalidEnvelope();

@@ -1,0 +1,78 @@
+[
+    {
+        "Id": "sha256:fda36a52c4993d8ddf65678923f45101db4fa64c7786475bf0ae5b8219345b51",
+        "RepoTags": [],
+        "RepoDigests": [
+            "ghcr.io/claidd/otziv-security@sha256:d626770288635060a3b150872e75888c2890d7a580392f04c8924a8071bd1a2d"
+        ],
+        "Parent": "",
+        "Comment": "buildkit.dockerfile.v0",
+        "Created": "2026-09-17T12:39:25.229645295Z",
+        "DockerVersion": "",
+        "Author": "",
+        "Config": {
+            "Hostname": "",
+            "Domainname": "",
+            "User": "",
+            "AttachStdin": false,
+            "AttachStdout": false,
+            "AttachStderr": false,
+            "ExposedPorts": {
+                "3306/tcp": {},
+                "33060/tcp": {},
+                "33061/tcp": {}
+            },
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "MYSQL_UNIX_PORT=/var/lib/mysql/mysql.sock"
+            ],
+            "Cmd": [
+                "mysqld"
+            ],
+            "Image": "",
+            "Volumes": null,
+            "WorkingDir": "",
+            "Entrypoint": [
+                "/entrypoint.sh"
+            ],
+            "OnBuild": null,
+            "Labels": {
+                "com.otziv.publication.revision": "7dfa53ac3089664a80d05892dc8c5e2b637b7c46",
+                "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+                "com.otziv.reviewed-component": "mysql",
+                "io.buildah.version": "1.33.7"
+            }
+        },
+        "Architecture": "amd64",
+        "Os": "linux",
+        "Size": 957433851,
+        "GraphDriver": {
+            "Data": {
+                "LowerDir": "/var/lib/docker/overlay2/28b95dd99609b7d71beacc0949e973e4d29728b1de9a768daec5e58e406fc7aa/diff:/var/lib/docker/overlay2/6dde25970fee024b28f3f8a7036fe5752bf799e05965bbb17aba2c3881ad2472/diff:/var/lib/docker/overlay2/59c12cd013cbc94521fcddba33850df0b5a101d68f083f263e009cff119daa92/diff:/var/lib/docker/overlay2/85c11332582b547af9ebb7e0d668ee0490371fe1b6e31ebaf3199e0091134107/diff:/var/lib/docker/overlay2/f4fb2c68e0e62fd8f264f29b2dc357d2585b8e8bc387a02abae29488e0aeff9d/diff:/var/lib/docker/overlay2/dccf7e388ea708c695429d271d284c0fe798b19ad9b2ee1b5273aa97ee02f766/diff:/var/lib/docker/overlay2/b2a81760881b2efb77d30571bd469be94246e11b091ff79ebc4af8b44981c3c7/diff",
+                "MergedDir": "/var/lib/docker/overlay2/7ec51ca88a96430e27e0bd35bbd2406eaf22f57137dd9da93a295fea96b2f0c5/merged",
+                "UpperDir": "/var/lib/docker/overlay2/7ec51ca88a96430e27e0bd35bbd2406eaf22f57137dd9da93a295fea96b2f0c5/diff",
+                "WorkDir": "/var/lib/docker/overlay2/7ec51ca88a96430e27e0bd35bbd2406eaf22f57137dd9da93a295fea96b2f0c5/work"
+            },
+            "Name": "overlay2"
+        },
+        "RootFS": {
+            "Type": "layers",
+            "Layers": [
+                "sha256:13c0c862a81f774a58331b5142a12c4d950d7771cf6b77ebd34a610e0026dbf9",
+                "sha256:a4ef66189b2f92063802f44c4868a590b76cae11a3433c7aa744af1a062e26fc",
+                "sha256:30f06ac3ad73d41f8a06b0e7f78f23ebc8164223e8b19afeab9324369e3e4f96",
+                "sha256:f7e0e0c91ffe13c3be8a3ddb535ffe7493570cf7ea37dc7505c204effb574eb4",
+                "sha256:430d43e983d1d1063d0a8e54901e16f5bb188864faa20d4091ca389c51e8deac",
+                "sha256:2f371d47cd5cfa5bb4b6e39852a0d9bf2c5d39f3d935aec1684bf10b9a1cdb45",
+                "sha256:238edd8d38ec1d5e5c16c0b2d49d2052d98b3081e689d9287c24be2c2018c86b",
+                "sha256:a8f9af6e37d164d95921d3f1a011e66417a9055676f9459f1ea0966a056dcfcc"
+            ]
+        },
+        "Metadata": {
+            "LastTagTime": "0001-01-01T00:00:00Z"
+        }
+    }
+]
