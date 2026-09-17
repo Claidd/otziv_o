@@ -2077,11 +2077,30 @@ public class StaffDailyProgressService {
         int lateTaskHour = clampHour(appSettingService.getInt(AppSettingService.WORKER_PROGRESS_LATE_TASK_HOUR, 22));
         int lateDeadlineHour = clampHour(appSettingService.getInt(AppSettingService.WORKER_PROGRESS_LATE_TASK_DEADLINE_HOUR, 12));
         LocalDate dueDate = openedAt.toLocalDate();
+        LocalDateTime deadline;
         if (TYPE_ORDER.equals(itemType) && openedAt.toLocalTime().getHour() >= lateTaskHour) {
             dueDate = dueDate.plusDays(1);
-            return dueDate.atTime(lateDeadlineHour, 0);
+            deadline = dueDate.atTime(lateDeadlineHour, 0);
+        } else {
+            deadline = dueDate.plusDays(1).atStartOfDay().minusNanos(1);
         }
-        return dueDate.plusDays(1).atStartOfDay().minusNanos(1);
+        return incidentAdjustedDeadline(deadline, appSettingService.getString(
+                "worker.progress.deadline-extension." + dueDate, ""));
+    }
+
+    static LocalDateTime incidentAdjustedDeadline(LocalDateTime deadline, String extendedDate) {
+        if (deadline == null || extendedDate == null || extendedDate.isBlank()) {
+            return deadline;
+        }
+        try {
+            LocalDate extension = LocalDate.parse(extendedDate.trim());
+            // A dated, explicit incident adjustment grants one day, preserving
+            // the original time and all task creation/completion timestamps.
+            return extension.equals(deadline.toLocalDate().plusDays(1))
+                    ? extension.atTime(deadline.toLocalTime()) : deadline;
+        } catch (java.time.format.DateTimeParseException exception) {
+            return deadline;
+        }
     }
 
     private LocalDateTime evaluationTime(LocalDate date) {

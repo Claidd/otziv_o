@@ -101,6 +101,46 @@ class StaffDailyProgressServiceTest {
     }
 
     @Test
+    void datedIncidentExtensionPreservesDeadlineTimeAndRejectsUnboundedChanges() {
+        LocalDateTime deadline = LocalDate.of(2026, 9, 17).atTime(23, 59, 59, 999_999_999);
+        assertEquals(deadline.plusDays(1), StaffDailyProgressService.incidentAdjustedDeadline(deadline, "2026-09-18"));
+        assertEquals(deadline, StaffDailyProgressService.incidentAdjustedDeadline(deadline, "2026-09-19"));
+        assertEquals(deadline, StaffDailyProgressService.incidentAdjustedDeadline(deadline, "2026-09-16"));
+        assertEquals(deadline, StaffDailyProgressService.incidentAdjustedDeadline(deadline, "invalid"));
+        assertEquals(deadline, StaffDailyProgressService.incidentAdjustedDeadline(deadline, null));
+    }
+
+    @Test
+    void incidentExtensionRemovesOverdueWithoutClosingTheTask() {
+        LocalDate today = LocalDate.now(java.time.ZoneId.of("Asia/Irkutsk"));
+        LocalDate yesterday = today.minusDays(1);
+        for (boolean extend : List.of(false, true)) {
+            NamedParameterJdbcTemplate localJdbc = mock(NamedParameterJdbcTemplate.class);
+            AppSettingService settings = mock(AppSettingService.class);
+            when(settings.getBoolean(AppSettingService.WORKER_PROGRESS_ENABLED, true)).thenReturn(true);
+            when(settings.getInt(AppSettingService.WORKER_PROGRESS_LATE_TASK_HOUR, 22)).thenReturn(22);
+            when(settings.getString("worker.progress.deadline-extension." + yesterday, ""))
+                    .thenReturn(extend ? today.toString() : "");
+            when(localJdbc.queryForList(anyString(), any(MapSqlParameterSource.class))).thenAnswer(invocation -> {
+                String sql = invocation.getArgument(0);
+                return sql.contains(") active_items") ? List.of(Map.of(
+                        "worker_id", 7L, "item_type", "order", "item_id", 55L,
+                        "opened_at", Timestamp.valueOf(yesterday.atTime(11, 0)),
+                        "added_at", Timestamp.valueOf(yesterday.atTime(11, 0)))) : List.of();
+            });
+            StaffDailyProgressService localService = new StaffDailyProgressService(
+                    localJdbc, settings, mock(WorkloadShadowProgressReadService.class));
+
+            DailyWorkProgressResponse result = localService.workerProgressByWorkers(
+                    List.of(Worker.builder().id(7L).build()), today).get(7L);
+
+            assertEquals(1, result.active());
+            assertEquals(0, result.completed());
+            assertEquals(extend ? 0 : 1, result.totalOverdueCount());
+        }
+    }
+
+    @Test
     void averageDailyActivityIncludesCalendarDaysWithoutActions() {
         NamedParameterJdbcTemplate localJdbc = mock(NamedParameterJdbcTemplate.class);
         AppSettingService settings = mock(AppSettingService.class);
