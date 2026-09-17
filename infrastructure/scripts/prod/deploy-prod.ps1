@@ -1011,6 +1011,7 @@ $deployBundlePaths = @(
     "whatsapp\OPERATION_LEDGER_RECOVERY.md",
     "whatsapp\OUTBOUND_OPERATIONS.md",
     "whatsapp\outbound-routes.js",
+    "whatsapp\outbound-document.js",
     "whatsapp\task-limiter.js",
     "whatsapp\client-lifecycle.js",
     "whatsapp\remote-session-fence.js",
