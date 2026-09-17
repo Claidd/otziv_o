@@ -43,6 +43,64 @@ class StaffDailyProgressServiceTest {
     );
 
     @Test
+    void incidentExcusedHistoryRetainsActualWorkAndDoesNotRecreatePenalties() {
+        NamedParameterJdbcTemplate localJdbc = mock(NamedParameterJdbcTemplate.class);
+        AppSettingService settings = mock(AppSettingService.class);
+        WorkloadShadowProgressReadService workload = mock(WorkloadShadowProgressReadService.class);
+        LocalDate date = LocalDate.now(java.time.ZoneId.of("Asia/Irkutsk")).minusDays(1);
+        when(settings.getBoolean(AppSettingService.WORKER_PROGRESS_ENABLED, true)).thenReturn(true);
+        Map<String, Object> saved = new HashMap<>();
+        saved.put("worker_id", 7L);
+        saved.put("completed_count", 12L);
+        saved.put("total_count", 12L);
+        saved.put("active_count", 0L);
+        saved.put("progress_percent", 100);
+        saved.put("checked", true);
+        saved.put("reached_100", true);
+        saved.put("order_overdue_count", 0L);
+        saved.put("total_overdue_count", 0L);
+        when(localJdbc.queryForList(anyString(), any(MapSqlParameterSource.class))).thenAnswer(invocation -> {
+            String sql = invocation.getArgument(0);
+            assertTrue(sql.contains("aggregation_status = 'INCIDENT_EXCUSED'"));
+            assertTrue(sql.contains("finalized_at IS NOT NULL"));
+            MapSqlParameterSource params = invocation.getArgument(1);
+            assertEquals(date, params.getValue("date"));
+            assertEquals(List.of(7L), params.getValue("workerIds"));
+            return List.of(saved);
+        });
+        StaffDailyProgressService localService = new StaffDailyProgressService(localJdbc, settings, workload);
+
+        DailyWorkProgressResponse result = localService.workerProgressByWorkers(
+                List.of(Worker.builder().id(7L).build()), date).get(7L);
+
+        assertEquals(12, result.completed());
+        assertEquals(0, result.active());
+        assertEquals(100, result.percent());
+        assertTrue(result.reached100());
+        assertEquals(0, result.totalOverdueCount());
+        verify(localJdbc, never()).update(anyString(), any(MapSqlParameterSource.class));
+        verify(localJdbc, never()).batchUpdate(anyString(), any(SqlParameterSource[].class));
+    }
+
+    @Test
+    void incidentAdjustmentDoesNotSuppressCurrentDayWork() {
+        NamedParameterJdbcTemplate localJdbc = mock(NamedParameterJdbcTemplate.class);
+        AppSettingService settings = mock(AppSettingService.class);
+        when(settings.getBoolean(AppSettingService.WORKER_PROGRESS_ENABLED, true)).thenReturn(true);
+        when(localJdbc.queryForList(anyString(), any(MapSqlParameterSource.class))).thenAnswer(invocation -> {
+            assertFalse(((String) invocation.getArgument(0)).contains("INCIDENT_EXCUSED"));
+            return List.of();
+        });
+        StaffDailyProgressService localService = new StaffDailyProgressService(
+                localJdbc, settings, mock(WorkloadShadowProgressReadService.class));
+
+        localService.workerProgressByWorkers(List.of(Worker.builder().id(7L).build()),
+                LocalDate.now(java.time.ZoneId.of("Asia/Irkutsk")));
+
+        verify(localJdbc, atLeastOnce()).update(anyString(), any(MapSqlParameterSource.class));
+    }
+
+    @Test
     void averageDailyActivityIncludesCalendarDaysWithoutActions() {
         NamedParameterJdbcTemplate localJdbc = mock(NamedParameterJdbcTemplate.class);
         AppSettingService settings = mock(AppSettingService.class);
