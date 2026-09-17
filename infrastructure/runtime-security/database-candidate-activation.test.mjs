@@ -28,7 +28,8 @@ const entry = { component: 'mysql', reference: publication.reference, commit: pu
 const rows = (await repositoryInventory()).map(row => row.references.some(reference =>
   originalPostgres.defaultReferencesBefore.some(source => source.path === reference.path && source.service === reference.service))
   ? { ...row, image: originalPostgres.sourceBeforeRef }
-  : row.image === original.sourceBeforeRef ? { ...row, image: entry.reference } : row);
+  : row.references.some(reference => original.defaultReferencesBefore.some(source => source.path === reference.path && source.service === reference.service))
+    ? { ...row, image: entry.reference } : row);
 const index = candidate => ({ ...activations, images: [...activations.images.filter(image => !['mysql', 'postgres'].includes(image.component)), candidate] });
 
 test('actual VPS replay plus full C7 OCI/anonymous pair admits only coordinated MySQL candidate preparation', async () => {

@@ -30,11 +30,7 @@ PROPERTIES = {
     "failBuildOnCVSS": "7.0",
     "failOnError": "true",
     "formats": "HTML,JSON",
-    "ossIndexAnalyzerEnabled": "true",
-    "ossIndexServerId": "otziv-sonatype",
-    "ossIndexWarnOnlyOnRemoteErrors": "false",
-    "ossIndexAnalyzerUseCache": "true",
-    "ossIndexAnalyzerCacheValidForHours": "24",
+    "ossIndexAnalyzerEnabled": "false",
     "nvdDatafeedUrl": "https://nvd.nist.gov/feeds/json/cve/2.0/nvdcve-2.0-{0}.json.gz",
     "autoUpdate": "true",
 }
@@ -188,7 +184,7 @@ def absolute_file(value: str, label: str) -> Path:
     return path.resolve()
 
 
-def configuration(args, environment: dict[str, str], require_token: bool = True) -> dict:
+def configuration(args, environment: dict[str, str]) -> dict:
     root = Path(args.root).resolve(strict=True)
     projects_for(root, getattr(args, "standalone_project", None))
     settings = absolute_file(args.settings, "Maven settings")
@@ -199,22 +195,8 @@ def configuration(args, environment: dict[str, str], require_token: bool = True)
     data = data.resolve()
     if settings.is_relative_to(data) or suppression.is_relative_to(data):
         raise PolicyError("Settings and policy must remain outside the public analyzer cache")
-    # setup-java produces env references; the runner never receives a credential argument.
-    servers = parse_xml(settings).findall("m:servers/m:server", {"m": "http://maven.apache.org/SETTINGS/1.0.0"})
-    if not servers:  # Maven also accepts namespace-free settings.
-        servers = parse_xml(settings).findall("servers/server")
-    matched = []
-    for server in servers:
-        values = {child.tag.split("}")[-1]: (child.text or "").strip() for child in server}
-        if values.get("id") == "otziv-sonatype":
-            matched.append(values)
-    if len(matched) != 1 or matched[0].get("password") != "${env.SONATYPE_GUIDE_TOKEN}":
-        raise PolicyError("Expected the approved Sonatype settings server with an environment-only password")
-    token = environment.get("SONATYPE_GUIDE_TOKEN", "")
-    if require_token and not re.fullmatch(r"\S+", token):
-        raise PolicyError("SONATYPE_GUIDE_TOKEN is required and must contain no whitespace")
-    if require_token and not environment.get("SONATYPE_GUIDE_USERNAME", "").strip():
-        raise PolicyError("SONATYPE_GUIDE_USERNAME is required by the Maven settings server")
+    # Public NVD/OSV audits require no account, token or Maven settings server.
+    parse_xml(settings)
     for variable in ("MAVEN_ARGS", "MAVEN_CONFIG"):
         if environment.get(variable, "").strip():
             raise PolicyError(variable + " must be empty: implicit Maven arguments cannot narrow the audit")
@@ -279,14 +261,14 @@ def main(argv=None) -> int:
             return 0
         if not all((args.settings, args.suppression_file, args.data_directory)):
             raise PolicyError("Settings, suppression file and public data directory are required")
-        config = configuration(args, dict(os.environ), require_token=not args.plan)
+        config = configuration(args, dict(os.environ))
         selected = config["projects"]
         invocations = [command(args, config, name) for name in selected]
         if args.plan:
             print(json.dumps({"mode": "PLAN_ONLY", "commands": invocations, "modules": list(selected),
                               "providerCalls": False}, indent=2))
             return 0
-        # This is an intentional direct goal, so validate credentials and effective policy here.
+        # This is an intentional direct goal, so validate the effective policy here.
         # The backend's lifecycle audit remains a separate AND condition in the same CI job.
         target = (next(iter(selected.values())).parent if args.standalone_project else root) / "target"
         target.mkdir(exist_ok=True)

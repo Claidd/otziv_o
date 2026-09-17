@@ -237,21 +237,25 @@
     },
     {
       "component": "mysql",
-      "reference": "ghcr.io/claidd/otziv-security@sha256:3a3caaab4e71b3bfdec9da21c17c00ed10ca237151919aeddac8e5ce4b8b7baa",
-      "commit": "2cd29a17f5ae7c8d7e00d332379c7ac887d5b52f",
-      "run": "34178760576",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:d626770288635060a3b150872e75888c2890d7a580392f04c8924a8071bd1a2d",
+      "commit": "7dfa53ac3089664a80d05892dc8c5e2b637b7c46",
+      "run": "35222126122",
       "attempt": "1",
+      "manifest": {
+        "path": "infrastructure/runtime-security/reviewed-images-c17-mysql.json",
+        "sha256": "d82938c0b96082fa00c108c9d5238ddd1a88da5ccf0cfb126f2882ca327472e5"
+      },
       "publication": {
-        "path": "infrastructure/runtime-security/proofs/c7-published/mysql/publication/publication.json",
-        "sha256": "c9f812b3754346b75e3d64ac824bdcef20ab798d95a91632981bd042c871d6e4"
+        "path": "infrastructure/runtime-security/proofs/c17-mysql/publication/publication.json",
+        "sha256": "3493e1df819b932d86fc400f08116c3706f79ce79a6d64ef61de0f0f71dc5aab"
       },
       "anonymous": {
-        "path": "infrastructure/runtime-security/proofs/c7-published/mysql/anonymous/anonymous-download.json",
-        "sha256": "a1e93c19307ee4c65452ba4a18f997e61e19f1506e591d73721ac1d64533360a"
+        "path": "infrastructure/runtime-security/proofs/c17-mysql/anonymous/anonymous-download.json",
+        "sha256": "232d943c076a46fa56b0f62574e32fb7eff5c953fe95e113afe2c2ff04955244"
       },
       "databaseTransition": {
-        "path": "infrastructure/runtime-security/proofs/c14-mysql-vps/actual-result.json",
-        "sha256": "0404aa7bb1fc5e1b254873701b8f19b155d9f41f054fa92008455ff208db2b6a"
+        "path": "infrastructure/runtime-security/proofs/c17-mysql/rehearsal.json",
+        "sha256": "b008a2de91b4e898c5aab37214c58620bf2115a0f0aaa1542c0d94f609443670"
       }
     },
     {

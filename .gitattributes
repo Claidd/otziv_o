@@ -47,3 +47,6 @@ infrastructure/runtime-security/postgres-c14-adjudication.mjs text eol=lf
 infrastructure/runtime-security/mysql-upgrade-rehearsal.mjs text eol=lf
 infrastructure/runtime-security/mysql-upgrade-rehearsal.test.mjs text eol=lf
 infrastructure/runtime-security/mysql-vps-release-rehearsal.test.mjs text eol=lf
+
+infrastructure/runtime-security/mysql-refresh-rehearsal.py text eol=lf
+infrastructure/runtime-security/reviewed-images-c17-*.json text eol=lf

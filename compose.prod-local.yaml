@@ -46,7 +46,7 @@ services:
 
   mysql:
     # The local restore script initializes a separate empty, versioned volume.
-    image: ghcr.io/claidd/otziv-security@sha256:3a3caaab4e71b3bfdec9da21c17c00ed10ca237151919aeddac8e5ce4b8b7baa
+    image: ghcr.io/claidd/otziv-security@sha256:d626770288635060a3b150872e75888c2890d7a580392f04c8924a8071bd1a2d
     user: "999:999"
     restart: unless-stopped
     logging: *default-logging

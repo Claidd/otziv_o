@@ -1,0 +1,71 @@
+{
+  "schema": "otziv-anonymous-download-v1",
+  "component": "mysql",
+  "commit": "7dfa53ac3089664a80d05892dc8c5e2b637b7c46",
+  "run": "35222126122",
+  "attempt": "1",
+  "manifestSet": "c17-mysql",
+  "manifestPath": "infrastructure/runtime-security/reviewed-images-c17-mysql.json",
+  "runner": "GitHub Actions 1000007735",
+  "startedAt": "2026-09-17T12:41:31.065Z",
+  "sourcePublicationSha256": "3493e1df819b932d86fc400f08116c3706f79ce79a6d64ef61de0f0f71dc5aab",
+  "result": "PASS",
+  "accountCredentialsUsed": false,
+  "dockerCredentialHelpersAvailable": false,
+  "dockerTransport": "unix:///var/run/docker.sock",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:d626770288635060a3b150872e75888c2890d7a580392f04c8924a8071bd1a2d",
+  "imageAbsentBeforePull": true,
+  "daemonVersion": "\"28.0.4\"",
+  "attestationEvidence": {
+    "schema": "otziv-registry-evidence-v1",
+    "imageManifestDigest": "sha256:24a5e97107d9a472a5eb374583180d8aec8551aae2511ece6881fc8475adb480",
+    "predicates": [
+      "https://slsa.dev/provenance/v1",
+      "https://spdx.dev/Document"
+    ],
+    "artifacts": [
+      {
+        "file": "registry-index.json",
+        "digest": "sha256:d626770288635060a3b150872e75888c2890d7a580392f04c8924a8071bd1a2d",
+        "size": 857
+      },
+      {
+        "file": "registry-amd64-manifest.json",
+        "digest": "sha256:24a5e97107d9a472a5eb374583180d8aec8551aae2511ece6881fc8475adb480",
+        "size": 1814
+      },
+      {
+        "file": "registry-amd64-config.json",
+        "digest": "sha256:fda36a52c4993d8ddf65678923f45101db4fa64c7786475bf0ae5b8219345b51",
+        "size": 5087
+      },
+      {
+        "file": "registry-attestation-0.json",
+        "digest": "sha256:d024e0e4843490f2c73ebe2936c038a49fe56047540166bff9c8600f35997c95",
+        "size": 1112
+      },
+      {
+        "file": "registry-attestation-0-payload-0.json",
+        "digest": "sha256:216a9c0be2071cdad4f71555d43905bdd3cb0c218affad39bd07468c890e7162",
+        "size": 2714331
+      },
+      {
+        "file": "registry-attestation-0-payload-1.json",
+        "digest": "sha256:6615c966f2aeff7a80d96fac5fe58fe1d8538229fb79cfd8e82836f5c2c749a2",
+        "size": 14962
+      }
+    ],
+    "sourceBinding": "LOCAL_GIT_METADATA_CHECKED_AGAINST_CLEAN_CHECKOUT_NOT_INDEPENDENT_SOURCE_AUTHENTICATION"
+  },
+  "pullExitCode": 0,
+  "imageId": "sha256:fda36a52c4993d8ddf65678923f45101db4fa64c7786475bf0ae5b8219345b51",
+  "platform": "linux/amd64",
+  "labels": {
+    "com.otziv.publication.revision": "7dfa53ac3089664a80d05892dc8c5e2b637b7c46",
+    "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+    "com.otziv.reviewed-component": "mysql",
+    "io.buildah.version": "1.33.7"
+  },
+  "publicDownloadReadiness": "VERIFIED_ANONYMOUS_DIGEST_PULL",
+  "finishedAt": "2026-09-17T12:41:54.721Z"
+}

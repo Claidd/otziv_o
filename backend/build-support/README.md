@@ -28,18 +28,22 @@ python backend/build-support/audit.py \
   --data-directory "$RUNNER_TEMP/otziv-dependency-check-data"
 ```
 
-The caller supplies `SONATYPE_GUIDE_TOKEN` and `SONATYPE_GUIDE_USERNAME` only through
-the approved environment. Maven settings must refer to that token environment
-variable, as the repository's `setup-java` configuration does. Credentials never
-appear in the command, manifest or public cache. Only the existing public database
-and `oss_cache` paths should be cached. Authentication, remote errors, CVSS 7+ and
-missing reports remain blocking; the OSS Index package cache stays at 24 hours.
-No analyzer is disabled.
+The release audit uses free public NVD and OSV data. No Sonatype account or
+credits are required; its analyzer is explicitly disabled. NVD still blocks
+CVSS 7+ and analyzer errors. After all three Maven audit stages,
+`python backend/build-support/osv_audit.py` queries every Maven package from all
+six reports, including test, provided and effective plugin dependencies.
+OSV HIGH/CRITICAL, unknown severity, missing reports, incomplete pagination and
+API failures are blocking. The OSV report preserves package coverage, report
+hashes, raw API responses and advisory details. Only package coordinates are
+sent to OSV. See https://google.github.io/osv.dev/api/.
+
+Only the public NVD database is cached. Maven settings and all reports remain
+outside that cache; no paid credentials enter the workflow.
 
 Before the audit the runner obtains the actual complete Maven effective reactor
 and validates every active plugin against the policy. It enables application,
-test, provided, runtime, system and plugin dependency scanning explicitly. All
-nineteen CLI properties were checked against the built adapter's inherited Mojo
+test, provided, runtime, system and plugin dependency scanning explicitly. The CLI properties were checked against the built adapter's inherited Mojo
 descriptor. This includes `odc.plugins.scan`; the superficially similar
 `scanPlugins` CLI property does not bind the upstream parameter.
 
@@ -55,7 +59,7 @@ failed; the runner never repeats an already audited project to hide its failure.
 Upload each project's `target/dependency-check-report.json` and `.html`, plus the
 aggregate `target/audit-policy-verification.json` and `audit-report-coverage.json`.
 Preserve raw reports before changing dependency graphs or audit policy. The local
-fixture tests exercise token rejection, command bindings, exact reactor coverage,
+fixture tests exercise credential-free execution, command bindings, exact reactor coverage,
 effective-version/override drift, unknown plugins, cache isolation, nonsecret plan
 mode, failed audit propagation and rejection of stale/incomplete report sets.
 

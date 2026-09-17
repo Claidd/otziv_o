@@ -481,29 +481,6 @@
 			<build>
 				<plugins>
 					<plugin>
-						<groupId>org.apache.maven.plugins</groupId>
-						<artifactId>maven-enforcer-plugin</artifactId>
-						<executions>
-							<execution>
-								<id>require-security-audit-credentials</id>
-								<phase>validate</phase>
-								<goals>
-									<goal>enforce</goal>
-								</goals>
-								<configuration>
-									<rules>
-										<requireEnvironmentVariable>
-											<variableName>SONATYPE_GUIDE_TOKEN</variableName>
-											<regex>\S+</regex>
-											<message>The security-audit lifecycle requires SONATYPE_GUIDE_TOKEN from the approved secret mechanism.</message>
-											<regexMessage>SONATYPE_GUIDE_TOKEN must be nonblank and contain no whitespace.</regexMessage>
-										</requireEnvironmentVariable>
-									</rules>
-								</configuration>
-							</execution>
-						</executions>
-					</plugin>
-					<plugin>
 						<groupId>com.hunt.build</groupId>
 						<artifactId>dependency-check-effective-maven-plugin</artifactId>
 						<version>1.0.0</version>
@@ -533,8 +510,8 @@
 						<configuration>
 							<scanPlugins>true</scanPlugins>
 							<nvdDatafeedUrl>https://nvd.nist.gov/feeds/json/cve/2.0/nvdcve-2.0-{0}.json.gz</nvdDatafeedUrl>
-							<ossIndexServerId>otziv-sonatype</ossIndexServerId>
-							<ossIndexWarnOnlyOnRemoteErrors>false</ossIndexWarnOnlyOnRemoteErrors>
+							<ossIndexAnalyzerEnabled>false</ossIndexAnalyzerEnabled>
+							<failOnError>true</failOnError>
 							<suppressionFiles>
 								<suppressionFile>${project.basedir}/../infrastructure/runtime-security/maven-false-positives.xml</suppressionFile>
 							</suppressionFiles>

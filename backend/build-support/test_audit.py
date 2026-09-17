@@ -137,14 +137,13 @@ class AuditPolicyTest(unittest.TestCase):
         with self.assertRaisesRegex(audit.PolicyError, "dependency override drift"):
             audit.verify_policy(self.root, self.effective)
 
-    def test_missing_token_rejects_before_any_maven_or_analyzer_invocation(self):
-        with self.assertRaisesRegex(audit.PolicyError, "TOKEN is required"):
-            audit.configuration(self.args, {}, require_token=True)
-
-    def test_whitespace_token_rejects_without_echoing_value(self):
-        env = {**self.env, "SONATYPE_GUIDE_TOKEN": "private value fixture"}
-        with self.assertRaises(audit.PolicyError) as caught: audit.configuration(self.args, env)
-        self.assertNotIn(env["SONATYPE_GUIDE_TOKEN"], str(caught.exception))
+    def test_free_audit_needs_no_credentials(self):
+        self.settings.write_text('<settings/>')
+        config = audit.configuration(self.args, {})
+        invocation = audit.command(self.args, config)
+        self.assertIn('-DossIndexAnalyzerEnabled=false', invocation)
+        self.assertIn('-DfailOnError=true', invocation)
+        self.assertIn('-DautoUpdate=true', invocation)
 
     def test_credentials_never_enter_command(self):
         invocation = audit.command(self.args, audit.configuration(self.args, self.env))
@@ -158,11 +157,6 @@ class AuditPolicyTest(unittest.TestCase):
     def test_public_cache_cannot_include_settings(self):
         self.args.data_directory = str(self.base)
         with self.assertRaisesRegex(audit.PolicyError, "outside the public analyzer cache"):
-            audit.configuration(self.args, self.env)
-
-    def test_literal_settings_password_is_not_accepted(self):
-        self.settings.write_text(self.settings.read_text().replace('${env.SONATYPE_GUIDE_TOKEN}', 'public-fixture-literal'))
-        with self.assertRaisesRegex(audit.PolicyError, "environment-only password"):
             audit.configuration(self.args, self.env)
 
     def test_pinned_setup_java_namespaced_settings_format_is_accepted(self):
