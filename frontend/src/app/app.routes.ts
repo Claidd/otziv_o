@@ -503,6 +503,12 @@ export const routes: Routes = [
     }
   },
   {
+    path: 'admin/client-offers',
+    loadComponent: () => import('./features/admin/client-offers/client-offers.component').then(m => m.ClientOffersComponent),
+    canActivate: [roleGuard],
+    data: { roles: ['ADMIN', 'OWNER'] }
+  },
+  {
     path: '**',
     loadComponent: () => import('./features/public/not-found.component')
       .then((m) => m.NotFoundComponent)

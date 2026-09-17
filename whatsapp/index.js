@@ -4,7 +4,8 @@ const fs = require("fs");
 const path = require("path");
 const QRCode = require("qrcode");
 const qrcodeTerminal = require("qrcode-terminal");
-const { Client, LocalAuth } = require("whatsapp-web.js");
+const { Client, LocalAuth, MessageMedia } = require("whatsapp-web.js");
+const { createDocumentOutboundHandler } = require("./outbound-document");
 const {
   FileDeliveryIdempotencyStore,
   ParticipantPhoneResolver,
@@ -965,6 +966,7 @@ app.get("/internal/operation-metrics", (_req, res) => {
   res.json(operationLedger.metrics());
 });
 
+app.use("/send-group-file", express.json({ limit: "8mb", strict: true }));
 app.use(express.json({ limit: WHATSAPP_HTTP_BODY_LIMIT, strict: true }));
 
 app.get("/internal/inbox-metrics", (_req, res) => {
@@ -1060,6 +1062,25 @@ app.get("/operations/:operationId", asyncRoute(async (req, res) => {
   res.set("Cache-Control", "no-store");
   res.json({ operationId: req.params.operationId, ...operationLedger.lookup(req.params.operationId) });
 }));
+app.post("/send-group-file", asyncRoute(createDocumentOutboundHandler({
+  ledger: operationLedger, clientId: CLIENT_ID, normalizeDestination: normalizeGroupId,
+  canStart: canStartOutbound,
+  send: async (destination, file) => {
+    const outboundToken = outboundRegistry.begin(destination, file.caption);
+    try {
+      const sent = await client.sendMessage(destination,
+        new MessageMedia(file.contentType, file.data, file.filename, file.size),
+        { caption: file.caption, sendMediaAsDocument: true });
+      const id = serializedId(sent?.id) || null;
+      outboundRegistry.complete(outboundToken, id);
+      if (id) await deliveryIdempotencyStore.mark(generatedOutboundKey(id), Date.now() + WHATSAPP_OUTBOUND_DURABLE_TTL_MS);
+      return id;
+    } catch (error) {
+      outboundRegistry.cancel(outboundToken);
+      throw error;
+    }
+  },
+})));
 app.post("/operations/:operationId/reconcile", asyncRoute(createOperationReconciliationHandler({
   ledger: operationLedger, clientId: CLIENT_ID,
   canRead: () => ready && authenticated && client && !shuttingDown,

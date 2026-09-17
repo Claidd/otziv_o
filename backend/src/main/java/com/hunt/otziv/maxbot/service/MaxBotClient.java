@@ -93,6 +93,56 @@ public class MaxBotClient {
         public boolean confirmed() { return errorCode == null && validReceiptId(messageId); }
     }
 
+    /** Upload is separate from message delivery and its token may be reused by a durable campaign. */
+    public String uploadDocument(byte[] bytes, String filename) {
+        if (!isConfigured()) throw new IllegalStateException("MAX не настроен");
+        try {
+            String response = restTemplate.postForObject(baseUrl + "/uploads?type=file", new HttpEntity<>(headers()), String.class);
+            java.net.URI uploadUrl = java.net.URI.create(objectMapper.readTree(response).path("url").asText());
+            // Document uploads are served by this provider-owned host; never forward the bot token there.
+            if (!"https".equals(uploadUrl.getScheme()) || !"fu.oneme.ru".equals(uploadUrl.getHost())
+                    || uploadUrl.getUserInfo() != null || (uploadUrl.getPort() != -1 && uploadUrl.getPort() != 443))
+                throw new IllegalStateException("Unexpected MAX upload host");
+            var body = new org.springframework.util.LinkedMultiValueMap<String,Object>();
+            body.add("data", new org.springframework.core.io.ByteArrayResource(bytes) {
+                @Override public String getFilename() { return filename; }
+            });
+            var uploadHeaders = new HttpHeaders();
+            uploadHeaders.setContentType(MediaType.MULTIPART_FORM_DATA);
+            String uploaded = restTemplate.postForObject(uploadUrl,new HttpEntity<>(body,uploadHeaders),String.class);
+            String uploadToken = objectMapper.readTree(uploaded).path("token").asText();
+            if (uploadToken.isBlank() || uploadToken.length() > 8192) throw new IllegalStateException("MAX upload token missing");
+            return uploadToken;
+        } catch (Exception failed) { throw new IllegalStateException("MAX не подтвердил загрузку файла",failed); }
+    }
+
+    /** Exactly one message request. Upload failures cannot accidentally send a text-only offer. */
+    public SendOnceResult sendDocumentToChatOnce(Long chatId, String text, String uploadToken) {
+        if (!isConfigured()) return new SendOnceResult(null,"max_not_configured");
+        if (chatId == null || !hasText(text) || !hasText(uploadToken)) return new SendOnceResult(null,"invalid_request");
+        var payload = Map.<String,Object>of("text",text,"notify",true,"attachments",
+                List.of(Map.of("type","file","payload",Map.of("token",uploadToken))));
+        String url = UriComponentsBuilder.fromUriString(baseUrl + "/messages").queryParam("chat_id",chatId).toUriString();
+        try {
+            String response = restTemplate.postForObject(url,new HttpEntity<>(payload,headers()),String.class);
+            JsonNode node = objectMapper.readTree(response);
+            JsonNode receipt = node.path("message").path("body").path("mid");
+            String id = receipt.asText();
+            boolean rejected = node.hasNonNull("error") || node.hasNonNull("code")
+                    || (node.has("success") && (!node.path("success").isBoolean() || !node.path("success").booleanValue()));
+            if (!rejected && receipt.isTextual() && validReceiptId(id)) return new SendOnceResult(id,null);
+            if ("attachment.not.ready".equals(node.path("code").asText())) return new SendOnceResult(null,"invalid_request");
+        } catch (RestClientResponseException error) {
+            try {
+                if ("attachment.not.ready".equals(objectMapper.readTree(error.getResponseBodyAsString()).path("code").asText()))
+                    return new SendOnceResult(null,"invalid_request");
+            } catch (Exception ignored) { /* Unconfirmed */ }
+        } catch (Exception unconfirmed) {
+            log.warn("MAX document operation unconfirmed ({})",unconfirmed.getClass().getSimpleName());
+        }
+        return new SendOnceResult(null,"operation_unknown");
+    }
+
     private static boolean validReceiptId(String messageId) {
         return messageId != null && messageId.matches("(?:mid\\.)?[a-zA-Z0-9_\\-]+")
                 && !messageId.matches("-?[0]+|-[0-9]+");

@@ -113,6 +113,31 @@ public class WhatsAppServiceImpl implements WhatsAppService {
     // ==== Public API ====
 
     @Override
+    public com.hunt.otziv.client_messages.dto.ClientMessageSendResult sendDocumentToGroupOnce(String clientId,
+            String groupId,String caption,byte[] bytes,String filename,String contentType,String operationId) {
+        try {
+            String canonical = com.hunt.otziv.whatsapp.dto.WhatsAppOperationEnvelope.documentPayload(caption,filename,contentType,bytes);
+            String expected = com.hunt.otziv.whatsapp.dto.WhatsAppOperationEnvelope.documentHash(clientId,groupId,canonical);
+            var request = jsonEntity(Map.of("operationId",operationId,"groupId",groupId,"caption",caption,
+                    "filename",filename,"contentType",contentType,"data",java.util.Base64.getEncoder().encodeToString(bytes)));
+            String response = restTemplate.postForObject(baseUrl(clientId)+"/send-group-file",request,String.class);
+            JsonNode receipt = MAPPER.readTree(response);
+            String id = receipt.path("messageId").asText();
+            if (operationId.equals(receipt.path("operationId").asText()) && "SUCCEEDED".equals(receipt.path("state").asText())
+                    && expected.equals(receipt.path("envelopeHash").asText()) && receipt.path("messageId").isTextual() && !id.isBlank() && id.length() <= 512)
+                return com.hunt.otziv.client_messages.dto.ClientMessageSendResult.sent("WhatsApp",id);
+        } catch (WhatsAppConfigurationException error) {
+            return com.hunt.otziv.client_messages.dto.ClientMessageSendResult.failed("whatsapp_client_missing","Проверьте WhatsApp-клиент менеджера");
+        } catch (RestClientResponseException error) {
+            var result = httpSendError(error,"Шлюз WhatsApp не принял файл");
+            if (result.hasStatus("error")) return com.hunt.otziv.client_messages.dto.ClientMessageSendResult.failed(result.code(),result.displayError());
+        } catch (Exception unconfirmed) {
+            log.warn("WhatsApp document operation unconfirmed ({})",unconfirmed.getClass().getSimpleName());
+        }
+        return com.hunt.otziv.client_messages.dto.ClientMessageSendResult.failed("operation_unknown","Доставка файла не подтверждена; проверьте чат");
+    }
+
+    @Override
     public com.hunt.otziv.whatsapp.dto.WhatsAppOperationStatus getOperationStatus(String clientId, String operationId) {
         if (operationId == null || !operationId.matches("[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")) {
             throw new IllegalArgumentException("Invalid operation ID");

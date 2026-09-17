@@ -274,6 +274,7 @@ public class SecurityConfig {
         auth.requestMatchers("/api/bots/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER");
         auth.requestMatchers("/api/review").hasAnyRole("ADMIN", "OWNER");
         auth.requestMatchers("/api/payments/public/**").permitAll();
+        auth.requestMatchers(HttpMethod.GET, "/api/public/client-offer-files/*").permitAll();
         auth.requestMatchers(HttpMethod.POST, "/api/payments/tbank/webhook").permitAll();
         auth.requestMatchers(HttpMethod.POST, "/api/payments/tochka/webhook").permitAll();
         auth.requestMatchers("/api/common-billing/**").hasAnyRole("ADMIN", "OWNER", "MANAGER");

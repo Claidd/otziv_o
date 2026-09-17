@@ -344,6 +344,9 @@ public class RestApiAuditActionResolver {
         put(actions, "GET", "/api/admin/settings/client-messages", "загрузка настроек автоответчика");
         put(actions, "PUT", "/api/admin/settings/client-messages", "редактирование настроек автоответчика");
         put(actions, "GET", "/api/admin/client-messages/monitor", "загрузка мониторинга автоответчика");
+        put(actions, "GET", "/api/admin/client-offers", "загрузка рассылок предложений");
+        put(actions, "PUT", "/api/admin/client-offers/{id}", "сохранение рассылки предложений {id}");
+        put(actions, "POST", "/api/admin/client-offers/{id}/{action}", "действие {action} с рассылкой предложений {id}");
         put(actions, "PUT", "/api/admin/client-messages/monitor", "переключение мониторинга автоответчика");
         put(actions, "POST", "/api/admin/client-messages/monitor/{stateId}/retry-now", "ручной повтор кандидата автоответчика {stateId}");
         put(actions, "POST", "/api/admin/client-messages/monitor/{stateId}/disable", "ручное отключение кандидата автоответчика {stateId}");

@@ -53,6 +53,7 @@ import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery;
 import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChat;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.methods.send.SendDocument;
 import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
@@ -1614,6 +1615,48 @@ public class TelegramService extends TelegramLongPollingBot {
 
     Message executeTelegramPhoto(SendPhoto photo) throws TelegramApiException {
         return execute(photo);
+    }
+
+    Message executeTelegramDocument(SendDocument document) throws TelegramApiException {
+        return execute(document);
+    }
+
+    public boolean canSendDocuments() {
+        return sendingEnabled && looksLikeTelegramBotToken(getBotToken());
+    }
+
+    /** One transport attempt, except a definite chat migration. The durable queue owns retries. */
+    public Optional<Integer> sendDocumentOnceMessageId(long chatId, byte[] bytes, String fileName, String caption) {
+        if (!canSendDocuments() || chatId == 0 || bytes == null || bytes.length == 0 || !hasText(fileName)) {
+            return Optional.empty();
+        }
+        long destination = chatId;
+        for (int attempt = 0; attempt < 2; attempt++) {
+            SendDocument document = new SendDocument();
+            document.setChatId(String.valueOf(destination));
+            document.setDocument(new InputFile(new ByteArrayInputStream(bytes), fileName));
+            document.setCaption(caption);
+            try {
+                Message response = executeTelegramDocument(document);
+                return response != null && response.getMessageId() != null && response.getMessageId() > 0
+                        ? Optional.of(response.getMessageId()) : Optional.empty();
+            } catch (TelegramApiRequestException exception) {
+                Optional<Long> migrated = migrateToChatId(exception);
+                if (attempt == 0 && migrated.isPresent() && migrated.get() != destination) {
+                    if (telegramChatMigrationService != null) {
+                        telegramChatMigrationService.migrateChatId(destination, migrated.get());
+                    }
+                    destination = migrated.get();
+                    continue;
+                }
+                log.warn("Telegram не подтвердил доставку документа: errorType={}", exception.getClass().getSimpleName());
+                return Optional.empty();
+            } catch (TelegramApiException | RuntimeException exception) {
+                log.warn("Telegram не подтвердил доставку документа: errorType={}", exception.getClass().getSimpleName());
+                return Optional.empty();
+            }
+        }
+        return Optional.empty();
     }
 
     Chat executeGetChat(GetChat request) throws TelegramApiException {
