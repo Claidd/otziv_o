@@ -1,0 +1,136 @@
+{
+  "schema": "otziv-postgres-libxml-c17-review-v1",
+  "reviewedAt": "2026-09-17T00:00:00Z",
+  "validUntil": "2027-01-01T00:00:00Z",
+  "parentReviewSha256": "c52ea7697261a4a1d3eed1540f14aa9048f44a63ff0631dd349443905e09fd67",
+  "sourceArchiveSha256": "98087fd181d9070724f3fbc65c7377db03038eb92bd882374daff44940138821",
+  "sourceVersion": "2.15.4",
+  "sourceCommit": "96498992efa48d52b0e8b83058bd88dbdaf153c1",
+  "rules": [
+    {
+      "cve": "CVE-2026-86138",
+      "package": "libxml2-16",
+      "source": "libxml2",
+      "version": "2.15.4",
+      "reason": "fixed_upstream_source"
+    },
+    {
+      "cve": "CVE-2026-86139",
+      "package": "libxml2-16",
+      "source": "libxml2",
+      "version": "2.15.4",
+      "reason": "fixed_upstream_source"
+    },
+    {
+      "cve": "CVE-2026-86142",
+      "package": "libxml2-16",
+      "source": "libxml2",
+      "version": "2.15.4",
+      "reason": "fixed_upstream_source"
+    },
+    {
+      "cve": "CVE-2026-86143",
+      "package": "libxml2-16",
+      "source": "libxml2",
+      "version": "2.15.4",
+      "reason": "fixed_upstream_source"
+    },
+    {
+      "cve": "CVE-2026-86144",
+      "package": "libxml2-16",
+      "source": "libxml2",
+      "version": "2.15.4",
+      "reason": "fixed_upstream_source"
+    }
+  ],
+  "fixes": {
+    "CVE-2026-86138": {
+      "commit": "a4cba4b5b5a8c42e155ed42d2d2a44955465a2e4",
+      "file": "dict.c"
+    },
+    "CVE-2026-86139": {
+      "commit": "8edbbdb09f24d26a2f900141fddc2b9d014f53b0",
+      "file": "uri.c"
+    },
+    "CVE-2026-86142": {
+      "commit": "6b3a736c0edc74ceec3d82f5252499d7911b3a58",
+      "file": "xpointer.c"
+    },
+    "CVE-2026-86143": {
+      "commit": "90f293ba74d28b1d570920382e707586f68ebf35",
+      "file": "xmlIO.c"
+    },
+    "CVE-2026-86144": {
+      "commit": "b63cd517afecb76582dd9488c55e54ceaf50de61",
+      "file": "xinclude.c"
+    }
+  },
+  "files": {
+    "CVE-2026-86138.html": {
+      "url": "https://security-tracker.debian.org/tracker/CVE-2026-86138",
+      "sha256": "54556cd900c2075eab22db34ae563c1ba11472e0af2d42e1f40875db4ce6c4e6"
+    },
+    "CVE-2026-86138.patch": {
+      "url": "https://github.com/GNOME/libxml2/commit/a4cba4b5b5a8c42e155ed42d2d2a44955465a2e4.patch",
+      "sha256": "f207c148a8defa5fcf564a05396748b1cf23e9788ae174a750556efdf9261f29"
+    },
+    "dict.c": {
+      "url": "https://raw.githubusercontent.com/GNOME/libxml2/96498992efa48d52b0e8b83058bd88dbdaf153c1/dict.c",
+      "sha256": "2663392f29dd45eb7ad802c471e146d4f6f509e317a4938b496920b4ea0228b4"
+    },
+    "CVE-2026-86139.html": {
+      "url": "https://security-tracker.debian.org/tracker/CVE-2026-86139",
+      "sha256": "41b09a9566f62444af2c9900f78623ffe2bc60c1b71df052bdc49d94199c96be"
+    },
+    "CVE-2026-86139.patch": {
+      "url": "https://github.com/GNOME/libxml2/commit/8edbbdb09f24d26a2f900141fddc2b9d014f53b0.patch",
+      "sha256": "d7ac6d515d52b34e44180f49c4089fe7c5889492daa111cfeb4cdcd101ce73e0"
+    },
+    "uri.c": {
+      "url": "https://raw.githubusercontent.com/GNOME/libxml2/96498992efa48d52b0e8b83058bd88dbdaf153c1/uri.c",
+      "sha256": "16cc4794868487cb3dac76faffef603163f8d8472508735df7b5a4cf0a4c4e44"
+    },
+    "CVE-2026-86142.html": {
+      "url": "https://security-tracker.debian.org/tracker/CVE-2026-86142",
+      "sha256": "443ee039f668b130dddeeb32bc63348d38cca62d192bf50646a5c73bc944f2c0"
+    },
+    "CVE-2026-86142.patch": {
+      "url": "https://github.com/GNOME/libxml2/commit/6b3a736c0edc74ceec3d82f5252499d7911b3a58.patch",
+      "sha256": "8a8153323a3fb797f4f8fcaa6fd12dcdb2081aee8c13baee6f88e22bd5fc87bd"
+    },
+    "xpointer.c": {
+      "url": "https://raw.githubusercontent.com/GNOME/libxml2/96498992efa48d52b0e8b83058bd88dbdaf153c1/xpointer.c",
+      "sha256": "73d0a6b451b21e3060e89d663698de5f4417bf26f691a91d9e1acf53a3475911"
+    },
+    "CVE-2026-86143.html": {
+      "url": "https://security-tracker.debian.org/tracker/CVE-2026-86143",
+      "sha256": "cabe4aa0c7191aab8d28d473604cc74f6637292ebb3c6de14d2961e344a695ee"
+    },
+    "CVE-2026-86143.patch": {
+      "url": "https://github.com/GNOME/libxml2/commit/90f293ba74d28b1d570920382e707586f68ebf35.patch",
+      "sha256": "f521d43d4bdd669009c0986963c33465f33ef7390343491bf751b25d72a0655d"
+    },
+    "xmlIO.c": {
+      "url": "https://raw.githubusercontent.com/GNOME/libxml2/96498992efa48d52b0e8b83058bd88dbdaf153c1/xmlIO.c",
+      "sha256": "802eb83c7e2b2ac4e146908258b5bf73e33a3325ff84a53cf92ef216eead9bc6"
+    },
+    "CVE-2026-86144.html": {
+      "url": "https://security-tracker.debian.org/tracker/CVE-2026-86144",
+      "sha256": "c39afbc66af8bd2939ade0bc37596e163e95dac81a42fd94bc673c4fe9fc81ec"
+    },
+    "CVE-2026-86144.patch": {
+      "url": "https://github.com/GNOME/libxml2/commit/b63cd517afecb76582dd9488c55e54ceaf50de61.patch",
+      "sha256": "49b3c2caba6fcba424ced833b26d67efb6c0749d26e7494f4951db61f55f211f"
+    },
+    "xinclude.c": {
+      "url": "https://raw.githubusercontent.com/GNOME/libxml2/96498992efa48d52b0e8b83058bd88dbdaf153c1/xinclude.c",
+      "sha256": "1fd040e0bcd75303be24fbed61746baae4e6646f4ca6abb36e743616e7674998"
+    }
+  },
+  "basis": [
+    "Debian and upstream identify each exact fix as included in 2.15.4.",
+    "Five source files match the SHA-256 verified archive used by the existing reviewed build.",
+    "Every decision requires the full C16 stopped-image runtime inventory and source identity to pass first.",
+    "Only the five listed Debian findings with exact package, source, PURL, architecture and version identity are matched. Unknown findings remain blocking; raw scans are unchanged."
+  ]
+}

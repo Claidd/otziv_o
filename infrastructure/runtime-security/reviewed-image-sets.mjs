@@ -8,6 +8,8 @@ const BASELINE_PATH = 'infrastructure/runtime-security/reviewed-images.json';
 const C12_PATH = 'infrastructure/runtime-security/reviewed-images-c12-phpmyadmin.json';
 const C12_CONTEXT = 'infrastructure/runtime-security/builds/phpmyadmin-alpine';
 const RELEASE_SETS = Object.freeze({
+  'c17-mysql': { component: 'mysql', path: 'infrastructure/runtime-security/reviewed-images-c17-mysql.json',
+    context: 'infrastructure/mysql', dockerfile: 'infrastructure/mysql/Dockerfile' },
   'c12-phpmyadmin': { component: 'phpmyadmin', path: C12_PATH, context: C12_CONTEXT, dockerfile: C12_CONTEXT + '/Dockerfile' },
   'c14-mc': { component: 'mc', path: 'infrastructure/runtime-security/reviewed-images-c14-mc.json',
     context: 'infrastructure/runtime-security/builds/minio', dockerfile: 'infrastructure/runtime-security/builds/minio/mc.Dockerfile' },

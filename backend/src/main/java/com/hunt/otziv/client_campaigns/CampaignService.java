@@ -1,7 +1,7 @@
 package com.hunt.otziv.client_campaigns;
 
 import static com.hunt.otziv.client_campaigns.CampaignModels.*;
-import com.hunt.otziv.config.settings.service.AppSettingService;
+import com.hunt.otziv.config.settings.api.OutboundMessagePolicy;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -15,18 +15,18 @@ import org.springframework.stereotype.Service;
 public class CampaignService {
     private final CampaignStore store;
     private final CampaignSender sender;
-    private final AppSettingService settings;
+    private final OutboundMessagePolicy settings;
     private final Clock clock;
     @Autowired
-    public CampaignService(CampaignStore store, CampaignSender sender, AppSettingService settings) {
+    public CampaignService(CampaignStore store, CampaignSender sender, OutboundMessagePolicy settings) {
         this(store,sender,settings,Clock.systemUTC());
     }
-    CampaignService(CampaignStore store, CampaignSender sender, AppSettingService settings, Clock clock) {
+    CampaignService(CampaignStore store, CampaignSender sender, OutboundMessagePolicy settings, Clock clock) {
         this.store=store; this.sender=sender; this.settings=settings; this.clock=clock;
     }
     public LocalDateTime now() { return LocalDateTime.now(clock); }
     public boolean liveEnabled() {
-        try { return settings.getBooleanFreshFailClosed(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED,true); }
+        try { return settings.clientMessagesEnabled(); }
         catch (RuntimeException unavailable) { return false; }
     }
     public Board board() {
