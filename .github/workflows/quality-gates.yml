@@ -21,6 +21,7 @@ on:
           - c14-postgres
           - c16-postgres
           - c17-mysql
+          - c18-mysql
           - c14-keycloak
           - c15-prometheus
           - c15-loki
