@@ -612,6 +612,7 @@ describe('WorkerReviewCardComponent', () => {
       component.activeSection = 'publish';
       component.requireCredentialCopyBeforeAccountAction = true;
       component.accountActionCredentialsCopied = credentialsCopied;
+      component.blockLockedByCredentials = !credentialsCopied;
       fixture.detectChanges();
       return (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('.review-actions button');
     };
@@ -620,7 +621,7 @@ describe('WorkerReviewCardComponent', () => {
     expect(buttons[5]?.disabled).toBe(false);
     expect(buttons[6]?.disabled).toBe(true);
     expect(buttons[5]?.title).toBe('Сменить аккаунт');
-    expect(buttons[6]?.title).toBe('Сначала скопируйте логин и пароль аккаунта');
+    expect(buttons[6]?.title).toBe('Сначала скопируйте логин и пароль текущего аккаунта');
 
     buttons = render(true);
     expect(buttons[5]?.disabled).toBe(false);

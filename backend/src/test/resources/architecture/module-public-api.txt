@@ -1,5 +1,8 @@
 # Explicit public module seams. This file does not export controllers, models, or all services.
 # A new export requires an owner, caller, authorization and transaction contract in the relevant ADR/catalogue.
+# ADR-019: boolean audit evidence and pre-mutation worker account guard; no ORM exposure.
+com.hunt.otziv.business_audit.api.CredentialRevealEvidence
+com.hunt.otziv.worker_activity.api.WorkerAccountBlockGuard
 com.hunt.otziv.api.dto.*
 com.hunt.otziv.c_companies.api.*
 com.hunt.otziv.common_billing.api.*

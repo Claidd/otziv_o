@@ -6,6 +6,7 @@ import com.hunt.otziv.p_products.worker_access.service.WorkerCellularAccessServi
 import com.hunt.otziv.p_products.worker_flow.service.WorkerPublicationGateService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.service.ReviewService;
+import com.hunt.otziv.worker_activity.api.WorkerAccountBlockGuard;
 import com.hunt.otziv.worker_activity.model.WorkerActivityAction;
 import com.hunt.otziv.worker_activity.service.WorkerActivityService;
 import java.util.Locale;
@@ -25,6 +26,7 @@ public class WorkerReviewAccountCommands {
     private final WorkerCellularAccessService cellular;
     private final WorkerPublicationGateService publication;
     private final WorkerActivityService activity;
+    private final WorkerAccountBlockGuard accountCredentialGuard;
 
     @Transactional(rollbackFor = Exception.class)
     public Change change(long reviewId, Source source, WorkerOrderActor actor) {
@@ -43,6 +45,7 @@ public class WorkerReviewAccountCommands {
     public Deactivated deactivate(long reviewId, long botId, Source source, WorkerOrderActor actor) {
         source = source == null ? new Source(null,null,null) : source;
         Review review = authorize(reviewId,source,actor);
+        accountCredentialGuard.assertCanBlock(actor.authentication(), "review", reviewId, botId(review));
         reviews.deActivateAndChangeBot(reviewId,botId);
         audit(actor,review,WorkerActivityAction.REVIEW_BOT_DEACTIVATE,"review",source.append("botId="+botId+";"));
         publicationActivity(source,actor);

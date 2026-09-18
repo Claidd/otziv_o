@@ -450,12 +450,15 @@
     <button
       type="button"
       (click)="botDeactivateRequested.emit()"
-      [disabled]="accountActionCooldownLocked || accountActionLocked() || !review.botId || isMutating('review-' + review.id + '-block-bot')"
-      [title]="accountActionTitle()"
+      [disabled]="accountActionCooldownLocked || blockLockedByCredentials || !review.botId || isMutating('review-' + review.id + '-block-bot')"
+      [title]="blockLockedByCredentials ? 'Сначала скопируйте логин и пароль текущего аккаунта' : accountActionTitle()"
     >
       {{ isMutating('review-' + review.id + '-block-bot') ? '...' : 'блок' }}
     </button>
   </div>
+  @if (blockLockedByCredentials) {
+    <small>Чтобы нажать «Блок», скопируйте логин и пароль текущего аккаунта.</small>
+  }
 
   @if (canEditRecoveryTaskDate && isRecoveryTask()) {
     <div

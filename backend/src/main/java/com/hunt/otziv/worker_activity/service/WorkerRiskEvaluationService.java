@@ -1,5 +1,6 @@
 package com.hunt.otziv.worker_activity.service;
 
+import com.hunt.otziv.worker_activity.account_action.WorkerAccountCredentialGuard;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.p_products.repository.OrderRepository;
@@ -86,6 +87,7 @@ public class WorkerRiskEvaluationService {
     private final PlatformTransactionManager transactionManager;
     private final AppSettingService appSettingService;
     private final WorkerRiskEventService riskEventService;
+    private final WorkerAccountCredentialGuard accountCredentialGuard;
 
     @Value("${worker.risk.duplicate-window-minutes:30}")
     private int duplicateWindowMinutes = 30;
@@ -263,20 +265,22 @@ public class WorkerRiskEvaluationService {
     }
 
     private void addAccountDeactivationWithoutCredentialCopyFinding(List<RiskFinding> result, WorkerActivityEvent event) {
-        if (event.getReviewId() == null || event.getCreatedAt() == null) {
+        Long botId;
+        try {
+            botId = Long.valueOf(detailValue(event.getDetails(), "botId"));
+        } catch (NumberFormatException exception) {
+            // Missing attribution is not evidence of a specialist's violation.
             return;
         }
-
-        LocalDateTime since = event.getCreatedAt().minusMinutes(Math.max(1, accountActionWithoutUseWindowMinutes));
-        boolean copiedLogin = copiedCredentialBetween(event, WorkerActivityAction.REVIEW_COPY_LOGIN, since, event.getCreatedAt());
-        boolean copiedPassword = copiedCredentialBetween(event, WorkerActivityAction.REVIEW_COPY_PASSWORD, since, event.getCreatedAt());
-        if (!copiedLogin || !copiedPassword) {
+        if (event.getEntityId() == null || event.getCreatedAt() == null) return;
+        if (!accountCredentialGuard.hasBothCredentials(event.getWorkerUsername(), event.getEntityType(),
+                event.getEntityId(), botId, event.getCreatedAt(), event.getId())) {
             result.add(new RiskFinding(
                     "ACCOUNT_DEACTIVATION_WITHOUT_CREDENTIAL_COPY",
                     35,
-                    "Блок аккаунта без попытки войти в него",
-                    "Перед блоком аккаунта по этой карточке система не увидела попытку входа"
-                            + (botToken(event).isBlank() ? "." : " в этот аккаунт.")
+                    "Блок аккаунта без копирования логина и пароля",
+                    "Перед блоком текущего аккаунта в этой карточке не подтверждено получение обоих полей: логина и пароля."
+                            + " Факт входа на внешнюю площадку система не отслеживает."
             ));
         }
     }

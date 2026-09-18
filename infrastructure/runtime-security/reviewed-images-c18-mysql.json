@@ -1,0 +1,35 @@
+{
+  "schema": "otziv-reviewed-images-v1",
+  "repository": "ghcr.io/claidd/otziv-security",
+  "publicationSet": "c18-mysql",
+  "baselineManifestSha256": "d48bdb7d6d869cde5d6f1a7b089491765e3eeaf46e0b0b6bb51b7719b38d3ef2",
+  "images": [
+    {
+      "component": "mysql",
+      "platform": "linux/amd64",
+      "sourceBeforeRef": "mysql@sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383",
+      "defaultReferencesBefore": [
+        {
+          "path": "compose.yaml",
+          "line": 32,
+          "service": "mysql"
+        },
+        {
+          "path": "compose.prod-local.yaml",
+          "line": 48,
+          "service": "mysql"
+        },
+        {
+          "path": "docker-compose.yaml",
+          "line": 49,
+          "service": "mysql"
+        }
+      ],
+      "candidateBaseRef": "ghcr.io/claidd/otziv-security@sha256:d626770288635060a3b150872e75888c2890d7a580392f04c8924a8071bd1a2d",
+      "buildArgs": {},
+      "context": "infrastructure/runtime-security/builds/mysql-c18",
+      "dockerfile": "infrastructure/runtime-security/builds/mysql-c18/Dockerfile",
+      "dockerfileSha256": "5175e602acf73f8ff9d95f701a1674d9e3c9da3d07af48dde4b8568e81b6521c"
+    }
+  ]
+}

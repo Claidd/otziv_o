@@ -50,3 +50,7 @@ infrastructure/runtime-security/mysql-vps-release-rehearsal.test.mjs text eol=lf
 
 infrastructure/runtime-security/mysql-refresh-rehearsal.py text eol=lf
 infrastructure/runtime-security/reviewed-images-c17-*.json text eol=lf
+
+infrastructure/runtime-security/builds/mysql-c18/** text eol=lf
+infrastructure/runtime-security/reviewed-images-c18-*.json text eol=lf
+infrastructure/runtime-security/mysql-libevent-rehearsal.py text eol=lf
