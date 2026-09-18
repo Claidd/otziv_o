@@ -1,0 +1,78 @@
+{
+  "schema": "otziv-reviewed-image-publication-v1",
+  "component": "mysql",
+  "commit": "afd6db11b2e8c2f3ea2aad652f8549bed40f5c1f",
+  "run": "35344406117",
+  "attempt": "1",
+  "tag": "ghcr.io/claidd/otziv-security:mysql-afd6db11b2e8c2f3ea2aad652f8549bed40f5c1f-35344406117-1",
+  "manifestSet": "c18-mysql",
+  "manifestPath": "infrastructure/runtime-security/reviewed-images-c18-mysql.json",
+  "sourceBeforeRef": "mysql@sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383",
+  "platform": "linux/amd64",
+  "productionActivated": false,
+  "publicDownloadReadiness": "NOT_VERIFIED_REQUIRES_ANONYMOUS_PULL_AFTER_VISIBILITY_CONFIGURATION",
+  "manifestSha256": "71848d004a849d2192bd86ead2379a3c0505768fc751cef39cd4ee52196196b7",
+  "dockerfileSha256": "5175e602acf73f8ff9d95f701a1674d9e3c9da3d07af48dde4b8568e81b6521c",
+  "builder": "moby/buildkit@sha256:28a898719c18a33f4e8000685287fa36fd0dd9560c6440227d3a732d79bb41d8",
+  "sbomGenerator": "docker/buildkit-syft-scanner@sha256:ae4f3b554449e7e25548e7d8ccc029d17357348e30c6e3df01b92bc93654d6a9",
+  "result": "PASS",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:c810a0bd4902a4791824bce7795f95f97743506a4263889a1008076e6e9630b0",
+  "attestationEvidence": {
+    "schema": "otziv-registry-evidence-v1",
+    "imageManifestDigest": "sha256:b68a640ca7ed7d255fd2daaab21b20b93f1cb78eb26aeabec85bba451dba33bf",
+    "predicates": [
+      "https://slsa.dev/provenance/v1",
+      "https://spdx.dev/Document"
+    ],
+    "artifacts": [
+      {
+        "file": "registry-index.json",
+        "digest": "sha256:c810a0bd4902a4791824bce7795f95f97743506a4263889a1008076e6e9630b0",
+        "size": 857
+      },
+      {
+        "file": "registry-amd64-manifest.json",
+        "digest": "sha256:b68a640ca7ed7d255fd2daaab21b20b93f1cb78eb26aeabec85bba451dba33bf",
+        "size": 2006
+      },
+      {
+        "file": "registry-amd64-config.json",
+        "digest": "sha256:e120bacdf41531660cd96bb43d06c9444c629d2115c4a4aa1ba97f864d2bf21b",
+        "size": 6033
+      },
+      {
+        "file": "registry-attestation-0.json",
+        "digest": "sha256:fb64fb0553ca49d08f5e436aa3aa40d909db774a910defb13c579cebb06bc12a",
+        "size": 1112
+      },
+      {
+        "file": "registry-attestation-0-payload-0.json",
+        "digest": "sha256:8ce87bbb9ef71fbb551f9be80d5f0233339ae94eda204d597e6aeeabc750c13e",
+        "size": 2714331
+      },
+      {
+        "file": "registry-attestation-0-payload-1.json",
+        "digest": "sha256:c184e6332894b7dd2ee6059f69698d0d1d80587026864a8ae24a669bf062f9be",
+        "size": 16150
+      }
+    ],
+    "sourceBinding": "LOCAL_GIT_METADATA_CHECKED_AGAINST_CLEAN_CHECKOUT_NOT_INDEPENDENT_SOURCE_AUTHENTICATION"
+  },
+  "imageId": "sha256:e120bacdf41531660cd96bb43d06c9444c629d2115c4a4aa1ba97f864d2bf21b",
+  "security": {
+    "schema": "otziv-vulnerability-scan-v1",
+    "artifactCount": 1,
+    "high": 0,
+    "critical": 0,
+    "unfixedHighOrCritical": 0,
+    "blockingFixedHighOrCritical": 0,
+    "adjudicatedFixedHighOrCritical": 0,
+    "effectiveBlockingFixedHighOrCritical": 0,
+    "result": "PASS",
+    "adjudicatedAbsentFixedHighOrCritical": 0,
+    "adjudicatedAbsentUnfixedHighOrCritical": 0,
+    "effectiveUnfixedHighOrCritical": 0,
+    "unresolvedRiskReview": "NONE",
+    "scannerImage": "aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969"
+  }
+}

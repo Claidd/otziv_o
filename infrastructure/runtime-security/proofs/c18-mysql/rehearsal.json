@@ -1,0 +1,134 @@
+{
+  "schema": "otziv-mysql-same-engine-refresh-v1",
+  "source": "ghcr.io/claidd/otziv-security@sha256:d626770288635060a3b150872e75888c2890d7a580392f04c8924a8071bd1a2d",
+  "candidate": "ghcr.io/claidd/otziv-security@sha256:c810a0bd4902a4791824bce7795f95f97743506a4263889a1008076e6e9630b0",
+  "production": false,
+  "sourceWrites": false,
+  "publishedPorts": 0,
+  "network": "none",
+  "sourceDumpSha256": "9fbeb4c6e0465ababf539d64a159293e182aba80a5afb5dfacf73387db05f27b",
+  "executedSourceSha256": "c6ea87d68fa9ad0c01588fb2a695855964c5fdbf39b8e0d32975b93e21021af2",
+  "startedAt": "2026-09-18T12:26:52.025693+00:00",
+  "checks": [
+    {
+      "name": "engine_version_source",
+      "passed": true
+    },
+    {
+      "name": "engine_version_candidate",
+      "passed": true
+    },
+    {
+      "name": "server_binary_unchanged",
+      "passed": true
+    },
+    {
+      "name": "openssl_fixed",
+      "passed": true
+    },
+    {
+      "name": "libevent_fixed",
+      "passed": true
+    },
+    {
+      "name": "only_libevent_changed",
+      "passed": true
+    },
+    {
+      "name": "native_uid_no_network_source",
+      "passed": true
+    },
+    {
+      "name": "restored_nonempty_production_schema",
+      "passed": true
+    },
+    {
+      "name": "clean_stop_source",
+      "passed": true
+    },
+    {
+      "name": "native_uid_no_network_candidate",
+      "passed": true
+    },
+    {
+      "name": "all_tables_schema_history_accounts_and_settings_exact",
+      "passed": true
+    },
+    {
+      "name": "existing_account_login",
+      "passed": true
+    },
+    {
+      "name": "clean_stop_candidate",
+      "passed": true
+    },
+    {
+      "name": "native_uid_no_network_restart",
+      "passed": true
+    },
+    {
+      "name": "restart_preserves_new_writes",
+      "passed": true
+    },
+    {
+      "name": "clean_stop_restart",
+      "passed": true
+    },
+    {
+      "name": "native_uid_no_network_rollback",
+      "passed": true
+    },
+    {
+      "name": "same_volume_rollback_preserves_all_new_writes",
+      "passed": true
+    },
+    {
+      "name": "clean_stop_rollback",
+      "passed": true
+    },
+    {
+      "name": "native_uid_no_network_restored",
+      "passed": true
+    },
+    {
+      "name": "fresh_restore_preserves_all_data_and_schema",
+      "passed": true
+    }
+  ],
+  "sourceLocalId": "sha256:d626770288635060a3b150872e75888c2890d7a580392f04c8924a8071bd1a2d",
+  "sourceMysqldSha256": "1a928190ad8166bc329b01d4adfba328f4d52083f81569f46c8435710c5e36eb",
+  "sourceOpenSSL": "openssl-libs-3.5.8-1.0.1.el9_8.x86_64",
+  "sourceLibevent": "libevent-2.1.12-8.el9_4.x86_64",
+  "sourceOtherPackagesSha256": "a4ad9aa71f1e071d9df32bc835010438522b5cf006c9ad6ac2d5882c97383aec",
+  "candidateLocalId": "sha256:c810a0bd4902a4791824bce7795f95f97743506a4263889a1008076e6e9630b0",
+  "candidateMysqldSha256": "1a928190ad8166bc329b01d4adfba328f4d52083f81569f46c8435710c5e36eb",
+  "candidateOpenSSL": "openssl-libs-3.5.8-1.0.1.el9_8.x86_64",
+  "candidateLibevent": "libevent-2.1.13-1.el9_8.x86_64",
+  "candidateOtherPackagesSha256": "a4ad9aa71f1e071d9df32bc835010438522b5cf006c9ad6ac2d5882c97383aec",
+  "before": {
+    "tableCount": 335,
+    "rows": 1139792,
+    "countsSha256": "c3ea2b774b51809acce78a4cfe9278ccaddb5c1fee3591bcebbc2f983e286875",
+    "checksumsSha256": "f62a7896d47625f3bdefa4cb3a2a6f894fe17234639222b3f4d4da8d492cb4ea",
+    "historySha256": "787c471bf50fb10c8c87a07ca3917774a2177de77c08a2cfd1325a535f1fed64",
+    "schemaSha256": "87a9b639ef4b70b2ab288c2feca58bbdbad76809764db30bfa6f1ea34a1b9586",
+    "accountsSha256": "d5f5525b4d70a1f3da75306cbb4e6d28fa4a0db9085be8aa406dd670b9e9caae",
+    "settingsSha256": "a0570a9a98542227edcb793e338aa272aab3b5d218f42cdd12efab9c9f5b3b72"
+  },
+  "after": {
+    "tableCount": 335,
+    "rows": 1139792,
+    "countsSha256": "c3ea2b774b51809acce78a4cfe9278ccaddb5c1fee3591bcebbc2f983e286875",
+    "checksumsSha256": "f62a7896d47625f3bdefa4cb3a2a6f894fe17234639222b3f4d4da8d492cb4ea",
+    "historySha256": "787c471bf50fb10c8c87a07ca3917774a2177de77c08a2cfd1325a535f1fed64",
+    "schemaSha256": "87a9b639ef4b70b2ab288c2feca58bbdbad76809764db30bfa6f1ea34a1b9586",
+    "accountsSha256": "d5f5525b4d70a1f3da75306cbb4e6d28fa4a0db9085be8aa406dd670b9e9caae",
+    "settingsSha256": "a0570a9a98542227edcb793e338aa272aab3b5d218f42cdd12efab9c9f5b3b72"
+  },
+  "result": "PASS",
+  "ownedResourcesRemaining": {
+    "containers": 0,
+    "volumes": 0
+  },
+  "completedAt": "2026-09-18T12:30:41.511421+00:00"
+}

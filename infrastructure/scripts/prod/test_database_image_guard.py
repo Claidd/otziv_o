@@ -328,7 +328,7 @@ class ContinuityTests(unittest.TestCase):
                                                                       "keycloak-postgres": {"pull_policy": "never"}}})
 
     def test_native_mysql_identity_constants_bind_the_retained_published_oci_index_and_configuration(self):
-        publication = HERE.parents[1] / "runtime-security/proofs/c17-mysql/publication"
+        publication = HERE.parents[1] / "runtime-security/proofs/c18-mysql/publication"
         index = (publication / "registry-index.json").read_bytes()
         config = (publication / "registry-amd64-config.json").read_bytes()
         self.assertEqual("sha256:" + hashlib.sha256(index).hexdigest(), guard.REVIEWED_MYSQL_INDEX)

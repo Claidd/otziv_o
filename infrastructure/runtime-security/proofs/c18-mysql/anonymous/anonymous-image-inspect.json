@@ -1,0 +1,79 @@
+[
+    {
+        "Id": "sha256:e120bacdf41531660cd96bb43d06c9444c629d2115c4a4aa1ba97f864d2bf21b",
+        "RepoTags": [],
+        "RepoDigests": [
+            "ghcr.io/claidd/otziv-security@sha256:c810a0bd4902a4791824bce7795f95f97743506a4263889a1008076e6e9630b0"
+        ],
+        "Parent": "",
+        "Comment": "buildkit.dockerfile.v0",
+        "Created": "2026-09-18T12:25:03.535094015Z",
+        "DockerVersion": "",
+        "Author": "",
+        "Config": {
+            "Hostname": "",
+            "Domainname": "",
+            "User": "",
+            "AttachStdin": false,
+            "AttachStdout": false,
+            "AttachStderr": false,
+            "ExposedPorts": {
+                "3306/tcp": {},
+                "33060/tcp": {},
+                "33061/tcp": {}
+            },
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "MYSQL_UNIX_PORT=/var/lib/mysql/mysql.sock"
+            ],
+            "Cmd": [
+                "mysqld"
+            ],
+            "Image": "",
+            "Volumes": null,
+            "WorkingDir": "",
+            "Entrypoint": [
+                "/entrypoint.sh"
+            ],
+            "OnBuild": null,
+            "Labels": {
+                "com.otziv.publication.revision": "afd6db11b2e8c2f3ea2aad652f8549bed40f5c1f",
+                "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+                "com.otziv.reviewed-component": "mysql",
+                "io.buildah.version": "1.33.7"
+            }
+        },
+        "Architecture": "amd64",
+        "Os": "linux",
+        "Size": 976751944,
+        "GraphDriver": {
+            "Data": {
+                "LowerDir": "/var/lib/docker/overlay2/876f1715ef0a09f6f7b71a04e1b0806d1dc6e37a257c427126cee0bb9bd14ebb/diff:/var/lib/docker/overlay2/fa65b23141ca7e969392d53fe3afbe07457a9c0d4290acb715758ad3062cd684/diff:/var/lib/docker/overlay2/15f3f8972eaf4b4d8b650322c5c50141e964aa5dd71ec5d7f2513cd3dbc91576/diff:/var/lib/docker/overlay2/42dd8adb6fc73e93771702926ab3f10d5f97b0899b496f2ca402017fb8ab1014/diff:/var/lib/docker/overlay2/93fe44cc37b790da0360c32af8552544ec00ab86a964e30cd96de5d309169489/diff:/var/lib/docker/overlay2/8a2b1220d1214157d8e403936786b2fdf55aa809b9c89e098b4897b7e7d9a8fa/diff:/var/lib/docker/overlay2/f5341354ac31c2c6b1a7e69d6e58d46533c4d398636db3cb011b44f9641ec5a8/diff:/var/lib/docker/overlay2/1a5652502705985afb651ac263e080e4997a678b9285d5258d10934af7a955d4/diff",
+                "MergedDir": "/var/lib/docker/overlay2/1becd314ab22587e66bbe330d1d01d1e7f93623e7fbc1a28b450ff2e5b479ac8/merged",
+                "UpperDir": "/var/lib/docker/overlay2/1becd314ab22587e66bbe330d1d01d1e7f93623e7fbc1a28b450ff2e5b479ac8/diff",
+                "WorkDir": "/var/lib/docker/overlay2/1becd314ab22587e66bbe330d1d01d1e7f93623e7fbc1a28b450ff2e5b479ac8/work"
+            },
+            "Name": "overlay2"
+        },
+        "RootFS": {
+            "Type": "layers",
+            "Layers": [
+                "sha256:13c0c862a81f774a58331b5142a12c4d950d7771cf6b77ebd34a610e0026dbf9",
+                "sha256:a4ef66189b2f92063802f44c4868a590b76cae11a3433c7aa744af1a062e26fc",
+                "sha256:30f06ac3ad73d41f8a06b0e7f78f23ebc8164223e8b19afeab9324369e3e4f96",
+                "sha256:f7e0e0c91ffe13c3be8a3ddb535ffe7493570cf7ea37dc7505c204effb574eb4",
+                "sha256:430d43e983d1d1063d0a8e54901e16f5bb188864faa20d4091ca389c51e8deac",
+                "sha256:2f371d47cd5cfa5bb4b6e39852a0d9bf2c5d39f3d935aec1684bf10b9a1cdb45",
+                "sha256:238edd8d38ec1d5e5c16c0b2d49d2052d98b3081e689d9287c24be2c2018c86b",
+                "sha256:a8f9af6e37d164d95921d3f1a011e66417a9055676f9459f1ea0966a056dcfcc",
+                "sha256:3396a65b2f690cce482a00f36d3304d00f56f3863bc5242c7125b53cf61aa8e4"
+            ]
+        },
+        "Metadata": {
+            "LastTagTime": "0001-01-01T00:00:00Z"
+        }
+    }
+]
