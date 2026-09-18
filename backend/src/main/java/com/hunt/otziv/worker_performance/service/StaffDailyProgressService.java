@@ -457,6 +457,18 @@ public class StaffDailyProgressService {
         }
 
         List<Long> workerIds = visibleWorkers.stream().map(WorkerProgressSubject::workerId).distinct().toList();
+        Map<Long, DailyWorkProgressResponse> excused = excusedDailyResults(workerIds, safeDate);
+        if (!excused.isEmpty()) {
+            visibleWorkers = visibleWorkers.stream()
+                    .filter(worker -> !excused.containsKey(worker.workerId())).toList();
+            workerIds = visibleWorkers.stream().map(WorkerProgressSubject::workerId).distinct().toList();
+            if (workerIds.isEmpty()) {
+                if (updateMonthly) {
+                    rebuildMonthly(safeDate.withDayOfMonth(1), false);
+                }
+                return Map.copyOf(excused);
+            }
+        }
         Map<Long, Long> workerUserIdByWorkerId = new HashMap<>();
         visibleWorkers.forEach(worker -> workerUserIdByWorkerId.put(worker.workerId(), worker.workerUserId()));
         List<Long> workerUserIds = visibleWorkers.stream()
@@ -480,7 +492,7 @@ public class StaffDailyProgressService {
             excludeWaitingClientOrdersFromLifecycle(workerIds);
         }
 
-        Map<Long, DailyWorkProgressResponse> result = new LinkedHashMap<>();
+        Map<Long, DailyWorkProgressResponse> result = new LinkedHashMap<>(excused);
         for (WorkerProgressSubject worker : visibleWorkers) {
             WorkerActiveStats activeStats = active.getOrDefault(worker.workerId(), WorkerActiveStats.empty());
             WorkerCompletionStats stats = completed.getOrDefault(worker.workerId(), WorkerCompletionStats.empty());
@@ -498,6 +510,27 @@ public class StaffDailyProgressService {
         if (updateMonthly) {
             rebuildMonthly(safeDate.withDayOfMonth(1), false);
         }
+        return result;
+    }
+
+    private Map<Long, DailyWorkProgressResponse> excusedDailyResults(List<Long> workerIds, LocalDate date) {
+        if (!date.isBefore(progressToday())) {
+            return Map.of();
+        }
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("date", date)
+                .addValue("workerIds", workerIds);
+        Map<Long, DailyWorkProgressResponse> result = new LinkedHashMap<>();
+        // An incident adjustment is an approved historical result. Rebuilding it
+        // from today's queue would restore the penalties that were waived.
+        jdbc.queryForList("""
+                SELECT * FROM worker_daily_performance
+                WHERE progress_date = :date
+                  AND worker_id IN (:workerIds)
+                  AND aggregation_status = 'INCIDENT_EXCUSED'
+                  AND finalized_at IS NOT NULL
+                """, params).forEach(row -> result.put(
+                        longValue(row.get("worker_id")), dailyResponse(date, row)));
         return result;
     }
 
@@ -2044,11 +2077,30 @@ public class StaffDailyProgressService {
         int lateTaskHour = clampHour(appSettingService.getInt(AppSettingService.WORKER_PROGRESS_LATE_TASK_HOUR, 22));
         int lateDeadlineHour = clampHour(appSettingService.getInt(AppSettingService.WORKER_PROGRESS_LATE_TASK_DEADLINE_HOUR, 12));
         LocalDate dueDate = openedAt.toLocalDate();
+        LocalDateTime deadline;
         if (TYPE_ORDER.equals(itemType) && openedAt.toLocalTime().getHour() >= lateTaskHour) {
             dueDate = dueDate.plusDays(1);
-            return dueDate.atTime(lateDeadlineHour, 0);
+            deadline = dueDate.atTime(lateDeadlineHour, 0);
+        } else {
+            deadline = dueDate.plusDays(1).atStartOfDay().minusNanos(1);
         }
-        return dueDate.plusDays(1).atStartOfDay().minusNanos(1);
+        return incidentAdjustedDeadline(deadline, appSettingService.getString(
+                "worker.progress.deadline-extension." + dueDate, ""));
+    }
+
+    static LocalDateTime incidentAdjustedDeadline(LocalDateTime deadline, String extendedDate) {
+        if (deadline == null || extendedDate == null || extendedDate.isBlank()) {
+            return deadline;
+        }
+        try {
+            LocalDate extension = LocalDate.parse(extendedDate.trim());
+            // A dated, explicit incident adjustment grants one day, preserving
+            // the original time and all task creation/completion timestamps.
+            return extension.equals(deadline.toLocalDate().plusDays(1))
+                    ? extension.atTime(deadline.toLocalTime()) : deadline;
+        } catch (java.time.format.DateTimeParseException exception) {
+            return deadline;
+        }
     }
 
     private LocalDateTime evaluationTime(LocalDate date) {
