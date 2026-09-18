@@ -58,11 +58,11 @@ class WorkerAccountCredentialGuardTest {
 
     @Test
     void rejectsWorkerBeforeMutationButPreservesManagerOverride() {
-        var worker = new UsernamePasswordAuthenticationToken("maks", "unused", List.of(new SimpleGrantedAuthority("ROLE_WORKER")));
+        var worker = new UsernamePasswordAuthenticationToken("maks", null, List.of(new SimpleGrantedAuthority("ROLE_WORKER")));
         var error = assertThrows(ResponseStatusException.class,
                 () -> guard.assertCanBlock(worker, "review", 197623L, 871819L));
         assertEquals(409, error.getStatusCode().value());
-        var manager = new UsernamePasswordAuthenticationToken("manager", "unused", List.of(
+        var manager = new UsernamePasswordAuthenticationToken("manager", null, List.of(
                 new SimpleGrantedAuthority("ROLE_WORKER"), new SimpleGrantedAuthority("ROLE_MANAGER")));
         clearInvocations(audit, activity);
         assertDoesNotThrow(() -> guard.assertCanBlock(manager, "review", 197623L, 871819L));
