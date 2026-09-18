@@ -7,7 +7,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.web.server.ResponseStatusException;
 import static org.junit.jupiter.api.Assertions.*;
@@ -58,12 +58,17 @@ class WorkerAccountCredentialGuardTest {
 
     @Test
     void rejectsWorkerBeforeMutationButPreservesManagerOverride() {
-        var worker = new UsernamePasswordAuthenticationToken("maks", null, List.of(new SimpleGrantedAuthority("ROLE_WORKER")));
+        var worker = mock(Authentication.class);
+        when(worker.isAuthenticated()).thenReturn(true);
+        when(worker.getName()).thenReturn("maks");
+        doReturn(List.of(new SimpleGrantedAuthority("ROLE_WORKER"))).when(worker).getAuthorities();
         var error = assertThrows(ResponseStatusException.class,
                 () -> guard.assertCanBlock(worker, "review", 197623L, 871819L));
         assertEquals(409, error.getStatusCode().value());
-        var manager = new UsernamePasswordAuthenticationToken("manager", null, List.of(
-                new SimpleGrantedAuthority("ROLE_WORKER"), new SimpleGrantedAuthority("ROLE_MANAGER")));
+        var manager = mock(Authentication.class);
+        when(manager.isAuthenticated()).thenReturn(true);
+        doReturn(List.of(new SimpleGrantedAuthority("ROLE_WORKER"),
+                new SimpleGrantedAuthority("ROLE_MANAGER"))).when(manager).getAuthorities();
         clearInvocations(audit, activity);
         assertDoesNotThrow(() -> guard.assertCanBlock(manager, "review", 197623L, 871819L));
         verifyNoInteractions(audit, activity);
