@@ -70,6 +70,7 @@ export class WorkerReviewCardComponent {
   @Input() savedSideNoteKey: string | null = null;
   @Input() requireCredentialCopyBeforeAccountAction = false;
   @Input() accountActionCredentialsCopied = false;
+  @Input() blockLockedByCredentials = false;
   @Input() accountActionCooldownLocked = false;
   @Input() accountActionCooldownTitle = '';
   @Input() publishLockedByCredentialWait = false;

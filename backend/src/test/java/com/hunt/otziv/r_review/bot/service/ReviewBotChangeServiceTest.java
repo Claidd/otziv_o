@@ -14,6 +14,7 @@ import com.hunt.otziv.p_products.service.BotAssignmentService;
 import com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
+import com.hunt.otziv.worker_activity.account_action.WorkerAccountCredentialGuard;
 import com.hunt.otziv.worker_activity.account_action.WorkerAccountActionCooldownService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -49,6 +50,9 @@ import static org.mockito.Mockito.when;
 class ReviewBotChangeServiceTest {
     @Mock
     private WorkerAccountActionCooldownService accountActionCooldownService;
+
+    @Mock
+    private WorkerAccountCredentialGuard accountCredentialGuard;
 
     @Mock
     private ReviewRepository reviewRepository;
@@ -513,7 +517,8 @@ class ReviewBotChangeServiceTest {
                 businessAuditService,
                 assignmentExclusionService,
                 assignmentMutationGuardService,
-                accountActionCooldownService
+                accountActionCooldownService,
+                accountCredentialGuard
         );
     }
 
@@ -530,6 +535,22 @@ class ReviewBotChangeServiceTest {
         assertSame(oldBot, review.getBot());
         verify(assignmentExclusionService, never()).rejectCurrentBot(any(), any());
         verify(botAssignmentService, never()).assignBotForReviewChange(any(), anyCollection());
+        verify(reviewRepository, never()).save(any());
+    }
+
+    @Test
+    void missingCredentialEvidenceRejectsBlockWithoutCooldownOrMutation() {
+        Review review = new Review();
+        Bot oldBot = bot(6L, "Текущий аккаунт", 2);
+        review.setBot(oldBot);
+        when(reviewRepository.findById(15L)).thenReturn(Optional.of(review));
+        ResponseStatusException rejected = new ResponseStatusException(HttpStatus.CONFLICT, "Скопируйте оба поля");
+        doThrow(rejected).when(accountCredentialGuard).assertCurrentActorCanBlock("review", 15L, 6L);
+        assertSame(rejected, assertThrows(ResponseStatusException.class, () -> service().deActivateAndChangeBot(15L, 6L)));
+        assertTrue(oldBot.isActive());
+        assertSame(oldBot, review.getBot());
+        verify(accountActionCooldownService, never()).admitCurrentAction();
+        verify(assignmentExclusionService, never()).rejectCurrentBot(any(), any());
         verify(reviewRepository, never()).save(any());
     }
 

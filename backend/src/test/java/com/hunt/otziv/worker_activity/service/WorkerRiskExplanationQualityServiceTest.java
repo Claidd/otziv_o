@@ -70,6 +70,9 @@ class WorkerRiskExplanationQualityServiceTest {
         assertThat(request.getValue().thinkingEnabled()).isFalse();
         assertThat(request.getValue().maxTokens()).isEqualTo(2048);
         assertThat(request.getValue().jsonObject()).isTrue();
+        assertThat(request.getValue().systemPrompt()).contains("блокировку внешней площадкой")
+                .contains("Копирование логина и пароля для проверки входа")
+                .contains("не доказывает успешный вход");
         assertThat(new ObjectMapper().readTree(request.getValue().userPrompt())
                 .path("specialistExplanation").asText()).isEqualTo(explanation);
     }

@@ -1,3 +1,4 @@
+import { AccountCredentialCopies, accountCredentialsCopied, recordAccountCredentialCopy } from '@otziv/client-common/account-credential-copy';
 import { OrderReviewsApi } from '../core/order-reviews.api';
 import { WorkerApi } from '../core/worker.api';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -425,10 +426,13 @@ type CredentialWaitSection = 'publish' | 'nagul';
                     <button type="button" (click)="changeReviewBot(review)" [disabled]="isMutating(reviewBotMutationKey(review, 'change'))">
                       {{ isMutating(reviewBotMutationKey(review, 'change')) ? '...' : 'смена' }}
                     </button>
-                    <button type="button" (click)="deactivateReviewBot(review)" [disabled]="!review.botId || isMutating(reviewBotMutationKey(review, 'block'))">
+                    <button type="button" (click)="deactivateReviewBot(review)" [disabled]="!review.botId || blockLockedByCredentials(review) || isMutating(reviewBotMutationKey(review, 'block'))" [title]="blockLockedByCredentials(review) ? 'Сначала скопируйте логин и пароль текущего аккаунта' : 'Блок аккаунта'">
                       {{ isMutating(reviewBotMutationKey(review, 'block')) ? '...' : 'блок' }}
                     </button>
                   </div>
+                  @if (blockLockedByCredentials(review)) {
+                    <small>Чтобы нажать «Блок», скопируйте логин и пароль текущего аккаунта.</small>
+                  }
 
                   <button
                     class="publish-button"
@@ -1653,6 +1657,8 @@ export class WorkerPage implements OnInit, OnDestroy {
   readonly reviewEditTarget = signal<WorkerReviewItem | null>(null);
   readonly editingBotNameReviewId = signal<number | null>(null);
   readonly botNameDraft = signal('');
+  readonly accountCredentialCopies = signal<AccountCredentialCopies>({});
+
   readonly publishCredentialPreparation = signal<PublishCredentialPreparation>({
     reviewId: null,
     invalidated: {}
@@ -2221,6 +2227,9 @@ export class WorkerPage implements OnInit, OnDestroy {
     if (!(await this.copyText(value, `${kind}-${review.id}`))) {
       return;
     }
+    if (kind === 'login' || kind === 'password') {
+      this.accountCredentialCopies.update(state => recordAccountCredentialCopy(state, review, kind));
+    }
   }
 
   reviewCredentialCopyDisabled(review: WorkerReviewItem, kind: ReviewCopyKind): boolean {
@@ -2242,6 +2251,10 @@ export class WorkerPage implements OnInit, OnDestroy {
     return this.reviewCredentialCopyDisabled(review, kind)
       ? this.accountRepairTitle(review)
       : 'Скопировать';
+  }
+
+  blockLockedByCredentials(review: WorkerReviewItem): boolean {
+    return this.isOnlyWorkerRole() && !accountCredentialsCopied(this.accountCredentialCopies(), review);
   }
 
   publishCredentialWaitLeftSeconds(review: WorkerReviewItem): number {
@@ -2433,6 +2446,10 @@ export class WorkerPage implements OnInit, OnDestroy {
   }
 
   async deactivateReviewBot(review: WorkerReviewItem): Promise<void> {
+    if (this.blockLockedByCredentials(review)) {
+      this.error.set('Сначала скопируйте логин и пароль текущего аккаунта.');
+      return;
+    }
     if (!review.botId) {
       return;
     }

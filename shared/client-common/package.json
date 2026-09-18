@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./account-credential-copy": "./src/account-credential-copy.ts",
     "./order-editor": "./src/order-editor.ts",
     "./manual-payment-recipient-summary": "./src/manual-payment-recipient-summary.ts",
     "./manual-payment-task-visibility": "./src/manual-payment-task-visibility.ts",

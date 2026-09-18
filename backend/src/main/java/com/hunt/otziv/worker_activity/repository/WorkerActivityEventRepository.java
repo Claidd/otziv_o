@@ -13,6 +13,9 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface WorkerActivityEventRepository extends JpaRepository<WorkerActivityEvent, Long> {
 
+    Optional<WorkerActivityEvent> findTopByEntityTypeAndEntityIdAndActionInAndIdNotAndCreatedAtLessThanEqualOrderByCreatedAtDesc(
+            String entityType, Long entityId, Collection<WorkerActivityAction> actions, Long excludedId, LocalDateTime before);
+
     long countByWorkerUserIdAndActionInAndCreatedAtGreaterThanEqual(
             Long workerUserId,
             Collection<WorkerActivityAction> actions,

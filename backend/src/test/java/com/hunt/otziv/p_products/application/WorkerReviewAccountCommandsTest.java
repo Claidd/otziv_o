@@ -8,6 +8,7 @@ import com.hunt.otziv.p_products.worker_access.service.WorkerCellularAccessServi
 import com.hunt.otziv.p_products.worker_flow.service.WorkerPublicationGateService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.service.ReviewService;
+import com.hunt.otziv.worker_activity.account_action.WorkerAccountCredentialGuard;
 import com.hunt.otziv.worker_activity.service.WorkerActivityService;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
@@ -20,7 +21,8 @@ class WorkerReviewAccountCommandsTest {
     WorkerCellularAccessService cellular=mock(WorkerCellularAccessService.class);
     WorkerPublicationGateService publication=mock(WorkerPublicationGateService.class);
     WorkerActivityService activity=mock(WorkerActivityService.class);
-    WorkerReviewAccountCommands commands=new WorkerReviewAccountCommands(reviews,bots,guard,cellular,publication,activity);
+    WorkerAccountCredentialGuard credentials=mock(WorkerAccountCredentialGuard.class);
+    WorkerReviewAccountCommands commands=new WorkerReviewAccountCommands(reviews,bots,guard,cellular,publication,activity,credentials);
     WorkerOrderActor worker=new WorkerOrderActor("worker",Set.of("WORKER"));
 
     @Test void directApplicationCallRejectsUnauthorizedActorBeforeReadingAccount() {
@@ -43,6 +45,18 @@ class WorkerReviewAccountCommandsTest {
         commands.change(1,new WorkerReviewAccountCommands.Source("board",null,"new"),worker);
         verify(cellular).enforceSection(eq("publish"),argThat(actor -> actor.getName().equals("worker")));
         verify(guard).assertReview(eq(1L),argThat(actor -> actor.getName().equals("worker")));
+    }
+
+    @Test void blockUsesExplicitActorAndRejectsBeforeMutationOrAudit() {
+        var bot = new com.hunt.otziv.b_bots.model.Bot(); bot.setId(2L);
+        var review = new Review(); review.setId(1L); review.setBot(bot);
+        when(reviews.getReviewById(1L)).thenReturn(review);
+        doThrow(new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT))
+                .when(credentials).assertCanBlock(argThat(actor -> actor.getName().equals("worker")),eq("review"),eq(1L),eq(2L));
+        assertThatThrownBy(() -> commands.deactivate(1,2,null,worker))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+        verify(reviews,never()).deActivateAndChangeBot(anyLong(),anyLong());
+        verifyNoInteractions(activity);
     }
 
     @Test void workerCannotUseAdministratorOnlyDeleteCommand() {

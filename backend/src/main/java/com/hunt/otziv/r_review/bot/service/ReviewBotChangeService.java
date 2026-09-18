@@ -12,6 +12,7 @@ import com.hunt.otziv.p_products.service.BotAssignmentService;
 import com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
+import com.hunt.otziv.worker_activity.account_action.WorkerAccountCredentialGuard;
 import com.hunt.otziv.worker_activity.account_action.WorkerAccountActionCooldownService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -57,6 +58,7 @@ public class ReviewBotChangeService {
     private final ReviewBotAssignmentExclusionService assignmentExclusionService;
     private final WorkerAssignmentMutationGuardService assignmentMutationGuardService;
     private final WorkerAccountActionCooldownService accountActionCooldownService;
+    private final WorkerAccountCredentialGuard accountCredentialGuard;
 
     @Transactional(noRollbackFor = ResponseStatusException.class)
     public void changeBot(Long reviewId) {
@@ -108,6 +110,7 @@ public class ReviewBotChangeService {
             Long currentBotId = currentBot != null ? currentBot.getId() : null;
 
             assertRequestedBotIsCurrent(botId, currentBotId);
+            accountCredentialGuard.assertCurrentActorCanBlock("review", reviewId, currentBotId);
             accountActionCooldownService.admitCurrentAction();
 
             if ((botId == null || botId == 0L) && currentBotId != null && currentBotId > 0) {

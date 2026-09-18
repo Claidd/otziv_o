@@ -1,5 +1,6 @@
 package com.hunt.otziv.review_recovery.service;
 
+import com.hunt.otziv.worker_activity.account_action.WorkerAccountCredentialGuard;
 import com.hunt.otziv.worker_activity.account_action.WorkerAccountActionCooldownService;
 
 import com.hunt.otziv.b_bots.model.Bot;
@@ -70,6 +71,9 @@ import static org.mockito.Mockito.when;
 class ReviewRecoveryTaskServiceImplTest {
     @Mock
     private WorkerAccountActionCooldownService accountActionCooldownService;
+
+    @Mock
+    private WorkerAccountCredentialGuard accountCredentialGuard;
 
     @Mock
     private ReviewRecoveryBatchRepository batchRepository;
@@ -486,6 +490,21 @@ class ReviewRecoveryTaskServiceImplTest {
         verify(botService, never()).save(any());
         verify(taskRepository, never()).save(any());
         verify(reviewRepository, never()).save(any());
+    }
+
+    @Test
+    void missingCredentialsRejectRecoveryBlockBeforeCooldownOrMutation() {
+        Bot currentBot = activeWalkedBot(20L, 4);
+        Review review = review(100L, "текст", order(10L), currentBot);
+        ReviewRecoveryTask task = recoveryTask(40L, review, currentBot);
+        when(taskRepository.findByIdForMutation(40L)).thenReturn(Optional.of(task));
+        org.mockito.Mockito.doThrow(new ResponseStatusException(HttpStatus.CONFLICT))
+                .when(accountCredentialGuard).assertCurrentActorCanBlock("recovery_task", 40L, 20L);
+        assertThrows(ResponseStatusException.class, () -> service.deactivateAndChangeTaskBot(40L, 20L));
+        assertTrue(currentBot.isActive());
+        verify(accountActionCooldownService, never()).admitCurrentAction();
+        verify(botExclusionService, never()).reject(any(), any(), any());
+        verify(botService, never()).save(any());
     }
 
     @Test

@@ -1,5 +1,6 @@
 package com.hunt.otziv.bad_reviews.service;
 
+import com.hunt.otziv.worker_activity.account_action.WorkerAccountCredentialGuard;
 import com.hunt.otziv.worker_activity.account_action.WorkerAccountActionCooldownService;
 
 import com.hunt.otziv.b_bots.model.Bot;
@@ -78,6 +79,9 @@ import org.mockito.InOrder;
 class BadReviewTaskServiceImplTest {
     @Mock
     private WorkerAccountActionCooldownService accountActionCooldownService;
+
+    @Mock
+    private WorkerAccountCredentialGuard accountCredentialGuard;
 
     @Mock
     private BadReviewTaskRepository badReviewTaskRepository;
@@ -366,6 +370,22 @@ class BadReviewTaskServiceImplTest {
         assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
         assertTrue(currentBot.isActive());
         assertSame(currentBot, task.getBot());
+        verify(botService, never()).save(any());
+        verify(badReviewTaskRepository, never()).save(any());
+    }
+
+    @Test
+    void missingCredentialsRejectBadTaskBlockBeforeCooldownOrMutation() {
+        Bot currentBot = Bot.builder().id(7L).active(true).build();
+        BadReviewTask task = BadReviewTask.builder().id(42L).bot(currentBot)
+                .sourceReview(Review.builder().id(88L).bot(currentBot).build())
+                .status(BadReviewTaskStatus.NEW).build();
+        when(badReviewTaskRepository.findByIdForMutation(42L)).thenReturn(Optional.of(task));
+        org.mockito.Mockito.doThrow(new ResponseStatusException(HttpStatus.CONFLICT))
+                .when(accountCredentialGuard).assertCurrentActorCanBlock("bad_review_task", 42L, 7L);
+        assertThrows(ResponseStatusException.class, () -> service.deactivateAndChangeTaskBot(42L, 7L));
+        assertTrue(currentBot.isActive());
+        verify(accountActionCooldownService, never()).admitCurrentAction();
         verify(botService, never()).save(any());
         verify(badReviewTaskRepository, never()).save(any());
     }

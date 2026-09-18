@@ -1,3 +1,4 @@
+import { AccountCredentialCopies, accountCredentialsCopied, recordAccountCredentialCopy } from '@otziv/client-common/account-credential-copy';
 import { Component, HostListener, OnDestroy, computed, effect, inject, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -170,6 +171,8 @@ export class WorkerBoardComponent implements OnDestroy {
   readonly overdueOrders = signal<ManagerOverdueOrders | null>(null);
   readonly overdueModalOpen = signal(false);
   readonly selectedWorkerId = signal<number | null>(null);
+  readonly accountCredentialCopies = signal<AccountCredentialCopies>({});
+
   readonly publishCredentialPreparation = signal<PublishCredentialPreparation>({
     reviewId: null,
     invalidated: {}
@@ -642,6 +645,10 @@ export class WorkerBoardComponent implements OnDestroy {
 
   deactivateReviewBot(review: WorkerReviewItem): void {
     if (this.accountActionCooldown.locked()) return;
+    if (this.blockLockedByCredentials(review)) {
+      this.toastService.error('Сначала скопируйте логин и пароль', 'Используйте кнопки в карточке текущего аккаунта.');
+      return;
+    }
     this.actionFacade.deactivateReviewBot(review);
   }
 
@@ -928,6 +935,7 @@ export class WorkerBoardComponent implements OnDestroy {
         return;
       }
       this.showCopySuccess(copiedKey, `${copyLabel} скопирован и подтвержден`);
+      this.accountCredentialCopies.update(state => recordAccountCredentialCopy(state, review, kind));
       this.markPublishCredentialCopied(review, kind);
       return;
     }
@@ -985,6 +993,10 @@ export class WorkerBoardComponent implements OnDestroy {
     });
     this.refreshPublishCredentialWaitTimer();
     this.storePublishCredentialPreparation();
+  }
+
+  blockLockedByCredentials(review: WorkerReviewItem): boolean {
+    return this.isOnlyWorkerRole() && !accountCredentialsCopied(this.accountCredentialCopies(), review);
   }
 
   publishCredentialWaitLeftSeconds(review: WorkerReviewItem): number {

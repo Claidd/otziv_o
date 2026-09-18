@@ -1,5 +1,6 @@
 package com.hunt.otziv.bad_reviews.service;
 
+import com.hunt.otziv.worker_activity.account_action.WorkerAccountCredentialGuard;
 import com.hunt.otziv.worker_activity.account_action.WorkerAccountActionCooldownService;
 
 import com.hunt.otziv.b_bots.model.Bot;
@@ -101,6 +102,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
     private final ReviewAccountWalkScheduleService accountWalkScheduleService;
     private final WorkerAssignmentMutationGuardService assignmentMutationGuardService;
     private final WorkerAccountActionCooldownService accountActionCooldownService;
+    private final WorkerAccountCredentialGuard accountCredentialGuard;
     private final OrderRepository orderRepository;
     private final ContractorCompletionRewardService contractorCompletionRewardService;
     private final ContractorPaymentBusinessClock contractorPaymentBusinessClock;
@@ -847,6 +849,8 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
         BadReviewTask task = requireTask(taskId, authentication);
         Long attachedBotId = task.getBot() != null ? task.getBot().getId() : null;
         assertRequestedBotIsCurrent(botId, attachedBotId);
+        if (authentication == null) accountCredentialGuard.assertCurrentActorCanBlock("bad_review_task", taskId, attachedBotId);
+        else accountCredentialGuard.assertCanBlock(authentication, "bad_review_task", taskId, attachedBotId);
         if (authentication == null) accountActionCooldownService.admitCurrentAction();
         else accountActionCooldownService.admitAction(authentication);
         Long currentBotId = botId != null && botId > 0 ? botId : attachedBotId;

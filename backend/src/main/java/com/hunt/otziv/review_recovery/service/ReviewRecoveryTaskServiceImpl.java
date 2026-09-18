@@ -1,5 +1,6 @@
 package com.hunt.otziv.review_recovery.service;
 
+import com.hunt.otziv.worker_activity.account_action.WorkerAccountCredentialGuard;
 import com.hunt.otziv.worker_activity.account_action.WorkerAccountActionCooldownService;
 
 import com.hunt.otziv.archive.dto.ArchiveReviewRecoverySource;
@@ -109,6 +110,7 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
     private final ApplicationEventPublisher eventPublisher;
     private final WorkerAssignmentMutationGuardService assignmentMutationGuardService;
     private final WorkerAccountActionCooldownService accountActionCooldownService;
+    private final WorkerAccountCredentialGuard accountCredentialGuard;
 
     @Override
     @Transactional(readOnly = true)
@@ -448,6 +450,8 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
         Bot currentBot = task.getBot();
         Long currentBotId = currentBot != null ? currentBot.getId() : null;
         assertRequestedBotIsCurrent(botId, currentBotId);
+        if (authentication == null) accountCredentialGuard.assertCurrentActorCanBlock("recovery_task", taskId, currentBotId);
+        else accountCredentialGuard.assertCanBlock(authentication, "recovery_task", taskId, currentBotId);
 
         if (authentication == null) accountActionCooldownService.admitCurrentAction();
         else accountActionCooldownService.admitAction(authentication);

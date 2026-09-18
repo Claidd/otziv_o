@@ -1,5 +1,6 @@
 package com.hunt.otziv.worker_activity.service;
 
+import com.hunt.otziv.worker_activity.account_action.WorkerAccountCredentialGuard;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.c_companies.model.Company;
@@ -75,6 +76,9 @@ class WorkerRiskEvaluationServiceTest {
 
     @Mock
     private WorkerRiskEventService riskEventService;
+
+    @Mock
+    private WorkerAccountCredentialGuard accountCredentialGuard;
 
     @Test
     void publishWithoutCredentialCopyCreatesIncidentAndWarnings() {
@@ -559,8 +563,8 @@ class WorkerRiskEvaluationServiceTest {
         verify(incidentRepository).save(captor.capture());
         assertEquals("ACCOUNT_DEACTIVATION_WITHOUT_CREDENTIAL_COPY", captor.getValue().getRuleCode());
         assertEquals(35, captor.getValue().getScore());
-        assertEquals("Блок аккаунта без попытки войти в него", captor.getValue().getTitle());
-        assertEquals(true, captor.getValue().getDetails().contains("система не увидела попытку входа"));
+        assertEquals("Блок аккаунта без копирования логина и пароля", captor.getValue().getTitle());
+        assertEquals(true, captor.getValue().getDetails().contains("не подтверждено получение обоих полей"));
         assertEquals(true, captor.getValue().getDetails().contains("Место: Детали заказа, вход: Специалист -> Все, раздел: Все"));
     }
 
@@ -571,22 +575,8 @@ class WorkerRiskEvaluationServiceTest {
         event.setDetails("botId=10");
         User worker = user(1L, "worker", "Иван Работник", 101L);
 
-        when(eventRepository.existsByWorkerUserIdAndActionAndReviewIdAndCreatedAtBetweenAndDetailsContaining(
-                eq(1L),
-                eq(WorkerActivityAction.REVIEW_COPY_LOGIN),
-                eq(501L),
-                any(LocalDateTime.class),
-                any(LocalDateTime.class),
-                eq("botId=10;")
-        )).thenReturn(true);
-        when(eventRepository.existsByWorkerUserIdAndActionAndReviewIdAndCreatedAtBetweenAndDetailsContaining(
-                eq(1L),
-                eq(WorkerActivityAction.REVIEW_COPY_PASSWORD),
-                eq(501L),
-                any(LocalDateTime.class),
-                any(LocalDateTime.class),
-                eq("botId=10;")
-        )).thenReturn(true);
+        when(accountCredentialGuard.hasBothCredentials("worker", "review", 501L, 10L, event.getCreatedAt(), event.getId()))
+                .thenReturn(true);
 
         service.evaluateSafely(event, worker);
 
@@ -666,7 +656,8 @@ class WorkerRiskEvaluationServiceTest {
                 orderRepository,
                 transactionManager(),
                 appSettingService,
-                riskEventService
+                riskEventService,
+                accountCredentialGuard
         );
     }
 
