@@ -1,6 +1,6 @@
 package com.hunt.otziv.bad_reviews.service;
 
-import com.hunt.otziv.worker_activity.account_action.WorkerAccountCredentialGuard;
+import com.hunt.otziv.worker_activity.api.WorkerAccountBlockGuard;
 import com.hunt.otziv.worker_activity.account_action.WorkerAccountActionCooldownService;
 
 import com.hunt.otziv.b_bots.model.Bot;
@@ -102,7 +102,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
     private final ReviewAccountWalkScheduleService accountWalkScheduleService;
     private final WorkerAssignmentMutationGuardService assignmentMutationGuardService;
     private final WorkerAccountActionCooldownService accountActionCooldownService;
-    private final WorkerAccountCredentialGuard accountCredentialGuard;
+    private final WorkerAccountBlockGuard accountCredentialGuard;
     private final OrderRepository orderRepository;
     private final ContractorCompletionRewardService contractorCompletionRewardService;
     private final ContractorPaymentBusinessClock contractorPaymentBusinessClock;

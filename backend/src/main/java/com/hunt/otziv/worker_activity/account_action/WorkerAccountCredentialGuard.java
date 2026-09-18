@@ -1,6 +1,7 @@
 package com.hunt.otziv.worker_activity.account_action;
 
-import com.hunt.otziv.business_audit.repository.BusinessAuditEventRepository;
+import com.hunt.otziv.business_audit.api.CredentialRevealEvidence;
+import com.hunt.otziv.worker_activity.api.WorkerAccountBlockGuard;
 import com.hunt.otziv.worker_activity.model.WorkerActivityAction;
 import com.hunt.otziv.worker_activity.model.WorkerActivityEvent;
 import com.hunt.otziv.worker_activity.repository.WorkerActivityEventRepository;
@@ -16,19 +17,21 @@ import org.springframework.web.server.ResponseStatusException;
 /** The same durable evidence is used before a block and when evaluating its risk. */
 @Service
 @RequiredArgsConstructor
-public class WorkerAccountCredentialGuard {
+public class WorkerAccountCredentialGuard implements WorkerAccountBlockGuard {
     private static final List<WorkerActivityAction> ACCOUNT_CHANGES = List.of(
             WorkerActivityAction.REVIEW_BOT_CHANGE, WorkerActivityAction.REVIEW_BOT_DEACTIVATE,
             WorkerActivityAction.BAD_TASK_BOT_CHANGE, WorkerActivityAction.BAD_TASK_BOT_DEACTIVATE,
             WorkerActivityAction.RECOVERY_TASK_BOT_CHANGE, WorkerActivityAction.RECOVERY_TASK_BOT_DEACTIVATE);
     private static final LocalDateTime HISTORY_START = LocalDateTime.of(2000, 1, 1, 0, 0);
-    private final BusinessAuditEventRepository auditRepository;
+    private final CredentialRevealEvidence credentialEvidence;
     private final WorkerActivityEventRepository activityRepository;
 
+    @Override
     public void assertCurrentActorCanBlock(String entityType, Long entityId, Long botId) {
         assertCanBlock(SecurityContextHolder.getContext().getAuthentication(), entityType, entityId, botId);
     }
 
+    @Override
     public void assertCanBlock(Authentication actor, String entityType, Long entityId, Long botId) {
         if (!WorkerAccountActionCooldownService.isPlainWorker(actor)) return;
         if (!hasBothCredentials(actor.getName(), entityType, entityId, botId, LocalDateTime.now())) {
@@ -53,9 +56,6 @@ public class WorkerAccountCredentialGuard {
                 .findTopByEntityTypeAndEntityIdAndActionInAndIdNotAndCreatedAtLessThanEqualOrderByCreatedAtDesc(
                         entityType, entityId, ACCOUNT_CHANGES, evaluatingEventId == null ? 0L : evaluatingEventId, at)
                 .map(WorkerActivityEvent::getCreatedAt).orElse(HISTORY_START);
-        return auditRepository.hasCredentialReveal(actor, entityType, entityId.toString(),
-                "field=login;botId=" + botId + ";", since, at)
-                && auditRepository.hasCredentialReveal(actor, entityType, entityId.toString(),
-                "field=password;botId=" + botId + ";", since, at);
+        return credentialEvidence.hasBothCredentials(actor, entityType, entityId, botId, since, at);
     }
 }

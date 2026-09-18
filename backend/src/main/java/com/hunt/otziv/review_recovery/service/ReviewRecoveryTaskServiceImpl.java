@@ -1,6 +1,6 @@
 package com.hunt.otziv.review_recovery.service;
 
-import com.hunt.otziv.worker_activity.account_action.WorkerAccountCredentialGuard;
+import com.hunt.otziv.worker_activity.api.WorkerAccountBlockGuard;
 import com.hunt.otziv.worker_activity.account_action.WorkerAccountActionCooldownService;
 
 import com.hunt.otziv.archive.dto.ArchiveReviewRecoverySource;
@@ -110,7 +110,7 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
     private final ApplicationEventPublisher eventPublisher;
     private final WorkerAssignmentMutationGuardService assignmentMutationGuardService;
     private final WorkerAccountActionCooldownService accountActionCooldownService;
-    private final WorkerAccountCredentialGuard accountCredentialGuard;
+    private final WorkerAccountBlockGuard accountCredentialGuard;
 
     @Override
     @Transactional(readOnly = true)

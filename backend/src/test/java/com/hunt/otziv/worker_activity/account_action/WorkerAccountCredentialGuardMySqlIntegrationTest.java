@@ -2,6 +2,7 @@ package com.hunt.otziv.worker_activity.account_action;
 
 import com.hunt.otziv.business_audit.model.BusinessAuditEvent;
 import com.hunt.otziv.business_audit.repository.BusinessAuditEventRepository;
+import com.hunt.otziv.business_audit.service.CredentialRevealEvidenceReader;
 import com.hunt.otziv.worker_activity.model.WorkerActivityAction;
 import com.hunt.otziv.worker_activity.model.WorkerActivityEvent;
 import com.hunt.otziv.worker_activity.repository.WorkerActivityEventRepository;
@@ -34,15 +35,17 @@ class WorkerAccountCredentialGuardMySqlIntegrationTest {
             LocalDateTime at = LocalDateTime.of(2026, 9, 18, 13, 21, 54);
             session.persist(change(at.minusMinutes(19)));
             session.persist(reveal("login", at.minusMinutes(18)));
-            session.persist(reveal("password", at.minusMinutes(18).plusSeconds(8)));
             // Evaluation sees the just-committed block, but must use the preceding assignment.
             var currentBlock = change(at);
             session.persist(currentBlock);
             session.flush();
             var repositories = new JpaRepositoryFactory(session);
             var guard = new WorkerAccountCredentialGuard(
-                    repositories.getRepository(BusinessAuditEventRepository.class),
+                    new CredentialRevealEvidenceReader(repositories.getRepository(BusinessAuditEventRepository.class)),
                     repositories.getRepository(WorkerActivityEventRepository.class));
+            assertFalse(guard.hasBothCredentials("maks", "review", 197623L, 871819L, at.plusNanos(100), currentBlock.getId()));
+            session.persist(reveal("password", at.minusMinutes(18).plusSeconds(8)));
+            session.flush();
             assertTrue(guard.hasBothCredentials("maks", "review", 197623L, 871819L, at.plusNanos(100), currentBlock.getId()));
             assertFalse(guard.hasBothCredentials("other", "review", 197623L, 871819L, at.plusNanos(100), currentBlock.getId()));
             assertFalse(guard.hasBothCredentials("maks", "recovery_task", 197623L, 871819L, at.plusNanos(100), currentBlock.getId()));

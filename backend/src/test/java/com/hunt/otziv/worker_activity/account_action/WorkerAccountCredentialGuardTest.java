@@ -1,6 +1,6 @@
 package com.hunt.otziv.worker_activity.account_action;
 
-import com.hunt.otziv.business_audit.repository.BusinessAuditEventRepository;
+import com.hunt.otziv.business_audit.api.CredentialRevealEvidence;
 import com.hunt.otziv.worker_activity.model.WorkerActivityEvent;
 import com.hunt.otziv.worker_activity.repository.WorkerActivityEventRepository;
 import java.time.LocalDateTime;
@@ -15,7 +15,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 class WorkerAccountCredentialGuardTest {
-    private final BusinessAuditEventRepository audit = mock(BusinessAuditEventRepository.class);
+    private final CredentialRevealEvidence audit = mock(CredentialRevealEvidence.class);
     private final WorkerActivityEventRepository activity = mock(WorkerActivityEventRepository.class);
     private final WorkerAccountCredentialGuard guard = new WorkerAccountCredentialGuard(audit, activity);
     private final LocalDateTime blockedAt = LocalDateTime.of(2026, 9, 18, 13, 21, 54);
@@ -27,10 +27,10 @@ class WorkerAccountCredentialGuardTest {
         when(activity.findTopByEntityTypeAndEntityIdAndActionInAndIdNotAndCreatedAtLessThanEqualOrderByCreatedAtDesc(
                 eq("review"), eq(197623L), any(), eq(0L), eq(blockedAt))).thenReturn(Optional.of(assignment));
         LocalDateTime copiedAt = blockedAt.minusMinutes(18);
-        when(audit.hasCredentialReveal(eq("maks"), eq("review"), eq("197623"), anyString(), any(), eq(blockedAt)))
+        when(audit.hasBothCredentials(eq("maks"), eq("review"), eq(197623L), eq(871819L), any(), eq(blockedAt)))
                 .thenAnswer(call -> copiedAt.isAfter(call.getArgument(4)));
         assertTrue(guard.hasBothCredentials("maks", "review", 197623L, 871819L, blockedAt));
-        verify(audit).hasCredentialReveal("maks", "review", "197623", "field=password;botId=871819;",
+        verify(audit).hasBothCredentials("maks", "review", 197623L, 871819L,
                 assignment.getCreatedAt(), blockedAt);
     }
 
@@ -40,16 +40,16 @@ class WorkerAccountCredentialGuardTest {
         assignment.setCreatedAt(blockedAt.minusMinutes(1));
         when(activity.findTopByEntityTypeAndEntityIdAndActionInAndIdNotAndCreatedAtLessThanEqualOrderByCreatedAtDesc(
                 eq("review"), eq(197623L), any(), eq(0L), eq(blockedAt))).thenReturn(Optional.of(assignment));
-        when(audit.hasCredentialReveal(eq("maks"), eq("review"), eq("197623"), anyString(), any(), eq(blockedAt)))
+        when(audit.hasBothCredentials(eq("maks"), eq("review"), eq(197623L), eq(871819L), any(), eq(blockedAt)))
                 .thenAnswer(call -> blockedAt.minusMinutes(18).isAfter(call.getArgument(4)));
         assertFalse(guard.hasBothCredentials("maks", "review", 197623L, 871819L, blockedAt));
     }
 
     @Test
-    void onlyLoginOrAnotherActorsCardOrAccountCannotUnlockBlock() {
-        when(audit.hasCredentialReveal(eq("maks"), eq("review"), eq("197623"),
-                eq("field=login;botId=871819;"), any(), any())).thenReturn(true);
-        assertFalse(guard.hasBothCredentials("maks", "review", 197623L, 871819L, blockedAt));
+    void anotherActorsCardOrAccountCannotUnlockBlock() {
+        when(audit.hasBothCredentials(eq("maks"), eq("review"), eq(197623L),
+                eq(871819L), any(), any())).thenReturn(true);
+        assertTrue(guard.hasBothCredentials("maks", "review", 197623L, 871819L, blockedAt));
         assertFalse(guard.hasBothCredentials("other", "review", 197623L, 871819L, blockedAt));
         assertFalse(guard.hasBothCredentials("maks", "recovery_task", 197623L, 871819L, blockedAt));
         assertFalse(guard.hasBothCredentials("maks", "review", 197624L, 871819L, blockedAt));
