@@ -8,6 +8,8 @@ const BASELINE_PATH = 'infrastructure/runtime-security/reviewed-images.json';
 const C12_PATH = 'infrastructure/runtime-security/reviewed-images-c12-phpmyadmin.json';
 const C12_CONTEXT = 'infrastructure/runtime-security/builds/phpmyadmin-alpine';
 const RELEASE_SETS = Object.freeze({
+  'c19-keycloak': { component: 'keycloak', path: 'infrastructure/runtime-security/reviewed-images-c19-keycloak.json',
+    context: 'infrastructure/keycloak/security-generation/c19-bouncycastle', dockerfile: 'infrastructure/keycloak/security-generation/c19-bouncycastle/Dockerfile' },
   'c18-mysql': { component: 'mysql', path: 'infrastructure/runtime-security/reviewed-images-c18-mysql.json',
     context: 'infrastructure/runtime-security/builds/mysql-c18', dockerfile: 'infrastructure/runtime-security/builds/mysql-c18/Dockerfile' },
   'c17-mysql': { component: 'mysql', path: 'infrastructure/runtime-security/reviewed-images-c17-mysql.json',
