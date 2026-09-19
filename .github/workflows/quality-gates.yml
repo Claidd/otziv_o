@@ -315,6 +315,7 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: ${{ needs.changes.outputs.backend == 'true' }}
       - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
         if: ${{ needs.changes.outputs.backend == 'true' }}
         with:
@@ -379,6 +380,7 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: ${{ needs.changes.outputs.issuer == 'true' }}
       - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
         if: ${{ needs.changes.outputs.issuer == 'true' }}
         with:
@@ -480,6 +482,7 @@ jobs:
         working-directory: frontend
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: ${{ needs.changes.outputs.frontend == 'true' }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         if: ${{ needs.changes.outputs.frontend == 'true' }}
         with:
@@ -510,6 +513,7 @@ jobs:
         working-directory: mobile
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: ${{ needs.changes.outputs.mobile == 'true' }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         if: ${{ needs.changes.outputs.mobile == 'true' }}
         with:
@@ -539,6 +543,7 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: ${{ needs.changes.outputs.browser == 'true' }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         if: ${{ needs.changes.outputs.browser == 'true' }}
         with:
@@ -606,6 +611,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: ${{ needs.changes.outputs.android == 'true' }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         if: ${{ needs.changes.outputs.android == 'true' }}
         with:
@@ -668,6 +674,7 @@ jobs:
         working-directory: whatsapp
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: ${{ needs.changes.outputs.whatsapp == 'true' }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         if: ${{ needs.changes.outputs.whatsapp == 'true' }}
         with:
@@ -696,6 +703,7 @@ jobs:
         working-directory: backend/external-review-worker
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: ${{ needs.changes.outputs.worker == 'true' }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         if: ${{ needs.changes.outputs.worker == 'true' }}
         with:
@@ -727,6 +735,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: ${{ needs.changes.outputs.parity == 'true' }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         if: ${{ needs.changes.outputs.parity == 'true' }}
         with:
@@ -780,6 +789,7 @@ jobs:
       matrix: ${{ fromJSON(needs.upstream-inventory.outputs.matrix) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: ${{ (needs.changes.outputs.upstream == 'true') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         if: ${{ (needs.changes.outputs.upstream == 'true') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         with:
@@ -852,6 +862,7 @@ jobs:
           - {component: publisher, scope: publisher, context: infrastructure/monitoring, dockerfile: infrastructure/monitoring/Dockerfile}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: ${{ (needs.changes.outputs[matrix.scope] == 'true') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         if: ${{ (needs.changes.outputs[matrix.scope] == 'true') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         with:
@@ -923,8 +934,8 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-      - name: Preserve the exact tested image for deployment
-        if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') && ((needs.changes.outputs[matrix.scope] == 'true') || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
+      - name: Verify immutable archive of the actual tested image
+        if: ${{ (needs.changes.outputs[matrix.scope] == 'true') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         env:
           COMPONENT: ${{ matrix.component }}
         run: >-
@@ -988,6 +999,7 @@ jobs:
             dockerfile: Grafana
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: ${{ needs.changes.outputs.monitoring == 'true' }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         if: ${{ needs.changes.outputs.monitoring == 'true' }}
         with:
