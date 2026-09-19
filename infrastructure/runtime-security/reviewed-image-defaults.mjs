@@ -18,6 +18,7 @@ import { validateDatabaseTransitionReadiness } from './mysql-libevent-readiness.
 import { validatePostgresActivationScan, validatePostgresTransitionReadiness } from './postgres-c16-activation.mjs';
 import { validatePublishedKeycloakMigrationAcceptance,
   assertPostgresKeycloakCoupling } from './postgres-transition-readiness.mjs';
+import {validateKeycloakC19Acceptance,coupleKeycloakC19} from './keycloak-c19-acceptance.mjs';
 
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 const DATABASE_HOLD = new Set(['mysql', 'postgres']);
@@ -151,6 +152,7 @@ export async function validateActivation(image, entry, manifestBytes, read) {
   if (['c14-keycloak', 'c15-keycloak'].includes(selected.manifestSet)) {
     await validatePublishedKeycloakMigrationAcceptance(publication.value, entry, read);
   }
+  if (selected.manifestSet === 'c19-keycloak') await validateKeycloakC19Acceptance(publication.value, entry, read);
   assert.equal(entry.reference, publication.value.reference, 'activation_registered_reference_mismatch');
   assert.equal(publication.value.security.effectiveBlockingFixedHighOrCritical, 0, 'activation_security_severity_mismatch');
   if (publication.value.security.unresolvedRiskReview === 'NONE') {
@@ -219,7 +221,8 @@ export async function validateReviewedDefaults(rows, manifestBytes, activations,
     registered.set(entry.component, entry);
   }
   if (databasePreparations.has('postgres')) {
-    assertPostgresKeycloakCoupling(databasePreparations.get('postgres'), registered.get('keycloak'), rows,
+    const coupled = await coupleKeycloakC19(databasePreparations.get('postgres'), registered.get('keycloak'), read);
+    assertPostgresKeycloakCoupling(coupled, registered.get('keycloak'), rows,
       images.find(image => image.component === 'keycloak'));
   }
   const checks = [];
@@ -260,8 +263,11 @@ export async function createEvidenceReader(root) {
   root = await realpath(root);
   const allowedRoots = ['infrastructure/runtime-security',
     'infrastructure/keycloak/security-generation/c14-migration-fix',
-    'infrastructure/keycloak/security-generation/c15-netty'];
-  const allowedFiles = ['infrastructure/keycloak/security-generation/container-proof.mjs'];
+    'infrastructure/keycloak/security-generation/c15-netty',
+    'infrastructure/keycloak/security-generation/c19-bouncycastle'];
+  const allowedFiles = ['infrastructure/keycloak/security-generation/container-proof.mjs',
+    'infrastructure/keycloak/security-generation/image-startup-smoke.mjs',
+    'infrastructure/keycloak/security-generation/provision.mjs'];
   const evidenceRoot = await realpath(resolve(root, 'infrastructure/runtime-security'));
   const evidenceRelative = relative(root, evidenceRoot);
   assert.ok(evidenceRelative && !isAbsolute(evidenceRelative) && evidenceRelative !== '..'

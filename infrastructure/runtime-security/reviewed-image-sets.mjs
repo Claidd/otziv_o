@@ -8,8 +8,6 @@ const BASELINE_PATH = 'infrastructure/runtime-security/reviewed-images.json';
 const C12_PATH = 'infrastructure/runtime-security/reviewed-images-c12-phpmyadmin.json';
 const C12_CONTEXT = 'infrastructure/runtime-security/builds/phpmyadmin-alpine';
 const RELEASE_SETS = Object.freeze({
-  'c19-keycloak': { component: 'keycloak', path: 'infrastructure/runtime-security/reviewed-images-c19-keycloak.json',
-    context: 'infrastructure/keycloak/security-generation/c19-bouncycastle', dockerfile: 'infrastructure/keycloak/security-generation/c19-bouncycastle/Dockerfile' },
   'c18-mysql': { component: 'mysql', path: 'infrastructure/runtime-security/reviewed-images-c18-mysql.json',
     context: 'infrastructure/runtime-security/builds/mysql-c18', dockerfile: 'infrastructure/runtime-security/builds/mysql-c18/Dockerfile' },
   'c17-mysql': { component: 'mysql', path: 'infrastructure/runtime-security/reviewed-images-c17-mysql.json',
@@ -33,6 +31,8 @@ const RELEASE_SETS = Object.freeze({
   'c15-tempo': { component: 'tempo', path: 'infrastructure/runtime-security/reviewed-images-c15-tempo.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/Tempo.Dockerfile' },
   'c15-grafana': { component: 'grafana', path: 'infrastructure/runtime-security/reviewed-images-c15-grafana.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/Grafana.Dockerfile' },
   'c15-keycloak': { component: 'keycloak', path: 'infrastructure/runtime-security/reviewed-images-c15-keycloak.json', context: 'infrastructure/keycloak/security-generation/c15-netty', dockerfile: 'infrastructure/keycloak/security-generation/c15-netty/Dockerfile' },
+  'c19-keycloak': { component: 'keycloak', path: 'infrastructure/runtime-security/reviewed-images-c19-keycloak.json',
+    context: 'infrastructure/keycloak/security-generation/c19-bouncycastle', dockerfile: 'infrastructure/keycloak/security-generation/c19-bouncycastle/Dockerfile' },
   'c15-mc': { component: 'mc', path: 'infrastructure/runtime-security/reviewed-images-c15-mc.json', context: 'infrastructure/runtime-security/builds/mc-c15', dockerfile: 'infrastructure/runtime-security/builds/mc-c15/mc.Dockerfile' },
 });
 // These two local-stack dependencies were absent from the immutable C7 manifest.

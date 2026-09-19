@@ -1,0 +1,35 @@
+{
+  "schema": "otziv-keycloak-c19-acceptance-v1",
+  "result": "PASS",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:6d129626434475b9c0984cc0f766ac28aced19fb7fa430a2c261d18419be1caf",
+  "imageConfigId": "sha256:dc2d5a08e5e81af395d21d2ed383875c0fff0c769d397a9e9ca67d7ea677f3eb",
+  "commit": "07e348429f605040bab786f5650d4d032521ba2a",
+  "run": "35445523866",
+  "attempt": "1",
+  "scope": "Bouncy Castle 1.85 library patch; Keycloak version, custom providers, PostgreSQL image and database schema unchanged.",
+  "advisories": [
+    "CVE-2026-8763",
+    "CVE-2026-13506"
+  ],
+  "files": {
+    "infrastructure/runtime-security/proofs/c19-keycloak-published/parent-activation.json": "b98ae7c9317c5775b10d6a3fc4a1350371ef11d40df23bef0701a641c953a3ad",
+    "infrastructure/runtime-security/proofs/c19-keycloak-published/runtime.json": "7de026af7fe4a2af3fed51067521b0b6abe3cd68064879b1b7be1b7db39d524e",
+    "infrastructure/runtime-security/proofs/c19-keycloak-published/rehearsal/capture.json": "4e5b29ad98b9e399e8948957563de585e4f027cccb27dd539defb683d7266ade",
+    "infrastructure/runtime-security/proofs/c19-keycloak-published/rehearsal/replay.json": "6cdbdd295fd5dd6b250f07e4ef992075c63e9050aced6ae2b4c97a3535f39271",
+    "infrastructure/runtime-security/proofs/c19-keycloak-published/issuer.json": "55b900fca5768235e49d7320cfc63a9403f9c53438b09821bbd55222e1d44691",
+    "infrastructure/runtime-security/proofs/c19-keycloak-published/startup.json": "641292a791c5832c9e7f2acfa4b1ccef75bb99c17112555680d412a6bbc42959",
+    "infrastructure/runtime-security/proofs/c19-keycloak-published/publication/publication.json": "b3136a64657ba60e959cf49d184ca9089394b5371805c7fcc531f34c9967ba8a",
+    "infrastructure/runtime-security/proofs/c19-keycloak-published/publication/vulnerabilities.json": "8bd8da29820932e997976344a199c9cf46c1ed1ec8db5bcdab53e710623aabf0",
+    "infrastructure/runtime-security/proofs/c19-keycloak-published/publication/registry-amd64-config.json": "dc2d5a08e5e81af395d21d2ed383875c0fff0c769d397a9e9ca67d7ea677f3eb",
+    "infrastructure/runtime-security/proofs/c19-keycloak-published/anonymous/anonymous-download.json": "928f714848d4f44cf334dd6c483e2257670b963d6c3609d8793cdbac947dfbf2"
+  },
+  "executedSources": {
+    "infrastructure/runtime-security/keycloak-c19-rehearsal.py": "502d38d0bdbb35571041fa2315e0684cf94a42bf736eb1703fbefad9ef18fb63",
+    "infrastructure/runtime-security/keycloak-c19-runtime.py": "04d96ed22b2a3c0a8daee70706e738c00c4710c7807af65c03fab37fa64cee52",
+    "infrastructure/keycloak/security-generation/c14-migration-fix/private-runtime.py": "f8bee667af239ac739f7912634d1b657ae29c7eecb9f71b73c31b78be2f1189b",
+    "infrastructure/keycloak/security-generation/container-proof.mjs": "c461daf8875f06e6c1ebf05858e9eebd80af34fe09939ca04830d595cb07b5e4",
+    "infrastructure/keycloak/security-generation/image-startup-smoke.mjs": "2db7f9ba3b2fe7b10f056c4c0717dbe07dcc72a566827ad274112d0b644e7a14",
+    "infrastructure/keycloak/security-generation/provision.mjs": "c5e081a0c4610f0450be825d02ae8db2b93fe1c4581280e232a3328fdce19567",
+    "infrastructure/keycloak/security-generation/c19-bouncycastle/Dockerfile": "7ccd6c913d1ce6ac118f15b5bc230e93a4ced97a6c67c707b4c37c99e8615a90"
+  }
+}

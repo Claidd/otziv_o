@@ -401,7 +401,7 @@ jobs:
         run: bash ./mvnw -f ../infrastructure/keycloak/security-generation/pom.xml -B -ntp verify
       - name: Build the real issuer release image
         if: ${{ needs.changes.outputs.issuer == 'true' }}
-        run: docker build -t otziv-issuer-ci infrastructure/keycloak/security-generation/c15-netty
+        run: docker build -t otziv-issuer-ci infrastructure/keycloak/security-generation/c19-bouncycastle
       - name: Build and scan reviewed database candidates
         if: ${{ needs.changes.outputs.issuer == 'true' }}
         run: |
