@@ -3,7 +3,7 @@ import {appendFileSync, readFileSync, writeFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 
 export const scopes = ['backend', 'issuer', 'frontend', 'mobile', 'browser', 'android',
-  'parity', 'whatsapp', 'worker', 'observer', 'publisher', 'upstream', 'monitoring'];
+  'parity', 'whatsapp', 'worker', 'observer', 'publisher', 'upstream', 'monitoring', 'infrastructure'];
 
 // An unknown input or an unverifiable base expands coverage; it never skips it.
 export function selectChecks(paths, event, usableBase = true) {

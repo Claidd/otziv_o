@@ -11,6 +11,7 @@ test('backend changes retain real authentication, database and client contract c
   const {checks} = selectChecks(['backend/src/main/java/Order.java'], 'push');
   for (const scope of ['backend', 'issuer', 'browser', 'parity']) assert.equal(checks[scope], true);
   assert.equal(checks.monitoring, false);
+  assert.equal(checks.infrastructure, false);
 });
 test('shared code expands to both clients and their consumers', () => {
   const {checks} = selectChecks(['shared/client-common/src/copy.ts'], 'pull_request');

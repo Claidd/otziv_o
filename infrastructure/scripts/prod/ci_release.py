@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import re
 import tempfile
+import subprocess
 
 from ci_artifacts import Client, extract_files, validate_artifact
 from ci_image_bundle import SERVICES, verify_bundle
@@ -151,9 +152,33 @@ def import_release(client, value, record, directory, worker=False):
     return capacity_plan(value, references, worker)
 
 
+def load_backend(inputs, revision, run_id, attempt):
+    """Reuse the tested application in recovery, including failed-job reruns."""
+    receipts = [(path, read(path)) for path in Path(inputs).rglob('backend.json')]
+    require(receipts, 'Tested backend artifact is missing')
+    for path, row in receipts:
+        require(row.get('schema') == 'otziv-ci-image-v1' and row.get('component') == 'backend'
+                and row.get('service') == 'app' and row.get('revision') == revision
+                and row.get('runId') == run_id and 0 < row.get('runAttempt', 0) <= attempt
+                and row.get('archive') == 'backend.oci.tar', 'Recovery image is from another source or run')
+    selected = max(row['runAttempt'] for _, row in receipts)
+    matches = [(path, row) for path, row in receipts if row['runAttempt'] == selected]
+    require(len(matches) == 1, 'Ambiguous recovery image attempt')
+    path, row = matches[0]
+    archive = path.parent / row['archive']
+    verify_bundle(archive, row)
+    subprocess.run(['docker', 'load', '--input', str(archive)], check=True)
+    reference = 'otziv-ci-backend:' + revision
+    installed = json.loads(subprocess.check_output(['docker', 'image', 'inspect', reference]))[0]
+    require(installed['Os'] == 'linux' and installed['Architecture'] == 'amd64'
+            and installed['RootFS']['Layers'] == [layer['diffId'] for layer in row['layers']], 'Loaded recovery image differs from CI')
+    subprocess.run(['docker', 'tag', reference, 'otziv-recovery-app-ci'], check=True)
+    return row
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['receipt', 'upstream', 'collect', 'fetch', 'import', 'validate-plan'])
+    parser.add_argument('command', choices=['receipt', 'upstream', 'collect', 'fetch', 'import', 'validate-plan', 'load-backend'])
     parser.add_argument('--repo', type=Path, default=Path.cwd())
     parser.add_argument('--input', type=Path)
     parser.add_argument('--output', type=Path, required=True)
@@ -180,6 +205,8 @@ def main():
         return
     elif args.command == 'import':
         value = import_release(Client(args.repo), read(args.input), read(args.registry), args.output.parent / 'images', args.worker)
+    elif args.command == 'load-backend':
+        value = load_backend(args.input, args.revision, args.run_id, args.attempt)
     else:
         value = read(args.input)
         validate_plan(value, args.revision)

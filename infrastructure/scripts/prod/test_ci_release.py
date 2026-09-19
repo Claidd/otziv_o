@@ -11,7 +11,7 @@ import zipfile
 
 from ci_artifacts import extract_files, storage_url, validate_artifact
 from ci_image_bundle import SERVICES, export_image
-from ci_release import capacity_plan, collect, fetch_image, fetch_manifest, validate_release
+from ci_release import capacity_plan, collect, fetch_image, fetch_manifest, load_backend, validate_release
 from production_images import inventory, record
 from release_ci import GateError
 from release_preflight import probe
@@ -126,6 +126,23 @@ class ReleaseArtifactsTest(unittest.TestCase):
         client.get.assert_not_called()
         with self.assertRaises(GateError):
             inventory(self.release, [{'service': 'keycloak', 'configId': SHA, 'reference': 'example.test/keycloak:mutable'}])
+
+    def test_recovery_loads_verified_backend_from_prior_successful_attempt_without_building(self):
+        row = {k: v for k, v in self.images[0].items() if k != 'artifact'}
+        installed = {'Os': 'linux', 'Architecture': 'amd64', 'RootFS': {'Layers': [x['diffId'] for x in row['layers']]}}
+        with patch('ci_release.subprocess.run') as run, patch('ci_release.subprocess.check_output', return_value=json.dumps([installed]).encode()):
+            self.assertEqual(row, load_backend(self.directory / 'backend', HEAD, 123, 2))
+        self.assertEqual(['load', 'tag'], [call.args[0][1] for call in run.call_args_list])
+        for revision, run_id in [('f' * 40, 123), (HEAD, 999)]:
+            with patch('ci_release.subprocess.run') as run, self.assertRaises(GateError):
+                load_backend(self.directory / 'backend', revision, run_id, 2)
+            run.assert_not_called()
+
+    def test_recovery_rejects_changed_archive_before_docker(self):
+        (self.directory / 'backend' / 'backend.oci.tar').write_bytes(b'changed')
+        with patch('ci_release.subprocess.run') as run, self.assertRaises(ValueError):
+            load_backend(self.directory / 'backend', HEAD, 123, 1)
+        run.assert_not_called()
 
 
 class ArchiveBoundaryTest(unittest.TestCase):
