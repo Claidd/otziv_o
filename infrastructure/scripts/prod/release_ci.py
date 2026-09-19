@@ -47,7 +47,7 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, *args, **kwargs):
         raise GateError('GitHub redirected a credentialed request')
 
-def github_reader(repo):
+def github_token(repo):
     token = os.environ.get('OTZIV_GITHUB_READ_TOKEN', '').strip()
     if not token:
         result = subprocess.run(['git', '-C', str(repo), 'credential', 'fill'],
@@ -56,6 +56,11 @@ def github_reader(repo):
         require(result.returncode == 0, 'GitHub sign-in is required in Git Credential Manager')
         token = dict(line.split('=', 1) for line in result.stdout.splitlines() if '=' in line).get('password', '')
     require(token, 'A GitHub read credential is required')
+    return token
+
+
+def github_reader(repo):
+    token = github_token(repo)
     opener = urllib.request.build_opener(NoRedirect())
     def get(path):
         require(path.startswith('/') and not re.search(r'[\r\n#\\]', path) and '..' not in path.split('/'), 'Invalid GitHub path')

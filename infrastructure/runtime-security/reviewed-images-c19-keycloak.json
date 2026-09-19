@@ -1,0 +1,36 @@
+{
+  "schema": "otziv-reviewed-images-v1",
+  "repository": "ghcr.io/claidd/otziv-security",
+  "publicationSet": "c19-keycloak",
+  "baselineManifestSha256": "d48bdb7d6d869cde5d6f1a7b089491765e3eeaf46e0b0b6bb51b7719b38d3ef2",
+  "images": [
+    {
+      "component": "keycloak",
+      "platform": "linux/amd64",
+      "sourceBeforeRef": "quay.io/keycloak/keycloak@sha256:4883630ef9db14031cde3e60700c9a9a8eaf1b5c24db1589d6a2d43de38ba2a9",
+      "defaultReferencesBefore": [
+        {
+          "path": "compose.yaml",
+          "line": 275,
+          "service": "keycloak"
+        },
+        {
+          "path": "compose.prod-local.yaml",
+          "line": 120,
+          "service": "keycloak"
+        },
+        {
+          "path": "docker-compose.yaml",
+          "line": 131,
+          "service": "keycloak"
+        }
+      ],
+      "buildArgs": {},
+      "candidateBaseRef": "ghcr.io/claidd/otziv-security@sha256:bd5687843becb0cdb232c2b864cc3786fafb8fc91f30f531fa2db7fc4d1fc59d",
+      "context": "infrastructure/keycloak/security-generation/c19-bouncycastle",
+      "dockerfile": "infrastructure/keycloak/security-generation/c19-bouncycastle/Dockerfile",
+      "dockerfileSha256": "7ccd6c913d1ce6ac118f15b5bc230e93a4ced97a6c67c707b4c37c99e8615a90",
+      "version": "26.7.3-otziv.4-bouncycastle1.85"
+    }
+  ]
+}

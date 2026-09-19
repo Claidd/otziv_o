@@ -1,0 +1,23 @@
+{
+  "component": "keycloak",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:bd5687843becb0cdb232c2b864cc3786fafb8fc91f30f531fa2db7fc4d1fc59d",
+  "commit": "19b8e35970626db301dca7b509be1879bd59bd9c",
+  "run": "34503395600",
+  "attempt": "1",
+  "manifest": {
+    "path": "infrastructure/runtime-security/reviewed-images-c15-keycloak.json",
+    "sha256": "3e25570c877c6113b1b982eb5a2b821f0df4a405d48c7bb3a6a1ecf0c80fca81"
+  },
+  "publication": {
+    "path": "infrastructure/runtime-security/proofs/c15-keycloak-published/publication/publication.json",
+    "sha256": "96cf33a0826fa91185846f098b97de00fdd466cab88035aa27e700937f6ccb98"
+  },
+  "anonymous": {
+    "path": "infrastructure/runtime-security/proofs/c15-keycloak-published/anonymous/anonymous-download.json",
+    "sha256": "63e2c25c83705a083ae478f0eb7e46e7a0fb42f759ad8415351fd36b3c32d8b9"
+  },
+  "migrationAcceptance": {
+    "path": "infrastructure/keycloak/security-generation/c15-netty/proofs/publication-acceptance.json",
+    "sha256": "e328234dec6fc203281becb48cb985456d0d73af46da46fe71e14984c72aed85"
+  }
+}

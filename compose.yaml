@@ -284,7 +284,7 @@ services:
       - internal_net
 
   keycloak:
-    image: ghcr.io/claidd/otziv-security@sha256:bd5687843becb0cdb232c2b864cc3786fafb8fc91f30f531fa2db7fc4d1fc59d
+    image: ghcr.io/claidd/otziv-security@sha256:6d129626434475b9c0984cc0f766ac28aced19fb7fa430a2c261d18419be1caf
     container_name: otziv-keycloak
     command: start-dev --import-realm
     ports:

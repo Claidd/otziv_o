@@ -34,6 +34,8 @@ param(
     [string]$DeploySnapshotRevision = "",
     [string]$DeployProtectedMainRevision = "",
     [string]$PrivateRegistryControlFile = "",
+    [string]$CiReleaseManifest = "",
+    [string]$CiCapacityPlan = "",
     [switch]$RebuildWhatsApp,
     [switch]$RequireMainCi,
     [switch]$Help
@@ -990,6 +992,19 @@ $webImage = "${DockerHubNamespace}/${WebRepository}:${Tag}"
 $externalReviewWorkerImage = "${DockerHubNamespace}/${ExternalReviewWorkerRepository}:${Tag}"
 $whatsAppImage = "${DockerHubNamespace}/${WhatsAppRepository}:${Tag}"
 $dockerObserverImage = "${DockerHubNamespace}/${DockerObserverRepository}:${Tag}"
+if ($CiCapacityPlan -or $CiReleaseManifest) {
+    if (-not ($CiCapacityPlan -and $CiReleaseManifest -and $RequireMainCi -and $SkipBuildPush -and $PrivateRegistryControlFile)) {
+        throw 'CI artifact deployment requires verified main, both receipts and owned private transport; local builds are prohibited.'
+    }
+    $preparedCapacity = Get-Content -Raw -Encoding UTF8 -LiteralPath $CiCapacityPlan | ConvertFrom-Json
+    if ($preparedCapacity.revision -ne $gitRevision) { throw 'CI image revision does not match the deployment snapshot.' }
+    $appImage = $preparedCapacity.releaseImages.app
+    $webImage = $preparedCapacity.releaseImages.nginx
+    $dockerObserverImage = $preparedCapacity.releaseImages.'docker-observer'
+    $whatsAppImage = $preparedCapacity.releaseImages.whatsapp
+    $deployWhatsAppChanged = $true
+    if ($EnableExternalReviewWorker) { $externalReviewWorkerImage = $preparedCapacity.releaseImages.'external-review-worker' }
+}
 $deployBundlePaths = @(
     "docker-compose.yaml",
     "compose.monitoring.yaml",
@@ -1422,7 +1437,15 @@ try {
         '--docker-observer', $dockerObserverImage)
     if ($EnableExternalReviewWorker) { $capacityArguments += @('--external-review-worker', $externalReviewWorkerImage) }
     if ($deployWhatsAppChanged) { $capacityArguments += @('--whatsapp', $whatsAppImage) }
-    Invoke-External -FilePath 'python' -Arguments $capacityArguments
+    if ($CiCapacityPlan) {
+        $verifiedCapacityArguments = @('-B', (Join-Path $scriptRoot 'ci_release.py'), 'validate-plan',
+            '--input', $CiCapacityPlan, '--manifest', $CiReleaseManifest, '--registry', $PrivateRegistryControlFile,
+            '--revision', $gitRevision, '--output', $capacityPlanPath)
+        if ($EnableExternalReviewWorker) { $verifiedCapacityArguments += '--worker' }
+        Invoke-External -FilePath 'python' -Arguments $verifiedCapacityArguments
+    } else {
+        Invoke-External -FilePath 'python' -Arguments $capacityArguments
+    }
     $capacityPlan = Get-Content -Raw -Encoding UTF8 -LiteralPath $capacityPlanPath | ConvertFrom-Json
     $appImage = $capacityPlan.releaseImages.app
     $webImage = $capacityPlan.releaseImages.nginx

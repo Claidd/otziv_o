@@ -178,17 +178,26 @@ regexes = [
 ]
 
 [[allowlists]]
-description = "Reviewed public Keycloak FIPS package names in exact C7/C15 publication scans"
+description = "Reviewed public Keycloak FIPS package names in exact C7/C15/C19 publication scans"
 targetRules = ["generic-api-key"]
 condition = "AND"
 regexTarget = "line"
 paths = [
+  '''(^|/)infrastructure/runtime\-security/proofs/c19\-keycloak\-published/publication/vulnerabilities\.json$''',
   '''(^|/)infrastructure/runtime\-security/proofs/c15\-keycloak\-published/publication/vulnerabilities\.json$''','''(^|/)infrastructure/runtime\-security/proofs/c7\-published/keycloak/publication/vulnerabilities\.json$''']
 regexes = [
   '''^\n?          "Name": "org\.keycloak:keycloak\-crypto\-fips1402",\r?$''',
 ]
 
 # Exact C8 Git-blob metadata values identified by the retained history proof.
+[[allowlists]]
+description = "Exact SHA256 of the public C19 stopped-image inventory script"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''(^|/)infrastructure/runtime\-security/proofs/c19\-keycloak\-published/acceptance\.json$''']
+regexes = ['''^\n?    "infrastructure/runtime-security/keycloak-c19-runtime\.py": "04d96ed22b2a3c0a8daee70706e738c00c4710c7807af65c03fab37fa64cee52",\r?$''']
+
 # AND: one detector, one exact artifact path, one complete public SHA-1/commit value.
 # Other matches on the same SPDX line and all other paths/rules remain scanned.
 

@@ -22,6 +22,7 @@ on:
           - c16-postgres
           - c17-mysql
           - c18-mysql
+          - c19-keycloak
           - c14-keycloak
           - c15-prometheus
           - c15-loki
@@ -32,9 +33,11 @@ on:
           - c15-mc
   pull_request:
   push:
+    branches: [main]
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: quality-gates-${{ github.event.pull_request.number || github.ref }}-${{ inputs.publish-reviewed-images && 'publication' || 'verification' }}-${{ inputs.publish-reviewed-images && inputs.reviewed-image-set || 'baseline' }}
@@ -53,7 +56,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: "24.20.0"
+          node-version: "24.18.0"
           package-manager-cache: false
       - id: inventory
         run: node infrastructure/runtime-security/publish-reviewed-images.mjs matrix
@@ -151,6 +154,41 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  changes:
+    if: github.event_name != 'workflow_dispatch' || inputs.publish-reviewed-images != true
+    name: Select affected components
+    runs-on: ubuntu-24.04
+    outputs:
+      backend: ${{ steps.select.outputs.backend }}
+      issuer: ${{ steps.select.outputs.issuer }}
+      frontend: ${{ steps.select.outputs.frontend }}
+      mobile: ${{ steps.select.outputs.mobile }}
+      browser: ${{ steps.select.outputs.browser }}
+      android: ${{ steps.select.outputs.android }}
+      parity: ${{ steps.select.outputs.parity }}
+      whatsapp: ${{ steps.select.outputs.whatsapp }}
+      worker: ${{ steps.select.outputs.worker }}
+      observer: ${{ steps.select.outputs.observer }}
+      publisher: ${{ steps.select.outputs.publisher }}
+      upstream: ${{ steps.select.outputs.upstream }}
+      monitoring: ${{ steps.select.outputs.monitoring }}
+      infrastructure: ${{ steps.select.outputs.infrastructure }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24.20.0"
+          package-manager-cache: false
+      - id: select
+        run: node infrastructure/scripts/security/ci-changes.mjs "$RUNNER_TEMP/ci-selection.json"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ci-selection-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ci-selection.json
+          retention-days: 90
+
   repository-contracts:
     if: github.event_name != 'workflow_dispatch' || inputs.publish-reviewed-images != true
     name: Repository contracts
@@ -169,7 +207,7 @@ jobs:
           docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true
           --mount "type=bind,source=$GITHUB_WORKSPACE/.github/workflows,target=/fixture,readonly"
           rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
-          -color /fixture/quality-gates.yml /fixture/dependency-audit.yml
+          -color /fixture/quality-gates.yml /fixture/dependency-audit.yml /fixture/production-image-security.yml /fixture/secret-scan.yml /fixture/sql-injection-guard.yml
       - name: Reject newly tracked generated artifacts
         shell: pwsh
         env:
@@ -193,7 +231,7 @@ jobs:
       - name: Verify build-support audit policy guards
         run: python3 -m unittest discover -s backend/build-support -p "test_*.py" -v
       - name: Verify conditional dependency aggregate contract
-        run: node --test infrastructure/scripts/security/dependency-changes.test.mjs infrastructure/scripts/security/verify-branch-policy.test.mjs
+        run: node --test infrastructure/scripts/security/ci-changes.test.mjs infrastructure/scripts/security/dependency-changes.test.mjs infrastructure/scripts/security/verify-branch-policy.test.mjs
       - name: Verify every original finding and prevent premature closure
         run: |
           node --test infrastructure/scripts/security/verify-remediation-registry.test.mjs
@@ -274,11 +312,14 @@ jobs:
   backend:
     if: github.event_name != 'workflow_dispatch' || inputs.publish-reviewed-images != true
     name: Backend (full Testcontainers suite)
+    needs: changes
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: ${{ needs.changes.outputs.backend == 'true' }}
       - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
+        if: ${{ needs.changes.outputs.backend == 'true' }}
         with:
           distribution: temurin
           java-version: "26"
@@ -286,16 +327,19 @@ jobs:
           cache: maven
           cache-jdk: false
       - name: Build reviewed Maven tooling and test transport
+        if: ${{ needs.changes.outputs.backend == 'true' }}
         working-directory: backend
         run: bash ./mvnw -B -ntp -f build-support/pom.xml install
       - name: Run all tests and package
+        if: ${{ needs.changes.outputs.backend == 'true' }}
         working-directory: backend
         run: bash ./mvnw -B -ntp verify
       - name: Enforce financial SQL budgets and capture CTE optimizer plans
+        if: ${{ needs.changes.outputs.backend == 'true' }}
         working-directory: backend
         run: bash ./mvnw -B -ntp -Dtest=FinancialCtePlanEvidence -Dotziv.benchmark.cte.iterations=4 -Dotziv.benchmark.source=ci -Dotziv.benchmark.query-budgets=true test
       - name: Preserve causal performance scenario measurements
-        if: always()
+        if: ${{ (always()) && (needs.changes.outputs.backend == 'true') }}
         uses: ./.github/actions/upload-report
         with:
           name: financial-scenario-benchmark
@@ -303,13 +347,15 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: ${{ needs.changes.outputs.backend == 'true' }}
         with:
           node-version: "24.18.0"
           package-manager-cache: false
       - name: Scan packaged Maven runtime libraries
+        if: ${{ needs.changes.outputs.backend == 'true' }}
         run: node infrastructure/runtime-security/scan.mjs java backend/target "$RUNNER_TEMP/maven-vulnerabilities.json"
       - name: Preserve Maven security evidence
-        if: always()
+        if: ${{ (always()) && (needs.changes.outputs.backend == 'true') }}
         uses: ./.github/actions/upload-report
         with:
           name: maven-runtime-security
@@ -317,22 +363,28 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
       - name: Upload backend test reports
-        if: always()
+        if: ${{ (always()) && (needs.changes.outputs.backend == 'true') }}
         uses: ./.github/actions/upload-report
         with:
           name: backend-test-reports
           path: backend/target/surefire-reports/
           if-no-files-found: ignore
           retention-days: 7
+      - name: Record unchanged component
+        if: ${{ !(needs.changes.outputs.backend == 'true') }}
+        run: echo "Component unchanged; heavy checks are not required for this diff." >> "$GITHUB_STEP_SUMMARY"
 
   issuer-security:
     if: github.event_name != 'workflow_dispatch' || inputs.publish-reviewed-images != true
     name: Issuer security generation (real Keycloak and PostgreSQL)
+    needs: [changes, integration-images]
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: ${{ needs.changes.outputs.issuer == 'true' }}
       - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
+        if: ${{ needs.changes.outputs.issuer == 'true' }}
         with:
           distribution: temurin
           java-version: "21"
@@ -340,55 +392,78 @@ jobs:
           cache: maven
           cache-jdk: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: ${{ needs.changes.outputs.issuer == 'true' }}
         with:
           node-version: "24.18.0"
           package-manager-cache: false
       - name: Build the pinned Keycloak provider and test transaction failure behavior
+        if: ${{ needs.changes.outputs.issuer == 'true' }}
         working-directory: backend
         run: bash ./mvnw -f ../infrastructure/keycloak/security-generation/pom.xml -B -ntp verify
       - name: Build the real issuer release image
-        run: docker build -t otziv-issuer-ci infrastructure/keycloak/security-generation/c15-netty
+        if: ${{ needs.changes.outputs.infrastructure == 'true' }}
+        run: docker build -t otziv-issuer-ci infrastructure/keycloak/security-generation/c19-bouncycastle
       - name: Build and scan reviewed database candidates
+        if: ${{ needs.changes.outputs.infrastructure == 'true' }}
         run: |
           docker build -t otziv-mysql-ci infrastructure/mysql
           docker build -t otziv-postgres-ci infrastructure/runtime-security/builds/postgres-c16
           node infrastructure/runtime-security/scan.mjs image otziv-mysql-ci "$RUNNER_TEMP/mysql-vulnerabilities.json"
           node infrastructure/runtime-security/scan.mjs image otziv-postgres-ci "$RUNNER_TEMP/postgres-vulnerabilities.json"
       - name: Verify PostgreSQL minor upgrade and separate backup rollback
+        if: ${{ needs.changes.outputs.infrastructure == 'true' }}
         run: |
           docker pull postgres@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d
           node infrastructure/postgres/upgrade-proof.mjs otziv-postgres-ci "$RUNNER_TEMP/postgres-upgrade"
           node infrastructure/runtime-security/proofs/c14-postgres/continuity.mjs otziv-postgres-ci "$RUNNER_TEMP/postgres-continuity"
           node infrastructure/runtime-security/proofs/c14-postgres/tcp-contract.mjs otziv-postgres-ci "$RUNNER_TEMP/postgres-tcp"
+      - name: Load reviewed infrastructure for ordinary application changes
+        if: ${{ needs.changes.outputs.issuer == 'true' && needs.changes.outputs.infrastructure != 'true' }}
+        run: node infrastructure/scripts/security/ci-issuer-fixtures.mjs
       - name: Reject provisioning configuration drift and inherited claim conflicts
+        if: ${{ needs.changes.outputs.issuer == 'true' }}
         run: node --test infrastructure/keycloak/security-generation/provision.test.mjs
       - name: Exercise provisioning, browser PKCE, immutable refresh, external mutations and rollback on journal failure
+        if: ${{ needs.changes.outputs.issuer == 'true' }}
         env:
           OTZIV_ISSUER_PROOF_POSTGRES_IMAGE: otziv-postgres-ci
           OTZIV_ISSUER_PROOF_NODE_IMAGE: node:22-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5
         run: node infrastructure/keycloak/security-generation/container-proof.mjs otziv-issuer-ci "$RUNNER_TEMP/issuer-proof.json"
       - name: Verify ordinary production import and development startup modes
+        if: ${{ needs.changes.outputs.infrastructure == 'true' }}
         env:
           OTZIV_ISSUER_PROOF_POSTGRES_IMAGE: otziv-postgres-ci
           OTZIV_ISSUER_PROOF_NODE_IMAGE: node:22-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5
         run: node infrastructure/keycloak/security-generation/image-startup-smoke.mjs otziv-issuer-ci "$RUNNER_TEMP/issuer-startup-proof.json"
       - name: Scan the actual issuer image
+        if: ${{ needs.changes.outputs.infrastructure == 'true' }}
         run: node infrastructure/runtime-security/scan.mjs image otziv-issuer-ci "$RUNNER_TEMP/issuer-vulnerabilities.json"
-      - name: Build the application for paired recovery
-        run: docker build -t otziv-recovery-app-ci -f backend/Dockerfile backend
+      - name: Download the already tested application for paired recovery
+        if: ${{ needs.changes.outputs.issuer == 'true' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: ci-image-backend-attempt-*
+          path: ${{ runner.temp }}/ci-backend
+      - name: Verify and load the exact tested application without rebuilding
+        if: ${{ needs.changes.outputs.issuer == 'true' }}
+        run: >-
+          python3 -B infrastructure/scripts/prod/ci_release.py load-backend
+          --input "$RUNNER_TEMP/ci-backend" --output "$RUNNER_TEMP/paired-recovery-image.json"
       - name: Load the pinned database and object-store fixtures
+        if: ${{ needs.changes.outputs.issuer == 'true' }}
         run: |
           docker pull mysql@sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383
           docker pull postgres@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d
           docker pull quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z@sha256:a1ea29fa28355559ef137d71fc570e508a214ec84ff8083e39bc5428980b015e
       - name: Restore both databases, exact object versions and keys after destroying the source fixture
+        if: ${{ needs.changes.outputs.issuer == 'true' }}
         env:
           OTZIV_SYSTEM_FIXTURE_MYSQL_IMAGE: otziv-mysql-ci
           OTZIV_SYSTEM_FIXTURE_POSTGRES_IMAGE: otziv-postgres-ci
           OTZIV_SYSTEM_FIXTURE_NODE_IMAGE: node:22-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5
         run: node infrastructure/recovery/full-system-fixture.mjs otziv-recovery-app-ci otziv-issuer-ci "$RUNNER_TEMP/paired-recovery"
       - name: Preserve issuer protocol and vulnerability evidence
-        if: always()
+        if: ${{ (always()) && (needs.changes.outputs.issuer == 'true') }}
         uses: ./.github/actions/upload-report
         with:
           name: issuer-security-generation
@@ -398,6 +473,7 @@ jobs:
             ${{ runner.temp }}/issuer-startup-proof.json
             ${{ runner.temp }}/issuer-vulnerabilities*
             ${{ runner.temp }}/paired-recovery/proof.json
+            ${{ runner.temp }}/paired-recovery-image.json
             ${{ runner.temp }}/postgres-upgrade/proof.json
             ${{ runner.temp }}/postgres-continuity/**
             ${{ runner.temp }}/postgres-tcp/**
@@ -405,10 +481,14 @@ jobs:
             ${{ runner.temp }}/postgres-vulnerabilities*
           if-no-files-found: warn
           retention-days: 14
+      - name: Record unchanged component
+        if: ${{ !(needs.changes.outputs.issuer == 'true') }}
+        run: echo "Component unchanged; heavy checks are not required for this diff." >> "$GITHUB_STEP_SUMMARY"
 
   frontend:
     if: github.event_name != 'workflow_dispatch' || inputs.publish-reviewed-images != true
     name: Frontend (unit and production build)
+    needs: changes
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     defaults:
@@ -416,20 +496,30 @@ jobs:
         working-directory: frontend
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: ${{ needs.changes.outputs.frontend == 'true' }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: ${{ needs.changes.outputs.frontend == 'true' }}
         with:
           node-version: "24.18.0"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci --no-audit --no-fund
+        if: ${{ needs.changes.outputs.frontend == 'true' }}
       - name: Audit the complete installed dependency graph
+        if: ${{ needs.changes.outputs.frontend == 'true' }}
         run: npm audit --audit-level=high
       - run: npm test -- --watch=false
+        if: ${{ needs.changes.outputs.frontend == 'true' }}
       - run: npm run build -- --configuration production
+        if: ${{ needs.changes.outputs.frontend == 'true' }}
+      - name: Record unchanged component
+        if: ${{ !(needs.changes.outputs.frontend == 'true') }}
+        run: echo "Component unchanged; heavy checks are not required for this diff." >> "$GITHUB_STEP_SUMMARY"
 
   mobile:
     if: github.event_name != 'workflow_dispatch' || inputs.publish-reviewed-images != true
     name: Mobile web (unit and production build)
+    needs: changes
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     defaults:
@@ -437,26 +527,39 @@ jobs:
         working-directory: mobile
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: ${{ needs.changes.outputs.mobile == 'true' }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: ${{ needs.changes.outputs.mobile == 'true' }}
         with:
           node-version: "24.18.0"
           cache: npm
           cache-dependency-path: mobile/package-lock.json
       - run: npm ci --no-audit --no-fund
+        if: ${{ needs.changes.outputs.mobile == 'true' }}
       - name: Audit the complete installed dependency graph
+        if: ${{ needs.changes.outputs.mobile == 'true' }}
         run: npm audit --audit-level=high
       - run: npm run test:unit
+        if: ${{ needs.changes.outputs.mobile == 'true' }}
       - run: npm run test:runtime
+        if: ${{ needs.changes.outputs.mobile == 'true' }}
       - run: npm run build:prod
+        if: ${{ needs.changes.outputs.mobile == 'true' }}
+      - name: Record unchanged component
+        if: ${{ !(needs.changes.outputs.mobile == 'true') }}
+        run: echo "Component unchanged; heavy checks are not required for this diff." >> "$GITHUB_STEP_SUMMARY"
 
   browser-smoke:
     if: github.event_name != 'workflow_dispatch' || inputs.publish-reviewed-images != true
     name: Built web and mobile browser scenarios
+    needs: changes
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: ${{ needs.changes.outputs.browser == 'true' }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: ${{ needs.changes.outputs.browser == 'true' }}
         with:
           node-version: "24.18.0"
           cache: npm
@@ -465,22 +568,26 @@ jobs:
             mobile/package-lock.json
             infrastructure/browser-smoke/package-lock.json
       - name: Build the real production web application
+        if: ${{ needs.changes.outputs.browser == 'true' }}
         working-directory: frontend
         run: |
           npm ci --no-audit --no-fund
           npm run build -- --configuration production
       - name: Build the real production mobile web application
+        if: ${{ needs.changes.outputs.browser == 'true' }}
         working-directory: mobile
         run: |
           npm ci --no-audit --no-fund
           npm run build:prod
       - name: Install pinned browser runner
+        if: ${{ needs.changes.outputs.browser == 'true' }}
         working-directory: infrastructure/browser-smoke
         run: |
           npm ci --no-fund
           npm audit --audit-level=high
           npx playwright install --with-deps chromium
       - name: Exercise browser UI using loopback fixtures only
+        if: ${{ needs.changes.outputs.browser == 'true' }}
         working-directory: infrastructure/browser-smoke
         shell: bash
         run: |
@@ -496,7 +603,7 @@ jobs:
           node hosted-sandbox.mjs prepare
           npm test
       - name: Preserve browser reports, failure screenshots and traces
-        if: always()
+        if: ${{ (always()) && (needs.changes.outputs.browser == 'true') }}
         uses: ./.github/actions/upload-report
         with:
           name: browser-smoke-reports
@@ -506,20 +613,27 @@ jobs:
             ${{ runner.temp }}/otziv-hosted-sandbox-proof.json
           if-no-files-found: warn
           retention-days: 14
+      - name: Record unchanged component
+        if: ${{ !(needs.changes.outputs.browser == 'true') }}
+        run: echo "Component unchanged; heavy checks are not required for this diff." >> "$GITHUB_STEP_SUMMARY"
 
   android-compile:
     if: github.event_name != 'workflow_dispatch' || inputs.publish-reviewed-images != true
     name: Android native tests, lint and debug assembly
+    needs: changes
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: ${{ needs.changes.outputs.android == 'true' }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: ${{ needs.changes.outputs.android == 'true' }}
         with:
           node-version: "24.18.0"
           cache: npm
           cache-dependency-path: mobile/package-lock.json
       - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
+        if: ${{ needs.changes.outputs.android == 'true' }}
         with:
           distribution: temurin
           java-version: "21"
@@ -527,6 +641,7 @@ jobs:
           cache: gradle
           cache-jdk: false
       - name: Install required hosted Android SDK packages
+        if: ${{ needs.changes.outputs.android == 'true' }}
         run: |
           set -euo pipefail
           sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
@@ -535,6 +650,7 @@ jobs:
           test -x "$sdk_manager"
           "$sdk_manager" --sdk_root="$sdk_root" "platforms;android-36" "build-tools;35.0.0"
       - name: Build and sync mobile assets without push or release signing
+        if: ${{ needs.changes.outputs.android == 'true' }}
         working-directory: mobile
         run: |
           npm ci --no-audit --no-fund
@@ -542,10 +658,11 @@ jobs:
           npm run build:local
           npx --no-install cap sync android
       - name: Compile native plugins and enforce Android lint
+        if: ${{ needs.changes.outputs.android == 'true' }}
         working-directory: mobile/android
         run: bash ./gradlew --no-daemon testDebugUnitTest lintDebug assembleDebug
       - name: Preserve Android unit and lint reports
-        if: always()
+        if: ${{ (always()) && (needs.changes.outputs.android == 'true') }}
         uses: ./.github/actions/upload-report
         with:
           name: android-native-lint
@@ -556,10 +673,14 @@ jobs:
             mobile/node_modules/@capacitor/**/android/build/reports/lint-results-debug.*
           if-no-files-found: warn
           retention-days: 14
+      - name: Record unchanged component
+        if: ${{ !(needs.changes.outputs.android == 'true') }}
+        run: echo "Component unchanged; heavy checks are not required for this diff." >> "$GITHUB_STEP_SUMMARY"
 
   whatsapp:
     if: github.event_name != 'workflow_dispatch' || inputs.publish-reviewed-images != true
     name: WhatsApp gateway (unit)
+    needs: changes
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     defaults:
@@ -567,19 +688,28 @@ jobs:
         working-directory: whatsapp
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: ${{ needs.changes.outputs.whatsapp == 'true' }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: ${{ needs.changes.outputs.whatsapp == 'true' }}
         with:
           node-version: "22.23.2"
           cache: npm
           cache-dependency-path: whatsapp/package-lock.json
       - run: npm ci --ignore-scripts --no-audit --no-fund
+        if: ${{ needs.changes.outputs.whatsapp == 'true' }}
       - name: Audit the complete installed dependency graph
+        if: ${{ needs.changes.outputs.whatsapp == 'true' }}
         run: npm audit --audit-level=high
       - run: npm test
+        if: ${{ needs.changes.outputs.whatsapp == 'true' }}
+      - name: Record unchanged component
+        if: ${{ !(needs.changes.outputs.whatsapp == 'true') }}
+        run: echo "Component unchanged; heavy checks are not required for this diff." >> "$GITHUB_STEP_SUMMARY"
 
   external-review-worker:
     if: github.event_name != 'workflow_dispatch' || inputs.publish-reviewed-images != true
     name: External review worker (syntax and health)
+    needs: changes
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     defaults:
@@ -587,29 +717,41 @@ jobs:
         working-directory: backend/external-review-worker
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: ${{ needs.changes.outputs.worker == 'true' }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: ${{ needs.changes.outputs.worker == 'true' }}
         with:
           node-version: "22.23.2"
           cache: npm
           cache-dependency-path: backend/external-review-worker/package-lock.json
       - run: npm ci --ignore-scripts --no-audit --no-fund
+        if: ${{ needs.changes.outputs.worker == 'true' }}
       - name: Audit the complete installed dependency graph
+        if: ${{ needs.changes.outputs.worker == 'true' }}
         run: npm audit --audit-level=high
       - name: Check JavaScript syntax
+        if: ${{ needs.changes.outputs.worker == 'true' }}
         shell: bash
         run: find src -type f -name '*.js' -print0 | xargs -0 -n1 node --check
       - name: Run worker security and behavior tests
+        if: ${{ needs.changes.outputs.worker == 'true' }}
         run: npm test
       # Readiness is checked in the actual image below; liveness alone is insufficient.
+      - name: Record unchanged component
+        if: ${{ !(needs.changes.outputs.worker == 'true') }}
+        run: echo "Component unchanged; heavy checks are not required for this diff." >> "$GITHUB_STEP_SUMMARY"
 
   client-parity:
     if: github.event_name != 'workflow_dispatch' || inputs.publish-reviewed-images != true
     name: Shared client package and compatibility fixtures
+    needs: changes
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: ${{ needs.changes.outputs.parity == 'true' }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: ${{ needs.changes.outputs.parity == 'true' }}
         with:
           node-version: "24.18.0"
           cache: npm
@@ -617,13 +759,21 @@ jobs:
             frontend/package-lock.json
             mobile/package-lock.json
       - run: npm ci --no-audit --no-fund
+        if: ${{ needs.changes.outputs.parity == 'true' }}
         working-directory: frontend
       - run: npm ci --no-audit --no-fund
+        if: ${{ needs.changes.outputs.parity == 'true' }}
         working-directory: mobile
       - run: node contracts/generate.mjs --check
+        if: ${{ needs.changes.outputs.parity == 'true' }}
       - run: node --test contracts/client-common.test.mjs
+        if: ${{ needs.changes.outputs.parity == 'true' }}
       - name: Verify published Android/backend compatibility fixtures
+        if: ${{ needs.changes.outputs.parity == 'true' }}
         run: node contracts/verify-release-compatibility.mjs
+      - name: Record unchanged component
+        if: ${{ !(needs.changes.outputs.parity == 'true') }}
+        run: echo "Component unchanged; heavy checks are not required for this diff." >> "$GITHUB_STEP_SUMMARY"
 
   upstream-inventory:
     if: github.event_name != 'workflow_dispatch' || inputs.publish-reviewed-images != true
@@ -644,7 +794,7 @@ jobs:
   upstream-images:
     if: github.event_name != 'workflow_dispatch' || inputs.publish-reviewed-images != true
     name: Pinned upstream image (${{ matrix.id }})
-    needs: upstream-inventory
+    needs: [upstream-inventory, changes]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
@@ -653,11 +803,14 @@ jobs:
       matrix: ${{ fromJSON(needs.upstream-inventory.outputs.matrix) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: ${{ (needs.changes.outputs.upstream == 'true') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: ${{ (needs.changes.outputs.upstream == 'true') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         with:
           node-version: "24.18.0"
           package-manager-cache: false
       - name: Pull and scan the exact Compose default without starting it
+        if: ${{ (needs.changes.outputs.upstream == 'true') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         env:
           UPSTREAM_IMAGE: ${{ matrix.image }}
           UPSTREAM_ID: ${{ matrix.id }}
@@ -665,13 +818,32 @@ jobs:
           docker pull "$UPSTREAM_IMAGE"
           node infrastructure/runtime-security/scan.mjs image "$UPSTREAM_IMAGE" "$RUNNER_TEMP/$UPSTREAM_ID-vulnerabilities.json"
       - name: Preserve raw findings, package inventory and triage
-        if: always()
+        if: ${{ (always()) && ((needs.changes.outputs.upstream == 'true') || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
         uses: ./.github/actions/upload-report
         with:
           name: upstream-security-${{ matrix.id }}
           path: ${{ runner.temp }}/*-vulnerabilities*
           if-no-files-found: warn
           retention-days: 14
+      - name: Measure this pinned image once for deployment capacity
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          UPSTREAM_IMAGE: ${{ matrix.image }}
+          UPSTREAM_ID: ${{ matrix.id }}
+        run: >-
+          python3 -B infrastructure/scripts/prod/ci_release.py upstream
+          --image "$UPSTREAM_IMAGE" --output "$RUNNER_TEMP/upstream-$UPSTREAM_ID.json"
+      - name: Preserve capacity receipt
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ci-capacity-${{ matrix.id }}-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/upstream-${{ matrix.id }}.json
+          retention-days: 90
+          if-no-files-found: error
+      - name: Record unchanged component
+        if: ${{ !((needs.changes.outputs.upstream == 'true') || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
+        run: echo "Component unchanged; heavy checks are not required for this diff." >> "$GITHUB_STEP_SUMMARY"
 
   upstream-image-gate:
     name: Upstream image security gate
@@ -689,47 +861,57 @@ jobs:
   integration-images:
     if: github.event_name != 'workflow_dispatch' || inputs.publish-reviewed-images != true
     name: Built integration image (${{ matrix.component }})
+    needs: changes
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        component: [worker, whatsapp, observer, backend, web, publisher]
+        include:
+          - {component: worker, scope: worker, context: backend/external-review-worker, dockerfile: backend/external-review-worker/Dockerfile}
+          - {component: whatsapp, scope: whatsapp, context: ., dockerfile: Dockerfile.whatsapp}
+          - {component: observer, scope: observer, context: infrastructure/docker-observer, dockerfile: infrastructure/docker-observer/Dockerfile}
+          - {component: backend, scope: backend, context: backend, dockerfile: backend/Dockerfile}
+          - {component: web, scope: frontend, context: ., dockerfile: frontend/Dockerfile}
+          - {component: publisher, scope: publisher, context: infrastructure/monitoring, dockerfile: infrastructure/monitoring/Dockerfile}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: ${{ (needs.changes.outputs[matrix.scope] == 'true') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: ${{ (needs.changes.outputs[matrix.scope] == 'true') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         with:
           node-version: "24.18.0"
           package-manager-cache: false
+      - name: Set up cached image builder
+        if: ${{ (needs.changes.outputs[matrix.scope] == 'true') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
       - name: Build the actual release Dockerfile
-        env:
-          COMPONENT: ${{ matrix.component }}
-        run: |
-          set -euo pipefail
-          case "$COMPONENT" in
-            worker) docker build -t otziv-worker-ci -f backend/external-review-worker/Dockerfile backend/external-review-worker ;;
-            whatsapp) docker build -t otziv-whatsapp-ci -f Dockerfile.whatsapp . ;;
-            observer) docker build -t otziv-observer-ci infrastructure/docker-observer ;;
-            backend) docker build -t otziv-backend-ci -f backend/Dockerfile backend ;;
-            web) docker build -t otziv-web-ci -f frontend/Dockerfile . ;;
-            publisher) docker build -t otziv-publisher-ci infrastructure/monitoring ;;
-          esac
+        if: ${{ (needs.changes.outputs[matrix.scope] == 'true') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64
+          load: true
+          tags: otziv-${{ matrix.component }}-ci
+          cache-from: type=gha,scope=release-${{ matrix.component }}
+          cache-to: type=gha,scope=release-${{ matrix.component }},mode=max
       - name: Exercise sandbox, actual readiness and cleanup under release hardening
-        if: matrix.component == 'worker' || matrix.component == 'whatsapp'
+        if: ${{ (matrix.component == 'worker' || matrix.component == 'whatsapp') && ((needs.changes.outputs[matrix.scope] == 'true') || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
         env:
           COMPONENT: ${{ matrix.component }}
         run: node infrastructure/runtime-security/container-smoke.mjs "$COMPONENT" "otziv-$COMPONENT-ci"
       - name: Exercise real pinned Dozzle and Alloy against the observer
-        if: matrix.component == 'observer'
+        if: ${{ (matrix.component == 'observer') && ((needs.changes.outputs[matrix.scope] == 'true') || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
         run: node infrastructure/docker-observer/consumer-smoke.mjs otziv-observer-ci
       - name: Exercise actual ordered observer deployment and failure stops
-        if: matrix.component == 'observer'
+        if: ${{ (matrix.component == 'observer') && ((needs.changes.outputs[matrix.scope] == 'true') || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
         run: node infrastructure/docker-observer/deployment-contract.mjs otziv-observer-ci
       - name: Exercise actual collector and authenticated HTTPS in the built publisher
-        if: matrix.component == 'publisher'
+        if: ${{ (matrix.component == 'publisher') && ((needs.changes.outputs[matrix.scope] == 'true') || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
         run: node infrastructure/monitoring/container-smoke.mjs otziv-publisher-ci
       - name: Check backend runtime, non-root user and shipped trust stores without external services
-        if: matrix.component == 'backend'
+        if: ${{ (matrix.component == 'backend') && ((needs.changes.outputs[matrix.scope] == 'true') || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
         run: |
           docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true \
             --tmpfs /tmp:rw,nosuid,size=64m --memory 512m --pids-limit 128 \
@@ -744,7 +926,7 @@ jobs:
               done
             '
       - name: Check web runtime and shipped artifacts without external services
-        if: matrix.component == 'web'
+        if: ${{ (matrix.component == 'web') && ((needs.changes.outputs[matrix.scope] == 'true') || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
         run: |
           docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true \
             --memory 128m --pids-limit 64 --entrypoint sh otziv-web-ci -ec '
@@ -753,12 +935,12 @@ jobs:
               test -s /etc/nginx/templates/default.conf.template
             '
       - name: Scan OS and application libraries in the built image
-        if: always()
+        if: ${{ (always()) && ((needs.changes.outputs[matrix.scope] == 'true') || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
         env:
           COMPONENT: ${{ matrix.component }}
         run: node infrastructure/runtime-security/scan.mjs image "otziv-$COMPONENT-ci" "$RUNNER_TEMP/$COMPONENT-vulnerabilities.json"
       - name: Preserve vulnerability evidence
-        if: always()
+        if: ${{ (always()) && ((needs.changes.outputs[matrix.scope] == 'true') || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
         uses: ./.github/actions/upload-report
         with:
           name: integration-image-security-${{ matrix.component }}
@@ -766,9 +948,52 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+      - name: Verify immutable archive of the actual tested image
+        if: ${{ (needs.changes.outputs[matrix.scope] == 'true') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+        env:
+          COMPONENT: ${{ matrix.component }}
+        run: >-
+          python3 -B infrastructure/scripts/prod/ci_image_bundle.py
+          --image "otziv-$COMPONENT-ci" --component "$COMPONENT" --revision "$GITHUB_SHA"
+          --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT"
+          --output "$RUNNER_TEMP/ci-image-$COMPONENT"
+      - name: Upload immutable CI image and capacity evidence
+        id: image-artifact
+        if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || (matrix.component == 'backend' && needs.changes.outputs.issuer == 'true') }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ci-image-${{ matrix.component }}-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ci-image-${{ matrix.component }}/
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: ${{ github.event_name == 'pull_request' && 7 || 90 }}
+      - name: Bind the small receipt to the immutable artifact
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          COMPONENT: ${{ matrix.component }}
+          ARTIFACT_ID: ${{ steps.image-artifact.outputs.artifact-id }}
+          ARTIFACT_DIGEST: ${{ steps.image-artifact.outputs.artifact-digest }}
+        run: >-
+          python3 -B infrastructure/scripts/prod/ci_release.py receipt
+          --input "$RUNNER_TEMP/ci-image-$COMPONENT/$COMPONENT.json"
+          --output "$RUNNER_TEMP/receipt-$COMPONENT.json"
+          --artifact-id "$ARTIFACT_ID" --artifact-digest "$ARTIFACT_DIGEST"
+      - name: Preserve small receipt for early preflight
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ci-receipt-${{ matrix.component }}-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/receipt-${{ matrix.component }}.json
+          retention-days: 90
+          if-no-files-found: error
+      - name: Record unchanged component
+        if: ${{ !((needs.changes.outputs[matrix.scope] == 'true') || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
+        run: echo "Component unchanged; heavy checks are not required for this diff." >> "$GITHUB_STEP_SUMMARY"
+
   monitoring-candidates:
     if: github.event_name != 'workflow_dispatch' || inputs.publish-reviewed-images != true
     name: Monitoring candidate (${{ matrix.component }})
+    needs: changes
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     strategy:
@@ -788,13 +1013,17 @@ jobs:
             dockerfile: Grafana
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: ${{ needs.changes.outputs.monitoring == 'true' }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: ${{ needs.changes.outputs.monitoring == 'true' }}
         with:
           node-version: "24.18.0"
           package-manager-cache: false
       - name: Validate mandatory immutable release references and overlay contracts
+        if: ${{ needs.changes.outputs.monitoring == 'true' }}
         run: node --test infrastructure/runtime-security/monitoring-release.test.mjs
       - name: Build the exact source derivative and isolated proof runner
+        if: ${{ needs.changes.outputs.monitoring == 'true' }}
         env:
           COMPONENT: ${{ matrix.component }}
           DOCKERFILE: ${{ matrix.dockerfile }}
@@ -804,6 +1033,7 @@ jobs:
           docker build -f "infrastructure/runtime-security/builds/$DOCKERFILE.Dockerfile" -t "otziv-monitoring-$COMPONENT-ci" infrastructure/runtime-security 2>&1 | tee "$RUNNER_TEMP/monitoring-evidence/build.log"
           docker build -t otziv-monitoring-proof-ci infrastructure/docker-observer
       - name: Pull the actual source pin and prove persistence, restart and backup rollback
+        if: ${{ needs.changes.outputs.monitoring == 'true' }}
         env:
           COMPONENT: ${{ matrix.component }}
           OTZIV_MONITORING_PROOF_NODE_IMAGE: otziv-monitoring-proof-ci
@@ -814,21 +1044,53 @@ jobs:
           CANDIDATE_ID=$(docker image inspect --format '{{.Id}}' "otziv-monitoring-$COMPONENT-ci")
           node infrastructure/runtime-security/monitoring-upgrade.mjs "$COMPONENT" "$CANDIDATE_ID" "$RUNNER_TEMP/monitoring-evidence/storage" 2>&1 | tee "$RUNNER_TEMP/monitoring-evidence/storage.log"
       - name: Prove Alloy forwards actual Docker and all four configured file streams
-        if: matrix.component == 'alloy'
+        if: ${{ (matrix.component == 'alloy') && (needs.changes.outputs.monitoring == 'true') }}
         run: |
           set -euo pipefail
           OTZIV_CONSUMER_PROOF_ALLOY_IMAGE=$(docker image inspect --format '{{.Id}}' otziv-monitoring-alloy-ci)
           export OTZIV_CONSUMER_PROOF_ALLOY_IMAGE
           node infrastructure/docker-observer/consumer-smoke.mjs otziv-monitoring-proof-ci 2>&1 | tee "$RUNNER_TEMP/monitoring-evidence/consumers.log"
       - name: Scan every package in the built candidate without suppressions
+        if: ${{ needs.changes.outputs.monitoring == 'true' }}
         env:
           COMPONENT: ${{ matrix.component }}
         run: node infrastructure/runtime-security/scan.mjs image "otziv-monitoring-$COMPONENT-ci" "$RUNNER_TEMP/monitoring-evidence/vulnerabilities.json"
       - name: Preserve exact builds, configuration, raw scans, SBOM and rollback proof
-        if: always()
+        if: ${{ (always()) && (needs.changes.outputs.monitoring == 'true') }}
         uses: ./.github/actions/upload-report
         with:
           name: monitoring-candidate-${{ matrix.component }}
           path: ${{ runner.temp }}/monitoring-evidence/
           if-no-files-found: warn
           retention-days: 14
+      - name: Record unchanged component
+        if: ${{ !(needs.changes.outputs.monitoring == 'true') }}
+        run: echo "Component unchanged; heavy checks are not required for this diff." >> "$GITHUB_STEP_SUMMARY"
+
+
+  release-manifest:
+    name: Collect immutable release manifest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [repository-contracts, backend, issuer-security, frontend, mobile, browser-smoke, android-compile, whatsapp, external-review-worker, client-parity, upstream-image-gate, integration-images]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: ci-receipt-*-attempt-*
+          path: ${{ runner.temp }}/receipts
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: ci-capacity-*-attempt-*
+          path: ${{ runner.temp }}/receipts
+      - name: Bind source, image checksums and capacity measurements
+        run: >-
+          python3 -B infrastructure/scripts/prod/ci_release.py collect
+          --input "$RUNNER_TEMP/receipts" --output "$RUNNER_TEMP/ci-release.json"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ci-release-manifest-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ci-release.json
+          retention-days: 90
+          if-no-files-found: error
