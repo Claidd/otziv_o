@@ -15,6 +15,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+$env:PYTHONDONTWRITEBYTECODE = '1'
 if ($Help) {
     Write-Host 'Normal release: .\deploy.ps1 -Tag 30.00'
     Write-Host 'Read-only CI verification: .\deploy.ps1 -CheckOnly'
@@ -69,18 +70,42 @@ if (-not $EnvFile) { $EnvFile = Join-Path $ProjectFilesRoot '.otziv/env/prod.env
 foreach ($path in @($SshKey, $SshKnownHostsFile, $EnvFile)) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Required local file missing: $path" }
 }
-$directory = Join-Path $ProjectFilesRoot ('otziv-deploy/releases/' + $Tag + '-' + [guid]::NewGuid().ToString('N'))
+# Docker Desktop can bind files on the system drive reliably. Keep private
+# operator evidence outside the source snapshot and independently of SSH files.
+$directory = Join-Path ([Environment]::GetFolderPath('UserProfile')) ('otziv-deploy/releases/' + $Tag + '-' + [guid]::NewGuid().ToString('N'))
 $record = Join-Path $directory 'registry.json'
 $registryHelper = Join-Path $helpers 'release_registry.py'
 $tunnel = $null
 $registryStarted = $false
 New-Item -ItemType Directory -Path $directory -Force | Out-Null
+if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) {
+    $operatorSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    & icacls.exe $directory '/inheritance:r' '/grant:r' "*${operatorSid}:(OI)(CI)F" '/grant:r' '*S-1-5-18:(OI)(CI)F' | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot protect the release evidence directory.' }
+} else {
+    & chmod 700 -- $directory
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot protect the release evidence directory.' }
+}
 $ci | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath (Join-Path $directory 'ci.json') -Encoding utf8
+$manifest = Join-Path $directory 'ci-release.json'
+$capacity = Join-Path $directory 'capacity.json'
+$artifactHelper = Join-Path $helpers 'ci_release.py'
+$probeArguments = @('--host', $VpsHost, '--user', $VpsUser, '--port', "$VpsPort", '--key', $SshKey,
+    '--known-hosts', $SshKnownHostsFile, '--path', $VpsPath)
 try {
+    & python -B $artifactHelper fetch --repo $repoRoot --input (Join-Path $directory 'ci.json') --output $manifest
+    if ($LASTEXITCODE -ne 0) { throw 'Verified main CI image manifest is unavailable.' }
+    $earlyArguments = @('-B', (Join-Path $helpers 'release_preflight.py'), '--manifest', $manifest,
+        '--output', (Join-Path $directory 'early-preflight.json')) + $probeArguments
+    if ($MobileApkPath) { $earlyArguments += @('--apk', $MobileApkPath) }
+    & python @earlyArguments
+    if ($LASTEXITCODE -ne 0) { throw 'Early server preflight failed before large image downloads; production was not changed.' }
     $created = @(& python $registryHelper create $record)
     if ($LASTEXITCODE -ne 0) { throw 'Could not prepare private image transport.' }
     $registryStarted = $true
     $registry = ($created -join '') | ConvertFrom-Json
+    & python -B $artifactHelper import --repo $repoRoot --input $manifest --registry $record --output $capacity
+    if ($LASTEXITCODE -ne 0) { throw 'CI image verification or private transport failed; production was not changed.' }
     # ProcessStartInfo keeps arguments separate, including paths containing spaces.
     $start = [Diagnostics.ProcessStartInfo]::new()
     $start.FileName = (Get-Command ssh).Source
@@ -103,13 +128,16 @@ try {
         EnvFile = $EnvFile; RemoteEnvFile = '.env'; SkipEnvUpload = $true
         PreparedDeploySnapshot = $true; DeploySnapshotRevision = $ci.revision
         DeploySnapshotBaseRevision = $ci.revision; DeployProtectedMainRevision = $ci.revision
-        PrivateRegistryControlFile = $record; RebuildWhatsApp = $true; RequireMainCi = $true
+        PrivateRegistryControlFile = $record; RebuildWhatsApp = $true; RequireMainCi = $true; SkipBuildPush = $true
+        CiReleaseManifest = $manifest; CiCapacityPlan = $capacity
         PreDeployBackupDirectory = (Join-Path $directory 'database-backup')
     }
     if ($MobileApkPath) { $parameters.MobileApkPath = $MobileApkPath }
     else { $parameters.SkipMobileApkUpload = $true }
     & (Join-Path $helpers 'deploy-prod.ps1') @parameters
     if ($LASTEXITCODE -ne 0) { throw 'Deployment did not complete; inspect its verification output.' }
+    & python -B (Join-Path $helpers 'production_images.py') record --manifest $manifest --output (Join-Path $directory 'production-images.json') @probeArguments
+    if ($LASTEXITCODE -ne 0) { throw 'Installation completed, but daily-scan inventory registration failed. Preserve the release evidence and retry registration.' }
     Write-Host "Deployment and production checks completed. Evidence: $directory"
 } finally {
     if ($null -ne $tunnel) {

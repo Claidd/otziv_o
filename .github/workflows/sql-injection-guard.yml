@@ -2,8 +2,7 @@ name: SQL injection guard
 
 on:
   push:
-    branches:
-      - "**"
+    branches: [main]
   pull_request:
     branches:
       - "**"

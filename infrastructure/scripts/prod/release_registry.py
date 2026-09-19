@@ -8,6 +8,10 @@ import socket
 import subprocess
 import time
 import uuid
+import tarfile
+from urllib.parse import urlsplit
+
+from ci_image_bundle import OCI_MANIFEST, digest, verify_bundle
 
 IMAGE = 'docker.io/library/registry@sha256:1be55279f18a2fe1a74edf2664cac61c1bea305b7b4642dab412e7affdcb3e33'
 LABEL = 'otziv.release.owner'
@@ -113,6 +117,66 @@ def stop(path):
     path.write_text(json.dumps(record, indent=2) + '\n')
     # Retain the labeled volume and image digests for recovery; never prune.
     return record
+
+
+def upload_location(record, repository, location, blob_digest):
+    parsed = urlsplit(location)
+    if ((parsed.netloc and parsed.netloc != f"127.0.0.1:{record['port']}")
+            or parsed.scheme not in ('', 'http') or parsed.fragment
+            or not parsed.path.startswith('/v2/' + repository + '/blobs/uploads/')
+            or '..' in parsed.path.split('/') or not re.fullmatch('sha256:[a-f0-9]{64}', blob_digest)):
+        raise ValueError('Registry returned an unsafe upload location')
+    return parsed.path + '?' + (parsed.query + '&' if parsed.query else '') + 'digest=' + blob_digest
+
+
+def upload_ci_image(record, archive_path, receipt):
+    """Copy exact CI blobs; do not load, retag, recompress or build the image."""
+    owned(record)
+    if record.get('state') != 'staging':
+        raise ValueError('CI images require an owned writable staging registry')
+    manifest = verify_bundle(archive_path, receipt)
+    repository = 'otziv-prepared/ci-' + receipt['component']
+
+    def exchange(method, path, data=None, headers=None, maximum=1024 * 1024):
+        connection = http.client.HTTPConnection('127.0.0.1', record['port'], timeout=180)
+        try:
+            connection.request(method, path, body=data, headers=headers or {})
+            response = connection.getresponse()
+            body = response.read(maximum + 1)
+            if len(body) > maximum:
+                raise RuntimeError('Registry response is too large')
+            return response.status, dict(response.getheaders()), body
+        finally:
+            connection.close()
+
+    with tarfile.open(archive_path, 'r:') as archive:
+        for descriptor in [manifest['config'], *manifest['layers']]:
+            identity = descriptor['digest']
+            status, _, _ = exchange('HEAD', f'/v2/{repository}/blobs/{identity}')
+            if status == 200:
+                continue
+            if status != 404:
+                raise RuntimeError('Cannot inspect registry blob')
+            status, headers, _ = exchange('POST', f'/v2/{repository}/blobs/uploads/', b'')
+            if status != 202:
+                raise RuntimeError('Cannot start registry upload')
+            location = next((value for key, value in headers.items() if key.lower() == 'location'), '')
+            location = upload_location(record, repository, location, identity)
+            with archive.extractfile('blobs/sha256/' + identity[7:]) as stream:
+                status, _, _ = exchange('PUT', location, stream,
+                    {'Content-Type': 'application/octet-stream', 'Content-Length': str(descriptor['size'])})
+            if status != 201:
+                raise RuntimeError('Registry rejected CI blob')
+        raw = archive.extractfile('blobs/sha256/' + receipt['manifestDigest'][7:]).read()
+        status, _, _ = exchange('PUT', f"/v2/{repository}/manifests/{receipt['manifestDigest']}", raw,
+                               {'Content-Type': OCI_MANIFEST})
+        if status != 201:
+            raise RuntimeError('Registry rejected CI manifest')
+        status, _, stored = exchange('GET', f"/v2/{repository}/manifests/{receipt['manifestDigest']}",
+                                    headers={'Accept': OCI_MANIFEST})
+        if status != 200 or digest(stored) != receipt['manifestDigest']:
+            raise RuntimeError('Transport changed the CI image manifest')
+    return f"127.0.0.1:{record['port']}/{repository}@{receipt['manifestDigest']}"
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)

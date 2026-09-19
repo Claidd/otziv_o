@@ -134,7 +134,7 @@ def budget(plan, revision, present, filesystem, deploy_path, docker_path, bundle
             "currentImagesPreserved": True, "automaticDeletion": False}
 
 
-def check(plan, revision, deploy_path, bundle, before_backup):
+def check(plan, revision, deploy_path, bundle, before_backup, *, bundle_bytes=None):
     deploy_path = str(Path(deploy_path).resolve(strict=True))
     info = json.loads(run(["docker", "info", "--format", "{{json .}}"])); docker_path = info["DockerRootDir"]
     # This host policy currently supports the proven overlay2 store. A different
@@ -160,8 +160,13 @@ def check(plan, revision, deploy_path, bundle, before_backup):
     def filesystem(path):
         path = Path(path).resolve(strict=True); stat = os.statvfs(path)
         return str(path.stat().st_dev), stat.f_bavail * stat.f_frsize
-    with tarfile.open(bundle, "r:gz") as archive:
-        expanded = sum(item.size for item in archive if item.isfile())
+    if bundle_bytes is None:
+        with tarfile.open(bundle, "r:gz") as archive:
+            expanded = sum(item.size for item in archive if item.isfile())
+    else:
+        if type(bundle_bytes) is not int or bundle_bytes <= 0:
+            raise ValueError('Invalid early bundle size estimate')
+        expanded = bundle_bytes
     database_bytes = 0
     if before_backup:
         sql = 'SELECT COALESCE(SUM(DATA_LENGTH),0) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE()'
