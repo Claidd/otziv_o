@@ -32,3 +32,11 @@ test('C15 selection keeps historical Keycloak publication evidence addressable',
   assert.equal(reviewedImageSetForComponent('keycloak').name, 'c14-keycloak');
   assert.equal(reviewedImageSetForComponent('keycloak', reviewedImageSet('c14-keycloak').path).name, 'c14-keycloak');
 });
+
+test('C20 activation selects its explicit manifest and preserves historical MC lookup', () => {
+  assert.equal(reviewedImageSetForComponent('mc').name, 'c14-mc');
+  for (const name of ['c14-mc', 'c15-mc', 'c20-mc']) {
+    const selected = reviewedImageSet(name);
+    assert.deepEqual(reviewedImageSetForComponent('mc', selected.path), selected);
+  }
+});
