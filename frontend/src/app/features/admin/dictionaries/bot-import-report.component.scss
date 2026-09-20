@@ -1,0 +1,21 @@
+:host { display: block; min-width: 0; }
+.report { display: grid; gap: .75rem; }
+header { display: flex; flex-wrap: wrap; gap: .75rem; justify-content: space-between; align-items: center; }
+h3 { margin: 0; font-size: 1rem; }
+p { margin: .35rem 0 0; font-size: .8rem; }
+.hint, small { color: var(--otziv-info); }
+button {
+  padding: .55rem .75rem;
+  border: 1px solid var(--otziv-primary);
+  border-radius: .5rem;
+  background: var(--otziv-white);
+  color: var(--otziv-primary);
+  font: inherit;
+  cursor: pointer;
+}
+.table-scroll { overflow: auto; max-height: 22rem; border: 1px solid rgba(103, 116, 131, .24); border-radius: .5rem; }
+table { border-collapse: collapse; width: 100%; min-width: 36rem; font-size: .8rem; text-align: left; }
+th, td { padding: .65rem; vertical-align: top; border-bottom: 1px solid rgba(103, 116, 131, .18); }
+th { position: sticky; top: 0; background: var(--otziv-muted-surface); z-index: 1; }
+td { overflow-wrap: anywhere; max-width: 18rem; }
+small { display: block; margin-top: .25rem; }

@@ -64,3 +64,5 @@ infrastructure/runtime-security/proofs/c19-keycloak-published/** whitespace=cr-a
 infrastructure/keycloak/security-generation/c19-bouncycastle/** text eol=lf
 infrastructure/keycloak/security-generation/image-startup-smoke.mjs text eol=lf
 infrastructure/keycloak/security-generation/provision.mjs text eol=lf
+infrastructure/runtime-security/reviewed-images-c20-*.json text eol=lf
+infrastructure/runtime-security/builds/mc-c20/** text eol=lf

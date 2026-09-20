@@ -183,6 +183,40 @@ class ContractorCompletionRewardServiceTest {
                 List.of(managerReward, specialistReward)
         );
     }
+
+    @Test
+    void restoresMissingPaymentSalaryWithExistingLegacyMarkersOnlyOnce() {
+        order.getManager().getUser().setCoefficient(new BigDecimal("0.08"));
+        order.getWorker().getUser().setCoefficient(new BigDecimal("0.30"));
+        order.setPayDay(LocalDate.of(2026, 8, 21));
+        when(markerRepository.findByOrderIdAndLogicalSource(any(), any())).thenAnswer(invocation -> {
+            var marker = new ContractorCompletionRewardMarker();
+            marker.setOrderId(91L);
+            marker.setLogicalSource(invocation.getArgument(1));
+            marker.setOccurredOn(LocalDate.of(2026, 7, 31));
+            return Optional.of(marker);
+        });
+        java.util.Map<String, Zp> saved = new java.util.HashMap<>();
+        when(zpRepository.findFirstByOrderIdAndSourceAndContractorRoleAndProfessionId(any(), any(), any(), any()))
+                .thenAnswer(invocation -> Optional.ofNullable(saved.get(invocation.<String>getArgument(1))));
+        when(zpRepository.save(any(Zp.class))).thenAnswer(invocation -> {
+            Zp reward = invocation.getArgument(0);
+            reward.setId((long) saved.size() + 1);
+            saved.put(reward.getSource(), reward);
+            return reward;
+        });
+
+        assertThat(service.ensureOrderPaymentAccrual(91L)).isEqualTo(2);
+        assertThat(service.ensureOrderPaymentAccrual(91L)).isZero();
+        assertThat(saved.values()).extracting(Zp::getSum)
+                .containsExactlyInAnyOrder(new BigDecimal("80.00"), new BigDecimal("300.00"));
+        assertThat(saved.values()).allSatisfy(reward -> {
+            assertThat(reward.isActive()).isTrue();
+            assertThat(reward.getCreated()).isEqualTo(LocalDate.of(2026, 8, 21));
+        });
+        verify(zpRepository, org.mockito.Mockito.times(2)).save(any(Zp.class));
+    }
+
     @Test
     void paidPreCutoffWorkCreatesPaymentDatedSalaryAndFreezesLogicalSources() {
         assertThat(service.ensureOrderCompletionAccrual(91L)).isEqualTo(1);

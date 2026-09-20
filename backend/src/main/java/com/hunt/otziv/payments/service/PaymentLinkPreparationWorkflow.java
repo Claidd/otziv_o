@@ -264,6 +264,7 @@ public class PaymentLinkPreparationWorkflow {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Предыдущий платеж требует сверки перед созданием нового счета");
             }
             if (linkedRouteAction == FrozenPaymentLinkAction.START_NEW_ATTEMPT) {
+                requireExplicitReplacementOfFrozenRecipient(link, configuredMode, amountKopecks);
                 if (!canRetireStaleLink(link)) {
                     throw new ResponseStatusException(HttpStatus.CONFLICT, "Предыдущий платеж уже закрыт для назначения получателя, но банковская операция " + "еще требует сверки");
                 }
@@ -285,6 +286,7 @@ public class PaymentLinkPreparationWorkflow {
                 if (canReuseContractorLink(link, amountKopecks)) {
                     return new PaymentInstructionPreparation(toManagerResponseWithShadowRoute(link), false);
                 }
+                requireExplicitReplacementOfFrozenRecipient(link, configuredMode, amountKopecks);
                 if (canRetireStaleLink(link)) {
                     retireStaleReusableLink(link);
                     contractorPaymentLiveRoutingService.releaseClosedPaymentLink(link);
@@ -316,6 +318,15 @@ public class PaymentLinkPreparationWorkflow {
                 } else {
                     throw new ResponseStatusException(HttpStatus.CONFLICT, "У заказа уже есть платеж в процессе по старым реквизитам или сумме. Проверьте платеж в журнале перед созданием нового счета.");
                 }
+            }
+        }
+        // Releasing capacity or expiring a link cannot revoke bank details already
+        // copied by the client. A later transfer must still be attributable to that
+        // recipient, even if today's routing would select somebody else.
+        for (PaymentLink previous : lockedOrderLinks) {
+            if (previous.getStatus() == PaymentLinkStatus.EXPIRED
+                    || previous.getStatus() == PaymentLinkStatus.CANCELED) {
+                requireExplicitReplacementOfFrozenRecipient(previous, configuredMode, amountKopecks);
             }
         }
         if (lockedOrderLinks.stream().anyMatch(this::blocksCreationOfAnotherBankPayment)) {
@@ -572,6 +583,19 @@ public class PaymentLinkPreparationWorkflow {
         }
         Long reserved = link.getReservedAmountKopecks();
         return reserved == null || reserved == currentAmountKopecks;
+    }
+
+    private void requireExplicitReplacementOfFrozenRecipient(
+            PaymentLink link, InvoicePaymentMode mode, long amountKopecks) {
+        // The client-facing amount and recipient stay binding independently of
+        // an internal reservation correction or release.
+        if (mode == InvoicePaymentMode.AUTO_ROUTING && isFrozenContractorRoute(link)
+                && link.getAmountKopecks() == amountKopecks) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "По этому заказу уже выданы реквизиты сотрудника. Автоматическая смена получателя заблокирована. "
+                            + "Если клиент перевёл деньги, нажмите «Оплатили» и укажите фактического получателя. "
+                            + "Для нового счёта сначала сверьте оплату и явно смените способ оплаты в карточке заказа.");
+        }
     }
 
     boolean isContractorRecipient(ContractorPaymentAllocation allocation) {

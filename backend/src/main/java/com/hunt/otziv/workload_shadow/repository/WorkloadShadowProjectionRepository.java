@@ -1237,12 +1237,14 @@ public interface WorkloadShadowProjectionRepository
             ) decision_row
             ON DUPLICATE KEY UPDATE
                 decision_code = CASE
+                    WHEN VALUES(decision_origin) = 'AFTER_CUTOFF' THEN 'LATE'
                     WHEN workload_shadow_late_batches.decision_code = 'MANDATORY'
                       OR VALUES(decision_code) = 'MANDATORY'
                         THEN 'MANDATORY'
                     ELSE VALUES(decision_code)
                 END,
                 decision_origin = CASE
+                    WHEN VALUES(decision_origin) = 'AFTER_CUTOFF' THEN 'AFTER_CUTOFF'
                     WHEN workload_shadow_late_batches.decision_code = 'MANDATORY'
                         THEN workload_shadow_late_batches.decision_origin
                     WHEN VALUES(decision_code) = 'MANDATORY'

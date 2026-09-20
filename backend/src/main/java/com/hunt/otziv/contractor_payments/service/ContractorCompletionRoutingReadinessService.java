@@ -83,7 +83,7 @@ public class ContractorCompletionRoutingReadinessService {
         var lockedCutover = cutoverStateService.lockedStartDate().orElse(null);
         if (lockedCutover != null) {
             long historicalConflicts = cutoverPreflightRepository
-                    .countActiveLegacyRewardCutoverConflicts(lockedCutover);
+                    .countActiveLegacyRewardRuntimeConflicts(lockedCutover);
             if (historicalConflicts > 0L) {
                 warnings.add("Исторические начисления требуют локальной сверки: заказов — "
                         + historicalConflicts);
@@ -104,6 +104,9 @@ public class ContractorCompletionRoutingReadinessService {
                 PageRequest.of(0, 1)
         ).isEmpty()) {
             warnings.add("Есть заказы с локальной очередью восстановления начислений");
+        }
+        if (!orderRepository.findPaidOrdersWithoutSalary(now, PageRequest.of(0, 1)).isEmpty()) {
+            warnings.add("Есть оплаченные заказы без начислений зарплаты");
         }
         if (!badReviewTaskRepository.findCompletionRewardRepairGapTaskIds(
                 BadReviewTaskStatus.DONE.name(),

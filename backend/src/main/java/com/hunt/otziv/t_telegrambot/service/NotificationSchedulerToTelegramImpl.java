@@ -217,10 +217,15 @@ public class NotificationSchedulerToTelegramImpl implements NotificationSchedule
         userDataMap.forEach((fio, data) -> {
             Long chatId = chatIds.get(fio);
             if (chatId != null && chatId != 0) {
-                String message = generateMessageForRecipient(fio, data, userDataMap);
-                findRecipientWithAssignments(fio)
-                        .filter(user -> hasRole(user, "ROLE_WORKER"))
-                        .ifPresent(user -> sendWorkerReportMedia(chatId, user, data));
+                Optional<User> recipient = findRecipientWithAssignments(fio);
+                String message;
+                if (recipient.isPresent() && hasRole(recipient.get(), "ROLE_WORKER")) {
+                    WorkerReport report = workerOnlyReport(fio, data, recipient.get());
+                    message = report.text();
+                    sendWorkerReportMedia(chatId, recipient.get(), report.data());
+                } else {
+                    message = generateMessageByRole(data == null ? null : data.getRole(), fio, data, userDataMap);
+                }
                 sendMessageSafe(chatId, message, fio);
             } else {
 //                log.warn("У сотрудника {} chatId отсутствует", fio);
@@ -282,7 +287,11 @@ public class NotificationSchedulerToTelegramImpl implements NotificationSchedule
 
     private void sendWorkerReportMedia(Long chatId, User recipient, UserData data) {
         DailyWorkProgressResponse progress = data == null ? null : data.getDailyProgress();
-        String eventCode = progress != null && progress.reached100()
+        if (progress == null || !progress.visible() || progress.updating() || progress.total() <= 0) {
+            return;
+        }
+        boolean completed = progress.completed() >= progress.total() && progress.active() == 0;
+        String eventCode = completed
                 ? NotificationMediaEventCatalog.WORKER_PROGRESS_GROWING.code()
                 : NotificationMediaEventCatalog.WORKER_PROGRESS_SLOWED.code();
         try {
@@ -290,7 +299,11 @@ public class NotificationSchedulerToTelegramImpl implements NotificationSchedule
                     eventCode,
                     chatId,
                     recipient.getId(),
-                    "📊 <b>Личный отчёт готов</b>\n\nЖека подводит итоги дня.",
+                    "📊 <b>Личный отчёт готов</b>\n\n"
+                            + "Результат на момент отправки: <b>" + progress.completed() + " из " + progress.total() + "</b>.\n"
+                            + (completed ? "Текущая нагрузка выполнена.\n"
+                            : "Цель пока не достигнута. Задания текущего дня можно завершить до 00:00.\n")
+                            + "Окончательный результат будет в итоговом отчёте после окончания дня.",
                     "HTML"
             );
         } catch (RuntimeException exception) {
@@ -330,16 +343,6 @@ public class NotificationSchedulerToTelegramImpl implements NotificationSchedule
         }
     }
 
-    private String generateMessageForRecipient(String fio, UserData userData, Map<String, UserData> result) {
-        Optional<User> recipient = findRecipientWithAssignments(fio);
-        if (recipient.isPresent() && hasRole(recipient.get(), "ROLE_WORKER")) {
-            return workerOnlyReport(fio, userData, recipient.get());
-        }
-
-        String role = userData != null ? userData.getRole() : null;
-        return generateMessageByRole(role, fio, userData, result);
-    }
-
     private Optional<User> findRecipientWithAssignments(String fio) {
         if (fio == null || fio.isBlank()) {
             return Optional.empty();
@@ -362,12 +365,12 @@ public class NotificationSchedulerToTelegramImpl implements NotificationSchedule
                 .anyMatch(role -> role != null && roleName.equals(role.getName()));
     }
 
-    private String workerOnlyReport(String fio, UserData fallbackData, User recipient) {
+    private WorkerReport workerOnlyReport(String fio, UserData fallbackData, User recipient) {
         try {
             Map<String, UserData> workerData = personalService.getPersonalsAndCountToMapToWorker(recipient.getId());
             String report = personalService.displayResultToWorker(workerData);
             if (report != null && !report.isBlank()) {
-                return report;
+                return new WorkerReport(report, workerData == null ? null : workerData.get(fio));
             }
         } catch (RuntimeException exception) {
             log.warn("Не удалось собрать личный отчет специалиста {}: {}", fio, exception.getMessage());
@@ -376,8 +379,10 @@ public class NotificationSchedulerToTelegramImpl implements NotificationSchedule
         UserData safeData = fallbackData != null
                 ? fallbackData
                 : UserData.builder().fio(fio).role("ROLE_WORKER").build();
-        return generateMessageByRole("ROLE_WORKER", fio, safeData, Map.of(fio, safeData));
+        return new WorkerReport(generateMessageByRole("ROLE_WORKER", fio, safeData, Map.of(fio, safeData)), null);
     }
+
+    private record WorkerReport(String text, UserData data) {}
 
     private long safeLong(Long value) {
         return value == null ? 0L : value;

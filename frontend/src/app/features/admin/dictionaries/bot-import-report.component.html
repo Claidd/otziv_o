@@ -1,0 +1,38 @@
+<section class="report" aria-label="Отчёт о дублях аккаунтов">
+  <header>
+    <div>
+      <h3>Найдены повторные аккаунты</h3>
+      <p>Ранее добавлялись: {{ existingCount() }} · Повторы внутри файла: {{ inFileCount() }}</p>
+    </div>
+    <button type="button" (click)="download()">Скачать дубли CSV</button>
+  </header>
+  @if (result().duplicateReportQueued) {
+    <p role="status">TXT-отчёт для обращения к поставщику поставлен в очередь отправки администратору в Telegram.
+      После подтверждённой доставки временное содержимое отчёта удаляется.</p>
+  }
+  <p class="hint">Сведения о первом добавлении сохраняются при повторной загрузке.
+    «Не сохранено» означает, что история этих аккаунтов неполная.</p>
+  <div class="table-scroll" tabindex="0" aria-label="Список повторных аккаунтов">
+    <table>
+      <thead><tr><th>Строка</th><th>Аккаунт</th><th>Первое добавление</th><th>Исходный файл</th></tr></thead>
+      <tbody>
+        @for (duplicate of visibleDuplicates(); track $index) {
+          <tr>
+            <td>{{ duplicate.rowNumber }}</td>
+            <td><strong>{{ duplicate.login }}</strong>
+              @if (duplicate.originalBotId != null) { <small>ID оригинала: {{ duplicate.originalBotId }}</small> }
+              <small>{{ duplicate.reason === 'DUPLICATE_IN_FILE' ? 'Повтор внутри файла' : 'Уже добавлялся ранее' }}</small>
+            </td>
+            <td>{{ duplicate.originalImportedAt ? (duplicate.originalImportedAt | date:'dd.MM.yyyy HH:mm') : 'Не сохранено' }}</td>
+            <td>{{ duplicate.originalFileName || 'Не сохранено' }}
+              @if (duplicate.originalRowNumber != null) { <small>Строка {{ duplicate.originalRowNumber }}</small> }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+  @if (duplicates().length > 100) {
+    <p class="hint">Показаны первые 100 из {{ duplicates().length }} дублей. Полный список — в CSV.</p>
+  }
+</section>

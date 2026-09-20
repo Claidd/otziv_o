@@ -56,6 +56,49 @@ class ContractorCompletionRewardRepairServiceTest {
     }
 
     @Test
+    void repairsPaidOrdersWithMissingSalaryEvenWhenAllCompletionMarkersExist() {
+        when(orderRepository.findPaidOrdersWithoutSalary(eq(now), any(Pageable.class)))
+                .thenReturn(List.of(24195L, 24196L));
+
+        service.repairCompletedUnpaidOrders();
+
+        verify(repairTransactionService).repairOrder(24195L);
+        verify(repairTransactionService).repairOrder(24196L);
+    }
+
+    @Test
+    void overlappingMissingMarkersAndMissingSalaryAreRepairedOnce() {
+        when(orderRepository.findCompletionRewardRepairOrderIds(
+                any(), any(), eq(3L), eq(now), any(Pageable.class)))
+                .thenReturn(List.of(24195L));
+        when(orderRepository.findPaidOrdersWithoutSalary(eq(now), any(Pageable.class)))
+                .thenReturn(List.of(24195L));
+
+        service.repairCompletedUnpaidOrders();
+
+        verify(repairTransactionService).repairOrder(24195L);
+    }
+
+    @Test
+    void salaryGapFailureIsDeferredWithoutSkippingTheNextMissingSalary() {
+        when(orderRepository.findPaidOrdersWithoutSalary(eq(now), any(Pageable.class)))
+                .thenReturn(List.of(24195L, 24196L));
+        when(repairStateRepository.findById(24195L)).thenReturn(Optional.empty());
+        org.mockito.Mockito.doThrow(new IllegalStateException("unverified historical identity"))
+                .when(repairTransactionService).repairOrder(24195L);
+
+        service.repairCompletedUnpaidOrders();
+
+        verify(repairTransactionService).repairOrder(24196L);
+        ArgumentCaptor<ContractorCompletionRewardRepairState> state =
+                ArgumentCaptor.forClass(ContractorCompletionRewardRepairState.class);
+        verify(repairStateRepository).save(state.capture());
+        assertThat(state.getValue().getOrderId()).isEqualTo(24195L);
+        assertThat(state.getValue().getNextAttemptAt()).isAfter(now);
+        assertThat(state.getValue().getLastError()).isEqualTo("IllegalStateException");
+    }
+
+    @Test
     void poisonOrderGetsDurableSanitizedBackoffWithoutStarvingTail() {
         when(orderRepository.findCompletionRewardRepairOrderIds(
                 any(), any(), eq(3L), eq(now), any(Pageable.class)

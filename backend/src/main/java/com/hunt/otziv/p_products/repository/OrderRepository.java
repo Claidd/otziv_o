@@ -304,6 +304,67 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             Pageable pageable
     );
 
+    /**
+     * Completed markers can survive a historical payment repair without salary.
+     * Discover expected recipients from performed work, not the current assignee.
+     * Existing salary, archival evidence and ledger entries are never recreated here.
+     */
+    @Query(value = """
+        SELECT o.order_id
+        FROM orders o
+        JOIN order_statuses s ON s.order_status_id = o.order_status
+        JOIN contractor_payment_rollout_state rollout ON rollout.id = 1
+        LEFT JOIN managers manager ON manager.manager_id = o.order_manager
+        LEFT JOIN users manager_user ON manager_user.id = manager.user_id
+        WHERE s.order_status_title = 'Оплачено'
+          AND rollout.accounting_authority IN ('PAYMENT', 'COMPLETION')
+          AND o.order_pay_day >= rollout.attribution_start_date
+          AND o.order_amount > 0
+          AND o.order_sum > 0
+          AND (
+              ROUND(o.order_sum * COALESCE(manager_user.coefficient, 0), 2) > 0
+              OR EXISTS (
+                  SELECT 1 FROM reviews performed_review
+                  JOIN order_details performed_detail
+                    ON performed_detail.order_detail_id = performed_review.review_order_details
+                  JOIN workers performed_worker ON performed_worker.worker_id = performed_review.review_worker
+                  JOIN users performed_user ON performed_user.id = performed_worker.user_id
+                  WHERE performed_detail.order_detail_order = o.order_id
+                    AND performed_review.review_publish = TRUE
+                    AND ROUND(o.order_sum * COALESCE(performed_user.coefficient, 0), 2) > 0
+              )
+              OR EXISTS (
+                  SELECT 1 FROM bad_review_tasks completed_task
+                  JOIN workers task_worker ON task_worker.worker_id = completed_task.bad_review_task_worker
+                  JOIN users task_user ON task_user.id = task_worker.user_id
+                  WHERE completed_task.bad_review_task_order = o.order_id
+                    AND completed_task.bad_review_task_status = 'DONE'
+                    AND ROUND(completed_task.bad_review_task_price * COALESCE(task_user.coefficient, 0), 2) > 0
+              )
+          )
+          AND (
+              SELECT COUNT(*) FROM reviews review
+              JOIN order_details detail ON detail.order_detail_id = review.review_order_details
+              WHERE detail.order_detail_order = o.order_id AND review.review_publish = TRUE
+          ) = o.order_amount
+          AND NOT EXISTS (SELECT 1 FROM zp reward WHERE reward.zp_order = o.order_id AND reward.zp_active = TRUE)
+          AND NOT EXISTS (SELECT 1 FROM archive_zp reward WHERE reward.zp_order = o.order_id AND reward.zp_active = TRUE)
+          AND NOT EXISTS (SELECT 1 FROM contractor_reward_ledger ledger WHERE ledger.order_id = o.order_id AND ledger.active = TRUE)
+          AND NOT EXISTS (
+              SELECT 1 FROM review_recovery_tasks recovery
+              JOIN review_recovery_batches batch ON batch.review_recovery_batch_id = recovery.review_recovery_task_batch
+              WHERE recovery.review_recovery_task_order = o.order_id
+                AND recovery.review_recovery_task_status = 'PLANNED'
+                AND batch.review_recovery_batch_status = 'OPEN'
+          )
+          AND NOT EXISTS (
+              SELECT 1 FROM contractor_completion_reward_repair_state repair
+              WHERE repair.order_id = o.order_id AND repair.next_attempt_at > :dueAt
+          )
+        ORDER BY o.order_id
+        """, nativeQuery = true)
+    List<Long> findPaidOrdersWithoutSalary(@Param("dueAt") LocalDateTime dueAt, Pageable pageable);
+
     @Query(value = """
         SELECT salary_mismatch.order_id
         FROM (

@@ -2034,6 +2034,17 @@ tr.selected td:first-child {
   padding: 1.1rem;
   background: var(--otziv-white);
   box-shadow: 0 1.25rem 3rem rgba(54, 61, 82, 0.2);
+  max-height: calc(100dvh - 2.5rem);
+  overflow-y: auto;
+}
+
+.import-modal.has-duplicates {
+  width: min(64rem, 100%);
+}
+
+.import-result.has-duplicates {
+  color: var(--otziv-dark);
+  background: rgba(255, 187, 85, 0.16);
 }
 
 .import-modal header {

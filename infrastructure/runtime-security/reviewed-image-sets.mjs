@@ -34,6 +34,8 @@ const RELEASE_SETS = Object.freeze({
   'c19-keycloak': { component: 'keycloak', path: 'infrastructure/runtime-security/reviewed-images-c19-keycloak.json',
     context: 'infrastructure/keycloak/security-generation/c19-bouncycastle', dockerfile: 'infrastructure/keycloak/security-generation/c19-bouncycastle/Dockerfile' },
   'c15-mc': { component: 'mc', path: 'infrastructure/runtime-security/reviewed-images-c15-mc.json', context: 'infrastructure/runtime-security/builds/mc-c15', dockerfile: 'infrastructure/runtime-security/builds/mc-c15/mc.Dockerfile' },
+  'c20-mc': { component: 'mc', path: 'infrastructure/runtime-security/reviewed-images-c20-mc.json',
+    context: 'infrastructure/runtime-security/builds/mc-c20', dockerfile: 'infrastructure/runtime-security/builds/mc-c20/Dockerfile' },
 });
 // These two local-stack dependencies were absent from the immutable C7 manifest.
 // Keep their original pins and service coverage explicit when adding publication.
