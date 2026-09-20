@@ -371,6 +371,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
       - name: Record unchanged component
+        working-directory: ${{ runner.temp }}
         if: ${{ !(needs.changes.outputs.backend == 'true') }}
         run: echo "Component unchanged; heavy checks are not required for this diff." >> "$GITHUB_STEP_SUMMARY"
 
@@ -482,6 +483,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
       - name: Record unchanged component
+        working-directory: ${{ runner.temp }}
         if: ${{ !(needs.changes.outputs.issuer == 'true') }}
         run: echo "Component unchanged; heavy checks are not required for this diff." >> "$GITHUB_STEP_SUMMARY"
 
@@ -513,6 +515,7 @@ jobs:
       - run: npm run build -- --configuration production
         if: ${{ needs.changes.outputs.frontend == 'true' }}
       - name: Record unchanged component
+        working-directory: ${{ runner.temp }}
         if: ${{ !(needs.changes.outputs.frontend == 'true') }}
         run: echo "Component unchanged; heavy checks are not required for this diff." >> "$GITHUB_STEP_SUMMARY"
 
@@ -546,6 +549,7 @@ jobs:
       - run: npm run build:prod
         if: ${{ needs.changes.outputs.mobile == 'true' }}
       - name: Record unchanged component
+        working-directory: ${{ runner.temp }}
         if: ${{ !(needs.changes.outputs.mobile == 'true') }}
         run: echo "Component unchanged; heavy checks are not required for this diff." >> "$GITHUB_STEP_SUMMARY"
 
@@ -614,6 +618,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
       - name: Record unchanged component
+        working-directory: ${{ runner.temp }}
         if: ${{ !(needs.changes.outputs.browser == 'true') }}
         run: echo "Component unchanged; heavy checks are not required for this diff." >> "$GITHUB_STEP_SUMMARY"
 
@@ -674,6 +679,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
       - name: Record unchanged component
+        working-directory: ${{ runner.temp }}
         if: ${{ !(needs.changes.outputs.android == 'true') }}
         run: echo "Component unchanged; heavy checks are not required for this diff." >> "$GITHUB_STEP_SUMMARY"
 
@@ -703,6 +709,7 @@ jobs:
       - run: npm test
         if: ${{ needs.changes.outputs.whatsapp == 'true' }}
       - name: Record unchanged component
+        working-directory: ${{ runner.temp }}
         if: ${{ !(needs.changes.outputs.whatsapp == 'true') }}
         run: echo "Component unchanged; heavy checks are not required for this diff." >> "$GITHUB_STEP_SUMMARY"
 
@@ -738,6 +745,7 @@ jobs:
         run: npm test
       # Readiness is checked in the actual image below; liveness alone is insufficient.
       - name: Record unchanged component
+        working-directory: ${{ runner.temp }}
         if: ${{ !(needs.changes.outputs.worker == 'true') }}
         run: echo "Component unchanged; heavy checks are not required for this diff." >> "$GITHUB_STEP_SUMMARY"
 
@@ -772,6 +780,7 @@ jobs:
         if: ${{ needs.changes.outputs.parity == 'true' }}
         run: node contracts/verify-release-compatibility.mjs
       - name: Record unchanged component
+        working-directory: ${{ runner.temp }}
         if: ${{ !(needs.changes.outputs.parity == 'true') }}
         run: echo "Component unchanged; heavy checks are not required for this diff." >> "$GITHUB_STEP_SUMMARY"
 
@@ -842,6 +851,7 @@ jobs:
           retention-days: 90
           if-no-files-found: error
       - name: Record unchanged component
+        working-directory: ${{ runner.temp }}
         if: ${{ !((needs.changes.outputs.upstream == 'true') || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
         run: echo "Component unchanged; heavy checks are not required for this diff." >> "$GITHUB_STEP_SUMMARY"
 
@@ -987,6 +997,7 @@ jobs:
           retention-days: 90
           if-no-files-found: error
       - name: Record unchanged component
+        working-directory: ${{ runner.temp }}
         if: ${{ !((needs.changes.outputs[matrix.scope] == 'true') || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
         run: echo "Component unchanged; heavy checks are not required for this diff." >> "$GITHUB_STEP_SUMMARY"
 
@@ -1064,6 +1075,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
       - name: Record unchanged component
+        working-directory: ${{ runner.temp }}
         if: ${{ !(needs.changes.outputs.monitoring == 'true') }}
         run: echo "Component unchanged; heavy checks are not required for this diff." >> "$GITHUB_STEP_SUMMARY"
 

@@ -1,5 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {mkdtempSync, readFileSync, rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {spawnSync} from 'node:child_process';
 import {changedPaths, scopes, selectChecks} from './ci-changes.mjs';
 
 test('a UI change does not rebuild monitoring or run the backend suite', () => {
@@ -44,4 +48,33 @@ test('PR selection uses its merge base, not only the last commit', () => {
     calls.push(args); return args[0] === 'merge-base' ? ancestor + '\n' : '';
   });
   assert.deepEqual(calls.at(-1).slice(-2), [ancestor, head]);
+});
+
+test('unchanged-component summaries run without a checkout or component directory', () => {
+  const workflow = readFileSync(new URL('../../../.github/workflows/quality-gates.yml', import.meta.url), 'utf8');
+  const scratch = mkdtempSync(join(tmpdir(), 'otziv-no-checkout-'));
+  let exercised = 0;
+  try {
+    for (const job of workflow.split(/^  [\w-]+:\r?$/m).slice(1)) {
+      const defaults = job.match(/    defaults:\r?\n      run:\r?\n        working-directory: (.+)/)?.[1]?.trim();
+      for (const step of job.split(/^      - /m).slice(1)) {
+        if (!step.startsWith('name: Record unchanged component')) continue;
+        const directory = step.match(/^        working-directory: (.+)$/m)?.[1]?.trim() ?? defaults ?? '${{ github.workspace }}';
+        const cwd = directory.replace('${{ runner.temp }}', scratch)
+          .replace('${{ github.workspace }}', join(scratch, 'workspace-without-checkout'));
+        const script = step.match(/^        run: (.+)$/m)?.[1]?.trim();
+        assert.ok(script, 'summary step must have a runnable command');
+        const summary = join(scratch, `summary-${exercised++}.md`);
+        const shell = process.platform === 'win32' ? 'C:/Program Files/Git/bin/bash.exe' : '/bin/bash';
+        const result = spawnSync(shell, ['-e', '-c', script], {
+          cwd, env: {...process.env, GITHUB_STEP_SUMMARY: summary}, encoding: 'utf8',
+        });
+        assert.equal(result.status, 0, `summary cannot depend on skipped checkout: ${directory}; ${result.error ?? result.stderr}`);
+        assert.match(readFileSync(summary, 'utf8'), /Component unchanged/);
+      }
+    }
+    assert.ok(exercised >= 12, 'all conditional jobs must be exercised');
+  } finally {
+    rmSync(scratch, {recursive: true, force: true});
+  }
 });
