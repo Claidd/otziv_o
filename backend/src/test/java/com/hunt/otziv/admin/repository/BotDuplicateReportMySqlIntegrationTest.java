@@ -1,8 +1,7 @@
 package com.hunt.otziv.admin.repository;
 
 import com.hunt.otziv.admin.service.BotDuplicateReportSender;
-import com.hunt.otziv.t_telegrambot.service.TelegramService;
-import com.hunt.otziv.u_users.service.UserService;
+import com.hunt.otziv.t_telegrambot.api.TelegramAdminDocuments;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.aop.framework.ProxyFactory;
@@ -71,20 +70,19 @@ class BotDuplicateReportMySqlIntegrationTest {
     @Test
     void retriesPartialDeliveryAfterRestartAndDeletesAllReportContentsWhenDone() {
         enqueue();
-        TelegramService telegram = mock(TelegramService.class);
-        UserService users = mock(UserService.class);
+        TelegramAdminDocuments telegram = mock(TelegramAdminDocuments.class);
         when(telegram.canSendDocuments()).thenReturn(true);
-        when(telegram.getAdminChatIds()).thenReturn(List.of(11L, 22L));
+        when(telegram.adminDocumentRecipients()).thenReturn(List.of(11L, 22L));
         when(telegram.sendDocumentOnceMessageId(eq(11L), any(), anyString())).thenReturn(Optional.of(90));
         when(telegram.sendDocumentOnceMessageId(eq(22L), any(), anyString())).thenReturn(Optional.empty());
-        new BotDuplicateReportSender(repository, telegram, users).sendPending();
+        new BotDuplicateReportSender(repository, telegram).sendPending();
         assertThat(count()).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT pending_chat_ids FROM bot_duplicate_report_delivery", String.class)).isEqualTo("22");
         assertThat(jdbc.queryForObject("SELECT report_text FROM bot_duplicate_report_delivery", String.class)).isEqualTo("Отчёт по дублям");
         assertThat(repository.claimNext()).isEmpty(); // Backoff prevents a hot retry loop.
         jdbc.update("UPDATE bot_duplicate_report_delivery SET next_attempt_at=CURRENT_TIMESTAMP(6)");
         when(telegram.sendDocumentOnceMessageId(eq(22L), any(), anyString())).thenReturn(Optional.of(91));
-        new BotDuplicateReportSender(repository, telegram, users).sendPending();
+        new BotDuplicateReportSender(repository, telegram).sendPending();
         assertThat(count()).isZero();
         verify(telegram, times(1)).sendDocumentOnceMessageId(eq(11L), any(), anyString());
         verify(telegram, times(2)).sendDocumentOnceMessageId(eq(22L), any(), anyString());
