@@ -7,6 +7,9 @@ import com.hunt.otziv.t_telegrambot.dto.TelegramReportScheduleSettingsResponse;
 import com.hunt.otziv.u_users.model.Role;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.service.UserService;
+import com.hunt.otziv.worker_performance.dto.DailyWorkProgressResponse;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -25,6 +28,9 @@ import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.ArgumentMatchers.contains;
 
 @ExtendWith(MockitoExtension.class)
 class NotificationSchedulerToTelegramImplTest {
@@ -107,14 +113,62 @@ class NotificationSchedulerToTelegramImplTest {
 
         scheduler.sendDailyReportToWorkers();
 
-        verify(notificationMediaDeliveryService).sendMediaOnly(
-                eq(NotificationMediaEventCatalog.WORKER_PROGRESS_SLOWED.code()),
-                eq(-123L),
-                eq(77L),
-                anyString(),
-                eq("HTML")
-        );
+        verifyNoInteractions(notificationMediaDeliveryService);
         verify(telegramService).sendMessage(eq(-123L), eq("worker-only report"), eq("HTML"));
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "32,36,89,true,WORKER_PROGRESS_SLOWED",
+            "98,100,98,true,WORKER_PROGRESS_SLOWED",
+            "999,1000,100,true,WORKER_PROGRESS_SLOWED",
+            "36,36,100,false,WORKER_PROGRESS_GROWING"
+    })
+    void mediaMatchesPersonalReportEvenWhenGeneralSummaryHasDifferentProgress(
+            long completed, long total, int percent, boolean reachedOnce, String eventCode) {
+        DailyWorkProgressResponse progress = mock(DailyWorkProgressResponse.class);
+        // The old condition would use this historical flag instead of the remaining work.
+        org.mockito.Mockito.lenient().when(progress.reached100()).thenReturn(reachedOnce);
+        org.mockito.Mockito.lenient().when(progress.percent()).thenReturn(percent);
+        when(progress.visible()).thenReturn(true);
+        when(progress.completed()).thenReturn(completed);
+        when(progress.total()).thenReturn(total);
+        if (completed == total) {
+            when(progress.active()).thenReturn(0L);
+        }
+        sendPersonalReport(progress);
+        verify(notificationMediaDeliveryService).sendMediaOnly(
+                eq(eventCode), eq(-123L), eq(77L),
+                contains("Результат на момент отправки: <b>" + completed + " из " + total + "</b>"), eq("HTML"));
+        verify(telegramService).sendMessage(-123L, "personal report", "HTML");
+    }
+
+    @ParameterizedTest
+    @CsvSource({"true,false,0", "true,true,36", "false,false,36"})
+    void skipsOutcomePictureWhenNoTasksOrProgressUnavailable(boolean visible, boolean updating, long total) {
+        DailyWorkProgressResponse progress = mock(DailyWorkProgressResponse.class);
+        when(progress.visible()).thenReturn(visible);
+        org.mockito.Mockito.lenient().when(progress.updating()).thenReturn(updating);
+        org.mockito.Mockito.lenient().when(progress.total()).thenReturn(total);
+        sendPersonalReport(progress);
+        verifyNoInteractions(notificationMediaDeliveryService);
+        verify(telegramService).sendMessage(-123L, "personal report", "HTML");
+    }
+
+    private void sendPersonalReport(DailyWorkProgressResponse progress) {
+        User worker = user(77L, "julia", "Юля К.", "ROLE_WORKER");
+        var general = com.hunt.otziv.admin.dto.personal.UserData.builder()
+                .fio("Юля К.").role("ROLE_WORKER").build();
+        var personal = com.hunt.otziv.admin.dto.personal.UserData.builder()
+                .fio("Юля К.").role("ROLE_WORKER").dailyProgress(progress).build();
+        var personalData = Map.of("Юля К.", personal);
+        when(userService.getAllWorkerTelegramGroups()).thenReturn(Map.of("Юля К.", -123L));
+        when(personalService.getPersonalsAndCountToMap()).thenReturn(Map.of("Юля К.", general));
+        when(userService.findByFio("Юля К.")).thenReturn(Optional.of(worker));
+        when(userService.findByUserNameWithAssignments("julia")).thenReturn(Optional.of(worker));
+        when(personalService.getPersonalsAndCountToMapToWorker(77L)).thenReturn(personalData);
+        when(personalService.displayResultToWorker(personalData)).thenReturn("personal report");
+        schedulerAt("2026-05-21T14:01:00Z").sendDailyReportToWorkers();
     }
 
     private NotificationSchedulerToTelegramImpl schedulerAt(String instant) {

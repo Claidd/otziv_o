@@ -17,6 +17,8 @@ com.hunt.otziv.client_messages.api.*
 com.hunt.otziv.u_users.api.WorkerRiskReviewerDirectory
 com.hunt.otziv.personal_reminders.api.SystemReminderCommands
 com.hunt.otziv.t_telegrambot.api.TelegramNotifications
+# BOT_IMPORT_DUPLICATES: admin-only scalar recipients and confirmed document delivery outside DB transactions.
+com.hunt.otziv.t_telegrambot.api.TelegramAdminDocuments
 com.hunt.otziv.client_messages.dto.ClientMessageSendResult
 com.hunt.otziv.client_messages.dto.TelegramTransferCopyButton
 # Platform encryption capability; no business persistence or transport methods.

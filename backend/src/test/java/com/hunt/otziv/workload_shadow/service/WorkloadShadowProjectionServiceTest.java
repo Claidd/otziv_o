@@ -152,9 +152,9 @@ class WorkloadShadowProjectionServiceTest {
     }
 
     @Test
-    void partialCompletionInsideOneLateBatchMakesItsRemainderMandatory() {
-        var initial = batch("NAGUL:3", 100L, 4, 4, DATE.atTime(22, 50));
-        var remaining = batch("NAGUL:3", 100L, 3, 4, DATE.atTime(22, 50));
+    void partialCompletionInsideLateBatchFromBeforeCutoffMakesItsRemainderMandatory() {
+        var initial = batch("NAGUL:3", 100L, 4, 4, DATE.atTime(21, 50));
+        var remaining = batch("NAGUL:3", 100L, 3, 4, DATE.atTime(21, 50));
         var late = decision(initial, WorkloadShadowProjectionService.DecisionCode.LATE);
 
         var decisions = WorkloadShadowProjectionService.classifyDailyBatchDecisions(
@@ -178,7 +178,7 @@ class WorkloadShadowProjectionServiceTest {
     }
 
     @Test
-    void completingCardsFromLateCohortMakesEveryRemainingCardMandatory() {
+    void completingCardsArrivingAfterCutoffKeepsRemainingCardsForTomorrow() {
         var first = batch("NAGUL:1", 100L, 1, 4, DATE.atTime(22, 50));
         var second = batch("NAGUL:2", 100L, 1, 4, DATE.atTime(22, 50));
         var third = batch("NAGUL:3", 100L, 1, 4, DATE.atTime(22, 50));
@@ -206,11 +206,11 @@ class WorkloadShadowProjectionServiceTest {
         assertEquals(2, afterTwoCompleted.size());
         assertTrue(afterTwoCompleted.values().stream().allMatch(
                 decision -> decision.decisionCode()
-                        == WorkloadShadowProjectionService.DecisionCode.MANDATORY
+                        == WorkloadShadowProjectionService.DecisionCode.LATE
         ));
         assertTrue(afterTwoCompleted.values().stream().allMatch(
                 decision -> decision.decisionOrigin()
-                        == WorkloadShadowProjectionService.DecisionOrigin.PARTIAL_COMPLETION
+                        == WorkloadShadowProjectionService.DecisionOrigin.AFTER_CUTOFF
         ));
     }
 
@@ -230,7 +230,23 @@ class WorkloadShadowProjectionServiceTest {
                 false
         );
 
-        assertEquals(late, decisions.get(initial.batchKey()));
+        assertEquals(WorkloadShadowProjectionService.DecisionCode.LATE,
+                decisions.get(initial.batchKey()).decisionCode());
+        assertEquals(WorkloadShadowProjectionService.DecisionOrigin.AFTER_CUTOFF,
+                decisions.get(initial.batchKey()).decisionOrigin());
+    }
+
+    @Test
+    void previouslyMandatoryWorkAfterCutoffIsExcludedFromToday() {
+        var remaining = batch("NAGUL:3", 100L, 3, 4, DATE.atTime(22, 0));
+        var decisions = WorkloadShadowProjectionService.classifyDailyBatchDecisions(
+                List.of(remaining),
+                Map.of(remaining.batchKey(), decision(remaining, WorkloadShadowProjectionService.DecisionCode.MANDATORY)),
+                DATE, DATE.atTime(23, 0), SHIFT_START, SHIFT_END, false);
+        assertEquals(WorkloadShadowProjectionService.DecisionCode.LATE,
+                decisions.get(remaining.batchKey()).decisionCode());
+        assertEquals(WorkloadShadowProjectionService.DecisionOrigin.AFTER_CUTOFF,
+                decisions.get(remaining.batchKey()).decisionOrigin());
     }
 
     @Test

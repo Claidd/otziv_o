@@ -934,7 +934,17 @@ public class WorkloadShadowProjectionService {
                 continue;
             }
             BatchDecision effective = persisted;
-            if (persisted.decisionCode() == DecisionCode.LATE
+            LocalDateTime availableAt = persisted.sourceAvailableAt() == null
+                    ? batch.availableAt() : persisted.sourceAvailableAt();
+            if (intakeCutoff != null && availableAt != null && !availableAt.isBefore(intakeCutoff)) {
+                // Starting tomorrow's work must not pull its remainder into today's target.
+                effective = new BatchDecision(
+                        persisted.batchKey(), DecisionCode.LATE, DecisionOrigin.AFTER_CUTOFF,
+                        persisted.cohortKey(), persisted.initialUnits(), persisted.initialEstimatedMinutes(),
+                        persisted.firstObservedAt(), availableAt, 0,
+                        persisted.cohortEstimatedMinutesAtDecision()
+                );
+            } else if (persisted.decisionCode() == DecisionCode.LATE
                     && partiallyCompletedLateCohorts.contains(
                             effectiveCohortKey(persisted)
                     )) {
@@ -1073,7 +1083,9 @@ public class WorkloadShadowProjectionService {
     }
 
     /**
-     * A late cohort is forgiven only while nobody has started it. Once at least one
+     * A capacity-excluded cohort from before the intake cutoff is forgiven only
+     * while nobody has started it. Work arriving after the cutoff stays excluded.
+     * Once at least one
      * unit disappears from an otherwise still-active cohort, the specialist has
      * chosen to work on that cohort and every remaining unit becomes mandatory for
      * the current day. Persisted rows for completed units intentionally remain in

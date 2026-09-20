@@ -4302,7 +4302,7 @@
 
   @if (importModalOpen()) {
     <section class="import-backdrop" (click)="closeBotImport()">
-      <article class="import-modal" role="dialog" aria-modal="true" aria-label="Импорт аккаунтов" (click)="$event.stopPropagation()">
+      <article class="import-modal" [class.has-duplicates]="importResult()?.duplicates?.length" role="dialog" aria-modal="true" aria-label="Импорт аккаунтов" (click)="$event.stopPropagation()">
         <header>
           <div>
             <p class="eyebrow">Импорт</p>
@@ -4352,7 +4352,7 @@
         }
 
         <label class="file-picker" [class.has-file]="importFile()">
-          <input type="file" accept=".csv,.tsv,.xls,.xlsx" (change)="selectBotImportFile($event)">
+          <input type="file" accept=".csv,.tsv,.xls,.xlsx" [disabled]="importing()" (change)="selectBotImportFile($event)">
           <span class="material-icons-sharp">upload_file</span>
           <strong>{{ importFile()?.name || 'Выбрать файл' }}</strong>
           <small>CSV, XLS, XLSX</small>
@@ -4363,10 +4363,11 @@
         }
 
         @if (importResult(); as result) {
-          <div class="import-result">
-            <span class="material-icons-sharp">task_alt</span>
+          <div class="import-result" [class.has-duplicates]="result.skippedDuplicates > 0">
+            <span class="material-icons-sharp">{{ result.skippedDuplicates ? 'warning_amber' : 'task_alt' }}</span>
             <strong>{{ importResultMessage(result) }}</strong>
             <small>Всего строк: {{ result.totalRows }}</small>
+            @if (result.sourceFileName) { <small>Проверен файл: {{ result.sourceFileName }}</small> }
             @if (result.errors.length) {
               <ul>
                 @for (message of result.errors; track $index) {
@@ -4375,6 +4376,9 @@
               </ul>
             }
           </div>
+          @if (result.duplicates?.length) {
+            <app-bot-import-report [result]="result" />
+          }
         }
 
         <div class="actions">

@@ -67,7 +67,7 @@ class ContractorCompletionRoutingReadinessServiceTest {
         lenient().when(zpRepository.findContractorRewardsNeedingGlobalRepair(any(), any(Pageable.class)))
                 .thenReturn(List.of());
         lenient().when(cutoverStateService.lockedStartDate()).thenReturn(java.util.Optional.of(LocalDate.of(2026, 8, 1)));
-        lenient().when(cutoverPreflightRepository.countActiveLegacyRewardCutoverConflicts(any()))
+        lenient().when(cutoverPreflightRepository.countActiveLegacyRewardRuntimeConflicts(any()))
                 .thenReturn(0L);
         lenient().when(orderRepository.countCompletionRewardDeferredByActiveRecovery(any(), any(), eq(3L)))
                 .thenReturn(0L);
@@ -81,6 +81,23 @@ class ContractorCompletionRoutingReadinessServiceTest {
 
         assertThat(service.hardRuntimeBlockers())
                 .contains("Выполняется восстановление финансового состояния");
+    }
+
+    @Test
+    void missingSalaryIsVisibleEvenWhenCompletionMarkersArePresent() {
+        when(businessClock.now()).thenReturn(now);
+        when(orderRepository.findPaidOrdersWithoutSalary(eq(now), any(Pageable.class)))
+                .thenReturn(List.of(24195L));
+        assertThat(service.runtimeWarnings()).contains("Есть оплаченные заказы без начислений зарплаты");
+    }
+
+    @Test
+    void accountedHistoricalTasksUseRuntimeEvidenceInsteadOfActivationPreflight() {
+        when(businessClock.now()).thenReturn(now);
+        when(cutoverPreflightRepository.countActiveLegacyRewardRuntimeConflicts(any())).thenReturn(0L);
+
+        assertThat(service.runtimeWarnings()).isEmpty();
+        verify(cutoverPreflightRepository, never()).countActiveLegacyRewardCutoverConflicts(any());
     }
 
     @Test
@@ -173,7 +190,7 @@ class ContractorCompletionRoutingReadinessServiceTest {
         assertThat(service.readyForLiveRouting()).isFalse();
 
         when(rewardRepairClaimRepository.count()).thenReturn(0L);
-        when(cutoverPreflightRepository.countActiveLegacyRewardCutoverConflicts(any()))
+        when(cutoverPreflightRepository.countActiveLegacyRewardRuntimeConflicts(any()))
                 .thenReturn(1L);
 
         assertThat(service.readyForLiveRouting()).isTrue();

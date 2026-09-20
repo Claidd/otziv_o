@@ -669,6 +669,20 @@ export interface BotImportResponse {
   skippedDuplicates: number;
   skippedInvalid: number;
   errors: string[];
+  sourceFileName?: string | null;
+  importedAt?: string | null;
+  duplicates?: BotImportDuplicate[];
+  duplicateReportQueued?: boolean;
+}
+
+export interface BotImportDuplicate {
+  rowNumber: number;
+  login: string;
+  reason: 'EXISTING_ACCOUNT' | 'DUPLICATE_IN_FILE';
+  originalBotId: number | null;
+  originalImportedAt: string | null;
+  originalFileName: string | null;
+  originalRowNumber: number | null;
 }
 
 export interface BotBrowserOpenResponse {

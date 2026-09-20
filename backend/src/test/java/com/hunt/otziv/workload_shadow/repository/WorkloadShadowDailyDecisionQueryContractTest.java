@@ -33,7 +33,7 @@ class WorkloadShadowDailyDecisionQueryContractTest {
     }
 
     @Test
-    void decisionUpsertPersistsTheMonotonicLateToMandatoryTransition()
+    void decisionUpsertPreservesMandatoryWorkExceptForArrivalsAfterCutoff()
             throws Exception {
         Method method = WorkloadShadowProjectionRepository.class.getDeclaredMethod(
                 "upsertDailyBatchDecisions",
@@ -43,10 +43,10 @@ class WorkloadShadowDailyDecisionQueryContractTest {
         String updateClause = sql.substring(sql.indexOf("on duplicate key update"));
 
         assertThat(updateClause).contains(
-                "decision_code = case",
+                "decision_code = case when values(decision_origin) = 'after_cutoff' then 'late'",
                 "workload_shadow_late_batches.decision_code = 'mandatory'",
                 "or values(decision_code) = 'mandatory'",
-                "decision_origin = case",
+                "decision_origin = case when values(decision_origin) = 'after_cutoff' then 'after_cutoff'",
                 "then values(decision_origin)",
                 "remaining_units = values(remaining_units)",
                 "remaining_estimated_minutes = values(remaining_estimated_minutes)",

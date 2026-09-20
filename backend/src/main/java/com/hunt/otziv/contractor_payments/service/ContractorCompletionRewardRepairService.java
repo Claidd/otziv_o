@@ -52,6 +52,7 @@ public class ContractorCompletionRewardRepairService {
                 now,
                 PageRequest.of(0, batchSize)
         ));
+        orderIds.addAll(orderRepository.findPaidOrdersWithoutSalary(now, PageRequest.of(0, batchSize)));
         List<Long> completedTaskGapIds = badReviewTaskRepository.findCompletionRewardRepairGapTaskIds(
                 BadReviewTaskStatus.DONE.name(),
                 ContractorRewardSourceCodes.BAD_REVIEW_DONE_MARKER_PREFIX,

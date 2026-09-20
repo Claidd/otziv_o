@@ -16,6 +16,7 @@ import com.hunt.otziv.performers.service.PerformerTelegramCallbackService;
 import com.hunt.otziv.performers.service.PerformerTelegramLinkService;
 import com.hunt.otziv.payments.service.OwnerManualCardPaymentApprovalTelegramCallbackService;
 import com.hunt.otziv.t_telegrambot.dto.TelegramChatMigrationResult;
+import com.hunt.otziv.t_telegrambot.api.TelegramAdminDocuments;
 import com.hunt.otziv.u_users.model.Role;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.service.UserService;
@@ -73,7 +74,7 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException;
 
 @Component
 @Slf4j
-public class TelegramService extends TelegramLongPollingBot {
+public class TelegramService extends TelegramLongPollingBot implements TelegramAdminDocuments {
 
     private static final Pattern BOT_TOKEN_PATTERN = Pattern.compile("\\d{6,}:[A-Za-z0-9_-]{20,}");
     private static final int MAX_TELEGRAM_MESSAGE_LENGTH = 3900;
@@ -1621,11 +1622,26 @@ public class TelegramService extends TelegramLongPollingBot {
         return execute(document);
     }
 
+    @Override
+    public List<Long> adminDocumentRecipients() {
+        List<Long> configured = adminChatIds.stream()
+                .filter(id -> id != null && id != 0L).distinct().toList();
+        if (!configured.isEmpty()) return configured;
+        return userService.getAllOwners("ROLE_ADMIN").stream()
+                .filter(user -> user != null && user.isActive() && user.getTelegramChatId() != null)
+                .map(User::getTelegramChatId).filter(id -> id != 0L).distinct().toList();
+    }
+
     public boolean canSendDocuments() {
         return sendingEnabled && looksLikeTelegramBotToken(getBotToken());
     }
 
     /** One transport attempt, except a definite chat migration. The durable queue owns retries. */
+    public Optional<Integer> sendDocumentOnceMessageId(long chatId, byte[] bytes, String fileName) {
+        return sendDocumentOnceMessageId(chatId, bytes, fileName,
+                "Отчёт по повторным аккаунтам. TXT содержит данные для обращения к поставщику.");
+    }
+
     public Optional<Integer> sendDocumentOnceMessageId(long chatId, byte[] bytes, String fileName, String caption) {
         if (!canSendDocuments() || chatId == 0 || bytes == null || bytes.length == 0 || !hasText(fileName)) {
             return Optional.empty();

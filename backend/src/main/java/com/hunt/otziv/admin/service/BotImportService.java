@@ -1,5 +1,7 @@
 package com.hunt.otziv.admin.service;
 
+import com.hunt.otziv.admin.repository.BotImportOriginRepository;
+import com.hunt.otziv.admin.repository.BotImportOriginRepository.Origin;
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.b_bots.model.StatusBot;
 import com.hunt.otziv.b_bots.repository.BotsRepository;
@@ -32,11 +34,12 @@ import java.nio.charset.CharacterCodingException;
 import java.nio.charset.Charset;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -80,6 +83,8 @@ public class BotImportService {
     private final CityRepository cityRepository;
     private final BusinessAuditService businessAuditService;
     private final FileUploadGuard fileUploadGuard;
+    private final BotImportOriginRepository originRepository;
+    private final BotDuplicateReportService duplicateReportService;
 
     @Transactional
     public BotImportResult importBots(MultipartFile file) {
@@ -92,22 +97,28 @@ public class BotImportService {
             throw badRequest("Файл не выбран");
         }
 
-        Long cityOverrideId = validCityOverrideId(cityId);
         List<List<String>> rows = readRows(file);
-        if (rows.isEmpty()) {
+        int headerRow = 0;
+        while (headerRow < rows.size() && !hasContent(rows.get(headerRow))) {
+            headerRow++;
+        }
+        if (headerRow == rows.size()) {
             throw badRequest("Файл не содержит аккаунтов");
         }
 
-        boolean hasHeader = hasHeader(rows.get(0));
-        Map<String, Integer> headers = hasHeader ? headerIndexes(rows.get(0)) : Map.of();
-        int firstDataRow = hasHeader ? 1 : 0;
+        String sourceFile = sourceFileName(file);
+        // Acquire before any database reads so concurrent imports see the preceding commit.
+        originRepository.lockImports();
+        Long cityOverrideId = validCityOverrideId(cityId);
+        LocalDateTime importedAt = LocalDateTime.now().truncatedTo(ChronoUnit.MICROS);
+        boolean hasHeader = hasHeader(rows.get(headerRow));
+        Map<String, Integer> headers = hasHeader ? headerIndexes(rows.get(headerRow)) : Map.of();
+        int firstDataRow = hasHeader ? headerRow + 1 : headerRow;
 
         int totalRows = 0;
-        int skippedDuplicates = 0;
         int skippedInvalid = 0;
         List<String> errors = new ArrayList<>();
         List<ImportedBotRow> importedRows = new ArrayList<>();
-        Set<String> seenLogins = new HashSet<>();
 
         for (int index = firstDataRow; index < rows.size(); index++) {
             List<String> row = rows.get(index);
@@ -118,10 +129,6 @@ public class BotImportService {
             totalRows++;
             try {
                 ImportedBotRow importedRow = toImportedRow(row, hasHeader, headers, index + 1, cityOverrideId);
-                if (!seenLogins.add(importedRow.login())) {
-                    skippedDuplicates++;
-                    continue;
-                }
                 importedRows.add(importedRow);
             } catch (RowImportException exception) {
                 skippedInvalid++;
@@ -129,19 +136,20 @@ public class BotImportService {
             }
         }
 
-        if (importedRows.isEmpty()) {
-            return new BotImportResult(totalRows, 0, skippedDuplicates, skippedInvalid, errors);
-        }
-
-        Set<String> existingLogins = findExistingLogins(importedRows);
+        Map<String, Origin> origins = findOrigins(importedRows);
+        List<DuplicateRow> duplicateRows = new ArrayList<>();
+        Map<String, Integer> acceptedRows = new HashMap<>();
         Map<Long, StatusBot> statuses = new HashMap<>();
         Map<Long, Worker> workers = new HashMap<>();
         Map<Long, City> cities = new HashMap<>();
         List<Bot> botsToSave = new ArrayList<>();
 
         for (ImportedBotRow importedRow : importedRows) {
-            if (existingLogins.contains(importedRow.login())) {
-                skippedDuplicates++;
+            String key = normalizedLogin(importedRow.login());
+            if (origins.containsKey(key)) {
+                duplicateRows.add(new DuplicateRow(importedRow.rowNumber(), importedRow.login(),
+                        acceptedRows.containsKey(key) ? "DUPLICATE_IN_FILE" : "EXISTING_ACCOUNT"));
+                acceptedRows.putIfAbsent(key, importedRow.rowNumber());
                 continue;
             }
 
@@ -160,6 +168,8 @@ public class BotImportService {
                         .worker(worker)
                         .botCity(city)
                         .build());
+                acceptedRows.put(key, importedRow.rowNumber());
+                origins.put(key, new Origin(key, null, importedAt, sourceFile, importedRow.rowNumber()));
             } catch (RowImportException exception) {
                 skippedInvalid++;
                 addError(errors, exception.getMessage());
@@ -170,11 +180,36 @@ public class BotImportService {
         if (!botsToSave.isEmpty()) {
             for (Bot savedBot : botsRepository.saveAll(botsToSave)) {
                 added++;
+                String key = normalizedLogin(savedBot.getLogin());
+                Origin origin = new Origin(key, savedBot.getId(), importedAt, sourceFile, acceptedRows.get(key));
+                originRepository.save(origin);
+                origins.put(key, origin);
                 auditImportedActiveValue(savedBot);
             }
         }
 
-        return new BotImportResult(totalRows, added, skippedDuplicates, skippedInvalid, errors);
+        List<BotImportDuplicate> duplicates = duplicateRows.stream().map(row -> {
+            Origin origin = origins.get(normalizedLogin(row.login()));
+            return new BotImportDuplicate(row.rowNumber(), row.login(), row.reason(), origin.botId(),
+                    origin.firstImportedAt(), origin.sourceFile(), origin.sourceRow());
+        }).toList();
+        BotImportResult result = new BotImportResult(totalRows, added, duplicates.size(), skippedInvalid, errors,
+                sourceFile, importedAt, duplicates, !duplicates.isEmpty());
+        duplicateReportService.enqueue(result);
+        return result;
+    }
+
+    private String sourceFileName(MultipartFile file) {
+        String name = file.getOriginalFilename();
+        if (name == null || name.isBlank()) return null;
+        name = name.replace('\\', '/');
+        name = name.substring(name.lastIndexOf('/') + 1);
+        if (name.length() > 255) throw badRequest("Имя файла не должно превышать 255 символов");
+        return name;
+    }
+
+    private static String normalizedLogin(String login) {
+        return login.trim().toLowerCase(Locale.ROOT);
     }
 
     private List<List<String>> readRows(MultipartFile file) {
@@ -210,9 +245,10 @@ public class BotImportService {
             DataFormatter formatter = new DataFormatter(Locale.ROOT);
             List<List<String>> rows = new ArrayList<>();
 
-            for (int rowIndex = sheet.getFirstRowNum(); rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+            for (int rowIndex = 0; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
                 Row row = sheet.getRow(rowIndex);
                 if (row == null || row.getLastCellNum() < 0) {
+                    rows.add(List.of());
                     continue;
                 }
 
@@ -221,9 +257,7 @@ public class BotImportService {
                     values.add(cleanCell(formatter.formatCellValue(row.getCell(cellIndex), evaluator)));
                 }
 
-                if (hasContent(values)) {
-                    rows.add(values);
-                }
+                rows.add(values);
             }
 
             return rows;
@@ -243,6 +277,7 @@ public class BotImportService {
         List<String> row = new ArrayList<>();
         StringBuilder cell = new StringBuilder();
         boolean quoted = false;
+        int embeddedLineBreaks = 0;
 
         for (int index = 0; index < text.length(); index++) {
             char current = text.charAt(index);
@@ -257,6 +292,9 @@ public class BotImportService {
                     }
                 } else {
                     cell.append(current);
+                    if (current == '\r' || (current == '\n' && (index == 0 || text.charAt(index - 1) != '\r'))) {
+                        embeddedLineBreaks++;
+                    }
                 }
                 continue;
             }
@@ -269,9 +307,10 @@ public class BotImportService {
             } else if (current == '\n' || current == '\r') {
                 row.add(cleanCell(cell.toString()));
                 cell.setLength(0);
-                if (hasContent(row)) {
-                    rows.add(row);
-                }
+                rows.add(row);
+                // Preserve physical line numbers when a quoted CSV field spans several lines.
+                for (int line = 0; line < embeddedLineBreaks; line++) rows.add(List.of());
+                embeddedLineBreaks = 0;
                 row = new ArrayList<>();
                 if (current == '\r' && index + 1 < text.length() && text.charAt(index + 1) == '\n') {
                     index++;
@@ -297,6 +336,7 @@ public class BotImportService {
             Long cityOverrideId
     ) {
         String login = requiredValue(cell(row, hasHeader, headers, "bot_login", 0), "bot_login", rowNumber);
+        if (login.length() > 45) throw rowError(rowNumber, "bot_login не должен превышать 45 символов");
         String password = requiredValue(cell(row, hasHeader, headers, "bot_password", 1), "bot_password", rowNumber);
         String fio = cityOverrideId != null
                 ? DEFAULT_FIO
@@ -326,19 +366,27 @@ public class BotImportService {
         return cityId;
     }
 
-    private Set<String> findExistingLogins(List<ImportedBotRow> rows) {
+    private Map<String, Origin> findOrigins(List<ImportedBotRow> rows) {
         List<String> logins = rows.stream()
-                .map(ImportedBotRow::login)
+                .map(row -> normalizedLogin(row.login()))
                 .distinct()
                 .toList();
-        Set<String> existingLogins = new LinkedHashSet<>();
+        Map<String, Origin> origins = new HashMap<>();
 
         for (int start = 0; start < logins.size(); start += LOGIN_CHUNK_SIZE) {
             int end = Math.min(start + LOGIN_CHUNK_SIZE, logins.size());
-            existingLogins.addAll(botsRepository.findExistingLogins(logins.subList(start, end)));
+            List<String> chunk = logins.subList(start, end);
+            originRepository.findOrigins(chunk).forEach(origin -> origins.put(origin.login(), origin));
+            List<String> missing = chunk.stream().filter(login -> !origins.containsKey(login)).toList();
+            if (!missing.isEmpty()) {
+                for (Origin origin : originRepository.findExistingAccounts(missing)) {
+                    origins.put(origin.login(), origin);
+                    originRepository.save(origin);
+                }
+            }
         }
 
-        return existingLogins;
+        return origins;
     }
 
     private StatusBot requiredStatus(Map<Long, StatusBot> cache, long id, int rowNumber) {
@@ -593,9 +641,19 @@ public class BotImportService {
             int added,
             int skippedDuplicates,
             int skippedInvalid,
-            List<String> errors
+            List<String> errors,
+            String sourceFileName,
+            LocalDateTime importedAt,
+            List<BotImportDuplicate> duplicates,
+            boolean duplicateReportQueued
     ) {
     }
+
+    public record BotImportDuplicate(int rowNumber, String login, String reason, Long originalBotId,
+                                     LocalDateTime originalImportedAt, String originalFileName,
+                                     Integer originalRowNumber) {}
+
+    private record DuplicateRow(int rowNumber, String login, String reason) {}
 
     private record ImportedBotRow(
             int rowNumber,

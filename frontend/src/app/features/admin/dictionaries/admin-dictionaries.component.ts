@@ -14,6 +14,7 @@ import { AdminAccountsApi } from '../../../core/admin-accounts.api';
 import { AdminWorkSettingsApi } from '../../../core/admin-work-settings.api';
 import { AdminGamificationApi } from '../../../core/admin-gamification.api';
 import { AdminAccountsFacade } from './admin-accounts.facade';
+import { BotImportReportComponent } from './bot-import-report.component';
 import { AdminPhonesFacade } from './admin-phones.facade';
 import { AdminGamificationFacade } from './admin-gamification.facade';
 import { AdminWorkSettingsFacade } from './admin-work-settings.facade';
@@ -130,7 +131,7 @@ const DICTIONARY_GUIDES: Record<DictionaryTabKey, DictionaryGuide> = {
 
 @Component({
   selector: 'app-admin-dictionaries',
-  imports: [AdminLayoutComponent, DatePipe, LoadErrorCardComponent, ReactiveFormsModule, RouterLink, UiTooltipDirective, SpecialistTransferComponent, ManagerAuditSettingsComponent],
+  imports: [AdminLayoutComponent, DatePipe, LoadErrorCardComponent, ReactiveFormsModule, RouterLink, UiTooltipDirective, SpecialistTransferComponent, ManagerAuditSettingsComponent, BotImportReportComponent],
   templateUrl: './admin-dictionaries.component.html',
   styleUrls: ['./admin-dictionaries.component.scss', './admin-dictionaries-monitor.component.scss']
 })
