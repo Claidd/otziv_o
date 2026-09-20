@@ -23,6 +23,7 @@ on:
           - c17-mysql
           - c18-mysql
           - c19-keycloak
+          - c20-mc
           - c14-keycloak
           - c15-prometheus
           - c15-loki

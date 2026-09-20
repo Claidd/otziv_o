@@ -193,3 +193,11 @@ test('C17 MySQL refresh keeps the reviewed engine recipe and original service co
   for (const key of Object.keys(image)) assert.deepEqual(image[key], previous[key]);
   assert.equal(hash((await readFile(new URL('../../' + image.dockerfile, import.meta.url), 'utf8')).replaceAll('\r\n', '\n')), image.dockerfileSha256);
 });
+
+test('C20 MC refresh is limited to the local S3 initializer and binds its OS recipe', async () => {
+  const loaded = await readReviewedImageSet(root, 'c20-mc');
+  const [image] = validateManifest(loaded.manifest);
+  assert.equal(image.component, 'mc');
+  assert.deepEqual(image.defaultReferencesBefore, [{path: 'compose.prod-local.yaml', service: 'minio-init'}]);
+  assert.equal(hash((await readFile(new URL('../../' + image.dockerfile, import.meta.url), 'utf8')).replaceAll('\r\n', '\n')), image.dockerfileSha256);
+});
