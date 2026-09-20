@@ -23,7 +23,8 @@ FROM (
     GROUP BY LOWER(TRIM(bot_login)) COLLATE utf8mb4_bin
 ) originals
 LEFT JOIN business_audit_events a
-    ON a.entity_type = 'bot' AND a.entity_id = CAST(originals.bot_id AS CHAR)
+    ON a.entity_type = 'bot'
+    AND a.entity_id = CAST(originals.bot_id AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_unicode_ci
     AND a.action = 'bot_active_changed'
     AND a.details = 'bot import initial active value'
 GROUP BY originals.normalized_login, originals.bot_id;

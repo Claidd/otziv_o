@@ -199,21 +199,21 @@
     },
     {
       "component": "mc",
-      "reference": "ghcr.io/claidd/otziv-security@sha256:a0b7303c61b0f3e5b97d126ae34ce6cd53411dab07e721b7ba818706585dcced",
-      "commit": "1be0043f3f6c0253285b819407af35ac3c7260fe",
-      "run": "34516984402",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:19f50d276bee3804121159095b62a7fc6cf236565d45ecb5a36d6dd7c19566b2",
+      "commit": "97890c2dd16b1e988b1c2a2eac2b9bbe97a24237",
+      "run": "35507543392",
       "attempt": "1",
       "manifest": {
-        "path": "infrastructure/runtime-security/reviewed-images-c15-mc.json",
-        "sha256": "4fc897e0ceba43625fba78caaeb19d7214c746d82659995b122fa328999ba40a"
+        "path": "infrastructure/runtime-security/reviewed-images-c20-mc.json",
+        "sha256": "991a00bdbc64cf1e4e7ddfbfb68f4fc76c7cfd6e5375a0c93a4e326ad6210fb4"
       },
       "publication": {
-        "path": "infrastructure/runtime-security/proofs/c15-mc-published/publication/publication.json",
-        "sha256": "9fa44b6d9c3634fe1757fbcd57d81925f1c51007e7b65ab4fc406880551377e0"
+        "path": "infrastructure/runtime-security/proofs/c20-mc-published/publication/publication.json",
+        "sha256": "385b5c9defae2dd0f4b1554fdf1beaf8e153d2552b817840c3b029309b0ed848"
       },
       "anonymous": {
-        "path": "infrastructure/runtime-security/proofs/c15-mc-published/anonymous/anonymous-download.json",
-        "sha256": "dc5effacb74728577626d6a7efe8d4bd4146aa0c190a6978b7f8a46253034e18"
+        "path": "infrastructure/runtime-security/proofs/c20-mc-published/anonymous/anonymous-download.json",
+        "sha256": "81ba86c7b095f6e2f627825ff18f3b498a049f9792fca6b745ba5fc07a310543"
       }
     },
     {

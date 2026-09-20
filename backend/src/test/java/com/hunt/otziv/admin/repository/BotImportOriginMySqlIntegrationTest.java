@@ -46,7 +46,8 @@ class BotImportOriginMySqlIntegrationTest {
         jdbc.execute("CREATE TABLE bots (bot_id BIGINT PRIMARY KEY, bot_login VARCHAR(45)) DEFAULT CHARSET=utf8mb4");
         jdbc.execute("""
                 CREATE TABLE business_audit_events (entity_type VARCHAR(40), entity_id VARCHAR(80),
-                    action VARCHAR(80), details TEXT, created_at DATETIME(6)) DEFAULT CHARSET=utf8mb4
+                    action VARCHAR(80), details TEXT, created_at DATETIME(6))
+                    DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
                 """);
         jdbc.update("INSERT INTO bots VALUES (1, 'Legacy'), (2, 'unknown'), (3, ' LEGACY ')");
         jdbc.update("""
