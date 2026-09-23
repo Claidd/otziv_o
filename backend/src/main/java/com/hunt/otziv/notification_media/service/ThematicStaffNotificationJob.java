@@ -1,5 +1,7 @@
 package com.hunt.otziv.notification_media.service;
 
+import com.hunt.otziv.notification_media.api.StaffMediaSignal;
+
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
@@ -45,6 +47,7 @@ public class ThematicStaffNotificationJob {
     private final NotificationMediaDeliveryService mediaDeliveryService;
     private final ThematicNotificationDispatchStore dispatchStore;
     private final AppSettingService appSettingService;
+    private final org.springframework.context.ApplicationEventPublisher mediaEvents;
 
     @Scheduled(
             cron = "${worker.thematic-notifications.cron:0 0 11,13,16,17 * * *}",
@@ -210,6 +213,7 @@ public class ThematicStaffNotificationJob {
             if (chatId == 0L) {
                 continue;
             }
+            mediaEvents.publishEvent(new StaffMediaSignal(user.getId(), "MANAGER_CONTEXT", null, null, null, null));
             Collection<Worker> team = user.getWorkers() == null ? Set.of() : user.getWorkers();
             List<DailyWorkProgressResponse> progress = team.stream()
                     .filter(Objects::nonNull)

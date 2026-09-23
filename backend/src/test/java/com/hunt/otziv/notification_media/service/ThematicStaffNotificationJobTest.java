@@ -56,7 +56,8 @@ class ThematicStaffNotificationJobTest {
                 progressService,
                 mediaDeliveryService,
                 dispatchStore,
-                appSettingService
+                appSettingService,
+                org.mockito.Mockito.mock(org.springframework.context.ApplicationEventPublisher.class)
         );
         when(appSettingService.getInt(anyString(), anyInt()))
                 .thenAnswer(invocation -> invocation.getArgument(1));

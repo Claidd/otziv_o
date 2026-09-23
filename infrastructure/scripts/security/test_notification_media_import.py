@@ -190,6 +190,24 @@ class NotificationMediaImportTest(unittest.TestCase):
         self.assertLess(sql.index("asset:EVENT:MANAGER:01.png"), sql.index("COMMIT;"))
         self.assertLess(sql.index("COMMIT;"), sql.index("IMPORT_COMMIT_OK"))
 
+    def test_disabled_reserve_rule_is_imported_without_enabling_it(self):
+        row = self.row(Path("unused.png"))
+        row["rule_enabled"] = False
+        with mock.patch.object(IMPORTER, "mysql", return_value="IMPORT_COMMIT_OK") as mysql:
+            IMPORTER.apply_database_changes([row], self.env, "reserve-test")
+        sql = mysql.call_args.args[0]
+        self.assertIn("SELECT 'EVENT','MANAGER',b'0',100,360", sql)
+        self.assertIn("AND recipient_type='MANAGER' AND enabled=b'0'", sql)
+        self.assertNotIn("UPDATE notification_media_rules", sql)
+
+    def test_conflicting_rule_states_fail_before_database_changes(self):
+        first = self.row(Path("one.png"))
+        second = {**first, "file_name": "02.png", "rule_enabled": False}
+        with mock.patch.object(IMPORTER, "mysql") as mysql:
+            with self.assertRaises(ValueError):
+                IMPORTER.apply_database_changes([first, second], self.env, "test")
+        mysql.assert_not_called()
+
     @staticmethod
     def row(path: Path) -> dict[str, str]:
         return {

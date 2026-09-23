@@ -98,7 +98,8 @@ class WorkerOrderCommandsMySqlIntegrationTest {
             return event;
         });
         risk=mock(WorkerRiskEvaluationService.class);
-        var activity=new WorkerActivityService(events,users,risk,mock(WorkloadShadowRefreshSignal.class),tm);
+        var activity=new WorkerActivityService(events,users,risk,mock(WorkloadShadowRefreshSignal.class),tm,
+                mock(org.springframework.context.ApplicationEventPublisher.class));
         var reminders=mock(ScheduledClientMessageService.class);
         var shared=new OrderStatusCommandService(orders,mock(OrderDetailsService.class),reviews,guard,reminders,users,mock(WorkerService.class));
         var sharedProxy=new ProxyFactory(shared);sharedProxy.setProxyTargetClass(true);

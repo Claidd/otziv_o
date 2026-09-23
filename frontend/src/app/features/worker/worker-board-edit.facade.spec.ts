@@ -478,3 +478,31 @@ describe('WorkerBoardEditFacade', () => {
     expect(state.lastReviewRequest?.botPassword).toBe('');
   });
 });
+
+
+describe('contextual save reminders', () => {
+  it('reports discarded edits, but not an unchanged editor or successful save', () => {
+    const hints: number[] = [];
+    const deps = {
+      managerApi: { getOrderDetails: () => of(orderDetails()), updateOrderReview: () => of(orderReview()) },
+      workerApi: {}, toastService: { success: () => undefined, error: () => undefined },
+      loadBoard: () => undefined, errorMessage: () => '', clearReviewEditDrafts: () => undefined,
+      canOpenOrderEditModal: () => true, canOpenReviewEditModal: () => true,
+      orderEditUrl: () => '', reviewEditUrl: () => '',
+      onUnsavedReview: (review: WorkerReviewItem) => hints.push(review.id)
+    } as unknown as WorkerBoardEditFacadeDeps;
+    const facade = new WorkerBoardEditFacade(deps);
+    facade.openReviewEdit(workerReview());
+    facade.closeReviewEdit();
+    expect(hints).toEqual([]);
+    facade.openReviewEdit(workerReview());
+    facade.handleReviewEditDraftChange({ field: 'text', value: 'Changed and discarded' });
+    facade.closeReviewEdit();
+    expect(hints).toEqual([workerReview().id]);
+    facade.openReviewEdit(workerReview());
+    facade.handleReviewEditDraftChange({ field: 'text', value: 'Successfully saved' });
+    facade.saveReviewEdit();
+    facade.closeReviewEdit();
+    expect(hints).toEqual([workerReview().id]);
+  });
+});

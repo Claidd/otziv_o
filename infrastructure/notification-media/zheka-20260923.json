@@ -1,0 +1,709 @@
+{
+  "version": "2026-09-23-zheka-polished",
+  "expected_unique_assets": 78,
+  "assets": [
+    {
+      "directory": "worker_site_inactive",
+      "event_code": "WORKER_SITE_INACTIVE",
+      "recipient_type": "WORKER",
+      "file_name": "001-sleep_work_self.png",
+      "original_filename": "zheka_polished_001_sleep_work_self.png",
+      "content_type": "image/png",
+      "sha256": "8c40940a2e09388ec5adeaf0489731b91d66353414e78aba9bf8c3ea7f22c22d"
+    },
+    {
+      "directory": "worker_progress_growing",
+      "event_code": "WORKER_PROGRESS_GROWING",
+      "recipient_type": "WORKER",
+      "file_name": "002-all_done_glow.png",
+      "original_filename": "zheka_polished_002_all_done_glow.png",
+      "content_type": "image/png",
+      "sha256": "218fdec9202eb89f537657ce5191ce630f9bd2e0de7c74c2100d0b8f1d81fd8f"
+    },
+    {
+      "directory": "worker_progress_growing",
+      "event_code": "WORKER_PROGRESS_GROWING",
+      "recipient_type": "WORKER",
+      "file_name": "016-plan_closed.png",
+      "original_filename": "zheka_polished_016_plan_closed.png",
+      "content_type": "image/png",
+      "sha256": "a2ecb35685361741f12d6f1ca241c2c5902c0db2c0e8ffb41487e8037849041d"
+    },
+    {
+      "directory": "worker_progress_growing",
+      "event_code": "WORKER_PROGRESS_GROWING",
+      "recipient_type": "WORKER",
+      "file_name": "020-breathe_done.png",
+      "original_filename": "zheka_polished_020_breathe_done.png",
+      "content_type": "image/png",
+      "sha256": "93bb7ce50388594afc8e3b07682ea35554da96127d5b0945a52b25f6bcebafca"
+    },
+    {
+      "directory": "worker_progress_growing",
+      "event_code": "WORKER_PROGRESS_GROWING",
+      "recipient_type": "WORKER",
+      "file_name": "030-done_rest.png",
+      "original_filename": "zheka_polished_030_done_rest.png",
+      "content_type": "image/png",
+      "sha256": "37d53abfb8e0a12007a72cf7baddc0520dfa0849e36570b86822dacf795d0e25"
+    },
+    {
+      "directory": "worker_progress_growing",
+      "event_code": "WORKER_PROGRESS_GROWING",
+      "recipient_type": "WORKER",
+      "file_name": "039-not_forgot_zheka_kind.png",
+      "original_filename": "zheka_polished_039_not_forgot_zheka_kind.png",
+      "content_type": "image/png",
+      "sha256": "059cb7935b174a5862d8927d68a28373fee5c46fe5179eaa426f2561fc8e1fff"
+    },
+    {
+      "directory": "worker_progress_growing",
+      "event_code": "WORKER_PROGRESS_GROWING",
+      "recipient_type": "WORKER",
+      "file_name": "087-all_work_done_zheka_happy.png",
+      "original_filename": "zheka_polished_087_all_work_done_zheka_happy.png",
+      "content_type": "image/png",
+      "sha256": "b9af0a87de66143a0e7291b43be46c8c5a3c6af020000292c53ce8b0c8f9995f"
+    },
+    {
+      "directory": "worker_streak",
+      "event_code": "WORKER_STREAK",
+      "recipient_type": "WORKER",
+      "file_name": "006-streak_holds.png",
+      "original_filename": "zheka_polished_006_streak_holds.png",
+      "content_type": "image/png",
+      "sha256": "8f03e5be8f6f8433953b3704a57b8ed742dc781a03c6c249d1008d4f3dba2d17"
+    },
+    {
+      "directory": "worker_streak_15",
+      "event_code": "WORKER_STREAK_15",
+      "recipient_type": "WORKER",
+      "file_name": "035-streak_burning.png",
+      "original_filename": "zheka_polished_035_streak_burning.png",
+      "content_type": "image/png",
+      "sha256": "db6a40d4417323b05d2a0d618cbb0f3c7fa36a48c8fee3985182fd65f12f8a06"
+    },
+    {
+      "directory": "worker_task_repeat",
+      "event_code": "WORKER_TASK_REPEAT",
+      "recipient_type": "WORKER",
+      "file_name": "013-zheka_watches.png",
+      "original_filename": "zheka_polished_013_zheka_watches.png",
+      "content_type": "image/png",
+      "sha256": "331d52dd9e2deebb1530602e535cc00e51e894204cf0714f9fd12273bf783398"
+    },
+    {
+      "directory": "worker_task_repeat",
+      "event_code": "WORKER_TASK_REPEAT",
+      "recipient_type": "WORKER",
+      "file_name": "015-later_never.png",
+      "original_filename": "zheka_polished_015_later_never.png",
+      "content_type": "image/png",
+      "sha256": "7c0bb1cd263d5eeada7632397665a63e15e24e791704d441f59931211d7c14a4"
+    },
+    {
+      "directory": "worker_task_overdue",
+      "event_code": "WORKER_TASK_OVERDUE",
+      "recipient_type": "WORKER",
+      "file_name": "019-deadline_watches.png",
+      "original_filename": "zheka_polished_019_deadline_watches.png",
+      "content_type": "image/png",
+      "sha256": "9a25d895780a7bf54d87f6c6a8ea6c4219568908d96fcd0abbdf430ed3a26af2"
+    },
+    {
+      "directory": "worker_task_overdue",
+      "event_code": "WORKER_TASK_OVERDUE",
+      "recipient_type": "WORKER",
+      "file_name": "023-dont_delay.png",
+      "original_filename": "zheka_polished_023_dont_delay.png",
+      "content_type": "image/png",
+      "sha256": "414e28ab0b675a17a33a29be02c71ed9bbff4a7496b11e7d7eeac1d0593c1f32"
+    },
+    {
+      "directory": "worker_progress_slowed",
+      "event_code": "WORKER_PROGRESS_SLOWED",
+      "recipient_type": "WORKER",
+      "file_name": "052-dont_panic_do.png",
+      "original_filename": "zheka_polished_052_dont_panic_do.png",
+      "content_type": "image/png",
+      "sha256": "bedd8630a737edd1db1caac0f3127460eec69e55a7b2f9455144381897f7bb27"
+    },
+    {
+      "directory": "worker_progress_slowed",
+      "event_code": "WORKER_PROGRESS_SLOWED",
+      "recipient_type": "WORKER",
+      "file_name": "061-dont_panic_work_it.png",
+      "original_filename": "zheka_polished_061_dont_panic_work_it.png",
+      "content_type": "image/png",
+      "sha256": "51823aab4483a98deacb741383dc1fa6fba37b6a8a49909e6984f0a1f1871665"
+    },
+    {
+      "directory": "worker_progress_slowed",
+      "event_code": "WORKER_PROGRESS_SLOWED",
+      "recipient_type": "WORKER",
+      "file_name": "089-vacation_no_review_debts.png",
+      "original_filename": "zheka_polished_089_vacation_no_review_debts.png",
+      "content_type": "image/png",
+      "sha256": "39c006c299a0ba2d5edbaa290bac24b1d5bdbe9eee691ce4bff3e738a5b2ec5b"
+    },
+    {
+      "directory": "worker_nagul_guide",
+      "event_code": "WORKER_NAGUL_GUIDE",
+      "recipient_type": "WORKER",
+      "file_name": "018-account_not_cactus.png",
+      "original_filename": "zheka_polished_018_account_not_cactus.png",
+      "content_type": "image/png",
+      "sha256": "023d4a6a042c6100d6fb58c7840d2d92761d7bdf9a79a03f74313973f6ea76e3"
+    },
+    {
+      "directory": "worker_nagul_guide",
+      "event_code": "WORKER_NAGUL_GUIDE",
+      "recipient_type": "WORKER",
+      "file_name": "031-morning_vygul.png",
+      "original_filename": "zheka_polished_031_morning_vygul.png",
+      "content_type": "image/png",
+      "sha256": "19c414e626ad3e9843153fb58deccfcb8433776c9fa824425f318aed27f58010"
+    },
+    {
+      "directory": "worker_nagul_guide",
+      "event_code": "WORKER_NAGUL_GUIDE",
+      "recipient_type": "WORKER",
+      "file_name": "041-left_to_right.png",
+      "original_filename": "zheka_polished_041_left_to_right.png",
+      "content_type": "image/png",
+      "sha256": "15bf09512efbf0cbb90e3fba49493e7b0bf04faac51b393a7600a410add48645"
+    },
+    {
+      "directory": "worker_nagul_guide",
+      "event_code": "WORKER_NAGUL_GUIDE",
+      "recipient_type": "WORKER",
+      "file_name": "045-three_minutes.png",
+      "original_filename": "zheka_polished_045_three_minutes.png",
+      "content_type": "image/png",
+      "sha256": "deda5e4a422234e3b1b1cfd40654f621c97f231ff23350a070a8b1a1e6d11ab9"
+    },
+    {
+      "directory": "worker_nagul_guide",
+      "event_code": "WORKER_NAGUL_GUIDE",
+      "recipient_type": "WORKER",
+      "file_name": "054-chaotic_plan.png",
+      "original_filename": "zheka_polished_054_chaotic_plan.png",
+      "content_type": "image/png",
+      "sha256": "98e3091103c6bdaaed22d46d0c994e65dda764e1c3734015aee1f5bc9577c54b"
+    },
+    {
+      "directory": "worker_nagul_guide",
+      "event_code": "WORKER_NAGUL_GUIDE",
+      "recipient_type": "WORKER",
+      "file_name": "062-vygul_then_publish.png",
+      "original_filename": "zheka_polished_062_vygul_then_publish.png",
+      "content_type": "image/png",
+      "sha256": "0afc43e622cd1908ba7ea07be7cebec8331725414453e81909f267a9b1d4767e"
+    },
+    {
+      "directory": "worker_nagul_guide",
+      "event_code": "WORKER_NAGUL_GUIDE",
+      "recipient_type": "WORKER",
+      "file_name": "076-search_not_direct_link.png",
+      "original_filename": "zheka_polished_076_search_not_direct_link.png",
+      "content_type": "image/png",
+      "sha256": "a4a3a4afb624bd77fec2d3751e8e9962fbd2747bd5948679229eea6efcf4f9c0"
+    },
+    {
+      "directory": "worker_nagul_guide",
+      "event_code": "WORKER_NAGUL_GUIDE",
+      "recipient_type": "WORKER",
+      "file_name": "078-2gis_beta_50_50.png",
+      "original_filename": "zheka_polished_078_2gis_beta_50_50.png",
+      "content_type": "image/png",
+      "sha256": "252655ca7d3ece151b88633214efa9ed8a3faa4cfb063487957d36055200ad64"
+    },
+    {
+      "directory": "worker_nagul_guide",
+      "event_code": "WORKER_NAGUL_GUIDE",
+      "recipient_type": "WORKER",
+      "file_name": "084-vygul_account_actions_3min.png",
+      "original_filename": "zheka_polished_084_vygul_account_actions_3min.png",
+      "content_type": "image/png",
+      "sha256": "8d8ea854e879aa7f2f9999618dccb874524b5405e796d1a8fc6a9a9b87477341"
+    },
+    {
+      "directory": "worker_fresh_account_guide",
+      "event_code": "WORKER_FRESH_ACCOUNT_GUIDE",
+      "recipient_type": "WORKER",
+      "file_name": "007-avatar_self.png",
+      "original_filename": "zheka_polished_007_avatar_self.png",
+      "content_type": "image/png",
+      "sha256": "9a45bc7aedae581e63496ac4ac54d9d3049f029eddff3d3c8a2bdebf0deab8d7"
+    },
+    {
+      "directory": "worker_fresh_account_guide",
+      "event_code": "WORKER_FRESH_ACCOUNT_GUIDE",
+      "recipient_type": "WORKER",
+      "file_name": "037-photo_account_alive.png",
+      "original_filename": "zheka_polished_037_photo_account_alive.png",
+      "content_type": "image/png",
+      "sha256": "557e41637b0c7d72b99a488c23d788b3c72d9efbaee8bb1156bc1eb17d65dfd5"
+    },
+    {
+      "directory": "worker_fresh_account_guide",
+      "event_code": "WORKER_FRESH_ACCOUNT_GUIDE",
+      "recipient_type": "WORKER",
+      "file_name": "049-fresh_account_vygul.png",
+      "original_filename": "zheka_polished_049_fresh_account_vygul.png",
+      "content_type": "image/png",
+      "sha256": "1a1c1a4efae23930e58291d23070c831d7e951c50f2afd917a204a6b3d6ca46b"
+    },
+    {
+      "directory": "worker_fresh_account_guide",
+      "event_code": "WORKER_FRESH_ACCOUNT_GUIDE",
+      "recipient_type": "WORKER",
+      "file_name": "066-fresh_account_vygul_first.png",
+      "original_filename": "zheka_polished_066_fresh_account_vygul_first.png",
+      "content_type": "image/png",
+      "sha256": "eb95290ad1aa9176574de3c5a428f810cc504ced7bd7a51fbb528e9f8fe91e67"
+    },
+    {
+      "directory": "worker_text_guide",
+      "event_code": "WORKER_TEXT_GUIDE",
+      "recipient_type": "WORKER",
+      "file_name": "017-not_template.png",
+      "original_filename": "zheka_polished_017_not_template.png",
+      "content_type": "image/png",
+      "sha256": "fe10128619a9fef462afb691794249f89bfd74add12485395a972152d2836470"
+    },
+    {
+      "directory": "worker_text_guide",
+      "event_code": "WORKER_TEXT_GUIDE",
+      "recipient_type": "WORKER",
+      "file_name": "021-write_alive.png",
+      "original_filename": "zheka_polished_021_write_alive.png",
+      "content_type": "image/png",
+      "sha256": "2ed79b9fd9ee584be46a08891ebc46e30e162f7d1a130858f8fe7b9039669caf"
+    },
+    {
+      "directory": "worker_text_guide",
+      "event_code": "WORKER_TEXT_GUIDE",
+      "recipient_type": "WORKER",
+      "file_name": "027-five_stars_wait.png",
+      "original_filename": "zheka_polished_027_five_stars_wait.png",
+      "content_type": "image/png",
+      "sha256": "44e9bc00161524ef3ca631c2f2e2181daf9811727b4246d04929ec0d437019d6"
+    },
+    {
+      "directory": "worker_text_guide",
+      "event_code": "WORKER_TEXT_GUIDE",
+      "recipient_type": "WORKER",
+      "file_name": "032-text_no_bite.png",
+      "original_filename": "zheka_polished_032_text_no_bite.png",
+      "content_type": "image/png",
+      "sha256": "e72c4098740cacf94e79a7c9ce2d7d786112d11ca583d9906a32e4f1f3f92181"
+    },
+    {
+      "directory": "worker_text_guide",
+      "event_code": "WORKER_TEXT_GUIDE",
+      "recipient_type": "WORKER",
+      "file_name": "040-inspiration_wont_write.png",
+      "original_filename": "zheka_polished_040_inspiration_wont_write.png",
+      "content_type": "image/png",
+      "sha256": "94c835a6540e7c443ea48ed80214be2ffddc938898b40d8a08f41516310c7b9d"
+    },
+    {
+      "directory": "worker_text_guide",
+      "event_code": "WORKER_TEXT_GUIDE",
+      "recipient_type": "WORKER",
+      "file_name": "047-dont_copy.png",
+      "original_filename": "zheka_polished_047_dont_copy.png",
+      "content_type": "image/png",
+      "sha256": "7c738aaf39c290ddd1e2ce3614ade0988408f40f1845d05de7b1a1fb6439d588"
+    },
+    {
+      "directory": "worker_text_guide",
+      "event_code": "WORKER_TEXT_GUIDE",
+      "recipient_type": "WORKER",
+      "file_name": "053-cliche_detected.png",
+      "original_filename": "zheka_polished_053_cliche_detected.png",
+      "content_type": "image/png",
+      "sha256": "7ab9b98853d2a1258379f276c5bcd96c45ec0e3b1299ae7b7d89d7ee00412472"
+    },
+    {
+      "directory": "worker_text_guide",
+      "event_code": "WORKER_TEXT_GUIDE",
+      "recipient_type": "WORKER",
+      "file_name": "060-photo_text_match.png",
+      "original_filename": "zheka_polished_060_photo_text_match.png",
+      "content_type": "image/png",
+      "sha256": "35faf4e2b25929f6fa1a06d8f3e6abf948c00cbb215092aee286214eaa9182ac"
+    },
+    {
+      "directory": "worker_text_guide",
+      "event_code": "WORKER_TEXT_GUIDE",
+      "recipient_type": "WORKER",
+      "file_name": "063-ai_cliche_zheka_smells.png",
+      "original_filename": "zheka_polished_063_ai_cliche_zheka_smells.png",
+      "content_type": "image/png",
+      "sha256": "bfa8dcb1a9fb9830ddf57d9b592084a2ee471712c94fb344231bf27fde355885"
+    },
+    {
+      "directory": "worker_text_guide",
+      "event_code": "WORKER_TEXT_GUIDE",
+      "recipient_type": "WORKER",
+      "file_name": "085-duplicate_reviews_seen.png",
+      "original_filename": "zheka_polished_085_duplicate_reviews_seen.png",
+      "content_type": "image/png",
+      "sha256": "594e9e5db76f0680ca7380be718f52f6f0de26ebacbbaa99bfc96bc6d29cb90a"
+    },
+    {
+      "directory": "worker_text_pending",
+      "event_code": "WORKER_TEXT_PENDING",
+      "recipient_type": "WORKER",
+      "file_name": "009-reviews_where.png",
+      "original_filename": "zheka_polished_009_reviews_where.png",
+      "content_type": "image/png",
+      "sha256": "ab5d24be43eef3b400a4fc76b1f9cbc500cc6b05e6d9e7a52b728345c4eac319"
+    },
+    {
+      "directory": "worker_text_pending",
+      "event_code": "WORKER_TEXT_PENDING",
+      "recipient_type": "WORKER",
+      "file_name": "026-dont_freeze.png",
+      "original_filename": "zheka_polished_026_dont_freeze.png",
+      "content_type": "image/png",
+      "sha256": "4cc32d491290727b4261729b936dc715b70fcd71de075e8c9a164bd40b7e1237"
+    },
+    {
+      "directory": "worker_text_pending",
+      "event_code": "WORKER_TEXT_PENDING",
+      "recipient_type": "WORKER",
+      "file_name": "033-empty_draft.png",
+      "original_filename": "zheka_polished_033_empty_draft.png",
+      "content_type": "image/png",
+      "sha256": "7a06097313489216d86dbe803890208f470680dea4b44b19de48aa1ae20bba47"
+    },
+    {
+      "directory": "worker_text_saved",
+      "event_code": "WORKER_TEXT_SAVED",
+      "recipient_type": "WORKER",
+      "file_name": "005-review_ready.png",
+      "original_filename": "zheka_polished_005_review_ready.png",
+      "content_type": "image/png",
+      "sha256": "3a677bf2413b59a39db2cb610acb45d253ba7f532ca674e1e229cea3036a14d3"
+    },
+    {
+      "directory": "worker_text_saved",
+      "event_code": "WORKER_TEXT_SAVED",
+      "recipient_type": "WORKER",
+      "file_name": "010-text_written.png",
+      "original_filename": "zheka_polished_010_text_written.png",
+      "content_type": "image/png",
+      "sha256": "41245ef67d6d2745009127837a30205733edafaac7efa1eec768a9230e639d29"
+    },
+    {
+      "directory": "worker_text_saved",
+      "event_code": "WORKER_TEXT_SAVED",
+      "recipient_type": "WORKER",
+      "file_name": "022-reviews_candy.png",
+      "original_filename": "zheka_polished_022_reviews_candy.png",
+      "content_type": "image/png",
+      "sha256": "a584bd8f40381c55f25922878cc69c95a077b5b8e944955a74bae69c0f6f4992"
+    },
+    {
+      "directory": "worker_publication_pending",
+      "event_code": "WORKER_PUBLICATION_PENDING",
+      "recipient_type": "WORKER",
+      "file_name": "029-checked_send.png",
+      "original_filename": "zheka_polished_029_checked_send.png",
+      "content_type": "image/png",
+      "sha256": "a9388482ccacb670ec8ebdab60de823c8f8df815774a7f39d6d16998abb67bad"
+    },
+    {
+      "directory": "worker_publication_pending",
+      "event_code": "WORKER_PUBLICATION_PENDING",
+      "recipient_type": "WORKER",
+      "file_name": "036-publish_free.png",
+      "original_filename": "zheka_polished_036_publish_free.png",
+      "content_type": "image/png",
+      "sha256": "491bc93a19cbba527335a2167e28bafdfc125ae77267e4fe9958300b44759e72"
+    },
+    {
+      "directory": "worker_publication_pending",
+      "event_code": "WORKER_PUBLICATION_PENDING",
+      "recipient_type": "WORKER",
+      "file_name": "043-reread_chat.png",
+      "original_filename": "zheka_polished_043_reread_chat.png",
+      "content_type": "image/png",
+      "sha256": "e0a1374ed55e47f8e6000d92462a80432f73f260a0a341c65edb5a6d92fa0d1c"
+    },
+    {
+      "directory": "worker_nagul_done",
+      "event_code": "WORKER_NAGUL_DONE",
+      "recipient_type": "WORKER",
+      "file_name": "003-vygul_done.png",
+      "original_filename": "zheka_polished_003_vygul_done.png",
+      "content_type": "image/png",
+      "sha256": "88496dfb2812a0d920c6e1078f9552d5301ed64275056168b8b22d1021fdc661"
+    },
+    {
+      "directory": "worker_nagul_done",
+      "event_code": "WORKER_NAGUL_DONE",
+      "recipient_type": "WORKER",
+      "file_name": "025-vygul_zheka_happy.png",
+      "original_filename": "zheka_polished_025_vygul_zheka_happy.png",
+      "content_type": "image/png",
+      "sha256": "633426c31177b2a1c10c4d00f2eb1810903aa9d155af9c8b4db50029b7435195"
+    },
+    {
+      "directory": "worker_publication_done",
+      "event_code": "WORKER_PUBLICATION_DONE",
+      "recipient_type": "WORKER",
+      "file_name": "004-publication_done.png",
+      "original_filename": "zheka_polished_004_publication_done.png",
+      "content_type": "image/png",
+      "sha256": "49c6e84d0a0450c46c947aadbe1c673ebd4f4ca4ceba6c2fc62cc73fbeda3061"
+    },
+    {
+      "directory": "worker_publication_done",
+      "event_code": "WORKER_PUBLICATION_DONE",
+      "recipient_type": "WORKER",
+      "file_name": "024-publication_zheka_happy.png",
+      "original_filename": "zheka_polished_024_publication_zheka_happy.png",
+      "content_type": "image/png",
+      "sha256": "6308b8e12cf4a9a777fd8bf83813cad2d55a5b06a60f519bbb66ffe4ef128c1c"
+    },
+    {
+      "directory": "worker_publication_done",
+      "event_code": "WORKER_PUBLICATION_DONE",
+      "recipient_type": "WORKER",
+      "file_name": "028-one_review_moves.png",
+      "original_filename": "zheka_polished_028_one_review_moves.png",
+      "content_type": "image/png",
+      "sha256": "6de1ffdae9b1d52ea3c2406dffad8139ce276bd26176b30706b49fa298b7687b"
+    },
+    {
+      "directory": "worker_three_publications",
+      "event_code": "WORKER_THREE_PUBLICATIONS",
+      "recipient_type": "WORKER",
+      "file_name": "038-three_reviews_party.png",
+      "original_filename": "zheka_polished_038_three_reviews_party.png",
+      "content_type": "image/png",
+      "sha256": "1654c3c02c4d489725c9893f98d04d5d5bd088d5b5613941543d3955ae832e6e"
+    },
+    {
+      "directory": "worker_rating_guide",
+      "event_code": "WORKER_RATING_GUIDE",
+      "recipient_type": "WORKER",
+      "file_name": "008-rating_falling.png",
+      "original_filename": "zheka_polished_008_rating_falling.png",
+      "content_type": "image/png",
+      "sha256": "1e3ac796b7b773c76e1a5587d8a39685a4493d0e4a012dc173946a214719ce66"
+    },
+    {
+      "directory": "worker_rating_guide",
+      "event_code": "WORKER_RATING_GUIDE",
+      "recipient_type": "WORKER",
+      "file_name": "077-rating_changed_press_changed.png",
+      "original_filename": "zheka_polished_077_rating_changed_press_changed.png",
+      "content_type": "image/png",
+      "sha256": "71740ed54c7d2eccabfd96f0c75e02209d731b8ee13c90f97ea5ba0bed7cdd3d"
+    },
+    {
+      "directory": "worker_rating_done",
+      "event_code": "WORKER_RATING_DONE",
+      "recipient_type": "WORKER",
+      "file_name": "011-rating_restored.png",
+      "original_filename": "zheka_polished_011_rating_restored.png",
+      "content_type": "image/png",
+      "sha256": "a6bf59105a769c208ed9ec1300235b4a4c12547e667e3caa30e636d632435726"
+    },
+    {
+      "directory": "worker_rating_done",
+      "event_code": "WORKER_RATING_DONE",
+      "recipient_type": "WORKER",
+      "file_name": "034-rating_saved.png",
+      "original_filename": "zheka_polished_034_rating_saved.png",
+      "content_type": "image/png",
+      "sha256": "34e9401efd986feb3779f9db1c9c13e43539297604e61d132e4ffdb6831d2323"
+    },
+    {
+      "directory": "worker_recovery_guide",
+      "event_code": "WORKER_RECOVERY_GUIDE",
+      "recipient_type": "WORKER",
+      "file_name": "048-unconfirmed_restore.png",
+      "original_filename": "zheka_polished_048_unconfirmed_restore.png",
+      "content_type": "image/png",
+      "sha256": "ce3d327e52a79a5e10180ba704cea522e86b78d621d837e3858e855c2dd4da19"
+    },
+    {
+      "directory": "worker_recovery_guide",
+      "event_code": "WORKER_RECOVERY_GUIDE",
+      "recipient_type": "WORKER",
+      "file_name": "067-recovery_details.png",
+      "original_filename": "zheka_polished_067_recovery_details.png",
+      "content_type": "image/png",
+      "sha256": "6e3b55bd57e62f6896577309449156861f94e425207f399a2f9485cb0931869a"
+    },
+    {
+      "directory": "worker_recovery_guide",
+      "event_code": "WORKER_RECOVERY_GUIDE",
+      "recipient_type": "WORKER",
+      "file_name": "068-delete_unconfirmed_first.png",
+      "original_filename": "zheka_polished_068_delete_unconfirmed_first.png",
+      "content_type": "image/png",
+      "sha256": "cc1d213b8c4014d732ac61b62d40bf3f27f5e60569381e3cebc1514be56f342c"
+    },
+    {
+      "directory": "worker_recovery_guide",
+      "event_code": "WORKER_RECOVERY_GUIDE",
+      "recipient_type": "WORKER",
+      "file_name": "072-recovery_section_card.png",
+      "original_filename": "zheka_polished_072_recovery_section_card.png",
+      "content_type": "image/png",
+      "sha256": "220a3472cb54b34950efb030af15c374a65c24801facd108aad83d27efe38787"
+    },
+    {
+      "directory": "worker_recovery_guide",
+      "event_code": "WORKER_RECOVERY_GUIDE",
+      "recipient_type": "WORKER",
+      "file_name": "073-explicit_recovery_workflow.png",
+      "original_filename": "zheka_polished_073_explicit_recovery_workflow.png",
+      "content_type": "image/png",
+      "sha256": "46f942a76b4a9c9bc57fe40112b67db35bf89412bf9c05e02ef0f851dc3e79fe"
+    },
+    {
+      "directory": "worker_recovery_guide",
+      "event_code": "WORKER_RECOVERY_GUIDE",
+      "recipient_type": "WORKER",
+      "file_name": "074-recovery_section_not_for_beauty.png",
+      "original_filename": "zheka_polished_074_recovery_section_not_for_beauty.png",
+      "content_type": "image/png",
+      "sha256": "094398c0059e58a9987c4c459b8b9f370cef72177f3ea70ced814b6a7c6ef3de"
+    },
+    {
+      "directory": "worker_recovery_guide",
+      "event_code": "WORKER_RECOVERY_GUIDE",
+      "recipient_type": "WORKER",
+      "file_name": "075-delete_switch_restore.png",
+      "original_filename": "zheka_polished_075_delete_switch_restore.png",
+      "content_type": "image/png",
+      "sha256": "6ac81f1693457c4ef20512231b0cdbccf9c075beafc74d9070210fc8890e1247"
+    },
+    {
+      "directory": "worker_recovery_guide",
+      "event_code": "WORKER_RECOVERY_GUIDE",
+      "recipient_type": "WORKER",
+      "file_name": "082-restoration_not_just_review.png",
+      "original_filename": "zheka_polished_082_restoration_not_just_review.png",
+      "content_type": "image/png",
+      "sha256": "9eee11483db229c186deef99c67b35b97be42cfdaf40a967840c82bdb2efb719"
+    },
+    {
+      "directory": "worker_recovery_finish",
+      "event_code": "WORKER_RECOVERY_FINISH",
+      "recipient_type": "WORKER",
+      "file_name": "069-press_restored.png",
+      "original_filename": "zheka_polished_069_press_restored.png",
+      "content_type": "image/png",
+      "sha256": "eb456147bdf5430a0582237ef20747b49bb714086d9b6ce7db20c49e5aedd111"
+    },
+    {
+      "directory": "worker_account_changed",
+      "event_code": "WORKER_ACCOUNT_CHANGED",
+      "recipient_type": "WORKER",
+      "file_name": "070-edit_text_after_account_change.png",
+      "original_filename": "zheka_polished_070_edit_text_after_account_change.png",
+      "content_type": "image/png",
+      "sha256": "d0a407c9dc323d1898bedf09b7d9ce04caf95291a3b0c39797f9a99668af704d"
+    },
+    {
+      "directory": "worker_unsaved_changes",
+      "event_code": "WORKER_UNSAVED_CHANGES",
+      "recipient_type": "WORKER",
+      "file_name": "051-save_pressed.png",
+      "original_filename": "zheka_polished_051_save_pressed.png",
+      "content_type": "image/png",
+      "sha256": "9272efa542a23e38eec686c153589ceb5c73d4a1e04d6b360fc362d70baed039"
+    },
+    {
+      "directory": "worker_unsaved_changes",
+      "event_code": "WORKER_UNSAVED_CHANGES",
+      "recipient_type": "WORKER",
+      "file_name": "065-save_zheka_not_telepath.png",
+      "original_filename": "zheka_polished_065_save_zheka_not_telepath.png",
+      "content_type": "image/png",
+      "sha256": "80751dcc0e41c779e1313722e0550a047404bdebc6fc99b32a1b37335e674158"
+    },
+    {
+      "directory": "worker_site_error",
+      "event_code": "WORKER_SITE_ERROR",
+      "recipient_type": "WORKER",
+      "file_name": "050-site_strange_write.png",
+      "original_filename": "zheka_polished_050_site_strange_write.png",
+      "content_type": "image/png",
+      "sha256": "a26d009388325285c5dd52da38afeb38480b606ec297f62405b918d7a9d03cfb"
+    },
+    {
+      "directory": "worker_site_error",
+      "event_code": "WORKER_SITE_ERROR",
+      "recipient_type": "WORKER",
+      "file_name": "086-site_unusual_write_now.png",
+      "original_filename": "zheka_polished_086_site_unusual_write_now.png",
+      "content_type": "image/png",
+      "sha256": "197a16d17b4774ea5e35b28c1e9940bd37d302aba8b1b54f48f085557841371d"
+    },
+    {
+      "directory": "worker_network_blocked",
+      "event_code": "WORKER_NETWORK_BLOCKED",
+      "recipient_type": "WORKER",
+      "file_name": "046-wifi_forbidden.png",
+      "original_filename": "zheka_polished_046_wifi_forbidden.png",
+      "content_type": "image/png",
+      "sha256": "2b28d0c1ab24fbf51a4138728ac0884278aa02121bdc2e7a8a63f32ae96e29cf"
+    },
+    {
+      "directory": "manager_client_chat_pending",
+      "event_code": "MANAGER_CLIENT_CHAT_PENDING",
+      "recipient_type": "MANAGER",
+      "file_name": "057-whatsapp_clients.png",
+      "original_filename": "zheka_polished_057_whatsapp_clients.png",
+      "content_type": "image/png",
+      "sha256": "4fb4d8fce8b8ff6994f43d5ff0f75b4eb6e6062b6baf7f4c0d10ab8a2feacf4e"
+    },
+    {
+      "directory": "manager_client_chat_pending",
+      "event_code": "MANAGER_CLIENT_CHAT_PENDING",
+      "recipient_type": "MANAGER",
+      "file_name": "064-whatsapp_full_sentence.png",
+      "original_filename": "zheka_polished_064_whatsapp_full_sentence.png",
+      "content_type": "image/png",
+      "sha256": "9b6625be34b52eca7d9732e35a81380458911cd0ea9f931e751cd1bab071729a"
+    },
+    {
+      "directory": "manager_bad_review_invoiced",
+      "event_code": "MANAGER_BAD_REVIEW_INVOICED",
+      "recipient_type": "MANAGER",
+      "file_name": "059-bad_deleted_bill.png",
+      "original_filename": "zheka_polished_059_bad_deleted_bill.png",
+      "content_type": "image/png",
+      "sha256": "4ee6e5f635bf82685250931edc793d68c7b5ca233b5f1cd7f6eff3529816bd8e",
+      "rule_enabled": false
+    },
+    {
+      "directory": "worker_account_login_guide",
+      "event_code": "WORKER_ACCOUNT_LOGIN_GUIDE",
+      "recipient_type": "WORKER",
+      "file_name": "079-max_wait_30_seconds.png",
+      "original_filename": "zheka_polished_079_max_wait_30_seconds.png",
+      "content_type": "image/png",
+      "sha256": "b84fe00529e86e9f1041f676323cb5f8192075e5b9cd44c69496fc088e8e543a"
+    },
+    {
+      "directory": "manager_payment_pending",
+      "event_code": "MANAGER_PAYMENT_PENDING",
+      "recipient_type": "MANAGER",
+      "file_name": "080-unpaid_no_money.png",
+      "original_filename": "zheka_polished_080_unpaid_no_money.png",
+      "content_type": "image/png",
+      "sha256": "08e2238f5a755f4b2b971a627118faca7e772baf829930ceaa01911dade7c4d6"
+    }
+  ]
+}

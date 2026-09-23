@@ -51,3 +51,8 @@ com.hunt.otziv.client_chat_control.dto.ClientChatPerformanceSample
 
 # Settings owner -> client chat preparation; read-only flag, no card authority (client-chat-review-prefetch-20260914.md).
 com.hunt.otziv.config.settings.api.ClientChatReviewSettings
+
+# CONTEXTUAL_ZHEKA_MEDIA: immutable after-commit event, read-only settings and text readiness.
+com.hunt.otziv.notification_media.api.StaffMediaSignal
+com.hunt.otziv.config.settings.api.ContextualMediaSettings
+com.hunt.otziv.r_review.utils.ReviewTextPolicy

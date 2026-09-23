@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { firstValueFrom, Subject, takeUntil } from 'rxjs';
 import { AuthService } from '../../core/auth.service';
+import { WorkerMediaContextService } from '../../core/worker-media-context.service';
 import { WorkerAccountActionCooldownService } from '../../core/worker-account-action-cooldown.service';
 import {
   ManagerApi,
@@ -133,6 +134,7 @@ export class WorkerBoardComponent implements OnDestroy {
   private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
   private readonly mobileNavIntent = inject(MobileNavIntentService);
+  private readonly mediaContext = inject(WorkerMediaContextService);
   private readonly overdueAlertStorageKeyPrefix = 'otziv-worker-overdue-alert:v2';
   private readonly activeSectionStorageKeyPrefix = 'otziv-worker-active-section:v1';
   private readonly boardStateStorageKeyPrefix = 'otziv-worker-board-state:v1';
@@ -256,6 +258,9 @@ export class WorkerBoardComponent implements OnDestroy {
     reviewActionSource: () => this.workerActivitySource()
   });
   private readonly editFacade = new WorkerBoardEditFacade({
+    onUnsavedReview: (review) => this.mediaContext.cardHint('UNSAVED_CHANGES', review),
+    onEmptyReviewText: (review) => this.mediaContext.cardHint('EMPTY_TEXT', review),
+    onRequestError: (error) => this.mediaContext.requestFailed(error),
     managerApi: this.managerApi,
     workerApi: this.workerApi,
     toastService: this.toastService,
@@ -414,6 +419,7 @@ export class WorkerBoardComponent implements OnDestroy {
           return;
         }
         this.board.set(board);
+        this.mediaContext.boardLoaded(board);
         this.scheduleProgressRefresh(board.dailyProgress?.updating === true);
         this.selectedWorkerId.set(board.selectedWorkerId ?? null);
         this.loading.set(false);
@@ -447,6 +453,7 @@ export class WorkerBoardComponent implements OnDestroy {
         if (requestId !== this.boardLoadEpoch) {
           return;
         }
+        this.mediaContext.requestFailed(err);
         const message = this.errorMessage(err, 'Не удалось загрузить раздел специалиста');
         this.error.set(message);
         this.loading.set(false);
