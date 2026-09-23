@@ -22,6 +22,7 @@ on:
           - c16-postgres
           - c17-mysql
           - c18-mysql
+          - c21-mysql
           - c19-keycloak
           - c20-mc
           - c14-keycloak

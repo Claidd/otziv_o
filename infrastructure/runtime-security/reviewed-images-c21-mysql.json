@@ -1,0 +1,35 @@
+{
+  "schema": "otziv-reviewed-images-v1",
+  "repository": "ghcr.io/claidd/otziv-security",
+  "publicationSet": "c21-mysql",
+  "baselineManifestSha256": "d48bdb7d6d869cde5d6f1a7b089491765e3eeaf46e0b0b6bb51b7719b38d3ef2",
+  "images": [
+    {
+      "component": "mysql",
+      "platform": "linux/amd64",
+      "sourceBeforeRef": "mysql@sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383",
+      "defaultReferencesBefore": [
+        {
+          "path": "compose.yaml",
+          "line": 32,
+          "service": "mysql"
+        },
+        {
+          "path": "compose.prod-local.yaml",
+          "line": 48,
+          "service": "mysql"
+        },
+        {
+          "path": "docker-compose.yaml",
+          "line": 49,
+          "service": "mysql"
+        }
+      ],
+      "candidateBaseRef": "ghcr.io/claidd/otziv-security@sha256:c810a0bd4902a4791824bce7795f95f97743506a4263889a1008076e6e9630b0",
+      "buildArgs": {},
+      "context": "infrastructure/runtime-security/builds/mysql-c21",
+      "dockerfile": "infrastructure/runtime-security/builds/mysql-c21/Dockerfile",
+      "dockerfileSha256": "0b37203256cc3eb905a9d8a31ca3a3203dca0012b54234f31f430c75bbdf5daa"
+    }
+  ]
+}
