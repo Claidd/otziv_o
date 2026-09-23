@@ -11,7 +11,7 @@ foreach($name in @('Assert-LocalRestoreContract','Import-LocalMySqlGzipStream','
 $script:passed=0
 $root=(Get-Location).Path
 $compose=Join-Path $root 'compose.prod-local.yaml'
-$image='ghcr.io/claidd/otziv-security@sha256:c810a0bd4902a4791824bce7795f95f97743506a4263889a1008076e6e9630b0'
+$image='ghcr.io/claidd/otziv-security@sha256:89081171be2ff681481a2baa8d38303965c191acc2e1ba59fc852ab4a1a4496e'
 $volume='otziv-prod-local_mysql_973_data'
 $command=@('mysqld','--user=999','--character-set-server=utf8mb4','--collation-server=utf8mb4_unicode_ci','--default-time-zone=+08:00','--restrict-fk-on-non-standard-key=OFF','--gtid-mode=OFF','--enforce-gtid-consistency=OFF','--log-bin=mysql-bin','--binlog-format=ROW','--event-scheduler=OFF')
 function Reset-Fixture {

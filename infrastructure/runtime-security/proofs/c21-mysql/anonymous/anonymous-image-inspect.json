@@ -1,0 +1,80 @@
+[
+    {
+        "Id": "sha256:e248dee7e60c3c9190cdf7dd69ea80d5e390804f90f000285434bc3c5451125a",
+        "RepoTags": [],
+        "RepoDigests": [
+            "ghcr.io/claidd/otziv-security@sha256:89081171be2ff681481a2baa8d38303965c191acc2e1ba59fc852ab4a1a4496e"
+        ],
+        "Parent": "",
+        "Comment": "buildkit.dockerfile.v0",
+        "Created": "2026-09-23T15:15:12.141467195Z",
+        "DockerVersion": "",
+        "Author": "",
+        "Config": {
+            "Hostname": "",
+            "Domainname": "",
+            "User": "",
+            "AttachStdin": false,
+            "AttachStdout": false,
+            "AttachStderr": false,
+            "ExposedPorts": {
+                "3306/tcp": {},
+                "33060/tcp": {},
+                "33061/tcp": {}
+            },
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "MYSQL_UNIX_PORT=/var/lib/mysql/mysql.sock"
+            ],
+            "Cmd": [
+                "mysqld"
+            ],
+            "Image": "",
+            "Volumes": null,
+            "WorkingDir": "",
+            "Entrypoint": [
+                "/entrypoint.sh"
+            ],
+            "OnBuild": null,
+            "Labels": {
+                "com.otziv.publication.revision": "4835721f9f1526ead22fc2ae0f1513fa8b1e2dd7",
+                "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+                "com.otziv.reviewed-component": "mysql",
+                "io.buildah.version": "1.33.7"
+            }
+        },
+        "Architecture": "amd64",
+        "Os": "linux",
+        "Size": 996256565,
+        "GraphDriver": {
+            "Data": {
+                "LowerDir": "/var/lib/docker/overlay2/332bd5f365055536a02bd22d2fa1f3a239281cfad6924753f1fd39244c2f4359/diff:/var/lib/docker/overlay2/f29d1cc8f0af090870adf6115e01687c2fd904ac9ef7671ab1f6a1204e3ef8fb/diff:/var/lib/docker/overlay2/56a035454f4eefc1060cad2f5783819f232d5890c594ac9900040935d6b335d1/diff:/var/lib/docker/overlay2/2b946086730a98a9a5f415e5382fd71da62ce33036ca1450a91ec96232a9884f/diff:/var/lib/docker/overlay2/d586c7d8ed57400c95b2d8fe420adcf6164135acb4143f3e5d4c30417c8ca736/diff:/var/lib/docker/overlay2/eea844535513b856cb6f0be2b27c38806d632d004965b7bcc47766f1ef2095ed/diff:/var/lib/docker/overlay2/fe2a0f0caa2a7399cd381adce2b56eac857171b35a22eab83d7a32163a397ecb/diff:/var/lib/docker/overlay2/60234ca77b2979e7bc816559b9924e4e1c84569b3b4e0d2abc82b0d24735188e/diff:/var/lib/docker/overlay2/0d9e186c595c6e34a8d5a7177ebf3d39d6ca3bff09d7ac822d28e88466edc9f6/diff",
+                "MergedDir": "/var/lib/docker/overlay2/ce52fb7f2810c885b716db7d049b80ad5a8f83ebe7f35bdd49bcd8bed5a5c482/merged",
+                "UpperDir": "/var/lib/docker/overlay2/ce52fb7f2810c885b716db7d049b80ad5a8f83ebe7f35bdd49bcd8bed5a5c482/diff",
+                "WorkDir": "/var/lib/docker/overlay2/ce52fb7f2810c885b716db7d049b80ad5a8f83ebe7f35bdd49bcd8bed5a5c482/work"
+            },
+            "Name": "overlay2"
+        },
+        "RootFS": {
+            "Type": "layers",
+            "Layers": [
+                "sha256:13c0c862a81f774a58331b5142a12c4d950d7771cf6b77ebd34a610e0026dbf9",
+                "sha256:a4ef66189b2f92063802f44c4868a590b76cae11a3433c7aa744af1a062e26fc",
+                "sha256:30f06ac3ad73d41f8a06b0e7f78f23ebc8164223e8b19afeab9324369e3e4f96",
+                "sha256:f7e0e0c91ffe13c3be8a3ddb535ffe7493570cf7ea37dc7505c204effb574eb4",
+                "sha256:430d43e983d1d1063d0a8e54901e16f5bb188864faa20d4091ca389c51e8deac",
+                "sha256:2f371d47cd5cfa5bb4b6e39852a0d9bf2c5d39f3d935aec1684bf10b9a1cdb45",
+                "sha256:238edd8d38ec1d5e5c16c0b2d49d2052d98b3081e689d9287c24be2c2018c86b",
+                "sha256:a8f9af6e37d164d95921d3f1a011e66417a9055676f9459f1ea0966a056dcfcc",
+                "sha256:3396a65b2f690cce482a00f36d3304d00f56f3863bc5242c7125b53cf61aa8e4",
+                "sha256:421c01eeb411a03f5e2c315a265ae1613cd276452c7a45918d070ccf455e7da1"
+            ]
+        },
+        "Metadata": {
+            "LastTagTime": "0001-01-01T00:00:00Z"
+        }
+    }
+]

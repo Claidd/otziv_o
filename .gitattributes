@@ -66,3 +66,7 @@ infrastructure/keycloak/security-generation/image-startup-smoke.mjs text eol=lf
 infrastructure/keycloak/security-generation/provision.mjs text eol=lf
 infrastructure/runtime-security/reviewed-images-c20-*.json text eol=lf
 infrastructure/runtime-security/builds/mc-c20/** text eol=lf
+
+infrastructure/runtime-security/builds/mysql-c21/** text eol=lf
+infrastructure/runtime-security/reviewed-images-c21-*.json text eol=lf
+infrastructure/runtime-security/mysql-curl-rehearsal.py text eol=lf
