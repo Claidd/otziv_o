@@ -436,11 +436,19 @@ def validate_manifest(root: Path, manifest: dict) -> list[dict[str, str]]:
         rows: list[dict[str, str]] = []
         hashes: set[str] = set()
         storage_targets: set[tuple[str, str]] = set()
+        rule_states: dict[tuple[str, str], bool] = {}
         for asset in explicit_assets:
             directory = str(asset["directory"])
             event_code = str(asset["event_code"])
             recipient_type = str(asset["recipient_type"])
             file_name = str(asset["file_name"])
+            rule_enabled = asset.get("rule_enabled", True)
+            if not isinstance(rule_enabled, bool):
+                raise ValueError("rule_enabled must be a boolean")
+            pair = (event_code, recipient_type)
+            if pair in rule_states and rule_states[pair] != rule_enabled:
+                raise ValueError(f"Conflicting enabled states for rule: {pair}")
+            rule_states[pair] = rule_enabled
             image = root / directory / file_name
             if not image.is_file() or image.stat().st_size == 0:
                 raise FileNotFoundError(image)
@@ -459,6 +467,7 @@ def validate_manifest(root: Path, manifest: dict) -> list[dict[str, str]]:
             storage_targets.add(target)
             rows.append(
                 {
+                    "rule_enabled": rule_enabled,
                     "directory": directory,
                     "event_code": event_code,
                     "recipient_type": recipient_type,
@@ -510,12 +519,19 @@ def apply_database_changes(
         (row["event_code"], row["recipient_type"])
         for row in rows
     }
+    rule_states = {}
+    for row in rows:
+        pair = (row["event_code"], row["recipient_type"])
+        enabled = row.get("rule_enabled", True)
+        if not isinstance(enabled, bool) or (pair in rule_states and rule_states[pair] != enabled):
+            raise ValueError(f"Invalid or conflicting enabled state for rule: {pair}")
+        rule_states[pair] = enabled
     statements = ["START TRANSACTION;"]
     for event_code, recipient_type in sorted(expected):
         statements.append(
             "INSERT INTO notification_media_rules "
             "(event_code,recipient_type,enabled,image_probability_percent,cooldown_minutes,created_at,updated_at) "
-            f"SELECT {sql_quote(event_code)},{sql_quote(recipient_type)},b'1',100,360,"
+            f"SELECT {sql_quote(event_code)},{sql_quote(recipient_type)},b'{int(rule_states[(event_code, recipient_type)])}',100,360,"
             "CURRENT_TIMESTAMP(6),CURRENT_TIMESTAMP(6) "
             "WHERE NOT EXISTS (SELECT 1 FROM notification_media_rules "
             f"WHERE event_code={sql_quote(event_code)} AND recipient_type={sql_quote(recipient_type)});"
@@ -572,7 +588,7 @@ def apply_database_changes(
             f"SELECT {sql_quote(assertion_name)},COUNT(*),1 "
             "FROM notification_media_rules "
             f"WHERE event_code={sql_quote(event_code)} "
-            f"AND recipient_type={sql_quote(recipient_type)} AND enabled=b'1';"
+            f"AND recipient_type={sql_quote(recipient_type)} AND enabled=b'{int(rule_states[(event_code, recipient_type)])}';"
         )
         key_prefix = f"notification-media/{event_code.lower()}/{prefix}/"
         count_assertion_name = f"asset-count:{event_code}:{recipient_type}"

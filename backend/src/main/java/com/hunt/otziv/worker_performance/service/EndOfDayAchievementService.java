@@ -131,7 +131,9 @@ public class EndOfDayAchievementService {
         String name = user == null ? "Специалист" : firstNonBlank(user.getFio(), user.getUsername(), "Специалист");
         String text = workerWorkdayText(name, result);
         String eventCode = result.reached100()
-                ? result.streakDays() >= 3
+                ? result.streakDays() >= 15
+                ? NotificationMediaEventCatalog.WORKER_STREAK_15.code()
+                : result.streakDays() >= 3
                 ? NotificationMediaEventCatalog.WORKER_STREAK.code()
                 : NotificationMediaEventCatalog.WORKER_PROGRESS_GROWING.code()
                 : NotificationMediaEventCatalog.WORKER_PROGRESS_SLOWED.code();

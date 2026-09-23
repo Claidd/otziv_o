@@ -20,11 +20,16 @@ public class ThematicNotificationDispatchStore {
 
     private final NamedParameterJdbcTemplate jdbc;
 
+    @org.springframework.transaction.annotation.Transactional
     public boolean claim(String eventCode, long recipientUserId, LocalDate date, int maxPerDay) {
         MapSqlParameterSource params = new MapSqlParameterSource()
                 .addValue("eventCode", eventCode)
                 .addValue("recipientUserId", recipientUserId)
                 .addValue("dispatchDate", Date.valueOf(date));
+        // Serialize scheduled and action-triggered claims for this recipient.
+        if (jdbc.queryForList("SELECT id FROM users WHERE id=:recipientUserId FOR UPDATE", params).isEmpty()) {
+            return false;
+        }
         Integer sentToday = jdbc.queryForObject("""
                 SELECT COUNT(*)
                 FROM thematic_notification_dispatches

@@ -45,18 +45,21 @@ public class WorkerActivityService {
     private final WorkerRiskEvaluationService riskEvaluationService;
     private final WorkloadShadowRefreshSignal workloadRefreshSignal;
     private final TransactionTemplate transactionTemplate;
+    private final org.springframework.context.ApplicationEventPublisher mediaEvents;
 
     public WorkerActivityService(
             WorkerActivityEventRepository eventRepository,
             UserService userService,
             WorkerRiskEvaluationService riskEvaluationService,
             WorkloadShadowRefreshSignal workloadRefreshSignal,
-            PlatformTransactionManager transactionManager
+            PlatformTransactionManager transactionManager,
+            org.springframework.context.ApplicationEventPublisher mediaEvents
     ) {
         this.eventRepository = eventRepository;
         this.userService = userService;
         this.riskEvaluationService = riskEvaluationService;
         this.workloadRefreshSignal = workloadRefreshSignal;
+        this.mediaEvents = mediaEvents;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
         this.transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -94,6 +97,7 @@ public class WorkerActivityService {
                     details
             )));
             if (event != null) {
+                publishMedia(event);
                 riskEvaluationService.evaluateSafely(event, workerUser);
             }
         } catch (RuntimeException e) {
@@ -141,6 +145,7 @@ public class WorkerActivityService {
         User workerUser = userService.findByUserNameWithAssignments(authentication.getName())
                 .orElseThrow(() -> new IllegalStateException("Worker audit actor is missing"));
         WorkerActivityEvent saved = eventRepository.save(event(workerUser,action,entityType,entityId,orderId,reviewId,section,details));
+        publishMedia(saved);
         org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
                 new org.springframework.transaction.support.TransactionSynchronization() {
                     @Override public void afterCommit() {
@@ -148,6 +153,13 @@ public class WorkerActivityService {
                         if (WORKLOAD_CHANGING_ACTIONS.contains(action)) workloadRefreshSignal.markDirty();
                     }
                 });
+    }
+
+    private void publishMedia(WorkerActivityEvent event) {
+        if (event == null || event.getWorkerUserId() == null || event.getAction() == null) return;
+        mediaEvents.publishEvent(new com.hunt.otziv.notification_media.api.StaffMediaSignal(
+                event.getWorkerUserId(), event.getAction().name(), event.getEntityType(),
+                event.getEntityId(), event.getReviewId(), event.getSection()));
     }
 
     private WorkerActivityEvent event(

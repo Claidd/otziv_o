@@ -31,6 +31,9 @@ type WorkerBoardRecoveryTaskApi = Pick<WorkerApi, 'updateRecoveryTask'>;
 type WorkerBoardEditToast = Pick<ToastService, 'success' | 'error'>;
 
 export type WorkerBoardEditFacadeDeps = {
+  onUnsavedReview?: (review: WorkerReviewItem) => void;
+  onEmptyReviewText?: (review: WorkerReviewItem) => void;
+  onRequestError?: (error: unknown) => void;
   managerApi: WorkerBoardEditApi;
   workerApi: WorkerBoardRecoveryTaskApi;
   toastService: WorkerBoardEditToast;
@@ -86,6 +89,7 @@ export class WorkerBoardEditFacade {
         this.orderLoading.set(false);
       },
       error: (err) => {
+        this.deps.onRequestError?.(err);
         const message = this.deps.errorMessage(err, 'Не удалось открыть редактирование заказа');
         this.orderLoading.set(false);
         this.orderError.set(message);
@@ -128,6 +132,7 @@ export class WorkerBoardEditFacade {
         this.deps.loadBoard();
       },
       error: (err) => {
+        this.deps.onRequestError?.(err);
         const message = this.deps.errorMessage(err, 'Не удалось сохранить заказ');
         this.orderError.set(message);
         this.orderSaving.set(false);
@@ -160,6 +165,7 @@ export class WorkerBoardEditFacade {
         this.deps.loadBoard();
       },
       error: (err) => {
+        this.deps.onRequestError?.(err);
         const message = this.deps.errorMessage(err, 'Не удалось удалить заказ');
         this.orderDeleting.set(false);
         this.orderError.set(message);
@@ -199,6 +205,7 @@ export class WorkerBoardEditFacade {
         this.reviewEditLoading.set(false);
       },
       error: (err) => {
+        this.deps.onRequestError?.(err);
         const message = this.deps.errorMessage(err, 'Не удалось открыть редактирование отзыва');
         this.reviewEditLoading.set(false);
         this.reviewEditError.set(message);
@@ -227,6 +234,11 @@ export class WorkerBoardEditFacade {
   closeReviewEdit(): void {
     if (this.reviewEditLoading() || !this.editReview() || this.reviewEditBusy()) {
       return;
+    }
+    const review = this.editReview()!;
+    const draft = this.reviewEditDraft();
+    if (draft && JSON.stringify(draft) !== JSON.stringify(this.toReviewEditDraft(review))) {
+      this.deps.onUnsavedReview?.(review);
     }
 
     this.editReview.set(null);
@@ -266,6 +278,7 @@ export class WorkerBoardEditFacade {
     }
 
     if (!draft.text.trim()) {
+      this.deps.onEmptyReviewText?.(review);
       this.reviewEditError.set('Поле отзыва не должно быть пустым');
       return;
     }
@@ -291,6 +304,7 @@ export class WorkerBoardEditFacade {
         this.deps.loadBoard();
       },
       error: (err) => {
+        this.deps.onRequestError?.(err);
         const message = this.deps.errorMessage(err, 'Не удалось сохранить отзыв');
         this.reviewEditError.set(message);
         this.reviewEditSaving.set(false);
@@ -330,6 +344,7 @@ export class WorkerBoardEditFacade {
         this.deps.loadBoard();
       },
       error: (err) => {
+        this.deps.onRequestError?.(err);
         const message = this.deps.errorMessage(err, 'Не удалось сохранить восстановление');
         this.reviewEditError.set(message);
         this.reviewEditSaving.set(false);
@@ -372,6 +387,7 @@ export class WorkerBoardEditFacade {
         this.deps.loadBoard();
       },
       error: (err) => {
+        this.deps.onRequestError?.(err);
         const message = this.deps.errorMessage(err, 'Не удалось удалить отзыв');
         this.reviewEditError.set(message);
         this.reviewEditDeleting.set(false);
@@ -409,6 +425,7 @@ export class WorkerBoardEditFacade {
         this.deps.loadBoard();
       },
       error: (err) => {
+        this.deps.onRequestError?.(err);
         const message = this.deps.errorMessage(err, 'Не удалось загрузить фото');
         this.reviewEditError.set(message);
         this.reviewEditUploading.set(false);
@@ -452,6 +469,7 @@ export class WorkerBoardEditFacade {
         this.deps.loadBoard();
       },
       error: (err) => {
+        this.deps.onRequestError?.(err);
         const message = this.deps.errorMessage(err, 'Не удалось назначить новый аккаунт');
         this.reviewEditNewAccountSaving.set(false);
         this.reviewEditError.set(message);

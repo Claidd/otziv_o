@@ -124,6 +124,21 @@ class EndOfDayAchievementServiceTest {
                 eq(GamificationEventService.WORKER_100_STREAK), eq(worker), anyString(), any(), anyString());
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({"14,WORKER_STREAK", "15,WORKER_STREAK_15"})
+    void usesFifteenDayImagesOnlyAfterReachingFifteenDays(int days, String event) {
+        Worker worker = Worker.builder().id(7L).user(User.builder()
+                .id(70L).fio("Анна").workerTelegramGroupChatId(-700L).build()).build();
+        var result = new EndOfDayAchievementService.AchievementResult(
+                DATE, EndOfDayAchievementService.ROLE_WORKER, 7L,
+                35, 35, 100, 0, true, days, false);
+        when(notificationMediaDeliveryService.send(anyString(), eq(-700L), eq(70L),
+                anyString(), eq("HTML"), anyList())).thenReturn(true);
+        service.notifyWorker(worker, result);
+        verify(notificationMediaDeliveryService).send(eq(event), eq(-700L), eq(70L),
+                anyString(), eq("HTML"), anyList());
+    }
+
     @Test
     void sendsWorkerIncompleteGoalAndResetDayCounter() {
         User user = User.builder()

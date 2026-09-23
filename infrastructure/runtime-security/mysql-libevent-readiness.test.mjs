@@ -4,7 +4,7 @@ import {readFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {validateDatabaseTransitionReadiness,MYSQL_REFRESH_REFERENCE} from './mysql-libevent-readiness.mjs';
 const root=new URL('../../',import.meta.url),read=p=>readFile(new URL(p,root));
-const entry=JSON.parse(await read('infrastructure/runtime-security/reviewed-image-activations.json')).images.find(x=>x.component==='mysql');
+const entry=JSON.parse(await read('infrastructure/runtime-security/proofs/c21-mysql/parent-activation.json'));
 const image=JSON.parse(await read('infrastructure/runtime-security/reviewed-images.json')).images.find(x=>x.component==='mysql');
 
 test('published OS refresh replays original activation and exact rollback rehearsal without authorizing ordinary cutover',async()=>{

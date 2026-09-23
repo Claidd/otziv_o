@@ -2719,7 +2719,6 @@ com.hunt.otziv.review_recovery.service.ReviewRecoveryTaskServiceImpl -> com.hunt
 com.hunt.otziv.review_recovery.service.ReviewRecoveryTaskServiceImpl -> com.hunt.otziv.r_review.bot.service.ReviewBotCooldownService
 com.hunt.otziv.review_recovery.service.ReviewRecoveryTaskServiceImpl -> com.hunt.otziv.r_review.model.Review
 com.hunt.otziv.review_recovery.service.ReviewRecoveryTaskServiceImpl -> com.hunt.otziv.r_review.repository.ReviewRepository
-com.hunt.otziv.review_recovery.service.ReviewRecoveryTaskServiceImpl -> com.hunt.otziv.r_review.utils.ReviewTextPolicy
 com.hunt.otziv.review_recovery.service.ReviewRecoveryTaskServiceImpl -> com.hunt.otziv.u_users.model.Manager
 com.hunt.otziv.review_recovery.service.ReviewRecoveryTaskServiceImpl -> com.hunt.otziv.u_users.model.User
 com.hunt.otziv.review_recovery.service.ReviewRecoveryTaskServiceImpl -> com.hunt.otziv.u_users.model.Worker
