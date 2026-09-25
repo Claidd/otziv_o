@@ -59,21 +59,39 @@ test('keeps a valid public payment URL byte-for-byte unchanged', () => {
   assert.deepEqual(navigated, [value]);
 });
 
-test('allows current T-Bank short payment URLs from production', () => {
-  const value = 'https://pay.tbank.ru/CwEMz5Cw';
-  const navigated = [];
+for (const value of [
+  'https://pay.tbank.ru/fixture',
+  'https://pay.tbank-online.com/fixture?order=213#confirm',
+  'https://pay.tbank-online.com:443/fixture',
+  'https://merch.securepaytb.ru/order/?uuid=tochka-test-operation'
+]) {
+  test(`opens the original bank payment URL: ${value}`, () => {
+    const navigated = [];
 
-  assert.equal(navigateToPaymentTarget(value, 'payment', (target) => navigated.push(target)), true);
-  assert.deepEqual(navigated, [value]);
-});
+    assert.equal(navigateToPaymentTarget(value, 'payment', (target) => navigated.push(target)), true);
+    assert.deepEqual(navigated, [value]);
+  });
+}
 
 for (const value of [
   'http://securepay.tinkoff.ru/pay',
   'https://securepay.tinkoff.ru.evil.test/pay',
+  'http://pay.tbank-online.com/fixture',
+  'https://pay.tbank-online.com:8443/fixture',
+  'https://pay.tbank-online.com.evil.test/fixture',
+  'https://evil-pay.tbank-online.com/fixture',
+  'https://pay.tbank-online.com@evil.test/fixture',
+  'https://user:password@pay.tbank-online.com/fixture',
+  'http://merch.securepaytb.ru/order/?uuid=example',
+  'https://merch.securepaytb.ru:8443/order/?uuid=example',
+  'https://merch.securepaytb.ru.evil.test/order/?uuid=example',
+  'https://pay.tbank.ru:8443/fixture',
   'https://evil.test/pay'
 ]) {
   test(`rejects untrusted generated payment URL: ${value}`, () => {
-    assert.equal(safePaymentNavigationTarget(value, 'payment'), null);
+    const navigated = [];
+    assert.equal(navigateToPaymentTarget(value, 'payment', target => navigated.push(target)), false);
+    assert.deepEqual(navigated, []);
   });
 }
 

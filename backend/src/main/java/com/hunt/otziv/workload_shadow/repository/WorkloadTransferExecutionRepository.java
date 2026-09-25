@@ -624,6 +624,18 @@ public interface WorkloadTransferExecutionRepository
             SELECT execution.workload_transfer_execution_id AS executionId,
                    execution.workflow_id AS workflowId,
                    workflow.mode AS mode,
+                   workflow.failure_number AS failureNumber,
+                   workflow.transfer_percent AS transferPercent,
+                   workflow.problem_units AS problemUnits,
+                   workflow.estimated_minutes AS estimatedMinutes,
+                   MAX(source_day.progress_date) AS sourceProgressDate,
+                   MAX(source_day.completed_units) AS sourceCompletedUnits,
+                   MAX(source_day.eligible_units) AS sourceEligibleUnits,
+                   MAX(source_day.progress_percent) AS sourceProgressPercent,
+                   MAX(accepted_offer.responded_at) AS acceptedAt,
+                   MAX(candidate.rating) AS recipientRating,
+                   MAX(candidate.current_estimated_minutes) AS recipientEstimatedMinutes,
+                   MAX(candidate.sequence_number) AS recipientSequenceNumber,
                    execution.manager_id AS managerId,
                    COALESCE(
                      NULLIF(TRIM(manager_user.fio), ''),
@@ -668,6 +680,16 @@ public interface WorkloadTransferExecutionRepository
             FROM workload_transfer_executions execution
             JOIN workload_transfer_workflows workflow
               ON workflow.workload_transfer_workflow_id = execution.workflow_id
+            LEFT JOIN workload_shadow_worker_daily source_day
+              ON source_day.worker_id = execution.source_worker_id
+             AND source_day.progress_date = DATE_SUB(workflow.decision_date, INTERVAL 1 DAY)
+             AND source_day.finalized = TRUE
+            LEFT JOIN workload_transfer_offers accepted_offer
+              ON accepted_offer.workload_transfer_offer_id = execution.accepted_offer_id
+             AND accepted_offer.status = 'ACCEPTED'
+            LEFT JOIN workload_transfer_workflow_candidates candidate
+              ON candidate.workflow_id = execution.workflow_id
+             AND candidate.worker_id = execution.target_worker_id
             JOIN managers manager
               ON manager.manager_id = execution.manager_id
             JOIN users manager_user
@@ -689,6 +711,10 @@ public interface WorkloadTransferExecutionRepository
             GROUP BY execution.workload_transfer_execution_id,
                      execution.workflow_id,
                      workflow.mode,
+                     workflow.failure_number,
+                     workflow.transfer_percent,
+                     workflow.problem_units,
+                     workflow.estimated_minutes,
                      execution.manager_id,
                      manager_user.fio,
                      manager_user.username,
@@ -1594,6 +1620,18 @@ public interface WorkloadTransferExecutionRepository
         Long getExecutionId();
         Long getWorkflowId();
         String getMode();
+        Integer getFailureNumber();
+        Integer getTransferPercent();
+        Long getProblemUnits();
+        Long getEstimatedMinutes();
+        LocalDate getSourceProgressDate();
+        Long getSourceCompletedUnits();
+        Long getSourceEligibleUnits();
+        java.math.BigDecimal getSourceProgressPercent();
+        LocalDateTime getAcceptedAt();
+        java.math.BigDecimal getRecipientRating();
+        Long getRecipientEstimatedMinutes();
+        Integer getRecipientSequenceNumber();
         Long getManagerId();
         String getManagerName();
         Long getSourceWorkerId();

@@ -13,6 +13,8 @@ import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.service.UserService;
 import com.hunt.otziv.workload_shadow.repository.WorkloadTransferExecutionRepository;
 import com.hunt.otziv.workload_shadow.repository.WorkloadTransferExecutionRepository.AppliedNotificationProjection;
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -63,12 +65,22 @@ class WorkloadTransferAppliedNotificationServiceTest {
         verify(telegramService).sendMessage(eq(1001L), ownerText.capture(), eq("HTML"));
         verify(telegramService).sendMessage(eq(2002L), anyString(), eq("HTML"));
         assertThat(ownerText.getValue())
-                .contains("LIVE · Смена специалиста по нагрузке")
+                .contains("Компания передана по нагрузке")
                 .contains("Компания:</b> «Гипер&lt;Сервис&gt;» (#3004)")
                 .contains("Специалист:</b> Максим Р. → Катя К.")
                 .contains("Перенесено:</b> 1 заказ, 6 карточек отзывов")
                 .contains("Заказы:</b> #101, #102")
-                .contains("Workflow #41, execution #81, режим CANARY");
+                .contains("Причина:</b> обязательная нагрузка не выполнена")
+                .contains("Неуспешных дней на момент решения: 5.")
+                .contains("Итог за 19.08.2026: выполнено 35 из 40 обязательных единиц работы (87,5%).")
+                .contains("Условия:</b> целевая доля передачи — 15% проблемной нагрузки.")
+                .contains("Нагрузка компании при выборе: 5 ед., примерно 15 мин.")
+                .contains("Получатель согласился 20.08.2026 20:28")
+                .contains("рейтинг 92,66, место в очереди 1, текущая нагрузка примерно 12 мин.")
+                .contains("Применено:</b> 20.08.2026 20:29")
+                .contains("Откат доступен до:</b> 20.08.2026 20:59")
+                .contains("Передача №81")
+                .doesNotContain("Workflow", "null");
     }
 
     @Test
@@ -80,11 +92,47 @@ class WorkloadTransferAppliedNotificationServiceTest {
         verifyNoInteractions(userService, telegramService);
     }
 
+    @Test
+    void missingHistoricalDetailsDoNotSuppressTheAppliedNotification() {
+        AppliedNotificationProjection execution = mock(AppliedNotificationProjection.class);
+        when(execution.getExecutionId()).thenReturn(81L);
+        when(execution.getFailureNumber()).thenReturn(7);
+        when(execution.getTransferPercent()).thenReturn(30);
+        when(userService.getAllOwners("ROLE_OWNER")).thenReturn(List.of());
+        when(repository.findAppliedNotification(81L)).thenReturn(Optional.of(execution));
+        when(userService.getAllOwners("ROLE_ADMIN")).thenReturn(List.of(user(4L, 2002L)));
+        when(telegramService.sendMessage(eq(2002L), anyString(), eq("HTML"))).thenReturn(true);
+
+        service.notifyApplied(81L);
+
+        ArgumentCaptor<String> text = ArgumentCaptor.forClass(String.class);
+        verify(telegramService).sendMessage(eq(2002L), text.capture(), eq("HTML"));
+        assertThat(text.getValue())
+                .contains("Неуспешных дней на момент решения: 7.")
+                .contains("целевая доля передачи — 30%")
+                .contains("Подробный итог рабочего дня недоступен.")
+                .contains("Время согласия получателя недоступно.")
+                .doesNotContain("рейтинг", "Итог за", "null");
+    }
+
+    @Test
+    void failedOwnerDeliveryDoesNotPreventAdminNotification() {
+        AppliedNotificationProjection execution = execution();
+        when(repository.findAppliedNotification(81L)).thenReturn(Optional.of(execution));
+        when(userService.getAllOwners("ROLE_OWNER")).thenReturn(List.of(user(1L, 1001L)));
+        when(userService.getAllOwners("ROLE_ADMIN")).thenReturn(List.of(user(4L, 2002L)));
+        when(telegramService.sendMessage(eq(1001L), anyString(), eq("HTML")))
+                .thenThrow(new IllegalStateException("Telegram unavailable"));
+        when(telegramService.sendMessage(eq(2002L), anyString(), eq("HTML"))).thenReturn(true);
+
+        service.notifyApplied(81L);
+
+        verify(telegramService).sendMessage(eq(2002L), anyString(), eq("HTML"));
+    }
+
     private AppliedNotificationProjection execution() {
         AppliedNotificationProjection projection = mock(AppliedNotificationProjection.class);
         when(projection.getExecutionId()).thenReturn(81L);
-        when(projection.getWorkflowId()).thenReturn(41L);
-        when(projection.getMode()).thenReturn("CANARY");
         when(projection.getManagerName()).thenReturn("Алекс");
         when(projection.getSourceWorkerName()).thenReturn("Максим Р.");
         when(projection.getTargetWorkerName()).thenReturn("Катя К.");
@@ -97,6 +145,18 @@ class WorkloadTransferAppliedNotificationServiceTest {
         when(projection.getAppliedAt()).thenReturn(LocalDateTime.of(2026, 8, 20, 20, 29));
         when(projection.getRollbackDeadlineAt()).thenReturn(LocalDateTime.of(2026, 8, 20, 20, 59));
         when(projection.getOrderIds()).thenReturn("101, 102");
+        when(projection.getFailureNumber()).thenReturn(5);
+        when(projection.getTransferPercent()).thenReturn(15);
+        when(projection.getProblemUnits()).thenReturn(5L);
+        when(projection.getEstimatedMinutes()).thenReturn(15L);
+        when(projection.getSourceProgressDate()).thenReturn(LocalDate.of(2026, 8, 19));
+        when(projection.getSourceCompletedUnits()).thenReturn(35L);
+        when(projection.getSourceEligibleUnits()).thenReturn(40L);
+        when(projection.getSourceProgressPercent()).thenReturn(new BigDecimal("87.50"));
+        when(projection.getAcceptedAt()).thenReturn(LocalDateTime.of(2026, 8, 20, 20, 28));
+        when(projection.getRecipientRating()).thenReturn(new BigDecimal("92.66"));
+        when(projection.getRecipientSequenceNumber()).thenReturn(1);
+        when(projection.getRecipientEstimatedMinutes()).thenReturn(12L);
         return projection;
     }
 
