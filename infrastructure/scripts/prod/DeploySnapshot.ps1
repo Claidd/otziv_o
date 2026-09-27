@@ -156,7 +156,8 @@ function Assert-OtzivDeployRevisionContainsProductionMain {
 function Assert-OtzivPreparedDeploySnapshotState {
     param(
         [Parameter(Mandatory = $true)][string]$Repository,
-        [Parameter(Mandatory = $true)][string]$ExpectedRevision
+        [Parameter(Mandatory = $true)][string]$ExpectedRevision,
+        [string]$CanonicalWorkspace = ''
     )
 
     if ($ExpectedRevision -notmatch '^[0-9a-f]{40}$') {
@@ -172,8 +173,28 @@ function Assert-OtzivPreparedDeploySnapshotState {
         throw "Prepared deploy snapshot HEAD changed from $resolvedExpectedRevision to $headRevision. Production deployment remains blocked."
     }
 
-    $statusResult = Invoke-OtzivSnapshotGit -Repository $Repository `
-        -Arguments @('status', '--porcelain', '--untracked-files=all', '--ignored=matching')
+    $statusArguments = @('status', '--porcelain', '--untracked-files=all')
+    if ($CanonicalWorkspace) {
+        # CI images and a Git archive never consume ignored local artifacts.
+        # This mode is only for the primary, exact main checkout, not a snapshot.
+        $canonical = [IO.Path]::GetFullPath($CanonicalWorkspace).TrimEnd('\', '/')
+        $actual = [IO.Path]::GetFullPath($Repository).TrimEnd('\', '/')
+        $common = Invoke-OtzivSnapshotGitText -Repository $Repository `
+            -Arguments @('rev-parse', '--path-format=absolute', '--git-common-dir') `
+            -FailureMessage 'Cannot resolve canonical workspace Git directory.'
+        $branch = Invoke-OtzivSnapshotGitText -Repository $Repository `
+            -Arguments @('branch', '--show-current') -FailureMessage 'Cannot resolve canonical branch.'
+        $main = Get-OtzivExactCommitRevision -Repository $Repository -Revision 'origin/main' `
+            -FailureMessage 'Cannot resolve canonical origin/main.'
+        if ($actual -cne $canonical -or
+            [IO.Path]::GetFullPath((Split-Path -Parent $common)).TrimEnd('\', '/') -cne $canonical -or
+            $branch -cne 'main' -or $main -cne $headRevision) {
+            throw 'Canonical CI deployment requires the primary workspace on exact origin/main.'
+        }
+    } else {
+        $statusArguments += '--ignored=matching'
+    }
+    $statusResult = Invoke-OtzivSnapshotGit -Repository $Repository -Arguments $statusArguments
     if ($statusResult.ExitCode -ne 0) {
         throw 'Unable to verify prepared deploy snapshot cleanliness. Production deployment remains blocked.'
     }
@@ -313,5 +334,39 @@ function New-OtzivDeploySnapshot {
         Commit = $commit
         Ref = $snapshotRef
         ChangedFiles = $changedFiles
+    }
+}
+
+function Export-OtzivCommittedDeployBundle {
+    param(
+        [Parameter(Mandatory = $true)][string]$Repository,
+        [Parameter(Mandatory = $true)][string]$Revision,
+        [Parameter(Mandatory = $true)][string]$StageRoot,
+        [Parameter(Mandatory = $true)][string[]]$InputPaths
+    )
+    $exact = Get-OtzivExactCommitRevision -Repository $Repository -Revision $Revision `
+        -FailureMessage 'Cannot resolve committed deployment bundle revision.'
+    $paths = @($InputPaths | ForEach-Object { $_.Replace('\', '/') })
+    foreach ($path in $paths) {
+        if ([IO.Path]::IsPathRooted($path) -or '..' -in $path.Split('/') -or $path.StartsWith('-')) {
+            throw 'Deployment archive inputs must be bounded repository paths.'
+        }
+    }
+    $entries = Invoke-OtzivSnapshotGitText -Repository $Repository `
+        -Arguments (@('ls-tree', '-r', $exact, '--') + $paths) `
+        -FailureMessage 'Cannot inspect committed deployment bundle inputs.'
+    if (@($entries -split "`n" | Where-Object { $_ -match '^(120000|160000) ' }).Count -gt 0) {
+        throw 'Deployment bundle cannot contain symlinks or submodules.'
+    }
+    $archive = Join-Path $StageRoot '.committed-inputs.tar'
+    if (Test-Path -LiteralPath $archive) { throw 'Committed deployment archive already exists.' }
+    try {
+        $result = Invoke-OtzivSnapshotGit -Repository $Repository `
+            -Arguments (@('archive', '--format=tar', "--output=$archive", $exact, '--') + $paths)
+        if ($result.ExitCode -ne 0) { throw 'Cannot archive committed deployment inputs.' }
+        & tar -xf $archive -C $StageRoot
+        if ($LASTEXITCODE -ne 0) { throw 'Cannot extract committed deployment inputs.' }
+    } finally {
+        if (Test-Path -LiteralPath $archive) { Remove-Item -LiteralPath $archive -Force }
     }
 }
