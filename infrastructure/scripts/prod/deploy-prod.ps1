@@ -38,6 +38,7 @@ param(
     [string]$CiCapacityPlan = "",
     [switch]$RebuildWhatsApp,
     [switch]$RequireMainCi,
+    [switch]$FullRollout,
     [switch]$Help
 )
 
@@ -1068,6 +1069,7 @@ $deployBundlePaths = @(
     "infrastructure\scripts\prod\deployment_capacity.py",
     "infrastructure\scripts\prod\whatsapp_deploy_state.py",
     "infrastructure\scripts\prod\image_layer_capacity.py",
+    "infrastructure\scripts\prod\selective_rollout.py",
     "infrastructure\scripts\prod\register-max-webhook.sh",
     "infrastructure\scripts\prod\init-letsencrypt.sh",
     "infrastructure\scripts\prod\renew-letsencrypt.sh",
@@ -1263,8 +1265,14 @@ if (-not $SkipBuildPush) {
 if (-not [string]::IsNullOrWhiteSpace($PrivateRegistryControlFile)) {
     # The normal entry point owns this loopback registry and its SSH tunnel.
     # Freeze published tags before digest resolution and any rollout action.
-    Invoke-External -FilePath 'python' -Arguments @(
-        (Join-Path $PSScriptRoot 'release_registry.py'), 'seal', $PrivateRegistryControlFile)
+    $transportRecord = Get-Content -Raw -Encoding UTF8 -LiteralPath $PrivateRegistryControlFile | ConvertFrom-Json
+    if (($transportRecord.PSObject.Properties.Name -contains 'transport') -and $transportRecord.transport -eq 'vps-artifact') {
+        Invoke-External -FilePath 'python' -Arguments @('-B',
+            (Join-Path $PSScriptRoot 'remote_release_transport.py'), 'seal', '--record', $PrivateRegistryControlFile)
+    } else {
+        Invoke-External -FilePath 'python' -Arguments @(
+            (Join-Path $PSScriptRoot 'release_registry.py'), 'seal', $PrivateRegistryControlFile)
+    }
 }
 
 if ($RequireMainCi) {
@@ -1800,6 +1808,7 @@ retain_deploy_lock="1"
     }
     $preDeployFlywayFingerprintQuoted = ConvertTo-BashSingleQuoted $preDeployFlywayFingerprint
 
+    $fullRolloutArgument = if ($FullRollout) { "--full" } else { "" }
     $remoteScript = @"
 set -Eeuo pipefail
 umask 077
@@ -2805,9 +2814,18 @@ remove_service_containers() {
   fi
 }
 
+service_unchanged() {
+  [ -f "`$selective_plan" ] && python3 infrastructure/scripts/prod/selective_rollout.py unchanged \
+    --output "`$selective_plan" --service "`$1"
+}
+
 recreate_service_with_retry() {
   service_name="`$1"
   profile="`${2:-}"
+  if service_unchanged "`$service_name"; then
+    echo "Retaining healthy unchanged service: `$service_name"
+    return 0
+  fi
   attempts=4
   attempt=1
   output_file="`$(mktemp)"
@@ -2968,15 +2986,17 @@ printf '%s\n' \
 chmod 600 "`$backup_dir/ROLLBACK.txt" || true
 
 capacity_check_dir="`$(mktemp -d "`$deploy_bundle_dir/capacity.XXXXXXXX")"
-tar --warning=no-timestamp -xzf "`$bundle_path" -C "`$capacity_check_dir" ./infrastructure/scripts/prod/deployment_capacity.py ./infrastructure/scripts/prod/image_layer_capacity.py ./.deploy-capacity.json
+tar --warning=no-timestamp -xzf "`$bundle_path" -C "`$capacity_check_dir" ./infrastructure/scripts/prod/deployment_capacity.py ./infrastructure/scripts/prod/image_layer_capacity.py ./.deploy-capacity.json ./infrastructure/scripts/prod/selective_rollout.py
 python3 "`$capacity_check_dir/infrastructure/scripts/prod/deployment_capacity.py" check \
   --plan "`$capacity_check_dir/.deploy-capacity.json" --revision "`$release_revision" \
   --deploy-path "`$remote_path" --bundle "`$bundle_path"
+rm -rf .deploy-mobile-update
+python3 "`$capacity_check_dir/infrastructure/scripts/prod/selective_rollout.py" sync \
+  --archive "`$bundle_path" --root "`$remote_path" --output "`$backup_dir/changed-files.json"
 rm -rf -- "`$capacity_check_dir"
 capacity_check_dir=""
-rm -rf .deploy-mobile-update
-tar --warning=no-timestamp -xzf "`$bundle_path" -C "`$remote_path"
 rm -f "`$bundle_path"
+selective_plan="`$backup_dir/rollout-plan.json"
 
 if [ ! -f docker-compose.yaml ]; then
   echo "docker-compose.yaml was not uploaded to `$remote_path" >&2
@@ -3127,11 +3147,20 @@ if ! compose run --rm --no-deps --interactive=false -T --entrypoint node whatsap
   echo "WhatsApp Chromium sandbox preflight failed; existing gateway containers were not stopped." >&2
   exit 1
 fi
-compose run --rm --no-deps --interactive=false -T --cap-add CHOWN --user 0 --entrypoint chown app -R 10001:10001 /app/logs /app/backup /app/mobile-releases </dev/null
-compose up -d --no-deps mysql keycloak-postgres loki tempo
+if ! python3 infrastructure/scripts/prod/selective_rollout.py plan --root "`$remote_path" \
+    --env "`$env_file" --changes "`$backup_dir/changed-files.json" --output "`$selective_plan" $fullRolloutArgument; then
+  printf '{}\n' > "`$selective_plan"
+  echo "Cannot prove unchanged services; using the full rollout."
+fi
+if ! service_unchanged app; then
+  compose run --rm --no-deps --interactive=false -T --cap-add CHOWN --user 0 --entrypoint chown app -R 10001:10001 /app/logs /app/backup /app/mobile-releases </dev/null
+fi
+compose up -d --no-deps mysql keycloak-postgres
+recreate_service_with_retry loki
+recreate_service_with_retry tempo
 wait_service_healthy mysql 600
 wait_service_healthy keycloak-postgres 600
-compose up -d --no-deps keycloak
+recreate_service_with_retry keycloak
 wait_service_healthy keycloak 900
 if [ "`$deploy_external_review_worker" = "1" ]; then
   recreate_service_with_retry external-review-worker external-review
@@ -3149,17 +3178,19 @@ if [ "`$deploy_external_review_worker" != "1" ]; then
 fi
 # Release extraction can replace the inode behind a single-file bind mount.
 # Recreate to read the uploaded configuration/rules; the TSDB named volume is retained.
-compose up -d --no-deps --force-recreate prometheus
+recreate_service_with_retry prometheus
 wait_service_healthy loki 600
 wait_service_healthy tempo 600
 wait_service_healthy prometheus 600
-compose up -d --no-deps grafana
+recreate_service_with_retry grafana
 wait_service_healthy grafana 600
-compose stop whatsapp_lika whatsapp_vika
-compose run --rm --no-deps --interactive=false -T --cap-add CHOWN --cap-add DAC_READ_SEARCH --user 0 --entrypoint sh whatsapp_lika -c 'node_uid="`$(id -u node)"; node_gid="`$(id -g node)"; chown -R "`$node_uid:`$node_gid" /auth' </dev/null
-compose run --rm --no-deps --interactive=false -T --cap-add CHOWN --cap-add DAC_READ_SEARCH --user 0 --entrypoint sh whatsapp_vika -c 'node_uid="`$(id -u node)"; node_gid="`$(id -g node)"; chown -R "`$node_uid:`$node_gid" /auth' </dev/null
-recreate_service_with_retry whatsapp_lika
-recreate_service_with_retry whatsapp_vika
+for gateway in whatsapp_lika whatsapp_vika; do
+  if ! service_unchanged "`$gateway"; then
+    compose stop "`$gateway"
+    compose run --rm --no-deps --interactive=false -T --cap-add CHOWN --cap-add DAC_READ_SEARCH --user 0 --entrypoint sh "`$gateway" -c 'node_uid="`$(id -u node)"; node_gid="`$(id -g node)"; chown -R "`$node_uid:`$node_gid" /auth' </dev/null
+  fi
+  recreate_service_with_retry "`$gateway"
+done
 . infrastructure/scripts/prod/rollout-docker-observer.sh
 rollout_docker_observer
 # Prune obsolete profile services only after each observer consumer passed log flow.
@@ -3185,7 +3216,13 @@ if ! wait_service_healthy whatsapp_lika 720; then
   compose restart whatsapp_lika
   wait_service_healthy whatsapp_lika 300
 fi
+keycloak_settings_hash="`$(python3 infrastructure/scripts/prod/selective_rollout.py settings-hash --root "`$remote_path" --env "`$env_file")"
 keycloak_settings_applied=0
+if service_unchanged keycloak && [ -f .deploy-keycloak-settings.sha256 ] \
+    && [ "`$(cat .deploy-keycloak-settings.sha256)" = "`$keycloak_settings_hash" ]; then
+  echo "Retaining verified unchanged Keycloak settings."
+  keycloak_settings_applied=1
+else
 for attempt in 1 2 3; do
   wait_service_healthy keycloak 300
 
@@ -3197,11 +3234,14 @@ for attempt in 1 2 3; do
   echo "Keycloak production settings failed on attempt `$attempt; retrying in 10 seconds..." >&2
   sleep 10
 done
+fi
 
 if [ "`$keycloak_settings_applied" != "1" ]; then
   echo "Failed to apply Keycloak production settings after retries." >&2
   exit 1
 fi
+printf '%s\n' "`$keycloak_settings_hash" > .deploy-keycloak-settings.sha256
+chmod 600 .deploy-keycloak-settings.sha256
 # The WhatsApp gateway may need its 10-minute startup watchdog followed by a
 # fresh initialization. Finalize Keycloak first and leave recovery headroom
 # instead of reporting a partial deployment at the watchdog deadline.

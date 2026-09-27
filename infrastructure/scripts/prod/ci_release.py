@@ -214,11 +214,15 @@ def main():
         release = validate_release(read(args.manifest), args.revision)
         from release_registry import owned
         registry = read(args.registry)
-        owned(registry)
-        require(registry['state'] == 'readonly', 'Prepared registry must reject writes')
-        refs = {row['component']: f"127.0.0.1:{registry['port']}/otziv-prepared/ci-{row['component']}@{row['manifestDigest']}"
-                for row in release['images']}
-        require(value == capacity_plan(release, refs, args.worker), 'Prepared images differ from CI release')
+        if registry.get('transport') == 'vps-artifact':
+            from remote_release_transport import validate_remote_plan
+            validate_remote_plan(registry, release, value, args.worker)
+        else:
+            owned(registry)
+            require(registry['state'] == 'readonly', 'Prepared registry must reject writes')
+            refs = {row['component']: f"127.0.0.1:{registry['port']}/otziv-prepared/ci-{row['component']}@{row['manifestDigest']}"
+                    for row in release['images']}
+            require(value == capacity_plan(release, refs, args.worker), 'Prepared images differ from CI release')
     write(args.output, value)
 
 

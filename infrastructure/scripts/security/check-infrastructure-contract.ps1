@@ -1,4 +1,4 @@
-﻿[CmdletBinding()]
+[CmdletBinding()]
 param()
 
 $ErrorActionPreference = 'Stop'
@@ -531,9 +531,9 @@ foreach ($gateway in @('whatsapp_lika', 'whatsapp_vika')) {
     Assert-TextNotMatch $gatewayBlock 'cap_add:' 'WhatsApp runtime must not regain host capabilities; the reviewed namespace seccomp profile is sufficient.'
 }
 Assert-TextMatch $deploy 'WhatsApp Chromium sandbox preflight failed; existing gateway containers were not stopped' 'Production deploy must validate Chromium sandbox compatibility before stopping existing gateways.'
-Assert-TextMatch $deploy '(?m)^compose run --rm --no-deps --interactive=false -T --cap-add CHOWN --user 0 --entrypoint chown app ' 'The one-shot app ownership migration must regain CAP_CHOWN after the service drops all capabilities.'
-Assert-TextMatch $deploy '(?m)^compose run --rm --no-deps --interactive=false -T --cap-add CHOWN --cap-add DAC_READ_SEARCH --user 0 --entrypoint sh whatsapp_lika ' 'The one-shot WhatsApp ownership migration must regain CAP_CHOWN and narrowly bypass read/search checks for legacy mode-0700 session trees.'
-Assert-TextMatch $deploy '(?m)^compose run --rm --no-deps --interactive=false -T --cap-add CHOWN --cap-add DAC_READ_SEARCH --user 0 --entrypoint sh whatsapp_vika ' 'Both one-shot WhatsApp ownership migrations must handle legacy mode-0700 session trees.'
+Assert-TextMatch $deploy '(?m)^\s*compose run --rm --no-deps --interactive=false -T --cap-add CHOWN --user 0 --entrypoint chown app ' 'The one-shot app ownership migration must regain CAP_CHOWN after the service drops all capabilities.'
+Assert-TextMatch $deploy '(?m)^\s*compose run --rm --no-deps --interactive=false -T --cap-add CHOWN --cap-add DAC_READ_SEARCH --user 0 --entrypoint sh "`\$gateway" ' 'The one-shot WhatsApp ownership migration must regain CAP_CHOWN and narrowly bypass read/search checks for legacy mode-0700 session trees.'
+Assert-TextMatch $deploy '(?m)^for gateway in whatsapp_lika whatsapp_vika; do\s*$' 'Both one-shot WhatsApp ownership migrations must handle legacy mode-0700 session trees.'
 Assert-TextMatch $legacyDeploy '(?m)^compose run --rm --no-deps --interactive=false -T --cap-add CHOWN --user 0 --entrypoint chown app ' 'The legacy one-shot app ownership migration must regain CAP_CHOWN after the service drops all capabilities.'
 Assert-TextMatch $legacyDeploy '(?m)^compose run --rm --no-deps --interactive=false -T --cap-add CHOWN --user 0 --entrypoint sh whatsapp_lika ' 'The legacy one-shot WhatsApp ownership migration must regain CAP_CHOWN after the service drops all capabilities.'
 

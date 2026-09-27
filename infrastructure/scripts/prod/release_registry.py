@@ -1,4 +1,4 @@
-"""Private loopback registry used by deploy.ps1; does not modify the VPS."""
+"""Owned loopback registry for local or direct VPS release transport."""
 from pathlib import Path
 import argparse
 import http.client
@@ -74,13 +74,15 @@ def start(record, directory, readonly):
         time.sleep(.5)
     raise RuntimeError('Private registry did not become ready')
 
-def create(path):
+def create(path, port=0, owner=None):
     if path.exists():
         raise ValueError('Use a new release directory')
     path.parent.mkdir(parents=True, exist_ok=True)
-    owner = uuid.uuid4().hex
+    owner = owner or uuid.uuid4().hex
+    if not re.fullmatch("[a-f0-9]{32}", owner) or type(port) is not int or not (port == 0 or 1024 <= port <= 65535):
+        raise ValueError("Invalid requested registry identity")
     with socket.socket() as probe:
-        probe.bind(('127.0.0.1', 0))
+        probe.bind(('127.0.0.1', port))
         port = probe.getsockname()[1]
     record = dict(owner=owner, port=port, container='otziv-release-' + owner,
         volume='otziv-release-' + owner + '-data', namespace=f'127.0.0.1:{port}/otziv-prepared', state='creating')

@@ -79,6 +79,16 @@ class Client:
     def artifacts(self, run_id):
         return pages(self.get, f'/actions/runs/{int(run_id)}/artifacts', 'artifacts')
 
+    def download_url(self, item):
+        """Short-lived storage URL, sent privately to the VPS without a GitHub token."""
+        try:
+            response = self.request(f"/actions/artifacts/{int(item['id'])}/zip")
+        except urllib.error.HTTPError as error:
+            require(error.code == 302, f'Artifact link failed (HTTP {error.code})')
+            return storage_url(error.headers.get('Location', ''))
+        response.close()
+        raise RuntimeError('Expected an authenticated artifact storage redirect')
+
     def download(self, item, output, maximum):
         require(0 < item['size_in_bytes'] <= maximum, 'Artifact exceeds its size limit')
         output = Path(output)
