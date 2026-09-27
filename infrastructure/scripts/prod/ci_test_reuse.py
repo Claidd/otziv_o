@@ -11,13 +11,16 @@ import json
 import os
 from pathlib import Path
 import re
+import platform
+import shutil
+import subprocess
 import tempfile
 import urllib.error
 
 from ci_artifacts import Client, extract_files, validate_artifact
 from release_ci import ACTION_APP_ID, API, REPOSITORY, GateError, git, pages, require
 
-SCHEMA = 'otziv-test-evidence-v1'
+SCHEMA = 'otziv-test-evidence-v2'
 DECISION = 'otziv-test-reuse-v1'
 WORKFLOW = '.github/workflows/quality-gates.yml'
 JOBS = {
@@ -32,6 +35,136 @@ JOBS = {
 }
 RECORD_STEP = 'Record successful check evidence'
 MAX_AGE = dt.timedelta(hours=24)
+RUNTIME_SCHEMA = 'otziv-test-runtime-v1'
+OUTCOME = 'otziv-test-outcome-v1'
+
+
+def digest(value):
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+
+
+def file_digest(path):
+    with Path(path).open('rb') as stream:
+        return hashlib.file_digest(stream, 'sha256').hexdigest()
+
+
+def directory_digest(root):
+    root = Path(root)
+    require(root.is_dir(), 'Installed tool directory missing: ' + str(root))
+    rows = [(p.relative_to(root).as_posix(), file_digest(p)) for p in sorted(root.rglob('*')) if p.is_file()]
+    require(rows, 'Installed tool directory is empty')
+    return digest(rows)
+
+
+def command(*args, cwd=None):
+    return subprocess.check_output(args, cwd=cwd, text=True, stderr=subprocess.STDOUT, timeout=180).strip()
+
+
+def runtime(repo, scope):
+    """Read installed bytes/versions, never assume setup-java's major is a pin.
+
+    Dependency locks, wrapper checksums, fixture digests and every test input are
+    also covered by the complete Git tree. Only relevant installed tools enter
+    a scope's fingerprint; absolute cache paths and host identities never do.
+    """
+    repo = Path(repo)
+    value = {'schema': RUNTIME_SCHEMA, 'runner': environment(), 'architecture': platform.machine(),
+             'python': platform.python_version(), 'node': json.loads(command('node', '-p', 'JSON.stringify(process.versions)')),
+             'nodeSha256': file_digest(shutil.which('node')), 'npm': command('npm', '--version')}
+    require(all(value['runner'].values()), 'Hosted runner generation is unavailable')
+    # Includes native libraries, Chrome and OS packages after browser setup.
+    packages = command('dpkg-query', '-W', '-f=${Package}=${Version}\n')
+    value['systemPackagesSha256'] = digest(sorted(packages.splitlines()))
+    if scope in ('backend', 'android'):
+        java_home = Path(os.environ['JAVA_HOME'])
+        release = (java_home / 'release').read_text()
+        version = re.search(r'(?m)^JAVA_RUNTIME_VERSION="([0-9A-Za-z.+_-]+)"$', release)
+        require(version, 'Resolved Java runtime version missing')
+        value['java'] = {'version': command('java', '--version'),
+                         'runtimeVersion': version[1],
+                         'releaseSha256': file_digest(java_home / 'release'),
+                         'modulesSha256': file_digest(java_home / 'lib/modules')}
+    if scope == 'backend':
+        maven = command('bash', './mvnw', '-v', cwd=repo / 'backend')
+        lines = re.sub(r'\x1b\[[0-9;]*m', '', maven).splitlines()
+        value['maven'] = next(line for line in lines if line.startswith('Apache Maven '))
+        value['docker'] = json.loads(command('docker', 'version', '--format', '{{json .Server}}'))
+        # Time/build metadata is stable for a binary; no server IDs are recorded.
+        source_text = '\n'.join(p.read_text(encoding='utf-8') for p in (repo / 'backend/src/test').rglob('*.java'))
+        fixtures = sorted(set(re.findall(r'mysql@sha256:[a-f0-9]{64}', source_text)))
+        require(fixtures and not re.search(r'"mysql:[^"\s]+"', source_text), 'Unpinned database fixture')
+        value['databaseFixtures'] = fixtures
+    if scope == 'browser':
+        browser = command('node', '--input-type=module', '-e',
+            'import { chromium } from "playwright"; process.stdout.write(chromium.executablePath())',
+            cwd=repo / 'infrastructure/browser-smoke')
+        # Hash the browser distribution, including shared resources and libraries.
+        value['chromiumSha256'] = directory_digest(Path(browser).parent)
+    if scope == 'android':
+        sdk = Path(os.environ.get('ANDROID_HOME') or os.environ['ANDROID_SDK_ROOT'])
+        value['androidSdk'] = {p: directory_digest(sdk / p)
+                              for p in ('platforms/android-36', 'build-tools/35.0.0')}
+        gradle = command('bash', './gradlew', '--version', cwd=repo / 'mobile/android')
+        match = re.search(r'(?m)^Gradle [^\r\n]+', gradle)
+        require(match, 'Resolved Gradle version missing')
+        value['gradle'] = match[0]
+    return value
+
+
+def validate_runtime(value):
+    require(isinstance(value, dict) and value.get('schema') == RUNTIME_SCHEMA
+            and all(value.get('runner', {}).get(k) for k in ('ImageOS', 'ImageVersion', 'RUNNER_ARCH', 'RUNNER_OS'))
+            and value.get('node') and re.fullmatch('[a-f0-9]{64}', value.get('nodeSha256', ''))
+            and value.get('npm') and value.get('python') and value.get('architecture')
+            and re.fullmatch('[a-f0-9]{64}', value.get('systemPackagesSha256', '')), 'Incomplete installed runtime proof')
+    return value
+
+
+def current_binding():
+    return {'revision': os.environ['GITHUB_SHA'], 'runId': int(os.environ['GITHUB_RUN_ID']),
+            'runAttempt': int(os.environ['GITHUB_RUN_ATTEMPT'])}
+
+
+def resolve_scope(decision, scope, actual):
+    binding = current_binding()
+    validate_decision(decision, binding['revision'], binding['runId'], binding['runAttempt'])
+    row = dict(decision['checks'][scope])
+    row['reused'] = False
+    row['runtimeMatched'] = False
+    if row.get('eligible'):
+        validate_runtime(actual)
+        if row.get('sourceRuntime') != actual:
+            row['reason'] = 'Installed toolchain or test fixtures changed; executing the full check'
+        else:
+            row['runtimeMatched'] = True
+            row['reused'] = decision['mode'] == 'active'
+            row['reason'] = 'Verified PR and actual installed runtime match' if row['reused'] else 'Shadow runtime comparison matched; executing checks'
+    return {'schema': OUTCOME, **binding, 'scope': scope, 'mode': decision['mode'],
+            'runtime': actual, 'decision': row}
+
+
+def collect_outcomes(decision, inputs):
+    binding = current_binding()
+    validate_decision(decision, binding['revision'], binding['runId'], binding['runAttempt'])
+    rows = [json.loads(p.read_text()) for p in Path(inputs).rglob('check-outcome.json')]
+    require(len(rows) == len(JOBS) and {r.get('scope') for r in rows} == set(JOBS), 'Missing or duplicate final check decisions')
+    for row in rows:
+        require(row.get('schema') == OUTCOME and all(row.get(k) == v for k, v in binding.items())
+                and row.get('mode') == decision['mode'], 'Final check belongs to another source/run/attempt')
+        before = decision['checks'][row['scope']]
+        after = row['decision']
+        # Only runtime confirmation can alter the predicted decision and reason.
+        require({k: v for k, v in before.items() if k not in ('reused', 'reason', 'runtimeMatched')}
+                == {k: v for k, v in after.items() if k not in ('reused', 'reason', 'runtimeMatched')}, 'Final check changed source provenance')
+        require(type(after.get('runtimeMatched')) is bool, 'Runtime comparison result missing')
+        if after['runtimeMatched']:
+            require(before.get('eligible') and after.get('sourceRuntime') == row.get('runtime'), 'Runtime match was not confirmed')
+        if after['reused']:
+            require(before.get('eligible') and decision['mode'] == 'active'
+                    and after.get('sourceRuntime') == row.get('runtime'), 'Reused check lacks matching installed runtime')
+            validate_runtime(row['runtime'])
+        decision['checks'][row['scope']] = after
+    return validate_decision(decision, binding['revision'], binding['runId'], binding['runAttempt'])
 
 
 def write(path, value):
@@ -48,7 +181,7 @@ def source(repo):
             'workflowBlob': git(repo, 'rev-parse', 'HEAD:' + WORKFLOW)}
 
 
-def record(repo, scope, event, summary=None):
+def record(repo, scope, event, summary=None, outcome=None, runtime_dir=None):
     require(scope in JOBS, 'Unsupported reusable check')
     require(os.environ.get('GITHUB_EVENT_NAME') == 'pull_request', 'Only PR execution can issue reusable evidence')
     pr = event['pull_request']
@@ -62,6 +195,12 @@ def record(repo, scope, event, summary=None):
              'headRevision': pr['head']['sha'], 'baseRevision': pr['base']['sha'],
              'environment': environment(), 'execution': 'fresh'}
     require(all(value['environment'].values()), 'Hosted runner generation is unavailable')
+    require(outcome is not None, 'Actual check outcome is required')
+    outcome = json.loads(Path(outcome).read_text())
+    require(outcome.get('schema') == OUTCOME and outcome.get('scope') == scope
+            and all(outcome.get(k) == v for k, v in current_binding().items())
+            and not outcome['decision']['reused'], 'PR evidence must describe a fresh check')
+    value['runtime'] = outcome['runtime']
     if scope == 'backend':
         require(summary is not None, 'Complete backend coverage is required')
         data = json.loads(Path(summary).read_text())
@@ -70,6 +209,16 @@ def record(repo, scope, event, summary=None):
                 'Incomplete backend coverage')
         value['coverage'] = data
         value['coverageSha256'] = hashlib.sha256(Path(summary).read_bytes()).hexdigest()
+        require(runtime_dir is not None, 'Actual backend shard environments are required')
+        snapshots = [json.loads(p.read_text()) for p in Path(runtime_dir).rglob('shard-runtime.json')]
+        require(len(snapshots) == 3 and {s.get('index') for s in snapshots} == {0, 1, 2}
+                and all(all(s.get(k) == v for k, v in current_binding().items()) for s in snapshots),
+                'Incomplete backend runtime attestations')
+        # A runner rollout between shards is a legitimate miss, never reusable.
+        if any(s['runtime'] != value['runtime'] for s in snapshots):
+            value['runtime'] = None
+    if value['runtime'] is not None:
+        validate_runtime(value['runtime'])
     return value
 
 
@@ -98,6 +247,7 @@ def validate_proof(value, run, pr, identity, runner, job, check, commit):
     require(value.get('tree') == identity['tree'] and value.get('workflowBlob') == identity['workflowBlob'],
             'Tested files or workflow differ from current main')
     require(value.get('environment') == runner and all(runner.values()), 'Hosted runner generation changed')
+    validate_runtime(value.get('runtime'))
     require(job.get('run_id') == run['id'] and job.get('run_attempt') == run['run_attempt']
             and job.get('head_sha') == run['head_sha'] and job.get('name') == JOBS[scope]
             and job.get('status') == 'completed' and job.get('conclusion') == 'success'
@@ -163,6 +313,10 @@ def select(client, repo, selection, revision, mode='shadow', runner=None, now=No
             archive = client.download(item, Path(directory) / 'proof.zip', 256 * 1024)
             extract_files(archive, Path(directory) / 'files', {'test-evidence.json': 128 * 1024})
             value = json.loads((Path(directory) / 'files/test-evidence.json').read_text())
+        # Older evidence did not attest actual Java/browser/SDK versions.
+        if value.get('schema') == 'otziv-test-evidence-v1' or value.get('runtime') is None:
+            result['checks'][scope]['reason'] = 'Actual installed runtime evidence unavailable; executing checks'
+            continue
         # Legitimate mismatches take the normal full path. Invalid identities fail below.
         if value.get('tree') != identity['tree'] or value.get('workflowBlob') != identity['workflowBlob'] or value.get('environment') != runner:
             result['checks'][scope]['reason'] = 'Files, workflow or hosted runner generation differ; executing checks'
@@ -176,8 +330,8 @@ def select(client, repo, selection, revision, mode='shadow', runner=None, now=No
         check = client.get(url.removeprefix(API))
         commit = client.get('/git/commits/' + value['testedRevision'])
         validate_proof(value, run, pr, identity, runner, job, check, commit)
-        result['checks'][scope] = {'reused': mode == 'active', 'eligible': True,
-            'reason': 'Verified identical PR checkout, workflow, hosted runner and successful latest attempt',
+        result['checks'][scope] = {'reused': False, 'eligible': True,
+            'reason': 'PR provenance verified; actual installed runtime must still match', 'sourceRuntime': value['runtime'],
             'sourceRunId': run['id'], 'sourceAttempt': run['run_attempt'], 'sourceHead': run['head_sha'],
             'testedRevision': value['testedRevision'], 'tree': value['tree'], 'jobId': job['id'],
             'artifactId': item['id'], 'artifactDigest': item['digest'], 'coverage': value.get('coverage')}
@@ -196,11 +350,12 @@ def validate_decision(value, revision, run_id, attempt):
     for row in value['checks'].values():
         require(type(row.get('reused')) is bool, 'Test transfer decision missing')
         if row['reused']:
-            require(value['mode'] == 'active' and row.get('eligible') is True and row.get('tree') == value['tree']
+            require(value['mode'] == 'active' and row.get('eligible') is True and row.get('runtimeMatched') is True and row.get('tree') == value['tree']
                     and all(type(row.get(k)) is int and row[k] > 0 for k in ('sourceRunId', 'sourceAttempt', 'jobId', 'artifactId'))
                     and re.fullmatch('[a-f0-9]{40}', row.get('sourceHead', ''))
                     and re.fullmatch('[a-f0-9]{40}', row.get('testedRevision', ''))
                     and re.fullmatch('sha256:[a-f0-9]{64}', row.get('artifactDigest', '')), 'Incomplete test transfer provenance')
+            validate_runtime(row.get('sourceRuntime'))
     return value
 
 
@@ -218,12 +373,31 @@ def verify_live_sources(client, value):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument('action', choices=['record', 'select'])
+    p.add_argument('action', choices=['record', 'select', 'resolve', 'snapshot', 'collect'])
     p.add_argument('--scope', choices=JOBS); p.add_argument('--summary', type=Path)
     p.add_argument('--selection', type=Path); p.add_argument('--output', type=Path, required=True)
+    p.add_argument('--decision', type=Path); p.add_argument('--outcome', type=Path)
+    p.add_argument('--inputs', type=Path); p.add_argument('--index', type=int)
+    p.add_argument('--runtime-dir', type=Path)
     args = p.parse_args()
     if args.action == 'record':
-        value = record(Path.cwd(), args.scope, json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text()), args.summary)
+        value = record(Path.cwd(), args.scope, json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text()),
+                       args.summary, args.outcome, args.runtime_dir)
+    elif args.action == 'snapshot':
+        value = {**current_binding(), 'index': args.index, 'runtime': runtime(Path.cwd(), args.scope)}
+    elif args.action == 'resolve':
+        decision = json.loads(args.decision.read_text())
+        selected = os.environ.get('CHECK_SELECTED') == 'true'
+        actual = runtime(Path.cwd(), args.scope) if selected else None
+        value = resolve_scope(decision, args.scope, actual)
+        with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as stream:
+            stream.write(f"reused={str(value['decision']['reused']).lower()}\n")
+            if args.scope == 'backend' and actual:
+                stream.write('java_version=' + actual['java']['runtimeVersion'] + '\n')
+        with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as stream:
+            stream.write(f"\n{args.scope}: {value['decision']['reason']}\n")
+    elif args.action == 'collect':
+        value = collect_outcomes(json.loads(args.decision.read_text()), args.inputs)
     else:
         selection = json.loads(args.selection.read_text())
         if os.environ.get('GITHUB_EVENT_NAME') == 'push' and os.environ.get('GITHUB_REF') == 'refs/heads/main':

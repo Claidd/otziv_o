@@ -9,8 +9,9 @@ import unittest
 from unittest.mock import patch
 import zipfile
 
-from ci_test_reuse import (DECISION, JOBS, RECORD_STEP, REPOSITORY, SCHEMA, WORKFLOW,
-                           record, select, validate_decision, validate_proof, verify_live_sources)
+from ci_test_reuse import (DECISION, JOBS, RECORD_STEP, REPOSITORY, SCHEMA, WORKFLOW, RUNTIME_SCHEMA,
+                           record, select, validate_decision, validate_proof, verify_live_sources,
+                           resolve_scope, collect_outcomes, directory_digest)
 from release_ci import ACTION_APP_ID, API, GateError
 
 
@@ -18,6 +19,9 @@ class ReuseTest(unittest.TestCase):
     def setUp(self):
         self.identity = {'testedRevision': 'a'*40, 'tree': 'b'*40, 'workflowBlob': 'c'*40}
         self.runner = {'ImageOS': 'ubuntu24', 'ImageVersion': '20260920.1', 'RUNNER_ARCH': 'X64', 'RUNNER_OS': 'Linux'}
+        self.runtime = {'schema': RUNTIME_SCHEMA, 'runner': self.runner, 'architecture': 'x86_64',
+                        'python': '3.12.3', 'node': {'node': '24.18.0'}, 'nodeSha256': '3'*64,
+                        'npm': '11.12.1', 'systemPackagesSha256': '4'*64}
         self.now = dt.datetime(2026, 9, 27, 19, tzinfo=dt.timezone.utc)
         self.run = {'id': 123, 'run_attempt': 1, 'head_sha': 'd'*40, 'status': 'completed',
                     'conclusion': 'success', 'path': WORKFLOW, 'event': 'pull_request',
@@ -30,7 +34,7 @@ class ReuseTest(unittest.TestCase):
                       'execution': 'fresh', 'scope': 'frontend', 'jobName': JOBS['frontend'],
                       'testedRevision': 'f'*40, 'tree': 'b'*40, 'workflowBlob': 'c'*40,
                       'headRevision': 'd'*40, 'baseRevision': 'e'*40, 'runId': 123,
-                      'runAttempt': 1, 'pullRequest': 32, 'environment': self.runner}
+                      'runAttempt': 1, 'pullRequest': 32, 'environment': self.runner, 'runtime': self.runtime}
         self.job = {'id': 55, 'run_id': 123, 'run_attempt': 1, 'head_sha': 'd'*40,
                     'name': JOBS['frontend'], 'status': 'completed', 'conclusion': 'success',
                     'labels': ['ubuntu-24.04'], 'check_run_url': API + '/check-runs/55',
@@ -67,9 +71,16 @@ class ReuseTest(unittest.TestCase):
             archive.writestr('test-evidence.json', json.dumps(self.value))
         return path
 
-    def select(self, mode='active'):
-        with patch('ci_test_reuse.source', return_value=self.identity), patch.dict(os.environ, {'GITHUB_RUN_ID': '900', 'GITHUB_RUN_ATTEMPT': '1'}):
-            return select(self, Path('.'), self.selection, 'a'*40, mode, self.runner, self.now)
+    def binding(self):
+        return patch.dict(os.environ, {'GITHUB_SHA': 'a'*40, 'GITHUB_RUN_ID': '900', 'GITHUB_RUN_ATTEMPT': '1'})
+
+    def select(self, mode='active', confirm=True):
+        with patch('ci_test_reuse.source', return_value=self.identity), self.binding():
+            decision = select(self, Path('.'), self.selection, 'a'*40, mode, self.runner, self.now)
+            if confirm:
+                for scope in JOBS:
+                    decision['checks'][scope] = resolve_scope(decision, scope, self.runtime)['decision']
+            return decision
 
     def validate(self):
         validate_proof(self.value, self.run, self.pr, self.identity, self.runner, self.job, self.check, self.commit)
@@ -159,6 +170,97 @@ class ReuseTest(unittest.TestCase):
         self.validate()
         self.value['coverage']['failures']=1
         with self.assertRaises(GateError):self.validate()
+
+    def test_source_selection_never_skips_before_installed_runtime_confirmation(self):
+        decision = self.select(confirm=False)
+        self.assertTrue(decision['checks']['frontend']['eligible'])
+        self.assertFalse(any(r['reused'] for r in decision['checks'].values()))
+
+    def test_exact_java_patch_and_bytes_node_packages_sdk_and_browser_must_match(self):
+        for extra in ({'java': {'version': '26.0.2+7', 'modulesSha256': '5'*64}},
+                      {'androidSdk': {'platforms/android-36': '6'*64}},
+                      {'chromiumSha256': '7'*64}, {'npm': 'another'},
+                      {'systemPackagesSha256': '8'*64}, {'nodeSha256': '9'*64}):
+            with self.subTest(extra=extra), self.binding():
+                outcome = resolve_scope(self.select(confirm=False), 'frontend', {**self.runtime, **extra})
+                self.assertFalse(outcome['decision']['reused'])
+                self.assertIn('executing the full check', outcome['decision']['reason'])
+
+    def test_old_or_incomplete_runtime_evidence_cannot_be_reused(self):
+        self.value['schema'] = 'otziv-test-evidence-v1'
+        self.assertFalse(self.select()['checks']['frontend']['reused'])
+        self.value['schema'] = SCHEMA
+        self.value['runtime'] = None
+        self.assertFalse(self.select()['checks']['frontend']['reused'])
+        self.value['runtime'] = {'schema': RUNTIME_SCHEMA}
+        with self.assertRaisesRegex(GateError, 'runtime'):self.select()
+
+    def outcomes(self, decision, directory):
+        for scope in JOBS:
+            path = Path(directory) / scope / 'check-outcome.json'
+            path.parent.mkdir()
+            path.write_text(json.dumps(resolve_scope(decision, scope, self.runtime)))
+
+    def test_release_requires_complete_current_attempt_runtime_confirmed_outcomes(self):
+        with self.binding(), tempfile.TemporaryDirectory() as directory:
+            decision = self.select(confirm=False)
+            self.outcomes(decision, directory)
+            final = collect_outcomes(copy.deepcopy(decision), directory)
+            self.assertTrue(final['checks']['frontend']['reused'])
+            path = Path(directory) / 'frontend/check-outcome.json'
+            original = json.loads(path.read_text())
+            for mutate in ('attempt', 'runtime', 'provenance'):
+                row = copy.deepcopy(original)
+                if mutate == 'attempt': row['runAttempt'] = 2
+                elif mutate == 'runtime': row['runtime']['nodeSha256'] = '0'*64
+                else: row['decision']['sourceRunId'] = 999
+                path.write_text(json.dumps(row))
+                with self.subTest(mutate=mutate), self.assertRaises(GateError):
+                    collect_outcomes(copy.deepcopy(decision), directory)
+            path.unlink()
+            with self.assertRaisesRegex(GateError, 'Missing or duplicate'):
+                collect_outcomes(copy.deepcopy(decision), directory)
+
+    def test_release_uses_actual_fallback_not_eligible_prediction(self):
+        with self.binding(), tempfile.TemporaryDirectory() as directory:
+            decision = self.select(confirm=False)
+            self.outcomes(decision, directory)
+            path = Path(directory) / 'frontend/check-outcome.json'
+            path.write_text(json.dumps(resolve_scope(decision, 'frontend', {**self.runtime, 'npm': 'changed'})))
+            final = collect_outcomes(decision, directory)
+            self.assertFalse(final['checks']['frontend']['reused'])
+
+    def test_installed_distribution_hash_changes_when_same_version_bytes_change(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'binary'
+            path.write_bytes(b'version 1; first bytes')
+            before = directory_digest(directory)
+            path.write_bytes(b'version 1; replaced bytes')
+            self.assertNotEqual(before, directory_digest(directory))
+
+    def test_backend_evidence_requires_all_actual_shards_and_does_not_reuse_mixed_runners(self):
+        with tempfile.TemporaryDirectory() as directory, self.binding(), patch.dict(os.environ, {
+                'GITHUB_EVENT_NAME': 'pull_request', 'GITHUB_SHA': 'f'*40}), \
+                patch('ci_test_reuse.environment', return_value=self.runner), \
+                patch('ci_test_reuse.source', return_value={**self.identity, 'testedRevision': 'f'*40}):
+            decision = {'schema': DECISION, 'revision': 'f'*40, 'runId': 900, 'runAttempt': 1,
+                        'tree': 'b'*40, 'mode': 'off', 'checks': {s: {'reused': False} for s in JOBS}}
+            outcome = resolve_scope(decision, 'backend', self.runtime)
+            root = Path(directory); summary = root / 'suite.json'; result = root / 'outcome.json'
+            summary.write_text(json.dumps({'result': 'PASS', 'shards': 3, 'tests': 100, 'classes': 30, 'failures': 0, 'errors': 0}))
+            result.write_text(json.dumps(outcome))
+            event = {'pull_request': self.pr}
+            def issue():
+                return record(Path('.'), 'backend', event, summary, result, root)
+            with self.assertRaisesRegex(GateError, 'runtime attestations'):issue()
+            for index in range(3):
+                folder = root / str(index); folder.mkdir()
+                (folder / 'shard-runtime.json').write_text(json.dumps({
+                    'revision': 'f'*40, 'runId': 900, 'runAttempt': 1, 'index': index, 'runtime': self.runtime}))
+            self.assertEqual(self.runtime, issue()['runtime'])
+            path = root / '1/shard-runtime.json'; row = json.loads(path.read_text())
+            row['runtime']['npm'] = 'changed'; path.write_text(json.dumps(row))
+            self.assertIsNone(issue()['runtime'])
 
 
 if __name__=='__main__':unittest.main()
