@@ -7,7 +7,7 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 class CampaignScheduleTest {
-    CampaignModels.Settings settings() { return new CampaignModels.Settings("Offer","Body",10,10,"10:00","21:00",true,false,false,"ATTACHMENT"); }
+    CampaignModels.Settings settings() { return new CampaignModels.Settings("Offer","Body",10,10,"10:00","21:00",true,false,false,"ATTACHMENT",false); }
     @Test void windowsAndCalendarUseIrkutskRegardlessOfServerZone() {
         assertThat(CampaignSchedule.allowed(LocalDateTime.parse("2026-09-17T01:59:00"),settings())).isEqualTo("2026-09-17T02:00:00");
         assertThat(CampaignSchedule.allowed(LocalDateTime.parse("2026-09-17T13:00:00"),settings())).isEqualTo("2026-09-18T02:00:00");

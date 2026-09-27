@@ -166,7 +166,7 @@ const SECONDARY_LINKS: AppNavigationLink[] = [
   },
   {
     id: 'client-offers',
-    label: 'Рассылки',
+    label: 'Рассылка',
     description: 'Предложения услуг клиентам',
     icon: 'campaign',
     active: 'client-offers',

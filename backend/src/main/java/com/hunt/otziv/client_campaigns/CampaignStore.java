@@ -40,7 +40,7 @@ public class CampaignStore {
                 values.getOrDefault("UNKNOWN", 0L), values.getOrDefault("SKIPPED", 0L));
     }
     public List<Recipient> recipients(String id, int page) {
-        return jdbc.query("SELECT * FROM client_offer_recipient WHERE campaign_id=? ORDER BY priority,company_id LIMIT 100 OFFSET ?",
+        return jdbc.query("SELECT * FROM client_offer_recipient WHERE campaign_id=? ORDER BY priority,company_id,user_id LIMIT 100 OFFSET ?",
                 this::recipient, id, Math.max(0, page) * 100L);
     }
     public Attachment attachment(String id) {
@@ -70,16 +70,16 @@ public class CampaignStore {
         jdbc.update("""
                 INSERT IGNORE INTO client_offer_campaign
                 (id,title,message,daily_limit,interval_minutes,window_start,window_end,include_active,include_stopped,
-                 include_banned,created_by,created_at,file_mode,file_token) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                 include_banned,created_by,created_at,file_mode,file_token,test_only) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """, id,s.title(),s.message(),s.dailyLimit(),s.intervalMinutes(),s.windowStart(),s.windowEnd(),
-                s.includeActive(),s.includeStopped(),s.includeBanned(),actor,now,s.fileMode(),UUID.randomUUID().toString());
+                s.includeActive(),s.includeStopped(),s.includeBanned(),actor,now,s.fileMode(),UUID.randomUUID().toString(),s.testOnly());
         var current = lock(id);
         requireState(current, "DRAFT");
         jdbc.update("""
                 UPDATE client_offer_campaign SET title=?,message=?,daily_limit=?,interval_minutes=?,window_start=?,
-                window_end=?,include_active=?,include_stopped=?,include_banned=?,file_mode=? WHERE id=?
+                window_end=?,include_active=?,include_stopped=?,include_banned=?,file_mode=?,test_only=? WHERE id=?
                 """, s.title().trim(),s.message().trim(),s.dailyLimit(),s.intervalMinutes(),s.windowStart(),s.windowEnd(),
-                s.includeActive(),s.includeStopped(),s.includeBanned(),s.fileMode(),id);
+                s.includeActive(),s.includeStopped(),s.includeBanned(),s.fileMode(),s.testOnly(),id);
         if (removeFile || file != null) jdbc.update("DELETE FROM client_offer_campaign_file WHERE campaign_id=?", id);
         if (file != null) {
             jdbc.update("INSERT INTO client_offer_campaign_file (campaign_id,content) VALUES (?,?)", id,file.bytes());
@@ -89,6 +89,8 @@ public class CampaignStore {
     }
 
     private List<Recipient> audience(Settings settings) {
+        // Test mode is an exclusive audience; client list switches cannot add companies to it.
+        if (settings.testOnly()) return testAudience();
         List<Recipient> rows = jdbc.query("""
                 SELECT c.company_id,c.company_title,c.company_url_chat,c.company_group_id,
                        c.company_telegram_group_chat_id,c.company_max_group_chat_id,m.client_id,s.status_title
@@ -104,7 +106,7 @@ public class CampaignStore {
             String destination = CampaignAudience.destination(url,client,chat,tg,max);
             return new Recipient(0,null,companyId,Objects.toString(r.getString("company_title"),"Компания"),group,
                     CampaignAudience.priority(group),destination == null ? "MISSING:"+companyId : destination,url,client,chat,tg,max,
-                    destination == null ? "SKIPPED" : "PENDING",null,destination == null ? "Не настроен привязанный чат компании" : null,null);
+                    destination == null ? "SKIPPED" : "PENDING",null,destination == null ? "Не настроен привязанный чат компании" : null,null,null);
         });
         Set<String> destinations = new HashSet<>();
         return rows.stream().filter(r -> CampaignAudience.included(r.audience(),settings))
@@ -113,9 +115,42 @@ public class CampaignStore {
     public List<AudienceCount> preview(Settings settings) {
         CampaignSchedule.validate(settings);
         var recipients = audience(settings);
-        return List.of("ACTIVE","STOPPED","BANNED").stream().map(group -> new AudienceCount(group,
+        return (settings.testOnly() ? List.of("TEST_STAFF") : List.of("ACTIVE","STOPPED","BANNED")).stream().map(group -> new AudienceCount(group,
                 recipients.stream().filter(r -> group.equals(r.audience())).count(),
                 recipients.stream().filter(r -> group.equals(r.audience()) && "PENDING".equals(r.state())).count())).toList();
+    }
+
+    private List<Recipient> testAudience() {
+        var rows = jdbc.query("""
+                SELECT u.id,u.fio,u.username,u.telegram_chat_id FROM users u
+                WHERE u.active=TRUE AND EXISTS (
+                    SELECT 1 FROM users_roles ur JOIN roles r ON r.id=ur.role_id
+                    WHERE ur.user_id=u.id AND r.name IN ('ROLE_ADMIN','ROLE_OWNER'))
+                ORDER BY u.id
+                """, (r,n) -> {
+            long userId = r.getLong("id");
+            Long chat = r.getObject("telegram_chat_id",Long.class);
+            boolean reachable = chat != null && chat > 0; // Personal Telegram chats only.
+            String name = r.getString("fio");
+            if (name == null || name.isBlank()) name = r.getString("username");
+            return new Recipient(0,null,null,Objects.toString(name,"Пользователь"),"TEST_STAFF",1,
+                    reachable ? "TELEGRAM:"+chat : "MISSING_USER:"+userId,null,null,null,
+                    reachable ? chat : null,null,reachable ? "PENDING" : "SKIPPED",null,
+                    reachable ? null : "Не привязан личный Telegram-чат",null,userId);
+        });
+        Set<String> destinations = new HashSet<>();
+        return rows.stream().filter(r -> destinations.add(r.destinationKey())).toList();
+    }
+
+    public boolean testRecipientAllowed(Recipient recipient) {
+        if (!"TEST_STAFF".equals(recipient.audience()) || recipient.companyId() != null
+                || recipient.userId() == null || recipient.telegramChatId() == null || recipient.telegramChatId() <= 0
+                || !("TELEGRAM:"+recipient.telegramChatId()).equals(recipient.destinationKey())) return false;
+        return Boolean.TRUE.equals(jdbc.queryForObject("""
+                SELECT EXISTS (SELECT 1 FROM users u WHERE u.id=? AND u.active=TRUE AND u.telegram_chat_id=?
+                    AND EXISTS (SELECT 1 FROM users_roles ur JOIN roles r ON r.id=ur.role_id
+                        WHERE ur.user_id=u.id AND r.name IN ('ROLE_ADMIN','ROLE_OWNER')))
+                """,Boolean.class,recipient.userId(),recipient.telegramChatId()));
     }
 
     @Transactional
@@ -125,14 +160,17 @@ public class CampaignStore {
         requireState(c,"DRAFT");
         List<Recipient> rows = audience(c.settings());
         if (rows.stream().noneMatch(r -> "PENDING".equals(r.state())))
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"В выбранных списках нет клиентов с настроенным чатом");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,c.settings().testOnly()
+                    ? "Нет активных администраторов и владельцев с привязанным личным Telegram-чатом"
+                    : "В выбранных списках нет клиентов с настроенным чатом");
         jdbc.batchUpdate("""
                 INSERT INTO client_offer_recipient (campaign_id,company_id,company_title,audience,priority,destination_key,
-                chat_url,client_id,group_id,telegram_chat_id,max_chat_id,state,operation_id,error_message)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                chat_url,client_id,group_id,telegram_chat_id,max_chat_id,state,operation_id,error_message,user_id)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """, rows, 250, (ps,r) -> {
             Object[] values = {id,r.companyId(),r.companyTitle(),r.audience(),r.priority(),r.destinationKey(),r.chatUrl(),
-                    r.clientId(),r.groupId(),r.telegramChatId(),r.maxChatId(),r.state(),"offer:"+id+":"+r.companyId(),r.errorMessage()};
+                    r.clientId(),r.groupId(),r.telegramChatId(),r.maxChatId(),r.state(),
+                    "offer:"+id+":"+(r.userId() == null ? r.companyId() : "user:"+r.userId()),r.errorMessage(),r.userId()};
             for (int i=0;i<values.length;i++) ps.setObject(i+1,values[i]);
         });
         jdbc.update("UPDATE client_offer_campaign SET state='RUNNING',started_at=?,next_at=? WHERE id=?",
@@ -205,7 +243,7 @@ public class CampaignStore {
             jdbc.update("UPDATE client_offer_campaign SET next_at=? WHERE id=?",CampaignSchedule.nextDay(now,c.settings()),id);
             return null;
         }
-        var r = jdbc.query("SELECT * FROM client_offer_recipient WHERE campaign_id=? AND state='PENDING' ORDER BY priority,company_id LIMIT 1 FOR UPDATE",
+        var r = jdbc.query("SELECT * FROM client_offer_recipient WHERE campaign_id=? AND state='PENDING' ORDER BY priority,company_id,user_id LIMIT 1 FOR UPDATE",
                 this::recipient,id).getFirst();
         jdbc.update("UPDATE client_offer_recipient SET state='SENDING',claimed_at=? WHERE id=?",now,r.id());
         // Reserve quota before transport. Unknown outcomes count too, so the limit cannot be exceeded.
@@ -245,14 +283,14 @@ public class CampaignStore {
     private Campaign campaign(ResultSet r, int n) throws SQLException {
         return new Campaign(r.getString("id"),new Settings(r.getString("title"),r.getString("message"),r.getInt("daily_limit"),
                 r.getInt("interval_minutes"),r.getString("window_start"),r.getString("window_end"),r.getBoolean("include_active"),
-                r.getBoolean("include_stopped"),r.getBoolean("include_banned"),r.getString("file_mode")),r.getString("state"),
+                r.getBoolean("include_stopped"),r.getBoolean("include_banned"),r.getString("file_mode"),r.getBoolean("test_only")),r.getString("state"),
                 r.getObject("created_at",LocalDateTime.class),r.getObject("started_at",LocalDateTime.class),r.getObject("next_at",LocalDateTime.class),
                 r.getObject("budget_day",java.time.LocalDate.class),r.getInt("budget_used"),r.getString("file_name"),r.getString("file_type"),r.getString("file_token"));
     }
     private Recipient recipient(ResultSet r, int n) throws SQLException {
-        return new Recipient(r.getLong("id"),r.getString("campaign_id"),r.getLong("company_id"),r.getString("company_title"),
+        return new Recipient(r.getLong("id"),r.getString("campaign_id"),r.getObject("company_id",Long.class),r.getString("company_title"),
                 r.getString("audience"),r.getInt("priority"),r.getString("destination_key"),r.getString("chat_url"),r.getString("client_id"),
                 r.getString("group_id"),r.getObject("telegram_chat_id",Long.class),r.getObject("max_chat_id",Long.class),r.getString("state"),
-                r.getString("operation_id"),r.getString("error_message"),r.getObject("finished_at",LocalDateTime.class));
+                r.getString("operation_id"),r.getString("error_message"),r.getObject("finished_at",LocalDateTime.class),r.getObject("user_id",Long.class));
     }
 }

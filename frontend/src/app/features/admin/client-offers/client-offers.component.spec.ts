@@ -29,6 +29,7 @@ describe('client offer campaigns', () => {
     const fixture = setup(); const component = fixture.componentInstance;
     expect(component.draft.fileMode).toBe('ATTACHMENT'); expect(component.draft.includeActive).toBe(true);
     expect(component.draft.includeStopped).toBe(false); expect(component.draft.includeBanned).toBe(false);
+    expect(component.draft.testOnly).toBe(false);
     expect(fixture.nativeElement.textContent).toContain('Вложением к сообщению');
     expect(fixture.nativeElement.textContent).toContain('3. Бан');
   });
@@ -49,6 +50,35 @@ describe('client offer campaigns', () => {
   it('polling keeps unsaved content and never starts a campaign', () => {
     const c = setup().componentInstance; valid(c); c.load(false);
     expect(c.draft.message).toBe('Предложение'); expect(api.action).not.toHaveBeenCalled();
+  });
+  it('test mode hides client lists, permits an empty client selection and persists the exclusive audience', async () => {
+    const fixture = setup(); const c = fixture.componentInstance; valid(c);
+    c.draft.includeActive = false; c.draft.includeStopped = false; c.draft.includeBanned = false;
+    fixture.changeDetectorRef.markForCheck(); fixture.detectChanges(); await fixture.whenStable();
+    const select: HTMLSelectElement = fixture.nativeElement.querySelector('select[name="testOnly"]');
+    select.selectedIndex = 1; select.dispatchEvent(new Event('change'));
+    fixture.detectChanges(); await fixture.whenStable();
+    expect(c.draft.testOnly).toBe(true); expect(c.valid()).toBe(true);
+    expect(fixture.nativeElement.querySelector('input[name="active"]')).toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('Клиентам ничего не отправится');
+    expect(fixture.nativeElement.textContent).toContain('Запуск тестовой рассылки');
+    c.preview(); expect(api.preview).toHaveBeenCalledWith(expect.objectContaining({ testOnly: true }));
+    expect(api.action).not.toHaveBeenCalled();
+    api.save.mockReturnValue(of(campaign(c, 'DRAFT'))); c.save();
+    expect(api.save).toHaveBeenCalledWith(c.draftId, expect.objectContaining({ testOnly: true }), null, false);
+    expect(api.action).not.toHaveBeenCalled();
+    select.selectedIndex = 0; select.dispatchEvent(new Event('change')); fixture.detectChanges();
+    expect(c.valid()).toBe(false);
+    expect(fixture.nativeElement.querySelector('input[name="active"]')).not.toBeNull();
+  });
+  it('keeps saved test campaigns visibly marked and locks their audience after start', () => {
+    const fixture = setup(); const c = fixture.componentInstance; valid(c); c.draft.testOnly = true;
+    const row = { campaign: campaign(c, 'RUNNING'), counts: { total: 2, pending: 2, sent: 0, unknown: 0, failed: 0, skipped: 0, sending: 0 }, usedToday: 0 };
+    c.board.set({ liveEnabled: true, campaigns: [row] }); c.select(row); fixture.detectChanges();
+    expect(c.draft.testOnly).toBe(true);
+    expect(fixture.nativeElement.querySelector('select[name="testOnly"]')).toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('Тестовая рассылка — только администраторам и владельцам');
+    expect(fixture.nativeElement.textContent).toContain('Пользователь');
   });
   it('shows unknown delivery separately and locks the payload after start', () => {
     const fixture = setup(); const c = fixture.componentInstance; valid(c);

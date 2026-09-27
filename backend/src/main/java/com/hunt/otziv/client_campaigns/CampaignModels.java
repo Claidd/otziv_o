@@ -15,7 +15,7 @@ public final class CampaignModels {
             @NotNull @Pattern(regexp="[0-2][0-9]:[0-5][0-9]") String windowStart,
             @NotNull @Pattern(regexp="[0-2][0-9]:[0-5][0-9]") String windowEnd,
             boolean includeActive, boolean includeStopped, boolean includeBanned,
-            @NotNull @Pattern(regexp="ATTACHMENT|LINK") String fileMode) {}
+            @NotNull @Pattern(regexp="ATTACHMENT|LINK") String fileMode, boolean testOnly) {}
 
     public record Campaign(String id, Settings settings, String state, LocalDateTime createdAt,
             LocalDateTime startedAt, LocalDateTime nextAt, LocalDate budgetDay, int budgetUsed,
@@ -24,10 +24,10 @@ public final class CampaignModels {
     public record Summary(Campaign campaign, Counts counts, int usedToday) {}
     public record Board(boolean liveEnabled, List<Summary> campaigns) {}
     public record AudienceCount(String audience, long total, long reachable) {}
-    public record Recipient(long id, String campaignId, long companyId, String companyTitle, String audience,
+    public record Recipient(long id, String campaignId, Long companyId, String companyTitle, String audience,
             int priority, String destinationKey, String chatUrl, String clientId, String groupId,
             Long telegramChatId, Long maxChatId, String state, String operationId, String errorMessage,
-            LocalDateTime finishedAt) {
+            LocalDateTime finishedAt, Long userId) {
         public ClientMessageDelivery.Target target() {
             return new ClientMessageDelivery.Target(companyId, companyTitle, chatUrl, telegramChatId, maxChatId);
         }
