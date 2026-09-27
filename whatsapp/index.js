@@ -966,7 +966,7 @@ app.get("/internal/operation-metrics", (_req, res) => {
   res.json(operationLedger.metrics());
 });
 
-app.use("/send-group-file", express.json({ limit: "8mb", strict: true }));
+app.use(["/send-group-file", "/send-file"], express.json({ limit: "8mb", strict: true }));
 app.use(express.json({ limit: WHATSAPP_HTTP_BODY_LIMIT, strict: true }));
 
 app.get("/internal/inbox-metrics", (_req, res) => {
@@ -1062,10 +1062,7 @@ app.get("/operations/:operationId", asyncRoute(async (req, res) => {
   res.set("Cache-Control", "no-store");
   res.json({ operationId: req.params.operationId, ...operationLedger.lookup(req.params.operationId) });
 }));
-app.post("/send-group-file", asyncRoute(createDocumentOutboundHandler({
-  ledger: operationLedger, clientId: CLIENT_ID, normalizeDestination: normalizeGroupId,
-  canStart: canStartOutbound,
-  send: async (destination, file) => {
+async function sendDocument(destination, file) {
     const outboundToken = outboundRegistry.begin(destination, file.caption);
     try {
       const sent = await client.sendMessage(destination,
@@ -1079,7 +1076,18 @@ app.post("/send-group-file", asyncRoute(createDocumentOutboundHandler({
       outboundRegistry.cancel(outboundToken);
       throw error;
     }
+}
+app.post("/send-group-file", asyncRoute(createDocumentOutboundHandler({
+  ledger: operationLedger, clientId: CLIENT_ID, normalizeDestination: normalizeGroupId,
+  canStart: canStartOutbound, send: sendDocument,
+})));
+app.post("/send-file", asyncRoute(createDocumentOutboundHandler({
+  ledger: operationLedger, clientId: CLIENT_ID, kind: "send-file",
+  normalizeDestination: raw => {
+    const phone = normalizePhone(raw);
+    return /^[1-9][0-9]{6,14}@c\.us$/u.test(phone) ? phone : "";
   },
+  canStart: canStartOutbound, send: sendDocument,
 })));
 app.post("/operations/:operationId/reconcile", asyncRoute(createOperationReconciliationHandler({
   ledger: operationLedger, clientId: CLIENT_ID,

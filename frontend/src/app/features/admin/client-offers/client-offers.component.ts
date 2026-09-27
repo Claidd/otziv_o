@@ -8,7 +8,8 @@ import { ClientOffersApi, OfferAudience, OfferBoard, OfferRecipient, OfferSettin
 import { AdminLayoutComponent } from '../../../shared/admin-layout.component';
 
 const defaults = (): OfferSettings => ({ title: '', message: '', dailyLimit: 30, intervalMinutes: 10,
-  windowStart: '10:00', windowEnd: '21:00', includeActive: true, includeStopped: false, includeBanned: false, fileMode: 'ATTACHMENT', testOnly: false });
+  windowStart: '10:00', windowEnd: '21:00', includeActive: true, includeStopped: false, includeBanned: false, fileMode: 'ATTACHMENT', testOnly: false,
+  includeLeadInWork: false, includeLeadOther: false, leadFallbackClientId: null });
 
 @Component({
   selector: 'app-client-offers',
@@ -31,6 +32,8 @@ export class ClientOffersComponent {
   readonly recipients = signal<OfferRecipient[]>([]);
   readonly recipientLoading = signal(false);
   readonly page = signal(0);
+  readonly leadSenders = signal<string[]>([]);
+  readonly sendersUnavailable = signal(false);
   draft = defaults();
   draftId: string = crypto.randomUUID();
   file: File | null = null;
@@ -39,6 +42,9 @@ export class ClientOffersComponent {
 
   constructor() {
     this.load();
+    this.api.leadSenders().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: accounts => this.leadSenders.set(accounts), error: () => this.sendersUnavailable.set(true)
+    });
     timer(15000, 15000).pipe(filter(() => !document.hidden && !this.busy()), takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.load(false));
   }
@@ -57,7 +63,7 @@ export class ClientOffersComponent {
   select(row: OfferSummary): void {
     if (this.busy()) return;
     this.selectedId.set(row.campaign.id); this.draftId = row.campaign.id;
-    this.draft = { ...row.campaign.settings }; this.file = null; this.removeFile = false; this.fileInputKey++;
+    this.draft = { ...defaults(), ...row.campaign.settings }; this.file = null; this.removeFile = false; this.fileInputKey++;
     this.audience.set(null); this.error.set(''); this.notice.set(''); this.page.set(0); this.recipients.set([]);
     if (!this.editable()) this.loadRecipients();
   }
@@ -78,7 +84,7 @@ export class ClientOffersComponent {
       && Number.isInteger(s.dailyLimit) && s.dailyLimit >= 1 && s.dailyLimit <= 10000
       && Number.isInteger(s.intervalMinutes) && s.intervalMinutes >= 1 && s.intervalMinutes <= 1440
       && !!s.windowStart && !!s.windowEnd && s.windowStart < s.windowEnd
-      && (s.testOnly || s.includeActive || s.includeStopped || s.includeBanned);
+      && (s.testOnly || s.includeActive || s.includeStopped || s.includeBanned || s.includeLeadInWork || s.includeLeadOther);
   }
   preview(): void {
     if (!this.valid() || this.busy()) return;
@@ -122,7 +128,8 @@ export class ClientOffersComponent {
   label(state: string): string {
     return ({ DRAFT: 'Черновик', RUNNING: 'Рассылается', PAUSED: 'Пауза', COMPLETED: 'Завершена', CANCELLED: 'Остановлена',
       PENDING: 'В очереди', SENDING: 'Отправляется', SENT: 'Отправлено', FAILED: 'Ошибка', UNKNOWN: 'Нужна проверка',
-      SKIPPED: 'Пропущено', ACTIVE: 'В работе', STOPPED: 'На стопе', BANNED: 'Бан', TEST_STAFF: 'Администраторы и владельцы' } as Record<string, string>)[state] ?? state;
+      SKIPPED: 'Пропущено', ACTIVE: 'Компании: в работе', STOPPED: 'Компании: на стопе', BANNED: 'Компании: бан',
+      LEAD_IN_WORK: 'Лиды: в работе', LEAD_OTHER: 'Остальные лиды без бана', TEST_STAFF: 'Администраторы и владельцы' } as Record<string, string>)[state] ?? state;
   }
   date(value: string | null): string {
     return value ? new Intl.DateTimeFormat('ru-RU', { timeZone: 'Asia/Irkutsk', dateStyle: 'short', timeStyle: 'short' })

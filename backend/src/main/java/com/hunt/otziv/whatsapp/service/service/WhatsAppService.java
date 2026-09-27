@@ -13,6 +13,13 @@ public interface WhatsAppService {
     String sendMessageToGroup(String clientId, String groupId, String message);
     String sendMessage(String clientId, String phone, String message, String operationId);
     String sendMessageToGroup(String clientId, String groupId, String message, String operationId);
+    default com.hunt.otziv.client_messages.dto.ClientMessageSendResult sendMessageOnce(String clientId,String phone,String message,String operationId) {
+        return com.hunt.otziv.client_messages.dto.ClientMessageSendResult.failed("invalid_request","Шлюз не поддерживает отправку лидам");
+    }
+    default com.hunt.otziv.client_messages.dto.ClientMessageSendResult sendDocumentOnce(String clientId,
+            String phone,String caption,byte[] bytes,String filename,String contentType,String operationId) {
+        return com.hunt.otziv.client_messages.dto.ClientMessageSendResult.failed("invalid_request","Шлюз не поддерживает файлы лидам");
+    }
     /** Caller must commit a durable delivery claim before invoking this transport. */
     default com.hunt.otziv.client_messages.dto.ClientMessageSendResult sendDocumentToGroupOnce(String clientId,
             String groupId,String caption,byte[] bytes,String filename,String contentType,String operationId) {

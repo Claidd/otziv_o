@@ -23,6 +23,10 @@ public class CampaignController {
     @PreAuthorize("hasAnyRole('ADMIN','OWNER')")
     public Board board() { return service.board(); }
 
+    @GetMapping("/api/admin/client-offers/lead-senders")
+    @PreAuthorize("hasAnyRole('ADMIN','OWNER')")
+    public List<String> leadSenders() { return store.leadSenders(); }
+
     @PostMapping("/api/admin/client-offers/preview")
     @PreAuthorize("hasAnyRole('ADMIN','OWNER')")
     public List<AudienceCount> preview(@Valid @RequestBody Settings settings) { return store.preview(settings); }

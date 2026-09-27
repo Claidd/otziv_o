@@ -27,6 +27,8 @@ public class CampaignSender {
         var c = claim.campaign(); var r = claim.recipient();
         if (c.settings().testOnly() && !store.testRecipientAllowed(r))
             return ClientMessageSendResult.failed("invalid_request","Получатель больше не входит в тестовый список или личный чат изменился");
+        if (r.leadId() != null && !store.leadRecipientAllowed(c.settings(),r))
+            return ClientMessageSendResult.failed("invalid_request","Лид недоступен: бан, изменение списка, номера или аккаунта менеджера");
         String text = c.settings().message();
         if (c.fileName() == null || "LINK".equals(c.settings().fileMode())) {
             if (c.fileName() != null) {
@@ -39,12 +41,15 @@ public class CampaignSender {
                 return telegram.sendMessageOnceWithInlineKeyboardMessageId(r.telegramChatId(),text,null,null)
                         .map(id -> ClientMessageSendResult.sent("Telegram",id.toString())).orElseGet(CampaignSender::unknown);
             }
+            if (r.leadId() != null) return whatsapp.sendMessageOnce(r.clientId(),r.phone(),text,r.operationId());
             return delivery.deliverWithOperationId(r.target(),r.clientId(),r.groupId(),text,null,r.operationId());
         }
         Attachment file;
         try { file = store.attachment(c.id()); }
         catch (RuntimeException failure) { return ClientMessageSendResult.failed("invalid_request","Не удалось прочитать файл рассылки"); }
         if (file == null) return ClientMessageSendResult.failed("invalid_request","Файл рассылки не найден");
+        if (r.leadId() != null)
+            return whatsapp.sendDocumentOnce(r.clientId(),r.phone(),text,file.bytes(),file.name(),file.contentType(),r.operationId());
         if (r.destinationKey().startsWith("TELEGRAM:")) {
             if (!telegram.canSendDocuments()) return ClientMessageSendResult.failed("invalid_request","Отправка Telegram выключена или бот не настроен");
             return telegram.sendDocumentOnceMessageId(r.telegramChatId(),file.bytes(),file.name(),text)

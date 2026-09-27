@@ -13,7 +13,7 @@ class LayoutStub { title = input(''); active = input(''); }
 describe('client offer campaigns', () => {
   const empty: OfferBoard = { liveEnabled: true, campaigns: [] };
   const api = { board: vi.fn(() => of(empty)), preview: vi.fn(() => of([])), save: vi.fn(), action: vi.fn(),
-    recipients: vi.fn(() => of([])), file: vi.fn() };
+    recipients: vi.fn(() => of([])), file: vi.fn(), leadSenders: vi.fn(() => of(['manager', 'fallback'])) };
   beforeEach(() => {
     vi.clearAllMocks(); api.board.mockReturnValue(of(empty));
     TestBed.configureTestingModule({ providers: [provideRouter([]), { provide: ClientOffersApi, useValue: api }] });
@@ -22,6 +22,22 @@ describe('client offer campaigns', () => {
   afterEach(() => TestBed.resetTestingModule());
   function setup() { const fixture = TestBed.createComponent(ClientOffersComponent); fixture.detectChanges(); return fixture; }
   function valid(component: ClientOffersComponent) { component.draft.title = 'Новая услуга'; component.draft.message = 'Предложение'; }
+  it('allows lead-only lists independently, persists fallback and hides them in test mode', async () => {
+    const fixture=setup(); const c=fixture.componentInstance; valid(c); c.draft.includeActive=false;
+    expect(c.valid()).toBe(false); expect(c.draft.includeLeadInWork).toBe(false);
+    c.draft.includeLeadInWork=true; expect(c.valid()).toBe(true);
+    c.draft.includeLeadInWork=false; c.draft.includeLeadOther=true; c.draft.leadFallbackClientId='fallback';
+    fixture.changeDetectorRef.markForCheck(); fixture.detectChanges(); await fixture.whenStable();
+    expect(c.valid()).toBe(true);
+    expect(fixture.nativeElement.querySelector('select[name="leadFallbackClientId"]').textContent).toContain('fallback');
+    expect(fixture.nativeElement.textContent).toContain('Лиды в бане исключены всегда');
+    api.save.mockReturnValue(of(campaign(c, 'DRAFT'))); c.save();
+    expect(api.save).toHaveBeenCalledWith(c.draftId,expect.objectContaining({includeLeadInWork:false,includeLeadOther:true,leadFallbackClientId:'fallback'}),null,false);
+    expect(api.action).not.toHaveBeenCalled();
+    c.draft.testOnly=true; fixture.changeDetectorRef.markForCheck(); fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('input[name="leadOther"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('select[name="leadFallbackClientId"]')).toBeNull();
+  });
   function campaign(component: ClientOffersComponent, state: string): OfferCampaign {
     return { id: component.draftId, settings: { ...component.draft }, state, fileName: null, createdAt: '2026-09-17T02:00:00', startedAt: null, nextAt: null };
   }

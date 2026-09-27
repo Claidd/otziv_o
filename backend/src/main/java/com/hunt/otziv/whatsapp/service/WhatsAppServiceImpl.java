@@ -113,19 +113,45 @@ public class WhatsAppServiceImpl implements WhatsAppService {
     // ==== Public API ====
 
     @Override
+    public com.hunt.otziv.client_messages.dto.ClientMessageSendResult sendMessageOnce(String clientId,String phone,String message,String operationId) {
+        try {
+            businessOperations.freezeForDispatch(operationId,clientId,"send",phone,message);
+            // Never substitute an older frozen recipient when the requested envelope differs.
+            businessOperations.requireMatches(operationId,clientId,"send",phone,message);
+            String expected = com.hunt.otziv.whatsapp.dto.WhatsAppOperationEnvelope.phoneHash(clientId,phone,message);
+            String body = sendMessage(clientId,phone,message,operationId);
+            var result = WhatsAppSendResult.parse(body);
+            if (result.hasStatus("error"))
+                return com.hunt.otziv.client_messages.dto.ClientMessageSendResult.failed(result.code(),result.displayError());
+            return confirmedOnce(body,operationId,expected);
+        } catch (Exception unconfirmed) {
+            log.warn("WhatsApp personal operation unconfirmed ({})",unconfirmed.getClass().getSimpleName());
+            return com.hunt.otziv.client_messages.dto.ClientMessageSendResult.failed("operation_unknown","Доставка не подтверждена; проверьте чат");
+        }
+    }
+
+    @Override
+    public com.hunt.otziv.client_messages.dto.ClientMessageSendResult sendDocumentOnce(String clientId,
+            String phone,String caption,byte[] bytes,String filename,String contentType,String operationId) {
+        return sendDocumentOnce(clientId,phone,caption,bytes,filename,contentType,operationId,false);
+    }
+
+    @Override
     public com.hunt.otziv.client_messages.dto.ClientMessageSendResult sendDocumentToGroupOnce(String clientId,
             String groupId,String caption,byte[] bytes,String filename,String contentType,String operationId) {
+        return sendDocumentOnce(clientId,groupId,caption,bytes,filename,contentType,operationId,true);
+    }
+
+    private com.hunt.otziv.client_messages.dto.ClientMessageSendResult sendDocumentOnce(String clientId,
+            String destination,String caption,byte[] bytes,String filename,String contentType,String operationId,boolean group) {
         try {
             String canonical = com.hunt.otziv.whatsapp.dto.WhatsAppOperationEnvelope.documentPayload(caption,filename,contentType,bytes);
-            String expected = com.hunt.otziv.whatsapp.dto.WhatsAppOperationEnvelope.documentHash(clientId,groupId,canonical);
-            var request = jsonEntity(Map.of("operationId",operationId,"groupId",groupId,"caption",caption,
+            String expected = group ? com.hunt.otziv.whatsapp.dto.WhatsAppOperationEnvelope.documentHash(clientId,destination,canonical)
+                    : com.hunt.otziv.whatsapp.dto.WhatsAppOperationEnvelope.phoneDocumentHash(clientId,destination,canonical);
+            var request = jsonEntity(Map.of("operationId",operationId,group ? "groupId" : "phone",destination,"caption",caption,
                     "filename",filename,"contentType",contentType,"data",java.util.Base64.getEncoder().encodeToString(bytes)));
-            String response = restTemplate.postForObject(baseUrl(clientId)+"/send-group-file",request,String.class);
-            JsonNode receipt = MAPPER.readTree(response);
-            String id = receipt.path("messageId").asText();
-            if (operationId.equals(receipt.path("operationId").asText()) && "SUCCEEDED".equals(receipt.path("state").asText())
-                    && expected.equals(receipt.path("envelopeHash").asText()) && receipt.path("messageId").isTextual() && !id.isBlank() && id.length() <= 512)
-                return com.hunt.otziv.client_messages.dto.ClientMessageSendResult.sent("WhatsApp",id);
+            String response = restTemplate.postForObject(baseUrl(clientId)+(group ? "/send-group-file" : "/send-file"),request,String.class);
+            return confirmedOnce(response,operationId,expected);
         } catch (WhatsAppConfigurationException error) {
             return com.hunt.otziv.client_messages.dto.ClientMessageSendResult.failed("whatsapp_client_missing","Проверьте WhatsApp-клиент менеджера");
         } catch (RestClientResponseException error) {
@@ -135,6 +161,15 @@ public class WhatsAppServiceImpl implements WhatsAppService {
             log.warn("WhatsApp document operation unconfirmed ({})",unconfirmed.getClass().getSimpleName());
         }
         return com.hunt.otziv.client_messages.dto.ClientMessageSendResult.failed("operation_unknown","Доставка файла не подтверждена; проверьте чат");
+    }
+
+    private com.hunt.otziv.client_messages.dto.ClientMessageSendResult confirmedOnce(String response,String operationId,String expected) throws JsonProcessingException {
+        JsonNode receipt = MAPPER.readTree(response);
+        String id = receipt.path("messageId").asText();
+        if (operationId.equals(receipt.path("operationId").asText()) && "SUCCEEDED".equals(receipt.path("state").asText())
+                && expected.equals(receipt.path("envelopeHash").asText()) && receipt.path("messageId").isTextual() && !id.isBlank() && id.length() <= 512)
+            return com.hunt.otziv.client_messages.dto.ClientMessageSendResult.sent("WhatsApp",id);
+        return com.hunt.otziv.client_messages.dto.ClientMessageSendResult.failed("operation_unknown","Подтверждение не соответствует операции отправки");
     }
 
     @Override

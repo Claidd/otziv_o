@@ -15,7 +15,14 @@ public final class CampaignModels {
             @NotNull @Pattern(regexp="[0-2][0-9]:[0-5][0-9]") String windowStart,
             @NotNull @Pattern(regexp="[0-2][0-9]:[0-5][0-9]") String windowEnd,
             boolean includeActive, boolean includeStopped, boolean includeBanned,
-            @NotNull @Pattern(regexp="ATTACHMENT|LINK") String fileMode, boolean testOnly) {}
+            @NotNull @Pattern(regexp="ATTACHMENT|LINK") String fileMode, boolean testOnly,
+            boolean includeLeadInWork, boolean includeLeadOther, @Size(max=128) String leadFallbackClientId) {
+        public Settings(String title,String message,int dailyLimit,int intervalMinutes,String windowStart,String windowEnd,
+                boolean includeActive,boolean includeStopped,boolean includeBanned,String fileMode,boolean testOnly) {
+            this(title,message,dailyLimit,intervalMinutes,windowStart,windowEnd,includeActive,includeStopped,includeBanned,
+                    fileMode,testOnly,false,false,null);
+        }
+    }
 
     public record Campaign(String id, Settings settings, String state, LocalDateTime createdAt,
             LocalDateTime startedAt, LocalDateTime nextAt, LocalDate budgetDay, int budgetUsed,
@@ -27,7 +34,13 @@ public final class CampaignModels {
     public record Recipient(long id, String campaignId, Long companyId, String companyTitle, String audience,
             int priority, String destinationKey, String chatUrl, String clientId, String groupId,
             Long telegramChatId, Long maxChatId, String state, String operationId, String errorMessage,
-            LocalDateTime finishedAt, Long userId) {
+            LocalDateTime finishedAt, Long userId, Long leadId, String phone) {
+        public Recipient(long id,String campaignId,Long companyId,String companyTitle,String audience,int priority,
+                String destinationKey,String chatUrl,String clientId,String groupId,Long telegramChatId,Long maxChatId,
+                String state,String operationId,String errorMessage,LocalDateTime finishedAt,Long userId) {
+            this(id,campaignId,companyId,companyTitle,audience,priority,destinationKey,chatUrl,clientId,groupId,
+                    telegramChatId,maxChatId,state,operationId,errorMessage,finishedAt,userId,null,null);
+        }
         public ClientMessageDelivery.Target target() {
             return new ClientMessageDelivery.Target(companyId, companyTitle, chatUrl, telegramChatId, maxChatId);
         }
