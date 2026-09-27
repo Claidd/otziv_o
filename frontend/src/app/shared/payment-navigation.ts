@@ -4,6 +4,7 @@ const PAYMENT_PROVIDER_HOSTS = new Set([
   'securepay.tinkoff.ru',
   'securepay.tbank.ru',
   'pay.tbank.ru',
+  'pay.tbank-online.com',
   'merch.securepaytb.ru'
 ]);
 const SBP_WEB_HOSTS = new Set(['qr.nspk.ru', 'www.tbank.ru', 'payzonaecom.com']);

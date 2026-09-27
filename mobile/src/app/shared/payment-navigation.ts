@@ -1,6 +1,12 @@
 export type PaymentNavigationPurpose = 'manual' | 'payment' | 'sbp';
 
-const PAYMENT_PROVIDER_HOSTS = new Set(['securepay.tinkoff.ru', 'securepay.tbank.ru', 'pay.tbank.ru']);
+const PAYMENT_PROVIDER_HOSTS = new Set([
+  'securepay.tinkoff.ru',
+  'securepay.tbank.ru',
+  'pay.tbank.ru',
+  'pay.tbank-online.com',
+  'merch.securepaytb.ru'
+]);
 const SBP_WEB_HOSTS = new Set(['qr.nspk.ru', 'www.tbank.ru', 'payzonaecom.com']);
 const SBP_CUSTOM_PATH = String.raw`(?:[/?#][A-Za-z0-9._~%!$&'()*+,;=:@/?#-]*)?`;
 const NSPK_BANK_TARGET = new RegExp(
@@ -64,7 +70,8 @@ export function safePaymentNavigationTarget(
         return target;
       }
       if (purpose === 'payment') {
-        return PAYMENT_PROVIDER_HOSTS.has(hostname) ? target : null;
+        const trustedPort = !url.port || url.port === '443';
+        return PAYMENT_PROVIDER_HOSTS.has(hostname) && trustedPort ? target : null;
       }
       return SBP_WEB_HOSTS.has(hostname) ? target : null;
     }

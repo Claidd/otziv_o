@@ -5,6 +5,7 @@ import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.service.UserService;
 import com.hunt.otziv.workload_shadow.repository.WorkloadTransferExecutionRepository;
 import com.hunt.otziv.workload_shadow.repository.WorkloadTransferExecutionRepository.AppliedNotificationProjection;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashSet;
@@ -21,6 +22,8 @@ public class WorkloadTransferAppliedNotificationService {
 
     private static final DateTimeFormatter TELEGRAM_TIME_FORMAT =
             DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
+    private static final DateTimeFormatter TELEGRAM_DATE_FORMAT =
+            DateTimeFormatter.ofPattern("dd.MM.yyyy");
     private static final String ROLE_OWNER = "ROLE_OWNER";
     private static final String ROLE_ADMIN = "ROLE_ADMIN";
 
@@ -120,7 +123,7 @@ public class WorkloadTransferAppliedNotificationService {
 
     private String message(AppliedNotificationProjection execution) {
         StringBuilder builder = new StringBuilder()
-                .append("🟢 <b>LIVE · Смена специалиста по нагрузке</b>\n")
+                .append("🟢 <b>Компания передана по нагрузке</b>\n")
                 .append("<b>Компания:</b> «")
                 .append(escaped(execution.getCompanyTitle()))
                 .append("» (#")
@@ -143,19 +146,73 @@ public class WorkloadTransferAppliedNotificationService {
                     .append(escaped(orderIds))
                     .append("\n");
         }
+        appendReasonAndConditions(builder, execution);
         builder.append("<b>Применено:</b> ")
                 .append(escaped(format(execution.getAppliedAt())))
                 .append("\n")
                 .append("<b>Откат доступен до:</b> ")
                 .append(escaped(format(execution.getRollbackDeadlineAt())))
-                .append("\n\n")
-                .append("Workflow #")
-                .append(value(execution.getWorkflowId()))
-                .append(", execution #")
-                .append(value(execution.getExecutionId()))
-                .append(", режим ")
-                .append(escaped(value(execution.getMode())));
+                .append("\n")
+                .append("Время указано по часовому поясу системы.\n")
+                .append("Передача №")
+                .append(value(execution.getExecutionId()));
         return builder.toString();
+    }
+
+    private void appendReasonAndConditions(
+            StringBuilder builder,
+            AppliedNotificationProjection execution
+    ) {
+        builder.append("\n<b>Причина:</b> обязательная нагрузка не выполнена; ")
+                .append("месячный лимит неуспешных дней превышен.\n")
+                .append("Неуспешных дней на момент решения: ")
+                .append(value(execution.getFailureNumber()))
+                .append(".\n");
+        if (execution.getSourceProgressDate() != null
+                && execution.getSourceCompletedUnits() != null
+                && execution.getSourceEligibleUnits() != null) {
+            builder.append("Итог за ")
+                    .append(TELEGRAM_DATE_FORMAT.format(execution.getSourceProgressDate()))
+                    .append(": выполнено ")
+                    .append(execution.getSourceCompletedUnits())
+                    .append(" из ")
+                    .append(execution.getSourceEligibleUnits())
+                    .append(" обязательных единиц работы (")
+                    .append(decimal(execution.getSourceProgressPercent()))
+                    .append("%).\n");
+        } else {
+            builder.append("Подробный итог рабочего дня недоступен.\n");
+        }
+        builder.append("\n<b>Условия:</b> целевая доля передачи — ")
+                .append(value(execution.getTransferPercent()))
+                .append("% проблемной нагрузки.\n")
+                .append("Нагрузка компании при выборе: ")
+                .append(value(execution.getProblemUnits()))
+                .append(" ед., примерно ")
+                .append(value(execution.getEstimatedMinutes()))
+                .append(" мин.\n")
+                .append("Передан активный пакет работы в пределах команды менеджера.\n");
+        if (execution.getAcceptedAt() != null) {
+            builder.append("Получатель согласился ")
+                    .append(format(execution.getAcceptedAt()))
+                    .append("; перед применением выполнена повторная проверка.\n");
+        } else {
+            builder.append("Время согласия получателя недоступно.\n");
+        }
+        if (execution.getRecipientRating() != null) {
+            builder.append("Получатель при выборе: рейтинг ")
+                    .append(decimal(execution.getRecipientRating()))
+                    .append(", место в очереди ")
+                    .append(value(execution.getRecipientSequenceNumber()))
+                    .append(", текущая нагрузка примерно ")
+                    .append(value(execution.getRecipientEstimatedMinutes()))
+                    .append(" мин.\n");
+        }
+        builder.append("\n");
+    }
+
+    private String decimal(BigDecimal number) {
+        return number == null ? "?" : number.stripTrailingZeros().toPlainString().replace('.', ',');
     }
 
     private String transferredSummary(AppliedNotificationProjection execution) {
