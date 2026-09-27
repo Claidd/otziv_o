@@ -208,7 +208,6 @@ public interface WorkloadShadowProjectionRepository
             ),
             classified AS (
                 SELECT target_order.order_worker AS worker_id,
-                       0 AS external_blocked_units,
                        SUM(CASE
                            WHEN target_order.order_status_title = 'Коррекция' THEN 1
                            ELSE COALESCE(pending_cards.pending_cards, 0)
@@ -221,77 +220,6 @@ public interface WorkloadShadowProjectionRepository
                 UNION ALL
 
                 SELECT review.review_worker AS worker_id,
-                       COUNT(DISTINCT review.review_id) AS external_blocked_units,
-                       0 AS client_deferred_units,
-                       0 AS manager_deferred_units
-                FROM reviews review
-                JOIN order_details detail ON detail.order_detail_id = review.review_order_details
-                JOIN orders orders ON orders.order_id = detail.order_detail_order
-                LEFT JOIN bots bot ON bot.bot_id = review.review_bot
-                WHERE review.review_worker IN (:workerIds)
-                  AND review.review_publish = FALSE
-                  AND (
-                      (review.review_vigul = FALSE AND review.review_publish_date <= :nagulDate)
-                      OR (review.review_vigul = TRUE AND review.review_publish_date <= :today)
-                  )
-                  AND review.review_text IS NOT NULL
-                  AND TRIM(review.review_text) <> ''
-                  AND LOWER(TRIM(review.review_text)) NOT LIKE 'текст отзыва%'
-                  AND LOWER(TRIM(review.review_text)) NOT LIKE 'нужно подставить%'
-                  AND LOWER(TRIM(review.review_text)) NOT LIKE 'нужно подсавить%'
-                  AND LOWER(TRIM(review.review_text)) NOT LIKE 'подставить текст%'
-                  AND LOWER(TRIM(review.review_text)) NOT LIKE 'подсавить текст%'
-                  AND (review.review_bot IS NULL OR COALESCE(bot.bot_active, FALSE) = FALSE)
-                  AND NOT EXISTS (
-                      SELECT 1
-                      FROM review_recovery_batches recovery_batch
-                      JOIN review_recovery_tasks recovery_task
-                        ON recovery_task.review_recovery_task_batch =
-                           recovery_batch.review_recovery_batch_id
-                      WHERE recovery_batch.review_recovery_batch_order = orders.order_id
-                        AND recovery_batch.review_recovery_batch_status = 'OPEN'
-                        AND recovery_task.review_recovery_task_status = 'PLANNED'
-                  )
-                GROUP BY review.review_worker
-
-                UNION ALL
-
-                SELECT task.bad_review_task_worker AS worker_id,
-                       COUNT(*) AS external_blocked_units,
-                       0 AS client_deferred_units,
-                       0 AS manager_deferred_units
-                FROM bad_review_tasks task
-                LEFT JOIN bots bot ON bot.bot_id = task.bad_review_task_bot
-                WHERE task.bad_review_task_worker IN (:workerIds)
-                  AND task.bad_review_task_status = 'NEW'
-                  AND task.bad_review_task_scheduled_date <= :today
-                  AND (task.bad_review_task_bot IS NULL OR COALESCE(bot.bot_active, FALSE) = FALSE)
-                GROUP BY task.bad_review_task_worker
-
-                UNION ALL
-
-                SELECT task.review_recovery_task_worker AS worker_id,
-                       COUNT(*) AS external_blocked_units,
-                       0 AS client_deferred_units,
-                       0 AS manager_deferred_units
-                FROM review_recovery_tasks task
-                JOIN review_recovery_batches batch
-                  ON batch.review_recovery_batch_id = task.review_recovery_task_batch
-                LEFT JOIN bots bot ON bot.bot_id = task.review_recovery_task_bot
-                WHERE task.review_recovery_task_worker IN (:workerIds)
-                  AND task.review_recovery_task_status = 'PLANNED'
-                  AND batch.review_recovery_batch_status = 'OPEN'
-                  AND task.review_recovery_task_scheduled_date <= :today
-                  AND (
-                      task.review_recovery_task_bot IS NULL
-                      OR COALESCE(bot.bot_active, FALSE) = FALSE
-                  )
-                GROUP BY task.review_recovery_task_worker
-
-                UNION ALL
-
-                SELECT review.review_worker AS worker_id,
-                       0 AS external_blocked_units,
                        0 AS client_deferred_units,
                        COUNT(DISTINCT event.review_id) AS manager_deferred_units
                 FROM business_audit_events event
@@ -306,17 +234,15 @@ public interface WorkloadShadowProjectionRepository
                 GROUP BY review.review_worker
             )
             SELECT classified.worker_id,
-                   SUM(classified.external_blocked_units) AS external_blocked_units,
                    SUM(classified.client_deferred_units) AS client_deferred_units,
                    SUM(classified.manager_deferred_units) AS manager_deferred_units
             FROM classified
             WHERE classified.worker_id IS NOT NULL
             GROUP BY classified.worker_id
             """, nativeQuery = true)
-    List<Map<String, Object>> findDeferredAndBlockedUnits(
+    List<Map<String, Object>> findDeferredUnits(
             @Param("workerIds") Collection<Long> workerIds,
-            @Param("today") LocalDate today,
-            @Param("nagulDate") LocalDate nagulDate
+            @Param("today") LocalDate today
     );
 
     @Query(value = """
@@ -463,6 +389,7 @@ public interface WorkloadShadowProjectionRepository
                        orders.order_company AS company_id,
                        orders.order_id,
                        review.review_vigul_changed_at,
+                       NOT COALESCE(bot.bot_active, FALSE) AS external_blocked,
                        GREATEST(
                            COALESCE(
                                review.review_text_ready_at,
@@ -505,11 +432,10 @@ public interface WorkloadShadowProjectionRepository
                 JOIN orders orders ON orders.order_id = detail.order_detail_order
                 LEFT JOIN order_status_audit status_audit
                   ON status_audit.order_id = orders.order_id
-                JOIN bots bot ON bot.bot_id = review.review_bot
+                LEFT JOIN bots bot ON bot.bot_id = review.review_bot
                 WHERE review.review_worker IN (:workerIds)
                   AND review.review_publish = FALSE
                   AND review.review_vigul = FALSE
-                  AND COALESCE(bot.bot_active, FALSE) = TRUE
                   AND review.review_publish_date <= :nagulDate
                   AND review.review_text IS NOT NULL
                   AND TRIM(review.review_text) <> ''
@@ -569,6 +495,7 @@ public interface WorkloadShadowProjectionRepository
                    relevant.company_id,
                    relevant.order_id,
                    1 AS units,
+                   relevant.external_blocked,
                    GREATEST(
                        relevant.base_available_at,
                        COALESCE(
@@ -656,6 +583,7 @@ public interface WorkloadShadowProjectionRepository
                        orders.order_company AS company_id,
                        orders.order_id,
                        review.review_vigul_changed_at,
+                       NOT COALESCE(bot.bot_active, FALSE) AS external_blocked,
                        TIMESTAMP(
                            review.review_publish_date,
                            CAST(:shiftStart AS TIME)
@@ -703,11 +631,10 @@ public interface WorkloadShadowProjectionRepository
                 JOIN orders orders ON orders.order_id = detail.order_detail_order
                 LEFT JOIN order_status_audit status_audit
                   ON status_audit.order_id = orders.order_id
-                JOIN bots bot ON bot.bot_id = review.review_bot
+                LEFT JOIN bots bot ON bot.bot_id = review.review_bot
                 WHERE review.review_worker IN (:workerIds)
                   AND review.review_publish = FALSE
                   AND review.review_vigul = TRUE
-                  AND COALESCE(bot.bot_active, FALSE) = TRUE
                   AND review.review_publish_date <= :today
                   AND review.review_text IS NOT NULL
                   AND TRIM(review.review_text) <> ''
@@ -760,6 +687,7 @@ public interface WorkloadShadowProjectionRepository
                    relevant.company_id,
                    relevant.order_id,
                    1 AS units,
+                   relevant.external_blocked,
                    GREATEST(
                        relevant.base_available_at,
                        relevant.publish_due_at,
@@ -793,6 +721,7 @@ public interface WorkloadShadowProjectionRepository
                    orders.order_company AS company_id,
                    orders.order_id,
                    1 AS units,
+                   NOT COALESCE(bot.bot_active, FALSE) AS external_blocked,
                    GREATEST(
                         COALESCE(
                             task.bad_review_task_created_at,
@@ -813,11 +742,10 @@ public interface WorkloadShadowProjectionRepository
                    CONCAT('BAD:', task.bad_review_task_id) AS batch_key
             FROM bad_review_tasks task
             JOIN orders orders ON orders.order_id = task.bad_review_task_order
-            JOIN bots bot ON bot.bot_id = task.bad_review_task_bot
+            LEFT JOIN bots bot ON bot.bot_id = task.bad_review_task_bot
             WHERE task.bad_review_task_worker IN (:workerIds)
               AND task.bad_review_task_status = 'NEW'
               AND task.bad_review_task_scheduled_date <= :today
-              AND COALESCE(bot.bot_active, FALSE) = TRUE
             """, nativeQuery = true)
     List<Map<String, Object>> findBadBatches(
             @Param("workerIds") Collection<Long> workerIds,
@@ -834,6 +762,7 @@ public interface WorkloadShadowProjectionRepository
                        -task.review_recovery_task_batch
                    ) AS order_id,
                    1 AS units,
+                   NOT COALESCE(bot.bot_active, FALSE) AS external_blocked,
                    GREATEST(
                         COALESCE(
                             task.review_recovery_task_created_at,
@@ -852,12 +781,11 @@ public interface WorkloadShadowProjectionRepository
             JOIN review_recovery_batches batch
               ON batch.review_recovery_batch_id = task.review_recovery_task_batch
             LEFT JOIN orders orders ON orders.order_id = task.review_recovery_task_order
-            JOIN bots bot ON bot.bot_id = task.review_recovery_task_bot
+            LEFT JOIN bots bot ON bot.bot_id = task.review_recovery_task_bot
             WHERE task.review_recovery_task_worker IN (:workerIds)
               AND task.review_recovery_task_status = 'PLANNED'
               AND batch.review_recovery_batch_status = 'OPEN'
               AND task.review_recovery_task_scheduled_date <= :today
-              AND COALESCE(bot.bot_active, FALSE) = TRUE
             """, nativeQuery = true)
     List<Map<String, Object>> findRecoveryBatches(
             @Param("workerIds") Collection<Long> workerIds,

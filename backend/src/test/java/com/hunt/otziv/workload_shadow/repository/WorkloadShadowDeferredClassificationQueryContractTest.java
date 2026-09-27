@@ -14,9 +14,8 @@ class WorkloadShadowDeferredClassificationQueryContractTest {
     @Test
     void managerDeferredUnitsCountConcreteCardsMovedToFutureToday() throws Exception {
         Method method = WorkloadShadowProjectionRepository.class.getDeclaredMethod(
-                "findDeferredAndBlockedUnits",
+                "findDeferredUnits",
                 Collection.class,
-                LocalDate.class,
                 LocalDate.class
         );
         Query query = method.getAnnotation(Query.class);
@@ -40,6 +39,7 @@ class WorkloadShadowDeferredClassificationQueryContractTest {
                 "sum(classified.manager_deferred_units) as manager_deferred_units"
         );
         assertThat(sql).doesNotContain(
+                "external_blocked_units",
                 "event.source = 'worker_board'",
                 "event.source = 'cron_or_maintenance'"
         );
