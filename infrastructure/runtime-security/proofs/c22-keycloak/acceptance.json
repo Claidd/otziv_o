@@ -1,0 +1,34 @@
+{
+  "schema": "otziv-keycloak-c22-acceptance-v1",
+  "result": "PASS",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:dd68530849039933b31724522ff290c5d4253175bdd9e23f0d132f7e66aa53ff",
+  "imageConfigId": "sha256:5159200cde124acd59c13bbb37a9d843d4b2e8caf6955d2ebd9b305036646650",
+  "commit": "49a537984b4441f0ac9ad5e79f619018b7488912",
+  "run": "36315128179",
+  "attempt": "1",
+  "scope": "Official FreeMarker 2.3.35 patch. Identical issuer distribution/provider apart from the JAR and generated Quarkus files; replay and rollback use existing local prod-like Keycloak data, not exported production identity data.",
+  "advisories": [
+    "CVE-2026-84939"
+  ],
+  "files": {
+    "infrastructure/runtime-security/proofs/c22-keycloak/parent-activation.json": "f8877f18ab5049f8b51064cd204173c25cb9c8a72e25c2d9c47774165f37ae86",
+    "infrastructure/runtime-security/proofs/c22-keycloak/runtime.json": "b1fb67d817e6eafb38c14e952c9b4000889533ab047bd7eee28dff4749279757",
+    "infrastructure/runtime-security/proofs/c22-keycloak/rehearsal/capture.json": "53d56004c0777299ac11d552cb289f38f2ee5056c69c9bf7218737bd7f98d56f",
+    "infrastructure/runtime-security/proofs/c22-keycloak/rehearsal/replay.json": "11a0200b43add018968704ad3b4b124cd0826decd2466d172c47b41d64164ecd",
+    "infrastructure/runtime-security/proofs/c22-keycloak/issuer.json": "5440cfefd9158d93cbd4ad83da6cee2cf65343a2c4b249d211ebce2f1cd3bb3a",
+    "infrastructure/runtime-security/proofs/c22-keycloak/startup.json": "982e90abfdfb8e47b488a74d9adc22ee086862bb99f736c40a7da089b3943e25",
+    "infrastructure/runtime-security/proofs/c22-keycloak/publication/publication.json": "6546ad6c7c1a8a07643d855bcfe891554a709610bc9ea544e23fcd35a0aee8fd",
+    "infrastructure/runtime-security/proofs/c22-keycloak/publication/vulnerabilities.json": "d0622804283b16f4eef17917365642b1648cee548ac1d96771586661cc845d53",
+    "infrastructure/runtime-security/proofs/c22-keycloak/publication/registry-amd64-config.json": "5159200cde124acd59c13bbb37a9d843d4b2e8caf6955d2ebd9b305036646650",
+    "infrastructure/runtime-security/proofs/c22-keycloak/anonymous/anonymous-download.json": "abdbee1608f9aed43d58a3188a64fbe8fb98be3bea017216103d283d805d8494"
+  },
+  "executedSources": {
+    "infrastructure/runtime-security/keycloak-c22-rehearsal.py": "4dceb1c9acf3b6010c9702aed36423bc1ae7e7ad3af87823ad5aba6a26f8c654",
+    "infrastructure/runtime-security/keycloak-c22-runtime.py": "864560872bccb25388a016e65b0d55c353096846718cebaad3d79786c4b638cd",
+    "infrastructure/keycloak/security-generation/c14-migration-fix/private-runtime.py": "f8bee667af239ac739f7912634d1b657ae29c7eecb9f71b73c31b78be2f1189b",
+    "infrastructure/keycloak/security-generation/container-proof.mjs": "c461daf8875f06e6c1ebf05858e9eebd80af34fe09939ca04830d595cb07b5e4",
+    "infrastructure/keycloak/security-generation/image-startup-smoke.mjs": "2db7f9ba3b2fe7b10f056c4c0717dbe07dcc72a566827ad274112d0b644e7a14",
+    "infrastructure/keycloak/security-generation/provision.mjs": "c5e081a0c4610f0450be825d02ae8db2b93fe1c4581280e232a3328fdce19567",
+    "infrastructure/runtime-security/builds/c22-keycloak/Dockerfile": "48ce4026616aaf92662ec2d9870e6b9240853bb27a8f824bf3140f83c8a569c8"
+  }
+}

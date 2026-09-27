@@ -1,0 +1,80 @@
+{
+  "schema": "otziv-anonymous-download-v1",
+  "component": "keycloak",
+  "commit": "49a537984b4441f0ac9ad5e79f619018b7488912",
+  "run": "36315128179",
+  "attempt": "1",
+  "manifestSet": "c22-keycloak",
+  "manifestPath": "infrastructure/runtime-security/reviewed-images-c22-keycloak.json",
+  "runner": "GitHub Actions 1000010001",
+  "startedAt": "2026-09-27T11:18:01.325Z",
+  "sourcePublicationSha256": "6546ad6c7c1a8a07643d855bcfe891554a709610bc9ea544e23fcd35a0aee8fd",
+  "result": "PASS",
+  "accountCredentialsUsed": false,
+  "dockerCredentialHelpersAvailable": false,
+  "dockerTransport": "unix:///var/run/docker.sock",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:dd68530849039933b31724522ff290c5d4253175bdd9e23f0d132f7e66aa53ff",
+  "imageAbsentBeforePull": true,
+  "daemonVersion": "\"28.0.4\"",
+  "attestationEvidence": {
+    "schema": "otziv-registry-evidence-v1",
+    "imageManifestDigest": "sha256:60c05627f760d37d9576303696110e317a9c4aae9f13298378536fdb1623e8b8",
+    "predicates": [
+      "https://slsa.dev/provenance/v1",
+      "https://spdx.dev/Document"
+    ],
+    "artifacts": [
+      {
+        "file": "registry-index.json",
+        "digest": "sha256:dd68530849039933b31724522ff290c5d4253175bdd9e23f0d132f7e66aa53ff",
+        "size": 857
+      },
+      {
+        "file": "registry-amd64-manifest.json",
+        "digest": "sha256:60c05627f760d37d9576303696110e317a9c4aae9f13298378536fdb1623e8b8",
+        "size": 7927
+      },
+      {
+        "file": "registry-amd64-config.json",
+        "digest": "sha256:5159200cde124acd59c13bbb37a9d843d4b2e8caf6955d2ebd9b305036646650",
+        "size": 20209
+      },
+      {
+        "file": "registry-attestation-0.json",
+        "digest": "sha256:cbc75d1baee6f5fc033886b5fbc1c9a209969f8a465c822511c07a0630413c93",
+        "size": 1112
+      },
+      {
+        "file": "registry-attestation-0-payload-0.json",
+        "digest": "sha256:d70004560c20f699bc90092a116889331c2ee750fcb1f60d4b4615c497909983",
+        "size": 5928292
+      },
+      {
+        "file": "registry-attestation-0-payload-1.json",
+        "digest": "sha256:3cb9751323ffcb868d03c14f32f0040f0639b41a83e59abb39e4aebef668693d",
+        "size": 31982
+      }
+    ],
+    "sourceBinding": "LOCAL_GIT_METADATA_CHECKED_AGAINST_CLEAN_CHECKOUT_NOT_INDEPENDENT_SOURCE_AUTHENTICATION"
+  },
+  "pullExitCode": 0,
+  "imageId": "sha256:5159200cde124acd59c13bbb37a9d843d4b2e8caf6955d2ebd9b305036646650",
+  "platform": "linux/amd64",
+  "labels": {
+    "com.otziv.publication.revision": "49a537984b4441f0ac9ad5e79f619018b7488912",
+    "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+    "com.otziv.reviewed-component": "keycloak",
+    "org.opencontainers.image.version": "22.04",
+    "otziv.bouncycastle": "1.85",
+    "otziv.bouncycastle-advisories": "CVE-2026-8763,CVE-2026-13506",
+    "otziv.freemarker": "2.3.35",
+    "otziv.freemarker-advisory": "CVE-2026-84939",
+    "otziv.netty-handler": "4.1.137.Final",
+    "otziv.netty-handler-advisory": "CVE-2026-75595",
+    "otziv.quarkus-descriptor-ordering": "3.33.3.1-otziv.1",
+    "otziv.realm-migration-fix": "26.7.3-otziv.1",
+    "otziv.realm-migration-upstream-proposal": "85a8379427a1d031afdd24f8c688bbcd2917fcca"
+  },
+  "publicDownloadReadiness": "VERIFIED_ANONYMOUS_DIGEST_PULL",
+  "finishedAt": "2026-09-27T11:18:11.211Z"
+}

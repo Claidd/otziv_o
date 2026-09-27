@@ -6,6 +6,7 @@ import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.r_review.model.Review;
+import com.hunt.otziv.r_review.api.ReviewAccountWalkingPolicy;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.r_review.utils.ReviewBotPolicy;
 import java.time.Clock;
@@ -21,7 +22,7 @@ import org.springframework.stereotype.Service;
 
 @Service
 @Slf4j
-public class ReviewAccountWalkScheduleService {
+public class ReviewAccountWalkScheduleService implements ReviewAccountWalkingPolicy {
 
     private static final int DEFAULT_WALKED_COUNTER_THRESHOLD = 2;
     private static final int DEFAULT_WALK_DELAY_DAYS = 2;
@@ -240,6 +241,7 @@ public class ReviewAccountWalkScheduleService {
         return order != null ? order.getId() : null;
     }
 
+    @Override
     public int walkedCounterThreshold() {
         return Math.max(1, appSettingService.getInt(
                 AppSettingService.REVIEW_ACCOUNT_WALKED_COUNTER_THRESHOLD,

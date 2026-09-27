@@ -1,0 +1,152 @@
+{
+  "schema": "otziv-mysql-same-engine-refresh-v1",
+  "source": "ghcr.io/claidd/otziv-security@sha256:89081171be2ff681481a2baa8d38303965c191acc2e1ba59fc852ab4a1a4496e",
+  "candidate": "ghcr.io/claidd/otziv-security@sha256:3bf3e8465193c365e83dc2959a1ce944791c8fd49cf58b68aa96783f63df21b7",
+  "production": false,
+  "sourceWrites": false,
+  "publishedPorts": 0,
+  "network": "none",
+  "sourceDumpSha256": "f9873936d9d8fe16375c665a2b191cccf9bb2b90321c317fe48872ef32f6a2c8",
+  "executedSourceSha256": "5dd10495cb89bb56853807d4e77691254b8a5e802452cfc39d734b9ddf95a392",
+  "startedAt": "2026-09-27T11:29:54.826106+00:00",
+  "checks": [
+    {
+      "name": "engine_version_source",
+      "passed": true
+    },
+    {
+      "name": "engine_version_candidate",
+      "passed": true
+    },
+    {
+      "name": "server_binary_unchanged",
+      "passed": true
+    },
+    {
+      "name": "openssl_fixed",
+      "passed": true
+    },
+    {
+      "name": "libevent_fixed",
+      "passed": true
+    },
+    {
+      "name": "curl_libraries_fixed",
+      "passed": true
+    },
+    {
+      "name": "libxml2_fixed",
+      "passed": true
+    },
+    {
+      "name": "only_libxml2_changed",
+      "passed": true
+    },
+    {
+      "name": "native_uid_no_network_source",
+      "passed": true
+    },
+    {
+      "name": "restored_nonempty_production_schema",
+      "passed": true
+    },
+    {
+      "name": "clean_stop_source",
+      "passed": true
+    },
+    {
+      "name": "native_uid_no_network_candidate",
+      "passed": true
+    },
+    {
+      "name": "all_tables_schema_history_accounts_and_settings_exact",
+      "passed": true
+    },
+    {
+      "name": "existing_account_login",
+      "passed": true
+    },
+    {
+      "name": "clean_stop_candidate",
+      "passed": true
+    },
+    {
+      "name": "native_uid_no_network_restart",
+      "passed": true
+    },
+    {
+      "name": "restart_preserves_new_writes",
+      "passed": true
+    },
+    {
+      "name": "clean_stop_restart",
+      "passed": true
+    },
+    {
+      "name": "native_uid_no_network_rollback",
+      "passed": true
+    },
+    {
+      "name": "same_volume_rollback_preserves_all_new_writes",
+      "passed": true
+    },
+    {
+      "name": "clean_stop_rollback",
+      "passed": true
+    },
+    {
+      "name": "native_uid_no_network_restored",
+      "passed": true
+    },
+    {
+      "name": "fresh_restore_preserves_all_data_and_schema",
+      "passed": true
+    }
+  ],
+  "sourceLocalId": "sha256:89081171be2ff681481a2baa8d38303965c191acc2e1ba59fc852ab4a1a4496e",
+  "sourceMysqldSha256": "1a928190ad8166bc329b01d4adfba328f4d52083f81569f46c8435710c5e36eb",
+  "sourceOpenSSL": "openssl-libs-3.5.8-1.0.1.el9_8.x86_64",
+  "sourceLibxml2": "libxml2-2.9.13-14.el9_8.4.x86_64",
+  "sourceLibevent": "libevent-2.1.13-1.el9_8.x86_64",
+  "sourceCurl": [
+    "curl-7.76.1-40.el9_8.7.x86_64",
+    "libcurl-7.76.1-40.el9_8.7.x86_64"
+  ],
+  "sourceOtherPackagesSha256": "ff71766ca4038afb31f9de268f4433573e694cd96d041d0930f427ff2c7cb2ad",
+  "candidateLocalId": "sha256:3bf3e8465193c365e83dc2959a1ce944791c8fd49cf58b68aa96783f63df21b7",
+  "candidateMysqldSha256": "1a928190ad8166bc329b01d4adfba328f4d52083f81569f46c8435710c5e36eb",
+  "candidateOpenSSL": "openssl-libs-3.5.8-1.0.1.el9_8.x86_64",
+  "candidateLibxml2": "libxml2-2.9.13-14.el9_8.5.x86_64",
+  "candidateLibevent": "libevent-2.1.13-1.el9_8.x86_64",
+  "candidateCurl": [
+    "curl-7.76.1-40.el9_8.7.x86_64",
+    "libcurl-7.76.1-40.el9_8.7.x86_64"
+  ],
+  "candidateOtherPackagesSha256": "ff71766ca4038afb31f9de268f4433573e694cd96d041d0930f427ff2c7cb2ad",
+  "before": {
+    "tableCount": 338,
+    "rows": 1219601,
+    "countsSha256": "74bfa8a942fba289795e59996f445dafd88646659cb281d4985b1d408a5d0473",
+    "checksumsSha256": "4ea35f56d6b076287ef549810dc4fe35f2e14af31ae5f11c0434e0c4e99870b2",
+    "historySha256": "332e18982e87318f37a70ad8fe34ef3601e418c15bc4517b1fa640780425f7a6",
+    "schemaSha256": "b02ac1ca6ef5afc16dd3823456d0b471020234b4b4ee08811de071c704ed4773",
+    "accountsSha256": "245d50f4516c2b6ae6f34273a7cb564e638277938e0c9c9692d0770c533ca60a",
+    "settingsSha256": "a0570a9a98542227edcb793e338aa272aab3b5d218f42cdd12efab9c9f5b3b72"
+  },
+  "after": {
+    "tableCount": 338,
+    "rows": 1219601,
+    "countsSha256": "74bfa8a942fba289795e59996f445dafd88646659cb281d4985b1d408a5d0473",
+    "checksumsSha256": "4ea35f56d6b076287ef549810dc4fe35f2e14af31ae5f11c0434e0c4e99870b2",
+    "historySha256": "332e18982e87318f37a70ad8fe34ef3601e418c15bc4517b1fa640780425f7a6",
+    "schemaSha256": "b02ac1ca6ef5afc16dd3823456d0b471020234b4b4ee08811de071c704ed4773",
+    "accountsSha256": "245d50f4516c2b6ae6f34273a7cb564e638277938e0c9c9692d0770c533ca60a",
+    "settingsSha256": "a0570a9a98542227edcb793e338aa272aab3b5d218f42cdd12efab9c9f5b3b72"
+  },
+  "result": "PASS",
+  "ownedResourcesRemaining": {
+    "containers": 0,
+    "volumes": 0
+  },
+  "completedAt": "2026-09-27T11:36:02.224262+00:00"
+}

@@ -33,6 +33,9 @@ public class ReviewAccountPoolAlertState {
     @Column(name = "last_required_count", nullable = false)
     private int lastRequiredCount;
 
+    @Column(name = "last_deficit_count", nullable = false)
+    private int lastDeficitCount;
+
     @Column(name = "last_notified_at")
     private LocalDateTime lastNotifiedAt;
 

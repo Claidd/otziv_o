@@ -9,6 +9,23 @@ vi.mock('@capacitor/browser', () => ({ Browser: { open: vi.fn().mockResolvedValu
 describe('native payment navigation after asynchronous diagnostics', () => {
   afterEach(() => vi.restoreAllMocks());
 
+  it.each([
+    'https://pay.tbank-online.com/fixture?order=213#confirm',
+    'https://merch.securepaytb.ru/order/?uuid=tochka-test-operation'
+  ])('passes the original provider URL to the native browser: %s', async (url) => {
+    vi.spyOn(Capacitor, 'isNativePlatform').mockReturnValue(true);
+    const browserOpen = vi.mocked(Browser.open);
+    browserOpen.mockClear();
+    TestBed.configureTestingModule({ providers: [
+      { provide: MobileAuthDiagnosticsService, useValue: { checkpoint: vi.fn().mockResolvedValue(undefined) } }
+    ] });
+    const service = TestBed.inject(MobileExternalLinkService);
+
+    expect(await service.openPayment(url, 'payment', () => true)).toBe(true);
+    expect(browserOpen).toHaveBeenCalledOnce();
+    expect(browserOpen).toHaveBeenCalledWith(expect.objectContaining({ url }));
+  });
+
   for (const activeAfterCheckpoint of [false, true]) {
     it(`${activeAfterCheckpoint ? 'opens for' : 'does not open for'} a ${activeAfterCheckpoint ? 'current' : 'departed'} payment visit`, async () => {
       let finishCheckpoint!: () => void;

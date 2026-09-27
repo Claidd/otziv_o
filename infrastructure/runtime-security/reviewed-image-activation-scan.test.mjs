@@ -67,14 +67,14 @@ test('raw byte changes fail the retained scanner hash even when parsed findings 
 
 test('changed raw counts fail a zero summary even if both scanner hash receipts are resealed', async () => {
   const value = await fixture();
-  value.raw.Results[0].Vulnerabilities.push({ VulnerabilityID: 'CVE-2099-0001', Severity: 'HIGH', PkgName: 'synthetic', FixedVersion: '2' });
+  (value.raw.Results[0].Vulnerabilities ??= []).push({ VulnerabilityID: 'CVE-2099-0001', Severity: 'HIGH', PkgName: 'synthetic', FixedVersion: '2' });
   value.resealScan();
   await assert.rejects(value.validate(), /activation_raw_scan_summary_high/);
 });
 
 test('a matching recounted HIGH summary still cannot activate a candidate with unadjudicated findings', async () => {
   const value = await fixture();
-  value.raw.Results[0].Vulnerabilities.push({ VulnerabilityID: 'CVE-2099-0001', Severity: 'CRITICAL', PkgName: 'synthetic' });
+  (value.raw.Results[0].Vulnerabilities ??= []).push({ VulnerabilityID: 'CVE-2099-0001', Severity: 'CRITICAL', PkgName: 'synthetic' });
   Object.assign(value.publication.security, summarizeReport(value.raw));
   value.resealScan(); await value.resealPublication();
   await assert.rejects(value.validate(), /activation_raw_scan_findings/);

@@ -1,0 +1,24 @@
+{
+  "schema": "otziv-reviewed-images-v1",
+  "repository": "ghcr.io/claidd/otziv-security",
+  "publicationSet": "c22-mc",
+  "baselineManifestSha256": "d48bdb7d6d869cde5d6f1a7b089491765e3eeaf46e0b0b6bb51b7719b38d3ef2",
+  "images": [
+    {
+      "component": "mc",
+      "sourceBeforeRef": "minio/mc@sha256:aead63c77f9db9107f1696fb08ecb0faeda23729cde94b0f663edf4fe09728e3",
+      "defaultReferencesBefore": [
+        {
+          "path": "compose.prod-local.yaml",
+          "service": "minio-init"
+        }
+      ],
+      "context": "infrastructure/runtime-security/builds/c22-mc",
+      "dockerfile": "infrastructure/runtime-security/builds/c22-mc/Dockerfile",
+      "platform": "linux/amd64",
+      "candidateBaseRef": "alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b",
+      "buildArgs": {},
+      "dockerfileSha256": "1b1840ec0bdba59f852978f77a7db5987f8b02c29da8ed9718282e114695f2f6"
+    }
+  ]
+}

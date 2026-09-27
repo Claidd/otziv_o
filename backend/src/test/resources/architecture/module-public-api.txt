@@ -56,3 +56,6 @@ com.hunt.otziv.config.settings.api.ClientChatReviewSettings
 com.hunt.otziv.notification_media.api.StaffMediaSignal
 com.hunt.otziv.config.settings.api.ContextualMediaSettings
 com.hunt.otziv.r_review.utils.ReviewTextPolicy
+
+# NAMED_ACCOUNT_POOL_FALLBACK: orders-owned scalar readiness threshold, server-only read access.
+com.hunt.otziv.r_review.api.ReviewAccountWalkingPolicy

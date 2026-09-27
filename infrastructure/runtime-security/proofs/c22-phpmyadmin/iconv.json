@@ -1,0 +1,1 @@
+{"result":"PASS","checks":["official PHP 8.3.35 ABI","GNU iconv implementation","Windows-1251 to UTF-8","PMA UTF-8 TRANSLIT import","roundtrip Cyrillic","GNU ASCII accent transliteration table","shared ASCII currency and sharp-s transliteration","IGNORE discards invalid UTF-8","Unicode character length"]}

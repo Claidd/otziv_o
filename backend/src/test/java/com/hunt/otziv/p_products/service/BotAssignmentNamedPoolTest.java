@@ -14,6 +14,10 @@ import com.hunt.otziv.r_review.bot.service.ReviewAccountWalkScheduleService;
 import com.hunt.otziv.r_review.bot.service.ReviewBotAssignmentGuardService;
 import com.hunt.otziv.r_review.bot.service.ReviewBotCooldownService;
 import com.hunt.otziv.r_review.model.Review;
+import com.hunt.otziv.p_products.dto.OrderDTO;
+import com.hunt.otziv.p_products.model.Order;
+import com.hunt.otziv.p_products.model.OrderDetails;
+import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.r_review.utils.ReviewBotPolicy;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
@@ -225,11 +229,111 @@ class BotAssignmentNamedPoolTest {
     }
 
     @Test
-    void doesNotChangeDefaultNewOrderAssignment() {
-        assertSame(stub, service.assignBotForReviewChange(review(ReviewBotAssignmentMode.NAGUL_ONLY), Set.of(),
-                ReviewBotAssignmentMode.DEFAULT_ORDER_ASSIGNMENT));
-        verify(botService).claimReserveBotForCity(eq(targetCity), anyCollection());
+    void newOrderClaimsDistinctNamedWalkingAccountsAndLeavesPublicationStock() {
+        Bot first = poolBot(900L, 0), second = poolBot(901L, 1), walked = poolBot(902L, 2);
+        when(botService.getFindAllByFilialCityId(325L)).thenReturn(List.of(first, second, walked));
+        var details = OrderDetails.builder().order(Order.builder().filial(filial).company(company).build())
+                .product(Product.builder().id(1L).build()).build();
+        var reviews = service.assignBotsToNewReviews(OrderDTO.builder().amount(3).build(), details);
+        assertEquals(Set.of(900L, 901L, 1L), reviews.stream().map(r -> r.getBot().getId()).collect(java.util.stream.Collectors.toSet()));
+        assertSame(targetCity, first.getBotCity());
+        assertSame(targetCity, second.getBotCity());
+        assertEquals(325L, walked.getBotCity().getId());
+        assertTrue(reviews.stream().noneMatch(Review::isVigul));
+    }
+
+    @ParameterizedTest
+    @CsvSource({"false,0", "false,1", "true,2", "true,7"})
+    void automaticStubReplacementUsesReviewStageAndAssignsCity(boolean publication, int counter) {
+        Bot candidate = poolBot(900L, counter);
+        when(botService.getFindAllByFilialCityId(325L)).thenReturn(List.of(candidate));
+        var review = review(publication ? ReviewBotAssignmentMode.PUBLISH_PREFER_WALKED : ReviewBotAssignmentMode.NAGUL_ONLY);
+        review.setBot(stub);
+        service.checkAndNotifyAboutStubBots(List.of(review));
+        assertSame(candidate, review.getBot());
+        assertEquals(publication, review.isVigul());
+        assertSame(targetCity, candidate.getBotCity());
+        verify(accountWalkScheduleService).synchronizeAfterAccountChange(review);
+        verify(telegramService, never()).sendAlertToAdmins(anyString());
+    }
+
+    @ParameterizedTest
+    @CsvSource({"false,2", "true,0", "true,1"})
+    void automaticStubReplacementRejectsWrongCounter(boolean publication, int counter) {
+        Bot candidate = poolBot(900L, counter);
+        when(botService.getFindAllByFilialCityId(325L)).thenReturn(List.of(candidate));
+        var review = review(publication ? ReviewBotAssignmentMode.PUBLISH_PREFER_WALKED : ReviewBotAssignmentMode.NAGUL_ONLY);
+        review.setBot(stub);
+        service.checkAndNotifyAboutStubBots(List.of(review));
+        assertSame(stub, review.getBot());
+        assertEquals(325L, candidate.getBotCity().getId());
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = {320L, 326L})
+    void newOrdersAndAutomaticReplacementNeverImportIntoSpecialCities(long city) {
+        targetCity.setId(city);
+        var details = OrderDetails.builder().order(Order.builder().filial(filial).company(company).build())
+                .product(Product.builder().id(1L).build()).build();
+        var reviews = service.assignBotsToNewReviews(OrderDTO.builder().amount(1).build(), details);
+        service.checkAndNotifyAboutStubBots(reviews);
+        assertSame(stub, reviews.getFirst().getBot());
         verify(botService, never()).getFindAllByFilialCityId(325L);
+        verify(botService, never()).save(any());
+    }
+
+    @Test
+    void automaticReplacementHonorsGuardAndDoesNotReuseOneAccountAcrossReviews() {
+        Bot candidate = poolBot(900L, 1);
+        when(botService.getFindAllByFilialCityId(325L)).thenReturn(List.of(candidate));
+        var first = review(ReviewBotAssignmentMode.NAGUL_ONLY);
+        var second = review(ReviewBotAssignmentMode.NAGUL_ONLY);
+        first.setBot(stub); second.setBot(stub); second.setId(51L);
+        service.checkAndNotifyAboutStubBots(List.of(first, second));
+        assertSame(candidate, first.getBot());
+        assertSame(stub, second.getBot());
+        verify(assignmentGuardService).lockIfEligible(eq(candidate), any());
+        verify(entityManager).refresh(candidate, LockModeType.PESSIMISTIC_WRITE);
+    }
+
+    @Test
+    void automaticReplacementLeavesPublishedAndRealAssignmentsAlone() {
+        var published = review(ReviewBotAssignmentMode.PUBLISH_PREFER_WALKED);
+        published.setBot(stub); published.setPublish(true);
+        var real = review(ReviewBotAssignmentMode.NAGUL_ONLY); real.setBot(poolBot(900L, 1));
+        service.checkAndNotifyAboutStubBots(List.of(published, real));
+        verify(botService, never()).getFindAllByFilialCityId(325L);
+        verify(botService, never()).save(any());
+    }
+
+    @Test
+    void existingReviewsWithoutBotsUseEachReviewsOwnStage() {
+        Bot walking = poolBot(900L, 1), publication = poolBot(901L, 2);
+        when(botService.getFindAllByFilialCityId(325L)).thenReturn(List.of(walking, publication));
+        var first = review(ReviewBotAssignmentMode.NAGUL_ONLY);
+        var second = review(ReviewBotAssignmentMode.PUBLISH_PREFER_WALKED);
+        second.setId(51L);
+        assertTrue(service.assignBotsToExistingReviews(List.of(first, second), filial));
+        assertSame(walking, first.getBot());
+        assertSame(publication, second.getBot());
+        assertFalse(first.isVigul());
+        assertTrue(second.isVigul());
+    }
+
+    @Test
+    void newOrderWithPerReviewFilialsClaimsEachAccountsDestinationCity() {
+        var secondCity = City.builder().id(8L).title("Бердск").build();
+        var secondFilial = Filial.builder().id(21L).city(secondCity).company(company).build();
+        when(filialService.getFilial(20L)).thenReturn(filial);
+        when(filialService.getFilial(21L)).thenReturn(secondFilial);
+        when(botService.getFindAllByFilialCityId(325L)).thenReturn(List.of(poolBot(900L, 0), poolBot(901L, 1)));
+        var details = OrderDetails.builder().order(Order.builder().filial(filial).company(company).build())
+                .product(Product.builder().id(1L).build()).build();
+        var reviews = service.assignBotsToNewReviews(
+                OrderDTO.builder().amount(2).reviewFilialIds(List.of(20L, 21L)).build(), details);
+        assertSame(targetCity, reviews.getFirst().getBot().getBotCity());
+        assertSame(secondCity, reviews.getLast().getBot().getBotCity());
+        assertNotEquals(reviews.getFirst().getBot().getId(), reviews.getLast().getBot().getId());
     }
 
     private Review review(ReviewBotAssignmentMode mode) {

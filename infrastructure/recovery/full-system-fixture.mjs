@@ -28,8 +28,8 @@ const imageRefs = {
   app: appImage, keycloak: keycloakImage,
   mysql: process.env.OTZIV_SYSTEM_FIXTURE_MYSQL_IMAGE || 'mysql@sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383',
   postgres: process.env.OTZIV_SYSTEM_FIXTURE_POSTGRES_IMAGE || 'postgres@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d',
-  // The official Quay mirror serves the identical fixture digest after Docker Hub stopped serving it.
-  objects: 'quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z@sha256:a1ea29fa28355559ef137d71fc570e508a214ec84ff8083e39bc5428980b015e',
+  // Use the reviewed, immutable S3 gateway from compose.prod-local.yaml; the old MinIO fixture is unavailable.
+  objects: 'ghcr.io/claidd/otziv-security@sha256:3bd06e6605d318c852fc56f42d14316b5cd74ed233119d586b078bd4a5e4be21',
   runner: process.env.OTZIV_SYSTEM_FIXTURE_NODE_IMAGE || 'otziv-observer-rollout:20260907'
 };
 const images = {}, allocated = new Set(), volumes = new Set(); let networkAllocated = false, phase = 'preflight';
@@ -137,8 +137,12 @@ async function startKeycloak(suffix) {
 }
 async function startObjects(suffix, volume) {
   objects = await container(suffix + '-objects', 'objects', ['--network-alias', 'objects', '--memory', '384m',
-    '--mount', `type=volume,source=${volume},target=/data`, '-e', 'MINIO_ROOT_USER=' + secret.s3Access, '-e', 'MINIO_ROOT_PASSWORD=' + secret.s3Secret], ['server', '/data']);
-  await waitHttp('http://objects:9000/minio/health/live');
+    '--entrypoint', '/bin/sh', '--mount', `type=volume,source=${volume},target=/var/lib/versity`,
+    '-e', 'ROOT_ACCESS_KEY=' + secret.s3Access, '-e', 'ROOT_SECRET_KEY=' + secret.s3Secret],
+    ['-ec', 'mkdir -p /var/lib/versity/data /var/lib/versity/versions /var/lib/versity/iam; '
+      + 'exec /usr/local/bin/versitygw --port :9000 --health /health --iam-dir /var/lib/versity/iam '
+      + 'posix --versioning-dir /var/lib/versity/versions /var/lib/versity/data']);
+  await waitHttp('http://objects:9000/health');
 }
 async function startApp(suffix) {
   const env = {
@@ -222,8 +226,8 @@ async function archiveObjects(volume, destination, restore = false) {
   const helper = await container((restore ? 'restore' : 'capture') + '-tar', 'runner', ['--network-alias', 'tar-helper', '--memory', '128m', '--entrypoint', 'sh',
     '--mount', `type=volume,source=${volume},target=/data${restore ? '' : ',readonly'}`], ['-c', 'sleep 600']);
   try {
-    if (restore) await docker(['exec', '-i', helper, 'tar', '-xf', '-', '-C', '/data'], { input: createReadStream(destination) });
-    else await dump(['exec', helper, 'tar', '-cf', '-', '-C', '/data', '.'], destination);
+    if (restore) await docker(['exec', '-i', helper, 'tar', '--xattrs', '--xattrs-include=*', '-xf', '-', '-C', '/data'], { input: createReadStream(destination) });
+    else await dump(['exec', helper, 'tar', '--xattrs', '--xattrs-include=*', '-cf', '-', '-C', '/data', '.'], destination);
   } finally { await removeContainer(helper); }
 }
 try {
