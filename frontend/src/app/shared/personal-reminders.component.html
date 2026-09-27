@@ -2,13 +2,22 @@
   <section class="reminder-alert" role="status" aria-label="Сработавшие напоминания">
     <div class="reminder-alert__head">
       <span class="material-icons-sharp">notifications_active</span>
-      <div>
-        <strong>Напоминание</strong>
-        <small>{{ dueReminders().length }}</small>
+      <div class="reminder-alert__head-actions">
+        @if (canManageAll()) {
+          <button type="button" class="reminder-clear-all" (click)="removeAll()"
+            [disabled]="!canRemoveAll()" [attr.aria-busy]="clearingAll()"
+            title="Удалить все напоминания" aria-label="Удалить все напоминания">
+            <span class="material-icons-sharp" aria-hidden="true">delete_sweep</span>
+          </button>
+        }
+        <div class="reminder-alert__heading">
+          <strong>Напоминания</strong>
+          <small>{{ dueReminders().length }}</small>
+        </div>
       </div>
     </div>
 
-    <div class="reminder-alert__list">
+    <div class="reminder-alert__list" [attr.inert]="clearingAll() ? '' : null">
       @for (reminder of alertReminders(); track reminder.id) {
         <article class="reminder-alert__item" [class.expanded]="isExpanded(reminder)">
           <div
@@ -95,13 +104,22 @@
         <h2>Заметки</h2>
         <small>{{ reminders().length }}</small>
       </div>
-      <button type="button" class="reminder-icon-button add" (click)="openCreate()" title="Добавить" aria-label="Добавить">
-        <span class="material-icons-sharp">add</span>
-      </button>
+      <div class="personal-reminders__head-actions">
+        @if (canManageAll() && !showAlert() && reminders().length) {
+          <button type="button" class="reminder-clear-all" (click)="removeAll()"
+            [disabled]="!canRemoveAll()" [attr.aria-busy]="clearingAll()"
+            title="Удалить все напоминания" aria-label="Удалить все напоминания">
+            <span class="material-icons-sharp" aria-hidden="true">delete_sweep</span>
+          </button>
+        }
+        <button type="button" class="reminder-icon-button add" (click)="openCreate()" [disabled]="clearingAll()" title="Добавить" aria-label="Добавить">
+          <span class="material-icons-sharp">add</span>
+        </button>
+      </div>
     </header>
 
     @if (formOpen()) {
-      <form class="reminder-form" (ngSubmit)="saveDraft()">
+      <form class="reminder-form" (ngSubmit)="saveDraft()" [attr.inert]="clearingAll() ? '' : null">
         <label>
           <span>Название</span>
           <input
@@ -173,7 +191,7 @@
       </form>
     }
 
-    <div class="personal-reminders__list" [class.scrollable]="isScrollable()">
+    <div class="personal-reminders__list" [class.scrollable]="isScrollable()" [attr.inert]="clearingAll() ? '' : null">
       @for (reminder of reminders(); track reminder.id) {
         <article class="personal-reminder" [class.due]="isDue(reminder)" [class.expanded]="isExpanded(reminder)">
           <div class="personal-reminder__leading">

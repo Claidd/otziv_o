@@ -14,6 +14,7 @@ import { copyTextToClipboard } from './clipboard-copy';
 import { ToastService } from './toast.service';
 import type { ToastAction } from './toast.service';
 import { ManagerApi } from '../core/manager.api';
+import { AuthService } from '../core/auth.service';
 
 type PersonalReminderView = 'full' | 'alert' | 'list';
 
@@ -37,6 +38,7 @@ export class PersonalRemindersComponent implements OnInit {
   private readonly remindersService = inject(PersonalRemindersService);
   private readonly toastService = inject(ToastService);
   private readonly managerApi = inject(ManagerApi);
+  private readonly auth = inject(AuthService);
 
   readonly view = signal<PersonalReminderView>('full');
   readonly initialized = signal(false);
@@ -50,6 +52,15 @@ export class PersonalRemindersComponent implements OnInit {
   readonly draft = signal<PersonalReminderDraft>(this.emptyDraft());
 
   readonly authenticated = this.remindersService.authenticated;
+  readonly clearingAll = this.remindersService.clearingAll;
+  readonly canManageAll = computed(() => {
+    this.auth.tokenParsed();
+    return this.authenticated() && this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']);
+  });
+  readonly canRemoveAll = computed(() => this.canManageAll()
+    && this.reminders().length > 0 && !this.clearingAll() && !this.saving()
+    && this.notifyingRecoveryReminderId() === null && this.banningBadReviewReminderId() === null
+    && this.copyingPaymentReminderId() === null);
   readonly reminders = this.remindersService.activeReminders;
   readonly dueReminders = this.remindersService.dueReminders;
   readonly alertReminders = computed(() => this.dueReminders().slice(0, 3));
@@ -61,7 +72,7 @@ export class PersonalRemindersComponent implements OnInit {
     const draft = this.draft();
     const hasText = Boolean(draft.title.trim() || draft.text.trim());
 
-    if (!hasText || this.saving()) {
+    if (!hasText || this.saving() || this.clearingAll()) {
       return false;
     }
 
@@ -123,6 +134,7 @@ export class PersonalRemindersComponent implements OnInit {
   }
 
   openCreate(): void {
+    if (this.clearingAll()) return;
     this.editingId.set(null);
     this.draft.set(this.emptyDraft());
     this.formOpen.set(true);
@@ -258,6 +270,26 @@ export class PersonalRemindersComponent implements OnInit {
     this.remindersService.remove(reminder.id).subscribe({
       next: () => this.toastService.success('Заметка удалена'),
       error: (err) => this.toastService.error('Заметка не удалена', apiErrorMessage(err, 'Попробуйте еще раз'))
+    });
+  }
+
+  removeAll(): void {
+    if (!this.canRemoveAll()) return;
+    const hasProtected = this.reminders().some((reminder) => reminder.sourceType === 'PAYMENT_RETURN_RECONCILIATION');
+    const message = 'Удалить все ваши напоминания и заметки? Это действие нельзя отменить.'
+      + (hasProtected ? '\nНапоминания о сверке возвратов останутся до завершения финансовой сверки.' : '');
+    if (!window.confirm(message)) return;
+
+    this.remindersService.removeAll().subscribe({
+      next: (ids) => {
+        if (this.editingId() !== null && ids.includes(this.editingId()!)) this.cancelEdit();
+        this.expandedReminderId.set(null);
+        this.toastService.success(
+          ids.length ? 'Напоминания удалены' : 'Нет напоминаний для удаления',
+          hasProtected ? 'Напоминания о сверке возвратов сохранены.' : undefined
+        );
+      },
+      error: (err) => this.toastService.error('Не удалось удалить напоминания', apiErrorMessage(err, 'Попробуйте еще раз'))
     });
   }
 

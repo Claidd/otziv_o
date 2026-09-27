@@ -31,6 +31,12 @@ class CampaignStoreMySqlIntegrationTest {
         jdbc.execute("DROP TABLE IF EXISTS client_offer_campaign_file");
         jdbc.execute("DROP TABLE IF EXISTS client_offer_campaign");
         new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_320__client_offer_campaigns.sql")).execute(data);
+        new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_325__client_offer_test_audience.sql")).execute(data);
+        jdbc.execute("CREATE TABLE IF NOT EXISTS users (id BIGINT PRIMARY KEY,fio VARCHAR(200),username VARCHAR(200),active BOOLEAN,telegram_chat_id BIGINT)");
+        jdbc.execute("CREATE TABLE IF NOT EXISTS roles (id BIGINT PRIMARY KEY,name VARCHAR(50))");
+        jdbc.execute("CREATE TABLE IF NOT EXISTS users_roles (user_id BIGINT,role_id BIGINT)");
+        jdbc.update("DELETE FROM users_roles"); jdbc.update("DELETE FROM users"); jdbc.update("DELETE FROM roles");
+        jdbc.update("INSERT INTO roles VALUES(1,'ROLE_ADMIN'),(2,'ROLE_OWNER'),(3,'ROLE_MANAGER'),(4,'ROLE_WORKER'),(5,'ROLE_USER')");
         jdbc.execute("CREATE TABLE IF NOT EXISTS company_status (company_status_id BIGINT PRIMARY KEY,status_title VARCHAR(30))");
         jdbc.execute("CREATE TABLE IF NOT EXISTS managers (manager_id BIGINT PRIMARY KEY,client_id VARCHAR(128))");
         jdbc.execute("""
@@ -44,7 +50,7 @@ class CampaignStoreMySqlIntegrationTest {
         factory.addAdvice(new TransactionInterceptor(new DataSourceTransactionManager(data),new AnnotationTransactionAttributeSource()));
         store = (CampaignStore) factory.getProxy();
     }
-    Settings settings(int limit) { return new Settings("Предложение","Новая услуга",limit,10,"10:00","21:00",true,true,true,"ATTACHMENT"); }
+    Settings settings(int limit) { return new Settings("Предложение","Новая услуга",limit,10,"10:00","21:00",true,true,true,"ATTACHMENT",false); }
     void company(int id,int status,long chat) { jdbc.update("INSERT INTO companies(company_id,company_title,company_status,company_url_chat,company_telegram_group_chat_id) VALUES(?,?,?,'https://t.me/fixture',?)",id,"Компания "+id,status,chat); }
     String draft(Settings settings) { String id = UUID.randomUUID().toString(); store.save(id,settings,null,false,"owner",now); return id; }
     void sent(Claim c,LocalDateTime time) { store.finish(c,ClientMessageSendResult.sent("Telegram","77"),time); }
@@ -57,7 +63,7 @@ class CampaignStoreMySqlIntegrationTest {
     }
     @Test void excludedListsNeverEnterQueueAndMissingChatsAreVisible() {
         company(1,1,1001); company(2,2,1002); company(3,3,1003); company(4,1,0);
-        var s = new Settings("Offer","Body",10,10,"10:00","21:00",true,false,false,"LINK");
+        var s = new Settings("Offer","Body",10,10,"10:00","21:00",true,false,false,"LINK",false);
         var id = draft(s); store.start(id,now);
         assertThat(store.counts(id).total()).isEqualTo(2);
         assertThat(store.counts(id).skipped()).isEqualTo(1);
@@ -114,5 +120,49 @@ class CampaignStoreMySqlIntegrationTest {
         assertThat(store.publicAttachment(c.fileToken()).bytes()).containsExactly(1,2,3);
         assertThatThrownBy(() -> store.save(id,settings(1),file,false,"owner",now)).isInstanceOf(ResponseStatusException.class);
         assertThat(store.get(id).settings().dailyLimit()).isEqualTo(10);
+    }
+
+    void user(long id,int role,boolean active,Long chat) {
+        jdbc.update("INSERT INTO users VALUES(?,?,?,?,?)",id,"User "+id,"user"+id,active,chat);
+        jdbc.update("INSERT INTO users_roles VALUES(?,?)",id,role);
+    }
+    Settings testSettings(boolean includeClients) {
+        return new Settings("Test","Body",10,10,"10:00","21:00",includeClients,includeClients,includeClients,"ATTACHMENT",true);
+    }
+    @Test void testAudienceExcludesAllCompaniesAndOtherRolesEvenWhenClientListsAreSelected() {
+        company(1,1,9001); company(2,2,9002); company(3,3,9003);
+        user(1,1,true,101L); user(2,2,true,102L); user(3,3,true,103L);
+        user(4,4,true,104L); user(5,5,true,105L); user(6,1,false,106L);
+        user(7,2,true,null); user(8,1,true,-108L); user(9,2,true,101L);
+        jdbc.update("INSERT INTO users_roles VALUES(1,2)");
+        var settings = testSettings(true);
+        assertThat(store.preview(settings)).containsExactly(new AudienceCount("TEST_STAFF",4,2));
+        var id = draft(settings); store.start(id,now);
+        assertThat(store.get(id).settings().testOnly()).isTrue();
+        var rows = store.recipients(id,0);
+        assertThat(rows).extracting(Recipient::userId).containsExactly(1L,2L,7L,8L);
+        assertThat(rows).allMatch(r -> r.companyId() == null && "TEST_STAFF".equals(r.audience()));
+        assertThat(rows).filteredOn(r -> "PENDING".equals(r.state())).extracting(Recipient::telegramChatId).containsExactly(101L,102L);
+        assertThat(store.claim(id,now).recipient().userId()).isEqualTo(1L);
+    }
+    @Test void testsWorkWithoutClientListsAndRevalidateRoleActiveStateAndPersonalChat() {
+        user(1,2,true,101L);
+        var id = draft(testSettings(false)); store.start(id,now);
+        var recipient = store.recipients(id,0).getFirst();
+        assertThat(store.testRecipientAllowed(recipient)).isTrue();
+        jdbc.update("UPDATE users SET active=FALSE WHERE id=1");
+        assertThat(store.testRecipientAllowed(recipient)).isFalse();
+        jdbc.update("UPDATE users SET active=TRUE,telegram_chat_id=102 WHERE id=1");
+        assertThat(store.testRecipientAllowed(recipient)).isFalse();
+        jdbc.update("UPDATE users SET telegram_chat_id=101 WHERE id=1");
+        jdbc.update("UPDATE users_roles SET role_id=3 WHERE user_id=1");
+        assertThat(store.testRecipientAllowed(recipient)).isFalse();
+    }
+    @Test void missingTestChatsCannotFallBackToReachableCompanies() {
+        company(1,1,9001); user(1,1,true,null);
+        var id = draft(testSettings(true));
+        assertThatThrownBy(() -> store.start(id,now)).isInstanceOf(ResponseStatusException.class);
+        assertThat(store.get(id).state()).isEqualTo("DRAFT");
+        assertThat(store.counts(id).total()).isZero();
     }
 }

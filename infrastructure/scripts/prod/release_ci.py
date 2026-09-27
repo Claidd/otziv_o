@@ -28,6 +28,16 @@ def git(repo, *args):
     require(result.returncode == 0, 'Git check failed: ' + args[0])
     return result.stdout.decode('utf-8').strip()
 
+def canonical_workspace(repo, workspace):
+    require(workspace.is_dir(), 'Canonical workspace is missing: ' + str(workspace))
+    require(repo.resolve() == workspace.resolve(),
+        'Deploy from the canonical workspace ' + str(workspace)
+        + '; a separate clean copy may omit unfinished local changes')
+    common = Path(git(repo, 'rev-parse', '--path-format=absolute', '--git-common-dir')).resolve()
+    require(common.parent == workspace.resolve(),
+        'The canonical release workspace must be the primary checkout, not a linked worktree')
+
+
 def local_revision(repo, *, refresh=True):
     origin = git(repo, 'remote', 'get-url', 'origin')
     require(origin in ('https://github.com/Claidd/otziv_o.git', 'https://github.com/Claidd/otziv_o',
@@ -154,9 +164,12 @@ def verify_ci(head, policy, get, now=None):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--repo', type=Path, required=True)
+    parser.add_argument('--workspace', type=Path)
     parser.add_argument('--record', type=Path)
     args = parser.parse_args()
     try:
+        if args.workspace:
+            canonical_workspace(args.repo, args.workspace)
         head = local_revision(args.repo)
         policy = json.loads((args.repo/'infrastructure/scripts/security/expected-branch-policy.json').read_text())
         receipt = verify_ci(head, policy, github_reader(args.repo))

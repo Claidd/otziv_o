@@ -28,7 +28,12 @@
     window.removeEventListener('otziv:startup-ready', ready);
     window.removeEventListener('otziv:startup-error', failed);
     window.removeEventListener('error', resourceFailed, true);
-    panel.parentNode.removeChild(panel);
+    panel.setAttribute('data-state', 'ready');
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      panel.remove();
+    } else {
+      window.setTimeout(function () { panel.remove(); }, 240);
+    }
   }
   retry.addEventListener('click', function () { window.location.reload(); });
   window.addEventListener('otziv:startup-ready', ready);

@@ -55,8 +55,11 @@ if ($VpsHost -notmatch '^[A-Za-z0-9][A-Za-z0-9.-]*$' -or $VpsUser -notmatch '^[a
 foreach ($tool in @('git', 'python')) { [void](Get-Command $tool -ErrorAction Stop) }
 $repoRoot = $PSScriptRoot
 $helpers = Join-Path $repoRoot 'infrastructure/scripts/prod'
+if (-not $ProjectFilesRoot) { $ProjectFilesRoot = Split-Path -Parent $repoRoot }
+$ProjectFilesRoot = [IO.Path]::GetFullPath($ProjectFilesRoot)
+$canonicalWorkspace = Join-Path $ProjectFilesRoot 'otziv'
 # This is the first external service action. CI failures must not reach Docker or SSH.
-$ciOutput = @(& python (Join-Path $helpers 'release_ci.py') --repo $repoRoot)
+$ciOutput = @(& python (Join-Path $helpers 'release_ci.py') --repo $repoRoot --workspace $canonicalWorkspace)
 if ($LASTEXITCODE -ne 0) { throw ($ciOutput -join [Environment]::NewLine) }
 $ci = ($ciOutput -join '') | ConvertFrom-Json
 if ($ci.result -ne 'PASS' -or $ci.revision -notmatch '^[0-9a-f]{40}$') { throw 'Invalid CI verification result.' }
@@ -67,8 +70,6 @@ if ($CheckOnly) {
 }
 [void](Get-Command ssh -ErrorAction Stop)
 if ($ImageTransport -eq 'Local') { [void](Get-Command docker -ErrorAction Stop) }
-if (-not $ProjectFilesRoot) { $ProjectFilesRoot = Split-Path -Parent $repoRoot }
-$ProjectFilesRoot = [IO.Path]::GetFullPath($ProjectFilesRoot)
 if (-not $SshKey) { $SshKey = Join-Path $ProjectFilesRoot '.ssh/otziv_vps_ed25519' }
 if (-not $SshKnownHostsFile) { $SshKnownHostsFile = Join-Path $ProjectFilesRoot '.ssh/known_hosts' }
 if (-not $EnvFile) { $EnvFile = Join-Path $ProjectFilesRoot '.otziv/env/prod.env' }

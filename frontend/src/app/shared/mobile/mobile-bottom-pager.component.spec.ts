@@ -43,6 +43,7 @@ describe('MobileBottomPagerComponent reminders', () => {
 
   const remindersService = {
     authenticated: signal(true),
+    clearingAll: signal(false),
     activeReminders,
     dueReminders,
     load,

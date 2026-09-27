@@ -1,0 +1,11 @@
+[Unit]
+Description=Check Otziv disk pressure every five minutes
+
+[Timer]
+OnActiveSec=1min
+OnUnitInactiveSec=5min
+AccuracySec=15s
+Unit=otziv-disk-maintenance.service
+
+[Install]
+WantedBy=timers.target

@@ -3865,6 +3865,10 @@ export class ApiService {
     return this.http.delete<void>(this.apiUrl(`/api/personal-reminders/${id}`));
   }
 
+  deleteAllPersonalReminders(): Observable<number[]> {
+    return this.http.delete<number[]>(this.apiUrl('/api/personal-reminders'));
+  }
+
   getOperatorBoard(query: OperatorBoardQuery = {}): Observable<OperatorBoard> {
     const params = new HttpParams()
       .set('keyword', query.keyword?.trim() ?? '')

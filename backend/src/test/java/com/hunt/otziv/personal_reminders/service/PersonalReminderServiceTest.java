@@ -244,6 +244,39 @@ class PersonalReminderServiceTest {
         verify(reminderRepository, never()).delete(reminder);
     }
 
+    @Test
+    void bulkDeleteUsesCurrentUserAndPreservesFinancialReconciliationReminders() {
+        User user = User.builder().id(5L).username("admin").build();
+        PersonalReminder note = reminder(11L, "Заметка", null, null);
+        PersonalReminder alert = reminder(12L, "Заканчивается место", "DISK", 1L);
+        PersonalReminder protectedReminder = reminder(13L, "Сверка", "PAYMENT_RETURN_RECONCILIATION", 2L);
+        when(userService.findByUserName("admin")).thenReturn(Optional.of(user));
+        when(reminderRepository.findByUserIdAndCompletedAtIsNullOrderByUpdatedAtDesc(5L))
+                .thenReturn(List.of(note, alert, protectedReminder));
+
+        assertEquals(List.of(11L, 12L), service.deleteAll(principal("admin")));
+
+        verify(reminderRepository).deleteAllInBatch(List.of(note, alert));
+        verifyNoInteractions(orderRepository, recoveryBatchRepository, badReviewTaskRepository, paymentInstructionOrchestrator);
+    }
+
+    @Test
+    void bulkDeleteDoesNotIssueUnscopedDeleteWhenNothingCanBeRemoved() {
+        when(userService.findByUserName("owner")).thenReturn(Optional.of(User.builder().id(7L).build()));
+        when(reminderRepository.findByUserIdAndCompletedAtIsNullOrderByUpdatedAtDesc(7L))
+                .thenReturn(List.of(reminder(13L, "Сверка", "PAYMENT_RETURN_RECONCILIATION", 2L)));
+        assertEquals(List.of(), service.deleteAll(principal("owner")));
+        verify(reminderRepository, never()).deleteAllInBatch(org.mockito.ArgumentMatchers.anyIterable());
+        verify(reminderRepository, never()).deleteAllInBatch();
+    }
+
+    @Test
+    void bulkDeleteRequiresAnExistingUser() {
+        assertThrows(ResponseStatusException.class, () -> service.deleteAll(null));
+        assertThrows(ResponseStatusException.class, () -> service.deleteAll(principal("missing")));
+        verifyNoInteractions(reminderRepository);
+    }
+
     private PersonalReminder reminder(Long id, String title, String sourceType, Long sourceId) {
         PersonalReminder reminder = new PersonalReminder();
         reminder.setId(id);

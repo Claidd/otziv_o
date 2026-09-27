@@ -128,6 +128,55 @@ CERTBOT_DRY_RUN=false
 
 ## Обычный запуск после настройки
 
+### Автоочистка диска VPS
+
+На хосте устанавливается независимый systemd-таймер. Он проверяет диск каждые
+5 минут, запускает очистку при заполнении от 80% и прекращает её при достижении
+75% либо исчерпании безопасных действий. Повторная очистка — не чаще раза в час;
+переход к 90% или 95% разрешает внеочередной запуск. Во время deploy очистка
+пропускается через общий `.deploy.lock.d`. Backend не получает доступ к Docker socket.
+
+```sh
+python3 infrastructure/scripts/prod/disk_maintenance.py --root /docker
+sudo bash infrastructure/scripts/prod/install-disk-maintenance.sh /docker
+sudo systemctl start otziv-disk-maintenance.service
+systemctl list-timers otziv-disk-maintenance.timer
+journalctl -u otziv-disk-maintenance.service -n 30 --no-pager
+```
+
+Очищаются только скачанные пакеты apt, архивные системные журналы (7 дней / 256 МБ),
+кэш сборки Docker старше 7 дней (с резервом 1 ГБ), образы старше 7 дней без тегов,
+digest-ссылок и любых контейнеров, а также истёкшие бинарные журналы MySQL через
+`PURGE BINARY LOGS`. Томов, контейнеров, таблиц, загрузок, резервных копий,
+WhatsApp-сессий и образов с digest-ссылками очистка не касается.
+
+По умолчанию срок хранения MySQL сохраняется. Для standalone-сервера можно явно
+разрешить сокращать историю журналов до суток только при нехватке места:
+
+```sh
+sudo install -m 0600 /dev/null /etc/otziv-disk-maintenance.conf
+sudo tee /etc/otziv-disk-maintenance.conf >/dev/null <<'EOF'
+TRIGGER_PERCENT=80
+TARGET_PERCENT=75
+MYSQL_PRESSURE_HOURS=24
+EOF
+```
+
+`MYSQL_PRESSURE_HOURS=0` возвращает штатный срок MySQL. Сокращение истории влияет
+на восстановление по бинарным журналам; оно допустимо только при подходящей политике
+полных резервных копий и отсутствии внешних потребителей binlog, в том числе временно
+отключённых. При обнаружении репликации очистка binlog пропускается. Текущий активный
+binlog никогда не удаляется, поэтому заданный порог не является жёстким лимитом объёма.
+Служба не меняет глобальные настройки MySQL. См. [документацию MySQL PURGE BINARY LOGS](https://dev.mysql.com/doc/refman/9.7/en/purge-binary-logs.html).
+
+Состояние и результат последнего запуска: `/var/lib/otziv-disk-maintenance/state.json`.
+Если безопасного мусора недостаточно, предупреждения о заполнении остаются включены.
+Отключение: `sudo systemctl disable --now otziv-disk-maintenance.timer`.
+Установленные файлы лежат в `/usr/local/sbin` и `/etc/systemd/system`, поэтому обычный
+деплой приложения не сбрасывает таймер; обновление выполняется повторным запуском installer.
+
+### Запуск контейнеров
+
 ```sh
 docker compose -f docker-compose.yaml --env-file .env.prod pull
 docker compose -f docker-compose.yaml --env-file .env.prod up -d

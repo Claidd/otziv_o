@@ -5,7 +5,7 @@ import { appEnvironment } from './app-environment';
 export interface OfferSettings {
   title: string; message: string; dailyLimit: number; intervalMinutes: number;
   windowStart: string; windowEnd: string; includeActive: boolean; includeStopped: boolean; includeBanned: boolean;
-  fileMode: 'ATTACHMENT' | 'LINK';
+  fileMode: 'ATTACHMENT' | 'LINK'; testOnly: boolean;
 }
 export interface OfferCampaign {
   id: string; settings: OfferSettings; state: string; fileName: string | null;
@@ -18,7 +18,7 @@ export interface OfferSummary { campaign: OfferCampaign; counts: OfferCounts; us
 export interface OfferBoard { liveEnabled: boolean; campaigns: OfferSummary[] }
 export interface OfferAudience { audience: string; total: number; reachable: number }
 export interface OfferRecipient {
-  id: number; companyId: number; companyTitle: string; audience: string; state: string;
+  id: number; companyId: number | null; userId: number | null; companyTitle: string; audience: string; state: string;
   errorMessage: string | null; finishedAt: string | null;
 }
 
