@@ -1,4 +1,4 @@
-import hashlib,io,json,tempfile,unittest
+import hashlib,io,json,subprocess,sys,tempfile,unittest
 from pathlib import Path
 from unittest.mock import Mock,patch
 from ci_artifacts import storage_url
@@ -7,6 +7,33 @@ from release_ci import GateError
 import test_ci_release as fixture_module
 
 class RemoteTransportTest(unittest.TestCase):
+    def test_transmitted_helpers_validate_new_manifest_in_an_isolated_interpreter(self):
+        from ci_test_reuse import DECISION,JOBS
+        fixture=fixture_module.ReleaseArtifactsTest();fixture.setUp();self.addCleanup(fixture.doCleanups)
+        release=fixture.release
+        release['testEvidence']={'schema':DECISION,'revision':release['revision'],'runId':123,'runAttempt':1,
+            'tree':'f'*40,'mode':'shadow','checks':{scope:{'reused':False} for scope in JOBS}}
+        record={'host':'server.example','user':'hunt','port':22,'path':'/docker','key':'key','known_hosts':'known','owner':'a'*32}
+        with patch('remote_release_transport.subprocess.run',return_value=Mock(returncode=0,stdout=b'{}')) as transport:
+            invoke(record,'prepare',release=release,links=[],releaseReserveBytes=0)
+        packet=json.loads(transport.call_args.kwargs['input'])
+        with tempfile.TemporaryDirectory() as directory:
+            for name,source in packet['modules'].items():
+                (Path(directory)/(name+'.py')).write_text(source,encoding='utf-8')
+            script=('import json,sys;sys.path.insert(0,sys.argv[1]);'
+                    'from ci_release import validate_release,capacity_plan;'
+                    'value=json.load(sys.stdin);validate_release(value,value["revision"]);'
+                    'assert capacity_plan(value)["revision"]==value["revision"]')
+            for valid in (True,False):
+                if not valid:packet['release']['testEvidence']['runAttempt']=2
+                result=subprocess.run([sys.executable,'-I','-B','-c',script,directory],
+                    input=json.dumps(packet['release']),capture_output=True,text=True,timeout=30)
+                with self.subTest(valid=valid):
+                    if valid:self.assertEqual(0,result.returncode,result.stderr)
+                    else:
+                        self.assertNotEqual(0,result.returncode)
+                        self.assertIn('Test transfer does not belong to current release',result.stderr)
+
     def test_signed_download_has_no_account_auth_and_checks_every_byte(self):
         data=b'bounded immutable artifact';digest='sha256:'+hashlib.sha256(data).hexdigest()
         item={'id':123,'size_in_bytes':len(data),'digest':digest}
