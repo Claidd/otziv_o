@@ -1,4 +1,4 @@
-import json,tempfile,unittest
+import json,tempfile,unittest,shutil
 from pathlib import Path
 from backend_test_shards import COUNT,inventory,selection,verify
 
@@ -28,5 +28,19 @@ class BackendShardsTest(unittest.TestCase):
         report=next((self.reports/'0').glob('TEST-*.xml'))
         (self.reports/'1'/report.name).write_bytes(report.read_bytes())
         with self.assertRaisesRegex(ValueError,'wrong shard'):verify(self.sources,self.reports,'a'*40)
+
+    def test_rerun_uses_latest_shard_without_repeating_successful_groups(self):
+        latest=self.reports/'rerun-0';shutil.copytree(self.reports/'0',latest)
+        manifest=json.loads((latest/'shard-selection.json').read_text());manifest['attempt']=2
+        (latest/'shard-selection.json').write_text(json.dumps(manifest))
+        old=next((self.reports/'0').glob('TEST-*.xml'))
+        old.write_text(old.read_text().replace('failures="0"','failures="1"'))
+        self.assertEqual(9,verify(self.sources,self.reports,'a'*40)['tests'])
+
+    def test_incomplete_latest_shard_never_falls_back_to_old_success(self):
+        latest=self.reports/'rerun-0';latest.mkdir()
+        manifest=json.loads((self.reports/'0'/'shard-selection.json').read_text());manifest['attempt']=2
+        (latest/'shard-selection.json').write_text(json.dumps(manifest))
+        with self.assertRaisesRegex(ValueError,'reports missing'):verify(self.sources,self.reports,'a'*40)
 
 if __name__=='__main__':unittest.main()

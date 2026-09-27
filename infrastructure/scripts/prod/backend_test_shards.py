@@ -32,11 +32,19 @@ def selection(root,index,revision='',attempt=1):
 def verify(root,inputs,revision):
     expected=[selection(root,i,revision) for i in range(COUNT)]
     found={}; totals={'tests':0,'failures':0,'errors':0,'skipped':0}
+    manifests=[]; latest={}
     for path in Path(inputs).rglob('shard-selection.json'):
         manifest=json.loads(path.read_text());index=manifest['index']
         if not 0<=index<COUNT or type(manifest.get('attempt')) is not int or manifest['attempt']<1:raise ValueError('Invalid shard identity')
         compare={**manifest,'attempt':1}
         if compare!=expected[index]:raise ValueError('Shard inventory or source changed')
+        manifests.append((path,manifest))
+        latest[index]=max(latest.get(index,0),manifest['attempt'])
+    # A failed-job rerun replaces that shard's failed/incomplete older reports.
+    # Never fall back to an earlier green attempt when the latest one is bad.
+    for path,manifest in manifests:
+        index=manifest['index']
+        if manifest['attempt']!=latest[index]:continue
         reports=list(path.parent.glob('TEST-*.xml'))
         if not reports:raise ValueError('Shard reports missing')
         selected={r['class'] for r in manifest['tests']};actual=set();counts={k:0 for k in totals};cases=set()
