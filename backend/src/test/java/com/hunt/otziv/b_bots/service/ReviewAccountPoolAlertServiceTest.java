@@ -241,7 +241,7 @@ class ReviewAccountPoolAlertServiceTest {
     private void stub(ReviewAccountPoolAlertState state, long count, List<User> owners, List<User> admins) {
         when(stateRepository.findByIdForUpdate(ReviewAccountPoolAlertService.STATE_ID)).thenReturn(Optional.of(state));
         when(walkScheduleService.walkedCounterThreshold()).thenReturn(2);
-        when(poolRepository.snapshot(any(LocalDate.class), eq(2)))
+        lenient().when(poolRepository.snapshot(any(LocalDate.class), eq(2)))
                 .thenReturn(new Snapshot(Math.toIntExact(count), 0, 0, 0, 0));
         lenient().when(botsRepository.countActiveByCityId(325L)).thenReturn(100L);
         lenient().when(userService.getAllOwners("ROLE_OWNER")).thenReturn(owners);
