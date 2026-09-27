@@ -69,6 +69,9 @@ class WorkloadShadowStageBatchQueryContractTest {
 
         assertThat(sql).contains(
                 "1 as units",
+                "left join bots bot",
+                "not coalesce(bot.bot_active, false) as external_blocked",
+                "relevant.external_blocked",
                 "concat('nagul:', relevant.review_id) as batch_key",
                 "review.review_text_ready_at",
                 "review.review_vigul_changed_at",
@@ -101,6 +104,9 @@ class WorkloadShadowStageBatchQueryContractTest {
 
         assertThat(sql).contains(
                 "1 as units",
+                "left join bots bot",
+                "not coalesce(bot.bot_active, false) as external_blocked",
+                "relevant.external_blocked",
                 "concat('publish:', relevant.review_id) as batch_key",
                 "review.review_vigul_changed_at",
                 "timestamp( review.review_publish_date, cast(:shiftstart as time) )",
@@ -130,6 +136,8 @@ class WorkloadShadowStageBatchQueryContractTest {
         assertThat(sql).contains(
                 "task.bad_review_task_id",
                 "1 as units",
+                "left join bots bot",
+                "not coalesce(bot.bot_active, false) as external_blocked",
                 "concat('bad:', task.bad_review_task_id) as batch_key",
                 "task.bad_review_task_created_at",
                 "cast(:shiftstart as time)"
@@ -153,6 +161,8 @@ class WorkloadShadowStageBatchQueryContractTest {
         assertThat(sql).contains(
                 "task.review_recovery_task_id",
                 "1 as units",
+                "left join bots bot",
+                "not coalesce(bot.bot_active, false) as external_blocked",
                 "concat('recovery:', task.review_recovery_task_id) as batch_key",
                 "task.review_recovery_task_created_at",
                 "cast(:shiftstart as time)"

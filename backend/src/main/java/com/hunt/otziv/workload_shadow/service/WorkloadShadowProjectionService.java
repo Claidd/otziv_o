@@ -87,17 +87,25 @@ public class WorkloadShadowProjectionService {
         }
         WalkEstimate walkEstimate = calculateWalkEstimate(progressDate, settings);
         persistWalkEstimate(walkEstimate, observedAt);
-        List<WorkBatch> batches = activeBatches(
+        LocalDateTime intakeCutoff = progressDate.atTime(settingsService.shiftEnd(settings));
+        List<WorkBatch> sourceBatches = activeBatches(
                 workerIds,
                 progressDate,
                 observedAt,
                 settings,
                 walkEstimate.effectiveMinutes()
         );
+        // Late blocked cards use the same persisted AFTER_CUTOFF decisions as active
+        // cards. Only blockers available before the cutoff belong to today's denominator.
+        List<WorkBatch> batches = sourceBatches.stream()
+                .filter(batch -> !batch.mandatoryExternalBlocker(intakeCutoff))
+                .toList();
         Map<Long, List<WorkBatch>> batchesByWorker = groupBatches(batches);
         Map<Long, WorkloadClassification> deferredAndBlocked = deferredAndBlockedUnits(
                 workerIds,
-                progressDate
+                progressDate,
+                sourceBatches,
+                intakeCutoff
         );
         Map<Long, Map<String, BatchDecision>> dailyBatchDecisions =
                 dailyBatchDecisions(
@@ -110,7 +118,6 @@ public class WorkloadShadowProjectionService {
                 dailyObservationWatermarks(workerIds, progressDate, settingsService.zone(settings));
         repository.deactivateDailyBatchDecisions(progressDate);
         LocalDateTime shiftStart = progressDate.atTime(settingsService.shiftStart(settings));
-        LocalDateTime intakeCutoff = progressDate.atTime(settingsService.shiftEnd(settings));
         LocalDateTime resultSealAt = resultSealAt(progressDate);
         Map<Long, CompletionStats> completions = completedUnits(workerIds, progressDate);
         Map<Long, HistoryStats> history = history(
@@ -283,18 +290,21 @@ public class WorkloadShadowProjectionService {
 
     private Map<Long, WorkloadClassification> deferredAndBlockedUnits(
             List<Long> workerIds,
-            LocalDate date
+            LocalDate date,
+            List<WorkBatch> batches,
+            LocalDateTime intakeCutoff
     ) {
         Map<Long, WorkloadClassification.Mutable> mutable = new HashMap<>();
-        LocalDate nagulDate = date.plusDays(appSettingService.getInt(
-                AppSettingService.NAGUL_LOOKAHEAD_DAYS,
-                14
-        ));
-        repository.findDeferredAndBlockedUnits(workerIds, date, nagulDate).forEach(row -> {
+        for (WorkBatch batch : batches) {
+            if (batch.mandatoryExternalBlocker(intakeCutoff)) {
+                mutable.computeIfAbsent(batch.workerId(), ignored -> new WorkloadClassification.Mutable())
+                        .externalBlockedUnits += batch.units();
+            }
+        }
+        repository.findDeferredUnits(workerIds, date).forEach(row -> {
             long workerId = longValue(row.get("worker_id"));
             WorkloadClassification.Mutable classification =
                     mutable.computeIfAbsent(workerId, ignored -> new WorkloadClassification.Mutable());
-            classification.externalBlockedUnits += longValue(row.get("external_blocked_units"));
             classification.clientDeferredUnits += longValue(row.get("client_deferred_units"));
             classification.managerDeferredUnits += longValue(row.get("manager_deferred_units"));
         });
@@ -608,7 +618,8 @@ public class WorkloadShadowProjectionService {
                 toLocalDateTime(row.get("available_at"), businessZone),
                 string(row.get("batch_key")).isBlank()
                         ? section + ":" + (orderId == null ? "unknown" : orderId)
-                        : string(row.get("batch_key"))
+                        : string(row.get("batch_key")),
+                booleanValue(row.get("external_blocked"))
         );
     }
 
@@ -1628,8 +1639,18 @@ public class WorkloadShadowProjectionService {
             long units,
             int unitMinutes,
             LocalDateTime availableAt,
-            String batchKey
+            String batchKey,
+            boolean externalBlocked
     ) {
+        WorkBatch(long workerId, Long companyId, Long orderId, String section,
+                  long units, int unitMinutes, LocalDateTime availableAt, String batchKey) {
+            this(workerId, companyId, orderId, section, units, unitMinutes, availableAt, batchKey, false);
+        }
+
+        boolean mandatoryExternalBlocker(LocalDateTime intakeCutoff) {
+            return externalBlocked && (availableAt == null || availableAt.isBefore(intakeCutoff));
+        }
+
         long estimatedMinutes() {
             return Math.max(0, units) * Math.max(1, unitMinutes);
         }
