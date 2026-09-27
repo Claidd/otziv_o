@@ -8,11 +8,6 @@ const BASELINE_PATH = 'infrastructure/runtime-security/reviewed-images.json';
 const C12_PATH = 'infrastructure/runtime-security/reviewed-images-c12-phpmyadmin.json';
 const C12_CONTEXT = 'infrastructure/runtime-security/builds/phpmyadmin-alpine';
 const RELEASE_SETS = Object.freeze({
-  'c22-nginx': { component: 'nginx', path: 'infrastructure/runtime-security/reviewed-images-c22-nginx.json', context: 'infrastructure/runtime-security/builds/c22-nginx', dockerfile: 'infrastructure/runtime-security/builds/c22-nginx/Dockerfile' },
-  'c22-mysql': { component: 'mysql', path: 'infrastructure/runtime-security/reviewed-images-c22-mysql.json', context: 'infrastructure/runtime-security/builds/c22-mysql', dockerfile: 'infrastructure/runtime-security/builds/c22-mysql/Dockerfile' },
-  'c22-keycloak': { component: 'keycloak', path: 'infrastructure/runtime-security/reviewed-images-c22-keycloak.json', context: 'infrastructure/runtime-security/builds/c22-keycloak', dockerfile: 'infrastructure/runtime-security/builds/c22-keycloak/Dockerfile' },
-  'c22-mc': { component: 'mc', path: 'infrastructure/runtime-security/reviewed-images-c22-mc.json', context: 'infrastructure/runtime-security/builds/c22-mc', dockerfile: 'infrastructure/runtime-security/builds/c22-mc/Dockerfile' },
-  'c22-phpmyadmin': { component: 'phpmyadmin', path: 'infrastructure/runtime-security/reviewed-images-c22-phpmyadmin.json', context: 'infrastructure/runtime-security/builds/c22-phpmyadmin', dockerfile: 'infrastructure/runtime-security/builds/c22-phpmyadmin/Dockerfile' },
   'c21-mysql': { component: 'mysql', path: 'infrastructure/runtime-security/reviewed-images-c21-mysql.json',
     context: 'infrastructure/runtime-security/builds/mysql-c21', dockerfile: 'infrastructure/runtime-security/builds/mysql-c21/Dockerfile' },
   'c18-mysql': { component: 'mysql', path: 'infrastructure/runtime-security/reviewed-images-c18-mysql.json',
@@ -43,6 +38,11 @@ const RELEASE_SETS = Object.freeze({
   'c15-mc': { component: 'mc', path: 'infrastructure/runtime-security/reviewed-images-c15-mc.json', context: 'infrastructure/runtime-security/builds/mc-c15', dockerfile: 'infrastructure/runtime-security/builds/mc-c15/mc.Dockerfile' },
   'c20-mc': { component: 'mc', path: 'infrastructure/runtime-security/reviewed-images-c20-mc.json',
     context: 'infrastructure/runtime-security/builds/mc-c20', dockerfile: 'infrastructure/runtime-security/builds/mc-c20/Dockerfile' },
+  'c22-nginx': { component: 'nginx', path: 'infrastructure/runtime-security/reviewed-images-c22-nginx.json', context: 'infrastructure/runtime-security/builds/c22-nginx', dockerfile: 'infrastructure/runtime-security/builds/c22-nginx/Dockerfile' },
+  'c22-mysql': { component: 'mysql', path: 'infrastructure/runtime-security/reviewed-images-c22-mysql.json', context: 'infrastructure/runtime-security/builds/c22-mysql', dockerfile: 'infrastructure/runtime-security/builds/c22-mysql/Dockerfile' },
+  'c22-keycloak': { component: 'keycloak', path: 'infrastructure/runtime-security/reviewed-images-c22-keycloak.json', context: 'infrastructure/runtime-security/builds/c22-keycloak', dockerfile: 'infrastructure/runtime-security/builds/c22-keycloak/Dockerfile' },
+  'c22-mc': { component: 'mc', path: 'infrastructure/runtime-security/reviewed-images-c22-mc.json', context: 'infrastructure/runtime-security/builds/c22-mc', dockerfile: 'infrastructure/runtime-security/builds/c22-mc/Dockerfile' },
+  'c22-phpmyadmin': { component: 'phpmyadmin', path: 'infrastructure/runtime-security/reviewed-images-c22-phpmyadmin.json', context: 'infrastructure/runtime-security/builds/c22-phpmyadmin', dockerfile: 'infrastructure/runtime-security/builds/c22-phpmyadmin/Dockerfile' },
 });
 // These two local-stack dependencies were absent from the immutable C7 manifest.
 // Keep their original pins and service coverage explicit when adding publication.

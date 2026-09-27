@@ -43,3 +43,13 @@
 шаблонные имена, состояние аккаунта, охлаждение, исключения, отказ общей
 проверки занятости и изменение полей между первоначальным чтением и
 получением блокировки.
+
+## Public readiness policy contract
+
+The orders module owns `ReviewAccountWalkingPolicy`. Its only caller outside the
+module is the server-side account-pool monitor. It returns the configured minimum
+counter as an integer through the existing schedule service, exposing no account,
+review, repository, mutation, or user-facing authorization capability. The caller
+already runs in its own reconciliation transaction; the policy only reads cached
+application settings and starts no transaction. Existing assignment callers keep
+their current schedule-service contract and obtain the same threshold.

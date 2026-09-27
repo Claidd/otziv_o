@@ -46,7 +46,7 @@ services:
 
   mysql:
     # The local restore script initializes a separate empty, versioned volume.
-    image: ghcr.io/claidd/otziv-security@sha256:89081171be2ff681481a2baa8d38303965c191acc2e1ba59fc852ab4a1a4496e
+    image: ghcr.io/claidd/otziv-security@sha256:3bf3e8465193c365e83dc2959a1ce944791c8fd49cf58b68aa96783f63df21b7
     user: "999:999"
     restart: unless-stopped
     logging: *default-logging
@@ -92,7 +92,7 @@ services:
       - internal_net
 
   phpmyadmin:
-    image: ghcr.io/claidd/otziv-security@sha256:0d805ad3b104f2a377b6e39f3e30e5707d8c6875a155a40d2c01e4ad608b5835
+    image: ghcr.io/claidd/otziv-security@sha256:49a197c95684926f380e2a78614e1260d5889ea973a3cc98911235eacb84df48
     profiles: ["db-admin"]
     restart: unless-stopped
     logging: *default-logging
@@ -134,7 +134,7 @@ services:
       - internal_net
 
   keycloak:
-    image: ${OTZIV_KEYCLOAK_IMAGE:-ghcr.io/claidd/otziv-security@sha256:6d129626434475b9c0984cc0f766ac28aced19fb7fa430a2c261d18419be1caf}
+    image: ${OTZIV_KEYCLOAK_IMAGE:-ghcr.io/claidd/otziv-security@sha256:dd68530849039933b31724522ff290c5d4253175bdd9e23f0d132f7e66aa53ff}
     restart: unless-stopped
     logging: *default-logging
     mem_limit: 1g
@@ -208,7 +208,7 @@ services:
       - internal_net
 
   minio-init:
-    image: ghcr.io/claidd/otziv-security@sha256:19f50d276bee3804121159095b62a7fc6cf236565d45ecb5a36d6dd7c19566b2
+    image: ghcr.io/claidd/otziv-security@sha256:95a76c67d3fc079a534a79a87d79df39a83aef94c3099b3457ffc4b54a68ef83
     restart: "no"
     logging: *default-logging
     mem_limit: 384m

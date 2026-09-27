@@ -7,7 +7,7 @@ const evidence={};
 for(const [key,path] of Object.entries({runtime:'runtime.json',capture:'rehearsal/capture.json',replay:'rehearsal/replay.json',
   issuer:'issuer.json',startup:'startup.json',raw:'publication/vulnerabilities.json',candidateConfig:'publication/registry-amd64-config.json'})) evidence[key]=await json(root+path);
 evidence.parentConfig=await json('infrastructure/runtime-security/proofs/c15-keycloak-published/publication/registry-amd64-config.json');
-const entry=(await json('infrastructure/runtime-security/reviewed-image-activations.json')).images.find(x=>x.component==='keycloak');
+const entry=await json('infrastructure/runtime-security/proofs/c22-keycloak/parent-activation.json');
 const publication=await json(root+'publication/publication.json');
 test('published crypto patch preserves real login, database, providers and both rollback paths',async()=>{
   checkKeycloakC19Evidence(evidence);

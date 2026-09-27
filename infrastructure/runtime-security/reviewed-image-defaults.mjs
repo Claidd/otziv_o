@@ -14,11 +14,12 @@ import { effectiveScanSummary } from './grafana-tempo-adjudication.mjs';
 import { summarizeReport, TRIVY_IMAGE } from './scan.mjs';
 import { BUILD_INFO_READER } from './go-binary-inspection.mjs';
 import { assertPublicationSet, reviewedImageSetForComponent, supplementalReviewedSources, validateReviewedImageSet } from './reviewed-image-sets.mjs';
-import { validateDatabaseTransitionReadiness } from './mysql-curl-readiness.mjs';
+import { validateDatabaseTransitionReadiness } from './mysql-c22-readiness.mjs';
 import { validatePostgresActivationScan, validatePostgresTransitionReadiness } from './postgres-c16-activation.mjs';
 import { validatePublishedKeycloakMigrationAcceptance,
   assertPostgresKeycloakCoupling } from './postgres-transition-readiness.mjs';
-import {validateKeycloakC19Acceptance,coupleKeycloakC19} from './keycloak-c19-acceptance.mjs';
+import {validateKeycloakC19Acceptance} from './keycloak-c19-acceptance.mjs';
+import {validateKeycloakC22Acceptance,coupleKeycloakC22} from './keycloak-c22-acceptance.mjs';
 
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 const DATABASE_HOLD = new Set(['mysql', 'postgres']);
@@ -153,6 +154,7 @@ export async function validateActivation(image, entry, manifestBytes, read) {
     await validatePublishedKeycloakMigrationAcceptance(publication.value, entry, read);
   }
   if (selected.manifestSet === 'c19-keycloak') await validateKeycloakC19Acceptance(publication.value, entry, read);
+  if (selected.manifestSet === 'c22-keycloak') await validateKeycloakC22Acceptance(publication.value, entry, read);
   assert.equal(entry.reference, publication.value.reference, 'activation_registered_reference_mismatch');
   assert.equal(publication.value.security.effectiveBlockingFixedHighOrCritical, 0, 'activation_security_severity_mismatch');
   if (publication.value.security.unresolvedRiskReview === 'NONE') {
@@ -221,7 +223,7 @@ export async function validateReviewedDefaults(rows, manifestBytes, activations,
     registered.set(entry.component, entry);
   }
   if (databasePreparations.has('postgres')) {
-    const coupled = await coupleKeycloakC19(databasePreparations.get('postgres'), registered.get('keycloak'), read);
+    const coupled = await coupleKeycloakC22(databasePreparations.get('postgres'), registered.get('keycloak'), read);
     assertPostgresKeycloakCoupling(coupled, registered.get('keycloak'), rows,
       images.find(image => image.component === 'keycloak'));
   }

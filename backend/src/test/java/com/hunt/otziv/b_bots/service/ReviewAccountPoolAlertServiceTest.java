@@ -16,7 +16,7 @@ import com.hunt.otziv.b_bots.model.ReviewAccountPoolAlertState;
 import com.hunt.otziv.b_bots.repository.BotsRepository;
 import com.hunt.otziv.b_bots.repository.ReviewAccountPoolRepository;
 import com.hunt.otziv.b_bots.repository.ReviewAccountPoolRepository.Snapshot;
-import com.hunt.otziv.r_review.bot.service.ReviewAccountWalkScheduleService;
+import com.hunt.otziv.r_review.api.ReviewAccountWalkingPolicy;
 import java.time.LocalDateTime;
 import org.mockito.ArgumentCaptor;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -45,7 +45,7 @@ class ReviewAccountPoolAlertServiceTest {
     @Mock
     private BotsRepository botsRepository;
     @Mock private ReviewAccountPoolRepository poolRepository;
-    @Mock private ReviewAccountWalkScheduleService walkScheduleService;
+    @Mock private ReviewAccountWalkingPolicy walkScheduleService;
     @Mock
     private PersonalReminderService personalReminderService;
     @Mock

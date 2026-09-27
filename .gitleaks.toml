@@ -1409,3 +1409,23 @@ paths = ['''(^|/)infrastructure/runtime\-security/proofs/c15\-grafana\-published
 regexes = [
   '''^da39a3ee5e6b4b0d3255bfef95601890afd80709$''',
 ]
+
+[[allowlists]]
+description = "Exact public C22 source checksum or Maven package metadata"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''(^|/)infrastructure/runtime\-security/proofs/c22\-keycloak/acceptance\.json$''']
+regexes = [
+  '''^\n?\ \ \ \ "infrastructure/runtime\-security/keycloak\-c22\-runtime\.py":\ "864560872bccb25388a016e65b0d55c353096846718cebaad3d79786c4b638cd",\r?$''',
+]
+
+[[allowlists]]
+description = "Exact public C22 source checksum or Maven package metadata"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''(^|/)infrastructure/runtime\-security/proofs/c22\-keycloak/publication/vulnerabilities\.json$''']
+regexes = [
+  '''^\n?\ \ \ \ \ \ \ \ \ \ "Name":\ "org\.keycloak:keycloak\-crypto\-fips1402",\r?$''',
+]

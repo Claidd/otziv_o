@@ -4,7 +4,7 @@ import com.hunt.otziv.b_bots.model.ReviewAccountPoolAlertState;
 import com.hunt.otziv.b_bots.repository.BotsRepository;
 import com.hunt.otziv.b_bots.repository.ReviewAccountPoolRepository;
 import com.hunt.otziv.b_bots.repository.ReviewAccountPoolRepository.Snapshot;
-import com.hunt.otziv.r_review.bot.service.ReviewAccountWalkScheduleService;
+import com.hunt.otziv.r_review.api.ReviewAccountWalkingPolicy;
 import com.hunt.otziv.b_bots.repository.ReviewAccountPoolAlertStateRepository;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
@@ -42,7 +42,7 @@ public class ReviewAccountPoolAlertService {
     private final ReviewAccountPoolAlertStateRepository stateRepository;
     private final BotsRepository botsRepository;
     private final ReviewAccountPoolRepository poolRepository;
-    private final ReviewAccountWalkScheduleService walkScheduleService;
+    private final ReviewAccountWalkingPolicy walkScheduleService;
     private final PersonalReminderService personalReminderService;
     private final UserService userService;
     private final TelegramService telegramService;

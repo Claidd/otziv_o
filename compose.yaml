@@ -30,7 +30,7 @@ services:
 
   mysql:
     # A fresh development volume retains older engine data separately.
-    image: ghcr.io/claidd/otziv-security@sha256:89081171be2ff681481a2baa8d38303965c191acc2e1ba59fc852ab4a1a4496e
+    image: ghcr.io/claidd/otziv-security@sha256:3bf3e8465193c365e83dc2959a1ce944791c8fd49cf58b68aa96783f63df21b7
     container_name: my-mysql
     command:
       - mysqld
@@ -57,7 +57,7 @@ services:
       internal_net:
 
   nginx:
-    image: ghcr.io/claidd/otziv-security@sha256:025c28f7afbcc84d8d836840afb7cb2e8e44f2b4930131c4bbb539380fd8185f
+    image: ghcr.io/claidd/otziv-security@sha256:95c21948b23ef308f41dba871bb1320796ce66e1c59f6b7ffdd7e86e57cb588b
     ports:
       - '127.0.0.1:80:80'
       - '127.0.0.1:443:443'
@@ -233,7 +233,7 @@ services:
       internal_net:
 
   phpmyadmin:
-    image: ghcr.io/claidd/otziv-security@sha256:0d805ad3b104f2a377b6e39f3e30e5707d8c6875a155a40d2c01e4ad608b5835
+    image: ghcr.io/claidd/otziv-security@sha256:49a197c95684926f380e2a78614e1260d5889ea973a3cc98911235eacb84df48
     profiles: ["db-admin"]
     ports:
       - "127.0.0.1:6571:80"
@@ -284,7 +284,7 @@ services:
       - internal_net
 
   keycloak:
-    image: ghcr.io/claidd/otziv-security@sha256:6d129626434475b9c0984cc0f766ac28aced19fb7fa430a2c261d18419be1caf
+    image: ghcr.io/claidd/otziv-security@sha256:dd68530849039933b31724522ff290c5d4253175bdd9e23f0d132f7e66aa53ff
     container_name: otziv-keycloak
     command: start-dev --import-realm
     ports:

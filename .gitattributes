@@ -70,3 +70,10 @@ infrastructure/runtime-security/builds/mc-c20/** text eol=lf
 infrastructure/runtime-security/builds/mysql-c21/** text eol=lf
 infrastructure/runtime-security/reviewed-images-c21-*.json text eol=lf
 infrastructure/runtime-security/mysql-curl-rehearsal.py text eol=lf
+
+# Keep C22 recipes and executed proof harnesses byte-identical.
+infrastructure/runtime-security/builds/c22-*/** text eol=lf
+infrastructure/runtime-security/reviewed-images-c22-*.json text eol=lf
+infrastructure/runtime-security/mysql-c22-* text eol=lf
+infrastructure/runtime-security/keycloak-c22-* text eol=lf
+infrastructure/runtime-security/proofs/c22-keycloak/runtime.json whitespace=cr-at-eol
