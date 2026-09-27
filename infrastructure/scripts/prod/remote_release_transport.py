@@ -24,7 +24,7 @@ import release_registry
 
 PORT = 51738
 MODULES = ('release_ci', 'image_layer_capacity', 'deployment_capacity', 'ci_image_bundle',
-           'ci_artifacts', 'release_registry', 'ci_release', 'remote_release_transport')
+           'ci_artifacts', 'release_registry', 'ci_test_reuse', 'ci_release', 'remote_release_transport')
 BOOTSTRAP = r'''
 import json,os,pathlib,re,sys
 p=json.load(sys.stdin)
