@@ -28,6 +28,22 @@ class SessionTest(unittest.TestCase):
     def test_current_process_has_stable_birth_identity(self):
         self.assertTrue(process_identity(os.getpid()))
         self.assertEqual(process_identity(os.getpid()),process_identity(os.getpid()))
+    def test_preparation_token_hands_off_to_exactly_one_deploy(self):
+        value=self.begin()
+        running=transition(value,'begin','a'*40,'b'*40,'test',value['token'],pid=123,now=101,process=lambda pid:'birth')
+        self.assertEqual(123,running['pid'])
+        self.assertEqual(value['token'],running['token'])
+        for pid in (123,456,None):
+            with self.subTest(pid=pid),self.assertRaisesRegex(GateError,'already owns'):
+                transition(running,'begin','a'*40,'b'*40,'test',value['token'],pid=pid,now=102,process=lambda pid:'birth')
+        renewed=transition(running,'renew','a'*40,'b'*40,'test',value['token'],now=103,process=lambda pid:'birth')
+        self.assertEqual(123,renewed['pid'])
+    def test_stopped_deploy_can_be_replaced_with_a_new_token(self):
+        running=self.begin(pid=123,process=lambda pid:'birth')
+        replacement=transition(running,'begin','a'*40,'b'*40,'next',pid=456,now=101,
+                               process=lambda pid:None if pid==123 else 'next-birth')
+        self.assertEqual(456,replacement['pid'])
+        self.assertNotEqual(running['token'],replacement['token'])
     def test_owned_finish_releases_preparation(self):
         value=self.begin();result=transition(value,'finish','a'*40,'b'*40,'test',value['token'],now=101)
         self.assertFalse(active(result,102))

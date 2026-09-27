@@ -89,6 +89,8 @@ def transition(value, action, revision, tree, owner, token=None, ttl=14400, pid=
     if action == 'finish':
         return {**value, 'state': 'finished', 'finishedAt': now}
     require(is_active, 'Release lease expired or its process stopped; begin a new session')
+    require(action != 'begin' or not value.get('pid'),
+            'A deployment process already owns this session; wait for it to finish before starting another')
     require(value['tree'] == tree, 'Frozen release content changed; finish the old session and review the new release')
     require(action in ('begin', 'renew', 'advance'), 'Unknown release action')
     require(action == 'advance' or value['revision'] == revision, 'Frozen revision changed; advance only after checking identical merged content')
