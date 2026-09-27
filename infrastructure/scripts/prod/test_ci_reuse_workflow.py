@@ -42,6 +42,13 @@ class WorkflowTest(unittest.TestCase):
         self.assertNotIn('reused', scan)
         java = next(p for p in parts if 'uses: actions/setup-java@' in p)
         self.assertIn('needs.backend-reuse.outputs.java_version', java)
+        preparation = ''.join(job('backend-reuse'))
+        # JEP 322 strings such as 26.0.2.1+1 are not setup-java input SemVer.
+        # Use the action's own normalized concrete version, while attesting the
+        # original release file and JDK bytes independently.
+        self.assertIn('java_version: ${{ steps.java.outputs.version }}', preparation)
+        self.assertIn('id: java', preparation)
+        self.assertIn('show-download-progress: true', preparation)
         aggregate = job('backend')
         self.assertTrue(any('PREPARATION' in p and 'RESULT' in p for p in aggregate))
         self.assertTrue(any('--runtime-dir ' in p and '--summary ' in p for p in aggregate))

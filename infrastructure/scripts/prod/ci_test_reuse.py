@@ -392,8 +392,6 @@ def main():
         value = resolve_scope(decision, args.scope, actual)
         with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as stream:
             stream.write(f"reused={str(value['decision']['reused']).lower()}\n")
-            if args.scope == 'backend' and actual:
-                stream.write('java_version=' + actual['java']['runtimeVersion'] + '\n')
         with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as stream:
             stream.write(f"\n{args.scope}: {value['decision']['reason']}\n")
     elif args.action == 'collect':
