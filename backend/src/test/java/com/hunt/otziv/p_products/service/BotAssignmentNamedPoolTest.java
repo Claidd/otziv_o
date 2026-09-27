@@ -306,6 +306,36 @@ class BotAssignmentNamedPoolTest {
         verify(botService, never()).save(any());
     }
 
+    @Test
+    void existingReviewsWithoutBotsUseEachReviewsOwnStage() {
+        Bot walking = poolBot(900L, 1), publication = poolBot(901L, 2);
+        when(botService.getFindAllByFilialCityId(325L)).thenReturn(List.of(walking, publication));
+        var first = review(ReviewBotAssignmentMode.NAGUL_ONLY);
+        var second = review(ReviewBotAssignmentMode.PUBLISH_PREFER_WALKED);
+        second.setId(51L);
+        assertTrue(service.assignBotsToExistingReviews(List.of(first, second), filial));
+        assertSame(walking, first.getBot());
+        assertSame(publication, second.getBot());
+        assertFalse(first.isVigul());
+        assertTrue(second.isVigul());
+    }
+
+    @Test
+    void newOrderWithPerReviewFilialsClaimsEachAccountsDestinationCity() {
+        var secondCity = City.builder().id(8L).title("Бердск").build();
+        var secondFilial = Filial.builder().id(21L).city(secondCity).company(company).build();
+        when(filialService.getFilial(20L)).thenReturn(filial);
+        when(filialService.getFilial(21L)).thenReturn(secondFilial);
+        when(botService.getFindAllByFilialCityId(325L)).thenReturn(List.of(poolBot(900L, 0), poolBot(901L, 1)));
+        var details = OrderDetails.builder().order(Order.builder().filial(filial).company(company).build())
+                .product(Product.builder().id(1L).build()).build();
+        var reviews = service.assignBotsToNewReviews(
+                OrderDTO.builder().amount(2).reviewFilialIds(List.of(20L, 21L)).build(), details);
+        assertSame(targetCity, reviews.getFirst().getBot().getBotCity());
+        assertSame(secondCity, reviews.getLast().getBot().getBotCity());
+        assertNotEquals(reviews.getFirst().getBot().getId(), reviews.getLast().getBot().getId());
+    }
+
     private Review review(ReviewBotAssignmentMode mode) {
         return Review.builder().id(50L).filial(filial)
                 .vigul(mode == ReviewBotAssignmentMode.PUBLISH_PREFER_WALKED).build();

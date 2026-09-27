@@ -178,7 +178,7 @@ public class ReviewAccountPoolAlertService {
         int required = pool.required();
         int deficit = pool.deficit();
         String title = remaining == 0 ? "Общий пул аккаунтов закончился"
-                : deficit > 0 ? "Недостаточно аккаунтов для отзывов с заглушкой"
+                : deficit > 0 ? "Недостаточно готовых аккаунтов для отзывов с заглушкой"
                 : "Заканчиваются аккаунты в общем пуле";
         String text = "Свободных аккаунтов в городе 325: " + remaining + "."
                 + (threshold == null ? "" : "\nДостигнут порог: " + threshold + ".")
