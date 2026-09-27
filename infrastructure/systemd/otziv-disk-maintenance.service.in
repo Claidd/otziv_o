@@ -1,0 +1,18 @@
+[Unit]
+Description=Safely reclaim disposable files when the Otziv disk is full
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+Environment=TRIGGER_PERCENT=80 TARGET_PERCENT=75 MYSQL_PRESSURE_HOURS=0
+EnvironmentFile=-/etc/otziv-disk-maintenance.conf
+ExecStart=/usr/bin/python3 /usr/local/sbin/otziv-disk-maintenance.py --apply --root @@OTZIV_DEPLOY_PATH@@ --trigger-percent ${TRIGGER_PERCENT} --target-percent ${TARGET_PERCENT} --mysql-pressure-hours ${MYSQL_PRESSURE_HOURS}
+TimeoutStartSec=10min
+Nice=10
+IOSchedulingClass=idle
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full

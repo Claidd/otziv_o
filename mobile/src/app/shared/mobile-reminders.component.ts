@@ -57,10 +57,20 @@ export function dispatchMobileRecoveryClientNotified(detail: MobileRecoveryClien
           <div class="sheet-head">
             <div>
               <p class="sheet-note">Личные дела</p>
-              <h2>Напоминания</h2>
+              <div class="reminders-title-row">
+                @if (canManageAll() && activeReminderCount()) {
+                  <button class="reminders-clear-all" type="button" (click)="deleteAll()"
+                    [disabled]="!canDeleteAll()" [attr.aria-busy]="clearingAll()"
+                    title="Удалить все напоминания" aria-label="Удалить все напоминания">
+                    <span class="material-icons-sharp" aria-hidden="true">delete_sweep</span>
+                  </button>
+                }
+                <h2>Напоминания</h2>
+                <small>{{ activeReminderCount() }}</small>
+              </div>
             </div>
             <div class="sheet-head-actions">
-              <button class="icon-button" type="button" (click)="openCreate()" aria-label="Создать напоминание">
+              <button class="icon-button" type="button" (click)="openCreate()" [disabled]="clearingAll()" aria-label="Создать напоминание">
                 <span class="material-icons-sharp">add</span>
               </button>
               <button class="icon-button" type="button" (click)="close()" aria-label="Закрыть">
@@ -69,7 +79,7 @@ export function dispatchMobileRecoveryClientNotified(detail: MobileRecoveryClien
             </div>
           </div>
 
-          <section class="sheet-form-content reminders-menu-content">
+          <section class="sheet-form-content reminders-menu-content" [attr.inert]="clearingAll() ? '' : null">
             @if (error()) {
               <p class="sheet-error">{{ error() }}</p>
             }
@@ -248,12 +258,26 @@ export function dispatchMobileRecoveryClientNotified(detail: MobileRecoveryClien
         </main>
       </ng-template>
     </ion-modal>
-  `
+  `,
+  styles: [`
+    .reminders-title-row { display: flex; align-items: center; gap: 0.4rem; }
+    .reminders-title-row small { color: var(--ion-color-medium); font-size: 0.8rem; }
+    button.reminders-clear-all {
+      display: grid; place-items: center; flex: 0 0 auto;
+      width: 30px; height: 30px; min-height: 30px; padding: 0;
+      border: 0; border-radius: 8px; color: var(--ion-color-medium); background: transparent; box-shadow: none;
+    }
+    button.reminders-clear-all .material-icons-sharp { font-size: 19px; }
+    button.reminders-clear-all:focus-visible { outline: 2px solid var(--ion-color-danger); }
+    button.reminders-clear-all:disabled { opacity: 0.45; }
+    .reminders-menu .sheet-head { flex-wrap: wrap; }
+  `]
 })
 export class MobileRemindersComponent implements OnInit, OnDestroy {
   private readonly managerReviewTasksApi = inject(ManagerReviewTasksApi);
   private readonly managerOrdersApi = inject(ManagerOrdersApi);
   private readonly recoveryClientNotifiedHandler = (event: Event) => this.handleRecoveryClientNotified(event);
+  private loadGeneration = 0;
 
   readonly reminders = signal<PersonalReminder[]>([]);
   readonly sheetOpen = signal(false);
@@ -262,6 +286,7 @@ export class MobileRemindersComponent implements OnInit, OnDestroy {
   readonly draft = signal<PersonalReminderDraft>(this.emptyDraft());
   readonly loading = signal(false);
   readonly saving = signal(false);
+  readonly clearingAll = signal(false);
   readonly error = signal<string | null>(null);
   readonly mutatingId = signal<number | null>(null);
   readonly notifyingRecoveryReminderId = signal<number | null>(null);
@@ -270,6 +295,11 @@ export class MobileRemindersComponent implements OnInit, OnDestroy {
   readonly expandedId = signal<number | null>(null);
   readonly activeReminders = computed(() => this.sortReminders(this.reminders().filter((reminder) => !reminder.completedAt)));
   readonly activeReminderCount = computed(() => this.activeReminders().length);
+  readonly canManageAll = computed(() => this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']));
+  readonly canDeleteAll = computed(() => this.canManageAll() && this.activeReminderCount() > 0
+    && !this.clearingAll() && !this.saving() && this.mutatingId() === null
+    && this.notifyingRecoveryReminderId() === null && this.copyingPaymentReminderId() === null
+    && this.banningBadReviewReminderId() === null);
 
   constructor(
     private readonly api: ApiService,
@@ -297,7 +327,7 @@ export class MobileRemindersComponent implements OnInit, OnDestroy {
   }
 
   close(): void {
-    if (this.saving() || this.mutatingId()) {
+    if (this.saving() || this.mutatingId() || this.clearingAll()) {
       return;
     }
 
@@ -309,6 +339,7 @@ export class MobileRemindersComponent implements OnInit, OnDestroy {
   }
 
   openCreate(): void {
+    if (this.clearingAll()) return;
     this.editingId.set(null);
     this.draft.set(this.emptyDraft());
     this.formOpen.set(true);
@@ -354,7 +385,7 @@ export class MobileRemindersComponent implements OnInit, OnDestroy {
     const draft = this.draft();
     const hasContent = Boolean(draft.title.trim() || draft.text.trim());
 
-    if (!hasContent || this.saving()) {
+    if (!hasContent || this.saving() || this.clearingAll()) {
       return false;
     }
 
@@ -499,6 +530,33 @@ export class MobileRemindersComponent implements OnInit, OnDestroy {
     }
   }
 
+  async deleteAll(): Promise<void> {
+    if (!this.canDeleteAll()) return;
+    const hasProtected = this.activeReminders().some((reminder) => reminder.sourceType === 'PAYMENT_RETURN_RECONCILIATION');
+    this.clearingAll.set(true);
+    try {
+      const confirmed = await this.confirm.confirm({
+        title: 'Удалить все напоминания?',
+        message: 'Все ваши напоминания и заметки будут удалены. Это действие нельзя отменить.'
+          + (hasProtected ? '\nНапоминания о сверке возвратов останутся до завершения финансовой сверки.' : ''),
+        confirmText: 'Удалить все',
+        danger: true
+      });
+      if (!confirmed || !this.canManageAll()) return;
+      ++this.loadGeneration;
+      this.loading.set(false);
+      this.error.set(null);
+      const deleted = new Set(await firstValueFrom(this.api.deleteAllPersonalReminders()));
+      this.reminders.update((reminders) => reminders.filter((reminder) => !deleted.has(reminder.id)));
+      if (this.editingId() !== null && deleted.has(this.editingId()!)) this.cancelCreate();
+      this.expandedId.set(null);
+    } catch (error) {
+      this.error.set(error instanceof Error ? error.message : 'Не удалось удалить напоминания.');
+    } finally {
+      this.clearingAll.set(false);
+    }
+  }
+
   toggle(reminder: PersonalReminder): void {
     this.expandedId.update((id) => id === reminder.id ? null : reminder.id);
   }
@@ -623,19 +681,21 @@ export class MobileRemindersComponent implements OnInit, OnDestroy {
       return;
     }
 
-    if (this.loading() || (!force && this.reminders().length)) {
+    if (this.loading() || this.clearingAll() || (!force && this.reminders().length)) {
       return;
     }
 
     this.loading.set(true);
     this.error.set(null);
+    const generation = ++this.loadGeneration;
 
     try {
-      this.reminders.set(await firstValueFrom(this.api.getPersonalReminders()));
+      const reminders = await firstValueFrom(this.api.getPersonalReminders());
+      if (generation === this.loadGeneration) this.reminders.set(reminders);
     } catch (error) {
-      this.error.set(error instanceof Error ? error.message : 'Не удалось загрузить напоминания.');
+      if (generation === this.loadGeneration) this.error.set(error instanceof Error ? error.message : 'Не удалось загрузить напоминания.');
     } finally {
-      this.loading.set(false);
+      if (generation === this.loadGeneration) this.loading.set(false);
     }
   }
 

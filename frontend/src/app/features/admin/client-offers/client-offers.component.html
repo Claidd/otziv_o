@@ -18,6 +18,7 @@
           <button type="button" class="campaign" [class.selected]="selectedId() === row.campaign.id" (click)="select(row)" [disabled]="busy()">
             <span class="pill" [class.running]="row.campaign.state === 'RUNNING'">{{ label(row.campaign.state) }}</span>
             <strong>{{ row.campaign.settings.title }}</strong>
+            @if (row.campaign.settings.testOnly) { <span class="pill">Тестовая</span> }
             <span>{{ row.counts.sent }} из {{ row.counts.total }} отправлено</span>
             <progress [value]="row.counts.sent" [max]="row.counts.total || 1" aria-label="Отправлено"></progress>
           </button>
@@ -30,7 +31,7 @@
           <form (ngSubmit)="save()">
             <fieldset [disabled]="busy()">
               <label>Название рассылки<input name="title" [(ngModel)]="draft.title" (ngModelChange)="changed()" maxlength="120" placeholder="Например, новая услуга для клиентов" required></label>
-              <label>Сообщение клиенту<textarea name="message" [(ngModel)]="draft.message" (ngModelChange)="changed()" rows="7" maxlength="1000" placeholder="Расскажите о предложении…" required></textarea>
+              <label>Сообщение<textarea name="message" [(ngModel)]="draft.message" (ngModelChange)="changed()" rows="7" maxlength="1000" placeholder="Расскажите о предложении…" required></textarea>
                 <small>{{ draft.message.length }} / 1000 символов</small></label>
               <div class="file-panel">
                 <label>Файл к предложению
@@ -43,12 +44,20 @@
                 <label>Как отправлять файл<select name="fileMode" [(ngModel)]="draft.fileMode"><option value="ATTACHMENT">Вложением к сообщению</option><option value="LINK">Ссылкой на скачивание</option></select></label>
               </div>
               <h3>Получатели и очередность</h3>
+              <label>Кому отправлять<select name="testOnly" [(ngModel)]="draft.testOnly" (ngModelChange)="changed()">
+                <option [ngValue]="false">Клиентам — по выбранным спискам</option>
+                <option [ngValue]="true">Тестовая — только администраторам и владельцам</option>
+              </select></label>
+              @if (draft.testOnly) {
+                <p class="banner warning" role="status">Тестовая рассылка: сообщение получат только активные администраторы и владельцы в личных Telegram-чатах, привязанных к их профилям. Клиентам ничего не отправится. Текст, файл и расписание применяются как обычно.</p>
+              } @else {
               <p class="hint">Включите нужные списки. Общий чат нескольких компаний получит одно сообщение.</p>
               <div class="audiences">
                 <label class="check"><input type="checkbox" name="active" [(ngModel)]="draft.includeActive" (ngModelChange)="changed()"><span><b>1. В работе</b><small>Активные клиенты</small></span></label>
                 <label class="check"><input type="checkbox" name="stopped" [(ngModel)]="draft.includeStopped" (ngModelChange)="changed()"><span><b>2. На стопе</b><small>После активных</small></span></label>
                 <label class="check"><input type="checkbox" name="banned" [(ngModel)]="draft.includeBanned" (ngModelChange)="changed()"><span><b>3. Бан</b><small>Последняя очередь</small></span></label>
               </div>
+              }
               <h3>Темп отправки</h3>
               <div class="schedule">
                 <label>Сообщений в день<input type="number" name="limit" [(ngModel)]="draft.dailyLimit" min="1" max="10000" step="1" required></label>
@@ -64,11 +73,12 @@
                 }</div>
               }
               <div class="actions"><button type="submit" class="secondary" [disabled]="!valid()">Сохранить черновик</button>
-                <button type="button" class="primary" (click)="save(true)" [disabled]="!valid() || !board().liveEnabled">Запуск</button></div>
+                <button type="button" class="primary" (click)="save(true)" [disabled]="!valid() || !board().liveEnabled">{{ draft.testOnly ? 'Запуск тестовой рассылки' : 'Запуск' }}</button></div>
               <p class="hint">При запуске сохранятся текст, файл, выбранные списки и чаты. Рассылка продолжится на сервере, даже если закрыть страницу.</p>
             </fieldset>
           </form>
         } @else if (selected(); as row) {
+          @if (row.campaign.settings.testOnly) { <p class="banner warning">Тестовая рассылка — только администраторам и владельцам в личные Telegram-чаты.</p> }
           <div class="stats">
             <article><b>{{ row.counts.sent }}</b><span>Отправлено</span></article><article><b>{{ row.counts.pending }}</b><span>В очереди</span></article>
             <article><b>{{ row.usedToday }} / {{ row.campaign.settings.dailyLimit }}</b><span>Попыток сегодня</span></article>
@@ -90,7 +100,7 @@
           <p class="hint">Пауза и остановка действуют на следующие отправки. Уже начатое сообщение может завершиться.</p>
           @if (row.counts.unknown > 0) { <p class="banner warning">У {{ row.counts.unknown }} сообщений нет подтверждения. Проверьте соответствующие чаты: автоматический повтор заблокирован, чтобы избежать дубликатов.</p> }
           <div class="section-heading"><h3>Получатели</h3><span>{{ row.counts.total }} всего · {{ row.counts.skipped }} пропущено</span></div>
-          <div class="table-scroll"><table><thead><tr><th>Компания</th><th>Список</th><th>Результат</th></tr></thead><tbody>
+          <div class="table-scroll"><table><thead><tr><th>{{ row.campaign.settings.testOnly ? 'Пользователь' : 'Компания' }}</th><th>Список</th><th>Результат</th></tr></thead><tbody>
             @for (recipient of recipients(); track recipient.id) { <tr><td>{{ recipient.companyTitle }}</td><td>{{ label(recipient.audience) }}</td><td><b>{{ label(recipient.state) }}</b>@if (recipient.errorMessage) { <small>{{ recipient.errorMessage }}</small> }</td></tr> }
           </tbody></table></div>
           <div class="pagination"><button type="button" (click)="setPage(page() - 1)" [disabled]="page() === 0 || recipientLoading()">Назад</button>

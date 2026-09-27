@@ -69,6 +69,12 @@ public class ApiPersonalReminderController {
         );
     }
 
+    @DeleteMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    public List<Long> deleteAll(Principal principal) {
+        return reminderService.deleteAll(principal);
+    }
+
     @DeleteMapping("/{reminderId}")
     public void delete(
             Principal principal,

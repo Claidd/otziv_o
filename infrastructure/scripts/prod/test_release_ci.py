@@ -1,6 +1,7 @@
 import copy
 import datetime as dt
 import json
+import subprocess
 from pathlib import Path
 import tempfile
 import unittest
@@ -119,6 +120,30 @@ class ReleaseGateTest(unittest.TestCase):
             def git(repo, *args): return values[args[1] if args[0] == 'rev-parse' else args[0]]
             with patch.object(ci, 'git', git), self.assertRaises(ci.GateError):
                 ci.local_revision(Path('.'), refresh=False)
+
+class CanonicalWorkspaceTest(unittest.TestCase):
+    def test_clean_clone_cannot_hide_canonical_changes(self):
+        with tempfile.TemporaryDirectory() as temp:
+            workspace = Path(temp) / 'otziv'
+            clone = Path(temp) / 'release-copy'
+            workspace.mkdir(); clone.mkdir()
+            (workspace / 'unfinished-feature.ts').write_text('pending change')
+            with patch.object(ci, 'git') as git, self.assertRaisesRegex(ci.GateError, 'canonical workspace'):
+                ci.canonical_workspace(clone, workspace)
+            git.assert_not_called()
+
+    def test_primary_checkout_accepted_and_linked_worktree_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            primary = Path(temp) / 'primary'
+            linked = Path(temp) / 'otziv'
+            subprocess.run(['git', 'init', '-q', str(primary)], check=True)
+            subprocess.run(['git', '-C', str(primary), '-c', 'user.name=Fixture', '-c',
+                            'user.email=fixture@example.invalid', 'commit', '-q', '--allow-empty', '-m', 'fixture'], check=True)
+            subprocess.run(['git', '-C', str(primary), 'worktree', 'add', '-q', '--detach', str(linked)], check=True)
+            ci.canonical_workspace(primary, primary)
+            with self.assertRaisesRegex(ci.GateError, 'primary checkout'):
+                ci.canonical_workspace(linked, linked)
+
 
 class RegistrySafetyTest(unittest.TestCase):
     def test_foreign_resource_names_rejected_before_docker(self):

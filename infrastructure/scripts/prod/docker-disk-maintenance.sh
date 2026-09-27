@@ -2,20 +2,17 @@
 set -euo pipefail
 
 mode="${1:---dry-run}"
+script_dir="$(cd -- "$(dirname -- "$0")" && pwd -P)"
+root="${2:-/docker}"
 case "$mode" in
   --dry-run)
-    docker system df
-    echo
-    echo "Dry run only. --apply removes unused images and build cache older than 7 days."
-    echo "Volumes and running containers are never removed."
+    exec python3 "$script_dir/disk_maintenance.py" --root "$root"
     ;;
   --apply)
-    docker image prune --force
-    docker builder prune --force --filter "until=168h"
-    docker system df
+    exec python3 "$script_dir/disk_maintenance.py" --apply --root "$root"
     ;;
   *)
-    echo "Usage: $0 [--dry-run|--apply]" >&2
+    echo "Usage: $0 [--dry-run|--apply] [/deployment/path]" >&2
     exit 2
     ;;
 esac

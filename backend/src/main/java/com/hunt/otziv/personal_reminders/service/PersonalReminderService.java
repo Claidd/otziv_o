@@ -110,6 +110,19 @@ public class PersonalReminderService implements com.hunt.otziv.personal_reminder
         reminderRepository.delete(reminder);
     }
 
+    @Transactional
+    public List<Long> deleteAll(Principal principal) {
+        User user = currentUser(principal);
+        List<PersonalReminder> reminders = reminderRepository
+                .findByUserIdAndCompletedAtIsNullOrderByUpdatedAtDesc(user.getId()).stream()
+                .filter(reminder -> !IMMUTABLE_PAYMENT_RETURN_SOURCE.equals(reminder.getSourceType()))
+                .toList();
+        if (!reminders.isEmpty()) {
+            reminderRepository.deleteAllInBatch(reminders);
+        }
+        return reminders.stream().map(PersonalReminder::getId).toList();
+    }
+
     public String preparePaymentCopyText(
             Principal principal,
             Authentication authentication,

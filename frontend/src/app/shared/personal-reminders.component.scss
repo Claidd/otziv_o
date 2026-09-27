@@ -54,6 +54,39 @@
   font-size: 1.15rem;
 }
 
+.reminder-alert__head-actions {
+  margin-left: auto;
+}
+
+.reminder-alert__head-actions,
+.reminder-alert__heading,
+.personal-reminders__head-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+button.reminder-clear-all.reminder-clear-all {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 1.85rem;
+  height: 1.85rem;
+  min-height: 1.85rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0.5rem;
+  color: var(--otziv-info);
+  background: transparent;
+  box-shadow: none;
+  cursor: pointer;
+
+  .material-icons-sharp { font-size: 1.1rem; }
+  &:hover:not(:disabled) { color: var(--otziv-danger); background: rgba(255, 0, 96, 0.08); }
+  &:focus-visible { outline: 2px solid var(--otziv-danger); outline-offset: 2px; }
+  &:disabled { opacity: 0.45; cursor: default; }
+}
+
 .reminder-alert__head strong,
 .personal-reminders__head h2,
 .reminder-alert__item h3,

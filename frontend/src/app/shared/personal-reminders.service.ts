@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, OnDestroy, computed, effect, inject, signal } from '@angular/core';
-import { Observable, tap } from 'rxjs';
+import { EMPTY, Observable, Subscription, defer, finalize, tap } from 'rxjs';
 import { AuthService } from '../core/auth.service';
 import { appEnvironment } from '../core/app-environment';
 
@@ -68,11 +68,13 @@ export class PersonalRemindersService implements OnDestroy {
   private loaded = false;
   private lastDueToastKey = '';
   private skipNextDueToast = false;
+  private loadSubscription?: Subscription;
 
   readonly authenticated = this.auth.authenticated;
   readonly now = signal(Date.now());
   readonly reminders = signal<PersonalReminder[]>([]);
   readonly loading = signal(false);
+  readonly clearingAll = signal(false);
   readonly error = signal<string | null>(null);
 
   readonly activeReminders = computed(() => {
@@ -113,6 +115,7 @@ export class PersonalRemindersService implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.loadSubscription?.unsubscribe();
     if (this.tickTimer) {
       window.clearInterval(this.tickTimer);
     }
@@ -123,14 +126,14 @@ export class PersonalRemindersService implements OnDestroy {
   }
 
   load(force = false): void {
-    if (!this.authenticated() || this.loading() || (this.loaded && !force)) {
+    if (!this.authenticated() || this.loading() || this.clearingAll() || (this.loaded && !force)) {
       return;
     }
 
     this.loading.set(true);
     this.error.set(null);
 
-    this.http.get<PersonalReminder[]>(this.endpoint).subscribe({
+    this.loadSubscription = this.http.get<PersonalReminder[]>(this.endpoint).subscribe({
       next: (reminders) => {
         this.reminders.set(reminders);
         this.loaded = true;
@@ -181,6 +184,23 @@ export class PersonalRemindersService implements OnDestroy {
         this.removeReminderSilently(id);
       })
     );
+  }
+
+  removeAll(): Observable<number[]> {
+    return defer(() => {
+      if (this.clearingAll()) return EMPTY;
+      this.clearingAll.set(true);
+      // A list read started before deletion must not restore deleted reminders.
+      this.loadSubscription?.unsubscribe();
+      this.loading.set(false);
+      return this.http.delete<number[]>(this.endpoint).pipe(
+        tap((ids) => {
+          const deleted = new Set(ids);
+          this.setRemindersAfterManualCompletion(this.reminders().filter((reminder) => !deleted.has(reminder.id)));
+        }),
+        finalize(() => this.clearingAll.set(false))
+      );
+    });
   }
 
   removeLocal(id: number): void {

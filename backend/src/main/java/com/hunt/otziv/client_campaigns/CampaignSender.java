@@ -25,12 +25,19 @@ public class CampaignSender {
     }
     public ClientMessageSendResult send(Claim claim) {
         var c = claim.campaign(); var r = claim.recipient();
+        if (c.settings().testOnly() && !store.testRecipientAllowed(r))
+            return ClientMessageSendResult.failed("invalid_request","Получатель больше не входит в тестовый список или личный чат изменился");
         String text = c.settings().message();
         if (c.fileName() == null || "LINK".equals(c.settings().fileMode())) {
             if (c.fileName() != null) {
                 if (!publicBaseUrl.matches("https?://[^/]+(?:/.*)?"))
                     return ClientMessageSendResult.failed("invalid_request","Не задан публичный адрес сайта для ссылки на файл");
                 text += "\n\n" + c.fileName() + "\n" + publicBaseUrl + "/api/public/client-offer-files/" + c.fileToken();
+            }
+            if (c.settings().testOnly()) {
+                if (!telegram.canSendDocuments()) return ClientMessageSendResult.failed("invalid_request","Отправка Telegram выключена или бот не настроен");
+                return telegram.sendMessageOnceWithInlineKeyboardMessageId(r.telegramChatId(),text,null,null)
+                        .map(id -> ClientMessageSendResult.sent("Telegram",id.toString())).orElseGet(CampaignSender::unknown);
             }
             return delivery.deliverWithOperationId(r.target(),r.clientId(),r.groupId(),text,null,r.operationId());
         }

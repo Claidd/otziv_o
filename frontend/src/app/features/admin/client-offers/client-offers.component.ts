@@ -8,7 +8,7 @@ import { ClientOffersApi, OfferAudience, OfferBoard, OfferRecipient, OfferSettin
 import { AdminLayoutComponent } from '../../../shared/admin-layout.component';
 
 const defaults = (): OfferSettings => ({ title: '', message: '', dailyLimit: 30, intervalMinutes: 10,
-  windowStart: '10:00', windowEnd: '21:00', includeActive: true, includeStopped: false, includeBanned: false, fileMode: 'ATTACHMENT' });
+  windowStart: '10:00', windowEnd: '21:00', includeActive: true, includeStopped: false, includeBanned: false, fileMode: 'ATTACHMENT', testOnly: false });
 
 @Component({
   selector: 'app-client-offers',
@@ -78,7 +78,7 @@ export class ClientOffersComponent {
       && Number.isInteger(s.dailyLimit) && s.dailyLimit >= 1 && s.dailyLimit <= 10000
       && Number.isInteger(s.intervalMinutes) && s.intervalMinutes >= 1 && s.intervalMinutes <= 1440
       && !!s.windowStart && !!s.windowEnd && s.windowStart < s.windowEnd
-      && (s.includeActive || s.includeStopped || s.includeBanned);
+      && (s.testOnly || s.includeActive || s.includeStopped || s.includeBanned);
   }
   preview(): void {
     if (!this.valid() || this.busy()) return;
@@ -122,7 +122,7 @@ export class ClientOffersComponent {
   label(state: string): string {
     return ({ DRAFT: 'Черновик', RUNNING: 'Рассылается', PAUSED: 'Пауза', COMPLETED: 'Завершена', CANCELLED: 'Остановлена',
       PENDING: 'В очереди', SENDING: 'Отправляется', SENT: 'Отправлено', FAILED: 'Ошибка', UNKNOWN: 'Нужна проверка',
-      SKIPPED: 'Пропущено', ACTIVE: 'В работе', STOPPED: 'На стопе', BANNED: 'Бан' } as Record<string, string>)[state] ?? state;
+      SKIPPED: 'Пропущено', ACTIVE: 'В работе', STOPPED: 'На стопе', BANNED: 'Бан', TEST_STAFF: 'Администраторы и владельцы' } as Record<string, string>)[state] ?? state;
   }
   date(value: string | null): string {
     return value ? new Intl.DateTimeFormat('ru-RU', { timeZone: 'Asia/Irkutsk', dateStyle: 'short', timeStyle: 'short' })

@@ -108,7 +108,7 @@ export class AdminLayoutComponent {
   readonly sidebarLinks: readonly ShellLink[] = [
     ...shellLinksById([
       'personal-cabinet', 'leads', 'companies', 'orders', 'worker', 'performer', 'operator',
-      'manager-control', 'team', 'score', 'manager-control-self', 'notification-media', 'analytics', 'training',
+      'manager-control', 'team', 'score', 'manager-control-self', 'notification-media', 'client-offers', 'analytics', 'training',
       'company-archive', 'cities', 'archive-admin', 'workload-monitor', 'performers-admin',
       'tbank', 'common-billing', 'reputation-ai', 'dictionaries', 'users', 'new-user',
       'mobile-update', 'metrics'

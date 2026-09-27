@@ -39,9 +39,34 @@
   <section id="app-startup" role="status" aria-live="polite">
     <div class="app-startup__card">
       <p class="app-startup__brand">Компания О!</p>
+      <div class="app-startup__loader" aria-hidden="true">
+        <div class="app-startup__halo"></div>
+        <svg class="app-startup__orbit" viewBox="0 0 128 128" fill="none">
+          <circle class="app-startup__orbit-track" cx="64" cy="64" r="59" />
+          <g class="app-startup__orbit-spin">
+            <circle class="app-startup__orbit-arc" cx="64" cy="64" r="59" pathLength="100" />
+            <circle cx="64" cy="5" r="4" fill="#ef451f" />
+          </g>
+        </svg>
+        <svg class="app-startup__mark" viewBox="0 0 80 80" fill="none">
+          <defs>
+            <linearGradient id="app-startup-gradient" x1="16" y1="12" x2="64" y2="72" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#f51f2c" />
+              <stop offset=".55" stop-color="#ef451f" />
+              <stop offset="1" stop-color="#ffad18" />
+            </linearGradient>
+          </defs>
+          <circle cx="40" cy="40" r="28" stroke="url(#app-startup-gradient)" stroke-width="8" />
+        </svg>
+        <svg class="app-startup__error-mark" viewBox="0 0 48 48" fill="none">
+          <path d="M24 13v14" stroke="currentColor" stroke-width="3" stroke-linecap="round" />
+          <circle cx="24" cy="35" r="2" fill="currentColor" />
+        </svg>
+      </div>
       <h1 id="app-startup-title">Открываем страницу</h1>
-      <p id="app-startup-message">Если загрузка не завершается, обновите страницу или проверьте подключение к интернету.</p>
-      <button id="app-startup-retry" type="button" hidden>Обновить</button>
+      <p id="app-startup-message">Пожалуйста, подождите немного.<br>Всё необходимое уже загружается.</p>
+      <div class="app-startup__progress" aria-hidden="true"><span></span></div>
+      <button id="app-startup-retry" type="button" hidden>Обновить страницу</button>
       <noscript><p class="app-startup__noscript">Для открытия страницы включите JavaScript в настройках браузера.</p></noscript>
     </div>
   </section>

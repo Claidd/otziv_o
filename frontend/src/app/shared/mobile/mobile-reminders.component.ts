@@ -19,7 +19,17 @@ import { PersonalRemindersService } from '../personal-reminders.service';
           <header class="mobile-reminders-head">
             <div>
               <p>Личные дела</p>
-              <h2 id="mobile-reminders-title">Напоминания</h2>
+              <div class="mobile-reminders-title-row">
+                @if (reminderEditor.canManageAll() && activeReminderCount()) {
+                  <button type="button" class="mobile-reminders-clear" (click)="reminderEditor.removeAll()"
+                    [disabled]="!reminderEditor.canRemoveAll()" [attr.aria-busy]="reminderEditor.clearingAll()"
+                    title="Удалить все напоминания" aria-label="Удалить все напоминания">
+                    <span class="material-icons-sharp" aria-hidden="true">delete_sweep</span>
+                  </button>
+                }
+                <h2 id="mobile-reminders-title">Напоминания</h2>
+                <small>{{ activeReminderCount() }}</small>
+              </div>
             </div>
 
             <div class="mobile-reminders-head-actions">
@@ -33,13 +43,23 @@ import { PersonalRemindersService } from '../personal-reminders.service';
           </header>
 
           <div class="mobile-reminders-content">
-            <app-personal-reminders mode="list" />
+            <app-personal-reminders #reminderEditor mode="list" />
           </div>
         </section>
       </div>
     }
   `,
   styles: [`
+    .mobile-reminders-title-row { display: flex; align-items: center; gap: 0.4rem; }
+    .mobile-reminders-title-row small { color: var(--otziv-info); }
+    button.mobile-reminders-clear.mobile-reminders-clear {
+      display: grid; place-items: center; flex: 0 0 auto;
+      width: 1.85rem; height: 1.85rem; min-height: 1.85rem; padding: 0;
+      border: 0; border-radius: 0.5rem; background: transparent; color: var(--otziv-info); box-shadow: none;
+    }
+    button.mobile-reminders-clear .material-icons-sharp { font-size: 1.1rem; }
+    button.mobile-reminders-clear:focus-visible { outline: 2px solid var(--otziv-danger); }
+    button.mobile-reminders-clear:disabled { opacity: 0.45; }
     :host {
       display: contents;
     }
@@ -391,7 +411,7 @@ export class MobileRemindersComponent implements OnInit {
   }
 
   close(): void {
-    if (this.editor?.saving()) {
+    if (this.editor?.saving() || this.editor?.clearingAll()) {
       return;
     }
 
