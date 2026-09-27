@@ -9,6 +9,8 @@ param(
     [string]$SshKnownHostsFile = '',
     [string]$EnvFile = '',
     [string]$MobileApkPath = '',
+    [ValidateSet('Direct', 'Local')][string]$ImageTransport = 'Direct',
+    [switch]$FullRollout,
     [switch]$CheckOnly,
     [switch]$Help
 )
@@ -19,7 +21,9 @@ $env:PYTHONDONTWRITEBYTECODE = '1'
 if ($Help) {
     Write-Host 'Normal release: .\deploy.ps1 -Tag 30.00'
     Write-Host 'Read-only CI verification: .\deploy.ps1 -CheckOnly'
-    Write-Host 'Requires clean, updated main, successful main CI, Git/Python 3/Docker/SSH and PowerShell 7.'
+    Write-Host 'Requires clean, updated main, successful main CI, Git/Python 3/SSH and PowerShell 7.'
+    Write-Host 'Images download directly on the VPS. -ImageTransport Local uses local Docker and an SSH tunnel.'
+    Write-Host '-FullRollout recreates all application services; database continuity guards still apply.'
     Write-Host 'Production configuration and the existing mobile APK are retained unless an APK path is supplied.'
     return
 }
@@ -61,7 +65,8 @@ if ($CheckOnly) {
     Write-Host 'Check complete. No Docker or VPS changes were made.'
     return
 }
-foreach ($tool in @('docker', 'ssh')) { [void](Get-Command $tool -ErrorAction Stop) }
+[void](Get-Command ssh -ErrorAction Stop)
+if ($ImageTransport -eq 'Local') { [void](Get-Command docker -ErrorAction Stop) }
 if (-not $ProjectFilesRoot) { $ProjectFilesRoot = Split-Path -Parent $repoRoot }
 $ProjectFilesRoot = [IO.Path]::GetFullPath($ProjectFilesRoot)
 if (-not $SshKey) { $SshKey = Join-Path $ProjectFilesRoot '.ssh/otziv_vps_ed25519' }
@@ -77,6 +82,8 @@ $record = Join-Path $directory 'registry.json'
 $registryHelper = Join-Path $helpers 'release_registry.py'
 $tunnel = $null
 $registryStarted = $false
+$releaseCompleted = $false
+$directHelper = Join-Path $helpers 'remote_release_transport.py'
 New-Item -ItemType Directory -Path $directory -Force | Out-Null
 if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) {
     $operatorSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
@@ -100,27 +107,37 @@ try {
     if ($MobileApkPath) { $earlyArguments += @('--apk', $MobileApkPath) }
     & python @earlyArguments
     if ($LASTEXITCODE -ne 0) { throw 'Early server preflight failed before large image downloads; production was not changed.' }
-    $created = @(& python $registryHelper create $record)
-    if ($LASTEXITCODE -ne 0) { throw 'Could not prepare private image transport.' }
-    $registryStarted = $true
-    $registry = ($created -join '') | ConvertFrom-Json
-    & python -B $artifactHelper import --repo $repoRoot --input $manifest --registry $record --output $capacity
-    if ($LASTEXITCODE -ne 0) { throw 'CI image verification or private transport failed; production was not changed.' }
-    # ProcessStartInfo keeps arguments separate, including paths containing spaces.
-    $start = [Diagnostics.ProcessStartInfo]::new()
-    $start.FileName = (Get-Command ssh).Source
-    $start.UseShellExecute = $false
-    $start.CreateNoWindow = $true
-    foreach ($argument in @('-N', '-T', '-p', "$VpsPort", '-i', $SshKey,
-        '-o', "UserKnownHostsFile=$($SshKnownHostsFile.Replace('\','/'))", '-o', 'StrictHostKeyChecking=yes',
-        '-o', 'IdentitiesOnly=yes', '-o', 'BatchMode=yes', '-o', 'ExitOnForwardFailure=yes',
-        '-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=3',
-        '-R', "127.0.0.1:$($registry.port):127.0.0.1:$($registry.port)", "$VpsUser@$VpsHost")) {
-        $start.ArgumentList.Add($argument)
+    if ($ImageTransport -eq 'Direct') {
+        $directArguments = @('-B', $directHelper, 'prepare', '--record', $record,
+            '--manifest', $manifest, '--output', $capacity,
+            '--preflight', (Join-Path $directory 'early-preflight.json')) + $probeArguments
+        $registryStarted = $true
+        & python @directArguments
+        if ($LASTEXITCODE -ne 0) { throw 'Direct image transport failed; production services were not changed.' }
+        $registry = Get-Content -Raw -Encoding UTF8 -LiteralPath $record | ConvertFrom-Json
+    } else {
+        $created = @(& python $registryHelper create $record)
+        if ($LASTEXITCODE -ne 0) { throw 'Could not prepare private image transport.' }
+        $registryStarted = $true
+        $registry = ($created -join '') | ConvertFrom-Json
+        & python -B $artifactHelper import --repo $repoRoot --input $manifest --registry $record --output $capacity
+        if ($LASTEXITCODE -ne 0) { throw 'CI image verification or private transport failed; production was not changed.' }
+        # ProcessStartInfo keeps arguments separate, including paths containing spaces.
+        $start = [Diagnostics.ProcessStartInfo]::new()
+        $start.FileName = (Get-Command ssh).Source
+        $start.UseShellExecute = $false
+        $start.CreateNoWindow = $true
+        foreach ($argument in @('-N', '-T', '-p', "$VpsPort", '-i', $SshKey,
+            '-o', "UserKnownHostsFile=$($SshKnownHostsFile.Replace('\','/'))", '-o', 'StrictHostKeyChecking=yes',
+            '-o', 'IdentitiesOnly=yes', '-o', 'BatchMode=yes', '-o', 'ExitOnForwardFailure=yes',
+            '-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=3',
+            '-R', "127.0.0.1:$($registry.port):127.0.0.1:$($registry.port)", "$VpsUser@$VpsHost")) {
+            $start.ArgumentList.Add($argument)
+        }
+        $tunnel = [Diagnostics.Process]::Start($start)
+        Start-Sleep -Seconds 2
+        if ($tunnel.HasExited) { throw 'Private SSH tunnel could not start; production was not changed.' }
     }
-    $tunnel = [Diagnostics.Process]::Start($start)
-    Start-Sleep -Seconds 2
-    if ($tunnel.HasExited) { throw 'Private SSH tunnel could not start; production was not changed.' }
     $parameters = @{
         DockerHubNamespace = $registry.namespace; Tag = $Tag
         VpsHost = $VpsHost; VpsUser = $VpsUser; VpsPort = $VpsPort; VpsPath = $VpsPath
@@ -129,7 +146,7 @@ try {
         PreparedDeploySnapshot = $true; DeploySnapshotRevision = $ci.revision
         DeploySnapshotBaseRevision = $ci.revision; DeployProtectedMainRevision = $ci.revision
         PrivateRegistryControlFile = $record; RebuildWhatsApp = $true; RequireMainCi = $true; SkipBuildPush = $true
-        CiReleaseManifest = $manifest; CiCapacityPlan = $capacity
+        CiReleaseManifest = $manifest; CiCapacityPlan = $capacity; FullRollout = $FullRollout
         PreDeployBackupDirectory = (Join-Path $directory 'database-backup')
     }
     if ($MobileApkPath) { $parameters.MobileApkPath = $MobileApkPath }
@@ -138,6 +155,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Deployment did not complete; inspect its verification output.' }
     & python -B (Join-Path $helpers 'production_images.py') record --manifest $manifest --output (Join-Path $directory 'production-images.json') @probeArguments
     if ($LASTEXITCODE -ne 0) { throw 'Installation completed, but daily-scan inventory registration failed. Preserve the release evidence and retry registration.' }
+    $releaseCompleted = $true
     Write-Host "Deployment and production checks completed. Evidence: $directory"
 } finally {
     if ($null -ne $tunnel) {
@@ -145,7 +163,13 @@ try {
         $tunnel.Dispose()
     }
     if ($registryStarted) {
-        & python $registryHelper stop $record | Out-Null
+        if ($ImageTransport -eq 'Direct' -and (Test-Path -LiteralPath $record)) {
+            $stopArguments = @('-B', $directHelper, 'stop', '--record', $record)
+            if ($releaseCompleted) { $stopArguments += '--completed' }
+            & python @stopArguments | Out-Null
+        } elseif ($ImageTransport -eq 'Local') {
+            & python $registryHelper stop $record | Out-Null
+        }
         if ($LASTEXITCODE -ne 0) { Write-Warning "Inspect owned registry state: $record" }
     }
 }

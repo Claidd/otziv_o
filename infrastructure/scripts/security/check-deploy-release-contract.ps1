@@ -529,7 +529,7 @@ Assert-Match $whatsappPackage '"ip-address"\s*:\s*"10\.4\.0"' 'WhatsApp must ret
 Assert-NotMatch ($whatsappIndex + "`n" + $whatsappChromiumLaunch) '--no-sandbox|--disable-setuid-sandbox|--no-zygote' 'WhatsApp Chromium must keep its Linux sandbox enabled without the incompatible no-zygote flag.'
 Assert-Match $whatsappChromiumSmoke 'require\("puppeteer"\)[\s\S]{0,300}require\("\./chromium-launch"\)[\s\S]{0,500}puppeteer\.launch[\s\S]{0,500}args: chromiumLaunchArgs\(""\)' 'Chromium smoke test must launch real Puppeteer with the same audited arguments as production.'
 Assert-Match $deploy 'compose run --rm --no-deps --interactive=false -T --entrypoint node whatsapp_lika chromium-smoke\.js </dev/null' 'Deploy must run the real Chromium sandbox smoke test under the production Compose security profile.'
-Assert-Order $deploy 'whatsapp_lika chromium-smoke.js </dev/null' 'compose stop whatsapp_lika whatsapp_vika' 'The real Chromium sandbox preflight must pass before existing WhatsApp gateways are stopped.'
+Assert-Order $deploy 'whatsapp_lika chromium-smoke.js </dev/null' 'compose stop "`$gateway"' 'The real Chromium sandbox preflight must pass before existing WhatsApp gateways are stopped.'
 
 $publicBindPermissionFunction = [regex]::Match(
     $deploy,
@@ -565,8 +565,8 @@ $publicBindNormalizerCallCount = [regex]::Matches($deploy, '(?m)^normalize_publi
 if ($publicBindNormalizerCallCount -ne 1) {
     throw "Production rollout must invoke public bind-mount normalization exactly once; found $publicBindNormalizerCallCount calls."
 }
-Assert-Order $deploy 'tar --warning=no-timestamp -xzf "`$bundle_path" -C "`$remote_path"' 'normalize_public_bind_mount_permissions' 'Public bind permissions must be normalized only after protected bundle extraction.'
-Assert-Order $deploy 'normalize_public_bind_mount_permissions' 'compose up -d --no-deps mysql keycloak-postgres loki tempo' 'Public bind permissions must be normalized before any affected production container starts.'
+Assert-Order $deploy 'selective_rollout.py" sync' 'normalize_public_bind_mount_permissions' 'Public bind permissions must be normalized only after protected bundle extraction.'
+Assert-Order $deploy 'normalize_public_bind_mount_permissions' 'compose up -d --no-deps mysql keycloak-postgres' 'Public bind permissions must be normalized before any affected production container starts.'
 
 Assert-Order $deploy 'Creating and verifying mandatory pre-deploy database backup on VPS' 'bash infrastructure/scripts/prod/validate-flyway-migrations.sh' 'The mandatory DB backup must finish before Flyway validation and app startup.'
 Assert-Match $deploy 'deploy_lock_token[\s\S]{0,5000}mkdir "`\$deploy_lock_dir"' 'The rollout must acquire a durable cross-session lock before creating the backup.'
@@ -619,7 +619,7 @@ Assert-Match $deploy 'Protected self-heal state is missing; leaving deploy lock 
 Assert-Match $deploy 'Protected deploy lock ownership changed; refusing to remove it' 'Local pre-rollout cleanup must never remove an unowned lock.'
 
 foreach ($composeRunContract in @(
-    @{ Name = 'production deploy'; Text = $deploy; Expected = 4 },
+    @{ Name = 'production deploy'; Text = $deploy; Expected = 3 },
     @{ Name = 'quarantined legacy deploy'; Text = $legacyDeploy; Expected = 4 }
 )) {
     $composeRunLines = @($composeRunContract.Text -split "`r?`n" | Where-Object {

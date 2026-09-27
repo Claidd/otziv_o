@@ -106,7 +106,7 @@ class CapacityTests(unittest.TestCase):
         preflight = source.index('--before-backup\n')
         self.assertLess(preflight, source.index('\npause_self_heal\n'))
         second = source.index('python3 "`$capacity_check_dir/infrastructure/scripts/prod/deployment_capacity.py" check')
-        self.assertLess(second, source.index('tar --warning=no-timestamp -xzf "`$bundle_path" -C "`$remote_path"'))
+        self.assertLess(second, source.index('selective_rollout.py" sync'))
         self.assertNotIn('compose build whatsapp_lika', source)
         self.assertNotIn('compose build docker-observer', (HERE/'rollout-docker-observer.sh').read_text())
         self.assertIn('"infrastructure\\scripts\\prod\\image_layer_capacity.py"', source)
