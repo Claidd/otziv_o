@@ -36,6 +36,9 @@ param(
     [string]$PrivateRegistryControlFile = "",
     [string]$CiReleaseManifest = "",
     [string]$CiCapacityPlan = "",
+    [string]$PreparedSourceArchive = "",
+    [string]$PreparedSourceSha256 = "",
+    [string]$ReleaseTimingFile = "",
     [switch]$RebuildWhatsApp,
     [switch]$RequireMainCi,
     [switch]$FullRollout,
@@ -44,6 +47,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot 'ReleaseMetrics.ps1')
 
 function Show-Help {
     @'
@@ -1379,7 +1383,8 @@ try {
     Write-Host "Preparing deployment bundle..."
     if ($canonicalMainWorkspace) {
         Export-OtzivCommittedDeployBundle -Repository $repoRoot -Revision $gitRevision `
-            -StageRoot $stageRoot -InputPaths $deployBundlePaths
+            -StageRoot $stageRoot -InputPaths $deployBundlePaths `
+            -PreparedArchive $PreparedSourceArchive -PreparedArchiveSha256 $PreparedSourceSha256
     } else {
         foreach ($deployBundlePath in $deployBundlePaths) {
             Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath $deployBundlePath
@@ -1486,6 +1491,7 @@ try {
     Invoke-External -FilePath "tar" -Arguments @("-czf", $bundlePath, "-C", $stageRoot, ".")
     Protect-SensitiveLocalPath -Path $bundlePath
 
+    Set-OtzivReleaseStage -Path $ReleaseTimingFile -Stage 'bundle-upload'
     $remotePathForUploadQuoted = ConvertTo-BashSingleQuoted $VpsPath
     $remoteUploadDirectoryQuoted = ConvertTo-BashSingleQuoted $remoteUploadDirectory
     $remoteBundleForUploadQuoted = ConvertTo-BashSingleQuoted $remoteBundle
@@ -1700,6 +1706,7 @@ retain_deploy_lock="1"
 "@
     $preBackupRemoteScript = $preBackupRemoteScript -replace "`r`n", "`n" -replace "`r", "`n"
     Write-Host "Creating and verifying mandatory pre-deploy database backup on VPS..."
+    Set-OtzivReleaseStage -Path $ReleaseTimingFile -Stage 'encrypted-database-backup'
     $remotePreBackupInvocationStarted = $true
     $preBackupOutput = @($preBackupRemoteScript | & ssh @sshArgs $remote "tr -d '\r' | bash -s")
     if ($LASTEXITCODE -ne 0) {
@@ -1815,6 +1822,7 @@ retain_deploy_lock="1"
         }
     }
     Write-Host "Verified local encrypted DB backup: $localBackupArtifact"
+    Set-OtzivReleaseStage -Path $ReleaseTimingFile -Stage 'selective-rollout-and-health'
 
     $preDeployFlywayFingerprint = [string]$preBackupValues['OTZIV_PREDEPLOY_BACKUP_FLYWAY_FINGERPRINT']
     if ($preDeployFlywayFingerprint -notmatch '^(?:ABSENT|[0-9A-F]{64})$') {

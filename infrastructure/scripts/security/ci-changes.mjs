@@ -3,7 +3,20 @@ import {appendFileSync, readFileSync, writeFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 
 export const scopes = ['backend', 'issuer', 'frontend', 'mobile', 'browser', 'android',
-  'parity', 'whatsapp', 'worker', 'observer', 'publisher', 'upstream', 'monitoring', 'infrastructure'];
+  'parity', 'whatsapp', 'worker', 'observer', 'publisher', 'upstream', 'monitoring', 'infrastructure',
+  'deployment', 'monitoring_config', ...['prometheus', 'loki', 'alloy', 'tempo', 'grafana'].flatMap(x => [`monitoring_${x}`, `monitoring_${x}_build`])];
+
+// Only reviewed, exact helper names are narrow. New helpers still select all checks.
+const deployHelpers = new Set([
+  'DeploySnapshot.ps1', 'deploy-prod.ps1', 'deploy-prod-fast.ps1', 'deploy-prod-ssh-images.ps1',
+  'release_ci.py', 'release_preflight.py', 'release_registry.py', 'remote_release_transport.py',
+  'ci_release.py', 'ci_artifacts.py', 'deployment_capacity.py', 'image_layer_capacity.py',
+  'selective_rollout.py', 'database_image_guard.py', 'whatsapp_deploy_state.py',
+  'disk_maintenance.py', 'docker-disk-maintenance.sh', 'install-disk-maintenance.sh',
+  'create-pre-deploy-db-backup.sh', 'production_images.py', 'release_session.py', 'release_metrics.py',
+  'ReleaseMetrics.ps1',
+]);
+const candidates = ['prometheus', 'loki', 'alloy', 'tempo', 'grafana'];
 
 // An unknown input or an unverifiable base expands coverage; it never skips it.
 export function selectChecks(paths, event, usableBase = true) {
@@ -23,12 +36,28 @@ export function selectChecks(paths, event, usableBase = true) {
     else if (path.startsWith('mobile/')) add('mobile', 'android', 'browser', 'parity');
     else if (/^(shared\/|contracts\/)/.test(path)) add('backend', 'issuer', 'frontend', 'mobile', 'android', 'browser', 'parity', 'whatsapp', 'worker');
     else if (path.startsWith('whatsapp/') || path === 'Dockerfile.whatsapp') add('whatsapp', 'backend', 'issuer');
-    else if (path.startsWith('infrastructure/docker-observer/')) add('observer', 'monitoring');
-    else if (path.startsWith('infrastructure/monitoring/')) add('publisher', 'monitoring');
+    else if (path === 'deploy.ps1') add('deployment');
+    else if (path.startsWith('infrastructure/scripts/prod/') &&
+      deployHelpers.has(path.split('/').at(-1).replace(/^test_/, ''))) add('deployment');
+    else if (/^infrastructure\/scripts\/prod\/(?:test_)?backend_test_shards\.py$/.test(path)
+      || path === 'infrastructure/scripts/prod/backend-test-durations.json') add('backend');
+    else if (/^infrastructure\/scripts\/prod\/(?:test_)?ci_image_(?:reuse|bundle)\.py$/.test(path)) {
+      add('backend', 'issuer', 'frontend', 'whatsapp', 'worker', 'observer', 'publisher', 'deployment');
+    }
+    else if (/^infrastructure\/runtime-security\/builds\/(Prometheus|Loki|Alloy|Tempo|Grafana)\.Dockerfile$/.test(path)) {
+      const component = path.split('/').at(-1).split('.')[0].toLowerCase();
+      add('monitoring', `monitoring_${component}`, `monitoring_${component}_build`, 'upstream');
+    }
+    else if (/^infrastructure\/runtime-security\/builds\/tempo-queue-shutdown(?:\.patch|_test\.go)$/.test(path))
+      add('monitoring', 'monitoring_tempo', 'monitoring_tempo_build', 'upstream');
+    else if (path.startsWith('infrastructure/docker-observer/')) add('observer', 'monitoring_config');
+    else if (path.startsWith('infrastructure/monitoring/')) add('publisher', 'monitoring_config');
+    else if (/^infrastructure\/(prometheus|loki|alloy|tempo|grafana)\//.test(path)) add('monitoring_config', 'upstream');
     else if (path.startsWith('infrastructure/browser-smoke/')) add('browser');
     else all('Shared, infrastructure, policy or unknown input changed: ' + path);
   }
-  return {schema: 'otziv-ci-selection-v1', event, paths, reasons,
+  if (selected.has('monitoring_config')) add('monitoring', ...candidates.map(x => `monitoring_${x}`));
+  return {schema: 'otziv-ci-selection-v2', event, paths, reasons,
     checks: Object.fromEntries(scopes.map(scope => [scope, selected.has(scope)]))};
 }
 

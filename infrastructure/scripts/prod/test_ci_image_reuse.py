@@ -48,11 +48,26 @@ class ImageReuseTest(unittest.TestCase):
             current = self.commit()
             self.assertNotEqual(fingerprint(self.repo, 'web', previous), fingerprint(self.repo, 'web', current))
 
-    def test_policy_change_invalidates_all_components(self):
+    def test_transport_change_preserves_image_bytes_but_changes_policy_and_transport(self):
         self.put('infrastructure/scripts/prod/deploy.py', 'modified')
         current = self.commit()
         for component in ['backend', 'web', 'observer', 'whatsapp', 'worker', 'publisher']:
-            self.assertNotEqual(fingerprint(self.repo, component, self.first), fingerprint(self.repo, component, current))
+            self.assertEqual(fingerprint(self.repo, component, self.first), fingerprint(self.repo, component, current))
+            for kind in ('policy','transport'):
+                self.assertNotEqual(fingerprint(self.repo, component, self.first, kind), fingerprint(self.repo, component, current, kind))
+
+    def test_dockerignore_changes_all_image_inputs(self):
+        self.put('.dockerignore','changed');current=self.commit()
+        for component in ['backend','web','observer','whatsapp','worker','publisher']:
+            self.assertNotEqual(fingerprint(self.repo,component,self.first),fingerprint(self.repo,component,current))
+
+    def test_build_recipe_change_invalidates_images_but_other_workflow_jobs_do_not(self):
+        workflow='  integration-images:\n    strategy:\n      matrix: fixture\n    steps:\n      - name: Set up cached image builder\n        uses: builder@1\n      - name: Exercise sandbox\n        run: verify\n  other:\n    run: test\n'
+        self.put('.github/workflows/quality-gates.yml',workflow);first=self.commit()
+        self.put('.github/workflows/quality-gates.yml',workflow.replace('run: test','run: test2'));second=self.commit()
+        self.assertEqual(fingerprint(self.repo,'backend',first),fingerprint(self.repo,'backend',second))
+        self.put('.github/workflows/quality-gates.yml',workflow.replace('builder@1','builder@2'));third=self.commit()
+        self.assertNotEqual(fingerprint(self.repo,'backend',second),fingerprint(self.repo,'backend',third))
 
     def test_candidate_rejects_failed_pr_fork_and_nonancestor_sources(self):
         self.put('README.md', 'not an image input')

@@ -32,6 +32,41 @@ test('policy, infrastructure, unknown paths, manual runs and missing history fai
 test('documentation needs repository/secret checks but no component builds', () => {
   assert.deepEqual(Object.values(selectChecks(['docs/guide.md'], 'pull_request').checks), scopes.map(() => false));
 });
+test('known deployment helpers select repository deployment contracts without Android or source monitoring builds', () => {
+  for (const path of ['deploy.ps1', 'infrastructure/scripts/prod/deploy-prod.ps1', 'infrastructure/scripts/prod/DeploySnapshot.ps1', 'infrastructure/scripts/prod/test_ci_release.py']) {
+    const {checks} = selectChecks([path], 'push');
+    assert.equal(checks.deployment, true);
+    for (const scope of ['backend','issuer','android','monitoring','frontend']) assert.equal(checks[scope], false);
+  }
+});
+test('one monitoring Dockerfile builds only that candidate; config uses existing pins', () => {
+  const {checks} = selectChecks(['infrastructure/runtime-security/builds/Tempo.Dockerfile'], 'push');
+  assert.equal(checks.monitoring_tempo, true); assert.equal(checks.monitoring_tempo_build, true);
+  for (const x of ['alloy','loki','grafana','prometheus']) assert.equal(checks[`monitoring_${x}`], false);
+  const config = selectChecks(['infrastructure/alloy/config.alloy'], 'push').checks;
+  for (const x of ['alloy','loki','grafana','prometheus','tempo']) {
+    assert.equal(config[`monitoring_${x}`], true); assert.equal(config[`monitoring_${x}_build`], false);
+  }
+});
+test('unknown production helper and proof/policy changes still run all checks', () => {
+  for (const path of ['infrastructure/scripts/prod/new-helper.py', 'infrastructure/scripts/prod/ci_test_reuse.py', 'infrastructure/runtime-security/monitoring-upgrade.mjs']) {
+    assert.deepEqual(Object.values(selectChecks([path], 'push').checks), scopes.map(() => true));
+  }
+});
+test('cross-component rename/deletion unions both dependency sets', () => {
+  const {checks} = selectChecks(['infrastructure/scripts/prod/deploy-prod.ps1','mobile/new-helper.ts'], 'push');
+  for (const x of ['deployment','mobile','android','browser','parity']) assert.equal(checks[x], true);
+});
+test('monitoring workflow wires the tested selection to proofs and fresh scans', () => {
+  const workflow = readFileSync(new URL('../../../.github/workflows/quality-gates.yml', import.meta.url), 'utf8');
+  const job = workflow.replace(/\r\n/g, '\n').split('  monitoring-candidates:\n')[1].split('  release-manifest:\n')[0];
+  assert.ok(job.includes("format('monitoring_{0}_build', matrix.component)"));
+  assert.ok(job.includes('monitoring-source.mjs "$COMPONENT" --current'));
+  assert.ok(job.includes('monitoring-upgrade.mjs'));
+  assert.ok(job.includes('scan.mjs image'));
+  assert.ok(job.includes('ci_monitoring_runner.py load'));
+  assert.equal(job.includes('tags: otziv-monitoring-proof-ci'), false);
+});
 test('deleted and renamed code paths remain visible and missing base expands coverage', () => {
   const sha = 'a'.repeat(40), head = 'b'.repeat(40), calls = [];
   const paths = changedPaths({before: sha, after: head}, args => {

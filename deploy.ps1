@@ -12,6 +12,8 @@ param(
     [ValidateSet('Direct', 'Local')][string]$ImageTransport = 'Direct',
     [switch]$FullRollout,
     [switch]$CheckOnly,
+    [switch]$PreflightOnly,
+    [string]$ReleaseSessionToken = '',
     [switch]$Help
 )
 
@@ -21,6 +23,7 @@ $env:PYTHONDONTWRITEBYTECODE = '1'
 if ($Help) {
     Write-Host 'Normal release: .\deploy.ps1 -Tag 30.00'
     Write-Host 'Read-only CI verification: .\deploy.ps1 -CheckOnly'
+    Write-Host 'Prepare and verify the source bundle and read VPS readiness: .\deploy.ps1 -PreflightOnly'
     Write-Host 'Requires clean, updated main, successful main CI, Git/Python 3/SSH and PowerShell 7.'
     Write-Host 'Images download directly on the VPS. -ImageTransport Local uses local Docker and an SSH tunnel.'
     Write-Host '-FullRollout recreates all application services; database continuity guards still apply.'
@@ -55,6 +58,9 @@ if ($VpsHost -notmatch '^[A-Za-z0-9][A-Za-z0-9.-]*$' -or $VpsUser -notmatch '^[a
 foreach ($tool in @('git', 'python')) { [void](Get-Command $tool -ErrorAction Stop) }
 $repoRoot = $PSScriptRoot
 $helpers = Join-Path $repoRoot 'infrastructure/scripts/prod'
+. (Join-Path $helpers 'DeploySnapshot.ps1')
+. (Join-Path $helpers 'ReleaseMetrics.ps1')
+$ciStartedAt = [DateTimeOffset]::UtcNow
 if (-not $ProjectFilesRoot) { $ProjectFilesRoot = Split-Path -Parent $repoRoot }
 $ProjectFilesRoot = [IO.Path]::GetFullPath($ProjectFilesRoot)
 $canonicalWorkspace = Join-Path $ProjectFilesRoot 'otziv'
@@ -85,6 +91,8 @@ $tunnel = $null
 $registryStarted = $false
 $releaseCompleted = $false
 $directHelper = Join-Path $helpers 'remote_release_transport.py'
+$sessionHelper = Join-Path $helpers 'release_session.py'
+$session = $null
 New-Item -ItemType Directory -Path $directory -Force | Out-Null
 if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) {
     $operatorSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
@@ -95,19 +103,43 @@ if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) {
     if ($LASTEXITCODE -ne 0) { throw 'Cannot protect the release evidence directory.' }
 }
 $ci | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath (Join-Path $directory 'ci.json') -Encoding utf8
+$timing = Join-Path $directory 'timing.json'
+@{ schema = 'otziv-release-timing-v1'; startedAt = $ciStartedAt.ToString('o');
+    stages = @(@{ name = 'exact-main-ci-verification'; startedAt = $ciStartedAt.ToString('o') })
+} | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $timing -Encoding utf8
 $manifest = Join-Path $directory 'ci-release.json'
 $capacity = Join-Path $directory 'capacity.json'
 $artifactHelper = Join-Path $helpers 'ci_release.py'
 $probeArguments = @('--host', $VpsHost, '--user', $VpsUser, '--port', "$VpsPort", '--key', $SshKey,
     '--known-hosts', $SshKnownHostsFile, '--path', $VpsPath)
 try {
+    $sessionArguments = @('-B', $sessionHelper, 'begin', '--repo', $repoRoot, '--pid', "$PID")
+    if ($ReleaseSessionToken) { $sessionArguments += @('--token', $ReleaseSessionToken) }
+    $sessionOutput = @(& python @sessionArguments)
+    if ($LASTEXITCODE -ne 0) { throw 'Another release owns the main checkout; inspect release_session.py status.' }
+    $session = ($sessionOutput -join '') | ConvertFrom-Json
+    Set-OtzivReleaseStage -Path $timing -Stage 'committed-source-preparation'
+    [void](Assert-OtzivPreparedDeploySnapshotState -Repository $repoRoot -ExpectedRevision $ci.revision -CanonicalWorkspace $canonicalWorkspace)
+    $preparedSource = New-OtzivPreparedDeployArchive -Repository $repoRoot -Revision $ci.revision -Directory $directory
+    & (Join-Path $repoRoot 'infrastructure/scripts/security/check-backup-readiness.ps1') -EnvFile $EnvFile
+    if ($LASTEXITCODE -ne 0) { throw 'Local backup readiness failed before image transport.' }
+    Set-OtzivReleaseStage -Path $timing -Stage 'manifest-and-server-preflight'
     & python -B $artifactHelper fetch --repo $repoRoot --input (Join-Path $directory 'ci.json') --output $manifest
     if ($LASTEXITCODE -ne 0) { throw 'Verified main CI image manifest is unavailable.' }
+    $qualityRun = @($ci.runs | Where-Object { $_.workflow -eq '.github/workflows/quality-gates.yml' })[0].runId
+    & python -B (Join-Path $helpers 'release_metrics.py') --repo $repoRoot --run-id $qualityRun --output (Join-Path $directory 'ci-timing.json')
+    if ($LASTEXITCODE -ne 0) { Write-Warning 'CI timing collection failed; mandatory CI verification already passed.' }
     $earlyArguments = @('-B', (Join-Path $helpers 'release_preflight.py'), '--manifest', $manifest,
         '--output', (Join-Path $directory 'early-preflight.json')) + $probeArguments
     if ($MobileApkPath) { $earlyArguments += @('--apk', $MobileApkPath) }
     & python @earlyArguments
     if ($LASTEXITCODE -ne 0) { throw 'Early server preflight failed before large image downloads; production was not changed.' }
+    if ($PreflightOnly) {
+        $releaseCompleted = $true
+        Write-Host "Source bundle and VPS readiness verified. No image transfer or deployment performed. Evidence: $directory"
+        return
+    }
+    Set-OtzivReleaseStage -Path $timing -Stage 'verified-image-transport'
     if ($ImageTransport -eq 'Direct') {
         $directArguments = @('-B', $directHelper, 'prepare', '--record', $record,
             '--manifest', $manifest, '--output', $capacity,
@@ -149,11 +181,15 @@ try {
         PrivateRegistryControlFile = $record; RebuildWhatsApp = $true; RequireMainCi = $true; SkipBuildPush = $true
         CiReleaseManifest = $manifest; CiCapacityPlan = $capacity; FullRollout = $FullRollout
         PreDeployBackupDirectory = (Join-Path $directory 'database-backup')
+        PreparedSourceArchive = $preparedSource.archive; PreparedSourceSha256 = $preparedSource.sha256
+        ReleaseTimingFile = $timing
     }
     if ($MobileApkPath) { $parameters.MobileApkPath = $MobileApkPath }
     else { $parameters.SkipMobileApkUpload = $true }
+    Set-OtzivReleaseStage -Path $timing -Stage 'installation-preparation'
     & (Join-Path $helpers 'deploy-prod.ps1') @parameters
     if ($LASTEXITCODE -ne 0) { throw 'Deployment did not complete; inspect its verification output.' }
+    Set-OtzivReleaseStage -Path $timing -Stage 'installed-image-verification'
     & python -B (Join-Path $helpers 'production_images.py') record --manifest $manifest --output (Join-Path $directory 'production-images.json') @probeArguments
     if ($LASTEXITCODE -ne 0) { throw 'Installation completed, but daily-scan inventory registration failed. Preserve the release evidence and retry registration.' }
     $releaseCompleted = $true
@@ -173,4 +209,9 @@ try {
         }
         if ($LASTEXITCODE -ne 0) { Write-Warning "Inspect owned registry state: $record" }
     }
+    if ($null -ne $session) {
+        & python -B $sessionHelper finish --repo $repoRoot --token $session.token | Out-Null
+        if ($LASTEXITCODE -ne 0) { Write-Warning 'Could not release the local coordination lease; inspect release_session.py status.' }
+    }
+    Set-OtzivReleaseStage -Path $timing -Stage 'complete' -Result $(if ($releaseCompleted) { 'success' } else { 'failure' })
 }

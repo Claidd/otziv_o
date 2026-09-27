@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
+import {repositoryInventory} from './upstream-images.mjs';
 
 const COMPONENTS = new Set(['prometheus', 'grafana', 'loki', 'tempo', 'alloy']);
 const IMMUTABLE_REF = /^[a-z0-9./:_-]+@sha256:[a-f0-9]{64}$/;
@@ -30,6 +31,16 @@ export function assertDistinctMonitoringImageIds(sourceId, candidateId) {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  assert.equal(process.argv.length, 3, 'usage_monitoring_source_component');
-  console.log((await readMonitoringSource(process.argv[2])).source);
+  const component = process.argv[2];
+  assert.ok(COMPONENTS.has(component), 'monitoring_component_invalid');
+  if (process.argv[3] === '--current') {
+    assert.equal(process.argv.length, 4, 'usage_monitoring_source_component');
+    const rows = (await repositoryInventory()).filter(row => row.references.some(ref =>
+      ref.path === 'docker-compose.yaml' && ref.service === component));
+    assert.equal(rows.length, 1, 'current_monitoring_image_missing_or_ambiguous');
+    console.log(rows[0].image);
+  } else {
+    assert.equal(process.argv.length, 3, 'usage_monitoring_source_component');
+    console.log((await readMonitoringSource(component)).source);
+  }
 }

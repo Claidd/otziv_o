@@ -1,6 +1,6 @@
 import json,tempfile,unittest,shutil
 from pathlib import Path
-from backend_test_shards import COUNT,inventory,selection,verify
+from backend_test_shards import COUNT,inventory,selection,verify,partition
 
 class BackendShardsTest(unittest.TestCase):
     def setUp(self):
@@ -17,6 +17,18 @@ class BackendShardsTest(unittest.TestCase):
         rows=inventory(self.sources);groups=[selection(self.sources,i)['tests'] for i in range(COUNT)]
         self.assertEqual(9,len(rows));self.assertEqual(sorted(r['class'] for r in rows),sorted(r['class'] for g in groups for r in g))
         self.assertEqual(9,verify(self.sources,self.reports,'a'*40)['tests'])
+    def test_duration_balancing_retains_whole_classes_and_all_new_tests(self):
+        rows=inventory(self.sources)
+        weights={r['class']:v for r,v in zip(rows,[90,80,70,1,1,1,1,1,1])}
+        groups=partition(rows,{'seconds':weights,'overheadSeconds':[0,0,0]})
+        loads=[sum(weights[r['class']] for r in g) for g in groups]
+        self.assertLessEqual(max(loads)-min(loads),20)
+        self.assertEqual(sorted(r['class'] for r in rows),sorted(r['class'] for g in groups for r in g))
+        self.assertEqual(groups,partition(list(reversed(rows)),{'seconds':weights}))
+
+    def test_bad_duration_data_is_rejected(self):
+        for value in [-1,float('nan'),float('inf'),'fast']:
+            with self.assertRaises(ValueError):partition(inventory(self.sources),{'seconds':{'new.Test':value}})
     def test_missing_report_or_partition_is_rejected(self):
         report=next((self.reports/'0').glob('TEST-*.xml'));report.unlink()
         with self.assertRaisesRegex(ValueError,'did not report'):verify(self.sources,self.reports,'a'*40)

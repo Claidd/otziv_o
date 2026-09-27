@@ -55,10 +55,13 @@ def validate_release(value, revision, run_id=None, attempt=None):
                        'images': [{'reference': image_reference(row), 'configId': row['configId'], 'layers': row['layers']}]}, revision)
     validate_plan(value['runtimeCapacity'], revision)
     require(type(value.get('bundleBytes')) is int and 0 < value['bundleBytes'] <= 2 * 1024**3, 'Invalid bundle estimate')
+    if 'testEvidence' in value:
+        from ci_test_reuse import validate_decision
+        validate_decision(value['testEvidence'], revision, value['runId'], value['runAttempt'])
     return value
 
 
-def collect(repo, inputs, revision, run_id, attempt):
+def collect(repo, inputs, revision, run_id, attempt, test_reuse=None):
     rows = [read(path) for path in Path(inputs).rglob('*.json')]
     def latest(matches):
         require(matches, 'Missing CI receipt')
@@ -89,6 +92,8 @@ def collect(repo, inputs, revision, run_id, attempt):
               'images': images, 'bundleBytes': bundle_bytes,
               'runtimeCapacity': {'schema': 'otziv-deploy-capacity-v2', 'revision': revision,
                                   'images': capacity, 'releaseImages': {'keycloak': keycloak[1]}}}
+    if test_reuse is not None:
+        result['testEvidence'] = read(test_reuse)
     return validate_release(result, revision, run_id, attempt)
 
 
@@ -120,6 +125,9 @@ def fetch_manifest(client, ci, output):
         directory = Path(temporary) / 'files'
         extract_files(archive, directory, {'ci-release.json': 2 * 1024**2})
         value = validate_release(read(directory / 'ci-release.json'), ci['revision'], run['runId'], run['attempt'])
+    if 'testEvidence' in value:
+        from ci_test_reuse import verify_live_sources
+        verify_live_sources(client, value['testEvidence'])
     write(output, value)
     return value
 
@@ -191,6 +199,7 @@ def main():
     parser.add_argument('--registry', type=Path)
     parser.add_argument('--manifest', type=Path)
     parser.add_argument('--worker', action='store_true')
+    parser.add_argument('--test-reuse', type=Path)
     args = parser.parse_args()
     if args.command == 'receipt':
         value = read(args.input)
@@ -199,7 +208,7 @@ def main():
     elif args.command == 'upstream':
         value = {'revision': args.revision, 'runId': args.run_id, 'runAttempt': args.attempt, 'image': freeze_image(args.image)}
     elif args.command == 'collect':
-        value = collect(args.repo, args.input, args.revision, args.run_id, args.attempt)
+        value = collect(args.repo, args.input, args.revision, args.run_id, args.attempt, args.test_reuse)
     elif args.command == 'fetch':
         fetch_manifest(Client(args.repo), read(args.input), args.output)
         return

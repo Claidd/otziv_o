@@ -50,6 +50,17 @@ class ReleaseArtifactsTest(unittest.TestCase):
         self.assertEqual(5, len(plan['images']))
         self.assertIn('external-review-worker', capacity_plan(self.release, worker=True)['releaseImages'])
 
+    def test_test_evidence_binds_current_main_without_rewriting_image_provenance(self):
+        from ci_test_reuse import JOBS, DECISION
+        original=copy.deepcopy(self.release['images'])
+        self.release['testEvidence']={'schema':DECISION,'revision':HEAD,'runId':123,'runAttempt':1,
+            'tree':'f'*40,'mode':'shadow','checks':{scope:{'reused':False} for scope in JOBS}}
+        validate_release(self.release,HEAD,123,1)
+        self.assertEqual(original,self.release['images'])
+        for key,bad in [('revision','c'*40),('runId',124),('runAttempt',2)]:
+            value=copy.deepcopy(self.release);value['testEvidence'][key]=bad
+            with self.subTest(key=key),self.assertRaises(GateError):validate_release(value,HEAD,123,1)
+
     def test_release_rejects_wrong_run_source_missing_component_bad_sizes_and_role(self):
         for change in ('source', 'run', 'missing', 'duplicate', 'size', 'role', 'artifact', 'attempt'):
             value = copy.deepcopy(self.release)
