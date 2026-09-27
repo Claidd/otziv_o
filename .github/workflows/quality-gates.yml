@@ -457,7 +457,7 @@ jobs:
         run: |
           docker pull mysql@sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383
           docker pull postgres@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d
-          docker pull quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z@sha256:a1ea29fa28355559ef137d71fc570e508a214ec84ff8083e39bc5428980b015e
+          docker pull ghcr.io/claidd/otziv-security@sha256:3bd06e6605d318c852fc56f42d14316b5cd74ed233119d586b078bd4a5e4be21
       - name: Restore both databases, exact object versions and keys after destroying the source fixture
         if: ${{ needs.changes.outputs.issuer == 'true' }}
         env:
