@@ -6,6 +6,7 @@ export interface OfferSettings {
   title: string; message: string; dailyLimit: number; intervalMinutes: number;
   windowStart: string; windowEnd: string; includeActive: boolean; includeStopped: boolean; includeBanned: boolean;
   fileMode: 'ATTACHMENT' | 'LINK'; testOnly: boolean;
+  includeLeadInWork: boolean; includeLeadOther: boolean; leadFallbackClientId: string | null;
 }
 export interface OfferCampaign {
   id: string; settings: OfferSettings; state: string; fileName: string | null;
@@ -27,6 +28,7 @@ export class ClientOffersApi {
   private readonly http = inject(HttpClient);
   private readonly url = `${appEnvironment.apiBaseUrl}/api/admin/client-offers`;
   board() { return this.http.get<OfferBoard>(this.url); }
+  leadSenders() { return this.http.get<string[]>(`${this.url}/lead-senders`); }
   preview(settings: OfferSettings) { return this.http.post<OfferAudience[]>(`${this.url}/preview`, settings); }
   save(id: string, settings: OfferSettings, file: File | null, removeFile: boolean) {
     const body = new FormData();

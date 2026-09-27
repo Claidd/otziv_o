@@ -14,7 +14,7 @@ import tempfile
 
 from ci_artifacts import Client
 from ci_image_bundle import SERVICES
-from release_ci import REPOSITORY, require
+from release_ci import REPOSITORY, GateError, require
 
 CONTEXTS = {
     'backend': ('backend/',),
@@ -26,11 +26,31 @@ CONTEXTS = {
 }
 POLICY = ('.github/', 'infrastructure/scripts/prod/', 'infrastructure/scripts/security/',
           'infrastructure/runtime-security/', '.gitattributes', '.dockerignore')
+BUILD_COMMON = ('.gitattributes', '.dockerignore')
+TRANSPORT = ('deploy.ps1', 'infrastructure/scripts/prod/')
 
 
-def fingerprint(repo, component, revision):
+def build_recipe(repo, revision):
+    """Hash the actual builder/matrix recipe, not unrelated workflow gates."""
+    path = '.github/workflows/quality-gates.yml'
+    result = subprocess.run(['git', '-C', str(repo), 'show', f'{revision}:{path}'],
+                            capture_output=True, timeout=60)
+    if result.returncode:
+        return b''  # Minimal test repositories have no workflow.
+    workflow = result.stdout.replace(b'\r\n', b'\n')
+    job = re.search(rb'(?m)^  integration-images:\n(.*?)(?=^  [a-z][\w-]+:|\Z)', workflow, re.S)
+    require(job, 'Image build job missing')
+    matrix = re.search(rb'    strategy:\n(.*?)    steps:\n', job[1], re.S)
+    recipe = re.search(rb'      - name: Set up cached image builder\n(.*?)      - name: Exercise sandbox', job[1], re.S)
+    require(matrix and recipe, 'Image build recipe changed; update its fingerprint contract')
+    return matrix[1] + recipe[1]
+
+
+def fingerprint(repo, component, revision, kind='build'):
     require(component in SERVICES and re.fullmatch('[a-f0-9]{40}', revision), 'Invalid image input identity')
     raw = subprocess.check_output(['git', '-C', str(repo), 'ls-tree', '-rz', '--full-tree', revision], timeout=60)
+    require(kind in ('build', 'policy', 'transport'), 'Unknown input fingerprint')
+    prefixes = (*CONTEXTS[component], *BUILD_COMMON) if kind == 'build' else POLICY if kind == 'policy' else TRANSPORT
     selected = []
     for entry in raw.split(b'\0'):
         if not entry:
@@ -38,20 +58,28 @@ def fingerprint(repo, component, revision):
         metadata, name = entry.split(b'\t', 1)
         path = name.decode('utf-8')
         if any(path.startswith(prefix) if prefix.endswith('/') else path == prefix
-               for prefix in (*CONTEXTS[component], *POLICY)):
+               for prefix in prefixes):
             require(metadata.split()[1] == b'blob', 'Unsupported image input type')
             selected.append(entry)
     require(selected, 'Image inputs are missing')
-    return hashlib.sha256(b'otziv-image-inputs-v1\0' + component.encode() + b'\0' + b'\0'.join(sorted(selected))).hexdigest()
+    recipe = build_recipe(repo, revision) if kind == 'build' else b''
+    return hashlib.sha256(b'otziv-image-inputs-v2\0' + kind.encode() + b'\0' + component.encode()
+                          + b'\0' + b'\0'.join(sorted(selected)) + b'\0' + recipe).hexdigest()
 
 
 def candidate(client, repo, component, revision, input_digest):
     from ci_release import fetch_manifest
-    result = client.get('/actions/workflows/quality-gates.yml/runs?branch=main&event=push&status=success&per_page=10')
+    # Inspect latest runs, including failures. A rerun failure may not be hidden
+    # by requesting only historical successes from the API.
+    result = client.get('/actions/workflows/quality-gates.yml/runs?branch=main&event=push&per_page=10')
+    seen = set()
     for run in result.get('workflow_runs', []):
         source = run.get('head_sha', '')
         if source == revision or not re.fullmatch('[a-f0-9]{40}', source):
             continue
+        if source in seen:
+            continue
+        seen.add(source)
         if not (run.get('head_branch') == 'main' and run.get('event') == 'push'
                 and run.get('status') == 'completed' and run.get('conclusion') == 'success'
                 and run.get('path') == '.github/workflows/quality-gates.yml'
@@ -61,6 +89,13 @@ def candidate(client, repo, component, revision, input_digest):
         ancestor = subprocess.run(['git', '-C', str(repo), 'merge-base', '--is-ancestor', source, revision], capture_output=True, timeout=60)
         if ancestor.returncode != 0 or fingerprint(repo, component, source) != input_digest:
             continue
+        from datetime import datetime, timezone, timedelta
+        updated = run.get('updated_at')
+        if not updated or not timedelta(0) <= datetime.now(timezone.utc) - datetime.fromisoformat(updated.replace('Z', '+00:00')) <= timedelta(days=7):
+            continue
+        current = client.get(f"/actions/runs/{run['id']}")
+        require(current.get('run_attempt') == run['run_attempt'] and current.get('conclusion') == 'success'
+                and current.get('status') == 'completed', 'Source image CI was rerun or failed')
         with tempfile.TemporaryDirectory(prefix='reuse-manifest-') as directory:
             value = fetch_manifest(client, {'result': 'PASS', 'revision': source, 'runs': [
                 {'workflow': '.github/workflows/quality-gates.yml', 'runId': run['id'], 'attempt': run['run_attempt']}]}, Path(directory) / 'ci-release.json')
@@ -83,7 +118,11 @@ def validate_installed(installed, image):
 def prepare(client, repo, component, revision, output):
     from ci_release import fetch_image
     input_digest = fingerprint(repo, component, revision)
-    result = {'reused': False, 'component': component, 'revision': revision, 'inputsDigest': input_digest}
+    result = {'schema': 'otziv-image-reuse-v2', 'reused': False, 'component': component,
+              'revision': revision, 'inputsDigest': input_digest,
+              'policyDigest': fingerprint(repo, component, revision, 'policy'),
+              'transportDigest': fingerprint(repo, component, revision, 'transport'),
+              'reason': 'No recent successful ancestor with identical build inputs and available artifacts'}
     found = candidate(client, repo, component, revision, input_digest)
     if found:
         release, image = found
@@ -94,7 +133,8 @@ def prepare(client, repo, component, revision, output):
         installed = json.loads(subprocess.check_output(['docker', 'image', 'inspect', source], timeout=60))[0]
         validate_installed(installed, image)
         subprocess.run(['docker', 'tag', source, f'otziv-{component}-ci'], check=True, timeout=60)
-        result.update(reused=True, sourceRevision=release['revision'], sourceRunId=release['runId'],
+        result.update(reused=True, reason='Identical build inputs; current policy scans and smoke checks still required',
+                      sourceRevision=release['revision'], sourceRunId=release['runId'],
                       sourceArtifactId=image['artifact']['id'], manifestDigest=image['manifestDigest'], configId=image['configId'])
     Path(output).write_text(json.dumps(result, indent=2) + '\n', encoding='utf-8')
     return result
@@ -111,11 +151,12 @@ def main():
     except Exception as error:
         # A cache miss, expired artifact or unverifiable source always builds anew.
         # No security scan failure is caught here: scans execute later in the job.
-        result = {'reused': False, 'reason': type(error).__name__}
+        result = {'reused': False, 'reason': str(error) if isinstance(error, GateError)
+                  else 'Verified source unavailable (' + type(error).__name__ + '); rebuilding with current scans'}
         args.output.write_text(json.dumps(result) + '\n', encoding='utf-8')
     with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as stream:
         stream.write('reused=' + str(result['reused']).lower() + '\n')
-    print('Verified previous image reused.' if result['reused'] else 'Fresh image build required.')
+    print('Verified previous image reused.' if result['reused'] else 'Fresh image build required: ' + result['reason'])
 
 
 if __name__ == '__main__':

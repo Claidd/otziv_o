@@ -25,7 +25,7 @@ final class CampaignSchedule {
         if (s == null || s.title() == null || s.title().isBlank() || s.title().length() > 120
                 || s.message() == null || s.message().isBlank() || s.message().length() > 1000
                 || s.dailyLimit() < 1 || s.dailyLimit() > 10000 || s.intervalMinutes() < 1 || s.intervalMinutes() > 1440
-                || !(s.testOnly() || s.includeActive() || s.includeStopped() || s.includeBanned())
+                || !(s.testOnly() || s.includeActive() || s.includeStopped() || s.includeBanned() || s.includeLeadInWork() || s.includeLeadOther())
                 || !("ATTACHMENT".equals(s.fileMode()) || "LINK".equals(s.fileMode())))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Проверьте текст, лимит, интервал и выберите хотя бы один список");
         try {

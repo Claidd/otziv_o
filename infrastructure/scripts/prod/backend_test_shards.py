@@ -1,9 +1,28 @@
 """Partition the full Surefire default test set and verify complete shard reports."""
-import argparse,hashlib,json,os,re,shutil
+import argparse,hashlib,json,os,re,shutil,math,statistics
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
 COUNT=3
+DURATIONS=Path(__file__).with_name('backend-test-durations.json')
+
+
+def partition(rows, durations=None):
+    """Longest classes first; unknown classes get the measured median weight."""
+    profile=durations if durations is not None else (json.loads(DURATIONS.read_text()) if DURATIONS.exists() else {})
+    weights=profile.get('seconds', {})
+    if not isinstance(weights,dict) or any(type(v) not in (int,float) or not math.isfinite(v) or v<0 for v in weights.values()):
+        raise ValueError('Invalid test duration profile')
+    fallback=statistics.median(weights.values()) if weights else 1.0
+    weight=lambda r:max(0.01,weights.get(r['class'],fallback))
+    overhead=profile.get('overheadSeconds',[0]*COUNT) if any(r['class'] in weights for r in rows) else [0]*COUNT
+    if len(overhead)!=COUNT or any(type(v) not in (int,float) or not math.isfinite(v) or v<0 for v in overhead):
+        raise ValueError('Invalid shard overhead')
+    groups=[[] for _ in range(COUNT)];loads=list(overhead)
+    for row in sorted(rows,key=lambda r:(-weight(r),r['class'])):
+        index=min(range(COUNT),key=lambda i:(loads[i],len(groups[i]),i))
+        groups[index].append(row);loads[index]+=weight(row)
+    return [sorted(group,key=lambda r:r['class']) for group in groups]
 
 
 def inventory(root):
@@ -23,8 +42,7 @@ def inventory(root):
 def selection(root,index,revision='',attempt=1):
     if not 0<=index<COUNT:raise ValueError('Invalid test shard')
     rows=inventory(root)
-    # Sorted round-robin keeps whole classes (including nested tests) together.
-    chosen=rows[index::COUNT]
+    chosen=partition(rows)[index]
     return {'schema':'otziv-backend-shard-v1','index':index,'count':COUNT,'revision':revision,'attempt':attempt,
             'inventoryDigest':hashlib.sha256(json.dumps(rows,sort_keys=True).encode()).hexdigest(),'tests':chosen}
 

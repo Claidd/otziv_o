@@ -1,7 +1,7 @@
 <app-admin-layout title="Рассылки предложений" active="client-offers">
   <main class="offers-page">
     <header class="panel hero">
-      <div><span class="eyebrow">Автоответчик · предложения услуг</span><h1>Рассылки клиентам</h1>
+      <div><span class="eyebrow">Автоответчик · предложения услуг</span><h1>Рассылки клиентам и лидам</h1>
         <p>Одно предложение — каждому выбранному чату. Каждый день, по вашему расписанию.</p></div>
       <a routerLink="/admin/dictionaries" [queryParams]="{tab: 'autoresponder'}">Настройки автоответчика ↗</a>
     </header>
@@ -45,18 +45,33 @@
               </div>
               <h3>Получатели и очередность</h3>
               <label>Кому отправлять<select name="testOnly" [(ngModel)]="draft.testOnly" (ngModelChange)="changed()">
-                <option [ngValue]="false">Клиентам — по выбранным спискам</option>
+                <option [ngValue]="false">Клиентам и лидам — по выбранным спискам</option>
                 <option [ngValue]="true">Тестовая — только администраторам и владельцам</option>
               </select></label>
               @if (draft.testOnly) {
                 <p class="banner warning" role="status">Тестовая рассылка: сообщение получат только активные администраторы и владельцы в личных Telegram-чатах, привязанных к их профилям. Клиентам ничего не отправится. Текст, файл и расписание применяются как обычно.</p>
               } @else {
-              <p class="hint">Включите нужные списки. Общий чат нескольких компаний получит одно сообщение.</p>
+              <p class="hint">Включите нужные списки компаний и лидов. Общий чат нескольких компаний получит одно сообщение.</p>
+              <h4>Компании — в привязанные чаты</h4>
               <div class="audiences">
                 <label class="check"><input type="checkbox" name="active" [(ngModel)]="draft.includeActive" (ngModelChange)="changed()"><span><b>1. В работе</b><small>Активные клиенты</small></span></label>
                 <label class="check"><input type="checkbox" name="stopped" [(ngModel)]="draft.includeStopped" (ngModelChange)="changed()"><span><b>2. На стопе</b><small>После активных</small></span></label>
-                <label class="check"><input type="checkbox" name="banned" [(ngModel)]="draft.includeBanned" (ngModelChange)="changed()"><span><b>3. Бан</b><small>Последняя очередь</small></span></label>
+                <label class="check"><input type="checkbox" name="banned" [(ngModel)]="draft.includeBanned" (ngModelChange)="changed()"><span><b>3. Бан</b><small>Только компании</small></span></label>
               </div>
+              <h4>Лиды — в личный WhatsApp</h4>
+              <div class="audiences">
+                <label class="check"><input type="checkbox" name="leadInWork" [(ngModel)]="draft.includeLeadInWork" (ngModelChange)="changed()"><span><b>4. Лиды «В работе»</b><small>Отдельный список</small></span></label>
+                <label class="check"><input type="checkbox" name="leadOther" [(ngModel)]="draft.includeLeadOther" (ngModelChange)="changed()"><span><b>5. Остальные лиды</b><small>Все статусы, кроме «В работе» и бана</small></span></label>
+              </div>
+              @if (draft.includeLeadInWork || draft.includeLeadOther) {
+                <p class="hint">Лидам отправляем по номеру из карточки с аккаунта их менеджера. Лиды в бане исключены всегда, даже если включён список компаний «Бан». Один номер получит одно сообщение за кампанию.</p>
+                <label>Отправитель для лидов без менеджера<select name="leadFallbackClientId" [(ngModel)]="draft.leadFallbackClientId" (ngModelChange)="changed()">
+                  <option [ngValue]="null">Пропускать лиды без менеджера</option>
+                  @for (account of leadSenders(); track account) { <option [ngValue]="account">{{ account }}</option> }
+                </select></label>
+                <small>Если менеджер назначен, но его аккаунт не настроен, лид будет пропущен. Выбранный отправитель используется только для лидов без менеджера.</small>
+                @if (sendersUnavailable()) { <p class="banner warning">Не удалось загрузить аккаунты отправителей. Обновите страницу для выбора аккаунта.</p> }
+              }
               }
               <h3>Темп отправки</h3>
               <div class="schedule">
@@ -65,11 +80,11 @@
                 <label>Начало отправок<input type="time" name="start" [(ngModel)]="draft.windowStart" required></label>
                 <label>Окончание отправок<input type="time" name="end" [(ngModel)]="draft.windowEnd" required></label>
               </div>
-              <p class="hint">Время Иркутска. Лимит — максимум попыток за день для этой кампании; непотраченный остаток не накапливается. Если интервал не позволяет отправить весь дневной объём, остаток продолжится в следующие дни.</p>
+              <p class="hint">Время Иркутска. Лимит общий для всей кампании: всех аккаунтов, компаний и лидов. Это максимум попыток за день; непотраченный остаток не накапливается. Если интервал не позволяет отправить весь дневной объём, остаток продолжится в следующие дни.</p>
               <button type="button" class="secondary" (click)="preview()" [disabled]="!valid()">Посчитать получателей</button>
               @if (audience(); as rows) {
                 <div class="preview-counts">@for (row of rows; track row.audience) {
-                  <span><b>{{ label(row.audience) }}</b>{{ row.reachable }} чатов @if (row.total > row.reachable) { · {{ row.total - row.reachable }} без чата }</span>
+                  <span><b>{{ label(row.audience) }}</b>{{ row.reachable }} получателей @if (row.total > row.reachable) { · {{ row.total - row.reachable }} недоступны для отправки }</span>
                 }</div>
               }
               <div class="actions"><button type="submit" class="secondary" [disabled]="!valid()">Сохранить черновик</button>
@@ -100,7 +115,7 @@
           <p class="hint">Пауза и остановка действуют на следующие отправки. Уже начатое сообщение может завершиться.</p>
           @if (row.counts.unknown > 0) { <p class="banner warning">У {{ row.counts.unknown }} сообщений нет подтверждения. Проверьте соответствующие чаты: автоматический повтор заблокирован, чтобы избежать дубликатов.</p> }
           <div class="section-heading"><h3>Получатели</h3><span>{{ row.counts.total }} всего · {{ row.counts.skipped }} пропущено</span></div>
-          <div class="table-scroll"><table><thead><tr><th>{{ row.campaign.settings.testOnly ? 'Пользователь' : 'Компания' }}</th><th>Список</th><th>Результат</th></tr></thead><tbody>
+          <div class="table-scroll"><table><thead><tr><th>{{ row.campaign.settings.testOnly ? 'Пользователь' : 'Компания / лид' }}</th><th>Список</th><th>Результат</th></tr></thead><tbody>
             @for (recipient of recipients(); track recipient.id) { <tr><td>{{ recipient.companyTitle }}</td><td>{{ label(recipient.audience) }}</td><td><b>{{ label(recipient.state) }}</b>@if (recipient.errorMessage) { <small>{{ recipient.errorMessage }}</small> }</td></tr> }
           </tbody></table></div>
           <div class="pagination"><button type="button" (click)="setPage(page() - 1)" [disabled]="page() === 0 || recipientLoading()">Назад</button>

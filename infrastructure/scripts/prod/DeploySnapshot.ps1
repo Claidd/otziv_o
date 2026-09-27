@@ -342,7 +342,9 @@ function Export-OtzivCommittedDeployBundle {
         [Parameter(Mandatory = $true)][string]$Repository,
         [Parameter(Mandatory = $true)][string]$Revision,
         [Parameter(Mandatory = $true)][string]$StageRoot,
-        [Parameter(Mandatory = $true)][string[]]$InputPaths
+        [Parameter(Mandatory = $true)][string[]]$InputPaths,
+        [string]$PreparedArchive = '',
+        [string]$PreparedArchiveSha256 = ''
     )
     $exact = Get-OtzivExactCommitRevision -Repository $Repository -Revision $Revision `
         -FailureMessage 'Cannot resolve committed deployment bundle revision.'
@@ -358,15 +360,68 @@ function Export-OtzivCommittedDeployBundle {
     if (@($entries -split "`n" | Where-Object { $_ -match '^(120000|160000) ' }).Count -gt 0) {
         throw 'Deployment bundle cannot contain symlinks or submodules.'
     }
-    $archive = Join-Path $StageRoot '.committed-inputs.tar'
-    if (Test-Path -LiteralPath $archive) { throw 'Committed deployment archive already exists.' }
+    $archive = if ($PreparedArchive) { $PreparedArchive } else { Join-Path $StageRoot '.committed-inputs.tar' }
+    if ($PreparedArchive) {
+        if ($PreparedArchiveSha256 -notmatch '^[a-fA-F0-9]{64}$' -or
+            (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -cne $PreparedArchiveSha256.ToUpperInvariant()) {
+            throw 'Prepared deployment archive changed after early verification.'
+        }
+    } elseif (Test-Path -LiteralPath $archive) { throw 'Committed deployment archive already exists.' }
     try {
-        $result = Invoke-OtzivSnapshotGit -Repository $Repository `
-            -Arguments (@('archive', '--format=tar', "--output=$archive", $exact, '--') + $paths)
-        if ($result.ExitCode -ne 0) { throw 'Cannot archive committed deployment inputs.' }
+        if (-not $PreparedArchive) {
+            $result = Invoke-OtzivSnapshotGit -Repository $Repository `
+                -Arguments (@('archive', '--format=tar', "--output=$archive", $exact, '--') + $paths)
+            if ($result.ExitCode -ne 0) { throw 'Cannot archive committed deployment inputs.' }
+        }
         & tar -xf $archive -C $StageRoot
         if ($LASTEXITCODE -ne 0) { throw 'Cannot extract committed deployment inputs.' }
     } finally {
-        if (Test-Path -LiteralPath $archive) { Remove-Item -LiteralPath $archive -Force }
+        if (-not $PreparedArchive -and (Test-Path -LiteralPath $archive)) { Remove-Item -LiteralPath $archive -Force }
     }
+}
+
+function Get-OtzivDeployBundlePaths {
+    param([Parameter(Mandatory = $true)][string]$Repository)
+    $errors = $null
+    $ast = [Management.Automation.Language.Parser]::ParseFile(
+        (Join-Path $Repository 'infrastructure/scripts/prod/deploy-prod.ps1'), [ref]$null, [ref]$errors)
+    if ($errors.Count) { throw 'Cannot parse the deployment inventory.' }
+    $matches = @($ast.FindAll({ param($node)
+        $node -is [Management.Automation.Language.AssignmentStatementAst] -and
+        $node.Left.Extent.Text -ceq '$deployBundlePaths'
+    }, $true))
+    if ($matches.Count -ne 1) { throw 'Deployment inventory must have one literal definition.' }
+    $allowed = @('StatementBlockAst','PipelineAst','CommandExpressionAst','ArrayExpressionAst',
+        'ArrayLiteralAst','StringConstantExpressionAst')
+    $nodes = @($matches[0].Right.FindAll({ param($node) $true }, $true))
+    if (@($nodes | Where-Object { $_.GetType().Name -notin $allowed }).Count -gt 0) {
+        throw 'Deployment inventory must contain only literal paths.'
+    }
+    $paths = @($nodes | Where-Object { $_ -is [Management.Automation.Language.StringConstantExpressionAst] } | ForEach-Object { $_.Value })
+    if ($paths.Count -eq 0 -or 'docker-compose.yaml' -notin $paths) { throw 'Deployment inventory is incomplete.' }
+    return $paths
+}
+
+function New-OtzivPreparedDeployArchive {
+    param(
+        [Parameter(Mandatory = $true)][string]$Repository,
+        [Parameter(Mandatory = $true)][string]$Revision,
+        [Parameter(Mandatory = $true)][string]$Directory
+    )
+    $paths = @(Get-OtzivDeployBundlePaths -Repository $Repository)
+    $stage = Join-Path $Directory 'verified-source'
+    if (Test-Path -LiteralPath $stage) { throw 'Prepared source directory already exists.' }
+    New-Item -ItemType Directory -Path $stage | Out-Null
+    Export-OtzivCommittedDeployBundle -Repository $Repository -Revision $Revision -StageRoot $stage -InputPaths $paths
+    foreach ($path in $paths) {
+        if (-not (Test-Path -LiteralPath (Join-Path $stage $path))) { throw "Committed deploy input missing: $path" }
+    }
+    $archive = Join-Path $Directory 'verified-source.tar'
+    if (Test-Path -LiteralPath $archive) { throw 'Prepared deployment archive already exists.' }
+    & tar -cf $archive -C $stage .
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot seal the verified source archive.' }
+    $receipt = [ordered]@{ revision = $Revision; archive = $archive
+        sha256 = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash; paths = $paths }
+    $receipt | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $Directory 'verified-source.json') -Encoding utf8
+    return [pscustomobject]$receipt
 }

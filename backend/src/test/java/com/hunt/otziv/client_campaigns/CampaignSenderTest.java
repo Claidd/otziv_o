@@ -75,4 +75,29 @@ class CampaignSenderTest {
         verify(store,never()).attachment(any());
         verifyNoInteractions(telegram,delivery,max,whatsapp);
     }
+
+    Claim leadClaim(String mode,String fileName) {
+        var s=new Settings("Leads","Body",30,10,"10:00","21:00",false,false,false,mode,false,true,true,"fallback");
+        var c=new Campaign("leads",s,"RUNNING",null,null,null,null,0,fileName,"text/plain","file-token");
+        return new Claim(c,new Recipient(3,"leads",null,"Lead","LEAD_IN_WORK",4,"WHATSAPP_PHONE:79991111111",
+                null,"manager",null,null,null,"PENDING","offer:leads:lead:1",null,null,null,1L,"79991111111"));
+    }
+    @Test void leadTextLinkAndAttachmentUsePersonalWhatsAppOnlyWithFrozenManager() {
+        when(store.leadRecipientAllowed(any(),any())).thenReturn(true);
+        when(whatsapp.sendMessageOnce(any(),any(),any(),any())).thenReturn(ClientMessageSendResult.sent("WhatsApp","text"));
+        assertThat(sender.send(leadClaim("ATTACHMENT",null)).sent()).isTrue();
+        assertThat(sender.send(leadClaim("LINK","offer.txt")).sent()).isTrue();
+        verify(whatsapp).sendMessageOnce("manager","79991111111","Body","offer:leads:lead:1");
+        verify(whatsapp).sendMessageOnce("manager","79991111111","Body\n\noffer.txt\nhttps://fixture.example/api/public/client-offer-files/file-token","offer:leads:lead:1");
+        var file=new Attachment("offer.txt","text/plain",new byte[]{1,2}); when(store.attachment("leads")).thenReturn(file);
+        when(whatsapp.sendDocumentOnce(any(),any(),any(),any(),any(),any(),any())).thenReturn(ClientMessageSendResult.sent("WhatsApp","file"));
+        assertThat(sender.send(leadClaim("ATTACHMENT","offer.txt")).sent()).isTrue();
+        verify(whatsapp).sendDocumentOnce("manager","79991111111","Body",file.bytes(),file.name(),file.contentType(),"offer:leads:lead:1");
+        verifyNoInteractions(delivery,telegram,max);
+    }
+    @Test void bannedOrChangedLeadNeverReachesAnyTransport() {
+        for (String mode : java.util.List.of("LINK","ATTACHMENT"))
+            assertThat(ClientMessageDelivery.isKnownUnsent(sender.send(leadClaim(mode,"offer.txt")))).isTrue();
+        verifyNoInteractions(delivery,telegram,max,whatsapp); verify(store,never()).attachment(any());
+    }
 }

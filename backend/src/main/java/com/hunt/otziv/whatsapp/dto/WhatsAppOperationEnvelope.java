@@ -44,6 +44,10 @@ public final class WhatsAppOperationEnvelope {
         return hash(clientId,"send-group-file",WhatsAppDestination.normalize("send-group",groupId),payload);
     }
 
+    public static String phoneDocumentHash(String clientId,String phone,String payload) {
+        return hash(clientId,"send-file",WhatsAppDestination.normalize("send",phone)+"@c.us",payload);
+    }
+
     private static String hash(String clientId, String kind, String destination, String message) {
         String normalizedMessage = trimJavaScript(message);
         if (clientId == null || clientId.isEmpty() || normalizedMessage.isEmpty()) throw invalidEnvelope();

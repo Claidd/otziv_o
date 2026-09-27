@@ -32,6 +32,7 @@ class CampaignStoreMySqlIntegrationTest {
         jdbc.execute("DROP TABLE IF EXISTS client_offer_campaign");
         new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_320__client_offer_campaigns.sql")).execute(data);
         new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_325__client_offer_test_audience.sql")).execute(data);
+        new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_326__client_offer_lead_audiences.sql")).execute(data);
         jdbc.execute("CREATE TABLE IF NOT EXISTS users (id BIGINT PRIMARY KEY,fio VARCHAR(200),username VARCHAR(200),active BOOLEAN,telegram_chat_id BIGINT)");
         jdbc.execute("CREATE TABLE IF NOT EXISTS roles (id BIGINT PRIMARY KEY,name VARCHAR(50))");
         jdbc.execute("CREATE TABLE IF NOT EXISTS users_roles (user_id BIGINT,role_id BIGINT)");
@@ -39,6 +40,9 @@ class CampaignStoreMySqlIntegrationTest {
         jdbc.update("INSERT INTO roles VALUES(1,'ROLE_ADMIN'),(2,'ROLE_OWNER'),(3,'ROLE_MANAGER'),(4,'ROLE_WORKER'),(5,'ROLE_USER')");
         jdbc.execute("CREATE TABLE IF NOT EXISTS company_status (company_status_id BIGINT PRIMARY KEY,status_title VARCHAR(30))");
         jdbc.execute("CREATE TABLE IF NOT EXISTS managers (manager_id BIGINT PRIMARY KEY,client_id VARCHAR(128))");
+        jdbc.execute("CREATE TABLE IF NOT EXISTS leads (id BIGINT PRIMARY KEY,company_name VARCHAR(500),lid_status VARCHAR(30),telephone_lead VARCHAR(20),manager_id BIGINT)");
+        jdbc.update("DELETE FROM leads"); jdbc.update("DELETE FROM managers");
+        jdbc.update("INSERT INTO managers VALUES(1,'manager'),(2,NULL),(3,'fallback')");
         jdbc.execute("""
                 CREATE TABLE IF NOT EXISTS companies (company_id BIGINT PRIMARY KEY,company_title VARCHAR(500),company_status BIGINT,
                 company_manager BIGINT,company_url_chat VARCHAR(500),company_group_id VARCHAR(128),
@@ -46,7 +50,12 @@ class CampaignStoreMySqlIntegrationTest {
                 """);
         jdbc.update("DELETE FROM companies"); jdbc.update("DELETE FROM company_status");
         jdbc.update("INSERT INTO company_status VALUES(1,'В работе'),(2,'На стопе'),(3,'Бан'),(4,'Новая')");
-        var factory = new ProxyFactory(new CampaignStore(jdbc));
+        var properties = new com.hunt.otziv.whatsapp.config.WhatsAppProperties();
+        for (String account : java.util.List.of("manager","fallback")) {
+            var client = new com.hunt.otziv.whatsapp.config.WhatsAppProperties.ClientConfig();
+            client.setId(account); client.setUrl("https://wa.fixture/"+account); properties.getClients().add(client);
+        }
+        var factory = new ProxyFactory(new CampaignStore(jdbc,new CampaignLeadAudience(jdbc,properties)));
         factory.addAdvice(new TransactionInterceptor(new DataSourceTransactionManager(data),new AnnotationTransactionAttributeSource()));
         store = (CampaignStore) factory.getProxy();
     }
@@ -54,6 +63,73 @@ class CampaignStoreMySqlIntegrationTest {
     void company(int id,int status,long chat) { jdbc.update("INSERT INTO companies(company_id,company_title,company_status,company_url_chat,company_telegram_group_chat_id) VALUES(?,?,?,'https://t.me/fixture',?)",id,"Компания "+id,status,chat); }
     String draft(Settings settings) { String id = UUID.randomUUID().toString(); store.save(id,settings,null,false,"owner",now); return id; }
     void sent(Claim c,LocalDateTime time) { store.finish(c,ClientMessageSendResult.sent("Telegram","77"),time); }
+    Settings leadSettings(boolean inWork,boolean other,String fallback) {
+        return new Settings("Leads","Offer",30,10,"10:00","21:00",false,false,false,"ATTACHMENT",false,inWork,other,fallback);
+    }
+    void lead(int id,String status,String phone,Integer manager) {
+        jdbc.update("INSERT INTO leads VALUES(?,?,?,?,?)",id,"Lead "+id,status,phone,manager);
+    }
+    @Test void leadListsAreIndependentBanIsExcludedAndManagerRoutingIsPreserved() {
+        lead(1,"В работе","89991111111",1); lead(2,"Отправленный","79992222222",null);
+        lead(3,"Бан","79993333333",1); lead(4,"К рассылке","79994444444",2);
+        lead(5,"Ошибка","invalid",1); lead(6,"В работу","79996666666",1);
+        var settings = leadSettings(true,true,"fallback");
+        var id = draft(settings); store.start(id,now);
+        assertThat(store.get(id).settings()).isEqualTo(settings);
+        var rows = store.recipients(id,0);
+        assertThat(rows).extracting(Recipient::leadId).containsExactly(1L,2L,4L,5L,6L);
+        assertThat(rows.getFirst().phone()).isEqualTo("79991111111");
+        assertThat(rows.getFirst().clientId()).isEqualTo("manager");
+        assertThat(rows.get(1).clientId()).isEqualTo("fallback");
+        assertThat(rows.get(2).state()).isEqualTo("SKIPPED");
+        assertThat(rows.get(3).state()).isEqualTo("SKIPPED");
+        assertThat(rows).allMatch(r -> r.companyId()==null && r.userId()==null && r.operationId().contains(":lead:"));
+        var activeOnly = draft(leadSettings(true,false,null)); store.start(activeOnly,now);
+        assertThat(store.recipients(activeOnly,0)).extracting(Recipient::leadId).containsExactly(1L);
+        var otherOnly = draft(leadSettings(false,true,"fallback")); store.start(otherOnly,now);
+        assertThat(store.recipients(otherOnly,0)).extracting(Recipient::leadId).containsExactly(2L,4L,5L,6L);
+    }
+    @Test void duplicatesAcrossListsReceiveOneMessageAndBannedPhoneVariantsNeverEnterQueue() {
+        lead(1,"В работе","89991111111",1); lead(2,"Отправленный","79991111111",null);
+        lead(3,"В работе","79993333333",1); lead(4," БАН ","89993333333",1);
+        var id = draft(leadSettings(true,true,"fallback")); store.start(id,now);
+        assertThat(store.recipients(id,0)).extracting(Recipient::leadId).containsExactly(1L);
+        assertThat(store.counts(id).pending()).isEqualTo(1);
+    }
+    @Test void sendTimeCheckRejectsNewBanChangedNumberManagerAndDeletedLead() {
+        lead(1,"В работе","79991111111",1);
+        var settings = leadSettings(true,true,"fallback"); var id=draft(settings); store.start(id,now);
+        var recipient=store.recipients(id,0).getFirst();
+        assertThat(store.leadRecipientAllowed(settings,recipient)).isTrue();
+        jdbc.update("UPDATE leads SET lid_status='Бан' WHERE id=1");
+        assertThat(store.leadRecipientAllowed(settings,recipient)).isFalse();
+        jdbc.update("UPDATE leads SET lid_status='В работе',telephone_lead='79992222222' WHERE id=1");
+        assertThat(store.leadRecipientAllowed(settings,recipient)).isFalse();
+        jdbc.update("UPDATE leads SET telephone_lead='79991111111',manager_id=3 WHERE id=1");
+        assertThat(store.leadRecipientAllowed(settings,recipient)).isFalse();
+        jdbc.update("UPDATE leads SET manager_id=1 WHERE id=1"); lead(2,"ban","89991111111",1);
+        assertThat(store.leadRecipientAllowed(settings,recipient)).isFalse();
+        jdbc.update("DELETE FROM leads"); assertThat(store.leadRecipientAllowed(settings,recipient)).isFalse();
+    }
+    @Test void missingFallbackIsSkippedUnknownAccountIsRejectedAndTestModeExcludesLeads() {
+        lead(1,"В работе","79991111111",null); lead(2,"Ошибка","79992222222",1);
+        var settings=leadSettings(true,true,null); var id=draft(settings); store.start(id,now);
+        assertThat(store.recipients(id,0).getFirst().state()).isEqualTo("SKIPPED");
+        assertThatThrownBy(() -> draft(leadSettings(true,true,"unknown"))).isInstanceOf(ResponseStatusException.class);
+        user(1,1,true,123L);
+        var test=new Settings("Test","Body",30,10,"10:00","21:00",true,true,true,"LINK",true,true,true,"fallback");
+        var testId=draft(test); store.start(testId,now);
+        assertThat(store.recipients(testId,0)).hasSize(1).allMatch(r -> r.leadId()==null && r.userId()!=null);
+    }
+    @Test void oldCompanyCampaignDoesNotIncludeLeadsAndSharesBudgetWhenExplicitlySelected() {
+        company(1,1,123L); lead(1,"В работе","79991111111",1);
+        var oldId=draft(settings(1)); store.start(oldId,now);
+        assertThat(store.recipients(oldId,0)).hasSize(1).allMatch(r -> r.leadId()==null);
+        var mixed=new Settings("Mixed","Body",1,10,"10:00","21:00",true,false,false,"LINK",false,true,false,null);
+        var id=draft(mixed); store.start(id,now); sent(store.claim(id,now),now);
+        assertThat(store.claim(id,now.plusMinutes(10))).isNull();
+        assertThat(store.claim(id,now.plusDays(1)).recipient().leadId()).isEqualTo(1);
+    }
     @Test void snapshotOrdersSelectedListsAndDeduplicatesChatsAcrossCompanies() {
         company(1,3,1001); company(2,2,1002); company(3,1,1003); company(4,2,1003); company(5,4,1005);
         var id = draft(settings(50)); store.start(id,now); store.start(id,now);

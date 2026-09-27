@@ -226,7 +226,7 @@ test('CLI wires the absolute Docker executable, blank config, empty PATH and loc
 
 test('workflow waits for all publications and retains same-run component proofs after an unrelated publication failure', async () => {
   const workflow = await readFile(new URL('../../.github/workflows/quality-gates.yml', import.meta.url), 'utf8');
-  const job = workflow.split('  reviewed-image-anonymous-download:')[1]?.split('  repository-contracts:')[0];
+  const job = workflow.split('  reviewed-image-anonymous-download:')[1]?.split(/^  [\w-]+:\r?$/m)[0];
   assert.ok(job);
   assert.match(job, /needs: \[reviewed-image-inventory, reviewed-image-publication\]/);
   assert.match(job, /!cancelled\(\)/);
