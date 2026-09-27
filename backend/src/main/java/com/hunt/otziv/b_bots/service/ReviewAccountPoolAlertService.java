@@ -2,6 +2,9 @@ package com.hunt.otziv.b_bots.service;
 
 import com.hunt.otziv.b_bots.model.ReviewAccountPoolAlertState;
 import com.hunt.otziv.b_bots.repository.BotsRepository;
+import com.hunt.otziv.b_bots.repository.ReviewAccountPoolRepository;
+import com.hunt.otziv.b_bots.repository.ReviewAccountPoolRepository.Snapshot;
+import com.hunt.otziv.r_review.bot.service.ReviewAccountWalkScheduleService;
 import com.hunt.otziv.b_bots.repository.ReviewAccountPoolAlertStateRepository;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
@@ -33,13 +36,13 @@ public class ReviewAccountPoolAlertService {
     static final String LOW_UNBLOCKED_SOURCE_TYPE = "REVIEW_ACCOUNT_CITY_LOW";
     private static final long POOL_CITY_ID = 325L;
     private static final int LOW_UNBLOCKED_THRESHOLD = 100;
-    private static final String POOL_ACCOUNT_NAME = "Впиши Имя Фамилию";
-    private static final String READY_STATUS = "Новый";
     private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Irkutsk");
     private static final int SHORTAGE_REMINDER_HOURS = 6;
 
     private final ReviewAccountPoolAlertStateRepository stateRepository;
     private final BotsRepository botsRepository;
+    private final ReviewAccountPoolRepository poolRepository;
+    private final ReviewAccountWalkScheduleService walkScheduleService;
     private final PersonalReminderService personalReminderService;
     private final UserService userService;
     private final TelegramService telegramService;
@@ -48,20 +51,13 @@ public class ReviewAccountPoolAlertService {
     public int reconcileAndNotify() {
         ReviewAccountPoolAlertState state = stateRepository.findByIdForUpdate(STATE_ID)
                 .orElseGet(this::newState);
-        int remaining = Math.toIntExact(botsRepository.countAvailableAccountPool(
-                POOL_CITY_ID,
-                POOL_ACCOUNT_NAME,
-                READY_STATUS,
-                0,
-                1,
-                LocalDate.now(BUSINESS_ZONE)
-        ));
-        int required = Math.toIntExact(botsRepository.countUnpublishedStubReviews());
+        Snapshot pool = poolRepository.snapshot(LocalDate.now(BUSINESS_ZONE), walkScheduleService.walkedCounterThreshold());
+        int remaining = pool.remaining();
+        int required = pool.required();
         int unblocked = Math.toIntExact(botsRepository.countActiveByCityId(POOL_CITY_ID));
         LocalDate today = LocalDate.now(BUSINESS_ZONE);
 
         Integer previous = state.getLastRemainingCount();
-        int previousRequired = state.getLastRequiredCount();
         boolean replenished = previous != null && remaining > previous;
         if (replenished) {
             state.setCycleNumber(state.getCycleNumber() + 1);
@@ -76,8 +72,8 @@ public class ReviewAccountPoolAlertService {
             mask |= thresholdBit(threshold);
         }
         LocalDateTime now = LocalDateTime.now(BUSINESS_ZONE);
-        boolean shortage = required > remaining;
-        boolean shortageStarted = shortage && (previous == null || previousRequired <= previous);
+        boolean shortage = pool.deficit() > 0;
+        boolean shortageStarted = shortage && state.getLastDeficitCount() == 0;
         boolean reminderDue = shortage && (state.getLastNotifiedAt() == null
                 || !now.isBefore(state.getLastNotifiedAt().plusHours(SHORTAGE_REMINDER_HOURS)));
         boolean shouldNotify = !reached.isEmpty() || shortageStarted || reminderDue;
@@ -87,6 +83,7 @@ public class ReviewAccountPoolAlertService {
         state.setNotifiedThresholdMask(mask);
         state.setLastRemainingCount(remaining);
         state.setLastRequiredCount(required);
+        state.setLastDeficitCount(pool.deficit());
         if (shouldNotify) {
             state.setLastNotifiedAt(now);
         }
@@ -97,7 +94,7 @@ public class ReviewAccountPoolAlertService {
 
         long cycleNumber = state.getCycleNumber();
         Integer reachedThreshold = reached.isEmpty() ? null : reached.get(reached.size() - 1);
-        notifyAfterCommit(shouldNotify, reachedThreshold, remaining, required, cycleNumber, now);
+        notifyAfterCommit(shouldNotify, reachedThreshold, pool, cycleNumber, now);
         notifyLowUnblockedAfterCommit(shouldNotifyLowUnblocked, unblocked, today);
         return remaining;
     }
@@ -105,15 +102,14 @@ public class ReviewAccountPoolAlertService {
     private void notifyAfterCommit(
             boolean shouldNotify,
             Integer threshold,
-            int remaining,
-            int required,
+            Snapshot pool,
             long cycleNumber,
             LocalDateTime notifiedAt
     ) {
         if (!shouldNotify) {
             return;
         }
-        Runnable notification = () -> notifyRecipients(threshold, remaining, required, cycleNumber, notifiedAt);
+        Runnable notification = () -> notifyRecipients(threshold, pool, cycleNumber, notifiedAt);
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
             notification.run();
             return;
@@ -174,23 +170,28 @@ public class ReviewAccountPoolAlertService {
 
     private void notifyRecipients(
             Integer threshold,
-            int remaining,
-            int required,
+            Snapshot pool,
             long cycleNumber,
             LocalDateTime notifiedAt
     ) {
-        String title = remaining == 0
-                ? "Аккаунты для выгула закончились"
-                : "Заканчиваются аккаунты для выгула";
-        int deficit = Math.max(0, required - remaining);
-        int coverage = required <= 0 ? 100 : Math.min(100, (int) Math.round(remaining * 100.0d / required));
-        String text = "В общем пуле осталось аккаунтов: " + remaining + "."
+        int remaining = pool.remaining();
+        int required = pool.required();
+        int deficit = pool.deficit();
+        String title = remaining == 0 ? "Общий пул аккаунтов закончился"
+                : deficit > 0 ? "Недостаточно аккаунтов для отзывов с заглушкой"
+                : "Заканчиваются аккаунты в общем пуле";
+        String text = "Свободных аккаунтов в городе 325: " + remaining + "."
                 + (threshold == null ? "" : "\nДостигнут порог: " + threshold + ".")
-                + "\nПубликаций с ботом-заглушкой: " + required + "."
-                + "\nТекущий дефицит: " + deficit + "."
-                + "\nПокрытие потребности: " + coverage + "%."
-                + "\nПул: город 325, активные аккаунты «Впиши Имя Фамилию» со счетчиком 0–1."
-                + "\n\nНеобходимо пополнить пул.";
+                + "\nДля выгула (счётчик 0–1): " + pool.walking() + "."
+                + "\nИз них с шаблонным именем: " + pool.templates() + "."
+                + "\nДля публикации (с ФИО, счётчик от 2 и достигнут порог выгула): " + pool.publication() + "."
+                + "\n\nОтзывов с заглушкой для общего пула: " + required + "."
+                + "\nВыгул: " + pool.walkingRequired() + ", публикация: " + pool.publicationRequired() + "."
+                + "\nНехватка: выгул — " + pool.walkingDeficit() + ", публикация — " + pool.publicationDeficit() + "."
+                + "\nПокрытие по этапам: " + pool.coverage() + "%."
+                + "\n\nУчитываются активные аккаунты со статусом «Новый», реквизитами, без паузы и незавершённых заданий или отзывов."
+                + " История конкретной компании проверяется при назначении. ВКонтакте и Фламп используют свои аккаунты."
+                + (deficit > 0 ? "\nНеобходимо пополнить соответствующую часть пула." : "");
         long sourceId = (cycleNumber + 1) * 10_000_000L
                 + notifiedAt.atZone(BUSINESS_ZONE).toEpochSecond() / 3600L;
 

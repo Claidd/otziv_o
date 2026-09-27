@@ -190,7 +190,9 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
             int reviewIndex = 0;
 
             for (Review review : reviewsWithoutBots) {
-                Bot assignedBot = findAndAssignUniqueBot(availableBots, usedBotIdsInThisOrder, reviewIndex, filial);
+                Bot assignedBot = findAndAssignUniqueBot(availableBots, usedBotIdsInThisOrder, reviewIndex, filial,
+                        ReviewBotAssignmentMode.DEFAULT_ORDER_ASSIGNMENT,
+                        ReviewBotAssignmentMode.forReviewChange(review));
 
                 // Назначаем бота отзыву
                 review.setBot(assignedBot);
@@ -284,7 +286,9 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
                 usedBotIdsForThisChange,
                 0,
                 filial,
-                mode
+                mode,
+                mode == null || mode == ReviewBotAssignmentMode.DEFAULT_ORDER_ASSIGNMENT
+                        ? ReviewBotAssignmentMode.forReviewChange(review) : mode
         );
 
         log.info("Бот ID {} ({}) выбран по общим правилам для замены в отзыве ID {}",
@@ -470,9 +474,10 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
                 continue;
             }
 
+            lockCompanyForBotAssignment(filial);
             usedBotIds.addAll(getUsedBotIdsInCompany(filial));
             usedBotIds.addAll(getReservedBotIdsByUnpublishedReviews(review.getId()));
-            Bot replacementBot = claimReplacementBotForStub(filial, usedBotIds, reviewIndex);
+            Bot replacementBot = claimReplacementBotForStub(filial, usedBotIds, reviewIndex, ReviewBotAssignmentMode.forReviewChange(review));
             if (replacementBot == null || STUB_BOT_ID.equals(replacementBot.getId())) {
                 continue;
             }
@@ -490,7 +495,7 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
         return changedReviews.size();
     }
 
-    private Bot claimReplacementBotForStub(Filial filial, Set<Long> usedBotIds, int reviewIndex) {
+    private Bot claimReplacementBotForStub(Filial filial, Set<Long> usedBotIds, int reviewIndex, ReviewBotAssignmentMode mode) {
         if (filial != null
                 && filial.getCity() != null
                 && OWN_CITY_NEW_ACCOUNT_CITY_IDS.contains(filial.getCity().getId())) {
@@ -505,7 +510,15 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
             }
         }
 
-        return claimReserveBot(filial, usedBotIds, reviewIndex);
+        Bot reserve = claimReserveBot(filial, usedBotIds, reviewIndex);
+        if (reserve != null) {
+            Bot locked = lockEligibleCandidate(reserve, filial);
+            if (locked == null) {
+                throw new IllegalStateException("Замена заглушки остановлена повторной проверкой аккаунта");
+            }
+            return locked;
+        }
+        return claimNamedPoolAccount(filial, usedBotIds, mode);
     }
 
     private boolean hasStubBot(Review review) {
@@ -623,6 +636,15 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
             Filial filial,
             ReviewBotAssignmentMode mode
     ) {
+        return findAndAssignUniqueBot(availableBots, usedBotIdsInThisOrder, reviewIndex, filial, mode,
+                mode == null || mode == ReviewBotAssignmentMode.DEFAULT_ORDER_ASSIGNMENT
+                        ? ReviewBotAssignmentMode.NAGUL_ONLY : mode);
+    }
+
+    private Bot findAndAssignUniqueBot(
+            List<Bot> availableBots, Set<Long> usedBotIdsInThisOrder, int reviewIndex, Filial filial,
+            ReviewBotAssignmentMode mode, ReviewBotAssignmentMode namedPoolMode
+    ) {
         Bot assignedBot = null;
 
         // Ищем первого доступного бота, который еще не использован в этом заказе
@@ -664,7 +686,7 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
         }
 
         if (assignedBot == null) {
-            assignedBot = claimNamedPoolAccount(filial, usedBotIdsInThisOrder, mode);
+            assignedBot = claimNamedPoolAccount(filial, usedBotIdsInThisOrder, namedPoolMode);
         }
 
         if (assignedBot == null) {

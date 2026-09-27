@@ -14,6 +14,13 @@ import static org.mockito.Mockito.when;
 
 import com.hunt.otziv.b_bots.model.ReviewAccountPoolAlertState;
 import com.hunt.otziv.b_bots.repository.BotsRepository;
+import com.hunt.otziv.b_bots.repository.ReviewAccountPoolRepository;
+import com.hunt.otziv.b_bots.repository.ReviewAccountPoolRepository.Snapshot;
+import com.hunt.otziv.r_review.bot.service.ReviewAccountWalkScheduleService;
+import java.time.LocalDateTime;
+import org.mockito.ArgumentCaptor;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.times;
 import com.hunt.otziv.b_bots.repository.ReviewAccountPoolAlertStateRepository;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
@@ -37,6 +44,8 @@ class ReviewAccountPoolAlertServiceTest {
     private ReviewAccountPoolAlertStateRepository stateRepository;
     @Mock
     private BotsRepository botsRepository;
+    @Mock private ReviewAccountPoolRepository poolRepository;
+    @Mock private ReviewAccountWalkScheduleService walkScheduleService;
     @Mock
     private PersonalReminderService personalReminderService;
     @Mock
@@ -188,13 +197,53 @@ class ReviewAccountPoolAlertServiceTest {
         verify(telegramService, never()).sendMessage(anyLong(), anyString());
     }
 
+    @Test
+    void namedAccountsPreventFalseEmptyPoolAlert() {
+        var state = state(0, 63, 1);
+        stub(state, 0, List.of(user(10L, 100L)), List.of());
+        when(poolRepository.snapshot(any(), eq(2))).thenReturn(new Snapshot(2075, 757, 0, 144, 0));
+        assertEquals(2832, service().reconcileAndNotify());
+        assertEquals(0, state.getLastDeficitCount());
+        verify(telegramService, never()).sendMessage(anyLong(), anyString());
+    }
+
+    @Test
+    void reportsStageShortageEvenWhenTotalSupplyExceedsDemandAndDoesNotRepeat() {
+        var state = state(500, 0, 0);
+        stub(state, 500, List.of(user(10L, 100L)), List.of());
+        when(poolRepository.snapshot(any(), eq(2))).thenReturn(new Snapshot(500, 0, 0, 0, 4));
+        var service = service();
+        service.reconcileAndNotify();
+        service.reconcileAndNotify();
+        assertEquals(4, state.getLastDeficitCount());
+        var message = ArgumentCaptor.forClass(String.class);
+        verify(telegramService, times(1)).sendMessage(eq(100L), message.capture());
+        assertTrue(message.getValue().contains("Для выгула (счётчик 0–1): 500"));
+        assertTrue(message.getValue().contains("публикация — 4"));
+        assertTrue(message.getValue().contains("Покрытие по этапам: 0%"));
+    }
+
+    @Test
+    void shortageReminderRepeatsAfterSixHoursAndStopsAfterReplenishment() {
+        var state = state(500, 0, 0);
+        state.setLastDeficitCount(4);
+        state.setLastNotifiedAt(LocalDateTime.now(ZoneId.of("Asia/Irkutsk")).minusHours(7));
+        stub(state, 500, List.of(user(10L, 100L)), List.of());
+        when(poolRepository.snapshot(any(), eq(2)))
+                .thenReturn(new Snapshot(500, 0, 0, 0, 4), new Snapshot(500, 10, 0, 0, 4));
+        var service = service();
+        service.reconcileAndNotify();
+        service.reconcileAndNotify();
+        assertEquals(0, state.getLastDeficitCount());
+        verify(telegramService, times(1)).sendMessage(eq(100L), anyString());
+    }
+
     private void stub(ReviewAccountPoolAlertState state, long count, List<User> owners, List<User> admins) {
         when(stateRepository.findByIdForUpdate(ReviewAccountPoolAlertService.STATE_ID)).thenReturn(Optional.of(state));
-        when(botsRepository.countAvailableAccountPool(
-                anyLong(), anyString(), anyString(), anyInt(), anyInt(), any(LocalDate.class)
-        )).thenReturn(count);
+        when(walkScheduleService.walkedCounterThreshold()).thenReturn(2);
+        when(poolRepository.snapshot(any(LocalDate.class), eq(2)))
+                .thenReturn(new Snapshot(Math.toIntExact(count), 0, 0, 0, 0));
         lenient().when(botsRepository.countActiveByCityId(325L)).thenReturn(100L);
-        lenient().when(botsRepository.countUnpublishedStubReviews()).thenReturn(0L);
         lenient().when(userService.getAllOwners("ROLE_OWNER")).thenReturn(owners);
         lenient().when(userService.getAllOwners("ROLE_ADMIN")).thenReturn(admins);
     }
@@ -203,6 +252,8 @@ class ReviewAccountPoolAlertServiceTest {
         return new ReviewAccountPoolAlertService(
                 stateRepository,
                 botsRepository,
+                poolRepository,
+                walkScheduleService,
                 personalReminderService,
                 userService,
                 telegramService
