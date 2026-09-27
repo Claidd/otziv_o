@@ -34,14 +34,16 @@ test("WhatsApp image upgrades reproducibly and runs as the non-root Node user", 
   assert.match(dockerfile, /npm ci --omit=dev/u);
   assert.match(dockerfile, /^USER node$/mu);
   assert.match(dockerfile, /chown -R node:node \/app \/auth/u);
-  for (const script of [deployScript, legacyDeployScript]) {
+  for (const script of [legacyDeployScript]) {
     assert.match(script, /--entrypoint sh whatsapp_lika -c 'node_uid=.*id -u node.*node_gid=.*id -g node.*chown -R .*\/auth'/u);
     assert.match(script, /--entrypoint sh whatsapp_vika -c 'node_uid=.*id -u node.*node_gid=.*id -g node.*chown -R .*\/auth'/u);
   }
-  const stop = deployScript.indexOf("compose stop whatsapp_lika whatsapp_vika");
+  assert.match(deployScript, /for gateway in whatsapp_lika whatsapp_vika; do\s+if ! service_unchanged "`\$gateway"; then/u);
+  assert.match(deployScript, /--cap-add CHOWN --cap-add DAC_READ_SEARCH --user 0 --entrypoint sh "`\$gateway" -c 'node_uid=.*id -u node.*node_gid=.*id -g node.*chown -R .*\/auth'/u);
+  const stop = deployScript.indexOf('compose stop "`$gateway"');
   const sandboxPreflight = deployScript.indexOf("WhatsApp Chromium sandbox preflight failed");
-  const ownershipMigration = deployScript.indexOf("--entrypoint sh whatsapp_lika", stop);
-  const restart = deployScript.indexOf("recreate_service_with_retry whatsapp_lika", ownershipMigration);
+  const ownershipMigration = deployScript.indexOf('--entrypoint sh "`$gateway"', stop);
+  const restart = deployScript.indexOf('recreate_service_with_retry "`$gateway"', ownershipMigration);
   assert.ok(sandboxPreflight >= 0 && sandboxPreflight < stop);
   assert.ok(stop >= 0 && stop < ownershipMigration && ownershipMigration < restart);
 });

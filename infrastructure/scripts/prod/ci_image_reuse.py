@@ -69,6 +69,17 @@ def candidate(client, repo, component, revision, input_digest):
     return None
 
 
+def validate_installed(installed, image):
+    # Classic Docker identifies an image by config; containerd's image store
+    # reports the OCI manifest digest. Both must bind to the verified bundle.
+    identity_matches = installed['Id'] == image['configId'] or (
+        installed['Id'] == image['manifestDigest']
+        and (installed.get('Descriptor') or {}).get('digest') == image['manifestDigest'])
+    require(identity_matches and installed['Os'] == 'linux' and installed['Architecture'] == 'amd64'
+            and installed['RootFS']['Layers'] == [layer['diffId'] for layer in image['layers']],
+            'Reused image differs from verified OCI')
+
+
 def prepare(client, repo, component, revision, output):
     from ci_release import fetch_image
     input_digest = fingerprint(repo, component, revision)
@@ -81,8 +92,7 @@ def prepare(client, repo, component, revision, output):
             subprocess.run(['docker', 'load', '--input', str(archive)], check=True, capture_output=True, timeout=600)
         source = f"otziv-ci-{component}:{release['revision']}"
         installed = json.loads(subprocess.check_output(['docker', 'image', 'inspect', source], timeout=60))[0]
-        require(installed['Id'] == image['configId'] and installed['Os'] == 'linux' and installed['Architecture'] == 'amd64'
-                and installed['RootFS']['Layers'] == [layer['diffId'] for layer in image['layers']], 'Reused image differs from verified OCI')
+        validate_installed(installed, image)
         subprocess.run(['docker', 'tag', source, f'otziv-{component}-ci'], check=True, timeout=60)
         result.update(reused=True, sourceRevision=release['revision'], sourceRunId=release['runId'],
                       sourceArtifactId=image['artifact']['id'], manifestDigest=image['manifestDigest'], configId=image['configId'])

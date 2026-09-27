@@ -81,5 +81,18 @@ class ImageReuseTest(unittest.TestCase):
             fetch.assert_not_called()
 
 
+class InstalledIdentityTest(unittest.TestCase):
+    def test_classic_and_containerd_identity_bind_to_verified_oci(self):
+        from ci_image_reuse import validate_installed
+        from release_ci import GateError
+        row={'configId':'sha256:'+'a'*64,'manifestDigest':'sha256:'+'b'*64,'layers':[{'diffId':'sha256:'+'c'*64}]}
+        value={'Id':row['configId'],'Os':'linux','Architecture':'amd64','RootFS':{'Layers':[row['layers'][0]['diffId']]}}
+        validate_installed(value,row)
+        value.update(Id=row['manifestDigest'],Descriptor={'digest':row['manifestDigest']})
+        validate_installed(value,row)
+        for changed in [{'Id':'sha256:'+'d'*64},{'Descriptor':{'digest':'sha256:'+'d'*64}},{'Architecture':'arm64'},{'RootFS':{'Layers':[]}}]:
+            with self.subTest(changed=changed),self.assertRaises(GateError):validate_installed({**value,**changed},row)
+
+
 if __name__ == '__main__':
     unittest.main()
