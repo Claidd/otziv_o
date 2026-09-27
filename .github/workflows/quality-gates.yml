@@ -33,6 +33,11 @@ on:
           - c15-grafana
           - c15-keycloak
           - c15-mc
+          - c22-nginx
+          - c22-mysql
+          - c22-keycloak
+          - c22-mc
+          - c22-phpmyadmin
   pull_request:
   push:
     branches: [main]
@@ -405,11 +410,11 @@ jobs:
         run: bash ./mvnw -f ../infrastructure/keycloak/security-generation/pom.xml -B -ntp verify
       - name: Build the real issuer release image
         if: ${{ needs.changes.outputs.infrastructure == 'true' }}
-        run: docker build -t otziv-issuer-ci infrastructure/keycloak/security-generation/c19-bouncycastle
+        run: docker build -t otziv-issuer-ci infrastructure/runtime-security/builds/c22-keycloak
       - name: Build and scan reviewed database candidates
         if: ${{ needs.changes.outputs.infrastructure == 'true' }}
         run: |
-          docker build -t otziv-mysql-ci infrastructure/mysql
+          docker build -t otziv-mysql-ci infrastructure/runtime-security/builds/c22-mysql
           docker build -t otziv-postgres-ci infrastructure/runtime-security/builds/postgres-c16
           node infrastructure/runtime-security/scan.mjs image otziv-mysql-ci "$RUNNER_TEMP/mysql-vulnerabilities.json"
           node infrastructure/runtime-security/scan.mjs image otziv-postgres-ci "$RUNNER_TEMP/postgres-vulnerabilities.json"
