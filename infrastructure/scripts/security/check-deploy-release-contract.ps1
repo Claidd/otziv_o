@@ -151,12 +151,13 @@ function Assert-PreparedSnapshotStateRejected {
         [Parameter(Mandatory = $true)][string]$Repository,
         [Parameter(Mandatory = $true)][string]$ExpectedRevision,
         [Parameter(Mandatory = $true)][string]$ExpectedMessagePattern,
-        [Parameter(Mandatory = $true)][string]$Scenario
+        [Parameter(Mandatory = $true)][string]$Scenario,
+        [string]$CanonicalWorkspace = ''
     )
 
     try {
         [void](Assert-OtzivPreparedDeploySnapshotState -Repository $Repository `
-                -ExpectedRevision $ExpectedRevision)
+                -ExpectedRevision $ExpectedRevision -CanonicalWorkspace $CanonicalWorkspace)
     } catch {
         if ($_.Exception.Message -notlike $ExpectedMessagePattern) {
             throw
@@ -253,6 +254,49 @@ function Test-DeployLineageGuard {
         Assert-OtzivProductionMainRevisionUnchanged `
             -SelectedRevision $protectedAhead `
             -RefreshedRevision $protectedAhead
+
+        # A primary CI checkout can retain ignored local artifacts. The bundle
+        # must contain only committed bytes; tracked/untracked/index mutations
+        # and alternate checkout identities must still fail closed.
+        Set-Content -LiteralPath $ignoredMutationPath -Value 'local private fixture' -Encoding Ascii
+        [void](Assert-OtzivPreparedDeploySnapshotState -Repository $workingRepository `
+                -ExpectedRevision $aheadRevision -CanonicalWorkspace $workingRepository)
+        $committedBundle = Join-Path $testRoot 'committed-bundle'
+        New-Item -ItemType Directory -Path $committedBundle | Out-Null
+        Export-OtzivCommittedDeployBundle -Repository $workingRepository -Revision $aheadRevision `
+            -StageRoot $committedBundle -InputPaths @('.')
+        if ((Get-Content -Raw -LiteralPath (Join-Path $committedBundle 'tracked-sentinel.txt')).Trim() -cne 'tracked' -or
+            (Test-Path -LiteralPath (Join-Path $committedBundle 'ignored-mutation.yaml'))) {
+            throw 'Canonical bundle did not preserve committed bytes or included ignored local files.'
+        }
+        Set-Content -LiteralPath $dirtyMutationPath -Value 'new local source' -Encoding Ascii
+        Assert-PreparedSnapshotStateRejected -Repository $workingRepository -ExpectedRevision $aheadRevision `
+            -CanonicalWorkspace $workingRepository -ExpectedMessagePattern 'Prepared deploy snapshot worktree changed*' `
+            -Scenario 'untracked source in the canonical workspace'
+        Remove-Item -LiteralPath $dirtyMutationPath -Force
+        Set-Content -LiteralPath (Join-Path $workingRepository 'tracked-sentinel.txt') -Value 'changed' -Encoding Ascii
+        Assert-PreparedSnapshotStateRejected -Repository $workingRepository -ExpectedRevision $aheadRevision `
+            -CanonicalWorkspace $workingRepository -ExpectedMessagePattern 'Prepared deploy snapshot worktree changed*' `
+            -Scenario 'changed tracked source in the canonical workspace'
+        Set-Content -LiteralPath (Join-Path $workingRepository 'tracked-sentinel.txt') -Value 'tracked' -Encoding Ascii
+        [void](Invoke-DeployLineageTestGit -Repository $workingRepository `
+            -Arguments @('update-index', '--skip-worktree', '--', 'tracked-sentinel.txt'))
+        Assert-PreparedSnapshotStateRejected -Repository $workingRepository -ExpectedRevision $aheadRevision `
+            -CanonicalWorkspace $workingRepository -ExpectedMessagePattern 'Prepared deploy snapshot contains assume-unchanged or skip-worktree files*' `
+            -Scenario 'skip-worktree in the canonical workspace'
+        [void](Invoke-DeployLineageTestGit -Repository $workingRepository `
+            -Arguments @('update-index', '--no-skip-worktree', '--', 'tracked-sentinel.txt'))
+        Assert-PreparedSnapshotStateRejected -Repository $workingRepository -ExpectedRevision $aheadRevision `
+            -CanonicalWorkspace $committedBundle -ExpectedMessagePattern 'Canonical CI deployment requires*' `
+            -Scenario 'a different canonical workspace'
+        [void](Invoke-DeployLineageTestGit -Repository $workingRepository -Arguments @('checkout', '--quiet', '--detach', $aheadRevision))
+        Assert-PreparedSnapshotStateRejected -Repository $workingRepository -ExpectedRevision $aheadRevision `
+            -CanonicalWorkspace $workingRepository -ExpectedMessagePattern 'Canonical CI deployment requires*' `
+            -Scenario 'a detached canonical checkout'
+        [void](Invoke-DeployLineageTestGit -Repository $workingRepository -Arguments @('checkout', '--quiet', 'main'))
+        Remove-Item -LiteralPath $ignoredMutationPath -Force
+        Write-Host 'Canonical CI workspace regression passed: local artifacts retained, committed-only bundle, source/index/identity mutations rejected.'
+
         $preparedAdvanceRejected = $false
         try {
             Assert-OtzivProductionMainRevisionUnchanged `
@@ -364,6 +408,8 @@ Assert-Order $deploy 'Assert-OtzivProductionMainRevisionUnchanged' '$dirtyDeploy
 Assert-Order $deploy 'Assert-OtzivDeployRevisionContainsProductionMain -Repository $repoRoot' '$dirtyDeployInputs = @(Get-OtzivDeployChanges' 'Production snapshots must verify protected-main ancestry before inspecting deployment inputs.'
 Assert-Match $deploy '\$DeploySnapshotRevision -notmatch ''\^\[0-9a-f\]\{40\}\$''[\s\S]{0,400}Assert-OtzivPreparedDeploySnapshotState -Repository \$repoRoot' 'Prepared deployment must bind its child worktree to the exact immutable snapshot commit and require a clean tree.'
 Assert-Order $deploy 'Assert-OtzivPreparedDeploySnapshotState -Repository $repoRoot' '$dirtyDeployInputs = @(Get-OtzivDeployChanges' 'Prepared child exact-revision and cleanliness verification must run before dirty-worktree handling.'
+Assert-Match $deploy '\$RequireMainCi[\s\S]{0,200}\$SkipBuildPush[\s\S]{0,100}\$CiReleaseManifest[\s\S]{0,160}\$AllowDirtyWorktree' 'Canonical mode must require immutable CI images and forbid dirty overrides.'
+Assert-Match $deploy 'if \(\$canonicalMainWorkspace\) \{[\s\S]{0,150}Export-OtzivCommittedDeployBundle' 'Canonical deployment must stage committed Git bytes instead of local directories.'
 Assert-Match $snapshot '''--ignored=matching''' 'Prepared snapshot cleanliness must include ignored files that could otherwise enter a Docker context.'
 Assert-Match $snapshot '@\(''ls-files'', ''-v''\)[\s\S]{0,300}\^\(\?:\[a-z\]\|S\)' 'Prepared snapshot verification must reject assume-unchanged and skip-worktree entries.'
 Assert-Order $deploy '$snapshotMobileRelease = if ($SkipMobileApkUpload)' 'New-OtzivDeploySnapshot -Repository $repoRoot -InputPaths $deployInputPaths' 'Automatic snapshot deploys must pin the local mobile release before materializing the isolated worktree.'

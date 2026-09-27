@@ -764,6 +764,15 @@ if (-not (Test-Path -LiteralPath $snapshotLibraryPath -PathType Leaf)) {
 }
 . $snapshotLibraryPath
 
+$canonicalMainWorkspace = ''
+if ($RequireMainCi) {
+    if (-not ($PreparedDeploySnapshot -and $SkipBuildPush -and $CiReleaseManifest -and
+              $CiCapacityPlan -and $PrivateRegistryControlFile) -or $AllowDirtyWorktree) {
+        throw 'Canonical CI deployment requires immutable CI images and a clean primary workspace.'
+    }
+    $canonicalMainWorkspace = Join-Path $ProjectFilesRoot 'otziv'
+}
+
 $preparedSnapshotRevision = $null
 $initialDeployRevision = if ($PreparedDeploySnapshot) {
     if ($DeploySnapshotRevision -notmatch '^[0-9a-f]{40}$') {
@@ -773,7 +782,7 @@ $initialDeployRevision = if ($PreparedDeploySnapshot) {
         -Revision $DeploySnapshotRevision `
         -FailureMessage 'Prepared deploy snapshot cannot resolve its exact snapshot revision.'
     Assert-OtzivPreparedDeploySnapshotState -Repository $repoRoot `
-        -ExpectedRevision $preparedSnapshotRevision
+        -ExpectedRevision $preparedSnapshotRevision -CanonicalWorkspace $canonicalMainWorkspace
 } else {
     if (-not [string]::IsNullOrWhiteSpace($DeploySnapshotRevision)) {
         throw 'DeploySnapshotRevision is reserved for an internally prepared deploy snapshot.'
@@ -945,7 +954,7 @@ if ($PreparedDeploySnapshot) {
 
 $gitRevision = if ($PreparedDeploySnapshot) {
     Assert-OtzivPreparedDeploySnapshotState -Repository $repoRoot `
-        -ExpectedRevision $preparedSnapshotRevision
+        -ExpectedRevision $preparedSnapshotRevision -CanonicalWorkspace $canonicalMainWorkspace
 } else {
     Get-OtzivExactCommitRevision -Repository $repoRoot `
         -Revision 'HEAD' `
@@ -1227,7 +1236,7 @@ $env:DOCKER_OBSERVER_IMAGE = $dockerObserverImage
 
 if ($PreparedDeploySnapshot) {
     [void](Assert-OtzivPreparedDeploySnapshotState -Repository $repoRoot `
-            -ExpectedRevision $preparedSnapshotRevision)
+            -ExpectedRevision $preparedSnapshotRevision -CanonicalWorkspace $canonicalMainWorkspace)
 }
 if (-not $SkipBuildPush) {
     $buildArgs = @("compose", "-f", $buildCompose, "build")
@@ -1242,7 +1251,7 @@ if (-not $SkipBuildPush) {
     Invoke-External -FilePath "docker" -Arguments $buildArgs
     if ($PreparedDeploySnapshot) {
         [void](Assert-OtzivPreparedDeploySnapshotState -Repository $repoRoot `
-                -ExpectedRevision $preparedSnapshotRevision)
+                -ExpectedRevision $preparedSnapshotRevision -CanonicalWorkspace $canonicalMainWorkspace)
     }
     Write-Host "Pushing application image..."
     Invoke-ExternalWithRetry -FilePath "docker" -Arguments @("push", $appImage) -Attempts 3 -DelaySeconds 10
@@ -1362,18 +1371,23 @@ fi
 
 if ($PreparedDeploySnapshot) {
     [void](Assert-OtzivPreparedDeploySnapshotState -Repository $repoRoot `
-            -ExpectedRevision $preparedSnapshotRevision)
+            -ExpectedRevision $preparedSnapshotRevision -CanonicalWorkspace $canonicalMainWorkspace)
 }
 New-Item -ItemType Directory -Path $stageRoot -Force | Out-Null
 Protect-SensitiveLocalPath -Path $stageRoot
 try {
     Write-Host "Preparing deployment bundle..."
-    foreach ($deployBundlePath in $deployBundlePaths) {
-        Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath $deployBundlePath
+    if ($canonicalMainWorkspace) {
+        Export-OtzivCommittedDeployBundle -Repository $repoRoot -Revision $gitRevision `
+            -StageRoot $stageRoot -InputPaths $deployBundlePaths
+    } else {
+        foreach ($deployBundlePath in $deployBundlePaths) {
+            Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath $deployBundlePath
+        }
     }
     if ($PreparedDeploySnapshot) {
         [void](Assert-OtzivPreparedDeploySnapshotState -Repository $repoRoot `
-                -ExpectedRevision $preparedSnapshotRevision)
+                -ExpectedRevision $preparedSnapshotRevision -CanonicalWorkspace $canonicalMainWorkspace)
     }
 
     $uploadedMobileRelease = "0"
