@@ -21,7 +21,9 @@ public interface ReviewRecoveryTaskService {
 
     ReviewRecoveryTask createTask(Long reviewId, User createdBy);
 
-    ReviewRecoveryTask createArchiveTask(ArchiveReviewRecoverySource source, User createdBy);
+    ReviewRecoveryTask createArchiveTask(ArchiveReviewRecoverySource source, User createdBy, Long workerId);
+
+    int reassignArchiveTasks(Long archiveOrderId, Long taskId, Long workerId, Authentication authentication);
 
     ReviewRecoveryTask getTask(Long taskId);
 

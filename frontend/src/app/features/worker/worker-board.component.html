@@ -477,7 +477,7 @@
       [canDelete]="!!reviewEditDetails()?.canDeleteReviews"
       [hideBotPassword]="isOnlyWorkerRole()"
       [recoveryTaskEdit]="!!editedTaskReview()?.recoveryTask"
-      [canReassignTask]="workerFilterAvailable() && !!editedTaskReview()"
+      [canReassignTask]="canReassignTask() && !!editedTaskReview()"
       [workerOptions]="workerOptions()"
       [taskWorkerId]="editedTaskReview()?.taskWorkerId ?? null"
       [taskWorkerSaving]="reviewEditTaskWorkerSaving()"

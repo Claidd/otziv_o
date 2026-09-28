@@ -523,7 +523,23 @@ public class ManagerControlProblemExamples {
 
     ManagerControlConcreteItemResponse recoveryTaskExample(ReviewRecoveryTask task, LocalDate today) {
         Order order = task.getOrder();
-        return new ManagerControlConcreteItemResponse(null, "RECOVERY_TASK", task.getId(), orderTitle(order, "Восстановление #" + task.getId()), taskSubtitle("Восстановление", task.getWorker(), task.getScheduledDate(), today), task.getStatus() == null ? null : task.getStatus().name(), daysSince(task.getScheduledDate(), today), "Задача восстановления требует проверки менеджера", orderTargetUrl(order), null, orderChatUrl(order), null, null, ManagerDailyControlItemStatus.OPEN.name(), null, null, null, null, null).withSla(startOfDay(task.getScheduledDate()), null, null, null);
+        String title = orderTitle(order, "Восстановление #" + task.getId());
+        String targetUrl = orderTargetUrl(order);
+        String chatUrl = orderChatUrl(order);
+        if (order == null && task.getArchiveOrderId() != null) {
+            Company company = task.getArchiveCompanyId() == null ? null
+                    : companyRepository.findById(task.getArchiveCompanyId()).orElse(null);
+            String companyTitle = company == null ? safe(task.getArchiveCompanyTitle()) : safe(company.getTitle());
+            if (!companyTitle.isBlank()) title = companyTitle;
+            targetUrl = "/manager/archive?mode=archive&archiveOrderId=" + task.getArchiveOrderId();
+            chatUrl = company == null ? null : company.getUrlChat();
+        }
+        return new ManagerControlConcreteItemResponse(null, "RECOVERY_TASK", task.getId(), title,
+                taskSubtitle("Восстановление #" + task.getId(), task.getWorker(), task.getScheduledDate(), today),
+                task.getStatus() == null ? null : task.getStatus().name(), daysSince(task.getScheduledDate(), today),
+                "Задача восстановления требует проверки менеджера", targetUrl, null, chatUrl, null, null,
+                ManagerDailyControlItemStatus.OPEN.name(), null, null, null, null, null)
+                .withSla(startOfDay(task.getScheduledDate()), null, null, null);
     }
 
     List<ManagerControlConcreteItemResponse> nagulReviewExamples(Manager manager, LocalDate today, int limit) {

@@ -1261,3 +1261,28 @@ button.details-button:disabled {
     display: grid;
   }
 }
+.recovery-assignment {
+  select {
+    width: 100%;
+    min-height: 44px;
+    margin-top: 8px;
+    padding: 10px 12px;
+    border: 1px solid rgba(103, 116, 131, 0.24);
+    border-radius: 8px;
+    background: var(--otziv-field-background);
+    color: var(--otziv-dark);
+  }
+
+  > p {
+    margin: 10px 0;
+  }
+
+  .restore-review-list {
+    margin-top: 12px;
+  }
+
+  .archive-review-recovery-button {
+    max-width: 100%;
+    white-space: normal;
+  }
+}

@@ -122,17 +122,20 @@
               </label>
             }
 
-            @if (canReassignTask && workerOptions.length > 0) {
+            @if (canReassignTask) {
               <label class="lead-edit-field">
                 <span>Специалист</span>
                 <select
                   name="reviewTaskWorker"
                   [ngModel]="taskWorkerId"
                   (ngModelChange)="requestTaskWorkerChange($event)"
-                  [disabled]="taskWorkerSaving"
+                  [disabled]="busy || taskWorkerSaving || !workerOptions.length"
                 >
                   @if (!taskWorkerId) {
                     <option [ngValue]="null" disabled>Выберите специалиста</option>
+                  }
+                  @if (taskWorkerUnavailable()) {
+                    <option [ngValue]="taskWorkerId" disabled>Прежний специалист недоступен — выберите замену</option>
                   }
                   @for (worker of workerOptions; track worker.id) {
                     <option [ngValue]="worker.id">{{ worker.label }}</option>
@@ -140,6 +143,10 @@
                 </select>
                 @if (taskWorkerSaving) {
                   <small>Переназначаю...</small>
+                } @else if (!workerOptions.length) {
+                  <small>Нет доступных действующих специалистов. Проверьте привязку сотрудников к менеджеру.</small>
+                } @else {
+                  <small>При выборе специалиста задача сразу передаётся ему.</small>
                 }
               </label>
             }

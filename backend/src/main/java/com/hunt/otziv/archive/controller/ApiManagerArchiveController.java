@@ -72,9 +72,21 @@ public class ApiManagerArchiveController {
     public ManagerArchiveOrderDetailsResponse createReviewRecoveryTask(
             @PathVariable Long orderId,
             @PathVariable Long reviewId,
+            @RequestParam(required = false) Long workerId,
             Principal principal,
             Authentication authentication
     ) {
-        return managerArchiveService.createReviewRecoveryTask(orderId, reviewId, principal, authentication);
+        return managerArchiveService.createReviewRecoveryTask(orderId, reviewId, workerId, principal, authentication);
+    }
+
+    @PostMapping("/orders/{orderId}/recovery-tasks/worker")
+    public ManagerArchiveOrderDetailsResponse reassignReviewRecoveryTasks(
+            @PathVariable Long orderId,
+            @RequestParam Long workerId,
+            @RequestParam(required = false) Long taskId,
+            Principal principal,
+            Authentication authentication
+    ) {
+        return managerArchiveService.reassignReviewRecoveryTasks(orderId, workerId, taskId, principal, authentication);
     }
 }

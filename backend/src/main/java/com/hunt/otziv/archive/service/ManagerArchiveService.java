@@ -3,6 +3,7 @@ package com.hunt.otziv.archive.service;
 import com.hunt.otziv.archive.dto.ArchiveAccessScope;
 import com.hunt.otziv.archive.dto.ArchiveReviewRecoverySource;
 import com.hunt.otziv.archive.dto.ArchiveRestoreResult;
+import com.hunt.otziv.archive.dto.ArchiveRecoveryWorkerOption;
 import com.hunt.otziv.archive.dto.ManagerArchiveOrderDetailsResponse;
 import com.hunt.otziv.archive.dto.ManagerArchiveOrderListItem;
 import com.hunt.otziv.archive.repository.ManagerArchiveRepository;
@@ -94,7 +95,9 @@ public class ManagerArchiveService {
                 repository.findBadReviewTasks(orderId),
                 repository.findNextOrderRequests(orderId),
                 financeVisible ? repository.findZp(orderId) : List.of(),
-                financeVisible ? repository.findPaymentChecks(orderId) : List.of()
+                financeVisible ? repository.findPaymentChecks(orderId) : List.of(),
+                "archive".equals(order.source()) ? repository.findRecoveryWorkers(scope, order.companyId()) : List.of(),
+                "archive".equals(order.source()) ? repository.findRecoveryTasks(orderId) : List.of()
         );
     }
 
@@ -125,6 +128,7 @@ public class ManagerArchiveService {
     public ManagerArchiveOrderDetailsResponse createReviewRecoveryTask(
             Long orderId,
             Long reviewId,
+            Long workerId,
             Principal principal,
             Authentication authentication
     ) {
@@ -141,8 +145,40 @@ public class ManagerArchiveService {
 
         ArchiveReviewRecoverySource source = repository.findReviewRecoverySource(orderId, reviewId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Архивный отзыв не найден"));
-        reviewRecoveryTaskService.createArchiveTask(source, currentUser(principal));
+        Long assignedWorkerId = recoveryWorkerId(scope, order.companyId(), workerId);
+        reviewRecoveryTaskService.createArchiveTask(source, currentUser(principal), assignedWorkerId);
         return getOrder(orderId, principal, authentication);
+    }
+
+    @Transactional
+    public ManagerArchiveOrderDetailsResponse reassignReviewRecoveryTasks(
+            Long orderId, Long workerId, Long taskId, Principal principal, Authentication authentication
+    ) {
+        ArchiveAccessScope scope = resolveScope(principal, authentication);
+        ManagerArchiveOrderListItem order = repository.findOrder(scope, orderId)
+                .filter(item -> "archive".equals(item.source()))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Архивный заказ не найден"));
+        if (workerId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Выберите специалиста для передачи восстановления");
+        }
+        Long assignedWorkerId = recoveryWorkerId(scope, order.companyId(), workerId);
+        reviewRecoveryTaskService.reassignArchiveTasks(orderId, taskId, assignedWorkerId, authentication);
+        return getOrder(orderId, principal, authentication);
+    }
+
+    private Long recoveryWorkerId(ArchiveAccessScope scope, Long companyId, Long requestedWorkerId) {
+        List<ArchiveRecoveryWorkerOption> options = repository.findRecoveryWorkers(scope, companyId);
+        if (requestedWorkerId != null) {
+            return options.stream().filter(option -> option.id().equals(requestedWorkerId))
+                    .map(ArchiveRecoveryWorkerOption::id).findFirst()
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Этот специалист недоступен или больше не работает"));
+        }
+        List<ArchiveRecoveryWorkerOption> companyWorkers = options.stream()
+                .filter(ArchiveRecoveryWorkerOption::companyWorker).toList();
+        if (companyWorkers.size() == 1) {
+            return companyWorkers.getFirst().id();
+        }
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Выберите действующего специалиста для восстановления");
     }
 
     private ArchiveAccessScope resolveScope(Principal principal, Authentication authentication) {

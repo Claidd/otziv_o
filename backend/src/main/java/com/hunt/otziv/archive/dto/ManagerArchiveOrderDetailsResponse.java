@@ -10,6 +10,8 @@ public record ManagerArchiveOrderDetailsResponse(
         List<ArchiveBadReviewTaskItem> badReviewTasks,
         List<ArchiveNextOrderRequestItem> nextOrderRequests,
         List<ArchiveZpItem> zp,
-        List<ArchivePaymentCheckItem> paymentChecks
+        List<ArchivePaymentCheckItem> paymentChecks,
+        List<ArchiveRecoveryWorkerOption> recoveryWorkers,
+        List<ArchiveRecoveryTaskItem> recoveryTasks
 ) {
 }

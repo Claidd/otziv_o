@@ -142,6 +142,41 @@ describe('WorkerReviewEditModalComponent', () => {
     expect(selectedWorkerId).toBe(202);
   });
 
+  it('shows the unavailable former worker and allows assigning an archived recovery to a current worker', async () => {
+    const fixture = TestBed.createComponent(WorkerReviewEditModalComponent);
+    const component = fixture.componentInstance;
+    component.review = review({ recoveryTask: true, recoveryTaskId: 1238, taskWorkerId: 60 });
+    component.draft = draft();
+    component.recoveryTaskEdit = true;
+    component.canReassignTask = true;
+    component.taskWorkerId = 60;
+    component.workerOptions = [{ id: 72, label: 'Новый специалист' }];
+    const assigned = vi.fn();
+    component.taskWorkerChangeRequested.subscribe(assigned);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const select = fixture.nativeElement.querySelector('select[name="reviewTaskWorker"]') as HTMLSelectElement;
+    expect(select.selectedOptions[0].textContent).toContain('Прежний специалист недоступен');
+    select.selectedIndex = 1;
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(assigned).toHaveBeenCalledWith(72);
+  });
+
+  it('explains an empty assignment list and hides assignment from an ordinary worker', async () => {
+    const fixture = TestBed.createComponent(WorkerReviewEditModalComponent);
+    const component = fixture.componentInstance;
+    component.review = review({ recoveryTask: true, recoveryTaskId: 1238 });
+    component.draft = draft();
+    component.canReassignTask = true;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(fixture.nativeElement.textContent).toContain('Нет доступных действующих специалистов');
+    expect(fixture.nativeElement.querySelector('select[name="reviewTaskWorker"]').disabled).toBe(true);
+    component.canReassignTask = false;
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('select[name="reviewTaskWorker"]')).toBeNull();
+  });
+
   it('blocks new account during the shared cooldown while leaving the editor usable', async () => {
     const fixture = TestBed.createComponent(WorkerReviewEditModalComponent);
     const component = fixture.componentInstance;
