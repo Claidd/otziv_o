@@ -331,7 +331,7 @@
             <p class="eyebrow">Архивный заказ</p>
             <h2>{{ order.companyTitle || 'Без компании' }} - #{{ order.id }}</h2>
           </div>
-          <button type="button" class="restore-close" (click)="closeRestore()" [disabled]="restoring()" title="Закрыть">
+          <button type="button" class="restore-close" (click)="closeRestore()" [disabled]="restoring() || !!recoveryTaskMutationKey()" title="Закрыть">
             <span class="material-icons-sharp">close</span>
           </button>
         </header>
@@ -389,7 +389,7 @@
                 }
               </div>
 
-              <button type="button" class="restore-confirm-inline" (click)="confirmRestore()" [disabled]="restoreLoading() || restoring() || !restoreDetails()">
+              <button type="button" class="restore-confirm-inline" (click)="confirmRestore()" [disabled]="restoreLoading() || restoring() || !!recoveryTaskMutationKey() || !restoreDetails()">
                 <span class="material-icons-sharp">settings_backup_restore</span>
                 {{ restoring() ? 'Восстанавливаю' : 'Восстановить' }}
               </button>
@@ -428,6 +428,44 @@
             </div>
           </section>
 
+          @if (order.source === 'archive') {
+            <section class="restore-detail-section recovery-assignment" aria-label="Исполнитель восстановления">
+              <header><h3>Восстановления отзывов</h3></header>
+              <label for="archive-recovery-worker">Специалист для восстановления</label>
+              <select id="archive-recovery-worker" [ngModel]="recoveryWorkerId()" (ngModelChange)="recoveryWorkerId.set($event)"
+                [disabled]="!!recoveryTaskMutationKey() || restoring()">
+                <option [ngValue]="null" disabled>Выберите специалиста</option>
+                @for (worker of recoveryWorkers(); track worker.id) {
+                  <option [ngValue]="worker.id">{{ worker.label }}{{ worker.companyWorker ? ' — специалист компании' : '' }}</option>
+                }
+              </select>
+              <p>Выбранному специалисту можно создать задачу по отзыву ниже или передать существующее восстановление. История архивного заказа сохранится.</p>
+              @if (!recoveryWorkers().length) {
+                <p role="status">Нет доступных действующих специалистов. Проверьте привязку сотрудников к менеджеру.</p>
+              }
+              @if (pendingRecoveryCount() > 1) {
+                <button type="button" class="archive-review-recovery-button" (click)="reassignArchiveRecoveryTasks()"
+                  [disabled]="!recoveryWorkerId() || !!recoveryTaskMutationKey() || restoring()">
+                  Передать незавершённые восстановления ({{ pendingRecoveryCount() }})
+                </button>
+              }
+              <div class="restore-review-list">
+                @for (task of recoveryTasks(); track task.id) {
+                  <article>
+                    <strong>Восстановление #{{ task.id }} · отзыв #{{ task.reviewId }}</strong>
+                    <p>{{ task.workerName }} · {{ task.scheduledDate }} · {{ task.status === 'DONE' ? 'Выполнено' : 'Запланировано' }}</p>
+                    @if (task.status === 'PLANNED') {
+                      <button type="button" class="archive-review-recovery-button" (click)="reassignArchiveRecoveryTasks(task.id)"
+                        [disabled]="!recoveryWorkerId() || task.workerId === recoveryWorkerId() || !!recoveryTaskMutationKey() || restoring()">
+                        Передать выбранному специалисту
+                      </button>
+                    }
+                  </article>
+                }
+              </div>
+            </section>
+          }
+
           <section class="restore-detail-section" aria-label="Отзывы заказа">
             <header>
               <h3>Отзывы</h3>
@@ -452,11 +490,11 @@
                         type="button"
                         class="archive-review-recovery-button"
                         (click)="createArchiveRecoveryTask(order, review)"
-                        [disabled]="!canCreateArchiveRecoveryTask(review) || !!recoveryTaskMutationKey()"
+                        [disabled]="!canCreateArchiveRecoveryTask(review) || !recoveryWorkerId() || !!recoveryTaskMutationKey() || restoring()"
                         title="Создать задачу восстановления по этому архивному отзыву"
                       >
                         <span class="material-icons-sharp">restore</span>
-                        {{ isArchiveRecoveryTaskCreating(order, review) ? 'Создаю' : 'Задача' }}
+                        {{ isArchiveRecoveryTaskCreating(order, review) ? 'Создаю' : hasArchiveRecoveryTask(review) ? 'Восстановление создано' : 'Создать восстановление' }}
                       </button>
                     }
                   </footer>

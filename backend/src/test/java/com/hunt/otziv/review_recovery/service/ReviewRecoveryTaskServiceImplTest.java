@@ -36,6 +36,7 @@ import com.hunt.otziv.review_recovery.repository.ReviewRecoveryTaskRepository;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
+import com.hunt.otziv.u_users.repository.WorkerRepository;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -80,6 +81,9 @@ class ReviewRecoveryTaskServiceImplTest {
 
     @Mock
     private ReviewRecoveryTaskRepository taskRepository;
+
+    @Mock
+    private WorkerRepository workerRepository;
 
     @Mock
     private ReviewRecoveryBotExclusionService botExclusionService;
@@ -244,10 +248,14 @@ class ReviewRecoveryTaskServiceImplTest {
         when(taskRepository.save(any(ReviewRecoveryTask.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(botService.findBotById(20L)).thenReturn(publicationBot);
 
-        ReviewRecoveryTask task = service.createArchiveTask(source, user(2L));
+        Worker currentWorker = Worker.builder().id(72L).build();
+        when(workerRepository.findActiveWorkerIds()).thenReturn(List.of(72L));
+        when(workerRepository.findById(72L)).thenReturn(Optional.of(currentWorker));
+        ReviewRecoveryTask task = service.createArchiveTask(source, user(2L), 72L);
 
         assertEquals(today.plusDays(ReviewRecoveryGateService.RECOVERY_SCHEDULE_STEP_DAYS), task.getScheduledDate());
         assertSame(publicationBot, task.getBot());
+        assertSame(currentWorker, task.getWorker());
         assertEquals("login", task.getBotLoginSnapshot());
         assertEquals("password", task.getBotPasswordSnapshot());
         assertEquals("Бот Ф.", task.getBotFioSnapshot());
@@ -736,6 +744,52 @@ class ReviewRecoveryTaskServiceImplTest {
                 77L,
                 worker
         );
+    }
+
+    @Test
+    void archiveTransferSkipsTaskCompletedBeforeLockAndKeepsHistoricalSource() {
+        var auth = new org.springframework.security.authentication.TestingAuthenticationToken("admin", "", "ROLE_ADMIN");
+        Worker replacement = Worker.builder().id(72L).build();
+        Worker former = Worker.builder().id(60L).build();
+        ReviewRecoveryBatch batch = ReviewRecoveryBatch.builder().status(ReviewRecoveryBatchStatus.OPEN).build();
+        ReviewRecoveryTask pending = ReviewRecoveryTask.builder().id(1238L).archiveOrderId(10L).archiveReviewId(11L)
+                .worker(former).batch(batch).status(ReviewRecoveryTaskStatus.PLANNED).build();
+        ReviewRecoveryTask completed = ReviewRecoveryTask.builder().id(1239L).archiveOrderId(10L).worker(former)
+                .batch(batch).status(ReviewRecoveryTaskStatus.DONE).build();
+        when(workerRepository.findActiveWorkerIds()).thenReturn(List.of(72L));
+        when(workerRepository.findById(72L)).thenReturn(Optional.of(replacement));
+        when(taskRepository.findPendingArchiveTaskIds(10L)).thenReturn(List.of(1238L, 1239L));
+        when(taskRepository.findByIdForMutation(1238L)).thenReturn(Optional.of(pending));
+        when(taskRepository.findByIdForMutation(1239L)).thenReturn(Optional.of(completed));
+
+        assertEquals(1, service.reassignArchiveTasks(10L, null, 72L, auth));
+        assertSame(replacement, pending.getWorker());
+        assertSame(former, completed.getWorker());
+        assertEquals(10L, pending.getArchiveOrderId());
+        assertEquals(11L, pending.getArchiveReviewId());
+        assertNull(pending.getOrder());
+        verify(assignmentMutationGuardService).assertRecoveryTask(1238L, auth);
+        verify(taskRepository, never()).save(completed);
+        verify(taskRepository).flush();
+    }
+
+    @Test
+    void archiveTransferRejectsTaskFromAnotherOrder() {
+        var auth = new org.springframework.security.authentication.TestingAuthenticationToken("admin", "", "ROLE_ADMIN");
+        when(workerRepository.findActiveWorkerIds()).thenReturn(List.of(72L));
+        when(workerRepository.findById(72L)).thenReturn(Optional.of(Worker.builder().id(72L).build()));
+        when(taskRepository.findPendingArchiveTaskIds(10L)).thenReturn(List.of(1238L));
+        assertThrows(ResponseStatusException.class, () -> service.reassignArchiveTasks(10L, 999L, 72L, auth));
+        verify(taskRepository, never()).save(any());
+    }
+
+    @Test
+    void archiveCreationRejectsInactiveWorkerBeforeCreatingBatch() {
+        ArchiveReviewRecoverySource source = archiveSource(10L, 11L, null, null, null);
+        when(workerRepository.findActiveWorkerIds()).thenReturn(List.of(72L));
+        assertThrows(ResponseStatusException.class, () -> service.createArchiveTask(source, user(2L), 60L));
+        verify(batchRepository, never()).save(any());
+        verify(taskRepository, never()).save(any());
     }
 
     private Order order(Long id) {

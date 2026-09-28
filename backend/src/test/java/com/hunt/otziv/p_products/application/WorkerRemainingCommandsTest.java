@@ -82,6 +82,24 @@ class WorkerRemainingCommandsTest {
         verifyNoInteractions(bad,recovery,guard,workers);
     }
 
+    @ParameterizedTest @ValueSource(strings={"ADMIN", "OWNER", "MANAGER"})
+    void privilegedActorCanReassignArchivedRecoveryWithoutLiveOrder(String role) {
+        var manager = new com.hunt.otziv.u_users.model.Manager(); manager.setId(9L);
+        var user = new com.hunt.otziv.u_users.model.User(); user.setId(5L);
+        var replacement = new com.hunt.otziv.u_users.model.Worker(); replacement.setId(72L);
+        var actor = new WorkerOrderActor("staff", Set.of(role));
+        when(recovery.getTask(1238L)).thenReturn(ReviewRecoveryTask.builder().id(1238L)
+                .archiveOrderId(10L).manager(manager).build());
+        when(users.findByUserName("staff")).thenReturn(Optional.of(user));
+        when(managers.getManagerByUserId(5L)).thenReturn(manager);
+        when(users.findManagersByUserName("staff")).thenReturn(Set.of(manager));
+        when(workers.getAllWorkers()).thenReturn(List.of(replacement));
+        when(workers.getAllWorkersToManager(manager)).thenReturn(List.of(replacement));
+        when(workers.getAllWorkersToManagerList(List.of(manager))).thenReturn(Set.of(replacement));
+        assignment.reassignRecoveryTask(1238L, 72L, actor);
+        verify(recovery).reassignTask(eq(1238L), same(replacement), argThat(auth -> "staff".equals(auth.getName())));
+    }
+
     @Test void omittedDatesPreserveDistinctLegacyTaskContractsAndCarryActorIntoMutation() {
         LocalDate today=LocalDate.of(2026,9,7);
         when(bad.getTask(1L)).thenReturn(BadReviewTask.builder().scheduledDate(today).build());

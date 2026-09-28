@@ -120,6 +120,10 @@ export class ManagerArchiveComponent implements OnDestroy {
   readonly activeArchiveOrderId = signal<number | null>(null);
   readonly liveStatusMutationKey = signal<string | null>(null);
   readonly recoveryTaskMutationKey = signal<string | null>(null);
+  readonly recoveryWorkerId = signal<number | null>(null);
+  readonly recoveryWorkers = computed(() => this.restoreDetails()?.recoveryWorkers ?? []);
+  readonly recoveryTasks = computed(() => this.restoreDetails()?.recoveryTasks ?? []);
+  readonly pendingRecoveryCount = computed(() => this.recoveryTasks().filter(task => task.status === 'PLANNED').length);
   readonly copied = signal<string | null>(null);
   readonly commonInvoiceArchives = signal<CommonInvoiceArchiveListItem[]>([]);
   readonly commonInvoiceArchiveTotal = signal(0);
@@ -426,7 +430,7 @@ export class ManagerArchiveComponent implements OnDestroy {
   }
 
   closeRestore(): void {
-    if (this.restoring()) {
+    if (this.restoring() || this.recoveryTaskMutationKey()) {
       return;
     }
 
@@ -438,7 +442,7 @@ export class ManagerArchiveComponent implements OnDestroy {
 
   confirmRestore(): void {
     const order = this.restoreOrder();
-    if (!order || this.restoreLoading() || this.restoring()) {
+    if (!order || this.restoreLoading() || this.restoring() || this.recoveryTaskMutationKey()) {
       return;
     }
 
@@ -462,7 +466,8 @@ export class ManagerArchiveComponent implements OnDestroy {
   }
 
   createArchiveRecoveryTask(order: ArchiveOrderListItem, review: ArchiveReviewItem): void {
-    if (!order?.id || !review?.id || this.recoveryTaskMutationKey()) {
+    const workerId = this.recoveryWorkerId();
+    if (!order?.id || !this.canCreateArchiveRecoveryTask(review) || !workerId || this.recoveryTaskMutationKey() || this.restoring()) {
       return;
     }
 
@@ -470,10 +475,12 @@ export class ManagerArchiveComponent implements OnDestroy {
     this.recoveryTaskMutationKey.set(key);
     this.restoreError.set(null);
 
-    this.managerApi.createArchiveReviewRecoveryTask(order.id, review.id).subscribe({
+    this.managerApi.createArchiveReviewRecoveryTask(order.id, review.id, workerId).subscribe({
       next: (details) => {
-        this.restoreOrder.set(details.order);
-        this.restoreDetails.set(details);
+        if (this.activeArchiveOrderId() === order.id) {
+          this.restoreOrder.set(details.order);
+          this.restoreDetails.set(details);
+        }
         this.recoveryTaskMutationKey.set(null);
         this.toastService.success('Задача создана', `Отзыв #${review.id} добавлен в восстановление`);
       },
@@ -491,7 +498,35 @@ export class ManagerArchiveComponent implements OnDestroy {
   }
 
   canCreateArchiveRecoveryTask(review: ArchiveReviewItem): boolean {
-    return !!review.id && !!(review.text || '').trim();
+    return !!review.id && !!(review.text || '').trim()
+      && !this.hasArchiveRecoveryTask(review);
+  }
+
+  hasArchiveRecoveryTask(review: ArchiveReviewItem): boolean {
+    return this.recoveryTasks().some(task => task.reviewId === review.id);
+  }
+
+  reassignArchiveRecoveryTasks(taskId?: number): void {
+    const order = this.restoreOrder();
+    const workerId = this.recoveryWorkerId();
+    if (!order || !workerId || this.recoveryTaskMutationKey() || this.restoring()) return;
+    this.recoveryTaskMutationKey.set(`assign-${taskId ?? 'all'}`);
+    this.restoreError.set(null);
+    this.managerApi.reassignArchiveRecoveryTasks(order.id, workerId, taskId).subscribe({
+      next: (details) => {
+        if (this.activeArchiveOrderId() === order.id) {
+          this.restoreDetails.set(details);
+        }
+        this.recoveryTaskMutationKey.set(null);
+        this.toastService.success('Специалист изменён', taskId ? `Восстановление #${taskId} передано` : 'Незавершённые восстановления переданы');
+      },
+      error: (err) => {
+        const message = apiErrorMessage(err, 'Не удалось передать восстановления');
+        this.restoreError.set(message);
+        this.recoveryTaskMutationKey.set(null);
+        this.toastService.error('Специалист не изменён', message);
+      }
+    });
   }
 
   restoreStatusOptions(_order: ArchiveOrderListItem): string[] {
@@ -696,6 +731,7 @@ export class ManagerArchiveComponent implements OnDestroy {
     this.loadingArchiveOrderId = orderId;
     this.restoreOrder.set(fallbackOrder ?? null);
     this.restoreDetails.set(null);
+    this.recoveryWorkerId.set(null);
     this.restoreResult.set(null);
     this.restoreError.set(null);
     this.restoreTargetStatus.set(this.restoreStatuses[0]);
@@ -708,6 +744,8 @@ export class ManagerArchiveComponent implements OnDestroy {
         }
         this.restoreOrder.set(details.order);
         this.restoreDetails.set(details);
+        const companyWorkers = (details.recoveryWorkers ?? []).filter(worker => worker.companyWorker);
+        this.recoveryWorkerId.set(companyWorkers.length === 1 ? companyWorkers[0].id : null);
         this.restoreLoading.set(false);
       },
       error: (err) => {
@@ -727,6 +765,7 @@ export class ManagerArchiveComponent implements OnDestroy {
     this.activeArchiveOrderId.set(null);
     this.restoreOrder.set(null);
     this.restoreDetails.set(null);
+    this.recoveryWorkerId.set(null);
     this.restoreResult.set(null);
     this.restoreError.set(null);
     this.restoreLoading.set(false);

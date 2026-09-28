@@ -27,6 +27,15 @@ public interface ReviewRecoveryTaskRepository extends JpaRepository<ReviewRecove
     Optional<ReviewRecoveryTask> findByIdForMutation(@Param("taskId") Long taskId);
 
     @Query("""
+        SELECT t.id FROM ReviewRecoveryTask t
+        WHERE t.archiveOrderId = :archiveOrderId
+          AND t.status = com.hunt.otziv.review_recovery.model.ReviewRecoveryTaskStatus.PLANNED
+          AND t.batch.status = com.hunt.otziv.review_recovery.model.ReviewRecoveryBatchStatus.OPEN
+        ORDER BY t.id
+    """)
+    List<Long> findPendingArchiveTaskIds(@Param("archiveOrderId") Long archiveOrderId);
+
+    @Query("""
         SELECT DISTINCT t.bot.id
         FROM ReviewRecoveryTask t
         WHERE t.status = :status

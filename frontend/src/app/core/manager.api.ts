@@ -150,6 +150,17 @@ export interface ArchiveOrderDetailsPayload {
   nextOrderRequests: ArchiveNextOrderRequestItem[];
   zp: ArchiveZpItem[];
   paymentChecks: ArchivePaymentCheckItem[];
+  recoveryWorkers?: { id: number; label: string; companyWorker: boolean }[];
+  recoveryTasks?: ArchiveRecoveryTaskItem[];
+}
+
+export interface ArchiveRecoveryTaskItem {
+  id: number;
+  reviewId: number;
+  workerId: number | null;
+  workerName: string;
+  scheduledDate: string;
+  status: 'PLANNED' | 'DONE';
 }
 
 export interface ArchiveCandidateCounts {
@@ -980,10 +991,21 @@ export class ManagerApi {
     );
   }
 
-  createArchiveReviewRecoveryTask(orderId: number, reviewId: number): Observable<ArchiveOrderDetailsPayload> {
+  createArchiveReviewRecoveryTask(orderId: number, reviewId: number, workerId: number): Observable<ArchiveOrderDetailsPayload> {
     return this.http.post<ArchiveOrderDetailsPayload>(
       `${appEnvironment.apiBaseUrl}/api/manager/archive/orders/${orderId}/reviews/${reviewId}/recovery-tasks`,
-      {}
+      {},
+      { params: { workerId } }
+    );
+  }
+
+  reassignArchiveRecoveryTasks(orderId: number, workerId: number, taskId?: number): Observable<ArchiveOrderDetailsPayload> {
+    let params = new HttpParams().set('workerId', workerId);
+    if (taskId != null) params = params.set('taskId', taskId);
+    return this.http.post<ArchiveOrderDetailsPayload>(
+      `${appEnvironment.apiBaseUrl}/api/manager/archive/orders/${orderId}/recovery-tasks/worker`,
+      {},
+      { params }
     );
   }
 

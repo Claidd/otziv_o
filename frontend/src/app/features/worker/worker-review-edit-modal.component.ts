@@ -74,11 +74,16 @@ export class WorkerReviewEditModalComponent {
 
   requestTaskWorkerChange(value: number | string | null): void {
     const workerId = Number(value);
-    if (!Number.isFinite(workerId) || workerId <= 0 || workerId === this.taskWorkerId) {
+    if (!this.canReassignTask || this.busy || this.taskWorkerSaving
+      || !this.workerOptions.some(worker => worker.id === workerId) || workerId === this.taskWorkerId) {
       return;
     }
 
     this.taskWorkerChangeRequested.emit(workerId);
+  }
+
+  taskWorkerUnavailable(): boolean {
+    return this.taskWorkerId != null && !this.workerOptions.some(worker => worker.id === this.taskWorkerId);
   }
 
   canShowVigulControl(draft: ReviewEditDraft): boolean {

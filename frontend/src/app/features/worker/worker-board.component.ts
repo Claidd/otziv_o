@@ -218,6 +218,10 @@ export class WorkerBoardComponent implements OnDestroy {
     };
   }));
   readonly workerOptions = computed(() => this.board()?.workerOptions ?? []);
+  readonly canReassignTask = computed(() => {
+    this.auth.tokenParsed();
+    return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER', 'MANAGER']);
+  });
   readonly mobileWorkerItems = computed<MobileStatusItem[]>(() => [
     { key: 'all', label: 'Все работники', value: '', icon: 'groups', tone: 'blue' },
     ...this.workerOptions().map((worker) => ({
@@ -660,7 +664,7 @@ export class WorkerBoardComponent implements OnDestroy {
   }
 
   reassignTaskWorker(review: WorkerReviewItem, workerId: number): void {
-    if (!this.workerFilterAvailable() || this.mutationKey()) {
+    if (!this.canReassignTask() || !this.workerOptions().some(worker => worker.id === workerId) || this.mutationKey()) {
       return;
     }
 

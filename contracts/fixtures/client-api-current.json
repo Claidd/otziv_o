@@ -203,6 +203,19 @@
       "created" : "2026-09-07",
       "active" : false
     },
+    "ArchiveRecoveryTaskItemOutput" : {
+      "id" : 2,
+      "reviewId" : 2,
+      "workerId" : 2,
+      "workerName" : "contract-example",
+      "scheduledDate" : "2026-09-07",
+      "status" : "contract-example"
+    },
+    "ArchiveRecoveryWorkerOptionOutput" : {
+      "id" : 2,
+      "label" : "contract-example",
+      "companyWorker" : false
+    },
     "ArchiveRestoreResultOutput" : {
       "batchId" : 2,
       "orderId" : 2,
@@ -1474,6 +1487,19 @@
         "workerId" : 2,
         "created" : "2026-09-07",
         "active" : false
+      } ],
+      "recoveryWorkers" : [ {
+        "id" : 2,
+        "label" : "contract-example",
+        "companyWorker" : false
+      } ],
+      "recoveryTasks" : [ {
+        "id" : 2,
+        "reviewId" : 2,
+        "workerId" : 2,
+        "workerName" : "contract-example",
+        "scheduledDate" : "2026-09-07",
+        "status" : "contract-example"
       } ]
     },
     "ManagerArchiveOrderListItemOutput" : {

@@ -7,6 +7,8 @@ import com.hunt.otziv.archive.dto.ArchiveOrderDetailItem;
 import com.hunt.otziv.archive.dto.ArchivePaymentCheckItem;
 import com.hunt.otziv.archive.dto.ArchiveReviewItem;
 import com.hunt.otziv.archive.dto.ArchiveReviewRecoverySource;
+import com.hunt.otziv.archive.dto.ArchiveRecoveryWorkerOption;
+import com.hunt.otziv.archive.dto.ArchiveRecoveryTaskItem;
 import com.hunt.otziv.archive.dto.ArchiveZpItem;
 import com.hunt.otziv.archive.dto.ManagerArchiveOrderListItem;
 import com.hunt.otziv.security.credentials.CredentialCipher;
@@ -243,6 +245,51 @@ public class ManagerArchiveRepository {
                 rowBigDecimal(rs, "review_price"),
                 safeString(rs.getString("review_url"))
         ));
+    }
+
+    public List<ArchiveRecoveryWorkerOption> findRecoveryWorkers(ArchiveAccessScope scope, Long companyId) {
+        if (!scope.isUnrestricted() && scope.managerIds().isEmpty()) {
+            return List.of();
+        }
+        String managerFilter = scope.isUnrestricted() ? "" : """
+                AND EXISTS (SELECT 1 FROM managers_users mu
+                            WHERE mu.user_id = u.id AND mu.manager_id IN (:managerIds))
+                """;
+        return jdbc.query("""
+                SELECT w.worker_id,
+                       COALESCE(NULLIF(TRIM(u.fio), ''), NULLIF(TRIM(u.username), ''),
+                                CONCAT('Специалист #', w.worker_id)) AS worker_label,
+                       EXISTS (SELECT 1 FROM workers_companies wc
+                               WHERE wc.worker_id = w.worker_id AND wc.company_id = :companyId) AS company_worker
+                FROM workers w
+                JOIN users u ON u.id = w.user_id
+                WHERE u.active = true
+                  AND EXISTS (SELECT 1 FROM users_roles ur JOIN roles r ON r.id = ur.role_id
+                              WHERE ur.user_id = u.id AND r.name = 'ROLE_WORKER')
+                """ + managerFilter + " ORDER BY company_worker DESC, worker_label, w.worker_id",
+                scopeParams(scope).addValue("companyId", companyId), (rs, rowNum) -> new ArchiveRecoveryWorkerOption(
+                        rs.getLong("worker_id"), rs.getString("worker_label"), rs.getBoolean("company_worker")));
+    }
+
+    public List<ArchiveRecoveryTaskItem> findRecoveryTasks(Long orderId) {
+        return jdbc.query("""
+                SELECT t.review_recovery_task_id AS task_id,
+                       t.review_recovery_task_archive_review_id AS review_id,
+                       t.review_recovery_task_worker AS worker_id,
+                       COALESCE(NULLIF(TRIM(u.fio), ''), u.username, 'Не назначен') AS worker_name,
+                       t.review_recovery_task_scheduled_date AS scheduled_date,
+                       t.review_recovery_task_status AS status
+                FROM review_recovery_tasks t
+                JOIN review_recovery_batches b ON b.review_recovery_batch_id = t.review_recovery_task_batch
+                LEFT JOIN workers w ON w.worker_id = t.review_recovery_task_worker
+                LEFT JOIN users u ON u.id = w.user_id
+                WHERE t.review_recovery_task_archive_order_id = :orderId
+                  AND t.review_recovery_task_status IN ('PLANNED', 'DONE')
+                  AND b.review_recovery_batch_status IN ('OPEN', 'COMPLETED')
+                ORDER BY t.review_recovery_task_id
+                """, new MapSqlParameterSource("orderId", orderId), (rs, rowNum) -> new ArchiveRecoveryTaskItem(
+                        rowLong(rs, "task_id"), rowLong(rs, "review_id"), rowLong(rs, "worker_id"),
+                        rs.getString("worker_name"), rowLocalDate(rs, "scheduled_date"), rs.getString("status")));
     }
 
     public Optional<ArchiveReviewRecoverySource> findReviewRecoverySource(Long orderId, Long reviewId) {

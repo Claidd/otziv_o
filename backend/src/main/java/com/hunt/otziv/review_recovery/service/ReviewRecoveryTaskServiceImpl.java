@@ -164,7 +164,7 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
 
     @Override
     @Transactional
-    public ReviewRecoveryTask createArchiveTask(ArchiveReviewRecoverySource source, User createdBy) {
+    public ReviewRecoveryTask createArchiveTask(ArchiveReviewRecoverySource source, User createdBy, Long workerId) {
         if (source == null || source.orderId() == null || source.reviewId() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Архивный отзыв для восстановления не найден");
         }
@@ -175,9 +175,7 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
         Manager manager = source.managerId() == null
                 ? null
                 : managerRepository.findById(source.managerId()).orElse(null);
-        Worker worker = source.workerId() == null
-                ? null
-                : workerRepository.findById(source.workerId()).orElse(null);
+        Worker worker = requireActiveArchiveWorker(workerId);
         Bot publicationBot = source.botId() == null
                 ? null
                 : botService.findBotById(source.botId());
@@ -327,6 +325,49 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
             );
         }
         return updated;
+    }
+
+    @Override
+    @Transactional
+    public int reassignArchiveTasks(Long archiveOrderId, Long taskId, Long workerId, Authentication authentication) {
+        Objects.requireNonNull(authentication, "authentication");
+        Worker worker = requireActiveArchiveWorker(workerId);
+        List<Long> candidates = taskRepository.findPendingArchiveTaskIds(archiveOrderId);
+        if (taskId != null && !candidates.contains(taskId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Задача восстановления архивного заказа не найдена");
+        }
+        int updated = 0;
+        // A stable lock order keeps concurrent bulk transfers from deadlocking.
+        for (Long candidateId : candidates.stream()
+                .filter(id -> taskId == null || Objects.equals(id, taskId)).sorted().toList()) {
+            ReviewRecoveryTask task = requireTaskForMutation(candidateId, authentication);
+            if (!Objects.equals(task.getArchiveOrderId(), archiveOrderId)
+                    || task.getStatus() != ReviewRecoveryTaskStatus.PLANNED
+                    || task.getBatch().getStatus() != ReviewRecoveryBatchStatus.OPEN) {
+                if (taskId != null) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Можно передать только незавершённое восстановление");
+                }
+                continue;
+            }
+            if (task.getWorker() != null && Objects.equals(task.getWorker().getId(), workerId)) {
+                continue;
+            }
+            task.setWorker(worker);
+            taskRepository.save(task);
+            log.info("Архивная задача восстановления {} назначена специалисту {}", task.getId(), workerId);
+            updated++;
+        }
+        // Archive details use JDBC; make the assignments visible before rebuilding that response.
+        taskRepository.flush();
+        return updated;
+    }
+
+    private Worker requireActiveArchiveWorker(Long workerId) {
+        if (workerId == null || !workerRepository.findActiveWorkerIds().contains(workerId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Выберите действующего специалиста для восстановления");
+        }
+        return workerRepository.findById(workerId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Специалист не найден"));
     }
 
     @Override

@@ -160,6 +160,8 @@ describe('ManagerArchiveComponent', () => {
     getArchiveOrder: ReturnType<typeof vi.fn>;
     restoreArchiveOrder: ReturnType<typeof vi.fn>;
     updateOrderStatus: ReturnType<typeof vi.fn>;
+    createArchiveReviewRecoveryTask: ReturnType<typeof vi.fn>;
+    reassignArchiveRecoveryTasks: ReturnType<typeof vi.fn>;
   };
   let commonBillingApi: {
     archiveInvoices: ReturnType<typeof vi.fn>;
@@ -179,7 +181,9 @@ describe('ManagerArchiveComponent', () => {
       getArchiveOrders: vi.fn(() => of(page([storedOrder, liveOrder]))),
       getArchiveOrder: vi.fn((orderId: number) => of(details(archiveOrder({ id: orderId })))),
       restoreArchiveOrder: vi.fn((orderId: number, targetStatus: string) => of(restoreResult(orderId, targetStatus))),
-      updateOrderStatus: vi.fn(() => of(void 0))
+      updateOrderStatus: vi.fn(() => of(void 0)),
+      createArchiveReviewRecoveryTask: vi.fn(() => of(details(storedOrder))),
+      reassignArchiveRecoveryTasks: vi.fn(() => of(details(storedOrder)))
     };
     commonBillingApi = {
       archiveInvoices: vi.fn(() => of(commonInvoicePage())),
@@ -213,6 +217,45 @@ describe('ManagerArchiveComponent', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it('prefills the only current company specialist and passes the choice when creating recovery', () => {
+    const payload = { ...details(storedOrder), recoveryWorkers: [
+      { id: 72, label: 'Новый специалист', companyWorker: true },
+      { id: 73, label: 'Другой', companyWorker: false }
+    ] };
+    managerApi.getArchiveOrder.mockReturnValue(of(payload));
+    const component = TestBed.createComponent(ManagerArchiveComponent).componentInstance;
+    component.openRestore(storedOrder);
+    expect(component.recoveryWorkerId()).toBe(72);
+    component.createArchiveRecoveryTask(storedOrder, payload.reviews[0]);
+    expect(managerApi.createArchiveReviewRecoveryTask).toHaveBeenCalledWith(storedOrder.id, 11, 72);
+  });
+
+  it('requires selection when the company has multiple specialists', () => {
+    const payload = { ...details(storedOrder), recoveryWorkers: [
+      { id: 72, label: 'Первый', companyWorker: true }, { id: 73, label: 'Второй', companyWorker: true }
+    ] };
+    managerApi.getArchiveOrder.mockReturnValue(of(payload));
+    const component = TestBed.createComponent(ManagerArchiveComponent).componentInstance;
+    component.openRestore(storedOrder);
+    expect(component.recoveryWorkerId()).toBeNull();
+    component.createArchiveRecoveryTask(storedOrder, payload.reviews[0]);
+    expect(managerApi.createArchiveReviewRecoveryTask).not.toHaveBeenCalled();
+  });
+
+  it('transfers an existing recovery without restoring the archive order or duplicating its task', () => {
+    const payload: ArchiveOrderDetailsPayload = { ...details(storedOrder), recoveryWorkers: [
+      { id: 72, label: 'Новый специалист', companyWorker: true }
+    ], recoveryTasks: [{ id: 1238, reviewId: 11, workerId: 60, workerName: 'Прежний', scheduledDate: '2026-09-28', status: 'PLANNED' }] };
+    managerApi.getArchiveOrder.mockReturnValue(of(payload));
+    const component = TestBed.createComponent(ManagerArchiveComponent).componentInstance;
+    component.openRestore(storedOrder);
+    component.createArchiveRecoveryTask(storedOrder, payload.reviews[0]);
+    expect(managerApi.createArchiveReviewRecoveryTask).not.toHaveBeenCalled();
+    component.reassignArchiveRecoveryTasks(1238);
+    expect(managerApi.reassignArchiveRecoveryTasks).toHaveBeenCalledWith(storedOrder.id, 72, 1238);
+    expect(managerApi.restoreArchiveOrder).not.toHaveBeenCalled();
   });
 
   it('loads closed orders and only offers restore for archive-source rows', () => {
