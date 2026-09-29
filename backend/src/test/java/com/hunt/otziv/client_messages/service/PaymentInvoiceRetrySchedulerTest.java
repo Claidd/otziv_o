@@ -12,6 +12,8 @@ import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.annotation.Propagation;
@@ -264,6 +266,80 @@ class PaymentInvoiceRetrySchedulerTest {
         ));
         verify(appSettingService, never()).getBoolean(
                 eq(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_AUTO_BAN_ENABLED), anyBoolean());
+    }
+
+    @Test
+    void manualSettlementClosesStaleReminderWithoutClaimingDeliveryOrLosingEvidence() throws Exception {
+        ScheduledClientMessageState reminder = uncertainReminder();
+        LocalDateTime attemptedAt = reminder.getLastAttemptAt();
+        ScheduledClientMessageState overdue = state(ClientMessageScenario.PAYMENT_OVERDUE_ESCALATION,
+                ScheduledMessageStateStatus.ACTIVE);
+        when(stateRepository.findByOrderIdInForUpdate(List.of(25047L))).thenReturn(List.of(reminder, overdue));
+
+        assertEquals(2, scheduler().closePaymentAutomationForManualSettlement(25047L, "Оплата подтверждена"));
+
+        assertEquals(ScheduledMessageStateStatus.DONE, reminder.getStatus());
+        assertEquals(ScheduledMessageStateStatus.DONE, overdue.getStatus());
+        assertNull(reminder.getNextAttemptAt());
+        assertNull(reminder.getLockedUntil());
+        assertEquals("UNKNOWN", reminder.getDeliveryStatus());
+        assertEquals("saved-token", reminder.getDeliveryToken());
+        assertEquals("saved-envelope", reminder.getDeliveryEnvelope());
+        assertEquals("saved-message", reminder.getDeliveryMessage());
+        assertEquals("state_transaction_outcome_uncertain", reminder.getLastErrorCode());
+        assertEquals("original error", reminder.getLastErrorMessage());
+        assertEquals(attemptedAt, reminder.getLastAttemptAt());
+        assertEquals(0, reminder.getSentCount());
+        assertNull(reminder.getLastSuccessAt());
+        assertEquals(0, scheduler().closePaymentAutomationForManualSettlement(25047L, "Повтор запроса"));
+        assertThrows(ResponseStatusException.class, () -> scheduler().assertPaymentAutomationMutable(25047L));
+        assertEquals(Propagation.MANDATORY, PaymentInvoiceRetryScheduler.class
+                .getMethod("closePaymentAutomationForManualSettlement", Long.class, String.class)
+                .getAnnotation(Transactional.class).propagation());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"prepared", "recent", "lease", "missing-envelope", "missing-token",
+            "invoice", "bad-review-invoice", "legacy", "transaction"})
+    void settlementRetainsOtherDeliveryFencesWithoutPartiallyClosingStates(String condition) {
+        ScheduledClientMessageState blocked = uncertainReminder();
+        switch (condition) {
+            case "prepared" -> blocked.setDeliveryStatus("PREPARED");
+            case "recent" -> blocked.setDeliveryPreparedAt(LocalDateTime.now());
+            case "lease" -> blocked.setLockedUntil(LocalDateTime.now().plusMinutes(10));
+            case "missing-envelope" -> blocked.setDeliveryEnvelope(null);
+            case "missing-token" -> blocked.setDeliveryToken(null);
+            case "invoice" -> blocked.setScenario(ClientMessageScenario.PAYMENT_INVOICE_RETRY);
+            case "bad-review-invoice" -> blocked.setScenario(ClientMessageScenario.BAD_REVIEW_INVOICE);
+            case "legacy" -> blocked.setLastErrorCode(ClientMessageStateSafety.LEGACY_PREPARATION_UNVERIFIED);
+            case "transaction" -> blocked.setLastErrorCode(ClientMessageStateSafety.TRANSACTION_IN_PROGRESS);
+            default -> throw new IllegalArgumentException(condition);
+        }
+        ScheduledClientMessageState allowed = uncertainReminder();
+        when(stateRepository.findByOrderIdInForUpdate(List.of(25047L))).thenReturn(List.of(allowed, blocked));
+
+        ResponseStatusException failure = assertThrows(ResponseStatusException.class,
+                () -> scheduler().closePaymentAutomationForManualSettlement(25047L, "Оплата подтверждена"));
+
+        assertEquals(409, failure.getStatusCode().value());
+        assertEquals(ScheduledMessageStateStatus.ACTIVE, allowed.getStatus());
+        assertEquals(ScheduledMessageStateStatus.ACTIVE, blocked.getStatus());
+        verify(stateRepository, never()).saveAll(any());
+    }
+
+    private ScheduledClientMessageState uncertainReminder() {
+        ScheduledClientMessageState reminder = state(ClientMessageScenario.PAYMENT_REMINDER,
+                ScheduledMessageStateStatus.ACTIVE);
+        reminder.setDeliveryStatus("UNKNOWN");
+        reminder.setLastErrorCode(ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN);
+        reminder.setLastErrorMessage("original error");
+        reminder.setDeliveryToken("saved-token");
+        reminder.setDeliveryEnvelope("saved-envelope");
+        reminder.setDeliveryMessage("saved-message");
+        reminder.setDeliveryPreparedAt(LocalDateTime.now().minusDays(5));
+        reminder.setLastAttemptAt(LocalDateTime.now().minusDays(5));
+        reminder.setLockedUntil(null);
+        return reminder;
     }
 
     private PaymentInvoiceRetryScheduler scheduler() {

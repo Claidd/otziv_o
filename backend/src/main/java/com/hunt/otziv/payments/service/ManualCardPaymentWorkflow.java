@@ -539,7 +539,7 @@ public class ManualCardPaymentWorkflow {
         Order order = orderRepository.findByIdForCounterUpdate(plan.orderId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ платежной ссылки не найден"));
         managerAccessService.requireOrderAccess(plan.orderId(), authentication);
         ensureOrderNotCoveredByActiveCommonInvoice(plan.orderId());
-        paymentInvoiceRetryScheduler.assertPaymentAutomationMutable(plan.orderId());
+        paymentInvoiceRetryScheduler.closePaymentAutomationForManualSettlement(plan.orderId(), "Ручная оплата подтверждена; платежные сообщения закрыты");
         PaymentLink link = paymentLinkRepository.findByIdForUpdate(plan.linkId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежная ссылка не найдена"));
         requireManualCardPlanBinding(link, plan);
         if (isCompletedManualCardPayment(link)) {
@@ -590,7 +590,6 @@ public class ManualCardPaymentWorkflow {
         } else if (!historicalPreCutoverManualCard && actualPaymentAttributionService.actualRecipientAccountingEnabled()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Режим учёта изменился после закрытия банковской сессии; повторите операцию с выбором получателя");
         }
-        closeManualPaymentAutomationAfterCommit(order);
         log.warn("Order paid by manual card transfer after bank-route reconciliation: orderId={}, linkId={}, actor={}", plan.orderId(), plan.linkId(), actor);
         return toAdminResponse(link);
     }
@@ -599,7 +598,7 @@ public class ManualCardPaymentWorkflow {
         Order order = orderRepository.findByIdForCounterUpdate(orderId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден"));
         managerAccessService.requireOrderAccess(orderId, authentication);
         ensureOrderNotCoveredByActiveCommonInvoice(orderId);
-        paymentInvoiceRetryScheduler.assertPaymentAutomationMutable(orderId);
+        paymentInvoiceRetryScheduler.closePaymentAutomationForManualSettlement(orderId, "Ручная оплата подтверждена; платежные сообщения закрыты");
         PaymentLink link = paymentLinkRepository.findByIdForUpdate(linkId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежная ссылка не найдена"));
         if (!hasOrderBinding(link, orderId) || (!isDirectManualAttributionRoute(link) && !isRecoverableExpiredManualRoute(link)) || link.getAmountKopecks() != amountKopecks) {
             throw ManualPaymentTaskRouteErrors.stale();
@@ -646,7 +645,6 @@ public class ManualCardPaymentWorkflow {
         if (updated)
             cancelBadReviewAutoBanAfterCommit(order, "Ручная оплата подтверждена");
         syncCommonInvoiceOrderPayment(link, "Ручная оплата заказа");
-        closeManualPaymentAutomationAfterCommit(order);
         return toAdminResponse(link);
     }
 
@@ -815,30 +813,6 @@ public class ManualCardPaymentWorkflow {
         target.setManualActualReceiptUrl(source.getManualActualReceiptUrl());
         target.setManualActualActor(source.getManualActualActor());
         target.setManualActualRecipientFrozenAt(source.getManualActualRecipientFrozenAt());
-    }
-
-    private void closeManualPaymentAutomationAfterCommit(Order order) {
-        Long orderId = order == null ? null : order.getId();
-        Runnable cleanup = () -> {
-            try {
-                paymentInvoiceRetryScheduler.cancelPaymentAutomation(orderId, "Заказ оплачен переводом на карту; T-Bank сессия закрыта");
-            } catch (RuntimeException e) {
-                log.error("Не удалось закрыть платежные расписания после ручной оплаты orderId={}", orderId, e);
-            }
-        };
-        if (!org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
-            cleanup.run();
-            return;
-        }
-        org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(new org.springframework.transaction.support.TransactionSynchronization() {
-
-            @Override
-            public void afterCompletion(int status) {
-                if (status == STATUS_COMMITTED) {
-                    cleanup.run();
-                }
-            }
-        });
     }
 
     private void cancelBadReviewAutoBanAfterCommit(Order order, String reason) {
