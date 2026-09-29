@@ -474,7 +474,7 @@
             <div class="restore-review-list">
               @for (review of details.reviews; track trackReview($index, review)) {
                 <article>
-                  <div>
+                  <div class="restore-review-heading">
                     <strong>{{ review.productTitle || review.category || 'Отзыв' }}</strong>
                     <span>{{ review.workerFio || order.workerName || '-' }}</span>
                   </div>
@@ -482,10 +482,22 @@
                   @if (review.answer) {
                     <p class="review-answer">{{ review.answer }}</p>
                   }
-                  <footer>
-                    <span>{{ review.publishedDate || review.changed || review.created || '-' }}</span>
-                    <span>{{ review.publish ? 'опубликован' : 'не опубликован' }}</span>
-                    @if (order.source === 'archive') {
+                  <dl class="restore-review-meta">
+                    <div class="restore-review-account">
+                      <dt>Аккаунт</dt>
+                      <dd>{{ review.botFio || 'Не указан' }}</dd>
+                    </div>
+                    <div>
+                      <dt>{{ review.publishedDate ? 'Дата публикации' : review.changed ? 'Дата изменения' : 'Дата создания' }}</dt>
+                      <dd>{{ ((review.publishedDate || review.changed || review.created) | date:'dd.MM.yyyy') || 'Не указана' }}</dd>
+                    </div>
+                    <div>
+                      <dt>Статус</dt>
+                      <dd>{{ review.publish ? 'Опубликован' : 'Не опубликован' }}</dd>
+                    </div>
+                  </dl>
+                  @if (order.source === 'archive') {
+                    <footer class="restore-review-actions">
                       <button
                         type="button"
                         class="archive-review-recovery-button"
@@ -496,8 +508,8 @@
                         <span class="material-icons-sharp">restore</span>
                         {{ isArchiveRecoveryTaskCreating(order, review) ? 'Создаю' : hasArchiveRecoveryTask(review) ? 'Восстановление создано' : 'Создать восстановление' }}
                       </button>
-                    }
-                  </footer>
+                    </footer>
+                  }
                 </article>
               } @empty {
                 <p class="restore-empty-line">Отзывов нет</p>

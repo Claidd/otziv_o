@@ -1025,6 +1025,55 @@ button.details-button:disabled {
   font-size: 0.7rem;
 }
 
+.restore-review-list .restore-review-heading {
+  flex-wrap: wrap;
+
+  strong,
+  span {
+    overflow: visible;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
+
+.restore-review-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem 0.75rem;
+  min-width: 0;
+  margin: 0;
+  font-size: 0.76rem;
+  font-weight: 900;
+  line-height: 1.35;
+
+  .restore-review-account {
+    grid-column: 1 / -1;
+  }
+
+  dt {
+    color: var(--otziv-info);
+  }
+
+  dd {
+    margin: 0.12rem 0 0;
+    color: var(--otziv-dark);
+    overflow-wrap: anywhere;
+  }
+}
+
+.restore-review-list .restore-review-actions {
+  justify-content: flex-end;
+}
+
+.restore-review-actions .archive-review-recovery-button {
+  min-width: 0;
+  max-width: 100%;
+  min-height: 2.75rem;
+  padding-block: 0.45rem;
+  line-height: 1.2;
+  white-space: normal;
+}
+
 .archive-review-recovery-button {
   display: inline-flex;
   align-items: center;
@@ -1193,6 +1242,10 @@ button.details-button:disabled {
 }
 
 @media (max-width: 640px) {
+  .restore-review-actions .archive-review-recovery-button {
+    width: 100%;
+  }
+
   .archive-tabs {
     overflow-x: auto;
   }
