@@ -5239,9 +5239,9 @@ class PaymentLinkServiceTest {
         verify(tbankClient, times(1)).getState(any(TbankPaymentProfile.class), eq("payment-5208"));
         verify(tbankClient, times(1)).cancel(any(TbankPaymentProfile.class), any(TbankCancelCommand.class));
         verify(orderTransactionService, times(1)).handlePaymentStatus(order);
-        verify(paymentInvoiceRetryScheduler, times(1)).cancelPaymentAutomation(
+        verify(paymentInvoiceRetryScheduler, times(1)).closePaymentAutomationForManualSettlement(
                 25047L,
-                "Заказ оплачен переводом на карту; T-Bank сессия закрыта"
+                "Ручная оплата подтверждена; платежные сообщения закрыты"
         );
         verify(managerAccessService, times(12)).requireOrderAccess(25047L, authentication);
     }
@@ -6367,7 +6367,7 @@ class PaymentLinkServiceTest {
 
         assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
         verify(orderTransactionService, never()).handlePaymentStatus(any(Order.class));
-        verify(paymentInvoiceRetryScheduler, never()).cancelPaymentAutomation(any(Long.class), anyString());
+        verify(paymentInvoiceRetryScheduler, never()).closePaymentAutomationForManualSettlement(any(Long.class), anyString());
     }
 
     @ParameterizedTest
@@ -6396,7 +6396,7 @@ class PaymentLinkServiceTest {
         assertEquals(409, error.getStatusCode().value());
         verify(tbankClient, never()).cancel(any(TbankPaymentProfile.class), any(TbankCancelCommand.class));
         verify(orderTransactionService, never()).handlePaymentStatus(any(Order.class));
-        verify(paymentInvoiceRetryScheduler, never()).cancelPaymentAutomation(any(Long.class), anyString());
+        verify(paymentInvoiceRetryScheduler, never()).closePaymentAutomationForManualSettlement(any(Long.class), anyString());
     }
 
     @Test

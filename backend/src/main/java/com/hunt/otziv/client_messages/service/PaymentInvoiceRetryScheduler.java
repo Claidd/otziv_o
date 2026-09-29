@@ -181,6 +181,43 @@ public class PaymentInvoiceRetryScheduler {
                 orderId,
                 "cancel_payment_automation"
         );
+        return closePaymentStates(states, reason);
+    }
+
+    /**
+     * Closing an old reminder is safe when recording a verified incoming payment:
+     * it cannot create or replace a payment route. Keep its unresolved delivery
+     * evidence so receipt recovery can record a late result without another send.
+     * The payment and closure must commit (or roll back) together.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public int closePaymentAutomationForManualSettlement(Long orderId, String reason) {
+        if (orderId == null || orderId <= 0) return 0;
+        List<ScheduledClientMessageState> states = stateRepository.findByOrderIdInForUpdate(List.of(orderId));
+        LocalDateTime now = LocalDateTime.now(clock);
+        // Validate the entire set before changing any state. Invoice sends retain
+        // the strict fence; only a completed, uncertain reminder attempt qualifies.
+        for (ScheduledClientMessageState state : states) {
+            if (PAYMENT_AUTOMATION_SCENARIOS.contains(state.getScenario())
+                    && !isUncertainSettledReminder(state, now)) {
+                requireSafeStateMutation(state, "manual_payment_settlement");
+            }
+        }
+        return closePaymentStates(states, reason);
+    }
+
+    private boolean isUncertainSettledReminder(ScheduledClientMessageState state, LocalDateTime now) {
+        return state.getScenario() == ClientMessageScenario.PAYMENT_REMINDER
+                && ClientMessageStateSafety.DELIVERY_OUTCOME_UNKNOWN.equals(state.getDeliveryStatus())
+                && ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN.equals(state.getLastErrorCode())
+                && state.getDeliveryPreparedAt() != null
+                && state.getDeliveryPreparedAt().isBefore(now.minusMinutes(5))
+                && (state.getLockedUntil() == null || state.getLockedUntil().isBefore(now))
+                && state.getDeliveryToken() != null && !state.getDeliveryToken().isBlank()
+                && state.getDeliveryEnvelope() != null && !state.getDeliveryEnvelope().isBlank();
+    }
+
+    private int closePaymentStates(List<ScheduledClientMessageState> states, String reason) {
         LocalDateTime now = LocalDateTime.now(clock);
         List<ScheduledClientMessageState> changed = new ArrayList<>();
         for (ScheduledClientMessageState state : states) {
@@ -192,6 +229,14 @@ public class PaymentInvoiceRetryScheduler {
             state.setStatus(ScheduledMessageStateStatus.DONE);
             state.setNextAttemptAt(null);
             state.setLockedUntil(null);
+            if (ClientMessageStateSafety.DELIVERY_OUTCOME_UNKNOWN.equals(state.getDeliveryStatus())) {
+                // Do not turn an unknown delivery into a claimed success or erase
+                // its original error, payload, identity or attempt timestamps.
+                log.info("Payment reminder closed by manual settlement; delivery evidence retained stateId={} orderId={}",
+                        state.getId(), state.getOrderId());
+                changed.add(state);
+                continue;
+            }
             state.setLastAttemptAt(now);
             state.setLastErrorCode("manual_card_payment_confirmed");
             state.setLastErrorMessage(reason == null || reason.isBlank()
