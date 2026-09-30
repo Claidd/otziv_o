@@ -10,7 +10,7 @@ import { summarizeReport, TRIVY_IMAGE } from './scan.mjs';
 
 const root = new URL('../../', import.meta.url);
 const manifest = JSON.parse(await readFile(new URL('./reviewed-images.json', import.meta.url)));
-const index = JSON.parse(await readFile(new URL('./reviewed-image-activations.json', import.meta.url)));
+const index = JSON.parse(await readFile(new URL('./c23-parent-activations.json', import.meta.url)));
 const image = manifest.images.find(item => item.component === 'alloy');
 const actualEntry = index.images.find(item => item.component === 'alloy');
 const publication = JSON.parse(await readFile(new URL(actualEntry.publication.path, root)));
