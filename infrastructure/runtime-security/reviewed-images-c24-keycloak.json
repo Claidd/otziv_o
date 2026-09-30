@@ -1,0 +1,75 @@
+{
+  "schema": "otziv-reviewed-images-v1",
+  "repository": "ghcr.io/claidd/otziv-security",
+  "tagPattern": "${component}-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}",
+  "platform": "linux/amd64",
+  "scope": "Reviewed candidate publication only; default activation and production rollout are separate decisions.",
+  "sourceBeforePolicy": "Immutable historical pins must remain explicit old-source upgrade proof inputs after any default update.",
+  "scanPolicy": "Scan actual published manifest digest; retain unchanged raw report/SBOM, separate exact-binary adjudications, and all vendor-unfixed risks.",
+  "images": [
+    {
+      "component": "keycloak",
+      "dockerfile": "infrastructure/runtime-security/builds/c24-keycloak/Dockerfile",
+      "context": "infrastructure/runtime-security/builds/c24-keycloak",
+      "buildArgs": {},
+      "platform": "linux/amd64",
+      "sourceBeforeRef": "quay.io/keycloak/keycloak@sha256:4883630ef9db14031cde3e60700c9a9a8eaf1b5c24db1589d6a2d43de38ba2a9",
+      "candidateBaseRef": "ghcr.io/claidd/otziv-security@sha256:6b29d37b178d16d7f10ad637157fb0a14acb740338280fc574575e72dae8bf22",
+      "buildImageRefs": [
+        "maven@sha256:527989ca6d3279cc9494d665f617374c428eccd7248dbadf0d03bceaa70b9c5d",
+        "maven@sha256:d6e32a254897415a445654a3c43c30fbc731a4d946cf5c66d1cb9184141c20c1",
+        "quay.io/keycloak/keycloak@sha256:ff4257d0d64efbe99ed1ddfaf07765cc3c36dc7518bf8324d41961327f441c54",
+        "maven@sha256:9b0bc1420b93f3eafb7401dc3030eac01e773d8d709686d3c4ac351fcf6f9f42",
+        "eclipse-temurin:21-jre-jammy@sha256:eebd356ad7358b7094758e5787a6726f332917cfd56feab6457c56dab895cdbf",
+        "ghcr.io/claidd/otziv-security@sha256:f4c38162a10001267b4667afc890a7a9438b5a27cb456c77c87cdcc5aa8d39f6"
+      ],
+      "version": "26.7.3-otziv.2",
+      "dockerfileSha256": "112dccf712d6787c60c24d1fd4ef01235ca5204e91ee5d1cc2679d790d344b46",
+      "historicalLocalImageId": "sha256:537b96f86faa1afdd7502ec6dc38da258cf479568488053581c561bad960cd5e",
+      "historicalLocalEvidence": [
+        {
+          "path": "infrastructure/runtime-security/ISSUER_ORDERING_VALIDATION_2026-09-08.json",
+          "sha256": "dad1ae36640354bda31860c8d58c5612edccf53531711e5bd58a2c5cdf745e78"
+        }
+      ],
+      "sourceBeforeScan": {
+        "path": ".codex-tmp/security-closure-20260908/upstream/c5-artifacts/upstream-security-quay-io-keycloak-keycloak-61bd1127b1/quay-io-keycloak-keycloak-61bd1127b1-vulnerabilities.json",
+        "sha256": "e28c49f339ed747f30d248ce2bd4beb71de33f8c650c58c68c2637a8aac97306"
+      },
+      "defaultReferencesBefore": [
+        {
+          "path": "compose.yaml",
+          "line": 275,
+          "service": "keycloak"
+        },
+        {
+          "path": "compose.prod-local.yaml",
+          "line": 120,
+          "service": "keycloak"
+        },
+        {
+          "path": "docker-compose.yaml",
+          "line": 131,
+          "service": "keycloak"
+        }
+      ],
+      "publishedDigest": null,
+      "publicationStatus": "NOT_PUBLISHED",
+      "deploymentStatus": "NOT_ACTIVATED",
+      "unfixedRiskReview": "NONE",
+      "activationPreconditions": [
+        "paired issuer DB backup",
+        "generation provider/provisioning gate and client mappings",
+        "actual login/refresh/revocation proof"
+      ],
+      "dockerfileHashEncoding": "UTF-8 with CRLF normalized to LF"
+    }
+  ],
+  "publicationWave": "C7",
+  "previousManifest": {
+    "path": "infrastructure/runtime-security/history/c6/reviewed-images.json",
+    "sha256": "d2703f82c09690f1b1815471f5a8e24e1960bd90217df733498c0c7ed07b03f3"
+  },
+  "publicationSet": "c24-keycloak",
+  "baselineManifestSha256": "d48bdb7d6d869cde5d6f1a7b089491765e3eeaf46e0b0b6bb51b7719b38d3ef2"
+}

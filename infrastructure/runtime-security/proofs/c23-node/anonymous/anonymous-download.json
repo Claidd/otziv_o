@@ -1,0 +1,71 @@
+{
+  "schema": "otziv-anonymous-download-v1",
+  "component": "node",
+  "commit": "392e2b86335114fddb63c1bf2601891013896f1f",
+  "run": "36711240938",
+  "attempt": "1",
+  "manifestSet": "c23-node",
+  "manifestPath": "infrastructure/runtime-security/reviewed-images-c23-node.json",
+  "runner": "GitHub Actions 1000011783",
+  "startedAt": "2026-09-30T11:55:40.460Z",
+  "sourcePublicationSha256": "d16e4d8c795566819bb7dc32cb25856ec28015116490eaf769835add4c178a7c",
+  "result": "PASS",
+  "accountCredentialsUsed": false,
+  "dockerCredentialHelpersAvailable": false,
+  "dockerTransport": "unix:///var/run/docker.sock",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:f4c38162a10001267b4667afc890a7a9438b5a27cb456c77c87cdcc5aa8d39f6",
+  "imageAbsentBeforePull": true,
+  "daemonVersion": "\"28.0.4\"",
+  "attestationEvidence": {
+    "schema": "otziv-registry-evidence-v1",
+    "imageManifestDigest": "sha256:62101e1fb23f11461ccdd436854d0eb699c854154cedb360810fd7c1730bbe1d",
+    "predicates": [
+      "https://slsa.dev/provenance/v1",
+      "https://spdx.dev/Document"
+    ],
+    "artifacts": [
+      {
+        "file": "registry-index.json",
+        "digest": "sha256:f4c38162a10001267b4667afc890a7a9438b5a27cb456c77c87cdcc5aa8d39f6",
+        "size": 857
+      },
+      {
+        "file": "registry-amd64-manifest.json",
+        "digest": "sha256:62101e1fb23f11461ccdd436854d0eb699c854154cedb360810fd7c1730bbe1d",
+        "size": 2767
+      },
+      {
+        "file": "registry-amd64-config.json",
+        "digest": "sha256:ee8b1e73bb3d45ffd4934771629d5816e75d54e48ad50b746705cb2d52512f88",
+        "size": 9653
+      },
+      {
+        "file": "registry-attestation-0.json",
+        "digest": "sha256:9f6133d8de72699c6e884740df6061fdb53a7add78a433c4816078e32c939898",
+        "size": 1111
+      },
+      {
+        "file": "registry-attestation-0-payload-0.json",
+        "digest": "sha256:2b0187940193b49d42d1e2460d70f9d0a33ebd6e9e5b0838d158f7d7e93076e6",
+        "size": 444565
+      },
+      {
+        "file": "registry-attestation-0-payload-1.json",
+        "digest": "sha256:2408dff88102fc9cd31a9df47bb3c49e9c9bf1276e6d556f76fcbca5c1253ba8",
+        "size": 23705
+      }
+    ],
+    "sourceBinding": "LOCAL_GIT_METADATA_CHECKED_AGAINST_CLEAN_CHECKOUT_NOT_INDEPENDENT_SOURCE_AUTHENTICATION"
+  },
+  "pullExitCode": 0,
+  "imageId": "sha256:ee8b1e73bb3d45ffd4934771629d5816e75d54e48ad50b746705cb2d52512f88",
+  "platform": "linux/amd64",
+  "labels": {
+    "com.otziv.publication.revision": "392e2b86335114fddb63c1bf2601891013896f1f",
+    "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+    "com.otziv.reviewed-component": "node",
+    "com.otziv.security.patch": "Node24.20.0/npm11.19.0 unchanged; exact compatible npm vendor package patches and Alpine3.24 updates"
+  },
+  "publicDownloadReadiness": "VERIFIED_ANONYMOUS_DIGEST_PULL",
+  "finishedAt": "2026-09-30T11:55:45.360Z"
+}

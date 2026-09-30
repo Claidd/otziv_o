@@ -3,7 +3,7 @@ FROM node:22-trixie-slim@sha256:7b8a0c89c54499bee567618f96578e1a12a800f062fbdbfd
 # Identical browser layer in both images; provenance: runtime-security/proofs/chrome153.
 RUN printf 'Acquire::Retries "1"; Acquire::http::Timeout "20"; Acquire::https::Timeout "20"; Acquire::ForceIPv4 "true";\n' > /etc/apt/apt.conf.d/80-bounded-network && \
     test "$(dpkg --print-architecture)" = amd64 && \
-    apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends curl ca-certificates fonts-liberation fonts-dejavu && \
+    apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends curl ca-certificates fonts-liberation fonts-dejavu openssl && \
     curl --fail --location --retry 3 --connect-timeout 20 --max-time 300 'https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_153.0.8010.36-1_amd64.deb' --output /tmp/chrome.deb && \
     printf '%s  /tmp/chrome.deb\n' '9bb44e33031c2f2857cf36b4343051a12f93058e4b781e3c76313df87f6c8d32' | sha256sum --check --strict && \
     apt-get install -y --no-install-recommends /tmp/chrome.deb && \

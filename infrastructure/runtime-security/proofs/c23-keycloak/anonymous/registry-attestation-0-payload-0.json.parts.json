@@ -1,0 +1,17 @@
+{
+  "schema": "otziv-raw-evidence-parts-v1",
+  "bytes": 5928292,
+  "sha256": "67003816b63bea11f809d388b0dbdf9158ad003c4b62a3dfa2e94c556a7586a2",
+  "parts": [
+    {
+      "file": "registry-attestation-0-payload-0.json.part001",
+      "bytes": 4194304,
+      "sha256": "cc689a2bb37b633793e3865caca52ca2a8aefeaa82089de1a4dde478c5364bba"
+    },
+    {
+      "file": "registry-attestation-0-payload-0.json.part002",
+      "bytes": 1733988,
+      "sha256": "e5b0dbeb87eac9876c927fcca1d05e5d4ebc2a75d970160e2725fd1a319431d0"
+    }
+  ]
+}

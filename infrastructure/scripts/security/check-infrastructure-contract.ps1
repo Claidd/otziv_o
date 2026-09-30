@@ -604,7 +604,7 @@ try {
     $frontendOverrides = $frontendPackageJson['overrides']
     $requiredFrontendOverrides = [ordered]@{
         'hono' = '4.13.5'
-        'ip-address' = '10.4.0'
+        'ip-address' = '10.7.1'
     }
     foreach ($dependency in $requiredFrontendOverrides.Keys) {
         if ($frontendOverrides[$dependency] -ne $requiredFrontendOverrides[$dependency]) {
@@ -612,12 +612,12 @@ try {
         }
     }
     foreach ($parent in @('@angular/build', 'jsdom')) {
-        if ($frontendOverrides[$parent]['undici'] -ne '7.29.0') {
-            $violations.Add("Frontend dependency override $parent -> undici must remain pinned to 7.29.0.")
+        if ($frontendOverrides[$parent]['undici'] -ne '7.29.1') {
+            $violations.Add("Frontend dependency override $parent -> undici must remain pinned to 7.29.1.")
         }
     }
-    if ($frontendOverrides['node-gyp']['undici'] -ne '6.28.0') {
-        $violations.Add('Frontend dependency override node-gyp -> undici must remain pinned to 6.28.0.')
+    if ($frontendOverrides['node-gyp']['undici'] -ne '6.28.1') {
+        $violations.Add('Frontend dependency override node-gyp -> undici must remain pinned to 6.28.1.')
     }
 }
 catch {

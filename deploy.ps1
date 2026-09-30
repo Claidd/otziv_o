@@ -11,6 +11,7 @@ param(
     [string]$MobileApkPath = '',
     [ValidateSet('Direct', 'Local')][string]$ImageTransport = 'Direct',
     [switch]$FullRollout,
+    [switch]$CoordinatedSslRefresh,
     [switch]$CheckOnly,
     [switch]$PreflightOnly,
     [string]$ReleaseSessionToken = '',
@@ -180,6 +181,7 @@ try {
         DeploySnapshotBaseRevision = $ci.revision; DeployProtectedMainRevision = $ci.revision
         PrivateRegistryControlFile = $record; RebuildWhatsApp = $true; RequireMainCi = $true; SkipBuildPush = $true
         CiReleaseManifest = $manifest; CiCapacityPlan = $capacity; FullRollout = $FullRollout
+        CoordinatedSslRefresh = $CoordinatedSslRefresh
         PreDeployBackupDirectory = (Join-Path $directory 'database-backup')
         PreparedSourceArchive = $preparedSource.archive; PreparedSourceSha256 = $preparedSource.sha256
         ReleaseTimingFile = $timing

@@ -156,3 +156,10 @@ test('default activation cannot rely on a forged PASS when the retained scan con
   await assert.rejects(validateActivation(value.image, entry, value.manifestBytes,
     async path => { assert.ok(files.has(path)); return files.get(path); }), /unreviewed_runtime_dependency_version/);
 });
+
+test('Jackson 2.21.7 requires every observed server and shaded CLI databind copy to be patched',()=>{
+ const value=scan(),updated=value.Results[0].Packages[0];updated.Version='2.21.7';updated.Identifier.PURL=updated.Identifier.PURL.replace('2.21.6','2.21.7');
+ const receipt=checkKeycloakRuntimeDependencies(bytes(value),imageId);validateKeycloakDependencyReceipt(receipt,imageId);assert.ok(receipt.policy.includes('databind-2.21.7'));
+ value.Results[0].Packages.push({...updated,Version:'2.21.6',Identifier:{PURL:updated.Identifier.PURL.replace('2.21.7','2.21.6')},FilePath:'opt/keycloak/bin/client/keycloak-admin-cli-26.7.3.jar'});
+ assert.throws(()=>checkKeycloakRuntimeDependencies(bytes(value),imageId),/keycloak_unreviewed_runtime_dependency_version/);
+});

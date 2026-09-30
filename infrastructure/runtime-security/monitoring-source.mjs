@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {readFile} from 'node:fs/promises';
+import {readFile,appendFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {repositoryInventory} from './upstream-images.mjs';
 
@@ -24,6 +24,22 @@ export async function readMonitoringSource(component) {
     manifestSha256: createHash('sha256').update(bytes).digest('hex') };
 }
 
+// C23 is a reviewed package overlay over the retained source-built C15 image.
+// Its complete publication, parent recipe, filesystem, binary and scan graph must
+// validate before CI can exercise the exact published overlay. Other recipes
+// keep the existing source-build selection and every candidate is scanned fresh.
+export async function usesReviewedSslOverlay(component) {
+  assert.ok(COMPONENTS.has(component), 'monitoring_component_invalid');
+  if (component !== 'alloy') return false;
+  const index = JSON.parse(await readFile(new URL('./reviewed-image-activations.json', import.meta.url)));
+  const entries = index.images.filter(entry => entry.component === component);
+  assert.equal(entries.length, 1, 'monitoring_activation_missing_or_duplicate');
+  if (entries[0].manifest?.path !== 'infrastructure/runtime-security/reviewed-images-c23-alloy.json') return false;
+  const {validateRepositoryDefaults} = await import('./reviewed-image-defaults.mjs');
+  await validateRepositoryDefaults(fileURLToPath(new URL('../../', import.meta.url)));
+  return true;
+}
+
 export function assertDistinctMonitoringImageIds(sourceId, candidateId) {
   assert.match(sourceId || '', IMAGE_ID, 'monitoring_source_identity_invalid');
   assert.match(candidateId || '', IMAGE_ID, 'monitoring_candidate_identity_invalid');
@@ -33,7 +49,12 @@ export function assertDistinctMonitoringImageIds(sourceId, candidateId) {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const component = process.argv[2];
   assert.ok(COMPONENTS.has(component), 'monitoring_component_invalid');
-  if (process.argv[3] === '--current') {
+  if (process.argv[3] === '--verification-mode') {
+    assert.equal(process.argv.length, 4, 'usage_monitoring_verification_mode_component');
+    const value = 'reviewed_ssl_overlay=' + String(await usesReviewedSslOverlay(component)) + '\n';
+    assert.ok(process.env.GITHUB_OUTPUT, 'monitoring_verification_output_missing');
+    await appendFile(process.env.GITHUB_OUTPUT, value);
+  } else if (process.argv[3] === '--current') {
     assert.equal(process.argv.length, 4, 'usage_monitoring_source_component');
     const rows = (await repositoryInventory()).filter(row => row.references.some(ref =>
       ref.path === 'docker-compose.yaml' && ref.service === component));

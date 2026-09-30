@@ -65,6 +65,9 @@ test('monitoring workflow wires the tested selection to proofs and fresh scans',
   assert.ok(job.includes('monitoring-upgrade.mjs'));
   assert.ok(job.includes('scan.mjs image'));
   assert.ok(job.includes('ci_monitoring_runner.py load'));
+  assert.ok(job.includes('--verification-mode'));
+  assert.equal(job.split("steps.monitoring_source.outputs.reviewed_ssl_overlay != 'true'").length-1,2);
+  assert.ok(job.includes("steps.monitoring_source.outputs.reviewed_ssl_overlay == 'true'"));
   assert.equal(job.includes('tags: otziv-monitoring-proof-ci'), false);
 });
 test('deleted and renamed code paths remain visible and missing base expands coverage', () => {

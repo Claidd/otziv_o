@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { selectMonitoringSource, assertDistinctMonitoringImageIds, readMonitoringSource } from './monitoring-source.mjs';
+import { selectMonitoringSource, assertDistinctMonitoringImageIds, readMonitoringSource, usesReviewedSslOverlay } from './monitoring-source.mjs';
 const before = 'prom/prometheus@sha256:'+'a'.repeat(64), after='ghcr.io/claidd/otziv-security@sha256:'+'b'.repeat(64);
 const manifest = () => ({schema:'otziv-reviewed-images-v1', images:[{component:'prometheus',sourceBeforeRef:before,candidateBaseRef:after,publishedDigest:after}]});
 for(const component of ['prometheus','grafana','loki','tempo','alloy'])test(`immutable historical baseline is used for ${component} after default/publication switch`,()=>{
@@ -29,4 +29,10 @@ test('different actual immutable image IDs are accepted, malformed identities ar
 });
 test('real checked-in manifest loads without any Compose file or environment interpolation',async()=>{
  const value=await readMonitoringSource('prometheus');assert.match(value.source,/^prom\/prometheus@sha256:[a-f0-9]{64}$/);assert.match(value.manifestSha256,/^[a-f0-9]{64}$/);
+});
+
+test('only the fully verified C23 overlay selects its actual published runtime for fresh configuration and scan proofs',async()=>{
+ assert.equal(await usesReviewedSslOverlay('alloy'),true);
+ for(const component of ['prometheus','loki','tempo','grafana'])assert.equal(await usesReviewedSslOverlay(component),false);
+ await assert.rejects(usesReviewedSslOverlay('postgres'),/monitoring_component_invalid/);
 });

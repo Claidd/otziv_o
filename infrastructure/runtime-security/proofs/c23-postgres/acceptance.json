@@ -1,0 +1,49 @@
+{
+  "schema": "otziv-ssl-refresh-acceptance-v1",
+  "result": "PASS",
+  "component": "postgres",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:c974c12a1107e314b1ba8cf65bd1fc5b6964645ced420c2151d336ee8a9a6534",
+  "imageConfigId": "sha256:1f5c2590fadde6b449908569285f1ed91a10831d36535d5c4ed647e9a0afca6a",
+  "parentReference": "ghcr.io/claidd/otziv-security@sha256:a30a580feb45fce65b87d21a104d407d3d1c5b255ae0e9a05ce9903e10adb270",
+  "parentIndexSha256": "7df6f0ad65a8e1b7466afc226bf2db32abd34864f082fe3607701eead286ef92",
+  "commit": "f2239d547142ad4e73f0b7f4b25799f410a240b9",
+  "run": "36716365254",
+  "attempt": "1",
+  "runtimePath": "infrastructure/runtime-security/proofs/c23-postgres/publication/vulnerabilities.runtime-refresh.json.gz",
+  "scope": "OpenSSL package refresh; application payload, launch configuration and unrelated packages verified unchanged.",
+  "pair": {
+    "postgres": {
+      "reference": "ghcr.io/claidd/otziv-security@sha256:c974c12a1107e314b1ba8cf65bd1fc5b6964645ced420c2151d336ee8a9a6534",
+      "imageConfigId": "sha256:1f5c2590fadde6b449908569285f1ed91a10831d36535d5c4ed647e9a0afca6a"
+    },
+    "keycloak": {
+      "reference": "ghcr.io/claidd/otziv-security@sha256:6b29d37b178d16d7f10ad637157fb0a14acb740338280fc574575e72dae8bf22",
+      "imageConfigId": "sha256:b15368a219b3ccdb55785120cec0447782109cc2ce0de50c1d2323964755a41b"
+    }
+  },
+  "capturePath": "infrastructure/runtime-security/proofs/c23-keycloak/rehearsal/capture.json",
+  "replayPath": "infrastructure/runtime-security/proofs/c23-keycloak/rehearsal/replay.json",
+  "issuerPath": "infrastructure/runtime-security/proofs/c23-keycloak/issuer.json",
+  "startupPath": "infrastructure/runtime-security/proofs/c23-keycloak/startup.json",
+  "files": {
+    "infrastructure/runtime-security/proofs/c23-postgres/publication/publication.json": "ca493ac4a13f6c9037eabb4ce9627caca58812128babdcb176f5f7de50c5629a",
+    "infrastructure/runtime-security/proofs/c23-postgres/publication/registry-amd64-config.json": "1f5c2590fadde6b449908569285f1ed91a10831d36535d5c4ed647e9a0afca6a",
+    "infrastructure/runtime-security/proofs/c23-postgres/publication/vulnerabilities.json": "f2d09388017e872377beb7fbc4101c363db30ff342e89b6e35b10c162beb492f",
+    "infrastructure/runtime-security/proofs/c23-postgres/publication/vulnerabilities.adjudications.json": "13311c894e05efc47dd6f3171259543938223c4880297a7262dc90981736ee6b",
+    "infrastructure/runtime-security/proofs/c23-postgres/publication/vulnerabilities.triage.json": "a8649846c460167d452e06d2e44e2d70b95f852fbfd71d71d21b82e2297fe377",
+    "infrastructure/runtime-security/proofs/c23-postgres/publication/vulnerabilities.runtime-refresh.json.gz": "60e3960cd635ddba0f33efc9c10169f9b2b9595dc49d66999bb40fa7ec6423ff",
+    "infrastructure/runtime-security/proofs/c23-keycloak/rehearsal/capture.json": "3f3ba323d165e2d82dbff781ad127cae74bacd9303b8aa7afa3b0bd1ae8d98d8",
+    "infrastructure/runtime-security/proofs/c23-keycloak/rehearsal/replay.json": "1f13a6627eccea800f0369ffe9ee859b423208bf3ce57c98bb02492ff0b68028",
+    "infrastructure/runtime-security/proofs/c23-keycloak/issuer.json": "44f79c6bfd080220d1fa30d645b79d1fd728f745b93e5768e43ca17d8e6ceab1",
+    "infrastructure/runtime-security/proofs/c23-keycloak/startup.json": "656731ea9d848cf01c2d8bb0ba811cff02f995583bb78c3cf777a894f0fff58d"
+  },
+  "executedSources": {
+    "infrastructure/runtime-security/ssl-refresh-inspection.py": "4969ebbd33456ba2fa10e377d2ff6877dca7651334c33536ca03362f83af1e1d",
+    "infrastructure/runtime-security/ssl-refresh.mjs": "9ee312eb882b408847e366f388882fe05eb28794b935a5910f2cfd7dd1898be8",
+    "infrastructure/runtime-security/ssl-refresh-rehearsal.py": "6c63ec417e4276834fe6b5316e695ef9e9116811152bfb9d66eb39f592b821f0",
+    "infrastructure/keycloak/security-generation/c14-migration-fix/private-runtime.py": "f8bee667af239ac739f7912634d1b657ae29c7eecb9f71b73c31b78be2f1189b",
+    "infrastructure/keycloak/security-generation/container-proof.mjs": "c461daf8875f06e6c1ebf05858e9eebd80af34fe09939ca04830d595cb07b5e4",
+    "infrastructure/keycloak/security-generation/image-startup-smoke.mjs": "2db7f9ba3b2fe7b10f056c4c0717dbe07dcc72a566827ad274112d0b644e7a14",
+    "infrastructure/keycloak/security-generation/provision.mjs": "c5e081a0c4610f0450be825d02ae8db2b93fe1c4581280e232a3328fdce19567"
+  }
+}

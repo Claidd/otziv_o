@@ -20,6 +20,8 @@ import { validatePublishedKeycloakMigrationAcceptance,
   assertPostgresKeycloakCoupling } from './postgres-transition-readiness.mjs';
 import {validateKeycloakC19Acceptance} from './keycloak-c19-acceptance.mjs';
 import {validateKeycloakC22Acceptance,coupleKeycloakC22} from './keycloak-c22-acceptance.mjs';
+import {validateSslRefreshActivation,validateSslRefreshTransition,coupleSslRefresh} from './ssl-refresh-activation.mjs';
+import {validateJacksonRefreshActivation} from './jackson-refresh-activation.mjs';
 
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 const DATABASE_HOLD = new Set(['mysql', 'postgres']);
@@ -139,7 +141,7 @@ export async function validateActivation(image, entry, manifestBytes, read) {
   const anonymous = await proof(entry.anonymous);
   const identity = { commit: entry.commit, run: entry.run, attempt: entry.attempt };
   const digest = validatePublication(publication.value, identity, publicationImage, sha256(selected.manifestBytes), selected.manifestSet);
-  if (publicationImage.component === 'postgres') {
+  if (publicationImage.component === 'postgres' && selected.manifestSet !== 'c23-postgres') {
     await validatePostgresActivationScan(publication.value, entry.publication.path, read);
   }
   if (['mc', 'minio'].includes(publicationImage.component)) {
@@ -155,6 +157,10 @@ export async function validateActivation(image, entry, manifestBytes, read) {
   }
   if (selected.manifestSet === 'c19-keycloak') await validateKeycloakC19Acceptance(publication.value, entry, read);
   if (selected.manifestSet === 'c22-keycloak') await validateKeycloakC22Acceptance(publication.value, entry, read);
+  if (['c23-postgres','c23-keycloak','c23-alloy'].includes(selected.manifestSet)) {
+    await validateSslRefreshActivation(publication.value, entry, read, validateActivation);
+  }
+  if(selected.manifestSet==='c24-keycloak')await validateJacksonRefreshActivation(publication.value,entry,read,validateActivation);
   assert.equal(entry.reference, publication.value.reference, 'activation_registered_reference_mismatch');
   assert.equal(publication.value.security.effectiveBlockingFixedHighOrCritical, 0, 'activation_security_severity_mismatch');
   if (publication.value.security.unresolvedRiskReview === 'NONE') {
@@ -218,12 +224,17 @@ export async function validateReviewedDefaults(rows, manifestBytes, activations,
       const image = images.find(image => image.component === entry.component);
       databasePreparations.set(entry.component, await (entry.component === 'mysql'
         ? validateDatabaseTransitionReadiness(entry, image, read)
-        : validatePostgresTransitionReadiness(entry, image, read)));
+        : entry.manifest?.path === 'infrastructure/runtime-security/reviewed-images-c23-postgres.json'
+          ? validateSslRefreshTransition(entry, image, read)
+          : validatePostgresTransitionReadiness(entry, image, read)));
     }
     registered.set(entry.component, entry);
   }
   if (databasePreparations.has('postgres')) {
-    const coupled = await coupleKeycloakC22(databasePreparations.get('postgres'), registered.get('keycloak'), read);
+    const issuer = registered.get('keycloak');
+    const coupled = await (['infrastructure/runtime-security/reviewed-images-c23-keycloak.json','infrastructure/runtime-security/reviewed-images-c24-keycloak.json'].includes(issuer?.manifest?.path)
+      ? coupleSslRefresh(databasePreparations.get('postgres'), issuer, read)
+      : coupleKeycloakC22(databasePreparations.get('postgres'), issuer, read));
     assertPostgresKeycloakCoupling(coupled, registered.get('keycloak'), rows,
       images.find(image => image.component === 'keycloak'));
   }

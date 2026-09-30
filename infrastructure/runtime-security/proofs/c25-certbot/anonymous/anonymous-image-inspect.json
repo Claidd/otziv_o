@@ -1,0 +1,86 @@
+[
+    {
+        "Id": "sha256:e62b53b43a531811f6144c03d2247108235dc9b0c3eaf7041b99d62f40e5e900",
+        "RepoTags": [],
+        "RepoDigests": [
+            "ghcr.io/claidd/otziv-security@sha256:fc21f2b893f9db7550cbad759cb2ad50fbf49bee61d5f58a3a45b009037a8764"
+        ],
+        "Parent": "",
+        "Comment": "buildkit.dockerfile.v0",
+        "Created": "2026-09-30T20:18:37.119984058Z",
+        "DockerVersion": "",
+        "Author": "",
+        "Config": {
+            "Hostname": "",
+            "Domainname": "",
+            "User": "",
+            "AttachStdin": false,
+            "AttachStdout": false,
+            "AttachStderr": false,
+            "ExposedPorts": {
+                "443/tcp": {},
+                "80/tcp": {}
+            },
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "PATH=/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "PYTHON_VERSION=3.14.7",
+                "PYTHON_SHA256=3b48dac8fb59f62eaa67ac83c1eb12bda1b7a08406dd286e252c11a66be27f81"
+            ],
+            "Cmd": null,
+            "Image": "",
+            "Volumes": {
+                "/etc/letsencrypt": {},
+                "/var/lib/letsencrypt": {}
+            },
+            "WorkingDir": "/opt/certbot",
+            "Entrypoint": [
+                "certbot"
+            ],
+            "OnBuild": null,
+            "Labels": {
+                "com.otziv.publication.revision": "a243b2a891f7b6a2ca3dd4af3fe5f0bc72ef530a",
+                "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+                "com.otziv.reviewed-component": "certbot",
+                "com.otziv.security.patch": "Certbot5.8.0 unchanged; Alpine3.23 updates; actual installer code removed from runtime"
+            }
+        },
+        "Architecture": "amd64",
+        "Os": "linux",
+        "Size": 195939280,
+        "GraphDriver": {
+            "Data": {
+                "LowerDir": "/var/lib/docker/overlay2/b4ae8c10179df7f67bb7e9827e22a1fb76d8e90d5d76024e5b43c89793dbec08/diff:/var/lib/docker/overlay2/b23c00f3a9c5b2928e2c4dbbabbc8340582548db4482443d8ad6b63cc73fd958/diff:/var/lib/docker/overlay2/8c0409eed60d8d8365aa741bb9b0f2a7918a94b9e1c0e35592d87c23654d8f81/diff:/var/lib/docker/overlay2/4ed3c51131d6acd7ebb68415103305f85fc8ba48ae5184469e3e0ada1c7a32f1/diff:/var/lib/docker/overlay2/01f3d233ca1f65fa73b9bc3267ec3e60d36e81c20fa3207d564637ec5e4a3451/diff:/var/lib/docker/overlay2/154037125e1dd4c76f20aae8171b718ebdcc323bff5ba7795a0f2898c276431a/diff:/var/lib/docker/overlay2/8cf7c3a896da59827334f8d3fbd3efa7ebbae3dd67c3761a779417d43b26e1bd/diff:/var/lib/docker/overlay2/07661340c27865728d821d8ec730d21e5b1e0488b719e5e9c46fcc54d4c5c28c/diff:/var/lib/docker/overlay2/329d450884e118c519c4ffb76ea1b3721ff8ed59adeee0321c6023cad8c0577e/diff:/var/lib/docker/overlay2/84729a793911f8253a6ce1ddb2a38af6f1acb8f61cb8f38c0d786045fb24d11f/diff:/var/lib/docker/overlay2/bb5da37a4875e97d26eceaf74efabdec1743e35393d17995237e365a29928634/diff:/var/lib/docker/overlay2/251c0d563a5ceb7f73a2684fb991f2eacbb33fc612412b8a0f7258798cd75fdf/diff:/var/lib/docker/overlay2/ca420aadc8d8e84734332210cd90683b704a6d21461a885cc13496d656e04544/diff:/var/lib/docker/overlay2/6d80fe39d103208dfa71bba47752c6622a1c4f76698f5e7cc48694e148398a37/diff",
+                "MergedDir": "/var/lib/docker/overlay2/aac865e2b8c04a0cba2fea75799c7216a7e76592273605041579fd10624f24d5/merged",
+                "UpperDir": "/var/lib/docker/overlay2/aac865e2b8c04a0cba2fea75799c7216a7e76592273605041579fd10624f24d5/diff",
+                "WorkDir": "/var/lib/docker/overlay2/aac865e2b8c04a0cba2fea75799c7216a7e76592273605041579fd10624f24d5/work"
+            },
+            "Name": "overlay2"
+        },
+        "RootFS": {
+            "Type": "layers",
+            "Layers": [
+                "sha256:31ad4a471c6852bfec14d757cc75a566c82a9769f12c3918cf6bf52cc0eeb3d0",
+                "sha256:6c89462f1460a25010ce1c5b803e0f73b7abeadb8aadd19780e5f274524244d9",
+                "sha256:8db1db438929d6f87dc658090a5b7620f843d5d55334bf19ff1d34d02fae6de5",
+                "sha256:9984ce7ca1602dbac8dd09f767174873da04ac6417484d05fa486d89ae5acd0d",
+                "sha256:77848973927cb0e07e0495c330d4bd6293555dca3b9eea3ee251df147f119d9c",
+                "sha256:70049969887b7b32a22595836d7e9526ba3f71377559adf03dd1edb9b40a75d1",
+                "sha256:33b5c658b86ace0793c87fd0437ad297d5c507ecec1fe5daba5b863b0adfa06b",
+                "sha256:c8db08cab275cd1170038f0961a793e88d691553ce9f47a6799c6b45f8b8755b",
+                "sha256:8c57e113b6b30c2511ab0ca6246f774687d153050ed069393a5b7dbb31fb0518",
+                "sha256:116f1062bba68bf69c01776043f457687d059c29092fca37f7b530f25a5970c4",
+                "sha256:c4a36adc5b2a91b0effc266bea649c51e93d1cc2828f1cd1dd252c11c2f4bcca",
+                "sha256:221f62de9c71f8b02cf5117411c6be66011223886b9f6c3be57e2fb9ef0544df",
+                "sha256:be00f9beb9f3d12d481d4db567967a3c73514c347b3305605e1de7e3296e8f3c",
+                "sha256:8d15518bf7362e8561dbac07be55cc1e189a58c3023f1ddb31365e4fa91de996",
+                "sha256:f3d45131e25cd65a77dafcabd1fd6941fb2a37889ed8c4c9788ddc6e2ff6d33f"
+            ]
+        },
+        "Metadata": {
+            "LastTagTime": "0001-01-01T00:00:00Z"
+        }
+    }
+]

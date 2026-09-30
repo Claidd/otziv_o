@@ -7,7 +7,7 @@ const root=new URL('../../',import.meta.url),R='infrastructure/runtime-security/
 const read=await createEvidenceReader(root.pathname.replace(/^\/(\w:)/,'$1'));
 const pub=JSON.parse(await read(P+'publication/publication.json'));
 const manifest=await read(R+'reviewed-images.json'),image=JSON.parse(manifest).images.find(x=>x.component==='postgres');
-const entry=JSON.parse(await read(R+'reviewed-image-activations.json')).images.find(x=>x.component==='postgres');
+const entry=JSON.parse(await read(R+'c23-parent-activations.json')).images.find(x=>x.component==='postgres');
 const changedReader=(path,mutate)=>async key=>{
   const bytes=await read(key);if(key!==path)return bytes;
   const value=JSON.parse(bytes);mutate(value);return Buffer.from(JSON.stringify(value));

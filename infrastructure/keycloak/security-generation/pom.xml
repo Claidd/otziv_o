@@ -8,7 +8,7 @@
     <maven.compiler.release>21</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <keycloak.version>26.7.3</keycloak.version>
-    <jackson-bom.version>2.21.6</jackson-bom.version>
+    <jackson-bom.version>2.21.7</jackson-bom.version>
     <parsson.version>1.1.9</parsson.version>
     <vertx.version>4.5.33</vertx.version>
   </properties>

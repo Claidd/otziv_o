@@ -13,12 +13,14 @@ export function positive(value, code, maximum = Number.MAX_SAFE_INTEGER) {
 }
 // Keep the recovery runtime paired with the published PostgreSQL activation.
 // Other images in the shared GHCR repository are not PostgreSQL runtimes.
-export const REVIEWED_POSTGRES_IMAGE = 'ghcr.io/claidd/otziv-security@sha256:a30a580feb45fce65b87d21a104d407d3d1c5b255ae0e9a05ce9903e10adb270';
+export const REVIEWED_POSTGRES_IMAGE = 'ghcr.io/claidd/otziv-security@sha256:c974c12a1107e314b1ba8cf65bd1fc5b6964645ced420c2151d336ee8a9a6534';
+// Preserve the exact pre-OpenSSL image for retained backup restore and rollback.
+export const SSL_REFRESH_PARENT_POSTGRES_IMAGE = 'ghcr.io/claidd/otziv-security@sha256:a30a580feb45fce65b87d21a104d407d3d1c5b255ae0e9a05ce9903e10adb270';
 // Existing encrypted backups keep their original runtime identity for rollback.
 export const PREVIOUS_REVIEWED_POSTGRES_IMAGE = 'ghcr.io/claidd/otziv-security@sha256:07834abbfd80ed7183afa9096db99afc4d93b99fd51aae726e550d07ade65dbf';
 export function assertPostgresImage(value) {
   if (typeof value !== 'string' || (!/^postgres(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?@sha256:[a-f0-9]{64}$/.test(value) &&
-      value !== REVIEWED_POSTGRES_IMAGE && value !== PREVIOUS_REVIEWED_POSTGRES_IMAGE)) throw new Error('postgres_image_not_pinned');
+      value !== REVIEWED_POSTGRES_IMAGE && value !== PREVIOUS_REVIEWED_POSTGRES_IMAGE && value !== SSL_REFRESH_PARENT_POSTGRES_IMAGE)) throw new Error('postgres_image_not_pinned');
 }
 export function validateConfig(config) {
   if (config.schema !== 'otziv-recovery-config-v1') throw new Error('config_schema_invalid');
