@@ -10,12 +10,56 @@ function Fixture-Git([string[]]$Arguments) {
 }
 try {
     New-Item -ItemType Directory -Path (Join-Path $fixture 'infrastructure/scripts/prod') -Force | Out-Null
+    # Exercise the real deploy inventory, including the optional bound SSL proofs.
+    # A tiny fixture alone misses extra assignments in the actual deploy script.
+    $repository = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../..'))
+    $ordinaryPaths = @(Get-OtzivDeployBundlePaths -Repository $repository)
+    $sslPaths = @(Get-OtzivDeployBundlePaths -Repository $repository -CoordinatedSslRefresh)
+    $extraPaths = @(Get-OtzivCoordinatedSslBundlePaths -Repository $repository)
+    if ($sslPaths.Count -le $ordinaryPaths.Count -or $extraPaths.Count -lt 10) {
+        throw 'Coordinated SSL archive is missing accepted evidence.'
+    }
+    $realRevision = (& git -C $repository rev-parse HEAD).Trim()
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot read the actual repository revision.' }
+    $realEvidence = Join-Path $fixture 'real-release-evidence'
+    New-Item -ItemType Directory -Path $realEvidence | Out-Null
+    $realPrepared = New-OtzivPreparedDeployArchive -Repository $repository -Revision $realRevision `
+        -Directory $realEvidence -CoordinatedSslRefresh
+    foreach ($path in $extraPaths) {
+        if ($path -notin $realPrepared.paths -or
+            -not (Test-Path -LiteralPath (Join-Path $realEvidence ('verified-source/' + $path)))) {
+            throw "Accepted SSL evidence absent from the committed archive: $path"
+        }
+    }
+    $fixtureSecurity = Join-Path $fixture 'infrastructure/runtime-security'
+    New-Item -ItemType Directory -Path $fixtureSecurity | Out-Null
+    $invalidIndex = @{ images = @(@{ component = 'postgres'; sslRefreshAcceptance = @{ path = '../local-secret.txt'; sha256 = ('a' * 64) } }) }
+    $invalidIndex | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $fixtureSecurity 'reviewed-image-activations.json') -Encoding utf8
+    $rejected = $false
+    try { $null = Get-OtzivCoordinatedSslBundlePaths -Repository $fixture }
+    catch {
+        if ($_.Exception.Message -ne 'SSL cutover evidence must use bounded repository paths.') { throw }
+        $rejected = $true
+    }
+    if (-not $rejected) { throw 'SSL evidence escaped the repository.' }
+    $invalidIndex.images[0].sslRefreshAcceptance.path = 'infrastructure/runtime-security/invalid-proof.json'
+    [IO.File]::WriteAllText((Join-Path $fixtureSecurity 'invalid-proof.json'), '{}')
+    $invalidIndex | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $fixtureSecurity 'reviewed-image-activations.json') -Encoding utf8
+    $rejected = $false
+    try { $null = Get-OtzivCoordinatedSslBundlePaths -Repository $fixture }
+    catch {
+        if ($_.Exception.Message -ne 'Accepted SSL cutover evidence changed.') { throw }
+        $rejected = $true
+    }
+    if (-not $rejected) { throw 'Changed accepted SSL evidence was packaged.' }
+    Remove-Item -LiteralPath @((Join-Path $fixtureSecurity 'reviewed-image-activations.json'), (Join-Path $fixtureSecurity 'invalid-proof.json')) -Force
+    Remove-Item -LiteralPath $fixtureSecurity -Force
     Fixture-Git @('init','-q') | Out-Null
     Fixture-Git @('config','user.name','Early preparation test') | Out-Null
     Fixture-Git @('config','user.email','prep@example.invalid') | Out-Null
     [IO.File]::WriteAllText((Join-Path $fixture 'docker-compose.yaml'), 'services: {}')
     [IO.File]::WriteAllText((Join-Path $fixture 'infrastructure/scripts/prod/deploy-prod.ps1'), '$deployBundlePaths = @("docker-compose.yaml", "infrastructure/scripts/prod")')
-    Fixture-Git @('add','.') | Out-Null
+    Fixture-Git @('add','docker-compose.yaml','infrastructure/scripts/prod') | Out-Null
     Fixture-Git @('commit','-qm','fixture') | Out-Null
     $revision = Fixture-Git @('rev-parse','HEAD')
     [IO.File]::WriteAllText((Join-Path $fixture 'infrastructure/scripts/prod/local-secret.txt'), 'must not ship')

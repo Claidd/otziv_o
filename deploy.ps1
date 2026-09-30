@@ -121,7 +121,7 @@ try {
     $session = ($sessionOutput -join '') | ConvertFrom-Json
     Set-OtzivReleaseStage -Path $timing -Stage 'committed-source-preparation'
     [void](Assert-OtzivPreparedDeploySnapshotState -Repository $repoRoot -ExpectedRevision $ci.revision -CanonicalWorkspace $canonicalWorkspace)
-    $preparedSource = New-OtzivPreparedDeployArchive -Repository $repoRoot -Revision $ci.revision -Directory $directory
+    $preparedSource = New-OtzivPreparedDeployArchive -Repository $repoRoot -Revision $ci.revision -Directory $directory -CoordinatedSslRefresh:$CoordinatedSslRefresh
     & (Join-Path $repoRoot 'infrastructure/scripts/security/check-backup-readiness.ps1') -EnvFile $EnvFile
     if ($LASTEXITCODE -ne 0) { throw 'Local backup readiness failed before image transport.' }
     Set-OtzivReleaseStage -Path $timing -Stage 'manifest-and-server-preflight'
