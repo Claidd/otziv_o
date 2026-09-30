@@ -38,6 +38,10 @@ on:
           - c22-keycloak
           - c22-mc
           - c22-phpmyadmin
+          - c23-node
+          - c23-postgres
+          - c23-keycloak
+          - c23-alloy
   pull_request:
   push:
     branches: [main]

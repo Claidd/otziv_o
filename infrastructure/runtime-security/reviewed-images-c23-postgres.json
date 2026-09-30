@@ -1,0 +1,79 @@
+{
+  "schema": "otziv-reviewed-images-v1",
+  "repository": "ghcr.io/claidd/otziv-security",
+  "tagPattern": "${component}-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}",
+  "platform": "linux/amd64",
+  "scope": "Reviewed candidate publication only; default activation and production rollout are separate decisions.",
+  "sourceBeforePolicy": "Immutable historical pins must remain explicit old-source upgrade proof inputs after any default update.",
+  "scanPolicy": "Scan actual published manifest digest; retain unchanged raw report/SBOM, separate exact-binary adjudications, and all vendor-unfixed risks.",
+  "images": [
+    {
+      "component": "postgres",
+      "dockerfile": "infrastructure/runtime-security/builds/c23-postgres/Dockerfile",
+      "context": "infrastructure/runtime-security/builds/c23-postgres",
+      "buildArgs": {},
+      "platform": "linux/amd64",
+      "sourceBeforeRef": "postgres@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d",
+      "candidateBaseRef": "ghcr.io/claidd/otziv-security@sha256:a30a580feb45fce65b87d21a104d407d3d1c5b255ae0e9a05ce9903e10adb270",
+      "buildImageRefs": [
+        "golang:1.27.1-bookworm@sha256:648f440f42a0958804efb24df176f806f9d353b41f1c0627f666428e40310f6b",
+        "postgres:17.11@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675"
+      ],
+      "version": "17.11 hardened",
+      "dockerfileSha256": "31df5218cfeb48fac4340e76e1c007136a57861b761e479d64cdefc8c6050e05",
+      "historicalLocalImageId": "sha256:84631285605c9dea134ddb89a1986ba30bcdfef1f16a5c1664b06bb6f9303097",
+      "historicalLocalEvidence": [
+        {
+          "path": ".codex-tmp/finalization-20260907/postgres-17.11-hardened-vulnerabilities.json",
+          "sha256": "9cc94c03823dd98b448c4d274b3bdb0b525bd1d8e3593b1db5a80068f9d11b23"
+        },
+        {
+          "path": ".codex-tmp/finalization-20260907/postgres-17.11-hardened-vulnerabilities.sbom.cdx.json",
+          "sha256": "7e4984b86f7dc0f3b3b20f8d5d406c7ffc9814e9ea79be80062202da782f84b2"
+        },
+        {
+          "path": ".codex-tmp/finalization-20260907/postgres-upgrade-v6/proof.json",
+          "sha256": "4fc94abc87fcc90c691e8fbd66c49d88b52cf5a9d019f292efa176578fe1b76a"
+        }
+      ],
+      "sourceBeforeScan": {
+        "path": ".codex-tmp/security-closure-20260908/upstream/c5-artifacts/upstream-security-postgres-aca3723006/postgres-aca3723006-vulnerabilities.json",
+        "sha256": "3f8d278a6d32cc09e6dfbda86e4b38bee6c63f8c414d665f00cb4ac4a258e3c4"
+      },
+      "defaultReferencesBefore": [
+        {
+          "path": "compose.yaml",
+          "line": 258,
+          "service": "keycloak-postgres"
+        },
+        {
+          "path": "compose.prod-local.yaml",
+          "line": 101,
+          "service": "keycloak-postgres"
+        },
+        {
+          "path": "docker-compose.yaml",
+          "line": 108,
+          "service": "keycloak-postgres"
+        }
+      ],
+      "publishedDigest": null,
+      "publicationStatus": "NOT_PUBLISHED",
+      "deploymentStatus": "NOT_ACTIVATED",
+      "unfixedRiskReview": "REQUIRED",
+      "activationPreconditions": [
+        "single writer/drain fence",
+        "paired backup and verified restore",
+        "retain PostgreSQL17 and Debian trixie collation family"
+      ],
+      "dockerfileHashEncoding": "UTF-8 with CRLF normalized to LF"
+    }
+  ],
+  "publicationWave": "C7",
+  "previousManifest": {
+    "path": "infrastructure/runtime-security/history/c6/reviewed-images.json",
+    "sha256": "d2703f82c09690f1b1815471f5a8e24e1960bd90217df733498c0c7ed07b03f3"
+  },
+  "publicationSet": "c23-postgres",
+  "baselineManifestSha256": "d48bdb7d6d869cde5d6f1a7b089491765e3eeaf46e0b0b6bb51b7719b38d3ef2"
+}

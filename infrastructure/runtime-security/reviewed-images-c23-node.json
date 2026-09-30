@@ -1,0 +1,146 @@
+{
+  "schema": "otziv-reviewed-images-v1",
+  "repository": "ghcr.io/claidd/otziv-security",
+  "tagPattern": "${component}-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}",
+  "platform": "linux/amd64",
+  "scope": "Reviewed candidate publication only; default activation and production rollout are separate decisions.",
+  "sourceBeforePolicy": "Immutable historical pins must remain explicit old-source upgrade proof inputs after any default update.",
+  "scanPolicy": "Scan actual published manifest digest; retain unchanged raw report/SBOM, separate exact-binary adjudications, and all vendor-unfixed risks.",
+  "images": [
+    {
+      "component": "node",
+      "dockerfile": "infrastructure/runtime-security/builds/c23-node/Dockerfile",
+      "context": "infrastructure/runtime-security/builds/c23-node",
+      "buildArgs": {},
+      "platform": "linux/amd64",
+      "sourceBeforeRef": "node@sha256:f70403e87646dc51b45295f4b8b70cdad0b63d2297c4c9899119b03f7af7a6b3",
+      "candidateBaseRef": "ghcr.io/claidd/otziv-security@sha256:8917049917dc110930957c5d59cff66489d9a3e486ffdfe7b2221c40acc0f14c",
+      "buildImageRefs": [
+        "node@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf"
+      ],
+      "version": "24.20.0/npm11.19.0",
+      "dockerfileSha256": "b9991878aaaa54773a44b1b9e34ad47f1d92d806ca77c09cecf95173e3d26c80",
+      "historicalLocalImageId": "sha256:04465a519aacdbb7f7167d79f60458e0696fde2043e671a79fbdd6383422e98c",
+      "historicalLocalEvidence": [
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-hardened-vulnerabilities-v1.json",
+          "sha256": "f6b75ae50515ee7fd11eafd47eea08343f328bae48674f9aacaa7b4265e49769"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-hardened-vulnerabilities-v1.sbom.cdx.json",
+          "sha256": "e3a6749cc8e13bff32b2d794d77de1ec2955f0a49c45679b3b09228c5546810b"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-hardened-vulnerabilities-v1.triage.json",
+          "sha256": "007c1214532534cf99efd468865e85b32865c73c2833a4dd8488f975acee87be"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-fixture/serve-proof.json",
+          "sha256": "f044681f95b8d0f5db5fa7e3750357b2843100c2a876f2e9fb1e96db6636dc16"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-fixture/production-build.log",
+          "sha256": "abae84a909a93f33e8f0f87072de2fd2a125045e1ce666bcb207e5da1fac9867"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-fixture/official-serve-red.log",
+          "sha256": "90603ccb2258e7a17cebeba597ae0ddfb44029b5fabf825dd18f158155f6d1ba"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-fixture/hardened-serve-red.log",
+          "sha256": "15db5d36af99f91406c345505098cf5adb3489664899b598923c8fc6fa92a8ad"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-fixture/hardened-serve-green.log",
+          "sha256": "338a6ab61a951f5831cd660e6ead80be817b116de56b85e4b082c3a0cbb82245"
+        }
+      ],
+      "sourceBeforeScan": {
+        "path": ".codex-tmp/security-closure-20260908/upstream/c5-artifacts/upstream-security-node-dc8b119ea9/node-dc8b119ea9-vulnerabilities.json",
+        "sha256": "61c7e5b606bcdeb5a11a0d93967f05d1bc263faeb52c556e0852ca04c739e621"
+      },
+      "defaultReferencesBefore": [
+        {
+          "path": "compose.yaml",
+          "line": 207,
+          "service": "frontend"
+        }
+      ],
+      "publishedDigest": null,
+      "publicationStatus": "NOT_PUBLISHED",
+      "deploymentStatus": "NOT_ACTIVATED",
+      "unfixedRiskReview": "NONE",
+      "dockerfileHashEncoding": "UTF-8 with CRLF normalized to LF",
+      "latestPortableLocalBuild": {
+        "component": "node",
+        "imageId": "sha256:4b5448032fcedc62a5a6548541f82ccedfddffcbdcb154af92ab21764e416c98",
+        "configId": "sha256:79796174d240852ac621e56078990979711147228e9cb24703194604fcf87d85",
+        "scanCreatedAt": "2026-09-07T22:41:31.08313851Z",
+        "result": {
+          "schema": "otziv-vulnerability-scan-v1",
+          "artifactCount": 2,
+          "high": 0,
+          "critical": 0,
+          "unfixedHighOrCritical": 0,
+          "blockingFixedHighOrCritical": 0,
+          "adjudicatedFixedHighOrCritical": 0,
+          "effectiveBlockingFixedHighOrCritical": 0,
+          "result": "PASS",
+          "unresolvedRiskReview": "NONE",
+          "scannerImage": "aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969"
+        },
+        "runtimeFileParity": {
+          "component": "node",
+          "historicalProvenImageId": "sha256:04465a519aacdbb7f7167d79f60458e0696fde2043e671a79fbdd6383422e98c",
+          "portableImageId": "sha256:4b5448032fcedc62a5a6548541f82ccedfddffcbdcb154af92ab21764e416c98",
+          "runtimePath": "/usr/local",
+          "actualRegularFiles": 2656,
+          "manifestSha256": "c0f2dadd4d7d3d28e86d61e8c203faab5f51ff70e8b7234091c94891075703ea",
+          "runtimeFileBytesExact": true,
+          "network": "none"
+        },
+        "evidence": [
+          {
+            "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-portable-vulnerabilities-v1.json",
+            "sha256": "f602a68fdbd433f314db0cee5b6dcc686ed02042d2b5f9f3bede56cad258ba34"
+          },
+          {
+            "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-portable-vulnerabilities-v1.sbom.cdx.json",
+            "sha256": "470543f61afbcb9f26ae7aa6fad257241a2ba79a943aef1148a758fea0cb0626"
+          },
+          {
+            "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-portable-vulnerabilities-v1.triage.json",
+            "sha256": "a2335683a278f4a2f338dae14473a46e56e06cd7e1ecf0921de7a8584ef497fc"
+          },
+          {
+            "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-portable-vulnerabilities-v1.adjudications.json",
+            "sha256": "658d05641d2316e9b15d039ed53d00fe21c6f737f96d76a43d5f3d3f6875d144"
+          },
+          {
+            "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-portable-vulnerabilities-v1.result.json",
+            "sha256": "b9d6dd354bcce54b575f8cc6186ba032d7de7c281838434fc14c0a3b9da8a245"
+          },
+          {
+            "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-portable-vulnerabilities-v1.scanner.log",
+            "sha256": "0679cf3a761ebfc4d7bc3036dd76bd2b13ca19ecd40fc6daf77877fc318f972e"
+          },
+          {
+            "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-portable-build-v1.log",
+            "sha256": "5343dbd23ef6257056ed8f1ac562c55d354756e35585f11211c5b3a6473b4c98"
+          },
+          {
+            "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/portable-runtime-parity.json",
+            "sha256": "293bf2656cd9598cecd25bd3fc70e2e6b37401cfaf797aee0f5bf30f77b8b302"
+          }
+        ]
+      }
+    }
+  ],
+  "publicationWave": "C7",
+  "previousManifest": {
+    "path": "infrastructure/runtime-security/history/c6/reviewed-images.json",
+    "sha256": "d2703f82c09690f1b1815471f5a8e24e1960bd90217df733498c0c7ed07b03f3"
+  },
+  "publicationSet": "c23-node",
+  "baselineManifestSha256": "d48bdb7d6d869cde5d6f1a7b089491765e3eeaf46e0b0b6bb51b7719b38d3ef2"
+}

@@ -1,0 +1,99 @@
+{
+  "schema": "otziv-reviewed-image-activations-v1",
+  "images": [
+    {
+      "component": "alloy",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:d006cedf890ade4915a098a5362ce0cda9a3fd7ec2c02320f15e92ccfd669122",
+      "commit": "e5b1de2299e9b3d1c58429c941e8013a5ece5143",
+      "run": "34503949563",
+      "attempt": "1",
+      "manifest": {
+        "path": "infrastructure/runtime-security/reviewed-images-c15-alloy.json",
+        "sha256": "c03f6bebd14c018cd644391f25da8a70802af675ecb3776a4c38d00cc0fe6243"
+      },
+      "publication": {
+        "path": "infrastructure/runtime-security/proofs/c15-alloy-published/publication/publication.json",
+        "sha256": "a97e7913fde94fb321c4ab44b48e319cec3631764958b42521c58a48de879553"
+      },
+      "anonymous": {
+        "path": "infrastructure/runtime-security/proofs/c15-alloy-published/anonymous/anonymous-download.json",
+        "sha256": "f98ac41d4bffc018071242acb17cb38373944a5da7e7d99eb3b1d4a23ba813c8"
+      },
+      "securityReassessment": {
+        "report": {
+          "path": "infrastructure/runtime-security/proofs/c15-alloy-published/reassessment/vulnerabilities.json",
+          "sha256": "1f44717cabdad957dc27390e229dcf0d6fa6122cd184a9d64c018393c9a73197"
+        },
+        "adjudication": {
+          "path": "infrastructure/runtime-security/proofs/c15-alloy-published/reassessment/adjudications.json",
+          "sha256": "bb12809b98953e955cbc743a86fc3e5a7806ef13563e70fe288ea0ffabbc49cb"
+        },
+        "summary": {
+          "path": "infrastructure/runtime-security/proofs/c15-alloy-published/reassessment/summary.json",
+          "sha256": "5426726d11dd1743bfcb6f3c6e078823e751eef66e4018d0794aa254446d10e4"
+        }
+      }
+    },
+    {
+      "component": "keycloak",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:dd68530849039933b31724522ff290c5d4253175bdd9e23f0d132f7e66aa53ff",
+      "commit": "49a537984b4441f0ac9ad5e79f619018b7488912",
+      "run": "36315128179",
+      "attempt": "1",
+      "manifest": {
+        "path": "infrastructure/runtime-security/reviewed-images-c22-keycloak.json",
+        "sha256": "16a04c6872f7e752f2ec52587eb620a075a954999357d6df609232aee6bbffcf"
+      },
+      "publication": {
+        "path": "infrastructure/runtime-security/proofs/c22-keycloak/publication/publication.json",
+        "sha256": "6546ad6c7c1a8a07643d855bcfe891554a709610bc9ea544e23fcd35a0aee8fd"
+      },
+      "anonymous": {
+        "path": "infrastructure/runtime-security/proofs/c22-keycloak/anonymous/anonymous-download.json",
+        "sha256": "abdbee1608f9aed43d58a3188a64fbe8fb98be3bea017216103d283d805d8494"
+      },
+      "migrationAcceptance": {
+        "path": "infrastructure/runtime-security/proofs/c22-keycloak/acceptance.json",
+        "sha256": "d43880fbf6ac869ef90456e91ac4463e1bf12e09bd4c1f5418f4ad176cbdd765"
+      }
+    },
+    {
+      "component": "node",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:8917049917dc110930957c5d59cff66489d9a3e486ffdfe7b2221c40acc0f14c",
+      "commit": "2cd29a17f5ae7c8d7e00d332379c7ac887d5b52f",
+      "run": "34178760576",
+      "attempt": "1",
+      "publication": {
+        "path": "infrastructure/runtime-security/proofs/c7-published/node/publication/publication.json",
+        "sha256": "3564898d800ceed2c89274acd3f68835173a22fabd0ebb6db26c00f7de0d183d"
+      },
+      "anonymous": {
+        "path": "infrastructure/runtime-security/proofs/c7-published/node/anonymous/anonymous-download.json",
+        "sha256": "425a705a621681088283bbe07ac7c51f9ea62158353f6194a3d3607a4b54dc96"
+      }
+    },
+    {
+      "component": "postgres",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:a30a580feb45fce65b87d21a104d407d3d1c5b255ae0e9a05ce9903e10adb270",
+      "commit": "9aeab5dbce420d045411767f830b79755ae9258a",
+      "run": "34690229481",
+      "attempt": "1",
+      "manifest": {
+        "path": "infrastructure/runtime-security/reviewed-images-c16-postgres.json",
+        "sha256": "e21701dc72623adff349c9d14cb2e6d867301fcfc0319a9cbcb3ce6a3dcafad9"
+      },
+      "publication": {
+        "path": "infrastructure/runtime-security/proofs/c16-postgres-published/publication/publication.json",
+        "sha256": "0cdc9e48bd5f21f0fe88ed274e644ad789d7ba208e6c1f7b569193c612b000d9"
+      },
+      "anonymous": {
+        "path": "infrastructure/runtime-security/proofs/c16-postgres-published/anonymous/anonymous-download.json",
+        "sha256": "3a3939b99aaee2aa45c2d6d058c1b6a3087b32f75259ecbd00c5b6105243f803"
+      },
+      "databaseTransition": {
+        "path": "infrastructure/runtime-security/proofs/c16-postgres-published/acceptance.json",
+        "sha256": "01e5746ed52eb5f52a0313df7e785047898870ef0c4ffd052f2d016c29fd41d8"
+      }
+    }
+  ]
+}

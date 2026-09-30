@@ -14,7 +14,7 @@ RUN --mount=type=cache,target=/root/.m2,sharing=locked \
 
 FROM eclipse-temurin:26-jre-jammy@sha256:3e83fe06950ab45b8fee3c8fccdbb3dc0cc203c4518babdd9e8957c31284c9d5
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl default-mysql-client openssl \
+    && apt-get install -y --no-install-recommends ca-certificates curl default-mysql-client libssl3 openssl \
     && rm -rf /var/lib/apt/lists/*
 
 ARG OTZIV_UID=10001

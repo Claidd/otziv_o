@@ -8,6 +8,7 @@ const BASELINE_PATH = 'infrastructure/runtime-security/reviewed-images.json';
 const C12_PATH = 'infrastructure/runtime-security/reviewed-images-c12-phpmyadmin.json';
 const C12_CONTEXT = 'infrastructure/runtime-security/builds/phpmyadmin-alpine';
 const RELEASE_SETS = Object.freeze({
+
   'c21-mysql': { component: 'mysql', path: 'infrastructure/runtime-security/reviewed-images-c21-mysql.json',
     context: 'infrastructure/runtime-security/builds/mysql-c21', dockerfile: 'infrastructure/runtime-security/builds/mysql-c21/Dockerfile' },
   'c18-mysql': { component: 'mysql', path: 'infrastructure/runtime-security/reviewed-images-c18-mysql.json',
@@ -43,6 +44,10 @@ const RELEASE_SETS = Object.freeze({
   'c22-keycloak': { component: 'keycloak', path: 'infrastructure/runtime-security/reviewed-images-c22-keycloak.json', context: 'infrastructure/runtime-security/builds/c22-keycloak', dockerfile: 'infrastructure/runtime-security/builds/c22-keycloak/Dockerfile' },
   'c22-mc': { component: 'mc', path: 'infrastructure/runtime-security/reviewed-images-c22-mc.json', context: 'infrastructure/runtime-security/builds/c22-mc', dockerfile: 'infrastructure/runtime-security/builds/c22-mc/Dockerfile' },
   'c22-phpmyadmin': { component: 'phpmyadmin', path: 'infrastructure/runtime-security/reviewed-images-c22-phpmyadmin.json', context: 'infrastructure/runtime-security/builds/c22-phpmyadmin', dockerfile: 'infrastructure/runtime-security/builds/c22-phpmyadmin/Dockerfile' },
+  'c23-node': { component: 'node', path: 'infrastructure/runtime-security/reviewed-images-c23-node.json', context: 'infrastructure/runtime-security/builds/c23-node', dockerfile: 'infrastructure/runtime-security/builds/c23-node/Dockerfile' },
+  'c23-postgres': { component: 'postgres', path: 'infrastructure/runtime-security/reviewed-images-c23-postgres.json', context: 'infrastructure/runtime-security/builds/c23-postgres', dockerfile: 'infrastructure/runtime-security/builds/c23-postgres/Dockerfile' },
+  'c23-keycloak': { component: 'keycloak', path: 'infrastructure/runtime-security/reviewed-images-c23-keycloak.json', context: 'infrastructure/runtime-security/builds/c23-keycloak', dockerfile: 'infrastructure/runtime-security/builds/c23-keycloak/Dockerfile' },
+  'c23-alloy': { component: 'alloy', path: 'infrastructure/runtime-security/reviewed-images-c23-alloy.json', context: 'infrastructure/runtime-security/builds/c23-alloy', dockerfile: 'infrastructure/runtime-security/builds/c23-alloy/Dockerfile' },
 });
 // These two local-stack dependencies were absent from the immutable C7 manifest.
 // Keep their original pins and service coverage explicit when adding publication.
