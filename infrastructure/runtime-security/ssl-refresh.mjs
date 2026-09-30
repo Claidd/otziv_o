@@ -98,6 +98,9 @@ export async function inspectSslRefresh(report,id,scratch,component){
   if(report.Metadata?.ImageID===parentId)return null;
   const candidate=report.Metadata?.ImageConfig;
   if(JSON.stringify(candidate?.rootfs?.diff_ids?.slice(0,parent.rootfs.diff_ids.length))!==JSON.stringify(parent.rootfs.diff_ids))return null;
+  // Buildx uses a separate image store. A fresh CI runner has pulled the child
+  // for scanning, but has not pulled the parent into Docker's inspection store.
+  await run('docker',['pull','--platform','linux/amd64',entry.reference],{timeoutMs:300000});
   const output=join(scratch,component+'-runtime-refresh.json.gz');
   await run(process.platform==='win32'?'python':'python3',['-B',fileURLToPath(new URL('ssl-refresh-inspection.py',root)),
     '--component',component,'--parent',entry.reference,'--candidate',id,'--output',output,'--temporary-directory',scratch,
