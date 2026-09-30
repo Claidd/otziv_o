@@ -8,6 +8,7 @@ const BASELINE_PATH = 'infrastructure/runtime-security/reviewed-images.json';
 const C12_PATH = 'infrastructure/runtime-security/reviewed-images-c12-phpmyadmin.json';
 const C12_CONTEXT = 'infrastructure/runtime-security/builds/phpmyadmin-alpine';
 const RELEASE_SETS = Object.freeze({
+  'c25-certbot': { component: 'certbot', path: 'infrastructure/runtime-security/reviewed-images-c25-certbot.json', context: 'infrastructure/runtime-security/builds/c25-certbot', dockerfile: 'infrastructure/runtime-security/builds/c25-certbot/Dockerfile' },
 
   'c21-mysql': { component: 'mysql', path: 'infrastructure/runtime-security/reviewed-images-c21-mysql.json',
     context: 'infrastructure/runtime-security/builds/mysql-c21', dockerfile: 'infrastructure/runtime-security/builds/mysql-c21/Dockerfile' },

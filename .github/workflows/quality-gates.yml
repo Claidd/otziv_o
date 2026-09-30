@@ -43,6 +43,7 @@ on:
           - c23-keycloak
           - c23-alloy
           - c24-keycloak
+          - c25-certbot
   pull_request:
   push:
     branches: [main]
