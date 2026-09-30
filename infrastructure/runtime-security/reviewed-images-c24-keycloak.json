@@ -24,7 +24,7 @@
         "ghcr.io/claidd/otziv-security@sha256:f4c38162a10001267b4667afc890a7a9438b5a27cb456c77c87cdcc5aa8d39f6"
       ],
       "version": "26.7.3-otziv.2",
-      "dockerfileSha256": "f47ad0527a74abf354ddbbab4c780af02898c0733aca4c68e01b1cba779ead24",
+      "dockerfileSha256": "112dccf712d6787c60c24d1fd4ef01235ca5204e91ee5d1cc2679d790d344b46",
       "historicalLocalImageId": "sha256:537b96f86faa1afdd7502ec6dc38da258cf479568488053581c561bad960cd5e",
       "historicalLocalEvidence": [
         {

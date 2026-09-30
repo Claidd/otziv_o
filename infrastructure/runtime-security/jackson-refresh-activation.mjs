@@ -3,6 +3,9 @@ import {gunzipSync} from 'node:zlib';
 import {dirname} from 'node:path';
 import {hash} from './ssl-refresh.mjs';
 import {coupleSslRefresh} from './ssl-refresh-activation.mjs';
+import {summarizeReport,TRIVY_IMAGE} from './scan.mjs';
+import {combinedScanSummary} from './scan-verdict.mjs';
+import {buildTriage} from './triage-report.mjs';
 const PARENT_SHA='9a772fbadbcbcd87454a419f51299a28d6246b0c214baa94c608589febe8c338';
 const SERVER='opt/keycloak/lib/lib/main/com.fasterxml.jackson.core.jackson-databind-2.21.5.jar';
 const CLI='opt/keycloak/bin/client/keycloak-admin-cli-26.7.3.jar';
@@ -43,6 +46,14 @@ export async function validateJacksonRefreshActivation(publication,entry,read,va
  validateJacksonInspection(record,JSON.parse(pBytes),JSON.parse(cBytes),'sha256:'+hash(pBytes),'sha256:'+hash(cBytes),parent.reference,entry.reference,entry.commit);
  assert.equal(publication.imageId,value.imageConfigId);assert.equal(publication.imageId,'sha256:'+hash(cBytes));
  const bytes=await read(dir+'/vulnerabilities.json'),scan=JSON.parse(bytes);assert.equal(scan.Metadata.ImageID,publication.imageId);assert.deepEqual(scan.Metadata.ImageConfig.rootfs,JSON.parse(cBytes).rootfs);
- assert.ok(value.files[dir+'/vulnerabilities.json']);assert.equal(publication.security.high,0);assert.equal(publication.security.critical,0);
+ assert.ok(value.files[dir+'/vulnerabilities.json']);
+ const receiptPath=dir+'/vulnerabilities.adjudications.json',triagePath=dir+'/vulnerabilities.triage.json';
+ assert.ok(value.files[receiptPath]&&value.files[triagePath]);
+ const receipt=JSON.parse(await read(receiptPath));
+ assert.equal(receipt.rawReportSha256,hash(bytes));assert.equal(receipt.imageConfigId,publication.imageId);
+ assert.equal(receipt.rawReportModified,false);assert.equal(receipt.status,'NOT_APPLICABLE');assert.deepEqual(receipt.decisions,[]);
+ assert.deepEqual(JSON.parse(await read(triagePath)),buildTriage(scan,bytes));
+ const summary=summarizeReport(scan);assert.equal(summary.high+summary.critical,0,'jackson_raw_security_findings');
+ assert.deepEqual(publication.security,{...combinedScanSummary(summary,{grafana:receipt,alloy:receipt.alloy,postgres:receipt.postgres}),scannerImage:TRIVY_IMAGE});
  assert.ok(publication.knownRuntimeDependencies.policy.includes('databind-2.21.7'));return value;
 }
