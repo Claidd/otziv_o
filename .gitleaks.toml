@@ -1429,3 +1429,26 @@ paths = ['''(^|/)infrastructure/runtime\-security/proofs/c22\-keycloak/publicati
 regexes = [
   '''^\n?\ \ \ \ \ \ \ \ \ \ "Name":\ "org\.keycloak:keycloak\-crypto\-fips1402",\r?$''',
 ]
+
+# C23 OCI/SBOM bytes are retained unchanged. This exact SPDX value is SHA-1 of
+# empty content, independently reproduced with hashlib.sha1(b'').hexdigest().
+# Only the named detector, these two complete paths and this complete public
+# value match; other values or fields continue through normal secret scanning.
+[[allowlists]]
+description = "Exact empty-content SPDX checksum in C23 Alloy OCI evidence"
+targetRules = ["sourcegraph-access-token"]
+condition = "AND"
+regexTarget = "secret"
+paths = [
+  '''(^|/)infrastructure/runtime\-security/proofs/c23\-alloy/publication/registry\-attestation\-0\-payload\-0\.json$''',
+  '''(^|/)infrastructure/runtime\-security/proofs/c23\-alloy/anonymous/registry\-attestation\-0\-payload\-0\.json$''',
+]
+regexes = ['''^da39a3ee5e6b4b0d3255bfef95601890afd80709$''']
+
+[[allowlists]]
+description = "Exact public Maven package coordinate in C23 Keycloak scan"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''(^|/)infrastructure/runtime\-security/proofs/c23\-keycloak/publication/vulnerabilities\.json$''']
+regexes = ['''^\n?          "Name": "org\.keycloak:keycloak\-crypto\-fips1402",\r?$''']

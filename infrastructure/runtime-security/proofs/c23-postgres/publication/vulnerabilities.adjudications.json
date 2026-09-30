@@ -1,0 +1,580 @@
+{
+  "schema": "otziv-image-adjudication-v1",
+  "rawReportSha256": "f2d09388017e872377beb7fbc4101c363db30ff342e89b6e35b10c162beb492f",
+  "imageConfigId": "sha256:1f5c2590fadde6b449908569285f1ed91a10831d36535d5c4ed647e9a0afca6a",
+  "immutableImageId": "sha256:1f5c2590fadde6b449908569285f1ed91a10831d36535d5c4ed647e9a0afca6a",
+  "rawReportModified": false,
+  "decisions": [],
+  "status": "NOT_APPLICABLE",
+  "alloy": {
+    "schema": "otziv-alloy-adjudication-v1",
+    "rawReportSha256": "f2d09388017e872377beb7fbc4101c363db30ff342e89b6e35b10c162beb492f",
+    "imageConfigId": "sha256:1f5c2590fadde6b449908569285f1ed91a10831d36535d5c4ed647e9a0afca6a",
+    "immutableImageId": "sha256:1f5c2590fadde6b449908569285f1ed91a10831d36535d5c4ed647e9a0afca6a",
+    "rawReportModified": false,
+    "decisions": [],
+    "status": "NOT_APPLICABLE"
+  },
+  "postgres": {
+    "schema": "otziv-postgres-c23-adjudication-v1",
+    "status": "EXACT_RUNTIME_VERIFIED",
+    "rawReportSha256": "f2d09388017e872377beb7fbc4101c363db30ff342e89b6e35b10c162beb492f",
+    "imageConfigId": "sha256:1f5c2590fadde6b449908569285f1ed91a10831d36535d5c4ed647e9a0afca6a",
+    "immutableImageId": "sha256:1f5c2590fadde6b449908569285f1ed91a10831d36535d5c4ed647e9a0afca6a",
+    "rawReportModified": false,
+    "reviewSha256": "c52ea7697261a4a1d3eed1540f14aa9048f44a63ff0631dd349443905e09fd67",
+    "validUntil": "2027-01-01T00:00:00Z",
+    "inspectedBinaryExecuted": false,
+    "sslRefresh": {
+      "component": "postgres",
+      "parentConfigId": "sha256:9aff3268aa60897853557e45444da2f6c1d45e311eb543e9eb8e0f49339c5f6e",
+      "parentReference": "ghcr.io/claidd/otziv-security@sha256:a30a580feb45fce65b87d21a104d407d3d1c5b255ae0e9a05ce9903e10adb270",
+      "runtimeProofSha256": "60e3960cd635ddba0f33efc9c10169f9b2b9595dc49d66999bb40fa7ec6423ff"
+    },
+    "libxml": {
+      "reviewSha256": "ef3d2b811cb6db96215318467d6a5defed8bd6ac1e211f491405fc30cc2dc983",
+      "decisions": [
+        {
+          "resultIndex": 0,
+          "findingIndex": 96,
+          "cve": "CVE-2026-74860",
+          "package": "libxml2-16",
+          "version": "2.15.4",
+          "state": "not_affected",
+          "justification": "vulnerable_python_bindings_absent",
+          "fixedHighOrCritical": false,
+          "unfixedHighOrCritical": true
+        }
+      ]
+    },
+    "libxmlSeptember": {
+      "schema": "otziv-postgres-libxml-c17-adjudication-v1",
+      "status": "EXACT_RUNTIME_VERIFIED",
+      "reviewSha256": "39a4c77f58af36c026e86e32a50d3618cd04bcabf217c3cd7afc5aa502af16e5",
+      "parentReviewSha256": "c52ea7697261a4a1d3eed1540f14aa9048f44a63ff0631dd349443905e09fd67",
+      "imageConfigId": "sha256:1f5c2590fadde6b449908569285f1ed91a10831d36535d5c4ed647e9a0afca6a",
+      "validUntil": "2027-01-01T00:00:00Z",
+      "decisions": [
+        {
+          "resultIndex": 0,
+          "findingIndex": 97,
+          "cve": "CVE-2026-86138",
+          "package": "libxml2-16",
+          "version": "2.15.4",
+          "state": "not_affected",
+          "justification": "fixed_upstream_source",
+          "fixedHighOrCritical": false,
+          "unfixedHighOrCritical": true
+        },
+        {
+          "resultIndex": 0,
+          "findingIndex": 98,
+          "cve": "CVE-2026-86139",
+          "package": "libxml2-16",
+          "version": "2.15.4",
+          "state": "not_affected",
+          "justification": "fixed_upstream_source",
+          "fixedHighOrCritical": false,
+          "unfixedHighOrCritical": true
+        },
+        {
+          "resultIndex": 0,
+          "findingIndex": 100,
+          "cve": "CVE-2026-86142",
+          "package": "libxml2-16",
+          "version": "2.15.4",
+          "state": "not_affected",
+          "justification": "fixed_upstream_source",
+          "fixedHighOrCritical": false,
+          "unfixedHighOrCritical": true
+        },
+        {
+          "resultIndex": 0,
+          "findingIndex": 101,
+          "cve": "CVE-2026-86143",
+          "package": "libxml2-16",
+          "version": "2.15.4",
+          "state": "not_affected",
+          "justification": "fixed_upstream_source",
+          "fixedHighOrCritical": false,
+          "unfixedHighOrCritical": true
+        },
+        {
+          "resultIndex": 0,
+          "findingIndex": 102,
+          "cve": "CVE-2026-86144",
+          "package": "libxml2-16",
+          "version": "2.15.4",
+          "state": "not_affected",
+          "justification": "fixed_upstream_source",
+          "fixedHighOrCritical": false,
+          "unfixedHighOrCritical": true
+        }
+      ]
+    },
+    "decisions": [
+      {
+        "resultIndex": 0,
+        "findingIndex": 80,
+        "cve": "CVE-2026-16742",
+        "package": "libsystemd0",
+        "version": "257.13-1~deb13u1",
+        "state": "not_affected",
+        "justification": "vulnerable_implementation_absent",
+        "fixedHighOrCritical": false,
+        "unfixedHighOrCritical": true
+      },
+      {
+        "resultIndex": 0,
+        "findingIndex": 87,
+        "cve": "CVE-2025-69720",
+        "package": "libtinfo6",
+        "version": "6.5+20250216-2",
+        "state": "not_affected",
+        "justification": "vulnerable_implementation_absent",
+        "fixedHighOrCritical": false,
+        "unfixedHighOrCritical": true
+      },
+      {
+        "resultIndex": 0,
+        "findingIndex": 89,
+        "cve": "CVE-2026-76642",
+        "package": "libuuid1",
+        "version": "2.41.5-0+deb13u1",
+        "state": "not_affected",
+        "justification": "vulnerable_implementation_absent",
+        "fixedHighOrCritical": false,
+        "unfixedHighOrCritical": true
+      },
+      {
+        "resultIndex": 0,
+        "findingIndex": 90,
+        "cve": "CVE-2026-78408",
+        "package": "libuuid1",
+        "version": "2.41.5-0+deb13u1",
+        "state": "not_affected",
+        "justification": "vulnerable_implementation_absent",
+        "fixedHighOrCritical": false,
+        "unfixedHighOrCritical": true
+      },
+      {
+        "resultIndex": 0,
+        "findingIndex": 91,
+        "cve": "CVE-2026-78409",
+        "package": "libuuid1",
+        "version": "2.41.5-0+deb13u1",
+        "state": "not_affected",
+        "justification": "vulnerable_implementation_absent",
+        "fixedHighOrCritical": false,
+        "unfixedHighOrCritical": true
+      },
+      {
+        "resultIndex": 0,
+        "findingIndex": 92,
+        "cve": "CVE-2026-78410",
+        "package": "libuuid1",
+        "version": "2.41.5-0+deb13u1",
+        "state": "not_affected",
+        "justification": "vulnerable_implementation_absent",
+        "fixedHighOrCritical": false,
+        "unfixedHighOrCritical": true
+      },
+      {
+        "resultIndex": 0,
+        "findingIndex": 95,
+        "cve": "CVE-2026-6653",
+        "package": "libxml2-16",
+        "version": "2.15.4",
+        "state": "not_affected",
+        "justification": "fixed_upstream_source",
+        "fixedHighOrCritical": false,
+        "unfixedHighOrCritical": true
+      },
+      {
+        "resultIndex": 0,
+        "findingIndex": 99,
+        "cve": "CVE-2026-86140",
+        "package": "libxml2-16",
+        "version": "2.15.4",
+        "state": "not_affected",
+        "justification": "fixed_upstream_source",
+        "fixedHighOrCritical": false,
+        "unfixedHighOrCritical": true
+      },
+      {
+        "resultIndex": 0,
+        "findingIndex": 133,
+        "cve": "CVE-2025-69720",
+        "package": "ncurses-base",
+        "version": "6.5+20250216-2",
+        "state": "not_affected",
+        "justification": "vulnerable_implementation_absent",
+        "fixedHighOrCritical": false,
+        "unfixedHighOrCritical": true
+      },
+      {
+        "resultIndex": 0,
+        "findingIndex": 135,
+        "cve": "CVE-2026-14662",
+        "package": "otziv-postgresql-17",
+        "version": "17.11",
+        "state": "not_affected",
+        "justification": "fixed_upstream_source",
+        "fixedHighOrCritical": true,
+        "unfixedHighOrCritical": false
+      },
+      {
+        "resultIndex": 0,
+        "findingIndex": 136,
+        "cve": "CVE-2026-14664",
+        "package": "otziv-postgresql-17",
+        "version": "17.11",
+        "state": "not_affected",
+        "justification": "fixed_upstream_source",
+        "fixedHighOrCritical": true,
+        "unfixedHighOrCritical": false
+      },
+      {
+        "resultIndex": 0,
+        "findingIndex": 137,
+        "cve": "CVE-2026-14668",
+        "package": "otziv-postgresql-17",
+        "version": "17.11",
+        "state": "not_affected",
+        "justification": "fixed_upstream_source",
+        "fixedHighOrCritical": true,
+        "unfixedHighOrCritical": false
+      },
+      {
+        "resultIndex": 0,
+        "findingIndex": 138,
+        "cve": "CVE-2026-14669",
+        "package": "otziv-postgresql-17",
+        "version": "17.11",
+        "state": "not_affected",
+        "justification": "fixed_upstream_source",
+        "fixedHighOrCritical": true,
+        "unfixedHighOrCritical": false
+      },
+      {
+        "resultIndex": 0,
+        "findingIndex": 139,
+        "cve": "CVE-2026-14670",
+        "package": "otziv-postgresql-17",
+        "version": "17.11",
+        "state": "not_affected",
+        "justification": "fixed_upstream_source",
+        "fixedHighOrCritical": true,
+        "unfixedHighOrCritical": false
+      },
+      {
+        "resultIndex": 0,
+        "findingIndex": 140,
+        "cve": "CVE-2026-14671",
+        "package": "otziv-postgresql-17",
+        "version": "17.11",
+        "state": "not_affected",
+        "justification": "fixed_upstream_source",
+        "fixedHighOrCritical": true,
+        "unfixedHighOrCritical": false
+      },
+      {
+        "resultIndex": 0,
+        "findingIndex": 141,
+        "cve": "CVE-2026-14677",
+        "package": "otziv-postgresql-17",
+        "version": "17.11",
+        "state": "not_affected",
+        "justification": "fixed_upstream_source",
+        "fixedHighOrCritical": true,
+        "unfixedHighOrCritical": false
+      },
+      {
+        "resultIndex": 0,
+        "findingIndex": 142,
+        "cve": "CVE-2026-14679",
+        "package": "otziv-postgresql-17",
+        "version": "17.11",
+        "state": "not_affected",
+        "justification": "fixed_upstream_source",
+        "fixedHighOrCritical": true,
+        "unfixedHighOrCritical": false
+      },
+      {
+        "resultIndex": 0,
+        "findingIndex": 143,
+        "cve": "CVE-2026-14680",
+        "package": "otziv-postgresql-17",
+        "version": "17.11",
+        "state": "not_affected",
+        "justification": "fixed_upstream_source",
+        "fixedHighOrCritical": true,
+        "unfixedHighOrCritical": false
+      },
+      {
+        "resultIndex": 0,
+        "findingIndex": 144,
+        "cve": "CVE-2026-15741",
+        "package": "otziv-postgresql-17",
+        "version": "17.11",
+        "state": "not_affected",
+        "justification": "fixed_upstream_source",
+        "fixedHighOrCritical": true,
+        "unfixedHighOrCritical": false
+      },
+      {
+        "resultIndex": 0,
+        "findingIndex": 145,
+        "cve": "CVE-2026-15742",
+        "package": "otziv-postgresql-17",
+        "version": "17.11",
+        "state": "not_affected",
+        "justification": "fixed_upstream_source",
+        "fixedHighOrCritical": true,
+        "unfixedHighOrCritical": false
+      },
+      {
+        "resultIndex": 0,
+        "findingIndex": 146,
+        "cve": "CVE-2026-16239",
+        "package": "otziv-postgresql-17",
+        "version": "17.11",
+        "state": "not_affected",
+        "justification": "fixed_upstream_source",
+        "fixedHighOrCritical": true,
+        "unfixedHighOrCritical": false
+      },
+      {
+        "resultIndex": 0,
+        "findingIndex": 147,
+        "cve": "CVE-2026-18408",
+        "package": "otziv-postgresql-17",
+        "version": "17.11",
+        "state": "not_affected",
+        "justification": "fixed_upstream_source",
+        "fixedHighOrCritical": true,
+        "unfixedHighOrCritical": false
+      },
+      {
+        "resultIndex": 0,
+        "findingIndex": 148,
+        "cve": "CVE-2026-19385",
+        "package": "otziv-postgresql-17",
+        "version": "17.11",
+        "state": "not_affected",
+        "justification": "fixed_upstream_source",
+        "fixedHighOrCritical": true,
+        "unfixedHighOrCritical": false
+      },
+      {
+        "resultIndex": 0,
+        "findingIndex": 149,
+        "cve": "CVE-2026-6464",
+        "package": "otziv-postgresql-17",
+        "version": "17.11",
+        "state": "not_affected",
+        "justification": "fixed_upstream_source",
+        "fixedHighOrCritical": true,
+        "unfixedHighOrCritical": false
+      },
+      {
+        "resultIndex": 0,
+        "findingIndex": 150,
+        "cve": "CVE-2026-6471",
+        "package": "otziv-postgresql-17",
+        "version": "17.11",
+        "state": "not_affected",
+        "justification": "fixed_upstream_source",
+        "fixedHighOrCritical": true,
+        "unfixedHighOrCritical": false
+      },
+      {
+        "resultIndex": 0,
+        "findingIndex": 151,
+        "cve": "CVE-2026-6473",
+        "package": "otziv-postgresql-17",
+        "version": "17.11",
+        "state": "not_affected",
+        "justification": "fixed_upstream_source",
+        "fixedHighOrCritical": true,
+        "unfixedHighOrCritical": false
+      },
+      {
+        "resultIndex": 0,
+        "findingIndex": 152,
+        "cve": "CVE-2026-14663",
+        "package": "otziv-postgresql-17",
+        "version": "17.11",
+        "state": "not_affected",
+        "justification": "fixed_upstream_source",
+        "fixedHighOrCritical": false,
+        "unfixedHighOrCritical": false
+      },
+      {
+        "resultIndex": 0,
+        "findingIndex": 153,
+        "cve": "CVE-2026-14666",
+        "package": "otziv-postgresql-17",
+        "version": "17.11",
+        "state": "not_affected",
+        "justification": "fixed_upstream_source",
+        "fixedHighOrCritical": false,
+        "unfixedHighOrCritical": false
+      },
+      {
+        "resultIndex": 0,
+        "findingIndex": 154,
+        "cve": "CVE-2026-14672",
+        "package": "otziv-postgresql-17",
+        "version": "17.11",
+        "state": "not_affected",
+        "justification": "fixed_upstream_source",
+        "fixedHighOrCritical": false,
+        "unfixedHighOrCritical": false
+      },
+      {
+        "resultIndex": 0,
+        "findingIndex": 155,
+        "cve": "CVE-2026-14678",
+        "package": "otziv-postgresql-17",
+        "version": "17.11",
+        "state": "not_affected",
+        "justification": "fixed_upstream_source",
+        "fixedHighOrCritical": false,
+        "unfixedHighOrCritical": false
+      },
+      {
+        "resultIndex": 0,
+        "findingIndex": 156,
+        "cve": "CVE-2026-14681",
+        "package": "otziv-postgresql-17",
+        "version": "17.11",
+        "state": "not_affected",
+        "justification": "fixed_upstream_source",
+        "fixedHighOrCritical": false,
+        "unfixedHighOrCritical": false
+      },
+      {
+        "resultIndex": 0,
+        "findingIndex": 157,
+        "cve": "CVE-2026-18024",
+        "package": "otziv-postgresql-17",
+        "version": "17.11",
+        "state": "not_affected",
+        "justification": "fixed_upstream_source",
+        "fixedHighOrCritical": false,
+        "unfixedHighOrCritical": false
+      },
+      {
+        "resultIndex": 0,
+        "findingIndex": 158,
+        "cve": "CVE-2026-6470",
+        "package": "otziv-postgresql-17",
+        "version": "17.11",
+        "state": "not_affected",
+        "justification": "fixed_upstream_source",
+        "fixedHighOrCritical": false,
+        "unfixedHighOrCritical": false
+      },
+      {
+        "resultIndex": 0,
+        "findingIndex": 159,
+        "cve": "CVE-2026-14673",
+        "package": "otziv-postgresql-17",
+        "version": "17.11",
+        "state": "not_affected",
+        "justification": "fixed_upstream_source",
+        "fixedHighOrCritical": false,
+        "unfixedHighOrCritical": false
+      },
+      {
+        "resultIndex": 0,
+        "findingIndex": 160,
+        "cve": "CVE-2026-16241",
+        "package": "otziv-postgresql-17",
+        "version": "17.11",
+        "state": "not_affected",
+        "justification": "fixed_upstream_source",
+        "fixedHighOrCritical": false,
+        "unfixedHighOrCritical": false
+      },
+      {
+        "resultIndex": 0,
+        "findingIndex": 161,
+        "cve": "CVE-2026-6469",
+        "package": "otziv-postgresql-17",
+        "version": "17.11",
+        "state": "not_affected",
+        "justification": "fixed_upstream_source",
+        "fixedHighOrCritical": false,
+        "unfixedHighOrCritical": false
+      },
+      {
+        "resultIndex": 0,
+        "findingIndex": 96,
+        "cve": "CVE-2026-74860",
+        "package": "libxml2-16",
+        "version": "2.15.4",
+        "state": "not_affected",
+        "justification": "vulnerable_python_bindings_absent",
+        "fixedHighOrCritical": false,
+        "unfixedHighOrCritical": true
+      },
+      {
+        "resultIndex": 0,
+        "findingIndex": 97,
+        "cve": "CVE-2026-86138",
+        "package": "libxml2-16",
+        "version": "2.15.4",
+        "state": "not_affected",
+        "justification": "fixed_upstream_source",
+        "fixedHighOrCritical": false,
+        "unfixedHighOrCritical": true
+      },
+      {
+        "resultIndex": 0,
+        "findingIndex": 98,
+        "cve": "CVE-2026-86139",
+        "package": "libxml2-16",
+        "version": "2.15.4",
+        "state": "not_affected",
+        "justification": "fixed_upstream_source",
+        "fixedHighOrCritical": false,
+        "unfixedHighOrCritical": true
+      },
+      {
+        "resultIndex": 0,
+        "findingIndex": 100,
+        "cve": "CVE-2026-86142",
+        "package": "libxml2-16",
+        "version": "2.15.4",
+        "state": "not_affected",
+        "justification": "fixed_upstream_source",
+        "fixedHighOrCritical": false,
+        "unfixedHighOrCritical": true
+      },
+      {
+        "resultIndex": 0,
+        "findingIndex": 101,
+        "cve": "CVE-2026-86143",
+        "package": "libxml2-16",
+        "version": "2.15.4",
+        "state": "not_affected",
+        "justification": "fixed_upstream_source",
+        "fixedHighOrCritical": false,
+        "unfixedHighOrCritical": true
+      },
+      {
+        "resultIndex": 0,
+        "findingIndex": 102,
+        "cve": "CVE-2026-86144",
+        "package": "libxml2-16",
+        "version": "2.15.4",
+        "state": "not_affected",
+        "justification": "fixed_upstream_source",
+        "fixedHighOrCritical": false,
+        "unfixedHighOrCritical": true
+      }
+    ]
+  }
+}

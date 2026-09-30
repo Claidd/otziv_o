@@ -1,0 +1,26 @@
+{
+  "schema": "otziv-ssl-refresh-acceptance-v1",
+  "result": "PASS",
+  "component": "alloy",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:82d7bc33adf7a8a2e7d6d4749ffeba837ee83ecf5dad5f260fee9992de460992",
+  "imageConfigId": "sha256:de72adde329f6e0dc68ed732be9a6ed5604d4656027d7129704e6bf1bb5d47b7",
+  "parentReference": "ghcr.io/claidd/otziv-security@sha256:d006cedf890ade4915a098a5362ce0cda9a3fd7ec2c02320f15e92ccfd669122",
+  "parentIndexSha256": "7df6f0ad65a8e1b7466afc226bf2db32abd34864f082fe3607701eead286ef92",
+  "commit": "f2239d547142ad4e73f0b7f4b25799f410a240b9",
+  "run": "36716370165",
+  "attempt": "1",
+  "runtimePath": "infrastructure/runtime-security/proofs/c23-alloy/publication/vulnerabilities.runtime-refresh.json.gz",
+  "scope": "OpenSSL package refresh; application payload, launch configuration and unrelated packages verified unchanged.",
+  "files": {
+    "infrastructure/runtime-security/proofs/c23-alloy/publication/publication.json": "b7256cb3d10a1caacd3492b509bd64a34cad3abf2b49e8045c005c57b67d9e21",
+    "infrastructure/runtime-security/proofs/c23-alloy/publication/registry-amd64-config.json": "de72adde329f6e0dc68ed732be9a6ed5604d4656027d7129704e6bf1bb5d47b7",
+    "infrastructure/runtime-security/proofs/c23-alloy/publication/vulnerabilities.json": "54badc2c5da98b9a26d3149a348151ad1e0db2770dc0d8dcf163131189d01f01",
+    "infrastructure/runtime-security/proofs/c23-alloy/publication/vulnerabilities.adjudications.json": "c0363e292f4fe3e9a3ba61305a09646ece10f90f4799c3046605cf114849b875",
+    "infrastructure/runtime-security/proofs/c23-alloy/publication/vulnerabilities.triage.json": "c620f211d6d8d2e79421d8c9bf96bca7eab4bf5ffa709f0dff9b3d3bfc9f9c32",
+    "infrastructure/runtime-security/proofs/c23-alloy/publication/vulnerabilities.runtime-refresh.json.gz": "3063184f257e6d0e1e86c7e731bebfe55c775884c937109cd70a720f285f7262"
+  },
+  "executedSources": {
+    "infrastructure/runtime-security/ssl-refresh-inspection.py": "4969ebbd33456ba2fa10e377d2ff6877dca7651334c33536ca03362f83af1e1d",
+    "infrastructure/runtime-security/ssl-refresh.mjs": "9ee312eb882b408847e366f388882fe05eb28794b935a5910f2cfd7dd1898be8"
+  }
+}

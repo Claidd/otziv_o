@@ -42,6 +42,7 @@ param(
     [switch]$RebuildWhatsApp,
     [switch]$RequireMainCi,
     [switch]$FullRollout,
+    [switch]$CoordinatedSslRefresh,
     [switch]$Help
 )
 
@@ -769,6 +770,9 @@ if (-not (Test-Path -LiteralPath $snapshotLibraryPath -PathType Leaf)) {
 . $snapshotLibraryPath
 
 $canonicalMainWorkspace = ''
+if ($CoordinatedSslRefresh -and -not $RequireMainCi) {
+    throw 'Explicit reviewed SSL cutover requires protected main CI and the mandatory backup.'
+}
 if ($RequireMainCi) {
     if (-not ($PreparedDeploySnapshot -and $SkipBuildPush -and $CiReleaseManifest -and
               $CiCapacityPlan -and $PrivateRegistryControlFile) -or $AllowDirtyWorktree) {
@@ -1079,6 +1083,7 @@ $deployBundlePaths = @(
     "infrastructure\scripts\prod\create-pre-deploy-db-backup.sh",
     "infrastructure\scripts\prod\otziv-prod-up.sh",
     "infrastructure\scripts\prod\database_image_guard.py",
+    "infrastructure\scripts\prod\coordinated_ssl_refresh.py",
     "infrastructure\scripts\prod\deployment_capacity.py",
     "infrastructure\scripts\prod\whatsapp_deploy_state.py",
     "infrastructure\scripts\prod\image_layer_capacity.py",
@@ -1088,6 +1093,25 @@ $deployBundlePaths = @(
     "infrastructure\scripts\prod\renew-letsencrypt.sh",
     "infrastructure\scripts\prod\register-max-webhook.ps1"
 )
+# Only the explicit C23 cutover needs its retained evidence on the VPS. Export
+# these exact committed files through the normal checked source archive.
+if ($CoordinatedSslRefresh) {
+    $activationPath = "infrastructure/runtime-security/reviewed-image-activations.json"
+    $activationIndex = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repoRoot $activationPath) | ConvertFrom-Json
+    $deployBundlePaths += @($activationPath, "infrastructure/runtime-security/c23-parent-activations.json")
+    foreach ($component in @('postgres', 'keycloak')) {
+        $entry = @($activationIndex.images | Where-Object { $_.component -eq $component })
+        if ($entry.Count -ne 1 -or -not $entry[0].sslRefreshAcceptance.path) {
+            throw "Missing accepted SSL cutover evidence: $component"
+        }
+        $acceptancePath = $entry[0].sslRefreshAcceptance.path
+        $accepted = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repoRoot $acceptancePath) | ConvertFrom-Json
+        $deployBundlePaths += $acceptancePath
+        $deployBundlePaths += @($accepted.files.PSObject.Properties.Name)
+        $deployBundlePaths += @($accepted.executedSources.PSObject.Properties.Name)
+    }
+    $deployBundlePaths = @($deployBundlePaths | Select-Object -Unique)
+}
 $remote = "${VpsUser}@${VpsHost}"
 $remoteDeployLockToken = [System.Guid]::NewGuid().ToString('N')
 $remoteUploadDirectory = "$VpsPath/.deploy-upload-$remoteDeployLockToken"
@@ -1831,6 +1855,8 @@ retain_deploy_lock="1"
     $preDeployFlywayFingerprintQuoted = ConvertTo-BashSingleQuoted $preDeployFlywayFingerprint
 
     $fullRolloutArgument = if ($FullRollout) { "--full" } else { "" }
+    $coordinatedSslEnabled = if ($CoordinatedSslRefresh) { '1' } else { '0' }
+    $coordinatedMainRevisionQuoted = if ($CoordinatedSslRefresh) { ConvertTo-BashSingleQuoted $preparedSnapshotRevision } else { "''" }
     $remoteScript = @"
 set -Eeuo pipefail
 umask 077
@@ -3137,7 +3163,17 @@ chmod +x infrastructure/scripts/prod/apply-keycloak-prod-settings.sh || true
 chmod +x infrastructure/scripts/prod/validate-flyway-migrations.sh || true
 chmod +x infrastructure/scripts/prod/create-pre-deploy-db-backup.sh || true
 chmod +x infrastructure/scripts/prod/register-max-webhook.sh || true
-# Refuse database image/storage changes before any rollout startup or retry.
+# The separate, explicit C23 SSL cutover keeps the ordinary continuity guard
+# intact. It runs under this lock, after the verified encrypted main DB backup,
+# retains an additional verified encrypted PG backup on the VPS, and restores
+# the old image on the same volume if any cutover check fails.
+if [ "$coordinatedSslEnabled" = "1" ]; then
+  python3 infrastructure/scripts/prod/coordinated_ssl_refresh.py \
+    --root "`$remote_path" --env-file "`$remote_path/`$env_file" \
+    --lock-token "`$deploy_lock_token" --main-revision $coordinatedMainRevisionQuoted \
+    --explicit-reviewed-ssl-cutover
+fi
+# Refuse ordinary database image/storage changes before rollout startup or retry.
 guard_database_images
 require_compose_service whatsapp_lika
 require_compose_service whatsapp_vika
