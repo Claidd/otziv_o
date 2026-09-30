@@ -1,5 +1,5 @@
 """Inspect stopped parent/child images; accept only an exact OpenSSL package overlay."""
-import argparse, gzip, hashlib, json, pathlib, subprocess, tarfile, tempfile, uuid
+import argparse, copy, gzip, hashlib, json, pathlib, re, subprocess, tarfile, tempfile, uuid
 
 FIELDS = ['User', 'WorkingDir', 'Entrypoint', 'Cmd', 'Env', 'Healthcheck', 'ExposedPorts', 'Volumes', 'StopSignal', 'Labels']
 PACKAGES = {'postgres': {'libssl3t64': '3.5.7-1~deb13u3', 'openssl': '3.5.7-1~deb13u3', 'openssl-provider-legacy': '3.5.7-1~deb13u3'},
@@ -64,8 +64,14 @@ def inspect(reference, directory):
         assert container['Config']['Labels']['otziv.ssl.inspection.owner'] == owner and not container['State']['Running']
         docker('rm', '-v', owner)
 
-def verify(parent, candidate, component):
-    assert parent['configuration'] == candidate['configuration'], 'ssl_refresh_config_changed'
+def verify(parent, candidate, component, publication_commit=None):
+    expected_config = copy.deepcopy(parent['configuration'])
+    if publication_commit:
+        assert re.fullmatch('[a-f0-9]{40}', publication_commit)
+        assert candidate['configuration']['Labels']['com.otziv.publication.revision'] == publication_commit
+        assert candidate['configuration']['Labels']['com.otziv.publication.source'] == 'https://github.com/Claidd/otziv_o'
+        expected_config['Labels']['com.otziv.publication.revision'] = publication_commit
+    assert expected_config == candidate['configuration'], 'ssl_refresh_config_changed'
     assert candidate['rootfs'][:len(parent['rootfs'])] == parent['rootfs'], 'ssl_refresh_parent_layers_changed'
     assert len(candidate['rootfs']) > len(parent['rootfs']), 'ssl_refresh_missing_overlay'
     expected = PACKAGES[component]
@@ -95,14 +101,16 @@ def verify(parent, candidate, component):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--component', choices=list(PACKAGES), required=True)
+    parser.add_argument('--publication-commit')
     for name in ['parent', 'candidate', 'output', 'temporary-directory']: parser.add_argument('--'+name, required=True)
     args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix='ssl-refresh-', dir=args.temporary_directory) as temporary:
         parent, candidate = [inspect(ref, pathlib.Path(temporary)) for ref in (args.parent, args.candidate)]
-    changed = verify(parent, candidate, args.component)
+    changed = verify(parent, candidate, args.component, args.publication_commit)
     record = {'schema': 'otziv-ssl-refresh-inspection-v1', 'result': 'PASS', 'component': args.component,
               'productionAccess': False, 'ownedContainersRemaining': 0, 'images': [parent, candidate], 'changedFiles': changed,
-              'packages': PACKAGES[args.component], 'executedScriptSha256': hashlib.sha256(pathlib.Path(__file__).read_bytes()).hexdigest()}
+              'packages': PACKAGES[args.component], 'publicationCommit': args.publication_commit,
+              'executedScriptSha256': hashlib.sha256(pathlib.Path(__file__).read_bytes()).hexdigest()}
     pathlib.Path(args.output).write_bytes(gzip.compress((json.dumps(record, separators=(',', ':'))+'\n').encode(), mtime=0))
     print(json.dumps({'result': 'PASS', 'component': args.component, 'changedFiles': len(changed)}))
 

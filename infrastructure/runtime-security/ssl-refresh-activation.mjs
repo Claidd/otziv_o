@@ -47,7 +47,7 @@ async function inspection(value,entry,read){
   assert.ok(value.files[value.runtimePath],'ssl_refresh_acceptance_runtime_unbound');
   assert.equal(runtime.executedScriptSha256,value.executedSources['infrastructure/runtime-security/ssl-refresh-inspection.py'],'ssl_refresh_acceptance_inspector');
   const inspected=validateSslInspection(runtime,entry.component,parentCfg,child,parentId,value.imageConfigId,
-    {parentReference:parent.reference,candidateReference:entry.reference});
+    {parentReference:parent.reference,candidateReference:entry.reference,publicationCommit:entry.commit});
   return {...inspected,parent,parentId,runtimeBytes,child};
 }
 

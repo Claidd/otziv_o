@@ -58,7 +58,14 @@ export function validateSslInspection(record,component,parent,candidate,parentId
     const value=(data,key)=>['User','WorkingDir'].includes(key)?data[key]||'':data[key]??null;
     for(const field of fields)assert.deepEqual(value(observed.configuration,field),value(config.config,field),'ssl_refresh_config_binding');
   }
-  assert.deepEqual(before.configuration,after.configuration,'ssl_refresh_launch_contract_changed');
+  const expectedConfiguration=structuredClone(before.configuration);
+  if(identity.publicationCommit){
+    assert.match(identity.publicationCommit,/^[a-f0-9]{40}$/,'ssl_refresh_publication_commit');
+    assert.equal(record.publicationCommit,identity.publicationCommit,'ssl_refresh_inspected_publication_commit');
+    assert.equal(after.configuration.Labels['com.otziv.publication.source'],'https://github.com/Claidd/otziv_o','ssl_refresh_publication_source');
+    expectedConfiguration.Labels['com.otziv.publication.revision']=identity.publicationCommit;
+  }
+  assert.deepEqual(expectedConfiguration,after.configuration,'ssl_refresh_launch_contract_changed');
   assert.deepEqual(after.rootfs.slice(0,before.rootfs.length),before.rootfs,'ssl_refresh_parent_layers_changed');
   assert.ok(after.rootfs.length>before.rootfs.length,'ssl_refresh_missing_overlay');
   const expected=new Set(Object.keys(REFRESH_PACKAGES[component]));
@@ -93,10 +100,11 @@ export async function inspectSslRefresh(report,id,scratch,component){
   if(JSON.stringify(candidate?.rootfs?.diff_ids?.slice(0,parent.rootfs.diff_ids.length))!==JSON.stringify(parent.rootfs.diff_ids))return null;
   const output=join(scratch,component+'-runtime-refresh.json.gz');
   await run(process.platform==='win32'?'python':'python3',['-B',fileURLToPath(new URL('ssl-refresh-inspection.py',root)),
-    '--component',component,'--parent',entry.reference,'--candidate',id,'--output',output,'--temporary-directory',scratch],{timeoutMs:600000});
+    '--component',component,'--parent',entry.reference,'--candidate',id,'--output',output,'--temporary-directory',scratch,
+    '--publication-commit',report.Metadata.ImageConfig.config.Labels['com.otziv.publication.revision']],{timeoutMs:600000});
   const bytes=await readFile(output),record=JSON.parse(gunzipSync(bytes));
   const observed=validateSslInspection(record,component,parent,candidate,parentId,report.Metadata.ImageID,
-    {parentReference:entry.reference,candidateReference:id});
+    {parentReference:entry.reference,candidateReference:id,publicationCommit:report.Metadata.ImageConfig.config.Labels['com.otziv.publication.revision']});
   assert.equal(record.executedScriptSha256,hash(await readFile(new URL('ssl-refresh-inspection.py',root))),'ssl_refresh_inspector_changed');
   return {...observed,proof:{component,parentConfigId:parentId,parentReference:entry.reference,runtimeProofSha256:hash(bytes)}};
 }
