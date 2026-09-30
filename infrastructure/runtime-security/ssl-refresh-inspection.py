@@ -21,8 +21,8 @@ def packages(status):
         for line in block.splitlines():
             if line.startswith(' ') and key:
                 fields[key] += '\n' + line
-            elif ': ' in line:
-                key, value = line.split(': ', 1); fields[key] = value
+            elif ':' in line:
+                key, value = line.split(':', 1); fields[key] = value.lstrip()
         if fields:
             assert fields['Package'] not in result
             result[fields['Package']] = fields
