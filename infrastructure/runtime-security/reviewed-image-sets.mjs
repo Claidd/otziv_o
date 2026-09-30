@@ -48,6 +48,7 @@ const RELEASE_SETS = Object.freeze({
   'c23-postgres': { component: 'postgres', path: 'infrastructure/runtime-security/reviewed-images-c23-postgres.json', context: 'infrastructure/runtime-security/builds/c23-postgres', dockerfile: 'infrastructure/runtime-security/builds/c23-postgres/Dockerfile' },
   'c23-keycloak': { component: 'keycloak', path: 'infrastructure/runtime-security/reviewed-images-c23-keycloak.json', context: 'infrastructure/runtime-security/builds/c23-keycloak', dockerfile: 'infrastructure/runtime-security/builds/c23-keycloak/Dockerfile' },
   'c23-alloy': { component: 'alloy', path: 'infrastructure/runtime-security/reviewed-images-c23-alloy.json', context: 'infrastructure/runtime-security/builds/c23-alloy', dockerfile: 'infrastructure/runtime-security/builds/c23-alloy/Dockerfile' },
+  'c24-keycloak': { component: 'keycloak', path: 'infrastructure/runtime-security/reviewed-images-c24-keycloak.json', context: 'infrastructure/runtime-security/builds/c24-keycloak', dockerfile: 'infrastructure/runtime-security/builds/c24-keycloak/Dockerfile' },
 });
 // These two local-stack dependencies were absent from the immutable C7 manifest.
 // Keep their original pins and service coverage explicit when adding publication.

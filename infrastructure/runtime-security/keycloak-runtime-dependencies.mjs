@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 
 const SCHEMA = 'otziv-keycloak-runtime-dependencies-v1';
+const C24_POLICY = 'keycloak-26.7.3-databind-2.21.7-other-jackson-2.21.6-parsson-1.1.9';
 const POLICY = 'keycloak-26.7.3-jackson-2.21.6-parsson-1.1.9';
 const DIGEST = /^sha256:[a-f0-9]{64}$/;
 const jackson = name => /^com\.fasterxml\.jackson[^:]*:/.test(name);
@@ -11,12 +12,13 @@ const known = name => jackson(name) || name === 'org.eclipse.parsson:parsson';
 // runtime still has to satisfy the same dependency policy.
 export const requiresKeycloakDependencyProof = image => image.component === 'keycloak';
 
-function validatePackages(packages) {
+function validatePackages(packages, policy = POLICY) {
   assert.ok(Array.isArray(packages) && packages.length, 'keycloak_known_dependencies_missing');
   for (const item of packages) {
     assert.ok(known(item.name), 'keycloak_unknown_dependency_evidence');
     const [group, artifact] = item.name.split(':');
     const expected = artifact === 'jackson-annotations' ? '2.21'
+      : artifact === 'jackson-databind' && policy === C24_POLICY ? '2.21.7'
       : jackson(item.name) ? '2.21.6' : '1.1.9';
     assert.equal(item.version, expected, 'keycloak_unreviewed_runtime_dependency_version');
     assert.equal(item.purl, `pkg:maven/${group}/${artifact}@${item.version}`, 'keycloak_dependency_identity_mismatch');
@@ -30,12 +32,12 @@ function validatePackages(packages) {
 
 export function validateKeycloakDependencyReceipt(receipt, imageId) {
   assert.equal(receipt?.schema, SCHEMA, 'keycloak_dependency_receipt_missing');
-  assert.equal(receipt.policy, POLICY, 'keycloak_dependency_policy_mismatch');
+  assert.ok([POLICY,C24_POLICY].includes(receipt.policy), 'keycloak_dependency_policy_mismatch');
   assert.equal(receipt.result, 'PASS', 'keycloak_dependency_policy_not_passed');
   assert.match(imageId || '', DIGEST, 'keycloak_dependency_image_id_missing');
   assert.equal(receipt.imageId, imageId, 'keycloak_dependency_image_mismatch');
   assert.match(receipt.rawScanSha256 || '', /^[a-f0-9]{64}$/, 'keycloak_dependency_scan_hash_missing');
-  validatePackages(receipt.packages);
+  validatePackages(receipt.packages,receipt.policy);
 }
 
 // This checks every package reported by the pinned scanner independently of its
@@ -58,8 +60,9 @@ export function checkKeycloakRuntimeDependencies(rawBytes, imageId) {
       packages.push({ name: item.Name, version: item.Version, purl, path: item.FilePath });
     }
   }
-  validatePackages(packages);
+  const policy=packages.some(x=>x.name==='com.fasterxml.jackson.core:jackson-databind'&&x.version==='2.21.7')?C24_POLICY:POLICY;
+  validatePackages(packages,policy);
   packages.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b), 'en'));
-  return { schema: SCHEMA, policy: POLICY, result: 'PASS', imageId,
+  return { schema: SCHEMA, policy, result: 'PASS', imageId,
     rawScanSha256: createHash('sha256').update(rawBytes).digest('hex'), packages };
 }

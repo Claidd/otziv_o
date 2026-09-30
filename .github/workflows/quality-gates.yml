@@ -42,6 +42,7 @@ on:
           - c23-postgres
           - c23-keycloak
           - c23-alloy
+          - c24-keycloak
   pull_request:
   push:
     branches: [main]
