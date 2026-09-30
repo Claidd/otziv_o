@@ -579,12 +579,12 @@ jobs:
         run: bash ./mvnw -f ../infrastructure/keycloak/security-generation/pom.xml -B -ntp verify
       - name: Build the real issuer release image
         if: ${{ needs.changes.outputs.infrastructure == 'true' }}
-        run: docker build -t otziv-issuer-ci infrastructure/runtime-security/builds/c22-keycloak
+        run: docker build -t otziv-issuer-ci infrastructure/runtime-security/builds/c24-keycloak
       - name: Build and scan reviewed database candidates
         if: ${{ needs.changes.outputs.infrastructure == 'true' }}
         run: |
           docker build -t otziv-mysql-ci infrastructure/runtime-security/builds/c22-mysql
-          docker build -t otziv-postgres-ci infrastructure/runtime-security/builds/postgres-c16
+          docker build -t otziv-postgres-ci infrastructure/runtime-security/builds/c23-postgres
           node infrastructure/runtime-security/scan.mjs image otziv-mysql-ci "$RUNNER_TEMP/mysql-vulnerabilities.json"
           node infrastructure/runtime-security/scan.mjs image otziv-postgres-ci "$RUNNER_TEMP/postgres-vulnerabilities.json"
       - name: Verify PostgreSQL minor upgrade and separate backup rollback

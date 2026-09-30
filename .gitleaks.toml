@@ -1460,3 +1460,34 @@ condition = "AND"
 regexTarget = "line"
 paths = ['''(^|/)infrastructure/runtime\-security/proofs/c24\-keycloak/publication/vulnerabilities\.json$''']
 regexes = ['''^\n?          "Name": "org\.keycloak:keycloak\-crypto\-fips1402",\r?$''']
+
+# Exact public Git commit IDs in retained C23 Alloy image labels and upstream
+# vulnerability references. Raw scan/SBOM bytes stay unchanged; other values,
+# files and rules continue through the blocking working-tree/history scans.
+[[allowlists]]
+description = "Exact public Git commit metadata in C23 Alloy raw scan and SBOM"
+targetRules = ["sourcegraph-access-token"]
+condition = "AND"
+regexTarget = "secret"
+paths = [
+  '''(^|/)infrastructure/runtime\-security/proofs/c23\-alloy/publication/vulnerabilities\.json$''',
+  '''(^|/)infrastructure/runtime\-security/proofs/c23\-alloy/publication/vulnerabilities\.sbom\.cdx\.json$''',
+]
+regexes = [
+  '''^1dcd0cf42a6a7cb62cc9a7c024196733abcfda95$''',
+  '''^1e9a0039f07471ddfe6816e5df04875bec409f92$''',
+  '''^35d122a3df8b0cc4082a4d89fdc6ee99f375fe67$''',
+  '''^3a1412d2b3bc4e4231fbeac2ed42117ae541bb38$''',
+  '''^49f79e947270f06940b9100fa638f85dddc4aa7f$''',
+  '''^5e390467b26a3cf3fecc04e1a0d482dff3162fc4$''',
+  '''^73ed7ce85cc78effb94daf028c9af6b4e5252e50$''',
+  '''^8c9602e3a145e9596dc1a63c6ed67865814b6633$''',
+  '''^9ff04d5b84743e331e80b589335a52c5480d1815$''',
+  '''^ba71b09e6ed272e93a669aeaec1e98b1df4cc582$''',
+  '''^becfd489a7bb459c0496893b555fb87a003296b1$''',
+  '''^c0186f14fbdb02f64c8e0ba701ce727ea764ff4c$''',
+  '''^c440855d6b33446edf4b5eb1a2d892281f15a99b$''',
+  '''^c65d435b43e5e6b82310e6b18dd4cdcb8ac63a0c$''',
+  '''^f2239d547142ad4e73f0b7f4b25799f410a240b9$''',
+  '''^f4d6f25bf0c3fa12d4968320a45685947756a22a$''',
+]
