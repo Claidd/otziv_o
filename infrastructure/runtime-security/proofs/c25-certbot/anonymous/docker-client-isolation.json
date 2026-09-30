@@ -1,0 +1,7 @@
+{
+  "config": {
+    "auths": {}
+  },
+  "credentialHelpers": "unavailable-empty-PATH",
+  "host": "unix:///var/run/docker.sock"
+}

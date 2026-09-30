@@ -1,0 +1,71 @@
+{
+  "schema": "otziv-anonymous-download-v1",
+  "component": "certbot",
+  "commit": "a243b2a891f7b6a2ca3dd4af3fe5f0bc72ef530a",
+  "run": "36771565118",
+  "attempt": "1",
+  "manifestSet": "c25-certbot",
+  "manifestPath": "infrastructure/runtime-security/reviewed-images-c25-certbot.json",
+  "runner": "GitHub Actions 1000012505",
+  "startedAt": "2026-09-30T20:19:31.564Z",
+  "sourcePublicationSha256": "f727f0331a69929aa20f214a6a3b6c7e946491733edfc73bce28b9bc90858ff1",
+  "result": "PASS",
+  "accountCredentialsUsed": false,
+  "dockerCredentialHelpersAvailable": false,
+  "dockerTransport": "unix:///var/run/docker.sock",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:fc21f2b893f9db7550cbad759cb2ad50fbf49bee61d5f58a3a45b009037a8764",
+  "imageAbsentBeforePull": true,
+  "daemonVersion": "\"28.0.4\"",
+  "attestationEvidence": {
+    "schema": "otziv-registry-evidence-v1",
+    "imageManifestDigest": "sha256:7da9a696e45c0f1ced2e8ad6d56ee39f9c9d7a14bdfc55644a419b8f10856c8a",
+    "predicates": [
+      "https://slsa.dev/provenance/v1",
+      "https://spdx.dev/Document"
+    ],
+    "artifacts": [
+      {
+        "file": "registry-index.json",
+        "digest": "sha256:fc21f2b893f9db7550cbad759cb2ad50fbf49bee61d5f58a3a45b009037a8764",
+        "size": 857
+      },
+      {
+        "file": "registry-amd64-manifest.json",
+        "digest": "sha256:7da9a696e45c0f1ced2e8ad6d56ee39f9c9d7a14bdfc55644a419b8f10856c8a",
+        "size": 3149
+      },
+      {
+        "file": "registry-amd64-config.json",
+        "digest": "sha256:e62b53b43a531811f6144c03d2247108235dc9b0c3eaf7041b99d62f40e5e900",
+        "size": 9484
+      },
+      {
+        "file": "registry-attestation-0.json",
+        "digest": "sha256:fb234e54b16e4790a861917cfb7336afe56ba5993055626900853e320bbc8431",
+        "size": 1112
+      },
+      {
+        "file": "registry-attestation-0-payload-0.json",
+        "digest": "sha256:324158d59dc5ec16aedf02e7a0888edb514924d9126aa48a6e3f84856f46723e",
+        "size": 1017201
+      },
+      {
+        "file": "registry-attestation-0-payload-1.json",
+        "digest": "sha256:701b3d46db80bbe2fb173cef9ae92c69071b733c39cd3cdda94da1935670246e",
+        "size": 23376
+      }
+    ],
+    "sourceBinding": "LOCAL_GIT_METADATA_CHECKED_AGAINST_CLEAN_CHECKOUT_NOT_INDEPENDENT_SOURCE_AUTHENTICATION"
+  },
+  "pullExitCode": 0,
+  "imageId": "sha256:e62b53b43a531811f6144c03d2247108235dc9b0c3eaf7041b99d62f40e5e900",
+  "platform": "linux/amd64",
+  "labels": {
+    "com.otziv.publication.revision": "a243b2a891f7b6a2ca3dd4af3fe5f0bc72ef530a",
+    "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+    "com.otziv.reviewed-component": "certbot",
+    "com.otziv.security.patch": "Certbot5.8.0 unchanged; Alpine3.23 updates; actual installer code removed from runtime"
+  },
+  "publicDownloadReadiness": "VERIFIED_ANONYMOUS_DIGEST_PULL",
+  "finishedAt": "2026-09-30T20:19:38.064Z"
+}
