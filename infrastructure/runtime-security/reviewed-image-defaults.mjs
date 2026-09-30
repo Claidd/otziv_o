@@ -21,6 +21,7 @@ import { validatePublishedKeycloakMigrationAcceptance,
 import {validateKeycloakC19Acceptance} from './keycloak-c19-acceptance.mjs';
 import {validateKeycloakC22Acceptance,coupleKeycloakC22} from './keycloak-c22-acceptance.mjs';
 import {validateSslRefreshActivation,validateSslRefreshTransition,coupleSslRefresh} from './ssl-refresh-activation.mjs';
+import {validateJacksonRefreshActivation} from './jackson-refresh-activation.mjs';
 
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 const DATABASE_HOLD = new Set(['mysql', 'postgres']);
@@ -159,6 +160,7 @@ export async function validateActivation(image, entry, manifestBytes, read) {
   if (['c23-postgres','c23-keycloak','c23-alloy'].includes(selected.manifestSet)) {
     await validateSslRefreshActivation(publication.value, entry, read, validateActivation);
   }
+  if(selected.manifestSet==='c24-keycloak')await validateJacksonRefreshActivation(publication.value,entry,read,validateActivation);
   assert.equal(entry.reference, publication.value.reference, 'activation_registered_reference_mismatch');
   assert.equal(publication.value.security.effectiveBlockingFixedHighOrCritical, 0, 'activation_security_severity_mismatch');
   if (publication.value.security.unresolvedRiskReview === 'NONE') {
@@ -230,7 +232,7 @@ export async function validateReviewedDefaults(rows, manifestBytes, activations,
   }
   if (databasePreparations.has('postgres')) {
     const issuer = registered.get('keycloak');
-    const coupled = await (issuer?.manifest?.path === 'infrastructure/runtime-security/reviewed-images-c23-keycloak.json'
+    const coupled = await (['infrastructure/runtime-security/reviewed-images-c23-keycloak.json','infrastructure/runtime-security/reviewed-images-c24-keycloak.json'].includes(issuer?.manifest?.path)
       ? coupleSslRefresh(databasePreparations.get('postgres'), issuer, read)
       : coupleKeycloakC22(databasePreparations.get('postgres'), issuer, read));
     assertPostgresKeycloakCoupling(coupled, registered.get('keycloak'), rows,

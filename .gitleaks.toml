@@ -1452,3 +1452,11 @@ condition = "AND"
 regexTarget = "line"
 paths = ['''(^|/)infrastructure/runtime\-security/proofs/c23\-keycloak/publication/vulnerabilities\.json$''']
 regexes = ['''^\n?          "Name": "org\.keycloak:keycloak\-crypto\-fips1402",\r?$''']
+
+[[allowlists]]
+description = "Exact public Maven package coordinate in C24 Keycloak scan"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''(^|/)infrastructure/runtime\-security/proofs/c24\-keycloak/publication/vulnerabilities\.json$''']
+regexes = ['''^\n?          "Name": "org\.keycloak:keycloak\-crypto\-fips1402",\r?$''']
