@@ -380,8 +380,49 @@ function Export-OtzivCommittedDeployBundle {
     }
 }
 
-function Get-OtzivDeployBundlePaths {
+function Get-OtzivCoordinatedSslBundlePaths {
     param([Parameter(Mandatory = $true)][string]$Repository)
+    function Read-OtzivBoundDeployEvidencePathOnly([string]$Path, [string]$Sha256) {
+        $relative = $Path.Replace('\', '/')
+        if ($relative -notmatch '^[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)+$' -or
+            '..' -in $relative.Split('/') -or '.' -in $relative.Split('/')) {
+            throw 'SSL cutover evidence must use bounded repository paths.'
+        }
+        $file = Join-Path $Repository $relative
+        if ($Sha256 -notmatch '^[a-f0-9]{64}$' -or
+            (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant() -cne $Sha256) {
+            throw 'Accepted SSL cutover evidence changed.'
+        }
+        return $file
+    }
+    $activationPath = 'infrastructure/runtime-security/reviewed-image-activations.json'
+    $index = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $Repository $activationPath) | ConvertFrom-Json
+    $paths = @($activationPath, 'infrastructure/runtime-security/c23-parent-activations.json')
+    foreach ($component in @('postgres', 'keycloak')) {
+        $entry = @($index.images | Where-Object { $_.component -eq $component })
+        if ($entry.Count -ne 1 -or -not $entry[0].sslRefreshAcceptance.path) {
+            throw "Missing accepted SSL cutover evidence: $component"
+        }
+        $reference = $entry[0].sslRefreshAcceptance
+        $acceptanceFile = Read-OtzivBoundDeployEvidencePathOnly $reference.path $reference.sha256
+        $accepted = Get-Content -Raw -Encoding UTF8 -LiteralPath $acceptanceFile | ConvertFrom-Json
+        if ($accepted.component -cne $component -or $accepted.result -cne 'PASS' -or
+            $accepted.schema -cne 'otziv-ssl-refresh-acceptance-v1') {
+            throw "Invalid accepted SSL cutover evidence: $component"
+        }
+        $paths += $reference.path
+        foreach ($map in @($accepted.files, $accepted.executedSources)) {
+            foreach ($file in $map.PSObject.Properties) {
+                $null = Read-OtzivBoundDeployEvidencePathOnly $file.Name $file.Value
+                $paths += $file.Name
+            }
+        }
+    }
+    return @($paths | Select-Object -Unique)
+}
+
+function Get-OtzivDeployBundlePaths {
+    param([Parameter(Mandatory = $true)][string]$Repository, [switch]$CoordinatedSslRefresh)
     $errors = $null
     $ast = [Management.Automation.Language.Parser]::ParseFile(
         (Join-Path $Repository 'infrastructure/scripts/prod/deploy-prod.ps1'), [ref]$null, [ref]$errors)
@@ -399,16 +440,18 @@ function Get-OtzivDeployBundlePaths {
     }
     $paths = @($nodes | Where-Object { $_ -is [Management.Automation.Language.StringConstantExpressionAst] } | ForEach-Object { $_.Value })
     if ($paths.Count -eq 0 -or 'docker-compose.yaml' -notin $paths) { throw 'Deployment inventory is incomplete.' }
-    return $paths
+    if ($CoordinatedSslRefresh) { $paths += @(Get-OtzivCoordinatedSslBundlePaths -Repository $Repository) }
+    return @($paths | Select-Object -Unique)
 }
 
 function New-OtzivPreparedDeployArchive {
     param(
         [Parameter(Mandatory = $true)][string]$Repository,
         [Parameter(Mandatory = $true)][string]$Revision,
-        [Parameter(Mandatory = $true)][string]$Directory
+        [Parameter(Mandatory = $true)][string]$Directory,
+        [switch]$CoordinatedSslRefresh
     )
-    $paths = @(Get-OtzivDeployBundlePaths -Repository $Repository)
+    $paths = @(Get-OtzivDeployBundlePaths -Repository $Repository -CoordinatedSslRefresh:$CoordinatedSslRefresh)
     $stage = Join-Path $Directory 'verified-source'
     if (Test-Path -LiteralPath $stage) { throw 'Prepared source directory already exists.' }
     New-Item -ItemType Directory -Path $stage | Out-Null

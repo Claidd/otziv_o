@@ -1093,24 +1093,10 @@ $deployBundlePaths = @(
     "infrastructure\scripts\prod\renew-letsencrypt.sh",
     "infrastructure\scripts\prod\register-max-webhook.ps1"
 )
-# Only the explicit C23 cutover needs its retained evidence on the VPS. Export
-# these exact committed files through the normal checked source archive.
+# The early prepared archive and installation use the same bounded evidence list.
+$effectiveDeployBundlePaths = @($deployBundlePaths)
 if ($CoordinatedSslRefresh) {
-    $activationPath = "infrastructure/runtime-security/reviewed-image-activations.json"
-    $activationIndex = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repoRoot $activationPath) | ConvertFrom-Json
-    $deployBundlePaths += @($activationPath, "infrastructure/runtime-security/c23-parent-activations.json")
-    foreach ($component in @('postgres', 'keycloak')) {
-        $entry = @($activationIndex.images | Where-Object { $_.component -eq $component })
-        if ($entry.Count -ne 1 -or -not $entry[0].sslRefreshAcceptance.path) {
-            throw "Missing accepted SSL cutover evidence: $component"
-        }
-        $acceptancePath = $entry[0].sslRefreshAcceptance.path
-        $accepted = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repoRoot $acceptancePath) | ConvertFrom-Json
-        $deployBundlePaths += $acceptancePath
-        $deployBundlePaths += @($accepted.files.PSObject.Properties.Name)
-        $deployBundlePaths += @($accepted.executedSources.PSObject.Properties.Name)
-    }
-    $deployBundlePaths = @($deployBundlePaths | Select-Object -Unique)
+    $effectiveDeployBundlePaths = @($deployBundlePaths + @(Get-OtzivCoordinatedSslBundlePaths -Repository $repoRoot) | Select-Object -Unique)
 }
 $remote = "${VpsUser}@${VpsHost}"
 $remoteDeployLockToken = [System.Guid]::NewGuid().ToString('N')
@@ -1151,7 +1137,7 @@ $scpArgs += @("-P", "$VpsPort") + $sshKeepAliveArgs
 if (-not (Test-Path -LiteralPath $buildCompose)) {
     throw "Missing build compose file: $buildCompose"
 }
-foreach ($relativePath in $deployBundlePaths) {
+foreach ($relativePath in $effectiveDeployBundlePaths) {
     if (-not (Test-Path -LiteralPath (Join-Path $repoRoot $relativePath))) {
         throw "Required deploy path is missing: $relativePath"
     }
@@ -1407,10 +1393,10 @@ try {
     Write-Host "Preparing deployment bundle..."
     if ($canonicalMainWorkspace) {
         Export-OtzivCommittedDeployBundle -Repository $repoRoot -Revision $gitRevision `
-            -StageRoot $stageRoot -InputPaths $deployBundlePaths `
+            -StageRoot $stageRoot -InputPaths $effectiveDeployBundlePaths `
             -PreparedArchive $PreparedSourceArchive -PreparedArchiveSha256 $PreparedSourceSha256
     } else {
-        foreach ($deployBundlePath in $deployBundlePaths) {
+        foreach ($deployBundlePath in $effectiveDeployBundlePaths) {
             Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath $deployBundlePath
         }
     }
