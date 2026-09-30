@@ -85,3 +85,9 @@ infrastructure/runtime-security/ssl-refresh-rehearsal.py -text
 infrastructure/runtime-security/reviewed-images-c23-*.json text eol=lf
 infrastructure/runtime-security/c23-parent-activations.json text eol=lf
 infrastructure/runtime-security/builds/c23-*/** text eol=lf
+
+infrastructure/runtime-security/jackson-refresh*.mjs text eol=lf
+infrastructure/runtime-security/jackson-refresh-inspection.py -text
+infrastructure/runtime-security/c24-parent-keycloak.json text eol=lf
+infrastructure/runtime-security/reviewed-images-c24-*.json text eol=lf
+infrastructure/runtime-security/builds/c24-*/** text eol=lf
