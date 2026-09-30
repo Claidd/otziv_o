@@ -74,13 +74,13 @@
     "@modelcontextprotocol/sdk": "1.30.0",
     "@hono/node-server": "2.0.12",
     "@angular/build": {
-      "undici": "7.29.0"
+      "undici": "7.29.1"
     },
     "jsdom": {
-      "undici": "7.29.0"
+      "undici": "7.29.1"
     },
     "node-gyp": {
-      "undici": "6.28.0"
+      "undici": "6.28.1"
     },
     "hono": "4.13.5",
     "ip-address": "10.4.0"
