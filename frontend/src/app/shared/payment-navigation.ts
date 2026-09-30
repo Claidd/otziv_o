@@ -7,7 +7,7 @@ const PAYMENT_PROVIDER_HOSTS = new Set([
   'pay.tbank-online.com',
   'merch.securepaytb.ru'
 ]);
-const SBP_WEB_HOSTS = new Set(['qr.nspk.ru', 'www.tbank.ru', 'payzonaecom.com']);
+const SBP_WEB_HOSTS = new Set(['qr.nspk.ru', 'www.tbank.ru', 'www.tbank-online.com', 'payzonaecom.com']);
 const SBP_CUSTOM_PATH = String.raw`(?:[/?#][A-Za-z0-9._~%!$&'()*+,;=:@/?#-]*)?`;
 const NSPK_BANK_TARGET = new RegExp(
   String.raw`^bank(?:b2b)?[0-9]{12}:\/\/qr\.nspk\.ru${SBP_CUSTOM_PATH}$`,

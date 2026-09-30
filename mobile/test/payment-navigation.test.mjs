@@ -22,6 +22,10 @@ for (const value of [
   'https://user:password@example.test/pay',
   'bankapp://user:password@pay/payment-sbp-bank',
   'bankapp://evil.example/payment-sbp-bank',
+  'http://www.tbank-online.com/mybank/payments/qr-pay/fixture',
+  'https://www.tbank-online.com.evil.test/mybank/payments/qr-pay/fixture',
+  'https://www.tbank-online.com@evil.test/mybank/payments/qr-pay/fixture',
+  'https://user:password@www.tbank-online.com/mybank/payments/qr-pay/fixture',
   'https://example.test/pay\r\nLocation:https://evil.test',
   'https://example.test/pay%0d%0aLocation:https://evil.test',
   'unknownbank://qr.nspk.ru/AS100000000111',
@@ -41,6 +45,7 @@ for (const value of [
 for (const value of [
   'https://qr.nspk.ru/AS100000000111',
   'https://www.tbank.ru/mybank/payments/qr-pay/AD100018PU4SB0748MTQ2RG6K2S26V24',
+  'https://www.tbank-online.com/mybank/payments/qr-pay/BD20005ETEST?type=02&bank=100000000004&sum=175000&cur=RUB',
   'https://payzonaecom.com/mobile-public/goto/qr/AD10001VKP9AV8AC9CGR2FHJ7LNIUJ9C',
   'bank100000000111://qr.nspk.ru/AS100000000111',
   'bankb2b100000000111://qr.nspk.ru/AR100000000111',
