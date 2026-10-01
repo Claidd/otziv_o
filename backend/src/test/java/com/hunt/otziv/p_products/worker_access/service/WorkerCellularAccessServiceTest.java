@@ -253,6 +253,49 @@ class WorkerCellularAccessServiceTest {
     }
 
     @Test
+    void configuredMegafonRangesAllowConfirmedMobileConnectionsWithoutAdmittingNeighboursOrVpn() throws Exception {
+        java.util.Properties configuration = new java.util.Properties();
+        try (var source = getClass().getResourceAsStream("/application.properties")) {
+            configuration.load(source);
+        }
+        String configured = configuration.getProperty("otziv.worker.cellular-access.allowed-cidrs");
+        WorkerCellularAccessProperties properties = properties(WorkerCellularAccessProperties.Mode.ENFORCE);
+        properties.setAllowedCidrs(List.of(configured.substring(configured.indexOf(':') + 1, configured.length() - 1).split(",")));
+        WorkerIpIntelligenceClient client = mock(WorkerIpIntelligenceClient.class);
+        when(client.lookup(anyString())).thenReturn(
+                new WorkerIpIntelligenceClient.IpIntelligence(true, false, false, "PJSC MegaFon", "ipquery")
+        );
+        WorkerNetworkViolationService violations = mock(WorkerNetworkViolationService.class);
+        WorkerCellularAccessService service = new WorkerCellularAccessService(properties, client, violations);
+        authenticate("ROLE_WORKER");
+
+        for (String address : List.of("178.177.228.1", "178.177.228.254", "178.177.230.1", "178.177.230.254")) {
+            request(address, MOBILE_USER_AGENT);
+            for (String section : WorkerCellularAccessService.PROTECTED_SECTIONS) {
+                assertDoesNotThrow(() -> service.enforceSection(section));
+            }
+        }
+        verifyNoInteractions(violations);
+
+        for (String address : List.of("178.177.227.254", "178.177.229.1", "178.177.231.1")) {
+            request(address, MOBILE_USER_AGENT);
+            assertEquals(403, assertThrows(ResponseStatusException.class,
+                    () -> service.enforceSection("publish")).getStatusCode().value());
+        }
+
+        for (String address : List.of("178.177.228.42", "178.177.230.42")) {
+            when(client.lookup(address)).thenReturn(
+                    new WorkerIpIntelligenceClient.IpIntelligence(true, false, true, "PJSC MegaFon", "ipquery")
+            );
+            request(address, MOBILE_USER_AGENT);
+            ResponseStatusException denied = assertThrows(ResponseStatusException.class,
+                    () -> service.enforceSection("publish"));
+            assertEquals(403, denied.getStatusCode().value());
+            org.junit.jupiter.api.Assertions.assertTrue(denied.getReason().contains("VPN"));
+        }
+    }
+
+    @Test
     void verifiedMtsMobileBroadbandRangesOverrideFalseFixedNetworkClassificationButNotVpnRisk() {
         WorkerCellularAccessProperties properties = properties(WorkerCellularAccessProperties.Mode.ENFORCE);
         properties.setAllowedCidrs(List.of(
