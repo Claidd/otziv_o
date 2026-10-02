@@ -104,12 +104,16 @@ __pycache__/
 **_IGNORE_**
 # end managed
 
-# Upstream Maven Site source fixtures are inputs, not build output.
-!/backend/build-support/site-plugin/src/test/resources/unit/deploy-dav/target/
-!/backend/build-support/site-plugin/src/test/resources/unit/deploy-dav/target/site/
-!/backend/build-support/site-plugin/src/test/resources/unit/deploy-dav/target/site/index.html
-!/backend/build-support/site-plugin/src/test/resources/unit/deploy-dav/target/site/css/
-!/backend/build-support/site-plugin/src/test/resources/unit/deploy-dav/target/site/css/maven-base.css
 
 !infrastructure/runtime-security/adjudications/alloy-daemon/upstream-govulncheck.yaml
 !infrastructure/runtime-security/adjudications/alloy-daemon-c15/upstream-govulncheck.yaml
+
+# Editor/merge backups and accidental local diagnostic files.
+*.orig
+/.codex-task-apply-probe.tmp
+/'2026-08-21
+
+# Hydrated, hash-verified runtime evidence from the public C26 release archive.
+/infrastructure/runtime-security/proofs/c26-keycloak/
+/infrastructure/runtime-security/proofs/c26-nginx/
+/infrastructure/runtime-security/proofs/c26-phpmyadmin/

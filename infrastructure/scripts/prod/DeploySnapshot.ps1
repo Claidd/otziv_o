@@ -398,6 +398,9 @@ function Get-OtzivCoordinatedSslBundlePaths {
     $activationPath = 'infrastructure/runtime-security/reviewed-image-activations.json'
     $index = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $Repository $activationPath) | ConvertFrom-Json
     $paths = @($activationPath, 'infrastructure/runtime-security/c23-parent-activations.json')
+    if (Test-Path -LiteralPath (Join-Path $Repository 'infrastructure/runtime-security/evidence-archive-c26.json')) {
+        $paths += @('infrastructure/runtime-security/evidence-archive-c26.json', 'infrastructure/runtime-security/evidence_archive.py')
+    }
     foreach ($component in @('postgres', 'keycloak')) {
         $entry = @($index.images | Where-Object { $_.component -eq $component })
         if ($entry.Count -ne 1 -or -not $entry[0].sslRefreshAcceptance.path) {
@@ -451,11 +454,65 @@ function New-OtzivPreparedDeployArchive {
         [Parameter(Mandatory = $true)][string]$Directory,
         [switch]$CoordinatedSslRefresh
     )
-    $paths = @(Get-OtzivDeployBundlePaths -Repository $Repository -CoordinatedSslRefresh:$CoordinatedSslRefresh)
     $stage = Join-Path $Directory 'verified-source'
     if (Test-Path -LiteralPath $stage) { throw 'Prepared source directory already exists.' }
     New-Item -ItemType Directory -Path $stage | Out-Null
-    Export-OtzivCommittedDeployBundle -Repository $Repository -Revision $Revision -StageRoot $stage -InputPaths $paths
+    $external = @{}
+    $manifestPath = 'infrastructure/runtime-security/evidence-archive-c26.json'
+    $loaderPath = 'infrastructure/runtime-security/evidence_archive.py'
+    $externalManifestCommitted = $false
+    if ($CoordinatedSslRefresh) {
+        $exact = Get-OtzivExactCommitRevision -Repository $Repository -Revision $Revision `
+            -FailureMessage 'Cannot resolve committed external evidence revision.'
+        $manifestObject = Invoke-OtzivSnapshotGit -Repository $Repository -Arguments @('cat-file', '-e', "${exact}:$manifestPath")
+        $externalManifestCommitted = $manifestObject.ExitCode -eq 0
+        if ($externalManifestCommitted -ne (Test-Path -LiteralPath (Join-Path $Repository $manifestPath) -PathType Leaf)) {
+            throw 'External evidence manifest is missing from the checkout or committed deployment revision.'
+        }
+    }
+    if ($externalManifestCommitted) {
+        # Both the loader and its trust manifest come from the exact checked commit.
+        # An edited local manifest cannot authorize extra files, paths or download hosts.
+        Export-OtzivCommittedDeployBundle -Repository $Repository -Revision $Revision -StageRoot $stage `
+            -InputPaths @($manifestPath, $loaderPath)
+        $boundManifest = Join-Path $stage $manifestPath
+        if ((Get-FileHash -LiteralPath $boundManifest -Algorithm SHA256).Hash -cne
+            (Get-FileHash -LiteralPath (Join-Path $Repository $manifestPath) -Algorithm SHA256).Hash) {
+            throw 'External evidence manifest differs from the committed deployment revision.'
+        }
+        $hydrated = @(& python -B (Join-Path $stage $loaderPath) hydrate --root $Repository --manifest $boundManifest --download)
+        if ($LASTEXITCODE -ne 0) { throw 'Committed external evidence hydration failed.' }
+        $manifest = Get-Content -Raw -Encoding UTF8 -LiteralPath $boundManifest | ConvertFrom-Json
+        foreach ($item in $manifest.files) { $external[$item.path] = $item }
+    }
+    $paths = @(Get-OtzivDeployBundlePaths -Repository $Repository -CoordinatedSslRefresh:$CoordinatedSslRefresh)
+    $sourcePaths = @($paths | Where-Object { -not $external.ContainsKey($_.Replace('\', '/')) })
+    Export-OtzivCommittedDeployBundle -Repository $Repository -Revision $Revision -StageRoot $stage -InputPaths $sourcePaths
+    foreach ($path in $paths) {
+        $relative = $path.Replace('\', '/')
+        if (-not $external.ContainsKey($relative)) { continue }
+        $item = $external[$relative]
+        $source = Join-Path $Repository $relative
+        $destination = Join-Path $stage $relative
+        if ((Get-Item -LiteralPath $source).Length -ne $item.bytes -or
+            (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash.ToLowerInvariant() -cne $item.sha256) {
+            throw 'Accepted external deployment evidence changed before staging.'
+        }
+        [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($destination)) | Out-Null
+        Copy-Item -LiteralPath $source -Destination $destination -Force
+        if ((Get-Item -LiteralPath $destination).Length -ne $item.bytes -or
+            (Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash.ToLowerInvariant() -cne $item.sha256) {
+            throw 'Accepted external deployment evidence changed during staging.'
+        }
+    }
+    if ($external.Count -gt 0) {
+        # Acceptance references and executed source hashes must also hold in the sealed tree.
+        $expectedEvidence = @(Get-OtzivCoordinatedSslBundlePaths -Repository $Repository)
+        $stagedEvidence = @(Get-OtzivCoordinatedSslBundlePaths -Repository $stage)
+        if (@(Compare-Object -ReferenceObject $expectedEvidence -DifferenceObject $stagedEvidence).Count -gt 0) {
+            throw 'Staged external evidence changed the accepted deployment inventory.'
+        }
+    }
     foreach ($path in $paths) {
         if (-not (Test-Path -LiteralPath (Join-Path $stage $path))) { throw "Committed deploy input missing: $path" }
     }

@@ -1,0 +1,98 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "helpers:pinGitHubActionDigests"
+  ],
+  "enabledManagers": [
+    "maven",
+    "npm",
+    "github-actions",
+    "dockerfile",
+    "pip_requirements"
+  ],
+  "includePaths": [
+    "backend/pom.xml",
+    "backend/Dockerfile",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "frontend/Dockerfile",
+    "mobile/package.json",
+    "mobile/package-lock.json",
+    "shared/client-common/package.json",
+    "shared/client-common/package-lock.json",
+    ".github/workflows/**",
+    ".github/actions/**",
+    "infrastructure/scripts/prod/retained-artifacts-requirements.txt"
+  ],
+  "prConcurrentLimit": 3,
+  "prHourlyLimit": 1,
+  "automerge": false,
+  "draftPR": true,
+  "dependencyDashboard": true,
+  "vulnerabilityAlerts": {
+    "prConcurrentLimit": 2,
+    "automerge": false,
+    "branchConcurrentLimit": 2
+  },
+  "packageRules": [
+    {
+      "description": "Keep Angular framework and its build packages aligned across web and mobile",
+      "matchManagers": [
+        "npm"
+      ],
+      "matchPackageNames": [
+        "/^@angular\\//",
+        "/^@angular-devkit\\//"
+      ],
+      "groupName": "Angular toolchain"
+    },
+    {
+      "description": "Review major platform upgrades before creating their branches",
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Keep the backend on the approved Java 25 LTS runtime",
+      "matchManagers": [
+        "dockerfile"
+      ],
+      "matchPackageNames": [
+        "eclipse-temurin"
+      ],
+      "allowedVersions": "/^25(?:[.-]|$)/"
+    },
+    {
+      "description": "Preserve full GitHub Action commit pins",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "pinDigests": true
+    },
+    {
+      "description": "Local Maven derivatives are maintained with their source and audit policy",
+      "matchManagers": [
+        "maven"
+      ],
+      "matchPackageNames": [
+        "com.hunt.build:*",
+        "org.apache.maven.plugins:maven-site-plugin"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "Keep the Maven builder on Java 25 LTS",
+      "matchManagers": [
+        "dockerfile"
+      ],
+      "matchPackageNames": [
+        "maven"
+      ],
+      "allowedVersions": "/eclipse-temurin-25-alpine$/"
+    }
+  ],
+  "branchConcurrentLimit": 3,
+  "rollbackPrs": false
+}

@@ -60,7 +60,7 @@ class ScheduledDeliveryProtocolTest {
         var constructor = Arrays.stream(ScheduledClientMessageService.class.getConstructors())
                 .max(Comparator.comparingInt(java.lang.reflect.Constructor::getParameterCount)).orElseThrow();
         var instance = (ScheduledClientMessageService) constructor.newInstance(Arrays.stream(constructor.getParameterTypes())
-                .map(type -> mock(type)).toArray());
+                .map(type -> type == ClientMessageTime.class ? new ClientMessageTime() : mock(type)).toArray());
         when(dependency(instance, "appSettingService", AppSettingService.class)
                 .getBooleanFreshFailClosed(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(true);
         installRecovery(instance);

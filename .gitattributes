@@ -98,3 +98,8 @@ infrastructure/runtime-security/reviewed-images-c26-*.json text eol=lf
 infrastructure/runtime-security/jackson-core-refresh*.mjs text eol=lf
 infrastructure/runtime-security/jackson-core-refresh-inspection.py text eol=lf
 infrastructure/runtime-security/c26-parent-keycloak.json text eol=lf
+infrastructure/runtime-security/evidence-archive-c26.json text eol=lf
+infrastructure/runtime-security/evidence_archive.py text eol=lf
+
+# Recovery receipts bind the manifest's exact UTF-8 bytes on every platform.
+infrastructure/artifact-recovery/** text eol=lf

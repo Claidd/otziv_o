@@ -371,28 +371,6 @@
                         </dependency>
                     </dependencies>
                 </plugin>
-				<plugin>
-					<groupId>org.apache.maven.plugins</groupId>
-					<artifactId>maven-site-plugin</artifactId>
-					<version>3.22.0-otziv-jetty12.0.39-2</version>
-				<dependencies>
-					    <dependency>
-					      <groupId>com.github.luben</groupId>
-					      <artifactId>zstd-jni</artifactId>
-					      <version>1.5.7-14</version>
-					    </dependency>
-					<dependency>
-						<groupId>org.jsoup</groupId>
-						<artifactId>jsoup</artifactId>
-						<version>1.23.2</version>
-					</dependency>
-					<dependency>
-						<groupId>commons-beanutils</groupId>
-						<artifactId>commons-beanutils</artifactId>
-						<version>1.11.0</version>
-					</dependency>
-				</dependencies>
-				</plugin>
 			</plugins>
 		</pluginManagement>
 		<finalName>otziv-1</finalName> <!-- 👈 добавь это -->

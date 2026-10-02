@@ -1,0 +1,17 @@
+{
+  "schema": "otziv-retained-artifacts-v1",
+  "manifestSha256": "db2b320d53f4bd55b452de0c7b82aaf89f32ec57ee419dbcb91ab329cfa26d62",
+  "ciphertextSha256": "b525841376a92bc9635b4c277695d12a1caf3f28e6d46fcc9d62494849b53369",
+  "objectKey": "backup/otziv-prod/retained-artifacts/v1/901914788a85fcc505a6f6c82a173c26f94921c04246bb20628e9985cb9c4e03/b525841376a92bc9635b4c277695d12a1caf3f28e6d46fcc9d62494849b53369.tar.otzivdb2",
+  "versionId": "1790926370518292348",
+  "verifiedFiles": 202,
+  "verifiedBytes": 397805360,
+  "allFileHashesVerified": true,
+  "authenticatedEnvelopeVerified": true,
+  "versionBoundDownloadVerified": true,
+  "verifiedAtUtc": "2026-10-02T08:21:32.994046+00:00",
+  "machineRole": "production-vps-isolated-recovery",
+  "usedPreexistingRemoteKey": true,
+  "productionServicesModified": false,
+  "artifactPayloadCopiedFromWorkstation": false
+}

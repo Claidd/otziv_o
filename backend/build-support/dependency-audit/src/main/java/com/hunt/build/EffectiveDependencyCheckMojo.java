@@ -5,6 +5,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import org.apache.maven.RepositoryUtils;
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.execution.MavenSession;
@@ -15,6 +20,10 @@ import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
+import org.apache.maven.lifecycle.internal.LifecycleExecutionPlanCalculator;
+import org.apache.maven.lifecycle.internal.LifecycleTask;
+import org.apache.maven.lifecycle.internal.GoalTask;
+import org.apache.maven.rtinfo.RuntimeInformation;
 import org.eclipse.aether.RepositorySystem;
 import org.eclipse.aether.collection.CollectRequest;
 import org.eclipse.aether.resolution.DependencyRequest;
@@ -23,7 +32,7 @@ import org.owasp.dependencycheck.maven.CheckMojo;
 import org.owasp.dependencycheck.Engine;
 import org.owasp.dependencycheck.exception.ExceptionCollection;
 
-/** Keeps OWASP's complete check and changes only plugin dependency collection. */
+/** Keeps OWASP's check, resolves effective plugin dependencies, and records one proven inactive binding. */
 @Mojo(name="check", defaultPhase=LifecyclePhase.VERIFY, threadSafe=true,
       requiresDependencyResolution=ResolutionScope.COMPILE_PLUS_RUNTIME, requiresOnline=true)
 public class EffectiveDependencyCheckMojo extends CheckMojo {
@@ -33,12 +42,85 @@ public class EffectiveDependencyCheckMojo extends CheckMojo {
     @Parameter(defaultValue="${session}", readonly=true, required=true)
     private MavenSession effectiveSession;
 
+    @Component
+    private LifecycleExecutionPlanCalculator executionPlans;
+
+    @Component
+    private RuntimeInformation runtimeInformation;
+
+    private MavenProject pluginScanProject;
+
+    @Override
+    protected MavenProject getProject() {
+        return pluginScanProject == null ? super.getProject() : pluginScanProject;
+    }
+
     @Override
     protected ExceptionCollection scanPlugins(MavenProject project, Engine engine,
             ExceptionCollection exceptions) {
-        var result = super.scanPlugins(project, engine, exceptions);
-        // ODC 13 returns null after scanning plugins. Preserve earlier dependency failures.
-        return result == null ? exceptions : result;
+        var decision = InactiveDefaultSite.inspect(project,
+                runtimeInformation == null ? null : runtimeInformation.getMavenVersion(),
+                effectiveSession == null ? null : effectiveSession.getGoals(), goals -> {
+                    var tasks = new ArrayList<Object>();
+                    for (var goal : goals) tasks.add(goal.contains(":") ? new GoalTask(goal) : new LifecycleTask(goal));
+                    return executionPlans.calculateExecutionPlan(effectiveSession, project, tasks, true).getMojoExecutions();
+                });
+        var scoped = pluginScanView(project, decision.exclude());
+        writeScopeReceipt(project, scoped, decision);
+        try {
+            // ODC reads root artifacts through getProject(), before dependency collection.
+            // Clone only the scan view; do not mutate Maven's reactor or an extension/report realm.
+            pluginScanProject = scoped;
+            var result = super.scanPlugins(scoped, engine, exceptions);
+            // ODC 13 returns null after scanning plugins. Preserve earlier dependency failures.
+            return result == null ? exceptions : result;
+        } finally {
+            pluginScanProject = null;
+        }
+    }
+
+    static MavenProject pluginScanView(MavenProject project, boolean exclude) {
+        if (!exclude) return project;
+        var scoped = project.clone();
+        var artifacts = new LinkedHashSet<>(project.getPluginArtifacts());
+        artifacts.removeIf(a -> InactiveDefaultSite.KEY.equals(a.getGroupId() + ":" + a.getArtifactId())
+                && InactiveDefaultSite.VERSION.equals(a.getVersion()));
+        scoped.setPluginArtifacts(artifacts);
+        return scoped;
+    }
+
+    private void writeScopeReceipt(MavenProject original, MavenProject scoped, InactiveDefaultSite.Decision decision) {
+        try {
+            var target = Path.of(original.getBuild().getDirectory(), "plugin-audit-scope.json");
+            Files.createDirectories(target.getParent());
+            var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            var receipt = mapper.createObjectNode();
+            receipt.put("schema", "otziv-plugin-audit-scope-v1");
+            receipt.put("project", original.getId());
+            receipt.put("projectPomSha256", HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                    .digest(Files.readAllBytes(original.getFile().toPath()))));
+            receipt.put("excludedDefaultSite", decision.exclude());
+            receipt.put("reason", decision.reason());
+            receipt.put("coordinate", InactiveDefaultSite.KEY + ":" + InactiveDefaultSite.VERSION);
+            receipt.put("expectedOrigin", InactiveDefaultSite.ORIGIN);
+            var before = receipt.putArray("originalBuildPluginRoots");
+            original.getPluginArtifacts().stream().map(a -> a.getGroupId() + ":" + a.getArtifactId() + ":" + a.getVersion())
+                    .sorted().forEach(before::add);
+            for (var kind : List.of("build", "report", "extension")) {
+                var artifacts = switch (kind) {
+                    case "build" -> scoped.getPluginArtifacts();
+                    case "report" -> scoped.getReportArtifacts();
+                    default -> scoped.getExtensionArtifacts();
+                };
+                var entries = receipt.putArray(kind + "PluginRoots");
+                artifacts.stream().map(a -> a.getGroupId() + ":" + a.getArtifactId() + ":" + a.getVersion())
+                        .sorted().forEach(entries::add);
+            }
+            Files.writeString(target, mapper.writerWithDefaultPrettyPrinter().writeValueAsString(receipt) + "\n", StandardCharsets.UTF_8);
+            getLog().info("Plugin audit scope: " + decision.reason() + "; receipt=" + target);
+        } catch (Exception failure) {
+            throw new IllegalStateException("Cannot record complete plugin audit scope", failure);
+        }
     }
 
     @Override

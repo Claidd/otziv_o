@@ -46,13 +46,10 @@ import com.hunt.otziv.scheduler.service.SchedulerLeaseService.Lease;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.whatsapp.service.WhatsAppAuthAlertService;
 import java.math.BigDecimal;
-import java.time.Clock;
 import java.time.Duration;
 import java.time.format.DateTimeParseException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.ZonedDateTime;
-import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -191,7 +188,7 @@ public class ScheduledClientMessageService {
     private final ClientMessageTransactionRunner transactionRunner;
     private final ScheduledDeliveryRecovery deliveryRecovery;
     private final SchedulerLeaseService schedulerLeaseService;
-    private final Clock clock = Clock.systemDefaultZone();
+    private final ClientMessageTime messageTime;
     @Value("${client.messages.reconcile-interval:PT5M}")
     private Duration reconcileInterval;
     @Value("${client.messages.reconcile-lease-duration:PT10M}")
@@ -206,8 +203,8 @@ public class ScheduledClientMessageService {
     )
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void tick() {
-        LocalDateTime nowStorage = LocalDateTime.now(clock);
-        LocalDateTime nowIrkutsk = nowIrkutsk();
+        LocalDateTime nowStorage = messageTime.nowStorage();
+        LocalDateTime nowIrkutsk = messageTime.nowIrkutsk();
         if (!appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_WORKER_ENABLED, true)) {
             logWorkerDisabled(nowStorage, nowIrkutsk);
             return;
@@ -277,7 +274,7 @@ public class ScheduledClientMessageService {
 
         int processed = 0;
         for (Long stateId : dueStateIds) {
-            LocalDateTime claimNow = databaseTimestamp(LocalDateTime.now(clock));
+            LocalDateTime claimNow = messageTime.databaseTimestamp(messageTime.nowStorage());
             LocalDateTime claimedUntil = claimNow.plus(Duration.ofMinutes(DEFAULT_LOCK_MINUTES));
             boolean claimed;
             try {
@@ -303,7 +300,7 @@ public class ScheduledClientMessageService {
                 quarantineRolledBackState(
                         stateId,
                         claimedUntil,
-                        databaseTimestamp(LocalDateTime.now(clock)),
+                        messageTime.databaseTimestamp(messageTime.nowStorage()),
                         e
                 );
             }
@@ -316,7 +313,7 @@ public class ScheduledClientMessageService {
         if (orderId == null || orderId <= 0) {
             return 0;
         }
-        return stateRepository.releaseReviewRecoveryHolds(orderId, LocalDateTime.now(clock));
+        return stateRepository.releaseReviewRecoveryHolds(orderId, messageTime.nowStorage());
     }
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -333,7 +330,7 @@ public class ScheduledClientMessageService {
             return manualRetryResult(state, false);
         }
         if (ClientMessageStateSafety.isLegacyPreparationFailure(state)
-                && legacyPreparationRecovery.recover(stateId, databaseTimestamp(LocalDateTime.now(clock)))) {
+                && legacyPreparationRecovery.recover(stateId, messageTime.databaseTimestamp(messageTime.nowStorage()))) {
             state = transactionRunner.callInNewTransaction(() -> stateRepository.findById(stateId).orElseThrow());
         }
         if (ClientMessageStateSafety.blocksAutomaticRearm(state)) {
@@ -353,7 +350,7 @@ public class ScheduledClientMessageService {
         boolean reconcilePaymentBeforeRetry = "payment_instruction_failed".equalsIgnoreCase(
                 state.getLastErrorCode() == null ? "" : state.getLastErrorCode().trim()
         ) && state.getOrderId() != null;
-        LocalDateTime nowStorage = databaseTimestamp(LocalDateTime.now(clock));
+        LocalDateTime nowStorage = messageTime.databaseTimestamp(messageTime.nowStorage());
         LocalDateTime pausedUntil = clientMessagesPausedUntil();
         if (pausedUntil != null && pausedUntil.isAfter(nowStorage)) {
             throw new ResponseStatusException(
@@ -385,7 +382,7 @@ public class ScheduledClientMessageService {
             quarantineRolledBackState(
                     state.getId(),
                     claimedUntil,
-                    databaseTimestamp(LocalDateTime.now(clock)),
+                    messageTime.databaseTimestamp(messageTime.nowStorage()),
                     e
             );
         }
@@ -419,7 +416,7 @@ public class ScheduledClientMessageService {
     }
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void reconcileCandidatesNow() {
-        LocalDateTime nowStorage = LocalDateTime.now(clock);
+        LocalDateTime nowStorage = messageTime.nowStorage();
         if (reconcileCandidatesWithLease(nowStorage).isPresent()) {
             lastReconcileAt = nowStorage;
         }
@@ -455,7 +452,7 @@ public class ScheduledClientMessageService {
 
         LocalDateTime waitingChangedAt = clientTextWaitingChangedAt(order);
         String targetKey = clientTextWaitingTargetKey(order.getId(), waitingChangedAt);
-        LocalDateTime nextAttemptAt = scheduleAtStorage(LocalDateTime.now(clock));
+        LocalDateTime nextAttemptAt = scheduleAtStorage(messageTime.nowStorage());
         Optional<ScheduledClientMessageState> existing = stateRepository.findByScenarioAndTargetKeyForUpdate(
                 ClientMessageScenario.CLIENT_TEXT_REMINDER,
                 targetKey
@@ -517,13 +514,13 @@ public class ScheduledClientMessageService {
         if (nextAttemptAt == null) {
             return null;
         }
-        LocalDateTime nowStorage = LocalDateTime.now(clock);
+        LocalDateTime nowStorage = messageTime.nowStorage();
         LocalDateTime desired = nextAttemptAt.isBefore(nowStorage) ? nowStorage : nextAttemptAt;
         return scheduleAtStorage(desired);
     }
 
     private void closeObsoleteClientTextReminderStates(Long orderId, String currentTargetKey) {
-        LocalDateTime nowStorage = LocalDateTime.now(clock);
+        LocalDateTime nowStorage = messageTime.nowStorage();
         stateRepository.findByOrderIdIn(List.of(orderId)).stream()
                 .filter(Objects::nonNull)
                 .filter(state -> state.getScenario() == ClientMessageScenario.CLIENT_TEXT_REMINDER)
@@ -543,7 +540,7 @@ public class ScheduledClientMessageService {
         if (currentTargetKeys == null || currentTargetKeys.isEmpty()) {
             return;
         }
-        LocalDateTime nowStorage = LocalDateTime.now(clock);
+        LocalDateTime nowStorage = messageTime.nowStorage();
         stateRepository.findByOrderIdIn(currentTargetKeys.keySet()).stream()
                 .filter(Objects::nonNull)
                 .filter(state -> state.getScenario() == ClientMessageScenario.CLIENT_TEXT_REMINDER)
@@ -644,7 +641,7 @@ public class ScheduledClientMessageService {
             return false;
         }
 
-        LocalDateTime nowStorage = databaseTimestamp(LocalDateTime.now(clock));
+        LocalDateTime nowStorage = messageTime.databaseTimestamp(messageTime.nowStorage());
         String targetKey = orderTargetKey(order.getId(), orderStatusChangedAt(order));
         Optional<ScheduledClientMessageState> existing = stateRepository.findByScenarioAndTargetKeyForUpdate(
                 ClientMessageScenario.PAYMENT_REMINDER,
@@ -775,7 +772,7 @@ public class ScheduledClientMessageService {
     }
 
     private LocalDateTime nextAttemptAfterStatusChange(ClientMessageScenario scenario, LocalDateTime statusChangedAt) {
-        LocalDateTime nowStorage = LocalDateTime.now(clock);
+        LocalDateTime nowStorage = messageTime.nowStorage();
         return switch (scenario) {
             case REVIEW_CHECK_DELIVERY_RETRY -> scheduleAtStorage(nowStorage.plusHours(reviewCheckRetryDelayHours()));
             case PAYMENT_INVOICE_RETRY -> scheduleAtStorage(nowStorage.plusHours(paymentInvoiceRetryDelayHours()));
@@ -798,7 +795,7 @@ public class ScheduledClientMessageService {
     private boolean synchronizeOrderAutomationStates(Order order) {
         Set<ClientMessageScenario> expectedScenarios = orderAutomationScenarios(order);
         String currentTargetKey = orderTargetKey(order.getId(), orderStatusChangedAt(order));
-        LocalDateTime nowStorage = LocalDateTime.now(clock);
+        LocalDateTime nowStorage = messageTime.nowStorage();
         boolean changed = false;
 
         for (ScheduledClientMessageState state : stateRepository.findByOrderIdIn(List.of(order.getId()))) {
@@ -864,7 +861,7 @@ public class ScheduledClientMessageService {
     }
 
     private void ensureOrderStateNow(ClientMessageScenario scenario, Order order) {
-        LocalDateTime nowStorage = LocalDateTime.now(clock);
+        LocalDateTime nowStorage = messageTime.nowStorage();
         String targetKey = orderTargetKey(order.getId(), orderStatusChangedAt(order));
         LocalDateTime nextAttemptAt = scheduleAtStorage(nowStorage);
         Optional<ScheduledClientMessageState> existing = stateRepository.findByScenarioAndTargetKeyForUpdate(
@@ -1289,7 +1286,7 @@ public class ScheduledClientMessageService {
                 || ClientMessageStateSafety.blocksAutomaticRearm(state)) {
             return;
         }
-        LocalDateTime nowStorage = databaseTimestamp(LocalDateTime.now(clock));
+        LocalDateTime nowStorage = messageTime.databaseTimestamp(messageTime.nowStorage());
         LocalDateTime claimedUntil = nowStorage.plus(Duration.ofMinutes(DEFAULT_LOCK_MINUTES));
         boolean claimed = transactionRunner.callInNewTransaction(
                 () -> lockActiveState(state.getId(), nowStorage, claimedUntil)
@@ -1317,7 +1314,7 @@ public class ScheduledClientMessageService {
         if (!liveSendingEnabled()) {
             transactionRunner.runInNewTransaction(() -> pausePreparedWithoutDispatch(prepared.stateId(),
                     prepared.orderId(), prepared.deliveryToken(), ClientMessageScenario.BAD_REVIEW_INVOICE,
-                    "bad-review-invoice:order:" + prepared.orderId(), databaseTimestamp(LocalDateTime.now(clock))));
+                    "bad-review-invoice:order:" + prepared.orderId(), messageTime.databaseTimestamp(messageTime.nowStorage())));
             return;
         }
         ClientMessageSendResult result;
@@ -1356,7 +1353,7 @@ public class ScheduledClientMessageService {
                 prepared,
                 finalResult,
                 finalOutcomeUnknown,
-                databaseTimestamp(LocalDateTime.now(clock)),
+                messageTime.databaseTimestamp(messageTime.nowStorage()),
                 durationMs
         ));
         if (deliveredOrderId != null) {
@@ -1377,7 +1374,7 @@ public class ScheduledClientMessageService {
         if (!chatDeliveryVerified && sentAttempt.isEmpty()) {
             return Optional.empty();
         }
-        LocalDateTime nowStorage = databaseTimestamp(LocalDateTime.now(clock));
+        LocalDateTime nowStorage = messageTime.databaseTimestamp(messageTime.nowStorage());
         String source = chatDeliveryVerified ? "истории чата" : "зафиксированной SENT-попытке";
         String message = firstText(
                 state.getDeliveryMessage(),
@@ -1698,10 +1695,10 @@ public class ScheduledClientMessageService {
                 || expectedLockedUntil == null) {
             return false;
         }
-        LocalDateTime actual = databaseTimestamp(state.getLockedUntil());
+        LocalDateTime actual = messageTime.databaseTimestamp(state.getLockedUntil());
         return ClientMessageStateSafety.isTransactionInProgress(state)
                 && expectedLockedUntil.equals(actual)
-                && actual.isAfter(databaseTimestamp(LocalDateTime.now(clock)));
+                && actual.isAfter(messageTime.databaseTimestamp(messageTime.nowStorage()));
     }
 
     private void quarantinePreparedDelivery(ScheduledClientMessageState state, LocalDateTime nowStorage) {
@@ -1750,12 +1747,12 @@ public class ScheduledClientMessageService {
     ) {
         stateRepository.lockDispatchBudget();
         if (!withinDailyLimit(nowStorage)) {
-            postpone(state, nextBusinessDayStartStorage(nowIrkutsk()), "daily_limit",
+            postpone(state, nextBusinessDayStartStorage(messageTime.nowIrkutsk()), "daily_limit",
                     "Дневной лимит авторассылки исчерпан");
             return false;
         }
         String channel = expectedChannel(company);
-        LocalDateTime nowIrkutsk = nowIrkutsk();
+        LocalDateTime nowIrkutsk = messageTime.nowIrkutsk();
         LocalDateTime allowed = slotPlanner.afterGap(
                 nowIrkutsk,
                 lastDispatchAtIrkutsk(channel),
@@ -1763,7 +1760,7 @@ public class ScheduledClientMessageService {
                 businessWindows()
         );
         if (allowed.isAfter(nowIrkutsk.plusSeconds(1))) {
-            postpone(state, toStorageTime(allowed), "rate_limited", "Следующий слот отправки: " + allowed);
+            postpone(state, messageTime.toStorageTime(allowed), "rate_limited", "Следующий слот отправки: " + allowed);
             return false;
         }
         return true;
@@ -1832,7 +1829,7 @@ public class ScheduledClientMessageService {
         if (!liveSendingEnabled()) {
             transactionRunner.runInNewTransaction(() -> pausePreparedWithoutDispatch(prepared.stateId(),
                     prepared.orderId(), prepared.token(), prepared.scenario(), prepared.targetKey(),
-                    databaseTimestamp(LocalDateTime.now(clock))));
+                    messageTime.databaseTimestamp(messageTime.nowStorage())));
             return;
         }
         long startedAt = System.currentTimeMillis();
@@ -1849,7 +1846,7 @@ public class ScheduledClientMessageService {
         }
         ClientMessageSendResult outcome = result;
         boolean finalized = transactionRunner.callInNewTransaction(() -> finalizeScheduledDelivery(prepared, outcome,
-                databaseTimestamp(LocalDateTime.now(clock)), System.currentTimeMillis() - startedAt));
+                messageTime.databaseTimestamp(messageTime.nowStorage()), System.currentTimeMillis() - startedAt));
         if (finalized) notifyScheduledDeliveryOutcome(prepared, outcome, nowStorage);
     }
 
@@ -2002,7 +1999,7 @@ public class ScheduledClientMessageService {
             } else if (!result.sent() && isWhatsAppAuthUnavailable(result.errorCode(), result.errorMessage())) {
                 whatsAppAuthAlertService.notifyAuthIssueSnapshot(prepared.clientId(), prepared.target() == null ? null : prepared.target().title(),
                         "фоновый автоответчик", result.errorCode(), result.errorMessage(), nowStorage,
-                        toIrkutskTime(nextWhatsAppAuthAttemptAt(nowStorage)), prepared.recipients());
+                        messageTime.toIrkutskTime(nextWhatsAppAuthAttemptAt(nowStorage)), prepared.recipients());
             }
         } catch (RuntimeException notificationFailed) {
             log.warn("Scheduled delivery ancillary notification failed: stateId={}", prepared.stateId(), notificationFailed);
@@ -2040,8 +2037,8 @@ public class ScheduledClientMessageService {
         if (state == null || state.getStatus() != ScheduledMessageStateStatus.ACTIVE) {
             return null;
         }
-        LocalDateTime currentLockedUntil = databaseTimestamp(state.getLockedUntil());
-        LocalDateTime currentTime = databaseTimestamp(LocalDateTime.now(clock));
+        LocalDateTime currentLockedUntil = messageTime.databaseTimestamp(state.getLockedUntil());
+        LocalDateTime currentTime = messageTime.databaseTimestamp(messageTime.nowStorage());
         if (!ClientMessageStateSafety.isTransactionInProgress(state)
                 || !expectedLockedUntil.equals(currentLockedUntil)) {
             log.warn(
@@ -2057,7 +2054,7 @@ public class ScheduledClientMessageService {
             return null;
         }
         if (requiresClientMessageSlot(state.getScenario())) stateRepository.lockDispatchBudget();
-        PreparedScheduledDelivery prepared = processState(stateId, databaseTimestamp(LocalDateTime.now(clock)));
+        PreparedScheduledDelivery prepared = processState(stateId, messageTime.databaseTimestamp(messageTime.nowStorage()));
         if (prepared == null && "CLAIMED".equals(state.getDeliveryStatus())) {
             state.setDeliveryStatus(hasText(state.getDeliveryEnvelope()) ? "RETRYABLE" : null);
             stateRepository.save(state);
@@ -2078,7 +2075,7 @@ public class ScheduledClientMessageService {
                     return;
                 }
                 if (!ClientMessageStateSafety.isTransactionInProgress(state)
-                        || !expectedLockedUntil.equals(databaseTimestamp(state.getLockedUntil()))) {
+                        || !expectedLockedUntil.equals(messageTime.databaseTimestamp(state.getLockedUntil()))) {
                     log.warn(
                             "Scheduled client message rollback quarantine skipped: claim ownership changed "
                                     + "stateId={} expected={} actual={}",
@@ -2144,7 +2141,7 @@ public class ScheduledClientMessageService {
             return null;
         }
 
-        LocalDateTime nowIrkutsk = nowIrkutsk();
+        LocalDateTime nowIrkutsk = messageTime.nowIrkutsk();
         boolean requiresMessageSlot = requiresClientMessageSlot(state.getScenario());
         if (requiresMessageSlot && !withinDailyLimit(nowStorage)) {
             postpone(state, nextBusinessDayStartStorage(nowIrkutsk), "daily_limit", "Дневной лимит авторассылки исчерпан");
@@ -2167,7 +2164,7 @@ public class ScheduledClientMessageService {
                     businessWindows()
             );
             if (allowedByGap.isAfter(nowIrkutsk.plusSeconds(1))) {
-                postpone(state, toStorageTime(allowedByGap), "rate_limited", "Следующий слот отправки: " + allowedByGap);
+                postpone(state, messageTime.toStorageTime(allowedByGap), "rate_limited", "Следующий слот отправки: " + allowedByGap);
                 return null;
             }
         }
@@ -2853,7 +2850,7 @@ public class ScheduledClientMessageService {
 
     @Transactional
     public int releaseDryRunMessagesIfLiveEnabled() {
-        return releaseDryRunMessagesIfLiveEnabled(LocalDateTime.now(clock));
+        return releaseDryRunMessagesIfLiveEnabled(messageTime.nowStorage());
     }
 
     private int releaseDryRunMessagesIfLiveEnabled(LocalDateTime nowStorage) {
@@ -2891,7 +2888,7 @@ public class ScheduledClientMessageService {
         ));
         stateRepository.save(state);
 
-        String sentAt = nowIrkutsk().toString();
+        String sentAt = messageTime.nowIrkutsk().toString();
         appSettingService.setString(lastSentSettingKey("ANY"), sentAt);
         if (channel != null && !channel.isBlank()) {
             appSettingService.setString(lastSentSettingKey(channel), sentAt);
@@ -3366,8 +3363,8 @@ public class ScheduledClientMessageService {
 
     private boolean withinDailyLimit(LocalDateTime nowStorage) {
         int limit = intSetting(AppSettingService.CLIENT_MESSAGES_DAILY_LIMIT, DEFAULT_DAILY_LIMIT, 1, 5000);
-        LocalDate irkutskToday = nowIrkutsk().toLocalDate();
-        LocalDateTime dayStart = toStorageTime(irkutskToday.atStartOfDay());
+        LocalDate irkutskToday = messageTime.nowIrkutsk().toLocalDate();
+        LocalDateTime dayStart = messageTime.toStorageTime(irkutskToday.atStartOfDay());
         return attemptRepository.countClientSentSince(ScheduledMessageAttemptStatus.SENT, dayStart)
                 + stateRepository.countReservedDeliveriesSince(dayStart) < limit;
     }
@@ -3375,7 +3372,7 @@ public class ScheduledClientMessageService {
     private LocalDateTime lastDispatchAtIrkutsk(String channel) {
         LocalDateTime sentAt = lastSentAtIrkutsk(channel);
         LocalDateTime reservedAt = stateRepository.latestReservedDeliveryAt(channel)
-                .map(this::toIrkutskTime).orElse(null);
+                .map(messageTime::toIrkutskTime).orElse(null);
         return sentAt == null ? reservedAt : reservedAt == null || sentAt.isAfter(reservedAt) ? sentAt : reservedAt;
     }
 
@@ -3431,42 +3428,14 @@ public class ScheduledClientMessageService {
     }
 
     private LocalDateTime scheduleAtStorage(LocalDateTime desiredStorageTime) {
-        LocalDateTime desiredIrkutsk = toIrkutskTime(desiredStorageTime);
+        LocalDateTime desiredIrkutsk = messageTime.toIrkutskTime(desiredStorageTime);
         LocalDateTime allowedIrkutsk = slotPlanner.nextAllowedAt(desiredIrkutsk, businessWindows());
-        return toStorageTime(allowedIrkutsk);
+        return messageTime.toStorageTime(allowedIrkutsk);
     }
 
     private LocalDateTime nextBusinessDayStartStorage(LocalDateTime nowIrkutsk) {
         LocalDateTime tomorrowStart = nowIrkutsk.toLocalDate().plusDays(1).atTime(10, 0);
-        return toStorageTime(slotPlanner.nextAllowedAt(tomorrowStart, businessWindows()));
-    }
-
-    private LocalDateTime toIrkutskTime(LocalDateTime storageTime) {
-        ZoneId storageZone = clock.getZone();
-        return storageTime.atZone(storageZone)
-                .withZoneSameInstant(ClientMessageSlotPlanner.IRKUTSK_ZONE)
-                .toLocalDateTime();
-    }
-
-    private LocalDateTime toStorageTime(LocalDateTime irkutskTime) {
-        ZoneId storageZone = clock.getZone();
-        return irkutskTime.atZone(ClientMessageSlotPlanner.IRKUTSK_ZONE)
-                .withZoneSameInstant(storageZone)
-                .toLocalDateTime();
-    }
-
-    private LocalDateTime databaseTimestamp(LocalDateTime value) {
-        if (value == null) {
-            return null;
-        }
-        return value.withNano((value.getNano() / 1_000) * 1_000);
-    }
-
-    private LocalDateTime nowIrkutsk() {
-        return ZonedDateTime.now(clock)
-                .withZoneSameInstant(ClientMessageSlotPlanner.IRKUTSK_ZONE)
-                .toLocalDateTime()
-                .withNano(0);
+        return messageTime.toStorageTime(slotPlanner.nextAllowedAt(tomorrowStart, businessWindows()));
     }
 
     private int clientTextReminderIntervalDays() {
@@ -3769,7 +3738,7 @@ public class ScheduledClientMessageService {
         if (order.getCreated() != null) {
             return order.getCreated().atStartOfDay();
         }
-        return LocalDateTime.now(clock);
+        return messageTime.nowStorage();
     }
 
     private String archiveCompanyTargetKey(Long companyId, LocalDateTime statusChangedAt) {
@@ -3790,7 +3759,7 @@ public class ScheduledClientMessageService {
         if (company.getCreateDate() != null) {
             return company.getCreateDate().atStartOfDay();
         }
-        return LocalDateTime.now(clock);
+        return messageTime.nowStorage();
     }
 
     private void applyMassErrorProtection(LocalDateTime nowStorage, String code, String readable) {

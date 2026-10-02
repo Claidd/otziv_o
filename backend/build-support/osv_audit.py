@@ -1,16 +1,19 @@
-"""Credential-free OSV audit of every package in all six effective Maven reports.
+"""Credential-free OSV audit of every package in all five effective Maven reports.
 
 NVD remains independently blocking. This additional gate fails closed on missing
 reports, incomplete API replies, unclassified findings, and HIGH/CRITICAL risk.
 Only public package coordinates are sent; source files and credentials are not.
 """
-import argparse, concurrent.futures, datetime, hashlib, json, math, re, time
+import argparse, concurrent.futures, datetime, hashlib, importlib.util, json, math, re, time
 import urllib.error, urllib.parse, urllib.request
 from pathlib import Path
+_scope_spec = importlib.util.spec_from_file_location("otziv_audit_scope", Path(__file__).with_name("audit.py"))
+_scope = importlib.util.module_from_spec(_scope_spec)
+_scope_spec.loader.exec_module(_scope)
 
 REPORTS = ['backend/target/dependency-check-report.json',
            *['backend/build-support/'+p+'target/dependency-check-report.json'
-             for p in ['', 'dependency-audit/', 'site-plugin/', 'test-transport/']],
+             for p in ['', 'dependency-audit/', 'test-transport/']],
            'infrastructure/keycloak/security-generation/target/dependency-check-report.json']
 class AuditError(ValueError): pass
 def require(value, message):
@@ -19,6 +22,10 @@ def inventory(root):
     packages=set(); reports=[]
     for relative in REPORTS:
         raw=(root/relative).read_bytes(); report=json.loads(raw)
+        try:
+            scope = _scope.verify_scope_receipt((root/relative).parent.parent/'pom.xml')
+        except (OSError, ValueError, KeyError) as error:
+            raise AuditError('Missing or invalid plugin audit scope: '+relative) from error
         deps=report.get('dependencies')
         require(isinstance(deps,list) and deps,'Missing dependency coverage: '+relative)
         count=0; other=[]
@@ -37,7 +44,7 @@ def inventory(root):
                 other.append(filename)
         require(count>0,'No package identities in '+relative)
         reports.append({'path':relative,'sha256':hashlib.sha256(raw).hexdigest(),'dependencies':len(deps),
-                        'packageIdentities':count,'nonPackageFilesCoveredByNvd':other})
+                        'packageIdentities':count,'nonPackageFilesCoveredByNvd':other,'pluginScope':scope})
     return sorted(packages),reports
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -125,7 +132,7 @@ def main():
     if output.exists():output.unlink()
     try:
         result=audit(args.root);output.write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8')
-        print('OSV: '+result['result']+', '+str(len(result['packages']))+' packages across all six reports')
+        print('OSV: '+result['result']+', '+str(len(result['packages']))+' packages across all five reports')
         for finding in result['findings']:
             if finding['blocking']:print('BLOCK '+finding['package']+' '+finding['id'])
         return 0 if result['result']=='PASS' else 1

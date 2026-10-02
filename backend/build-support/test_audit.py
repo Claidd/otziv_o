@@ -62,6 +62,15 @@ class AuditPolicyTest(unittest.TestCase):
             projects.append(project)
         ET.ElementTree(projects).write(self.effective, encoding="utf-8", xml_declaration=True)
 
+    def write_scope(self, pom):
+        source = audit.parse_xml(pom)
+        group = audit.text(source, "groupId") or audit.text(source.find("m:parent", audit.NS), "groupId")
+        identity = ":".join((group, audit.text(source, "artifactId"), audit.text(source, "packaging", "jar"), audit.text(source, "version")))
+        value = {"schema": "otziv-plugin-audit-scope-v1", "project": identity, "projectPomSha256": audit.digest(pom),
+                 "excludedDefaultSite": False, "reason": "fixture-full-audit", "originalBuildPluginRoots": ["example:plugin:1"],
+                 "buildPluginRoots": ["example:plugin:1"], "reportPluginRoots": [], "extensionPluginRoots": []}
+        (pom.parent / "target/plugin-audit-scope.json").write_text(json.dumps(value), encoding="utf-8")
+
     def change_effective(self, callback):
         tree = ET.parse(self.effective)
         callback(tree.getroot())
@@ -70,7 +79,7 @@ class AuditPolicyTest(unittest.TestCase):
     def test_exact_finite_reactor_and_all_policy_pins_are_accepted(self):
         result = audit.verify_policy(self.root, self.effective)
         self.assertEqual(result["result"], "PASS")
-        self.assertEqual(len(result["projects"]), 4)
+        self.assertEqual(len(result["projects"]), 3)
 
     def test_missing_module_in_effective_model_fails(self):
         self.change_effective(lambda root: root.remove(root[-1]))
@@ -202,10 +211,11 @@ class AuditPolicyTest(unittest.TestCase):
             pom = Path(command[command.index("-f") + 1])
             (pom.parent / "target").mkdir(exist_ok=True)
             (pom.parent / "target/dependency-check-report.json").write_text('{"dependencies":[]}', encoding="utf-8")
-            return argparse.Namespace(returncode=23 if pom.parent.name == "site-plugin" else 0)
+            self.write_scope(pom)
+            return argparse.Namespace(returncode=23 if pom.parent.name == "test-transport" else 0)
         with patch.dict(audit.os.environ, self.env, clear=True), patch.object(audit.subprocess, "run", side_effect=completed) as run:
             self.assertEqual(audit.main(argv), 23)
-            self.assertEqual(run.call_count, 5)
+            self.assertEqual(run.call_count, 4)
             self.assertIn(audit.HELP_GOAL, run.call_args_list[0].args[0])
             self.assertIn(audit.GOAL, run.call_args_list[1].args[0])
             self.assertEqual([call.args[0][call.args[0].index("-f") + 1] for call in run.call_args_list[1:]],
@@ -215,23 +225,60 @@ class AuditPolicyTest(unittest.TestCase):
                 for name, value in audit.PROPERTIES.items(): self.assertIn("-D" + name + "=" + value, call.args[0])
             coverage = json.loads((target / "audit-report-coverage.json").read_text())
             self.assertTrue(coverage["complete"])
-            self.assertEqual([entry["exitCode"] for entry in coverage["projectExits"]], [0, 0, 23, 0])
+            self.assertEqual([entry["exitCode"] for entry in coverage["projectExits"]], [0, 0, 23])
 
     def test_report_coverage_requires_every_module_and_valid_shape(self):
         for pom in audit.reactor(self.root).values():
             (pom.parent / "target").mkdir(exist_ok=True)
             (pom.parent / "target/dependency-check-report.json").write_text('{"dependencies":[]}', encoding="utf-8")
+            self.write_scope(pom)
         self.assertTrue(audit.report_coverage(self.root)["complete"])
-        report = self.root / "site-plugin/target/dependency-check-report.json"
+        report = self.root / "test-transport/target/dependency-check-report.json"
         report.write_text('{"dependencies":null}', encoding="utf-8")
         self.assertFalse(audit.report_coverage(self.root)["complete"])
         report.unlink()
         self.assertFalse(audit.report_coverage(self.root)["complete"])
 
+    def test_scope_receipt_cannot_drop_another_plugin_or_reuse_another_pom(self):
+        pom = self.root / "pom.xml"
+        (pom.parent / "target").mkdir(exist_ok=True)
+        self.write_scope(pom)
+        path = pom.parent / "target/plugin-audit-scope.json"
+        original = path.read_text(encoding="utf-8")
+        for mutate in (lambda x: x.update(buildPluginRoots=[]), lambda x: x.update(projectPomSha256="0"*64),
+                       lambda x: x.update(project="other:project:pom:1"), lambda x: x.update(excludedDefaultSite="true")):
+            value = json.loads(original); mutate(value); path.write_text(json.dumps(value), encoding="utf-8")
+            with self.assertRaises(audit.PolicyError): audit.verify_scope_receipt(pom)
+
+    def test_only_the_exact_inactive_binding_has_a_valid_scope_receipt(self):
+        pom = self.root / "pom.xml"; (pom.parent / "target").mkdir(exist_ok=True); self.write_scope(pom)
+        path = pom.parent / "target/plugin-audit-scope.json"; value = json.loads(path.read_text())
+        value.update(excludedDefaultSite=True, reason="unused-maven-3.9.15-default-site-binding",
+                     coordinate=audit.DEFAULT_SITE+":3.12.1", expectedOrigin="org.apache.maven:maven-core:3.9.15:default-lifecycle-bindings")
+        value["originalBuildPluginRoots"].append(audit.DEFAULT_SITE+":3.12.1")
+        path.write_text(json.dumps(value)); self.assertTrue(audit.verify_scope_receipt(pom)["excludedDefaultSite"])
+        for field in ("reportPluginRoots", "extensionPluginRoots"):
+            changed = copy.deepcopy(value); changed[field].append(audit.DEFAULT_SITE+":3.22.0"); path.write_text(json.dumps(changed))
+            with self.assertRaises(audit.PolicyError): audit.verify_scope_receipt(pom)
+
+    def test_structural_site_preflight_never_claims_java_origin_proof(self):
+        def add(root):
+            plugin = ET.SubElement(root[0].find("m:build/m:plugins", audit.NS), Q+"plugin")
+            ET.SubElement(plugin,Q+"artifactId").text="maven-site-plugin"; ET.SubElement(plugin,Q+"version").text="3.12.1"
+            executions=ET.SubElement(plugin,Q+"executions")
+            for ident, phase, goal in (("default-site","site","site"),("default-deploy","site-deploy","deploy")):
+                execution=ET.SubElement(executions,Q+"execution"); ET.SubElement(execution,Q+"id").text=ident
+                ET.SubElement(execution,Q+"phase").text=phase; ET.SubElement(ET.SubElement(execution,Q+"goals"),Q+"goal").text=goal
+        self.change_effective(add)
+        result=audit.verify_policy(self.root,self.effective)
+        site=next(plugin for project in result["projects"].values() for plugin in project["activePlugins"] if plugin["coordinate"]==audit.DEFAULT_SITE)
+        self.assertEqual(site["scope"],"requires-java-origin-and-execution-plan-proof")
+
     def test_zero_exit_cannot_reuse_stale_reports_as_current_complete_audit(self):
         for pom in audit.reactor(self.root).values():
             (pom.parent / "target").mkdir(exist_ok=True)
             (pom.parent / "target/dependency-check-report.json").write_text('{"dependencies":[]}', encoding="utf-8")
+            self.write_scope(pom)
         shutil.copyfile(self.effective, self.root / "target/audit-effective-pom.xml")
         argv = ["--root", str(self.root), "--maven", "mvn-fixture", "--settings", str(self.settings),
                 "--suppression-file", str(self.suppression), "--data-directory", self.args.data_directory]
@@ -322,6 +369,7 @@ class AuditPolicyTest(unittest.TestCase):
             for name, value in audit.PROPERTIES.items():
                 self.assertIn("-D" + name + "=" + value, command)
             (pom.parent / "target/dependency-check-report.json").write_text('{"dependencies":[]}', encoding="utf-8")
+            self.write_scope(pom)
             return argparse.Namespace(returncode=19)
         with patch.dict(audit.os.environ, self.env, clear=True), patch.object(audit.subprocess, "run", side_effect=completed) as run:
             self.assertEqual(audit.main(argv), 19)
@@ -335,6 +383,7 @@ class AuditPolicyTest(unittest.TestCase):
         target = pom.parent / "target"
         target.mkdir()
         (target / "dependency-check-report.json").write_text('{"dependencies":[]}', encoding="utf-8")
+        self.write_scope(pom)
         shutil.copyfile(pom, target / "audit-effective-pom.xml")
         argv = ["--root", str(root), "--standalone-project", "keycloak", "--maven", "mvn-fixture",
                 "--settings", str(self.settings), "--suppression-file", str(self.suppression),

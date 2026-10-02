@@ -18,6 +18,12 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.owasp.dependencycheck.exception.ExceptionCollection;
 import org.owasp.dependencycheck.maven.CheckMojo;
+import org.owasp.dependencycheck.Engine;
+import org.owasp.dependencycheck.utils.Settings;
+import org.apache.maven.lifecycle.MavenExecutionPlan;
+import org.apache.maven.lifecycle.DefaultLifecycles;
+import org.apache.maven.lifecycle.internal.LifecycleExecutionPlanCalculator;
+import org.apache.maven.rtinfo.RuntimeInformation;
 
 public class EffectiveDependencyCheckMojoTest {
     @Rule public TemporaryFolder temporary = new TemporaryFolder();
@@ -56,6 +62,8 @@ public class EffectiveDependencyCheckMojoTest {
     }
 
     private EffectiveDependencyCheckMojo mojo(MavenProject project, File resolvedFile, boolean empty) throws Exception {
+        project.getBuild().setDirectory(temporary.getRoot().getAbsolutePath());
+        project.setFile(temporary.newFile());
         var repositorySession = new DefaultRepositorySystemSession();
         repositorySession.setArtifactTypeRegistry(new DefaultArtifactTypeRegistry()
                 .add(new DefaultArtifactType("jar")).add(new DefaultArtifactType("test-jar", "jar", "tests", "java")));
@@ -135,6 +143,47 @@ public class EffectiveDependencyCheckMojoTest {
         var candidate=mojo(project,temporary.newFile(),false);
         assertSame(failures,candidate.scanPlugins(project,null,failures));
         assertNull(candidate.scanPlugins(project,null,null));
+    }
+
+    @Test public void upstreamScanUsesScopedRootsRestoresProjectAndStillScansTransitiveSite() throws Exception {
+        var project=new InactiveDefaultSiteTest().project();
+        var candidate=mojo(project,temporary.newFile(),false);
+        var session=new MavenSession(null,new DefaultRepositorySystemSession(),
+                new DefaultMavenExecutionRequest().setGoals(List.of("verify")),new DefaultMavenExecutionResult());
+        field(candidate,"effectiveSession",session);field(candidate,"session",session);
+        field(candidate,"runtimeInformation",new RuntimeInformation(){
+            public String getMavenVersion(){return "3.9.15";} public boolean isMavenVersion(String version){return version.equals("3.9.15");}
+        });
+        field(candidate,"executionPlans",Proxy.newProxyInstance(getClass().getClassLoader(),new Class<?>[]{LifecycleExecutionPlanCalculator.class},
+                (proxy,method,args)->new MavenExecutionPlan(List.of(),new DefaultLifecycles(Map.of(),null))));
+        var rootRequests=new ArrayList<String>();var scans=new ArrayList<String>();var fail=new boolean[]{false};
+        var otherFile=temporary.newFile("other-plugin.jar");var transitiveSite=temporary.newFile("transitive-site.jar");
+        var repository=(RepositorySystem)Proxy.newProxyInstance(getClass().getClassLoader(),new Class<?>[]{RepositorySystem.class},
+                (proxy,method,args)->{
+                    if(method.getName().equals("resolveArtifact")) {
+                        var request=(ArtifactRequest)args[1];rootRequests.add(request.getArtifact().getArtifactId());
+                        if(fail[0]) throw new IllegalStateException("deliberate-resolution-failure");
+                        return new ArtifactResult(request).setArtifact(request.getArtifact().setFile(otherFile));
+                    }
+                    if(method.getName().equals("resolveDependencies")) {
+                        var request=(DependencyRequest)args[1];
+                        return new DependencyResult(request).setArtifactResults(List.of(
+                                new ArtifactResult(new ArtifactRequest()).setArtifact(request.getCollectRequest().getRoot().getArtifact().setFile(otherFile)),
+                                new ArtifactResult(new ArtifactRequest()).setArtifact(new DefaultArtifact(InactiveDefaultSite.KEY+":jar:3.12.1").setFile(transitiveSite))));
+                    }
+                    throw new AssertionError(method.getName());
+                });
+        field(candidate,"repoSystem",repository);field(candidate,"effectiveRepositorySystem",repository);
+        try(var engine=new Engine(new Settings()){
+            @Override public List<org.owasp.dependencycheck.dependency.Dependency> scan(File file,String name){scans.add(file.getName());return List.of();}
+        }) {
+            candidate.scanPlugins(project,engine,null);
+            assertEquals(List.of("other-plugin"),rootRequests);assertTrue(scans.contains("transitive-site.jar"));
+            assertSame(project,candidate.getProject());assertEquals(2,project.getPluginArtifacts().size());
+            rootRequests.clear();fail[0]=true;
+            assertThrows(IllegalStateException.class,()->candidate.scanPlugins(project,engine,null));
+            assertEquals(List.of("other-plugin"),rootRequests);assertSame(project,candidate.getProject());
+        }
     }
 
     private static class OriginalProbe extends CheckMojo {

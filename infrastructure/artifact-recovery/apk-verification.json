@@ -1,0 +1,110 @@
+{
+  "schema": "otziv-retained-apk-verification-v1",
+  "verifiedAtUtc": "2026-10-02T07:49:45.059478+00:00",
+  "manifestSha256": "db2b320d53f4bd55b452de0c7b82aaf89f32ec57ee419dbcb91ab329cfa26d62",
+  "verificationTools": {
+    "androidBuildTools": "37.0.0",
+    "apksigner": "0.9"
+  },
+  "files": [
+    {
+      "path": "mobile/builds/otziv-prod-debug-v1.0.53-code53.apk",
+      "sha256": "1605925ac25311de55e194ebae420bdfb2807879630a3df8f86b73279e148c16",
+      "signatureVerified": true,
+      "v2SignatureVerified": true,
+      "signerCertificateSha256": "a15a162afe1f808f9586dd3f129f9e61f4be49ccff708ca99c6a0714004251d5",
+      "packageName": "com.hunt.otziv",
+      "versionCode": 53,
+      "versionName": "1.0.53",
+      "debuggable": true
+    },
+    {
+      "path": "mobile/builds/otziv-prod-release-v1.0.54-code54.apk",
+      "sha256": "3abb96347019f0982228eda4f3d4cc1d1d3a7c5f5b11b476c7552d58d66c7073",
+      "signatureVerified": true,
+      "v2SignatureVerified": true,
+      "signerCertificateSha256": "a15a162afe1f808f9586dd3f129f9e61f4be49ccff708ca99c6a0714004251d5",
+      "packageName": "com.hunt.otziv",
+      "versionCode": 54,
+      "versionName": "1.0.54",
+      "debuggable": false
+    },
+    {
+      "path": "mobile/builds/otziv-prod-release-v1.0.55-code55.apk",
+      "sha256": "42e317840fae740f89e846b9e3302d7a29a372ef04f11de4314d1c97c4ea7678",
+      "signatureVerified": true,
+      "v2SignatureVerified": true,
+      "signerCertificateSha256": "a15a162afe1f808f9586dd3f129f9e61f4be49ccff708ca99c6a0714004251d5",
+      "packageName": "com.hunt.otziv",
+      "versionCode": 55,
+      "versionName": "1.0.55",
+      "debuggable": false
+    },
+    {
+      "path": "mobile/builds/otziv-prod-release-v1.0.56-code56.apk",
+      "sha256": "21e9b18a91992547b8894242b3cb95996883188d8a79a43a1118f86992398817",
+      "signatureVerified": true,
+      "v2SignatureVerified": true,
+      "signerCertificateSha256": "a15a162afe1f808f9586dd3f129f9e61f4be49ccff708ca99c6a0714004251d5",
+      "packageName": "com.hunt.otziv",
+      "versionCode": 56,
+      "versionName": "1.0.56",
+      "debuggable": false
+    },
+    {
+      "path": "mobile/builds/otziv-prod-release-v1.0.57-code57.apk",
+      "sha256": "0fa9df4328a91fdbb9a8e257e8cf6c801f77db985c328d21622251d178f9f866",
+      "signatureVerified": true,
+      "v2SignatureVerified": true,
+      "signerCertificateSha256": "a15a162afe1f808f9586dd3f129f9e61f4be49ccff708ca99c6a0714004251d5",
+      "packageName": "com.hunt.otziv",
+      "versionCode": 57,
+      "versionName": "1.0.57",
+      "debuggable": false
+    },
+    {
+      "path": "mobile/builds/otziv-prod-release-v1.0.58-code58.apk",
+      "sha256": "41128a24c5c701931814652393e2dc14f06e6508e9b8d9242622ecfb629991e0",
+      "signatureVerified": true,
+      "v2SignatureVerified": true,
+      "signerCertificateSha256": "a15a162afe1f808f9586dd3f129f9e61f4be49ccff708ca99c6a0714004251d5",
+      "packageName": "com.hunt.otziv",
+      "versionCode": 58,
+      "versionName": "1.0.58",
+      "debuggable": false
+    },
+    {
+      "path": "mobile/builds/otziv-prod-release-v1.0.59-code59.apk",
+      "sha256": "f2536ed5a149867b94eb7d1b57f0be41103b2ee5187d5f9a7e780e69e0ff3511",
+      "signatureVerified": true,
+      "v2SignatureVerified": true,
+      "signerCertificateSha256": "a15a162afe1f808f9586dd3f129f9e61f4be49ccff708ca99c6a0714004251d5",
+      "packageName": "com.hunt.otziv",
+      "versionCode": 59,
+      "versionName": "1.0.59",
+      "debuggable": false
+    },
+    {
+      "path": "mobile/builds/otziv-prod-release-v1.0.60-code60.apk",
+      "sha256": "cc270cc7b2e21a863a70562b56cf76fc3f1c0cb5edbb0fb5411f3e79493a788b",
+      "signatureVerified": true,
+      "v2SignatureVerified": true,
+      "signerCertificateSha256": "a15a162afe1f808f9586dd3f129f9e61f4be49ccff708ca99c6a0714004251d5",
+      "packageName": "com.hunt.otziv",
+      "versionCode": 60,
+      "versionName": "1.0.60",
+      "debuggable": false
+    },
+    {
+      "path": "mobile/builds/otziv-prod-release-v1.0.61-code61.apk",
+      "sha256": "1bfaa0c6b65782f63a85606284f062645bb135a163d5ccfaaa1e8e564ad7723f",
+      "signatureVerified": true,
+      "v2SignatureVerified": true,
+      "signerCertificateSha256": "a15a162afe1f808f9586dd3f129f9e61f4be49ccff708ca99c6a0714004251d5",
+      "packageName": "com.hunt.otziv",
+      "versionCode": 61,
+      "versionName": "1.0.61",
+      "debuggable": false
+    }
+  ]
+}

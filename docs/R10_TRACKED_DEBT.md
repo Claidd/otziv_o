@@ -1,13 +1,10 @@
-# R10 tracked repository recovery-artifact baseline
+# R10 recovery artifacts: historical baseline and completed migration
 
-Snapshot date: 2026-08-03 (post-audit index).
+Historical snapshot date: 2026-08-03 (post-audit index).
 
-The current index deliberately retains the two sets of non-reproducible delivery
-artifacts below. A clean clone therefore still contains the signed Android
-releases and the generated notification media needed for emergency recovery.
-The hygiene gate reports this existing debt without deleting it and rejects new
-files added to these protected roots. It also rejects modification or deletion
-of the retained binary artifacts until that recovery migration is reviewed.
+At that snapshot the index deliberately retained the two sets of delivery
+artifacts below until an independent recovery copy could be verified. These
+figures describe the historical baseline, not the current checkout.
 
 | Tracked root | Files | Bytes | MiB |
 | --- | ---: | ---: | ---: |
@@ -15,9 +12,21 @@ of the retained binary artifacts until that recovery migration is reviewed.
 | `generated-assets/` | 192 | 315,545,434 | 300.93 |
 | **Total retained recovery artifacts** | **202** | **397,804,366** | **379.38** |
 
-The counts describe the Git index, not ignored local files. Do not untrack either
-retained root until a signed release/object-storage copy has been verified from
-a second machine and the production deploy no longer reads the checkout copy.
+On 2026-10-02 the complete 202-file Git snapshot (397,805,360 bytes; the source
+importer had changed since August) was archived to the dedicated private backup
+S3. A version-bound authenticated download and an isolated restore on the VPS,
+using its pre-existing backup key, verified every file hash. Nine APK signatures,
+package identities and versions were verified separately against the same bytes.
+The records and file manifest are in `infrastructure/artifact-recovery/`.
+
+The migration untracks 199 binary artifacts (397,760,618 bytes), preserving
+local ignored copies and the three tracked importer/source manifests. The
+hygiene gate now rejects any tracked binary in these roots and checks the
+offline manifest/receipt bindings. Deletions in the migration diff are accepted
+only when their old Git blob exactly matches the verified archive entry.
+Android verifier tests generate their own throwaway signed APK fixtures;
+neither historical APKs nor production backup/signing credentials are required.
+See [recovery instructions](RETAINED_ARTIFACT_RECOVERY.md).
 
 The remediation removes only reproducible dependencies (`whatsapp/node_modules`),
 Codex temporary/attachment material, database-query fragments (`=`, `CHAR(50`,
@@ -32,4 +41,6 @@ Run a current local report without enforcing a diff:
 ./infrastructure/scripts/security/check-repository-hygiene.ps1 -ReportOnly
 ```
 
-On CI the same script receives the pull-request base or pre-push commit and blocks only new generated artifacts.
+On CI the script receives the pull-request base or pre-push commit, enforces the
+current tree and validates any historical-artifact deletion against the reviewed
+recovery manifest. This does not rewrite Git history or remove old blobs.
