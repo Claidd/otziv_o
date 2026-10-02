@@ -1383,6 +1383,7 @@ jobs:
           docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true \
             --memory 128m --pids-limit 64 --entrypoint sh otziv-web-ci -ec '
               nginx -v
+              apk --no-network info -v -e pcre2 | grep -Fx pcre2-10.49-r0
               test -s /usr/share/nginx/html/index.html
               test -s /etc/nginx/templates/default.conf.template
             '
