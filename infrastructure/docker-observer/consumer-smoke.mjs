@@ -81,7 +81,6 @@ try {
     '--mount', `type=bind,source=${backendLogDirectory},target=/var/log/otziv-app,readonly`,
     '--memory', '512m', '--pids-limit', '256', alloy, 'run', '--storage.path=/tmp/alloy', '/etc/alloy/fixture.alloy']);
   allocated.push(collector); await run('docker', ['start', collector]);
-  await new Promise(resolve => setTimeout(resolve, 5000));
   const result = await run('docker', ['exec', '--env', `FIXTURE_ID=${fixture.trim()}`, '--env', `FIXTURE_MARKER=${marker}`,
     observer, 'node', '/fixtures/consumer.cjs', 'probe'], { timeoutMs: 90_000 });
   if (result.includes('OBSERVER_FIXTURE_FAILURE')) throw new Error(result.trim());

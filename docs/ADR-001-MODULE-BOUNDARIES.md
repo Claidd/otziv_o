@@ -34,7 +34,7 @@ Reporting получает read projection. Прямой доступ к чуж�
 
 ## Проверки зависимостей
 
-`ModuleBoundaryTest` использует ArchUnit 1.4.2, поддерживающий bytecode Java 26.
+`ModuleBoundaryTest` использует ArchUnit 1.4.2, поддерживающий bytecode Java 25.
 Он запускается обычным `./mvnw verify` и проверяет:
 
 1. `CommonInvoiceSettlementService` не зависит от CommonBillingService или

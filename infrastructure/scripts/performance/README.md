@@ -1,6 +1,6 @@
 # Financial and manager scenario measurements
 
-Run from `backend` with Java 26 and Docker available:
+Run from `backend` with Java 25 and Docker available:
 
 ```text
 ./mvnw -B -ntp -Dtest=FinancialScenarioBenchmark -Dotziv.benchmark.source=<source-label> test

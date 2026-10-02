@@ -1,6 +1,10 @@
 ARG RUNTIME_IMAGE=otziv-app:prod-local
 FROM ${RUNTIME_IMAGE}
 
+# Reusing a runtime must preserve the Java version tested by CI.
+# Build backend/Dockerfile first when the cached local image still uses Java 26.
+RUN java -XshowSettings:properties -version 2>&1 | grep -Eq "^[[:space:]]*java\.specification\.version = 25$"
+
 WORKDIR /app
 COPY otziv-1.jar /app/app.jar
 
