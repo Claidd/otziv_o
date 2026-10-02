@@ -15,7 +15,7 @@
 	<name>otziv_o</name>
 	<description>Demo project for Spring Boot</description>
 	<properties>
-		<java.version>26</java.version>
+		<java.version>25</java.version>
 		<maven.compiler.release>${java.version}</maven.compiler.release>
 		<apache.poi.version>5.5.1</apache.poi.version>
 		<commons-compress.version>1.28.0</commons-compress.version>
@@ -458,7 +458,7 @@
 						<configuration>
 							<rules>
 								<requireJavaVersion>
-									<version>[26,27)</version>
+									<version>[25,26)</version>
 								</requireJavaVersion>
 								<dependencyConvergence>
 									<includes>

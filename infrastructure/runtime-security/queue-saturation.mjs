@@ -13,7 +13,7 @@ assert.ok(args.includes('--confirm-local-synthetic'),'Pass --confirm-local-synth
 const report=resolve(value('--classpath-report')||''),out=resolve(value('--output')||'');
 assert.ok(value('--classpath-report')&&value('--output'),'Explicit --classpath-report and fresh --output directory are required');
 try{await access(out);throw Error('Output directory already exists; preserve previous evidence');}catch(error){if(error.code!=='ENOENT')throw error;}
-const javaHome=value('--java-home')||process.env.JAVA_HOME;assert.ok(javaHome,'A JDK26 --java-home is required');
+const javaHome=value('--java-home')||process.env.JAVA_HOME;assert.ok(javaHome,'A JDK25 --java-home is required');
 const binary=name=>resolve(javaHome,'bin',process.platform==='win32'?name+'.exe':name);
 const run=(command,parameters,log)=>new Promise((done,reject)=>{
   const child=spawn(command,parameters,{cwd:root,windowsHide:true,stdio:['ignore','pipe','pipe']});let text='';
@@ -22,7 +22,7 @@ const run=(command,parameters,log)=>new Promise((done,reject)=>{
 });
 const context=(await run('docker',['context','inspect','--format','{{.Endpoints.docker.Host}}'])).trim();
 assert.match(context,/^(npipe|unix):\/\//,'Only local Docker is supported');
-const version=await run(binary('java'),['-version']);assert.match(version,/version "26\./,'JDK26 is required');
+const version=await run(binary('java'),['-version']);assert.match(version,/version "25\./,'JDK25 is required');
 await mkdir(out,{recursive:true});await mkdir(resolve(out,'classes'));
 await writeFile(resolve(out,'docker-stats-before.txt'),await run('docker',['stats','--no-stream','--format','{{.Name}} {{.MemUsage}} {{.CPUPerc}}']));
 const xml=await readFile(report,'utf8');
