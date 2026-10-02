@@ -1,5 +1,35 @@
 # Runtime security and CI evidence
 
+## Retained C26 evidence
+
+The 83 original C26 Keycloak, nginx and phpMyAdmin evidence files are retained in
+the versioned [C26 evidence release](https://github.com/Claidd/otziv_o/releases/tag/runtime-evidence-c26-20261002).
+`evidence-archive-c26.json` pins the ZIP size and SHA-256 and every original file's
+path, size, mode and SHA-256. The payloads are ignored locally; the manifest,
+validators and image acceptance policy remain in Git. Original proof bytes and
+their existing acceptance hashes are unchanged.
+
+Before running the offline validators from a fresh checkout, explicitly restore
+the archive. No GitHub token or production credential is needed:
+
+```sh
+python3 -B infrastructure/runtime-security/evidence_archive.py hydrate --download
+python3 -B infrastructure/runtime-security/evidence_archive.py verify
+```
+
+CI performs this restoration before the repository contracts and monitoring
+candidate checks. A coordinated SSL deployment stages only the proof files its
+accepted image graph needs, verified against the manifest from the exact release
+commit. Ordinary application deployment does not require these source proofs.
+
+Downloads and ZIP members are bounded and hash checked before extraction. A
+corrupt local file or cached archive fails instead of being silently replaced.
+An unavailable release asset fails a cold restoration; ordinary expiring Actions
+artifacts are not its only retained copy. The hash pin detects a modified asset;
+it does not prevent a repository administrator from deleting the release.
+Historical Git commits still contain the original files; this change does not
+rewrite history or shrink existing clones.
+
 The quality workflow builds the actual backend, web, worker, WhatsApp, Docker-observer and monitoring-publisher Dockerfiles, checks their runtime boundaries and preserves vulnerability reports. Local commands require Node 22.12+ and a local Docker context; remote Docker contexts are rejected. Nothing here starts the application Compose stack, restores production data, logs into WhatsApp or sends provider messages.
 
 ```sh

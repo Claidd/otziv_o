@@ -1,0 +1,509 @@
+{
+  "schema": "otziv-c26-evidence-archive-v1",
+  "sourceRevision": "189b28d57f5702a85170ed7ef0f8a89d03b2c8fd",
+  "archive": {
+    "url": "https://github.com/Claidd/otziv_o/releases/download/runtime-evidence-c26-20261002/c26-evidence.zip",
+    "sha256": "2047d0d34ed000da168820449de9190c70ca9e782a9cc532863635253e6aab2b",
+    "bytes": 3131555
+  },
+  "files": [
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-keycloak/acceptance.json",
+      "sha256": "8ece112f8cb3e31e25165fc213c9d3402cef03253ddb4e5948ae6bc154ce5cba",
+      "bytes": 4677,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-keycloak/anonymous/anonymous-download.json",
+      "sha256": "fa89d9e046bf0438a751c4d5c2c15d6a57189d180ee4c925e5b8066030faef76",
+      "bytes": 3313,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-keycloak/anonymous/anonymous-image-inspect.json",
+      "sha256": "10314aaf0265cb1439f2a0075e95d41ba5e451bb4c94cef953f1fa04bbcfa822",
+      "bytes": 11517,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-keycloak/anonymous/before-image-ids.txt",
+      "sha256": "12a1451d06ed5c84ccd10d3065d67e2e12747a85df5a0f8a0d62a51315b42eaf",
+      "bytes": 432,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-keycloak/anonymous/before-reference-inspect.txt",
+      "sha256": "8c4be2bf3f8b480d3e190b823ee5f6a0c409aec6dd318711b5cffe0b4bfe6dc6",
+      "bytes": 148,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-keycloak/anonymous/docker-client-isolation.json",
+      "sha256": "43059db9428713e407d8c2a7b353bcbc8716be2df54dc5e7a1d3798b413f8271",
+      "bytes": 128,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-keycloak/anonymous/registry-amd64-config.json",
+      "sha256": "f641317e4919c0959cf51693cf434024094922ec612f5f3bb5a08122f10ab511",
+      "bytes": 22036,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-keycloak/anonymous/registry-amd64-manifest.json",
+      "sha256": "62a778051b1c0fa6fe5295ee05a8d2264cc75ee3c726c8c0732f17c033e1e97f",
+      "bytes": 8886,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-keycloak/anonymous/registry-attestation-0-payload-0.json.part001",
+      "sha256": "6e802e5e863b9832205fc71e806df220cfcc51fd1eac04d9b689134b8a185397",
+      "bytes": 4194304,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-keycloak/anonymous/registry-attestation-0-payload-0.json.part002",
+      "sha256": "11b373fa34f3cd011f354581f8bd20da89b1df8bc9ef63d5882c9eba293201af",
+      "bytes": 1733988,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-keycloak/anonymous/registry-attestation-0-payload-0.json.parts.json",
+      "sha256": "a2cccf589b57dbb2635dfb9fa211f64fb0d5da5670c500390d407a50af45ab3a",
+      "bytes": 529,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-keycloak/anonymous/registry-attestation-0-payload-1.json",
+      "sha256": "26653491d203c965fc8de92fcff35e2f4c3cf971656b05ac58af585f3f7f6cd6",
+      "bytes": 40851,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-keycloak/anonymous/registry-attestation-0.json",
+      "sha256": "62706167beceb204eb81c2f8b12120bf3dd72eb71acf2a4db75f5bad92b6e87d",
+      "bytes": 1112,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-keycloak/anonymous/registry-index.json",
+      "sha256": "76ad15fac3c0041798b6b2b87632bbf91ae7c171ebfa813aa1d1633b48f90ff9",
+      "bytes": 857,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-keycloak/issuer.json",
+      "sha256": "b81d6d5a0e59e8c04afa3ae535de1389fd93535abab7abec9f059b07988f5b30",
+      "bytes": 2649,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-keycloak/postgres-pair-acceptance.json",
+      "sha256": "41f1a14784e1ad45704b9b4b42a3e69eeafadb416eff93dd28089d6885664cc4",
+      "bytes": 4321,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-keycloak/publication/build-metadata.json",
+      "sha256": "69634ef3caf608770b658d7ba2a47fe066bf97a98e59091ca5d3289d820779f0",
+      "bytes": 12467,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-keycloak/publication/known-runtime-dependencies.json",
+      "sha256": "0f8ac4c3ad01780ca9edb87c0dff0e993aa08606797b36a0f8427740891a9f3e",
+      "bytes": 5289,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-keycloak/publication/publication.json",
+      "sha256": "4acda885ab90c66f08660574456d379b97ea764e4c5ced2c423b3da3095f5734",
+      "bytes": 9034,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-keycloak/publication/registry-amd64-config.json",
+      "sha256": "f641317e4919c0959cf51693cf434024094922ec612f5f3bb5a08122f10ab511",
+      "bytes": 22036,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-keycloak/publication/registry-amd64-manifest.json",
+      "sha256": "62a778051b1c0fa6fe5295ee05a8d2264cc75ee3c726c8c0732f17c033e1e97f",
+      "bytes": 8886,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-keycloak/publication/registry-attestation-0-payload-0.json.part001",
+      "sha256": "6e802e5e863b9832205fc71e806df220cfcc51fd1eac04d9b689134b8a185397",
+      "bytes": 4194304,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-keycloak/publication/registry-attestation-0-payload-0.json.part002",
+      "sha256": "11b373fa34f3cd011f354581f8bd20da89b1df8bc9ef63d5882c9eba293201af",
+      "bytes": 1733988,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-keycloak/publication/registry-attestation-0-payload-0.json.parts.json",
+      "sha256": "a2cccf589b57dbb2635dfb9fa211f64fb0d5da5670c500390d407a50af45ab3a",
+      "bytes": 529,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-keycloak/publication/registry-attestation-0-payload-1.json",
+      "sha256": "26653491d203c965fc8de92fcff35e2f4c3cf971656b05ac58af585f3f7f6cd6",
+      "bytes": 40851,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-keycloak/publication/registry-attestation-0.json",
+      "sha256": "62706167beceb204eb81c2f8b12120bf3dd72eb71acf2a4db75f5bad92b6e87d",
+      "bytes": 1112,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-keycloak/publication/registry-index.json",
+      "sha256": "76ad15fac3c0041798b6b2b87632bbf91ae7c171ebfa813aa1d1633b48f90ff9",
+      "bytes": 857,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-keycloak/publication/vulnerabilities.adjudications.json",
+      "sha256": "5e748e0dac5ec0043440db9417ea9abf3e5bcd230ff72c9ed7ace171b3e4eae6",
+      "bytes": 838,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-keycloak/publication/vulnerabilities.json",
+      "sha256": "f6001cd11c34771dc7e197f6896db1125122773d9202a66e0cfb4a380982cd86",
+      "bytes": 1029683,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-keycloak/publication/vulnerabilities.sbom.cdx.json",
+      "sha256": "a7daf98f8b91e96294796e675d6f76663ea5857dab83940537531f83797d002f",
+      "bytes": 926398,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-keycloak/publication/vulnerabilities.triage.json",
+      "sha256": "e09c776143edac96032cd1eff04847be8f4b7afb869030bffa337da33c42aa6b",
+      "bytes": 365,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-keycloak/rehearsal/capture.json",
+      "sha256": "ddd06eef608bfa124db44f40dd4b2e63181f522fab015dfffae8694bb9bd11eb",
+      "bytes": 13084,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-keycloak/rehearsal/replay.json",
+      "sha256": "c229c3d8030796a24cff1d8d9ab5b6f041fc4daa7d02437e508f10bb1a8b4957",
+      "bytes": 13874,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-keycloak/runtime.json.gz",
+      "sha256": "fda3de8f3a383922db1b78129b4ba5830e2b2ce3d903d6d2c76515961c43ef6e",
+      "bytes": 1189238,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-keycloak/startup.json",
+      "sha256": "157007790e5f484c18e3f8a504c0aad19f11914114394f30509797aedf9d6f03",
+      "bytes": 1028,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-nginx/anonymous/anonymous-download.json",
+      "sha256": "4b8f1a977ddd3858732407d7d2f4503ffaeaefa0a7716f5cae42ac63912e2828",
+      "bytes": 2936,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-nginx/anonymous/anonymous-image-inspect.json",
+      "sha256": "c308b4055952341122bf9486dedbb69687ea40ef7647b7f64ef7cbd494d101c6",
+      "bytes": 4715,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-nginx/anonymous/before-image-ids.txt",
+      "sha256": "12a1451d06ed5c84ccd10d3065d67e2e12747a85df5a0f8a0d62a51315b42eaf",
+      "bytes": 432,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-nginx/anonymous/before-reference-inspect.txt",
+      "sha256": "5fa0a595aedd0ee1caba72e3a63d67ce1e748cd14a8f834e6016fddbb5b0a4ee",
+      "bytes": 148,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-nginx/anonymous/docker-client-isolation.json",
+      "sha256": "43059db9428713e407d8c2a7b353bcbc8716be2df54dc5e7a1d3798b413f8271",
+      "bytes": 128,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-nginx/anonymous/registry-amd64-config.json",
+      "sha256": "df0afeef78982f84f3e0fed2d42c6139e40608b29bbe70e451057273e39bfff3",
+      "bytes": 14773,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-nginx/anonymous/registry-amd64-manifest.json",
+      "sha256": "59e8116f3deda8d1da01a66046b937b42c5e09ed2a0ea7ecf73b498705c25566",
+      "bytes": 2382,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-nginx/anonymous/registry-attestation-0-payload-0.json",
+      "sha256": "720391c87ed95bc4796c54c9ae5de93e4a848fc466f13682cea317f345b9adfb",
+      "bytes": 946718,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-nginx/anonymous/registry-attestation-0-payload-1.json",
+      "sha256": "a9b7e873146b1a2ce624f6ca611fc1e6e66702970e69d473331309a644e02dac",
+      "bytes": 17781,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-nginx/anonymous/registry-attestation-0.json",
+      "sha256": "204ced22627938d4f7c3e7f5ee770fdf440fb59e938ad7cba8dc8059213c386d",
+      "bytes": 1111,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-nginx/anonymous/registry-index.json",
+      "sha256": "847ffa6cc2bcbebf94763b1b2c9e025b24e374b46a815fa4ed918901e6f49578",
+      "bytes": 857,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-nginx/http-smoke.json",
+      "sha256": "422ecd64697753eceb75c0c808919c0ee431bde579d69db88e67aa4ca3620938",
+      "bytes": 1009,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-nginx/publication/build-metadata.json",
+      "sha256": "5e20791974f0a858d812d3cbf812f6ad73c792aecc3abafe94dab5bf79422c5f",
+      "bytes": 11883,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-nginx/publication/publication.json",
+      "sha256": "7b34ffec73061b32aaf45e8d32fd2a5db9cfacdb207d06aec071073ca5939f82",
+      "bytes": 3370,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-nginx/publication/registry-amd64-config.json",
+      "sha256": "df0afeef78982f84f3e0fed2d42c6139e40608b29bbe70e451057273e39bfff3",
+      "bytes": 14773,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-nginx/publication/registry-amd64-manifest.json",
+      "sha256": "59e8116f3deda8d1da01a66046b937b42c5e09ed2a0ea7ecf73b498705c25566",
+      "bytes": 2382,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-nginx/publication/registry-attestation-0-payload-0.json",
+      "sha256": "720391c87ed95bc4796c54c9ae5de93e4a848fc466f13682cea317f345b9adfb",
+      "bytes": 946718,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-nginx/publication/registry-attestation-0-payload-1.json",
+      "sha256": "a9b7e873146b1a2ce624f6ca611fc1e6e66702970e69d473331309a644e02dac",
+      "bytes": 17781,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-nginx/publication/registry-attestation-0.json",
+      "sha256": "204ced22627938d4f7c3e7f5ee770fdf440fb59e938ad7cba8dc8059213c386d",
+      "bytes": 1111,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-nginx/publication/registry-index.json",
+      "sha256": "847ffa6cc2bcbebf94763b1b2c9e025b24e374b46a815fa4ed918901e6f49578",
+      "bytes": 857,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-nginx/publication/vulnerabilities.adjudications.json",
+      "sha256": "59b9dbb3db604312589c9c8e26c8c441a6ef177ce0a6f195718ed128cd24350b",
+      "bytes": 838,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-nginx/publication/vulnerabilities.json",
+      "sha256": "164bfc1155fd1287d09d192fe1e204205b23c871ffdd8927d33da9059d580205",
+      "bytes": 160407,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-nginx/publication/vulnerabilities.sbom.cdx.json",
+      "sha256": "8967e79e747020ea5a88616a93f6930232796afa05246f9dc26cc09f1c94ebc4",
+      "bytes": 118001,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-nginx/publication/vulnerabilities.triage.json",
+      "sha256": "20908376c7bf9302bb359babbc6c2f7883480aeb61c2f5225e2dbc8a99f5083d",
+      "bytes": 365,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-phpmyadmin/anonymous/anonymous-download.json",
+      "sha256": "7efa08cd508678a761d701c21a124f5742b15b2cca79ef74bdde2cca4f92b8ab",
+      "bytes": 2969,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-phpmyadmin/anonymous/anonymous-image-inspect.json",
+      "sha256": "89b86cfbf41673361a83b2d07e7fff299acabc1c367c1510cb4f154626be04b2",
+      "bytes": 6949,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-phpmyadmin/anonymous/before-image-ids.txt",
+      "sha256": "12a1451d06ed5c84ccd10d3065d67e2e12747a85df5a0f8a0d62a51315b42eaf",
+      "bytes": 432,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-phpmyadmin/anonymous/before-reference-inspect.txt",
+      "sha256": "053ce47c7999233ea72699420839a5b7d9164abd371a9e8e3dea43a1cb5e5107",
+      "bytes": 148,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-phpmyadmin/anonymous/docker-client-isolation.json",
+      "sha256": "43059db9428713e407d8c2a7b353bcbc8716be2df54dc5e7a1d3798b413f8271",
+      "bytes": 128,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-phpmyadmin/anonymous/registry-amd64-config.json",
+      "sha256": "063c3c7755b1152e96586e5ee7dbe32ee5be3f36456f4ed89772d77513aa0548",
+      "bytes": 10066,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-phpmyadmin/anonymous/registry-amd64-manifest.json",
+      "sha256": "e3e8a030a5c1a873c0fb45381d71d0f22c834dcbba001fea4b07a7adab040912",
+      "bytes": 4453,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-phpmyadmin/anonymous/registry-attestation-0-payload-0.json",
+      "sha256": "2041eb08dddf737019c0bccef20cff4c7ec9359aac50c4db4b11f22f4063a28a",
+      "bytes": 894986,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-phpmyadmin/anonymous/registry-attestation-0-payload-1.json",
+      "sha256": "44acea78e7c6504180e5092fce79882bd429575edd82acd04c41101b895342e2",
+      "bytes": 22868,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-phpmyadmin/anonymous/registry-attestation-0.json",
+      "sha256": "4c69658c6565bfdef4a4e92249f63aad34b2ced5dd9e5d74ef05d809806aba79",
+      "bytes": 1111,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-phpmyadmin/anonymous/registry-index.json",
+      "sha256": "e7c5c3b4761c54f4c596e7470c8c901682fe1e017787b6bc2486ffbf1d81fa9c",
+      "bytes": 857,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-phpmyadmin/http-smoke.json",
+      "sha256": "69d84bea7d64e0681db578dcfc6aa0987113732f019ce799776955d065358afd",
+      "bytes": 1210,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-phpmyadmin/publication/build-metadata.json",
+      "sha256": "d73beeb6d0653f2ca3b29959e176261fc43fc43e0a59c279afcb9b2b260ea682",
+      "bytes": 11923,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-phpmyadmin/publication/publication.json",
+      "sha256": "d91ae45fd6e3996dd29f09dbf79414ef836e158ed3993ca3b8d8d5e55309c33a",
+      "bytes": 3395,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-phpmyadmin/publication/registry-amd64-config.json",
+      "sha256": "063c3c7755b1152e96586e5ee7dbe32ee5be3f36456f4ed89772d77513aa0548",
+      "bytes": 10066,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-phpmyadmin/publication/registry-amd64-manifest.json",
+      "sha256": "e3e8a030a5c1a873c0fb45381d71d0f22c834dcbba001fea4b07a7adab040912",
+      "bytes": 4453,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-phpmyadmin/publication/registry-attestation-0-payload-0.json",
+      "sha256": "2041eb08dddf737019c0bccef20cff4c7ec9359aac50c4db4b11f22f4063a28a",
+      "bytes": 894986,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-phpmyadmin/publication/registry-attestation-0-payload-1.json",
+      "sha256": "44acea78e7c6504180e5092fce79882bd429575edd82acd04c41101b895342e2",
+      "bytes": 22868,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-phpmyadmin/publication/registry-attestation-0.json",
+      "sha256": "4c69658c6565bfdef4a4e92249f63aad34b2ced5dd9e5d74ef05d809806aba79",
+      "bytes": 1111,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-phpmyadmin/publication/registry-index.json",
+      "sha256": "e7c5c3b4761c54f4c596e7470c8c901682fe1e017787b6bc2486ffbf1d81fa9c",
+      "bytes": 857,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-phpmyadmin/publication/vulnerabilities.adjudications.json",
+      "sha256": "3d752e564d38540b58af41cae0c8cbb2c205a35c9e2f7f2fd1ebe509993bb31e",
+      "bytes": 838,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-phpmyadmin/publication/vulnerabilities.json",
+      "sha256": "52cf27f3a27cbb80ccacb38c397b17d4a12694fa7373ccd56217469e794ecc5d",
+      "bytes": 208881,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-phpmyadmin/publication/vulnerabilities.sbom.cdx.json",
+      "sha256": "9d992a41f2e62de24896bc0116a19a60097bd1cdfb6ab9b05c101e7fb9f9558b",
+      "bytes": 232325,
+      "mode": "100644"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c26-phpmyadmin/publication/vulnerabilities.triage.json",
+      "sha256": "2f92ac524ca2b6d6d6cd0741dfde3f696e526618958c9ce41941701dd3bd8303",
+      "bytes": 365,
+      "mode": "100644"
+    }
+  ]
+}
