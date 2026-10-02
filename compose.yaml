@@ -57,7 +57,7 @@ services:
       internal_net:
 
   nginx:
-    image: ghcr.io/claidd/otziv-security@sha256:95c21948b23ef308f41dba871bb1320796ce66e1c59f6b7ffdd7e86e57cb588b
+    image: ghcr.io/claidd/otziv-security@sha256:847ffa6cc2bcbebf94763b1b2c9e025b24e374b46a815fa4ed918901e6f49578
     ports:
       - '127.0.0.1:80:80'
       - '127.0.0.1:443:443'
@@ -233,7 +233,7 @@ services:
       internal_net:
 
   phpmyadmin:
-    image: ghcr.io/claidd/otziv-security@sha256:49a197c95684926f380e2a78614e1260d5889ea973a3cc98911235eacb84df48
+    image: ghcr.io/claidd/otziv-security@sha256:e7c5c3b4761c54f4c596e7470c8c901682fe1e017787b6bc2486ffbf1d81fa9c
     profiles: ["db-admin"]
     ports:
       - "127.0.0.1:6571:80"
@@ -284,7 +284,7 @@ services:
       - internal_net
 
   keycloak:
-    image: ghcr.io/claidd/otziv-security@sha256:5c73f4ab9b91ea48fc11333d4ebd93e702959ea558318cb6d7849deb5387d4f4
+    image: ghcr.io/claidd/otziv-security@sha256:76ad15fac3c0041798b6b2b87632bbf91ae7c171ebfa813aa1d1633b48f90ff9
     container_name: otziv-keycloak
     command: start-dev --import-realm
     ports:

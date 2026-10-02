@@ -40,7 +40,7 @@ def reviewed_plan(root, resolved):
     entries = {x['component']: x for x in activations}
     pg, kc = entries['postgres'], entries['keycloak']
     require(pg.get('manifest', {}).get('path') == 'infrastructure/runtime-security/reviewed-images-c23-postgres.json'
-            and kc.get('manifest', {}).get('path') in ('infrastructure/runtime-security/reviewed-images-c23-keycloak.json','infrastructure/runtime-security/reviewed-images-c24-keycloak.json'),
+            and kc.get('manifest', {}).get('path') in ('infrastructure/runtime-security/reviewed-images-c23-keycloak.json','infrastructure/runtime-security/reviewed-images-c24-keycloak.json','infrastructure/runtime-security/reviewed-images-c26-keycloak.json'),
             'coordinated_ssl_unreviewed_generation')
     accepted = proof(root, pg['sslRefreshAcceptance']); issuer = proof(root, kc['sslRefreshAcceptance'])
     require(accepted['result'] == issuer['result'] == 'PASS' and accepted['pair'] == issuer['pair'], 'coordinated_ssl_pair_not_accepted')

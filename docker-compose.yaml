@@ -96,7 +96,7 @@ services:
       - internal_net
 
   phpmyadmin:
-    image: ghcr.io/claidd/otziv-security@sha256:49a197c95684926f380e2a78614e1260d5889ea973a3cc98911235eacb84df48
+    image: ghcr.io/claidd/otziv-security@sha256:e7c5c3b4761c54f4c596e7470c8c901682fe1e017787b6bc2486ffbf1d81fa9c
     profiles: ["db-admin"]
     restart: unless-stopped
     logging: *default-logging
@@ -145,7 +145,7 @@ services:
       - internal_net
 
   keycloak:
-    image: ${OTZIV_KEYCLOAK_IMAGE:-ghcr.io/claidd/otziv-security@sha256:5c73f4ab9b91ea48fc11333d4ebd93e702959ea558318cb6d7849deb5387d4f4}
+    image: ${OTZIV_KEYCLOAK_IMAGE:-ghcr.io/claidd/otziv-security@sha256:76ad15fac3c0041798b6b2b87632bbf91ae7c171ebfa813aa1d1633b48f90ff9}
     restart: unless-stopped
     logging: *default-logging
     mem_limit: ${KEYCLOAK_MEMORY_LIMIT:-2g}

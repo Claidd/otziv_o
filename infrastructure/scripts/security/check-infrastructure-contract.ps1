@@ -603,7 +603,7 @@ try {
     $frontendPackageJson = $frontendPackageConfig | ConvertFrom-Json -AsHashtable
     $frontendOverrides = $frontendPackageJson['overrides']
     $requiredFrontendOverrides = [ordered]@{
-        'hono' = '4.13.5'
+        'hono' = '4.13.7'
         'ip-address' = '10.7.1'
     }
     foreach ($dependency in $requiredFrontendOverrides.Keys) {

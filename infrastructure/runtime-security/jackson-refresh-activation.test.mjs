@@ -8,8 +8,7 @@ import {createEvidenceReader,validateActivation} from './reviewed-image-defaults
 import {validateJacksonInspection,validateJacksonRefreshActivation} from './jackson-refresh-activation.mjs';
 import {buildTriage} from './triage-report.mjs';
 const read=await createEvidenceReader(resolve(dirname(fileURLToPath(import.meta.url)),'../..'));
-const entries=JSON.parse(await read('infrastructure/runtime-security/reviewed-image-activations.json')).images;
-const entry=entries.find(x=>x.component==='keycloak');
+const entry=JSON.parse(await read('infrastructure/runtime-security/c26-parent-keycloak.json'));
 const parent=JSON.parse(await read('infrastructure/runtime-security/c24-parent-keycloak.json'));
 const value=JSON.parse(await read(entry.sslRefreshAcceptance.path));
 const publication=JSON.parse(await read(entry.publication.path));

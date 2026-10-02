@@ -23,6 +23,7 @@ export function validateJacksonCoreInspection(record,parent,child,parentId,child
   assert.deepEqual(Object.keys(value.configuration).sort(),['User','WorkingDir','Entrypoint','Cmd','Env','Healthcheck','ExposedPorts','Volumes','StopSignal','Labels'].sort());
   for(const path of [SERVER,CLI])assert.equal(value.jars[path].sha256,value.inventory[path].sha256);
   const reduced=entries=>Object.fromEntries(Object.entries(entries).filter(([p])=>selected(p)).map(([p,v])=>[p,{sha256:v.sha256,size:v.size}]));
+  assert.ok(Object.keys(reduced(value.jars[CLI].entries)).length,'jackson_shaded_payload_missing');
   assert.deepEqual(reduced(value.jars[CLI].entries),reduced(value.jars[SERVER].entries),'jackson_shaded_payload');
  }
  const configuration=structuredClone(before.configuration);configuration.Labels['com.otziv.publication.revision']=commit;assert.deepEqual(after.configuration,configuration,'jackson_launch_changed');
@@ -43,10 +44,13 @@ export async function validateJacksonCoreRefreshActivation(publication,entry,rea
  const dir=dirname(entry.publication.path),prior=dirname(parent.publication.path);
  const pBytes=await read(prior+'/registry-amd64-config.json'),cBytes=await read(dir+'/registry-amd64-config.json');
  const raw=await read(value.runtimePath),record=JSON.parse(gunzipSync(raw));assert.ok(value.files[value.runtimePath]);
- assert.equal(record.executedScriptSha256,value.executedSources['infrastructure/runtime-security/jackson-core-refresh-inspection.py']);assert.equal(record.underlyingInspectorSha256,value.executedSources['infrastructure/runtime-security/ssl-refresh-inspection.py']);
- assert.match(record.patchScriptSha256||'',/^[a-f0-9]{64}$/,'jackson_core_patch_source_missing');
- assert.match(value.executedSources['infrastructure/runtime-security/builds/c26-keycloak/patch_cli.py']||'',/^[a-f0-9]{64}$/,'jackson_core_patch_binding_missing');
- assert.equal(record.patchScriptSha256,value.executedSources['infrastructure/runtime-security/builds/c26-keycloak/patch_cli.py']);
+ for(const [field,path] of [['executedScriptSha256','infrastructure/runtime-security/jackson-core-refresh-inspection.py'],
+  ['underlyingInspectorSha256','infrastructure/runtime-security/ssl-refresh-inspection.py'],
+  ['patchScriptSha256','infrastructure/runtime-security/builds/c26-keycloak/patch_cli.py']]){
+  assert.match(record[field]||'',/^[a-f0-9]{64}$/,'jackson_core_source_missing:'+field);
+  assert.match(value.executedSources[path]||'',/^[a-f0-9]{64}$/,'jackson_core_source_binding_missing:'+field);
+  assert.equal(record[field],value.executedSources[path],'jackson_core_source_binding_changed:'+field);
+ }
  validateJacksonCoreInspection(record,JSON.parse(pBytes),JSON.parse(cBytes),'sha256:'+hash(pBytes),'sha256:'+hash(cBytes),parent.reference,entry.reference,entry.commit);
  assert.equal(publication.imageId,value.imageConfigId);assert.equal(publication.imageId,'sha256:'+hash(cBytes));
  const bytes=await read(dir+'/vulnerabilities.json'),scan=JSON.parse(bytes);assert.equal(scan.Metadata.ImageID,publication.imageId);assert.deepEqual(scan.Metadata.ImageConfig.rootfs,JSON.parse(cBytes).rootfs);

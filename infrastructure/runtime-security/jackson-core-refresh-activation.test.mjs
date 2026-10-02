@@ -42,6 +42,7 @@ test('Core-only inspection accepts the official artifact and preserved provider,
   const record=fixture();assert.equal(verify(record),record);
 });
 for(const [name,change] of [
+  ['empty core inventories in both compared JARs',r=>{for(const image of r.images)for(const jar of [server,cli])image.jars[jar].entries={};}],
   ['old ordinary core class',r=>{r.images[1].jars[cli].entries['com/fasterxml/jackson/core/JsonFactory.class']=entry('0'.repeat(64));}],
   ['leftover old multi-release parser',r=>{r.images[1].jars[cli].entries['META-INF/versions/17/com/fasterxml/jackson/core/io/doubleparser/v2_21_6/FastDoubleParser.class']=entry('2'.repeat(64));}],
   ['stale JsonFactory service descriptor',r=>{r.images[1].jars[cli].entries['META-INF/services/com.fasterxml.jackson.core.JsonFactory']=entry('6'.repeat(64));}],
@@ -53,3 +54,27 @@ for(const [name,change] of [
   ['unremoved owned container',r=>{r.ownedContainersRemaining=1;}],
   ['executed inspected container',r=>{r.images[1].containerExecuted=true;}]
 ])test('Core-only inspection rejects '+name,()=>{const record=fixture();change(record);assert.throws(()=>verify(record));});
+
+// Use the published proof to exercise source binding after all presentation
+// hashes are recomputed; missing values must not compare equal as undefined.
+for(const [field,path] of [
+ ['executedScriptSha256','infrastructure/runtime-security/jackson-core-refresh-inspection.py'],
+ ['underlyingInspectorSha256','infrastructure/runtime-security/ssl-refresh-inspection.py'],
+ ['patchScriptSha256','infrastructure/runtime-security/builds/c26-keycloak/patch_cli.py']
+])test('activation rejects double-missing source binding '+field,async()=>{
+ const {createEvidenceReader,validateActivation}=await import('./reviewed-image-defaults.mjs');
+ const {validateJacksonCoreRefreshActivation}=await import('./jackson-core-refresh-activation.mjs');
+ const {hash}=await import('./ssl-refresh.mjs');
+ const {gzipSync,gunzipSync}=await import('node:zlib');
+ const {fileURLToPath}=await import('node:url');
+ const read=await createEvidenceReader(fileURLToPath(new URL('../../',import.meta.url)));
+ const entry=JSON.parse(await read('infrastructure/runtime-security/reviewed-image-activations.json')).images.find(x=>x.component==='keycloak');
+ const accepted=JSON.parse(await read(entry.sslRefreshAcceptance.path));
+ const publication=JSON.parse(await read(entry.publication.path));
+ const record=JSON.parse(gunzipSync(await read(accepted.runtimePath)));
+ delete record[field];delete accepted.executedSources[path];
+ const raw=gzipSync(Buffer.from(JSON.stringify(record)));accepted.files[accepted.runtimePath]=hash(raw);
+ const value=Buffer.from(JSON.stringify(accepted));entry.sslRefreshAcceptance.sha256=hash(value);entry.migrationAcceptance=entry.sslRefreshAcceptance;
+ const changed=async p=>p===accepted.runtimePath?raw:p===entry.sslRefreshAcceptance.path?value:read(p);
+ await assert.rejects(validateJacksonCoreRefreshActivation(publication,entry,changed,validateActivation),/jackson_core_source_missing/);
+});

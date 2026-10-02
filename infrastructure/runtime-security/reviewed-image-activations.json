@@ -64,29 +64,29 @@
     },
     {
       "component": "keycloak",
-      "reference": "ghcr.io/claidd/otziv-security@sha256:5c73f4ab9b91ea48fc11333d4ebd93e702959ea558318cb6d7849deb5387d4f4",
-      "commit": "0b7a0832e8c2a8f9cd96a7b6419bde50091661c8",
-      "run": "36749446720",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:76ad15fac3c0041798b6b2b87632bbf91ae7c171ebfa813aa1d1633b48f90ff9",
+      "commit": "c81a29c1eda2ba157702560338467521cd3e484e",
+      "run": "36953214402",
       "attempt": "1",
       "manifest": {
-        "path": "infrastructure/runtime-security/reviewed-images-c24-keycloak.json",
-        "sha256": "31c2f1a6784df749c4462d6dd1b93701bf84cd7f1f5ada7168d54cf1df343a14"
+        "path": "infrastructure/runtime-security/reviewed-images-c26-keycloak.json",
+        "sha256": "b804ab9ce2c785083bc69b9031257b7016b787c73ad70dbfb66a90b324f47538"
       },
       "publication": {
-        "path": "infrastructure/runtime-security/proofs/c24-keycloak/publication/publication.json",
-        "sha256": "7658e8509b5af3d0376fe7a88565afba04747ba87af0c9fae23ca3b57c3c416d"
+        "path": "infrastructure/runtime-security/proofs/c26-keycloak/publication/publication.json",
+        "sha256": "4acda885ab90c66f08660574456d379b97ea764e4c5ced2c423b3da3095f5734"
       },
       "anonymous": {
-        "path": "infrastructure/runtime-security/proofs/c24-keycloak/anonymous/anonymous-download.json",
-        "sha256": "8d6251d8bfc531a0672c31bf90e3fecb2286f2b66ccdb64c2e8be8def340aa09"
+        "path": "infrastructure/runtime-security/proofs/c26-keycloak/anonymous/anonymous-download.json",
+        "sha256": "fa89d9e046bf0438a751c4d5c2c15d6a57189d180ee4c925e5b8066030faef76"
       },
       "sslRefreshAcceptance": {
-        "path": "infrastructure/runtime-security/proofs/c24-keycloak/acceptance.json",
-        "sha256": "826bf8366854fff05c3ad4ab3bf19ea1f8e9831e59ad4d58587a179eced0e18c"
+        "path": "infrastructure/runtime-security/proofs/c26-keycloak/acceptance.json",
+        "sha256": "8ece112f8cb3e31e25165fc213c9d3402cef03253ddb4e5948ae6bc154ce5cba"
       },
       "migrationAcceptance": {
-        "path": "infrastructure/runtime-security/proofs/c24-keycloak/acceptance.json",
-        "sha256": "826bf8366854fff05c3ad4ab3bf19ea1f8e9831e59ad4d58587a179eced0e18c"
+        "path": "infrastructure/runtime-security/proofs/c26-keycloak/acceptance.json",
+        "sha256": "8ece112f8cb3e31e25165fc213c9d3402cef03253ddb4e5948ae6bc154ce5cba"
       }
     },
     {
@@ -110,21 +110,21 @@
     },
     {
       "component": "nginx",
-      "reference": "ghcr.io/claidd/otziv-security@sha256:95c21948b23ef308f41dba871bb1320796ce66e1c59f6b7ffdd7e86e57cb588b",
-      "commit": "49a537984b4441f0ac9ad5e79f619018b7488912",
-      "run": "36315116183",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:847ffa6cc2bcbebf94763b1b2c9e025b24e374b46a815fa4ed918901e6f49578",
+      "commit": "c81a29c1eda2ba157702560338467521cd3e484e",
+      "run": "36953242831",
       "attempt": "1",
       "manifest": {
-        "path": "infrastructure/runtime-security/reviewed-images-c22-nginx.json",
-        "sha256": "3e4af06f0a313b6304d75c475e0b69f81dc8c0a29a912205249a5eb7177ec546"
+        "path": "infrastructure/runtime-security/reviewed-images-c26-nginx.json",
+        "sha256": "3af8c9c84debf281fc24d85e0f2b9d9a29a6e802ac44d293e4ef310781c16c20"
       },
       "publication": {
-        "path": "infrastructure/runtime-security/proofs/c22-nginx/publication/publication.json",
-        "sha256": "e9a5916ba0176b0236cda1016e32b232c04abfc37ac4be490baf787879f5107c"
+        "path": "infrastructure/runtime-security/proofs/c26-nginx/publication/publication.json",
+        "sha256": "7b34ffec73061b32aaf45e8d32fd2a5db9cfacdb207d06aec071073ca5939f82"
       },
       "anonymous": {
-        "path": "infrastructure/runtime-security/proofs/c22-nginx/anonymous/anonymous-download.json",
-        "sha256": "ae3f17a2995acefab9def84350147a24183d1f2caf0c86f22efc87bc6bbf9264"
+        "path": "infrastructure/runtime-security/proofs/c26-nginx/anonymous/anonymous-download.json",
+        "sha256": "4b8f1a977ddd3858732407d7d2f4503ffaeaefa0a7716f5cae42ac63912e2828"
       }
     },
     {
@@ -148,21 +148,21 @@
     },
     {
       "component": "phpmyadmin",
-      "reference": "ghcr.io/claidd/otziv-security@sha256:49a197c95684926f380e2a78614e1260d5889ea973a3cc98911235eacb84df48",
-      "commit": "49a537984b4441f0ac9ad5e79f619018b7488912",
-      "run": "36315139382",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:e7c5c3b4761c54f4c596e7470c8c901682fe1e017787b6bc2486ffbf1d81fa9c",
+      "commit": "c81a29c1eda2ba157702560338467521cd3e484e",
+      "run": "36953263889",
       "attempt": "1",
       "manifest": {
-        "path": "infrastructure/runtime-security/reviewed-images-c22-phpmyadmin.json",
-        "sha256": "85790f0360f223c41655e515673d5bbcc518bb25adc5e8b83685516f488ab494"
+        "path": "infrastructure/runtime-security/reviewed-images-c26-phpmyadmin.json",
+        "sha256": "3e304954873864f069404ad1a3b96dfa9d7f3f323fe8b56fca79eacefb508e7d"
       },
       "publication": {
-        "path": "infrastructure/runtime-security/proofs/c22-phpmyadmin/publication/publication.json",
-        "sha256": "b9b25c42fd836d548c7c1176d7a871155bd0340ccc08911200f22725b1fa992b"
+        "path": "infrastructure/runtime-security/proofs/c26-phpmyadmin/publication/publication.json",
+        "sha256": "d91ae45fd6e3996dd29f09dbf79414ef836e158ed3993ca3b8d8d5e55309c33a"
       },
       "anonymous": {
-        "path": "infrastructure/runtime-security/proofs/c22-phpmyadmin/anonymous/anonymous-download.json",
-        "sha256": "f11afe1dfd7426f7b831ca34a695da098f19fdc05ca519fd9e9a222b8d1892da"
+        "path": "infrastructure/runtime-security/proofs/c26-phpmyadmin/anonymous/anonymous-download.json",
+        "sha256": "7efa08cd508678a761d701c21a124f5742b15b2cca79ef74bdde2cca4f92b8ab"
       }
     },
     {
@@ -283,12 +283,12 @@
         "sha256": "35a614826672fb3a57973e669b507a3c1df076c8932fec1f8225363dbe6c4e46"
       },
       "sslRefreshAcceptance": {
-        "path": "infrastructure/runtime-security/proofs/c24-keycloak/postgres-pair-acceptance.json",
-        "sha256": "915b3bdbb40cdefb1a5907867c653292e433888c30470b0f0f7532f203bf3967"
+        "path": "infrastructure/runtime-security/proofs/c26-keycloak/postgres-pair-acceptance.json",
+        "sha256": "41f1a14784e1ad45704b9b4b42a3e69eeafadb416eff93dd28089d6885664cc4"
       },
       "databaseTransition": {
-        "path": "infrastructure/runtime-security/proofs/c24-keycloak/postgres-pair-acceptance.json",
-        "sha256": "915b3bdbb40cdefb1a5907867c653292e433888c30470b0f0f7532f203bf3967"
+        "path": "infrastructure/runtime-security/proofs/c26-keycloak/postgres-pair-acceptance.json",
+        "sha256": "41f1a14784e1ad45704b9b4b42a3e69eeafadb416eff93dd28089d6885664cc4"
       }
     }
   ]

@@ -1,0 +1,32 @@
+{
+  "schema": "otziv-issuer-image-startup-v1",
+  "startedAt": "2026-10-02T02:07:30.929Z",
+  "production": false,
+  "image": "ghcr.io/claidd/otziv-security@sha256:76ad15fac3c0041798b6b2b87632bbf91ae7c171ebfa813aa1d1633b48f90ff9",
+  "checks": [
+    {
+      "name": "start_imports_and_serves_real_postgres_realm",
+      "passed": true
+    },
+    {
+      "name": "start_has_no_missing_classpath_error",
+      "passed": true
+    },
+    {
+      "name": "start-dev_imports_and_serves_real_postgres_realm",
+      "passed": true
+    },
+    {
+      "name": "start-dev_has_no_missing_classpath_error",
+      "passed": true
+    }
+  ],
+  "imageId": "sha256:76ad15fac3c0041798b6b2b87632bbf91ae7c171ebfa813aa1d1633b48f90ff9",
+  "postgresImage": {
+    "reference": "ghcr.io/claidd/otziv-security@sha256:c974c12a1107e314b1ba8cf65bd1fc5b6964645ced420c2151d336ee8a9a6534",
+    "id": "sha256:c974c12a1107e314b1ba8cf65bd1fc5b6964645ced420c2151d336ee8a9a6534"
+  },
+  "result": "PASS",
+  "cleanup": "PASS",
+  "finishedAt": "2026-10-02T02:08:31.721Z"
+}
