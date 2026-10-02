@@ -44,6 +44,9 @@ on:
           - c23-alloy
           - c24-keycloak
           - c25-certbot
+          - c26-keycloak
+          - c26-nginx
+          - c26-phpmyadmin
   pull_request:
   push:
     branches: [main]
@@ -580,7 +583,7 @@ jobs:
         run: bash ./mvnw -f ../infrastructure/keycloak/security-generation/pom.xml -B -ntp verify
       - name: Build the real issuer release image
         if: ${{ needs.changes.outputs.infrastructure == 'true' }}
-        run: docker build -t otziv-issuer-ci infrastructure/runtime-security/builds/c24-keycloak
+        run: docker build -t otziv-issuer-ci infrastructure/runtime-security/builds/c26-keycloak
       - name: Build and scan reviewed database candidates
         if: ${{ needs.changes.outputs.infrastructure == 'true' }}
         run: |

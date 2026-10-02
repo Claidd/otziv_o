@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFile, realpath } from 'node:fs/promises';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
+import { C26_POLICY } from './keycloak-runtime-dependencies.mjs';
 
 export const BASELINE_MANIFEST_SHA256 = 'd48bdb7d6d869cde5d6f1a7b089491765e3eeaf46e0b0b6bb51b7719b38d3ef2';
 const BASELINE_PATH = 'infrastructure/runtime-security/reviewed-images.json';
@@ -50,6 +51,9 @@ const RELEASE_SETS = Object.freeze({
   'c23-keycloak': { component: 'keycloak', path: 'infrastructure/runtime-security/reviewed-images-c23-keycloak.json', context: 'infrastructure/runtime-security/builds/c23-keycloak', dockerfile: 'infrastructure/runtime-security/builds/c23-keycloak/Dockerfile' },
   'c23-alloy': { component: 'alloy', path: 'infrastructure/runtime-security/reviewed-images-c23-alloy.json', context: 'infrastructure/runtime-security/builds/c23-alloy', dockerfile: 'infrastructure/runtime-security/builds/c23-alloy/Dockerfile' },
   'c24-keycloak': { component: 'keycloak', path: 'infrastructure/runtime-security/reviewed-images-c24-keycloak.json', context: 'infrastructure/runtime-security/builds/c24-keycloak', dockerfile: 'infrastructure/runtime-security/builds/c24-keycloak/Dockerfile' },
+  'c26-keycloak': { component: 'keycloak', path: 'infrastructure/runtime-security/reviewed-images-c26-keycloak.json', context: 'infrastructure/runtime-security/builds/c26-keycloak', dockerfile: 'infrastructure/runtime-security/builds/c26-keycloak/Dockerfile' },
+  'c26-nginx': { component: 'nginx', path: 'infrastructure/runtime-security/reviewed-images-c26-nginx.json', context: 'infrastructure/runtime-security/builds/c26-nginx', dockerfile: 'infrastructure/runtime-security/builds/c26-nginx/Dockerfile' },
+  'c26-phpmyadmin': { component: 'phpmyadmin', path: 'infrastructure/runtime-security/reviewed-images-c26-phpmyadmin.json', context: 'infrastructure/runtime-security/builds/c26-phpmyadmin', dockerfile: 'infrastructure/runtime-security/builds/c26-phpmyadmin/Dockerfile' },
 });
 // These two local-stack dependencies were absent from the immutable C7 manifest.
 // Keep their original pins and service coverage explicit when adding publication.
@@ -102,6 +106,7 @@ export function validateReviewedImageSet(name, manifestBytes, baselineBytes = ma
   assert.equal(image.prepare, undefined, 'reviewed_image_set_preparation_forbidden');
   assert.equal(image.sourceBeforeRef, original.sourceBeforeRef, 'reviewed_image_set_historical_source_changed');
   assert.deepEqual(image.defaultReferencesBefore, original.defaultReferencesBefore, 'reviewed_image_set_service_coverage_changed');
+  if (name === 'c26-keycloak') assert.equal(image.knownRuntimeDependencyPolicy, C26_POLICY, 'reviewed_image_set_dependency_policy');
   return manifest;
 }
 

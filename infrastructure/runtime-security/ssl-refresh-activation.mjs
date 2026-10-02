@@ -144,7 +144,10 @@ export async function validateSslRefreshTransition(entry,image,read){
     acceptancePath:entry.sslRefreshAcceptance.path,proofSha256:entry.sslRefreshAcceptance.sha256,ordinaryDeploymentUpgradeAuthorized:false};
 }
 export async function coupleSslRefresh(readiness,entry,read){
-  const value=await acceptance(entry,read);await validatePairRehearsal(value,entry,read);
+  const value=await acceptance(entry,read);
+  assert.equal(value.pair.keycloak.reference,entry.reference,'ssl_refresh_coupling_candidate_reference');
+  assert.equal(value.pair.keycloak.imageConfigId,value.imageConfigId,'ssl_refresh_coupling_candidate_config');
+  await validatePairRehearsal(value,entry,read);
   assert.deepEqual(entry.migrationAcceptance,entry.sslRefreshAcceptance,'ssl_refresh_issuer_acceptance_binding');
   assert.equal(readiness.postgresReference,value.pair.postgres.reference,'ssl_refresh_coupling_postgres');assert.equal(readiness.postgresConfigId,value.pair.postgres.imageConfigId,'ssl_refresh_coupling_postgres_config');
   assert.equal(readiness.requiredKeycloakReference,entry.reference,'ssl_refresh_coupling_issuer');assert.equal(readiness.requiredKeycloakConfigId,value.imageConfigId,'ssl_refresh_coupling_issuer_config');
