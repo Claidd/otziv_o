@@ -4,8 +4,11 @@
 
 The repository is the recoverable source-of-truth for application code,
 infrastructure definitions, database migrations, build wrappers and dependency
-lockfiles. It also deliberately retains the currently unique signed APK files in
-`mobile/builds/` and generated notification media in `generated-assets/`.
+lockfiles. Historical signed APKs and generated notification media have a
+separate encrypted, version-bound archive in the owned backup destination.
+Git retains the importer, source JSON manifests and small recovery records in
+`infrastructure/artifact-recovery/`; binary payloads are restored when needed.
+See [retained artifact recovery](RETAINED_ARTIFACT_RECOVERY.md).
 
 A clean clone can therefore rebuild the backend, frontend, mobile web bundle,
 WhatsApp gateway and external-review worker without copying `node_modules`,
@@ -42,7 +45,7 @@ git clone <repository-url> otziv-recovery-check
 cd otziv-recovery-check
 git fsck --full
 git status --short
-git ls-files mobile/builds generated-assets
+python -B infrastructure/scripts/prod/retained_artifacts.py verify-records --directory infrastructure/artifact-recovery
 ```
 
 Restore secrets from the approved encrypted store, install Docker/Java/Node and
@@ -62,16 +65,18 @@ For releases containing device-token migration V210, also follow
 `docs/DEVICE_TOKEN_V210_ROLLOUT.md`; an application-only rollback to a pre-V210
 binary is not compatible with the migrated database.
 
-## Rules for removing retained artifacts later
+## Recovery artifacts removed from the current tree
 
-Do not untrack `mobile/builds/` or `generated-assets/` merely to reduce Git size.
-They may be removed only after all of the following are true:
+The archive migration preserves all 202 original files (397,805,360 bytes),
+including the three source/manifest files that remain in Git. The following
+conditions govern this and any subsequent recovery-artifact migration:
 
 1. Every retained artifact has a verified copy in owned release/object storage.
 2. A second machine can download and checksum that copy without the original
    workstation.
 3. Production deployment no longer reads the checkout copy.
-4. A clean-clone and rollback drill succeeds.
+4. A clean checkout can run its tests without backup credentials and recover
+   historical bytes to a separate directory when they are needed for rollback.
 5. The removal is made in a dedicated, reviewed change.
 
 For an additional repository copy, create a Git bundle on encrypted external

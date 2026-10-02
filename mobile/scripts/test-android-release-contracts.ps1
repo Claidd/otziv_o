@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [string]$ReleaseApkPath = "",
-    [string]$LegacyDebugApkPath = ""
+    [string]$LegacyDebugApkPath = "",
+    [string]$ExpectedSignerSha256 = "A15A162AFE1F808F9586DD3F129F9E61F4BE49CCFF708CA99C6A0714004251D5"
 )
 
 Set-StrictMode -Version Latest
@@ -9,16 +10,21 @@ $ErrorActionPreference = "Stop"
 
 $mobileDirectory = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $verifier = Join-Path $PSScriptRoot "verify-android-release.ps1"
-$releaseApk = if ([string]::IsNullOrWhiteSpace($ReleaseApkPath)) {
-    Join-Path $mobileDirectory "builds\otziv-prod-release-v1.0.62-code62.apk"
-} else {
-    $ReleaseApkPath
+$fixtureRoot = $null
+try {
+if ([string]::IsNullOrWhiteSpace($ReleaseApkPath) -and [string]::IsNullOrWhiteSpace($LegacyDebugApkPath)) {
+    $fixtureRoot = Join-Path ([IO.Path]::GetTempPath()) ('otziv-apk-fixture-' + [guid]::NewGuid().ToString('N'))
+    $fixtureOutput = @(& python -B (Join-Path $PSScriptRoot 'create-release-verifier-fixtures.py') --out $fixtureRoot)
+    if ($LASTEXITCODE -ne 0) { throw 'Failed to generate Android verifier fixtures.' }
+    $fixtures = ($fixtureOutput -join '') | ConvertFrom-Json
+    $ReleaseApkPath = $fixtures.releaseApk
+    $LegacyDebugApkPath = $fixtures.debugApk
+    $ExpectedSignerSha256 = $fixtures.signerSha256
+} elseif ([string]::IsNullOrWhiteSpace($ReleaseApkPath) -or [string]::IsNullOrWhiteSpace($LegacyDebugApkPath)) {
+    throw 'Supply both release and debuggable APK paths, or omit both to generate isolated test fixtures.'
 }
-$legacyDebugApk = if ([string]::IsNullOrWhiteSpace($LegacyDebugApkPath)) {
-    Join-Path $mobileDirectory "builds\otziv-prod-debug-v1.0.53-code53.apk"
-} else {
-    $LegacyDebugApkPath
-}
+$releaseApk = $ReleaseApkPath
+$legacyDebugApk = $LegacyDebugApkPath
 $verificationTemporaryRoot = [System.IO.Directory]::GetParent(
     (Join-Path ([System.IO.Path]::GetTempPath()) 'otziv-temp-path-probe')
 ).FullName
@@ -35,6 +41,7 @@ function Assert-VerifierRejects {
 
     $rejected = $false
     try {
+        if (-not $Arguments.ContainsKey('ExpectedSignerSha256')) { $Arguments.ExpectedSignerSha256 = $ExpectedSignerSha256 }
         & $verifier @Arguments -Quiet | Out-Null
     } catch {
         $rejected = $true
@@ -49,6 +56,7 @@ $verified = & $verifier `
         -ApkPath $releaseApk `
         -ExpectedVersionCode 62 `
         -ExpectedVersionName "1.0.62" `
+        -ExpectedSignerSha256 $ExpectedSignerSha256 `
         -PassThru `
         -Quiet
 if ($verified.PackageName -cne "com.hunt.otziv" -or
@@ -71,7 +79,8 @@ try {
             -ApkPath $unicodeReleaseApk `
             -ExpectedVersionCode 62 `
             -ExpectedVersionName "1.0.62" `
-            -PassThru `
+            -ExpectedSignerSha256 $ExpectedSignerSha256 `
+        -PassThru `
             -Quiet
     $unicodeHashAfterVerification = (Get-FileHash -LiteralPath $unicodeReleaseApk -Algorithm SHA256).Hash.ToUpperInvariant()
     if ($unicodeVerified.ArtifactSha256 -cne $unicodeSourceHash -or
@@ -127,7 +136,8 @@ Assert-VerifierRejects -Name "wrong versionName" -Arguments @{
     ExpectedVersionName = "1.0.63"
 }
 
-if (Test-Path -LiteralPath $legacyDebugApk -PathType Leaf) {
+if (-not (Test-Path -LiteralPath $legacyDebugApk -PathType Leaf)) { throw "The debuggable APK negative fixture is mandatory." }
+& {
     Assert-VerifierRejects -Name "debuggable APK" -Arguments @{
         ApkPath = $legacyDebugApk
         ExpectedVersionCode = 53
@@ -144,4 +154,31 @@ if ($newStageDirectories.Count -ne 0) {
 }
 Write-Host "PASS: verifier cleans ASCII staging after successful and rejected APK checks"
 
+
+if ($fixtureRoot) {
+    Assert-VerifierRejects -Name 'ephemeral fixture rejected by the production signer allowlist' -Arguments @{
+        ApkPath = $releaseApk
+        ExpectedVersionCode = 62
+        ExpectedVersionName = '1.0.62'
+        ExpectedSignerSha256 = 'A15A162AFE1F808F9586DD3F129F9E61F4BE49CCFF708CA99C6A0714004251D5'
+    }
+}
 Write-Host "Android release verifier contract checks passed."
+} finally {
+    if ($fixtureRoot -and (Test-Path -LiteralPath $fixtureRoot)) {
+        $resolvedFixture = [IO.Path]::GetFullPath($fixtureRoot)
+        $expectedParent = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd([IO.Path]::DirectorySeparatorChar)
+        $item = Get-Item -LiteralPath $resolvedFixture -Force
+        if ($item.Parent.FullName -cne $expectedParent -or $item.Name -notmatch '^otziv-apk-fixture-[0-9a-f]{32}$' -or
+                ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw 'Refusing to clean an unexpected APK fixture directory.'
+        }
+        foreach ($child in Get-ChildItem -LiteralPath $resolvedFixture -Force) {
+            if ($child.PSIsContainer -or ($child.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+                throw 'Unexpected fixture subdirectory/link; refusing cleanup.'
+            }
+            Remove-Item -LiteralPath $child.FullName -Force
+        }
+        Remove-Item -LiteralPath $resolvedFixture -Force
+    }
+}

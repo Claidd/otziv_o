@@ -1070,7 +1070,7 @@ $deployBundlePaths = @(
     "infrastructure\tempo",
     "infrastructure\alloy",
     "infrastructure\docker-observer",
-    # Scan reports/source proofs stay with the release evidence in Git. Only the
+    # Scan reports/source proofs stay in the hash-pinned evidence archive. Only the
     # runtime seccomp policy is mounted by production containers.
     "infrastructure\runtime-security\chromium-seccomp.json",
     "infrastructure\monitoring",

@@ -257,6 +257,10 @@ jobs:
           . ./infrastructure/scripts/security/resolve-ci-base-revision.ps1
           $baseRevision = Resolve-CiBaseRevision -BaseRevision $env:BASE_REVISION -DefaultBranch $env:DEFAULT_BRANCH
           ./infrastructure/scripts/security/check-repository-hygiene.ps1 -BaseRevision $baseRevision
+      - name: Restore hash-pinned runtime security evidence
+        run: python3 -B infrastructure/runtime-security/evidence_archive.py hydrate --download
+      - name: Verify evidence archive integrity and extraction guards
+        run: python3 -m unittest discover -s infrastructure/runtime-security -p "test_evidence_archive.py" -v
       - name: Enforce infrastructure security contracts
         shell: pwsh
         run: ./infrastructure/scripts/security/check-infrastructure-contract.ps1
@@ -266,8 +270,13 @@ jobs:
       - name: Exercise preparation before image transfer and prepared archive integrity
         shell: pwsh
         run: ./infrastructure/scripts/security/test-early-deploy-preparation.ps1
+      - name: Verify committed external evidence in coordinated deploy bundles
+        shell: pwsh
+        run: ./infrastructure/scripts/security/test-external-evidence-deploy-bundle.ps1
       - name: Exercise database image continuity and startup guards
-        run: python3 -m unittest discover -s infrastructure/scripts/prod -p "test_*.py" -v
+        run: |
+          python3 -m pip install --require-hashes -r infrastructure/scripts/prod/retained-artifacts-requirements.txt
+          python3 -m unittest discover -s infrastructure/scripts/prod -p "test_*.py" -v
       - name: Reject unsafe local restore targets before any Docker mutation
         shell: pwsh
         run: ./infrastructure/scripts/local/test-restore-contract.ps1
@@ -935,6 +944,11 @@ jobs:
           sdk_manager="$sdk_root/cmdline-tools/latest/bin/sdkmanager"
           test -x "$sdk_manager"
           "$sdk_manager" --sdk_root="$sdk_root" "platforms;android-36" "build-tools;35.0.0"
+      - name: Verify Android release guards with generated signed fixtures
+        if: ${{ needs.changes.outputs.android == 'true' }}
+        shell: pwsh
+        working-directory: ${{ github.workspace }}
+        run: ./mobile/scripts/test-android-release-contracts.ps1
       - name: Install and freshly audit Android JavaScript dependencies
         if: needs.changes.outputs.android == 'true'
         working-directory: mobile
@@ -1506,6 +1520,9 @@ jobs:
         with:
           node-version: "24.18.0"
           package-manager-cache: false
+      - name: Restore hash-pinned runtime security evidence
+        if: ${{ needs.changes.outputs[format('monitoring_{0}', matrix.component)] == 'true' }}
+        run: python3 -B infrastructure/runtime-security/evidence_archive.py hydrate --download
       - name: Validate mandatory immutable release references and overlay contracts
         if: ${{ needs.changes.outputs[format('monitoring_{0}', matrix.component)] == 'true' }}
         run: node --test infrastructure/runtime-security/monitoring-release.test.mjs

@@ -1,0 +1,24 @@
+{
+  "schema": "otziv-retained-artifacts-v1",
+  "objectKey": "backup/otziv-prod/retained-artifacts/v1/901914788a85fcc505a6f6c82a173c26f94921c04246bb20628e9985cb9c4e03/b525841376a92bc9635b4c277695d12a1caf3f28e6d46fcc9d62494849b53369.tar.otzivdb2",
+  "versionId": "1790926370518292348",
+  "ciphertextSha256": "b525841376a92bc9635b4c277695d12a1caf3f28e6d46fcc9d62494849b53369",
+  "ciphertextBytes": 397968908,
+  "destinationSha256": "d247f0f157358499591241df2cfb2bf6df51a047e002f905bacf21a160727428",
+  "clientSideEncryption": "OTZIVDB2_AES_256_GCM",
+  "retention": {
+    "mode": "GOVERNANCE",
+    "retainUntil": "2026-12-31T07:32:48Z",
+    "requestedDays": 90
+  },
+  "aclVerifiedPrivate": true,
+  "lifecycle": "NO_CONFIGURATION",
+  "anonymousDownloadDenied": true,
+  "versionBoundDownloadVerified": true,
+  "serverSideEncryption": "NONE_REPORTED",
+  "manifestSha256": "db2b320d53f4bd55b452de0c7b82aaf89f32ec57ee419dbcb91ab329cfa26d62",
+  "bundleSha256": "901914788a85fcc505a6f6c82a173c26f94921c04246bb20628e9985cb9c4e03",
+  "authenticatedEnvelopeVerified": true,
+  "allFilesVerified": 202,
+  "verifiedAtUtc": "2026-10-02T08:11:20.096592+00:00"
+}
