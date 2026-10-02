@@ -137,7 +137,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> {
                     auth.requestMatchers("/css/**", "/font/**", "/images/**", "/js/**", "/webjars/**", "/static/**").permitAll();
                     auth.requestMatchers("/auth", "/login", "/register").permitAll();
-                    auth.requestMatchers("/kvesty", "/lasertag", "/nerf", "/api/index", "/favicon.ico", "/error").permitAll();
+                    auth.requestMatchers("/api/index", "/favicon.ico", "/error").permitAll();
                     configureApiAuthorization(auth);
                     configureLegacyAuthorization(auth);
                     auth.anyRequest().authenticated();

@@ -113,3 +113,8 @@ __pycache__/
 
 !infrastructure/runtime-security/adjudications/alloy-daemon/upstream-govulncheck.yaml
 !infrastructure/runtime-security/adjudications/alloy-daemon-c15/upstream-govulncheck.yaml
+
+# Editor/merge backups and accidental local diagnostic files.
+*.orig
+/.codex-task-apply-probe.tmp
+/'2026-08-21
