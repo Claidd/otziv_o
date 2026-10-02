@@ -8,7 +8,7 @@ explicit `pluginManagement` policy in each POM pins the effective build tools;
 plugins. The policy is an inventory and compatibility guard, not a vulnerability
 exception or a claim that every upstream artifact is currently clean.
 
-Build with JDK 25 and Maven 3.9.15 before building the backend:
+Build with JDK 26 and Maven 3.9.15 before building the backend:
 
 ```sh
 mvn -B -ntp -f backend/build-support/pom.xml install

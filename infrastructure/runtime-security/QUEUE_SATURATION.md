@@ -6,7 +6,7 @@
 proxies на отдельном MySQL. Backend source, настройки приложения и рабочие базы
 не меняются. Класс `QueueSaturationBenchmark` находится вне Maven test sources.
 
-Нужны локальный Docker, JDK 25, Node и dependency classpath из XML завершённого
+Нужны локальный Docker, JDK 26, Node и dependency classpath из XML завершённого
 Surefire test. Например, такой XML создаёт существующий `LeadCommandCodecTest`;
 подготовку зависимостей следует выполнять в отдельном Maven snapshot. Runner
 использует зависимости из classpath, но самостоятельно компилирует два актуальных
@@ -17,7 +17,7 @@ repository source файла в новый каталог, который сто
 ```powershell
 node infrastructure/runtime-security/queue-saturation.mjs `
   --confirm-local-synthetic `
-  --java-home "E:/path/to/jdk-25" `
+  --java-home "E:/path/to/jdk-26" `
   --classpath-report "E:/snapshot/backend/target/surefire-reports/TEST-com.hunt.otziv.l_lead.service.LeadCommandCodecTest.xml" `
   --output ".codex-tmp/queue-saturation-new-run"
 ```

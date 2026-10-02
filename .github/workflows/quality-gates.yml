@@ -368,7 +368,7 @@ jobs:
         id: java
         with:
           distribution: temurin
-          java-version: "25"
+          java-version: "26"
           show-download-progress: true
           cache: maven
           cache-jdk: false
@@ -1370,7 +1370,7 @@ jobs:
             --entrypoint sh otziv-backend-ci -ec '
               test "$(id -u)" -ne 0
               test -s /app/app.jar
-              java -XshowSettings:properties -version 2>&1 | grep "java.specification.version = 25"
+              java -XshowSettings:properties -version 2>&1 | grep "java.specification.version = 26"
               mysql --version
               test -s /etc/ssl/certs/ca-certificates.crt
               for alias in russian-trusted-root-ca russian-trusted-sub-ca russian-trusted-sub-ca-2024; do

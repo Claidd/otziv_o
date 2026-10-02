@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM maven:3.9.15-eclipse-temurin-25-alpine@sha256:dc63612f353a8500d46ece1a86e4a736d65836328c57d13eed8dd1ef46b8dad7 AS build
+FROM maven:3.9.15-eclipse-temurin-26-alpine@sha256:9b0bc1420b93f3eafb7401dc3030eac01e773d8d709686d3c4ac351fcf6f9f42 AS build
 WORKDIR /app
 COPY build-support ./build-support
 COPY pom.xml .
@@ -12,7 +12,7 @@ RUN --mount=type=cache,target=/root/.m2,sharing=locked \
     mvn -B -ntp -f build-support/pom.xml install \
     && mvn -B -ntp clean package -DskipTests
 
-FROM eclipse-temurin:25-jre-jammy@sha256:6a11121e5419a1eb4def2bba2f74a4c1b560395b9c26b52e37485d2bf58f7958
+FROM eclipse-temurin:26-jre-jammy@sha256:3e83fe06950ab45b8fee3c8fccdbb3dc0cc203c4518babdd9e8957c31284c9d5
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl default-mysql-client libssl3 openssl \
     && rm -rf /var/lib/apt/lists/*

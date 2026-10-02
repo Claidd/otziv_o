@@ -2,7 +2,7 @@
 
 The comparative harness is `FinancialScenarioBenchmark.java`; its SHA256 is `50f9009d186b3ed062531d14bf3a348b099549fb4f91420dc3c6f1aae00e3984`. Do not change it between before/after measurements. Select the two financial before scenarios from `performance-before-finance.json` and the manager scenario from `performance-before-manager.json`; each file contains all three scenarios, but their source slices have different purposes.
 
-Manual comparative command (Java25 and Docker; disposable synthetic MySQL only):
+Manual comparative command (Java26 and Docker; disposable synthetic MySQL only):
 
 ```text
 ./mvnw.cmd -B -ntp -Dtest=FinancialScenarioBenchmark -Dotziv.benchmark.source=<precise-source-label> test
