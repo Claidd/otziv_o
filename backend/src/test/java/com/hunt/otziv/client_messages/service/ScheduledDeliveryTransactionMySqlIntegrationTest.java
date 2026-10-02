@@ -256,7 +256,7 @@ class ScheduledDeliveryTransactionMySqlIntegrationTest {
         assertThat(settingsB.getString("client.messages.last-sent-at.ANY", null)).isEqualTo(oldSentAt.toString());
         ReflectionTestUtils.setField(service, "appSettingService", settingsA);
         var clock = java.time.Clock.fixed(java.time.Instant.parse("2026-09-08T04:00:00Z"), java.time.ZoneId.systemDefault());
-        ReflectionTestUtils.setField(service, "clock", clock);
+        ReflectionTestUtils.setField(service, "messageTime", new ClientMessageTime(clock));
         var prepared = prepare();
         when(sender.deliverWithOperationId(any(), nullable(String.class), nullable(String.class), any(), any(), any()))
                 .thenReturn(ClientMessageSendResult.sent("Telegram", "42"));
@@ -267,7 +267,7 @@ class ScheduledDeliveryTransactionMySqlIntegrationTest {
         var otherInstance = newService();
         ReflectionTestUtils.setField(otherInstance, "appSettingService", settingsB);
         ReflectionTestUtils.setField(otherInstance, "slotPlanner", new ClientMessageSlotPlanner());
-        ReflectionTestUtils.setField(otherInstance, "clock", clock);
+        ReflectionTestUtils.setField(otherInstance, "messageTime", new ClientMessageTime(clock));
 
         boolean admitted = transactions.callInPreparationTransaction(() -> {
             var next = newState("next-gap-candidate");

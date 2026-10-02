@@ -62,6 +62,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import static org.mockito.Mockito.verifyNoInteractions;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -142,6 +143,9 @@ class ScheduledClientMessageServiceTest {
     @Mock
     private SchedulerLeaseService schedulerLeaseService;
 
+    @Spy
+    private ClientMessageTime messageTime = new ClientMessageTime();
+
     @InjectMocks
     private ScheduledClientMessageService service;
 
@@ -210,13 +214,28 @@ class ScheduledClientMessageServiceTest {
             if (arg instanceof Company company) snapshotCompanies.put(company.getId(), company);
             if (arg instanceof LocalDateTime time) now = time;
         }
-        if (now != null) ReflectionTestUtils.setField(service, "clock", java.time.Clock.fixed(
-                now.atZone(java.time.ZoneId.systemDefault()).toInstant(), java.time.ZoneId.systemDefault()));
+        if (now != null) ReflectionTestUtils.setField(service, "messageTime", new ClientMessageTime(java.time.Clock.fixed(
+                now.atZone(java.time.ZoneId.systemDefault()).toInstant(), java.time.ZoneId.systemDefault())));
         T value = ReflectionTestUtils.invokeMethod(service, method, args);
         if (value instanceof ScheduledClientMessageService.PreparedScheduledDelivery prepared) {
             service.dispatchScheduledDelivery(prepared, now);
         }
         return value;
+    }
+
+    @Test
+    void effectiveNextAttemptUsesInjectedClockAndIrkutskWindowsAcrossMonthBoundary() {
+        ReflectionTestUtils.setField(service, "messageTime", new ClientMessageTime(java.time.Clock.fixed(
+                java.time.Instant.parse("2026-08-31T16:30:00Z"), java.time.ZoneOffset.UTC)));
+        ReflectionTestUtils.setField(service, "slotPlanner", new ClientMessageSlotPlanner());
+        when(appSettingService.getString(AppSettingService.CLIENT_MESSAGES_BUSINESS_WINDOWS,
+                ClientMessageSlotPlanner.DEFAULT_WINDOWS_SPEC)).thenReturn("09:00-10:00,15:00-16:00");
+
+        assertEquals(LocalDateTime.parse("2026-09-01T01:00:00"),
+                service.effectiveNextAttemptAt(LocalDateTime.parse("2026-08-31T15:00:00")));
+        assertEquals(LocalDateTime.parse("2026-09-01T07:30:00"),
+                service.effectiveNextAttemptAt(LocalDateTime.parse("2026-09-01T07:30:00")));
+        assertNull(service.effectiveNextAttemptAt(null));
     }
 
     @Test
