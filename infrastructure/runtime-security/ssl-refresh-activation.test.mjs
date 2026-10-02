@@ -31,3 +31,27 @@ for(const [name,mutate,error] of [
  const modified=async p=>p===entry.sslRefreshAcceptance.path?accepted:p===value.replayPath?bytes:read(p);
  await assert.rejects(validateSslRefreshTransition(entry,image,modified),error);
 });
+
+for(const [name,mutate,error] of [
+ ['new issuer digest with the retained C24 replay', (entry,value)=>{
+   entry.reference='ghcr.io/claidd/otziv-security@sha256:'+'a'.repeat(64);
+   value.reference=entry.reference;
+ }, /ssl_refresh_coupling_candidate_reference/],
+ ['new issuer config with the retained C24 replay', (entry,value)=>{
+   value.imageConfigId='sha256:'+'b'.repeat(64);
+ }, /ssl_refresh_coupling_candidate_config/]
+])test('recomputed acceptance hashes cannot claim '+name,async()=>{
+ const entry=JSON.parse(await read('infrastructure/runtime-security/c26-parent-keycloak.json'));
+ const value=JSON.parse(await read(entry.sslRefreshAcceptance.path));
+ const readiness=()=>({postgresReference:value.pair.postgres.reference,
+   postgresConfigId:value.pair.postgres.imageConfigId,
+   requiredKeycloakReference:entry.reference,requiredKeycloakConfigId:value.imageConfigId});
+ // The unchanged C24 capture, replay, issuer and startup proofs remain valid.
+ await coupleSslRefresh(readiness(),entry,read);
+ mutate(entry,value);
+ const accepted=Buffer.from(JSON.stringify(value));
+ entry.sslRefreshAcceptance={...entry.sslRefreshAcceptance,sha256:hash(accepted)};
+ entry.migrationAcceptance=entry.sslRefreshAcceptance;
+ const modified=async path=>path===entry.sslRefreshAcceptance.path?accepted:read(path);
+ await assert.rejects(coupleSslRefresh(readiness(),entry,modified),error);
+});

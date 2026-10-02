@@ -1,0 +1,24 @@
+{
+  "schema": "otziv-c26-http-smoke-v1",
+  "result": "PASS",
+  "component": "nginx",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:847ffa6cc2bcbebf94763b1b2c9e025b24e374b46a815fa4ed918901e6f49578",
+  "inspectedImageId": "sha256:847ffa6cc2bcbebf94763b1b2c9e025b24e374b46a815fa4ed918901e6f49578",
+  "productionAccess": false,
+  "localCandidateOnly": false,
+  "network": "none",
+  "publishedPorts": false,
+  "executedScriptSha256": "aa3e5eda6b9578fd9b1284a6129073c9d48b7a2b546a4f3a0d418f3b7d209520",
+  "publicationSha256": "7b34ffec73061b32aaf45e8d32fd2a5db9cfacdb207d06aec071073ca5939f82",
+  "imageConfigId": "sha256:df0afeef78982f84f3e0fed2d42c6139e40608b29bbe70e451057273e39bfff3",
+  "commit": "c81a29c1eda2ba157702560338467521cd3e484e",
+  "run": "36953242831",
+  "attempt": "1",
+  "http": {
+    "status": 200,
+    "regexNamedCapture": true,
+    "bodySha256": "8565d29a743d25a02a7fcd21141f077eafa79c041a1f308204032ec0d502c5a6"
+  },
+  "pcre2Package": "pcre2-10.49-r0",
+  "ownedContainersRemaining": 0
+}

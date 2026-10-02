@@ -46,7 +46,7 @@ export function validatePublication(publication, identity, image, manifestSha256
   assert.equal(publication.builder, BUILDKIT, 'anonymous_publication_builder_mismatch');
   assert.equal(publication.sbomGenerator, SBOM_GENERATOR, 'anonymous_publication_scanner_mismatch');
   assert.match(publication.imageId || '', DIGEST, 'anonymous_publication_image_id_missing');
-  if (requiresKeycloakDependencyProof(image)) validateKeycloakDependencyReceipt(publication.knownRuntimeDependencies, publication.imageId);
+  if (requiresKeycloakDependencyProof(image)) validateKeycloakDependencyReceipt(publication.knownRuntimeDependencies, publication.imageId, image.knownRuntimeDependencyPolicy);
   assert.equal(publication.tag, `${REPOSITORY}:${image.component}-${identity.commit}-${identity.run}-${identity.attempt}`, 'anonymous_publication_tag_identity_mismatch');
   assert.ok(typeof publication.reference === 'string' && publication.reference.startsWith(REPOSITORY + '@'), 'anonymous_publication_registry_scope');
   const digest = publication.reference.slice(REPOSITORY.length + 1);
@@ -83,7 +83,7 @@ export async function verifyAnonymousDownload({ publicationBytes, identity, imag
     const publication = JSON.parse(Buffer.from(publicationBytes).toString('utf8'));
     const digest = validatePublication(publication, identity, image, manifestSha256, manifestSet);
     if (requiresKeycloakDependencyProof(image)) {
-      const checked = checkKeycloakRuntimeDependencies(await readPublicationArtifact('vulnerabilities.json'), publication.imageId);
+      const checked = checkKeycloakRuntimeDependencies(await readPublicationArtifact('vulnerabilities.json'), publication.imageId, image.knownRuntimeDependencyPolicy);
       assert.deepEqual(checked, publication.knownRuntimeDependencies, 'anonymous_known_dependencies_changed');
     }
     proof.reference = publication.reference;

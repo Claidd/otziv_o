@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 
 const SCHEMA = 'otziv-keycloak-runtime-dependencies-v1';
 const C24_POLICY = 'keycloak-26.7.3-databind-2.21.7-other-jackson-2.21.6-parsson-1.1.9';
+export const C26_POLICY = 'keycloak-26.7.3-core-databind-2.21.7-other-jackson-2.21.6-parsson-1.1.9';
 const POLICY = 'keycloak-26.7.3-jackson-2.21.6-parsson-1.1.9';
 const DIGEST = /^sha256:[a-f0-9]{64}$/;
 const jackson = name => /^com\.fasterxml\.jackson[^:]*:/.test(name);
@@ -18,7 +19,8 @@ function validatePackages(packages, policy = POLICY) {
     assert.ok(known(item.name), 'keycloak_unknown_dependency_evidence');
     const [group, artifact] = item.name.split(':');
     const expected = artifact === 'jackson-annotations' ? '2.21'
-      : artifact === 'jackson-databind' && policy === C24_POLICY ? '2.21.7'
+      : artifact === 'jackson-databind' && [C24_POLICY, C26_POLICY].includes(policy) ? '2.21.7'
+      : artifact === 'jackson-core' && policy === C26_POLICY ? '2.21.7'
       : jackson(item.name) ? '2.21.6' : '1.1.9';
     assert.equal(item.version, expected, 'keycloak_unreviewed_runtime_dependency_version');
     assert.equal(item.purl, `pkg:maven/${group}/${artifact}@${item.version}`, 'keycloak_dependency_identity_mismatch');
@@ -28,11 +30,13 @@ function validatePackages(packages, policy = POLICY) {
   for (const name of ['com.fasterxml.jackson.core:jackson-databind', 'org.eclipse.parsson:parsson']) {
     assert.ok(packages.some(item => item.name === name), 'keycloak_required_dependency_missing');
   }
+  if (policy === C26_POLICY) assert.ok(packages.some(item => item.name === 'com.fasterxml.jackson.core:jackson-core'), 'keycloak_required_dependency_missing');
 }
 
-export function validateKeycloakDependencyReceipt(receipt, imageId) {
+export function validateKeycloakDependencyReceipt(receipt, imageId, expectedPolicy) {
   assert.equal(receipt?.schema, SCHEMA, 'keycloak_dependency_receipt_missing');
-  assert.ok([POLICY,C24_POLICY].includes(receipt.policy), 'keycloak_dependency_policy_mismatch');
+  assert.ok([POLICY,C24_POLICY,C26_POLICY].includes(receipt.policy), 'keycloak_dependency_policy_mismatch');
+  if (expectedPolicy !== undefined) assert.equal(receipt.policy, expectedPolicy, 'keycloak_dependency_policy_mismatch');
   assert.equal(receipt.result, 'PASS', 'keycloak_dependency_policy_not_passed');
   assert.match(imageId || '', DIGEST, 'keycloak_dependency_image_id_missing');
   assert.equal(receipt.imageId, imageId, 'keycloak_dependency_image_mismatch');
@@ -43,7 +47,7 @@ export function validateKeycloakDependencyReceipt(receipt, imageId) {
 // This checks every package reported by the pinned scanner independently of its
 // CVE database. It does not count physical copies: Trivy can deduplicate equal
 // package/version pairs. The Docker recipe must also prove the actual CLI binary.
-export function checkKeycloakRuntimeDependencies(rawBytes, imageId) {
+export function checkKeycloakRuntimeDependencies(rawBytes, imageId, expectedPolicy) {
   const report = JSON.parse(Buffer.from(rawBytes).toString('utf8'));
   assert.match(imageId || '', DIGEST, 'keycloak_dependency_image_id_missing');
   assert.equal(report.ArtifactType, 'container_image', 'keycloak_dependency_scan_type');
@@ -60,7 +64,9 @@ export function checkKeycloakRuntimeDependencies(rawBytes, imageId) {
       packages.push({ name: item.Name, version: item.Version, purl, path: item.FilePath });
     }
   }
-  const policy=packages.some(x=>x.name==='com.fasterxml.jackson.core:jackson-databind'&&x.version==='2.21.7')?C24_POLICY:POLICY;
+  const policy=packages.some(x=>x.name==='com.fasterxml.jackson.core:jackson-core'&&x.version==='2.21.7')?C26_POLICY:
+    packages.some(x=>x.name==='com.fasterxml.jackson.core:jackson-databind'&&x.version==='2.21.7')?C24_POLICY:POLICY;
+  if (expectedPolicy !== undefined) assert.equal(policy, expectedPolicy, 'keycloak_dependency_policy_mismatch');
   validatePackages(packages,policy);
   packages.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b), 'en'));
   return { schema: SCHEMA, policy, result: 'PASS', imageId,

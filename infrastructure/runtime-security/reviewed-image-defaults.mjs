@@ -22,6 +22,7 @@ import {validateKeycloakC19Acceptance} from './keycloak-c19-acceptance.mjs';
 import {validateKeycloakC22Acceptance,coupleKeycloakC22} from './keycloak-c22-acceptance.mjs';
 import {validateSslRefreshActivation,validateSslRefreshTransition,coupleSslRefresh} from './ssl-refresh-activation.mjs';
 import {validateJacksonRefreshActivation} from './jackson-refresh-activation.mjs';
+import {validateJacksonCoreRefreshActivation} from './jackson-core-refresh-activation.mjs';
 
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 const DATABASE_HOLD = new Set(['mysql', 'postgres']);
@@ -161,6 +162,7 @@ export async function validateActivation(image, entry, manifestBytes, read) {
     await validateSslRefreshActivation(publication.value, entry, read, validateActivation);
   }
   if(selected.manifestSet==='c24-keycloak')await validateJacksonRefreshActivation(publication.value,entry,read,validateActivation);
+  if(selected.manifestSet==='c26-keycloak')await validateJacksonCoreRefreshActivation(publication.value,entry,read,validateActivation);
   assert.equal(entry.reference, publication.value.reference, 'activation_registered_reference_mismatch');
   assert.equal(publication.value.security.effectiveBlockingFixedHighOrCritical, 0, 'activation_security_severity_mismatch');
   if (publication.value.security.unresolvedRiskReview === 'NONE') {
@@ -232,7 +234,7 @@ export async function validateReviewedDefaults(rows, manifestBytes, activations,
   }
   if (databasePreparations.has('postgres')) {
     const issuer = registered.get('keycloak');
-    const coupled = await (['infrastructure/runtime-security/reviewed-images-c23-keycloak.json','infrastructure/runtime-security/reviewed-images-c24-keycloak.json'].includes(issuer?.manifest?.path)
+    const coupled = await (['infrastructure/runtime-security/reviewed-images-c23-keycloak.json','infrastructure/runtime-security/reviewed-images-c24-keycloak.json','infrastructure/runtime-security/reviewed-images-c26-keycloak.json'].includes(issuer?.manifest?.path)
       ? coupleSslRefresh(databasePreparations.get('postgres'), issuer, read)
       : coupleKeycloakC22(databasePreparations.get('postgres'), issuer, read));
     assertPostgresKeycloakCoupling(coupled, registered.get('keycloak'), rows,

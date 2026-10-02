@@ -174,7 +174,7 @@ async function publish(component, outputArgument) {
     record.security = await scan('image', record.reference, resolve(output, 'vulnerabilities.json'));
     if (component === 'keycloak') {
       record.knownRuntimeDependencies = checkKeycloakRuntimeDependencies(
-        await readFile(resolve(output, 'vulnerabilities.json')), record.imageId);
+        await readFile(resolve(output, 'vulnerabilities.json')), record.imageId, image.knownRuntimeDependencyPolicy);
       await writeFile(resolve(output, 'known-runtime-dependencies.json'), JSON.stringify(record.knownRuntimeDependencies, null, 2) + '\n');
     }
     record.result = record.security.result;

@@ -1,0 +1,36 @@
+{
+  "schema": "otziv-reviewed-images-v1",
+  "repository": "ghcr.io/claidd/otziv-security",
+  "publicationSet": "c26-keycloak",
+  "baselineManifestSha256": "d48bdb7d6d869cde5d6f1a7b089491765e3eeaf46e0b0b6bb51b7719b38d3ef2",
+  "images": [
+    {
+      "component": "keycloak",
+      "sourceBeforeRef": "quay.io/keycloak/keycloak@sha256:4883630ef9db14031cde3e60700c9a9a8eaf1b5c24db1589d6a2d43de38ba2a9",
+      "defaultReferencesBefore": [
+        {
+          "path": "compose.yaml",
+          "line": 275,
+          "service": "keycloak"
+        },
+        {
+          "path": "compose.prod-local.yaml",
+          "line": 120,
+          "service": "keycloak"
+        },
+        {
+          "path": "docker-compose.yaml",
+          "line": 131,
+          "service": "keycloak"
+        }
+      ],
+      "context": "infrastructure/runtime-security/builds/c26-keycloak",
+      "dockerfile": "infrastructure/runtime-security/builds/c26-keycloak/Dockerfile",
+      "platform": "linux/amd64",
+      "candidateBaseRef": "ghcr.io/claidd/otziv-security@sha256:5c73f4ab9b91ea48fc11333d4ebd93e702959ea558318cb6d7849deb5387d4f4",
+      "buildArgs": {},
+      "dockerfileSha256": "fbeb13b7dd95ef138ec76a3bc0afef42d434548f7b424d4a564d98e9b65bf1ab",
+      "knownRuntimeDependencyPolicy": "keycloak-26.7.3-core-databind-2.21.7-other-jackson-2.21.6-parsson-1.1.9"
+    }
+  ]
+}

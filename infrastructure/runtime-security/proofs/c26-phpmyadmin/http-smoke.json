@@ -1,0 +1,29 @@
+{
+  "schema": "otziv-c26-http-smoke-v1",
+  "result": "PASS",
+  "component": "phpmyadmin",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:e7c5c3b4761c54f4c596e7470c8c901682fe1e017787b6bc2486ffbf1d81fa9c",
+  "inspectedImageId": "sha256:e7c5c3b4761c54f4c596e7470c8c901682fe1e017787b6bc2486ffbf1d81fa9c",
+  "productionAccess": false,
+  "localCandidateOnly": false,
+  "network": "none",
+  "publishedPorts": false,
+  "executedScriptSha256": "aa3e5eda6b9578fd9b1284a6129073c9d48b7a2b546a4f3a0d418f3b7d209520",
+  "publicationSha256": "d91ae45fd6e3996dd29f09dbf79414ef836e158ed3993ca3b8d8d5e55309c33a",
+  "imageConfigId": "sha256:063c3c7755b1152e96586e5ee7dbe32ee5be3f36456f4ed89772d77513aa0548",
+  "commit": "c81a29c1eda2ba157702560338467521cd3e484e",
+  "run": "36953263889",
+  "attempt": "1",
+  "http": {
+    "status": 200,
+    "loginForm": true,
+    "bodySha256": "e43ebda93204f03bc29d4bdf1f68f195aba4b45a7d37b03d9dacd0715e5db66c",
+    "assetStatus": 200,
+    "assetSha256": "fc9a93dd241f6b045cbff0481cf4e1901becd0e12fb45166a8f17f95823f0b1a",
+    "phpVersion": "8.3.35",
+    "pcreVersion": "10.49 2026-09-28",
+    "namedCapture": true
+  },
+  "pcre2Package": "pcre2-10.49-r0",
+  "ownedContainersRemaining": 0
+}

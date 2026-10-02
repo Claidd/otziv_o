@@ -11,8 +11,9 @@ RUN npm run build -- --configuration production
 FROM nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10
 RUN apk upgrade --no-cache \
     && sha256sum /usr/sbin/nginx > /tmp/nginx.sha256 \
-    && apk add --no-cache --repository https://dl-cdn.alpinelinux.org/alpine/v3.23/main libssl3=3.5.9-r0 libcrypto3=3.5.9-r0 \
+    && apk add --no-cache --repository https://dl-cdn.alpinelinux.org/alpine/v3.23/main libssl3=3.5.9-r0 libcrypto3=3.5.9-r0 pcre2=10.49-r0 \
     && sha256sum -c /tmp/nginx.sha256 && rm /tmp/nginx.sha256 \
+    && apk --no-network info -v -e pcre2 | grep -Fx 'pcre2-10.49-r0' \
     && nginx -v
 COPY infrastructure/nginx/prod.conf /etc/nginx/templates/default.conf.template
 COPY --from=build /app/dist/frontend/browser /usr/share/nginx/html

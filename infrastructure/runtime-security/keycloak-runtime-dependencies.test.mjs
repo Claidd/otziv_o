@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { checkKeycloakRuntimeDependencies, validateKeycloakDependencyReceipt } from './keycloak-runtime-dependencies.mjs';
+import { C26_POLICY, checkKeycloakRuntimeDependencies, validateKeycloakDependencyReceipt } from './keycloak-runtime-dependencies.mjs';
 import { BUILDKIT, REPOSITORY, SBOM_GENERATOR } from './publish-reviewed-images.mjs';
 import { validatePublication, verifyAnonymousDownload } from './verify-anonymous-download.mjs';
 import { validateActivation } from './reviewed-image-defaults.mjs';
@@ -162,4 +162,39 @@ test('Jackson 2.21.7 requires every observed server and shaded CLI databind copy
  const receipt=checkKeycloakRuntimeDependencies(bytes(value),imageId);validateKeycloakDependencyReceipt(receipt,imageId);assert.ok(receipt.policy.includes('databind-2.21.7'));
  value.Results[0].Packages.push({...updated,Version:'2.21.6',Identifier:{PURL:updated.Identifier.PURL.replace('2.21.7','2.21.6')},FilePath:'opt/keycloak/bin/client/keycloak-admin-cli-26.7.3.jar'});
  assert.throws(()=>checkKeycloakRuntimeDependencies(bytes(value),imageId),/keycloak_unreviewed_runtime_dependency_version/);
+});
+
+function c26Scan() {
+  const value = scan(), databind = value.Results[0].Packages[0];
+  databind.Version = '2.21.7';
+  databind.Identifier.PURL = databind.Identifier.PURL.replace('2.21.6', '2.21.7');
+  value.Results[0].Packages.push({ Name: 'com.fasterxml.jackson.core:jackson-core', Version: '2.21.7',
+    Identifier: { PURL: 'pkg:maven/com.fasterxml.jackson.core/jackson-core@2.21.7' },
+    FilePath: 'opt/keycloak/lib/lib/main/com.fasterxml.jackson.core.jackson-core-2.21.5.jar' });
+  return value;
+}
+
+test('C26 requires patched core and databind even without CVE findings', () => {
+  const value = c26Scan();
+  const receipt = checkKeycloakRuntimeDependencies(bytes(value), imageId, C26_POLICY);
+  validateKeycloakDependencyReceipt(receipt, imageId, C26_POLICY);
+  for (const change of [
+    v => { v.Results[0].Packages.pop(); },
+    v => { v.Results[0].Packages.at(-1).Version = '2.21.6'; },
+    v => { v.Results[0].Packages[0].Version = '2.21.6'; },
+    v => { v.Results[0].Packages.push({ ...v.Results[0].Packages.at(-1), Version: '2.21.6',
+      Identifier: { PURL: 'pkg:maven/com.fasterxml.jackson.core/jackson-core@2.21.6' },
+      FilePath: 'opt/keycloak/bin/client/keycloak-admin-cli-26.7.3.jar' }); },
+  ]) {
+    const wrong = structuredClone(value); change(wrong);
+    assert.throws(() => checkKeycloakRuntimeDependencies(bytes(wrong), imageId, C26_POLICY), /policy_mismatch|unreviewed_runtime_dependency_version/);
+  }
+});
+
+test('C26 publication cannot reuse a passing historical dependency receipt', () => {
+  const value = publicationFixture();
+  value.image.knownRuntimeDependencyPolicy = C26_POLICY;
+  assert.throws(() => validatePublication(value.publication, value.identity, value.image, hash(value.manifestBytes)), /dependency_policy_mismatch/);
+  value.publication.knownRuntimeDependencies = checkKeycloakRuntimeDependencies(bytes(c26Scan()), imageId, C26_POLICY);
+  validatePublication(value.publication, value.identity, value.image, hash(value.manifestBytes));
 });

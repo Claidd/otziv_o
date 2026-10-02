@@ -44,6 +44,9 @@ on:
           - c23-alloy
           - c24-keycloak
           - c25-certbot
+          - c26-keycloak
+          - c26-nginx
+          - c26-phpmyadmin
   pull_request:
   push:
     branches: [main]
@@ -580,7 +583,7 @@ jobs:
         run: bash ./mvnw -f ../infrastructure/keycloak/security-generation/pom.xml -B -ntp verify
       - name: Build the real issuer release image
         if: ${{ needs.changes.outputs.infrastructure == 'true' }}
-        run: docker build -t otziv-issuer-ci infrastructure/runtime-security/builds/c24-keycloak
+        run: docker build -t otziv-issuer-ci infrastructure/runtime-security/builds/c26-keycloak
       - name: Build and scan reviewed database candidates
         if: ${{ needs.changes.outputs.infrastructure == 'true' }}
         run: |
@@ -1380,6 +1383,7 @@ jobs:
           docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true \
             --memory 128m --pids-limit 64 --entrypoint sh otziv-web-ci -ec '
               nginx -v
+              apk --no-network info -v -e pcre2 | grep -Fx pcre2-10.49-r0
               test -s /usr/share/nginx/html/index.html
               test -s /etc/nginx/templates/default.conf.template
             '
