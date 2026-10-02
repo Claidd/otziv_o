@@ -18,7 +18,8 @@ import xml.etree.ElementTree as ET
 NS = {"m": "http://maven.apache.org/POM/4.0.0"}
 GOAL = "com.hunt.build:dependency-check-effective-maven-plugin:1.0.0:check"
 HELP_GOAL = "org.apache.maven.plugins:maven-help-plugin:3.5.1:effective-pom"
-MODULES = ("dependency-audit", "site-plugin", "test-transport")
+MODULES = ("dependency-audit", "test-transport")
+DEFAULT_SITE = "org.apache.maven.plugins:maven-site-plugin"
 PROPERTIES = {
     "dependency-check.skip": "false",
     "odc.plugins.scan": "true",
@@ -60,7 +61,7 @@ def reactor(root: Path) -> dict[str, Path]:
     project = parse_xml(root / "pom.xml")
     actual = [node.text.strip() for node in project.findall("m:modules/m:module", NS)]
     if actual != list(MODULES):
-        raise PolicyError("The audited reactor must contain exactly the three reviewed modules in order")
+        raise PolicyError("The audited reactor must contain exactly the two reviewed modules in order")
     result = {".": root / "pom.xml"}
     for name in MODULES:
         module = (root / name / "pom.xml").resolve(strict=True)
@@ -102,6 +103,23 @@ def verify_dependency_exclusions(plugin, rule: dict, coordinate: str) -> None:
             raise PolicyError("Plugin dependency exclusion drift: " + coordinate + " / " + dependency)
 
 
+def default_site_candidate(plugin, project, managed) -> bool:
+    """Structural preflight only: Java must still prove origin, sources and execution plans."""
+    if key(plugin) != DEFAULT_SITE or text(plugin, "version") != "3.12.1" or DEFAULT_SITE in managed:
+        return False
+    if plugin.find("m:dependencies", NS) is not None or plugin.find("m:extensions", NS) is not None:
+        return False
+    executions = plugin.findall("m:executions/m:execution", NS)
+    expected = {"default-site": ("site", "site"), "default-deploy": ("site-deploy", "deploy")}
+    if len(executions) != 2 or {text(item, "id") for item in executions} != set(expected):
+        return False
+    for execution in executions:
+        phase, goal = expected[text(execution, "id")]
+        if text(execution, "phase") != phase or [item.text for item in execution.findall("m:goals/m:goal", NS)] != [goal]:
+            return False
+    return True
+
+
 def verify_policy(root: Path, effective: Path, standalone: str | None = None) -> dict:
     expected_projects = projects_for(root, standalone)
     policy = json.loads((root / "plugin-policy.json").read_text(encoding="utf-8"))
@@ -141,6 +159,12 @@ def verify_policy(root: Path, effective: Path, standalone: str | None = None) ->
         active = []
         for plugin in plugins:
             coordinate = key(plugin)
+            if default_site_candidate(plugin, project, managed):
+                # effective-pom XML has no InputSource metadata. It cannot authorize an omission.
+                # The adapter either proves the exact unused default binding or audits Site fully.
+                active.append({"coordinate": coordinate, "version": "3.12.1", "dependencies": {},
+                               "scope": "requires-java-origin-and-execution-plan-proof"})
+                continue
             if coordinate not in rules:
                 raise PolicyError("Unreviewed active build plugin: " + coordinate)
             rule = rules[coordinate]
@@ -235,11 +259,41 @@ def report_coverage(root: Path, standalone: str | None = None) -> dict:
                 dependencies = value["dependencies"]
                 if not isinstance(dependencies, list):
                     raise ValueError("Unexpected report dependencies shape")
-                item.update(valid=True, sha256=digest(report), dependencies=len(dependencies))
+                scope = verify_scope_receipt(pom)
+                item.update(valid=True, sha256=digest(report), dependencies=len(dependencies), pluginScope=scope)
             except (OSError, ValueError, KeyError):
                 item["valid"] = False
         reports.append(item)
     return {"complete": all(item.get("valid") for item in reports), "reports": reports}
+
+
+def verify_scope_receipt(pom: Path) -> dict:
+    path = pom.parent / "target/plugin-audit-scope.json"
+    value = json.loads(path.read_text(encoding="utf-8"))
+    source = parse_xml(pom)
+    group = text(source, "groupId") or text(source.find("m:parent", NS), "groupId")
+    identity = ":".join((group, text(source, "artifactId"), text(source, "packaging", "jar"), text(source, "version")))
+    if (value.get("schema") != "otziv-plugin-audit-scope-v1" or value.get("project") != identity
+            or value.get("projectPomSha256") != digest(pom) or type(value.get("excludedDefaultSite")) is not bool):
+        raise PolicyError("Missing or stale plugin audit scope identity")
+    for field in ("originalBuildPluginRoots", "buildPluginRoots", "reportPluginRoots", "extensionPluginRoots"):
+        roots = value.get(field)
+        if not isinstance(roots, list) or any(not isinstance(item, str) or item.count(":") != 2 for item in roots):
+            raise PolicyError("Invalid plugin audit root inventory")
+        if len(roots) != len(set(roots)):
+            raise PolicyError("Duplicate plugin audit root inventory")
+    before, after = set(value["originalBuildPluginRoots"]), set(value["buildPluginRoots"])
+    excluded = DEFAULT_SITE + ":3.12.1"
+    expected = {excluded} if value["excludedDefaultSite"] else set()
+    if before - after != expected or after - before:
+        raise PolicyError("Plugin scope changed unreviewed roots")
+    if value["excludedDefaultSite"] and (
+            value.get("reason") != "unused-maven-3.9.15-default-site-binding"
+            or value.get("coordinate") != excluded
+            or value.get("expectedOrigin") != "org.apache.maven:maven-core:3.9.15:default-lifecycle-bindings"
+            or any(item.startswith(DEFAULT_SITE + ":") for item in value["reportPluginRoots"] + value["extensionPluginRoots"])):
+        raise PolicyError("Invalid inactive default Site proof")
+    return {"sha256": digest(path), "excludedDefaultSite": value["excludedDefaultSite"], "reason": value.get("reason")}
 
 
 def main(argv=None) -> int:
@@ -288,7 +342,7 @@ def main(argv=None) -> int:
         # A finding in one plugin project must not prevent analysis of the others.
         # Clear ONLY this invocation's known report files so stale output cannot satisfy coverage.
         for pom in selected.values():
-            for name in ("dependency-check-report.json", "dependency-check-report.html"):
+            for name in ("dependency-check-report.json", "dependency-check-report.html", "plugin-audit-scope.json"):
                 report = pom.parent / "target" / name
                 if report.is_file():
                     report.unlink()

@@ -124,7 +124,9 @@ jobs:
       - name: OWASP dependency-check (CVSS 7+ blocks)
         id: audit
         if: ${{ !cancelled() && steps.bootstrap.outcome == 'success' }}
-        run: bash ./mvnw -B -ntp -Psecurity-audit -DskipTests verify
+        run: |
+          rm -f -- target/dependency-check-report.json target/dependency-check-report.html target/plugin-audit-scope.json
+          bash ./mvnw -B -ntp -Psecurity-audit -DskipTests verify
         working-directory: backend
       - name: Audit every build-support module and its effective plugins
         id: bootstrap-audit
@@ -177,13 +179,16 @@ jobs:
             backend/target/dependency-check-report.html
             backend/target/dependency-check-report.json
             backend/target/osv-audit.json
+            backend/target/plugin-audit-scope.json
             backend/build-support/**/target/dependency-check-report.html
             backend/build-support/**/target/dependency-check-report.json
+            backend/build-support/**/target/plugin-audit-scope.json
             backend/build-support/target/audit-policy-verification.json
             backend/build-support/target/audit-report-coverage.json
             backend/build-support/target/audit-effective-pom.xml
             infrastructure/keycloak/security-generation/target/dependency-check-report.html
             infrastructure/keycloak/security-generation/target/dependency-check-report.json
+            infrastructure/keycloak/security-generation/target/plugin-audit-scope.json
             infrastructure/keycloak/security-generation/target/audit-policy-verification.json
             infrastructure/keycloak/security-generation/target/audit-report-coverage.json
             infrastructure/keycloak/security-generation/target/audit-effective-pom.xml

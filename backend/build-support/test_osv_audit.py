@@ -10,8 +10,14 @@ class OsvAuditTests(unittest.TestCase):
         for path in osv.REPORTS:
             p=self.root/path;p.parent.mkdir(parents=True,exist_ok=True)
             p.write_text(json.dumps({'dependencies':[{'fileName':'component.jar','packages':[{'id':PURL}]}]}))
+            pom=p.parent.parent/'pom.xml'
+            pom.write_text('<project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion><groupId>example</groupId><artifactId>fixture</artifactId><version>1</version></project>')
+            scope={'schema':'otziv-plugin-audit-scope-v1','project':'example:fixture:jar:1','projectPomSha256':osv._scope.digest(pom),
+                   'excludedDefaultSite':False,'reason':'fixture-full-audit','originalBuildPluginRoots':['example:plugin:1'],
+                   'buildPluginRoots':['example:plugin:1'],'reportPluginRoots':[],'extensionPluginRoots':[]}
+            (p.parent/'plugin-audit-scope.json').write_text(json.dumps(scope))
     def test_every_report_is_required_even_when_other_reports_cover_same_packages(self):
-        packages,reports=osv.inventory(self.root);self.assertEqual(packages,[PURL]);self.assertEqual(len(reports),6)
+        packages,reports=osv.inventory(self.root);self.assertEqual(packages,[PURL]);self.assertEqual(len(reports),5)
         (self.root/osv.REPORTS[-1]).unlink()
         with self.assertRaises(OSError):osv.inventory(self.root)
     def test_empty_or_unidentified_maven_artifacts_fail_closed(self):
@@ -19,6 +25,14 @@ class OsvAuditTests(unittest.TestCase):
         for dependencies in [[],[{'fileName':'component.jar'}]]:
             p.write_text(json.dumps({'dependencies':dependencies}))
             with self.assertRaises(osv.AuditError):osv.inventory(self.root)
+    def test_backend_scope_receipt_is_mandatory_current_and_cannot_drop_another_root(self):
+        path=self.root/'backend/target/plugin-audit-scope.json';original=path.read_text()
+        for mutation in [lambda x:x.update(projectPomSha256='0'*64),lambda x:x.update(project='other:project:jar:1'),
+                         lambda x:x.update(buildPluginRoots=[]),lambda x:x.update(schema='unknown')]:
+            value=json.loads(original);mutation(value);path.write_text(json.dumps(value))
+            with self.assertRaises(osv.AuditError):osv.inventory(self.root)
+        path.unlink()
+        with self.assertRaises(osv.AuditError):osv.inventory(self.root)
     def test_pagination_is_exhausted_and_queries_remain_bound_to_package(self):
         calls=[]
         def fetch(path,payload):

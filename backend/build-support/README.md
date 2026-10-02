@@ -1,8 +1,7 @@
 # Build-support reactor
 
-This finite reactor builds the reviewed downstream audit adapter, Site plugin and
-Testcontainers transport. Each module has its own POM; the Site derivative has no
-Apache Maven parent. An identical
+This finite reactor builds the reviewed downstream audit adapter and
+Testcontainers transport. Each module has its own POM. An identical
 explicit `pluginManagement` policy in each POM pins the effective build tools;
 `plugin-policy.json` and `audit.py` reject missing, changed or unreviewed active
 plugins. The policy is an inventory and compatibility guard, not a vulnerability
@@ -17,7 +16,7 @@ python -m unittest discover -s backend/build-support -p test_audit.py
 
 The application, reactor and standalone issuer audits must all succeed in the same
 authenticated CI job. Run each even if an earlier audit reports vulnerabilities, and
-combine their exit statuses. Each of the four reactor projects uses one direct goal rather than the
+combine their exit statuses. Each of the three reactor projects uses one direct goal rather than the
 backend `security-audit` lifecycle, avoiding a duplicate application audit:
 
 ```sh
@@ -32,7 +31,7 @@ The release audit uses free public NVD and OSV data. No Sonatype account or
 credits are required; its analyzer is explicitly disabled. NVD still blocks
 CVSS 7+ and analyzer errors. After all three Maven audit stages,
 `python backend/build-support/osv_audit.py` queries every Maven package from all
-six reports, including test, provided and effective plugin dependencies.
+five reports, including test, provided and effective plugin dependencies.
 OSV HIGH/CRITICAL, unknown severity, missing reports, incomplete pagination and
 API failures are blocking. The OSV report preserves package coverage, report
 hashes, raw API responses and advisory details. Only package coordinates are
@@ -47,12 +46,14 @@ test, provided, runtime, system and plugin dependency scanning explicitly. The C
 descriptor. This includes `odc.plugins.scan`; the superficially similar
 `scanPlugins` CLI property does not bind the upstream parameter.
 
-The runner audits all four installed projects sequentially with `-N`, after one
+The runner audits all three installed projects sequentially with `-N`, after one
 complete effective-model preflight. It continues through every project even if
 one reports vulnerabilities, retaining the first failure exit code. This avoids
 Maven skipping dependent projects after a failed reactor module. The shared cache
 remains active for each invocation. `target/audit-report-coverage.json` records each
-project's actual exit code, report presence and digest. Missing or malformed reports cannot turn a
+project's actual exit code, report presence and digest. Each project's fresh
+`target/plugin-audit-scope.json` must match its GAV and current POM hash; OSV also
+checks this receipt for the application and standalone issuer. Missing or malformed reports cannot turn a
 zero process exit into complete coverage. A failed/partial reactor audit remains
 failed; the runner never repeats an already audited project to hide its failure.
 
@@ -62,6 +63,17 @@ Preserve raw reports before changing dependency graphs or audit policy. The loca
 fixture tests exercise credential-free execution, command bindings, exact reactor coverage,
 effective-version/override drift, unknown plugins, cache isolation, nonsecret plan
 mode, failed audit propagation and rejection of stale/incomplete report sets.
+
+The unused Site fork has been removed. Maven 3.9.15 still injects Site 3.12.1
+into every effective model. The Java adapter can omit only that generated build
+root after proving its origin, unchanged default configuration/bindings, absence
+of source/parent/profile/management/report/extension declarations and absence
+from complete clean/default lifecycle and current invocation plans, including
+forks. Unknown Maven versions, commands, metadata or failed planning retain the
+full plugin audit. The effective-POM Python preflight only recognizes a candidate;
+it cannot authorize the omission. No vulnerability suppression is added. A Site
+dependency reached through another plugin is still scanned. See the adapter
+README for the exact scope contract and tests.
 
 `--plan` prints a nonsecret command without calling Maven or any analyzer.
 `--verify-effective path.xml` validates an existing actual Maven model without
@@ -74,7 +86,7 @@ After installing this reactor, run the same command with `--standalone-project k
 under JDK 21. This accepts only the fixed repository path
 `infrastructure/keycloak/security-generation/pom.xml`, the reviewed GAV and Java
 release 21. It performs one nonrecursive full audit with the same fail-closed policy,
-public cache and environment-only credentials. The backend lifecycle audit, all four
+public cache and environment-only credentials. The backend lifecycle audit, all three
 bootstrap audits and this issuer audit are separate required AND conditions in CI.
 No complete audit is claimed from local Trivy inventory alone.
 
