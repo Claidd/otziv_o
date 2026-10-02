@@ -8,7 +8,7 @@ The only Java source is the unchanged upstream `ZerodepDockerHttpClient.java`, g
 
 At verification time Maven Central and the upstream release API still identified docker-java 3.7.1 and Testcontainers 2.0.5 as latest releases. Testcontainers' `httpclient5` selection constructs `ZerodepDockerHttpClient` directly. Selecting the official unshaded artifact alone does not replace this path. This downstream rebuild avoids a custom discovery strategy, altered Ryuk lifecycle, and changes to application code.
 
-Normal bootstrap with JDK 26 and Maven 3.9.15:
+Normal bootstrap with JDK 25 and Maven 3.9.15:
 
 ```sh
 mvn -B -ntp -f backend/build-support/test-transport/pom.xml install
