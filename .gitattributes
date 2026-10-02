@@ -91,3 +91,10 @@ infrastructure/runtime-security/jackson-refresh-inspection.py -text
 infrastructure/runtime-security/c24-parent-keycloak.json text eol=lf
 infrastructure/runtime-security/reviewed-images-c24-*.json text eol=lf
 infrastructure/runtime-security/builds/c24-*/** text eol=lf
+
+# Keep C26 recipes, snapshots and executed inspection sources byte-identical.
+infrastructure/runtime-security/builds/c26-*/** text eol=lf
+infrastructure/runtime-security/reviewed-images-c26-*.json text eol=lf
+infrastructure/runtime-security/jackson-core-refresh*.mjs text eol=lf
+infrastructure/runtime-security/jackson-core-refresh-inspection.py text eol=lf
+infrastructure/runtime-security/c26-parent-keycloak.json text eol=lf
