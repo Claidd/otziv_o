@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -36,7 +37,11 @@ def main():
     build = next((p for p in tools if (p / 'lib/apksigner.jar').is_file()), None)
     if build is None:
         raise RuntimeError('Android Build-Tools with apksigner are required')
-    platforms = sorted((sdk / 'platforms').glob('android-*/android.jar'), key=lambda p: int(p.parent.name.split('-')[1]), reverse=True)
+    platforms = sorted(
+        (p for p in (sdk / 'platforms').glob('android-*/android.jar')
+         if re.fullmatch(r'android-\d+(?:\.\d+)*', p.parent.name)),
+        key=lambda p: tuple(int(part) for part in p.parent.name.removeprefix('android-').split('.')),
+        reverse=True)
     if not platforms:
         raise RuntimeError('An Android platform android.jar is required')
     java = shutil.which('java')

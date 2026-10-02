@@ -104,3 +104,6 @@ try {
         [IO.Path]::GetFileName($resolved) -notmatch '^otziv-external-evidence-[a-f0-9]{32}$') { throw 'Unexpected fixture path.' }
     if (Test-Path -LiteralPath $resolved) { Remove-Item -LiteralPath $resolved -Recurse -Force }
 }
+
+# Expected failing child processes must not leak their status to the CI wrapper.
+exit 0
