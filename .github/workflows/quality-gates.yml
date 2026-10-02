@@ -275,8 +275,8 @@ jobs:
         run: ./infrastructure/scripts/security/test-external-evidence-deploy-bundle.ps1
       - name: Exercise database image continuity and startup guards
         run: |
-          python3 -m pip install --require-hashes -r infrastructure/scripts/prod/retained-artifacts-requirements.txt
-          python3 -m unittest discover -s infrastructure/scripts/prod -p "test_*.py" -v
+          python3 -m pip install --target "$RUNNER_TEMP/retained-artifact-deps" --require-hashes -r infrastructure/scripts/prod/retained-artifacts-requirements.txt
+          PYTHONPATH="$RUNNER_TEMP/retained-artifact-deps${PYTHONPATH:+:$PYTHONPATH}" python3 -m unittest discover -s infrastructure/scripts/prod -p "test_*.py" -v
       - name: Reject unsafe local restore targets before any Docker mutation
         shell: pwsh
         run: ./infrastructure/scripts/local/test-restore-contract.ps1

@@ -8,7 +8,8 @@
     "maven",
     "npm",
     "github-actions",
-    "dockerfile"
+    "dockerfile",
+    "pip_requirements"
   ],
   "includePaths": [
     "backend/pom.xml",
@@ -21,7 +22,8 @@
     "shared/client-common/package.json",
     "shared/client-common/package-lock.json",
     ".github/workflows/**",
-    ".github/actions/**"
+    ".github/actions/**",
+    "infrastructure/scripts/prod/retained-artifacts-requirements.txt"
   ],
   "prConcurrentLimit": 3,
   "prHourlyLimit": 1,
