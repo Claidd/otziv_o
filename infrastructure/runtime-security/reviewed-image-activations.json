@@ -148,21 +148,21 @@
     },
     {
       "component": "phpmyadmin",
-      "reference": "ghcr.io/claidd/otziv-security@sha256:e7c5c3b4761c54f4c596e7470c8c901682fe1e017787b6bc2486ffbf1d81fa9c",
-      "commit": "c81a29c1eda2ba157702560338467521cd3e484e",
-      "run": "36953263889",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:618901b10b646f87c426a6eacb5117ee0c50e1d555e38fe7999eb24542b364e5",
+      "commit": "9852e1766b813297df81f371b31b6225445a787b",
+      "run": "37213301874",
       "attempt": "1",
       "manifest": {
-        "path": "infrastructure/runtime-security/reviewed-images-c26-phpmyadmin.json",
-        "sha256": "3e304954873864f069404ad1a3b96dfa9d7f3f323fe8b56fca79eacefb508e7d"
+        "path": "infrastructure/runtime-security/reviewed-images-c27-phpmyadmin.json",
+        "sha256": "27e3155fe2d45c2e851e853fcc73edfbb771be6cf549f63d34d01d24906f08f5"
       },
       "publication": {
-        "path": "infrastructure/runtime-security/proofs/c26-phpmyadmin/publication/publication.json",
-        "sha256": "d91ae45fd6e3996dd29f09dbf79414ef836e158ed3993ca3b8d8d5e55309c33a"
+        "path": "infrastructure/runtime-security/proofs/c27-phpmyadmin/publication/publication.json",
+        "sha256": "c53642784c1bc43c94d7384aba3fdcd57ca48df5ece60536df527386556b50aa"
       },
       "anonymous": {
-        "path": "infrastructure/runtime-security/proofs/c26-phpmyadmin/anonymous/anonymous-download.json",
-        "sha256": "7efa08cd508678a761d701c21a124f5742b15b2cca79ef74bdde2cca4f92b8ab"
+        "path": "infrastructure/runtime-security/proofs/c27-phpmyadmin/anonymous/anonymous-download.json",
+        "sha256": "9bcf31b1858e7f43d5e470d239e349de0caec7ffbe7d902d88ff4656c9c32bc1"
       }
     },
     {
