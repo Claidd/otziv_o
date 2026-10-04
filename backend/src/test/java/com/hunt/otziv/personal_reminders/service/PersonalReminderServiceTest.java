@@ -261,6 +261,20 @@ class PersonalReminderServiceTest {
     }
 
     @Test
+    void managerCompletionKeepsAClosedMarkerForPaymentAttention() {
+        User user = User.builder().id(5L).username("manager").build();
+        PersonalReminder reminder = reminder(40L, "Проверьте оплату", "PAYMENT_ATTENTION", 99L);
+        when(userService.findByUserName("manager")).thenReturn(Optional.of(user));
+        when(reminderRepository.findByIdAndUserId(40L, 5L)).thenReturn(Optional.of(reminder));
+
+        service.complete(principal("manager"), 40L);
+
+        assertNotNull(reminder.getCompletedAt());
+        verify(reminderRepository).save(reminder);
+        verify(reminderRepository, never()).delete(reminder);
+    }
+
+    @Test
     void bulkDeleteDoesNotIssueUnscopedDeleteWhenNothingCanBeRemoved() {
         when(userService.findByUserName("owner")).thenReturn(Optional.of(User.builder().id(7L).build()));
         when(reminderRepository.findByUserIdAndCompletedAtIsNullOrderByUpdatedAtDesc(7L))

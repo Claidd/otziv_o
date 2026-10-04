@@ -19,6 +19,19 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface ScheduledClientMessageStateRepository extends CrudRepository<ScheduledClientMessageState, Long> {
 
+    @Query("""
+        SELECT s.id FROM ScheduledClientMessageState s
+        WHERE s.scenario = com.hunt.otziv.client_messages.model.ClientMessageScenario.PAYMENT_OVERDUE_ESCALATION
+          AND s.status = com.hunt.otziv.client_messages.model.ScheduledMessageStateStatus.ACTIVE
+          AND s.nextAttemptAt > :now AND s.nextAttemptAt <= :horizon
+          AND NOT EXISTS (SELECT r.id FROM PersonalReminder r
+              WHERE r.sourceType = 'PAYMENT_ATTENTION' AND r.sourceId = s.id)
+        ORDER BY s.nextAttemptAt, s.id
+    """)
+    List<Long> findApproachingPaymentDueIds(@Param("now") LocalDateTime now,
+                                             @Param("horizon") LocalDateTime horizon,
+                                             Pageable pageable);
+
     @Query(value = "SELECT guard_id FROM scheduled_client_message_dispatch_guard WHERE guard_id = 1 FOR UPDATE", nativeQuery = true)
     int lockDispatchBudget();
 

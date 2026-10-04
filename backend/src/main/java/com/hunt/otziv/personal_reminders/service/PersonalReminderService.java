@@ -48,6 +48,7 @@ public class PersonalReminderService implements com.hunt.otziv.personal_reminder
     public static final String SOURCE_REVIEW_RECOVERY_BATCH = "REVIEW_RECOVERY_BATCH";
     public static final String SOURCE_BAD_REVIEW_TASK = "BAD_REVIEW_TASK";
     public static final String SOURCE_BAD_REVIEW_ORDER_READY = "BAD_REVIEW_ORDER_READY";
+    public static final String SOURCE_PAYMENT_ATTENTION = "PAYMENT_ATTENTION";
     private static final Pattern ORDER_ID_PATTERN = Pattern.compile("#(\\d+)");
 
     private final PersonalReminderRepository reminderRepository;
@@ -97,7 +98,12 @@ public class PersonalReminderService implements com.hunt.otziv.personal_reminder
         PersonalReminder reminder = findOwnedReminder(reminderId, user);
         rejectUserMutationOfRecoveryReminder(reminder);
         PersonalReminderResponse response = PersonalReminderResponse.from(reminder);
-        reminderRepository.delete(reminder);
+        if (SOURCE_PAYMENT_ATTENTION.equals(reminder.getSourceType())) {
+            reminder.setCompletedAt(Instant.now());
+            reminderRepository.save(reminder);
+        } else {
+            reminderRepository.delete(reminder);
+        }
 
         return response;
     }
@@ -107,7 +113,12 @@ public class PersonalReminderService implements com.hunt.otziv.personal_reminder
         User user = currentUser(principal);
         PersonalReminder reminder = findOwnedReminder(reminderId, user);
         rejectUserMutationOfRecoveryReminder(reminder);
-        reminderRepository.delete(reminder);
+        if (SOURCE_PAYMENT_ATTENTION.equals(reminder.getSourceType())) {
+            reminder.setCompletedAt(Instant.now());
+            reminderRepository.save(reminder);
+        } else {
+            reminderRepository.delete(reminder);
+        }
     }
 
     @Transactional
@@ -117,9 +128,15 @@ public class PersonalReminderService implements com.hunt.otziv.personal_reminder
                 .findByUserIdAndCompletedAtIsNullOrderByUpdatedAtDesc(user.getId()).stream()
                 .filter(reminder -> !IMMUTABLE_PAYMENT_RETURN_SOURCE.equals(reminder.getSourceType()))
                 .toList();
-        if (!reminders.isEmpty()) {
-            reminderRepository.deleteAllInBatch(reminders);
-        }
+        var paymentAttention = reminders.stream()
+                .filter(reminder -> SOURCE_PAYMENT_ATTENTION.equals(reminder.getSourceType()))
+                .toList();
+        paymentAttention.forEach(reminder -> reminder.setCompletedAt(Instant.now()));
+        if (!paymentAttention.isEmpty()) reminderRepository.saveAll(paymentAttention);
+        var otherReminders = reminders.stream()
+                .filter(reminder -> !SOURCE_PAYMENT_ATTENTION.equals(reminder.getSourceType()))
+                .toList();
+        if (!otherReminders.isEmpty()) reminderRepository.deleteAllInBatch(otherReminders);
         return reminders.stream().map(PersonalReminder::getId).toList();
     }
 
