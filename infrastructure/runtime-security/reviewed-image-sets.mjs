@@ -54,6 +54,7 @@ const RELEASE_SETS = Object.freeze({
   'c26-keycloak': { component: 'keycloak', path: 'infrastructure/runtime-security/reviewed-images-c26-keycloak.json', context: 'infrastructure/runtime-security/builds/c26-keycloak', dockerfile: 'infrastructure/runtime-security/builds/c26-keycloak/Dockerfile' },
   'c26-nginx': { component: 'nginx', path: 'infrastructure/runtime-security/reviewed-images-c26-nginx.json', context: 'infrastructure/runtime-security/builds/c26-nginx', dockerfile: 'infrastructure/runtime-security/builds/c26-nginx/Dockerfile' },
   'c26-phpmyadmin': { component: 'phpmyadmin', path: 'infrastructure/runtime-security/reviewed-images-c26-phpmyadmin.json', context: 'infrastructure/runtime-security/builds/c26-phpmyadmin', dockerfile: 'infrastructure/runtime-security/builds/c26-phpmyadmin/Dockerfile' },
+  'c27-phpmyadmin': { component: 'phpmyadmin', path: 'infrastructure/runtime-security/reviewed-images-c27-phpmyadmin.json', context: 'infrastructure/runtime-security/builds/c27-phpmyadmin', dockerfile: 'infrastructure/runtime-security/builds/c27-phpmyadmin/Dockerfile' },
 });
 // These two local-stack dependencies were absent from the immutable C7 manifest.
 // Keep their original pins and service coverage explicit when adding publication.
