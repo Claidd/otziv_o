@@ -99,6 +99,17 @@ class PersonalReminderServiceTest {
     }
 
     @Test
+    void manuallyClosedPaymentAttentionIsNotCreatedAgain() {
+        when(reminderRepository.existsBySourceTypeAndSourceId("PAYMENT_ATTENTION", 99L)).thenReturn(true);
+
+        service.ensureOpenDueNow(new SystemReminderCommands.Reminder(
+                5L, "Проверьте оплату", "Свяжитесь с клиентом", "PAYMENT_ATTENTION", 99L, 10L));
+
+        verifyNoInteractions(userService);
+        verify(reminderRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
     void listHidesRecoveryCompletionReminderWhenBatchReopened() {
         User user = new User();
         user.setId(5L);
@@ -258,6 +269,20 @@ class PersonalReminderServiceTest {
 
         verify(reminderRepository).deleteAllInBatch(List.of(note, alert));
         verifyNoInteractions(orderRepository, recoveryBatchRepository, badReviewTaskRepository, paymentInstructionOrchestrator);
+    }
+
+    @Test
+    void managerCompletionKeepsAClosedMarkerForPaymentAttention() {
+        User user = User.builder().id(5L).username("manager").build();
+        PersonalReminder reminder = reminder(40L, "Проверьте оплату", "PAYMENT_ATTENTION", 99L);
+        when(userService.findByUserName("manager")).thenReturn(Optional.of(user));
+        when(reminderRepository.findByIdAndUserId(40L, 5L)).thenReturn(Optional.of(reminder));
+
+        service.complete(principal("manager"), 40L);
+
+        assertNotNull(reminder.getCompletedAt());
+        verify(reminderRepository).save(reminder);
+        verify(reminderRepository, never()).delete(reminder);
     }
 
     @Test

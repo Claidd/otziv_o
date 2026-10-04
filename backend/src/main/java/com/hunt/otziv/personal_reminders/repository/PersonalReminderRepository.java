@@ -4,11 +4,21 @@ import com.hunt.otziv.personal_reminders.model.PersonalReminder;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 import java.util.Optional;
 
 public interface PersonalReminderRepository extends JpaRepository<PersonalReminder, Long> {
+    boolean existsBySourceTypeAndSourceId(String sourceType, Long sourceId);
+    List<PersonalReminder> findBySourceTypeAndSourceOrderIdAndCompletedAtIsNull(String sourceType, Long sourceOrderId);
+
+    @Query("SELECT r.id FROM PersonalReminder r WHERE r.sourceType = :sourceType "
+            + "AND r.completedAt IS NULL AND r.id > :afterId ORDER BY r.id")
+    List<Long> findOpenSourceIdsAfter(@Param("sourceType") String sourceType,
+                                      @Param("afterId") long afterId, Pageable pageable);
     boolean existsBySourceTypeAndSourceIdAndCompletedAtIsNull(String sourceType, Long sourceId);
 
     List<PersonalReminder> findByUserIdAndCompletedAtIsNullOrderByUpdatedAtDesc(Long userId);
