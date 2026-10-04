@@ -47,6 +47,7 @@ on:
           - c26-keycloak
           - c26-nginx
           - c26-phpmyadmin
+          - c27-phpmyadmin
   pull_request:
   push:
     branches: [main]
