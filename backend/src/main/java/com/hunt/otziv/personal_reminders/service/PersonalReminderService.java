@@ -169,6 +169,10 @@ public class PersonalReminderService implements com.hunt.otziv.personal_reminder
     @Override
     @Transactional
     public void ensureOpenDueNow(com.hunt.otziv.personal_reminders.api.SystemReminderCommands.Reminder command) {
+        if (SOURCE_PAYMENT_ATTENTION.equals(command.sourceType())
+                && reminderRepository.existsBySourceTypeAndSourceId(command.sourceType(), command.sourceId())) {
+            return;
+        }
         User recipient = userService.findByIdToUserInfo(command.recipientUserId());
         if (recipient == null || !java.util.Objects.equals(recipient.getId(), command.recipientUserId())
                 || !recipient.isActive()) {

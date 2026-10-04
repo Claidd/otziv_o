@@ -99,6 +99,17 @@ class PersonalReminderServiceTest {
     }
 
     @Test
+    void manuallyClosedPaymentAttentionIsNotCreatedAgain() {
+        when(reminderRepository.existsBySourceTypeAndSourceId("PAYMENT_ATTENTION", 99L)).thenReturn(true);
+
+        service.ensureOpenDueNow(new SystemReminderCommands.Reminder(
+                5L, "Проверьте оплату", "Свяжитесь с клиентом", "PAYMENT_ATTENTION", 99L, 10L));
+
+        verifyNoInteractions(userService);
+        verify(reminderRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
     void listHidesRecoveryCompletionReminderWhenBatchReopened() {
         User user = new User();
         user.setId(5L);

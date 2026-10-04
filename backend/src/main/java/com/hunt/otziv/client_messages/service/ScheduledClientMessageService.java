@@ -8,6 +8,7 @@ import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.client_messages.dto.ArchiveCompanyMessageCandidate;
 import com.hunt.otziv.client_messages.dto.ClientMessageSendResult;
 import com.hunt.otziv.client_messages.api.ClientMessageDelivery;
+import com.hunt.otziv.client_messages.api.PaymentDeadlineNoticeSource;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hunt.otziv.client_messages.dto.TelegramTransferCopyButton;
 import com.hunt.otziv.client_messages.model.ClientMessageScenario;
@@ -78,7 +79,7 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class ScheduledClientMessageService {
+public class ScheduledClientMessageService implements PaymentDeadlineNoticeSource {
 
     private static final ObjectMapper DELIVERY_JSON = new ObjectMapper();
 
@@ -196,6 +197,43 @@ public class ScheduledClientMessageService {
     private LocalDateTime lastReconcileAt;
     private LocalDateTime lastCleanupAt;
     private LocalDateTime lastSummaryLogAt;
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Long> approachingIds(LocalDateTime now, LocalDateTime horizon, long afterId, int limit) {
+        if (!paymentAttentionEnabled()) return List.of();
+        return stateRepository.findApproachingPaymentDueIds(now, horizon, afterId,
+                PageRequest.of(0, Math.min(Math.max(limit, 1), 200)));
+    }
+
+    @Override
+    @Transactional
+    public Optional<PaymentDeadlineNoticeSource.Deadline> dueWithin(
+            long stateId, LocalDateTime now, LocalDateTime horizon) {
+        if (!paymentAttentionEnabled()) return Optional.empty();
+        return stateRepository.findByIdForUpdate(stateId)
+                .filter(state -> state.getScenario() == ClientMessageScenario.PAYMENT_OVERDUE_ESCALATION)
+                .filter(state -> state.getStatus() == ScheduledMessageStateStatus.ACTIVE)
+                .filter(state -> state.getOrderId() != null && state.getNextAttemptAt() != null)
+                .filter(state -> state.getNextAttemptAt().isAfter(now)
+                        && !state.getNextAttemptAt().isAfter(horizon))
+                .map(state -> new PaymentDeadlineNoticeSource.Deadline(state.getId(), state.getOrderId()));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean isActive(long stateId) {
+        return stateRepository.findById(stateId)
+                .filter(state -> state.getScenario() == ClientMessageScenario.PAYMENT_OVERDUE_ESCALATION)
+                .filter(state -> state.getStatus() == ScheduledMessageStateStatus.ACTIVE)
+                .isPresent();
+    }
+
+    private boolean paymentAttentionEnabled() {
+        return appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_ENABLED, true)
+                && appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_LIVE_ENABLED, false)
+                && appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_PAYMENT_REMINDER_ENABLED, true);
+    }
 
     @Scheduled(
             fixedDelayString = "${client.messages.tick-delay-ms:30000}",
