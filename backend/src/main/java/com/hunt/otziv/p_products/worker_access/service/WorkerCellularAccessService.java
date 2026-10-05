@@ -16,6 +16,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.Locale;
+import java.util.List;
 import java.util.Set;
 
 import static org.springframework.http.HttpStatus.FORBIDDEN;
@@ -32,6 +33,10 @@ public class WorkerCellularAccessService {
     private static final String REASON_DESKTOP = "DESKTOP_OR_UNKNOWN_DEVICE";
     private static final String REASON_UNKNOWN = "UNKNOWN_NETWORK";
     private static final Set<String> ELEVATED_ROLES = Set.of("ROLE_ADMIN", "ROLE_OWNER", "ROLE_MANAGER");
+    // Alena's LTE session on 2026-10-05 used this MegaFon range, which ipquery marked fixed.
+    // Keep this exception account-scoped; the neighboring ranges are globally verified separately.
+    private static final IpCidrMatcher ALENA_VERIFIED_MEGAFON_RANGE =
+            new IpCidrMatcher(List.of("178.177.229.0/24"));
 
     private final WorkerCellularAccessProperties properties;
     private final IpCidrMatcher cidrMatcher;
@@ -102,7 +107,13 @@ public class WorkerCellularAccessService {
         boolean cidrMatch = cidrMatcher.matches(clientIp);
         WorkerIpIntelligenceClient.IpIntelligence intelligence = segment("worker.network", "ip-intelligence",
                 () -> ipIntelligenceClient.lookup(clientIp));
-        boolean serverCellularNetwork = !intelligence.risky() && (cidrMatch || intelligence.mobile());
+        boolean accountScopedMegafonMatch = "alena".equalsIgnoreCase(authentication.getName())
+                && mobileDevice
+                && intelligence.known()
+                && "PJSC MegaFon".equals(intelligence.organization())
+                && ALENA_VERIFIED_MEGAFON_RANGE.matches(clientIp);
+        boolean serverCellularNetwork = !intelligence.risky()
+                && (cidrMatch || intelligence.mobile() || accountScopedMegafonMatch);
         String reason = accessReason(mobileDevice, serverCellularNetwork, telemetry, intelligence);
         boolean allowed = REASON_ALLOWED.equals(reason);
         boolean wouldDeny = !allowed && shouldEnforce(reason, telemetry, policy);
@@ -119,7 +130,7 @@ public class WorkerCellularAccessService {
         }
 
         log.info(
-                "Worker cellular access: user={}, scope={}, mode={}, result={}, reason={}, mobileDevice={}, cidrMatch={}, "
+                "Worker cellular access: user={}, scope={}, mode={}, result={}, reason={}, mobileDevice={}, cidrMatch={}, accountScopedMegafonMatch={}, "
                         + "intelKnown={}, intelMobile={}, intelRisky={}, intelOrg={}, clientTelemetry={}, ipPrefix={}",
                 authentication.getName(),
                 normalizeScope(scope),
@@ -128,6 +139,7 @@ public class WorkerCellularAccessService {
                 reason,
                 mobileDevice,
                 cidrMatch,
+                accountScopedMegafonMatch,
                 intelligence.known(),
                 intelligence.mobile(),
                 intelligence.risky(),
@@ -177,8 +189,9 @@ public class WorkerCellularAccessService {
     private String deniedMessage(String reason) {
         return switch (reason) {
             case REASON_NON_CELLULAR ->
-                    "Доступ заблокирован: обнаружена домашняя сеть или Wi-Fi. "
-                            + "Отключите Wi-Fi, включите мобильный интернет и повторите действие.";
+                    "Доступ заблокирован: мобильная сеть не подтверждена. "
+                            + "Подключитесь через мобильный интернет без Wi-Fi и VPN. "
+                            + "Если он уже включён, сообщите менеджеру время ошибки.";
             case REASON_VPN ->
                     "Доступ заблокирован: обнаружен VPN, прокси, Tor или сеть дата-центра. "
                             + "Отключите VPN или прокси и повторите действие через мобильный интернет.";
