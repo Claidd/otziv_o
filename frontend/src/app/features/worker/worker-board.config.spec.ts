@@ -60,8 +60,9 @@ describe('worker-board config helpers', () => {
   });
 
   it('preserves a network restriction explanation for the worker toast', () => {
-    const message = 'Доступ заблокирован: обнаружена домашняя сеть или Wi-Fi. '
-      + 'Отключите Wi-Fi, включите мобильный интернет и повторите действие.';
+    const message = 'Доступ заблокирован: мобильная сеть не подтверждена. '
+      + 'Подключитесь через мобильный интернет без Wi-Fi и VPN. '
+      + 'Если он уже включён, сообщите менеджеру время ошибки.';
 
     expect(workerErrorMessage({ status: 403, error: { message } }, 'Не удалось загрузить раздел')).toBe(message);
   });

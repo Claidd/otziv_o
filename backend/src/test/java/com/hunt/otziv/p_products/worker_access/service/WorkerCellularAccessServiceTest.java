@@ -121,8 +121,9 @@ class WorkerCellularAccessServiceTest {
                 () -> service.enforceSection("publish")
         );
         assertEquals(
-                "Доступ заблокирован: обнаружена домашняя сеть или Wi-Fi. "
-                        + "Отключите Wi-Fi, включите мобильный интернет и повторите действие.",
+                "Доступ заблокирован: мобильная сеть не подтверждена. "
+                        + "Подключитесь через мобильный интернет без Wi-Fi и VPN. "
+                        + "Если он уже включён, сообщите менеджеру время ошибки.",
                 fixedNetwork.getReason()
         );
 
@@ -250,6 +251,56 @@ class WorkerCellularAccessServiceTest {
                 eq("client=web-or-legacy"),
                 eq(false)
         );
+    }
+
+    @Test
+    void alenaCanUseConfirmedMegafonRangeWithoutAllowingOtherAccountsOrRiskyNetworks() {
+        WorkerCellularAccessProperties properties = properties(WorkerCellularAccessProperties.Mode.ENFORCE);
+        WorkerIpIntelligenceClient client = mock(WorkerIpIntelligenceClient.class);
+        when(client.lookup(anyString())).thenReturn(
+                new WorkerIpIntelligenceClient.IpIntelligence(true, false, false, "PJSC MegaFon", "ipquery")
+        );
+        WorkerNetworkViolationService violations = mock(WorkerNetworkViolationService.class);
+        WorkerCellularAccessService service = new WorkerCellularAccessService(properties, client, violations);
+
+        authenticateUser("alena", "ROLE_WORKER");
+        for (String address : List.of("178.177.229.1", "178.177.229.254")) {
+            request(address, MOBILE_USER_AGENT);
+            for (String section : WorkerCellularAccessService.PROTECTED_SECTIONS) {
+                assertDoesNotThrow(() -> service.enforceSection(section));
+            }
+        }
+        verifyNoInteractions(violations);
+
+        authenticateUser("worker", "ROLE_WORKER");
+        request("178.177.229.1", MOBILE_USER_AGENT);
+        assertEquals(403, assertThrows(ResponseStatusException.class,
+                () -> service.enforceSection("publish")).getStatusCode().value());
+
+        authenticateUser("alena", "ROLE_WORKER");
+        request("178.177.231.1", MOBILE_USER_AGENT);
+        assertEquals(403, assertThrows(ResponseStatusException.class,
+                () -> service.enforceSection("publish")).getStatusCode().value());
+
+        request("178.177.229.42", DESKTOP_USER_AGENT);
+        assertEquals(403, assertThrows(ResponseStatusException.class,
+                () -> service.enforceSection("publish")).getStatusCode().value());
+
+        when(client.lookup("178.177.229.43")).thenReturn(
+                new WorkerIpIntelligenceClient.IpIntelligence(true, false, true, "PJSC MegaFon", "ipquery")
+        );
+        request("178.177.229.43", MOBILE_USER_AGENT);
+        ResponseStatusException vpn = assertThrows(ResponseStatusException.class,
+                () -> service.enforceSection("publish"));
+        assertEquals(403, vpn.getStatusCode().value());
+        org.junit.jupiter.api.Assertions.assertTrue(vpn.getReason().contains("VPN"));
+
+        when(client.lookup("178.177.229.44")).thenReturn(
+                new WorkerIpIntelligenceClient.IpIntelligence(true, false, false, "Another provider", "ipquery")
+        );
+        request("178.177.229.44", MOBILE_USER_AGENT);
+        assertEquals(403, assertThrows(ResponseStatusException.class,
+                () -> service.enforceSection("publish")).getStatusCode().value());
     }
 
     @Test
@@ -442,11 +493,15 @@ class WorkerCellularAccessServiceTest {
     }
 
     private void authenticate(String... roles) {
+        authenticateUser("worker", roles);
+    }
+
+    private void authenticateUser(String username, String... roles) {
         List<SimpleGrantedAuthority> authorities = java.util.Arrays.stream(roles)
                 .map(SimpleGrantedAuthority::new)
                 .toList();
         SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken("worker", "password", authorities)
+                new UsernamePasswordAuthenticationToken(username, "password", authorities)
         );
     }
 
