@@ -46,6 +46,7 @@ on:
           - c25-certbot
           - c26-keycloak
           - c26-nginx
+          - c28-nginx
           - c26-phpmyadmin
           - c27-phpmyadmin
   pull_request:
