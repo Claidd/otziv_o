@@ -880,6 +880,11 @@ public class CommonInvoiceMembershipWorkflow implements com.hunt.otziv.common_bi
         if (targetStatus.isBlank() || STATUS_WAITING_COMMON_INVOICE.equals(targetStatus)) {
             targetStatus = STATUS_PUBLIC;
         }
+        if (STATUS_PUBLIC.equals(statusTitle(order)) && ACTIVE_WORK_STATUSES.contains(targetStatus)) {
+            // The order may have finished publication while it belonged to the
+            // common invoice. Its pre-invoice work status is no longer current.
+            return;
+        }
         order.setStatus(orderStatusService.getOrderStatusByTitle(targetStatus));
         orderRepository.save(order);
     }

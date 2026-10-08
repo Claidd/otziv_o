@@ -3031,6 +3031,26 @@ class CommonBillingServiceTest {
     }
 
     @Test
+    void detachingFromCommonInvoiceDoesNotReturnPublishedOrderToItsOriginalWorkStatus() {
+        CommonInvoiceMembershipWorkflow membership =
+                (CommonInvoiceMembershipWorkflow) ReflectionTestUtils.getField(service, "invoiceMembershipWorkflow");
+        assertNotNull(membership);
+
+        Order published = order(101L);
+        published.setStatus(status("Опубликовано"));
+        membership.restoreDetachedOrderStatus(published, "Новый");
+        assertEquals("Опубликовано", published.getStatus().getTitle());
+        verify(orderRepository, never()).save(published);
+
+        Order unfinished = order(102L);
+        unfinished.setStatus(status("На проверке"));
+        when(orderStatusService.getOrderStatusByTitle("Новый")).thenReturn(status("Новый"));
+        membership.restoreDetachedOrderStatus(unfinished, "Новый");
+        assertEquals("Новый", unfinished.getStatus().getTitle());
+        verify(orderRepository).save(unfinished);
+    }
+
+    @Test
     void publicInvoiceIsPayableWhileInvoiceIsCollecting() {
         CommonBillingAccount account = account();
         CommonInvoice invoice = invoice(account);
