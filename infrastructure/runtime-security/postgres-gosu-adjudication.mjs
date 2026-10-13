@@ -9,21 +9,30 @@ import { run } from '../recovery/process.mjs';
 
 export const GOSU_READER = 'golang:1.27.2-bookworm@sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61';
 export const GOSU_SHA256 = '1c8ba2a839b4bf9048ebb035f7e4a682c982120d10feed65dd70e0ba250f7401';
-const ROOTFS = [
+const PARENT_ROOTFS = [
   'sha256:3412f6e84bf5df2d548131d5a86650e84d37ed1758ea532826a7a25477fc8945',
   'sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef',
-  'sha256:e9ea9f91c84d0aef4aa8e972f69267500c22cd0348233f2d30882d9c143ca91e',
 ];
+const PARENT_CONFIG_ID = 'sha256:9aff3268aa60897853557e45444da2f6c1d45e311eb543e9eb8e0f49339c5f6e';
+const PARENT_REFERENCE = 'ghcr.io/claidd/otziv-security@sha256:a30a580feb45fce65b87d21a104d407d3d1c5b255ae0e9a05ce9903e10adb270';
 const CVES = new Set(['CVE-2026-78667', 'CVE-2026-78669', 'CVE-2026-97031']);
 const sha256 = value => createHash('sha256').update(value).digest('hex');
 
 export function matchGosuFindings(report, postgres) {
   assert.equal(postgres?.status, 'EXACT_RUNTIME_VERIFIED', 'gosu_postgres_unverified');
+  assert.equal(postgres.imageConfigId, report.Metadata?.ImageID, 'gosu_image_binding_changed');
+  assert.equal(postgres.sslRefresh?.component, 'postgres', 'gosu_parent_component_changed');
+  assert.equal(postgres.sslRefresh.parentConfigId, PARENT_CONFIG_ID, 'gosu_parent_config_changed');
+  assert.equal(postgres.sslRefresh.parentReference, PARENT_REFERENCE, 'gosu_parent_reference_changed');
+  assert.match(postgres.sslRefresh.runtimeProofSha256 || '', /^[a-f0-9]{64}$/, 'gosu_runtime_proof_missing');
   const labels = report.Metadata?.ImageConfig?.config?.Labels || {};
   assert.equal(labels['com.otziv.reviewed-component'], 'postgres', 'gosu_component_changed');
-  assert.equal(labels['com.otziv.publication.revision'], 'f2239d547142ad4e73f0b7f4b25799f410a240b9', 'gosu_publication_changed');
+  assert.match(labels['com.otziv.publication.revision'] || '', /^[a-f0-9]{40}$/, 'gosu_publication_changed');
   assert.equal(labels['com.otziv.gosu.source'], 'https://github.com/tianon/gosu/tree/6456aaa0f3c854d199d0f037f068eb97515b7513', 'gosu_source_changed');
-  assert.deepEqual(report.Metadata.ImageConfig.rootfs.diff_ids, ROOTFS, 'gosu_rootfs_changed');
+  const rootfs = report.Metadata.ImageConfig.rootfs.diff_ids;
+  assert.equal(rootfs.length, PARENT_ROOTFS.length + 1, 'gosu_rootfs_changed');
+  assert.deepEqual(rootfs.slice(0, PARENT_ROOTFS.length), PARENT_ROOTFS, 'gosu_rootfs_changed');
+  assert.match(rootfs.at(-1), /^sha256:[a-f0-9]{64}$/, 'gosu_rootfs_changed');
   const decisions = [];
   for (const [resultIndex, result] of report.Results.entries()) {
     if (result.Target !== 'usr/local/bin/gosu') continue;
@@ -62,7 +71,7 @@ export async function adjudicatePostgresGosu(report, bytes, imageId, scratch, po
     stage = 'inspect';
     assert.match(imageId, /^sha256:[a-f0-9]{64}$/, 'gosu_image_id_invalid');
     const inspected = JSON.parse(await run('docker', ['image', 'inspect', imageId]))[0];
-    assert.deepEqual(inspected.RootFS.Layers, ROOTFS, 'gosu_inspected_rootfs_changed');
+    assert.deepEqual(inspected.RootFS.Layers, report.Metadata.ImageConfig.rootfs.diff_ids, 'gosu_inspected_rootfs_changed');
     await mkdir(directory);
     stage = 'source_create';
     const sourceName = `otziv-gosu-source-${randomUUID()}`;
