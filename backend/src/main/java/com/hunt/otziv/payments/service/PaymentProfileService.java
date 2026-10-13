@@ -1,8 +1,7 @@
 package com.hunt.otziv.payments.service;
 
 import com.hunt.otziv.payments.config.TbankPaymentProperties;
-import com.hunt.otziv.common_billing.model.CommonInvoiceStatus;
-import com.hunt.otziv.common_billing.repository.CommonInvoiceRepository;
+import com.hunt.otziv.common_billing.api.CommonInvoiceProfileUsage;
 import com.hunt.otziv.payments.dto.ManagerManualPaymentSettingsResponse;
 import com.hunt.otziv.payments.dto.ManagerPaymentProfileAssignmentRequest;
 import com.hunt.otziv.payments.dto.ManagerPaymentProfileResponse;
@@ -18,7 +17,6 @@ import com.hunt.otziv.payments.model.PaymentLinkStatus;
 import com.hunt.otziv.payments.model.PaymentMethod;
 import com.hunt.otziv.payments.model.PaymentPolicy;
 import com.hunt.otziv.payments.model.PaymentProfile;
-import com.hunt.otziv.payments.model.ManualPaymentSource;
 import com.hunt.otziv.payments.model.TbankRuntimeMode;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.payments.repository.PaymentProfileRepository;
@@ -62,18 +60,10 @@ public class PaymentProfileService {
             PaymentMethod.MANUAL_MOBILE_BANK,
             PaymentMethod.MANUAL_EXTERNAL_LINK
     );
-    private static final Set<CommonInvoiceStatus> ACTIVE_COMMON_MANUAL_STATUSES = Set.of(
-            CommonInvoiceStatus.COLLECTING,
-            CommonInvoiceStatus.READY,
-            CommonInvoiceStatus.INVOICED,
-            CommonInvoiceStatus.REMINDER,
-            CommonInvoiceStatus.PARTIALLY_PAID,
-            CommonInvoiceStatus.NEEDS_ATTENTION
-    );
 
     private final PaymentProfileRepository paymentProfileRepository;
     private final PaymentLinkRepository paymentLinkRepository;
-    private final CommonInvoiceRepository commonInvoiceRepository;
+    private final CommonInvoiceProfileUsage commonInvoiceProfileUsageService;
     private final ManagerRepository managerRepository;
     private final TbankPaymentProperties properties;
     private final TbankRuntimeSettingsService runtimeSettingsService;
@@ -572,23 +562,17 @@ public class PaymentProfileService {
 
     private long manualMonthlyUsed(PaymentProfile profile, LocalDateTime periodStart, LocalDateTime periodEnd) {
         return manualMonthlyAmount(profile, MANUAL_USAGE_STATUSES, periodStart, periodEnd)
-                + commonInvoiceRepository.sumReservedAndConfirmedProfilePaymentRoutesForPeriod(
-                        profile.getId(), ManualPaymentSource.PROFILE_MONTHLY_LIMIT, periodStart, periodEnd,
-                        ACTIVE_COMMON_MANUAL_STATUSES, CommonInvoiceStatus.PAID);
+                + commonInvoiceProfileUsageService.used(profile.getId(), periodStart, periodEnd);
     }
 
     private long manualMonthlyConfirmed(PaymentProfile profile, LocalDateTime periodStart, LocalDateTime periodEnd) {
         return manualMonthlyAmount(profile, MANUAL_CONFIRMED_STATUSES, periodStart, periodEnd)
-                + commonInvoiceRepository.sumProfilePaymentRoutesForPeriod(
-                        profile.getId(), ManualPaymentSource.PROFILE_MONTHLY_LIMIT, periodStart, periodEnd,
-                        Set.of(CommonInvoiceStatus.PAID));
+                + commonInvoiceProfileUsageService.confirmed(profile.getId(), periodStart, periodEnd);
     }
 
     private long manualMonthlyPendingAmount(PaymentProfile profile, LocalDateTime periodStart, LocalDateTime periodEnd) {
         return manualMonthlyAmount(profile, MANUAL_PENDING_STATUSES, periodStart, periodEnd)
-                + commonInvoiceRepository.sumProfilePaymentRoutesForPeriod(
-                        profile.getId(), ManualPaymentSource.PROFILE_MONTHLY_LIMIT, periodStart, periodEnd,
-                        ACTIVE_COMMON_MANUAL_STATUSES);
+                + commonInvoiceProfileUsageService.pendingAmount(profile.getId(), periodStart, periodEnd);
     }
 
     private long manualMonthlyAmount(
@@ -623,9 +607,7 @@ public class PaymentProfileService {
                 periodStart,
                 periodEnd,
                 LocalDateTime.now()
-        ) + commonInvoiceRepository.countProfilePaymentRoutesForPeriod(
-                profile.getId(), ManualPaymentSource.PROFILE_MONTHLY_LIMIT, periodStart, periodEnd,
-                ACTIVE_COMMON_MANUAL_STATUSES);
+        ) + commonInvoiceProfileUsageService.pendingCount(profile.getId(), periodStart, periodEnd);
     }
 
     private PaymentPolicy paymentPolicy(PaymentProfile profile) {
