@@ -18,7 +18,7 @@ export function validateObservedBinary(report, inspect, binarySha256, buildInfo,
       JSON.stringify(reportLayers) !== JSON.stringify(inspect.RootFS?.Layers)) throw new Error('adjudication_image_mismatch');
   if (binarySha256 !== review.binary.sha256) throw new Error('adjudication_binary_mismatch');
   if (sha256(canonicalBuildInfo(buildInfo)) !== review.binary.canonicalBuildInfoSha256 ||
-      !buildInfo.split(/\r?\n/)[0].endsWith(': go1.27.1') ||
+      !buildInfo.split(/\r?\n/)[0].endsWith(': ' + (review.binary.goVersion || 'go1.27.1')) ||
       !buildInfo.includes(`\tdep\t${review.module.name}\t${review.module.version}\t${review.module.sum}`)) throw new Error('adjudication_build_info_mismatch');
 }
 
@@ -27,6 +27,9 @@ export async function inspectReviewedGoBinary(report, immutableImageId, scratch,
   if (!candidates.length || candidates.some(candidate => candidate.binary.path !== candidates[0].binary.path))
     throw new Error('adjudication_target_invalid');
   review = candidates[0];
+  const reader = review.binary.buildInfoReader || BUILD_INFO_READER;
+  if (candidates.some(candidate => (candidate.binary.buildInfoReader || BUILD_INFO_READER) !== reader))
+    throw new Error('adjudication_reader_mismatch');
   if (!/^sha256:[a-f0-9]{64}$/.test(immutableImageId)) throw new Error('adjudication_immutable_image_required');
   if (!/^[a-zA-Z0-9_.-]+(?:\/[a-zA-Z0-9_.-]+)*$/.test(review.binary.path) ||
       review.binary.path.split('/').some(part => part === '.' || part === '..')) throw new Error('adjudication_target_invalid');
@@ -47,11 +50,11 @@ export async function inspectReviewedGoBinary(report, immutableImageId, scratch,
     if (!review) throw new Error('adjudication_binary_mismatch');
     const buildInfo = await run('docker', ['run', '--rm', '--network', 'none', '--read-only', '--cap-drop=ALL',
       '--security-opt=no-new-privileges:true', '--memory', '512m', '--pids-limit', '64', '-e', 'GOTOOLCHAIN=local',
-      '--mount', `type=bind,source=${directory},target=/input,readonly`, BUILD_INFO_READER,
+      '--mount', `type=bind,source=${directory},target=/input,readonly`, reader,
       'go', 'version', '-m', '/input/executable'], { timeoutMs: 120_000 });
     validateObservedBinary(report, inspect, binarySha256, buildInfo, review);
     return { binarySha256, canonicalBuildInfoSha256: sha256(canonicalBuildInfo(buildInfo)),
-      buildInfoReader: BUILD_INFO_READER, inspectedBinaryExecuted: false };
+      buildInfoReader: reader, inspectedBinaryExecuted: false };
   } finally {
     if (container) await run('docker', ['rm', '-f', container]).catch(() => {});
     // Only the fresh owned directory above is removed, never a configured parent.
