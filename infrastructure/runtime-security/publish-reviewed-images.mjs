@@ -13,7 +13,7 @@ import { gitSource, SOURCE_REPOSITORY, takePublicationRegistryReader, verifyRegi
 export const REPOSITORY = 'ghcr.io/claidd/otziv-security';
 export const BUILDKIT = 'moby/buildkit@sha256:28a898719c18a33f4e8000685287fa36fd0dd9560c6440227d3a732d79bb41d8';
 export const SBOM_GENERATOR = 'docker/buildkit-syft-scanner@sha256:ae4f3b554449e7e25548e7d8ccc029d17357348e30c6e3df01b92bc93654d6a9';
-const COMPONENTS = new Set(['prometheus', 'loki', 'alloy', 'tempo', 'grafana', 'mysql', 'postgres', 'keycloak', 'nginx', 'node', 'phpmyadmin', 'certbot', 'minio', 'mc']);
+const COMPONENTS = new Set(['prometheus', 'loki', 'alloy', 'tempo', 'grafana', 'mysql', 'postgres', 'keycloak', 'nginx', 'node', 'phpmyadmin', 'certbot', 'minio', 'mc', 'dozzle']);
 const DIGEST = /^sha256:[a-f0-9]{64}$/;
 const ROOT = resolve(fileURLToPath(new URL('../../', import.meta.url)));
 

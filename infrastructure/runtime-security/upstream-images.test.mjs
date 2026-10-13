@@ -29,7 +29,7 @@ test('empty inventory cannot silently pass a release scan', () => {
 test('actual Compose models cover database, issuer, monitoring and optional upstreams', async () => {
   const rows = await repositoryInventory();
   const reviewed = await validateRepositoryDefaults(process.cwd(), rows);
-  assert.equal(new Set(reviewed.map(item => item.component)).size, 14);
+  assert.equal(new Set(reviewed.map(item => item.component)).size, 15);
   for (const [component, service] of [['minio', 'minio'], ['mc', 'minio-init']]) {
     const checks = reviewed.filter(item => item.component === component);
     assert.deepEqual(checks.map(item => [item.path, item.service]), [['compose.prod-local.yaml', service]]);
@@ -37,6 +37,6 @@ test('actual Compose models cover database, issuer, monitoring and optional upst
       reference.path === 'compose.prod-local.yaml' && reference.service === service)), component);
     assert.ok(['EXACT_ORIGINAL_SOURCE', 'PAIRED_PUBLICATION_AND_ANONYMOUS_EVIDENCE'].includes(checks[0].mode));
   }
-  assert.ok(rows.some(row => row.image.startsWith('amir20/dozzle@')), 'amir20/dozzle');
+  assert.equal(reviewed.filter(item => item.component === 'dozzle').length, 3);
   assert.equal(new Set(rows.map(row => row.id)).size, rows.length);
 });

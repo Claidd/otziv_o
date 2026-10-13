@@ -1,0 +1,54 @@
+{
+  "schema": "otziv-image-adjudication-v1",
+  "rawReportSha256": "3955c18d28ebf5e0d243dd6a5f172d10509292c9e0360ce0b73fab5b8b7c9108",
+  "imageConfigId": "sha256:41b315a7b540eb7616047edf4ab2f4db298a5e472c275ea85c0015b868223e08",
+  "immutableImageId": "sha256:41b315a7b540eb7616047edf4ab2f4db298a5e472c275ea85c0015b868223e08",
+  "rawReportModified": false,
+  "decisions": [],
+  "status": "NOT_APPLICABLE",
+  "alloy": {
+    "schema": "otziv-alloy-c29-adjudication-v1",
+    "rawReportSha256": "3955c18d28ebf5e0d243dd6a5f172d10509292c9e0360ce0b73fab5b8b7c9108",
+    "imageConfigId": "sha256:41b315a7b540eb7616047edf4ab2f4db298a5e472c275ea85c0015b868223e08",
+    "immutableImageId": "sha256:41b315a7b540eb7616047edf4ab2f4db298a5e472c275ea85c0015b868223e08",
+    "rawReportModified": false,
+    "decisions": [
+      {
+        "resultIndex": 1,
+        "findingIndex": 0,
+        "cve": "CVE-2026-41567",
+        "target": "usr/bin/alloy",
+        "package": "github.com/docker/docker",
+        "version": "v28.5.2+incompatible",
+        "state": "not_affected",
+        "justification": "vulnerable_code_not_present",
+        "fixedHighOrCritical": false,
+        "unfixedHighOrCritical": true
+      },
+      {
+        "resultIndex": 1,
+        "findingIndex": 1,
+        "cve": "CVE-2026-42306",
+        "target": "usr/bin/alloy",
+        "package": "github.com/docker/docker",
+        "version": "v28.5.2+incompatible",
+        "state": "not_affected",
+        "justification": "vulnerable_code_not_present",
+        "fixedHighOrCritical": false,
+        "unfixedHighOrCritical": true
+      }
+    ],
+    "status": "EXACT_BINARY_AFFECTED_CODE_ABSENT",
+    "binarySha256": "e4d79301188578367594f5e3fa236ca104033f63bb21df37504275b579cff777",
+    "buildInfoSha256": "ae73055a58ebedc3a8470effa968f33e2d51742c8b8c87918841a1a4d4f64501",
+    "buildInfoReader": "golang:1.27.2-bookworm@sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61",
+    "inspectedBinaryExecuted": false,
+    "functionCount": 418416,
+    "daemonFunctions": 0,
+    "clientFunctions": 309,
+    "functionNamesSha256": "faf5136a02c46c3c7865659c3aad987242e91d1272f57876fcd1c195d2285de3",
+    "packageCount": 5199,
+    "daemonPackages": 0,
+    "closureSha256": "dc4b06fdf72b965478f7b7b6fde9ec591085920b7e148356215ed81c0c60ab66"
+  }
+}

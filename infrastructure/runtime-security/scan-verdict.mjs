@@ -2,10 +2,11 @@ import assert from 'node:assert/strict';
 import { effectiveScanSummary } from './grafana-tempo-adjudication.mjs';
 import { effectiveAlloySummary } from './alloy-daemon-adjudication.mjs';
 import { effectivePostgresSummary } from './ssl-refresh.mjs';
+import { effectiveGosuSummary } from './postgres-gosu-adjudication.mjs';
 
 // Accept the raw counter summary, never an earlier verdict or pre-subtracted counters.
 // Inspection failures and finding counts are separate inputs to the final verdict.
-export function combinedScanSummary(summary, { grafana = null, alloy = null, postgres = null } = {}) {
+export function combinedScanSummary(summary, { grafana = null, alloy = null, postgres = null, gosu = null } = {}) {
   assert.ok(!Object.hasOwn(summary, 'result') &&
     !Object.keys(summary).some(key => key.startsWith('effective') || key.startsWith('adjudicated')),
   'scan_verdict_requires_raw_summary');
@@ -16,7 +17,8 @@ export function combinedScanSummary(summary, { grafana = null, alloy = null, pos
 
   const positions = new Set();
   for (const [proof, acceptedStatus] of [[grafana, 'EXACT_BINARY_FIXED_CODE_PROVEN'],
-    [alloy, 'EXACT_BINARY_AFFECTED_CODE_ABSENT'], [postgres, 'EXACT_RUNTIME_VERIFIED']]) {
+    [alloy, 'EXACT_BINARY_AFFECTED_CODE_ABSENT'], [postgres, 'EXACT_RUNTIME_VERIFIED'],
+    [gosu, 'EXACT_BINARY_AFFECTED_CODE_ABSENT']]) {
     if (!proof) continue;
     assert.ok(['NOT_APPLICABLE', 'REJECTED', acceptedStatus].includes(proof.status), 'scan_verdict_unknown_status');
     assert.ok(Array.isArray(proof.decisions), 'scan_verdict_invalid_decisions');
@@ -30,7 +32,7 @@ export function combinedScanSummary(summary, { grafana = null, alloy = null, pos
       positions.add(position);
     }
   }
-  const rejected = [grafana, alloy, postgres].some(proof => proof?.status === 'REJECTED');
+  const rejected = [grafana, alloy, postgres, gosu].some(proof => proof?.status === 'REJECTED');
   const legacy = effectiveAlloySummary(effectiveScanSummary(summary, grafana), alloy);
   if (!postgres || postgres.status === 'NOT_APPLICABLE')
     return rejected ? { ...legacy, result: 'FAIL' } : legacy;
@@ -39,6 +41,6 @@ export function combinedScanSummary(summary, { grafana = null, alloy = null, pos
   // PostgreSQL can account for those findings after exact runtime verification.
   // Carry counters forward and recompute severity; preserve every inspection failure.
   const { result: intermediateSeverityVerdict, ...counters } = legacy;
-  const reviewed = effectivePostgresSummary(counters, postgres);
+  const reviewed = effectiveGosuSummary(effectivePostgresSummary(counters, postgres), gosu);
   return rejected ? { ...reviewed, result: 'FAIL' } : reviewed;
 }

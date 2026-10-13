@@ -7,6 +7,8 @@ import { assertLocalDocker } from '../recovery/drill.mjs';
 import { buildTriage } from './triage-report.mjs';
 import { adjudicateGrafanaImage } from './grafana-tempo-adjudication.mjs';
 import { adjudicateAlloyImage, adjudicatePostgresImage } from './ssl-refresh.mjs';
+import { adjudicateAlloyC29Image, C29_ALLOY_PROOF_LABEL } from './alloy-c29-adjudication.mjs';
+import { adjudicatePostgresGosu } from './postgres-gosu-adjudication.mjs';
 import { combinedScanSummary } from './scan-verdict.mjs';
 
 export const TRIVY_IMAGE = 'aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969'; // 0.74.0
@@ -89,15 +91,18 @@ export async function scan(kind, source, output) {
     // Preserve ALL findings above. The automatic remediation gate blocks actionable fixes;
     // unresolved vendor findings remain explicit release risks, never implicit exemptions.
     const adjudication = kind === 'image' ? await adjudicateGrafanaImage(report, reportBytes, immutableImageId, scratch) : null;
-    const alloy = kind === 'image' ? await adjudicateAlloyImage(report, reportBytes, immutableImageId, scratch) : null;
+    const alloy = kind === 'image' ? await (report.Metadata?.ImageConfig?.config?.Labels?.['com.otziv.security.proof'] === C29_ALLOY_PROOF_LABEL
+      ? adjudicateAlloyC29Image(report, reportBytes, immutableImageId, scratch)
+      : adjudicateAlloyImage(report, reportBytes, immutableImageId, scratch)) : null;
     const postgres = kind === 'image' ? await adjudicatePostgresImage(report, reportBytes, immutableImageId, scratch) : null;
+    const gosu = kind === 'image' ? await adjudicatePostgresGosu(report, reportBytes, immutableImageId, scratch, postgres) : null;
     for (const receipt of [alloy, postgres]) if (receipt?.sslRefresh) {
       await copyFile(join(scratch, receipt.sslRefresh.component + '-runtime-refresh.json.gz'),
         destination.replace(/\.json$/, '') + '.runtime-refresh.json.gz');
     }
     if (adjudication) await writeFile(destination.replace(/\.json$/, '') + '.adjudications.json',
-      JSON.stringify({ ...adjudication, alloy, ...(postgres?.status !== 'NOT_APPLICABLE' && postgres ? { postgres } : {}) }, null, 2) + '\n');
-    return { ...combinedScanSummary(summary, { grafana: adjudication, alloy, postgres }), scannerImage: TRIVY_IMAGE };
+      JSON.stringify({ ...adjudication, alloy, ...(postgres?.status !== 'NOT_APPLICABLE' && postgres ? { postgres } : {}), ...(gosu ? { gosu } : {}) }, null, 2) + '\n');
+    return { ...combinedScanSummary(summary, { grafana: adjudication, alloy, postgres, gosu }), scannerImage: TRIVY_IMAGE };
   } finally {
     // local is the exact fresh directory returned by mkdtemp, never a configured parent.
     await rm(local, { recursive: true, force: true });

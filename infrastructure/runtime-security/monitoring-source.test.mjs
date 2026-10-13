@@ -31,8 +31,7 @@ test('real checked-in manifest loads without any Compose file or environment int
  const value=await readMonitoringSource('prometheus');assert.match(value.source,/^prom\/prometheus@sha256:[a-f0-9]{64}$/);assert.match(value.manifestSha256,/^[a-f0-9]{64}$/);
 });
 
-test('only the fully verified C23 overlay selects its actual published runtime for fresh configuration and scan proofs',async()=>{
- assert.equal(await usesReviewedSslOverlay('alloy'),true);
- for(const component of ['prometheus','loki','tempo','grafana'])assert.equal(await usesReviewedSslOverlay(component),false);
+test('every activated C29 monitoring image selects its verified published runtime for configuration and scan proofs',async()=>{
+ for(const component of ['prometheus','loki','tempo','grafana','alloy'])assert.equal(await usesReviewedSslOverlay(component),true);
  await assert.rejects(usesReviewedSslOverlay('postgres'),/monitoring_component_invalid/);
 });

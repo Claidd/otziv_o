@@ -34,7 +34,7 @@ function fixture() {
 
 test('all current activations validate with retained registry bytes; DB preparation never authorizes ordinary upgrade', async () => {
   const result = await validateRepositoryDefaults(fileURLToPath(root));
-  assert.equal(result.length, 32);
+  assert.equal(result.length, 35);
   for (const row of result.filter(row => ['mysql', 'postgres'].includes(row.component))) {
     if (row.mode === 'EXACT_ORIGINAL_SOURCE') continue;
     assert.equal(row.mode, 'PAIRED_PUBLICATION_AND_ANONYMOUS_EVIDENCE');

@@ -1,0 +1,81 @@
+{
+  "schema": "otziv-anonymous-download-v1",
+  "component": "minio",
+  "commit": "d87bc6671b50f0dc57be5a50ebdd74127361137c",
+  "run": "38442057653",
+  "attempt": "1",
+  "manifestSet": "c29-local-s3",
+  "manifestPath": "infrastructure/runtime-security/reviewed-images-c29-local-s3.json",
+  "runner": "GitHub Actions 1000014941",
+  "startedAt": "2026-10-13T17:54:29.137Z",
+  "sourcePublicationSha256": "b9c707bfca9e11307bc09178fff4f92fcac2c54c5331c8bf7d3e8d625b212978",
+  "result": "PASS",
+  "accountCredentialsUsed": false,
+  "dockerCredentialHelpersAvailable": false,
+  "dockerTransport": "unix:///var/run/docker.sock",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:c3cb0739ee553dadff40237d83698f644852826d7483942d5265fa613b5f7931",
+  "imageAbsentBeforePull": true,
+  "daemonVersion": "\"28.0.4\"",
+  "attestationEvidence": {
+    "schema": "otziv-registry-evidence-v1",
+    "imageManifestDigest": "sha256:a56e7311fdda10833e13b3e41f4c19c379042d06189379e870e0e50d0074e370",
+    "predicates": [
+      "https://slsa.dev/provenance/v1",
+      "https://spdx.dev/Document"
+    ],
+    "artifacts": [
+      {
+        "file": "registry-index.json",
+        "digest": "sha256:c3cb0739ee553dadff40237d83698f644852826d7483942d5265fa613b5f7931",
+        "size": 857
+      },
+      {
+        "file": "registry-amd64-manifest.json",
+        "digest": "sha256:a56e7311fdda10833e13b3e41f4c19c379042d06189379e870e0e50d0074e370",
+        "size": 2188
+      },
+      {
+        "file": "registry-amd64-config.json",
+        "digest": "sha256:6ff3d7d2e7029ed77926f3c62129db524512f4d74253caaab1b11eb9846188ba",
+        "size": 5897
+      },
+      {
+        "file": "registry-attestation-0.json",
+        "digest": "sha256:254bdec5f738a49f878f9a2015d03f81afc78dfb1300ada60a75cae743be179c",
+        "size": 1111
+      },
+      {
+        "file": "registry-attestation-0-payload-0.json",
+        "digest": "sha256:964fea9881dd88ac88b49b21098fe85475f5cf3f0d417c9c33b751a9fd3e0694",
+        "size": 211908
+      },
+      {
+        "file": "registry-attestation-0-payload-1.json",
+        "digest": "sha256:ac25944d985a3fcb234006bcf23b15d3e508c01165c5037aa05ca233914c1ebe",
+        "size": 23907
+      }
+    ],
+    "sourceBinding": "LOCAL_GIT_METADATA_CHECKED_AGAINST_CLEAN_CHECKOUT_NOT_INDEPENDENT_SOURCE_AUTHENTICATION"
+  },
+  "pullExitCode": 0,
+  "imageId": "sha256:6ff3d7d2e7029ed77926f3c62129db524512f4d74253caaab1b11eb9846188ba",
+  "platform": "linux/amd64",
+  "labels": {
+    "com.otziv.derivative": "Alpine vendor libssl3/libcrypto3 package update only; Versity v1.8.0 binary unchanged",
+    "com.otziv.publication.revision": "d87bc6671b50f0dc57be5a50ebdd74127361137c",
+    "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+    "com.otziv.reviewed-component": "minio",
+    "com.otziv.security.patch": "Go1.27.2; x/net0.60.0; parent Alpine security packages preserved",
+    "com.otziv.upstream.image": "ghcr.io/versity/versitygw@sha256:30292fc2eeacc67a36993b01f7a7a5e3361a19cced0e80c1d71cfa2a4b0a2499",
+    "org.opencontainers.image.created": "2026-09-04T23:12:05.588Z",
+    "org.opencontainers.image.description": "A simple to deploy but feature rich S3 object storage server for your filesystem",
+    "org.opencontainers.image.licenses": "Apache-2.0",
+    "org.opencontainers.image.revision": "fd04bc1df2656298577b82667a4195c77f8c7563",
+    "org.opencontainers.image.source": "https://github.com/versity/versitygw",
+    "org.opencontainers.image.title": "versitygw",
+    "org.opencontainers.image.url": "https://github.com/versity/versitygw",
+    "org.opencontainers.image.version": "v1.8.0-otziv.c29"
+  },
+  "publicDownloadReadiness": "VERIFIED_ANONYMOUS_DIGEST_PULL",
+  "finishedAt": "2026-10-13T17:54:32.983Z"
+}

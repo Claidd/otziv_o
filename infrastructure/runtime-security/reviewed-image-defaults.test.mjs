@@ -197,7 +197,7 @@ test('repository contract freezes C7 manifest bytes so five production checks ca
     const manifestPath = join(evidence, 'reviewed-images.json');
     await writeFile(manifestPath, reviewedBytes);
     const baseline = await validateRepositoryDefaults(root, originalRepositoryRows());
-    assert.equal(baseline.length, 32);
+    assert.equal(baseline.length, 35);
     const changed = new Set(['prometheus', 'loki', 'tempo', 'alloy', 'grafana']);
     const altered = structuredClone(reviewed);
     for (const image of altered.images) if (changed.has(image.component))

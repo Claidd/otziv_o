@@ -874,7 +874,7 @@ services:
       - internal_net
 
   dozzle:
-    image: amir20/dozzle@sha256:27128281cc1f93b0f849f2a5fb4ef9c12a0cce1135ab3b6fede27f9867c8a1c2
+    image: ghcr.io/claidd/otziv-security@sha256:ba8cd824797578f70a51d211f859a4e5ed30d4e14449081280fd42e591c2cac5
     container_name: log-viewer
     restart: unless-stopped
     logging: *default-logging
@@ -900,7 +900,7 @@ services:
       start_period: 10s
 
   prometheus:
-    image: ghcr.io/claidd/otziv-security@sha256:508c918889067ea070d3da34913a81bd6df8092fb18977ca339e2367e3d77692
+    image: ghcr.io/claidd/otziv-security@sha256:265f09428f7b04245333b7171bf3710189e1a94d44009cbd1e7d664461ce6663
     container_name: prometheus
     restart: unless-stopped
     logging: *default-logging
@@ -931,7 +931,7 @@ services:
       - internal_net
 
   loki:
-    image: ghcr.io/claidd/otziv-security@sha256:e1638cc4e592cfc301811518526fbdb7cf0573425ec519af76a6a806816215c9
+    image: ghcr.io/claidd/otziv-security@sha256:0e33a90fc7cf951bf966f4801e062b588dfae1168dde953d175e67c1061205e7
     container_name: loki
     restart: unless-stopped
     logging: *default-logging
@@ -952,7 +952,7 @@ services:
       - internal_net
 
   tempo:
-    image: ghcr.io/claidd/otziv-security@sha256:6e743b30d2eb3c59887e3f04ba56fd20a5e36f15d616c272d7a7ea30076cfa38
+    image: ghcr.io/claidd/otziv-security@sha256:212d33e10827df28d1207a194f95b69b5227b83ccf4a37704414c334dfedb808
     stop_grace_period: 30s
     container_name: tempo
     restart: unless-stopped
@@ -974,7 +974,7 @@ services:
       - internal_net
 
   alloy:
-    image: ghcr.io/claidd/otziv-security@sha256:82d7bc33adf7a8a2e7d6d4749ffeba837ee83ecf5dad5f260fee9992de460992
+    image: ghcr.io/claidd/otziv-security@sha256:4e742bcabebac215f9277f20f7cdaeebee062814ed03ed929910c1aa394ce50e
     container_name: alloy
     restart: unless-stopped
     logging: *default-logging
@@ -1006,7 +1006,7 @@ services:
       - internal_net
 
   grafana:
-    image: ghcr.io/claidd/otziv-security@sha256:a9a36b873c7f4d424937a95f6d6c4c1f12f9d5f7556e23a1c81d6b649b570488
+    image: ghcr.io/claidd/otziv-security@sha256:759f950776ba40b54dc13852a46cdfb99bff8c4a1519dbefebd3b1cec9a9f243
     restart: unless-stopped
     logging: *default-logging
     pids_limit: ${GRAFANA_PIDS_LIMIT:-512}

@@ -24,17 +24,19 @@ export async function readMonitoringSource(component) {
     manifestSha256: createHash('sha256').update(bytes).digest('hex') };
 }
 
-// C23 is a reviewed package overlay over the retained source-built C15 image.
-// Its complete publication, parent recipe, filesystem, binary and scan graph must
-// validate before CI can exercise the exact published overlay. Other recipes
-// keep the existing source-build selection and every candidate is scanned fresh.
+// A reviewed published candidate has already been built from its committed
+// recipe and scanned by the publication workflow. CI still checks its complete
+// publication and activation proof, pulls the exact digest and scans it again.
+// Keep the historical C23 Alloy overlay in this selection as well.
 export async function usesReviewedSslOverlay(component) {
   assert.ok(COMPONENTS.has(component), 'monitoring_component_invalid');
-  if (component !== 'alloy') return false;
   const index = JSON.parse(await readFile(new URL('./reviewed-image-activations.json', import.meta.url)));
   const entries = index.images.filter(entry => entry.component === component);
   assert.equal(entries.length, 1, 'monitoring_activation_missing_or_duplicate');
-  if (entries[0].manifest?.path !== 'infrastructure/runtime-security/reviewed-images-c23-alloy.json') return false;
+  const selected = entries[0].manifest?.path;
+  const c29 = `infrastructure/runtime-security/reviewed-images-c29-${component}.json`;
+  if (selected !== c29 && !(component === 'alloy' &&
+    selected === 'infrastructure/runtime-security/reviewed-images-c23-alloy.json')) return false;
   const {validateRepositoryDefaults} = await import('./reviewed-image-defaults.mjs');
   await validateRepositoryDefaults(fileURLToPath(new URL('../../', import.meta.url)));
   return true;

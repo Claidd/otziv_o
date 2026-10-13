@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { gunzipSync } from 'node:zlib';
 import { loadReviewedProof, matchingFindings, validateObservedBinary, effectiveScanSummary } from './grafana-tempo-adjudication.mjs';
 import { summarizeReport } from './scan.mjs';
 
@@ -41,6 +42,22 @@ test('C15 review binds the new executable to the same exact fixed Tempo module',
   assert.throws(() => validateObservedBinary(report, inspect, review.binary.sha256, currentBuild, current.review), /binary_mismatch/);
   assert.throws(() => validateObservedBinary(report, inspect, current.review.binary.sha256, buildInfo, current.review), /build_info_mismatch/);
   await assert.rejects(loadReviewedProof('../unreviewed'), /review_unknown/);
+});
+
+test('C29 Grafana binds the same fixed Tempo source to the Go 1.27.2 executable', async () => {
+  const current = await loadReviewedProof('c29');
+  const currentBuild = gunzipSync(await readFile(new URL('./adjudications/grafana-tempo-c29/reviewed-buildinfo.txt.gz', import.meta.url))).toString('utf8');
+  const { report, inspect } = fixture();
+  for (const [key, value] of Object.entries(current.review.product)) {
+    report.Metadata.ImageConfig.config.Labels[`org.opencontainers.image.${key}`] = value;
+    inspect.Config.Labels[`org.opencontainers.image.${key}`] = value;
+  }
+  assert.deepEqual(current.review.module, review.module);
+  assert.deepEqual(current.review.decisions, review.decisions);
+  assert.equal(current.review.binary.goVersion, 'go1.27.2');
+  assert.equal(matchingFindings(report, current.review).length, 2);
+  validateObservedBinary(report, inspect, current.review.binary.sha256, currentBuild, current.review);
+  assert.throws(() => validateObservedBinary(report, inspect, current.review.binary.sha256, buildInfo, current.review), /build_info_mismatch/);
 });
 test('effective summary retains both raw HIGH findings and does not mutate the raw report', () => {
   const { report } = fixture(), before = JSON.stringify(report);
