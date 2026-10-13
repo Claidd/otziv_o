@@ -8,6 +8,7 @@ import subprocess
 
 from ci_release import capacity_plan, read, write
 from release_ci import require
+from remote_release_transport import staging_required_bytes
 
 REMOTE = r'''
 import json, os, subprocess, sys, types
@@ -41,6 +42,13 @@ result = {'schema': 'otziv-server-preflight-v1', 'images': images, 'ready': True
 if packet.get('plan'):
     result['capacity'] = check(packet['plan'], packet['revision'], root, None, True,
                                bundle_bytes=packet['bundleBytes'])
+    staging = os.path.join(root, '.release-staging')
+    if os.path.lexists(staging) and (os.path.islink(staging) or not os.path.isdir(staging)):
+        # The Direct bootstrap rejects this path. Local delivery remains possible.
+        result['stagingAvailableBytes'] = 0
+    else:
+        stats = os.statvfs(staging if os.path.isdir(staging) else root)
+        result['stagingAvailableBytes'] = stats.f_bavail * stats.f_frsize
 print(json.dumps(result))
 '''
 
@@ -80,6 +88,23 @@ def probe_args(args, **kwargs):
     return probe(args.host, args.user, args.port, args.key, args.known_hosts, args.path, **kwargs)
 
 
+def direct_transport_decision(release, preflight):
+    """Match the remote Direct gate while the preflight is still read-only."""
+    filesystems = preflight['capacity']['filesystems']
+    require(preflight['capacity']['result'] == 'PASS' and filesystems,
+            'Successful deployment capacity preflight required')
+    available = preflight.get('stagingAvailableBytes')
+    require(type(available) is int and available >= 0, 'Direct staging measurement missing')
+    reserve = 0
+    for filesystem in filesystems:
+        amount = filesystem.get('requiredBytes')
+        require(type(amount) is int and amount >= 0, 'Invalid deployment capacity reserve')
+        reserve += amount
+    required = staging_required_bytes(release, reserve)
+    return {'result': 'PASS' if available > required else 'FAIL',
+            'availableBytes': available, 'requiredBytes': required}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     add_arguments(parser)
@@ -90,8 +115,10 @@ def main():
     value = read(args.manifest)
     size = value['bundleBytes'] + (args.apk.stat().st_size if args.apk else 0)
     result = probe_args(args, plan=capacity_plan(value), bundle_bytes=size)
+    result['directTransport'] = direct_transport_decision(value, result)
     write(args.output, result)
-    print('Server readiness and early capacity preflight: PASS; no VPS files or services changed.')
+    print('Server readiness and early capacity preflight: PASS; Direct staging: '
+          + result['directTransport']['result'] + '; no VPS files or services changed.')
 
 
 if __name__ == '__main__':

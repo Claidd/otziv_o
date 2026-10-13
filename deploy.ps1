@@ -94,6 +94,7 @@ $releaseCompleted = $false
 $directHelper = Join-Path $helpers 'remote_release_transport.py'
 $sessionHelper = Join-Path $helpers 'release_session.py'
 $session = $null
+$effectiveImageTransport = $ImageTransport
 New-Item -ItemType Directory -Path $directory -Force | Out-Null
 if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) {
     $operatorSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
@@ -140,8 +141,20 @@ try {
         Write-Host "Source bundle and VPS readiness verified. No image transfer or deployment performed. Evidence: $directory"
         return
     }
+    if ($effectiveImageTransport -eq 'Direct') {
+        $early = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $directory 'early-preflight.json') | ConvertFrom-Json
+        if ($early.directTransport.result -eq 'FAIL') {
+            [void](Get-Command docker -ErrorAction Stop)
+            $effectiveImageTransport = 'Local'
+            $neededGiB = [math]::Round($early.directTransport.requiredBytes / 1GB, 2)
+            $freeGiB = [math]::Round($early.directTransport.availableBytes / 1GB, 2)
+            Write-Warning "Direct staging requires $neededGiB GiB but has $freeGiB GiB; using verified Local transport."
+        } elseif ($early.directTransport.result -ne 'PASS') {
+            throw 'Direct staging preflight has no valid result.'
+        }
+    }
     Set-OtzivReleaseStage -Path $timing -Stage 'verified-image-transport'
-    if ($ImageTransport -eq 'Direct') {
+    if ($effectiveImageTransport -eq 'Direct') {
         $directArguments = @('-B', $directHelper, 'prepare', '--record', $record,
             '--manifest', $manifest, '--output', $capacity,
             '--preflight', (Join-Path $directory 'early-preflight.json')) + $probeArguments
@@ -202,11 +215,11 @@ try {
         $tunnel.Dispose()
     }
     if ($registryStarted) {
-        if ($ImageTransport -eq 'Direct' -and (Test-Path -LiteralPath $record)) {
+        if ($effectiveImageTransport -eq 'Direct' -and (Test-Path -LiteralPath $record)) {
             $stopArguments = @('-B', $directHelper, 'stop', '--record', $record)
             if ($releaseCompleted) { $stopArguments += '--completed' }
             & python @stopArguments | Out-Null
-        } elseif ($ImageTransport -eq 'Local') {
+        } elseif ($effectiveImageTransport -eq 'Local') {
             & python $registryHelper stop $record | Out-Null
         }
         if ($LASTEXITCODE -ne 0) { Write-Warning "Inspect owned registry state: $record" }
