@@ -1,5 +1,7 @@
 package com.hunt.otziv.payments;
 
+import com.hunt.otziv.common_billing.repository.CommonInvoiceRepository;
+import com.hunt.otziv.common_billing.model.CommonInvoiceStatus;
 import com.hunt.otziv.payments.config.TbankPaymentProperties;
 import com.hunt.otziv.payments.dto.PaymentProfilePolicyRequest;
 import com.hunt.otziv.payments.dto.ManagerPaymentProfileAssignmentRequest;
@@ -9,6 +11,7 @@ import com.hunt.otziv.payments.dto.UpdateManagerPaymentProfilesRequest;
 import com.hunt.otziv.payments.dto.UpdatePaymentProfilePoliciesRequest;
 import com.hunt.otziv.payments.model.PaymentPolicy;
 import com.hunt.otziv.payments.model.ManualPaymentType;
+import com.hunt.otziv.payments.model.ManualPaymentSource;
 import com.hunt.otziv.payments.model.PaymentProfile;
 import com.hunt.otziv.payments.model.TbankRuntimeMode;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
@@ -37,6 +40,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 
 @ExtendWith(MockitoExtension.class)
 class PaymentProfileServiceTest {
@@ -48,6 +53,9 @@ class PaymentProfileServiceTest {
     private PaymentLinkRepository paymentLinkRepository;
 
     @Mock
+    private CommonInvoiceRepository commonInvoiceRepository;
+
+    @Mock
     private ManagerRepository managerRepository;
 
     @Mock
@@ -57,11 +65,44 @@ class PaymentProfileServiceTest {
     private TochkaPaymentProfileResolver tochkaPaymentProfileResolver;
 
     @Test
+    void profileCounterIncludesReservedAndPaidCommonInvoices() {
+        PaymentProfile profile = profile();
+        when(paymentProfileRepository.findAllByOrderByDefaultProfileDescNameAsc())
+                .thenReturn(List.of(profile));
+        when(managerRepository.findAllForPaymentProfileAssignments()).thenReturn(List.of());
+        when(runtimeSettingsService.runtimeMode()).thenReturn(TbankRuntimeMode.LIVE);
+        when(commonInvoiceRepository.sumReservedAndConfirmedProfilePaymentRoutesForPeriod(
+                eq(profile.getId()), eq(ManualPaymentSource.PROFILE_MONTHLY_LIMIT),
+                any(), any(), any(), eq(CommonInvoiceStatus.PAID)))
+                .thenReturn(30_000L);
+        when(commonInvoiceRepository.sumProfilePaymentRoutesForPeriod(
+                eq(profile.getId()), eq(ManualPaymentSource.PROFILE_MONTHLY_LIMIT),
+                any(), any(), any()))
+                .thenReturn(15_000L);
+        when(commonInvoiceRepository.countProfilePaymentRoutesForPeriod(
+                eq(profile.getId()), eq(ManualPaymentSource.PROFILE_MONTHLY_LIMIT),
+                any(), any(), any()))
+                .thenReturn(2L);
+        PaymentProfileService service = new PaymentProfileService(
+                paymentProfileRepository, paymentLinkRepository, commonInvoiceRepository,
+                managerRepository, new TbankPaymentProperties(), runtimeSettingsService,
+                tochkaPaymentProfileResolver);
+
+        var response = service.managementState().profiles().getFirst();
+
+        assertEquals(30_000L, response.manualMonthlyUsedKopecks());
+        assertEquals(15_000L, response.manualMonthlyConfirmedKopecks());
+        assertEquals(15_000L, response.manualMonthlyPendingAmountKopecks());
+        assertEquals(2L, response.manualMonthlyPendingCount());
+    }
+
+    @Test
     void managerCannotUpdateSharedManualPaymentRequisites() {
         TbankPaymentProperties properties = new TbankPaymentProperties();
         PaymentProfileService service = new PaymentProfileService(
                 paymentProfileRepository,
                 paymentLinkRepository,
+                commonInvoiceRepository,
                 managerRepository,
                 properties,
                 runtimeSettingsService,
@@ -95,6 +136,7 @@ class PaymentProfileServiceTest {
         PaymentProfileService service = new PaymentProfileService(
                 paymentProfileRepository,
                 paymentLinkRepository,
+                commonInvoiceRepository,
                 managerRepository,
                 new TbankPaymentProperties(),
                 runtimeSettingsService,
@@ -125,6 +167,7 @@ class PaymentProfileServiceTest {
         PaymentProfileService service = new PaymentProfileService(
                 paymentProfileRepository,
                 paymentLinkRepository,
+                commonInvoiceRepository,
                 managerRepository,
                 new TbankPaymentProperties(),
                 runtimeSettingsService,
@@ -153,6 +196,7 @@ class PaymentProfileServiceTest {
         PaymentProfileService service = new PaymentProfileService(
                 paymentProfileRepository,
                 paymentLinkRepository,
+                commonInvoiceRepository,
                 managerRepository,
                 new TbankPaymentProperties(),
                 runtimeSettingsService,
@@ -191,6 +235,7 @@ class PaymentProfileServiceTest {
         PaymentProfileService service = new PaymentProfileService(
                 paymentProfileRepository,
                 paymentLinkRepository,
+                commonInvoiceRepository,
                 managerRepository,
                 new TbankPaymentProperties(),
                 runtimeSettingsService,
@@ -232,6 +277,7 @@ class PaymentProfileServiceTest {
         PaymentProfileService service = new PaymentProfileService(
                 paymentProfileRepository,
                 paymentLinkRepository,
+                commonInvoiceRepository,
                 managerRepository,
                 new TbankPaymentProperties(),
                 runtimeSettingsService,
@@ -260,6 +306,7 @@ class PaymentProfileServiceTest {
         PaymentProfileService service = new PaymentProfileService(
                 paymentProfileRepository,
                 paymentLinkRepository,
+                commonInvoiceRepository,
                 managerRepository,
                 new TbankPaymentProperties(),
                 runtimeSettingsService,
@@ -298,6 +345,7 @@ class PaymentProfileServiceTest {
         PaymentProfileService service = new PaymentProfileService(
                 paymentProfileRepository,
                 paymentLinkRepository,
+                commonInvoiceRepository,
                 managerRepository,
                 new TbankPaymentProperties(),
                 runtimeSettingsService,
@@ -333,6 +381,7 @@ class PaymentProfileServiceTest {
         PaymentProfileService service = new PaymentProfileService(
                 paymentProfileRepository,
                 paymentLinkRepository,
+                commonInvoiceRepository,
                 managerRepository,
                 new TbankPaymentProperties(),
                 runtimeSettingsService,
@@ -363,6 +412,7 @@ class PaymentProfileServiceTest {
         PaymentProfileService service = new PaymentProfileService(
                 paymentProfileRepository,
                 paymentLinkRepository,
+                commonInvoiceRepository,
                 managerRepository,
                 new TbankPaymentProperties(),
                 runtimeSettingsService,
@@ -390,6 +440,7 @@ class PaymentProfileServiceTest {
         PaymentProfileService service = new PaymentProfileService(
                 paymentProfileRepository,
                 paymentLinkRepository,
+                commonInvoiceRepository,
                 managerRepository,
                 new TbankPaymentProperties(),
                 runtimeSettingsService,
@@ -419,6 +470,7 @@ class PaymentProfileServiceTest {
         PaymentProfileService service = new PaymentProfileService(
                 paymentProfileRepository,
                 paymentLinkRepository,
+                commonInvoiceRepository,
                 managerRepository,
                 new TbankPaymentProperties(),
                 runtimeSettingsService,
@@ -453,6 +505,7 @@ class PaymentProfileServiceTest {
         PaymentProfileService service = new PaymentProfileService(
                 paymentProfileRepository,
                 paymentLinkRepository,
+                commonInvoiceRepository,
                 managerRepository,
                 new TbankPaymentProperties(),
                 runtimeSettingsService,
@@ -478,6 +531,7 @@ class PaymentProfileServiceTest {
         PaymentProfileService service = new PaymentProfileService(
                 paymentProfileRepository,
                 paymentLinkRepository,
+                commonInvoiceRepository,
                 managerRepository,
                 new TbankPaymentProperties(),
                 runtimeSettingsService,
@@ -512,6 +566,7 @@ class PaymentProfileServiceTest {
         PaymentProfileService service = new PaymentProfileService(
                 paymentProfileRepository,
                 paymentLinkRepository,
+                commonInvoiceRepository,
                 managerRepository,
                 new TbankPaymentProperties(),
                 runtimeSettingsService,
@@ -534,6 +589,7 @@ class PaymentProfileServiceTest {
         PaymentProfileService service = new PaymentProfileService(
                 paymentProfileRepository,
                 paymentLinkRepository,
+                commonInvoiceRepository,
                 managerRepository,
                 new TbankPaymentProperties(),
                 runtimeSettingsService,
@@ -552,6 +608,7 @@ class PaymentProfileServiceTest {
         PaymentProfileService service = new PaymentProfileService(
                 paymentProfileRepository,
                 paymentLinkRepository,
+                commonInvoiceRepository,
                 managerRepository,
                 new TbankPaymentProperties(),
                 runtimeSettingsService,

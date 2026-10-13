@@ -863,6 +863,49 @@ class CommonBillingServiceTest {
     }
 
     @Test
+    void commonInvoiceRouteCanSwitchFromOwnerMonthlyManualToEmployeeRequisites() {
+        CommonBillingAccount account = account();
+        Manager routeManager = eligibleManager(551L);
+        account.setManager(routeManager);
+        CommonInvoice invoice = invoice(account);
+        invoice.setAmountKopecks(100_000L);
+        invoice.setPaymentRouteType(PaymentMethod.MANUAL_MOBILE_BANK.name());
+        invoice.setPaymentRouteManualSource(ManualPaymentSource.PROFILE_MONTHLY_LIMIT);
+        invoice.setPaymentRouteAmountKopecks(100_000L);
+        invoice.setPaymentRouteSelectedAt(LocalDateTime.of(2026, 10, 13, 14, 0));
+        invoice.setContractorAllocationId(551L);
+        Order order = order(101L);
+        CommonInvoiceOrder item = item(invoice, order);
+        stubPaymentModeChangeInvoice(invoice, item, order);
+        when(paymentRefRepository.findByInvoiceIdForUpdate(invoice.getId())).thenReturn(List.of());
+        when(contractorPaymentLiveRoutingService.frozenCommonRouteAction(invoice.getId(), 551L))
+                .thenReturn(FrozenCommonRouteAction.KEEP);
+        when(invoiceRouteSelector.selectCommonInvoiceTaskRoute(invoice, routeManager, 100_000L))
+                .thenReturn(Optional.empty());
+        ContractorPaymentAllocation employee = new ContractorPaymentAllocation();
+        employee.setId(552L);
+        employee.setRecipientType(ContractorRecipientType.SPECIALIST);
+        employee.setRecipientNameSnapshot("Елена Ч.");
+        employee.setPaymentPhoneSnapshot("89149528806");
+        when(contractorPaymentLiveRoutingService.reserveContractorForCommonInvoice(
+                eq(invoice), eq(List.of(order)), eq(routeManager), eq(100_000L)))
+                .thenReturn(employee);
+        String token = ReflectionTestUtils.invokeMethod(
+                service, "commonInvoiceRouteChangeToken", invoice, List.of());
+
+        Boolean changed = ReflectionTestUtils.invokeMethod(
+                service, "replaceCommonInvoicePaymentRouteLocked", invoice.getId(),
+                new CommonInvoicePaymentRouteChangeRequest(
+                        CommonInvoicePaymentRouteChangeTarget.EMPLOYEE_REQUISITES, true, token),
+                "manager");
+
+        assertEquals(Boolean.TRUE, changed);
+        assertEquals(ManualPaymentSource.CONTRACTOR_PAYMENT_PROFILE,
+                invoice.getPaymentRouteManualSource());
+        assertEquals(552L, invoice.getContractorAllocationId());
+    }
+
+    @Test
     void commonInvoiceRouteCanSwitchFromEmployeeRequisitesToOwnerTbankWithoutChangingFutureMode() {
         CommonBillingAccount account = account();
         Manager routeManager = eligibleManager(601L);
@@ -1194,6 +1237,30 @@ class CommonBillingServiceTest {
                 .previewFrozenCommonRouteAction(invoice.getId(), 801L);
         verify(contractorPaymentLiveRoutingService, never())
                 .frozenCommonRouteAction(anyLong(), anyLong());
+    }
+
+    @Test
+    void commonInvoiceRouteChangeContextIdentifiesOwnerMonthlyManualRoute() {
+        CommonBillingAccount account = account();
+        account.setManager(eligibleManager(705L));
+        CommonInvoice invoice = invoice(account);
+        invoice.setAmountKopecks(100_000L);
+        invoice.setPaymentRouteType(PaymentMethod.MANUAL_MOBILE_BANK.name());
+        invoice.setPaymentRouteManualSource(ManualPaymentSource.PROFILE_MONTHLY_LIMIT);
+        invoice.setPaymentRouteManualRecipient("Мария Р.");
+        invoice.setPaymentRouteAmountKopecks(100_000L);
+        invoice.setPaymentRouteSelectedAt(LocalDateTime.of(2026, 10, 13, 19, 0));
+        invoice.setContractorAllocationId(803L);
+        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+        when(paymentRefRepository.findByInvoiceIdOrderByCreatedAtAsc(invoice.getId()))
+                .thenReturn(List.of());
+        when(contractorPaymentLiveRoutingService.previewFrozenCommonRouteAction(invoice.getId(), 803L))
+                .thenReturn(FrozenCommonRouteAction.KEEP);
+
+        var context = service.commonInvoicePaymentRouteChangeContext(invoice.getId());
+
+        assertEquals(CommonInvoicePaymentRouteChangeTarget.OWNER_MANUAL, context.currentTarget());
+        assertTrue(context.canChange());
     }
 
     @Test
@@ -3215,7 +3282,7 @@ class CommonBillingServiceTest {
         when(contractorPaymentLiveRoutingService.reserveForCommonInvoice(
                 eq(invoice), any(), any(), eq(100_000L)
         )).thenReturn(allocation);
-        when(invoiceRouteSelector.selectCommonInvoiceOwnerAcquiringRoute(any(), eq(100_000L)))
+        when(invoiceRouteSelector.selectCommonInvoiceOwnerAutomaticRoute(any(), eq(100_000L)))
                 .thenReturn(ownerRoute);
 
         var response = service.publicInvoice("token");
@@ -3224,7 +3291,7 @@ class CommonBillingServiceTest {
         assertEquals(TbankRuntimeSettingsService.PAYMENT_SOURCE_TBANK_LINK, response.paymentRouteType());
         verify(contractorPaymentLiveRoutingService).reserveForCommonInvoice(
                 eq(invoice), any(), any(), eq(100_000L));
-        verify(invoiceRouteSelector).selectCommonInvoiceOwnerAcquiringRoute(any(), eq(100_000L));
+        verify(invoiceRouteSelector).selectCommonInvoiceOwnerAutomaticRoute(any(), eq(100_000L));
         verify(invoiceRouteSelector, never()).selectCommonInvoiceRoute(any(), anyLong());
     }
 
@@ -3245,7 +3312,7 @@ class CommonBillingServiceTest {
         when(contractorPaymentLiveRoutingService.reserveForCommonInvoice(
                 eq(invoice), any(), any(), eq(100_000L)
         )).thenReturn(allocation);
-        when(invoiceRouteSelector.selectCommonInvoiceOwnerAcquiringRoute(any(), eq(100_000L)))
+        when(invoiceRouteSelector.selectCommonInvoiceOwnerAutomaticRoute(any(), eq(100_000L)))
                 .thenThrow(new ResponseStatusException(HttpStatus.CONFLICT, "T-Bank недоступен"));
 
         ResponseStatusException exception = assertThrows(
@@ -3283,6 +3350,7 @@ class CommonBillingServiceTest {
         assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
         verify(invoiceRouteSelector, never()).selectCommonInvoiceRoute(any(), anyLong());
         verify(invoiceRouteSelector, never()).selectCommonInvoiceOwnerAcquiringRoute(any(), anyLong());
+        verify(invoiceRouteSelector, never()).selectCommonInvoiceOwnerAutomaticRoute(any(), anyLong());
         verify(paymentIssueReminderService).notifyOrderIssue(
                 eq(101L),
                 eq(PaymentIssueReminderService.SOURCE_PAYMENT_FAIL_CLOSED),
@@ -3314,6 +3382,7 @@ class CommonBillingServiceTest {
         assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
         verify(invoiceRouteSelector, never()).selectCommonInvoiceRoute(any(), anyLong());
         verify(invoiceRouteSelector, never()).selectCommonInvoiceOwnerAcquiringRoute(any(), anyLong());
+        verify(invoiceRouteSelector, never()).selectCommonInvoiceOwnerAutomaticRoute(any(), anyLong());
         verify(paymentIssueReminderService).notifyOrderIssue(
                 eq(101L),
                 eq(PaymentIssueReminderService.SOURCE_PAYMENT_FAIL_CLOSED),

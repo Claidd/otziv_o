@@ -1389,7 +1389,7 @@ class PaymentLinkServiceTest {
         verify(contractorPaymentLiveRoutingService).reserveForPaymentLink(link);
     }
     @Test
-    void liveOwnerAllocationUsesTbankAcquiringInsteadOfLegacyManualProfile() {
+    void liveOwnerAllocationUsesEnabledManualProfileWithinMonthlyLimit() {
         PaymentLinkService service = service(properties());
         Order order = order(726L, "ООО Владелец через эквайринг", BigDecimal.valueOf(1000));
         PaymentProfile manualProfile = profile(8L, "owner-manual", "Ручной профиль владельца", "owner-terminal");
@@ -1423,14 +1423,61 @@ class PaymentLinkServiceTest {
         ArgumentCaptor<PaymentLink> saved = ArgumentCaptor.forClass(PaymentLink.class);
         verify(paymentLinkRepository, times(2)).save(saved.capture());
         PaymentLink link = saved.getAllValues().getLast();
-        assertEquals(PaymentMethod.BANK_FORM, link.getPaymentMethod());
-        assertEquals(PaymentLinkStatus.CREATED, link.getStatus());
+        assertEquals(PaymentMethod.MANUAL_MOBILE_BANK, link.getPaymentMethod());
+        assertEquals(PaymentLinkStatus.WAITING_MANUAL_PAYMENT, link.getStatus());
         assertEquals(727L, link.getContractorAllocationId());
+        assertEquals(ManualPaymentSource.PROFILE_MONTHLY_LIMIT, link.getManualSource());
+        assertEquals(ManualPaymentType.MOBILE_BANK, link.getManualPaymentType());
+        assertEquals("+79990001122", link.getManualPhone());
+        assertEquals("+79990001122", response.telegramCopyTransferNumber());
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "MANUAL_UNTIL_LIMIT_THEN_TBANK, 500000",
+            "T_BANK_ONLY, 0"
+    })
+    void liveOwnerAllocationUsesBankAfterLimitOrWhenManualIsDisabled(
+            String policy, long usedKopecks) {
+        PaymentLinkService service = service(properties());
+        Order order = order(886L, "ООО Владелец", BigDecimal.valueOf(1000));
+        PaymentProfile profile = profile(88L, "owner", "Основной магазин", "owner-terminal");
+        profile.setPaymentPolicy(PaymentPolicy.valueOf(policy));
+        profile.setManualPhone("+79990001122");
+        profile.setManualRecipientName("Мария Р.");
+        profile.setManualMonthlyHardLimitKopecks(500_000L);
+        ContractorPaymentAllocation owner = new ContractorPaymentAllocation();
+        owner.setId(887L);
+        owner.setRecipientType(ContractorRecipientType.OWNER);
+        when(orderRepository.findByIdForMutation(886L)).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findFirstByOrder_IdAndStatusInAndExpiresAtAfterOrderByCreatedAtDesc(
+                eq(886L), anyCollection(), any(LocalDateTime.class))).thenReturn(Optional.empty());
+        when(paymentProfileService.selectForManager(any())).thenReturn(profile);
+        when(paymentProfileService.lockForRouting(profile)).thenReturn(profile);
+        when(contractorPaymentLiveRoutingService.enabledForNewRoutes()).thenReturn(true);
+        when(contractorPaymentLiveRoutingService.reserveForPaymentLink(any(PaymentLink.class)))
+                .thenReturn(owner);
+        when(paymentLinkRepository.save(any(PaymentLink.class))).thenAnswer(invocation -> {
+            PaymentLink link = invocation.getArgument(0);
+            link.setId(888L);
+            return link;
+        });
+        if (profile.getPaymentPolicy() == PaymentPolicy.MANUAL_UNTIL_LIMIT_THEN_TBANK) {
+            when(paymentLinkRepository.sumManualReservedAndConfirmedForPeriod(
+                    eq(88L), anyCollection(), anyCollection(), any(LocalDateTime.class),
+                    any(LocalDateTime.class), any(LocalDateTime.class),
+                    eq(PaymentLinkStatus.CONFIRMED), eq(null)))
+                    .thenReturn(usedKopecks);
+        }
+
+        service.createForOrder(886L);
+
+        ArgumentCaptor<PaymentLink> saved = ArgumentCaptor.forClass(PaymentLink.class);
+        verify(paymentLinkRepository, times(2)).save(saved.capture());
+        PaymentLink link = saved.getAllValues().getLast();
+        assertEquals(PaymentMethod.BANK_FORM, link.getPaymentMethod());
         assertNull(link.getManualSource());
-        assertNull(link.getManualPaymentType());
-        assertNull(link.getManualPhone());
-        assertTrue(response.copyText().contains("Ссылка на оплату: https://example.ru/pay/"));
-        assertNull(response.telegramCopyTransferNumber());
+        assertEquals(887L, link.getContractorAllocationId());
     }
 
     @ParameterizedTest
@@ -2298,6 +2345,60 @@ class PaymentLinkServiceTest {
                 any(), any(), anyCollection(), any(LocalDateTime.class), any(LocalDateTime.class),
                 any(LocalDateTime.class), any(PaymentLinkStatus.class), any()
         );
+    }
+
+    @Test
+    void commonInvoiceOwnerAutomaticRouteUsesMonthlyProfileDespiteManagerText() {
+        PaymentLinkService service = service(properties());
+        Manager manager = manager("manager-owner-auto");
+        PaymentProfile profile = profile(19L, "owner-auto", "Основной магазин", "owner-terminal");
+        profile.setPaymentPolicy(PaymentPolicy.MANUAL_UNTIL_LIMIT_THEN_TBANK);
+        profile.setManualPaymentType(ManualPaymentType.MOBILE_BANK);
+        profile.setManualPhone("+79990001122");
+        profile.setManualRecipientName("Мария Р.");
+        profile.setManualMonthlyHardLimitKopecks(500_000L);
+        lenient().when(runtimeSettingsService.paymentInstructionSource())
+                .thenReturn(TbankRuntimeSettingsService.PAYMENT_SOURCE_MANAGER_TEXT);
+        when(paymentProfileService.selectForManager(manager)).thenReturn(profile);
+        when(paymentProfileService.lockForRouting(profile)).thenReturn(profile);
+
+        var route = service.selectCommonInvoiceOwnerAutomaticRoute(manager, 230_000L);
+
+        assertEquals(PaymentMethod.MANUAL_MOBILE_BANK.name(), route.routeType());
+        assertEquals(ManualPaymentSource.PROFILE_MONTHLY_LIMIT.name(), route.manualSource());
+        assertEquals("+79990001122", route.manualPhone());
+        assertEquals("Мария Р.", route.manualRecipientName());
+    }
+
+    @Test
+    void commonInvoiceOwnerAutomaticRouteFallsBackToBankAtLimitOrWhenDisabled() {
+        PaymentLinkService service = service(properties());
+        Manager manager = manager("manager-owner-limit");
+        PaymentProfile profile = profile(20L, "owner-limit", "Основной магазин", "owner-terminal");
+        profile.setPaymentPolicy(PaymentPolicy.MANUAL_UNTIL_LIMIT_THEN_TBANK);
+        profile.setManualPaymentType(ManualPaymentType.MOBILE_BANK);
+        profile.setManualPhone("+79990001122");
+        profile.setManualRecipientName("Мария Р.");
+        profile.setManualMonthlyHardLimitKopecks(500_000L);
+        when(paymentProfileService.selectForManager(manager)).thenReturn(profile);
+        when(paymentProfileService.lockForRouting(profile)).thenReturn(profile);
+        when(paymentLinkRepository.sumManualReservedAndConfirmedForPeriod(
+                eq(20L), anyCollection(), anyCollection(), any(LocalDateTime.class),
+                any(LocalDateTime.class), any(LocalDateTime.class),
+                eq(PaymentLinkStatus.CONFIRMED), eq(null)))
+                .thenReturn(200_000L);
+        when(manualPaymentTaskService.commonInvoiceProfileUsageForPeriod(
+                eq(20L), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(100_000L);
+
+        var overLimit = service.selectCommonInvoiceOwnerAutomaticRoute(manager, 230_000L);
+        profile.setPaymentPolicy(PaymentPolicy.T_BANK_ONLY);
+        var disabled = service.selectCommonInvoiceOwnerAutomaticRoute(manager, 100_000L);
+
+        assertEquals(TbankRuntimeSettingsService.PAYMENT_SOURCE_BANK_LINK, overLimit.routeType());
+        assertNull(overLimit.manualSource());
+        assertEquals(TbankRuntimeSettingsService.PAYMENT_SOURCE_BANK_LINK, disabled.routeType());
+        assertNull(disabled.manualSource());
     }
     @Test
     void commonInvoiceRouteUsesManagerTextWithoutRequiringTbankProfile() {

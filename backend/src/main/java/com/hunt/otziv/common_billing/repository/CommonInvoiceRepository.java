@@ -646,6 +646,42 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
             @Param("paidStatus") CommonInvoiceStatus paidStatus
     );
 
+    @Query("""
+        SELECT COALESCE(SUM(invoice.paymentRouteAmountKopecks), 0)
+        FROM CommonInvoice invoice
+        WHERE invoice.paymentRouteProfileId = :profileId
+          AND invoice.paymentRouteManualSource = :manualSource
+          AND invoice.paymentRouteSelectedAt >= :from
+          AND invoice.paymentRouteSelectedAt < :to
+          AND invoice.paymentRouteAmountKopecks > 0
+          AND invoice.status IN :statuses
+    """)
+    long sumProfilePaymentRoutesForPeriod(
+            @Param("profileId") Long profileId,
+            @Param("manualSource") ManualPaymentSource manualSource,
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to,
+            @Param("statuses") Collection<CommonInvoiceStatus> statuses
+    );
+
+    @Query("""
+        SELECT COUNT(invoice)
+        FROM CommonInvoice invoice
+        WHERE invoice.paymentRouteProfileId = :profileId
+          AND invoice.paymentRouteManualSource = :manualSource
+          AND invoice.paymentRouteSelectedAt >= :from
+          AND invoice.paymentRouteSelectedAt < :to
+          AND invoice.paymentRouteAmountKopecks > 0
+          AND invoice.status IN :statuses
+    """)
+    long countProfilePaymentRoutesForPeriod(
+            @Param("profileId") Long profileId,
+            @Param("manualSource") ManualPaymentSource manualSource,
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to,
+            @Param("statuses") Collection<CommonInvoiceStatus> statuses
+    );
+
     @Query(value = """
         SELECT receipt.sourceId AS sourceId,
                SUM(receipt.amountKopecks) AS amountKopecks,

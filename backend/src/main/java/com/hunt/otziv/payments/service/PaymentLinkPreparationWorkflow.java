@@ -371,7 +371,7 @@ public class PaymentLinkPreparationWorkflow {
                         applyContractorPaymentRoute(link, liveAllocation);
                     } else {
                         applyPaymentProfile(link, profile);
-                        applyBankPaymentRoute(link);
+                        routePaymentWithoutTask(link, profile, amountKopecks, now, null);
                         link.setContractorAllocationId(liveAllocation.getId());
                     }
                     link = paymentLinkRepository.save(link);
