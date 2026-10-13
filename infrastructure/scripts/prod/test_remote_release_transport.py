@@ -2,11 +2,24 @@ import hashlib,io,json,subprocess,sys,tempfile,unittest
 from pathlib import Path
 from unittest.mock import Mock,patch
 from ci_artifacts import storage_url
-from remote_release_transport import SignedArtifacts,invoke,validate_remote_plan,remote,PORT
+from remote_release_transport import SignedArtifacts,invoke,validate_remote_plan,remote,staging_required_bytes,PORT
+from release_preflight import direct_transport_decision
 from release_ci import GateError
 import test_ci_release as fixture_module
 
 class RemoteTransportTest(unittest.TestCase):
+    def test_early_direct_capacity_matches_remote_gate_and_preserves_local_fallback(self):
+        fixture=fixture_module.ReleaseArtifactsTest();fixture.setUp();self.addCleanup(fixture.doCleanups)
+        release=fixture.release
+        reserve=7_956_311_397
+        required=staging_required_bytes(release,reserve)
+        preflight={'capacity':{'result':'PASS','filesystems':[{'requiredBytes':reserve}]},
+                   'stagingAvailableBytes':required}
+        self.assertEqual('FAIL',direct_transport_decision(release,preflight)['result'])
+        preflight['stagingAvailableBytes']=required+1
+        self.assertEqual({'result':'PASS','availableBytes':required+1,'requiredBytes':required},
+                         direct_transport_decision(release,preflight))
+
     def test_transmitted_helpers_validate_new_manifest_in_an_isolated_interpreter(self):
         from ci_test_reuse import DECISION,JOBS
         fixture=fixture_module.ReleaseArtifactsTest();fixture.setUp();self.addCleanup(fixture.doCleanups)

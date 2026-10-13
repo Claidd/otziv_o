@@ -85,16 +85,25 @@ class SignedArtifacts:
         return output
 
 
+def staging_required_bytes(release, release_reserve_bytes, worker=False):
+    """Use the same Direct staging budget before and during remote transport."""
+    require(type(release_reserve_bytes) is int and release_reserve_bytes >= 0,
+            'Invalid release capacity reserve')
+    release = validate_release(release, release['revision'])
+    archives = sum(row['archiveBytes'] for row in release['images'] if row['service']
+                   and (row['service'] != 'external-review-worker' or worker))
+    return archives * 3 + 1024**3 + release_reserve_bytes
+
+
 def remote(packet, directory):
     record_path = directory/'registry.json'
     action = packet['action']
     if action == 'prepare':
         release = validate_release(packet['release'], packet['release']['revision'])
-        # Stage contains ZIP + OCI + registry blobs. Keep another GiB reserve;
-        # the normal capacity check separately budgets unpacking and DB backups.
-        needed = sum(row['archiveBytes'] for row in release['images'] if row['service']
-                     and (row['service'] != 'external-review-worker' or packet.get('worker'))) * 3 + 1024**3
-        require(shutil.disk_usage(directory).free > needed + packet['releaseReserveBytes'], 'Insufficient artifact staging capacity')
+        # Stage contains ZIP + OCI + registry blobs. The deployment capacity
+        # reserve also covers image unpacking and the mandatory DB backup.
+        needed = staging_required_bytes(release, packet['releaseReserveBytes'], packet.get('worker', False))
+        require(shutil.disk_usage(directory).free > needed, 'Insufficient artifact staging capacity')
         registry = release_registry.create(record_path, PORT, packet['owner'])
         plan = import_release(SignedArtifacts(packet['links']), release, registry, directory/'images', packet.get('worker', False))
         registry = release_registry.seal(record_path)
