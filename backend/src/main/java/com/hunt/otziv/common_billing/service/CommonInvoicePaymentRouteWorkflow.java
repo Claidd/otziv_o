@@ -164,12 +164,11 @@ public class CommonInvoicePaymentRouteWorkflow {
                 ownerBankReissueBlockReason = "Актуальный платежный профиль менеджера недоступен: " + readableException(failure);
             }
         }
-        CommonInvoicePaymentRouteChangeTarget currentTarget = isTbankCommonRoute(invoice)
+        boolean ownerManualRoute = isOwnerManualProfileRoute(invoice);
+        CommonInvoicePaymentRouteChangeTarget currentTarget = isTbankCommonRoute(invoice) || ownerManualRoute
                 ? CommonInvoicePaymentRouteChangeTarget.OWNER_TBANK
-                : isOwnerManualProfileRoute(invoice)
-                        ? CommonInvoicePaymentRouteChangeTarget.OWNER_MANUAL
-                        : CommonInvoicePaymentRouteChangeTarget.EMPLOYEE_REQUISITES;
-        return new CommonInvoicePaymentRouteChangeContextResponse(commonInvoiceRouteLabel(invoice), currentTarget, commonInvoiceRouteRecipient(invoice, routeItems), invoice.getStatus() == null ? "UNKNOWN" : invoice.getStatus().name(), blockReason == null, blockReason == null ? "" : blockReason, commonInvoiceRouteChangeToken(invoice, paymentRefs), invoice.getPaymentRouteProfileId(), ownerBankTargetProfile == null ? null : ownerBankTargetProfile.getId(), normalize(ownerBankTargetProfile == null ? null : ownerBankTargetProfile.getName()), normalize(ownerBankTargetProfile == null ? null : ownerBankTargetProfile.getProvider()), ownerBankReissueBlockReason == null, ownerBankReissueBlockReason == null ? "" : ownerBankReissueBlockReason);
+                : CommonInvoicePaymentRouteChangeTarget.EMPLOYEE_REQUISITES;
+        return new CommonInvoicePaymentRouteChangeContextResponse(commonInvoiceRouteLabel(invoice), currentTarget, commonInvoiceRouteRecipient(invoice, routeItems), invoice.getStatus() == null ? "UNKNOWN" : invoice.getStatus().name(), blockReason == null, blockReason == null ? "" : blockReason, commonInvoiceRouteChangeToken(invoice, paymentRefs), invoice.getPaymentRouteProfileId(), ownerBankTargetProfile == null ? null : ownerBankTargetProfile.getId(), normalize(ownerBankTargetProfile == null ? null : ownerBankTargetProfile.getName()), normalize(ownerBankTargetProfile == null ? null : ownerBankTargetProfile.getProvider()), ownerBankReissueBlockReason == null, ownerBankReissueBlockReason == null ? "" : ownerBankReissueBlockReason, ownerManualRoute);
     }
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)

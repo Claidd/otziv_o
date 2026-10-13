@@ -991,7 +991,9 @@ export class CommonBillingComponent implements OnDestroy {
           return;
         }
         const target: CommonInvoicePaymentRouteChangeTarget = targetOverride
-          ?? (context.currentTarget === 'OWNER_TBANK' ? 'EMPLOYEE_REQUISITES' : 'OWNER_TBANK');
+          ?? (context.currentTarget === 'OWNER_TBANK' && !context.ownerManualRoute
+            ? 'EMPLOYEE_REQUISITES'
+            : 'OWNER_TBANK');
         const destination = target === 'EMPLOYEE_REQUISITES'
           ? 'реквизиты специалиста или менеджера'
           : 'банковскую ссылку владельца';

@@ -9,7 +9,6 @@ package com.hunt.otziv.common_billing.dto;
  */
 public enum CommonInvoicePaymentRouteChangeTarget {
     EMPLOYEE_REQUISITES,
-    OWNER_MANUAL,
     OWNER_TBANK,
     OWNER_BANK_REISSUE
 }

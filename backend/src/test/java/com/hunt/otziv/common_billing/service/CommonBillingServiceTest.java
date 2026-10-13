@@ -1259,7 +1259,8 @@ class CommonBillingServiceTest {
 
         var context = service.commonInvoicePaymentRouteChangeContext(invoice.getId());
 
-        assertEquals(CommonInvoicePaymentRouteChangeTarget.OWNER_MANUAL, context.currentTarget());
+        assertEquals(CommonInvoicePaymentRouteChangeTarget.OWNER_TBANK, context.currentTarget());
+        assertTrue(context.ownerManualRoute());
         assertTrue(context.canChange());
     }
 

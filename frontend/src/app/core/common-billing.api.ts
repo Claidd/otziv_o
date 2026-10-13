@@ -87,7 +87,6 @@ export interface CommonInvoiceDetailsResponse {
 
 export type CommonInvoicePaymentRouteChangeTarget =
   | 'EMPLOYEE_REQUISITES'
-  | 'OWNER_MANUAL'
   | 'OWNER_TBANK'
   | 'OWNER_BANK_REISSUE';
 
@@ -105,6 +104,7 @@ export interface CommonInvoicePaymentRouteChangeContextResponse {
   ownerBankTargetProvider?: string | null;
   canReissueOwnerBank: boolean;
   ownerBankReissueBlockReason: string;
+  ownerManualRoute?: boolean;
 }
 
 export interface CommonInvoiceArchiveOrderPreview {
