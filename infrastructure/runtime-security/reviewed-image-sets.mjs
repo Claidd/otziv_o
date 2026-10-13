@@ -54,6 +54,14 @@ const RELEASE_SETS = Object.freeze({
   'c26-keycloak': { component: 'keycloak', path: 'infrastructure/runtime-security/reviewed-images-c26-keycloak.json', context: 'infrastructure/runtime-security/builds/c26-keycloak', dockerfile: 'infrastructure/runtime-security/builds/c26-keycloak/Dockerfile' },
   'c26-nginx': { component: 'nginx', path: 'infrastructure/runtime-security/reviewed-images-c26-nginx.json', context: 'infrastructure/runtime-security/builds/c26-nginx', dockerfile: 'infrastructure/runtime-security/builds/c26-nginx/Dockerfile' },
   'c28-nginx': { component: 'nginx', path: 'infrastructure/runtime-security/reviewed-images-c28-nginx.json', context: 'infrastructure/runtime-security/builds/c28-nginx', dockerfile: 'infrastructure/runtime-security/builds/c28-nginx/Dockerfile' },
+  'c29-dozzle': { component: 'dozzle', path: 'infrastructure/runtime-security/reviewed-images-c29-dozzle.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c29-dozzle/Dockerfile' },
+  'c29-prometheus': { component: 'prometheus', path: 'infrastructure/runtime-security/reviewed-images-c29-prometheus.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c29-prometheus/Dockerfile' },
+  'c29-loki': { component: 'loki', path: 'infrastructure/runtime-security/reviewed-images-c29-loki.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c29-loki/Dockerfile' },
+  'c29-alloy': { component: 'alloy', path: 'infrastructure/runtime-security/reviewed-images-c29-alloy.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c29-alloy/Dockerfile' },
+  'c29-tempo': { component: 'tempo', path: 'infrastructure/runtime-security/reviewed-images-c29-tempo.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c29-tempo/Dockerfile' },
+  'c29-grafana': { component: 'grafana', path: 'infrastructure/runtime-security/reviewed-images-c29-grafana.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c29-grafana/Dockerfile' },
+  'c29-mc': { component: 'mc', path: 'infrastructure/runtime-security/reviewed-images-c29-mc.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c29-mc/Dockerfile' },
+  'c29-local-s3': { component: 'minio', path: 'infrastructure/runtime-security/reviewed-images-c29-local-s3.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c29-local-s3/Dockerfile' },
   'c26-phpmyadmin': { component: 'phpmyadmin', path: 'infrastructure/runtime-security/reviewed-images-c26-phpmyadmin.json', context: 'infrastructure/runtime-security/builds/c26-phpmyadmin', dockerfile: 'infrastructure/runtime-security/builds/c26-phpmyadmin/Dockerfile' },
   'c27-phpmyadmin': { component: 'phpmyadmin', path: 'infrastructure/runtime-security/reviewed-images-c27-phpmyadmin.json', context: 'infrastructure/runtime-security/builds/c27-phpmyadmin', dockerfile: 'infrastructure/runtime-security/builds/c27-phpmyadmin/Dockerfile' },
 });
@@ -65,6 +73,10 @@ export function supplementalReviewedSources() {
       defaultReferencesBefore: [{ path: 'compose.prod-local.yaml', service: 'minio-init' }] },
     { component: 'minio', sourceBeforeRef: 'minio/minio@sha256:a1ea29fa28355559ef137d71fc570e508a214ec84ff8083e39bc5428980b015e',
       defaultReferencesBefore: [{ path: 'compose.prod-local.yaml', service: 'minio' }] },
+    { component: 'dozzle', sourceBeforeRef: 'amir20/dozzle@sha256:27128281cc1f93b0f849f2a5fb4ef9c12a0cce1135ab3b6fede27f9867c8a1c2',
+      defaultReferencesBefore: [{ path: 'compose.yaml', service: 'log-viewer' },
+        { path: 'compose.prod-local.yaml', service: 'dozzle' },
+        { path: 'docker-compose.yaml', service: 'dozzle' }] },
   ];
 }
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');

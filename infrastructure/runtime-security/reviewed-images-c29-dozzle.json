@@ -1,0 +1,33 @@
+{
+  "schema": "otziv-reviewed-images-v1",
+  "repository": "ghcr.io/claidd/otziv-security",
+  "publicationSet": "c29-dozzle",
+  "baselineManifestSha256": "d48bdb7d6d869cde5d6f1a7b089491765e3eeaf46e0b0b6bb51b7719b38d3ef2",
+  "images": [
+    {
+      "component": "dozzle",
+      "platform": "linux/amd64",
+      "sourceBeforeRef": "amir20/dozzle@sha256:27128281cc1f93b0f849f2a5fb4ef9c12a0cce1135ab3b6fede27f9867c8a1c2",
+      "defaultReferencesBefore": [
+        {
+          "path": "compose.yaml",
+          "service": "log-viewer"
+        },
+        {
+          "path": "compose.prod-local.yaml",
+          "service": "dozzle"
+        },
+        {
+          "path": "docker-compose.yaml",
+          "service": "dozzle"
+        }
+      ],
+      "buildArgs": {},
+      "candidateBaseRef": "amir20/dozzle@sha256:ba65da5af3d2147cfc2ee68ea5a6e35b75d2dff7eeff226151a65c9d77831c02",
+      "context": "infrastructure/runtime-security",
+      "dockerfile": "infrastructure/runtime-security/builds/c29-dozzle/Dockerfile",
+      "dockerfileSha256": "2444c590b242a4f08aa719a398283ba622b4987db562ff2bd77b1bb849abf00f",
+      "version": "v11.3.1-otziv.1"
+    }
+  ]
+}

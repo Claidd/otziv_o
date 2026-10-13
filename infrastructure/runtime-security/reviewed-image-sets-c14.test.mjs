@@ -72,7 +72,7 @@ test('mc and MinIO defaults need their own complete publication proof and cannot
   const rows = originals.map(image => ({ image: image.sourceBeforeRef.replace(/:[^/@]+@/, '@'),
     references: structuredClone(image.defaultReferencesBefore) }));
   const readNothing = async () => { throw Error('unexpected_evidence_read'); };
-  assert.equal((await validateReviewedDefaults(rows, baselineBytes, undefined, readNothing, true)).length, 32);
+  assert.equal((await validateReviewedDefaults(rows, baselineBytes, undefined, readNothing, true)).length, 35);
   for (const component of ['mc', 'minio']) {
     const index = originals.findIndex(image => image.component === component);
     await assert.rejects(resolveActivationManifest(originals[index], {}, baselineBytes, readNothing), /versioned_manifest_required/);

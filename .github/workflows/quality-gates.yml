@@ -49,6 +49,14 @@ on:
           - c28-nginx
           - c26-phpmyadmin
           - c27-phpmyadmin
+          - c29-dozzle
+          - c29-prometheus
+          - c29-loki
+          - c29-alloy
+          - c29-tempo
+          - c29-grafana
+          - c29-mc
+          - c29-local-s3
   pull_request:
   push:
     branches: [main]
