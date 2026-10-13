@@ -325,6 +325,11 @@ def select(client, repo, selection, revision, mode='shadow', runner=None, now=No
         matched_jobs = [j for j in jobs if j.get('name') == JOBS[scope]]
         require(len(matched_jobs) == 1, 'Source test job missing or ambiguous')
         job = matched_jobs[0]
+        # GitHub may temporarily omit steps from an otherwise completed job.
+        # Without the issuer step, evidence is not reusable; run the full check.
+        if not job.get('steps'):
+            result['checks'][scope]['reason'] = 'Source job steps unavailable; executing the full check'
+            continue
         url = job.get('check_run_url', '')
         require(url.startswith(API + '/check-runs/') and url.removeprefix(API + '/check-runs/').isdigit(), 'Invalid check API identity')
         check = client.get(url.removeprefix(API))
