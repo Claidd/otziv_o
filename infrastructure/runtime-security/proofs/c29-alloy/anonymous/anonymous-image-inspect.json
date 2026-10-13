@@ -1,0 +1,85 @@
+[
+    {
+        "Id": "sha256:41b315a7b540eb7616047edf4ab2f4db298a5e472c275ea85c0015b868223e08",
+        "RepoTags": [],
+        "RepoDigests": [
+            "ghcr.io/claidd/otziv-security@sha256:4e742bcabebac215f9277f20f7cdaeebee062814ed03ed929910c1aa394ce50e"
+        ],
+        "Parent": "",
+        "Comment": "buildkit.dockerfile.v0",
+        "Created": "2026-10-13T18:37:31.300536582Z",
+        "DockerVersion": "",
+        "Author": "",
+        "Config": {
+            "Hostname": "",
+            "Domainname": "",
+            "User": "",
+            "AttachStdin": false,
+            "AttachStdout": false,
+            "AttachStderr": false,
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "ALLOY_DEPLOY_MODE=docker"
+            ],
+            "Cmd": [
+                "run",
+                "/etc/alloy/config.alloy",
+                "--storage.path=/var/lib/alloy/data"
+            ],
+            "ArgsEscaped": true,
+            "Image": "",
+            "Volumes": null,
+            "WorkingDir": "",
+            "Entrypoint": [
+                "/bin/alloy"
+            ],
+            "OnBuild": null,
+            "Labels": {
+                "com.otziv.publication.revision": "09e5ccdd863cdf51ed7848e44f6b157b9bf40a9c",
+                "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+                "com.otziv.reviewed-component": "alloy",
+                "com.otziv.security.patch": "Go1.27.2; google.golang.org/grpc1.83.2; original UI lock and vendor build tags",
+                "com.otziv.security.proof": "alloy-daemon-c29",
+                "org.opencontainers.image.revision": "becfd489a7bb459c0496893b555fb87a003296b1",
+                "org.opencontainers.image.source": "https://github.com/grafana/alloy",
+                "org.opencontainers.image.version": "1.19.2-otziv.2"
+            }
+        },
+        "Architecture": "amd64",
+        "Os": "linux",
+        "Size": 1759829435,
+        "GraphDriver": {
+            "Data": {
+                "LowerDir": "/var/lib/docker/overlay2/a75645e5b01fcdfbdd01433757c2772eebb2ed5a592b7783d536b8b1452f5ecf/diff:/var/lib/docker/overlay2/682915ba72b32061a759301b1804ed2cd6d2c74a5f41e73a82b9c50524944fc5/diff:/var/lib/docker/overlay2/af23e0a480065afe0a5b1be3c302685dae4201624e26a6238601f723d06817cd/diff:/var/lib/docker/overlay2/88ec5d188b8e15b2d7ed694b00dd56121b72baa96a6311cae10cec15d8f70358/diff:/var/lib/docker/overlay2/1722cedd80ca2abb4cfa0d58800b66b9670619473c96c87f7a46caf012542e10/diff:/var/lib/docker/overlay2/b2cae7373c94976a9a1b6a146b892ee16915aa7761bffe93f4a96175047bbdde/diff:/var/lib/docker/overlay2/0732308b9fecddedd2e967c6db407abc58ece1208ab8d6e34fc341ef2585ca71/diff:/var/lib/docker/overlay2/a0303eaf64f1d7b58f12f1705fdc3fe7f39ff0d9b9a9fab4bf725ab4893a8da4/diff:/var/lib/docker/overlay2/9e96efc89e48ced83245f750cbbb39ead7f7f674d3d2755ed4003475ececbfec/diff:/var/lib/docker/overlay2/cbcf62a835a98fa367a5f378daaf90f5603e2464902d6aa94b2a57e04806a67f/diff:/var/lib/docker/overlay2/2ecabf36753b9153b8237a1e7fcb2ea704dd89e301b188c78d9f7ec2306508f9/diff:/var/lib/docker/overlay2/0acdbb607fa6c1f66cd88f221929f38ad7aa701beb53f26d668086973fe594bb/diff",
+                "MergedDir": "/var/lib/docker/overlay2/7758b6713b254adfbb5fb17eeb3d1fc4f7f74b256d2a594adb45996e8fb6fd60/merged",
+                "UpperDir": "/var/lib/docker/overlay2/7758b6713b254adfbb5fb17eeb3d1fc4f7f74b256d2a594adb45996e8fb6fd60/diff",
+                "WorkDir": "/var/lib/docker/overlay2/7758b6713b254adfbb5fb17eeb3d1fc4f7f74b256d2a594adb45996e8fb6fd60/work"
+            },
+            "Name": "overlay2"
+        },
+        "RootFS": {
+            "Type": "layers",
+            "Layers": [
+                "sha256:538812a4b9bd45adaac2b5e5b967daa6999aa44eb110aa32ae7c69702b906475",
+                "sha256:9c37a913490f54b19ed0b7adb27bbbb1977e9e8b1efde260f6518e7f66946be7",
+                "sha256:3811aad73903fceb82a51458fe600c12a78d741d6bbd031bd87e7589e41a6d8d",
+                "sha256:4502af2c8dcd9cc2c4fc5b04a5b0a7a746ac9500be97fd2b0a59a692304bb442",
+                "sha256:16240de67cd4f746c51e41736cfaf5d8344b3330a1dd53239f3177d3ad99265b",
+                "sha256:2eaa7339e917e84cdf320a367113f59b8b24d57f5e9eaa6ca311b1cd528a7407",
+                "sha256:6dc3d145ddf72e263546e156710268581d13524319f7ab644744e8fa8ffe5107",
+                "sha256:45eadccc303c879365ed980fe4ed21262b0bd1a4957c8f8b2f357d40e4ec1d62",
+                "sha256:396cc1480c006362620aeb035c50470a0ecb100a2776e984ecdde2f590d44968",
+                "sha256:897b9c539878bf6e79564fc72d74d45f24d619607ee87704d665956dcca40651",
+                "sha256:60e3b071708301568ebf60e150ed29bae441a62235184691af6e5937a8fa0ec4",
+                "sha256:eca8f9af20384d28f9d28b3e76dbadf21d7b2fe626b1ef00f48f2e15572d8b4b",
+                "sha256:9360d44ba59991242f44a1db1bcb9d020fe27c1d74ce6c08cca63a995dfdaff6"
+            ]
+        },
+        "Metadata": {
+            "LastTagTime": "0001-01-01T00:00:00Z"
+        }
+    }
+]

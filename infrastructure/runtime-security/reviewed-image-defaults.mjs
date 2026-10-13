@@ -33,6 +33,19 @@ const MANIFEST = 'infrastructure/runtime-security/reviewed-images.json';
 const MANIFEST_SHA256 = 'd48bdb7d6d869cde5d6f1a7b089491765e3eeaf46e0b0b6bb51b7719b38d3ef2';
 const ACTIVATIONS = 'infrastructure/runtime-security/reviewed-image-activations.json';
 const EVIDENCE_FILE = /^registry-(?:index|amd64-(?:manifest|config)|attestation-[0-9]+(?:-payload-[0-9]+)?)\.json$/;
+// These four unmodified public scanner/OCI payloads contain high-entropy hashes
+// that resemble credentials. Retain their exact bytes compressed and verify them
+// before any publication or registry checks consume them.
+const C29_COMPRESSED_PROOFS = new Map([
+  ['infrastructure/runtime-security/proofs/c29-alloy/anonymous/registry-attestation-0-payload-0.json',
+    '7e66512278b6b71b139d00f0678400ff3f972fc6901d9f61e824ab0f921944e5'],
+  ['infrastructure/runtime-security/proofs/c29-alloy/publication/registry-attestation-0-payload-0.json',
+    '7e66512278b6b71b139d00f0678400ff3f972fc6901d9f61e824ab0f921944e5'],
+  ['infrastructure/runtime-security/proofs/c29-alloy/publication/vulnerabilities.json',
+    '3955c18d28ebf5e0d243dd6a5f172d10509292c9e0360ce0b73fab5b8b7c9108'],
+  ['infrastructure/runtime-security/proofs/c29-grafana/publication/vulnerabilities.sbom.cdx.json',
+    '4cf6633d14c7b3c35cfe8e4cecdf623e065c86c0fbf299ff66b1eba53d0e4839'],
+]);
 
 export async function validateAlloyReassessment(image, entry, publication, proof) {
   // The original C7 publication remains immutable. This later finding review is
@@ -190,11 +203,13 @@ export async function validateGrafanaC29ActivationScan(publication, publicationP
   const directory = dirname(publicationPath).replaceAll('\\', '/');
   const [rawBytes, receiptBytes] = await Promise.all([
     read(directory + '/vulnerabilities.json'), read(directory + '/vulnerabilities.adjudications.json')]);
-  const raw = JSON.parse(rawBytes), receipt = JSON.parse(receiptBytes).grafana;
+  const raw = JSON.parse(rawBytes), receipt = JSON.parse(receiptBytes);
   const { review, reviewSha256 } = await loadReviewedProof('c29');
   assert.equal(raw.Metadata?.ImageID, publication.imageId, 'activation_grafana_c29_report_image');
   assert.equal(receipt?.schema, 'otziv-image-adjudication-v1', 'activation_grafana_c29_schema');
   assert.equal(receipt.status, 'EXACT_BINARY_FIXED_CODE_PROVEN', 'activation_grafana_c29_not_proven');
+  assert.equal(receipt.alloy?.status, 'NOT_APPLICABLE', 'activation_grafana_c29_alloy_scope');
+  assert.deepEqual(receipt.alloy.decisions, [], 'activation_grafana_c29_alloy_decisions');
   assert.equal(receipt.reviewSha256, reviewSha256, 'activation_grafana_c29_review_changed');
   assert.equal(receipt.rawReportSha256, sha256(rawBytes), 'activation_grafana_c29_raw_changed');
   assert.equal(receipt.imageConfigId, publication.imageId, 'activation_grafana_c29_receipt_image');
@@ -209,7 +224,8 @@ export async function validateGrafanaC29ActivationScan(publication, publicationP
   assert.deepEqual(receipt.module, review.module, 'activation_grafana_c29_module');
   assert.deepEqual(receipt.decisions, matchingFindings(raw, review), 'activation_grafana_c29_decisions');
   assert.equal(receipt.decisions.length, 2, 'activation_grafana_c29_scope');
-  const expected = { ...combinedScanSummary(summarizeReport(raw), { grafana: receipt }), scannerImage: TRIVY_IMAGE };
+  const expected = { ...combinedScanSummary(summarizeReport(raw),
+    { grafana: receipt, alloy: receipt.alloy }), scannerImage: TRIVY_IMAGE };
   assert.deepEqual(publication.security, expected, 'activation_grafana_c29_summary');
   assert.equal(expected.result, 'PASS', 'activation_grafana_c29_security_failed');
   assert.equal(expected.effectiveBlockingFixedHighOrCritical, 0, 'activation_grafana_c29_fixed_findings');
@@ -434,6 +450,12 @@ export async function createEvidenceReader(root) {
     // Preserve the original-file path, including its existing outer hash checks.
     // A dangling link is not an absent original and may not trigger the fallback.
     if (exists) return readFile(await physicalPath(path));
+    if (C29_COMPRESSED_PROOFS.has(path)) {
+      const compressed = await boundedRead(path + '.gz', FILE_GATE_BYTES);
+      const bytes = gunzipSync(compressed, { maxOutputLength: 8 * 1024 * 1024 });
+      assert.equal(sha256(bytes), C29_COMPRESSED_PROOFS.get(path), 'activation_c29_compressed_hash');
+      return bytes;
+    }
     const name = basename(path);
     if (!SPLIT_EVIDENCE_FILE.test(name)) return readFile(await physicalPath(path));
     const metadata = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(
