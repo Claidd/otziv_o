@@ -96,7 +96,8 @@ class ManagerWorkerDailyProgressTransactionMySqlIntegrationTest {
         });
 
         ManagerWorkerDailyProgressService service = transactionalProxy(
-                new ManagerWorkerDailyProgressService(managerRepository, progressService)
+                new ManagerWorkerDailyProgressService(managerRepository, progressService,
+                        mock(com.hunt.otziv.worker_performance.service.EndOfDayAchievementService.class))
         );
 
         service.progressByManagerIds(List.of(1L), date);

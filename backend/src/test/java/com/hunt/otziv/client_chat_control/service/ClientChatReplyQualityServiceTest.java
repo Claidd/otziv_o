@@ -20,6 +20,12 @@ class ClientChatReplyQualityServiceTest {
     }
 
     @Test
+    void reactionOnlyIsNotAClientReply() {
+        var result = service.assess("Когда будут готовы отзывы?", "👌");
+        assertEquals(ClientChatReplyQuality.SUSPICIOUS, result.quality());
+    }
+
+    @Test
     void replyWithNextStepToProblemIsGood() {
         var result = service.assess(
                 "Ссылка не открывается",

@@ -13,6 +13,8 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +39,29 @@ public class EndOfDayAchievementService {
     private final TelegramService telegramService;
     private final NotificationMediaDeliveryService notificationMediaDeliveryService;
     private final GamificationEventService gamificationEventService;
+
+    public Map<Long, WorkerDayResult> workerDayResults(Collection<Long> workerIds, LocalDate date) {
+        if (workerIds == null || workerIds.isEmpty() || date == null) {
+            return Map.of();
+        }
+        List<Long> ids = workerIds.stream().filter(java.util.Objects::nonNull).distinct().toList();
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        List<WorkerDayResult> rows = jdbc.query("""
+                SELECT actor_id, eligible_count, completed_count, reached_100
+                FROM end_of_day_achievement_results
+                WHERE result_date = :date AND actor_role = :role AND actor_id IN (:ids)
+                """, new MapSqlParameterSource()
+                .addValue("date", date)
+                .addValue("role", ROLE_WORKER)
+                .addValue("ids", ids), (rs, rowNum) -> new WorkerDayResult(
+                rs.getLong("actor_id"), rs.getLong("eligible_count"),
+                rs.getLong("completed_count"), rs.getBoolean("reached_100")));
+        Map<Long, WorkerDayResult> result = new LinkedHashMap<>();
+        rows.forEach(row -> result.put(row.workerId(), row));
+        return result;
+    }
 
     @Transactional
     public AchievementResult saveResult(
@@ -466,5 +491,8 @@ public class EndOfDayAchievementService {
         public static AchievementResult empty(LocalDate date, String actorRole, Long actorId) {
             return new AchievementResult(date, actorRole, actorId, 0, 0, 0, 0, false, 0, false);
         }
+    }
+
+    public record WorkerDayResult(Long workerId, long eligibleCount, long completedCount, boolean reached100) {
     }
 }

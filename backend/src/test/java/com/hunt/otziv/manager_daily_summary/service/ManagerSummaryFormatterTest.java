@@ -190,6 +190,19 @@ class ManagerSummaryFormatterTest {
     }
 
     @Test
+    void personalAuditShowsFinalizedMissedGoalFromYesterday() {
+        LocalDate reportDate = LocalDate.of(2026, 7, 13);
+        when(workerProgressService.missedPreviousDayGoals(1L, reportDate)).thenReturn(List.of(
+                new ManagerWorkerDailyProgressService.MissedWorkerGoal(
+                        50L, "Мария С.", reportDate.minusDays(1), 4, 8)));
+
+        ManagerFormattedReport report = formatter.formatPersonal(row("Вика", "CALCULATED"));
+
+        assertTrue(report.html().contains("Невыполненные дневные цели за 12.07.2026"));
+        assertTrue(report.richHtml().contains("Мария С.: выполнено <b>4 из 8</b>, осталось 4"));
+    }
+
+    @Test
     void doesNotShowMisleadingTeamEfficiencyBeforeAnyTaskIsCompleted() {
         DailyWorkProgressResponse currentWorker = workerProgress(0, 8, 8, 0);
         when(workerProgressService.progressByManagerIds(anyList(), any())).thenReturn(Map.of(

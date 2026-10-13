@@ -108,6 +108,20 @@ class ClientChatMessageTrackerServiceTest {
     }
 
     @Test
+    void emojiOnlyStaffMessageDoesNotCloseClientQuestion() {
+        ClientChatMessageCommand reaction = new ClientChatMessageCommand(
+                ClientChatPlatform.WHATSAPP, ClientChatDirection.OUTGOING,
+                "12001@g.us", "Компания", "reaction-1", "12001@g.us",
+                "Менеджер", "👌", LocalDateTime.now());
+
+        service.track(reaction, ClientChatSenderRole.STAFF);
+
+        verify(messageRepository).save(any(ClientChatMessage.class));
+        verify(unansweredRepository, never()).findByPlatformAndChatIdAndStatus(
+                ClientChatPlatform.WHATSAPP, "12001@g.us", ClientChatUnansweredStatus.OPEN);
+    }
+
+    @Test
     void incomingOwnerMessageIsIgnoredAndDoesNotCloseManagersOpenClientCard() {
         Role ownerRole = new Role();
         ownerRole.setName("ROLE_OWNER");
@@ -333,17 +347,21 @@ class ClientChatMessageTrackerServiceTest {
         ClientChatUnansweredItem open = openItem("Когда отправите готовые тексты?");
         open.setPlatform(ClientChatPlatform.WHATSAPP);
         open.setChatId("12001@g.us");
+        ClientChatMessage reaction = new ClientChatMessage();
+        reaction.setSenderRole(ClientChatSenderRole.STAFF);
+        reaction.setMessageText("👌");
+        reaction.setMessageAt(LocalDateTime.now().minusMinutes(1));
         ClientChatMessage reply = new ClientChatMessage();
         reply.setSenderRole(ClientChatSenderRole.STAFF);
         reply.setMessageText("Отправим готовые тексты сегодня до 18:00");
         reply.setMessageAt(LocalDateTime.now());
         when(unansweredRepository.findById(59L)).thenReturn(Optional.of(open));
-        when(messageRepository.findFirstByPlatformAndChatIdAndSenderRoleAndMessageAtAfterOrderByMessageAtAscIdAsc(
+        when(messageRepository.findByPlatformAndChatIdAndSenderRoleAndMessageAtAfterOrderByMessageAtAscIdAsc(
                 ClientChatPlatform.WHATSAPP,
                 "12001@g.us",
                 ClientChatSenderRole.STAFF,
                 open.getLastClientMessageAt()
-        )).thenReturn(Optional.of(reply));
+        )).thenReturn(List.of(reaction, reply));
 
         service.markFromManagerControl(
                 59L,

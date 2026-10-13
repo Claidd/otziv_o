@@ -20,6 +20,7 @@ import com.hunt.otziv.u_users.service.UserService;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -61,6 +62,7 @@ public class ManagerReportReviewTelegramService {
     private final ManagerReportReviewEventRepository eventRepository;
     private final ManagerReportReviewQualityService qualityService;
     private final ManagerSummaryFormatter formatter;
+    private final ManagerWorkerDailyProgressService workerProgressService;
     private final TelegramService telegramService;
     private final NotificationMediaDeliveryService notificationMediaDeliveryService;
     private final UserService userService;
@@ -209,20 +211,24 @@ public class ManagerReportReviewTelegramService {
         review.setQuestionsContext(report.questionContext());
         review.setCurrentQuestionIndex(0);
         review.setMinimumReadSeconds(minimumReadSeconds(report.html(), testMode));
-        int issueCount = issueCount(summary);
+        List<ManagerReportReviewQualityService.ReviewQuestion> goalQuestions =
+                previousDayGoalQuestions(manager.getId(), summary.date());
+        int currentDayIssueCount = issueCount(summary);
+        int issueCount = currentDayIssueCount + goalQuestions.size();
         review.setIssueCount(issueCount);
         List<ManagerReportReviewQualityService.ReviewQuestion> preparedQuestions = List.of();
         if (issueCount > 0) {
-            ManagerReportReviewQualityService.QuestionGeneration generation =
-                    qualityService.generateQuestions(
-                            taskContextService.refresh(report.questionContext()),
-                            issueCount
-                    );
-            review.setQuestionsJson(qualityService.questionsJson(generation.questions()));
+            ManagerReportReviewQualityService.QuestionGeneration generation = currentDayIssueCount > 0
+                    ? qualityService.generateQuestions(
+                            taskContextService.refresh(report.questionContext()), currentDayIssueCount)
+                    : new ManagerReportReviewQualityService.QuestionGeneration(List.of(), true, "");
+            preparedQuestions = generation.aiVerified()
+                    ? withGoalQuestions(generation.questions(), goalQuestions)
+                    : List.of();
+            review.setQuestionsJson(qualityService.questionsJson(preparedQuestions));
             review.setQuestionsSource(generation.aiVerified() ? QUESTIONS_AI : QUESTIONS_PENDING_AI);
             if (generation.aiVerified()) {
-                preparedQuestions = generation.questions();
-                review.setIssueCount(generation.questions().size());
+                review.setIssueCount(preparedQuestions.size());
             }
         } else {
             review.setQuestionsJson("[]");
@@ -1403,7 +1409,9 @@ public class ManagerReportReviewTelegramService {
                 taskContextService.refresh(clean(review.getQuestionsContext()).isBlank()
                         ? review.getReportSnapshot()
                         : review.getQuestionsContext()),
-                Math.max(0, review.getIssueCount())
+                Math.max(0, review.getIssueCount()
+                        - previousDayGoalQuestions(review.getManager() == null ? null : review.getManager().getId(),
+                        review.getSummaryDate()).size())
         );
         if (!generation.aiVerified()) {
             aiAvailabilityService.pause(
@@ -1415,12 +1423,16 @@ public class ManagerReportReviewTelegramService {
             return List.of();
         }
         aiAvailabilityService.resume(review, LocalDateTime.now(), "question-generation");
-        review.setQuestionsJson(qualityService.questionsJson(generation.questions()));
+        List<ManagerReportReviewQualityService.ReviewQuestion> allQuestions = withGoalQuestions(
+                generation.questions(),
+                previousDayGoalQuestions(review.getManager() == null ? null : review.getManager().getId(),
+                        review.getSummaryDate()));
+        review.setQuestionsJson(qualityService.questionsJson(allQuestions));
         review.setQuestionsSource(QUESTIONS_AI);
-        review.setIssueCount(generation.questions().size());
+        review.setIssueCount(allQuestions.size());
         sessionRepository.save(review);
-        issueService.ensureIssues(review, generation.questions());
-        return generation.questions();
+        issueService.ensureIssues(review, allQuestions);
+        return allQuestions;
     }
 
     private boolean questionsPendingAi(ManagerReportReviewSession review) {
@@ -1493,6 +1505,38 @@ public class ManagerReportReviewTelegramService {
                 + Math.max(0, summary.taskOtherOpen())
                 + Math.max(0, summary.hardSlaBreachCount());
         return (int) Math.min(Integer.MAX_VALUE, Math.max(explicit, open));
+    }
+
+    private List<ManagerReportReviewQualityService.ReviewQuestion> previousDayGoalQuestions(
+            Long managerId, java.time.LocalDate reportDate
+    ) {
+        List<ManagerWorkerDailyProgressService.MissedWorkerGoal> missed =
+                workerProgressService.missedPreviousDayGoals(managerId, reportDate);
+        if (missed == null || missed.isEmpty()) {
+            return List.of();
+        }
+        return missed.stream().map(goal -> new ManagerReportReviewQualityService.ReviewQuestion(
+                "Специалист " + goal.workerName() + " за " + goal.date().format(DATE)
+                        + " выполнил " + goal.completed() + " из " + goal.total()
+                        + " задач и не достиг дневной цели. Какие задачи остались невыполненными, "
+                        + "что помешало и как вы поможете специалисту закрыть этот долг?",
+                List.of("специалист " + goal.workerName() + " и недобор "
+                                + (goal.total() - goal.completed()) + " задач",
+                        "конкретные невыполненные задачи или проверяемая причина недобора",
+                        "конкретное действие менеджера и способ проверить результат")
+        )).toList();
+    }
+
+    private List<ManagerReportReviewQualityService.ReviewQuestion> withGoalQuestions(
+            List<ManagerReportReviewQualityService.ReviewQuestion> currentDay,
+            List<ManagerReportReviewQualityService.ReviewQuestion> previousDayGoals
+    ) {
+        List<ManagerReportReviewQualityService.ReviewQuestion> result = new ArrayList<>(
+                currentDay == null ? List.of() : currentDay);
+        if (previousDayGoals != null) {
+            result.addAll(previousDayGoals);
+        }
+        return List.copyOf(result);
     }
 
     private String collapsedReport(ManagerReportReviewSession review) {

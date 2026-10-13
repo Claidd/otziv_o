@@ -13,4 +13,10 @@ public final class ClientChatContentClassifier {
                         "(?iu)^[^\\r\\n?]{1,240}\\.(pdf|docx?|xlsx?|csv|txt|rtf|png|jpe?g|webp|heic|zip|rar)$"
                 );
     }
+
+    public static boolean reactionOnly(String value) {
+        String text = value == null ? "" : value.trim();
+        return !text.isEmpty() && (text.matches("(?iu)^\\[вложение:\\s*reaction]$")
+                || text.codePoints().noneMatch(Character::isLetterOrDigit));
+    }
 }

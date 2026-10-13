@@ -271,6 +271,33 @@ test("ignores WhatsApp system notifications instead of tracking them as attachme
   assert.equal(calls.length, 0);
 });
 
+test("does not forward reactions as client replies during live tracking or reconciliation", async () => {
+  const calls = [];
+  const handler = createMessageHandler({
+    clientId: "whatsapp_vika",
+    postWebhook: async (route, payload) => calls.push({ route, payload }),
+  });
+  const reaction = {
+    from: "12001@g.us",
+    id: { _serialized: "reaction-1" },
+    timestamp: 110,
+    fromMe: true,
+    type: "reaction",
+    body: "👌",
+  };
+  assert.equal(trackedBody(reaction), "");
+  assert.equal((await handler(reaction)).ignored, true);
+  assert.deepEqual(calls, []);
+  const payloads = await reconciliationPayloads({
+    clientId: "whatsapp_vika",
+    groupId: "12001@g.us",
+    groupName: "Клиент",
+    afterTimestamp: 100,
+    messages: [reaction],
+  });
+  assert.deepEqual(payloads, []);
+});
+
 test("reconciliation excludes WhatsApp system notifications", async () => {
   const payloads = await reconciliationPayloads({
     clientId: "whatsapp_vika",

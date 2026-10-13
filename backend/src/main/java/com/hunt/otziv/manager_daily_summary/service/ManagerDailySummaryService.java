@@ -2,6 +2,7 @@ package com.hunt.otziv.manager_daily_summary.service;
 
 import com.hunt.otziv.client_chat_control.model.ClientChatMessage;
 import com.hunt.otziv.client_chat_control.model.ClientChatSenderRole;
+import com.hunt.otziv.client_chat_control.service.ClientChatContentClassifier;
 import com.hunt.otziv.client_chat_control.repository.ClientChatMessageRepository;
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.gamification.repository.GamificationScoreLedgerRepository;
@@ -231,7 +232,8 @@ public class ManagerDailySummaryService {
                     waitingSince = message.getMessageAt();
                     continue;
                 }
-                if (message.getSenderRole() == ClientChatSenderRole.STAFF && waitingSince != null) {
+                if (message.getSenderRole() == ClientChatSenderRole.STAFF && waitingSince != null
+                        && !ClientChatContentClassifier.reactionOnly(message.getMessageText())) {
                     long seconds = businessSeconds(waitingSince, message.getMessageAt());
                     if (!message.getMessageAt().isBefore(from) && message.getMessageAt().isBefore(to)) {
                         allDurations.add(seconds);

@@ -66,6 +66,8 @@ public class ManagerSummaryFormatter {
         ManagerView view = view(manager);
         ManagerWorkerDailyProgressService.ManagerWorkerProgress workers = workerProgress(List.of(manager))
                 .get(manager.managerId());
+        List<ManagerWorkerDailyProgressService.MissedWorkerGoal> missedGoals =
+                workerProgressService.missedPreviousDayGoals(manager.managerId(), manager.date());
         ManagerDebtTaskDetailsService.ManagerDebtTasks debtTasks = debtTasks(List.of(manager))
                 .get(manager.managerId());
         String date = manager.date().format(DATE);
@@ -74,6 +76,7 @@ public class ManagerSummaryFormatter {
                 .append("👤 <b>").append(escape(manager.managerName())).append("</b>\n")
                 .append(personalProgress(view, false));
         appendWorkerTeam(html, manager.managerName(), workers, false, false);
+        appendMissedGoals(html, missedGoals, false);
         appendDebtTasks(html, List.of(view), debtTasks == null
                 ? Map.of()
                 : Map.of(manager.managerId(), debtTasks), false);
@@ -91,6 +94,7 @@ public class ManagerSummaryFormatter {
                 .append("<p>👤 <b>").append(escape(manager.managerName())).append("</b></p>")
                 .append(personalProgress(view, true));
         appendWorkerTeam(rich, manager.managerName(), workers, true, false);
+        appendMissedGoals(rich, missedGoals, true);
         appendDebtTasks(rich, List.of(view), debtTasks == null
                 ? Map.of()
                 : Map.of(manager.managerId(), debtTasks), true);
@@ -496,6 +500,32 @@ public class ManagerSummaryFormatter {
         }
         if (rich) {
             result.append("</section>");
+        }
+    }
+
+    private void appendMissedGoals(
+            StringBuilder result,
+            List<ManagerWorkerDailyProgressService.MissedWorkerGoal> missedGoals,
+            boolean rich
+    ) {
+        if (missedGoals == null || missedGoals.isEmpty()) {
+            return;
+        }
+        if (rich) {
+            result.append("<h4>📌 Невыполненные дневные цели за ")
+                    .append(missedGoals.getFirst().date().format(DATE)).append("</h4><ul>");
+        } else {
+            result.append("\n\n📌 <b>Невыполненные дневные цели за ")
+                    .append(missedGoals.getFirst().date().format(DATE)).append("</b>\n");
+        }
+        for (ManagerWorkerDailyProgressService.MissedWorkerGoal goal : missedGoals) {
+            String detail = escape(goal.workerName()) + ": выполнено <b>" + goal.completed()
+                    + " из " + goal.total() + "</b>, осталось "
+                    + Math.max(0, goal.total() - goal.completed()) + ".";
+            result.append(rich ? "<li>" + detail + "</li>" : "• " + detail + "\n");
+        }
+        if (rich) {
+            result.append("</ul>");
         }
     }
 
