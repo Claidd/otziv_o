@@ -13,7 +13,7 @@ import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.repository.ManagerRepository;
 import com.hunt.otziv.worker_performance.dto.DailyWorkProgressResponse;
-import com.hunt.otziv.worker_performance.service.EndOfDayAchievementService;
+import com.hunt.otziv.worker_performance.api.FinalWorkerDayResults;
 import com.hunt.otziv.worker_performance.service.StaffDailyProgressService;
 import java.time.LocalDate;
 import java.util.List;
@@ -33,7 +33,7 @@ class ManagerWorkerDailyProgressServiceTest {
 
     @Mock private ManagerRepository managerRepository;
     @Mock private StaffDailyProgressService progressService;
-    @Mock private EndOfDayAchievementService achievementService;
+    @Mock private FinalWorkerDayResults achievementService;
     private ManagerWorkerDailyProgressService service;
 
     @BeforeEach
@@ -95,7 +95,7 @@ class ManagerWorkerDailyProgressServiceTest {
         when(managerRepository.findAllWithUserAndImage()).thenReturn(List.of(manager));
         when(managerRepository.findAllManagersWorkers(List.of(manager))).thenReturn(List.of(manager));
         when(achievementService.workerDayResults(List.of(50L), DATE.minusDays(1)))
-                .thenReturn(Map.of(50L, new EndOfDayAchievementService.WorkerDayResult(50L, 8, 4, false)));
+                .thenReturn(Map.of(50L, new FinalWorkerDayResults.WorkerDayResult(50L, 8, 4, false)));
 
         List<ManagerWorkerDailyProgressService.MissedWorkerGoal> missed =
                 service.missedPreviousDayGoals(1L, DATE);

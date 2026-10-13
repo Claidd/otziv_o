@@ -4,7 +4,7 @@ import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.repository.ManagerRepository;
 import com.hunt.otziv.worker_performance.dto.DailyWorkProgressResponse;
-import com.hunt.otziv.worker_performance.service.EndOfDayAchievementService;
+import com.hunt.otziv.worker_performance.api.FinalWorkerDayResults;
 import com.hunt.otziv.worker_performance.service.StaffDailyProgressService;
 import java.time.LocalDate;
 import java.util.Collection;
@@ -25,7 +25,7 @@ public class ManagerWorkerDailyProgressService {
 
     private final ManagerRepository managerRepository;
     private final StaffDailyProgressService progressService;
-    private final EndOfDayAchievementService achievementService;
+    private final FinalWorkerDayResults achievementService;
 
     /*
      * Historical progress reads reconcile the finalized workload projection
@@ -120,15 +120,15 @@ public class ManagerWorkerDailyProgressService {
                 .filter(worker -> worker.getId() != null)
                 .sorted(java.util.Comparator.comparing(this::workerName, String.CASE_INSENSITIVE_ORDER))
                 .toList();
-        Map<Long, EndOfDayAchievementService.WorkerDayResult> results = achievementService.workerDayResults(
+        Map<Long, FinalWorkerDayResults.WorkerDayResult> results = achievementService.workerDayResults(
                 workers.stream().map(Worker::getId).toList(), reportDate.minusDays(1));
         return workers.stream()
                 .filter(worker -> {
-                    EndOfDayAchievementService.WorkerDayResult result = results.get(worker.getId());
+                    FinalWorkerDayResults.WorkerDayResult result = results.get(worker.getId());
                     return result != null && result.eligibleCount() > 0 && !result.reached100();
                 })
                 .map(worker -> {
-                    EndOfDayAchievementService.WorkerDayResult result = results.get(worker.getId());
+                    FinalWorkerDayResults.WorkerDayResult result = results.get(worker.getId());
                     return new MissedWorkerGoal(worker.getId(), workerName(worker), reportDate.minusDays(1),
                             result.completedCount(), result.eligibleCount());
                 })

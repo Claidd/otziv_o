@@ -1,5 +1,7 @@
 package com.hunt.otziv.worker_performance.service;
 
+import com.hunt.otziv.worker_performance.api.FinalWorkerDayResults;
+
 import com.hunt.otziv.gamification.service.GamificationEventService;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.notification_media.service.NotificationMediaDeliveryService;
@@ -27,7 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class EndOfDayAchievementService {
+public class EndOfDayAchievementService implements FinalWorkerDayResults {
 
     private static final DateTimeFormatter MESSAGE_DATE_FORMATTER = DateTimeFormatter.ofPattern("dd.MM.yyyy");
 
@@ -40,6 +42,7 @@ public class EndOfDayAchievementService {
     private final NotificationMediaDeliveryService notificationMediaDeliveryService;
     private final GamificationEventService gamificationEventService;
 
+    @Override
     public Map<Long, WorkerDayResult> workerDayResults(Collection<Long> workerIds, LocalDate date) {
         if (workerIds == null || workerIds.isEmpty() || date == null) {
             return Map.of();
@@ -493,6 +496,4 @@ public class EndOfDayAchievementService {
         }
     }
 
-    public record WorkerDayResult(Long workerId, long eligibleCount, long completedCount, boolean reached100) {
-    }
 }

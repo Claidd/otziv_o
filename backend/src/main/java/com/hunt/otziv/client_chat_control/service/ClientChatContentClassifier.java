@@ -1,5 +1,7 @@
 package com.hunt.otziv.client_chat_control.service;
 
+import com.hunt.otziv.client_chat_control.api.ClientChatReplyEvidence;
+
 public final class ClientChatContentClassifier {
 
     private ClientChatContentClassifier() {
@@ -15,8 +17,6 @@ public final class ClientChatContentClassifier {
     }
 
     public static boolean reactionOnly(String value) {
-        String text = value == null ? "" : value.trim();
-        return !text.isEmpty() && (text.matches("(?iu)^\\[вложение:\\s*reaction]$")
-                || text.codePoints().noneMatch(Character::isLetterOrDigit));
+        return ClientChatReplyEvidence.reactionOnly(value);
     }
 }
