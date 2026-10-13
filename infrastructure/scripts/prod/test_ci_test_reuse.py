@@ -151,6 +151,14 @@ class ReuseTest(unittest.TestCase):
             with self.subTest(key=key),self.assertRaises(GateError):self.validate()
             target[key]=old
 
+    def test_missing_github_job_steps_fall_back_to_full_check(self):
+        self.job['steps'] = []
+        result = self.select()
+        self.assertFalse(result['checks']['frontend']['reused'])
+        self.assertIn('steps unavailable', result['checks']['frontend']['reason'])
+        with self.assertRaisesRegex(GateError, 'successful job'):
+            self.validate()
+
     def test_live_source_rerun_revokes_transfer_at_deploy(self):
         result=self.select();self.run['run_attempt']=2
         with self.assertRaisesRegex(GateError,'new attempt'):verify_live_sources(self,result)
