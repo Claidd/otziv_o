@@ -1,0 +1,82 @@
+[
+    {
+        "Id": "sha256:6ff3d7d2e7029ed77926f3c62129db524512f4d74253caaab1b11eb9846188ba",
+        "RepoTags": [],
+        "RepoDigests": [
+            "ghcr.io/claidd/otziv-security@sha256:c3cb0739ee553dadff40237d83698f644852826d7483942d5265fa613b5f7931"
+        ],
+        "Parent": "",
+        "Comment": "buildkit.dockerfile.v0",
+        "Created": "2026-10-13T17:53:36.731626586Z",
+        "DockerVersion": "",
+        "Author": "",
+        "Config": {
+            "Hostname": "",
+            "Domainname": "",
+            "User": "",
+            "AttachStdin": false,
+            "AttachStdout": false,
+            "AttachStderr": false,
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+            ],
+            "Cmd": null,
+            "Image": "",
+            "Volumes": null,
+            "WorkingDir": "/",
+            "Entrypoint": [
+                "/usr/local/bin/docker-entrypoint.sh"
+            ],
+            "OnBuild": null,
+            "Labels": {
+                "com.otziv.derivative": "Alpine vendor libssl3/libcrypto3 package update only; Versity v1.8.0 binary unchanged",
+                "com.otziv.publication.revision": "d87bc6671b50f0dc57be5a50ebdd74127361137c",
+                "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+                "com.otziv.reviewed-component": "minio",
+                "com.otziv.security.patch": "Go1.27.2; x/net0.60.0; parent Alpine security packages preserved",
+                "com.otziv.upstream.image": "ghcr.io/versity/versitygw@sha256:30292fc2eeacc67a36993b01f7a7a5e3361a19cced0e80c1d71cfa2a4b0a2499",
+                "org.opencontainers.image.created": "2026-09-04T23:12:05.588Z",
+                "org.opencontainers.image.description": "A simple to deploy but feature rich S3 object storage server for your filesystem",
+                "org.opencontainers.image.licenses": "Apache-2.0",
+                "org.opencontainers.image.revision": "fd04bc1df2656298577b82667a4195c77f8c7563",
+                "org.opencontainers.image.source": "https://github.com/versity/versitygw",
+                "org.opencontainers.image.title": "versitygw",
+                "org.opencontainers.image.url": "https://github.com/versity/versitygw",
+                "org.opencontainers.image.version": "v1.8.0-otziv.c29"
+            }
+        },
+        "Architecture": "amd64",
+        "Os": "linux",
+        "Size": 118084869,
+        "GraphDriver": {
+            "Data": {
+                "LowerDir": "/var/lib/docker/overlay2/f3348246270deaf27f49f485bc547ae5708dda72e51dbf9b0ef9daeecdcb0241/diff:/var/lib/docker/overlay2/7b5f2f00cc2ac625ade18e5e7ea07e6569580cd9a5887409ca046ec710729e4e/diff:/var/lib/docker/overlay2/c9a4948672424d9a3947ac8b4a45d151bad3bfc21ed3368c9beb38783d6c1dd2/diff:/var/lib/docker/overlay2/78e3567395bedb8bdb30c5d2ecf172b5cc68250f3b358479cbc2d43b0715fac9/diff:/var/lib/docker/overlay2/5714e6b94ef070e234fe8e8ce81c5d9fbdc556031e561707f15af40613a97cb0/diff:/var/lib/docker/overlay2/6367a41c23afbf1e913c1de3f81e97acc0619159febd84c9758ce6bb46597cf2/diff:/var/lib/docker/overlay2/098d6e6561a2ba7c9e80107aa190183f67d0f6ae4812b1ac1c5bfd91779f1bb2/diff:/var/lib/docker/overlay2/7b986112d41fbc7969c6cf76dc013b278c854302d28144c622a5bb8df1e9f2a0/diff:/var/lib/docker/overlay2/b356025bf2af49e34b9ea6685a781ba74e45486df183a47ebcd1a78fbc2b8906/diff",
+                "MergedDir": "/var/lib/docker/overlay2/1101d900207ad53bc4c42d02d8938b70281b8c9620f20f94dff9c6b88bffe57d/merged",
+                "UpperDir": "/var/lib/docker/overlay2/1101d900207ad53bc4c42d02d8938b70281b8c9620f20f94dff9c6b88bffe57d/diff",
+                "WorkDir": "/var/lib/docker/overlay2/1101d900207ad53bc4c42d02d8938b70281b8c9620f20f94dff9c6b88bffe57d/work"
+            },
+            "Name": "overlay2"
+        },
+        "RootFS": {
+            "Type": "layers",
+            "Layers": [
+                "sha256:34884abbe92863fce933ed7c39c0e045631af0ed86d5cc0dfbdf9fdca426ce3c",
+                "sha256:cc015d1a2a543af8a6d773a6e9262d8ad65af4374900c83691bf60c13c85c588",
+                "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef",
+                "sha256:b6a352de45b1318fde6932192304a4d9919bd9c4d9a6ce728aeb582f5cb6e384",
+                "sha256:9c46e264a8e898ced678db4b4c9f881c98ae974f02b7f69578aba3ad8b7c530f",
+                "sha256:d1f3a415814c1f0b22a146c25b2be676c19aa364ae16df3a3ba338fb75a84b3d",
+                "sha256:7c26790ef261d25af40cb01517ad675f7d59028303d79548f2d4edac03a0679b",
+                "sha256:c8570ba2591e17b97ab54e82175eb283a834c7b6ef2990809e483acc0a09ec44",
+                "sha256:a845692b2ae6473b8ccbfa326bc9367b47fdc19d9e9ea27b8f7b4406d2058c22",
+                "sha256:d7188b3d9597717b519e057fff41de00aad03132e6b783ccea00806f652706a8"
+            ]
+        },
+        "Metadata": {
+            "LastTagTime": "0001-01-01T00:00:00Z"
+        }
+    }
+]

@@ -1,0 +1,83 @@
+{
+  "schema": "otziv-anonymous-download-v1",
+  "component": "prometheus",
+  "commit": "d87bc6671b50f0dc57be5a50ebdd74127361137c",
+  "run": "38442045796",
+  "attempt": "1",
+  "manifestSet": "c29-prometheus",
+  "manifestPath": "infrastructure/runtime-security/reviewed-images-c29-prometheus.json",
+  "runner": "GitHub Actions 1000014943",
+  "startedAt": "2026-10-13T17:56:44.165Z",
+  "sourcePublicationSha256": "5ffbad29ef1852abe0781e466d54b845d01d05329745e1f0e4ce779d43dd2318",
+  "result": "PASS",
+  "accountCredentialsUsed": false,
+  "dockerCredentialHelpersAvailable": false,
+  "dockerTransport": "unix:///var/run/docker.sock",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:265f09428f7b04245333b7171bf3710189e1a94d44009cbd1e7d664461ce6663",
+  "imageAbsentBeforePull": true,
+  "daemonVersion": "\"28.0.4\"",
+  "attestationEvidence": {
+    "schema": "otziv-registry-evidence-v1",
+    "imageManifestDigest": "sha256:151fcb7c4278ef49f609c6e4685677531cbdf7758874a064e31f9a6f2636ee5b",
+    "predicates": [
+      "https://slsa.dev/provenance/v1",
+      "https://spdx.dev/Document"
+    ],
+    "artifacts": [
+      {
+        "file": "registry-index.json",
+        "digest": "sha256:265f09428f7b04245333b7171bf3710189e1a94d44009cbd1e7d664461ce6663",
+        "size": 857
+      },
+      {
+        "file": "registry-amd64-manifest.json",
+        "digest": "sha256:151fcb7c4278ef49f609c6e4685677531cbdf7758874a064e31f9a6f2636ee5b",
+        "size": 2575
+      },
+      {
+        "file": "registry-amd64-config.json",
+        "digest": "sha256:b980c6a2097dac3a3b1c55a35322715cd2a9e997a4906472e237e3ad26c39441",
+        "size": 6748
+      },
+      {
+        "file": "registry-attestation-0.json",
+        "digest": "sha256:75c9314cc81faae8c77249fbe209a7fd81a0ee710bd060981d56bb54da4683d1",
+        "size": 1111
+      },
+      {
+        "file": "registry-attestation-0-payload-0.json",
+        "digest": "sha256:5405e8a74c0f9ba8f5c126c93b8f5b6f551b023c7fcd3a622714fdbd0f615bf3",
+        "size": 694130
+      },
+      {
+        "file": "registry-attestation-0-payload-1.json",
+        "digest": "sha256:46bc5c18496a0cf92fe29e9b1c0fe036a6fcff1dfa8a14f5e043c46290dbcae8",
+        "size": 33276
+      }
+    ],
+    "sourceBinding": "LOCAL_GIT_METADATA_CHECKED_AGAINST_CLEAN_CHECKOUT_NOT_INDEPENDENT_SOURCE_AUTHENTICATION"
+  },
+  "pullExitCode": 0,
+  "imageId": "sha256:b980c6a2097dac3a3b1c55a35322715cd2a9e997a4906472e237e3ad26c39441",
+  "platform": "linux/amd64",
+  "labels": {
+    "com.otziv.publication.revision": "d87bc6671b50f0dc57be5a50ebdd74127361137c",
+    "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+    "com.otziv.reviewed-component": "prometheus",
+    "com.otziv.security.patch": "Go1.27.2; grpc1.83.2; x/net0.60.0; unmodified official web assets",
+    "io.prometheus.image.variant": "busybox",
+    "maintainer": "The Prometheus Authors <prometheus-developers@googlegroups.com>",
+    "org.opencontainers.image.authors": "The Prometheus Authors",
+    "org.opencontainers.image.description": "The Prometheus monitoring system and time series database",
+    "org.opencontainers.image.documentation": "https://prometheus.io/docs",
+    "org.opencontainers.image.licenses": "Apache License 2.0",
+    "org.opencontainers.image.revision": "b273ae3adeb64ad630d65ef7f16440df95658410",
+    "org.opencontainers.image.source": "https://github.com/prometheus/prometheus",
+    "org.opencontainers.image.title": "Prometheus",
+    "org.opencontainers.image.url": "https://github.com/prometheus/prometheus",
+    "org.opencontainers.image.vendor": "Prometheus",
+    "org.opencontainers.image.version": "3.13.3-otziv.2"
+  },
+  "publicDownloadReadiness": "VERIFIED_ANONYMOUS_DIGEST_PULL",
+  "finishedAt": "2026-10-13T17:56:49.997Z"
+}
