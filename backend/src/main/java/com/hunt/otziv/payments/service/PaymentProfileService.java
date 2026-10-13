@@ -1,6 +1,7 @@
 package com.hunt.otziv.payments.service;
 
 import com.hunt.otziv.payments.config.TbankPaymentProperties;
+import com.hunt.otziv.common_billing.api.CommonInvoiceProfileUsage;
 import com.hunt.otziv.payments.dto.ManagerManualPaymentSettingsResponse;
 import com.hunt.otziv.payments.dto.ManagerPaymentProfileAssignmentRequest;
 import com.hunt.otziv.payments.dto.ManagerPaymentProfileResponse;
@@ -26,7 +27,6 @@ import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.repository.ManagerRepository;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -44,7 +44,6 @@ import org.springframework.web.server.ResponseStatusException;
 @RequiredArgsConstructor
 public class PaymentProfileService {
 
-    private static final ZoneId MOSCOW_ZONE = ZoneId.of("Europe/Moscow");
     private static final Set<PaymentLinkStatus> MANUAL_USAGE_STATUSES = Set.of(
             PaymentLinkStatus.WAITING_MANUAL_PAYMENT,
             PaymentLinkStatus.MANUAL_REPORTED,
@@ -64,6 +63,7 @@ public class PaymentProfileService {
 
     private final PaymentProfileRepository paymentProfileRepository;
     private final PaymentLinkRepository paymentLinkRepository;
+    private final CommonInvoiceProfileUsage commonInvoiceProfileUsageService;
     private final ManagerRepository managerRepository;
     private final TbankPaymentProperties properties;
     private final TbankRuntimeSettingsService runtimeSettingsService;
@@ -561,15 +561,18 @@ public class PaymentProfileService {
     }
 
     private long manualMonthlyUsed(PaymentProfile profile, LocalDateTime periodStart, LocalDateTime periodEnd) {
-        return manualMonthlyAmount(profile, MANUAL_USAGE_STATUSES, periodStart, periodEnd);
+        return manualMonthlyAmount(profile, MANUAL_USAGE_STATUSES, periodStart, periodEnd)
+                + commonInvoiceProfileUsageService.used(profile.getId(), periodStart, periodEnd);
     }
 
     private long manualMonthlyConfirmed(PaymentProfile profile, LocalDateTime periodStart, LocalDateTime periodEnd) {
-        return manualMonthlyAmount(profile, MANUAL_CONFIRMED_STATUSES, periodStart, periodEnd);
+        return manualMonthlyAmount(profile, MANUAL_CONFIRMED_STATUSES, periodStart, periodEnd)
+                + commonInvoiceProfileUsageService.confirmed(profile.getId(), periodStart, periodEnd);
     }
 
     private long manualMonthlyPendingAmount(PaymentProfile profile, LocalDateTime periodStart, LocalDateTime periodEnd) {
-        return manualMonthlyAmount(profile, MANUAL_PENDING_STATUSES, periodStart, periodEnd);
+        return manualMonthlyAmount(profile, MANUAL_PENDING_STATUSES, periodStart, periodEnd)
+                + commonInvoiceProfileUsageService.pendingAmount(profile.getId(), periodStart, periodEnd);
     }
 
     private long manualMonthlyAmount(
@@ -587,7 +590,7 @@ public class PaymentProfileService {
                 statuses,
                 periodStart,
                 periodEnd,
-                LocalDateTime.now(MOSCOW_ZONE),
+                LocalDateTime.now(),
                 PaymentLinkStatus.CONFIRMED,
                 null
         );
@@ -603,8 +606,8 @@ public class PaymentProfileService {
                 MANUAL_PENDING_STATUSES,
                 periodStart,
                 periodEnd,
-                LocalDateTime.now(MOSCOW_ZONE)
-        );
+                LocalDateTime.now()
+        ) + commonInvoiceProfileUsageService.pendingCount(profile.getId(), periodStart, periodEnd);
     }
 
     private PaymentPolicy paymentPolicy(PaymentProfile profile) {
@@ -753,7 +756,7 @@ public class PaymentProfileService {
     }
 
     private LocalDateTime currentMonthStart() {
-        LocalDate today = LocalDate.now(MOSCOW_ZONE);
+        LocalDate today = LocalDate.now();
         return today.withDayOfMonth(1).atStartOfDay();
     }
 

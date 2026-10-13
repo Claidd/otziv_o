@@ -164,7 +164,11 @@ public class CommonInvoicePaymentRouteWorkflow {
                 ownerBankReissueBlockReason = "Актуальный платежный профиль менеджера недоступен: " + readableException(failure);
             }
         }
-        return new CommonInvoicePaymentRouteChangeContextResponse(commonInvoiceRouteLabel(invoice), isTbankCommonRoute(invoice) ? CommonInvoicePaymentRouteChangeTarget.OWNER_TBANK : CommonInvoicePaymentRouteChangeTarget.EMPLOYEE_REQUISITES, commonInvoiceRouteRecipient(invoice, routeItems), invoice.getStatus() == null ? "UNKNOWN" : invoice.getStatus().name(), blockReason == null, blockReason == null ? "" : blockReason, commonInvoiceRouteChangeToken(invoice, paymentRefs), invoice.getPaymentRouteProfileId(), ownerBankTargetProfile == null ? null : ownerBankTargetProfile.getId(), normalize(ownerBankTargetProfile == null ? null : ownerBankTargetProfile.getName()), normalize(ownerBankTargetProfile == null ? null : ownerBankTargetProfile.getProvider()), ownerBankReissueBlockReason == null, ownerBankReissueBlockReason == null ? "" : ownerBankReissueBlockReason);
+        boolean ownerManualRoute = isOwnerManualProfileRoute(invoice);
+        CommonInvoicePaymentRouteChangeTarget currentTarget = isTbankCommonRoute(invoice) || ownerManualRoute
+                ? CommonInvoicePaymentRouteChangeTarget.OWNER_TBANK
+                : CommonInvoicePaymentRouteChangeTarget.EMPLOYEE_REQUISITES;
+        return new CommonInvoicePaymentRouteChangeContextResponse(commonInvoiceRouteLabel(invoice), currentTarget, commonInvoiceRouteRecipient(invoice, routeItems), invoice.getStatus() == null ? "UNKNOWN" : invoice.getStatus().name(), blockReason == null, blockReason == null ? "" : blockReason, commonInvoiceRouteChangeToken(invoice, paymentRefs), invoice.getPaymentRouteProfileId(), ownerBankTargetProfile == null ? null : ownerBankTargetProfile.getId(), normalize(ownerBankTargetProfile == null ? null : ownerBankTargetProfile.getName()), normalize(ownerBankTargetProfile == null ? null : ownerBankTargetProfile.getProvider()), ownerBankReissueBlockReason == null, ownerBankReissueBlockReason == null ? "" : ownerBankReissueBlockReason, ownerManualRoute);
     }
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -194,11 +198,14 @@ public class CommonInvoicePaymentRouteWorkflow {
             throw new ResponseStatusException(HttpStatus.CONFLICT, blockReason);
         }
         boolean currentlyOwnerTbank = isTbankCommonRoute(invoice);
+        boolean currentlyOwnerManual = isOwnerManualProfileRoute(invoice);
         boolean ownerBankReissue = request.target() == CommonInvoicePaymentRouteChangeTarget.OWNER_BANK_REISSUE;
         if (ownerBankReissue && !currentlyOwnerTbank) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Переиздать по актуальному банковскому профилю можно только ссылку владельца");
         }
-        if ((request.target() == CommonInvoicePaymentRouteChangeTarget.OWNER_TBANK && currentlyOwnerTbank) || (request.target() == CommonInvoicePaymentRouteChangeTarget.EMPLOYEE_REQUISITES && !currentlyOwnerTbank)) {
+        if ((request.target() == CommonInvoicePaymentRouteChangeTarget.OWNER_TBANK && currentlyOwnerTbank)
+                || (request.target() == CommonInvoicePaymentRouteChangeTarget.EMPLOYEE_REQUISITES
+                        && !currentlyOwnerTbank && !currentlyOwnerManual)) {
             return false;
         }
         if (ownerBankReissue) {
@@ -754,6 +761,10 @@ public class CommonInvoicePaymentRouteWorkflow {
 
     boolean isTbankCommonRoute(CommonInvoice invoice) {
         return invoicePresenter.isTbankCommonRoute(invoice);
+    }
+
+    boolean isOwnerManualProfileRoute(CommonInvoice invoice) {
+        return invoice != null && invoice.getPaymentRouteManualSource() == ManualPaymentSource.PROFILE_MONTHLY_LIMIT;
     }
 
     Manager manager(CommonInvoice invoice) {

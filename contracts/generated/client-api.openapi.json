@@ -14368,6 +14368,9 @@
               "type" : "null"
             } ]
           },
+          "ownerManualRoute" : {
+            "type" : "boolean"
+          },
           "paymentEvidenceToken" : {
             "anyOf" : [ {
               "type" : "string"
@@ -14383,7 +14386,7 @@
             } ]
           }
         },
-        "required" : [ "blockReason", "canChange", "canReissueOwnerBank", "currentPaymentProfileId", "currentRecipient", "currentRoute", "currentTarget", "ownerBankReissueBlockReason", "ownerBankTargetPaymentProfileId", "ownerBankTargetPaymentProfileName", "ownerBankTargetProvider", "paymentEvidenceToken", "status" ],
+        "required" : [ "blockReason", "canChange", "canReissueOwnerBank", "currentPaymentProfileId", "currentRecipient", "currentRoute", "currentTarget", "ownerBankReissueBlockReason", "ownerBankTargetPaymentProfileId", "ownerBankTargetPaymentProfileName", "ownerBankTargetProvider", "ownerManualRoute", "paymentEvidenceToken", "status" ],
         "additionalProperties" : true,
         "x-server-permission-fields" : [ "canChange", "canReissueOwnerBank" ]
       },
@@ -25461,7 +25464,7 @@
     "sha256" : "46f38ffca242257e927266528a1b7701c9ad94299e2c61511a81b7e656572dbd"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/common_billing/dto/CommonInvoicePaymentRouteChangeContextResponse.java",
-    "sha256" : "dde2fc39c7bd6faaf3d57d04a17cbde1303ba958e68e6d4d7b045c3b3540f855"
+    "sha256" : "dd6bc07eb625abffbebf2aee49760be31e049456808b635fd79ab993c5552425"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/common_billing/dto/CommonInvoicePaymentRouteChangeRequest.java",
     "sha256" : "a03b9757a52834ad9f854181bd6b0e052e5d540f6f870804a17db053432614e5"
@@ -25968,7 +25971,7 @@
     "sha256" : "ec632e21d38c13762c66e4a42ee20e6cd042b058049eaf136f806eacb479b39d"
   }, {
     "path" : "contracts/client-api.config.json",
-    "sha256" : "f88da0252e58485b06fb1728104025e10e073889192c7cabb19519264c3b77d6"
+    "sha256" : "414d091cc839164c33e6aa1d40faa36d229f1f9f1c5ee902fedddcdc1b17a1f1"
   } ],
   "x-source-fingerprint-normalization" : "UTF-8 text with CRLF normalized to LF",
   "x-schema-java-types" : {

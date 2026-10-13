@@ -972,7 +972,7 @@ export class CommonBillingComponent implements OnDestroy {
     );
   }
 
-  changeCommonInvoicePaymentRoute(): void {
+  changeCommonInvoicePaymentRoute(targetOverride?: CommonInvoicePaymentRouteChangeTarget): void {
     const invoice = this.currentInvoice();
     if (!invoice || this.mutating() || invoice.invoicePaymentMode === 'OWNER_PAPER_INVOICE') {
       return;
@@ -990,9 +990,10 @@ export class CommonBillingComponent implements OnDestroy {
           this.toastService.error('Способ оплаты нельзя изменить', context.blockReason || 'Нужна ручная сверка');
           return;
         }
-        const target: CommonInvoicePaymentRouteChangeTarget = context.currentTarget === 'OWNER_TBANK'
-          ? 'EMPLOYEE_REQUISITES'
-          : 'OWNER_TBANK';
+        const target: CommonInvoicePaymentRouteChangeTarget = targetOverride
+          ?? (context.currentTarget === 'OWNER_TBANK' && !context.ownerManualRoute
+            ? 'EMPLOYEE_REQUISITES'
+            : 'OWNER_TBANK');
         const destination = target === 'EMPLOYEE_REQUISITES'
           ? 'реквизиты специалиста или менеджера'
           : 'банковскую ссылку владельца';
@@ -1831,6 +1832,14 @@ export class CommonBillingComponent implements OnDestroy {
 
   isOwnerBankRoute(invoice: CommonInvoiceSummaryResponse | null | undefined): boolean {
     return Boolean(invoice && isBankPaymentRouteType(invoice.paymentRouteType));
+  }
+
+  isOwnerManualRoute(invoice: CommonInvoiceSummaryResponse | null | undefined): boolean {
+    return Boolean(invoice
+      && (invoice.paymentRouteType === 'MANUAL_MOBILE_BANK'
+        || invoice.paymentRouteType === 'MANUAL_EXTERNAL_LINK')
+      && !invoice.contractorPaymentRoute
+      && !invoice.paymentRouteManualTaskId);
   }
 
   retryManualTbankReconciliation(): void {

@@ -64,19 +64,24 @@ public class CommonInvoiceRouteSelector {
 
     @Transactional
     public PaymentRouteSelection selectCommonInvoiceRoute(Manager manager, long amountKopecks) {
-        return selectCommonInvoiceRoute(manager, amountKopecks, false);
+        return selectCommonInvoiceRoute(manager, amountKopecks, false, false);
+    }
+
+    @Transactional
+    public PaymentRouteSelection selectCommonInvoiceOwnerAutomaticRoute(Manager manager, long amountKopecks) {
+        return selectCommonInvoiceRoute(manager, amountKopecks, false, true);
     }
 
     @Transactional
     public PaymentRouteSelection selectCommonInvoiceOwnerAcquiringRoute(Manager manager, long amountKopecks) {
-        return selectCommonInvoiceRoute(manager, amountKopecks, true);
+        return selectCommonInvoiceRoute(manager, amountKopecks, true, true);
     }
 
-    PaymentRouteSelection selectCommonInvoiceRoute(Manager manager, long amountKopecks, boolean forceTbankAcquiring) {
+    PaymentRouteSelection selectCommonInvoiceRoute(Manager manager, long amountKopecks, boolean forceTbankAcquiring, boolean ignoreManagerText) {
         if (amountKopecks <= 0) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "У общего счета нет суммы к оплате");
         }
-        if (!forceTbankAcquiring && TbankRuntimeSettingsService.PAYMENT_SOURCE_MANAGER_TEXT.equals(runtimeSettingsService.paymentInstructionSource())) {
+        if (!ignoreManagerText && TbankRuntimeSettingsService.PAYMENT_SOURCE_MANAGER_TEXT.equals(runtimeSettingsService.paymentInstructionSource())) {
             return new PaymentRouteSelection(TbankRuntimeSettingsService.PAYMENT_SOURCE_MANAGER_TEXT, null, "", "", "", null, null, null, "", "", "", "", "", commonInvoiceManagerText(manager));
         }
         PaymentProfile profile = paymentProfileService.lockForRouting(paymentProfileService.selectForManager(manager));
@@ -154,7 +159,7 @@ public class CommonInvoiceRouteSelector {
         LocalDateTime periodEnd = periodStart.plusMonths(1);
         long alreadyUsed = paymentLinkRepository.sumManualReservedAndConfirmedForPeriod(profile.getId(), MANUAL_PAYMENT_METHODS, MANUAL_USAGE_STATUSES, periodStart, periodEnd, now, PaymentLinkStatus.CONFIRMED, excludedLinkId);
         alreadyUsed += manualPaymentTaskService.commonInvoiceProfileUsageForPeriod(profile.getId(), periodStart, periodEnd);
-        return alreadyUsed + amountKopecks <= monthlyLimit;
+        return alreadyUsed < monthlyLimit && amountKopecks <= monthlyLimit - alreadyUsed;
     }
 
     long manualMonthlyHardLimit(PaymentProfile profile) {

@@ -18,7 +18,8 @@
     "ManagerArchiveOrderDetailsResponse": ["recoveryWorkers", "recoveryTasks"],
     "DailyWorkProgressResponse": ["calculatedAt"],
     "ManagerControlConcreteItemResponse": ["delivery"],
-    "CommonInvoiceDetailsResponse": ["delivery"]
+    "CommonInvoiceDetailsResponse": ["delivery"],
+    "CommonInvoicePaymentRouteChangeContextResponse": ["ownerManualRoute"]
   },
   "releaseEvidence": "releases/inventory.json records actual latest published Android/backend artifacts; no minimum supported release is inferred."
 }

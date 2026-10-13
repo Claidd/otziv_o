@@ -1122,7 +1122,7 @@ public class CommonInvoiceInitializationService {
         } else if (contractorPaymentLiveRoutingService.enabledForNewRoutes()) {
             try {
                 liveAllocation = requireLiveCommonInvoiceAllocation(invoice, contractorPaymentLiveRoutingService.reserveForCommonInvoice(invoice, routeOrders, routeManager, remainingKopecks));
-                route = isContractorRecipient(liveAllocation) ? contractorCommonPaymentRoute(invoice, liveAllocation) : invoiceRouteSelector.selectCommonInvoiceOwnerAcquiringRoute(routeManager, remainingKopecks);
+                route = isContractorRecipient(liveAllocation) ? contractorCommonPaymentRoute(invoice, liveAllocation) : invoiceRouteSelector.selectCommonInvoiceOwnerAutomaticRoute(routeManager, remainingKopecks);
             } catch (RuntimeException exception) {
                 notifyCommonInvoiceRoutingFailure(invoice, routeOrders, exception);
                 throw exception;

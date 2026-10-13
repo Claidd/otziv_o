@@ -104,6 +104,7 @@ export interface CommonInvoicePaymentRouteChangeContextResponse {
   ownerBankTargetProvider?: string | null;
   canReissueOwnerBank: boolean;
   ownerBankReissueBlockReason: string;
+  ownerManualRoute?: boolean;
 }
 
 export interface CommonInvoiceArchiveOrderPreview {

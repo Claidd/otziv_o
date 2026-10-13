@@ -676,7 +676,8 @@
       "ownerBankTargetPaymentProfileName" : "contract-example",
       "ownerBankTargetProvider" : "contract-example",
       "canReissueOwnerBank" : false,
-      "ownerBankReissueBlockReason" : "contract-example"
+      "ownerBankReissueBlockReason" : "contract-example",
+      "ownerManualRoute" : false
     },
     "CommonInvoicePaymentRouteChangeTargetOutput" : "EMPLOYEE_REQUISITES",
     "CommonInvoiceSummaryResponseOutput" : {

@@ -13,6 +13,7 @@ public record CommonInvoicePaymentRouteChangeContextResponse(
         String ownerBankTargetPaymentProfileName,
         String ownerBankTargetProvider,
         boolean canReissueOwnerBank,
-        String ownerBankReissueBlockReason
+        String ownerBankReissueBlockReason,
+        boolean ownerManualRoute
 ) {
 }

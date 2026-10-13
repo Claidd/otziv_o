@@ -342,8 +342,14 @@
             && invoice?.status !== 'PAID') {
             <button type="button" class="secondary" (click)="changeCommonInvoicePaymentRoute()" [disabled]="!!mutating()">
               <span class="material-icons-sharp" aria-hidden="true">swap_horiz</span>
-              Сменить способ оплаты
+              {{ isOwnerManualRoute(invoice) ? 'Выставить ссылку T-Bank' : 'Сменить способ оплаты' }}
             </button>
+            @if (isOwnerManualRoute(invoice)) {
+              <button type="button" class="secondary" (click)="changeCommonInvoicePaymentRoute('EMPLOYEE_REQUISITES')" [disabled]="!!mutating()">
+                <span class="material-icons-sharp" aria-hidden="true">swap_horiz</span>
+                Реквизиты сотрудника
+              </button>
+            }
             @if (isOwnerBankRoute(invoice)) {
               <button type="button" class="secondary" (click)="reissueCommonInvoiceOwnerBankRoute()" [disabled]="!!mutating()">
                 <span class="material-icons-sharp" aria-hidden="true">published_with_changes</span>

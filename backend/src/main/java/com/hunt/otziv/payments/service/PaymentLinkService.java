@@ -156,6 +156,10 @@ public class PaymentLinkService implements com.hunt.otziv.payments.api.Standalon
         return commonInvoiceRouteSelector.selectCommonInvoiceOwnerAcquiringRoute(manager, amountKopecks);
     }
 
+    public PaymentRouteSelection selectCommonInvoiceOwnerAutomaticRoute(Manager manager, long amountKopecks) {
+        return commonInvoiceRouteSelector.selectCommonInvoiceOwnerAutomaticRoute(manager, amountKopecks);
+    }
+
     public Optional<PaymentRouteSelection> selectCommonInvoiceTaskRoute(com.hunt.otziv.common_billing.model.CommonInvoice invoice, Manager manager, long amountKopecks) {
         return commonInvoiceRouteSelector.selectCommonInvoiceTaskRoute(invoice, manager, amountKopecks);
     }
