@@ -4,6 +4,7 @@ import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.repository.ManagerRepository;
 import com.hunt.otziv.worker_performance.dto.DailyWorkProgressResponse;
+import com.hunt.otziv.worker_performance.api.FinalWorkerDayResults;
 import com.hunt.otziv.worker_performance.service.StaffDailyProgressService;
 import java.time.LocalDate;
 import java.util.Collection;
@@ -24,6 +25,7 @@ public class ManagerWorkerDailyProgressService {
 
     private final ManagerRepository managerRepository;
     private final StaffDailyProgressService progressService;
+    private final FinalWorkerDayResults achievementService;
 
     /*
      * Historical progress reads reconcile the finalized workload projection
@@ -96,6 +98,43 @@ public class ManagerWorkerDailyProgressService {
         return result;
     }
 
+    @Transactional
+    public List<MissedWorkerGoal> missedPreviousDayGoals(Long managerId, LocalDate reportDate) {
+        if (managerId == null || reportDate == null) {
+            return List.of();
+        }
+        List<Manager> selected = managerRepository.findAllWithUserAndImage().stream()
+                .filter(manager -> managerId.equals(manager.getId()))
+                .toList();
+        if (selected.isEmpty()) {
+            return List.of();
+        }
+        Manager manager = managerRepository.findAllManagersWorkers(selected).stream()
+                .filter(candidate -> managerId.equals(candidate.getId()))
+                .findFirst().orElse(null);
+        if (manager == null || manager.getUser() == null || manager.getUser().getWorkers() == null) {
+            return List.of();
+        }
+        List<Worker> workers = manager.getUser().getWorkers().stream()
+                .filter(Objects::nonNull)
+                .filter(worker -> worker.getId() != null)
+                .sorted(java.util.Comparator.comparing(this::workerName, String.CASE_INSENSITIVE_ORDER))
+                .toList();
+        Map<Long, FinalWorkerDayResults.WorkerDayResult> results = achievementService.workerDayResults(
+                workers.stream().map(Worker::getId).toList(), reportDate.minusDays(1));
+        return workers.stream()
+                .filter(worker -> {
+                    FinalWorkerDayResults.WorkerDayResult result = results.get(worker.getId());
+                    return result != null && result.eligibleCount() > 0 && !result.reached100();
+                })
+                .map(worker -> {
+                    FinalWorkerDayResults.WorkerDayResult result = results.get(worker.getId());
+                    return new MissedWorkerGoal(worker.getId(), workerName(worker), reportDate.minusDays(1),
+                            result.completedCount(), result.eligibleCount());
+                })
+                .toList();
+    }
+
     private ManagerWorkerProgress aggregate(
             Long managerId,
             List<WorkerProgress> workers,
@@ -164,6 +203,15 @@ public class ManagerWorkerDailyProgressService {
             String workerName,
             DailyWorkProgressResponse current,
             DailyWorkProgressResponse previous
+    ) {
+    }
+
+    public record MissedWorkerGoal(
+            Long workerId,
+            String workerName,
+            LocalDate date,
+            long completed,
+            long total
     ) {
     }
 }

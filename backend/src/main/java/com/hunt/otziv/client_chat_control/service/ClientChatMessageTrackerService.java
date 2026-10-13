@@ -70,6 +70,9 @@ public class ClientChatMessageTrackerService {
         }
         LocalDateTime messageAt = command.messageAt() == null ? LocalDateTime.now() : command.messageAt();
         String messageText = safe(command.messageText());
+        if (messageText.matches("(?iu)^\\[вложение:\\s*reaction]$")) {
+            return;
+        }
         if (messageText.isBlank() && hasText(command.externalMessageId())) {
             messageText = "[Нетекстовое сообщение]";
         }
@@ -147,6 +150,9 @@ public class ClientChatMessageTrackerService {
             if (direction == ClientChatDirection.INCOMING && isOwnerOrAdmin(actorUser)) {
                 log.debug("Owner/admin chat message ignored for manager unanswered control: platform={}, chatId={}, messageId={}",
                         command.platform(), command.chatId(), savedMessage.getId());
+                return;
+            }
+            if (ClientChatContentClassifier.reactionOnly(savedMessage.getMessageText())) {
                 return;
             }
             closeOpenItems(
@@ -392,6 +398,10 @@ public class ClientChatMessageTrackerService {
             return;
         }
         assertResolutionRateAllowed(item, resolvedByUserId);
+        if (ClientChatContentClassifier.reactionOnly(replyText)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Реакция без текста не является ответом клиенту");
+        }
         ClientChatReplyQualityService.Result quality = quality(item.getLastMessageText(), replyText);
         item.setResolutionReplyText(limit(replyText, 4000));
         close(
@@ -472,6 +482,10 @@ public class ClientChatMessageTrackerService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Закрытое сообщение не найдено"));
         if (!item.isAuditRequired()) {
             return;
+        }
+        if (ClientChatContentClassifier.reactionOnly(replyText)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Реакция без текста не является ответом клиенту");
         }
         ClientChatReplyQualityService.Result quality = quality(item.getLastMessageText(), replyText);
         item.setResolutionReplyText(limit(replyText, 4000));
@@ -917,12 +931,15 @@ public class ClientChatMessageTrackerService {
                 ? LocalDateTime.of(1970, 1, 1, 0, 0)
                 : item.getLastClientMessageAt();
         return messageRepository
-                .findFirstByPlatformAndChatIdAndSenderRoleAndMessageAtAfterOrderByMessageAtAscIdAsc(
+                .findByPlatformAndChatIdAndSenderRoleAndMessageAtAfterOrderByMessageAtAscIdAsc(
                         item.getPlatform(),
                         item.getChatId(),
                         ClientChatSenderRole.STAFF,
                         after
                 )
+                .stream()
+                .filter(message -> !ClientChatContentClassifier.reactionOnly(message.getMessageText()))
+                .findFirst()
                 .orElse(null);
     }
 

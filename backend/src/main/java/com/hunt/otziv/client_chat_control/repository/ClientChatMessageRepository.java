@@ -84,6 +84,13 @@ public interface ClientChatMessageRepository extends JpaRepository<ClientChatMes
             LocalDateTime messageAt
     );
 
+    List<ClientChatMessage> findByPlatformAndChatIdAndSenderRoleAndMessageAtAfterOrderByMessageAtAscIdAsc(
+            ClientChatPlatform platform,
+            String chatId,
+            ClientChatSenderRole senderRole,
+            LocalDateTime messageAt
+    );
+
     Optional<ClientChatMessage> findFirstByPlatformAndChatIdAndSenderRoleAndMessageAtBetweenOrderByMessageAtAscIdAsc(
             ClientChatPlatform platform,
             String chatId,

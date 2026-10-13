@@ -51,6 +51,7 @@ class ManagerReportReviewTelegramServiceTest {
     @Mock private ManagerReportReviewEventRepository eventRepository;
     @Mock private ManagerReportReviewQualityService qualityService;
     @Mock private ManagerSummaryFormatter formatter;
+    @Mock private ManagerWorkerDailyProgressService workerProgressService;
     @Mock private TelegramService telegramService;
     @Mock private NotificationMediaDeliveryService notificationMediaDeliveryService;
     @Mock private UserService userService;
@@ -143,6 +144,35 @@ class ManagerReportReviewTelegramServiceTest {
                         && review.isAutoCompleted()
                         && review.getCompletedAt() != null
         ));
+    }
+
+    @Test
+    void missedWorkerGoalYesterdayCreatesMandatoryQuestion() {
+        ManagerDailySummaryResponse summary = summary(0);
+        LocalDate previousDay = summary.date().minusDays(1);
+        when(formatter.formatPersonal(summary)).thenReturn(new ManagerFormattedReport(
+                "Вчера Мария не выполнила цель: 4 из 8",
+                "<h2>Вчера Мария не выполнила цель: 4 из 8</h2>"));
+        when(workerProgressService.missedPreviousDayGoals(manager.getId(), summary.date()))
+                .thenReturn(List.of(new ManagerWorkerDailyProgressService.MissedWorkerGoal(
+                        50L, "Мария", previousDay, 4, 8)));
+        when(sessionRepository.findBySummaryDateAndManager_IdAndTestModeFalse(summary.date(), manager.getId()))
+                .thenReturn(Optional.empty());
+        when(qualityService.questionsJson(any())).thenReturn("[{\"question\":\"цель\"}]");
+        when(telegramService.sendRichMessageWithInlineKeyboardMessageId(
+                eq(700L), any(String.class), any())).thenReturn(Optional.of(503));
+
+        assertThat(service.deliver(manager, summary)).isTrue();
+
+        verify(qualityService, never()).generateQuestions(any(String.class), anyInt());
+        verify(qualityService).questionsJson(org.mockito.ArgumentMatchers.argThat(questions ->
+                questions.size() == 1
+                        && questions.getFirst().question().contains("Мария")
+                        && questions.getFirst().question().contains("4 из 8")));
+        verify(sessionRepository, atLeastOnce()).save(org.mockito.ArgumentMatchers.argThat(review ->
+                review.getStatus() == ManagerReportReviewStatus.DELIVERED
+                        && review.getIssueCount() == 1
+                        && !review.isAutoCompleted()));
     }
 
     @Test

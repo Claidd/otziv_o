@@ -15,6 +15,10 @@ public class ClientChatReplyQualityService {
     public Result assess(String clientMessage, String staffReply) {
         String client = normalize(clientMessage);
         String reply = normalize(staffReply);
+        if (ClientChatContentClassifier.reactionOnly(staffReply)) {
+            return new Result(ClientChatReplyQuality.SUSPICIOUS,
+                    "Реакция без текста не является ответом клиенту");
+        }
         if (reply.isBlank()) {
             return new Result(ClientChatReplyQuality.SUSPICIOUS, "Ответ сотрудника пуст");
         }

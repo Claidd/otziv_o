@@ -1,5 +1,7 @@
 package com.hunt.otziv.client_chat_control.service;
 
+import com.hunt.otziv.client_chat_control.api.ClientChatReplyEvidence;
+
 public final class ClientChatContentClassifier {
 
     private ClientChatContentClassifier() {
@@ -12,5 +14,9 @@ public final class ClientChatContentClassifier {
                 || text.matches(
                         "(?iu)^[^\\r\\n?]{1,240}\\.(pdf|docx?|xlsx?|csv|txt|rtf|png|jpe?g|webp|heic|zip|rar)$"
                 );
+    }
+
+    public static boolean reactionOnly(String value) {
+        return ClientChatReplyEvidence.reactionOnly(value);
     }
 }

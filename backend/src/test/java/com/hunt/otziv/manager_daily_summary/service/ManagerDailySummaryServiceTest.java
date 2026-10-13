@@ -107,6 +107,30 @@ class ManagerDailySummaryServiceTest {
     }
 
     @Test
+    void reactionBeforeTextDoesNotStopClientWaitingTime() {
+        LocalDate date = LocalDate.of(2026, 7, 13);
+        Manager manager = manager();
+        when(managerRepository.findAllWithUserAndImage()).thenReturn(List.of(manager));
+        when(performanceService.score(date)).thenReturn(List.of());
+        when(controlRepository.findByControlDateAndManager(date, manager)).thenReturn(Optional.empty());
+        when(dailyRepository.findBySummaryDateAndManager_Id(date, manager.getId())).thenReturn(Optional.empty());
+        when(activityRepository.findByManager_IdAndOccurredAtBetweenOrderByOccurredAt(any(), any(), any()))
+                .thenReturn(List.of());
+        ClientChatMessage reaction = message(2L, ClientChatSenderRole.STAFF, date.atTime(9, 1));
+        reaction.setMessageText("👌");
+        ClientChatMessage reply = message(3L, ClientChatSenderRole.STAFF, date.atTime(9, 15));
+        reply.setMessageText("Готовые тексты отправим сегодня до 18:00");
+        when(messageRepository.findByManager_IdAndMessageAtBetweenOrderByMessageAtAscIdAsc(any(), any(), any()))
+                .thenReturn(List.of(message(1L, ClientChatSenderRole.CLIENT, date.atTime(9, 0)),
+                        reaction, reply));
+
+        var response = service.calculate(date, false).getFirst();
+
+        assertEquals(1, response.replyCount());
+        assertEquals(900, response.allReplyAverageSeconds());
+    }
+
+    @Test
     void replyTodayIncludesClientMessageFromPreviousDay() {
         LocalDate date = LocalDate.of(2026, 7, 14);
         Manager manager = manager();

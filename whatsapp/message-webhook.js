@@ -41,7 +41,9 @@ function generatedOutboundKey(externalMessageId) {
 }
 
 function trackedBody(message) {
-  if (isSystemNotification(message)) {
+  // WhatsApp reactions are acknowledgements attached to another message, not replies.
+  if (isSystemNotification(message)
+      || String(message && message.type || "").trim().toLowerCase() === "reaction") {
     return "";
   }
   const body = String(message && message.body || "").trim();
