@@ -1,8 +1,10 @@
 package com.hunt.otziv.payments.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.hunt.otziv.common_billing.controller.PublicCommonInvoiceController;
@@ -25,16 +27,15 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.server.ResponseStatusException;
 
 class PaymentRequisitesNoStoreControllerTest {
 
     @Test
-    void ordinaryPublicReadAndReportResponsesDisableCaching() {
+    void ordinaryPublicReadDisablesCachingAndClientReportIsRetired() {
         PaymentLinkService service = mock(PaymentLinkService.class);
         PublicPaymentLinkResponse readBody = mock(PublicPaymentLinkResponse.class);
-        PublicPaymentLinkResponse reportBody = mock(PublicPaymentLinkResponse.class);
         when(service.publicLink("ordinary-token")).thenReturn(readBody);
-        when(service.reportManualPayment("ordinary-token")).thenReturn(reportBody);
         PublicPaymentController controller = new PublicPaymentController(
                 service,
                 mock(TbankPaymentProperties.class),
@@ -44,20 +45,26 @@ class PaymentRequisitesNoStoreControllerTest {
         );
 
         assertNoStore(controller.paymentLink("ordinary-token"), readBody);
-        assertNoStore(controller.reportManualPayment("ordinary-token"), reportBody);
+        assertThatThrownBy(() -> controller.reportManualPayment("ordinary-token"))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("410 GONE");
+        verify(service).publicLink("ordinary-token");
+        verifyNoMoreInteractions(service);
     }
 
     @Test
-    void commonPublicReadAndReportResponsesDisableCaching() {
+    void commonPublicReadDisablesCachingAndClientReportIsRetired() {
         CommonBillingService service = mock(CommonBillingService.class);
         PublicCommonInvoiceResponse readBody = mock(PublicCommonInvoiceResponse.class);
-        PublicCommonInvoiceResponse reportBody = mock(PublicCommonInvoiceResponse.class);
         when(service.publicInvoice("group-token")).thenReturn(readBody);
-        when(service.reportPublicCommonPayment("group-token")).thenReturn(reportBody);
         PublicCommonInvoiceController controller = new PublicCommonInvoiceController(service);
 
         assertNoStore(controller.commonInvoice("group-token"), readBody);
-        assertNoStore(controller.reportCommonInvoicePaid("group-token"), reportBody);
+        assertThatThrownBy(() -> controller.reportCommonInvoicePaid("group-token"))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("410 GONE");
+        verify(service).publicInvoice("group-token");
+        verifyNoMoreInteractions(service);
     }
 
     @Test

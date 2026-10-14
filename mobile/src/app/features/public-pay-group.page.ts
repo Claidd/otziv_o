@@ -104,12 +104,7 @@ import { isBankPaymentRoute } from '../shared/bank-payment-source';
                 }
                 <small>После оплаты отправьте один чек менеджеру.</small>
                 @if (invoice.clientReportedAt) {
-                  <p class="reported-state"><span class="material-icons-sharp">schedule</span> Вы сообщили об оплате. Ожидаем подтверждение поступления.</p>
-                } @else if (invoice.clientReportable) {
-                  <button class="primary" type="button" (click)="reportPaid()" [disabled]="!canReportPaid()">
-                    <span class="material-icons-sharp">{{ reportingPaid() ? 'hourglass_top' : 'done_all' }}</span>
-                    {{ reportingPaid() ? 'Отправляем сообщение...' : 'Я оплатил' }}
-                  </button>
+                  <p class="reported-state">Ожидаем подтверждение поступления менеджером.</p>
                 }
               </section>
             } @else if (invoice.payable && bankRoute()) {
@@ -166,7 +161,6 @@ export class PublicPayGroupPage implements OnDestroy {
   readonly loading = signal(true);
   readonly refreshing = signal(false);
   readonly submitting = signal(false);
-  readonly reportingPaid = signal(false);
   readonly error = signal('');
   readonly message = signal('');
   readonly email = signal('');
@@ -199,12 +193,6 @@ export class PublicPayGroupPage implements OnDestroy {
       && this.privacyConsent()
       && this.receiptConsent()
       && !this.submitting()
-  ));
-  readonly canReportPaid = computed(() => Boolean(
-    this.invoice()?.clientReportable
-      && this.manualRoute()
-      && !this.invoice()?.clientReportedAt
-      && !this.reportingPaid()
   ));
 
   constructor(private readonly externalLink: MobileExternalLinkService
@@ -286,37 +274,6 @@ export class PublicPayGroupPage implements OnDestroy {
         }
         this.error.set(this.errorMessage(error, 'Не удалось перейти к оплате.'));
         this.submitting.set(false);
-      }
-    });
-  }
-
-  reportPaid(): void {
-    if (!this.canReportPaid()) {
-      return;
-    }
-    const routeTicket = this.captureRoute();
-    const token = this.token();
-    if (!routeTicket || !token) {
-      return;
-    }
-    this.reportingPaid.set(true);
-    this.error.set('');
-    this.message.set('');
-    this.publicPaymentsApi.reportPublicCommonInvoicePaid(token).subscribe({
-      next: (invoice) => {
-        if (!this.isActiveRoute(routeTicket)) {
-          return;
-        }
-        this.invoice.set(invoice);
-        this.reportingPaid.set(false);
-        this.message.set('Сообщение об оплате принято. Поступление ещё будет проверено.');
-      },
-      error: (error) => {
-        if (!this.isActiveRoute(routeTicket)) {
-          return;
-        }
-        this.reportingPaid.set(false);
-        this.error.set(this.errorMessage(error, 'Не удалось сообщить об оплате. Обновите счет и попробуйте снова.'));
       }
     });
   }
@@ -453,7 +410,6 @@ export class PublicPayGroupPage implements OnDestroy {
     this.loading.set(false);
     this.refreshing.set(false);
     this.submitting.set(false);
-    this.reportingPaid.set(false);
     this.error.set('');
     this.message.set('');
     this.email.set('');

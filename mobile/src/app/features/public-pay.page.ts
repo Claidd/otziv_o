@@ -81,7 +81,7 @@ import { manualTransferDestinationPresentation } from '../shared/manual-transfer
                     @if (!externalManualPayment()) {
                     <strong>{{ payment.manualPhone || 'Реквизиты не указаны' }}</strong>
                     }
-                    <small>{{ payment.manualComment || 'После оплаты нажмите кнопку подтверждения.' }}</small>
+                    <small>{{ payment.manualComment || 'Комментарий к переводу' }}</small>
                     @if (manualPaymentDestinationAvailable()) {
                     <button type="button" (click)="externalManualPayment() ? openManualPaymentUrl() : copyManualValue(payment.manualPhone)">
                       <span class="material-icons-sharp">{{ externalManualPayment() ? 'open_in_new' : 'content_copy' }}</span>
@@ -90,9 +90,7 @@ import { manualTransferDestinationPresentation } from '../shared/manual-transfer
                     } @else {
                     <p class="destination-error" role="alert">Реквизиты не настроены. Не переводите деньги и обратитесь к менеджеру.</p>
                     }
-                    <button type="button" class="primary" (click)="reportManualPayment()" [disabled]="!canReportManual()">
-                      {{ manualSubmitting() ? 'Отмечаем...' : 'Я оплатил' }}
-                    </button>
+                    <p>После перевода отправьте чек менеджеру. Он проверит поступление и отметит оплату.</p>
                   </section>
                 } @else {
                   @if (showSbpPayment() && sbpBankSelectionSupported()) {
@@ -162,7 +160,6 @@ export class PublicPayPage implements OnDestroy {
   readonly refreshingPayment = signal(false);
   readonly sbpSubmitting = signal(false);
   readonly bankSubmitting = signal(false);
-  readonly manualSubmitting = signal(false);
   readonly error = signal('');
   readonly message = signal('');
   readonly email = signal('');
@@ -211,7 +208,6 @@ export class PublicPayPage implements OnDestroy {
   });
   readonly isPaymentComplete = computed(() => ['CONFIRMED', 'TEST_CONFIRMED'].includes(this.payment()?.status ?? ''));
   readonly canSubmit = computed(() => Boolean(this.payment()?.payable && this.email().includes('@') && this.offerConsent() && this.privacyConsent() && this.receiptConsent() && !this.sbpSubmitting() && !this.bankSubmitting()));
-  readonly canReportManual = computed(() => Boolean(this.payment()?.payable && this.manualPayment() && this.manualPaymentDestinationAvailable() && this.payment()?.status !== 'MANUAL_REPORTED' && !this.manualSubmitting()));
   readonly manualPaymentButtonLabel = computed(() => this.payment()?.manualPaymentButtonLabel?.trim() || 'Оплатить через Альфа-Банк');
   readonly manualPaymentUrl = computed(() => configuredPaymentTarget(this.payment()?.manualPaymentUrl));
   readonly manualPaymentDestinationAvailable = computed(() => this.externalManualPayment()
@@ -348,37 +344,6 @@ export class PublicPayPage implements OnDestroy {
         }
         this.error.set(this.errorMessage(error, 'Не удалось перейти к оплате.'));
         this.bankSubmitting.set(false);
-      }
-    });
-  }
-
-  reportManualPayment(): void {
-    if (!this.canReportManual()) {
-      return;
-    }
-
-    const routeTicket = this.captureRoute();
-    if (!routeTicket) {
-      return;
-    }
-    const token = this.token();
-    this.manualSubmitting.set(true);
-    this.clearFeedback();
-    this.publicPaymentsApi.reportPublicManualPayment(token).subscribe({
-      next: (payment) => {
-        if (!this.isActiveRoute(routeTicket)) {
-          return;
-        }
-        this.payment.set(payment);
-        this.manualSubmitting.set(false);
-        this.message.set('Спасибо. Менеджер проверит поступление вручную.');
-      },
-      error: (error) => {
-        if (!this.isActiveRoute(routeTicket)) {
-          return;
-        }
-        this.error.set(this.errorMessage(error, 'Не удалось отметить оплату.'));
-        this.manualSubmitting.set(false);
       }
     });
   }
@@ -583,7 +548,6 @@ export class PublicPayPage implements OnDestroy {
     this.refreshingPayment.set(false);
     this.sbpSubmitting.set(false);
     this.bankSubmitting.set(false);
-    this.manualSubmitting.set(false);
     this.error.set('');
     this.message.set('');
     this.email.set('');

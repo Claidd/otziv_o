@@ -77,15 +77,7 @@
             </button>
           </div>
 
-          <button
-            class="manual-paid-button"
-            type="button"
-            [disabled]="!canReportManual()"
-            (click)="reportManualPayment()"
-          >
-            <span class="material-icons-sharp" aria-hidden="true">{{ manualSubmitting() ? 'hourglass_top' : 'done_all' }}</span>
-            {{ item?.status === 'MANUAL_REPORTED' ? 'Платеж ожидает проверки' : (manualSubmitting() ? 'Отмечаем' : 'Я оплатил') }}
-          </button>
+          <p class="pay-info">После перевода отправьте чек менеджеру. Он проверит поступление и отметит оплату.</p>
         </article>
         }
 

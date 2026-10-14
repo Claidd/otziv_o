@@ -40,24 +40,21 @@ describe('cached Ionic public payment pages', () => {
   });
   afterEach(() => requests.verify());
 
-  for (const scenario of ['bank', 'sbp', 'manual', 'group-bank', 'group-manual']) {
+  for (const scenario of ['bank', 'sbp', 'group-bank']) {
     for (const reenter of [false, true]) {
       it(`${scenario}: ignores a completed write after leaving${reenter ? ' and reentering the same token' : ''}, without cancelling or replaying it`, () => {
         const group = scenario.startsWith('group');
-        const manual = scenario.endsWith('manual');
         const fixture = group ? TestBed.createComponent(PublicPayGroupPage) : TestBed.createComponent(PublicPayPage);
         const page = fixture.componentInstance;
         const url = `/api/payments/public/${group ? 'group/' : ''}A`;
-        const data = group ? invoice('A', manual) : payment('A', manual);
+        const data = group ? invoice('A') : payment('A');
         requests.expectOne(url).flush(data);
         // First Ionic enter must not duplicate the constructor's initial read.
         page.ionViewWillEnter();
         requests.expectNone(url);
         page.email.set('payer@example.test');
         page.offerConsent.set(true); page.privacyConsent.set(true); page.receiptConsent.set(true);
-        if (page instanceof PublicPayGroupPage) {
-          if (manual) page.reportPaid(); else page.submitPayment();
-        } else if (manual) page.reportManualPayment();
+        if (page instanceof PublicPayGroupPage) page.submitPayment();
         else if (scenario === 'sbp') page.submitSbp();
         else page.submitBankForm();
         const command = requests.expectOne(request => request.method === 'POST');
@@ -71,9 +68,7 @@ describe('cached Ionic public payment pages', () => {
           requests.expectOne(url).flush(data);
           requests.expectNone(request => request.method === 'POST');
         }
-        command.flush(manual
-          ? { ...data, status: 'MANUAL_REPORTED', clientReportedAt: '2026-09-07T12:00:00' }
-          : { status: 'NEW', paymentId: 'fixture-payment', paymentUrl: 'https://securepay.tinkoff.ru/browser-fixture', qrPayload: 'https://qr.nspk.ru/fixture' });
+        command.flush({ status: 'NEW', paymentId: 'fixture-payment', paymentUrl: 'https://securepay.tinkoff.ru/browser-fixture', qrPayload: 'https://qr.nspk.ru/fixture' });
 
         expect(openPayment).not.toHaveBeenCalled();
         expect(page.message()).toBe('');
