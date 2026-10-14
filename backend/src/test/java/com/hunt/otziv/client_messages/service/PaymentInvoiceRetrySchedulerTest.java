@@ -215,8 +215,11 @@ class PaymentInvoiceRetrySchedulerTest {
         sent.setDeliveryStatus("SENT");
         sent.setDeliveryToken("old-token");
         sent.setDeliveryMessage("old-message");
+        sent.setDeliveryEnvelope("old-invoice-and-link");
+        sent.setDeliveryChannel("WhatsApp");
         sent.setDeliveryTaskId(40L);
         sent.setDeliveryPreparedAt(LocalDateTime.now());
+        sent.setDeliveryRecoveryCheckedAt(LocalDateTime.now());
         stubBadReviewSchedule(sent);
 
         scheduler.scheduleBadReviewInvoiceRetry(order);
@@ -225,8 +228,11 @@ class PaymentInvoiceRetrySchedulerTest {
         assertNull(sent.getDeliveryStatus());
         assertNull(sent.getDeliveryToken());
         assertNull(sent.getDeliveryMessage());
+        assertNull(sent.getDeliveryEnvelope());
+        assertNull(sent.getDeliveryChannel());
         assertNull(sent.getDeliveryTaskId());
         assertNull(sent.getDeliveryPreparedAt());
+        assertNull(sent.getDeliveryRecoveryCheckedAt());
         verify(stateRepository).save(sent);
     }
 
