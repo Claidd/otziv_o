@@ -269,38 +269,6 @@ describe('public payment route isolation', () => {
     }
   );
 
-  it('group contractor route records client report separately from confirmed payment', async () => {
-    const params = new BehaviorSubject(convertToParamMap({ token: 'A' }));
-    const current: PublicCommonInvoice = {
-      ...invoice('A'),
-      paymentRouteType: 'MANUAL_MOBILE_BANK',
-      clientReportable: true
-    };
-    const reported = new Subject<PublicCommonInvoice>();
-    const paymentsApi = {
-      getPublicCommonInvoice: vi.fn(() => of(current)),
-      initPublicCommonInvoicePayment: vi.fn(),
-      reportPublicCommonInvoicePaid: vi.fn(() => reported)
-    };
-    await configure(PayGroupPageComponent, params, paymentsApi);
-    const fixture = TestBed.createComponent(PayGroupPageComponent);
-    const component = fixture.componentInstance;
-
-    component.reportPaid();
-
-    expect(paymentsApi.reportPublicCommonInvoicePaid).toHaveBeenCalledWith('A');
-    expect(component.reportingPaid()).toBe(true);
-    reported.next({
-      ...current,
-      clientReportable: false,
-      clientReportedAt: '2026-08-07T12:00:00'
-    });
-    expect(component.clientReported()).toBe(true);
-    expect(component.invoice()?.paidKopecks).toBe(0);
-    expect(component.reportingPaid()).toBe(false);
-    fixture.destroy();
-  });
-
   it('single contractor payment shows card copy for a 16 digit destination', async () => {
     const params = new BehaviorSubject(convertToParamMap({ token: 'A' }));
     const current: PublicPaymentLink = {

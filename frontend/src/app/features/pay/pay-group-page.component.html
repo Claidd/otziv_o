@@ -123,22 +123,7 @@
                 </button>
                 <p class="common-route-note">После оплаты отправьте один чек менеджеру.</p>
                 @if (item?.clientReportedAt) {
-                  <p class="client-reported-state" role="status">
-                    <span class="material-icons-sharp" aria-hidden="true">schedule</span>
-                    Вы сообщили об оплате. Ожидаем подтверждение поступления.
-                  </p>
-                } @else if (item?.clientReportable) {
-                  <button
-                    type="button"
-                    class="primary-pay-button reported-paid-action"
-                    (click)="reportPaid()"
-                    [disabled]="!canReportPaid()"
-                  >
-                    <span class="material-icons-sharp" aria-hidden="true">
-                      {{ reportingPaid() ? 'hourglass_top' : 'done_all' }}
-                    </span>
-                    {{ reportingPaid() ? 'Отправляем сообщение' : 'Я оплатил' }}
-                  </button>
+                  <p class="client-reported-state" role="status">Ожидаем подтверждение поступления менеджером.</p>
                 }
               </section>
             } @else if (bankRoute()) {

@@ -24,12 +24,10 @@ import java.util.HashSet;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-import org.springframework.web.server.ResponseStatusException;
 
 /** Real controller dispatch, validation and advice with isolated application ports; no bank or DB calls. */
 class ClientApiMvcContractTest {
@@ -76,11 +74,10 @@ class ClientApiMvcContractTest {
         validate(json, "ApiExceptionHandlerApiErrorResponseOutput"); verifyNoInteractions(payments);
     }
 
-    @Test void domainConflictKeeps409AndStructuredErrorAndIsNotRetried() throws Exception {
-        when(payments.reportManualPayment("contract-token")).thenThrow(new ResponseStatusException(HttpStatus.CONFLICT, "Route changed"));
+    @Test void retiredClientPaymentReportReturns410WithoutChangingPayment() throws Exception {
         String json = mvc.perform(post("/api/payments/public/contract-token/manual-paid"))
-                .andExpect(status().isConflict()).andExpect(jsonPath("$.message").value("Route changed")).andReturn().getResponse().getContentAsString();
-        validate(json, "ApiExceptionHandlerApiErrorResponseOutput"); verify(payments, times(1)).reportManualPayment("contract-token");
+                .andExpect(status().isGone()).andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("Отметка клиента"))).andReturn().getResponse().getContentAsString();
+        validate(json, "ApiExceptionHandlerApiErrorResponseOutput"); verifyNoInteractions(payments);
     }
 
     @Test void retiredPublicCapabilityReallyReturns404WithNoResponsePayload() throws Exception {

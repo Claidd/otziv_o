@@ -40,7 +40,6 @@ export class PayPageComponent {
   readonly loading = signal(true);
   readonly sbpSubmitting = signal(false);
   readonly bankSubmitting = signal(false);
-  readonly manualSubmitting = signal(false);
   readonly error = signal('');
   readonly message = signal('');
   readonly email = signal('');
@@ -190,17 +189,9 @@ export class PayPageComponent {
       this.privacyConsent() &&
       this.receiptConsent() &&
       !this.sbpSubmitting() &&
-      !this.bankSubmitting() &&
-      !this.manualSubmitting()
+      !this.bankSubmitting()
     );
   });
-  readonly canReportManual = computed(() => Boolean(
-    this.payment()?.payable &&
-    this.manualPayment() &&
-    this.manualPaymentDestinationAvailable() &&
-    this.payment()?.status !== 'MANUAL_REPORTED' &&
-    !this.manualSubmitting()
-  ));
   readonly manualPaymentButtonLabel = computed(() => {
     const label = this.payment()?.manualPaymentButtonLabel?.trim();
     return label || 'Оплатить через Альфа-Банк';
@@ -380,39 +371,6 @@ export class PayPageComponent {
     });
   }
 
-  reportManualPayment(): void {
-    if (!this.canReportManual()) {
-      return;
-    }
-
-    const routeTicket = this.captureRoute();
-    if (!routeTicket) {
-      return;
-    }
-    const token = this.token();
-
-    this.manualSubmitting.set(true);
-    this.message.set('');
-    this.error.set('');
-    this.paymentsApi.reportPublicManualPayment(token).subscribe({
-      next: (payment) => {
-        if (!this.isActiveRoute(routeTicket)) {
-          return;
-        }
-        this.payment.set(payment);
-        this.manualSubmitting.set(false);
-        this.message.set('Спасибо. Отметили платеж как отправленный, менеджер проверит поступление вручную.');
-      },
-      error: (err) => {
-        if (!this.isActiveRoute(routeTicket)) {
-          return;
-        }
-        this.error.set(this.publicPaymentError(err));
-        this.manualSubmitting.set(false);
-      }
-    });
-  }
-
   async copyManualValue(value?: string | null): Promise<void> {
     const text = value?.trim();
     if (!text) {
@@ -586,7 +544,6 @@ export class PayPageComponent {
     }
     this.sbpSubmitting.set(false);
     this.bankSubmitting.set(false);
-    this.manualSubmitting.set(false);
     if (!payment.payable || this.isFinalStatus(payment.status)) {
       this.sbpPaymentPayload.set('');
       this.sbpPaymentUrl.set('');
@@ -671,7 +628,6 @@ export class PayPageComponent {
     this.loading.set(false);
     this.sbpSubmitting.set(false);
     this.bankSubmitting.set(false);
-    this.manualSubmitting.set(false);
     this.error.set('');
     this.message.set('');
     this.email.set('');

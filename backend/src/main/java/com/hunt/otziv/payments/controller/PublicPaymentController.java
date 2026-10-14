@@ -19,6 +19,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,6 +27,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequiredArgsConstructor
@@ -116,7 +118,8 @@ public class PublicPaymentController {
 
     @PostMapping("/api/payments/public/{token}/manual-paid")
     public ResponseEntity<PublicPaymentLinkResponse> reportManualPayment(@PathVariable String token) {
-        return noStore(paymentLinkService.reportManualPayment(token));
+        throw new ResponseStatusException(HttpStatus.GONE,
+                "Отметка клиента об оплате отключена. Отправьте чек менеджеру для проверки поступления.");
     }
 
     private <T> ResponseEntity<T> noStore(T body) {

@@ -1441,7 +1441,7 @@ export class TbankPaymentsComponent implements OnDestroy {
       INITIATED: 'Открыта форма',
       AUTHORIZED: 'Авторизован',
       WAITING_MANUAL_PAYMENT: 'Ждет перевод',
-      MANUAL_REPORTED: 'Клиент оплатил',
+      MANUAL_REPORTED: 'Клиент заявил об оплате · требуется сверка',
       TEST_CONFIRMED: 'Тест оплачен',
       CONFIRMED: 'Оплачен',
       REJECTED: 'Отклонен',

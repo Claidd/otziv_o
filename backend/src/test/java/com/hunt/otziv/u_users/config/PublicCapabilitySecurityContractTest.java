@@ -49,6 +49,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -247,11 +248,11 @@ class PublicCapabilitySecurityContractTest {
                         .content(PAYMENT_REQUEST))
                 .andExpect(status().isOk());
         mockMvc.perform(post("/api/payments/public/group/invoice-token/reported-paid"))
-                .andExpect(status().isOk());
+                .andExpect(status().isGone());
 
         CommonBillingService commonBillingService = context.getBean(CommonBillingService.class);
         verify(commonBillingService).publicInvoice("invoice-token");
-        verify(commonBillingService).reportPublicCommonPayment("invoice-token");
+        verify(commonBillingService, never()).reportPublicCommonPayment("invoice-token");
         verify(commonBillingService).initPublicPayment(
                 "invoice-token",
                 "client@example.com",
