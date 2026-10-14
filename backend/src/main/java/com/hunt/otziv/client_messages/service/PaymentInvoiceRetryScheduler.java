@@ -406,8 +406,11 @@ public class PaymentInvoiceRetryScheduler {
         state.setDeliveryToken(null);
         state.setDeliveryStatus(null);
         state.setDeliveryMessage(null);
+        state.setDeliveryEnvelope(null);
+        state.setDeliveryChannel(null);
         state.setDeliveryTaskId(null);
         state.setDeliveryPreparedAt(null);
+        state.setDeliveryRecoveryCheckedAt(null);
     }
 
     private boolean canSchedule(Order order) {

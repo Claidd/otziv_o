@@ -1272,17 +1272,31 @@
 
   .review-carousel-dots span,
   .review-carousel-dots button {
-    width: 0.38rem;
-    height: 0.38rem;
+    width: 1.25rem;
+    height: 1.25rem;
+    min-width: 1.25rem;
+    min-height: 1.25rem;
     border: 0;
     border-radius: 999px;
     padding: 0;
-    background: #ccd;
+    background: transparent;
     cursor: pointer;
+  }
+
+  .review-carousel-dots button::before {
+    width: 0.38rem;
+    height: 0.38rem;
+    border-radius: 999px;
+    background: #ccd;
+    content: '';
   }
 
   .review-carousel-dots span.active,
   .review-carousel-dots button.active {
+    width: 1.25rem;
+  }
+
+  .review-carousel-dots button.active::before {
     width: 1.05rem;
     background: var(--otziv-action-fill);
   }
@@ -1361,15 +1375,26 @@
   }
 
   .details-actions--after-cards {
+    position: relative;
+    width: auto;
+    margin: 0;
+    border: 1px solid rgba(103, 116, 131, 0.2);
+    border-radius: 0.9rem;
+    padding: 0.38rem;
+    background: color-mix(in srgb, var(--otziv-background) 94%, transparent);
+  }
+
+  .review-check-controls {
     position: fixed;
     right: max(0.5rem, env(safe-area-inset-right));
     bottom: calc(var(--otziv-mobile-nav-height, 2.56rem) + env(safe-area-inset-bottom) + 0.35rem);
     left: max(0.5rem, env(safe-area-inset-left));
     z-index: 76;
+    display: grid;
+    gap: 0.32rem;
     width: auto;
     max-width: 45rem;
     margin: 0 auto;
-    border: 1px solid rgba(103, 116, 131, 0.2);
     border-radius: 0.9rem;
     padding: 0.38rem;
     background: color-mix(in srgb, var(--otziv-background) 94%, transparent);
@@ -1377,8 +1402,25 @@
     backdrop-filter: blur(12px);
   }
 
-  .review-check-form {
-    padding-bottom: 7rem;
+  .review-check-controls .review-navigation {
+    width: 100%;
+    margin: 0;
+  }
+
+  .review-check-controls .review-fast-select {
+    margin-top: 0;
+  }
+
+  :host .review-check-controls .approve-publication-hint {
+    display: none;
+  }
+
+  .review-check-form:has(.review-check-controls) {
+    padding-bottom: 10rem;
+  }
+
+  .review-check-form:has(.review-fast-select) {
+    padding-bottom: 13rem;
   }
 
   .mobile-review-check-side {
@@ -1405,12 +1447,12 @@
   }
 
   .review-field-editor--text :is(textarea, .review-display-field--text) {
-    height: 20rem;
+    height: clamp(11.7rem, calc(100dvh - 34rem), 20rem);
   }
 
   .review-field-editor--text.expanded :is(textarea, .review-display-field--text) {
-    height: 20rem;
-    min-height: 20rem;
+    height: clamp(11.7rem, calc(100dvh - 34rem), 20rem);
+    min-height: clamp(11.7rem, calc(100dvh - 34rem), 20rem);
   }
 
   .review-field-editor--text.review-field-editor--text-expanded .review-display-field--text {
@@ -1557,13 +1599,13 @@
   }
 
   .review-carousel-dots span,
-  .review-carousel-dots button {
+  .review-carousel-dots button::before {
     width: 0.36rem;
     height: 0.36rem;
   }
 
   .review-carousel-dots span.active,
-  .review-carousel-dots button.active {
+  .review-carousel-dots button.active::before {
     width: 0.95rem;
   }
 

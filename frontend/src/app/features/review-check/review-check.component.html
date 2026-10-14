@@ -366,110 +366,114 @@
               }
             </section>
 
-            @if (showReviewNavigation()) {
-              <nav class="review-navigation" aria-label="Навигация по отзывам">
-                <button type="button" (click)="previousReview()" [disabled]="activeReviewSlide() === 0" title="Предыдущий отзыв">
-                  <span class="material-icons-sharp">chevron_left</span>
-                </button>
-                <label>
-                  <span class="review-navigation-label">{{ activeReviewSlide() >= reviewCheckReviews().length ? 'Действие' : 'Отзыв' }}</span>
-                  <input
-                    type="text"
-                    inputmode="numeric"
-                    [ngModel]="reviewJumpValue()"
-                    [ngModelOptions]="{ standalone: true }"
-                    (ngModelChange)="setReviewJumpValue($event)"
-                    (keydown.enter)="jumpToReview()"
-                    (blur)="jumpToReview()"
-                    aria-label="Номер или ID отзыва"
-                  >
-                </label>
-                <span>{{ activeReviewSlide() + 1 }} из {{ reviewCarouselItemCount(details) }}</span>
-                <button type="button" (click)="nextReview()" [disabled]="activeReviewSlide() >= reviewCarouselItemCount(details) - 1" title="Следующий отзыв">
-                  <span class="material-icons-sharp">chevron_right</span>
-                </button>
-              </nav>
+            @if (showReviewNavigation() || details.permissions.canApprovePublication) {
+              <div class="review-check-controls">
+                @if (showReviewNavigation()) {
+                  <nav class="review-navigation" aria-label="Навигация по отзывам">
+                    <button type="button" (click)="previousReview()" [disabled]="activeReviewSlide() === 0" title="Предыдущий отзыв">
+                      <span class="material-icons-sharp">chevron_left</span>
+                    </button>
+                    <label>
+                      <span class="review-navigation-label">{{ activeReviewSlide() >= reviewCheckReviews().length ? 'Действие' : 'Отзыв' }}</span>
+                      <input
+                        type="text"
+                        inputmode="numeric"
+                        [ngModel]="reviewJumpValue()"
+                        [ngModelOptions]="{ standalone: true }"
+                        (ngModelChange)="setReviewJumpValue($event)"
+                        (keydown.enter)="jumpToReview()"
+                        (blur)="jumpToReview()"
+                        aria-label="Номер или ID отзыва"
+                      >
+                    </label>
+                    <span>{{ activeReviewSlide() + 1 }} из {{ reviewCarouselItemCount(details) }}</span>
+                    <button type="button" (click)="nextReview()" [disabled]="activeReviewSlide() >= reviewCarouselItemCount(details) - 1" title="Следующий отзыв">
+                      <span class="material-icons-sharp">chevron_right</span>
+                    </button>
+                  </nav>
 
-              <span class="mobile-swipe-hint" aria-hidden="true">
-                <span class="material-icons-sharp">chevron_right</span>
-              </span>
+                  <span class="mobile-swipe-hint" aria-hidden="true">
+                    <span class="material-icons-sharp">chevron_right</span>
+                  </span>
 
-              @if (showReviewFastSelect()) {
-                <div class="review-fast-select" aria-label="Быстрый переход по отзывам">
-                  <label>
-                    <span>Фильтр</span>
-                    <select
-                      [ngModel]="reviewQuickFilter()"
-                      [ngModelOptions]="{ standalone: true }"
-                      (ngModelChange)="setReviewQuickFilter($event)"
-                    >
-                      <option value="all">Все отзывы</option>
-                      <option value="unpublished">Неопубликованные</option>
-                      <option value="missing-photo">Без фото</option>
-                      <option value="with-note">С заметкой</option>
-                    </select>
-                  </label>
-                  <label>
-                    <span>Перейти</span>
-                    <select
-                      [ngModel]="activeReviewSlide()"
-                      [ngModelOptions]="{ standalone: true }"
-                      (ngModelChange)="setActiveReviewFromQuickSelect($event)"
-                    >
-                      @for (reviewIndex of reviewQuickFilterIndexes(); track reviewIndex) {
-                        <option [ngValue]="reviewIndex">{{ reviewQuickOptionLabel(reviewIndex) }}</option>
+                  @if (showReviewFastSelect()) {
+                    <div class="review-fast-select" aria-label="Быстрый переход по отзывам">
+                      <label>
+                        <span>Фильтр</span>
+                        <select
+                          [ngModel]="reviewQuickFilter()"
+                          [ngModelOptions]="{ standalone: true }"
+                          (ngModelChange)="setReviewQuickFilter($event)"
+                        >
+                          <option value="all">Все отзывы</option>
+                          <option value="unpublished">Неопубликованные</option>
+                          <option value="missing-photo">Без фото</option>
+                          <option value="with-note">С заметкой</option>
+                        </select>
+                      </label>
+                      <label>
+                        <span>Перейти</span>
+                        <select
+                          [ngModel]="activeReviewSlide()"
+                          [ngModelOptions]="{ standalone: true }"
+                          (ngModelChange)="setActiveReviewFromQuickSelect($event)"
+                        >
+                          @for (reviewIndex of reviewQuickFilterIndexes(); track reviewIndex) {
+                            <option [ngValue]="reviewIndex">{{ reviewQuickOptionLabel(reviewIndex) }}</option>
+                          }
+                          @if (details.permissions.canApprovePublication) {
+                            <option [ngValue]="reviewApproveSlideIndex(details)">
+                              {{ isReviewWindowApproved(details) ? 'Публикация разрешена' : 'Разрешить публикацию' }}
+                            </option>
+                          }
+                        </select>
+                      </label>
+                    </div>
+                  } @else {
+                    <div class="review-carousel-dots">
+                      @for (dotReview of reviewCheckReviews(); track trackReviewDot($index, dotReview); let i = $index) {
+                        <button
+                          type="button"
+                          [class.active]="activeReviewSlide() === i"
+                          (click)="goToReviewIndex(i)"
+                          [attr.aria-label]="'Перейти к отзыву ' + (i + 1)"
+                        ></button>
                       }
                       @if (details.permissions.canApprovePublication) {
-                        <option [ngValue]="reviewApproveSlideIndex(details)">
-                          {{ isReviewWindowApproved(details) ? 'Публикация разрешена' : 'Разрешить публикацию' }}
-                        </option>
+                        <button
+                          type="button"
+                          [class.active]="activeReviewSlide() === reviewApproveSlideIndex(details)"
+                          (click)="goToReviewIndex(reviewApproveSlideIndex(details))"
+                          [attr.aria-label]="isReviewWindowApproved(details) ? 'Публикация разрешена' : 'Перейти к разрешению публикации'"
+                        ></button>
                       }
-                    </select>
-                  </label>
-                </div>
-              } @else {
-                <div class="review-carousel-dots">
-                  @for (dotReview of reviewCheckReviews(); track trackReviewDot($index, dotReview); let i = $index) {
+                    </div>
+                  }
+                }
+
+                @if (details.permissions.canApprovePublication) {
+                  <footer class="details-actions details-actions--after-cards">
+                    @if (!isReviewWindowApproved(details)) {
+                      <span class="approve-publication-hint" aria-hidden="true">
+                        <span class="material-icons-sharp">arrow_downward</span>
+                        <strong>разрешите публикацию</strong>
+                      </span>
+                    }
+
                     <button
                       type="button"
-                      [class.active]="activeReviewSlide() === i"
-                      (click)="goToReviewIndex(i)"
-                      [attr.aria-label]="'Перейти к отзыву ' + (i + 1)"
-                    ></button>
-                  }
-                  @if (details.permissions.canApprovePublication) {
-                    <button
-                      type="button"
-                      [class.active]="activeReviewSlide() === reviewApproveSlideIndex(details)"
-                      (click)="goToReviewIndex(reviewApproveSlideIndex(details))"
-                      [attr.aria-label]="isReviewWindowApproved(details) ? 'Публикация разрешена' : 'Перейти к разрешению публикации'"
-                    ></button>
-                  }
-                </div>
-              }
+                      class="approve-publication-button"
+                      [class.approved]="isReviewWindowApproved(details)"
+                      (click)="approveReviews()"
+                      [disabled]="busy() || isReviewWindowApproved(details)"
+                    >
+                      {{ isReviewWindowApproved(details) ? 'Публикация разрешена' : isAction('approve') ? 'Разрешаю...' : 'Разрешить публикацию' }}
+                    </button>
+                  </footer>
+                }
+              </div>
             }
           </div>
-
-          @if (details.permissions.canApprovePublication) {
-            <footer class="details-actions details-actions--after-cards">
-              @if (!isReviewWindowApproved(details)) {
-                <span class="approve-publication-hint" aria-hidden="true">
-                  <span class="material-icons-sharp">arrow_downward</span>
-                  <strong>разрешите публикацию</strong>
-                </span>
-              }
-
-              <button
-                type="button"
-                class="approve-publication-button"
-                [class.approved]="isReviewWindowApproved(details)"
-                (click)="approveReviews()"
-                [disabled]="busy() || isReviewWindowApproved(details)"
-              >
-                {{ isReviewWindowApproved(details) ? 'Публикация разрешена' : isAction('approve') ? 'Разрешаю...' : 'Разрешить публикацию' }}
-              </button>
-            </footer>
-          }
 
           <section class="check-comment-card">
             <label>
