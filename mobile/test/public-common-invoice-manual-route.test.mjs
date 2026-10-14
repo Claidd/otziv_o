@@ -1,11 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
-import { apiTransportSource } from './api-source.mjs';
 import { loadTsModule } from './load-ts-module.mjs';
 
 const pageSource = source('src/app/features/public-pay-group.page.ts');
-const apiSource = apiTransportSource();
 const bankRouteSource = source('src/app/shared/bank-payment-source.ts');
 
 test('mobile generated common invoice projection retains every public routing field returned by the backend', () => {
@@ -45,10 +43,10 @@ test('mobile common manual route shows and copies recipient requisites with card
   assert.match(pageSource, /navigator\.clipboard\.writeText\(clean\)/);
 });
 
-test('client payment report is gated by the backend flag and uses the public common endpoint', () => {
-  assert.match(pageSource, /canReportPaid = computed[\s\S]*?clientReportable[\s\S]*?manualRoute\(\)[\s\S]*?clientReportedAt/);
-  assert.match(pageSource, /reportPublicCommonInvoicePaid\(token\)[\s\S]*?isActiveRoute\(routeTicket\)/);
-  assert.match(apiSource, /reportPublicCommonInvoicePaid[\s\S]*?\/reported-paid/);
+test('client sees manual requisites and sends a receipt to the manager without self-reporting', () => {
+  assert.match(pageSource, /manualRecipientName[\s\S]*?manualBankName[\s\S]*?manualComment/);
+  assert.match(pageSource, /После оплаты отправьте один чек менеджеру/);
+  assert.doesNotMatch(pageSource, /canReportPaid|reportPaid\(\)|Я оплатил/);
 });
 
 function source(relativePath) {
