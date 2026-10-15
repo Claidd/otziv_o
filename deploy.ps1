@@ -8,6 +8,7 @@ param(
     [string]$SshKey = '',
     [string]$SshKnownHostsFile = '',
     [string]$EnvFile = '',
+    [string]$LocalWorkRoot = '',
     [string]$MobileApkPath = '',
     [ValidateSet('Direct', 'Local')][string]$ImageTransport = 'Direct',
     [switch]$FullRollout,
@@ -27,6 +28,7 @@ if ($Help) {
     Write-Host 'Prepare and verify the source bundle and read VPS readiness: .\deploy.ps1 -PreflightOnly'
     Write-Host 'Requires clean, updated main, successful main CI, Git/Python 3/SSH and PowerShell 7.'
     Write-Host 'Images download directly on the VPS. -ImageTransport Local uses local Docker and an SSH tunnel.'
+    Write-Host '-LocalWorkRoot or OTZIV_LOCAL_WORK_ROOT places release evidence and temporary files on a chosen disk.'
     Write-Host '-FullRollout recreates all application services; database continuity guards still apply.'
     Write-Host 'Production configuration and the existing mobile APK are retained unless an APK path is supplied.'
     return
@@ -65,6 +67,32 @@ $ciStartedAt = [DateTimeOffset]::UtcNow
 if (-not $ProjectFilesRoot) { $ProjectFilesRoot = Split-Path -Parent $repoRoot }
 $ProjectFilesRoot = [IO.Path]::GetFullPath($ProjectFilesRoot)
 $canonicalWorkspace = Join-Path $ProjectFilesRoot 'otziv'
+if (-not $LocalWorkRoot -and $IsWindows) { $LocalWorkRoot = [Environment]::GetEnvironmentVariable('OTZIV_LOCAL_WORK_ROOT', 'User') }
+if ($LocalWorkRoot) {
+    $LocalWorkRoot = [IO.Path]::GetFullPath($LocalWorkRoot)
+    if (-not (Test-Path -LiteralPath $LocalWorkRoot -PathType Container)) {
+        throw "Configured local work root does not exist: $LocalWorkRoot"
+    }
+    $pathToCheck = $LocalWorkRoot
+    while ($pathToCheck) {
+        $item = Get-Item -LiteralPath $pathToCheck -Force
+        if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+            throw "Configured local work root contains a reparse point: $pathToCheck"
+        }
+        $parent = Split-Path -Path $pathToCheck -Parent
+        if (-not $parent -or $parent -eq $pathToCheck) { break }
+        $pathToCheck = $parent
+    }
+    $localTemp = Join-Path $LocalWorkRoot 'tmp'
+    New-Item -ItemType Directory -Path $localTemp -Force | Out-Null
+    if ((Get-Item -LiteralPath $localTemp -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) {
+        throw "Configured local temporary directory is a reparse point: $localTemp"
+    }
+    $env:TEMP = $localTemp
+    $env:TMP = $localTemp
+} else {
+    $LocalWorkRoot = Join-Path ([Environment]::GetFolderPath('UserProfile')) 'otziv-deploy'
+}
 # This is the first external service action. CI failures must not reach Docker or SSH.
 $ciOutput = @(& python (Join-Path $helpers 'release_ci.py') --repo $repoRoot --workspace $canonicalWorkspace)
 if ($LASTEXITCODE -ne 0) { throw ($ciOutput -join [Environment]::NewLine) }
@@ -83,9 +111,9 @@ if (-not $EnvFile) { $EnvFile = Join-Path $ProjectFilesRoot '.otziv/env/prod.env
 foreach ($path in @($SshKey, $SshKnownHostsFile, $EnvFile)) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Required local file missing: $path" }
 }
-# Docker Desktop can bind files on the system drive reliably. Keep private
-# operator evidence outside the source snapshot and independently of SSH files.
-$directory = Join-Path ([Environment]::GetFolderPath('UserProfile')) ('otziv-deploy/releases/' + $Tag + '-' + [guid]::NewGuid().ToString('N'))
+# Keep private operator evidence outside the source snapshot and independently
+# of SSH files. The configured work root also supplies temporary files.
+$directory = Join-Path $LocalWorkRoot ('releases/' + $Tag + '-' + [guid]::NewGuid().ToString('N'))
 $record = Join-Path $directory 'registry.json'
 $registryHelper = Join-Path $helpers 'release_registry.py'
 $tunnel = $null
