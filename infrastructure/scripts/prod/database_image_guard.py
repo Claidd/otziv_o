@@ -31,8 +31,8 @@ EXTRA_MOUNTS = {"mysql": {"/backup", "/var/lib/mysql-files"}, "keycloak-postgres
 # This immutable OCI index was reviewed with the exact configuration below.
 # Classic Docker reports its config ID; containerd's image store reports the
 # pinned index ID. A tag, version string or image label never grants this path.
-REVIEWED_MYSQL_CONFIG = "sha256:1607210399230dc1ccd0169863f359d1c0c19c32d18949a44b5628dd64fbc541"
-REVIEWED_MYSQL_INDEX = "sha256:3bf3e8465193c365e83dc2959a1ce944791c8fd49cf58b68aa96783f63df21b7"
+REVIEWED_MYSQL_CONFIG = "sha256:985c9594c5a0a7ff588a7a86819dacd2b47847984fdb56dce825cc949c948124"
+REVIEWED_MYSQL_INDEX = "sha256:28521a2c331136328abde7b504ae0ded617c74caa8a4a2554f1f0494d4df9009"
 REVIEWED_MYSQL_REFERENCE = "ghcr.io/claidd/otziv-security@" + REVIEWED_MYSQL_INDEX
 NATIVE_MYSQL_OPTIONS = {
     "user": "999", "character-set-server": "utf8mb4", "collation-server": "utf8mb4_unicode_ci",

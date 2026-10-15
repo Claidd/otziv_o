@@ -16,7 +16,7 @@ import { combinedScanSummary } from './scan-verdict.mjs';
 import { C29_ALLOY_PROOF_LABEL, C29_ALLOY_BUILD_INFO_READER } from './alloy-c29-adjudication.mjs';
 import { BUILD_INFO_READER } from './go-binary-inspection.mjs';
 import { assertPublicationSet, reviewedImageSetForComponent, supplementalReviewedSources, validateReviewedImageSet } from './reviewed-image-sets.mjs';
-import { validateDatabaseTransitionReadiness } from './mysql-c22-readiness.mjs';
+import { validateDatabaseTransitionReadiness } from './mysql-c30-readiness.mjs';
 import { validatePostgresActivationScan, validatePostgresTransitionReadiness } from './postgres-c16-activation.mjs';
 import { validatePublishedKeycloakMigrationAcceptance,
   assertPostgresKeycloakCoupling } from './postgres-transition-readiness.mjs';

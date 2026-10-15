@@ -35,6 +35,7 @@ on:
           - c15-mc
           - c22-nginx
           - c22-mysql
+          - c30-mysql
           - c22-keycloak
           - c22-mc
           - c22-phpmyadmin
@@ -606,7 +607,7 @@ jobs:
       - name: Build and scan reviewed database candidates
         if: ${{ needs.changes.outputs.infrastructure == 'true' }}
         run: |
-          docker build -t otziv-mysql-ci infrastructure/runtime-security/builds/c22-mysql
+          docker build -t otziv-mysql-ci infrastructure/runtime-security/builds/c30-mysql
           docker build -t otziv-postgres-ci infrastructure/runtime-security/builds/c23-postgres
           node infrastructure/runtime-security/scan.mjs image otziv-mysql-ci "$RUNNER_TEMP/mysql-vulnerabilities.json"
           node infrastructure/runtime-security/scan.mjs image otziv-postgres-ci "$RUNNER_TEMP/postgres-vulnerabilities.json"

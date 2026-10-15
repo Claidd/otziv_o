@@ -173,7 +173,7 @@ function Assert-LocalRestoreContract {
     if ($VolumeName -cnotmatch '^otziv-prod-local_mysql_973_[a-z0-9][a-z0-9_-]*$') {
         throw 'Restore requires a dedicated otziv-prod-local_mysql_973_ volume; legacy MySQL volumes are never reused or removed.'
     }
-    $image = 'ghcr.io/claidd/otziv-security@sha256:3bf3e8465193c365e83dc2959a1ce944791c8fd49cf58b68aa96783f63df21b7'
+    $image = 'ghcr.io/claidd/otziv-security@sha256:28521a2c331136328abde7b504ae0ded617c74caa8a4a2554f1f0494d4df9009'
     $configuration = Get-LocalRestoreDockerJson -Arguments ($ComposeArguments + @('config', '--format', 'json'))
     $mysql = $configuration.services.mysql
     $volume = $configuration.volumes.mysql_data
@@ -202,7 +202,7 @@ function Assert-LocalRestoreContract {
         }
     }
     $imageMetadata = @(Get-LocalRestoreDockerJson -Arguments @('image', 'inspect', $image))[0]
-    if ($imageMetadata.Id -notin @('sha256:3bf3e8465193c365e83dc2959a1ce944791c8fd49cf58b68aa96783f63df21b7', 'sha256:1607210399230dc1ccd0169863f359d1c0c19c32d18949a44b5628dd64fbc541') -or
+    if ($imageMetadata.Id -notin @('sha256:28521a2c331136328abde7b504ae0ded617c74caa8a4a2554f1f0494d4df9009', 'sha256:985c9594c5a0a7ff588a7a86819dacd2b47847984fdb56dce825cc949c948124') -or
         $imageMetadata.Os -cne 'linux' -or $imageMetadata.Architecture -cne 'amd64' -or
         ($imageMetadata.Config.Entrypoint -join "`n") -cne '/entrypoint.sh' -or $image -notin $imageMetadata.RepoDigests) {
         throw 'The reviewed local MySQL image is not present with the expected immutable identity.'
@@ -280,7 +280,7 @@ function Initialize-EmptyLocalMySqlVolume {
     param([Parameter(Mandatory)][string]$VolumeName, [Parameter(Mandatory)][string]$Image)
 
     if ($VolumeName -cnotmatch '^otziv-prod-local_mysql_973_[a-z0-9][a-z0-9_-]*$' -or
-        $Image -cne 'ghcr.io/claidd/otziv-security@sha256:3bf3e8465193c365e83dc2959a1ce944791c8fd49cf58b68aa96783f63df21b7') {
+        $Image -cne 'ghcr.io/claidd/otziv-security@sha256:28521a2c331136328abde7b504ae0ded617c74caa8a4a2554f1f0494d4df9009') {
         throw 'Empty-volume initialization requires the reviewed local 9.7.3 image and versioned volume.'
     }
     $existing = @(& docker volume ls -q --filter "name=^${VolumeName}$" 2>$null)

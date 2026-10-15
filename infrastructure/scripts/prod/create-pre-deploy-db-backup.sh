@@ -233,9 +233,10 @@ verify_artifact() {
   fi
   if ! decrypt_artifact_to_stdout "$artifact" "$key_file" | gzip -dc | awk '
     /CREATE TABLE|INSERT INTO|Flyway|flyway_schema_history/ { valid = 1 }
-    END { exit(valid ? 0 : 1) }
+    /^-- Dump completed on / { complete = 1 }
+    END { exit(valid && complete ? 0 : 1) }
   '; then
-    echo "Decrypted pre-deploy backup does not contain an expected SQL marker." >&2
+    echo "Decrypted pre-deploy backup is missing SQL data or the mysqldump completion marker." >&2
     exit 1
   fi
 
@@ -265,6 +266,8 @@ create_backup() {
   local deploy_tag="$4"
   local key_base64 run_id work_dir key_file artifact manifest artifact_tmp manifest_tmp
   local schema_defaults schema_charset schema_collation
+  local dump_help masking_component_count dump_stderr
+  local -a masking_args=()
 
   if ! printf '%s' "$deploy_tag" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$'; then
     echo "Deploy tag contains unsupported characters." >&2
@@ -321,7 +324,22 @@ create_backup() {
     exit 1
   fi
 
+  dump_help="$(docker exec "$mysql_container" mysqldump --help)"
+  if [[ "$dump_help" == *"--masking-policies"* ]]; then
+    # MySQL 9.7 enables Enterprise masking-policy export by default even in
+    # Community Edition. Skip it only after proving the component is absent.
+    masking_component_count="$(docker exec "$mysql_container" sh -lc '
+      MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot -N -B -e "SELECT COUNT(*) FROM mysql.component WHERE component_urn LIKE 0x256f626a6563745f706f6c69637925"
+    ')"
+    if [ "$masking_component_count" != "0" ]; then
+      echo "Masking-policy component is present or cannot be ruled out; refusing an incomplete backup." >&2
+      exit 1
+    fi
+    masking_args=(--skip-masking-policies)
+  fi
+
   echo "Creating mandatory pre-deploy database backup..."
+  dump_stderr="$work_dir/mysqldump.stderr"
   {
     # This recovery metadata is authenticated and encrypted together with the
     # SQL stream, so restore-clean never has to trust editable manifest fields.
@@ -331,10 +349,15 @@ create_backup() {
         -u"$MYSQL_USER" \
         --single-transaction --quick --routines --events --triggers \
         --hex-blob --no-tablespaces --set-gtid-purged=OFF \
-        "$MYSQL_DATABASE"
-    '
+        "$@" "$MYSQL_DATABASE"
+    ' sh "${masking_args[@]}" 2>"$dump_stderr"
   } | gzip -9 | openssl enc -aes-256-cbc -salt -pbkdf2 -iter "$OPENSSL_ITERATIONS" -md sha256 \
     -out "$artifact_tmp" -pass "file:$key_file"
+  if awk '$0 != "id: cannot find name for user ID 999" { unexpected = 1 }
+      END { exit(unexpected ? 0 : 1) }' "$dump_stderr"; then
+    echo "mysqldump emitted an unexpected diagnostic; refusing the backup." >&2
+    exit 1
+  fi
   if [ ! -s "$artifact_tmp" ]; then
     echo "mysqldump/gzip/encryption produced an empty artifact." >&2
     exit 1
