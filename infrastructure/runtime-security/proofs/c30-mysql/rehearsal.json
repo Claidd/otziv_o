@@ -1,0 +1,165 @@
+{
+  "schema": "otziv-mysql-same-engine-refresh-v1",
+  "source": "ghcr.io/claidd/otziv-security@sha256:3bf3e8465193c365e83dc2959a1ce944791c8fd49cf58b68aa96783f63df21b7",
+  "candidate": "ghcr.io/claidd/otziv-security@sha256:28521a2c331136328abde7b504ae0ded617c74caa8a4a2554f1f0494d4df9009",
+  "preliminary": false,
+  "production": false,
+  "sourceWrites": false,
+  "publishedPorts": 0,
+  "network": "none",
+  "sourceDumpSha256": "9fcf5da306683e93dcff3729cb691c79dc9859a46c7339b62a19d3513a9b3e3e",
+  "executedSourceSha256": "4ebab022015d6477cb7c0312abf1e53f4854b1999f245c5b256856dc150ec7ed",
+  "startedAt": "2026-10-15T11:57:53.226834+00:00",
+  "checks": [
+    {
+      "name": "engine_version_source",
+      "passed": true
+    },
+    {
+      "name": "engine_version_candidate",
+      "passed": true
+    },
+    {
+      "name": "server_binary_unchanged",
+      "passed": true
+    },
+    {
+      "name": "openssl_fixed",
+      "passed": true
+    },
+    {
+      "name": "libevent_fixed",
+      "passed": true
+    },
+    {
+      "name": "curl_libraries_fixed",
+      "passed": true
+    },
+    {
+      "name": "libxml2_fixed",
+      "passed": true
+    },
+    {
+      "name": "pcre2_source_vulnerable",
+      "passed": true
+    },
+    {
+      "name": "pcre2_fixed",
+      "passed": true
+    },
+    {
+      "name": "only_pcre2_changed",
+      "passed": true
+    },
+    {
+      "name": "native_uid_no_network_source",
+      "passed": true
+    },
+    {
+      "name": "restored_nonempty_production_schema",
+      "passed": true
+    },
+    {
+      "name": "clean_stop_source",
+      "passed": true
+    },
+    {
+      "name": "native_uid_no_network_candidate",
+      "passed": true
+    },
+    {
+      "name": "all_tables_schema_history_accounts_and_settings_exact",
+      "passed": true
+    },
+    {
+      "name": "existing_account_login",
+      "passed": true
+    },
+    {
+      "name": "clean_stop_candidate",
+      "passed": true
+    },
+    {
+      "name": "native_uid_no_network_restart",
+      "passed": true
+    },
+    {
+      "name": "restart_preserves_new_writes",
+      "passed": true
+    },
+    {
+      "name": "clean_stop_restart",
+      "passed": true
+    },
+    {
+      "name": "native_uid_no_network_rollback",
+      "passed": true
+    },
+    {
+      "name": "same_volume_rollback_preserves_all_new_writes",
+      "passed": true
+    },
+    {
+      "name": "clean_stop_rollback",
+      "passed": true
+    },
+    {
+      "name": "native_uid_no_network_restored",
+      "passed": true
+    },
+    {
+      "name": "fresh_restore_preserves_all_data_and_schema",
+      "passed": true
+    }
+  ],
+  "sourceLocalId": "sha256:3bf3e8465193c365e83dc2959a1ce944791c8fd49cf58b68aa96783f63df21b7",
+  "sourceMysqldSha256": "1a928190ad8166bc329b01d4adfba328f4d52083f81569f46c8435710c5e36eb",
+  "sourceOpenSSL": "openssl-libs-3.5.8-1.0.1.el9_8.x86_64",
+  "sourceLibxml2": "libxml2-2.9.13-14.el9_8.5.x86_64",
+  "sourcePcre2": "pcre2-10.40-6.0.1.el9.x86_64",
+  "sourcePcre2Syntax": "pcre2-syntax-10.40-6.0.1.el9.noarch",
+  "sourceLibevent": "libevent-2.1.13-1.el9_8.x86_64",
+  "sourceCurl": [
+    "curl-7.76.1-40.el9_8.7.x86_64",
+    "libcurl-7.76.1-40.el9_8.7.x86_64"
+  ],
+  "sourceOtherPackagesSha256": "090e27835b8fff709522ecafb020c7bca9b63b2c39f1e01d6f1a16bf4a57b48a",
+  "candidateLocalId": "sha256:28521a2c331136328abde7b504ae0ded617c74caa8a4a2554f1f0494d4df9009",
+  "candidateMysqldSha256": "1a928190ad8166bc329b01d4adfba328f4d52083f81569f46c8435710c5e36eb",
+  "candidateOpenSSL": "openssl-libs-3.5.8-1.0.1.el9_8.x86_64",
+  "candidateLibxml2": "libxml2-2.9.13-14.el9_8.5.x86_64",
+  "candidatePcre2": "pcre2-10.40-7.0.1.el9_8.x86_64",
+  "candidatePcre2Syntax": "pcre2-syntax-10.40-7.0.1.el9_8.noarch",
+  "candidateLibevent": "libevent-2.1.13-1.el9_8.x86_64",
+  "candidateCurl": [
+    "curl-7.76.1-40.el9_8.7.x86_64",
+    "libcurl-7.76.1-40.el9_8.7.x86_64"
+  ],
+  "candidateOtherPackagesSha256": "090e27835b8fff709522ecafb020c7bca9b63b2c39f1e01d6f1a16bf4a57b48a",
+  "before": {
+    "tableCount": 340,
+    "rows": 1294238,
+    "countsSha256": "6790d386795cc68f6569c0749e509d5a48663f3cd3d7cc93def7e029e1c41953",
+    "checksumsSha256": "eafa598d567bb6d39bc98daf55c8f220021230bf2a514803ee3b8e8e499908b0",
+    "historySha256": "df0ca4de2d7fd96d8331ccaf8d6b599a34ac2438fd0d708d06debdcdf0f43532",
+    "schemaSha256": "aecf44680fed6a1a47769ff1d38b2c0bdde005e2a595a2405eb94076479cb03a",
+    "accountsSha256": "721b93615f198f3d878081184160c578091a74af434758a1b22d436651dbee83",
+    "settingsSha256": "a0570a9a98542227edcb793e338aa272aab3b5d218f42cdd12efab9c9f5b3b72"
+  },
+  "after": {
+    "tableCount": 340,
+    "rows": 1294238,
+    "countsSha256": "6790d386795cc68f6569c0749e509d5a48663f3cd3d7cc93def7e029e1c41953",
+    "checksumsSha256": "eafa598d567bb6d39bc98daf55c8f220021230bf2a514803ee3b8e8e499908b0",
+    "historySha256": "df0ca4de2d7fd96d8331ccaf8d6b599a34ac2438fd0d708d06debdcdf0f43532",
+    "schemaSha256": "aecf44680fed6a1a47769ff1d38b2c0bdde005e2a595a2405eb94076479cb03a",
+    "accountsSha256": "721b93615f198f3d878081184160c578091a74af434758a1b22d436651dbee83",
+    "settingsSha256": "a0570a9a98542227edcb793e338aa272aab3b5d218f42cdd12efab9c9f5b3b72"
+  },
+  "result": "PASS",
+  "ownedResourcesRemaining": {
+    "containers": 0,
+    "volumes": 0
+  },
+  "completedAt": "2026-10-15T12:05:41.449592+00:00"
+}

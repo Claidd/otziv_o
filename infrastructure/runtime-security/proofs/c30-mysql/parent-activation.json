@@ -1,0 +1,23 @@
+{
+  "component": "mysql",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:3bf3e8465193c365e83dc2959a1ce944791c8fd49cf58b68aa96783f63df21b7",
+  "commit": "49a537984b4441f0ac9ad5e79f619018b7488912",
+  "run": "36315122982",
+  "attempt": "1",
+  "manifest": {
+    "path": "infrastructure/runtime-security/reviewed-images-c22-mysql.json",
+    "sha256": "32ed13801ed00af6644392d89f07e99b2b489a81ad8f4be9fac769cb3941cd0d"
+  },
+  "publication": {
+    "path": "infrastructure/runtime-security/proofs/c22-mysql/publication/publication.json",
+    "sha256": "655e97dfeb5e20dfd8c4a2f8be8a47425d9d2fadb29573c7bf71f01f837d7e84"
+  },
+  "anonymous": {
+    "path": "infrastructure/runtime-security/proofs/c22-mysql/anonymous/anonymous-download.json",
+    "sha256": "751d519fe9cff67c0504182f260b2245f5bebec12fbf69c6a20a3a3df11fcde8"
+  },
+  "databaseTransition": {
+    "path": "infrastructure/runtime-security/proofs/c22-mysql/rehearsal.json",
+    "sha256": "93005b4b3047d84c3d5024e3fe877fd9f345769404ff9be6974d5cf5a83d6a30"
+  }
+}

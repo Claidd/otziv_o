@@ -163,25 +163,25 @@
     },
     {
       "component": "mysql",
-      "reference": "ghcr.io/claidd/otziv-security@sha256:3bf3e8465193c365e83dc2959a1ce944791c8fd49cf58b68aa96783f63df21b7",
-      "commit": "49a537984b4441f0ac9ad5e79f619018b7488912",
-      "run": "36315122982",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:28521a2c331136328abde7b504ae0ded617c74caa8a4a2554f1f0494d4df9009",
+      "commit": "677069f9d7ad2724c37e87b36186eb50c2a63412",
+      "run": "38730287952",
       "attempt": "1",
       "manifest": {
-        "path": "infrastructure/runtime-security/reviewed-images-c22-mysql.json",
-        "sha256": "32ed13801ed00af6644392d89f07e99b2b489a81ad8f4be9fac769cb3941cd0d"
+        "path": "infrastructure/runtime-security/reviewed-images-c30-mysql.json",
+        "sha256": "bba1e3d843a18bfeba9317bc212b11d2c3a8f83d8d6c9ed8d8f4559536771bed"
       },
       "publication": {
-        "path": "infrastructure/runtime-security/proofs/c22-mysql/publication/publication.json",
-        "sha256": "655e97dfeb5e20dfd8c4a2f8be8a47425d9d2fadb29573c7bf71f01f837d7e84"
+        "path": "infrastructure/runtime-security/proofs/c30-mysql/publication/publication.json",
+        "sha256": "534480205396e099f0e562fde6f9bf9ba6f6388b1a8368d62861ba993e79c686"
       },
       "anonymous": {
-        "path": "infrastructure/runtime-security/proofs/c22-mysql/anonymous/anonymous-download.json",
-        "sha256": "751d519fe9cff67c0504182f260b2245f5bebec12fbf69c6a20a3a3df11fcde8"
+        "path": "infrastructure/runtime-security/proofs/c30-mysql/anonymous/anonymous-download.json",
+        "sha256": "26147e7ac7d93182118d8ee7d6bde517f4cbfb82c5f6ce4b71037ddef57a1411"
       },
       "databaseTransition": {
-        "path": "infrastructure/runtime-security/proofs/c22-mysql/rehearsal.json",
-        "sha256": "93005b4b3047d84c3d5024e3fe877fd9f345769404ff9be6974d5cf5a83d6a30"
+        "path": "infrastructure/runtime-security/proofs/c30-mysql/rehearsal.json",
+        "sha256": "1fe154937592d75fb901bc35f6fa67b60b24ff36af93f8b25f4d7052ff1911c8"
       }
     },
     {
