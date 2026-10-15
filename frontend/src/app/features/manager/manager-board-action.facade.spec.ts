@@ -1,5 +1,5 @@
 import { signal } from '@angular/core';
-import { of, throwError } from 'rxjs';
+import { NEVER, of, throwError } from 'rxjs';
 import { afterEach, vi } from 'vitest';
 import type { CompanyCardItem, OrderCardItem, OrderDetailsPayload } from '../../core/manager.api';
 import type { StatusAction } from './manager-board.config';
@@ -29,6 +29,7 @@ function createFacade(config: {
   failCompanyStatus?: boolean;
   orderStatusError?: unknown;
   canOverrideActiveBankPayment?: boolean;
+  clientWaitingNever?: boolean;
 } = {}) {
   const mutationKey = signal<string | null>(null);
   const calls: string[] = [];
@@ -50,7 +51,7 @@ function createFacade(config: {
       },
       updateOrderClientWaiting: (orderId: number, waitingForClient: boolean) => {
         calls.push(`client-waiting:${orderId}:${waitingForClient}`);
-        return of(void 0);
+        return config.clientWaitingNever ? NEVER : of(void 0);
       },
       updateCompanyNote: (companyId: number, value: string) => {
         calls.push(`company-note:${companyId}:${value}`);
@@ -114,6 +115,24 @@ describe('ManagerBoardActionFacade', () => {
     expect(mutationKey()).toBeNull();
     expect(toastMessages).toContain('success:Статус изменен:Acme: Архив');
     expect(toastMessages).toContain('success:Статус изменен:Acme: Оплачено');
+  });
+
+  it('unlocks client waiting and reloads the order when the request never responds', () => {
+    vi.useFakeTimers();
+    try {
+      const { facade, calls, mutationKey, toastMessages } = createFacade({ clientWaitingNever: true });
+
+      facade.toggleOrderClientWaiting(order({ id: 27820, commonInvoiceId: 323 }));
+      expect(mutationKey()).toBe('order-27820-client-waiting');
+
+      vi.advanceTimersByTime(15000);
+
+      expect(mutationKey()).toBeNull();
+      expect(calls).toEqual(['client-waiting:27820:true', 'load-board']);
+      expect(toastMessages.some((message) => message.startsWith('error:Ожидание не подтверждено:'))).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('resets mutation key when status update fails', () => {

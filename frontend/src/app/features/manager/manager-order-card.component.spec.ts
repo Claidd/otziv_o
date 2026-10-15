@@ -175,6 +175,34 @@ describe('ManagerOrderCardComponent', () => {
     expect(element.querySelector('.worker-edit-button')?.textContent?.trim()).toBe('Worker');
   });
 
+  it('makes an in-progress client action visible on the card', () => {
+    const fixture = TestBed.createComponent(ManagerOrderCardComponent);
+    fixture.componentInstance.order = order({ id: 27820, status: 'Новый', commonInvoiceId: 323 });
+    fixture.componentInstance.mutationKey = 'order-27820-client-waiting';
+    fixture.detectChanges();
+
+    const button = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('.client-waiting-action');
+    expect(button?.disabled).toBe(true);
+    expect(button?.getAttribute('aria-busy')).toBe('true');
+    expect(button?.textContent?.trim()).toBe('сохраняем...');
+  });
+
+  it('accepts a short moving touch once and keeps keyboard activation', () => {
+    const fixture = TestBed.createComponent(ManagerOrderCardComponent);
+    const component = fixture.componentInstance;
+    component.order = order({ id: 27820, status: 'Новый', commonInvoiceId: 323 });
+    let toggles = 0;
+    component.clientWaitingToggled.subscribe(() => toggles++);
+
+    component.onClientWaitingPointerDown({ pointerType: 'touch', pointerId: 1, clientX: 20, clientY: 20, currentTarget: null } as PointerEvent);
+    component.onClientWaitingPointerUp({ pointerType: 'touch', pointerId: 1, clientX: 28, clientY: 36 } as PointerEvent);
+    component.onClientWaitingClick({ detail: 1 } as MouseEvent);
+    expect(toggles).toBe(1);
+
+    component.onClientWaitingClick({ detail: 0 } as MouseEvent);
+    expect(toggles).toBe(2);
+  });
+
   it('marks orders without changes for two or more days', () => {
     const render = (days: number): HTMLElement => {
       const fixture = TestBed.createComponent(ManagerOrderCardComponent);

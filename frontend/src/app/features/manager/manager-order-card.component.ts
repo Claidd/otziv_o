@@ -45,6 +45,8 @@ export class ManagerOrderCardComponent implements OnDestroy {
   communicationPopoverOpen = false;
   titlePopoverOpen = false;
   private titlePointerType: string | null = null;
+  private clientWaitingTouchStart: { pointerId: number; x: number; y: number } | null = null;
+  private clientWaitingLastTouchAt = -Infinity;
   private unchangedCityTimer: ReturnType<typeof setTimeout> | null = null;
 
   @Output() readonly companyNoteSaved = new EventEmitter<string>();
@@ -474,11 +476,54 @@ export class ManagerOrderCardComponent implements OnDestroy {
   }
 
   clientWaitingTitle(): string {
+    if (this.isClientWaitingMutating()) {
+      return 'Сохраняем ожидание клиента';
+    }
     return this.order.waitingForClient ? 'Вернуть заказ в работу специалиста' : 'Заказ ждет текст от клиента';
   }
 
   clientWaitingLabel(): string {
+    if (this.isClientWaitingMutating()) {
+      return 'сохраняем...';
+    }
     return this.order.waitingForClient ? 'ждет клиента' : 'клиент';
+  }
+
+  onClientWaitingPointerDown(event: PointerEvent): void {
+    if (event.pointerType !== 'touch' || this.isClientWaitingMutating()) {
+      return;
+    }
+    this.clientWaitingTouchStart = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+    (event.currentTarget as HTMLElement | null)?.setPointerCapture?.(event.pointerId);
+  }
+
+  onClientWaitingPointerUp(event: PointerEvent): void {
+    if (event.pointerType !== 'touch') {
+      return;
+    }
+    const start = this.clientWaitingTouchStart;
+    this.clientWaitingTouchStart = null;
+    this.clientWaitingLastTouchAt = Date.now();
+    if (start?.pointerId !== event.pointerId || this.isClientWaitingMutating()) {
+      return;
+    }
+    if (Math.hypot(event.clientX - start.x, event.clientY - start.y) <= 20) {
+      this.clientWaitingToggled.emit();
+    }
+  }
+
+  onClientWaitingPointerCancel(event: PointerEvent): void {
+    if (this.clientWaitingTouchStart?.pointerId === event.pointerId) {
+      this.clientWaitingTouchStart = null;
+      this.clientWaitingLastTouchAt = Date.now();
+    }
+  }
+
+  onClientWaitingClick(event: MouseEvent): void {
+    if (event.detail !== 0 && Date.now() - this.clientWaitingLastTouchAt < 800) {
+      return;
+    }
+    this.clientWaitingToggled.emit();
   }
 
   paymentCopyTitle(): string {

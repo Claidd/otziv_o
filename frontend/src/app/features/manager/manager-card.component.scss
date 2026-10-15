@@ -805,6 +805,7 @@
   color: var(--otziv-dark);
   border-color: rgba(103, 116, 131, 0.24);
   background: var(--otziv-white);
+  touch-action: none;
 }
 
 .card-actions .client-waiting-action.active {
@@ -813,6 +814,27 @@
   border-color: rgba(214, 159, 43, 0.36);
   background: rgba(255, 244, 214, 0.86);
   text-transform: uppercase;
+}
+
+.card-actions .client-waiting-action:disabled {
+  color: #596579;
+  border-color: rgba(103, 116, 131, 0.36);
+  background: #e7ebf2;
+  cursor: wait;
+  opacity: 1;
+}
+
+:host-context(body.otziv-dark-theme) .card-actions .client-waiting-action:disabled {
+  color: #cbd5e1;
+  border-color: rgba(148, 163, 184, 0.36);
+  background: #334155;
+}
+
+@media (hover: none) {
+  .card-actions .client-waiting-action:not(.active):not(:disabled):hover {
+    color: var(--otziv-dark);
+    background: var(--otziv-white);
+  }
 }
 
 :host-context(body.otziv-dark-theme) .card-actions .client-waiting-action.active {

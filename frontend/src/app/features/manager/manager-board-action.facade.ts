@@ -1,6 +1,7 @@
 import type { WritableSignal } from '@angular/core';
 import type { CompanyCardItem, ManagerApi, ManagerBoard, OrderCardItem } from '../../core/manager.api';
 import type { ToastService } from '../../shared/toast.service';
+import { TimeoutError, timeout } from 'rxjs';
 import { manualPaymentRouteErrorCode } from '../../shared/manual-payment-routing';
 import type { StatusAction } from './manager-board.config';
 
@@ -130,7 +131,7 @@ export class ManagerBoardActionFacade {
     const key = `order-${order.id}-client-waiting`;
     this.deps.mutationKey.set(key);
 
-    this.deps.managerApi.updateOrderClientWaiting(order.id, waitingForClient).subscribe({
+    this.deps.managerApi.updateOrderClientWaiting(order.id, waitingForClient).pipe(timeout({ first: 15000 })).subscribe({
       next: () => {
         this.patchOrder(order.id, { waitingForClient });
         this.deps.mutationKey.set(null);
@@ -142,6 +143,11 @@ export class ManagerBoardActionFacade {
       },
       error: (err) => {
         this.deps.mutationKey.set(null);
+        if (err instanceof TimeoutError) {
+          this.deps.toastService.error('Ожидание не подтверждено', 'Не удалось получить подтверждение за 15 секунд. Обновляем заказ, чтобы проверить его состояние.');
+          this.deps.loadBoard();
+          return;
+        }
         this.deps.toastService.error(
           'Ожидание не изменено',
           this.deps.errorMessage(err, 'Не удалось изменить ожидание клиента')

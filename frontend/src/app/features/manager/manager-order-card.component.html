@@ -183,7 +183,11 @@
         class="client-waiting-action"
         [class.active]="order.waitingForClient"
         [disabled]="isClientWaitingMutating()"
-        (click)="clientWaitingToggled.emit()"
+        [attr.aria-busy]="isClientWaitingMutating()"
+        (pointerdown)="onClientWaitingPointerDown($event)"
+        (pointerup)="onClientWaitingPointerUp($event)"
+        (pointercancel)="onClientWaitingPointerCancel($event)"
+        (click)="onClientWaitingClick($event)"
         [title]="clientWaitingTitle()"
       >
         {{ clientWaitingLabel() }}
