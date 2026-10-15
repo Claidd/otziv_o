@@ -35,6 +35,7 @@ on:
           - c15-mc
           - c22-nginx
           - c22-mysql
+          - c30-mysql
           - c22-keycloak
           - c22-mc
           - c22-phpmyadmin
