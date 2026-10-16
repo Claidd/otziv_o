@@ -1,4 +1,5 @@
 import { ManualPaymentTasksApi } from '../core/manual-payment-tasks.api';
+import { ContractorAccrualHistoryApi, type ContractorSelfAccrualAdjustment } from '../core/contractor-accrual-history.api';
 import { DictionariesApi } from '../core/dictionaries.api';
 import { inject, Component, computed, OnDestroy, OnInit, signal, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -52,6 +53,7 @@ import {
   type ManagerReportReviewAccessState
 } from '../core/manager-report-review-access.service';
 import { MobileContractorPaymentSummaryComponent } from '../shared/mobile-contractor-payment-summary.component';
+import { MobileContractorAccrualHistoryComponent } from '../shared/mobile-contractor-accrual-history.component';
 import {
   shouldShowLegacyContractorMetrics
 } from '../shared/contractor-payment-summary';
@@ -108,7 +110,7 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
 
 @Component({
   selector: 'app-home',
-  imports: [FormsModule, IonContent, IonModal, MobileActionSheetComponent, MobileContractorPaymentSummaryComponent, MobileDictionariesComponent, MobileHeaderComponent, MobileStatusSliderComponent, RouterLink],
+  imports: [FormsModule, IonContent, IonModal, MobileActionSheetComponent, MobileContractorPaymentSummaryComponent, MobileContractorAccrualHistoryComponent, MobileDictionariesComponent, MobileHeaderComponent, MobileStatusSliderComponent, RouterLink],
   template: `
     <div class="ion-page">
       <app-mobile-header [title]="sectionTitle()" />
@@ -468,6 +470,15 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
                       [error]="contractorPaymentsError()"
                       (retry)="loadContractorPayments()"
                     />
+                    @if (contractorPayments().length || contractorAccrualHistoryLoading() || contractorAccrualHistoryError()) {
+                      <app-mobile-contractor-accrual-history
+                        [summaries]="contractorPayments()"
+                        [adjustments]="contractorAccrualAdjustments()"
+                        [loading]="contractorAccrualHistoryLoading()"
+                        [error]="contractorAccrualHistoryError()"
+                        (retry)="loadContractorAccrualHistory()"
+                      />
+                    }
                   }
 
                   <section class="metric-grid">
@@ -2499,6 +2510,7 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
 })
 export class HomePage implements OnInit, OnDestroy {
   private readonly manualPaymentTasksApi = inject(ManualPaymentTasksApi);
+  private readonly contractorAccrualHistoryApi = inject(ContractorAccrualHistoryApi);
   private readonly dictionariesApi = inject(DictionariesApi);
   @ViewChild('sectionModal') private sectionModal?: IonModal;
 
@@ -2509,6 +2521,7 @@ export class HomePage implements OnInit, OnDestroy {
   private midnightRefreshTimer: ReturnType<typeof setTimeout> | null = null;
   private reloadEpoch = 0;
   private contractorPaymentsRequestEpoch = 0;
+  private contractorAccrualHistoryRequestEpoch = 0;
 
   readonly activeSection = signal<HomeSectionKey>('profile');
   readonly selectedDate = signal(this.todayIso());
@@ -2525,6 +2538,9 @@ export class HomePage implements OnInit, OnDestroy {
   readonly contractorPayments = signal<ContractorPaymentSummary[]>([]);
   readonly contractorPaymentsLoading = signal(false);
   readonly contractorPaymentsError = signal<string | null>(null);
+  readonly contractorAccrualAdjustments = signal<ContractorSelfAccrualAdjustment[]>([]);
+  readonly contractorAccrualHistoryLoading = signal(false);
+  readonly contractorAccrualHistoryError = signal<string | null>(null);
   readonly team = signal<TeamResponse | null>(null);
   readonly score = signal<ScoreResponse | null>(null);
   readonly analytics = signal<AnalyticsResponse | null>(null);
@@ -2617,6 +2633,7 @@ export class HomePage implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.reloadEpoch += 1;
     this.contractorPaymentsRequestEpoch += 1;
+    this.contractorAccrualHistoryRequestEpoch += 1;
     this.closeSectionSheet();
     this.routeSubscription?.unsubscribe();
     this.querySubscription?.unsubscribe();
@@ -2778,6 +2795,10 @@ export class HomePage implements OnInit, OnDestroy {
           }
           this.profile.set(profile);
           await this.loadContractorPayments(requestId);
+          if (requestId !== this.reloadEpoch) {
+            return;
+          }
+          await this.loadContractorAccrualHistory(requestId);
           if (requestId !== this.reloadEpoch) {
             return;
           }
@@ -3778,6 +3799,36 @@ export class HomePage implements OnInit, OnDestroy {
     } finally {
       if (requestId === this.contractorPaymentsRequestEpoch && reloadRequestId === this.reloadEpoch) {
         this.contractorPaymentsLoading.set(false);
+      }
+    }
+  }
+
+  async loadContractorAccrualHistory(reloadRequestId = this.reloadEpoch): Promise<void> {
+    if (!this.auth.hasRealmRole('MANAGER') && !this.auth.hasRealmRole('WORKER')) {
+      this.contractorAccrualHistoryRequestEpoch += 1;
+      this.contractorAccrualAdjustments.set([]);
+      this.contractorAccrualHistoryError.set(null);
+      this.contractorAccrualHistoryLoading.set(false);
+      return;
+    }
+
+    const requestId = ++this.contractorAccrualHistoryRequestEpoch;
+    this.contractorAccrualHistoryLoading.set(true);
+    this.contractorAccrualHistoryError.set(null);
+    try {
+      const adjustments = await firstValueFrom(this.contractorAccrualHistoryApi.getMyAdjustments());
+      if (requestId !== this.contractorAccrualHistoryRequestEpoch || reloadRequestId !== this.reloadEpoch) {
+        return;
+      }
+      this.contractorAccrualAdjustments.set(adjustments ?? []);
+    } catch (error) {
+      if (requestId !== this.contractorAccrualHistoryRequestEpoch || reloadRequestId !== this.reloadEpoch) {
+        return;
+      }
+      this.contractorAccrualHistoryError.set(this.errorMessage(error) || 'Не удалось загрузить историю премий и удержаний.');
+    } finally {
+      if (requestId === this.contractorAccrualHistoryRequestEpoch && reloadRequestId === this.reloadEpoch) {
+        this.contractorAccrualHistoryLoading.set(false);
       }
     }
   }

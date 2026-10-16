@@ -26,12 +26,21 @@ const HEADER_LINKS: MobileHeaderLink[] = [
   { label: 'Лиды', icon: 'notifications_active', path: '/tabs/leads', roles: rolesForAction(MOBILE_SECTIONS.leads, MOBILE_ACTIONS.view) },
   { label: 'Компании', icon: 'business', path: '/tabs/companies', roles: rolesForAction(MOBILE_SECTIONS.companies, MOBILE_ACTIONS.view) },
   { label: 'Заказы', icon: 'inventory_2', path: '/tabs/orders', roles: rolesForAction(MOBILE_SECTIONS.orders, MOBILE_ACTIONS.view) },
+  { label: 'Архиватор', icon: 'archive', path: '/tabs/archive-admin', roles: rolesForAction(MOBILE_SECTIONS.archiveAdmin, MOBILE_ACTIONS.view) },
   { label: 'Общие счета', icon: 'receipt_long', path: '/tabs/common-billing', roles: rolesForAction(MOBILE_SECTIONS.commonBilling, MOBILE_ACTIONS.view) },
   { label: 'Контроль', icon: 'fact_check', path: '/tabs/control', roles: rolesForAction(MOBILE_SECTIONS.managerControl, MOBILE_ACTIONS.view) },
   { label: 'Специалист', icon: 'engineering', path: '/tabs/worker', roles: rolesForAction(MOBILE_SECTIONS.worker, MOBILE_ACTIONS.view) },
   { label: 'Риски', icon: 'policy', path: '/tabs/worker-risk', roles: rolesForAction(MOBILE_SECTIONS.workerRisk, MOBILE_ACTIONS.view) },
   { label: 'Оператор', icon: 'support_agent', path: '/tabs/operator', roles: rolesForAction(MOBILE_SECTIONS.operator, MOBILE_ACTIONS.view) },
   { label: 'Банк', icon: 'account_balance_wallet', path: '/tabs/tbank', roles: rolesForAction(MOBILE_SECTIONS.tbank, MOBILE_ACTIONS.view) },
+  { label: 'Исполнители', icon: 'group', path: '/tabs/performers', roles: rolesForAction(MOBILE_SECTIONS.performers, MOBILE_ACTIONS.view) },
+  { label: 'Мои задания', icon: 'assignment', path: '/tabs/performer', roles: rolesForAction(MOBILE_SECTIONS.performerBoard, MOBILE_ACTIONS.view) },
+  { label: 'Города', icon: 'location_city', path: '/tabs/cities', roles: rolesForAction(MOBILE_SECTIONS.cityStats, MOBILE_ACTIONS.view) },
+  { label: 'Клиентские оферты', icon: 'description', path: '/tabs/client-offers', roles: rolesForAction(MOBILE_SECTIONS.clientOffers, MOBILE_ACTIONS.view) },
+  { label: 'Картинки уведомлений', icon: 'image', path: '/tabs/notification-media', roles: rolesForAction(MOBILE_SECTIONS.notificationMedia, MOBILE_ACTIONS.view) },
+  { label: 'Репутационный AI', icon: 'auto_awesome', path: '/tabs/reputation-ai', roles: rolesForAction(MOBILE_SECTIONS.reputationAi, MOBILE_ACTIONS.view) },
+  { label: 'Нагрузка', icon: 'monitor_heart', path: '/tabs/workload-monitor', roles: rolesForAction(MOBILE_SECTIONS.workloadShadow, MOBILE_ACTIONS.view) },
+  { label: 'Версия приложения', icon: 'system_update', path: '/tabs/mobile-update-admin', roles: rolesForAction(MOBILE_SECTIONS.mobileUpdateAdmin, MOBILE_ACTIONS.view) },
   { label: 'Пользователи', icon: 'admin_panel_settings', path: '/tabs/users', roles: rolesForAction(MOBILE_SECTIONS.adminUsers, MOBILE_ACTIONS.view) },
   { label: 'Обучение', icon: 'school', path: '/tabs/training', roles: rolesForAction(MOBILE_SECTIONS.training, MOBILE_ACTIONS.view) },
   { label: 'WhatsApp', icon: 'qr_code_2', path: '/tabs/whatsapp', roles: ['MANAGER'] },
@@ -228,6 +237,9 @@ const HEADER_LOGOUT_CONFIRM_GUARD_MS = 900;
     .mobile-header-menu {
       display: grid;
       gap: 0.65rem;
+      max-height: calc(100dvh - 5rem - env(safe-area-inset-bottom));
+      overflow-y: auto;
+      overscroll-behavior: contain;
       margin: 0 0.45rem 0.55rem;
       border: 1px solid rgba(103, 116, 131, 0.16);
       border-radius: 1rem;

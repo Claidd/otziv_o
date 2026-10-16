@@ -1,0 +1,149 @@
+<div class="ion-page">
+  <app-mobile-header title="AI-репутация" />
+  <ion-content fullscreen [scrollY]="false">
+    <ion-refresher slot="fixed" (ionRefresh)="refresh($event)"><ion-refresher-content /></ion-refresher>
+    <main class="reputation-page">
+      <header class="page-top">
+        <div><p class="eyebrow">ADMIN / OWNER</p><h1>AI-репутация</h1><small>Исследование компании, черновики, проверка текста и промпты</small></div>
+      </header>
+
+      @if (notice()) { <p class="alert success" role="status">{{ notice() }}</p> }
+      @if (error()) { <p class="alert" role="alert">{{ error() }}</p> }
+
+      <section class="card company-card">
+        <label class="field"><span>ID компании</span><input type="number" min="1" step="1" inputmode="numeric" [ngModel]="companyId()" (ngModelChange)="setCompanyId($event)"></label>
+        <small>Выберите компанию перед загрузкой или генерацией. После смены ID результаты предыдущей компании очищаются.</small>
+      </section>
+
+      <nav class="section-tabs" aria-label="Разделы AI-репутации">
+        <button type="button" [class.active]="section() === 'report'" (click)="section.set('report')">Отчёт</button>
+        <button type="button" [class.active]="section() === 'pack'" (click)="section.set('pack')">AI-пакет</button>
+        <button type="button" [class.active]="section() === 'text'" (click)="section.set('text')">Тексты</button>
+        <button type="button" [class.active]="section() === 'prompts'" (click)="section.set('prompts')">Промпты</button>
+        <button type="button" [class.active]="section() === 'route'" (click)="section.set('route')">Маршрут</button>
+      </nav>
+
+      @if (section() === 'report') {
+        <section class="card">
+          <h2>Параметры сбора</h2>
+          @if (deepProfiles().length) {
+            <label class="field"><span>Профиль глубокого отчёта</span><select [ngModel]="deepProfile()" (ngModelChange)="deepProfile.set($event)">@for (profile of deepProfiles(); track profile.key) { <option [value]="profile.key">{{ profile.label }} · {{ profile.model }}</option> }</select></label>
+          }
+          <label class="field"><span>Описание и ручные факты</span><textarea rows="3" [ngModel]="manualDescription()" (ngModelChange)="manualDescription.set($event)"></textarea></label>
+          <label class="field"><span>Товары и услуги, каждый с новой строки</span><textarea rows="3" [ngModel]="productsText()" (ngModelChange)="productsText.set($event)"></textarea></label>
+          <label class="field"><span>Публичные ссылки, каждая с новой строки</span><textarea rows="3" [ngModel]="publicUrlsText()" (ngModelChange)="publicUrlsText.set($event)"></textarea></label>
+          <label class="check"><input type="checkbox" [ngModel]="includeWebsite()" (ngModelChange)="includeWebsite.set($event)"> Добавить сайт компании из CRM</label>
+          <label class="check"><input type="checkbox" [ngModel]="autoEnrich()" (ngModelChange)="autoEnrich.set($event)"> Автодосбор недостающих фактов</label>
+          <div class="actions"><button type="button" (click)="loadSnapshot()" [disabled]="!!busy()">Загрузить сырьё</button><button type="button" (click)="refreshSnapshot()" [disabled]="!!busy()">Обновить источники</button></div>
+          @if (snapshot(); as raw) {
+            <details><summary>Сырьё · {{ raw.companyName }} · {{ raw.sources.length }} источников</summary>
+              <p>Поиск: {{ raw.searchProvider }} · результатов {{ raw.searchResultsCount }} · страниц сайта {{ raw.websitePagesRead }}</p>
+              @for (warning of raw.warnings; track $index) { <p class="warning">{{ warning }}</p> }
+              @for (source of raw.sources; track $index) { <article class="source"><strong>{{ source.title }}</strong><p>{{ source.excerpt }}</p>@if (safeSource(source.url)) { <button type="button" (click)="openSource(source.url)">Открыть источник</button> }</article> }
+            </details>
+          }
+        </section>
+
+        <section class="card">
+          <h2>Глубокий отчёт</h2>
+          <div class="actions"><button type="button" class="primary" (click)="startDeep('full_report')" [disabled]="!!busy() || deepActive()">Собрать отчёт</button><button type="button" (click)="loadLatestDeep()" [disabled]="!!busy()">Последний отчёт</button><button type="button" (click)="loadHistory()" [disabled]="!!busy()">История</button></div>
+          @if (deepJob(); as job) {
+            <p class="status">#{{ job.jobId }} · {{ job.status }} · {{ job.operation }} · {{ job.model }}</p>
+            @if (job.errorMessage) { <p class="warning">{{ job.errorMessage }}</p> }
+            @if (deepActive()) { <p>Задача выполняется в фоне. Статус обновляется автоматически, экран можно закрыть.</p> }
+            @if (job.report; as report) {
+              <p>Компания: {{ report.companyName }} · источников {{ report.sources.length }} · разделов {{ report.sections.length }}</p>
+              @if (report.coverageStatus) { <p>Охват: {{ report.coverageStatus }}</p> }
+              <div class="actions"><button type="button" (click)="startDeep('refresh_sources')" [disabled]="!!busy() || deepActive()">Обновить источники</button><button type="button" (click)="startDeep('rebuild_text')" [disabled]="!!busy() || deepActive()">Пересобрать текст</button><button type="button" (click)="copyExport('report')" [disabled]="!!busy()">Копировать Markdown</button><button type="button" (click)="exportFile('report', 'markdown')" [disabled]="!!busy()">Скачать Markdown</button><button type="button" (click)="exportFile('report', 'pdf')" [disabled]="!!busy()">PDF</button><button type="button" (click)="startPack(job.jobId)" [disabled]="!!busy() || packActive()">AI-пакет из версии</button></div>
+              @for (check of report.qualityChecks ?? []; track $index) { <p class="quality" [class.warning]="check.status === 'fail' || check.status === 'warn'">{{ check.label }} · {{ check.status }}: {{ check.detail }}</p> }
+              @for (warning of report.warnings; track $index) { <p class="warning">{{ warning }}</p> }
+              @if (report.factSnapshot; as facts) {
+                <details><summary>Проверенные факты · {{ facts.confirmedFacts.length }}</summary>@for (fact of facts.confirmedFacts; track $index) { <p><strong>{{ fact.label }}:</strong> {{ fact.value }} · {{ fact.evidence }}</p> }</details>
+                <details><summary>Неопределённые факты · {{ facts.uncertainFacts.length }}</summary>@for (fact of facts.uncertainFacts; track $index) { <p class="warning"><strong>{{ fact.label }}:</strong> {{ fact.value }} · {{ fact.evidence }}</p> }</details>
+                <details><summary>Оценка источников · {{ facts.sourceReviews.length }}</summary>@for (source of facts.sourceReviews; track $index) { <p>{{ source.title }} · {{ source.status }}: {{ source.reason }}@if (safeSource(source.url)) { <button type="button" (click)="openSource(source.url)">Открыть</button> }</p> }</details>
+              }
+              @for (block of report.sections; track $index) {
+                <details class="report-section"><summary>{{ block.title }}</summary><p class="long-text">{{ block.body }}</p><button type="button" (click)="startDeep('rebuild_section', $index)" [disabled]="!!busy() || deepActive()">Пересобрать раздел</button></details>
+              }
+              <label class="field"><span>Идеи отзывов, каждая с новой строки</span><textarea rows="5" [ngModel]="reviewIdeasText()" (ngModelChange)="reviewIdeasText.set($event)"></textarea></label>
+              <button type="button" (click)="saveReviewIdeas()" [disabled]="!!busy()">Сохранить идеи</button>
+              <details><summary>Источники отчёта · {{ report.sources.length }}</summary>@for (source of report.sources; track $index) { <article class="source"><strong>{{ source.title }}</strong>@if (safeSource(source.url)) { <button type="button" (click)="openSource(source.url)">Открыть</button> }</article> }</details>
+            }
+          } @else { <p class="muted">Откройте сохранённый отчёт или запустите новый.</p> }
+        </section>
+
+        @if (history().length) {
+          <section class="card">
+            <h2>История отчётов</h2>
+            <label class="field"><span>Поиск</span><input type="search" [ngModel]="historyQuery()" (ngModelChange)="historyQuery.set($event)" placeholder="Компания, модель, номер"></label>
+            <div class="filters"><select [ngModel]="historyStatus()" (ngModelChange)="historyStatus.set($event)"><option value="all">Все статусы</option><option value="QUEUED">В очереди</option><option value="RUNNING">В работе</option><option value="DONE">Готово</option><option value="FAILED">Ошибка</option></select><select [ngModel]="historyOperation()" (ngModelChange)="historyOperation.set($event)"><option value="all">Все операции</option><option value="full_report">Полный отчёт</option><option value="refresh_sources">Источники</option><option value="rebuild_text">Текст</option><option value="rebuild_section">Раздел</option></select></div>
+            @for (job of filteredHistory(); track job.jobId) { <article class="history-item"><strong>#{{ job.jobId }} · {{ job.status }}</strong><small>{{ job.operation }} · {{ job.model }} · {{ job.createdAt }}</small><button type="button" (click)="openHistory(job)">Открыть версию</button>@if (job.report) { <button type="button" (click)="compareWithCurrent(job)" [disabled]="!deepJob()?.report || deepJob()?.jobId === job.jobId">Сравнить с открытой</button><button type="button" (click)="startPack(job.jobId)" [disabled]="!!busy() || packActive()">Создать AI-пакет</button> }</article> }
+            @if (reportComparison(); as difference) { <article class="history-item"><strong>Сравнение с #{{ comparisonBase()?.jobId }}</strong><p>Качество: {{ difference.qualityBefore }} → {{ difference.qualityAfter }}</p><p>Источники: +{{ difference.addedSources }} / −{{ difference.removedSources }}</p><p>Разделы: {{ difference.sectionsBefore }} → {{ difference.sectionsAfter }} · предупреждения: {{ difference.warningsBefore }} → {{ difference.warningsAfter }}</p></article> }
+          </section>
+        }
+      }
+
+      @if (section() === 'pack') {
+        <section class="card"><h2>AI-пакет компании</h2>
+          @if (packProfiles().length) { <label class="field"><span>Профиль AI-пакета</span><select [ngModel]="packProfile()" (ngModelChange)="packProfile.set($event)">@for (profile of packProfiles(); track profile.key) { <option [value]="profile.key">{{ profile.label }} · {{ profile.model }}</option> }</select></label> }
+          <label class="field"><span>Главный товар или услуга</span><input type="text" [ngModel]="productOrService()" (ngModelChange)="productOrService.set($event)"></label>
+          <div class="number-grid"><label class="field"><span>Реклама</span><input type="number" min="1" max="8" [ngModel]="adTextsCount()" (ngModelChange)="adTextsCount.set($event)"></label><label class="field"><span>Посты</span><input type="number" min="1" max="5" [ngModel]="socialPostsCount()" (ngModelChange)="socialPostsCount.set($event)"></label><label class="field"><span>Позитив</span><input type="number" min="1" max="8" [ngModel]="positiveReplyCount()" (ngModelChange)="positiveReplyCount.set($event)"></label><label class="field"><span>Негатив</span><input type="number" min="1" max="6" [ngModel]="negativeReplyCount()" (ngModelChange)="negativeReplyCount.set($event)"></label></div>
+          <div class="actions"><button type="button" class="primary" (click)="startPack()" [disabled]="!!busy() || packActive()">Собрать пакет</button><button type="button" (click)="loadLatestPack()" [disabled]="!!busy()">Последний пакет</button></div>
+          @if (packJob(); as job) { <p class="status">#{{ job.jobId }} · {{ job.status }} · {{ job.model }}</p>@if (job.errorMessage) { <p class="warning">{{ job.errorMessage }}</p> }@if (packActive()) { <p>Пакет собирается в фоне. Статус обновится автоматически.</p> }
+            @if (job.pack; as pack) {
+              <div class="actions"><button type="button" (click)="copyExport('pack')" [disabled]="!!busy()">Копировать Markdown</button><button type="button" (click)="exportFile('pack', 'markdown')" [disabled]="!!busy()">Скачать Markdown</button><button type="button" (click)="exportFile('pack', 'pdf')" [disabled]="!!busy()">PDF</button></div>
+              <p>{{ pack.companyProfile.shortDescription }}</p>
+              <details><summary>УТП · {{ pack.utp.length }}</summary>@for (item of pack.utp; track $index) { <p class="long-text">{{ item }} <button type="button" (click)="copyText(item)">Копировать</button></p> }</details>
+              <details><summary>Реклама · {{ pack.adTexts.length }}</summary>@for (item of pack.adTexts; track $index) { <p class="long-text">{{ item }} <button type="button" (click)="copyText(item)">Копировать</button></p> }</details>
+              <details><summary>Посты · {{ pack.socialPosts.length }}</summary>@for (item of pack.socialPosts; track $index) { <p class="long-text">{{ item }} <button type="button" (click)="copyText(item)">Копировать</button></p> }</details>
+              <details><summary>Темы и черновики отзывов · {{ pack.reviewDraftTemplates.length }}</summary>@for (item of pack.honestReviewTopics; track $index) { <p>{{ item }}</p> }@for (item of pack.reviewDraftTemplates; track $index) { <p class="long-text">{{ item }} <button type="button" (click)="copyText(item)">Копировать</button></p> }</details>
+              <details><summary>Ответы компании</summary>@for (item of pack.positiveReviewReplies; track $index) { <p class="long-text">{{ item }}</p> }@for (item of pack.negativeReviewReplies; track $index) { <p class="long-text">{{ item }}</p> }</details>
+              @for (note of pack.safetyNotes; track $index) { <p class="warning">{{ note }}</p> }
+            }
+          }
+        </section>
+        @if (packJob()?.pack) {
+          <section class="card"><h2>Улучшить шаблоны отзывов</h2><label class="field"><span>Ручные заметки</span><textarea rows="3" [ngModel]="templateNotes()" (ngModelChange)="templateNotes.set($event)"></textarea></label><label class="field"><span>Тон</span><input type="text" [ngModel]="templateTone()" (ngModelChange)="templateTone.set($event)"></label><div class="number-grid"><label class="field"><span>Темы</span><input type="number" min="1" max="10" [ngModel]="templateTopicsCount()" (ngModelChange)="templateTopicsCount.set($event)"></label><label class="field"><span>Черновики</span><input type="number" min="1" max="8" [ngModel]="templateDraftsCount()" (ngModelChange)="templateDraftsCount.set($event)"></label></div><button type="button" (click)="improveTemplates()" [disabled]="!!busy()">Подготовить варианты</button>
+            @if (templates(); as result) { <h3>Предпросмотр</h3>@for (item of result.honestReviewTopics; track $index) { <p>{{ item }}</p> }@for (item of result.reviewDraftTemplates; track $index) { <p class="long-text">{{ item }}</p> }@for (note of result.safetyNotes; track $index) { <p class="warning">{{ note }}</p> }<button type="button" class="primary" (click)="applyTemplates()" [disabled]="!!busy()">Сохранить в пакет</button> }
+          </section>
+          <section class="card"><h2>Один черновик</h2><label class="field"><span>Идея</span><input type="text" [ngModel]="singleIdea()" (ngModelChange)="singleIdea.set($event)"></label><label class="field"><span>Стиль</span><input type="text" [ngModel]="singleStyle()" (ngModelChange)="singleStyle.set($event)"></label><label class="field"><span>Длина</span><select [ngModel]="singleLength()" (ngModelChange)="singleLength.set($event)"><option value="short">Короткий</option><option value="medium">Средний</option><option value="long">Длинный</option></select></label><button type="button" (click)="createSingleDraft()" [disabled]="!!busy()">Создать черновик</button>@if (singleDraft(); as result) { <p class="long-text">{{ result.draft }}</p><button type="button" (click)="copyText(result.draft)">Копировать</button>@for (note of result.safetyNotes; track $index) { <p class="warning">{{ note }}</p> } }
+          </section>
+        }
+      }
+
+      @if (section() === 'text') {
+        <section class="card"><h2>Черновик отзыва</h2><label class="field"><span>Товар или услуга</span><input type="text" [ngModel]="productOrService()" (ngModelChange)="productOrService.set($event)"></label><label class="field"><span>Реальный опыт, каждый пункт с новой строки</span><textarea rows="3" [ngModel]="experienceText()" (ngModelChange)="experienceText.set($event)"></textarea></label><div class="number-grid"><label class="field"><span>Тон</span><input type="text" [ngModel]="draftTone()" (ngModelChange)="draftTone.set($event)"></label><label class="field"><span>Длина</span><select [ngModel]="draftLength()" (ngModelChange)="draftLength.set($event)"><option value="short">Короткий</option><option value="medium">Средний</option><option value="long">Длинный</option></select></label></div><button type="button" (click)="createDraft()" [disabled]="!!busy()">Создать</button>@if (draftResult(); as result) { <p class="long-text">{{ result.draft }}</p><button type="button" (click)="copyText(result.draft)">Копировать</button>@if (result.warning) { <p class="warning">{{ result.warning }}</p> } }</section>
+        <section class="card"><h2>Проверить или улучшить текст</h2><label class="field"><span>Текст</span><textarea rows="6" [ngModel]="checkText()" (ngModelChange)="checkText.set($event)"></textarea></label><label class="field"><span>Разрешённые факты, каждый с новой строки</span><textarea rows="3" [ngModel]="allowedFactsText()" (ngModelChange)="allowedFactsText.set($event)"></textarea></label><label class="field"><span>Тон переписывания</span><input type="text" [ngModel]="rewriteTone()" (ngModelChange)="rewriteTone.set($event)"></label><div class="actions"><button type="button" (click)="checkReview()" [disabled]="!!busy()">Проверить</button><button type="button" (click)="rewriteReview()" [disabled]="!!busy()">Улучшить</button></div>@if (rewriteResult(); as result) { <p class="long-text">{{ result.rewrittenText }}</p><button type="button" (click)="copyText(result.rewrittenText)">Копировать</button> }@if (safety(); as result) { <p [class.warning]="!result.safeToUseAsDraft">Риск: {{ result.riskScore }} · {{ result.safeToUseAsDraft ? 'можно использовать как черновик' : 'нужна правка' }}</p>@for (warning of result.warnings; track $index) { <p class="warning">{{ warning }}</p> }@for (suggestion of result.suggestions; track $index) { <p>{{ suggestion }}</p> } }</section>
+        <section class="card"><h2>Ответы компании</h2><label class="field"><span>Текст отзыва</span><textarea rows="4" [ngModel]="replyText()" (ngModelChange)="replyText.set($event)"></textarea></label><label class="field"><span>Тон</span><input type="text" [ngModel]="replyTone()" (ngModelChange)="replyTone.set($event)"></label><label class="field"><span>Вариантов</span><input type="number" min="1" [ngModel]="replyCount()" (ngModelChange)="replyCount.set($event)"></label><div class="actions"><button type="button" (click)="createReply('positive')" [disabled]="!!busy()">Положительный</button><button type="button" (click)="createReply('negative')" [disabled]="!!busy()">Негативный</button></div>@if (replies(); as result) { @for (item of result.replies; track $index) { <p class="long-text">{{ item }}</p><button type="button" (click)="copyText(item)">Копировать</button> }@if (result.warning) { <p class="warning">{{ result.warning }}</p> } }</section>
+      }
+
+      @if (section() === 'prompts') {
+        <section class="card"><div class="card-head"><h2>Промпты AI</h2><button type="button" (click)="loadPrompts()" [disabled]="!!busy()">Обновить</button></div><label class="field"><span>Шаблон</span><select [ngModel]="promptKey()" (ngModelChange)="selectPrompt($event)">@for (prompt of prompts(); track prompt.key) { <option [value]="prompt.key">{{ prompt.title }}{{ prompt.customized ? ' · изменён' : '' }}</option> }</select></label>
+          @if (selectedPrompt(); as prompt) {
+            <p>{{ prompt.description }}</p>
+            <label class="field"><span>Текст промпта</span><textarea rows="12" [ngModel]="promptDraft()" (ngModelChange)="updatePromptDraft($event)"></textarea></label>
+            @if (missingPlaceholders().length) { <p class="warning">Нужные маркеры: {{ missingPlaceholders().join(', ') }}</p> }
+            <div class="actions"><button type="button" (click)="validatePrompt()" [disabled]="!!busy()">Проверить</button><button type="button" (click)="previewPrompt()" [disabled]="!!busy()">Предпросмотр</button><button type="button" class="primary" (click)="savePrompt()" [disabled]="!!busy() || !promptChanged() || !!missingPlaceholders().length">Сохранить</button><button type="button" class="danger" (click)="resetPrompt()" [disabled]="!!busy() || !prompt.customized">Сбросить</button></div>
+            @if (prompt.presets.length) { <details><summary>Пресеты</summary>@for (preset of prompt.presets; track preset.key) { <article class="history-item"><strong>{{ preset.title }}</strong><p>{{ preset.description }}</p><button type="button" (click)="applyPreset(preset)" [disabled]="!!busy()">Применить</button></article> }</details> }
+            @if (promptValidation(); as result) { <p [class.warning]="!result.valid">{{ result.valid ? 'Проверка пройдена' : 'Промпт не прошёл проверку' }}</p>@for (warning of result.warnings; track $index) { <p class="warning">{{ warning }}</p> } }
+            @if (promptPreview(); as result) { <details open><summary>Предпросмотр · {{ result.sampleName }}</summary><p class="long-text">{{ result.renderedContent }}</p>@for (marker of result.unresolvedPlaceholders; track $index) { <p class="warning">Не подставлено: {{ marker }}</p> }</details> }
+            <details><summary>История версий · {{ promptHistory().length }}</summary>@for (version of promptHistory(); track version.id) { <article class="history-item"><strong>{{ version.action }} · {{ version.actor }}</strong><small>{{ version.createdAt }}</small><p class="long-text">{{ version.content }}</p></article> }</details>
+          }
+        </section>
+      }
+
+      @if (section() === 'route') {
+        <section class="card"><div class="card-head"><h2>Маршрут AI</h2><button type="button" (click)="loadStatus()" [disabled]="!!busy()">Обновить</button></div>
+          @if (status(); as state) {
+            <p>Система: {{ state.enabled ? 'включена' : 'выключена' }} · AI: {{ state.aiProvider }} · {{ state.aiAvailable ? 'доступен' : 'не доступен' }}</p>
+            <p>Поиск: {{ state.searchProvider }} · {{ state.searchAvailable ? 'доступен' : 'не доступен' }}</p>
+            <p>OpenAI: {{ state.openAiConfigured ? 'настроен' : 'не настроен' }} · proxy {{ state.openAiProxyEnabled ? 'включён' : 'выключен' }}</p>
+            <button type="button" (click)="checkOpenAiRoute()" [disabled]="!!busy()">Проверить маршрут OpenAI</button>
+            @if (state.openAiDiagnostics; as diagnostics) { <p>{{ diagnostics.route }} · {{ diagnostics.lastCheckStatus }} · HTTP {{ diagnostics.lastHttpStatus ?? '—' }}</p>@if (diagnostics.lastMessage) { <p>{{ diagnostics.lastMessage }}</p> } }
+            @for (warning of state.warnings; track $index) { <p class="warning">{{ warning }}</p> }
+          } @else { <p class="muted">Статус не загружен.</p> }
+        </section>
+      }
+    </main>
+  </ion-content>
+</div>

@@ -1047,6 +1047,29 @@ tr.unlinked td {
   margin: 0.65rem 0;
 }
 
+.accrual-help {
+  margin: 0.65rem 0;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid rgba(79, 111, 181, 0.2);
+  border-radius: 0.6rem;
+  background: var(--otziv-white);
+}
+
+.accrual-help > summary {
+  color: var(--otziv-primary);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.accrual-help ol {
+  margin: 0.55rem 0 0;
+  padding-left: 1.35rem;
+}
+
+.accrual-help li + li {
+  margin-top: 0.35rem;
+}
+
 .accrual-adjustment-form {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

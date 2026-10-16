@@ -86,6 +86,22 @@ import { MobileContractorPaymentMetricHelpComponent } from './mobile-contractor-
                   </section>
                 }
               </div>
+
+              <div class="accrual-breakdown" aria-label="Состав начисления за месяц">
+                <div><span>За работу</span><strong>{{ money(summary.workAccruedMonthKopecks ?? summary.accruedMonthKopecks) }}</strong></div>
+                <div><span>Премии с отменами</span><strong>{{ money(summary.bonusMonthKopecks) }}</strong></div>
+                <div><span>Удержания с отменами</span><strong>{{ money(summary.deductionMonthKopecks) }}</strong></div>
+                <div class="accrual-total"><span>Итого за месяц</span><strong>{{ money(summary.accruedMonthKopecks) }}</strong></div>
+              </div>
+
+              <dl class="requisites" aria-label="Мои реквизиты оплаты">
+                <div><dt>Получатель</dt><dd>{{ summary.recipientName || 'не указан' }}</dd></div>
+                <div><dt>Телефон или карта</dt><dd>{{ summary.paymentPhone || 'не указано' }}</dd></div>
+                <div><dt>Банк</dt><dd>{{ summary.bankName || 'не указан' }}</dd></div>
+                @if (summary.paymentComment) {
+                  <div><dt>Комментарий</dt><dd>{{ summary.paymentComment }}</dd></div>
+                }
+              </dl>
             </article>
           }
         </div>
@@ -114,6 +130,45 @@ import { MobileContractorPaymentMetricHelpComponent } from './mobile-contractor-
       background: var(--otziv-white);
       box-shadow: 0 0.8rem 1.6rem rgba(132, 139, 200, 0.1);
       box-sizing: border-box;
+    }
+
+    .accrual-breakdown,
+    .requisites {
+      display: grid;
+      gap: 0.38rem;
+      margin: 0.2rem 0 0;
+      border: 1px solid rgba(103, 116, 131, 0.14);
+      border-radius: 0.75rem;
+      padding: 0.62rem 0.7rem;
+      background: var(--otziv-light);
+    }
+
+    .accrual-breakdown > div,
+    .requisites > div {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.7rem;
+      min-width: 0;
+      font-size: 0.7rem;
+      line-height: 1.35;
+    }
+
+    .accrual-breakdown span,
+    .requisites dt { color: var(--otziv-info); }
+
+    .accrual-breakdown strong,
+    .requisites dd {
+      min-width: 0;
+      margin: 0;
+      overflow-wrap: anywhere;
+      text-align: right;
+      font-weight: 850;
+    }
+
+    .accrual-breakdown .accrual-total {
+      margin-top: 0.2rem;
+      border-top: 1px solid rgba(103, 116, 131, 0.16);
+      padding-top: 0.42rem;
     }
 
     .summary-title {

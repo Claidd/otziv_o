@@ -15,9 +15,13 @@ import {
   UserAssignments
 } from '../core/api.service';
 import { MobileConfirmService } from '../shared/mobile-confirm.service';
+import { AuthService } from '../core/auth.service';
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
 import { MobileMediaService } from '../shared/mobile-media.service';
 import { safeHttpsExternalUrl } from '../shared/external-navigation';
+import { ContractorAccrualAdjustmentsComponent } from './contractor-accrual-adjustments.component';
+import { ContractorFinanceComponent } from './contractor-finance.component';
+import { ContractorSystemComponent } from './contractor-system.component';
 
 type AssignmentGroup = keyof Pick<UpdateUserAssignmentsRequest, 'managerIds' | 'workerIds' | 'operatorIds' | 'marketologIds'>;
 
@@ -42,14 +46,14 @@ const ROLE_OPTIONS = ['ADMIN', 'OWNER', 'MANAGER', 'WORKER', 'PERFORMER', 'OPERA
 
 @Component({
   selector: 'app-admin-users-page',
-  imports: [DatePipe, FormsModule, IonContent, IonModal, MobileHeaderComponent],
+  imports: [DatePipe, FormsModule, IonContent, IonModal, MobileHeaderComponent, ContractorAccrualAdjustmentsComponent, ContractorFinanceComponent, ContractorSystemComponent],
   template: `
     <div class="ion-page">
       <app-mobile-header title="Пользователи" />
 
       <ion-content fullscreen [scrollY]="false">
         <main class="admin-users-page">
-          <section class="admin-users-top">
+          <section class="admin-users-top" [class.owner]="isOwner()">
             <div>
               <p>ADMIN</p>
               <h1>Пользователи</h1>
@@ -61,6 +65,11 @@ const ROLE_OPTIONS = ['ADMIN', 'OWNER', 'MANAGER', 'WORKER', 'PERFORMER', 'OPERA
             <button class="icon-button add" type="button" (click)="openCreateUser()" aria-label="Новый пользователь">
               <span class="material-icons-sharp">person_add</span>
             </button>
+            @if (isOwner()) {
+              <button class="icon-button" type="button" (click)="contractorSystemOpen.set(true)" aria-label="Общая система начислений">
+                <span class="material-icons-sharp">account_balance</span>
+              </button>
+            }
           </section>
 
           <form class="admin-users-search" (ngSubmit)="reload()" role="search">
@@ -119,6 +128,10 @@ const ROLE_OPTIONS = ['ADMIN', 'OWNER', 'MANAGER', 'WORKER', 'PERFORMER', 'OPERA
                     </label>
                     <button class="ghost" type="button" (click)="openPassword(user)">пароль</button>
                     <button class="ghost" type="button" (click)="openAssignments(user)">назначения</button>
+                    @if (user.roles.includes('WORKER') || user.roles.includes('MANAGER')) {
+                      <button class="ghost" type="button" (click)="openAccrualAdjustments(user)">премии и удержания</button>
+                      <button class="ghost" type="button" (click)="openContractorFinance(user)">платёжный профиль</button>
+                    }
                     <button class="ghost" type="button" (click)="openEditUser(user)">изменить</button>
                     <button class="danger-link" type="button" (click)="deleteUser(user)" [disabled]="isAdminUser(user) || busyUserId() === user.id">удалить</button>
                   </footer>
@@ -352,6 +365,15 @@ const ROLE_OPTIONS = ['ADMIN', 'OWNER', 'MANAGER', 'WORKER', 'PERFORMER', 'OPERA
             }
           </ng-template>
         </ion-modal>
+        @if (accrualUser(); as user) {
+          <app-contractor-accrual-adjustments [user]="user" (dismissed)="closeAccrualAdjustments()" />
+        }
+        @if (financeUser(); as user) {
+          <app-contractor-finance [user]="user" (dismissed)="closeContractorFinance()" />
+        }
+        @if (contractorSystemOpen()) {
+          <app-contractor-system (dismissed)="contractorSystemOpen.set(false)" />
+        }
       </ion-content>
     </div>
   `,
@@ -360,6 +382,7 @@ const ROLE_OPTIONS = ['ADMIN', 'OWNER', 'MANAGER', 'WORKER', 'PERFORMER', 'OPERA
     .admin-users-page{display:flex;flex-direction:column;gap:.65rem;height:100%;max-width:48rem;margin:0 auto;padding:.75rem .75rem calc(.75rem + env(safe-area-inset-bottom));overflow:hidden}
     .admin-users-top,.admin-users-search,.user-card,.empty-card{border:1px solid rgba(103,116,131,.16);border-radius:1rem;background:linear-gradient(155deg,var(--otziv-white),var(--otziv-tone-walk-surface));box-shadow:0 .8rem 1.6rem rgba(132,139,200,.1)}
     .admin-users-top{display:grid;grid-template-columns:minmax(0,1fr)2.42rem 2.42rem;align-items:center;gap:.5rem;padding:.75rem}
+    .admin-users-top.owner{grid-template-columns:minmax(0,1fr) repeat(3,2.42rem)}
     .admin-users-top p,.sheet-note{margin:0;color:var(--otziv-info);font-size:.68rem;font-weight:1000;text-transform:uppercase}.admin-users-top h1{margin:.1rem 0;color:var(--otziv-dark);font-size:1.28rem}.admin-users-top small{color:var(--otziv-info);font-weight:900}
     .icon-button{display:grid;place-items:center;width:2.42rem;height:2.42rem;border:0;border-radius:.82rem;color:var(--otziv-primary);background:linear-gradient(145deg,rgba(108,155,207,.16),var(--otziv-white))}
     .icon-button.add{color:#16735f;background:linear-gradient(145deg,rgba(74,198,177,.16),var(--otziv-white))}
@@ -392,6 +415,9 @@ export class AdminUsersPage implements OnInit {
   readonly assignmentUser = signal<AdminUser | null>(null);
   readonly assignmentOptions = signal<AssignmentOptions | null>(null);
   readonly assignmentDraft = signal<UpdateUserAssignmentsRequest | null>(null);
+  readonly accrualUser = signal<AdminUser | null>(null);
+  readonly financeUser = signal<AdminUser | null>(null);
+  readonly contractorSystemOpen = signal(false);
 
   readonly filteredUsers = computed(() => {
     const keyword = this.keyword().trim().toLocaleLowerCase('ru-RU');
@@ -410,6 +436,7 @@ export class AdminUsersPage implements OnInit {
 
   constructor(
     private readonly api: ApiService,
+    private readonly auth: AuthService,
     private readonly confirm: MobileConfirmService,
     private readonly media: MobileMediaService
   ) {}
@@ -417,6 +444,8 @@ export class AdminUsersPage implements OnInit {
   ngOnInit(): void {
     void this.reload();
   }
+
+  isOwner(): boolean { return this.auth.hasRealmRole('OWNER'); }
 
   async reload(): Promise<void> {
     this.loading.set(true);
@@ -448,6 +477,22 @@ export class AdminUsersPage implements OnInit {
       emailVerified: true,
       roles: ['WORKER']
     });
+  }
+
+  openAccrualAdjustments(user: AdminUser): void {
+    this.accrualUser.set(user);
+  }
+
+  closeAccrualAdjustments(): void {
+    this.accrualUser.set(null);
+  }
+
+  openContractorFinance(user: AdminUser): void {
+    this.financeUser.set(user);
+  }
+
+  closeContractorFinance(): void {
+    this.financeUser.set(null);
   }
 
   openEditUser(user: AdminUser): void {

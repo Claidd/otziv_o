@@ -2123,6 +2123,192 @@ export interface UpdateUserAssignmentsRequest {
   marketologIds: number[];
 }
 
+export type ContractorRole = 'SPECIALIST' | 'MANAGER';
+
+export interface ContractorPaymentProfile {
+  id: number;
+  userId: number;
+  role: ContractorRole;
+  rowVersion: number;
+  enabled: boolean;
+  liveEnabled: boolean;
+  recipientName?: string | null;
+  paymentPhone?: string | null;
+  bankName?: string | null;
+  paymentComment?: string | null;
+  openingBalanceKopecks: number;
+  trackingStartedAt: string;
+  accruedMonthKopecks: number;
+  accruedTotalKopecks: number;
+  workAccruedMonthKopecks: number;
+  bonusMonthKopecks: number;
+  deductionMonthKopecks: number;
+  reservedKopecks: number;
+  clientReportedKopecks: number;
+  partiallyConfirmedOutstandingKopecks: number;
+  grossConfirmedMonthKopecks: number;
+  grossConfirmedTotalKopecks: number;
+  returnedMonthKopecks: number;
+  returnedTotalKopecks: number;
+  closedWithoutPaymentMonthKopecks: number;
+  closedWithoutPaymentTotalKopecks: number;
+  netReceivedMonthKopecks: number;
+  netReceivedTotalKopecks: number;
+  availableKopecks: number;
+  exposureOverrunKopecks: number;
+  reportingLive: boolean;
+  shadowMode: boolean;
+  liveRouting: boolean;
+}
+
+export interface ContractorPaymentProfileRequest {
+  role: ContractorRole;
+  expectedVersion: number;
+  enabled: boolean;
+  liveEnabled: boolean;
+  recipientName?: string;
+  paymentPhone?: string;
+  bankName?: string;
+  paymentComment?: string;
+  openingBalanceKopecks: number;
+  openingBalanceReason?: string;
+}
+
+export interface ContractorOpeningBalanceChange {
+  id: number;
+  profileId: number;
+  oldBalanceKopecks: number;
+  newBalanceKopecks: number;
+  deltaKopecks: number;
+  reason: string;
+  changedBy: string;
+  effectiveAt: string;
+  createdAt: string;
+}
+
+export type ContractorPaymentMode = 'SHADOW' | 'LIVE';
+
+export interface ContractorDirectSettlement {
+  id: number;
+  profileId: number;
+  userId: number;
+  type: 'PAYMENT' | 'REVERSAL';
+  mode: ContractorPaymentMode;
+  simulated: boolean;
+  amountKopecks: number;
+  effectiveAt: string;
+  reason: string;
+  evidenceReference: string;
+  idempotencyKey: string;
+  actor: string;
+  createdAt: string;
+  originalSettlementId?: number | null;
+  allocationId: number;
+}
+
+export interface ContractorDirectSettlementRequest {
+  expectedMode: ContractorPaymentMode;
+  amountKopecks: number;
+  effectiveAt: string;
+  reason: string;
+  evidenceReference: string;
+  idempotencyKey: string;
+}
+
+export interface ContractorAllocationEvent {
+  id: number;
+  eventType: string;
+  amountKopecks: number;
+  effectiveAt: string;
+  reason?: string | null;
+  actor: string;
+}
+
+export interface ContractorAllocationJournalItem {
+  id: number;
+  attemptNo: number;
+  mode: ContractorPaymentMode;
+  sourceType: 'PAYMENT_LINK' | 'COMMON_INVOICE' | 'DIRECT_SETTLEMENT' | 'ACTUAL_PAYMENT';
+  sourceId: number;
+  orderId?: number | null;
+  commonInvoiceId?: number | null;
+  recipientType: 'SPECIALIST' | 'MANAGER' | 'OWNER';
+  recipientProfileId?: number | null;
+  recipientName?: string | null;
+  amountKopecks: number;
+  confirmedKopecks: number;
+  returnedKopecks: number;
+  status: string;
+  routingDecisionReason?: string | null;
+  specialistRejectionReason?: string | null;
+  managerRejectionReason?: string | null;
+  availableBeforeKopecks?: number | null;
+  reservedAt?: string | null;
+  clientReportedAt?: string | null;
+  confirmedAt?: string | null;
+  releasedAt?: string | null;
+  reconcileAttempts: number;
+  reconcileNextRetryAt?: string | null;
+  reconcileLastErrorCode?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  reason?: string | null;
+  events: ContractorAllocationEvent[];
+}
+
+export interface ContractorAllocationJournalPage {
+  content: ContractorAllocationJournalItem[];
+  number: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  first: boolean;
+  last: boolean;
+}
+
+export type ContractorAccrualAdjustmentKind = 'BONUS' | 'DEDUCTION';
+
+export interface ContractorAccrualAdjustmentRequest {
+  kind: ContractorAccrualAdjustmentKind;
+  amountKopecks: number;
+  reason: string;
+  referenceMonth: string;
+  evidenceReference?: string;
+  idempotencyKey: string;
+}
+
+export interface ContractorAccrualAdjustment {
+  id: number;
+  profileId: number;
+  kind: ContractorAccrualAdjustmentKind | 'REVERSAL';
+  signedAmountKopecks: number;
+  effectiveOn: string;
+  referenceMonth: string;
+  reason: string;
+  evidenceReference?: string | null;
+  createdBy: string;
+  createdAt: string;
+  reversalOfId?: number | null;
+}
+
+export interface ContractorAccrualAdjustmentHistoryPage {
+  items: ContractorAccrualAdjustment[];
+  hasMore: boolean;
+}
+
+export interface ContractorAccrualAdjustmentPreview {
+  workMonthKopecks: number;
+  bonusMonthKopecks: number;
+  deductionMonthKopecks: number;
+  accruedMonthBeforeKopecks: number;
+  accruedMonthAfterKopecks: number;
+  freeForNewPaymentsBeforeKopecks: number;
+  freeForNewPaymentsAfterKopecks: number;
+  paidTotalKopecks: number;
+  outstandingKopecks: number;
+  manualTaskCommitmentKopecks: number;
+}
+
 export interface AdminPromoText {
   id: number;
   position: number;
@@ -2848,6 +3034,10 @@ export interface ContractorPaymentSummary {
   role: ContractorPaymentRole;
   profileEnabled: boolean;
   liveEnabled: boolean;
+  recipientName?: string | null;
+  paymentPhone?: string | null;
+  bankName?: string | null;
+  paymentComment?: string | null;
   accruedMonthKopecks: number;
   accruedTotalKopecks: number;
   reservedKopecks: number;
@@ -2869,6 +3059,9 @@ export interface ContractorPaymentSummary {
   liveRouting: boolean;
   trackingStartedAt: string;
   currentMonthCoverageComplete: boolean;
+  workAccruedMonthKopecks?: number;
+  bonusMonthKopecks?: number;
+  deductionMonthKopecks?: number;
 }
 
 export interface ManagerManualPaymentSettings {
@@ -3138,6 +3331,114 @@ export class ApiService {
 
   updateAdminUserAssignments(id: number, request: UpdateUserAssignmentsRequest): Observable<UserAssignments> {
     return this.http.put<UserAssignments>(this.apiUrl(`/api/admin/users/${id}/assignments`), request);
+  }
+
+  getAdminContractorPaymentProfiles(userId: number): Observable<ContractorPaymentProfile[]> {
+    return this.http.get<ContractorPaymentProfile[]>(
+      this.apiUrl(`/api/admin/users/${userId}/contractor-payment-profiles`)
+    );
+  }
+
+  updateAdminContractorPaymentProfile(
+    userId: number, request: ContractorPaymentProfileRequest
+  ): Observable<ContractorPaymentProfile> {
+    return this.http.put<ContractorPaymentProfile>(
+      this.apiUrl(`/api/admin/users/${userId}/contractor-payment-profiles`), request
+    );
+  }
+
+  getAdminContractorOpeningBalanceHistory(
+    userId: number, profileId: number
+  ): Observable<ContractorOpeningBalanceChange[]> {
+    return this.http.get<ContractorOpeningBalanceChange[]>(
+      this.apiUrl(`/api/admin/users/${userId}/contractor-payment-profiles/${profileId}/opening-balance-history`)
+    );
+  }
+
+  getAdminContractorDirectSettlements(
+    userId: number, profileId: number
+  ): Observable<ContractorDirectSettlement[]> {
+    return this.http.get<ContractorDirectSettlement[]>(
+      this.apiUrl(`/api/admin/users/${userId}/contractor-payment-profiles/${profileId}/direct-settlements`)
+    );
+  }
+
+  createAdminContractorDirectSettlement(
+    userId: number, profileId: number, request: ContractorDirectSettlementRequest
+  ): Observable<ContractorDirectSettlement> {
+    return this.http.post<ContractorDirectSettlement>(
+      this.apiUrl(`/api/admin/users/${userId}/contractor-payment-profiles/${profileId}/direct-settlements`), request
+    );
+  }
+
+  reverseAdminContractorDirectSettlement(
+    userId: number, profileId: number, originalId: number, request: ContractorDirectSettlementRequest
+  ): Observable<ContractorDirectSettlement> {
+    return this.http.post<ContractorDirectSettlement>(
+      this.apiUrl(`/api/admin/users/${userId}/contractor-payment-profiles/${profileId}/direct-settlements/${originalId}/reversals`),
+      request
+    );
+  }
+
+  getAdminContractorAllocationJournal(
+    userId: number,
+    filter: { status?: string; mode?: ContractorPaymentMode | ''; sourceType?: ContractorAllocationJournalItem['sourceType'] | ''; sourceId?: number | null; page?: number; size?: number } = {}
+  ): Observable<ContractorAllocationJournalPage> {
+    const params: Record<string, string | number> = {
+      userId, page: filter.page ?? 0, size: filter.size ?? 10
+    };
+    if (filter.status) params['status'] = filter.status;
+    if (filter.mode) params['mode'] = filter.mode;
+    if (filter.sourceType) params['sourceType'] = filter.sourceType;
+    if (filter.sourceId != null) params['sourceId'] = filter.sourceId;
+    return this.http.get<ContractorAllocationJournalPage>(
+      this.apiUrl('/api/admin/contractor-payment-allocations'), { params }
+    );
+  }
+
+  recordAdminContractorReturnedAmount(
+    allocationId: number, request: { returnedTotalKopecks: number; reason: string }
+  ): Observable<void> {
+    return this.http.put<void>(
+      this.apiUrl(`/api/admin/contractor-payment-allocations/${allocationId}/returned-amount`), request
+    );
+  }
+
+  getAdminContractorAccrualAdjustmentsPage(
+    userId: number, profileId: number, page: number
+  ): Observable<ContractorAccrualAdjustmentHistoryPage> {
+    return this.http.get<ContractorAccrualAdjustmentHistoryPage>(
+      this.apiUrl(`/api/admin/users/${userId}/contractor-payment-profiles/${profileId}/accrual-adjustments/pages`),
+      { params: { page } }
+    );
+  }
+
+  previewAdminContractorAccrualAdjustment(
+    userId: number, profileId: number, request: ContractorAccrualAdjustmentRequest
+  ): Observable<ContractorAccrualAdjustmentPreview> {
+    return this.http.post<ContractorAccrualAdjustmentPreview>(
+      this.apiUrl(`/api/admin/users/${userId}/contractor-payment-profiles/${profileId}/accrual-adjustments/preview`),
+      request
+    );
+  }
+
+  createAdminContractorAccrualAdjustment(
+    userId: number, profileId: number, request: ContractorAccrualAdjustmentRequest
+  ): Observable<ContractorAccrualAdjustment> {
+    return this.http.post<ContractorAccrualAdjustment>(
+      this.apiUrl(`/api/admin/users/${userId}/contractor-payment-profiles/${profileId}/accrual-adjustments`),
+      request
+    );
+  }
+
+  reverseAdminContractorAccrualAdjustment(
+    userId: number, profileId: number, adjustmentId: number,
+    request: { reason: string; idempotencyKey: string }
+  ): Observable<ContractorAccrualAdjustment> {
+    return this.http.post<ContractorAccrualAdjustment>(
+      this.apiUrl(`/api/admin/users/${userId}/contractor-payment-profiles/${profileId}/accrual-adjustments/${adjustmentId}/reversals`),
+      request
+    );
   }
 
   getAdminPromoTextManagement(keyword = ''): Observable<PromoTextManagementResponse>{ return this.dictionariesApi.getAdminPromoTextManagement(keyword); }

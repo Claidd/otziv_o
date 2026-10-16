@@ -18,6 +18,7 @@ export const MOBILE_ROLES = {
   ownerAdmin: [MOBILE_ROLE.admin, MOBILE_ROLE.owner] as MobileRoleSet,
   manager: [MOBILE_ROLE.admin, MOBILE_ROLE.owner, MOBILE_ROLE.manager] as MobileRoleSet,
   worker: [MOBILE_ROLE.admin, MOBILE_ROLE.owner, MOBILE_ROLE.manager, MOBILE_ROLE.worker] as MobileRoleSet,
+  performer: [MOBILE_ROLE.performer] as MobileRoleSet,
   leads: [MOBILE_ROLE.admin, MOBILE_ROLE.owner, MOBILE_ROLE.manager, MOBILE_ROLE.marketolog] as MobileRoleSet,
   operator: [MOBILE_ROLE.admin, MOBILE_ROLE.owner, MOBILE_ROLE.operator] as MobileRoleSet,
   botBrowser: [MOBILE_ROLE.admin, MOBILE_ROLE.owner, MOBILE_ROLE.manager, MOBILE_ROLE.worker] as MobileRoleSet,
@@ -41,10 +42,19 @@ export const MOBILE_SECTIONS = {
   commonBilling: 'commonBilling',
   managerControl: 'managerControl',
   archive: 'archive',
+  archiveAdmin: 'archiveAdmin',
   workerRisk: 'workerRisk',
   worker: 'worker',
+  performerBoard: 'performerBoard',
   operator: 'operator',
   tbank: 'tbank',
+  performers: 'performers',
+  cityStats: 'cityStats',
+  clientOffers: 'clientOffers',
+  notificationMedia: 'notificationMedia',
+  reputationAi: 'reputationAi',
+  workloadShadow: 'workloadShadow',
+  mobileUpdateAdmin: 'mobileUpdateAdmin',
   dictionaries: 'dictionaries',
   adminUsers: 'adminUsers',
   botBrowser: 'botBrowser'
@@ -114,6 +124,10 @@ export const MOBILE_ACTION_MATRIX: MobileActionMatrix = {
     restore: MOBILE_ROLES.manager,
     manage: MOBILE_ROLES.ownerAdmin
   },
+  archiveAdmin: {
+    view: MOBILE_ROLES.ownerAdmin,
+    manage: MOBILE_ROLES.ownerAdmin
+  },
   workerRisk: {
     view: MOBILE_ROLES.manager,
     manage: MOBILE_ROLES.manager
@@ -122,6 +136,10 @@ export const MOBILE_ACTION_MATRIX: MobileActionMatrix = {
     view: MOBILE_ROLES.worker,
     edit: MOBILE_ROLES.worker,
     manage: MOBILE_ROLES.manager
+  },
+  performerBoard: {
+    view: MOBILE_ROLES.performer,
+    edit: MOBILE_ROLES.performer
   },
   operator: {
     view: MOBILE_ROLES.operator,
@@ -134,6 +152,32 @@ export const MOBILE_ACTION_MATRIX: MobileActionMatrix = {
     edit: MOBILE_ROLES.ownerAdmin,
     delete: MOBILE_ROLES.ownerAdmin,
     manage: MOBILE_ROLES.ownerAdmin
+  },
+  performers: {
+    view: MOBILE_ROLES.manager,
+    edit: MOBILE_ROLES.manager,
+    manage: MOBILE_ROLES.manager
+  },
+  cityStats: {
+    view: MOBILE_ROLES.ownerAdmin
+  },
+  clientOffers: {
+    view: MOBILE_ROLES.ownerAdmin,
+    manage: MOBILE_ROLES.ownerAdmin
+  },
+  notificationMedia: {
+    view: MOBILE_ROLES.ownerAdmin,
+    manage: MOBILE_ROLES.ownerAdmin
+  },
+  reputationAi: {
+    view: MOBILE_ROLES.ownerAdmin,
+    manage: MOBILE_ROLES.ownerAdmin
+  },
+  workloadShadow: {
+    view: MOBILE_ROLES.ownerAdmin
+  },
+  mobileUpdateAdmin: {
+    view: MOBILE_ROLES.ownerAdmin
   },
   dictionaries: {
     view: MOBILE_ROLES.manager,
