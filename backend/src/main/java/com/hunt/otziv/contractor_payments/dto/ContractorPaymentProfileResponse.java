@@ -33,6 +33,9 @@ public record ContractorPaymentProfileResponse(
         long exposureOverrunKopecks,
         boolean reportingLive,
         boolean shadowMode,
-        boolean liveRouting
+        boolean liveRouting,
+        long workAccruedMonthKopecks,
+        long bonusMonthKopecks,
+        long deductionMonthKopecks
 ) {
 }

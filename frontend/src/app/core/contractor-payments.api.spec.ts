@@ -28,6 +28,13 @@ describe('ContractorPaymentsApi', () => {
     expect(get.mock.calls[0][0]).not.toContain('userId');
   });
 
+  it('loads accrual correction reasons only from the authenticated employee route', () => {
+    api.getMyAccrualAdjustments();
+
+    expect(get).toHaveBeenCalledWith('/api/contractor-payments/me/accrual-adjustments');
+    expect(get.mock.calls[0][0]).not.toContain('userId');
+  });
+
   it('loads the global contractor-payment system status for an admin screen', () => {
     const status = systemStatus();
     get.mockReturnValue(of(status));

@@ -277,6 +277,9 @@ export interface ScoreContractorPaymentSummary {
   availableKopecks: number;
   reportingLive: boolean;
   currentMonthCoverageComplete: boolean;
+  workAccruedMonthKopecks?: number;
+  bonusMonthKopecks?: number;
+  deductionMonthKopecks?: number;
 }
 
 export interface ManagerPerformanceScore {

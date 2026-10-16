@@ -5,6 +5,7 @@ import com.hunt.otziv.contractor_payments.repository.*;
 import com.hunt.otziv.contractor_payments.service.*;
 import com.hunt.otziv.u_users.model.User;
 import jakarta.persistence.EntityManager;
+import java.math.BigDecimal;
 import java.time.*;
 import java.util.*;
 import org.junit.jupiter.api.Test;
@@ -219,6 +220,54 @@ class InteractiveBatchQueriesMySqlIntegrationTest {
         first.setOpeningBalanceKopecks(2200); em.flush();
         assertThat(ledger.totalsForProfiles(List.of(first), FROM, TO).get(first.getId()).total())
                 .isEqualTo(accruals.get(first.getId()).total() + 1000);
+    }
+
+    @Test void bonusOnlyProfileAppearsInBatchBalancesAndCanonicalAnalyticsWithoutWorkCounts() {
+        var profile = profile(900021L, 0);
+        em.flush();
+        insertAdjustment(profile.getId(), "BONUS", 900L, FROM.plusDays(2), "bonus-current");
+        insertAdjustment(profile.getId(), "DEDUCTION", -350L, FROM.plusDays(3), "deduction-current");
+        insertAdjustment(profile.getId(), "BONUS", 125L, FROM.minusDays(1), "bonus-previous");
+
+        var facts = financialRead.read(List.of(profile.getId()), ContractorAllocationMode.LIVE,
+                accounting.summaryEventTypes(ContractorAllocationMode.LIVE), FROM, TO);
+        assertThat(facts.accruals().get(profile.getId()))
+                .isEqualTo(new ContractorAdminFinancialReadRepository.Accrual(675L, 550L));
+        assertThat(facts.adjustmentMonths().get(profile.getId()))
+                .isEqualTo(new ContractorAdminFinancialReadRepository.AdjustmentMonths(900L, 350L));
+        assertThat(ledger.totalAccrued(profile)).isEqualTo(675L);
+        assertThat(ledger.accruedInPeriod(profile, FROM, TO)).isEqualTo(550L);
+
+        var source = jdbc.queryForMap("""
+                SELECT COALESCE(SUM(salary_sum), 0) AS salary_sum,
+                       COUNT(DISTINCT source_zp_id) AS work_count,
+                       COALESCE(SUM(salary_review_count), 0) AS review_count
+                FROM analytics_salary_source
+                WHERE user_id = ? AND metric_date >= ? AND metric_date < ?
+                """, profile.getUser().getId(), FROM, TO);
+        assertThat((BigDecimal) source.get("salary_sum")).isEqualByComparingTo("5.50");
+        assertThat(((Number) source.get("work_count")).longValue()).isZero();
+        assertThat(((Number) source.get("review_count")).longValue()).isZero();
+
+        var daily = jdbc.queryForMap("""
+                SELECT COALESCE(SUM(salary_sum), 0) AS salary_sum,
+                       COALESCE(SUM(salary_entry_count), 0) AS work_count
+                FROM analytics_salary_daily_source
+                WHERE user_id = ? AND metric_date >= ? AND metric_date < ?
+                """, profile.getUser().getId(), FROM, TO);
+        assertThat((BigDecimal) daily.get("salary_sum")).isEqualByComparingTo("5.50");
+        assertThat(((Number) daily.get("work_count")).longValue()).isZero();
+    }
+
+    private void insertAdjustment(long profileId, String bucket, long signedKopecks,
+                                  LocalDate effectiveOn, String idempotencyKey) {
+        jdbc.update("""
+                INSERT INTO contractor_accrual_adjustments
+                    (profile_id, kind, bucket, signed_amount_kopecks, effective_on, reference_month,
+                     reason, created_by, created_at, idempotency_key)
+                VALUES (?, ?, ?, ?, ?, ?, 'Analytics batch fixture', 'batch-test', CURRENT_TIMESTAMP(6), ?)
+                """, profileId, bucket, bucket, signedKopecks, effectiveOn,
+                effectiveOn.withDayOfMonth(1), idempotencyKey);
     }
 
     @Test void currentFinancialFactsRespectActualRecipientModeDateAndCommittedSourceChanges() {

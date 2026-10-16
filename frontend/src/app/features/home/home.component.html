@@ -262,7 +262,7 @@
                       <span class="contractor-payment-metric-card">
                         <app-contractor-payment-metric-help
                           label="Начислено"
-                          description="Сколько вознаграждения начислено по вашим заказам плюс переходящий неоплаченный остаток, если он был задан. Ниже отдельно показано начисление за текущий месяц."
+                          description="Начисление за работы с учётом премий и удержаний плюс переходящий неоплаченный остаток, если он был задан. Ниже отдельно показано начисление за текущий месяц."
                           [descriptionId]="'contractor-payment-help-' + summary.profileId + '-accrued'"
                         />
                         <strong>{{ contractorMoney(summary.accruedTotalKopecks) }}</strong>
@@ -296,6 +296,35 @@
                         <strong>{{ contractorMoney(summary.availableKopecks) }}</strong>
                       </span>
                     </div>
+
+                    <div class="contractor-accrual-breakdown" aria-label="Состав начисления за месяц">
+                      <span>За работы <strong>{{ contractorMoney(summary.workAccruedMonthKopecks ?? summary.accruedMonthKopecks) }}</strong></span>
+                      <span>Премии с отменами <strong>{{ contractorMoney(summary.bonusMonthKopecks) }}</strong></span>
+                      <span>Удержания с отменами <strong>{{ contractorMoney(summary.deductionMonthKopecks) }}</strong></span>
+                      <span>Итого за месяц <strong>{{ contractorMoney(summary.accruedMonthKopecks) }}</strong></span>
+                    </div>
+
+                    @if (contractorAccrualHistoryLoading()) {
+                      <p class="contractor-accrual-history-state">Загружаю историю премий и удержаний…</p>
+                    } @else if (contractorAccrualHistoryError()) {
+                      <p class="contractor-accrual-history-state">{{ contractorAccrualHistoryError() }}</p>
+                    } @else if (contractorAccrualHistoryFor(summary.profileId).length > 0) {
+                      <details class="contractor-accrual-history">
+                        <summary>История премий и удержаний</summary>
+                        <ol>
+                          @for (adjustment of contractorAccrualHistoryFor(summary.profileId); track adjustment.id) {
+                            <li>
+                              <strong>
+                                {{ adjustment.kind === 'BONUS' ? 'Премия' : adjustment.kind === 'DEDUCTION' ? 'Удержание' : 'Отмена корректировки' }}
+                                · {{ adjustment.signedAmountKopecks > 0 ? '+' : '' }}{{ contractorMoney(adjustment.signedAmountKopecks) }}
+                              </strong>
+                              <small>Учтено {{ adjustment.effectiveOn }} · основание за {{ adjustment.referenceMonth }}</small>
+                              <span>{{ adjustment.reason }}</span>
+                            </li>
+                          }
+                        </ol>
+                      </details>
+                    }
 
                     <dl class="contractor-payment-requisites" aria-label="Мои реквизиты оплаты">
                       <div>

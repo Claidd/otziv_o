@@ -14,6 +14,7 @@ import com.hunt.otziv.contractor_payments.controller.ContractorPaymentAdminContr
 import com.hunt.otziv.contractor_payments.dto.ContractorPaymentProfileRequest;
 import com.hunt.otziv.contractor_payments.dto.ContractorPaymentProfileResponse;
 import com.hunt.otziv.contractor_payments.model.ContractorRole;
+import com.hunt.otziv.contractor_payments.service.ContractorAccrualAdjustmentService;
 import com.hunt.otziv.contractor_payments.service.ContractorDirectSettlementService;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentProfileService;
 import com.hunt.otziv.payments.config.TbankPaymentProperties;
@@ -75,6 +76,7 @@ class PaymentRequisitesNoStoreControllerTest {
         when(profileService.getForUser(5L)).thenReturn(List.of(profile));
         ContractorPaymentAdminController controller = new ContractorPaymentAdminController(
                 profileService,
+                mock(ContractorAccrualAdjustmentService.class),
                 mock(ContractorDirectSettlementService.class)
         );
         ContractorPaymentProfileRequest request = new ContractorPaymentProfileRequest(

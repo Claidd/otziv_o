@@ -1028,6 +1028,159 @@ tr.unlinked td {
   background: var(--otziv-white);
 }
 
+.accrual-adjustments {
+  min-width: 0;
+  border: 1px solid rgba(79, 111, 181, 0.25);
+  border-radius: 0.72rem;
+  padding: 0.7rem;
+  background: rgba(79, 111, 181, 0.04);
+}
+
+.accrual-adjustments > summary {
+  color: var(--otziv-primary);
+  font-size: 0.78rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.accrual-adjustments .form-hint {
+  margin: 0.65rem 0;
+}
+
+.accrual-adjustment-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+  margin-top: 0.65rem;
+}
+
+.accrual-adjustment-form label,
+.accrual-reversal label {
+  display: grid;
+  min-width: 0;
+  gap: 0.3rem;
+}
+
+.accrual-adjustment-form label.wide {
+  grid-column: 1 / -1;
+}
+
+.accrual-adjustment-form label span,
+.accrual-reversal label span {
+  color: var(--otziv-info);
+  font-size: 0.65rem;
+  font-weight: 800;
+}
+
+.accrual-adjustment-form input,
+.accrual-adjustment-form select,
+.accrual-reversal input {
+  min-width: 0;
+  width: 100%;
+  border: 1px solid rgba(103, 116, 131, 0.2);
+  border-radius: 0.62rem;
+  padding: 0.58rem 0.66rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-white);
+  font: inherit;
+}
+
+.accrual-adjustment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.7rem;
+}
+
+.accrual-preview,
+.accrual-adjustment-history {
+  display: grid;
+  min-width: 0;
+  gap: 0.45rem;
+  margin-top: 0.7rem;
+  border-radius: 0.7rem;
+  padding: 0.65rem;
+  background: var(--otziv-white);
+  font-size: 0.72rem;
+}
+
+.accrual-preview > div {
+  display: flex;
+  min-width: 0;
+  justify-content: space-between;
+  gap: 0.5rem;
+  border-top: 1px solid rgba(103, 116, 131, 0.12);
+  padding-top: 0.35rem;
+}
+
+.accrual-preview > div > span,
+.accrual-preview > div > b {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.accrual-preview > div > b {
+  text-align: right;
+}
+
+.accrual-preview-total {
+  color: var(--otziv-primary);
+  font-weight: 900;
+}
+
+.accrual-adjustment-history ol {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.accrual-adjustment-history li {
+  min-width: 0;
+  border-radius: 0.6rem;
+  padding: 0.55rem;
+  background: var(--otziv-field-background);
+}
+
+.accrual-adjustment-row {
+  display: grid;
+  min-width: 0;
+  gap: 0.18rem;
+  overflow-wrap: anywhere;
+}
+
+.accrual-adjustment-row small {
+  color: var(--otziv-info);
+}
+
+.accrual-reversal {
+  margin-top: 0.45rem;
+  border-top: 1px solid rgba(103, 116, 131, 0.15);
+  padding-top: 0.45rem;
+}
+
+.accrual-reversal summary {
+  color: #a83f47;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.accrual-reversal label,
+.accrual-reversal button {
+  margin-top: 0.45rem;
+}
+
+@container contractor-payments (max-width: 32rem) {
+  .accrual-adjustment-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .accrual-adjustment-form label.wide {
+    grid-column: auto;
+  }
+}
+
 .opening-history summary {
   color: var(--otziv-primary);
   font-size: 0.72rem;

@@ -36,6 +36,7 @@ import { ManagerReportReviewAccessApi } from '../../core/manager-report-review-a
 import { WorkloadShadowApi } from '../../core/workload-shadow.api';
 import {
   ContractorPaymentSummary,
+  ContractorSelfAccrualAdjustment,
   ContractorPaymentsApi
 } from '../../core/contractor-payments.api';
 import {
@@ -187,7 +188,11 @@ export class HomeComponent {
   readonly contractorPayments = signal<ContractorPaymentSummary[]>([]);
   readonly contractorPaymentsLoading = signal(false);
   readonly contractorPaymentsError = signal<string | null>(null);
+  readonly contractorAccrualAdjustments = signal<ContractorSelfAccrualAdjustment[]>([]);
+  readonly contractorAccrualHistoryLoading = signal(false);
+  readonly contractorAccrualHistoryError = signal<string | null>(null);
   private contractorPaymentsRequested = false;
+  private contractorAccrualHistoryRequest = 0;
 
   readonly actions: DashboardAction[] = [
     {
@@ -1350,6 +1355,7 @@ export class HomeComponent {
       next: (summaries) => {
         this.contractorPayments.set(summaries);
         this.contractorPaymentsLoading.set(false);
+        this.loadContractorAccrualHistory();
       },
       error: (error) => {
         this.contractorPaymentsError.set(apiErrorDetail(
@@ -1357,6 +1363,37 @@ export class HomeComponent {
           'Расчёты по вознаграждениям временно недоступны.'
         ));
         this.contractorPaymentsLoading.set(false);
+      }
+    });
+  }
+
+  contractorAccrualHistoryFor(profileId: number): ContractorSelfAccrualAdjustment[] {
+    return this.contractorAccrualAdjustments()
+      .filter((adjustment) => adjustment.profileId === profileId)
+      .slice(0, 5);
+  }
+
+  private loadContractorAccrualHistory(): void {
+    const request = ++this.contractorAccrualHistoryRequest;
+    this.contractorAccrualHistoryLoading.set(true);
+    this.contractorAccrualHistoryError.set(null);
+    this.contractorPaymentsApi.getMyAccrualAdjustments().subscribe({
+      next: (adjustments) => {
+        if (request !== this.contractorAccrualHistoryRequest) {
+          return;
+        }
+        this.contractorAccrualAdjustments.set(adjustments);
+        this.contractorAccrualHistoryLoading.set(false);
+      },
+      error: (error) => {
+        if (request !== this.contractorAccrualHistoryRequest) {
+          return;
+        }
+        this.contractorAccrualHistoryError.set(apiErrorDetail(
+          error,
+          'Не удалось загрузить историю премий и удержаний.'
+        ));
+        this.contractorAccrualHistoryLoading.set(false);
       }
     });
   }

@@ -10,6 +10,7 @@ import com.hunt.otziv.contractor_payments.model.ContractorPaymentProfile;
 import com.hunt.otziv.contractor_payments.model.ContractorRewardLedgerEntry;
 import com.hunt.otziv.contractor_payments.model.ContractorRole;
 import com.hunt.otziv.contractor_payments.repository.ContractorPaymentProfileRepository;
+import com.hunt.otziv.contractor_payments.repository.ContractorAccrualAdjustmentRepository;
 import com.hunt.otziv.contractor_payments.repository.ContractorRewardLedgerRepository;
 import com.hunt.otziv.contractor_payments.repository.ContractorRewardSyncMarkerRepository;
 import com.hunt.otziv.p_products.model.Order;
@@ -45,6 +46,7 @@ class ContractorRewardLedgerServiceTest {
 
     @Mock private ZpRepository zpRepository;
     @Mock private ContractorRewardLedgerRepository ledgerRepository;
+    @Mock private ContractorAccrualAdjustmentRepository adjustmentRepository;
     @Mock private ContractorRewardSyncMarkerRepository markerRepository;
     @Mock private ContractorPaymentProfileRepository profileRepository;
     @Mock private ContractorRewardAttributionService attributionService;
@@ -60,6 +62,7 @@ class ContractorRewardLedgerServiceTest {
         service = new ContractorRewardLedgerService(
                 zpRepository,
                 ledgerRepository,
+                adjustmentRepository,
                 markerRepository,
                 profileRepository,
                 attributionService,

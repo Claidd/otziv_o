@@ -182,10 +182,19 @@ public class ManualPaymentTaskContractorCapacityService {
             ContractorPaymentProfile profile,
             ContractorAllocationMode mode
     ) {
+        return ordinaryAvailableAfterAccrualDelta(profile, mode, 0L);
+    }
+
+    /** Preview a signed accrual change against the raw position before clamping to zero. */
+    public long ordinaryAvailableAfterAccrualDelta(
+            ContractorPaymentProfile profile,
+            ContractorAllocationMode mode,
+            long signedAccrualDeltaKopecks
+    ) {
         if (profile == null || profile.getId() == null || mode == null) {
             return 0L;
         }
-        long position = profileService.capacityPosition(profile, mode);
+        long position = addSaturated(profileService.capacityPosition(profile, mode), signedAccrualDeltaKopecks);
         long foreignTaskExposure = nonNegative(
                 allocationRepository.taskCapacityExposureOutsideModeForUpdate(
                         profile.getId(), mode.name()));

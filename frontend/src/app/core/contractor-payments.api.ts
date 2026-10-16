@@ -88,6 +88,20 @@ export interface ContractorPaymentSummary {
   liveRouting: boolean;
   trackingStartedAt: string;
   currentMonthCoverageComplete: boolean;
+  workAccruedMonthKopecks?: number;
+  bonusMonthKopecks?: number;
+  deductionMonthKopecks?: number;
+}
+
+export interface ContractorSelfAccrualAdjustment {
+  id: number;
+  profileId: number;
+  kind: 'BONUS' | 'DEDUCTION' | 'REVERSAL';
+  signedAmountKopecks: number;
+  effectiveOn: string;
+  referenceMonth: string;
+  reason: string;
+  reversalOfId?: number | null;
 }
 
 export interface ContractorPaymentAllocationEvent {
@@ -290,6 +304,12 @@ export class ContractorPaymentsApi {
   getMySummary(): Observable<ContractorPaymentSummary[]> {
     return this.http.get<ContractorPaymentSummary[]>(
       `${appEnvironment.apiBaseUrl}/api/contractor-payments/me`
+    );
+  }
+
+  getMyAccrualAdjustments(): Observable<ContractorSelfAccrualAdjustment[]> {
+    return this.http.get<ContractorSelfAccrualAdjustment[]>(
+      `${appEnvironment.apiBaseUrl}/api/contractor-payments/me/accrual-adjustments`
     );
   }
 

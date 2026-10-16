@@ -9,12 +9,16 @@ import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.contractor_payments.dto.ContractorPaymentAllocationJournalItemResponse;
 import com.hunt.otziv.contractor_payments.dto.ContractorPaymentAdminSummaryResponse;
 import com.hunt.otziv.contractor_payments.dto.ContractorPaymentSummaryResponse;
+import com.hunt.otziv.contractor_payments.dto.ContractorAccrualAdjustmentSelfResponse;
+import com.hunt.otziv.contractor_payments.model.ContractorAccrualAdjustment;
+import com.hunt.otziv.contractor_payments.model.ContractorAccrualAdjustmentKind;
 import com.hunt.otziv.contractor_payments.model.ContractorAllocationEventType;
 import com.hunt.otziv.contractor_payments.model.ContractorAllocationMode;
 import com.hunt.otziv.contractor_payments.model.ContractorAllocationSourceType;
@@ -28,6 +32,8 @@ import com.hunt.otziv.contractor_payments.repository.ContractorPaymentAllocation
 import com.hunt.otziv.contractor_payments.repository.ContractorActualPaymentAttributionRepository;
 import com.hunt.otziv.contractor_payments.repository.ContractorPaymentAllocationRepository;
 import com.hunt.otziv.contractor_payments.repository.ContractorPaymentProfileRepository;
+import com.hunt.otziv.contractor_payments.repository.ContractorAccrualAdjustmentRepository;
+import com.hunt.otziv.contractor_payments.repository.ContractorRewardLedgerRepository;
 import com.hunt.otziv.u_users.model.Role;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.repository.UserRepository;
@@ -52,6 +58,10 @@ class ContractorPaymentVisibilityServiceTest {
             mock(ContractorPaymentAllocationRepository.class);
     private final ContractorPaymentAllocationEventRepository eventRepository =
             mock(ContractorPaymentAllocationEventRepository.class);
+    private final ContractorAccrualAdjustmentRepository accrualAdjustmentRepository =
+            mock(ContractorAccrualAdjustmentRepository.class);
+    private final ContractorRewardLedgerRepository rewardLedgerRepository =
+            mock(ContractorRewardLedgerRepository.class);
     private final ContractorActualPaymentAttributionRepository attributionRepository =
             mock(ContractorActualPaymentAttributionRepository.class);
     private final ContractorRewardLedgerService ledgerService = mock(ContractorRewardLedgerService.class);
@@ -69,6 +79,8 @@ class ContractorPaymentVisibilityServiceTest {
             profileRepository,
             allocationRepository,
             eventRepository,
+            accrualAdjustmentRepository,
+            rewardLedgerRepository,
             ledgerService,
             accountingService,
             runtimeSwitch,
@@ -148,6 +160,42 @@ class ContractorPaymentVisibilityServiceTest {
             public ContractorAllocationStatus getStatus() { return status; }
             public long getOutstanding() { return amount; }
         };
+    }
+
+    @Test
+    void ownAdjustmentHistoryReadsOnlyOwnProfileAndOmitsInternalEvidenceAndActor() {
+        User user = user(17L, "worker", "ROLE_WORKER");
+        ContractorPaymentProfile ownProfile = profile(31L, user, ContractorRole.SPECIALIST);
+        ContractorAccrualAdjustment adjustment = new ContractorAccrualAdjustment();
+        adjustment.setId(71L);
+        adjustment.setProfile(ownProfile);
+        adjustment.setKind(ContractorAccrualAdjustmentKind.BONUS);
+        adjustment.setSignedAmountKopecks(5_000L);
+        adjustment.setEffectiveOn(LocalDate.of(2026, 10, 16));
+        adjustment.setReferenceMonth(LocalDate.of(2026, 9, 1));
+        adjustment.setReason("Премия");
+        adjustment.setCreatedAt(LocalDateTime.of(2026, 10, 16, 9, 0));
+        adjustment.setEvidenceReference("internal-document-123");
+        adjustment.setCreatedBy("owner-private-identity");
+        when(userRepository.findByUsername("worker")).thenReturn(Optional.of(user));
+        when(profileRepository.findAllByUserId(17L)).thenReturn(List.of(ownProfile));
+        when(accrualAdjustmentRepository.findAllByProfileIdOrderByCreatedAtDescIdDesc(
+                31L, PageRequest.of(0, 100))).thenReturn(List.of(adjustment));
+
+        List<ContractorAccrualAdjustmentSelfResponse> response = service.ownAdjustmentHistory(
+                new UsernamePasswordAuthenticationToken("worker", "", List.of())
+        );
+
+        assertEquals(1, response.size());
+        assertEquals(31L, response.getFirst().profileId());
+        assertEquals(5_000L, response.getFirst().signedAmountKopecks());
+        assertEquals("2026-09", response.getFirst().referenceMonth());
+        assertFalse(response.getFirst().toString().contains("internal-document-123"));
+        assertFalse(response.getFirst().toString().contains("owner-private-identity"));
+        verify(profileRepository).findAllByUserId(17L);
+        verify(accrualAdjustmentRepository).findAllByProfileIdOrderByCreatedAtDescIdDesc(
+                31L, PageRequest.of(0, 100));
+        verifyNoMoreInteractions(accrualAdjustmentRepository);
     }
 
     @Test

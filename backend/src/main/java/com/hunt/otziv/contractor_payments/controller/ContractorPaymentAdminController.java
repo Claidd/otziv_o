@@ -1,12 +1,17 @@
 package com.hunt.otziv.contractor_payments.controller;
 
 import com.hunt.otziv.contractor_payments.dto.ContractorPaymentProfileRequest;
+import com.hunt.otziv.contractor_payments.dto.ContractorAccrualAdjustmentRequest;
+import com.hunt.otziv.contractor_payments.dto.ContractorAccrualAdjustmentReversalRequest;
+import com.hunt.otziv.contractor_payments.dto.ContractorAccrualAdjustmentResponse;
+import com.hunt.otziv.contractor_payments.dto.ContractorAccrualAdjustmentPreviewResponse;
 import com.hunt.otziv.contractor_payments.dto.ContractorPaymentProfileAdjustmentResponse;
 import com.hunt.otziv.contractor_payments.dto.ContractorPaymentProfileResponse;
 import com.hunt.otziv.contractor_payments.dto.ContractorDirectSettlementRequest;
 import com.hunt.otziv.contractor_payments.dto.ContractorDirectSettlementResponse;
 import com.hunt.otziv.contractor_payments.service.ContractorDirectSettlementService;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentProfileService;
+import com.hunt.otziv.contractor_payments.service.ContractorAccrualAdjustmentService;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +36,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class ContractorPaymentAdminController {
 
     private final ContractorPaymentProfileService profileService;
+    private final ContractorAccrualAdjustmentService accrualAdjustmentService;
     private final ContractorDirectSettlementService directSettlementService;
 
     @GetMapping
@@ -62,6 +68,37 @@ public class ContractorPaymentAdminController {
             @PathVariable Long profileId
     ) {
         return profileService.openingBalanceHistory(userId, profileId);
+    }
+
+    @GetMapping("/{profileId}/accrual-adjustments")
+    public ResponseEntity<List<ContractorAccrualAdjustmentResponse>> accrualAdjustmentHistory(
+            @PathVariable Long userId, @PathVariable Long profileId
+    ) {
+        return noStore(accrualAdjustmentService.history(userId, profileId));
+    }
+
+    @PostMapping("/{profileId}/accrual-adjustments/preview")
+    public ResponseEntity<ContractorAccrualAdjustmentPreviewResponse> previewAccrualAdjustment(
+            @PathVariable Long userId, @PathVariable Long profileId,
+            @Valid @RequestBody ContractorAccrualAdjustmentRequest request
+    ) {
+        return noStore(accrualAdjustmentService.preview(userId, profileId, request));
+    }
+
+    @PostMapping("/{profileId}/accrual-adjustments")
+    public ResponseEntity<ContractorAccrualAdjustmentResponse> createAccrualAdjustment(
+            @PathVariable Long userId, @PathVariable Long profileId,
+            @Valid @RequestBody ContractorAccrualAdjustmentRequest request
+    ) {
+        return noStore(accrualAdjustmentService.create(userId, profileId, request));
+    }
+
+    @PostMapping("/{profileId}/accrual-adjustments/{adjustmentId}/reversals")
+    public ResponseEntity<ContractorAccrualAdjustmentResponse> reverseAccrualAdjustment(
+            @PathVariable Long userId, @PathVariable Long profileId, @PathVariable Long adjustmentId,
+            @Valid @RequestBody ContractorAccrualAdjustmentReversalRequest request
+    ) {
+        return noStore(accrualAdjustmentService.reverse(userId, profileId, adjustmentId, request));
     }
 
     @GetMapping("/{profileId}/direct-settlements")

@@ -353,7 +353,8 @@ public class PaymentAccountingReconciliationService {
             SELECT capacity.*
             FROM (
                 SELECT profile.id AS profile_id,
-                       profile.opening_balance_kopecks + COALESCE(ledger.accrued_kopecks, 0) AS accrued_kopecks,
+                       profile.opening_balance_kopecks + COALESCE(ledger.accrued_kopecks, 0)
+                           + COALESCE(adjustments.signed_kopecks, 0) AS accrued_kopecks,
                        GREATEST(0, COALESCE(exposure.confirmed_kopecks, 0)
                            - COALESCE(exposure.returned_kopecks, 0)) AS paid_kopecks,
                        COALESCE(exposure.outstanding_kopecks, 0) AS outstanding_kopecks,
@@ -362,7 +363,8 @@ public class PaymentAccountingReconciliationService {
                            GREATEST(0, COALESCE(exposure.confirmed_kopecks, 0)
                                - COALESCE(exposure.returned_kopecks, 0))
                                + COALESCE(exposure.outstanding_kopecks, 0)
-                               - (profile.opening_balance_kopecks + COALESCE(ledger.accrued_kopecks, 0))
+                               - (profile.opening_balance_kopecks + COALESCE(ledger.accrued_kopecks, 0)
+                                   + COALESCE(adjustments.signed_kopecks, 0))
                        ) AS overrun_kopecks,
                        exposure.sample_order_id
                 FROM contractor_payment_profiles profile
@@ -372,6 +374,11 @@ public class PaymentAccountingReconciliationService {
                     FROM contractor_reward_ledger
                     GROUP BY profile_id
                 ) ledger ON ledger.profile_id = profile.id
+                LEFT JOIN (
+                    SELECT profile_id, SUM(signed_amount_kopecks) AS signed_kopecks
+                    FROM contractor_accrual_adjustments
+                    GROUP BY profile_id
+                ) adjustments ON adjustments.profile_id = profile.id
                 LEFT JOIN (
                     SELECT recipient_profile_id,
                            SUM(GREATEST(0, confirmed_kopecks)) AS confirmed_kopecks,
