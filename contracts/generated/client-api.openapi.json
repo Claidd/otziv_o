@@ -25347,7 +25347,7 @@
     "sha256" : "fc058f3a9974396c5f9a4ec85c6520064ec25e0e95aa892c1cb8aefbc52af1d9"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/admin/controller/ApiCabinetController.java",
-    "sha256" : "2a5e9200cd015a77eadca5cebb9af5e5b8811f01f80bdbb3c7d935603ea510c0"
+    "sha256" : "e296a83569e2ab3b20b308adc6ebaee96d3d6581ba942c3ad16d490cc282c460"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/archive/controller/ApiManagerArchiveController.java",
     "sha256" : "f2a1662e876152bf10aa21b8d8feeb786de757bf2f412791f6c7a9f98d1c51c0"
