@@ -189,6 +189,12 @@ export const routes: Routes = [
         data: { roles: rolesForAction(MOBILE_SECTIONS.archive, MOBILE_ACTIONS.view) }
       },
       {
+        path: 'archive-admin',
+        loadComponent: () => import('./features/archive-admin.page').then((m) => m.ArchiveAdminPage),
+        canActivate: [roleGuard],
+        data: { roles: rolesForAction(MOBILE_SECTIONS.archiveAdmin, MOBILE_ACTIONS.view) }
+      },
+      {
         path: 'orders/:companyId/:orderId',
         loadComponent: () => import('./features/order-details.page').then((m) => m.OrderDetailsPage),
         canActivate: [roleGuard],
@@ -264,6 +270,54 @@ export const routes: Routes = [
         loadComponent: () => import('./features/tbank.page').then((m) => m.TbankPage),
         canActivate: [roleGuard],
         data: { roles: rolesForAction(MOBILE_SECTIONS.tbank, MOBILE_ACTIONS.view) }
+      },
+      {
+        path: 'performers',
+        loadComponent: () => import('./features/admin-performers.page').then((m) => m.AdminPerformersPage),
+        canActivate: [roleGuard],
+        data: { roles: rolesForAction(MOBILE_SECTIONS.performers, MOBILE_ACTIONS.view) }
+      },
+      {
+        path: 'performer',
+        loadComponent: () => import('./features/performer-board.page').then((m) => m.PerformerBoardPage),
+        canActivate: [roleGuard],
+        data: { roles: rolesForAction(MOBILE_SECTIONS.performerBoard, MOBILE_ACTIONS.view) }
+      },
+      {
+        path: 'cities',
+        loadComponent: () => import('./features/admin-city-stats.page').then((m) => m.AdminCityStatsPage),
+        canActivate: [roleGuard],
+        data: { roles: rolesForAction(MOBILE_SECTIONS.cityStats, MOBILE_ACTIONS.view) }
+      },
+      {
+        path: 'client-offers',
+        loadComponent: () => import('./features/admin-client-offers.page').then((m) => m.AdminClientOffersPage),
+        canActivate: [roleGuard],
+        data: { roles: rolesForAction(MOBILE_SECTIONS.clientOffers, MOBILE_ACTIONS.view) }
+      },
+      {
+        path: 'notification-media',
+        loadComponent: () => import('./features/admin-notification-media.page').then((m) => m.AdminNotificationMediaPage),
+        canActivate: [roleGuard],
+        data: { roles: rolesForAction(MOBILE_SECTIONS.notificationMedia, MOBILE_ACTIONS.view) }
+      },
+      {
+        path: 'reputation-ai',
+        loadComponent: () => import('./features/reputation-ai.page').then((m) => m.ReputationAiPage),
+        canActivate: [roleGuard],
+        data: { roles: rolesForAction(MOBILE_SECTIONS.reputationAi, MOBILE_ACTIONS.view) }
+      },
+      {
+        path: 'workload-monitor',
+        loadComponent: () => import('./features/admin-workload-shadow.page').then((m) => m.AdminWorkloadShadowPage),
+        canActivate: [roleGuard],
+        data: { roles: rolesForAction(MOBILE_SECTIONS.workloadShadow, MOBILE_ACTIONS.view) }
+      },
+      {
+        path: 'mobile-update-admin',
+        loadComponent: () => import('./features/mobile-update-admin.page').then((m) => m.AdminMobileUpdatePage),
+        canActivate: [roleGuard],
+        data: { roles: rolesForAction(MOBILE_SECTIONS.mobileUpdateAdmin, MOBILE_ACTIONS.view) }
       },
       {
         path: 'users',

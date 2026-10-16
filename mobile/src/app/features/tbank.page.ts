@@ -67,6 +67,12 @@ import { MobileManualCardPaymentFlowService } from '../shared/mobile-manual-card
 import { mobileManualCardPaymentIsCompleted } from '../shared/mobile-manual-card-payment';
 import { MobileManualPaymentTaskOperationKeyDraft } from '../shared/manual-payment-operation-key';
 import { manualPaymentTaskWorklist } from '../shared/manual-payment-task-visibility';
+import {
+  canCloseManualPaymentAsUnpaid,
+  canConfirmContractorPaymentSource,
+  canMarkLegacyReceiptNotRequired,
+  confirmedTotalKopecks
+} from '../shared/manual-payment-audit';
 
 type TbankMode = 'payments' | 'recipients' | 'launch' | 'tasks' | 'profiles' | 'managers';
 type PaymentStatusFilter = 'all' | 'active' | 'paid' | 'refunded' | 'failed' | 'created' | 'manual';
@@ -278,6 +284,12 @@ function currentMonthInput(): string {
                         <strong>{{ shortDate(link.expiresAt) }}</strong>
                       </span>
                       @if (isManualPayment(link)) {
+                        @if ((link.confirmedAmountKopecks ?? 0) > 0) {
+                          <span>
+                            <small>Подтверждено по выписке</small>
+                            <strong>{{ formatKopecks(link.confirmedAmountKopecks) }}</strong>
+                          </span>
+                        }
                         <span>
                           <small>Чек</small>
                           <strong>{{ receiptStatusLabel(link) }}</strong>
@@ -314,10 +326,28 @@ function currentMonthInput(): string {
                           {{ mutatingId() === link.id ? '...' : 'подтвердить' }}
                         </button>
                       }
+                      @if (canConfirmContractorSource(link)) {
+                        <button type="button" class="confirm" (click)="openContractorAudit(link)" [disabled]="mutatingId() === link.id">
+                          <span class="material-icons-sharp">fact_check</span>
+                          сверить поступление
+                        </button>
+                      }
+                      @if (canCloseManualAsUnpaid(link)) {
+                        <button type="button" class="refund" (click)="openUnpaidAudit(link)" [disabled]="mutatingId() === link.id">
+                          <span class="material-icons-sharp">money_off</span>
+                          платежа нет
+                        </button>
+                      }
                       @if (canMarkManualReceipt(link)) {
                         <button type="button" class="receipt" (click)="markManualReceipt(link)" [disabled]="mutatingId() === link.id">
                           <span class="material-icons-sharp">receipt</span>
                           чек
+                        </button>
+                      }
+                      @if (canMarkLegacyReceipt(link)) {
+                        <button type="button" class="receipt" (click)="markLegacyReceipt(link)" [disabled]="mutatingId() === link.id">
+                          <span class="material-icons-sharp">history</span>
+                          без чека
                         </button>
                       }
                       @if (!isManualPayment(link)) {
@@ -1133,6 +1163,54 @@ function currentMonthInput(): string {
             </form>
           </ng-template>
         </ion-modal>
+
+        <ion-modal class="sheet-modal tbank-audit-sheet" [isOpen]="paymentAuditLink() !== null" [canDismiss]="mutatingId() !== paymentAuditLink()?.id" (didDismiss)="closePaymentAudit()">
+          <ng-template>
+            @if (paymentAuditLink(); as link) {
+              <form class="sheet-body tbank-audit-sheet-body" (ngSubmit)="submitPaymentAudit()">
+                <header class="sheet-head">
+                  <div>
+                    <p class="sheet-note">Заказ №{{ link.orderId || '-' }} · счёт №{{ link.id }}</p>
+                    <h2>{{ paymentAuditAction() === 'contractor' ? 'Сверить поступление' : 'Платежа нет' }}</h2>
+                  </div>
+                  <button class="icon-button" type="button" (click)="closePaymentAudit()" [disabled]="mutatingId() === link.id" aria-label="Закрыть">
+                    <span class="material-icons-sharp">close</span>
+                  </button>
+                </header>
+
+                <section class="sheet-form-content tbank-audit-form">
+                  <p class="audit-explanation">
+                    @if (paymentAuditAction() === 'contractor') {
+                      Укажите общую сумму подтверждённых поступлений именно по этому счёту после проверки выписки получателя. Максимум {{ money(link.amount) }}.
+                    } @else {
+                      Укажите, выписку за какой период и какой счёт или карту получателя проверили. Полный номер карты не нужен. Закроется только инструкция; статус заказа не изменится.
+                    }
+                  </p>
+                  @if (paymentAuditAction() === 'contractor') {
+                    <label class="sheet-field">
+                      <span>Подтверждено по счёту, ₽</span>
+                      <input name="auditAmount" inputmode="decimal" type="text" [ngModel]="paymentAuditAmount()" (ngModelChange)="paymentAuditAmount.set($event || '')" autocomplete="off" required>
+                    </label>
+                  }
+                  <label class="sheet-field">
+                    <span>{{ paymentAuditAction() === 'contractor' ? 'Основание сверки' : 'Заметка для истории проверки' }}</span>
+                    <textarea name="auditNote" [ngModel]="paymentAuditNote()" (ngModelChange)="paymentAuditNote.set($event || '')" required></textarea>
+                  </label>
+                  @if (paymentAuditError()) {
+                    <p class="audit-error" role="alert">{{ paymentAuditError() }}</p>
+                  }
+                </section>
+
+                <div class="sheet-actions">
+                  <button class="secondary" type="button" (click)="closePaymentAudit()" [disabled]="mutatingId() === link.id">Отмена</button>
+                  <button type="submit" [class.danger]="paymentAuditAction() === 'unpaid'" [disabled]="mutatingId() === link.id || !paymentAuditNote().trim() || (paymentAuditAction() === 'contractor' && confirmedTotalKopecks(paymentAuditAmount(), link.amountKopecks) === null)">
+                    {{ mutatingId() === link.id ? 'Сохраняю' : (paymentAuditAction() === 'contractor' ? 'Подтвердить' : 'Закрыть инструкцию') }}
+                  </button>
+                </div>
+              </form>
+            }
+          </ng-template>
+        </ion-modal>
       </ion-content>
     </div>
   `,
@@ -1391,7 +1469,8 @@ function currentMonthInput(): string {
       flex-direction: column;
       justify-content: flex-start;
       gap: var(--otziv-card-gap, 0.34rem);
-      overflow: hidden;
+      overflow-x: hidden;
+      overflow-y: auto;
       padding: var(--otziv-card-padding, 0.66rem);
     }
 
@@ -1716,6 +1795,31 @@ function currentMonthInput(): string {
     .tbank-date-actions {
       grid-template-columns: repeat(3, minmax(0, 1fr));
     }
+
+    .tbank-audit-sheet {
+      --height: min(75vh, 34rem);
+    }
+
+    .tbank-audit-sheet-body {
+      height: 100%;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+    }
+
+    .tbank-audit-form {
+      align-content: start;
+      gap: 0.7rem;
+      overflow-y: auto;
+    }
+
+    .audit-explanation,
+    .audit-error {
+      margin: 0;
+      font-size: 0.76rem;
+      line-height: 1.35;
+    }
+
+    .audit-explanation { color: var(--otziv-info); }
+    .audit-error { color: var(--otziv-danger); font-weight: 800; }
 
     .recipient-list,
     .launch-list,
@@ -2214,6 +2318,12 @@ export class TbankPage implements OnInit, OnDestroy {
   private destroyed = false;
   readonly error = signal<string | null>(null);
   readonly mutatingId = signal<number | null>(null);
+  readonly paymentAuditLink = signal<AdminPaymentLinkResponse | null>(null);
+  readonly paymentAuditAction = signal<'contractor' | 'unpaid' | null>(null);
+  readonly paymentAuditAmount = signal('');
+  readonly paymentAuditNote = signal('');
+  readonly paymentAuditError = signal<string | null>(null);
+  readonly confirmedTotalKopecks = confirmedTotalKopecks;
   readonly mutatingTaskId = signal<number | null>(null);
   readonly savingProfiles = signal(false);
   readonly savingProfilePolicies = signal(false);
@@ -3108,6 +3218,114 @@ export class TbankPage implements OnInit, OnDestroy {
     }
   }
 
+  async openContractorAudit(link: AdminPaymentLinkResponse): Promise<void> {
+    if (!this.canConfirmContractorSource(link) || this.mutatingId()) return;
+    const confirmed = await this.confirm.confirm({
+      title: 'Сверка поступления',
+      message: `Выписка получателя проверена и перевод относится именно к счёту №${link.id}?`,
+      confirmText: 'Да, сверено'
+    });
+    if (!confirmed) return;
+    this.paymentAuditAction.set('contractor');
+    this.paymentAuditLink.set(link);
+    this.paymentAuditAmount.set(String(Math.max(0, link.confirmedAmountKopecks ?? 0) / 100 || link.amount));
+    this.paymentAuditNote.set('');
+    this.paymentAuditError.set(null);
+  }
+
+  async openUnpaidAudit(link: AdminPaymentLinkResponse): Promise<void> {
+    if (!this.canCloseManualAsUnpaid(link) || this.mutatingId()) return;
+    const confirmed = await this.confirm.confirm({
+      title: 'Платежа нет',
+      message: `Вы проверили выписку счёта или карты получателя и подтверждаете, что перевод по заказу №${link.orderId ?? '-'} на сумму ${this.money(link.amount)} НЕ поступил? Будет закрыта только эта ручная инструкция. Заказ не будет отмечен оплаченным и не перейдёт в статус «Не оплачено».`,
+      confirmText: 'Да, платежа нет',
+      danger: true
+    });
+    if (!confirmed) return;
+    this.paymentAuditAction.set('unpaid');
+    this.paymentAuditLink.set(link);
+    this.paymentAuditAmount.set('');
+    this.paymentAuditNote.set('');
+    this.paymentAuditError.set(null);
+  }
+
+  closePaymentAudit(): void {
+    if (this.mutatingId() === this.paymentAuditLink()?.id) return;
+    this.paymentAuditLink.set(null);
+    this.paymentAuditAction.set(null);
+    this.paymentAuditError.set(null);
+  }
+
+  async submitPaymentAudit(): Promise<void> {
+    const link = this.paymentAuditLink();
+    const action = this.paymentAuditAction();
+    if (!link || !action || this.mutatingId()) return;
+    const reason = this.paymentAuditNote().trim();
+    const total = confirmedTotalKopecks(this.paymentAuditAmount(), link.amountKopecks);
+    if (!reason) {
+      this.paymentAuditError.set('Для истории сверки требуется заметка о проверенной выписке.');
+      return;
+    }
+    if (action === 'contractor' && (total === null || !this.canConfirmContractorSource(link))) {
+      this.paymentAuditError.set('Проверьте сумму: она должна быть больше нуля и не превышать сумму счёта.');
+      return;
+    }
+    if (action === 'unpaid' && !this.canCloseManualAsUnpaid(link)) {
+      this.paymentAuditError.set('Эту инструкцию уже нельзя закрыть как неоплаченную. Обновите журнал.');
+      return;
+    }
+
+    this.mutatingId.set(link.id);
+    this.paymentAuditError.set(null);
+    try {
+      const updated = action === 'contractor'
+        ? await firstValueFrom(this.paymentAdministrationApi.confirmAdminContractorPaymentSource(link.id, {
+          recipientStatementChecked: true,
+          paymentReceived: true,
+          confirmedTotalKopecks: total!,
+          reason
+        }))
+        : await firstValueFrom(this.paymentAdministrationApi.closeAdminManualPaymentLinkAsUnpaid(link.id, {
+          recipientStatementChecked: true,
+          paymentAbsent: true,
+          note: reason
+        }));
+      this.links.update((links) => links.map((item) => item.id === updated.id ? updated : item));
+      this.mutatingId.set(null);
+      this.closePaymentAudit();
+      void this.loadPaymentLinks();
+      await this.loadProfilesOnly();
+      await this.loadRecipientMonthlySummary();
+    } catch (error) {
+      this.paymentAuditError.set(this.errorMessage(error, action === 'contractor'
+        ? 'Не удалось сохранить сверку по выбранному счёту.'
+        : 'Не удалось закрыть ручную инструкцию.'));
+    } finally {
+      this.mutatingId.set(null);
+    }
+  }
+
+  async markLegacyReceipt(link: AdminPaymentLinkResponse): Promise<void> {
+    if (!this.canMarkLegacyReceipt(link) || this.mutatingId()) return;
+    const confirmed = await this.confirm.confirm({
+      title: 'Старая оплата без чека',
+      message: 'Закрыть старую оплату без отметки чека? Денежные суммы при этом не изменятся.',
+      confirmText: 'Закрыть'
+    });
+    if (!confirmed) return;
+    this.mutatingId.set(link.id);
+    this.error.set(null);
+    try {
+      const updated = await firstValueFrom(this.paymentAdministrationApi.markAdminManualPaymentReceiptLegacyNotRequired(link.id));
+      this.links.update((links) => links.map((item) => item.id === updated.id ? updated : item));
+      void this.loadPaymentLinks();
+    } catch (error) {
+      this.error.set(this.errorMessage(error, 'Не удалось закрыть старую оплату без чека.'));
+    } finally {
+      this.mutatingId.set(null);
+    }
+  }
+
   async updateManualTaskStatus(task: ManualPaymentTaskResponse, status: ManualPaymentTaskStatus): Promise<void> {
     if (!task?.id || this.mutatingTaskId()) {
       return;
@@ -3353,7 +3571,9 @@ export class TbankPage implements OnInit, OnDestroy {
     if (!this.isManualPayment(link)) {
       return '';
     }
-    return link.receiptStatus === 'MARKED' ? 'Чек отмечен' : 'Чек ожидает';
+    if (link.receiptStatus === 'MARKED') return 'Чек отмечен';
+    if (link.receiptStatus === 'LEGACY_NOT_REQUIRED') return 'Без чека (старая оплата)';
+    return 'Чек ожидает';
   }
 
   isManualPayment(link: AdminPaymentLinkResponse): boolean {
@@ -3376,8 +3596,24 @@ export class TbankPage implements OnInit, OnDestroy {
       && (link.status === 'WAITING_MANUAL_PAYMENT' || link.status === 'MANUAL_REPORTED');
   }
 
+  canConfirmContractorSource(link: AdminPaymentLinkResponse): boolean {
+    return canConfirmContractorPaymentSource(link);
+  }
+
+  canCloseManualAsUnpaid(link: AdminPaymentLinkResponse): boolean {
+    return canCloseManualPaymentAsUnpaid(link);
+  }
+
   canMarkManualReceipt(link: AdminPaymentLinkResponse): boolean {
-    return this.isManualPayment(link) && link.status === 'CONFIRMED' && link.receiptStatus !== 'MARKED';
+    return !link.archived
+      && this.isManualPayment(link)
+      && link.status === 'CONFIRMED'
+      && link.receiptStatus !== 'MARKED'
+      && link.receiptStatus !== 'LEGACY_NOT_REQUIRED';
+  }
+
+  canMarkLegacyReceipt(link: AdminPaymentLinkResponse): boolean {
+    return canMarkLegacyReceiptNotRequired(link);
   }
 
   statusLabel(status: string): string {

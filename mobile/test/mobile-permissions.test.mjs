@@ -35,3 +35,21 @@ test('makes audit training available to managers and management only', () => {
   assert.equal(canUseAction(['OWNER'], MOBILE_SECTIONS.training, MOBILE_ACTIONS.view), true);
   assert.equal(canUseAction(['WORKER'], MOBILE_SECTIONS.training, MOBILE_ACTIONS.view), false);
 });
+
+test('city statistics remains an owner/admin view', () => {
+  assert.equal(canUseAction(['ADMIN'], MOBILE_SECTIONS.cityStats, MOBILE_ACTIONS.view), true);
+  assert.equal(canUseAction(['OWNER'], MOBILE_SECTIONS.cityStats, MOBILE_ACTIONS.view), true);
+  assert.equal(canUseAction(['MANAGER'], MOBILE_SECTIONS.cityStats, MOBILE_ACTIONS.view), false);
+  assert.equal(canUseAction(['WORKER'], MOBILE_SECTIONS.cityStats, MOBILE_ACTIONS.view), false);
+});
+
+test('new management screens and performer board follow their web roles', () => {
+  for (const section of [MOBILE_SECTIONS.clientOffers, MOBILE_SECTIONS.notificationMedia, MOBILE_SECTIONS.archiveAdmin, MOBILE_SECTIONS.reputationAi, MOBILE_SECTIONS.workloadShadow, MOBILE_SECTIONS.mobileUpdateAdmin]) {
+    assert.equal(canUseAction(['ADMIN'], section, MOBILE_ACTIONS.view), true);
+    assert.equal(canUseAction(['OWNER'], section, MOBILE_ACTIONS.view), true);
+    assert.equal(canUseAction(['MANAGER'], section, MOBILE_ACTIONS.view), false);
+  }
+  assert.equal(canUseAction(['PERFORMER'], MOBILE_SECTIONS.performerBoard, MOBILE_ACTIONS.view), true);
+  assert.equal(canUseAction(['PERFORMER'], MOBILE_SECTIONS.performerBoard, MOBILE_ACTIONS.edit), true);
+  assert.equal(canUseAction(['WORKER'], MOBILE_SECTIONS.performerBoard, MOBILE_ACTIONS.view), false);
+});

@@ -4,6 +4,19 @@ import { Observable, map } from 'rxjs';
 import type { AdminPaymentLinkResponse, AdminPaymentLinksPageResponse, PaymentLinkArchiveRunResponse, PaymentLinkListSource } from './api.service';
 import { mobileEnvironment } from './mobile-environment';
 
+export interface ContractorPaymentSourceConfirmationRequest {
+  recipientStatementChecked: true;
+  paymentReceived: true;
+  confirmedTotalKopecks: number;
+  reason: string;
+}
+
+export interface CloseManualPaymentUnpaidRequest {
+  recipientStatementChecked: true;
+  paymentAbsent: true;
+  note: string;
+}
+
 /** Stateless feature transport; authentication and error handling stay in Angular interceptors. */
 @Injectable({ providedIn: 'root' })
 export class PaymentAdministrationApi {
@@ -63,6 +76,33 @@ export class PaymentAdministrationApi {
   markAdminManualPaymentReceipt(linkId: number): Observable<AdminPaymentLinkResponse> {
     return this.http.post<AdminPaymentLinkResponse>(
       this.apiUrl(`/api/admin/payments/manual-links/${linkId}/receipt`),
+      {}
+    );
+  }
+
+  confirmAdminContractorPaymentSource(
+    linkId: number,
+    request: ContractorPaymentSourceConfirmationRequest
+  ): Observable<AdminPaymentLinkResponse> {
+    return this.http.post<AdminPaymentLinkResponse>(
+      this.apiUrl(`/api/admin/payments/manual-links/${linkId}/contractor-confirmation`),
+      request
+    );
+  }
+
+  closeAdminManualPaymentLinkAsUnpaid(
+    linkId: number,
+    request: CloseManualPaymentUnpaidRequest
+  ): Observable<AdminPaymentLinkResponse> {
+    return this.http.post<AdminPaymentLinkResponse>(
+      this.apiUrl(`/api/admin/payments/manual-links/${linkId}/close-unpaid`),
+      request
+    );
+  }
+
+  markAdminManualPaymentReceiptLegacyNotRequired(linkId: number): Observable<AdminPaymentLinkResponse> {
+    return this.http.post<AdminPaymentLinkResponse>(
+      this.apiUrl(`/api/admin/payments/manual-links/${linkId}/receipt/legacy-not-required`),
       {}
     );
   }

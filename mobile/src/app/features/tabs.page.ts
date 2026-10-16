@@ -7,6 +7,7 @@ import {
   callOutline,
   gridOutline,
   homeOutline,
+  personOutline,
   readerOutline,
   receiptOutline
 } from 'ionicons/icons';
@@ -122,6 +123,12 @@ const SMART_TAB_DOUBLE_TAP_MS = 700;
             <ion-label>Оператор</ion-label>
           </ion-tab-button>
         }
+        @if (canPerformer()) {
+          <ion-tab-button tab="performer" href="/tabs/performer">
+            <ion-icon name="person-outline" />
+            <ion-label>Задания</ion-label>
+          </ion-tab-button>
+        }
 
       </ion-tab-bar>
     </ion-tabs>
@@ -224,6 +231,7 @@ export class TabsPage implements OnInit, OnDestroy {
       callOutline,
       gridOutline,
       homeOutline,
+      personOutline,
       readerOutline,
       receiptOutline
     });
@@ -349,6 +357,10 @@ export class TabsPage implements OnInit, OnDestroy {
   canOperator(): boolean {
     return !this.workLocked()
       && canUseAction(this.auth.user()?.roles, MOBILE_SECTIONS.operator, MOBILE_ACTIONS.view);
+  }
+
+  canPerformer(): boolean {
+    return canUseAction(this.auth.user()?.roles, MOBILE_SECTIONS.performerBoard, MOBILE_ACTIONS.view);
   }
 
   workLocked(): boolean {
