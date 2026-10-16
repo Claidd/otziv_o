@@ -140,6 +140,29 @@ class PersonalReminderServiceTest {
     }
 
     @Test
+    void listHidesOldBadReviewReminderAfterPaymentButKeepsUnpaidOne() {
+        User user = User.builder().id(5L).username("manager").build();
+        PersonalReminder paidReminder = reminder(31L, "Плохие отзывы завершены: Оплачено",
+                PersonalReminderService.SOURCE_BAD_REVIEW_ORDER_READY, 10L);
+        paidReminder.setSourceOrderId(10L);
+        PersonalReminder unpaidReminder = reminder(32L, "Плохие отзывы завершены: Не оплачено",
+                PersonalReminderService.SOURCE_BAD_REVIEW_ORDER_READY, 11L);
+        unpaidReminder.setSourceOrderId(11L);
+
+        when(userService.findByUserName("manager")).thenReturn(Optional.of(user));
+        when(reminderRepository.findByUserIdAndCompletedAtIsNullOrderByUpdatedAtDesc(5L))
+                .thenReturn(List.of(paidReminder, unpaidReminder));
+        when(reminderRepository.findSettledBadReviewReminderIds(5L)).thenReturn(List.of(31L));
+        when(orderRepository.findByIdForOrderDto(11L)).thenReturn(Optional.of(
+                com.hunt.otziv.p_products.model.Order.builder().id(11L).build()));
+
+        List<PersonalReminderResponse> reminders = service.list(principal("manager"));
+
+        assertEquals(1, reminders.size());
+        assertEquals(32L, reminders.getFirst().id());
+    }
+
+    @Test
     void paymentCopyIsPreparedCanonicallyAtClickTime() {
         User user = new User();
         user.setId(5L);

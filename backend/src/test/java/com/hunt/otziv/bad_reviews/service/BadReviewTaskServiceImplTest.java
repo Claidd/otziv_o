@@ -931,8 +931,7 @@ class BadReviewTaskServiceImplTest {
                 PersonalReminderService.SOURCE_BAD_REVIEW_TASK,
                 42L
         );
-        verify(personalReminderService).deleteSystemReminderBySource(
-                order.getManager().getUser(),
+        verify(personalReminderService).deleteSystemRemindersBySource(
                 PersonalReminderService.SOURCE_BAD_REVIEW_ORDER_READY,
                 12L
         );

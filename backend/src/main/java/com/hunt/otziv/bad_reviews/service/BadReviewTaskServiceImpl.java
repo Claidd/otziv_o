@@ -767,14 +767,12 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
     @Override
     @Transactional
     public void deleteOrderReadyReminder(Order order) {
-        User managerUser = managerUser(order);
         Long orderId = order != null ? order.getId() : null;
-        if (managerUser == null || orderId == null) {
+        if (orderId == null) {
             return;
         }
 
-        personalReminderService.deleteSystemReminderBySource(
-                managerUser,
+        personalReminderService.deleteSystemRemindersBySource(
                 PersonalReminderService.SOURCE_BAD_REVIEW_ORDER_READY,
                 orderId
         );
@@ -1347,6 +1345,10 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
 
     private void createOrderReadyReminderIfNeeded(Order order, BadReviewTaskSummary summary) {
         if (order == null || order.getId() == null || summary == null || summary.pending() > 0 || summary.done() <= 0) {
+            return;
+        }
+        String status = order.getStatus() == null ? "" : order.getStatus().getTitle();
+        if ("Оплачено".equals(status) || "Бан".equals(status)) {
             return;
         }
 
