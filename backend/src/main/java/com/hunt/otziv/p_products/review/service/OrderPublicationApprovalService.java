@@ -43,6 +43,11 @@ public class OrderPublicationApprovalService {
     }
 
     @Transactional
+    public void approveExistingOrderAfterReminders(Long orderId, String auditDetails) {
+        approvePreparedOrder(orderId, List.of(), auditDetails, false, true);
+    }
+
+    @Transactional
     public void approvePreparedOrder(Long orderId, List<OrderDetailsDTO> details, String auditDetails) {
         approvePreparedOrder(orderId, details, auditDetails, false);
     }
@@ -54,6 +59,16 @@ public class OrderPublicationApprovalService {
             String auditDetails,
             boolean restoredFromArchive
     ) {
+        approvePreparedOrder(orderId, details, auditDetails, restoredFromArchive, false);
+    }
+
+    private void approvePreparedOrder(
+            Long orderId,
+            List<OrderDetailsDTO> details,
+            String auditDetails,
+            boolean restoredFromArchive,
+            boolean automaticReviewApproval
+    ) {
         lockAggregate(orderId);
         List<OrderDetailsDTO> completeDetails = completeOrderDetails(orderId, details);
         validate(orderId, completeDetails);
@@ -62,7 +77,9 @@ public class OrderPublicationApprovalService {
         try {
             boolean statusChanged = restoredFromArchive
                     ? orderStatusTransitionService.changeStatusForRestoredArchiveOrder(orderId, STATUS_TO_PUBLISH)
-                    : orderStatusTransitionService.changeStatusForOrder(orderId, STATUS_TO_PUBLISH);
+                    : automaticReviewApproval
+                        ? orderStatusTransitionService.changeStatusForAutoApprovedReviewOrder(orderId)
+                        : orderStatusTransitionService.changeStatusForOrder(orderId, STATUS_TO_PUBLISH);
             if (!statusChanged) {
                 throw failure(
                         orderId,

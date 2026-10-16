@@ -2321,6 +2321,12 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
             markDone(state, nowStorage, "order_status_changed", "Заказ уже перешел в новый цикл статуса");
             return null;
         }
+        if (reviewCheck && state.getSentCount() >= 7 && isManagedByActiveCommonInvoice(order)) {
+            // Approval runs independently of the message budget, including for old backlog.
+            // Do not send an eighth reminder while that workflow validates the order.
+            postpone(state, nextNoSendAttemptAt(nowStorage), null, null);
+            return null;
+        }
 
         PaymentMessageWithTransfer paymentMessage;
         try {

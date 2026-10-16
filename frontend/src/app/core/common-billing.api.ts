@@ -459,6 +459,13 @@ export class CommonBillingApi {
     );
   }
 
+  archiveDisputedOrder(invoiceId: number, orderId: number): Observable<CommonInvoiceDetailsResponse> {
+    return this.http.post<CommonInvoiceDetailsResponse>(
+      `${appEnvironment.apiBaseUrl}/api/common-billing/invoices/${invoiceId}/orders/${orderId}/archive-disputed`,
+      {}
+    );
+  }
+
   deleteInvoiceWithOrders(invoiceId: number): Observable<void> {
     return this.http.delete<void>(
       `${appEnvironment.apiBaseUrl}/api/common-billing/invoices/${invoiceId}`

@@ -54,7 +54,7 @@ class DeliveryResponseCompatibilityTest {
         when(manager.sendClientMessage(eq(7L), any(), any())).thenReturn(card);
         when(manager.replyToClientMessage(eq(7L), any(), any(), any())).thenReturn(card);
         var mvc = MockMvcBuilders.standaloneSetup(
-                new CommonBillingAdminController(billing, mock(CommonBillingPublicationApprovalFailureMarker.class),
+                new CommonBillingAdminController(billing, mock(com.hunt.otziv.common_billing.service.CommonInvoiceDisputedOrderArchiveWorkflow.class), mock(CommonBillingPublicationApprovalFailureMarker.class),
                         mock(ContractorPaymentTargetAccessPolicy.class), mock(ContractorActualPaymentAttributionFlowPolicy.class)),
                 new ApiManagerControlController(manager, new PerformanceMetrics(new SimpleMeterRegistry()),
                         mock(ManagerQueueStateService.class), mock(ManagerSiteActivityService.class), mock(ManagerClientDeliveryStatus.class)))

@@ -12,10 +12,27 @@ import java.util.LinkedList;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class OrderReviewCheckMessageBuilderTest {
+
+    @Test
+    void explainsAutomaticApprovalToClient() {
+        OrderReviewCheckMessageBuilder builder = new OrderReviewCheckMessageBuilder(mock(AppSettingService.class));
+        Order order = new Order();
+        order.setId(42L);
+        order.setCompany(company("СТК"));
+
+        String message = builder.autoApprovedPublicationStartedMessage(order);
+
+        assertTrue(message.startsWith("СТК\n\nЗдравствуйте!"));
+        assertTrue(message.contains("заказа №42"));
+        assertTrue(message.contains("после семи напоминаний"));
+        assertTrue(message.contains("автоматически одобрен и передан в публикацию"));
+        assertTrue(message.contains("Если у вас есть возражения"));
+    }
 
     @Test
     void buildsReviewCheckTextWithShortOrderDetailLink() {

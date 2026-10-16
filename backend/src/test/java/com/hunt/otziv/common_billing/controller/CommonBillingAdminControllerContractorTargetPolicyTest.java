@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.hunt.otziv.common_billing.service.CommonBillingPublicationApprovalFailureMarker;
 import com.hunt.otziv.common_billing.service.CommonBillingService;
+import com.hunt.otziv.common_billing.service.CommonInvoiceDisputedOrderArchiveWorkflow;
 import com.hunt.otziv.contractor_payments.service.ContractorActualPaymentAttributionFlowPolicy;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentTargetAccessPolicy;
 import com.hunt.otziv.contractor_payments.dto.ContractorPaymentSourceConfirmationRequest;
@@ -32,8 +33,11 @@ class CommonBillingAdminControllerContractorTargetPolicyTest {
             mock(ContractorPaymentTargetAccessPolicy.class);
     private final ContractorActualPaymentAttributionFlowPolicy actualPaymentFlowPolicy =
             mock(ContractorActualPaymentAttributionFlowPolicy.class);
+    private final CommonInvoiceDisputedOrderArchiveWorkflow disputedOrderArchiveWorkflow =
+            mock(CommonInvoiceDisputedOrderArchiveWorkflow.class);
     private final CommonBillingAdminController controller = new CommonBillingAdminController(
             commonBillingService,
+            disputedOrderArchiveWorkflow,
             approvalFailureMarker,
             targetAccessPolicy,
             actualPaymentFlowPolicy
@@ -79,7 +83,8 @@ class CommonBillingAdminControllerContractorTargetPolicyTest {
                 () -> controller.archiveInvoice(INVOICE_ID, null, null),
                 () -> controller.markOrderPaid(INVOICE_ID, 7L, null, null),
                 () -> controller.approveReviewOrders(INVOICE_ID),
-                () -> controller.detachOrder(INVOICE_ID, 7L)
+                () -> controller.detachOrder(INVOICE_ID, 7L),
+                () -> controller.archiveDisputedOrder(INVOICE_ID, 7L)
         );
 
         for (Executable mutation : mutations) {
@@ -92,7 +97,7 @@ class CommonBillingAdminControllerContractorTargetPolicyTest {
         }
 
         verify(targetAccessPolicy, times(mutations.size())).requireCanManageCommonInvoice(INVOICE_ID);
-        verifyNoInteractions(commonBillingService, approvalFailureMarker);
+        verifyNoInteractions(commonBillingService, approvalFailureMarker, disputedOrderArchiveWorkflow);
     }
 
     @Test

@@ -1776,6 +1776,43 @@ class ScheduledClientMessageServiceTest {
     }
 
     @Test
+    void seventhDeliveredReviewReminderStopsFurtherMessagesForCommonInvoiceOrder() {
+        LocalDateTime changedAt = LocalDateTime.of(2026, 5, 20, 10, 0);
+        LocalDateTime now = LocalDateTime.of(2026, 5, 25, 12, 0);
+        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
+                .id(193L)
+                .scenario(ClientMessageScenario.REVIEW_CHECK_REMINDER)
+                .targetType(ClientMessageTargetType.ORDER)
+                .targetKey("order:13:2026-05-20T10:00")
+                .orderId(13L)
+                .status(ScheduledMessageStateStatus.ACTIVE)
+                .sentCount(7)
+                .build();
+        Order order = new Order();
+        order.setId(13L);
+        order.setStatus(OrderStatus.builder().title("На проверке").build());
+        order.setStatusChangedAt(changedAt);
+        when(orderRepository.findByIdForMutation(13L)).thenReturn(Optional.of(order));
+        when(commonBillingServiceProvider.getIfAvailable()).thenReturn(commonBillingService);
+        when(commonBillingService.isOrderInActiveCommonInvoice(13L)).thenReturn(true);
+        when(appSettingService.getString(
+                AppSettingService.CLIENT_MESSAGES_BUSINESS_WINDOWS,
+                ClientMessageSlotPlanner.DEFAULT_WINDOWS_SPEC
+        )).thenReturn(ClientMessageSlotPlanner.DEFAULT_WINDOWS_SPEC);
+        when(slotPlanner.nextAllowedAt(any(LocalDateTime.class), anyString()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        Object prepared = ReflectionTestUtils.invokeMethod(service, "sendOrderReminder", state, new Company(),
+                java.util.Set.of("На проверке"), "status changed", 2, true, now);
+
+        assertNull(prepared);
+        assertEquals(7, state.getSentCount());
+        assertNotNull(state.getNextAttemptAt());
+        verify(stateRepository).save(state);
+        verifyNoInteractions(messageSender);
+    }
+
+    @Test
     void autoArchiveStaleReviewCheckChangesOrderStatusAndCompletesState() throws Exception {
         LocalDateTime changedAt = LocalDateTime.of(2026, 4, 20, 10, 0);
         LocalDateTime now = LocalDateTime.of(2026, 5, 25, 12, 0);

@@ -42,6 +42,15 @@ public class OrderReviewCheckMessageBuilder {
         );
     }
 
+    public String autoApprovedPublicationStartedMessage(Order order) {
+        return renderOrderTemplate(
+                "{companyAndFilial}\n\nЗдравствуйте! По нашим данным, замечаний к текстам заказа №{orderId} после семи напоминаний не поступило. "
+                        + "Заказ автоматически одобрен и передан в публикацию. Если у вас есть возражения, сообщите менеджеру: мы разберём ситуацию и при необходимости остановим заказ.",
+                order,
+                Map.of("orderId", order == null || order.getId() == null ? "" : order.getId().toString())
+        );
+    }
+
     public String reviewLink(Order order) {
         return firstDetail(order)
                 .map(detail -> reviewLinkBaseUrl() + "/" + detail.getId())

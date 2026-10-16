@@ -1589,6 +1589,22 @@ export class CommonBillingComponent implements OnDestroy {
     );
   }
 
+  archiveDisputedOrder(order: CommonInvoiceOrderResponse): void {
+    const invoice = this.currentInvoice();
+    if (!invoice || invoice.status === 'NEEDS_ATTENTION' || invoice.sentAt || !order.detachable || this.mutating()) {
+      return;
+    }
+    if (!window.confirm(`Убрать спорный заказ №${order.orderId} из общего счета и перевести его в архив?`)) {
+      return;
+    }
+    this.invoiceAction(
+      invoice.id,
+      `archive-disputed-${order.orderId}`,
+      () => this.commonBillingApi.archiveDisputedOrder(invoice.id, order.orderId),
+      `Заказ ${order.orderId} убран из общего счета и архивирован`
+    );
+  }
+
   async copyPublicUrl(): Promise<void> {
     const url = this.currentInvoice()?.publicUrl?.trim();
     if (!url) {
