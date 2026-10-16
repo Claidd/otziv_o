@@ -2,7 +2,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting, TestRequest } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router, convertToParamMap } from '@angular/router';
-import { ToastController } from '@ionic/angular/standalone';
+import { ToastController } from '@ionic/angular';
 import { BehaviorSubject, Observable, of } from 'rxjs';
 import type { OrderDetailsPayload, OrderReviewItem, ReviewRecoveryTaskItem } from '../core/api.service';
 import { AuthService } from '../core/auth.service';

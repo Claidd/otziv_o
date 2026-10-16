@@ -1,3 +1,4 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { AccountCredentialCopies, accountCredentialsCopied, recordAccountCredentialCopy } from '@otziv/client-common/account-credential-copy';
 import { OrderReviewsApi } from '../core/order-reviews.api';
 import { WorkerApi } from '../core/worker.api';
@@ -10,7 +11,7 @@ import {
   IonRefresher,
   IonRefresherContent,
   RefresherCustomEvent
-} from '@ionic/angular/standalone';
+} from '@ionic/angular';
 import { Subscription, firstValueFrom } from 'rxjs';
 import {
   type ApiService,
@@ -103,6 +104,7 @@ type WorkerListState = {
 type CredentialWaitSection = 'publish' | 'nagul';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-worker',
   imports: [
     FormsModule,

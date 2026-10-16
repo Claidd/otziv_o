@@ -1,6 +1,8 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-mobile-search-bar',
   standalone: true,
   template: `

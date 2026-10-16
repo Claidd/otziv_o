@@ -1,42 +1,24 @@
 package com.hunt.otziv.mobile_update.controller;
 
-import com.hunt.otziv.mobile_update.dto.MobileUpdateResponse;
-import com.hunt.otziv.mobile_update.service.MobileUpdateService;
-
+import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/api/admin/mobile-update")
 @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
 public class MobileUpdateAdminController {
 
-    private final MobileUpdateService mobileUpdateService;
-
-    public MobileUpdateAdminController(MobileUpdateService mobileUpdateService) {
-        this.mobileUpdateService = mobileUpdateService;
-    }
-
     @PostMapping
-    public MobileUpdateResponse publish(
-            @RequestParam("apk") MultipartFile apk,
-            @RequestParam int versionCode,
-            @RequestParam String versionName,
-            @RequestParam(defaultValue = "0") int minSupportedVersionCode,
-            @RequestParam(defaultValue = "false") boolean required,
-            @RequestParam(defaultValue = "") String notes
-    ) {
-        return mobileUpdateService.publish(
-                apk,
-                versionCode,
-                versionName,
-                minSupportedVersionCode,
-                required,
-                notes
+    public void publish() {
+        // The old installed APKs read this channel. A replacement signer must
+        // never be served here because Android cannot install it over them.
+        throw new ResponseStatusException(
+                HttpStatus.GONE,
+                "Публикация в прежнем канале закрыта после смены ключа подписи. Новое приложение: /android-new/"
         );
     }
 }

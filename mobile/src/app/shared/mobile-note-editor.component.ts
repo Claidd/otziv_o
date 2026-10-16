@@ -1,7 +1,9 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-mobile-note-editor',
   standalone: true,
   imports: [FormsModule],

@@ -1,9 +1,10 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { DictionariesApi } from '../core/dictionaries.api';
 import { inject, Component, Input, OnDestroy, OnInit, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { IonModal } from '@ionic/angular/standalone';
+import { IonModal } from '@ionic/angular';
 import { firstValueFrom, forkJoin } from 'rxjs';
 import {
   AdminBot,
@@ -157,6 +158,7 @@ const CLIENT_MESSAGE_DEFAULTS: AdminClientMessageSettings = {
 };
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-mobile-dictionaries',
   imports: [FormsModule, IonModal, MobileSearchBarComponent, MobileStatusSliderComponent],
   template: `

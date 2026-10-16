@@ -1,9 +1,10 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { CompaniesApi } from '../core/companies.api';
 import { DatePipe } from '@angular/common';
 import { inject, Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, ParamMap, Router } from '@angular/router';
-import { IonContent, IonModal } from '@ionic/angular/standalone';
+import { IonContent, IonModal } from '@ionic/angular';
 import { Observable, Subscription, firstValueFrom } from 'rxjs';
 import {
   ApiService,
@@ -91,6 +92,7 @@ type PersonalReminderDraft = {
 };
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-leads',
   imports: [DatePipe, FormsModule, IonContent, IonModal, MobileBottomPagerComponent, MobileHeaderComponent, MobileLeadCardComponent, MobileNoteEditorComponent, MobileSearchBarComponent, MobileStatusSliderComponent],
   template: `

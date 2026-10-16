@@ -1,3 +1,4 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { inject } from '@angular/core';
 import { CommonBillingApi } from '../core/common-billing.api';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -13,7 +14,7 @@ import {
   IonTitle,
   IonToolbar,
   ModalController
-} from '@ionic/angular/standalone';
+} from '@ionic/angular';
 import { firstValueFrom } from 'rxjs';
 import {
   type ApiService,
@@ -52,6 +53,7 @@ export function mobileCommonPaymentRublesToKopecks(raw: string): number | null {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-mobile-common-manual-payment-dialog',
   imports: [
     FormsModule,

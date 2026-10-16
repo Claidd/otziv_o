@@ -8,6 +8,8 @@ param(
 
     [string]$KeystorePropertiesPath = "",
 
+    [string]$ExpectedSignerSha256 = "A15A162AFE1F808F9586DD3F129F9E61F4BE49CCFF708CA99C6A0714004251D5",
+
     [string]$OutputDirectory = "",
 
     [switch]$Push
@@ -92,12 +94,12 @@ $selectedOutputDirectory = if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
 }
 
 $javaMajorVersion = Get-JavaMajorVersion -JavaHome $env:JAVA_HOME
-if ($null -eq $javaMajorVersion -or $javaMajorVersion -lt 17 -or $javaMajorVersion -gt 24) {
+if ($javaMajorVersion -ne 21) {
     . (Join-Path $PSScriptRoot "android-env.ps1")
     $javaMajorVersion = Get-JavaMajorVersion -JavaHome $env:JAVA_HOME
 }
-if ($null -eq $javaMajorVersion -or $javaMajorVersion -lt 17 -or $javaMajorVersion -gt 24) {
-    throw "Android release build requires a supported JDK (17 through 24; project default is JDK 21)."
+if ($javaMajorVersion -ne 21) {
+    throw "Android release build requires JDK 21 for the Capacitor compiler toolchain."
 }
 
 $npmCommand = Get-Command "npm.cmd" -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -133,6 +135,7 @@ $verifiedBuild = & $verifier `
         -ApkPath $builtApk `
         -ExpectedVersionCode $VersionCode `
         -ExpectedVersionName $VersionName `
+        -ExpectedSignerSha256 $ExpectedSignerSha256 `
         -PassThru `
         -Quiet
 
@@ -146,6 +149,7 @@ if (Test-Path -LiteralPath $releasePath -PathType Leaf) {
             -ApkPath $releasePath `
             -ExpectedVersionCode $VersionCode `
             -ExpectedVersionName $VersionName `
+            -ExpectedSignerSha256 $ExpectedSignerSha256 `
             -PassThru `
             -Quiet
     if ($existingRelease.ArtifactSha256 -ceq $verifiedBuild.ArtifactSha256) {
@@ -164,6 +168,7 @@ try {
             -ApkPath $temporaryReleasePath `
             -ExpectedVersionCode $VersionCode `
             -ExpectedVersionName $VersionName `
+            -ExpectedSignerSha256 $ExpectedSignerSha256 `
             -PassThru `
             -Quiet
     if ($verifiedCopy.ArtifactSha256 -cne $verifiedBuild.ArtifactSha256) {

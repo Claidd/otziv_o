@@ -1,8 +1,10 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { Component, inject } from '@angular/core';
 import { formatUpdateSize } from '../core/mobile-update.helpers';
 import { MobileUpdateService } from '../core/mobile-update.service';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-mobile-update-host',
   standalone: true,
   template: `

@@ -1,6 +1,7 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { IonContent, IonRefresher, IonRefresherContent, type RefresherCustomEvent } from '@ionic/angular/standalone';
+import { IonContent, IonRefresher, IonRefresherContent, type RefresherCustomEvent } from '@ionic/angular';
 import { firstValueFrom, forkJoin } from 'rxjs';
 import {
   AdminNotificationMediaApi,
@@ -21,6 +22,7 @@ const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-admin-notification-media-mobile',
   imports: [FormsModule, IonContent, IonRefresher, IonRefresherContent, MobileHeaderComponent],
   template: `

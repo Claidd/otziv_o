@@ -1,3 +1,4 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { NgClass } from '@angular/common';
 import { Component, EventEmitter, HostBinding, Input, Output } from '@angular/core';
 import { safeHttpsOrInternalUrl } from './external-navigation';
@@ -6,6 +7,7 @@ export type MobileReviewCardLayout = 'worker' | 'details';
 export type MobileReviewPhotoMode = 'none' | 'link' | 'button' | 'file';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-mobile-review-card-shell',
   standalone: true,
   imports: [NgClass],

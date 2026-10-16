@@ -7,7 +7,7 @@ import { AdminMobileUpdatePage } from './mobile-update-admin.page';
 
 const release: MobilePublishedRelease = {
   enabled: true, versionCode: 74, versionName: '1.0.74', minSupportedVersionCode: 70,
-  required: false, notes: 'Новые функции', downloadUrl: '/api/mobile-update/download',
+  required: false, notes: 'Новые функции', downloadUrl: '/android-new/otziv-new.apk',
   fileSize: 12_000_000, sha256: 'ABCDEF', publishedAt: '2026-10-16T08:00:00Z'
 };
 
@@ -28,7 +28,7 @@ describe('mobile administrator update status', () => {
     fixture = TestBed.createComponent(AdminMobileUpdatePage);
     page = fixture.componentInstance;
     page.ngOnInit();
-    http.expectOne('/api/mobile-update').flush(release);
+    http.expectOne('/android-new/release.json').flush(release);
     for (let i = 0; i < 8; i++) await Promise.resolve();
   });
 
@@ -43,6 +43,7 @@ describe('mobile administrator update status', () => {
     page.installed.set({ versionCode: 74, versionName: '1.0.74', canInstallPackages: true });
     expect(page.updateStatus()).toContain('актуальная');
     http.expectNone('/api/admin/mobile-update');
+    http.expectNone('/api/mobile-update');
   });
 
   it('links to the controlled release and signing instructions without uploading an APK', async () => {

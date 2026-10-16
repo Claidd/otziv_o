@@ -1,3 +1,4 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { LeadItem } from '../../core/api.service';
@@ -18,6 +19,7 @@ import {
 } from './lead-board.helpers';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-mobile-lead-card',
   standalone: true,
   imports: [DatePipe, MobileNoteEditorComponent],

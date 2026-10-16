@@ -1,9 +1,11 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { Component, OnDestroy, signal } from '@angular/core';
-import { IonContent } from '@ionic/angular/standalone';
+import { IonContent } from '@ionic/angular';
 import { ApiService, WhatsAppClientStatus } from '../core/api.service';
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-whatsapp-bind-page',
   imports: [IonContent, MobileHeaderComponent],
   template: `

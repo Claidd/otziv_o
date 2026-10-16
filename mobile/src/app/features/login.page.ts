@@ -1,3 +1,4 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { Component, OnInit, computed, effect, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import {
@@ -5,12 +6,13 @@ import {
   IonContent,
   IonIcon,
   IonSpinner
-} from '@ionic/angular/standalone';
+} from '@ionic/angular';
 import { logInOutline } from 'ionicons/icons';
 import { addIcons } from 'ionicons';
 import { AuthService } from '../core/auth.service';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-login',
   imports: [IonButton, IonContent, IonIcon, IonSpinner],
   template: `

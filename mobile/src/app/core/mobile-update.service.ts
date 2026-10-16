@@ -8,6 +8,7 @@ import {
   type MobileUpdateRelease,
   isUpdateAvailable,
   isUpdateRequired,
+  mobileUpdateReleaseUrl,
   resolveUpdateUrl
 } from './mobile-update.helpers';
 import { mobileEnvironment } from './mobile-environment';
@@ -63,7 +64,7 @@ export class MobileUpdateService {
       const info = await AppUpdater.getInfo();
       this.installedVersionCode.set(info.versionCode);
       this.installedVersionName.set(info.versionName);
-      const release = await firstValueFrom(this.http.get<MobileUpdateRelease>(this.apiUrl('/api/mobile-update')));
+      const release = await firstValueFrom(this.http.get<MobileUpdateRelease>(mobileUpdateReleaseUrl(mobileEnvironment.apiBaseUrl)));
       if (!isUpdateAvailable(release, info.versionCode)) {
         this.releaseState.set(null);
         this.visible.set(false);
@@ -194,9 +195,5 @@ export class MobileUpdateService {
       return error.message;
     }
     return fallback;
-  }
-
-  private apiUrl(path: string): string {
-    return `${mobileEnvironment.apiBaseUrl}${path}`;
   }
 }

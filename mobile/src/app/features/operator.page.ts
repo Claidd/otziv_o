@@ -1,3 +1,4 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { DictionariesApi } from '../core/dictionaries.api';
 import { CompaniesApi } from '../core/companies.api';
 import { inject, Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
@@ -8,7 +9,7 @@ import {
   IonRefresher,
   IonRefresherContent,
   RefresherCustomEvent
-} from '@ionic/angular/standalone';
+} from '@ionic/angular';
 import { firstValueFrom } from 'rxjs';
 import {
   ApiService,
@@ -90,6 +91,7 @@ const OPERATOR_TABS: OperatorTab[] = [
 ];
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-operator',
   imports: [FormsModule, IonContent, IonModal, IonRefresher, IonRefresherContent, MobileBottomPagerComponent, MobileHeaderComponent, MobileRemindersComponent, MobileSearchBarComponent, MobileStatusSliderComponent],
   template: `

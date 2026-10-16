@@ -1,5 +1,6 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { Component, EventEmitter, Input, OnInit, Output, computed, signal } from '@angular/core';
-import { IonModal } from '@ionic/angular/standalone';
+import { IonModal } from '@ionic/angular';
 import { firstValueFrom } from 'rxjs';
 import {
   AdminUser, ApiService, ContractorAllocationJournalItem, ContractorAllocationJournalPage,
@@ -17,6 +18,7 @@ import { MobileConfirmService } from '../shared/mobile-confirm.service';
 type FinanceSection = 'profile' | 'settlements' | 'journal';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-contractor-finance',
   imports: [IonModal],
   template: `

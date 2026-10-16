@@ -1,7 +1,7 @@
 import { inject } from '@angular/core';
 import { ManagerManualPaymentsApi } from '../core/manager-manual-payments.api';
 import { Injectable } from '@angular/core';
-import { ModalController, ToastController } from '@ionic/angular/standalone';
+import { ModalController, ToastController } from '@ionic/angular';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../core/api.service';
 import {

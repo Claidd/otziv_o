@@ -1,8 +1,10 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { Component, inject } from '@angular/core';
 import { MobileNativeService } from '../core/mobile-native.service';
 import { AuthService } from '../core/auth.service';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-mobile-native-status',
   standalone: true,
   template: `

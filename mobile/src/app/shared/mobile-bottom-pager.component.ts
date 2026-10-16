@@ -1,8 +1,10 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { Location } from '@angular/common';
 import { Component, EventEmitter, inject, Input, Output } from '@angular/core';
 import { Router } from '@angular/router';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-mobile-bottom-pager',
   standalone: true,
   template: `

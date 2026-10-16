@@ -1,6 +1,8 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { Component, Input, signal } from '@angular/core';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-mobile-contractor-payment-metric-help',
   standalone: true,
   template: `

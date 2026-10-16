@@ -1,9 +1,10 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { Component, OnInit, signal } from '@angular/core';
 import {
   IonButton,
   IonContent,
   IonIcon,
-} from '@ionic/angular/standalone';
+} from '@ionic/angular';
 import { addIcons } from 'ionicons';
 import { logOutOutline, refreshOutline } from 'ionicons/icons';
 import { firstValueFrom } from 'rxjs';
@@ -12,6 +13,7 @@ import { AuthService } from '../core/auth.service';
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-profile',
   imports: [IonButton, IonContent, IonIcon, MobileHeaderComponent],
   template: `

@@ -1,7 +1,9 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { Component } from '@angular/core';
 import { MobileConfirmService } from './mobile-confirm.service';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-mobile-confirm-host',
   standalone: true,
   template: `

@@ -6,7 +6,7 @@ import { OrderReviewsApi } from '../core/order-reviews.api';
 import { OrderPaymentApi } from '../core/order-payment.api';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router, convertToParamMap } from '@angular/router';
-import { ToastController } from '@ionic/angular/standalone';
+import { ToastController } from '@ionic/angular';
 import { BehaviorSubject, Subject, of } from 'rxjs';
 import { OrderDetailsPage } from './order-details.page';
 import { ApiService, type OrderDetailsPayload, type CompanyDeepReportState } from '../core/api.service';

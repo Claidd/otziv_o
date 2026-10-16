@@ -1,7 +1,8 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { Component, HostListener, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { DomSanitizer } from '@angular/platform-browser';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { IonContent } from '@ionic/angular/standalone';
+import { IonContent } from '@ionic/angular';
 import { Subscription } from 'rxjs';
 import { ApiService, BotBrowserMetadata } from '../core/api.service';
 import { prepareBotBrowserVncUrl } from '../core/bot-browser-vnc-url';
@@ -9,6 +10,7 @@ import { mobileEnvironment } from '../core/mobile-environment';
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-bot-browser-page',
   imports: [IonContent, MobileHeaderComponent, RouterLink],
   template: `

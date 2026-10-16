@@ -1,3 +1,4 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 
 export interface MobileStatusItem {
@@ -12,6 +13,7 @@ export interface MobileStatusItem {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-mobile-status-slider',
   standalone: true,
   template: `

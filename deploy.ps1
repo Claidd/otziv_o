@@ -10,6 +10,7 @@ param(
     [string]$EnvFile = '',
     [string]$LocalWorkRoot = '',
     [string]$MobileApkPath = '',
+    [string]$StandaloneMobileApkPath = '',
     [ValidateSet('Direct', 'Local')][string]$ImageTransport = 'Direct',
     [switch]$FullRollout,
     [switch]$CoordinatedSslRefresh,
@@ -31,6 +32,7 @@ if ($Help) {
     Write-Host '-LocalWorkRoot or OTZIV_LOCAL_WORK_ROOT places release evidence and temporary files on a chosen disk.'
     Write-Host '-FullRollout recreates all application services; database continuity guards still apply.'
     Write-Host 'Production configuration and the existing mobile APK are retained unless an APK path is supplied.'
+    Write-Host '-StandaloneMobileApkPath publishes a separately signed APK at /android-new after verified deployment.'
     return
 }
 if ($PSVersionTable.PSVersion.Major -lt 7) {
@@ -63,6 +65,11 @@ $repoRoot = $PSScriptRoot
 $helpers = Join-Path $repoRoot 'infrastructure/scripts/prod'
 . (Join-Path $helpers 'DeploySnapshot.ps1')
 . (Join-Path $helpers 'ReleaseMetrics.ps1')
+$standalonePublisher = Join-Path $helpers 'publish-android-reinstall.ps1'
+$standaloneMetadata = Join-Path $repoRoot 'frontend/public/android-new/release.json'
+if ($MobileApkPath -and $StandaloneMobileApkPath) {
+    throw 'Choose either the legacy MobileApkPath or the standalone new-signer APK, never both.'
+}
 $ciStartedAt = [DateTimeOffset]::UtcNow
 if (-not $ProjectFilesRoot) { $ProjectFilesRoot = Split-Path -Parent $repoRoot }
 $ProjectFilesRoot = [IO.Path]::GetFullPath($ProjectFilesRoot)
@@ -99,6 +106,10 @@ if ($LASTEXITCODE -ne 0) { throw ($ciOutput -join [Environment]::NewLine) }
 $ci = ($ciOutput -join '') | ConvertFrom-Json
 if ($ci.result -ne 'PASS' -or $ci.revision -notmatch '^[0-9a-f]{40}$') { throw 'Invalid CI verification result.' }
 Write-Host "CI passed for main $($ci.revision)."
+if ($StandaloneMobileApkPath) {
+    & $standalonePublisher -ApkPath $StandaloneMobileApkPath -ReleaseJsonPath $standaloneMetadata -VerifyOnly
+    if ($LASTEXITCODE -ne 0) { throw 'Standalone Android APK verification failed before production access.' }
+}
 if ($CheckOnly) {
     Write-Host 'Check complete. No Docker or VPS changes were made.'
     return
@@ -162,6 +173,7 @@ try {
     $earlyArguments = @('-B', (Join-Path $helpers 'release_preflight.py'), '--manifest', $manifest,
         '--output', (Join-Path $directory 'early-preflight.json')) + $probeArguments
     if ($MobileApkPath) { $earlyArguments += @('--apk', $MobileApkPath) }
+    if ($StandaloneMobileApkPath) { $earlyArguments += @('--apk', $StandaloneMobileApkPath) }
     & python @earlyArguments
     if ($LASTEXITCODE -ne 0) { throw 'Early server preflight failed before large image downloads; production was not changed.' }
     if ($PreflightOnly) {
@@ -235,6 +247,20 @@ try {
     Set-OtzivReleaseStage -Path $timing -Stage 'installed-image-verification'
     & python -B (Join-Path $helpers 'production_images.py') record --manifest $manifest --output (Join-Path $directory 'production-images.json') @probeArguments
     if ($LASTEXITCODE -ne 0) { throw 'Installation completed, but daily-scan inventory registration failed. Preserve the release evidence and retry registration.' }
+    if ($StandaloneMobileApkPath) {
+        Set-OtzivReleaseStage -Path $timing -Stage 'standalone-android-publication'
+        $standaloneParameters = @{
+            ApkPath = $StandaloneMobileApkPath; ReleaseJsonPath = $standaloneMetadata
+            VpsHost = $VpsHost; VpsUser = $VpsUser; VpsPort = $VpsPort; VpsPath = $VpsPath
+            SshKey = $SshKey; SshKnownHostsFile = $SshKnownHostsFile
+        }
+        try {
+            & $standalonePublisher @standaloneParameters
+            if ($LASTEXITCODE -ne 0) { throw 'Standalone publisher returned a nonzero exit code.' }
+        } catch {
+            throw "Web deployment and health checks succeeded; the web remains deployed, but standalone Android publication failed: $($_.Exception.Message)"
+        }
+    }
     $releaseCompleted = $true
     Write-Host "Deployment and production checks completed. Evidence: $directory"
 } finally {

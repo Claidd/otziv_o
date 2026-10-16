@@ -6,6 +6,8 @@ const {
   formatUpdateSize,
   isUpdateAvailable,
   isUpdateRequired,
+  MOBILE_UPDATE_RELEASE_PATH,
+  mobileUpdateReleaseUrl,
   resolveUpdateUrl
 } = loadTsModule('src/app/core/mobile-update.helpers.ts');
 
@@ -38,4 +40,10 @@ test('resolves server download URL and formats APK size', () => {
   assert.equal(resolveUpdateUrl(release.downloadUrl, 'https://o-ogo.ru/'), 'https://o-ogo.ru/api/mobile-update/download');
   assert.equal(resolveUpdateUrl('https://cdn.example/app.apk', 'https://o-ogo.ru'), 'https://cdn.example/app.apk');
   assert.equal(formatUpdateSize(release.fileSize), '11,0 МБ');
+});
+
+test('new certificate checks an isolated static release channel', () => {
+  assert.equal(MOBILE_UPDATE_RELEASE_PATH, '/android-new/release.json');
+  assert.equal(mobileUpdateReleaseUrl('https://o-ogo.ru/'), 'https://o-ogo.ru/android-new/release.json');
+  assert.equal(mobileUpdateReleaseUrl(''), '/android-new/release.json');
 });

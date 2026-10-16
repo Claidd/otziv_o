@@ -1,6 +1,7 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { IonContent } from '@ionic/angular/standalone';
+import { IonContent } from '@ionic/angular';
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
 
 type AuditTrainingSection = {
@@ -110,6 +111,7 @@ const AUDIT_TRAINING_SECTIONS: readonly AuditTrainingSection[] = [
 ];
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-training-mobile',
   imports: [IonContent, MobileHeaderComponent, RouterLink],
   template: `

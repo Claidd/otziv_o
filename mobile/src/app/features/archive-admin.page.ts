@@ -1,6 +1,7 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { IonContent, IonRefresher, IonRefresherContent, type RefresherCustomEvent } from '@ionic/angular/standalone';
+import { IonContent, IonRefresher, IonRefresherContent, type RefresherCustomEvent } from '@ionic/angular';
 import { firstValueFrom } from 'rxjs';
 import {
   MobileArchiveAdminApi,
@@ -26,6 +27,7 @@ const defaultSettings = (): MobileArchiveSettingsRequest => ({
 });
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-archive-admin-mobile',
   imports: [FormsModule, IonContent, IonRefresher, IonRefresherContent, MobileHeaderComponent],
   template: `

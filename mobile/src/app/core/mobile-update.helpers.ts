@@ -11,6 +11,14 @@ export type MobileUpdateRelease = {
   downloadUrl: string;
 };
 
+// A new signing certificate requires a separate release channel. Older installed
+// APKs continue to read /api/mobile-update and cannot install this channel's APK.
+export const MOBILE_UPDATE_RELEASE_PATH = '/android-new/release.json';
+
+export function mobileUpdateReleaseUrl(apiBaseUrl: string): string {
+  return resolveUpdateUrl(MOBILE_UPDATE_RELEASE_PATH, apiBaseUrl);
+}
+
 export function isUpdateAvailable(release: MobileUpdateRelease, installedVersionCode: number): boolean {
   return release.enabled && release.versionCode > installedVersionCode;
 }

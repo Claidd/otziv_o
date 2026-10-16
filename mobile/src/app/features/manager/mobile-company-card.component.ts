@@ -1,3 +1,4 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CompanyItem } from '../../core/api.service';
 import { MobileNoteEditorComponent } from '../../shared/mobile-note-editor.component';
@@ -5,6 +6,7 @@ import { displayPhone, phoneHref } from '../../shared/phone-format';
 import { type CompanyStatusAction, type ManagerNoteSaveState } from './manager-board.helpers';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-mobile-company-card',
   standalone: true,
   imports: [MobileNoteEditorComponent],

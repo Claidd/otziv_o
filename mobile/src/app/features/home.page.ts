@@ -1,10 +1,11 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { ManualPaymentTasksApi } from '../core/manual-payment-tasks.api';
 import { ContractorAccrualHistoryApi, type ContractorSelfAccrualAdjustment } from '../core/contractor-accrual-history.api';
 import { DictionariesApi } from '../core/dictionaries.api';
 import { inject, Component, computed, OnDestroy, OnInit, signal, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, NavigationStart, ParamMap, Router, RouterLink } from '@angular/router';
-import { IonContent, IonModal, ToastController } from '@ionic/angular/standalone';
+import { IonContent, IonModal, ToastController } from '@ionic/angular';
 import { firstValueFrom, Subscription } from 'rxjs';
 import {
   AnalyticsResponse,
@@ -109,6 +110,7 @@ const DEFAULT_MANUAL_PAYMENT_URL = 'https://pay.alfabank.ru/sc/EWwpfrArNZotkqOR'
 const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Альфа-Банк';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-home',
   imports: [FormsModule, IonContent, IonModal, MobileActionSheetComponent, MobileContractorPaymentSummaryComponent, MobileContractorAccrualHistoryComponent, MobileDictionariesComponent, MobileHeaderComponent, MobileStatusSliderComponent, RouterLink],
   template: `
