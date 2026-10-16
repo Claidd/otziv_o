@@ -845,7 +845,7 @@ services:
       - internal_net
 
   grafana:
-    image: ghcr.io/claidd/otziv-security@sha256:759f950776ba40b54dc13852a46cdfb99bff8c4a1519dbefebd3b1cec9a9f243
+    image: ghcr.io/claidd/otziv-security@sha256:3e0e52079cc164961d5152600588ca6bf827a40b0de0ef5b20512e6e45c04913
     profiles: ["observability"]
     restart: unless-stopped
     logging: *default-logging

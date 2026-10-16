@@ -33,10 +33,10 @@ const MANIFEST = 'infrastructure/runtime-security/reviewed-images.json';
 const MANIFEST_SHA256 = 'd48bdb7d6d869cde5d6f1a7b089491765e3eeaf46e0b0b6bb51b7719b38d3ef2';
 const ACTIVATIONS = 'infrastructure/runtime-security/reviewed-image-activations.json';
 const EVIDENCE_FILE = /^registry-(?:index|amd64-(?:manifest|config)|attestation-[0-9]+(?:-payload-[0-9]+)?)\.json$/;
-// These four unmodified public scanner/OCI payloads contain high-entropy hashes
+// These unmodified public scanner/OCI payloads contain high-entropy hashes
 // that resemble credentials. Retain their exact bytes compressed and verify them
 // before any publication or registry checks consume them.
-const C29_COMPRESSED_PROOFS = new Map([
+const COMPRESSED_PROOFS = new Map([
   ['infrastructure/runtime-security/proofs/c29-alloy/anonymous/registry-attestation-0-payload-0.json',
     '7e66512278b6b71b139d00f0678400ff3f972fc6901d9f61e824ab0f921944e5'],
   ['infrastructure/runtime-security/proofs/c29-alloy/publication/registry-attestation-0-payload-0.json',
@@ -45,6 +45,14 @@ const C29_COMPRESSED_PROOFS = new Map([
     '3955c18d28ebf5e0d243dd6a5f172d10509292c9e0360ce0b73fab5b8b7c9108'],
   ['infrastructure/runtime-security/proofs/c29-grafana/publication/vulnerabilities.sbom.cdx.json',
     '4cf6633d14c7b3c35cfe8e4cecdf623e065c86c0fbf299ff66b1eba53d0e4839'],
+  ['infrastructure/runtime-security/proofs/c30-grafana/publication/vulnerabilities.sbom.cdx.json',
+    '76adb23c52d512270da0bd268053ec785a7255573f32f49e1b5ab3e26f0e2114'],
+  ['infrastructure/runtime-security/proofs/c30-grafana/anonymous/registry-attestation-0-payload-0.json',
+    '20c13b1415bd5a28b147836ef1d1bb118c4423034a08c2c84520a00ea90d4dc8'],
+  ['infrastructure/runtime-security/proofs/c30-grafana/publication/registry-attestation-0-payload-0.json',
+    '20c13b1415bd5a28b147836ef1d1bb118c4423034a08c2c84520a00ea90d4dc8'],
+  ['infrastructure/runtime-security/proofs/c30-grafana/publication/vulnerabilities.json',
+    'c4662b60f0c7b187abab33af4ef7d3733ef3e6b29810f9cd9fb6f164f0d41fac'],
 ]);
 
 export async function validateAlloyReassessment(image, entry, publication, proof) {
@@ -497,10 +505,10 @@ export async function createEvidenceReader(root) {
     // Preserve the original-file path, including its existing outer hash checks.
     // A dangling link is not an absent original and may not trigger the fallback.
     if (exists) return readFile(await physicalPath(path));
-    if (C29_COMPRESSED_PROOFS.has(path)) {
+    if (COMPRESSED_PROOFS.has(path)) {
       const compressed = await boundedRead(path + '.gz', FILE_GATE_BYTES);
       const bytes = gunzipSync(compressed, { maxOutputLength: 8 * 1024 * 1024 });
-      assert.equal(sha256(bytes), C29_COMPRESSED_PROOFS.get(path), 'activation_c29_compressed_hash');
+      assert.equal(sha256(bytes), COMPRESSED_PROOFS.get(path), 'activation_compressed_hash');
       return bytes;
     }
     const name = basename(path);
