@@ -86,6 +86,43 @@ class AnalyticsAggregateScoreComparisonServiceTest {
         assertTrue(comparison.mismatches().isEmpty());
     }
 
+    @Test
+    void comparesExactKopecksAndFallsBackWhenOneSideHasOnlyLegacyRubles() {
+        UserData legacyManager = scoreUser("Manager One", "ROLE_MANAGER", 100L, 0L, 1000L,
+                0L, 0L, 0L, 0L, 0L);
+        legacyManager.setSalaryKopecks(10_001L);
+        legacyManager.setZpTotalKopecks(100_001L);
+        UserData aggregateManager = scoreUser("Manager One", "ROLE_MANAGER", 100L, 0L, 1000L,
+                0L, 0L, 0L, 0L, 0L);
+        aggregateManager.setSalaryKopecks(10_002L);
+        aggregateManager.setZpTotalKopecks(100_002L);
+
+        UserData legacyWorker = scoreUser("Worker One", "ROLE_WORKER", 25L, 0L, 1000L,
+                0L, 0L, 0L, 0L, 0L);
+        UserData aggregateWorker = scoreUser("Worker One", "ROLE_WORKER", 25L, 0L, 1000L,
+                0L, 0L, 0L, 0L, 0L);
+        aggregateWorker.setSalaryKopecks(2_599L);
+        aggregateWorker.setZpTotalKopecks(100_099L);
+
+        when(personalService.getPersonalsAndCountToScore(DATE))
+                .thenReturn(List.of(legacyManager, legacyWorker));
+        when(aggregateScoreService.buildScore(DATE))
+                .thenReturn(Optional.of(List.of(aggregateManager, aggregateWorker)));
+
+        AnalyticsScoreComparison comparison = service.compare(DATE);
+
+        assertFalse(comparison.matches());
+        assertEquals(2, comparison.comparedUserCount());
+        assertEquals(2, comparison.mismatchCount());
+        assertTrue(comparison.comparedFields().containsAll(List.of("salaryKopecks", "zpTotalKopecks")));
+        assertTrue(comparison.mismatches().stream().anyMatch(field ->
+                "salaryKopecks".equals(field.field()) && "1".equals(field.delta())));
+        assertTrue(comparison.mismatches().stream().anyMatch(field ->
+                "zpTotalKopecks".equals(field.field()) && "1".equals(field.delta())));
+        assertFalse(comparison.mismatches().stream().anyMatch(field ->
+                "ROLE_WORKER|Worker One".equals(field.userKey())));
+    }
+
     private UserData scoreUser(
             String fio,
             String role,

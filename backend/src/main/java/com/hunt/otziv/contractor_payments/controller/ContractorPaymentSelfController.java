@@ -1,6 +1,7 @@
 package com.hunt.otziv.contractor_payments.controller;
 
 import com.hunt.otziv.contractor_payments.dto.ContractorPaymentSummaryResponse;
+import com.hunt.otziv.contractor_payments.dto.ContractorAccrualAdjustmentSelfResponse;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentVisibilityService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -21,5 +22,11 @@ public class ContractorPaymentSelfController {
     @PreAuthorize("isAuthenticated()")
     public List<ContractorPaymentSummaryResponse> ownSummary(Authentication authentication) {
         return visibilityService.ownSummary(authentication);
+    }
+
+    @GetMapping("/me/accrual-adjustments")
+    @PreAuthorize("isAuthenticated()")
+    public List<ContractorAccrualAdjustmentSelfResponse> ownAdjustmentHistory(Authentication authentication) {
+        return visibilityService.ownAdjustmentHistory(authentication);
     }
 }

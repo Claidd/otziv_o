@@ -44,6 +44,10 @@ export interface UserStat {
   sum1Week: number;
   sum1Month: number;
   sum1Year: number;
+  sum1DayKopecks?: number | null;
+  sum1WeekKopecks?: number | null;
+  sum1MonthKopecks?: number | null;
+  sum1YearKopecks?: number | null;
   sumOrders1Month: number;
   sumOrders2Month: number;
   percent1Day: number;
@@ -79,6 +83,10 @@ export interface StatDto {
   sum1Week: number;
   sum1Month: number;
   sum1Year: number;
+  sum1DayKopecks?: number | null;
+  sum1WeekKopecks?: number | null;
+  sum1MonthKopecks?: number | null;
+  sum1YearKopecks?: number | null;
   sumOrders1Month: number;
   sumOrders2Month: number;
   percent1Day: number;
@@ -145,6 +153,7 @@ export interface TeamMember {
   fio: string;
   imageId: number;
   sum1Month?: number;
+  sum1MonthKopecks?: number | null;
   order1Month?: number;
   review1Month?: number;
   payment1Month?: number;
@@ -240,8 +249,10 @@ export interface ScoreUser {
   fio: string;
   role: string;
   salary?: number | null;
+  salaryKopecks?: number | null;
   totalSum?: number | null;
   zpTotal?: number | null;
+  zpTotalKopecks?: number | null;
   newCompanies?: number | null;
   newOrders?: number | null;
   correctOrders?: number | null;
@@ -277,6 +288,9 @@ export interface ScoreContractorPaymentSummary {
   availableKopecks: number;
   reportingLive: boolean;
   currentMonthCoverageComplete: boolean;
+  workAccruedMonthKopecks?: number;
+  bonusMonthKopecks?: number;
+  deductionMonthKopecks?: number;
 }
 
 export interface ManagerPerformanceScore {

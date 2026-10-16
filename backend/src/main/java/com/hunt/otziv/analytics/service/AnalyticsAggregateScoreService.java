@@ -74,13 +74,16 @@ public class AnalyticsAggregateScoreService {
         long zpTotal = users.values().stream()
                 .mapToLong(ScoreAccumulator::salary)
                 .sum();
+        long zpTotalKopecks = users.values().stream()
+                .mapToLong(ScoreAccumulator::salaryKopecks)
+                .reduce(0L, Math::addExact);
 
         List<UserData> score = users.values().stream()
                 .filter(user -> SCORE_ROLES.contains(user.role()))
                 .sorted(Comparator
                         .comparingInt((ScoreAccumulator user) -> rolePriority(user.role()))
                         .thenComparing(ScoreAccumulator::fio, Comparator.nullsLast(String::compareToIgnoreCase)))
-                .map(user -> user.toUserData(zpTotal))
+                .map(user -> user.toUserData(zpTotal, zpTotalKopecks))
                 .toList();
 
         return Optional.of(score);
@@ -108,10 +111,15 @@ public class AnalyticsAggregateScoreService {
         return value == null ? 0L : value.longValue();
     }
 
+    private static long toKopecks(BigDecimal value) {
+        return value == null ? 0L : value.movePointRight(2).longValueExact();
+    }
+
     private static class ScoreAccumulator {
         private final User user;
         private final String role;
         private long salary;
+        private long salaryKopecks;
         private long payment;
         private long newCompanies;
         private long salaryEntries;
@@ -126,6 +134,7 @@ public class AnalyticsAggregateScoreService {
 
         private void add(AnalyticsUserMetricAggregate row) {
             salary += toLong(row.getSalarySum());
+            salaryKopecks = Math.addExact(salaryKopecks, toKopecks(row.getSalarySum()));
             payment += toLong(row.getPaymentSum());
             newCompanies += row.getNewCompaniesCount();
             salaryEntries += row.getSalaryEntryCount();
@@ -138,6 +147,7 @@ public class AnalyticsAggregateScoreService {
 
         private void replaceSalary(SalaryTotal total) {
             salary = toLong(total.salarySum());
+            salaryKopecks = toKopecks(total.salarySum());
             salaryEntries = total.salaryEntryCount();
             salaryReviews = total.salaryReviewCount();
         }
@@ -158,9 +168,13 @@ public class AnalyticsAggregateScoreService {
             return salary;
         }
 
-        private UserData toUserData(long zpTotal) {
+        private long salaryKopecks() {
+            return salaryKopecks;
+        }
+
+        private UserData toUserData(long zpTotal, long zpTotalKopecks) {
             long percentInWork = leadsNew == 0 ? 0 : (leadsInWork * 100) / leadsNew;
-            return new UserData(
+            UserData score = new UserData(
                     user.getFio(),
                     role,
                     salary,
@@ -190,6 +204,9 @@ public class AnalyticsAggregateScoreService {
                     null,
                     null
             );
+            score.setSalaryKopecks(salaryKopecks);
+            score.setZpTotalKopecks(zpTotalKopecks);
+            return score;
         }
 
         private static Long imageId(User user) {

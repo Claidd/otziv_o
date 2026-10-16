@@ -30,6 +30,10 @@ public class UserStatDTO {
     private int sum1Week;
     private int sum1Month;
     private int sum1Year;
+    private Long sum1DayKopecks;
+    private Long sum1WeekKopecks;
+    private Long sum1MonthKopecks;
+    private Long sum1YearKopecks;
     private int sumOrders1Month;
     private int sumOrders2Month;
     //  Проценты сумм за период

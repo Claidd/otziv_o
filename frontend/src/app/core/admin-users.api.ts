@@ -135,6 +135,9 @@ export interface ContractorPaymentProfile {
   reportingLive: boolean;
   shadowMode: boolean;
   liveRouting: boolean;
+  workAccruedMonthKopecks?: number;
+  bonusMonthKopecks?: number;
+  deductionMonthKopecks?: number;
 }
 
 export interface ContractorPaymentProfileRequest {
@@ -160,6 +163,49 @@ export interface ContractorPaymentProfileAdjustment {
   changedBy: string;
   effectiveAt: string;
   createdAt: string;
+}
+
+export type ContractorAccrualAdjustmentKind = 'BONUS' | 'DEDUCTION';
+
+export interface ContractorAccrualAdjustmentRequest {
+  kind: ContractorAccrualAdjustmentKind;
+  amountKopecks: number;
+  reason: string;
+  referenceMonth: string;
+  evidenceReference?: string;
+  idempotencyKey?: string;
+}
+
+export interface ContractorAccrualAdjustment {
+  id: number;
+  profileId: number;
+  kind: ContractorAccrualAdjustmentKind | 'REVERSAL';
+  signedAmountKopecks: number;
+  effectiveOn: string;
+  referenceMonth: string;
+  reason: string;
+  evidenceReference?: string | null;
+  createdBy: string;
+  createdAt: string;
+  reversalOfId?: number | null;
+}
+
+export interface ContractorAccrualAdjustmentHistoryPage {
+  items: ContractorAccrualAdjustment[];
+  hasMore: boolean;
+}
+
+export interface ContractorAccrualAdjustmentPreview {
+  workMonthKopecks: number;
+  bonusMonthKopecks: number;
+  deductionMonthKopecks: number;
+  accruedMonthBeforeKopecks: number;
+  accruedMonthAfterKopecks: number;
+  freeForNewPaymentsBeforeKopecks: number;
+  freeForNewPaymentsAfterKopecks: number;
+  paidTotalKopecks: number;
+  outstandingKopecks: number;
+  manualTaskCommitmentKopecks: number;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -252,6 +298,59 @@ export class AdminUsersApi {
   ): Observable<ContractorPaymentProfileAdjustment[]> {
     return this.http.get<ContractorPaymentProfileAdjustment[]>(
       `${appEnvironment.apiBaseUrl}/api/admin/users/${userId}/contractor-payment-profiles/${profileId}/opening-balance-history`
+    );
+  }
+
+  getContractorAccrualAdjustments(
+    userId: number,
+    profileId: number
+  ): Observable<ContractorAccrualAdjustment[]> {
+    return this.http.get<ContractorAccrualAdjustment[]>(
+      `${appEnvironment.apiBaseUrl}/api/admin/users/${userId}/contractor-payment-profiles/${profileId}/accrual-adjustments`
+    );
+  }
+
+  getContractorAccrualAdjustmentsPage(
+    userId: number,
+    profileId: number,
+    page: number
+  ): Observable<ContractorAccrualAdjustmentHistoryPage> {
+    return this.http.get<ContractorAccrualAdjustmentHistoryPage>(
+      `${appEnvironment.apiBaseUrl}/api/admin/users/${userId}/contractor-payment-profiles/${profileId}/accrual-adjustments/pages?page=${page}`
+    );
+  }
+
+  previewContractorAccrualAdjustment(
+    userId: number,
+    profileId: number,
+    request: ContractorAccrualAdjustmentRequest
+  ): Observable<ContractorAccrualAdjustmentPreview> {
+    return this.http.post<ContractorAccrualAdjustmentPreview>(
+      `${appEnvironment.apiBaseUrl}/api/admin/users/${userId}/contractor-payment-profiles/${profileId}/accrual-adjustments/preview`,
+      request
+    );
+  }
+
+  createContractorAccrualAdjustment(
+    userId: number,
+    profileId: number,
+    request: ContractorAccrualAdjustmentRequest
+  ): Observable<ContractorAccrualAdjustment> {
+    return this.http.post<ContractorAccrualAdjustment>(
+      `${appEnvironment.apiBaseUrl}/api/admin/users/${userId}/contractor-payment-profiles/${profileId}/accrual-adjustments`,
+      request
+    );
+  }
+
+  reverseContractorAccrualAdjustment(
+    userId: number,
+    profileId: number,
+    adjustmentId: number,
+    request: { reason: string; idempotencyKey: string }
+  ): Observable<ContractorAccrualAdjustment> {
+    return this.http.post<ContractorAccrualAdjustment>(
+      `${appEnvironment.apiBaseUrl}/api/admin/users/${userId}/contractor-payment-profiles/${profileId}/accrual-adjustments/${adjustmentId}/reversals`,
+      request
     );
   }
 }

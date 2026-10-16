@@ -6,12 +6,14 @@ import com.hunt.otziv.contractor_payments.dto.ContractorPaymentProfileAdjustment
 import com.hunt.otziv.contractor_payments.dto.ContractorPaymentProfileRequest;
 import com.hunt.otziv.contractor_payments.dto.ContractorPaymentProfileResponse;
 import com.hunt.otziv.contractor_payments.model.ContractorAllocationMode;
+import com.hunt.otziv.contractor_payments.model.ContractorAccrualBucket;
 import com.hunt.otziv.contractor_payments.model.ContractorAllocationStatus;
 import com.hunt.otziv.contractor_payments.model.ContractorPaymentAmountLimits;
 import com.hunt.otziv.contractor_payments.model.ContractorPaymentProfile;
 import com.hunt.otziv.contractor_payments.model.ContractorPaymentProfileAdjustment;
 import com.hunt.otziv.contractor_payments.model.ContractorRole;
 import com.hunt.otziv.contractor_payments.repository.ContractorPaymentAllocationRepository;
+import com.hunt.otziv.contractor_payments.repository.ContractorAccrualAdjustmentRepository;
 import com.hunt.otziv.contractor_payments.repository.ContractorPaymentProfileRepository;
 import com.hunt.otziv.contractor_payments.repository.ContractorPaymentProfileAdjustmentRepository;
 import com.hunt.otziv.contractor_payments.repository.ContractorRewardLedgerRepository;
@@ -65,6 +67,7 @@ public class ContractorPaymentProfileService {
     private final ContractorPaymentProfileRepository profileRepository;
     private final ContractorPaymentAllocationRepository allocationRepository;
     private final ContractorRewardLedgerRepository rewardLedgerRepository;
+    private final ContractorAccrualAdjustmentRepository accrualAdjustmentRepository;
     private final ContractorRewardLedgerService ledgerService;
     private final ContractorPaymentAccountingService accountingService;
     private final ContractorPaymentProfileAdjustmentRepository adjustmentRepository;
@@ -384,8 +387,9 @@ public class ContractorPaymentProfileService {
         // this profile sees every committed accrual, confirmation, return and
         // reservation before deciding whether another invoice fits.
         long accrued = Math.addExact(
-                profile.getOpeningBalanceKopecks(),
-                rewardLedgerRepository.sumActiveForCapacityUpdate(profile.getId())
+                Math.addExact(profile.getOpeningBalanceKopecks(),
+                        rewardLedgerRepository.sumActiveForCapacityUpdate(profile.getId())),
+                accrualAdjustmentRepository.sumForCapacityUpdate(profile.getId())
         );
         ContractorPaymentAllocationRepository.CapacityTotals totals = allocationRepository
                 .capacityTotalsForUpdate(profile.getId(), mode.name());
@@ -405,8 +409,9 @@ public class ContractorPaymentProfileService {
             return 0L;
         }
         long accrued = Math.addExact(
-                profile.getOpeningBalanceKopecks(),
-                rewardLedgerRepository.sumActiveForCapacitySnapshot(profile.getId())
+                Math.addExact(profile.getOpeningBalanceKopecks(),
+                        rewardLedgerRepository.sumActiveForCapacitySnapshot(profile.getId())),
+                accrualAdjustmentRepository.sumByProfileId(profile.getId())
         );
         ContractorPaymentAllocationRepository.CapacityTotals totals = allocationRepository
                 .capacityTotalsSnapshot(profile.getId(), mode.name());
@@ -466,6 +471,12 @@ public class ContractorPaymentProfileService {
                 0L,
                 Math.addExact(balancePaidForCapacity, outstanding) - accruedTotal
         );
+        long workMonth = rewardLedgerRepository.sumActiveByProfileIdAndPeriod(
+                profile.getId(), monthStart, nextMonth);
+        long bonusMonth = accrualAdjustmentRepository.sumBucketInPeriod(
+                profile.getId(), ContractorAccrualBucket.BONUS, monthStart, nextMonth);
+        long deductionMonth = Math.negateExact(accrualAdjustmentRepository.sumBucketInPeriod(
+                profile.getId(), ContractorAccrualBucket.DEDUCTION, monthStart, nextMonth));
         return new ContractorPaymentProfileResponse(
                 profile.getId(),
                 profile.getUser().getId(),
@@ -496,7 +507,10 @@ public class ContractorPaymentProfileService {
                 exposureOverrun,
                 balanceMode == ContractorAllocationMode.LIVE,
                 shadowMode,
-                liveRouting
+                liveRouting,
+                workMonth,
+                bonusMonth,
+                deductionMonth
         );
     }
 

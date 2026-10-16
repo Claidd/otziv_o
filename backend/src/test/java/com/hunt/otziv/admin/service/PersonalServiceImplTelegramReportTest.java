@@ -85,6 +85,23 @@ class PersonalServiceImplTelegramReportTest {
                 .doesNotContain("SMM &lt;One&gt;");
     }
 
+    @Test
+    void exactSalaryAmountsKeepKopecksInTelegramReportAndTotal() {
+        UserData manager = manager("Вика_Ц.");
+        manager.setSalaryKopecks(952_450L);
+        manager.setZpTotalKopecks(952_375L);
+        UserData worker = worker("Люба Р.");
+        worker.setSalaryKopecks(-75L);
+        worker.setZpTotalKopecks(952_375L);
+
+        String report = service.displayResult(Map.of("Вика_Ц.", manager, "Люба Р.", worker));
+
+        assertThat(report)
+                .contains("Вознаграждения всего: <b>9 523,75 руб.</b>")
+                .contains("Начислено: <b>9 524,50 руб.</b>")
+                .contains("Начислено: <b>-0,75 руб.</b>");
+    }
+
     private UserData manager(String fio) {
         return UserData.builder()
                 .fio(fio)

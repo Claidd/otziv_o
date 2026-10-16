@@ -159,6 +159,7 @@ public class AnalyticsAggregateTeamService {
                             .login(login(user))
                             .imageId(imageId(user))
                             .sum1Month(toInt(metric.salary))
+                            .sum1MonthKopecks(metric.salaryKopecks)
                             .order1Month(toInt(metric.salaryEntries))
                             .review1Month(toInt(metric.salaryReviews))
                             .payment1Month(toInt(managerPayments.getOrDefault(userId(user), 0L)))
@@ -180,6 +181,7 @@ public class AnalyticsAggregateTeamService {
                             .login(login(user))
                             .imageId(imageId(user))
                             .sum1Month(toInt(metric.salary))
+                            .sum1MonthKopecks(metric.salaryKopecks)
                             .order1Month(toInt(metric.salaryEntries))
                             .review1Month(toInt(metric.salaryReviews))
                             .leadsNew(metric.leadsNew)
@@ -202,6 +204,7 @@ public class AnalyticsAggregateTeamService {
                             .login(login(user))
                             .imageId(imageId(user))
                             .sum1Month(toInt(metric.salary))
+                            .sum1MonthKopecks(metric.salaryKopecks)
                             .order1Month(toInt(metric.salaryEntries))
                             .review1Month(toInt(metric.salaryReviews))
                             .acceptsCompanyTransfers(worker.isAcceptsCompanyTransfers())
@@ -222,6 +225,7 @@ public class AnalyticsAggregateTeamService {
                             .login(login(user))
                             .imageId(imageId(user))
                             .sum1Month(toInt(metric.salary))
+                            .sum1MonthKopecks(metric.salaryKopecks)
                             .order1Month(toInt(metric.salaryEntries))
                             .review1Month(toInt(metric.salaryReviews))
                             .leadsNew(metric.leadsNew)
@@ -267,6 +271,10 @@ public class AnalyticsAggregateTeamService {
         return value == null ? 0L : value.longValue();
     }
 
+    private static long toKopecks(BigDecimal value) {
+        return value == null ? 0L : value.movePointRight(2).longValueExact();
+    }
+
     private static int toInt(long value) {
         return Math.toIntExact(value);
     }
@@ -279,6 +287,7 @@ public class AnalyticsAggregateTeamService {
         private static final TeamAccumulator EMPTY = new TeamAccumulator();
 
         private long salary;
+        private long salaryKopecks;
         private long salaryEntries;
         private long salaryReviews;
         private long leadsNew;
@@ -286,6 +295,7 @@ public class AnalyticsAggregateTeamService {
 
         private void add(AnalyticsUserMetricAggregate row) {
             salary += toLong(row.getSalarySum());
+            salaryKopecks = Math.addExact(salaryKopecks, toKopecks(row.getSalarySum()));
             salaryEntries += row.getSalaryEntryCount();
             salaryReviews += row.getSalaryReviewCount();
             leadsNew += row.getLeadsNewCount();
@@ -294,6 +304,7 @@ public class AnalyticsAggregateTeamService {
 
         private void replaceSalary(SalaryTotal total) {
             salary = toLong(total.salarySum());
+            salaryKopecks = toKopecks(total.salarySum());
             salaryEntries = total.salaryEntryCount();
             salaryReviews = total.salaryReviewCount();
         }

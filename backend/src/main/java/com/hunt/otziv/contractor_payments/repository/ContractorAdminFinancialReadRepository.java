@@ -18,7 +18,23 @@ public class ContractorAdminFinancialReadRepository {
     static final String SQL = """
             SELECT e.profile_id, 'ACCRUAL' AS kind, '' AS metric, SUM(e.amount_kopecks) AS total,
                    SUM(CASE WHEN e.occurred_on >= :fromDate AND e.occurred_on < :toDate THEN e.amount_kopecks ELSE 0 END) AS period
-            FROM contractor_reward_ledger e WHERE e.profile_id IN (:ids) AND e.active = TRUE GROUP BY e.profile_id
+            FROM (
+                SELECT profile_id, occurred_on, amount_kopecks
+                FROM contractor_reward_ledger
+                WHERE profile_id IN (:ids) AND active = TRUE
+                UNION ALL
+                SELECT profile_id, effective_on AS occurred_on, signed_amount_kopecks AS amount_kopecks
+                FROM contractor_accrual_adjustments
+                WHERE profile_id IN (:ids)
+            ) e
+            GROUP BY e.profile_id
+            UNION ALL
+            SELECT profile_id, 'ADJUSTMENT_BUCKET', bucket, SUM(signed_amount_kopecks),
+                   SUM(CASE WHEN effective_on >= :fromDate AND effective_on < :toDate
+                       THEN signed_amount_kopecks ELSE 0 END)
+            FROM contractor_accrual_adjustments
+            WHERE profile_id IN (:ids)
+            GROUP BY profile_id, bucket
             UNION ALL
             SELECT a.recipient_profile_id, 'EVENT', e.event_type, SUM(e.amount_kopecks),
                    SUM(CASE WHEN e.effective_at >= :fromTime AND e.effective_at < :toTime THEN e.amount_kopecks ELSE 0 END)
@@ -42,6 +58,8 @@ public class ContractorAdminFinancialReadRepository {
 
     private final NamedParameterJdbcTemplate jdbc;
     public record Accrual(long total, long month) {}
+    /** Net month amounts; deduction signs are inverted, and reversals can make either field negative. */
+    public record AdjustmentMonths(long bonusMonthKopecks, long deductionMonthKopecks) {}
     public record ActualTransfers(long count, long amountKopecks) {
         public static ActualTransfers empty() { return new ActualTransfers(0, 0); }
     }
@@ -53,8 +71,13 @@ public class ContractorAdminFinancialReadRepository {
         public long getMonth() { return month; }
     }
     public record Facts(Map<Long, Accrual> accruals, List<EventTotals> events,
-                        Map<Long, Map<ContractorAllocationStatus, Long>> exposures, Map<Long, ActualTransfers> transfers) {
-        public static Facts empty() { return new Facts(Map.of(), List.of(), Map.of(), Map.of()); }
+                        Map<Long, Map<ContractorAllocationStatus, Long>> exposures, Map<Long, ActualTransfers> transfers,
+                        Map<Long, AdjustmentMonths> adjustmentMonths) {
+        public Facts(Map<Long, Accrual> accruals, List<EventTotals> events,
+                     Map<Long, Map<ContractorAllocationStatus, Long>> exposures, Map<Long, ActualTransfers> transfers) {
+            this(accruals, events, exposures, transfers, Map.of());
+        }
+        public static Facts empty() { return new Facts(Map.of(), List.of(), Map.of(), Map.of(), Map.of()); }
     }
 
     @Transactional(readOnly = true)
@@ -70,12 +93,24 @@ public class ContractorAdminFinancialReadRepository {
         List<EventTotals> events = new ArrayList<>();
         Map<Long, Map<ContractorAllocationStatus, Long>> exposures = new HashMap<>();
         Map<Long, ActualTransfers> transfers = new HashMap<>();
+        Map<Long, AdjustmentMonths> adjustmentMonths = new HashMap<>();
         jdbc.query(SQL, params, (org.springframework.jdbc.core.RowCallbackHandler) row -> {
             long id = row.getLong("profile_id");
             long total = row.getBigDecimal("total").longValueExact();
             long period = row.getBigDecimal("period").longValueExact();
             switch (row.getString("kind")) {
                 case "ACCRUAL" -> accruals.put(id, new Accrual(total, period));
+                case "ADJUSTMENT_BUCKET" -> {
+                    AdjustmentMonths previous = adjustmentMonths.getOrDefault(id, new AdjustmentMonths(0, 0));
+                    switch (row.getString("metric")) {
+                        case "BONUS" -> adjustmentMonths.put(id, new AdjustmentMonths(
+                                Math.addExact(previous.bonusMonthKopecks(), period), previous.deductionMonthKopecks()));
+                        case "DEDUCTION" -> adjustmentMonths.put(id, new AdjustmentMonths(
+                                previous.bonusMonthKopecks(),
+                                Math.addExact(previous.deductionMonthKopecks(), Math.negateExact(period))));
+                        default -> throw new IllegalStateException("Unexpected adjustment bucket");
+                    }
+                }
                 case "EVENT" -> events.add(new EventTotals(id, ContractorAllocationEventType.valueOf(row.getString("metric")), total, period));
                 case "EXPOSURE" -> exposures.computeIfAbsent(id, ignored -> new EnumMap<>(ContractorAllocationStatus.class))
                         .put(ContractorAllocationStatus.valueOf(row.getString("metric")), total);
@@ -85,6 +120,7 @@ public class ContractorAdminFinancialReadRepository {
         });
         Map<Long, Map<ContractorAllocationStatus, Long>> immutableExposures = new HashMap<>();
         exposures.forEach((id, amounts) -> immutableExposures.put(id, Map.copyOf(amounts)));
-        return new Facts(Map.copyOf(accruals), List.copyOf(events), Map.copyOf(immutableExposures), Map.copyOf(transfers));
+        return new Facts(Map.copyOf(accruals), List.copyOf(events), Map.copyOf(immutableExposures),
+                Map.copyOf(transfers), Map.copyOf(adjustmentMonths));
     }
 }

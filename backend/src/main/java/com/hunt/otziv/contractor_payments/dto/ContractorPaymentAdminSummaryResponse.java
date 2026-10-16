@@ -29,6 +29,9 @@ public record ContractorPaymentAdminSummaryResponse(
         long outstandingReservedKopecks,
         long availableKopecks,
         boolean reportingLive,
-        boolean currentMonthCoverageComplete
+        boolean currentMonthCoverageComplete,
+        long workAccruedMonthKopecks,
+        long bonusMonthKopecks,
+        long deductionMonthKopecks
 ) {
 }

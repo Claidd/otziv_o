@@ -168,6 +168,34 @@ class ManualPaymentTaskContractorCapacityServiceTest {
     }
 
     @Test
+    void projectedBonusDoesNotExposeFreeCapacityUntilPriorDeficitAndTasksAreCovered() {
+        profile.setManualTaskCommitmentKopecks(20_000L);
+        when(profileService.capacityPosition(profile, ContractorAllocationMode.LIVE))
+                .thenReturn(-30_000L);
+        when(allocationRepository.taskCapacityExposureOutsideModeForUpdate(7L, "LIVE"))
+                .thenReturn(10_000L);
+
+        assertThat(service.ordinaryAvailableAfterAccrualDelta(
+                profile, ContractorAllocationMode.LIVE, 20_000L)).isZero();
+        assertThat(service.ordinaryAvailableAfterAccrualDelta(
+                profile, ContractorAllocationMode.LIVE, 70_000L)).isEqualTo(10_000L);
+    }
+
+    @Test
+    void projectedDeductionRespectsForeignTaskExposureInShadowMode() {
+        profile.setManualTaskCommitmentKopecks(20_000L);
+        when(profileService.capacityPosition(profile, ContractorAllocationMode.SHADOW))
+                .thenReturn(50_000L);
+        when(allocationRepository.taskCapacityExposureOutsideModeForUpdate(7L, "SHADOW"))
+                .thenReturn(10_000L);
+
+        assertThat(service.ordinaryAvailableAfterAccrualDelta(
+                profile, ContractorAllocationMode.SHADOW, -15_000L)).isEqualTo(5_000L);
+        assertThat(service.ordinaryAvailableAfterAccrualDelta(
+                profile, ContractorAllocationMode.SHADOW, -25_000L)).isZero();
+    }
+
+    @Test
     void netUnbackedLegacyConfirmationKeepsCapacityBlockedUntilExactReturn() {
         when(profileService.capacityPosition(profile, ContractorAllocationMode.LIVE))
                 .thenReturn(100_000L);

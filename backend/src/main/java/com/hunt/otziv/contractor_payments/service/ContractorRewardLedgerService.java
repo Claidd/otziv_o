@@ -5,6 +5,7 @@ import com.hunt.otziv.contractor_payments.model.ContractorRewardLedgerEntry;
 import com.hunt.otziv.contractor_payments.model.ContractorRewardSyncMarker;
 import com.hunt.otziv.contractor_payments.model.ContractorRole;
 import com.hunt.otziv.contractor_payments.repository.ContractorPaymentProfileRepository;
+import com.hunt.otziv.contractor_payments.repository.ContractorAccrualAdjustmentRepository;
 import com.hunt.otziv.contractor_payments.repository.ContractorRewardLedgerRepository;
 import com.hunt.otziv.contractor_payments.repository.ContractorRewardSyncMarkerRepository;
 import com.hunt.otziv.p_products.model.Order;
@@ -46,6 +47,7 @@ public class ContractorRewardLedgerService {
 
     private final ZpRepository zpRepository;
     private final ContractorRewardLedgerRepository ledgerRepository;
+    private final ContractorAccrualAdjustmentRepository accrualAdjustmentRepository;
     private final ContractorRewardSyncMarkerRepository syncMarkerRepository;
     private final ContractorPaymentProfileRepository profileRepository;
     private final ContractorRewardAttributionService attributionService;
@@ -249,11 +251,15 @@ public class ContractorRewardLedgerService {
     }
 
     public long totalAccrued(ContractorPaymentProfile profile) {
-        return Math.addExact(profile.getOpeningBalanceKopecks(), ledgerRepository.sumActiveByProfileId(profile.getId()));
+        return Math.addExact(Math.addExact(
+                profile.getOpeningBalanceKopecks(), ledgerRepository.sumActiveByProfileId(profile.getId())),
+                accrualAdjustmentRepository.sumByProfileId(profile.getId()));
     }
 
     public long accruedInPeriod(ContractorPaymentProfile profile, LocalDate from, LocalDate to) {
-        return ledgerRepository.sumActiveByProfileIdAndPeriod(profile.getId(), from, to);
+        return Math.addExact(
+                ledgerRepository.sumActiveByProfileIdAndPeriod(profile.getId(), from, to),
+                accrualAdjustmentRepository.sumInPeriod(profile.getId(), from, to));
     }
 
     public record AccrualTotals(long total, long month) {}
@@ -264,11 +270,16 @@ public class ContractorRewardLedgerService {
         if (profiles.isEmpty()) return totals;
         var rows = ledgerRepository.sumActiveForProfiles(profiles.stream().map(ContractorPaymentProfile::getId).toList(), from, to)
                 .stream().collect(java.util.stream.Collectors.toMap(row -> row.getProfileId(), row -> row));
+        var adjustments = accrualAdjustmentRepository.sumForProfiles(
+                profiles.stream().map(ContractorPaymentProfile::getId).toList(), from, to)
+                .stream().collect(java.util.stream.Collectors.toMap(row -> row.getProfileId(), row -> row));
         for (var profile : profiles) {
             var row = rows.get(profile.getId());
+            var adjustment = adjustments.get(profile.getId());
             totals.put(profile.getId(), new AccrualTotals(
-                    Math.addExact(profile.getOpeningBalanceKopecks(), row == null ? 0 : row.getTotal()),
-                    row == null ? 0 : row.getMonth()));
+                    Math.addExact(Math.addExact(profile.getOpeningBalanceKopecks(), row == null ? 0 : row.getTotal()),
+                            adjustment == null ? 0 : adjustment.getTotal()),
+                    Math.addExact(row == null ? 0 : row.getMonth(), adjustment == null ? 0 : adjustment.getMonth())));
         }
         return totals;
     }

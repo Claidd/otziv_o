@@ -34,6 +34,9 @@ public record ContractorPaymentSummaryResponse(
         boolean shadowMode,
         boolean liveRouting,
         LocalDateTime trackingStartedAt,
-        boolean currentMonthCoverageComplete
+        boolean currentMonthCoverageComplete,
+        long workAccruedMonthKopecks,
+        long bonusMonthKopecks,
+        long deductionMonthKopecks
 ) {
 }

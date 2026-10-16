@@ -36,6 +36,7 @@ import { ManagerReportReviewAccessApi } from '../../core/manager-report-review-a
 import { WorkloadShadowApi } from '../../core/workload-shadow.api';
 import {
   ContractorPaymentSummary,
+  ContractorSelfAccrualAdjustment,
   ContractorPaymentsApi
 } from '../../core/contractor-payments.api';
 import {
@@ -187,7 +188,11 @@ export class HomeComponent {
   readonly contractorPayments = signal<ContractorPaymentSummary[]>([]);
   readonly contractorPaymentsLoading = signal(false);
   readonly contractorPaymentsError = signal<string | null>(null);
+  readonly contractorAccrualAdjustments = signal<ContractorSelfAccrualAdjustment[]>([]);
+  readonly contractorAccrualHistoryLoading = signal(false);
+  readonly contractorAccrualHistoryError = signal<string | null>(null);
   private contractorPaymentsRequested = false;
+  private contractorAccrualHistoryRequest = 0;
 
   readonly actions: DashboardAction[] = [
     {
@@ -403,10 +408,10 @@ export class HomeComponent {
     }
 
     return [
-      { label: 'За сегодня', value: this.money(workerZp.sum1Day), percent: workerZp.percent1Day },
-      { label: 'За неделю', value: this.money(workerZp.sum1Week), percent: workerZp.percent1Week },
-      { label: 'За месяц', value: this.money(workerZp.sum1Month), percent: workerZp.percent1Month },
-      { label: 'За год', value: this.money(workerZp.sum1Year), percent: workerZp.percent1Year },
+      { label: 'За сегодня', value: this.accruedMoney(workerZp.sum1DayKopecks, workerZp.sum1Day), percent: workerZp.percent1Day },
+      { label: 'За неделю', value: this.accruedMoney(workerZp.sum1WeekKopecks, workerZp.sum1Week), percent: workerZp.percent1Week },
+      { label: 'За месяц', value: this.accruedMoney(workerZp.sum1MonthKopecks, workerZp.sum1Month), percent: workerZp.percent1Month },
+      { label: 'За год', value: this.accruedMoney(workerZp.sum1YearKopecks, workerZp.sum1Year), percent: workerZp.percent1Year },
       { label: 'Заказов за месяц', value: this.count(workerZp.sumOrders1Month), percent: workerZp.percent1MonthOrders },
       { label: 'За прошлый месяц', value: this.count(workerZp.sumOrders2Month), percent: workerZp.percent2MonthOrders }
     ];
@@ -420,9 +425,9 @@ export class HomeComponent {
 
     return [
       { label: 'За период', value: this.money(this.contractorRewardPeriodTotal(workerZp.zpPayMapMonth)), percent: null },
-      { label: 'За день', value: this.money(workerZp.sum1Day), percent: workerZp.percent1Day },
-      { label: 'За неделю', value: this.money(workerZp.sum1Week), percent: workerZp.percent1Week },
-      { label: 'За месяц', value: this.money(workerZp.sum1Month), percent: workerZp.percent1Month }
+      { label: 'За день', value: this.accruedMoney(workerZp.sum1DayKopecks, workerZp.sum1Day), percent: workerZp.percent1Day },
+      { label: 'За неделю', value: this.accruedMoney(workerZp.sum1WeekKopecks, workerZp.sum1Week), percent: workerZp.percent1Week },
+      { label: 'За месяц', value: this.accruedMoney(workerZp.sum1MonthKopecks, workerZp.sum1Month), percent: workerZp.percent1Month }
     ];
   });
 
@@ -1321,6 +1326,14 @@ export class HomeComponent {
     return `${new Intl.NumberFormat('ru-RU').format(value || 0)} руб.`;
   }
 
+  private accruedMoney(exactKopecks: number | null | undefined, legacyRubles: number): string {
+    const kopecks = exactKopecks ?? legacyRubles * 100;
+    return `${new Intl.NumberFormat('ru-RU', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(kopecks / 100)} руб.`;
+  }
+
   private contractorRewardPeriodTotal(map?: string | null): number {
     return cabinetPeriodTotalFrom(map, {
       fallbackYear: new Date(this.cabinetDate()).getFullYear()
@@ -1350,6 +1363,7 @@ export class HomeComponent {
       next: (summaries) => {
         this.contractorPayments.set(summaries);
         this.contractorPaymentsLoading.set(false);
+        this.loadContractorAccrualHistory();
       },
       error: (error) => {
         this.contractorPaymentsError.set(apiErrorDetail(
@@ -1357,6 +1371,37 @@ export class HomeComponent {
           'Расчёты по вознаграждениям временно недоступны.'
         ));
         this.contractorPaymentsLoading.set(false);
+      }
+    });
+  }
+
+  contractorAccrualHistoryFor(profileId: number): ContractorSelfAccrualAdjustment[] {
+    return this.contractorAccrualAdjustments()
+      .filter((adjustment) => adjustment.profileId === profileId)
+      .slice(0, 5);
+  }
+
+  private loadContractorAccrualHistory(): void {
+    const request = ++this.contractorAccrualHistoryRequest;
+    this.contractorAccrualHistoryLoading.set(true);
+    this.contractorAccrualHistoryError.set(null);
+    this.contractorPaymentsApi.getMyAccrualAdjustments().subscribe({
+      next: (adjustments) => {
+        if (request !== this.contractorAccrualHistoryRequest) {
+          return;
+        }
+        this.contractorAccrualAdjustments.set(adjustments);
+        this.contractorAccrualHistoryLoading.set(false);
+      },
+      error: (error) => {
+        if (request !== this.contractorAccrualHistoryRequest) {
+          return;
+        }
+        this.contractorAccrualHistoryError.set(apiErrorDetail(
+          error,
+          'Не удалось загрузить историю премий и удержаний.'
+        ));
+        this.contractorAccrualHistoryLoading.set(false);
       }
     });
   }

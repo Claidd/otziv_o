@@ -185,6 +185,10 @@ public class AnalyticsAggregateStatsService {
         stats.setSum1Week(salary7Day.intValue());
         stats.setSum1Month(salaryCurrentMonth.intValue());
         stats.setSum1Year(salaryCurrentYear.intValue());
+        stats.setSum1DayKopecks(salary1Day.movePointRight(2).longValueExact());
+        stats.setSum1WeekKopecks(salary7Day.movePointRight(2).longValueExact());
+        stats.setSum1MonthKopecks(salaryCurrentMonth.movePointRight(2).longValueExact());
+        stats.setSum1YearKopecks(salaryCurrentYear.movePointRight(2).longValueExact());
         stats.setSumOrders1Month(toInt(salaryCurrentMonthCount));
         stats.setSumOrders2Month(toInt(salaryPreviousMonthCount));
         stats.setPercent1Day(calculatePercentageDifference(salary1Day, salary2Day).intValue());

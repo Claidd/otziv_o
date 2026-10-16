@@ -63,10 +63,10 @@ export class UserInfoComponent implements OnDestroy {
     }
 
     return [
-      { label: 'За сегодня', value: this.money(stat.sum1Day), percent: stat.percent1Day },
-      { label: 'За неделю', value: this.money(stat.sum1Week), percent: stat.percent1Week },
-      { label: 'За месяц', value: this.money(stat.sum1Month), percent: stat.percent1Month },
-      { label: 'За год', value: this.money(stat.sum1Year), percent: stat.percent1Year },
+      { label: 'За сегодня', value: this.accruedMoney(stat.sum1DayKopecks, stat.sum1Day), percent: stat.percent1Day },
+      { label: 'За неделю', value: this.accruedMoney(stat.sum1WeekKopecks, stat.sum1Week), percent: stat.percent1Week },
+      { label: 'За месяц', value: this.accruedMoney(stat.sum1MonthKopecks, stat.sum1Month), percent: stat.percent1Month },
+      { label: 'За год', value: this.accruedMoney(stat.sum1YearKopecks, stat.sum1Year), percent: stat.percent1Year },
       { label: 'Заказов за месяц', value: this.count(stat.sumOrders1Month), percent: stat.percent1MonthOrders },
       { label: 'За прошлый месяц', value: this.count(stat.sumOrders2Month), percent: stat.percent2MonthOrders }
     ];
@@ -165,8 +165,12 @@ export class UserInfoComponent implements OnDestroy {
     return 'red';
   }
 
-  private money(value?: number | null): string {
-    return `${new Intl.NumberFormat('ru-RU').format(value || 0)} руб.`;
+  private accruedMoney(exactKopecks: number | null | undefined, legacyRubles: number): string {
+    const kopecks = exactKopecks ?? legacyRubles * 100;
+    return `${new Intl.NumberFormat('ru-RU', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(kopecks / 100)} руб.`;
   }
 
   private count(value?: number | null): string {

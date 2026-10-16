@@ -240,7 +240,7 @@ export class TeamComponent implements OnDestroy {
         return [];
       }
       return [
-        { label: 'Начислено', value: this.money(member.sum1Month) },
+        { label: 'Начислено', value: this.accruedMonthMoney(member) },
         { label: 'Выручка', value: this.money(member.payment1Month) },
         { label: 'Заказы', value: this.count(member.order1Month) },
         { label: 'Отзывы', value: this.count(member.review1Month) }
@@ -258,7 +258,7 @@ export class TeamComponent implements OnDestroy {
       const networkEpisodes = Number(violations?.visible ? violations.episodeCount : 0);
       const monthMode = this.progressMode() === 'month';
       return [
-      { label: 'Начислено', value: this.money(member.sum1Month) },
+        { label: 'Начислено', value: this.accruedMonthMoney(member) },
         {
           label: 'Восстановления',
           value: monthMode ? this.publicationRatePercentLabel(recoveries, publications) : this.count(recoveries),
@@ -304,7 +304,7 @@ export class TeamComponent implements OnDestroy {
     }
 
     return [
-        { label: 'Начислено', value: this.money(member.sum1Month) },
+      { label: 'Начислено', value: this.accruedMonthMoney(member) },
       { label: 'Новые', value: this.count(member.leadsNew) },
       { label: 'В работе', value: this.count(member.leadsInWork) },
       { label: 'Конверсия', value: `${member.percentInWork || 0}%` }
@@ -663,8 +663,10 @@ export class TeamComponent implements OnDestroy {
   }
 
   private hasStats(member: TeamMember): boolean {
+    const hasAccrual = member.sum1MonthKopecks != null
+      ? member.sum1MonthKopecks !== 0
+      : Number(member.sum1Month || 0) !== 0;
     return [
-      member.sum1Month,
       member.order1Month,
       member.review1Month,
       member.payment1Month,
@@ -674,7 +676,15 @@ export class TeamComponent implements OnDestroy {
       member.inCorrect,
       member.intVigul,
       member.publish
-    ].some((value) => Number(value || 0) > 0);
+    ].some((value) => Number(value || 0) > 0) || hasAccrual;
+  }
+
+  private accruedMonthMoney(member: TeamMember): string {
+    const kopecks = member.sum1MonthKopecks ?? (member.sum1Month ?? 0) * 100;
+    return `${new Intl.NumberFormat('ru-RU', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(kopecks / 100)} руб.`;
   }
 
   private money(value?: number | null): string {

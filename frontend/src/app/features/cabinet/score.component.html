@@ -83,6 +83,9 @@
                     <span class="accrued">
                       <small>Начислено за месяц</small>
                       <b>{{ moneyKopecks(payment.accruedMonthKopecks) }}</b>
+                      <em>Работа {{ moneyKopecks(payment.workAccruedMonthKopecks ?? payment.accruedMonthKopecks) }}</em>
+                      <em>Премии с отменами {{ moneyKopecks(payment.bonusMonthKopecks) }}</em>
+                      <em>Удержания с отменами {{ moneyKopecks(payment.deductionMonthKopecks) }}</em>
                     </span>
                     <span class="paid">
                       <small>Оплачено за месяц</small>

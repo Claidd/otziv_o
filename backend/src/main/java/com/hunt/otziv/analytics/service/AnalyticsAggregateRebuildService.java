@@ -439,6 +439,7 @@ public class AnalyticsAggregateRebuildService {
                     WHERE daily.metric_date BETWEEN :fromInclusive AND :toInclusive
                       AND (
                           daily.salary_entry_count > 0
+                          OR daily.salary_sum <> 0
                           OR daily.payment_count > 0
                           OR daily.new_companies_count > 0
                           OR daily.published_reviews_count > 0
@@ -695,6 +696,7 @@ public class AnalyticsAggregateRebuildService {
                       ON daily.user_id = owner_visibility.visible_user_id
                      AND daily.metric_date BETWEEN :fromInclusive AND :toInclusive
                     WHERE daily.salary_entry_count > 0
+                       OR daily.salary_sum <> 0
                        OR daily.payment_count > 0
                        OR daily.new_companies_count > 0
                        OR daily.published_reviews_count > 0
@@ -898,6 +900,7 @@ public class AnalyticsAggregateRebuildService {
                         WHERE monthly.month_start = :monthStart
                           AND (
                               monthly.salary_entry_count > 0
+                              OR monthly.salary_sum <> 0
                               OR monthly.payment_count > 0
                               OR monthly.new_companies_count > 0
                               OR monthly.published_reviews_count > 0
@@ -1060,6 +1063,7 @@ public class AnalyticsAggregateRebuildService {
                         owner_visibility.owner_user_id,
                         COUNT(DISTINCT CASE
                             WHEN monthly.salary_entry_count > 0
+                              OR monthly.salary_sum <> 0
                               OR monthly.payment_count > 0
                               OR monthly.new_companies_count > 0
                               OR monthly.published_reviews_count > 0

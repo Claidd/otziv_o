@@ -635,6 +635,9 @@
 
                     <div class="contractor-profile-metrics">
                       <span><small>Начислено за месяц</small><strong>{{ moneyKopecks(profile.accruedMonthKopecks) }}</strong></span>
+                      <span><small>За выполненные работы</small><strong>{{ moneyKopecks(profile.workAccruedMonthKopecks ?? profile.accruedMonthKopecks) }}</strong></span>
+                      <span><small>Премии с отменами за месяц</small><strong>{{ moneyKopecks(profile.bonusMonthKopecks) }}</strong></span>
+                      <span><small>Удержания с отменами за месяц</small><strong>{{ moneyKopecks(profile.deductionMonthKopecks) }}</strong></span>
                       <span><small>Зарезервировано</small><strong>{{ moneyKopecks(profile.reservedKopecks) }}</strong></span>
                       <span><small>Клиент сообщил</small><strong>{{ moneyKopecks(profile.clientReportedKopecks) }}</strong></span>
                       <span><small>Частично подтверждено · остаток</small><strong>{{ moneyKopecks(profile.partiallyConfirmedOutstandingKopecks) }}</strong></span>
@@ -650,6 +653,170 @@
                         {{ moneyKopecks(profile.exposureOverrunKopecks) }}.
                       </p>
                     }
+
+                    <details
+                      class="accrual-adjustments"
+                      (toggle)="loadContractorAccrualHistory(profile.id, $any($event.target).open)"
+                    >
+                      <summary>Премии и удержания</summary>
+                      <p class="form-hint compact">
+                        Корректировка входит в начисление текущего месяца и доступную сумму для новых оплат.
+                        Причину увидит сотрудник; укажите здесь только рабочее основание без реквизитов.
+                        Месяц основания может быть прошлым, но закрытый расчёт не меняется задним числом.
+                      </p>
+                      @if (contractorAccrualErrors()[profile.id]) {
+                        <p class="error compact" role="alert">{{ contractorAccrualErrors()[profile.id] }}</p>
+                      }
+                      <div class="accrual-adjustment-form">
+                        <label>
+                          <span>Вид</span>
+                          <select
+                            [value]="contractorAccrualDraft(profile.id).kind"
+                            [disabled]="!canManageContractorProfiles() || contractorAccrualSavingId() !== null"
+                            (change)="updateContractorAccrualDraft(profile.id, 'kind', $any($event.target).value)"
+                          >
+                            <option value="BONUS">Премия</option>
+                            <option value="DEDUCTION">Удержание</option>
+                          </select>
+                        </label>
+                        <label>
+                          <span>Сумма, ₽</span>
+                          <input
+                            type="text"
+                            inputmode="decimal"
+                            placeholder="0,00"
+                            [value]="contractorAccrualDraft(profile.id).amountRubles"
+                            [disabled]="!canManageContractorProfiles() || contractorAccrualSavingId() !== null"
+                            (input)="updateContractorAccrualDraft(profile.id, 'amountRubles', $any($event.target).value)"
+                          >
+                        </label>
+                        <label>
+                          <span>Месяц основания</span>
+                          <input
+                            type="month"
+                            [max]="currentContractorAccrualMonth()"
+                            [value]="contractorAccrualDraft(profile.id).referenceMonth"
+                            [disabled]="!canManageContractorProfiles() || contractorAccrualSavingId() !== null"
+                            (change)="updateContractorAccrualDraft(profile.id, 'referenceMonth', $any($event.target).value)"
+                          >
+                        </label>
+                        <label>
+                          <span>ID документа · для админа и владельца</span>
+                          <input
+                            type="text"
+                            maxlength="160"
+                            placeholder="Необязательно, без персональных данных"
+                            [value]="contractorAccrualDraft(profile.id).evidenceReference"
+                            [disabled]="!canManageContractorProfiles() || contractorAccrualSavingId() !== null"
+                            (input)="updateContractorAccrualDraft(profile.id, 'evidenceReference', $any($event.target).value)"
+                          >
+                        </label>
+                        <label class="wide">
+                          <span>Причина · видна сотруднику</span>
+                          <input
+                            type="text"
+                            maxlength="255"
+                            placeholder="Например, премия за помощь команде"
+                            [value]="contractorAccrualDraft(profile.id).reason"
+                            [disabled]="!canManageContractorProfiles() || contractorAccrualSavingId() !== null"
+                            (input)="updateContractorAccrualDraft(profile.id, 'reason', $any($event.target).value)"
+                          >
+                        </label>
+                      </div>
+                      <div class="accrual-adjustment-actions">
+                        <button
+                          type="button"
+                          class="secondary"
+                          (click)="previewContractorAccrualAdjustment(profile.id)"
+                          [disabled]="!canManageContractorProfiles() || contractorAccrualPreviewLoadingId() !== null || contractorAccrualSavingId() !== null"
+                        >
+                          {{ contractorAccrualPreviewLoadingId() === profile.id ? 'Рассчитываю…' : 'Проверить расчёт' }}
+                        </button>
+                        <button
+                          type="button"
+                          (click)="createContractorAccrualAdjustment(profile.id)"
+                          [disabled]="!canManageContractorProfiles() || !contractorAccrualPreviews()[profile.id] || contractorAccrualPreviewKeys()[profile.id] !== contractorAccrualDraft(profile.id).idempotencyKey || contractorAccrualSavingId() !== null"
+                        >
+                          {{ contractorAccrualSavingId() === profile.id ? 'Провожу…' : 'Провести корректировку' }}
+                        </button>
+                      </div>
+                      @if (contractorAccrualPreviews()[profile.id]; as preview) {
+                        <div class="accrual-preview" aria-label="Предварительный расчёт">
+                          <strong>Проверка перед проведением</strong>
+                          <div><span>За работу в этом месяце</span><b>{{ moneyKopecks(preview.workMonthKopecks) }}</b></div>
+                          <div><span>Премии с отменами сейчас</span><b>{{ moneyKopecks(preview.bonusMonthKopecks) }}</b></div>
+                          <div><span>Удержания с отменами сейчас</span><b>{{ moneyKopecks(preview.deductionMonthKopecks) }}</b></div>
+                          <div><span>Начислено за месяц</span><b>{{ moneyKopecks(preview.accruedMonthBeforeKopecks) }} → {{ moneyKopecks(preview.accruedMonthAfterKopecks) }}</b></div>
+                          <div><span>Уже оплачено всего</span><b>{{ moneyKopecks(preview.paidTotalKopecks) }}</b></div>
+                          <div><span>Занято действующими счетами</span><b>{{ moneyKopecks(preview.outstandingKopecks) }}</b></div>
+                          <div><span>Обязательства по заданиям</span><b>{{ moneyKopecks(preview.manualTaskCommitmentKopecks) }}</b></div>
+                          <div class="accrual-preview-total"><span>Свободно для новых оплат</span><b>{{ moneyKopecks(preview.freeForNewPaymentsBeforeKopecks) }} → {{ moneyKopecks(preview.freeForNewPaymentsAfterKopecks) }}</b></div>
+                        </div>
+                      }
+                      <div class="accrual-adjustment-history">
+                        <strong>История корректировок</strong>
+                        @if (contractorAccrualHistoryLoading()[profile.id] && !contractorAccrualHistory()[profile.id]) {
+                          <p>Загружаю историю…</p>
+                        } @else if ((contractorAccrualHistory()[profile.id] || []).length === 0) {
+                          <p>Премий и удержаний пока не было.</p>
+                        } @else {
+                          <ol>
+                            @for (adjustment of contractorAccrualHistory()[profile.id]; track adjustment.id) {
+                              <li>
+                                <div class="accrual-adjustment-row">
+                                  <strong>
+                                    {{ adjustment.kind === 'BONUS' ? 'Премия' : adjustment.kind === 'DEDUCTION' ? 'Удержание' : 'Отмена' }}
+                                    · {{ moneyKopecks(adjustment.signedAmountKopecks) }}
+                                  </strong>
+                                  <small>Учтено {{ adjustment.effectiveOn }} · за {{ adjustment.referenceMonth }} · {{ adjustment.createdBy }}</small>
+                                  <span>{{ adjustment.reason }}</span>
+                                  @if (adjustment.evidenceReference) {
+                                    <small>Документ: {{ adjustment.evidenceReference }}</small>
+                                  }
+                                  @if (adjustment.reversalOfId) {
+                                    <small>Отмена записи №{{ adjustment.reversalOfId }}</small>
+                                  }
+                                </div>
+                                @if (canManageContractorProfiles() && contractorAccrualCanReverse(profile.id, adjustment)) {
+                                  <details class="accrual-reversal">
+                                    <summary>Отменить запись</summary>
+                                    <label>
+                                      <span>Причина отмены · видна сотруднику</span>
+                                      <input
+                                        type="text"
+                                        maxlength="255"
+                                        placeholder="Обязательно"
+                                        [value]="contractorAccrualReversalReasons()[adjustment.id] || ''"
+                                        [disabled]="contractorAccrualReversalSavingId() !== null"
+                                        (input)="updateContractorAccrualReversalReason(adjustment.id, $any($event.target).value)"
+                                      >
+                                    </label>
+                                    <button
+                                      type="button"
+                                      class="secondary"
+                                      (click)="reverseContractorAccrualAdjustment(profile.id, adjustment.id)"
+                                      [disabled]="contractorAccrualReversalSavingId() !== null"
+                                    >
+                                      {{ contractorAccrualReversalSavingId() === adjustment.id ? 'Отменяю…' : 'Подтвердить отмену' }}
+                                    </button>
+                                  </details>
+                                }
+                              </li>
+                            }
+                          </ol>
+                          @if (contractorAccrualHistoryNextPage()[profile.id] !== undefined) {
+                            <button
+                              type="button"
+                              class="secondary"
+                              (click)="loadMoreContractorAccrualHistory(profile.id)"
+                              [disabled]="contractorAccrualHistoryLoading()[profile.id]"
+                            >
+                              {{ contractorAccrualHistoryLoading()[profile.id] ? 'Загружаю…' : 'Показать ещё' }}
+                            </button>
+                          }
+                        }
+                      </div>
+                    </details>
 
                     <details
                       class="opening-history"

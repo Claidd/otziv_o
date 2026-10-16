@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigInteger;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -31,9 +32,9 @@ public class AnalyticsAggregateScoreComparisonService {
     );
 
     private static final List<ScoreField> COMPARED_FIELDS = List.of(
-            new ScoreField("salary", UserData::getSalary),
+            new ScoreField("salary", UserData::getSalary, "salaryKopecks", UserData::getSalaryKopecks),
             new ScoreField("totalSum", UserData::getTotalSum),
-            new ScoreField("zpTotal", UserData::getZpTotal),
+            new ScoreField("zpTotal", UserData::getZpTotal, "zpTotalKopecks", UserData::getZpTotalKopecks),
             new ScoreField("newCompanies", UserData::getNewCompanies),
             new ScoreField("order1Month", UserData::getOrder1Month),
             new ScoreField("review1Month", UserData::getReview1Month),
@@ -101,15 +102,19 @@ public class AnalyticsAggregateScoreComparisonService {
 
             comparedUsers++;
             for (ScoreField field : COMPARED_FIELDS) {
-                Long legacyValue = zeroIfNull(field.value().apply(legacy));
-                Long aggregateValue = zeroIfNull(field.value().apply(aggregate));
+                Long legacyExact = field.exactValue() == null ? null : field.exactValue().apply(legacy);
+                Long aggregateExact = field.exactValue() == null ? null : field.exactValue().apply(aggregate);
+                boolean compareExact = legacyExact != null && aggregateExact != null;
+                String fieldName = compareExact ? field.exactName() : field.name();
+                Long legacyValue = compareExact ? legacyExact : zeroIfNull(field.value().apply(legacy));
+                Long aggregateValue = compareExact ? aggregateExact : zeroIfNull(field.value().apply(aggregate));
                 if (!legacyValue.equals(aggregateValue)) {
                     mismatches.add(new ScoreFieldComparison(
                             key,
-                            field.name(),
+                            fieldName,
                             String.valueOf(legacyValue),
                             String.valueOf(aggregateValue),
-                            String.valueOf(aggregateValue - legacyValue),
+                            BigInteger.valueOf(aggregateValue).subtract(BigInteger.valueOf(legacyValue)).toString(),
                             false
                     ));
                 }
@@ -158,7 +163,9 @@ public class AnalyticsAggregateScoreComparisonService {
 
     private List<String> comparedFieldNames() {
         return COMPARED_FIELDS.stream()
-                .map(ScoreField::name)
+                .flatMap(field -> field.exactName() == null
+                        ? java.util.stream.Stream.of(field.name())
+                        : java.util.stream.Stream.of(field.exactName(), field.name()))
                 .toList();
     }
 
@@ -170,7 +177,11 @@ public class AnalyticsAggregateScoreComparisonService {
         return value == null ? 0L : value;
     }
 
-    private record ScoreField(String name, Function<UserData, Long> value) {
+    private record ScoreField(String name, Function<UserData, Long> value,
+                              String exactName, Function<UserData, Long> exactValue) {
+        private ScoreField(String name, Function<UserData, Long> value) {
+            this(name, value, null, null);
+        }
     }
 
     public record AnalyticsScoreComparison(

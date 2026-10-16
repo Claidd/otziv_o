@@ -639,6 +639,26 @@ class ApiCabinetControllerTest {
     }
 
     @Test
+    void scoreSortsEqualWholeRubleWorkerSalariesByExactKopecks() {
+        ReflectionTestUtils.setField(controller, "aggregateAnalyticsReadEnabled", false);
+        UserData fiftyKopecks = scoreUser("Fifty Kopecks", 0L, 11L);
+        fiftyKopecks.setRole("ROLE_WORKER");
+        fiftyKopecks.setSalaryKopecks(50L);
+        fiftyKopecks.setZpTotalKopecks(125L);
+        UserData seventyFiveKopecks = scoreUser("Seventy Five Kopecks", 0L, 12L);
+        seventyFiveKopecks.setRole("ROLE_WORKER");
+        seventyFiveKopecks.setSalaryKopecks(75L);
+        when(personalService.getPersonalsAndCountToScore(DATE))
+                .thenReturn(List.of(fiftyKopecks, seventyFiveKopecks));
+
+        ApiCabinetController.ScoreResponse response = controller.score(principal, authentication, DATE, true);
+
+        assertEquals("Seventy Five Kopecks", response.groups().get("workers").getFirst().fio());
+        assertEquals(75L, response.groups().get("workers").getFirst().salaryKopecks());
+        assertEquals(125L, response.groups().get("workers").get(1).zpTotalKopecks());
+    }
+
+    @Test
     void scoreHidesFinancialFieldsForNonFinanceRoles() {
         authentication = new UsernamePasswordAuthenticationToken(
                 "worker",
@@ -652,10 +672,33 @@ class ApiCabinetControllerTest {
 
         ApiCabinetController.ScoreUserResponse worker = response.groups().get("managers").getFirst();
         assertNull(worker.salary());
+        assertNull(worker.salaryKopecks());
         assertNull(worker.totalSum());
         assertNull(worker.zpTotal());
+        assertNull(worker.zpTotalKopecks());
         assertNull(worker.newCompanies());
         verify(contractorPaymentVisibilityService, never()).adminSummary(DATE);
+    }
+
+    @Test
+    void nonFinanceScoreOrderDoesNotRevealHiddenSalaryOrRevenue() {
+        authentication = new UsernamePasswordAuthenticationToken(
+                "worker", "n/a", List.of(new SimpleGrantedAuthority("ROLE_WORKER"))
+        );
+        ReflectionTestUtils.setField(controller, "aggregateAnalyticsReadEnabled", true);
+        UserData alpha = scoreUser("Alpha", 1L, 11L);
+        alpha.setSalaryKopecks(100L);
+        alpha.setTotalSum(1L);
+        UserData zeta = scoreUser("Zeta", 1_000L, 12L);
+        zeta.setSalaryKopecks(100_000L);
+        zeta.setTotalSum(100_000L);
+        when(analyticsAggregateScoreService.buildScore(DATE)).thenReturn(Optional.of(List.of(zeta, alpha)));
+
+        ApiCabinetController.ScoreResponse response = controller.score(principal, authentication, DATE, true);
+
+        assertEquals("Alpha", response.groups().get("managers").getFirst().fio());
+        assertNull(response.groups().get("managers").getFirst().salaryKopecks());
+        assertNull(response.groups().get("managers").get(1).salaryKopecks());
     }
 
     @Test

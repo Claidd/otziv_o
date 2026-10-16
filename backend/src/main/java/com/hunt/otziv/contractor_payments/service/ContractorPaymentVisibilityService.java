@@ -2,10 +2,12 @@ package com.hunt.otziv.contractor_payments.service;
 
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.contractor_payments.dto.ContractorPaymentAdminSummaryResponse;
+import com.hunt.otziv.contractor_payments.dto.ContractorAccrualAdjustmentSelfResponse;
 import com.hunt.otziv.contractor_payments.dto.ContractorPaymentAllocationEventResponse;
 import com.hunt.otziv.contractor_payments.dto.ContractorPaymentAllocationJournalItemResponse;
 import com.hunt.otziv.contractor_payments.dto.ContractorPaymentSummaryResponse;
 import com.hunt.otziv.contractor_payments.model.ContractorAllocationMode;
+import com.hunt.otziv.contractor_payments.model.ContractorAccrualBucket;
 import com.hunt.otziv.contractor_payments.model.ContractorAllocationStatus;
 import com.hunt.otziv.contractor_payments.model.ContractorAllocationSourceType;
 import com.hunt.otziv.contractor_payments.model.ContractorPaymentAllocation;
@@ -13,6 +15,8 @@ import com.hunt.otziv.contractor_payments.model.ContractorPaymentAllocationEvent
 import com.hunt.otziv.contractor_payments.model.ContractorPaymentProfile;
 import com.hunt.otziv.contractor_payments.model.ContractorRole;
 import com.hunt.otziv.contractor_payments.repository.ContractorPaymentAllocationEventRepository;
+import com.hunt.otziv.contractor_payments.repository.ContractorAccrualAdjustmentRepository;
+import com.hunt.otziv.contractor_payments.repository.ContractorRewardLedgerRepository;
 import com.hunt.otziv.contractor_payments.repository.ContractorPaymentAllocationRepository;
 import com.hunt.otziv.contractor_payments.repository.ContractorPaymentProfileRepository;
 import com.hunt.otziv.u_users.model.User;
@@ -20,6 +24,7 @@ import com.hunt.otziv.u_users.repository.UserRepository;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.YearMonth;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
@@ -56,6 +61,8 @@ public class ContractorPaymentVisibilityService {
     private final ContractorPaymentProfileRepository profileRepository;
     private final ContractorPaymentAllocationRepository allocationRepository;
     private final ContractorPaymentAllocationEventRepository eventRepository;
+    private final ContractorAccrualAdjustmentRepository accrualAdjustmentRepository;
+    private final ContractorRewardLedgerRepository rewardLedgerRepository;
     private final ContractorRewardLedgerService ledgerService;
     private final ContractorPaymentAccountingService accountingService;
     private final ContractorPaymentRuntimeSwitch runtimeSwitch;
@@ -85,6 +92,24 @@ public class ContractorPaymentVisibilityService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<ContractorAccrualAdjustmentSelfResponse> ownAdjustmentHistory(Authentication authentication) {
+        User user = resolveCurrentUser(authentication);
+        return profileRepository.findAllByUserId(user.getId()).stream()
+                .flatMap(profile -> accrualAdjustmentRepository.findAllByProfileIdOrderByCreatedAtDescIdDesc(
+                        profile.getId(), PageRequest.of(0, 100)).stream())
+                .sorted(java.util.Comparator.comparing(
+                        com.hunt.otziv.contractor_payments.model.ContractorAccrualAdjustment::getCreatedAt).reversed()
+                        .thenComparing(com.hunt.otziv.contractor_payments.model.ContractorAccrualAdjustment::getId,
+                                java.util.Comparator.reverseOrder()))
+                .map(entry -> new ContractorAccrualAdjustmentSelfResponse(
+                        entry.getId(), entry.getProfile().getId(), entry.getKind(),
+                        entry.getSignedAmountKopecks(), entry.getEffectiveOn(),
+                        YearMonth.from(entry.getReferenceMonth()).toString(), entry.getReason(),
+                        entry.getReversalOf() == null ? null : entry.getReversalOf().getId()))
+                .toList();
+    }
+
     /**
      * Read-only finance overview for administrators and owners. The endpoint
      * layer must still enforce role access; this method deliberately returns no
@@ -107,6 +132,12 @@ public class ContractorPaymentVisibilityService {
                             new com.hunt.otziv.contractor_payments.repository.ContractorAdminFinancialReadRepository.Accrual(0, 0));
                     var accrued = new ContractorRewardLedgerService.AccrualTotals(
                             Math.addExact(profile.getOpeningBalanceKopecks(), rawAccrued.total()), rawAccrued.month());
+                    var adjustmentMonth = facts.adjustmentMonths().getOrDefault(profile.getId(),
+                            new com.hunt.otziv.contractor_payments.repository.ContractorAdminFinancialReadRepository.AdjustmentMonths(0, 0));
+                    var breakdown = new MonthBreakdown(
+                            Math.addExact(Math.subtractExact(accrued.month(), adjustmentMonth.bonusMonthKopecks()),
+                                    adjustmentMonth.deductionMonthKopecks()),
+                            adjustmentMonth.bonusMonthKopecks(), adjustmentMonth.deductionMonthKopecks());
                     var event = events.getOrDefault(profile.getId(), ContractorPaymentAccountingService.PeriodTotals.empty());
                     var exposure = facts.exposures().getOrDefault(profile.getId(), Map.of());
                     var amounts = new SummaryAmounts(accrued.total(), accrued.month(),
@@ -115,7 +146,7 @@ public class ContractorPaymentVisibilityService {
                             exposure.getOrDefault(ContractorAllocationStatus.PARTIALLY_CONFIRMED, 0L),
                             event.confirmedMonth(), event.confirmedTotal(), event.returnedMonth(), event.returnedTotal(),
                             event.closedMonth(), event.closedTotal());
-                    ContractorPaymentSummaryResponse summary = summary(profile, monthStart, policy, amounts);
+                    ContractorPaymentSummaryResponse summary = summary(profile, monthStart, policy, amounts, breakdown);
                     var transferStats = facts.transfers().getOrDefault(
                             profile.getId(),
                             com.hunt.otziv.contractor_payments.repository.ContractorAdminFinancialReadRepository.ActualTransfers.empty()
@@ -149,7 +180,10 @@ public class ContractorPaymentVisibilityService {
                             outstandingReserved,
                             summary.availableKopecks(),
                             summary.reportingLive(),
-                            summary.currentMonthCoverageComplete()
+                            summary.currentMonthCoverageComplete(),
+                            summary.workAccruedMonthKopecks(),
+                            summary.bonusMonthKopecks(),
+                            summary.deductionMonthKopecks()
                     );
                 })
                 .toList();
@@ -195,6 +229,7 @@ public class ContractorPaymentVisibilityService {
     private record SummaryAmounts(long accruedTotal, long accruedMonth, long reserved, long clientReported,
                                   long partiallyConfirmedOutstanding, long grossConfirmedMonth, long grossConfirmedTotal,
                                   long returnedMonth, long returnedTotal, long closedWithoutPaymentMonth, long closedWithoutPaymentTotal) {}
+    private record MonthBreakdown(long work, long bonus, long deduction) {}
 
     private SummaryPolicy summaryPolicy() {
         return new SummaryPolicy(appSettingService.getBoolean(AppSettingService.CONTRACTOR_PAYMENTS_SHADOW_ENABLED, true),
@@ -215,12 +250,20 @@ public class ContractorPaymentVisibilityService {
                 accountingService.returned(profile, mode),
                 accountingService.closedWithoutPaymentInPeriod(profile, mode, from.atStartOfDay(), to.atStartOfDay()),
                 accountingService.closedWithoutPayment(profile, mode));
-        return summary(profile, from, policy, amounts);
+        return summary(profile, from, policy, amounts, monthBreakdown(profile.getId(), from, to));
+    }
+
+    private MonthBreakdown monthBreakdown(Long profileId, LocalDate from, LocalDate to) {
+        return new MonthBreakdown(
+                rewardLedgerRepository.sumActiveByProfileIdAndPeriod(profileId, from, to),
+                accrualAdjustmentRepository.sumBucketInPeriod(profileId, ContractorAccrualBucket.BONUS, from, to),
+                Math.negateExact(accrualAdjustmentRepository.sumBucketInPeriod(
+                        profileId, ContractorAccrualBucket.DEDUCTION, from, to)));
     }
 
     /** The same financial arithmetic is used by batch finance reads and the own-profile path. */
     private ContractorPaymentSummaryResponse summary(ContractorPaymentProfile profile, LocalDate monthStart,
-            SummaryPolicy policy, SummaryAmounts amounts) {
+            SummaryPolicy policy, SummaryAmounts amounts, MonthBreakdown breakdown) {
         LocalDateTime trackingStartedAt = profile.getTrackingStartedAt();
         boolean currentMonthCoverageComplete = trackingStartedAt != null && !trackingStartedAt.isAfter(monthStart.atStartOfDay());
         boolean shadowMode = policy.shadow(), liveRouting = policy.liveRouting();
@@ -274,7 +317,10 @@ public class ContractorPaymentVisibilityService {
                 shadowMode,
                 liveRouting,
                 trackingStartedAt,
-                currentMonthCoverageComplete
+                currentMonthCoverageComplete,
+                breakdown.work(),
+                breakdown.bonus(),
+                breakdown.deduction()
         );
     }
 

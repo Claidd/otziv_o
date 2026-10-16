@@ -7,6 +7,10 @@ import {
   AdminUsersApi,
   AssignmentOptions,
   ChangeKeycloakPasswordRequest,
+  ContractorAccrualAdjustment,
+  ContractorAccrualAdjustmentKind,
+  ContractorAccrualAdjustmentPreview,
+  ContractorAccrualAdjustmentRequest,
   ContractorPaymentProfile,
   ContractorPaymentProfileAdjustment,
   ContractorPaymentProfileRequest,
@@ -94,6 +98,15 @@ type ContractorDirectSettlementDraft = {
   idempotencyKey: string;
 };
 
+type ContractorAccrualAdjustmentDraft = {
+  kind: ContractorAccrualAdjustmentKind;
+  amountRubles: string;
+  reason: string;
+  referenceMonth: string;
+  evidenceReference: string;
+  idempotencyKey: string;
+};
+
 @Component({
   selector: 'app-users-admin',
   imports: [AdminLayoutComponent, LoadErrorCardComponent, ReactiveFormsModule, RouterLink],
@@ -145,6 +158,18 @@ export class UsersAdminComponent implements OnDestroy {
   readonly contractorOpeningHistory = signal<Record<number, ContractorPaymentProfileAdjustment[]>>({});
   readonly contractorOpeningHistoryLoadingId = signal<number | null>(null);
   readonly contractorOpeningHistoryError = signal<string | null>(null);
+  readonly contractorAccrualDrafts = signal<Record<number, ContractorAccrualAdjustmentDraft>>({});
+  readonly contractorAccrualPreviews = signal<Record<number, ContractorAccrualAdjustmentPreview>>({});
+  readonly contractorAccrualPreviewKeys = signal<Record<number, string>>({});
+  readonly contractorAccrualPreviewLoadingId = signal<number | null>(null);
+  readonly contractorAccrualSavingId = signal<number | null>(null);
+  readonly contractorAccrualHistory = signal<Record<number, ContractorAccrualAdjustment[]>>({});
+  readonly contractorAccrualHistoryLoading = signal<Record<number, boolean>>({});
+  readonly contractorAccrualHistoryNextPage = signal<Record<number, number>>({});
+  readonly contractorAccrualErrors = signal<Record<number, string>>({});
+  readonly contractorAccrualReversalReasons = signal<Record<number, string>>({});
+  readonly contractorAccrualReversalKeys = signal<Record<number, string>>({});
+  readonly contractorAccrualReversalSavingId = signal<number | null>(null);
   readonly contractorDirectSettlements = signal<Record<number, ContractorDirectSettlement[]>>({});
   readonly contractorDirectSettlementsLoadingId = signal<number | null>(null);
   readonly contractorDirectSettlementsError = signal<string | null>(null);
@@ -197,6 +222,8 @@ export class UsersAdminComponent implements OnDestroy {
   private formBaseline = '';
   private contractorJournalRequest = 0;
   private contractorProfilesRequest = 0;
+  private contractorAccrualHistoryRequest = 0;
+  private readonly contractorAccrualHistoryRequestByProfile = new Map<number, number>();
   readonly assignmentOptions = signal<AssignmentOptions>({
     managers: [],
     workers: [],
@@ -368,6 +395,19 @@ export class UsersAdminComponent implements OnDestroy {
     this.contractorOpeningHistory.set({});
     this.contractorOpeningHistoryError.set(null);
     this.contractorOpeningHistoryLoadingId.set(null);
+    this.contractorAccrualDrafts.set({});
+    this.contractorAccrualPreviews.set({});
+    this.contractorAccrualPreviewKeys.set({});
+    this.contractorAccrualHistory.set({});
+    this.contractorAccrualHistoryNextPage.set({});
+    this.contractorAccrualHistoryRequestByProfile.clear();
+    this.contractorAccrualPreviewLoadingId.set(null);
+    this.contractorAccrualSavingId.set(null);
+    this.contractorAccrualHistoryLoading.set({});
+    this.contractorAccrualReversalSavingId.set(null);
+    this.contractorAccrualErrors.set({});
+    this.contractorAccrualReversalReasons.set({});
+    this.contractorAccrualReversalKeys.set({});
     this.contractorDirectSettlements.set({});
     this.contractorDirectSettlementsError.set(null);
     this.contractorDirectSettlementsLoadingId.set(null);
@@ -403,6 +443,13 @@ export class UsersAdminComponent implements OnDestroy {
           savedEnabled: profile.enabled,
           savedLiveEnabled: profile.liveEnabled
         })));
+        this.contractorAccrualDrafts.update((drafts) => {
+          const next = { ...drafts };
+          for (const profile of profiles) {
+            next[profile.id] ??= this.newContractorAccrualDraft();
+          }
+          return next;
+        });
         this.contractorProfilesLoading.set(false);
       },
       error: (err) => {
@@ -588,6 +635,343 @@ export class UsersAdminComponent implements OnDestroy {
         ));
         this.contractorOpeningHistoryLoadingId.set(null);
       }
+    });
+  }
+
+  contractorAccrualDraft(profileId: number): ContractorAccrualAdjustmentDraft {
+    return this.contractorAccrualDrafts()[profileId] ?? this.newContractorAccrualDraft();
+  }
+
+  updateContractorAccrualDraft(
+    profileId: number,
+    field: 'kind' | 'amountRubles' | 'reason' | 'referenceMonth' | 'evidenceReference',
+    value: string
+  ): void {
+    const current = this.contractorAccrualDraft(profileId);
+    this.contractorAccrualDrafts.update((drafts) => ({
+      ...drafts,
+      [profileId]: { ...current, [field]: value, idempotencyKey: this.newIdempotencyKey() },
+    }));
+    this.contractorAccrualPreviews.update((previews) => {
+      const next = { ...previews };
+      delete next[profileId];
+      return next;
+    });
+    this.contractorAccrualPreviewKeys.update((keys) => {
+      const next = { ...keys };
+      delete next[profileId];
+      return next;
+    });
+    this.contractorAccrualErrors.update((errors) => {
+      const next = { ...errors };
+      delete next[profileId];
+      return next;
+    });
+  }
+
+  previewContractorAccrualAdjustment(profileId: number): void {
+    const userId = this.selectedUser()?.id;
+    if (userId == null || !this.canManageContractorProfiles()
+      || this.contractorAccrualPreviewLoadingId() !== null || this.contractorAccrualSavingId() !== null) {
+      return;
+    }
+    const request = this.contractorAccrualRequest(profileId);
+    if (!request) {
+      return;
+    }
+    const key = this.contractorAccrualDraft(profileId).idempotencyKey;
+    this.contractorAccrualPreviewLoadingId.set(profileId);
+    this.clearContractorAccrualError(profileId);
+    this.adminUsersApi.previewContractorAccrualAdjustment(userId, profileId, request).subscribe({
+      next: (preview) => {
+        this.contractorAccrualPreviewLoadingId.set(null);
+        if (this.selectedUser()?.id !== userId || this.contractorAccrualDraft(profileId).idempotencyKey !== key) {
+          return;
+        }
+        this.contractorAccrualPreviews.update((previews) => ({ ...previews, [profileId]: preview }));
+        this.contractorAccrualPreviewKeys.update((keys) => ({ ...keys, [profileId]: key }));
+      },
+      error: (err) => {
+        this.contractorAccrualPreviewLoadingId.set(null);
+        if (this.selectedUser()?.id === userId && this.contractorAccrualDraft(profileId).idempotencyKey === key) {
+          this.setContractorAccrualError(profileId, this.errorMessage(err, 'Не удалось рассчитать корректировку'));
+        }
+      }
+    });
+  }
+
+  createContractorAccrualAdjustment(profileId: number): void {
+    const userId = this.selectedUser()?.id;
+    if (userId == null || !this.canManageContractorProfiles() || this.contractorAccrualSavingId() !== null) {
+      return;
+    }
+    const key = this.contractorAccrualDraft(profileId).idempotencyKey;
+    if (!this.contractorAccrualPreviews()[profileId] || this.contractorAccrualPreviewKeys()[profileId] !== key) {
+      this.setContractorAccrualError(profileId, 'Сначала проверьте расчёт до и после корректировки.');
+      return;
+    }
+    const request = this.contractorAccrualRequest(profileId);
+    if (!request) {
+      return;
+    }
+    this.contractorAccrualSavingId.set(profileId);
+    this.clearContractorAccrualError(profileId);
+    this.adminUsersApi.createContractorAccrualAdjustment(userId, profileId, request).subscribe({
+      next: (saved) => {
+        this.contractorAccrualSavingId.set(null);
+        if (this.selectedUser()?.id !== userId) {
+          return;
+        }
+        this.contractorAccrualDrafts.update((drafts) => ({
+          ...drafts,
+          [profileId]: this.newContractorAccrualDraft()
+        }));
+        this.contractorAccrualPreviews.update((previews) => {
+          const next = { ...previews };
+          delete next[profileId];
+          return next;
+        });
+        this.contractorAccrualPreviewKeys.update((keys) => {
+          const next = { ...keys };
+          delete next[profileId];
+          return next;
+        });
+        this.refreshContractorAccrualHistory(userId, profileId);
+        this.loadContractorPaymentProfiles(userId);
+        this.toastService.success(
+          saved.kind === 'BONUS' ? 'Премия проведена' : 'Удержание проведено',
+          this.moneyKopecks(Math.abs(saved.signedAmountKopecks))
+        );
+      },
+      error: (err) => {
+        this.contractorAccrualSavingId.set(null);
+        if (this.selectedUser()?.id === userId) {
+          const message = this.errorMessage(err, 'Не удалось провести корректировку');
+          this.setContractorAccrualError(profileId, message);
+          this.toastService.error('Корректировка не проведена', message);
+          if (err?.status === 409) {
+            this.clearContractorAccrualPreview(profileId);
+            this.loadContractorPaymentProfiles(userId);
+          }
+        }
+      }
+    });
+  }
+
+  loadContractorAccrualHistory(profileId: number, open: boolean): void {
+    const userId = this.selectedUser()?.id;
+    if (!open || userId == null || this.contractorAccrualHistory()[profileId]
+      || this.contractorAccrualHistoryLoading()[profileId]) {
+      return;
+    }
+    this.refreshContractorAccrualHistory(userId, profileId);
+  }
+
+  loadMoreContractorAccrualHistory(profileId: number): void {
+    const userId = this.selectedUser()?.id;
+    const page = this.contractorAccrualHistoryNextPage()[profileId];
+    if (userId == null || page === undefined || this.contractorAccrualHistoryLoading()[profileId]) {
+      return;
+    }
+    this.fetchContractorAccrualHistoryPage(userId, profileId, page);
+  }
+
+  contractorAccrualCanReverse(profileId: number, row: ContractorAccrualAdjustment): boolean {
+    return row.kind !== 'REVERSAL'
+      && !(this.contractorAccrualHistory()[profileId] ?? []).some((other) => other.reversalOfId === row.id);
+  }
+
+  updateContractorAccrualReversalReason(adjustmentId: number, reason: string): void {
+    this.contractorAccrualReversalReasons.update((reasons) => ({ ...reasons, [adjustmentId]: reason }));
+    this.contractorAccrualReversalKeys.update((keys) => ({ ...keys, [adjustmentId]: this.newIdempotencyKey() }));
+  }
+
+  reverseContractorAccrualAdjustment(profileId: number, adjustmentId: number): void {
+    const userId = this.selectedUser()?.id;
+    if (userId == null || !this.canManageContractorProfiles() || this.contractorAccrualReversalSavingId() !== null) {
+      return;
+    }
+    const reason = (this.contractorAccrualReversalReasons()[adjustmentId] ?? '').trim();
+    if (!reason) {
+      this.setContractorAccrualError(profileId, 'Укажите причину отмены корректировки.');
+      return;
+    }
+    const key = this.contractorAccrualReversalKeys()[adjustmentId] ?? this.newIdempotencyKey();
+    this.contractorAccrualReversalKeys.update((keys) => ({ ...keys, [adjustmentId]: key }));
+    this.contractorAccrualReversalSavingId.set(adjustmentId);
+    this.clearContractorAccrualError(profileId);
+    this.adminUsersApi.reverseContractorAccrualAdjustment(userId, profileId, adjustmentId, {
+      reason,
+      idempotencyKey: key
+    }).subscribe({
+      next: () => {
+        this.contractorAccrualReversalSavingId.set(null);
+        if (this.selectedUser()?.id !== userId) {
+          return;
+        }
+        this.contractorAccrualReversalReasons.update((reasons) => {
+          const next = { ...reasons };
+          delete next[adjustmentId];
+          return next;
+        });
+        this.contractorAccrualReversalKeys.update((keys) => {
+          const next = { ...keys };
+          delete next[adjustmentId];
+          return next;
+        });
+        this.refreshContractorAccrualHistory(userId, profileId);
+        this.loadContractorPaymentProfiles(userId);
+        this.toastService.success('Корректировка отменена');
+      },
+      error: (err) => {
+        this.contractorAccrualReversalSavingId.set(null);
+        if (this.selectedUser()?.id === userId) {
+          const message = this.errorMessage(err, 'Не удалось отменить корректировку');
+          this.setContractorAccrualError(profileId, message);
+          this.toastService.error('Корректировка не отменена', message);
+          if (err?.status === 409) {
+            this.loadContractorPaymentProfiles(userId);
+            this.refreshContractorAccrualHistory(userId, profileId);
+          }
+        }
+      }
+    });
+  }
+
+  private contractorAccrualRequest(profileId: number): ContractorAccrualAdjustmentRequest | null {
+    const draft = this.contractorAccrualDraft(profileId);
+    const normalized = draft.amountRubles.trim().replace(',', '.');
+    if (!/^\d{1,12}(?:\.\d{1,2})?$/.test(normalized)) {
+      this.setContractorAccrualError(profileId, 'Укажите положительную сумму в рублях с точностью до копейки.');
+      return null;
+    }
+    const [rubles, kopecks = ''] = normalized.split('.');
+    const amountKopecks = Number(rubles) * 100 + Number(kopecks.padEnd(2, '0'));
+    if (!Number.isSafeInteger(amountKopecks) || amountKopecks <= 0
+      || amountKopecks > 100_000_000_000) {
+      this.setContractorAccrualError(profileId, 'Сумма должна быть больше нуля и не превышать 1 млрд рублей.');
+      return null;
+    }
+    const reason = draft.reason.trim();
+    if (!reason) {
+      this.setContractorAccrualError(profileId, 'Укажите понятную причину; её увидит сотрудник.');
+      return null;
+    }
+    if (reason.length > 255) {
+      this.setContractorAccrualError(profileId, 'Причина не должна превышать 255 символов.');
+      return null;
+    }
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(draft.referenceMonth)) {
+      this.setContractorAccrualError(profileId, 'Укажите месяц основания в формате ГГГГ-ММ.');
+      return null;
+    }
+    if (draft.referenceMonth > this.currentContractorAccrualMonth()) {
+      this.setContractorAccrualError(profileId, 'Месяц основания не может быть будущим.');
+      return null;
+    }
+    return {
+      kind: draft.kind,
+      amountKopecks,
+      reason,
+      referenceMonth: draft.referenceMonth,
+      evidenceReference: draft.evidenceReference.trim() || undefined,
+      idempotencyKey: draft.idempotencyKey
+    };
+  }
+
+  private newContractorAccrualDraft(): ContractorAccrualAdjustmentDraft {
+    return {
+      kind: 'BONUS',
+      amountRubles: '',
+      reason: '',
+      referenceMonth: this.currentContractorAccrualMonth(),
+      evidenceReference: '',
+      idempotencyKey: this.newIdempotencyKey()
+    };
+  }
+
+  currentContractorAccrualMonth(): string {
+    const monthParts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Irkutsk', year: 'numeric', month: '2-digit'
+    }).formatToParts(new Date());
+    const year = monthParts.find((part) => part.type === 'year')?.value ?? '';
+    const month = monthParts.find((part) => part.type === 'month')?.value ?? '';
+    return `${year}-${month}`;
+  }
+
+  private clearContractorAccrualPreview(profileId: number): void {
+    this.contractorAccrualPreviews.update((previews) => {
+      const next = { ...previews };
+      delete next[profileId];
+      return next;
+    });
+    this.contractorAccrualPreviewKeys.update((keys) => {
+      const next = { ...keys };
+      delete next[profileId];
+      return next;
+    });
+  }
+
+  private refreshContractorAccrualHistory(userId: number, profileId: number): void {
+    this.contractorAccrualHistory.update((history) => {
+      const next = { ...history };
+      delete next[profileId];
+      return next;
+    });
+    this.contractorAccrualHistoryNextPage.update((pages) => {
+      const next = { ...pages };
+      delete next[profileId];
+      return next;
+    });
+    this.fetchContractorAccrualHistoryPage(userId, profileId, 0);
+  }
+
+  private fetchContractorAccrualHistoryPage(userId: number, profileId: number, page: number): void {
+    const request = ++this.contractorAccrualHistoryRequest;
+    this.contractorAccrualHistoryRequestByProfile.set(profileId, request);
+    this.contractorAccrualHistoryLoading.update((loading) => ({ ...loading, [profileId]: true }));
+    this.clearContractorAccrualError(profileId);
+    this.adminUsersApi.getContractorAccrualAdjustmentsPage(userId, profileId, page).subscribe({
+      next: (result) => {
+        if (this.selectedUser()?.id !== userId
+          || this.contractorAccrualHistoryRequestByProfile.get(profileId) !== request) {
+          return;
+        }
+        this.contractorAccrualHistory.update((history) => {
+          const merged = page === 0 ? result.items : [...(history[profileId] ?? []), ...result.items];
+          return { ...history, [profileId]: [...new Map(merged.map((item) => [item.id, item])).values()] };
+        });
+        this.contractorAccrualHistoryNextPage.update((pages) => {
+          const next = { ...pages };
+          if (result.hasMore) {
+            next[profileId] = page + 1;
+          } else {
+            delete next[profileId];
+          }
+          return next;
+        });
+        this.contractorAccrualHistoryLoading.update((loading) => ({ ...loading, [profileId]: false }));
+      },
+      error: (err) => {
+        if (this.selectedUser()?.id !== userId
+          || this.contractorAccrualHistoryRequestByProfile.get(profileId) !== request) {
+          return;
+        }
+        this.setContractorAccrualError(profileId, this.errorMessage(err, 'Не удалось загрузить историю корректировок'));
+        this.contractorAccrualHistoryLoading.update((loading) => ({ ...loading, [profileId]: false }));
+      }
+    });
+  }
+
+  private setContractorAccrualError(profileId: number, message: string): void {
+    this.contractorAccrualErrors.update((errors) => ({ ...errors, [profileId]: message }));
+  }
+
+  private clearContractorAccrualError(profileId: number): void {
+    this.contractorAccrualErrors.update((errors) => {
+      const next = { ...errors };
+      delete next[profileId];
+      return next;
     });
   }
 
