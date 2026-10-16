@@ -159,6 +159,12 @@ public class OrderStatusTransitionService {
     }
 
     @Transactional
+    public boolean changeStatusForAutoApprovedReviewOrder(Long orderID) throws Exception {
+        return changeStatusForOrderInternal(orderID, STATUS_TO_PUBLISH, false, false, false,
+                false, null, false, true);
+    }
+
+    @Transactional
     public boolean changeStatusForRestoredArchiveOrder(Long orderID, String title) throws Exception {
         return changeStatusForOrderInternal(orderID, title, false, false, true);
     }
@@ -215,6 +221,15 @@ public class OrderStatusTransitionService {
     private boolean changeStatusForOrderInternal(Long orderID,String title,boolean allowCommonBillingFinancialStatus,
             boolean allowBanWithPendingBadTasks,boolean restoredArchiveOrigin,boolean allowPaymentReturnReminder,
             org.springframework.security.core.Authentication actor,boolean explicitActor) throws Exception {
+        return changeStatusForOrderInternal(orderID, title, allowCommonBillingFinancialStatus,
+                allowBanWithPendingBadTasks, restoredArchiveOrigin, allowPaymentReturnReminder,
+                actor, explicitActor, false);
+    }
+
+    private boolean changeStatusForOrderInternal(Long orderID,String title,boolean allowCommonBillingFinancialStatus,
+            boolean allowBanWithPendingBadTasks,boolean restoredArchiveOrigin,boolean allowPaymentReturnReminder,
+            org.springframework.security.core.Authentication actor,boolean explicitActor,
+            boolean automaticReviewApproval) throws Exception {
         try {
             orderAggregateMutationLockService.lock(orderID);
             Order order = orderRepository.findByIdForMutation(orderID)
@@ -247,7 +262,7 @@ public class OrderStatusTransitionService {
                 case STATUS_IN_CHECK -> handleManualInCheckStatus(order);
                 case STATUS_CORRECTION -> handleCorrectionStatus(order);
                 case STATUS_PUBLIC -> handlePublicStatus(order);
-                case STATUS_TO_PUBLISH -> handleToPublicStatus(order, restoredArchiveOrigin);
+                case STATUS_TO_PUBLISH -> handleToPublicStatus(order, restoredArchiveOrigin, automaticReviewApproval);
                 case STATUS_TO_PAY -> handleManualToPayStatus(order);
                 case STATUS_NOT_PAID -> handleNotPaidStatus(order);
                 case STATUS_BAN -> handleBanStatus(order, allowBanWithPendingBadTasks);
@@ -503,7 +518,7 @@ public class OrderStatusTransitionService {
         return true;
     }
 
-    private boolean handleToPublicStatus(Order order, boolean restoredArchiveOrigin) {
+    private boolean handleToPublicStatus(Order order, boolean restoredArchiveOrigin, boolean automaticReviewApproval) {
         validateReviewsReadyForPublication(order);
 
         try {
@@ -543,7 +558,7 @@ public class OrderStatusTransitionService {
                 log.info("Заказ ID {} переведен в статус 'К публикации'", order.getId());
             }
 
-            notifyClientAboutPublicationStarted(order, previousOrderStatus);
+            notifyClientAboutPublicationStarted(order, previousOrderStatus, automaticReviewApproval);
             eventPublisher.publishEvent(new PerformerPublicationRequestedEvent(order.getId()));
             return true;
 
@@ -556,7 +571,7 @@ public class OrderStatusTransitionService {
         }
     }
 
-    private void notifyClientAboutPublicationStarted(Order order, String previousOrderStatus) {
+    private void notifyClientAboutPublicationStarted(Order order, String previousOrderStatus, boolean automaticReviewApproval) {
         if (!STATUS_IN_CHECK.equals(previousOrderStatus)) {
             log.info("Уведомление о передаче в публикацию пропущено: заказ ID {} перешел из статуса '{}'",
                     order.getId(), previousOrderStatus);
@@ -571,8 +586,11 @@ public class OrderStatusTransitionService {
         String clientId = order.getManager() != null ? order.getManager().getClientId() : null;
         String groupId = order.getCompany() != null ? order.getCompany().getGroupId() : null;
         String occurrence = "publication-start:" + order.getClientMessageGeneration();
+        String message = automaticReviewApproval
+                ? orderReviewCheckMessageBuilder.autoApprovedPublicationStartedMessage(order)
+                : orderReviewCheckMessageBuilder.publicationStartedMessage(order);
         var prepared = orderStatusNotificationService.preparePublicationProgress(order, clientId, groupId,
-                orderReviewCheckMessageBuilder.publicationStartedMessage(order), false, occurrence);
+                message, false, occurrence);
         // Order, operation identity and immutable intent commit together. Enqueue failure must roll back.
         orderPublicationOutbox.enqueueNotification(order.getId(), occurrence, prepared);
         log.info("Уведомление о начале публикации поставлено в очередь, orderId={}", order.getId());

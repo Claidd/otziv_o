@@ -14,6 +14,7 @@ import com.hunt.otziv.common_billing.dto.ManualPaymentConfirmationRequest;
 import com.hunt.otziv.common_billing.dto.InvoicePaymentModeChangeRequest;
 import com.hunt.otziv.common_billing.service.CommonBillingPublicationApprovalFailureMarker;
 import com.hunt.otziv.common_billing.service.CommonBillingService;
+import com.hunt.otziv.common_billing.service.CommonInvoiceDisputedOrderArchiveWorkflow;
 import com.hunt.otziv.contractor_payments.service.ContractorActualPaymentAttributionFlowPolicy;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentTargetAccessPolicy;
 import com.hunt.otziv.contractor_payments.dto.ContractorPaymentSourceConfirmationRequest;
@@ -37,6 +38,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class CommonBillingAdminController {
 
     private final CommonBillingService commonBillingService;
+    private final CommonInvoiceDisputedOrderArchiveWorkflow disputedOrderArchiveWorkflow;
     private final CommonBillingPublicationApprovalFailureMarker publicationApprovalFailureMarker;
     private final ContractorPaymentTargetAccessPolicy contractorPaymentTargetAccessPolicy;
     private final ContractorActualPaymentAttributionFlowPolicy actualPaymentFlowPolicy;
@@ -341,6 +343,13 @@ public class CommonBillingAdminController {
     public CommonInvoiceDetailsResponse detachOrder(@PathVariable Long invoiceId, @PathVariable Long orderId) {
         requireCanMutateInvoice(invoiceId);
         return commonBillingService.detachOrder(invoiceId, orderId);
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    @PostMapping("/api/common-billing/invoices/{invoiceId}/orders/{orderId}/archive-disputed")
+    public CommonInvoiceDetailsResponse archiveDisputedOrder(@PathVariable Long invoiceId, @PathVariable Long orderId) {
+        requireCanMutateInvoice(invoiceId);
+        return disputedOrderArchiveWorkflow.archive(invoiceId, orderId);
     }
 
     private void requireCanMutateInvoice(Long invoiceId) {

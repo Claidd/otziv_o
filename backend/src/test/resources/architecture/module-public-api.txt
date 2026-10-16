@@ -66,3 +66,5 @@ com.hunt.otziv.r_review.utils.ReviewTextPolicy
 
 # NAMED_ACCOUNT_POOL_FALLBACK: orders-owned scalar readiness threshold, server-only read access.
 com.hunt.otziv.r_review.api.ReviewAccountWalkingPolicy
+# ADR-022: scalar active-recovery hold for reminder auto-approval.
+com.hunt.otziv.review_recovery.api.ReviewRecoveryMessageHold

@@ -606,7 +606,7 @@ button .material-icons-sharp {
 
 .invoice-order-card-toolbar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 2rem 2rem 2rem;
+  grid-template-columns: 2rem 2rem minmax(0, 1fr) 2rem 2rem;
   align-items: center;
   gap: 0.34rem;
   border: 1px solid var(--billing-toolbar-border);
@@ -665,6 +665,12 @@ button .material-icons-sharp {
   border-color: var(--billing-toolbar-detach-border);
   color: var(--billing-toolbar-detach-text);
   background: var(--billing-toolbar-detach-surface);
+}
+
+.invoice-order-card-toolbar .toolbar-action--archive {
+  border-color: #dcaaa6;
+  color: #a73730;
+  background: #fff4f2;
 }
 
 .invoice-order-card-toolbar .toolbar-action--complete {

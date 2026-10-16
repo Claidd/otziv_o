@@ -19,6 +19,30 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface ScheduledClientMessageStateRepository extends CrudRepository<ScheduledClientMessageState, Long> {
 
+    interface ReviewApprovalCandidate {
+        Long getStateId();
+        Long getInvoiceId();
+    }
+
+    @Query("""
+        SELECT s.id AS stateId, invoice.id AS invoiceId
+        FROM ScheduledClientMessageState s, CommonInvoiceOrder item
+        JOIN item.invoice invoice
+        JOIN item.order o
+        JOIN o.status orderStatus
+        WHERE s.orderId = o.id
+          AND s.scenario = com.hunt.otziv.client_messages.model.ClientMessageScenario.REVIEW_CHECK_REMINDER
+          AND s.status = com.hunt.otziv.client_messages.model.ScheduledMessageStateStatus.ACTIVE
+          AND s.sentCount >= 7
+          AND s.id > :afterId
+          AND item.activeMembership = TRUE
+          AND invoice.status = com.hunt.otziv.common_billing.model.CommonInvoiceStatus.COLLECTING
+          AND invoice.sentAt IS NULL
+          AND orderStatus.title = 'На проверке'
+        ORDER BY s.id
+    """)
+    List<ReviewApprovalCandidate> findReviewApprovalCandidates(@Param("afterId") long afterId, Pageable pageable);
+
     @Query("""
         SELECT s.id FROM ScheduledClientMessageState s
         WHERE s.scenario = com.hunt.otziv.client_messages.model.ClientMessageScenario.PAYMENT_OVERDUE_ESCALATION
