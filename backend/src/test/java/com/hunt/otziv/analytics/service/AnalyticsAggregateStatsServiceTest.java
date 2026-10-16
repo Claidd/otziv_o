@@ -78,7 +78,7 @@ class AnalyticsAggregateStatsServiceTest {
                 .thenReturn(List.of(
                         financial(LocalDate.of(2026, 5, 1), "200.00", "80.00", 2, 4),
                         financial(LocalDate.of(2026, 5, 7), "50.00", "20.00", 1, 1),
-                        financial(LocalDate.of(2026, 5, 8), "100.00", "40.00", 1, 1)
+                        financial(LocalDate.of(2026, 5, 8), "100.00", "40.45", 1, 1)
                 ));
 
         User admin = User.builder().id(1L).build();
@@ -96,6 +96,8 @@ class AnalyticsAggregateStatsServiceTest {
         assertEquals(-60, stats.getPercent1MonthOrdersPay());
         assertEquals(1, stats.getNewLeads());
         assertEquals(1, stats.getLeadsInWork());
+        assertEquals(4_045L, stats.getSum1DayKopecks());
+        assertEquals(14_045L, stats.getSum1MonthKopecks());
 
         JsonNode dailyPaymentMap = objectMapper.readTree(stats.getOrderPayMap());
         assertEquals(31, dailyPaymentMap.size());

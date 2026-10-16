@@ -192,6 +192,14 @@
                 <p class="eyebrow">МОИ РАСЧЁТЫ</p>
                 <h2>Вознаграждения и переводы</h2>
               </div>
+              <button
+                type="button"
+                class="secondary contractor-payment-refresh"
+                (click)="loadContractorPayments(true)"
+                [disabled]="contractorPaymentsLoading()"
+              >
+                {{ contractorPaymentsLoading() ? 'Обновляю…' : 'Обновить расчёты' }}
+              </button>
             </div>
 
             @if (contractorPaymentsLoading()) {

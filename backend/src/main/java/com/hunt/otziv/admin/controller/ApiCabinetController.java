@@ -943,8 +943,10 @@ public class ApiCabinetController {
                 })
                 .thenComparing(managerPerformanceComparator(managerPerformanceByUserId))
                 .thenComparing(workerScoreComparator(financeVisible))
-                .thenComparing(Comparator.comparingLong((UserData user) -> valueOrZero(user.getTotalSum())).reversed())
-                .thenComparing(Comparator.comparingLong((UserData user) -> valueOrZero(user.getSalary())).reversed())
+                .thenComparing(Comparator.comparingLong((UserData user) -> financeVisible
+                        ? valueOrZero(user.getTotalSum()) : 0L).reversed())
+                .thenComparing(Comparator.comparingLong((UserData user) -> financeVisible
+                        ? exactSalaryKopecks(user) : 0L).reversed())
                 .thenComparing(UserData::getFio, Comparator.nullsLast(String::compareToIgnoreCase));
     }
 
@@ -973,14 +975,20 @@ public class ApiCabinetController {
                 return 0;
             }
 
-            long leftValue = financeVisible ? valueOrZero(left.getSalary()) : valueOrZero(left.getInPublish());
-            long rightValue = financeVisible ? valueOrZero(right.getSalary()) : valueOrZero(right.getInPublish());
+            long leftValue = financeVisible ? exactSalaryKopecks(left) : valueOrZero(left.getInPublish());
+            long rightValue = financeVisible ? exactSalaryKopecks(right) : valueOrZero(right.getInPublish());
             return Long.compare(rightValue, leftValue);
         };
     }
 
     private static long valueOrZero(Long value) {
         return value == null ? 0L : value;
+    }
+
+    private static long exactSalaryKopecks(UserData user) {
+        return user.getSalaryKopecks() == null
+                ? Math.multiplyExact(valueOrZero(user.getSalary()), 100L)
+                : user.getSalaryKopecks();
     }
 
     private ManagerPerformanceScoreResponse managerPerformance(LocalDate selectedDate, User user, Principal principal) {
@@ -1109,8 +1117,10 @@ public class ApiCabinetController {
             String fio,
             String role,
             Long salary,
+            Long salaryKopecks,
             Long totalSum,
             Long zpTotal,
+            Long zpTotalKopecks,
             Long newCompanies,
             Long newOrders,
             Long correctOrders,
@@ -1134,8 +1144,10 @@ public class ApiCabinetController {
                     user.getFio(),
                     user.getRole(),
                     financeVisible ? user.getSalary() : null,
+                    financeVisible ? user.getSalaryKopecks() : null,
                     financeVisible ? user.getTotalSum() : null,
                     financeVisible ? user.getZpTotal() : null,
+                    financeVisible ? user.getZpTotalKopecks() : null,
                     financeVisible ? user.getNewCompanies() : null,
                     user.getNewOrders(),
                     user.getCorrectOrders(),

@@ -1,5 +1,6 @@
 package com.hunt.otziv.analytics.service;
 
+import com.hunt.otziv.common.events.ContractorAccrualAdjustedEvent;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneId;
@@ -11,6 +12,7 @@ import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.context.ApplicationListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
@@ -30,7 +32,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class ContractorAccrualAnalyticsRefreshService {
+public class ContractorAccrualAnalyticsRefreshService
+        implements ApplicationListener<ContractorAccrualAdjustedEvent> {
 
     private static final String PENDING_PREFIX = "contractor-accrual-analytics:";
     private static final ZoneId ACCOUNTING_ZONE = ZoneId.of("Asia/Irkutsk");
@@ -41,6 +44,17 @@ public class ContractorAccrualAnalyticsRefreshService {
     private final PlatformTransactionManager transactionManager;
     private final Set<LocalDate> rebuilding = ConcurrentHashMap.newKeySet();
     private final ThreadPoolTaskExecutor executor = newExecutor();
+
+    @Override
+    public boolean supportsAsyncExecution() {
+        // The pending marker must be inserted before the ledger transaction commits.
+        return false;
+    }
+
+    @Override
+    public void onApplicationEvent(ContractorAccrualAdjustedEvent event) {
+        refreshAfterCommit(event.effectiveOn());
+    }
 
     /** Call inside the same transaction that inserts the adjustment. */
     public void refreshAfterCommit(LocalDate effectiveOn) {

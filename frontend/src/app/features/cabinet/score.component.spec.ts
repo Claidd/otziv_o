@@ -64,4 +64,23 @@ describe('ScoreComponent saved balances', () => {
     expect(component.savedContractorPayments()).toEqual([orphan]);
     expect(component.visibleSections().at(-1)?.title).toBe('Сохранённые остатки');
   });
+
+  it('uses exact salary kopecks in legacy score rows and falls back to rubles', () => {
+    const response = {
+      date: '2026-10-01',
+      financeVisible: true,
+      contractorPayments: [],
+      groups: { managers: [], workers: [], operators: [], marketologs: [] }
+    } as unknown as ScoreResponse;
+    const api = { getScore: () => of(response), imageUrl: () => '' } as unknown as CabinetApi;
+    const component = new ScoreComponent(api);
+    const operatorSection = component.sections.find((section) => section.key === 'operators')!;
+
+    expect(component.rows(operatorSection, {
+      fio: 'Оператор', role: 'ROLE_OPERATOR', salary: 18, salaryKopecks: 1_855
+    }).find((row) => row.label === 'Начислено')?.value).toBe('18,55 ₽');
+    expect(component.rows(operatorSection, {
+      fio: 'Оператор', role: 'ROLE_OPERATOR', salary: 18
+    }).find((row) => row.label === 'Начислено')?.value).toBe('18,00 ₽');
+  });
 });

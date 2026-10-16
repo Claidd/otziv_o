@@ -7,6 +7,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -20,6 +21,13 @@ public interface ContractorAccrualAdjustmentRepository extends JpaRepository<Con
     boolean existsByReversalOfId(Long originalId);
 
     List<ContractorAccrualAdjustment> findAllByProfileIdOrderByCreatedAtDescIdDesc(Long profileId, Pageable pageable);
+
+    @Query("""
+        SELECT a FROM ContractorAccrualAdjustment a
+        WHERE a.profile.id = :profileId
+        ORDER BY a.createdAt DESC, a.id DESC
+        """)
+    Slice<ContractorAccrualAdjustment> findHistoryPage(@Param("profileId") Long profileId, Pageable pageable);
 
     @Query("SELECT COALESCE(SUM(a.signedAmountKopecks), 0) FROM ContractorAccrualAdjustment a WHERE a.profile.id = :profileId")
     long sumByProfileId(@Param("profileId") Long profileId);

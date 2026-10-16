@@ -4,6 +4,7 @@ import com.hunt.otziv.contractor_payments.dto.ContractorPaymentProfileRequest;
 import com.hunt.otziv.contractor_payments.dto.ContractorAccrualAdjustmentRequest;
 import com.hunt.otziv.contractor_payments.dto.ContractorAccrualAdjustmentReversalRequest;
 import com.hunt.otziv.contractor_payments.dto.ContractorAccrualAdjustmentResponse;
+import com.hunt.otziv.contractor_payments.dto.ContractorAccrualAdjustmentHistoryPageResponse;
 import com.hunt.otziv.contractor_payments.dto.ContractorAccrualAdjustmentPreviewResponse;
 import com.hunt.otziv.contractor_payments.dto.ContractorPaymentProfileAdjustmentResponse;
 import com.hunt.otziv.contractor_payments.dto.ContractorPaymentProfileResponse;
@@ -27,6 +28,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -75,6 +77,14 @@ public class ContractorPaymentAdminController {
             @PathVariable Long userId, @PathVariable Long profileId
     ) {
         return noStore(accrualAdjustmentService.history(userId, profileId));
+    }
+
+    @GetMapping("/{profileId}/accrual-adjustments/pages")
+    public ResponseEntity<ContractorAccrualAdjustmentHistoryPageResponse> accrualAdjustmentHistoryPage(
+            @PathVariable Long userId, @PathVariable Long profileId,
+            @RequestParam(defaultValue = "0") int page
+    ) {
+        return noStore(accrualAdjustmentService.historyPage(userId, profileId, page));
     }
 
     @PostMapping("/{profileId}/accrual-adjustments/preview")

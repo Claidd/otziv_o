@@ -59,7 +59,7 @@ class AnalyticsAggregateUserStatsServiceTest {
                 daily(LocalDate.of(2026, 5, 1), "50.00", 1),
                 daily(LocalDate.of(2026, 5, 7), "25.00", 1),
                 daily(LocalDate.of(2026, 5, 8), "100.00", 2),
-                daily(DATE, "40.00", 1)
+                daily(DATE, "40.45", 1)
         ));
 
         UserStatDTO stats = service.buildUserStats(DATE, user).orElseThrow();
@@ -72,6 +72,10 @@ class AnalyticsAggregateUserStatsServiceTest {
         assertEquals(165, stats.getSum1Week());
         assertEquals(215, stats.getSum1Month());
         assertEquals(915, stats.getSum1Year());
+        assertEquals(4_045L, stats.getSum1DayKopecks());
+        assertEquals(16_545L, stats.getSum1WeekKopecks());
+        assertEquals(21_545L, stats.getSum1MonthKopecks());
+        assertEquals(91_545L, stats.getSum1YearKopecks());
         assertEquals(5, stats.getSumOrders1Month());
         assertEquals(2, stats.getSumOrders2Month());
         assertEquals(-60, stats.getPercent1Day());

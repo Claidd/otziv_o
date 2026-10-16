@@ -17,6 +17,7 @@ public class MarketologsListDTO {
     private String fio;
     private Long imageId;
     private int sum1Month;
+    private Long sum1MonthKopecks;
     private int order1Month;
     private int review1Month;
     private Long leadsNew;

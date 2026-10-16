@@ -138,6 +138,31 @@ class AnalyticsAggregateScoreServiceTest {
         assertEquals(5L, result.get().getFirst().getReview1Month());
     }
 
+    @Test
+    void preservesBonusAndDeductionKopecksWithoutChangingWorkCounts() {
+        AnalyticsMonthlyUser manager = monthlyUser(user(10L, "Manager", null), "ROLE_MANAGER",
+                "10.50", "0.00", 3, 7, 0, 0, 0);
+        AnalyticsMonthlyUser worker = monthlyUser(user(11L, "Worker", null), "ROLE_WORKER",
+                "-0.75", "0.00", 2, 4, 0, 0, 0);
+        when(readService.monthlyUsers(MONTH_START, MONTH_START)).thenReturn(List.of(manager, worker));
+        when(salarySourceService.totalsForUsers(anyCollection(), eq(MONTH_START), eq(DATE)))
+                .thenReturn(Map.of(
+                        10L, new SalaryTotal(new BigDecimal("10.50"), 3L, 7L),
+                        11L, new SalaryTotal(new BigDecimal("-0.75"), 2L, 4L)
+                ));
+
+        List<UserData> score = service.buildScore(DATE).orElseThrow();
+
+        assertEquals(1_050L, score.get(0).getSalaryKopecks());
+        assertEquals(-75L, score.get(1).getSalaryKopecks());
+        assertEquals(975L, score.get(0).getZpTotalKopecks());
+        assertEquals(975L, score.get(1).getZpTotalKopecks());
+        assertEquals(3L, score.get(0).getOrder1Month());
+        assertEquals(7L, score.get(0).getReview1Month());
+        assertEquals(2L, score.get(1).getOrder1Month());
+        assertEquals(4L, score.get(1).getReview1Month());
+    }
+
     private AnalyticsMonthlyUser monthlyUser(
             User user,
             String role,

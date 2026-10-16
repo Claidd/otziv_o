@@ -133,6 +133,35 @@ class AnalyticsAggregateTeamServiceTest {
         assertEquals(10, managerDto.getPayment1Month());
     }
 
+    @Test
+    void preservesBonusAndDeductionKopecksWithoutChangingWorkCounts() {
+        User managerUser = user(10L, "manager", "Manager", null);
+        User workerUser = user(11L, "worker", "Worker", null);
+        Manager manager = Manager.builder().id(100L).user(managerUser).build();
+        com.hunt.otziv.u_users.model.Worker worker = com.hunt.otziv.u_users.model.Worker.builder()
+                .id(101L).user(workerUser).build();
+        when(readService.monthlyUsers(anyCollection(), eq(MONTH_START), eq(MONTH_START)))
+                .thenReturn(List.of(
+                        monthlyUser(managerUser, "10.50", "0.00", 3, 7, 0, 0),
+                        monthlyUser(workerUser, "-0.75", "0.00", 2, 4, 0, 0)
+                ));
+        when(salarySourceService.totalsForUsers(anyCollection(), eq(MONTH_START), eq(DATE)))
+                .thenReturn(Map.of(
+                        10L, new SalaryTotal(new BigDecimal("10.50"), 3L, 7L),
+                        11L, new SalaryTotal(new BigDecimal("-0.75"), 2L, 4L)
+                ));
+
+        AggregateTeam team = service.buildTeam(DATE, List.of(manager), List.of(), List.of(worker), List.of())
+                .orElseThrow();
+
+        assertEquals(1_050L, team.managers().getFirst().getSum1MonthKopecks());
+        assertEquals(-75L, team.workers().getFirst().getSum1MonthKopecks());
+        assertEquals(3, team.managers().getFirst().getOrder1Month());
+        assertEquals(7, team.managers().getFirst().getReview1Month());
+        assertEquals(2, team.workers().getFirst().getOrder1Month());
+        assertEquals(4, team.workers().getFirst().getReview1Month());
+    }
+
     private AnalyticsMonthlyUser monthlyUser(
             User user,
             String salary,

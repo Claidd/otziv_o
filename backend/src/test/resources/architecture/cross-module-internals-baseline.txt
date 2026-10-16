@@ -836,6 +836,9 @@ com.hunt.otziv.contractor_payments.model.ContractorPaymentAllocation -> com.hunt
 com.hunt.otziv.contractor_payments.model.ContractorPaymentProfile -> com.hunt.otziv.security.credentials.EncryptedCredentialConverter
 com.hunt.otziv.contractor_payments.model.ContractorPaymentProfile -> com.hunt.otziv.u_users.model.User
 com.hunt.otziv.contractor_payments.repository.ContractorCompletionCutoverPreflightRepository -> com.hunt.otziv.z_zp.model.Zp
+com.hunt.otziv.contractor_payments.service.ContractorAccrualAdjustmentService -> com.hunt.otziv.business_audit.service.BusinessAuditService
+com.hunt.otziv.contractor_payments.service.ContractorAccrualAdjustmentService -> com.hunt.otziv.payments.service.ManualPaymentTaskContractorCapacityService
+com.hunt.otziv.contractor_payments.service.ContractorAccrualAdjustmentService -> com.hunt.otziv.u_users.model.User
 com.hunt.otziv.contractor_payments.service.ContractorActualPaymentAttributionService -> com.hunt.otziv.business_audit.service.BusinessAuditService
 com.hunt.otziv.contractor_payments.service.ContractorActualPaymentAttributionService -> com.hunt.otziv.config.settings.service.AppSettingService
 com.hunt.otziv.contractor_payments.service.ContractorActualPaymentAttributionService -> com.hunt.otziv.p_products.model.Order

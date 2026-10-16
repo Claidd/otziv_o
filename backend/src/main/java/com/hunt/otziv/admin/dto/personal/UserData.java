@@ -50,4 +50,27 @@ public class UserData {
     private Long badTasks;
     private Long recoveryTasks;
 
+    // Exact monetary values for newer consumers. Legacy salary/zpTotal remain
+    // whole-ruble numbers for existing clients.
+    private Long salaryKopecks;
+    private Long zpTotalKopecks;
+
+    public UserData(
+            String fio, String role, Long salary, Long totalSum, Long zpTotal,
+            Long newCompanies, Long newOrders, Long correctOrders, Long inVigul,
+            Long inPublish, Long imageId, Long userId, Long order1Month,
+            Long review1Month, Long leadsNew, Long leadsInWork, Long percentInWork,
+            Long orderInNew, Long orderToCheck, Long orderInCheck,
+            Long orderInCorrect, Long orderInPublished, Long orderInWaitingPay1,
+            Long orderInWaitingPay2, Long orderNoPay,
+            DailyWorkProgressResponse dailyProgress, Long badTasks, Long recoveryTasks
+    ) {
+        this(fio, role, salary, totalSum, zpTotal, newCompanies, newOrders,
+                correctOrders, inVigul, inPublish, imageId, userId, order1Month,
+                review1Month, leadsNew, leadsInWork, percentInWork, orderInNew,
+                orderToCheck, orderInCheck, orderInCorrect, orderInPublished,
+                orderInWaitingPay1, orderInWaitingPay2, orderNoPay,
+                dailyProgress, badTasks, recoveryTasks, null, null);
+    }
+
 }

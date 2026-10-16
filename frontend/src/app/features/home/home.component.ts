@@ -408,10 +408,10 @@ export class HomeComponent {
     }
 
     return [
-      { label: 'За сегодня', value: this.money(workerZp.sum1Day), percent: workerZp.percent1Day },
-      { label: 'За неделю', value: this.money(workerZp.sum1Week), percent: workerZp.percent1Week },
-      { label: 'За месяц', value: this.money(workerZp.sum1Month), percent: workerZp.percent1Month },
-      { label: 'За год', value: this.money(workerZp.sum1Year), percent: workerZp.percent1Year },
+      { label: 'За сегодня', value: this.accruedMoney(workerZp.sum1DayKopecks, workerZp.sum1Day), percent: workerZp.percent1Day },
+      { label: 'За неделю', value: this.accruedMoney(workerZp.sum1WeekKopecks, workerZp.sum1Week), percent: workerZp.percent1Week },
+      { label: 'За месяц', value: this.accruedMoney(workerZp.sum1MonthKopecks, workerZp.sum1Month), percent: workerZp.percent1Month },
+      { label: 'За год', value: this.accruedMoney(workerZp.sum1YearKopecks, workerZp.sum1Year), percent: workerZp.percent1Year },
       { label: 'Заказов за месяц', value: this.count(workerZp.sumOrders1Month), percent: workerZp.percent1MonthOrders },
       { label: 'За прошлый месяц', value: this.count(workerZp.sumOrders2Month), percent: workerZp.percent2MonthOrders }
     ];
@@ -425,9 +425,9 @@ export class HomeComponent {
 
     return [
       { label: 'За период', value: this.money(this.contractorRewardPeriodTotal(workerZp.zpPayMapMonth)), percent: null },
-      { label: 'За день', value: this.money(workerZp.sum1Day), percent: workerZp.percent1Day },
-      { label: 'За неделю', value: this.money(workerZp.sum1Week), percent: workerZp.percent1Week },
-      { label: 'За месяц', value: this.money(workerZp.sum1Month), percent: workerZp.percent1Month }
+      { label: 'За день', value: this.accruedMoney(workerZp.sum1DayKopecks, workerZp.sum1Day), percent: workerZp.percent1Day },
+      { label: 'За неделю', value: this.accruedMoney(workerZp.sum1WeekKopecks, workerZp.sum1Week), percent: workerZp.percent1Week },
+      { label: 'За месяц', value: this.accruedMoney(workerZp.sum1MonthKopecks, workerZp.sum1Month), percent: workerZp.percent1Month }
     ];
   });
 
@@ -1324,6 +1324,14 @@ export class HomeComponent {
 
   private money(value?: number | null): string {
     return `${new Intl.NumberFormat('ru-RU').format(value || 0)} руб.`;
+  }
+
+  private accruedMoney(exactKopecks: number | null | undefined, legacyRubles: number): string {
+    const kopecks = exactKopecks ?? legacyRubles * 100;
+    return `${new Intl.NumberFormat('ru-RU', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(kopecks / 100)} руб.`;
   }
 
   private contractorRewardPeriodTotal(map?: string | null): number {

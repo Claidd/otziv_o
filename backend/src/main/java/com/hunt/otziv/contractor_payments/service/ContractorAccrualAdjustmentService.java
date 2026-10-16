@@ -1,8 +1,9 @@
 package com.hunt.otziv.contractor_payments.service;
 
-import com.hunt.otziv.analytics.service.ContractorAccrualAnalyticsRefreshService;
+import com.hunt.otziv.common.events.ContractorAccrualAdjustedEvent;
 import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.contractor_payments.dto.ContractorAccrualAdjustmentPreviewResponse;
+import com.hunt.otziv.contractor_payments.dto.ContractorAccrualAdjustmentHistoryPageResponse;
 import com.hunt.otziv.contractor_payments.dto.ContractorAccrualAdjustmentRequest;
 import com.hunt.otziv.contractor_payments.dto.ContractorAccrualAdjustmentResponse;
 import com.hunt.otziv.contractor_payments.dto.ContractorAccrualAdjustmentReversalRequest;
@@ -29,6 +30,7 @@ import java.util.Objects;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -61,7 +63,7 @@ public class ContractorAccrualAdjustmentService {
     private final ContractorPaymentTargetAccessPolicy targetAccessPolicy;
     private final ContractorPaymentBusinessClock businessClock;
     private final BusinessAuditService businessAuditService;
-    private final ContractorAccrualAnalyticsRefreshService analyticsRefreshService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional(readOnly = true)
     public List<ContractorAccrualAdjustmentResponse> history(Long userId, Long profileId) {
@@ -70,6 +72,18 @@ public class ContractorAccrualAdjustmentService {
         return adjustmentRepository.findAllByProfileIdOrderByCreatedAtDescIdDesc(
                 profileId, PageRequest.of(0, 100)
         ).stream().map(this::response).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public ContractorAccrualAdjustmentHistoryPageResponse historyPage(Long userId, Long profileId, int page) {
+        targetAccessPolicy.requireCanManageUser(userId);
+        requireProfile(userId, profileId);
+        if (page < 0 || page > 1_000_000) {
+            throw badRequest("Некорректная страница истории корректировок");
+        }
+        var slice = adjustmentRepository.findHistoryPage(profileId, PageRequest.of(page, 50));
+        return new ContractorAccrualAdjustmentHistoryPageResponse(
+                slice.getContent().stream().map(this::response).toList(), slice.hasNext());
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
@@ -116,7 +130,7 @@ public class ContractorAccrualAdjustmentService {
         entry.setIdempotencyKey(validated.idempotencyKey());
         ContractorAccrualAdjustment saved = adjustmentRepository.saveAndFlush(entry);
         audit(saved, "CREATE_CONTRACTOR_ACCRUAL_ADJUSTMENT");
-        analyticsRefreshService.refreshAfterCommit(saved.getEffectiveOn());
+        eventPublisher.publishEvent(new ContractorAccrualAdjustedEvent(this, saved.getEffectiveOn()));
         return response(saved);
     }
 
@@ -168,7 +182,7 @@ public class ContractorAccrualAdjustmentService {
         reversal.setIdempotencyKey(key);
         ContractorAccrualAdjustment saved = adjustmentRepository.saveAndFlush(reversal);
         audit(saved, "REVERSE_CONTRACTOR_ACCRUAL_ADJUSTMENT");
-        analyticsRefreshService.refreshAfterCommit(saved.getEffectiveOn());
+        eventPublisher.publishEvent(new ContractorAccrualAdjustedEvent(this, saved.getEffectiveOn()));
         return response(saved);
     }
 

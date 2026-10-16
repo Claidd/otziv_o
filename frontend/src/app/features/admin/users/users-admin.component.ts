@@ -164,7 +164,8 @@ export class UsersAdminComponent implements OnDestroy {
   readonly contractorAccrualPreviewLoadingId = signal<number | null>(null);
   readonly contractorAccrualSavingId = signal<number | null>(null);
   readonly contractorAccrualHistory = signal<Record<number, ContractorAccrualAdjustment[]>>({});
-  readonly contractorAccrualHistoryLoadingId = signal<number | null>(null);
+  readonly contractorAccrualHistoryLoading = signal<Record<number, boolean>>({});
+  readonly contractorAccrualHistoryNextPage = signal<Record<number, number>>({});
   readonly contractorAccrualErrors = signal<Record<number, string>>({});
   readonly contractorAccrualReversalReasons = signal<Record<number, string>>({});
   readonly contractorAccrualReversalKeys = signal<Record<number, string>>({});
@@ -221,6 +222,8 @@ export class UsersAdminComponent implements OnDestroy {
   private formBaseline = '';
   private contractorJournalRequest = 0;
   private contractorProfilesRequest = 0;
+  private contractorAccrualHistoryRequest = 0;
+  private readonly contractorAccrualHistoryRequestByProfile = new Map<number, number>();
   readonly assignmentOptions = signal<AssignmentOptions>({
     managers: [],
     workers: [],
@@ -396,9 +399,11 @@ export class UsersAdminComponent implements OnDestroy {
     this.contractorAccrualPreviews.set({});
     this.contractorAccrualPreviewKeys.set({});
     this.contractorAccrualHistory.set({});
+    this.contractorAccrualHistoryNextPage.set({});
+    this.contractorAccrualHistoryRequestByProfile.clear();
     this.contractorAccrualPreviewLoadingId.set(null);
     this.contractorAccrualSavingId.set(null);
-    this.contractorAccrualHistoryLoadingId.set(null);
+    this.contractorAccrualHistoryLoading.set({});
     this.contractorAccrualReversalSavingId.set(null);
     this.contractorAccrualErrors.set({});
     this.contractorAccrualReversalReasons.set({});
@@ -756,10 +761,19 @@ export class UsersAdminComponent implements OnDestroy {
   loadContractorAccrualHistory(profileId: number, open: boolean): void {
     const userId = this.selectedUser()?.id;
     if (!open || userId == null || this.contractorAccrualHistory()[profileId]
-      || this.contractorAccrualHistoryLoadingId() === profileId) {
+      || this.contractorAccrualHistoryLoading()[profileId]) {
       return;
     }
     this.refreshContractorAccrualHistory(userId, profileId);
+  }
+
+  loadMoreContractorAccrualHistory(profileId: number): void {
+    const userId = this.selectedUser()?.id;
+    const page = this.contractorAccrualHistoryNextPage()[profileId];
+    if (userId == null || page === undefined || this.contractorAccrualHistoryLoading()[profileId]) {
+      return;
+    }
+    this.fetchContractorAccrualHistoryPage(userId, profileId, page);
   }
 
   contractorAccrualCanReverse(profileId: number, row: ContractorAccrualAdjustment): boolean {
@@ -899,19 +913,52 @@ export class UsersAdminComponent implements OnDestroy {
   }
 
   private refreshContractorAccrualHistory(userId: number, profileId: number): void {
-    this.contractorAccrualHistoryLoadingId.set(profileId);
-    this.adminUsersApi.getContractorAccrualAdjustments(userId, profileId).subscribe({
-      next: (items) => {
-        if (this.selectedUser()?.id === userId) {
-          this.contractorAccrualHistory.update((history) => ({ ...history, [profileId]: items }));
+    this.contractorAccrualHistory.update((history) => {
+      const next = { ...history };
+      delete next[profileId];
+      return next;
+    });
+    this.contractorAccrualHistoryNextPage.update((pages) => {
+      const next = { ...pages };
+      delete next[profileId];
+      return next;
+    });
+    this.fetchContractorAccrualHistoryPage(userId, profileId, 0);
+  }
+
+  private fetchContractorAccrualHistoryPage(userId: number, profileId: number, page: number): void {
+    const request = ++this.contractorAccrualHistoryRequest;
+    this.contractorAccrualHistoryRequestByProfile.set(profileId, request);
+    this.contractorAccrualHistoryLoading.update((loading) => ({ ...loading, [profileId]: true }));
+    this.clearContractorAccrualError(profileId);
+    this.adminUsersApi.getContractorAccrualAdjustmentsPage(userId, profileId, page).subscribe({
+      next: (result) => {
+        if (this.selectedUser()?.id !== userId
+          || this.contractorAccrualHistoryRequestByProfile.get(profileId) !== request) {
+          return;
         }
-        this.contractorAccrualHistoryLoadingId.set(null);
+        this.contractorAccrualHistory.update((history) => {
+          const merged = page === 0 ? result.items : [...(history[profileId] ?? []), ...result.items];
+          return { ...history, [profileId]: [...new Map(merged.map((item) => [item.id, item])).values()] };
+        });
+        this.contractorAccrualHistoryNextPage.update((pages) => {
+          const next = { ...pages };
+          if (result.hasMore) {
+            next[profileId] = page + 1;
+          } else {
+            delete next[profileId];
+          }
+          return next;
+        });
+        this.contractorAccrualHistoryLoading.update((loading) => ({ ...loading, [profileId]: false }));
       },
       error: (err) => {
-        if (this.selectedUser()?.id === userId) {
-          this.setContractorAccrualError(profileId, this.errorMessage(err, 'Не удалось загрузить историю корректировок'));
+        if (this.selectedUser()?.id !== userId
+          || this.contractorAccrualHistoryRequestByProfile.get(profileId) !== request) {
+          return;
         }
-        this.contractorAccrualHistoryLoadingId.set(null);
+        this.setContractorAccrualError(profileId, this.errorMessage(err, 'Не удалось загрузить историю корректировок'));
+        this.contractorAccrualHistoryLoading.update((loading) => ({ ...loading, [profileId]: false }));
       }
     });
   }

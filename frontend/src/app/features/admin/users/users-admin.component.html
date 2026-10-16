@@ -701,7 +701,7 @@
                           >
                         </label>
                         <label>
-                          <span>ID документа · только для админа</span>
+                          <span>ID документа · для админа и владельца</span>
                           <input
                             type="text"
                             maxlength="160"
@@ -755,7 +755,7 @@
                       }
                       <div class="accrual-adjustment-history">
                         <strong>История корректировок</strong>
-                        @if (contractorAccrualHistoryLoadingId() === profile.id) {
+                        @if (contractorAccrualHistoryLoading()[profile.id] && !contractorAccrualHistory()[profile.id]) {
                           <p>Загружаю историю…</p>
                         } @else if ((contractorAccrualHistory()[profile.id] || []).length === 0) {
                           <p>Премий и удержаний пока не было.</p>
@@ -804,6 +804,16 @@
                               </li>
                             }
                           </ol>
+                          @if (contractorAccrualHistoryNextPage()[profile.id] !== undefined) {
+                            <button
+                              type="button"
+                              class="secondary"
+                              (click)="loadMoreContractorAccrualHistory(profile.id)"
+                              [disabled]="contractorAccrualHistoryLoading()[profile.id]"
+                            >
+                              {{ contractorAccrualHistoryLoading()[profile.id] ? 'Загружаю…' : 'Показать ещё' }}
+                            </button>
+                          }
                         }
                       </div>
                     </details>

@@ -24,6 +24,7 @@ import com.hunt.otziv.contractor_payments.model.ContractorRole;
 import com.hunt.otziv.contractor_payments.dto.ContractorPaymentProfileRequest;
 import com.hunt.otziv.contractor_payments.dto.ContractorPaymentProfileResponse;
 import com.hunt.otziv.contractor_payments.repository.ContractorPaymentAllocationRepository;
+import com.hunt.otziv.contractor_payments.repository.ContractorAccrualAdjustmentRepository;
 import com.hunt.otziv.contractor_payments.repository.ContractorPaymentProfileRepository;
 import com.hunt.otziv.contractor_payments.repository.ContractorPaymentProfileAdjustmentRepository;
 import com.hunt.otziv.contractor_payments.repository.ContractorRewardLedgerRepository;
@@ -55,6 +56,8 @@ class ContractorPaymentProfileServiceTest {
     private ContractorPaymentAllocationRepository allocationRepository;
     @Mock
     private ContractorRewardLedgerRepository rewardLedgerRepository;
+    @Mock
+    private ContractorAccrualAdjustmentRepository accrualAdjustmentRepository;
     @Mock
     private ContractorRewardLedgerService ledgerService;
     @Mock
@@ -159,6 +162,17 @@ class ContractorPaymentProfileServiceTest {
         assertThat(service.available(profile, ContractorAllocationMode.LIVE)).isEqualTo(200_000L);
         verify(rewardLedgerRepository).sumActiveForCapacityUpdate(7L);
         verify(allocationRepository).capacityTotalsForUpdate(7L, ContractorAllocationMode.LIVE.name());
+    }
+
+    @Test
+    void capacityIncludesSignedBonusAndDeductionAdjustments() {
+        when(rewardLedgerRepository.sumActiveForCapacityUpdate(7L)).thenReturn(300_000L);
+        when(accrualAdjustmentRepository.sumForCapacityUpdate(7L)).thenReturn(975L);
+        when(allocationRepository.capacityTotalsForUpdate(7L, ContractorAllocationMode.LIVE.name()))
+                .thenReturn(capacityTotals(0L, 0L, 0L));
+
+        assertThat(service.available(profile, ContractorAllocationMode.LIVE)).isEqualTo(300_975L);
+        verify(accrualAdjustmentRepository).sumForCapacityUpdate(7L);
     }
 
     @Test

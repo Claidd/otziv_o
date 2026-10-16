@@ -12,7 +12,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.hunt.otziv.analytics.service.ContractorAccrualAnalyticsRefreshService;
+import com.hunt.otziv.common.events.ContractorAccrualAdjustedEvent;
 import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.contractor_payments.dto.ContractorAccrualAdjustmentRequest;
 import com.hunt.otziv.contractor_payments.dto.ContractorAccrualAdjustmentReversalRequest;
@@ -41,7 +41,10 @@ import org.mockito.InjectMocks;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.SliceImpl;
 import org.springframework.http.HttpStatus;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -65,7 +68,7 @@ class ContractorAccrualAdjustmentServiceTest {
     @Mock private ContractorPaymentTargetAccessPolicy targetAccessPolicy;
     @Mock private ContractorPaymentBusinessClock businessClock;
     @Mock private BusinessAuditService businessAuditService;
-    @Mock private ContractorAccrualAnalyticsRefreshService analyticsRefreshService;
+    @Mock private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks private ContractorAccrualAdjustmentService service;
 
@@ -116,7 +119,10 @@ class ContractorAccrualAdjustmentServiceTest {
         assertThat(entry.getValue().getCreatedBy()).isEqualTo("admin");
         assertThat(response.referenceMonth()).isEqualTo("2026-10");
         assertThat(response.signedAmountKopecks()).isEqualTo(5_000L);
-        verify(analyticsRefreshService).refreshAfterCommit(effectiveOn);
+        ArgumentCaptor<ContractorAccrualAdjustedEvent> published = ArgumentCaptor.forClass(
+                ContractorAccrualAdjustedEvent.class);
+        verify(eventPublisher).publishEvent(published.capture());
+        assertThat(published.getValue().effectiveOn()).isEqualTo(effectiveOn);
         verify(businessAuditService).recordRequiredInCurrentTransaction(
                 eq("CREATE_CONTRACTOR_ACCRUAL_ADJUSTMENT"), eq("CONTRACTOR_ACCRUAL_ADJUSTMENT"),
                 eq(71L), any(), any(), any(), any(), any()
@@ -141,7 +147,7 @@ class ContractorAccrualAdjustmentServiceTest {
                         .isEqualTo(HttpStatus.CONFLICT))
                 .hasMessageContaining("свободную сумму");
         verify(adjustmentRepository, never()).saveAndFlush(any());
-        verifyNoInteractions(businessAuditService, analyticsRefreshService);
+        verifyNoInteractions(businessAuditService, eventPublisher);
     }
 
     @Test
@@ -161,7 +167,7 @@ class ContractorAccrualAdjustmentServiceTest {
 
         assertThat(response.id()).isEqualTo(81L);
         verify(adjustmentRepository, never()).saveAndFlush(any());
-        verifyNoInteractions(businessAuditService, analyticsRefreshService);
+        verifyNoInteractions(businessAuditService, eventPublisher);
     }
 
     @Test
@@ -231,7 +237,10 @@ class ContractorAccrualAdjustmentServiceTest {
         assertThat(response.reversalOfId()).isEqualTo(92L);
         assertThat(response.referenceMonth()).isEqualTo("2026-10");
         assertThat(response.signedAmountKopecks()).isEqualTo(4_000L);
-        verify(analyticsRefreshService).refreshAfterCommit(effectiveOn);
+        ArgumentCaptor<ContractorAccrualAdjustedEvent> published = ArgumentCaptor.forClass(
+                ContractorAccrualAdjustedEvent.class);
+        verify(eventPublisher).publishEvent(published.capture());
+        assertThat(published.getValue().effectiveOn()).isEqualTo(effectiveOn);
     }
 
     @Test
@@ -254,7 +263,7 @@ class ContractorAccrualAdjustmentServiceTest {
         assertThat(response.id()).isEqualTo(95L);
         assertThat(response.reversalOfId()).isEqualTo(94L);
         verify(adjustmentRepository, never()).saveAndFlush(any());
-        verifyNoInteractions(businessAuditService, analyticsRefreshService);
+        verifyNoInteractions(businessAuditService, eventPublisher);
     }
 
     @Test
@@ -306,6 +315,36 @@ class ContractorAccrualAdjustmentServiceTest {
         assertThat(preview.paidTotalKopecks()).isEqualTo(8_000L);
         assertThat(preview.outstandingKopecks()).isEqualTo(4_000L);
         assertThat(preview.manualTaskCommitmentKopecks()).isEqualTo(2_000L);
+    }
+
+    @Test
+    void historyPageReturnsAnOlderBoundedSliceWithMoreAvailable() {
+        when(profileRepository.findById(PROFILE_ID)).thenReturn(Optional.of(profile));
+        var pageable = PageRequest.of(2, 50);
+        var older = entry(101L, ContractorAccrualAdjustmentKind.DEDUCTION,
+                ContractorAccrualBucket.DEDUCTION, -1_250L,
+                LocalDate.of(2026, 8, 1), null, "older-adjustment");
+        when(adjustmentRepository.findHistoryPage(PROFILE_ID, pageable))
+                .thenReturn(new SliceImpl<>(List.of(older), pageable, true));
+
+        var page = service.historyPage(USER_ID, PROFILE_ID, 2);
+
+        assertThat(page.items()).hasSize(1);
+        assertThat(page.items().getFirst().id()).isEqualTo(101L);
+        assertThat(page.items().getFirst().signedAmountKopecks()).isEqualTo(-1_250L);
+        assertThat(page.hasMore()).isTrue();
+        verify(targetAccessPolicy).requireCanManageUser(USER_ID);
+    }
+
+    @Test
+    void historyPageRejectsNegativePageBeforeRepositoryQuery() {
+        when(profileRepository.findById(PROFILE_ID)).thenReturn(Optional.of(profile));
+
+        assertThatThrownBy(() -> service.historyPage(USER_ID, PROFILE_ID, -1))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(error -> assertThat(((ResponseStatusException) error).getStatusCode())
+                        .isEqualTo(HttpStatus.BAD_REQUEST));
+        verify(adjustmentRepository, never()).findHistoryPage(any(), any());
     }
 
     private void stubLockedProfile() {

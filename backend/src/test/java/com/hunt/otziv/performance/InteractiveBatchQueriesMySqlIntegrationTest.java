@@ -3,6 +3,7 @@ package com.hunt.otziv.performance;
 import com.hunt.otziv.contractor_payments.model.*;
 import com.hunt.otziv.contractor_payments.repository.*;
 import com.hunt.otziv.contractor_payments.service.*;
+import com.hunt.otziv.common.events.ContractorAccrualAdjustedEvent;
 import com.hunt.otziv.u_users.model.User;
 import jakarta.persistence.EntityManager;
 import java.math.BigDecimal;
@@ -12,11 +13,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.transaction.TestTransaction;
 import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -40,6 +43,7 @@ class InteractiveBatchQueriesMySqlIntegrationTest {
         registry.add("spring.datasource.password", MYSQL::getPassword);
     }
     @Autowired JdbcTemplate jdbc;
+    @Autowired ApplicationEventPublisher events;
     @Autowired EntityManager em;
     @Autowired ContractorRewardLedgerService ledger;
     @Autowired ContractorPaymentAccountingService accounting;
@@ -257,6 +261,22 @@ class InteractiveBatchQueriesMySqlIntegrationTest {
                 """, profile.getUser().getId(), FROM, TO);
         assertThat((BigDecimal) daily.get("salary_sum")).isEqualByComparingTo("5.50");
         assertThat(((Number) daily.get("work_count")).longValue()).isZero();
+    }
+
+    @Test void accrualAnalyticsMarkerRollsBackWithTheLedgerTransaction() {
+        LocalDate effectiveOn = LocalDate.of(2099, 12, 15);
+        String key = "contractor-accrual-analytics:2099-12";
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM app_settings WHERE setting_key = ?", Integer.class, key)).isZero();
+
+        events.publishEvent(new ContractorAccrualAdjustedEvent(this, effectiveOn));
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM app_settings WHERE setting_key = ?", Integer.class, key)).isEqualTo(1);
+
+        TestTransaction.flagForRollback();
+        TestTransaction.end();
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM app_settings WHERE setting_key = ?", Integer.class, key)).isZero();
     }
 
     private void insertAdjustment(long profileId, String bucket, long signedKopecks,

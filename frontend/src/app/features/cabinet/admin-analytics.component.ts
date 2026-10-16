@@ -75,9 +75,9 @@ export class AdminAnalyticsComponent {
 
     return [
       this.moneyMetric('За период', this.periodMoneyTotal(stats.zpPayMapMonth), null),
-      this.moneyMetric('За вчера', stats.sum1Day, stats.percent1Day),
-      this.moneyMetric('За неделю', stats.sum1Week, stats.percent1Week),
-      this.moneyMetric('За месяц', stats.sum1Month, stats.percent1Month)
+      this.accruedMoneyMetric('За вчера', stats.sum1DayKopecks, stats.sum1Day, stats.percent1Day),
+      this.accruedMoneyMetric('За неделю', stats.sum1WeekKopecks, stats.sum1Week, stats.percent1Week),
+      this.accruedMoneyMetric('За месяц', stats.sum1MonthKopecks, stats.sum1Month, stats.percent1Month)
     ];
   });
 
@@ -88,7 +88,7 @@ export class AdminAnalyticsComponent {
     }
 
     return [
-      this.moneyMetric('За год', stats.sum1Year, stats.percent1Year),
+      this.accruedMoneyMetric('За год', stats.sum1YearKopecks, stats.sum1Year, stats.percent1Year),
       { label: 'Заказов за месяц', value: this.formatCount(stats.sumOrders1Month), percent: stats.percent1MonthOrders },
       { label: 'За прошлый месяц', value: this.formatCount(stats.sumOrders2Month), percent: stats.percent2MonthOrders }
     ];
@@ -207,6 +207,23 @@ export class AdminAnalyticsComponent {
     return {
       label,
       value: this.formatMoney(value),
+      percent
+    };
+  }
+
+  private accruedMoneyMetric(
+    label: string,
+    exactKopecks: number | null | undefined,
+    legacyRubles: number,
+    percent: number | null
+  ): Metric {
+    const kopecks = exactKopecks ?? legacyRubles * 100;
+    return {
+      label,
+      value: `${new Intl.NumberFormat('ru-RU', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      }).format(kopecks / 100)} руб.`,
       percent
     };
   }

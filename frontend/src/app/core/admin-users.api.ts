@@ -190,6 +190,11 @@ export interface ContractorAccrualAdjustment {
   reversalOfId?: number | null;
 }
 
+export interface ContractorAccrualAdjustmentHistoryPage {
+  items: ContractorAccrualAdjustment[];
+  hasMore: boolean;
+}
+
 export interface ContractorAccrualAdjustmentPreview {
   workMonthKopecks: number;
   bonusMonthKopecks: number;
@@ -302,6 +307,16 @@ export class AdminUsersApi {
   ): Observable<ContractorAccrualAdjustment[]> {
     return this.http.get<ContractorAccrualAdjustment[]>(
       `${appEnvironment.apiBaseUrl}/api/admin/users/${userId}/contractor-payment-profiles/${profileId}/accrual-adjustments`
+    );
+  }
+
+  getContractorAccrualAdjustmentsPage(
+    userId: number,
+    profileId: number,
+    page: number
+  ): Observable<ContractorAccrualAdjustmentHistoryPage> {
+    return this.http.get<ContractorAccrualAdjustmentHistoryPage>(
+      `${appEnvironment.apiBaseUrl}/api/admin/users/${userId}/contractor-payment-profiles/${profileId}/accrual-adjustments/pages?page=${page}`
     );
   }
 

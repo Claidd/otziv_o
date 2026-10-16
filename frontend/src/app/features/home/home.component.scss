@@ -1691,6 +1691,21 @@ dd {
     var(--otziv-white);
 }
 
+.contractor-payment-summary > .panel-title {
+  flex-wrap: wrap;
+}
+
+.contractor-payment-refresh {
+  margin-left: auto;
+}
+
+@media (max-width: 560px) {
+  .contractor-payment-refresh {
+    width: 100%;
+    margin-left: 0;
+  }
+}
+
 .contractor-payment-role {
   gap: 0.9rem;
   border: 1px solid var(--otziv-surface-border-neutral);

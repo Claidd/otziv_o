@@ -149,7 +149,7 @@ export class ScoreComponent {
     }
 
     return [
-      this.financeRow('Начислено', user.salary),
+      this.accruedFinanceRow(user),
       { label: 'Новые', value: this.count(user.leadsNew) },
       { label: 'В работе', value: this.count(user.leadsInWork) },
       { label: 'Конверсия', value: `${user.percentInWork || 0}%` }
@@ -217,6 +217,14 @@ export class ScoreComponent {
       label,
       value: `${new Intl.NumberFormat('ru-RU').format(value || 0)}${suffix}`
     };
+  }
+
+  private accruedFinanceRow(user: ScoreUser): { label: string; value: string } | null {
+    const kopecks = user.salaryKopecks ?? (user.salary == null ? null : user.salary * 100);
+    if (!this.score()?.financeVisible || kopecks == null) {
+      return null;
+    }
+    return { label: 'Начислено', value: this.moneyKopecks(kopecks) };
   }
 
   private count(value?: number | null): string {
