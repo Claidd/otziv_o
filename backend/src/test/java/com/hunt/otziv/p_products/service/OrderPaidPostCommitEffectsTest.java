@@ -1,6 +1,6 @@
 package com.hunt.otziv.p_products.service;
 
-import com.hunt.otziv.bad_reviews.service.BadReviewTaskService;
+import com.hunt.otziv.bad_reviews.api.PaidBadReviewReminders;
 import com.hunt.otziv.gamification.service.GamificationEventService;
 import com.hunt.otziv.mobile_push.service.MobilePushBusinessNotificationService;
 import com.hunt.otziv.p_products.model.Order;
@@ -19,7 +19,7 @@ import static org.mockito.Mockito.when;
 class OrderPaidPostCommitEffectsTest {
 
     @Mock private OrderRepository orderRepository;
-    @Mock private BadReviewTaskService badReviewTaskService;
+    @Mock private PaidBadReviewReminders paidBadReviewReminders;
     @Mock private GamificationEventService gamificationEventService;
     @Mock private MobilePushBusinessNotificationService mobilePushBusinessNotificationService;
 
@@ -32,12 +32,12 @@ class OrderPaidPostCommitEffectsTest {
 
         new OrderPaidPostCommitEffects(
                 orderRepository,
-                badReviewTaskService,
+                paidBadReviewReminders,
                 gamificationEventService,
                 mobilePushBusinessNotificationService
         ).apply(42L);
 
-        verify(badReviewTaskService).deleteOrderReadyReminder(order);
+        verify(paidBadReviewReminders).closeForPaidOrder(42L);
         verify(mobilePushBusinessNotificationService).notifyOwnersOrderPaid(order);
     }
 
@@ -46,11 +46,11 @@ class OrderPaidPostCommitEffectsTest {
         Order order = Order.builder().id(43L).build();
         when(orderRepository.findByIdForMutation(43L)).thenReturn(Optional.of(order));
         doThrow(new IllegalStateException("reminders unavailable"))
-                .when(badReviewTaskService).deleteOrderReadyReminder(order);
+                .when(paidBadReviewReminders).closeForPaidOrder(43L);
 
         new OrderPaidPostCommitEffects(
                 orderRepository,
-                badReviewTaskService,
+                paidBadReviewReminders,
                 gamificationEventService,
                 mobilePushBusinessNotificationService
         ).apply(43L);

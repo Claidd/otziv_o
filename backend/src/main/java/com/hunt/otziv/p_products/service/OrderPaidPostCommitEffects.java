@@ -1,6 +1,6 @@
 package com.hunt.otziv.p_products.service;
 
-import com.hunt.otziv.bad_reviews.service.BadReviewTaskService;
+import com.hunt.otziv.bad_reviews.api.PaidBadReviewReminders;
 import com.hunt.otziv.gamification.service.GamificationEventService;
 import com.hunt.otziv.mobile_push.service.MobilePushBusinessNotificationService;
 import com.hunt.otziv.p_products.model.Order;
@@ -15,7 +15,7 @@ import org.springframework.stereotype.Service;
 public class OrderPaidPostCommitEffects {
 
     private final OrderRepository orderRepository;
-    private final BadReviewTaskService badReviewTaskService;
+    private final PaidBadReviewReminders paidBadReviewReminders;
     private final GamificationEventService gamificationEventService;
     private final MobilePushBusinessNotificationService mobilePushBusinessNotificationService;
 
@@ -31,7 +31,7 @@ public class OrderPaidPostCommitEffects {
         }
 
         try {
-            badReviewTaskService.deleteOrderReadyReminder(order);
+            paidBadReviewReminders.closeForPaidOrder(orderId);
         } catch (RuntimeException exception) {
             log.warn("Не удалось закрыть напоминание после оплаты заказа {}", orderId, exception);
         }

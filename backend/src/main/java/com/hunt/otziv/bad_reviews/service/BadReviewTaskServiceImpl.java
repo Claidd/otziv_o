@@ -5,6 +5,7 @@ import com.hunt.otziv.worker_activity.account_action.WorkerAccountActionCooldown
 
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.b_bots.service.BotService;
+import com.hunt.otziv.bad_reviews.api.PaidBadReviewReminders;
 import com.hunt.otziv.bad_reviews.dto.BadReviewTaskSummary;
 import com.hunt.otziv.bad_reviews.model.BadReviewTask;
 import com.hunt.otziv.bad_reviews.model.BadReviewTaskStatus;
@@ -74,7 +75,7 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class BadReviewTaskServiceImpl implements BadReviewTaskService {
+public class BadReviewTaskServiceImpl implements BadReviewTaskService, PaidBadReviewReminders {
 
     private static final int DEFAULT_ORIGINAL_RATING = 5;
     private static final int DEFAULT_TARGET_RATING = 2;
@@ -772,6 +773,18 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
             return;
         }
 
+        personalReminderService.deleteSystemRemindersBySource(
+                PersonalReminderService.SOURCE_BAD_REVIEW_ORDER_READY,
+                orderId
+        );
+    }
+
+    @Override
+    @Transactional
+    public void closeForPaidOrder(Long orderId) {
+        if (orderId == null) {
+            return;
+        }
         personalReminderService.deleteSystemRemindersBySource(
                 PersonalReminderService.SOURCE_BAD_REVIEW_ORDER_READY,
                 orderId

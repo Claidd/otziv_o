@@ -908,6 +908,16 @@ class BadReviewTaskServiceImplTest {
     }
 
     @Test
+    void paidOrderApiClosesOrderReadyReminderForEveryRecipient() {
+        service.closeForPaidOrder(12L);
+
+        verify(personalReminderService).deleteSystemRemindersBySource(
+                PersonalReminderService.SOURCE_BAD_REVIEW_ORDER_READY,
+                12L
+        );
+    }
+
+    @Test
     void cancelDoneTaskRemovesTaskReminderAndOrderReadyReminderWhenNoDoneTasksRemain() {
         Order order = order(12L);
         BadReviewTask task = BadReviewTask.builder()
