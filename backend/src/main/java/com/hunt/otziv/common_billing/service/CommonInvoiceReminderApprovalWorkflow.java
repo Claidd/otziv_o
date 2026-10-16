@@ -1,18 +1,11 @@
 package com.hunt.otziv.common_billing.service;
 
-import com.hunt.otziv.client_messages.model.ClientMessageScenario;
-import com.hunt.otziv.client_messages.model.ScheduledClientMessageState;
-import com.hunt.otziv.client_messages.model.ScheduledMessageStateStatus;
-import com.hunt.otziv.client_messages.repository.ScheduledClientMessageStateRepository;
+import com.hunt.otziv.client_messages.api.ReviewApprovalReminderStates;
 import com.hunt.otziv.common_billing.model.CommonInvoice;
 import com.hunt.otziv.common_billing.model.CommonInvoiceOrder;
 import com.hunt.otziv.common_billing.model.CommonInvoiceStatus;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceOrderRepository;
-import com.hunt.otziv.p_products.model.Order;
-import com.hunt.otziv.p_products.repository.OrderRepository;
-import com.hunt.otziv.p_products.review.service.OrderPublicationApprovalService;
-import com.hunt.otziv.review_recovery.service.ReviewRecoveryHoldService;
-import java.time.LocalDateTime;
+import com.hunt.otziv.p_products.api.ReviewReminderOrderApprovals;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,28 +17,21 @@ public class CommonInvoiceReminderApprovalWorkflow {
 
     public static final int REQUIRED_REMINDERS = 7;
 
-    private final ScheduledClientMessageStateRepository stateRepository;
-    private final OrderRepository orderRepository;
+    private final ReviewApprovalReminderStates stateService;
+    private final ReviewReminderOrderApprovals orderApprovals;
     private final CommonInvoiceOrderRepository invoiceOrderRepository;
     private final CommonInvoiceManualPaymentWorkflow manualPaymentWorkflow;
-    private final OrderPublicationApprovalService publicationApprovalService;
-    private final ReviewRecoveryHoldService reviewRecoveryHoldService;
 
     @Transactional
     public boolean approve(Long stateId) {
-        ScheduledClientMessageState state = stateRepository.findByIdForUpdate(stateId).orElse(null);
-        if (state == null || state.getScenario() != ClientMessageScenario.REVIEW_CHECK_REMINDER
-                || state.getStatus() != ScheduledMessageStateStatus.ACTIVE
-                || state.getSentCount() < REQUIRED_REMINDERS || state.getOrderId() == null
-                || state.getDeliveryStatus() != null) {
+        ReviewApprovalReminderStates.Evidence state = stateService.lockEligible(stateId, REQUIRED_REMINDERS).orElse(null);
+        if (state == null) {
             return false;
         }
-        Order order = orderRepository.findByIdForMutation(state.getOrderId()).orElse(null);
-        if (order == null || order.getStatus() == null || !"На проверке".equals(order.getStatus().getTitle())
-                || !currentCycle(state, order) || reviewRecoveryHoldService.shouldPauseClientMessages(order)) {
+        if (!orderApprovals.lockEligible(state.orderId(), state.targetKey())) {
             return false;
         }
-        CommonInvoiceOrder item = invoiceOrderRepository.findMembershipByOrderIdForRead(order.getId()).orElse(null);
+        CommonInvoiceOrder item = invoiceOrderRepository.findMembershipByOrderIdForRead(state.orderId()).orElse(null);
         if (item == null || item.getInvoice() == null || item.isPaid() || item.isUnpaid()) {
             return false;
         }
@@ -57,22 +43,11 @@ public class CommonInvoiceReminderApprovalWorkflow {
             return false;
         }
 
-        publicationApprovalService.approveExistingOrderAfterReminders(order.getId(),
-                "invoiceId=" + invoiceId + ";source=seven_delivered_review_reminders;sentCount=" + state.getSentCount());
-        state.setStatus(ScheduledMessageStateStatus.DONE);
-        state.setNextAttemptAt(null);
-        state.setLockedUntil(null);
-        state.setLastErrorCode(null);
-        state.setLastErrorMessage(null);
-        stateRepository.save(state);
+        orderApprovals.approve(state.orderId(),
+                "invoiceId=" + invoiceId + ";source=seven_delivered_review_reminders;sentCount=" + state.sentCount());
+        stateService.complete(stateId);
         manualPaymentWorkflow.invoiceAfterOrderPrelude(invoiceId);
         return true;
     }
 
-    private boolean currentCycle(ScheduledClientMessageState state, Order order) {
-        LocalDateTime changedAt = order.getStatusChangedAt();
-        if (changedAt == null && order.getChanged() != null) changedAt = order.getChanged().atStartOfDay();
-        if (changedAt == null && order.getCreated() != null) changedAt = order.getCreated().atStartOfDay();
-        return changedAt != null && ("order:" + order.getId() + ":" + changedAt.withNano(0)).equals(state.getTargetKey());
-    }
 }

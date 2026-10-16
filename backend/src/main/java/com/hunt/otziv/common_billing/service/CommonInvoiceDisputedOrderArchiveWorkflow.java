@@ -5,8 +5,7 @@ import com.hunt.otziv.common_billing.model.CommonInvoice;
 import com.hunt.otziv.common_billing.model.CommonInvoiceOrder;
 import com.hunt.otziv.common_billing.model.CommonInvoiceStatus;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceOrderRepository;
-import com.hunt.otziv.p_products.model.Order;
-import com.hunt.otziv.p_products.status.service.OrderStatusTransitionService;
+import com.hunt.otziv.p_products.api.DisputedOrderArchive;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -21,7 +20,7 @@ public class CommonInvoiceDisputedOrderArchiveWorkflow {
     private final CommonInvoiceOrderRepository invoiceOrderRepository;
     private final CommonInvoiceMembershipWorkflow membershipWorkflow;
     private final CommonInvoiceManualPaymentWorkflow manualPaymentWorkflow;
-    private final OrderStatusTransitionService statusTransitionService;
+    private final DisputedOrderArchive disputedOrderArchive;
 
     @Transactional
     public CommonInvoiceDetailsResponse archive(Long invoiceId, Long orderId) {
@@ -30,15 +29,15 @@ public class CommonInvoiceDisputedOrderArchiveWorkflow {
         if (item.getInvoice() == null || !invoiceId.equals(item.getInvoice().getId())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Заказ относится к другому общему счету");
         }
-        ensureCanArchive(item);
+        ensureCanArchive(item, orderId);
         membershipWorkflow.detachOrder(invoiceId, orderId);
         // detachOrder locks and refreshes the invoice and order. Check again in that same transaction.
-        ensureNoPaymentState(item);
+        ensureNoPaymentState(item, orderId);
         if (invoiceOrderRepository.findByOrder_IdAndActiveMembershipTrue(orderId).isPresent()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Заказ остался в активном общем счете");
         }
         try {
-            if (!statusTransitionService.changeStatusForOrder(orderId, "Архив")) {
+            if (!disputedOrderArchive.archive(orderId)) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Не удалось архивировать заказ");
             }
         } catch (ResponseStatusException exception) {
@@ -49,9 +48,9 @@ public class CommonInvoiceDisputedOrderArchiveWorkflow {
         return manualPaymentWorkflow.invoiceAfterOrderPrelude(invoiceId);
     }
 
-    private void ensureCanArchive(CommonInvoiceOrder item) {
+    private void ensureCanArchive(CommonInvoiceOrder item, Long orderId) {
         CommonInvoice invoice = item.getInvoice();
-        ensureNoPaymentState(item);
+        ensureNoPaymentState(item, orderId);
         if (!item.isActiveMembership() || invoice == null
                 || (invoice.getStatus() != CommonInvoiceStatus.COLLECTING
                     && invoice.getStatus() != CommonInvoiceStatus.READY)) {
@@ -60,11 +59,10 @@ public class CommonInvoiceDisputedOrderArchiveWorkflow {
         }
     }
 
-    private void ensureNoPaymentState(CommonInvoiceOrder item) {
+    private void ensureNoPaymentState(CommonInvoiceOrder item, Long orderId) {
         CommonInvoice invoice = item.getInvoice();
-        Order order = item.getOrder();
-        if (item.isPaid() || item.isUnpaid() || order == null || order.isComplete()
-                || order.getPayDay() != null || invoice == null || invoice.getSentAt() != null) {
+        if (item.isPaid() || item.isUnpaid() || disputedOrderArchive.hasPaymentState(orderId)
+                || invoice == null || invoice.getSentAt() != null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Заказ или общий счет уже имеет платежное состояние; требуется ручной разбор конфликта");
         }

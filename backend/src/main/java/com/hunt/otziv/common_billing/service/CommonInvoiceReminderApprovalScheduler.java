@@ -1,10 +1,9 @@
 package com.hunt.otziv.common_billing.service;
 
-import com.hunt.otziv.client_messages.repository.ScheduledClientMessageStateRepository;
+import com.hunt.otziv.client_messages.api.ReviewApprovalReminderStates;
 import com.hunt.otziv.p_products.review.exception.PublicationApprovalException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -13,7 +12,7 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class CommonInvoiceReminderApprovalScheduler {
 
-    private final ScheduledClientMessageStateRepository stateRepository;
+    private final ReviewApprovalReminderStates stateService;
     private final CommonInvoiceReminderApprovalWorkflow approvalWorkflow;
     private final CommonBillingPublicationApprovalFailureMarker failureMarker;
 
@@ -24,20 +23,20 @@ public class CommonInvoiceReminderApprovalScheduler {
         int inspected = 0;
         int approved = 0;
         while (inspected < 200) {
-            var candidates = stateRepository.findReviewApprovalCandidates(afterId, PageRequest.of(0, Math.min(50, 200 - inspected)));
+            var candidates = stateService.candidatesAfter(afterId, Math.min(50, 200 - inspected));
             if (candidates.isEmpty()) break;
             for (var candidate : candidates) {
-                afterId = candidate.getStateId();
+                afterId = candidate.stateId();
                 inspected++;
                 try {
-                    if (approvalWorkflow.approve(candidate.getStateId())) approved++;
+                    if (approvalWorkflow.approve(candidate.stateId())) approved++;
                 } catch (PublicationApprovalException exception) {
-                    failureMarker.markAttention(candidate.getInvoiceId(), exception);
+                    failureMarker.markAttention(candidate.invoiceId(), exception);
                     log.warn("Review reminder auto-approval needs attention: invoiceId={} stateId={}",
-                            candidate.getInvoiceId(), candidate.getStateId(), exception);
+                            candidate.invoiceId(), candidate.stateId(), exception);
                 } catch (RuntimeException exception) {
                     log.warn("Review reminder auto-approval failed: invoiceId={} stateId={}",
-                            candidate.getInvoiceId(), candidate.getStateId(), exception);
+                            candidate.invoiceId(), candidate.stateId(), exception);
                 }
             }
         }

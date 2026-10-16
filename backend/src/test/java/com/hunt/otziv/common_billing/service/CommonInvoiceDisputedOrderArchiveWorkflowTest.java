@@ -6,7 +6,7 @@ import com.hunt.otziv.common_billing.model.CommonInvoiceOrder;
 import com.hunt.otziv.common_billing.model.CommonInvoiceStatus;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceOrderRepository;
 import com.hunt.otziv.p_products.model.Order;
-import com.hunt.otziv.p_products.status.service.OrderStatusTransitionService;
+import com.hunt.otziv.p_products.api.DisputedOrderArchive;
 import java.time.LocalDateTime;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,7 +26,7 @@ class CommonInvoiceDisputedOrderArchiveWorkflowTest {
     @Mock CommonInvoiceOrderRepository invoiceOrderRepository;
     @Mock CommonInvoiceMembershipWorkflow membershipWorkflow;
     @Mock CommonInvoiceManualPaymentWorkflow manualPaymentWorkflow;
-    @Mock OrderStatusTransitionService statusTransitionService;
+    @Mock DisputedOrderArchive disputedOrderArchive;
     @InjectMocks CommonInvoiceDisputedOrderArchiveWorkflow workflow;
 
     private CommonInvoiceOrder item;
@@ -47,26 +47,28 @@ class CommonInvoiceDisputedOrderArchiveWorkflowTest {
     @Test
     void detachesAndArchivesUnpaidOrderTogether() throws Exception {
         CommonInvoiceDetailsResponse details = mock(CommonInvoiceDetailsResponse.class);
-        when(statusTransitionService.changeStatusForOrder(42L, "Архив")).thenReturn(true);
+        when(disputedOrderArchive.archive(42L)).thenReturn(true);
         when(manualPaymentWorkflow.invoiceAfterOrderPrelude(5L)).thenReturn(details);
 
         assertSame(details, workflow.archive(5L, 42L));
-        var sequence = inOrder(membershipWorkflow, statusTransitionService);
+        var sequence = inOrder(membershipWorkflow, disputedOrderArchive);
         sequence.verify(membershipWorkflow).detachOrder(5L, 42L);
-        sequence.verify(statusTransitionService).changeStatusForOrder(42L, "Архив");
+        sequence.verify(disputedOrderArchive).archive(42L);
     }
 
     @Test
-    void rejectsPaidOrderWithoutDetaching() {
+    void rejectsPaidOrderWithoutDetaching() throws Exception {
         item.setPaid(true);
         assertThrows(ResponseStatusException.class, () -> workflow.archive(5L, 42L));
-        verifyNoInteractions(membershipWorkflow, statusTransitionService);
+        verifyNoInteractions(membershipWorkflow);
+        verify(disputedOrderArchive, never()).archive(42L);
     }
 
     @Test
-    void rejectsInvoiceAlreadySentToClient() {
+    void rejectsInvoiceAlreadySentToClient() throws Exception {
         item.getInvoice().setSentAt(LocalDateTime.now());
         assertThrows(ResponseStatusException.class, () -> workflow.archive(5L, 42L));
-        verifyNoInteractions(membershipWorkflow, statusTransitionService);
+        verifyNoInteractions(membershipWorkflow);
+        verify(disputedOrderArchive, never()).archive(42L);
     }
 }

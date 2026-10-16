@@ -1,6 +1,7 @@
 package com.hunt.otziv.review_recovery.service;
 
 import com.hunt.otziv.p_products.model.Order;
+import com.hunt.otziv.review_recovery.api.ReviewRecoveryMessageHold;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryBatch;
 import com.hunt.otziv.review_recovery.repository.ReviewRecoveryBatchRepository;
 import java.time.Duration;
@@ -12,7 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
-public class ReviewRecoveryHoldService {
+public class ReviewRecoveryHoldService implements ReviewRecoveryMessageHold {
 
     private static final Set<String> TERMINAL_ORDER_STATUSES = Set.of("Оплачено", "Архив", "Бан");
     private static final Set<String> CLIENT_SILENT_RECOVERY_STATUSES = Set.of("Архив", "Бан");
@@ -26,6 +27,12 @@ public class ReviewRecoveryHoldService {
             return false;
         }
         return recoveryGateService.hasActiveRecoveryTasks(order.getId());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean shouldPauseActiveOrder(Long orderId) {
+        return orderId != null && recoveryGateService.hasActiveRecoveryTasks(orderId);
     }
 
     @Transactional
