@@ -2,8 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { gunzipSync } from 'node:zlib';
-import { loadReviewedProof, matchingFindings, validateObservedBinary, effectiveScanSummary,
-  adjudicateGrafanaImage } from './grafana-tempo-adjudication.mjs';
+import { loadReviewedProof, matchingFindings, validateObservedBinary, effectiveScanSummary } from './grafana-tempo-adjudication.mjs';
 import { summarizeReport } from './scan.mjs';
 
 const { review } = await loadReviewedProof();
@@ -60,17 +59,24 @@ test('C29 Grafana binds the same fixed Tempo source to the Go 1.27.2 executable'
   validateObservedBinary(report, inspect, current.review.binary.sha256, currentBuild, current.review);
   assert.throws(() => validateObservedBinary(report, inspect, current.review.binary.sha256, buildInfo, current.review), /build_info_mismatch/);
 });
-test('C30 Grafana cannot borrow C29 exact-binary proof while its identity is pending', async () => {
-  const { report } = fixture();
-  report.Metadata.ImageConfig.config.Labels['org.opencontainers.image.version'] = '12.4.10+otziv.3';
-  await assert.rejects(loadReviewedProof('c30'), /adjudication_c30_identity_pending/);
-  const receipt = await adjudicateGrafanaImage(report, Buffer.from(JSON.stringify(report)),
-    'sha256:' + 'a'.repeat(64), 'unused');
-  assert.equal(receipt.status, 'REJECTED');
-  assert.equal(receipt.reason, 'adjudication_c30_identity_pending');
-  assert.deepEqual(receipt.decisions, []);
-  assert.equal(effectiveScanSummary(summarizeReport(report), receipt).result, 'FAIL');
-  assert.equal((await loadReviewedProof('c29')).review.product.version, '12.4.10+otziv.2');
+test('C30 Grafana binds the patched binary to the same reviewed fixed Tempo source', async () => {
+  const current = await loadReviewedProof('c30');
+  const prior = await loadReviewedProof('c29');
+  const currentBuild = gunzipSync(await readFile(new URL('./adjudications/grafana-tempo-c30/reviewed-buildinfo.txt.gz', import.meta.url))).toString('utf8');
+  const { report, inspect } = fixture();
+  for (const [key, value] of Object.entries(current.review.product)) {
+    report.Metadata.ImageConfig.config.Labels[`org.opencontainers.image.${key}`] = value;
+    inspect.Config.Labels[`org.opencontainers.image.${key}`] = value;
+  }
+  assert.equal(current.review.product.version, '12.4.10+otziv.3');
+  assert.notEqual(current.review.binary.sha256, prior.review.binary.sha256);
+  assert.deepEqual(current.review.module, prior.review.module);
+  assert.deepEqual(current.review.decisions, prior.review.decisions);
+  assert.match(currentBuild, /\tdep\tgithub\.com\/getkin\/kin-openapi\tv0\.149\.0\t/);
+  assert.equal(matchingFindings(report, current.review).length, 2);
+  assert.equal(matchingFindings(report, prior.review).length, 0);
+  validateObservedBinary(report, inspect, current.review.binary.sha256, currentBuild, current.review);
+  assert.throws(() => validateObservedBinary(report, inspect, prior.review.binary.sha256, currentBuild, current.review), /binary_mismatch/);
 });
 test('effective summary retains both raw HIGH findings and does not mutate the raw report', () => {
   const { report } = fixture(), before = JSON.stringify(report);

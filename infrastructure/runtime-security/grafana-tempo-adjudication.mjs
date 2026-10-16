@@ -7,11 +7,11 @@ export { BUILD_INFO_READER, canonicalBuildInfo, validateObservedBinary } from '.
 
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 const C30_PRODUCT_VERSION = '12.4.10+otziv.3';
-// Fill these only from the completed, independently inspected C30 build.
-// Until then, C30 cannot inherit C29's exact-binary Tempo adjudication.
-const C30_IDENTITY_SHA256 = null;
-const C30_BINARY_SHA256 = null;
-const C30_BUILD_INFO_SHA256 = null;
+// The separately published C30 image is bound to its inspected executable.
+// It cannot inherit C29's exact-binary Tempo adjudication.
+const C30_IDENTITY_SHA256 = '66d2387e49ef930bfa2002ba1a10c38368d23cbdda5d2030175b67cc4d27d0e3';
+const C30_BINARY_SHA256 = 'da43653c2fdd936dac451ffda63ddebd2899758672376daf73087740dc35528c';
+const C30_BUILD_INFO_SHA256 = '03d0697eff5ee1f06df6bc721dcb17c7398544287a9cf8f8cad79ea1c1d6de3f';
 
 
 export async function loadReviewedProof(generation = 'original') {

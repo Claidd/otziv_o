@@ -1,0 +1,10 @@
+{
+  "schema": "otziv-grafana-tempo-c30-identity-v1",
+  "sourceReviewSha256": "275f1e745af89e77f8be0a3f473c8ddc1b403ee4c26d0fe398342a7b8d3db709",
+  "productVersion": "12.4.10+otziv.3",
+  "binarySha256": "da43653c2fdd936dac451ffda63ddebd2899758672376daf73087740dc35528c",
+  "canonicalBuildInfoSha256": "03d0697eff5ee1f06df6bc721dcb17c7398544287a9cf8f8cad79ea1c1d6de3f",
+  "goVersion": "go1.27.2",
+  "buildInfoReader": "golang:1.27.2-bookworm@sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61",
+  "moduleSum": "h1:kE5kdMnyPJmlNUdWhahfzqPYB3vM8DtAxgWymbB8nOA="
+}
