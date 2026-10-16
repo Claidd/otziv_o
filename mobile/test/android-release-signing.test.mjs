@@ -55,7 +55,7 @@ test('release build verifies both Gradle output and immutable copied artifact', 
   assert.match(releaseBuilder, /assembleRelease/);
   assert.match(releaseBuilder, /-PotzivVersionCode=/);
   assert.match(releaseBuilder, /-PotzivVersionName=/);
-  assert.match(releaseBuilder, /javaMajorVersion -gt 24/);
+  assert.match(releaseBuilder, /if \(\$javaMajorVersion -ne 21\) \{\s*throw "Android release build requires JDK 21 for the Capacitor compiler toolchain\."\s*\}/);
   assert.equal((releaseBuilder.match(/verify-android-release\.ps1/g) ?? []).length, 1);
   assert.match(releaseBuilder, /verifiedCopy\.ArtifactSha256 -cne \$verifiedBuild\.ArtifactSha256/);
   assert.match(releaseBuilder, /version artifacts are immutable/);
