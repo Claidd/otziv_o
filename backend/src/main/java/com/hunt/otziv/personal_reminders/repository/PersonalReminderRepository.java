@@ -12,6 +12,18 @@ import java.util.List;
 import java.util.Optional;
 
 public interface PersonalReminderRepository extends JpaRepository<PersonalReminder, Long> {
+    @Query(value = """
+            SELECT r.personal_reminder_id
+            FROM personal_reminders r
+            JOIN orders o ON o.order_id = r.source_order_id
+            JOIN order_statuses s ON s.order_status_id = o.order_status
+            WHERE r.user_id = :userId
+              AND r.completed_at IS NULL
+              AND r.source_type = 'BAD_REVIEW_ORDER_READY'
+              AND s.order_status_title IN ('Оплачено', 'Бан')
+            """, nativeQuery = true)
+    List<Long> findSettledBadReviewReminderIds(@Param("userId") Long userId);
+
     boolean existsBySourceTypeAndSourceId(String sourceType, Long sourceId);
     List<PersonalReminder> findBySourceTypeAndSourceOrderIdAndCompletedAtIsNull(String sourceType, Long sourceOrderId);
 

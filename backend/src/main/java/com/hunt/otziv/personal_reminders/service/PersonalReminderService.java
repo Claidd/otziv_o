@@ -61,8 +61,11 @@ public class PersonalReminderService implements com.hunt.otziv.personal_reminder
     @Transactional(readOnly = true)
     public List<PersonalReminderResponse> list(Principal principal) {
         User user = currentUser(principal);
+        var settledReminderIds = new java.util.HashSet<>(
+                reminderRepository.findSettledBadReviewReminderIds(user.getId()));
 
         return reminderRepository.findByUserIdAndCompletedAtIsNullOrderByUpdatedAtDesc(user.getId()).stream()
+                .filter(reminder -> !settledReminderIds.contains(reminder.getId()))
                 .filter(this::isVisibleReminder)
                 .sorted(Comparator
                         .comparingInt(this::dueRank)
