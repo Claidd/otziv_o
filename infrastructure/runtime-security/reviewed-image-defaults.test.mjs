@@ -4,7 +4,8 @@ import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node
 import { basename, dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
-import { createEvidenceReader, validateActivation, validateReviewedDefaults, validateRepositoryDefaults } from './reviewed-image-defaults.mjs';
+import { createEvidenceReader, validateActivation, validateReviewedDefaults, validateRepositoryDefaults,
+  assertGrafanaC30KinOpenApi } from './reviewed-image-defaults.mjs';
 import { BUILDKIT, REPOSITORY, SBOM_GENERATOR } from './publish-reviewed-images.mjs';
 import { checkedJson, SOURCE_REPOSITORY, verifyRegistryEvidence } from './registry-evidence.mjs';
 import { inventory } from './upstream-images.mjs';
@@ -17,6 +18,15 @@ const fixture = JSON.parse(await readFile(new URL('fixture.json', directory)));
 const blobs = new Map(await Promise.all(fixture.result.artifacts.map(async item => [item.file, await readFile(new URL(item.file, directory))])));
 const reviewedBytes = await readFile(new URL('./reviewed-images.json', import.meta.url));
 const reviewed = JSON.parse(reviewedBytes);
+test('C30 Grafana activation requires the patched kin-openapi module in the actual binary', () => {
+  const report = { Results: [{ Type: 'gobinary', Target: 'usr/share/grafana/bin/grafana',
+    Packages: [{ Name: 'github.com/getkin/kin-openapi', Version: 'v0.149.0' }] }] };
+  assert.doesNotThrow(() => assertGrafanaC30KinOpenApi(report));
+  report.Results[0].Packages[0].Version = 'v0.147.0';
+  assert.throws(() => assertGrafanaC30KinOpenApi(report), /activation_grafana_c30_kin_openapi_version/);
+  report.Results[0].Packages = [];
+  assert.throws(() => assertGrafanaC30KinOpenApi(report), /activation_grafana_c30_kin_openapi_coverage/);
+});
 // Rebind the existing scratch fixture in memory to this API's fixed source/path.
 // These recomputed descriptor hashes are synthetic test data, never publication refs.
 fixture.expected.source = SOURCE_REPOSITORY;

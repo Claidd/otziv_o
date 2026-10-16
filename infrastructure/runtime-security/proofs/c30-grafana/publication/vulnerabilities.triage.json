@@ -1,0 +1,45 @@
+{
+  "schema": "otziv-runtime-triage-v1",
+  "scanCreatedAt": "2026-10-16T15:17:59.291430337Z",
+  "imageId": "sha256:8b1c3542749e0d9a1281982fcd72e982fe5efcb4378c7b1883a381eca8f95d5c",
+  "reportSHA256": "c4662b60f0c7b187abab33af4ef7d3733ef3e6b29810f9cd9fb6f164f0d41fac",
+  "policy": "Context only. No finding is excluded or accepted by this file.",
+  "findings": [
+    {
+      "package": "github.com/grafana/tempo",
+      "path": null,
+      "installed": "v1.5.1-0.20260427112133-525d1bab07e0",
+      "cve": "CVE-2026-21728",
+      "severity": "HIGH",
+      "vendorStatus": "fixed",
+      "fixedVersion": "2.8.4, 2.9.2, 2.10.2",
+      "title": "grafana/tempo: Tempo: Denial of Service via large queries",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2026-21728",
+      "sourceType": "gobinary",
+      "sourceClass": "lang-pkgs",
+      "context": "APPLICATION_LIBRARY_REVIEW_REQUIRED",
+      "disposition": "FIX_REQUIRED",
+      "reachability": "NOT_PROVEN",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null
+    },
+    {
+      "package": "github.com/grafana/tempo",
+      "path": null,
+      "installed": "v1.5.1-0.20260427112133-525d1bab07e0",
+      "cve": "CVE-2026-28377",
+      "severity": "HIGH",
+      "vendorStatus": "fixed",
+      "fixedVersion": "2.10.3",
+      "title": "Grafana Tempo: Grafana Tempo: Information disclosure of S3 encryption key via status config endpoint",
+      "primaryURL": "https://avd.aquasec.com/nvd/cve-2026-28377",
+      "sourceType": "gobinary",
+      "sourceClass": "lang-pkgs",
+      "context": "APPLICATION_LIBRARY_REVIEW_REQUIRED",
+      "disposition": "FIX_REQUIRED",
+      "reachability": "NOT_PROVEN",
+      "riskAcceptance": null,
+      "acceptanceExpiry": null
+    }
+  ]
+}

@@ -60,21 +60,21 @@
     },
     {
       "component": "grafana",
-      "reference": "ghcr.io/claidd/otziv-security@sha256:759f950776ba40b54dc13852a46cdfb99bff8c4a1519dbefebd3b1cec9a9f243",
-      "commit": "09e5ccdd863cdf51ed7848e44f6b157b9bf40a9c",
-      "run": "38445404373",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:3e0e52079cc164961d5152600588ca6bf827a40b0de0ef5b20512e6e45c04913",
+      "commit": "537d7526a1493eec8d662c82baafaa21c4e7854c",
+      "run": "38921006809",
       "attempt": "1",
       "manifest": {
-        "path": "infrastructure/runtime-security/reviewed-images-c29-grafana.json",
-        "sha256": "721005a0ad70a59d86fe42c9145cbde3ad3581c8fcd4c9f959bd400e8741eaef"
+        "path": "infrastructure/runtime-security/reviewed-images-c30-grafana.json",
+        "sha256": "8f649aa7919414f236134e56cf05460e86198daf4e39235004a77ece5d91a404"
       },
       "publication": {
-        "path": "infrastructure/runtime-security/proofs/c29-grafana/publication/publication.json",
-        "sha256": "1bc402bae7dc96c7bc2a59571d899421761677c8bdbc41471414c90a0b60b90f"
+        "path": "infrastructure/runtime-security/proofs/c30-grafana/publication/publication.json",
+        "sha256": "b25faf3f7f09a0e6e95e0557eeeb8afe5fe61642f7e79ee7c97404ff71c15434"
       },
       "anonymous": {
-        "path": "infrastructure/runtime-security/proofs/c29-grafana/anonymous/anonymous-download.json",
-        "sha256": "ba0f3fee18eace631f040df116855e528db9acb42d2d06466bb4ba6a720949e1"
+        "path": "infrastructure/runtime-security/proofs/c30-grafana/anonymous/anonymous-download.json",
+        "sha256": "f0b9096f390ccf02170e9c36751aba826601fa8505aed51a7562589962a9125a"
       }
     },
     {

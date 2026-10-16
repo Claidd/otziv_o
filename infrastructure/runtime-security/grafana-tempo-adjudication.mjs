@@ -6,26 +6,34 @@ import { exactProduct, labelsOf, inspectReviewedGoBinary } from './go-binary-ins
 export { BUILD_INFO_READER, canonicalBuildInfo, validateObservedBinary } from './go-binary-inspection.mjs';
 
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
+const C30_PRODUCT_VERSION = '12.4.10+otziv.3';
+// The separately published C30 image is bound to its inspected executable.
+// It cannot inherit C29's exact-binary Tempo adjudication.
+const C30_IDENTITY_SHA256 = '66d2387e49ef930bfa2002ba1a10c38368d23cbdda5d2030175b67cc4d27d0e3';
+const C30_BINARY_SHA256 = 'da43653c2fdd936dac451ffda63ddebd2899758672376daf73087740dc35528c';
+const C30_BUILD_INFO_SHA256 = '03d0697eff5ee1f06df6bc721dcb17c7398544287a9cf8f8cad79ea1c1d6de3f';
 
 
 export async function loadReviewedProof(generation = 'original') {
-  if (!['original', 'c15', 'c29'].includes(generation)) throw new Error('adjudication_review_unknown');
-  if (generation === 'c29') {
+  if (!['original', 'c15', 'c29', 'c30'].includes(generation)) throw new Error('adjudication_review_unknown');
+  if (generation === 'c29' || generation === 'c30') {
     // Reuse the byte-checked fixed Tempo source and ancestry review from C15.
     // Only the exact Grafana executable and its Go toolchain changed.
+    if (generation === 'c30' && (!C30_IDENTITY_SHA256 || !C30_BINARY_SHA256 || !C30_BUILD_INFO_SHA256))
+      throw new Error('adjudication_c30_identity_pending');
     const base = await loadReviewedProof('c15');
-    const identityBytes = await readFile(new URL('./adjudications/grafana-tempo-c29/identity.json', import.meta.url));
+    const identityBytes = await readFile(new URL(`./adjudications/grafana-tempo-${generation}/identity.json`, import.meta.url));
     const identity = JSON.parse(identityBytes);
     const identitySha256 = sha256(identityBytes);
-    assert.equal(identitySha256, '96040cec15743c05e1550331821a358a390dc0c87051654ff5fe688bff273167', 'adjudication_c29_identity_changed');
-    assert.equal(identity.schema, 'otziv-grafana-tempo-c29-identity-v1', 'adjudication_c29_schema');
-    assert.equal(identity.sourceReviewSha256, base.reviewSha256, 'adjudication_c29_source_changed');
-    assert.equal(identity.productVersion, '12.4.10+otziv.2', 'adjudication_c29_version');
-    assert.equal(identity.binarySha256, '5d7687c55e709e8ac3ccde640ac3f814cac65ce974623ef0cb612f24c13bf7d9', 'adjudication_c29_binary');
-    assert.equal(identity.canonicalBuildInfoSha256, '6794e488a8cc58c21fbea13b138e6b3102f0419c09c0c237ac4abc1337793688', 'adjudication_c29_build_info');
-    assert.equal(identity.goVersion, 'go1.27.2', 'adjudication_c29_compiler');
-    assert.equal(identity.buildInfoReader, 'golang:1.27.2-bookworm@sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61', 'adjudication_c29_reader');
-    assert.equal(identity.moduleSum, base.review.module.sum, 'adjudication_c29_module_changed');
+    assert.equal(identitySha256, generation === 'c30' ? C30_IDENTITY_SHA256 : '96040cec15743c05e1550331821a358a390dc0c87051654ff5fe688bff273167', `adjudication_${generation}_identity_changed`);
+    assert.equal(identity.schema, `otziv-grafana-tempo-${generation}-identity-v1`, `adjudication_${generation}_schema`);
+    assert.equal(identity.sourceReviewSha256, base.reviewSha256, `adjudication_${generation}_source_changed`);
+    assert.equal(identity.productVersion, generation === 'c30' ? C30_PRODUCT_VERSION : '12.4.10+otziv.2', `adjudication_${generation}_version`);
+    assert.equal(identity.binarySha256, generation === 'c30' ? C30_BINARY_SHA256 : '5d7687c55e709e8ac3ccde640ac3f814cac65ce974623ef0cb612f24c13bf7d9', `adjudication_${generation}_binary`);
+    assert.equal(identity.canonicalBuildInfoSha256, generation === 'c30' ? C30_BUILD_INFO_SHA256 : '6794e488a8cc58c21fbea13b138e6b3102f0419c09c0c237ac4abc1337793688', `adjudication_${generation}_build_info`);
+    assert.equal(identity.goVersion, 'go1.27.2', `adjudication_${generation}_compiler`);
+    assert.equal(identity.buildInfoReader, 'golang:1.27.2-bookworm@sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61', `adjudication_${generation}_reader`);
+    assert.equal(identity.moduleSum, base.review.module.sum, `adjudication_${generation}_module_changed`);
     const review = structuredClone(base.review);
     review.product.version = identity.productVersion;
     Object.assign(review.binary, { sha256: identity.binarySha256,
@@ -82,7 +90,9 @@ export async function adjudicateGrafanaImage(report, reportBytes, immutableImage
   const base = { schema: 'otziv-image-adjudication-v1', rawReportSha256: sha256(reportBytes),
     imageConfigId: report.Metadata?.ImageID, immutableImageId, rawReportModified: false, decisions: [] };
   try {
-    const candidates = await Promise.all(['original', 'c15', 'c29'].map(loadReviewedProof));
+    const generations = labelsOf(report)['org.opencontainers.image.version'] === C30_PRODUCT_VERSION
+      ? ['c30'] : ['original', 'c15', 'c29'];
+    const candidates = await Promise.all(generations.map(loadReviewedProof));
     const matching = candidates.filter(candidate => matchingFindings(report, candidate.review).length);
     if (!matching.length) return { ...base, status: 'NOT_APPLICABLE' };
     const observed = await inspectReviewedGoBinary(report, immutableImageId, scratch, matching.map(candidate => candidate.review));
@@ -90,7 +100,7 @@ export async function adjudicateGrafanaImage(report, reportBytes, immutableImage
     const decisions = matchingFindings(report, review);
     return { ...base, status: 'EXACT_BINARY_FIXED_CODE_PROVEN', reviewSha256, ...observed, module: review.module, decisions };
   } catch (error) {
-    return { ...base, status: 'REJECTED', reason: /^adjudication_[a-z_]+$/.test(error.message) ? error.message : 'adjudication_inspection_failed' };
+    return { ...base, status: 'REJECTED', reason: /^adjudication_[a-z0-9_]+$/.test(error.message) ? error.message : 'adjudication_inspection_failed' };
   }
 }
 

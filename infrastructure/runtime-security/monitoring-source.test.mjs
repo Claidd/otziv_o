@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { selectMonitoringSource, assertDistinctMonitoringImageIds, readMonitoringSource, usesReviewedSslOverlay } from './monitoring-source.mjs';
+import { selectMonitoringSource, assertDistinctMonitoringImageIds, readMonitoringSource, usesReviewedSslOverlay,
+  isPublishedMonitoringOverlayManifest } from './monitoring-source.mjs';
 const before = 'prom/prometheus@sha256:'+'a'.repeat(64), after='ghcr.io/claidd/otziv-security@sha256:'+'b'.repeat(64);
 const manifest = () => ({schema:'otziv-reviewed-images-v1', images:[{component:'prometheus',sourceBeforeRef:before,candidateBaseRef:after,publishedDigest:after}]});
 for(const component of ['prometheus','grafana','loki','tempo','alloy'])test(`immutable historical baseline is used for ${component} after default/publication switch`,()=>{
@@ -34,4 +35,10 @@ test('real checked-in manifest loads without any Compose file or environment int
 test('every activated C29 monitoring image selects its verified published runtime for configuration and scan proofs',async()=>{
  for(const component of ['prometheus','loki','tempo','grafana','alloy'])assert.equal(await usesReviewedSslOverlay(component),true);
  await assert.rejects(usesReviewedSslOverlay('postgres'),/monitoring_component_invalid/);
+});
+test('C30 Grafana remains on the published image verification path when activated',()=>{
+ const path='infrastructure/runtime-security/reviewed-images-c30-grafana.json';
+ assert.equal(isPublishedMonitoringOverlayManifest('grafana',path),true);
+ assert.equal(isPublishedMonitoringOverlayManifest('tempo',path),false);
+ assert.equal(isPublishedMonitoringOverlayManifest('grafana','infrastructure/runtime-security/reviewed-images-c30-tempo.json'),false);
 });

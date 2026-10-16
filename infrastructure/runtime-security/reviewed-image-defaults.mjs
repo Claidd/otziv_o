@@ -33,10 +33,10 @@ const MANIFEST = 'infrastructure/runtime-security/reviewed-images.json';
 const MANIFEST_SHA256 = 'd48bdb7d6d869cde5d6f1a7b089491765e3eeaf46e0b0b6bb51b7719b38d3ef2';
 const ACTIVATIONS = 'infrastructure/runtime-security/reviewed-image-activations.json';
 const EVIDENCE_FILE = /^registry-(?:index|amd64-(?:manifest|config)|attestation-[0-9]+(?:-payload-[0-9]+)?)\.json$/;
-// These four unmodified public scanner/OCI payloads contain high-entropy hashes
+// These unmodified public scanner/OCI payloads contain high-entropy hashes
 // that resemble credentials. Retain their exact bytes compressed and verify them
 // before any publication or registry checks consume them.
-const C29_COMPRESSED_PROOFS = new Map([
+const COMPRESSED_PROOFS = new Map([
   ['infrastructure/runtime-security/proofs/c29-alloy/anonymous/registry-attestation-0-payload-0.json',
     '7e66512278b6b71b139d00f0678400ff3f972fc6901d9f61e824ab0f921944e5'],
   ['infrastructure/runtime-security/proofs/c29-alloy/publication/registry-attestation-0-payload-0.json',
@@ -45,6 +45,14 @@ const C29_COMPRESSED_PROOFS = new Map([
     '3955c18d28ebf5e0d243dd6a5f172d10509292c9e0360ce0b73fab5b8b7c9108'],
   ['infrastructure/runtime-security/proofs/c29-grafana/publication/vulnerabilities.sbom.cdx.json',
     '4cf6633d14c7b3c35cfe8e4cecdf623e065c86c0fbf299ff66b1eba53d0e4839'],
+  ['infrastructure/runtime-security/proofs/c30-grafana/publication/vulnerabilities.sbom.cdx.json',
+    '76adb23c52d512270da0bd268053ec785a7255573f32f49e1b5ab3e26f0e2114'],
+  ['infrastructure/runtime-security/proofs/c30-grafana/anonymous/registry-attestation-0-payload-0.json',
+    '20c13b1415bd5a28b147836ef1d1bb118c4423034a08c2c84520a00ea90d4dc8'],
+  ['infrastructure/runtime-security/proofs/c30-grafana/publication/registry-attestation-0-payload-0.json',
+    '20c13b1415bd5a28b147836ef1d1bb118c4423034a08c2c84520a00ea90d4dc8'],
+  ['infrastructure/runtime-security/proofs/c30-grafana/publication/vulnerabilities.json',
+    'c4662b60f0c7b187abab33af4ef7d3733ef3e6b29810f9cd9fb6f164f0d41fac'],
 ]);
 
 export async function validateAlloyReassessment(image, entry, publication, proof) {
@@ -232,6 +240,50 @@ export async function validateGrafanaC29ActivationScan(publication, publicationP
   assert.equal(expected.unresolvedRiskReview, 'NONE', 'activation_grafana_c29_unresolved');
 }
 
+export function assertGrafanaC30KinOpenApi(raw) {
+  const grafana = (raw.Results || []).filter(result => result.Type === 'gobinary' &&
+    result.Target === 'usr/share/grafana/bin/grafana');
+  assert.equal(grafana.length, 1, 'activation_grafana_c30_binary_coverage');
+  const modules = (grafana[0].Packages || []).filter(pkg => pkg.Name === 'github.com/getkin/kin-openapi');
+  assert.equal(modules.length, 1, 'activation_grafana_c30_kin_openapi_coverage');
+  assert.equal(modules[0].Version, 'v0.149.0', 'activation_grafana_c30_kin_openapi_version');
+}
+
+export async function validateGrafanaC30ActivationScan(publication, publicationPath, read) {
+  assert.equal(publication.component, 'grafana', 'activation_grafana_c30_component');
+  const directory = dirname(publicationPath).replaceAll('\\', '/');
+  const [rawBytes, receiptBytes] = await Promise.all([
+    read(directory + '/vulnerabilities.json'), read(directory + '/vulnerabilities.adjudications.json')]);
+  const raw = JSON.parse(rawBytes), receipt = JSON.parse(receiptBytes);
+  const { review, reviewSha256 } = await loadReviewedProof('c30');
+  assert.equal(raw.Metadata?.ImageID, publication.imageId, 'activation_grafana_c30_report_image');
+  assertGrafanaC30KinOpenApi(raw);
+  assert.equal(receipt?.schema, 'otziv-image-adjudication-v1', 'activation_grafana_c30_schema');
+  assert.equal(receipt.status, 'EXACT_BINARY_FIXED_CODE_PROVEN', 'activation_grafana_c30_not_proven');
+  assert.equal(receipt.alloy?.status, 'NOT_APPLICABLE', 'activation_grafana_c30_alloy_scope');
+  assert.deepEqual(receipt.alloy.decisions, [], 'activation_grafana_c30_alloy_decisions');
+  assert.equal(receipt.reviewSha256, reviewSha256, 'activation_grafana_c30_review_changed');
+  assert.equal(receipt.rawReportSha256, sha256(rawBytes), 'activation_grafana_c30_raw_changed');
+  assert.equal(receipt.imageConfigId, publication.imageId, 'activation_grafana_c30_receipt_image');
+  assert.ok([publication.imageId, publication.reference.split('@')[1]].includes(receipt.immutableImageId),
+    'activation_grafana_c30_inspected_image');
+  assert.equal(receipt.binarySha256, review.binary.sha256, 'activation_grafana_c30_binary');
+  assert.equal(receipt.canonicalBuildInfoSha256, review.binary.canonicalBuildInfoSha256,
+    'activation_grafana_c30_build_info');
+  assert.equal(receipt.buildInfoReader, review.binary.buildInfoReader, 'activation_grafana_c30_reader');
+  assert.equal(receipt.rawReportModified, false, 'activation_grafana_c30_raw_modified');
+  assert.equal(receipt.inspectedBinaryExecuted, false, 'activation_grafana_c30_binary_executed');
+  assert.deepEqual(receipt.module, review.module, 'activation_grafana_c30_module');
+  assert.deepEqual(receipt.decisions, matchingFindings(raw, review), 'activation_grafana_c30_decisions');
+  assert.equal(receipt.decisions.length, 2, 'activation_grafana_c30_scope');
+  const expected = { ...combinedScanSummary(summarizeReport(raw),
+    { grafana: receipt, alloy: receipt.alloy }), scannerImage: TRIVY_IMAGE };
+  assert.deepEqual(publication.security, expected, 'activation_grafana_c30_summary');
+  assert.equal(expected.result, 'PASS', 'activation_grafana_c30_security_failed');
+  assert.equal(expected.effectiveBlockingFixedHighOrCritical, 0, 'activation_grafana_c30_fixed_findings');
+  assert.equal(expected.unresolvedRiskReview, 'NONE', 'activation_grafana_c30_unresolved');
+}
+
 export async function validateActivation(image, entry, manifestBytes, read) {
   assert.equal(entry.component, image.component, 'activation_component_mismatch');
   assert.match(entry.commit || '', /^[a-f0-9]{40}$/, 'activation_commit_missing');
@@ -260,6 +312,9 @@ export async function validateActivation(image, entry, manifestBytes, read) {
   }
   if (selected.manifestSet === 'c29-grafana') {
     await validateGrafanaC29ActivationScan(publication.value, entry.publication.path, read);
+  }
+  if (selected.manifestSet === 'c30-grafana') {
+    await validateGrafanaC30ActivationScan(publication.value, entry.publication.path, read);
   }
   if (requiresKeycloakDependencyProof(publicationImage)) {
     const checked = checkKeycloakRuntimeDependencies(
@@ -450,10 +505,10 @@ export async function createEvidenceReader(root) {
     // Preserve the original-file path, including its existing outer hash checks.
     // A dangling link is not an absent original and may not trigger the fallback.
     if (exists) return readFile(await physicalPath(path));
-    if (C29_COMPRESSED_PROOFS.has(path)) {
+    if (COMPRESSED_PROOFS.has(path)) {
       const compressed = await boundedRead(path + '.gz', FILE_GATE_BYTES);
       const bytes = gunzipSync(compressed, { maxOutputLength: 8 * 1024 * 1024 });
-      assert.equal(sha256(bytes), C29_COMPRESSED_PROOFS.get(path), 'activation_c29_compressed_hash');
+      assert.equal(sha256(bytes), COMPRESSED_PROOFS.get(path), 'activation_compressed_hash');
       return bytes;
     }
     const name = basename(path);

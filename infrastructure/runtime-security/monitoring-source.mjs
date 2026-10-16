@@ -24,6 +24,13 @@ export async function readMonitoringSource(component) {
     manifestSha256: createHash('sha256').update(bytes).digest('hex') };
 }
 
+export function isPublishedMonitoringOverlayManifest(component, selected) {
+  assert.ok(COMPONENTS.has(component), 'monitoring_component_invalid');
+  return selected === `infrastructure/runtime-security/reviewed-images-c29-${component}.json` ||
+    (component === 'grafana' && selected === 'infrastructure/runtime-security/reviewed-images-c30-grafana.json') ||
+    (component === 'alloy' && selected === 'infrastructure/runtime-security/reviewed-images-c23-alloy.json');
+}
+
 // A reviewed published candidate has already been built from its committed
 // recipe and scanned by the publication workflow. CI still checks its complete
 // publication and activation proof, pulls the exact digest and scans it again.
@@ -34,9 +41,7 @@ export async function usesReviewedSslOverlay(component) {
   const entries = index.images.filter(entry => entry.component === component);
   assert.equal(entries.length, 1, 'monitoring_activation_missing_or_duplicate');
   const selected = entries[0].manifest?.path;
-  const c29 = `infrastructure/runtime-security/reviewed-images-c29-${component}.json`;
-  if (selected !== c29 && !(component === 'alloy' &&
-    selected === 'infrastructure/runtime-security/reviewed-images-c23-alloy.json')) return false;
+  if (!isPublishedMonitoringOverlayManifest(component, selected)) return false;
   const {validateRepositoryDefaults} = await import('./reviewed-image-defaults.mjs');
   await validateRepositoryDefaults(fileURLToPath(new URL('../../', import.meta.url)));
   return true;

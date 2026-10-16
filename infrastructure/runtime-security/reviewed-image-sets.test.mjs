@@ -52,6 +52,11 @@ test('the only alternate set has one PMA image and the unchanged historical mapp
   assert.deepEqual(value.images[0].defaultReferencesBefore, original.defaultReferencesBefore);
   assert.equal(value.images[0].sourceBeforeRef, original.sourceBeforeRef);
 });
+test('C30 Grafana uses a separate versioned publication manifest and build recipe', () => {
+  assert.deepEqual(reviewedImageSet('c30-grafana'), {
+    name: 'c30-grafana', path: 'infrastructure/runtime-security/reviewed-images-c30-grafana.json'
+  });
+});
 
 for (const [name, mutate] of Object.entries({
   'baseline bytes': value => { value.baseline = Buffer.concat([baselineBytes, Buffer.from('\n')]); },

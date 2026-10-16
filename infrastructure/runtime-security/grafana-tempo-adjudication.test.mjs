@@ -59,6 +59,25 @@ test('C29 Grafana binds the same fixed Tempo source to the Go 1.27.2 executable'
   validateObservedBinary(report, inspect, current.review.binary.sha256, currentBuild, current.review);
   assert.throws(() => validateObservedBinary(report, inspect, current.review.binary.sha256, buildInfo, current.review), /build_info_mismatch/);
 });
+test('C30 Grafana binds the patched binary to the same reviewed fixed Tempo source', async () => {
+  const current = await loadReviewedProof('c30');
+  const prior = await loadReviewedProof('c29');
+  const currentBuild = gunzipSync(await readFile(new URL('./adjudications/grafana-tempo-c30/reviewed-buildinfo.txt.gz', import.meta.url))).toString('utf8');
+  const { report, inspect } = fixture();
+  for (const [key, value] of Object.entries(current.review.product)) {
+    report.Metadata.ImageConfig.config.Labels[`org.opencontainers.image.${key}`] = value;
+    inspect.Config.Labels[`org.opencontainers.image.${key}`] = value;
+  }
+  assert.equal(current.review.product.version, '12.4.10+otziv.3');
+  assert.notEqual(current.review.binary.sha256, prior.review.binary.sha256);
+  assert.deepEqual(current.review.module, prior.review.module);
+  assert.deepEqual(current.review.decisions, prior.review.decisions);
+  assert.match(currentBuild, /\tdep\tgithub\.com\/getkin\/kin-openapi\tv0\.149\.0\t/);
+  assert.equal(matchingFindings(report, current.review).length, 2);
+  assert.equal(matchingFindings(report, prior.review).length, 0);
+  validateObservedBinary(report, inspect, current.review.binary.sha256, currentBuild, current.review);
+  assert.throws(() => validateObservedBinary(report, inspect, prior.review.binary.sha256, currentBuild, current.review), /binary_mismatch/);
+});
 test('effective summary retains both raw HIGH findings and does not mutate the raw report', () => {
   const { report } = fixture(), before = JSON.stringify(report);
   const decisions = matchingFindings(report, review), result = effectiveScanSummary(summarizeReport(report), { decisions });
