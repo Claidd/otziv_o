@@ -1,7 +1,8 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { Component, OnInit, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { IonContent } from '@ionic/angular/standalone';
+import { IonContent } from '@ionic/angular';
 import {
   ApiService,
   PerformerCityOption,
@@ -16,6 +17,7 @@ type RegisterMode = 'client' | 'performer' | 'legacy';
 const STRONG_PASSWORD_PATTERN = /^(?=.*\p{Ll})(?=.*\p{Lu})(?=.*\p{N})(?=.*[^\p{L}\p{N}\s])[^\r\n]{12,128}$/u;
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-public-register-page',
   imports: [FormsModule, IonContent, RouterLink],
   template: `

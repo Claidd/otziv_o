@@ -1,7 +1,8 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { Component, OnInit, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { IonContent, IonModal } from '@ionic/angular/standalone';
+import { IonContent, IonModal } from '@ionic/angular';
 import { firstValueFrom } from 'rxjs';
 import {
   AdminUser,
@@ -45,6 +46,7 @@ interface UserDraft {
 const ROLE_OPTIONS = ['ADMIN', 'OWNER', 'MANAGER', 'WORKER', 'PERFORMER', 'OPERATOR', 'MARKETOLOG'];
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-admin-users-page',
   imports: [DatePipe, FormsModule, IonContent, IonModal, MobileHeaderComponent, ContractorAccrualAdjustmentsComponent, ContractorFinanceComponent, ContractorSystemComponent],
   template: `

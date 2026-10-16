@@ -1,3 +1,4 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { inject } from '@angular/core';
 import { ManagerControlApi } from '../core/manager-control.api';
 import { ManagerReportsApi } from '../core/manager-reports.api';
@@ -14,7 +15,7 @@ import {
   IonRefresher,
   IonRefresherContent,
   RefresherCustomEvent
-} from '@ionic/angular/standalone';
+} from '@ionic/angular';
 import {
   type ApiService,
   ManagerControlActionPayload,
@@ -45,6 +46,7 @@ import {
 } from './manager-performance.helpers';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-manager-control-mobile',
   imports: [DatePipe, FormsModule, IonContent, IonRefresher, IonRefresherContent, MobileHeaderComponent],
   template: `

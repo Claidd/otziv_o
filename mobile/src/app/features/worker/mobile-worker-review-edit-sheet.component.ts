@@ -1,10 +1,11 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { OrderReviewsApi } from '../../core/order-reviews.api';
 import { ManagerReviewActionsApi } from '../../core/manager-review-actions.api';
 import { ManagerOrdersApi } from '../../core/manager-orders.api';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, EventEmitter, Input, Output, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { IonModal } from '@ionic/angular/standalone';
+import { IonModal } from '@ionic/angular';
 import { firstValueFrom } from 'rxjs';
 import {
   OrderDetailsPayload,
@@ -17,6 +18,7 @@ import { MobileConfirmService } from '../../shared/mobile-confirm.service';
 import { safeHttpsOrInternalUrl } from '../../shared/external-navigation';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-mobile-worker-review-edit-sheet',
   imports: [FormsModule, IonModal],
   template: `

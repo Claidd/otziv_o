@@ -1,6 +1,7 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { Component, Input, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { IonHeader, IonToolbar } from '@ionic/angular/standalone';
+import { IonHeader, IonToolbar } from '@ionic/angular';
 import { AuthService } from '../core/auth.service';
 import {
   MOBILE_ACTIONS,
@@ -51,6 +52,7 @@ const HEADER_LOGOUT_MENU_GUARD_MS = 600;
 const HEADER_LOGOUT_CONFIRM_GUARD_MS = 900;
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-mobile-header',
   imports: [IonHeader, IonToolbar, RouterLink],
   template: `

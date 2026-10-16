@@ -1,9 +1,10 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { inject } from '@angular/core';
 import { ManagerReviewTasksApi } from '../core/manager-review-tasks.api';
 import { ManagerOrdersApi } from '../core/manager-orders.api';
 import { Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { IonModal } from '@ionic/angular/standalone';
+import { IonModal } from '@ionic/angular';
 import { firstValueFrom } from 'rxjs';
 import {
   ApiService,
@@ -48,6 +49,7 @@ export function dispatchMobileRecoveryClientNotified(detail: MobileRecoveryClien
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-mobile-reminders',
   imports: [FormsModule, IonModal],
   template: `

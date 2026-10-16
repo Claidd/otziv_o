@@ -1,8 +1,8 @@
-import { provideHttpClient, withInterceptors } from '@angular/common/http';
+import { provideHttpClient, withInterceptors, withXhr } from '@angular/common/http';
 import { ApplicationConfig, provideBrowserGlobalErrorListeners, provideAppInitializer, inject } from '@angular/core';
 import { provideRouter } from '@angular/router';
 import { RouteReuseStrategy } from '@angular/router';
-import { provideIonicAngular, IonicRouteStrategy } from '@ionic/angular/standalone';
+import { provideIonicAngular, IonicRouteStrategy } from '@ionic/angular';
 
 import { routes } from './app.routes';
 import { authInterceptor } from './core/auth.interceptor';
@@ -20,7 +20,7 @@ export const appConfig: ApplicationConfig = {
     provideIonicAngular(),
     { provide: RouteReuseStrategy, useClass: IonicRouteStrategy },
     provideRouter(routes),
-    provideHttpClient(withInterceptors([mobileTelemetryInterceptor, authInterceptor, clientApiContractInterceptor])),
+    provideHttpClient(withInterceptors([mobileTelemetryInterceptor, authInterceptor, clientApiContractInterceptor]), withXhr()),
     provideAppInitializer(() => inject(AuthService).init())
   ]
 };

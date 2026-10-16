@@ -1,3 +1,4 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import type { ContractorPaymentSummary } from '../core/api.service';
 import {
@@ -10,6 +11,7 @@ import {
 import { MobileContractorPaymentMetricHelpComponent } from './mobile-contractor-payment-metric-help.component';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-mobile-contractor-payment-summary',
   standalone: true,
   imports: [MobileContractorPaymentMetricHelpComponent],

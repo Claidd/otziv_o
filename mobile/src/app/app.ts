@@ -1,5 +1,6 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { Component, effect, inject } from '@angular/core';
-import { IonApp, IonRouterOutlet } from '@ionic/angular/standalone';
+import { IonApp, IonRouterOutlet } from '@ionic/angular';
 import { AuthService } from './core/auth.service';
 import { MobileNativeService } from './core/mobile-native.service';
 import { MobilePushService } from './core/mobile-push.service';
@@ -10,6 +11,7 @@ import { MobileUpdateService } from './core/mobile-update.service';
 import { MobileThemeService } from './shared/mobile-theme.service';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-root',
   imports: [IonApp, IonRouterOutlet, MobileConfirmHostComponent, MobileNativeStatusComponent, MobileUpdateHostComponent],
   template: `

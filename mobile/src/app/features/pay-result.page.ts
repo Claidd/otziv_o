@@ -1,10 +1,12 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { Component, computed, inject } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { IonContent } from '@ionic/angular/standalone';
+import { IonContent } from '@ionic/angular';
 
 type PaymentResult = 'success' | 'fail';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-pay-result-page',
   imports: [IonContent, RouterLink],
   template: `

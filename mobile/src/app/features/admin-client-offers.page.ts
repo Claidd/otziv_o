@@ -1,8 +1,9 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { Capacitor } from '@capacitor/core';
 import { Directory, Filesystem } from '@capacitor/filesystem';
 import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { IonContent, IonRefresher, IonRefresherContent, type RefresherCustomEvent } from '@ionic/angular/standalone';
+import { IonContent, IonRefresher, IonRefresherContent, type RefresherCustomEvent } from '@ionic/angular';
 import { firstValueFrom } from 'rxjs';
 import {
   MobileClientOffersApi,
@@ -26,6 +27,7 @@ const FILE_EXTENSIONS = new Set(['pdf', 'txt', 'doc', 'docx', 'xlsx', 'pptx', 'j
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-admin-client-offers-mobile',
   imports: [FormsModule, IonContent, IonRefresher, IonRefresherContent, MobileHeaderComponent],
   template: `

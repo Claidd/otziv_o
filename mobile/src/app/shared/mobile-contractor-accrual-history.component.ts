@@ -1,8 +1,10 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import type { ContractorPaymentSummary } from '../core/api.service';
 import type { ContractorSelfAccrualAdjustment } from '../core/contractor-accrual-history.api';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-mobile-contractor-accrual-history',
   standalone: true,
   template: `

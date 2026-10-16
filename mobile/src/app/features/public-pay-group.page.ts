@@ -1,9 +1,10 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { PublicPaymentsApi } from '../core/public-payments.api';
 import { watchPublicPaymentNavigation } from './public-payment-navigation-lifecycle';
 import { Component, HostListener, OnDestroy, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { IonContent } from '@ionic/angular/standalone';
+import { IonContent } from '@ionic/angular';
 import { Subscription } from 'rxjs';
 import { type ApiService, PublicCommonInvoice } from '../core/api.service';
 import { RouteEpochGuard, RouteEpochTicket } from '../core/route-epoch.guard';
@@ -13,6 +14,7 @@ import { configuredPaymentTarget } from '../shared/payment-navigation';
 import { isBankPaymentRoute } from '../shared/bank-payment-source';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-public-pay-group-page',
   imports: [FormsModule, IonContent, RouterLink],
   template: `

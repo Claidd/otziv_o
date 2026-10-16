@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { ModalController } from '@ionic/angular/standalone';
+import { ModalController } from '@ionic/angular';
 import type { CommonInvoiceDetailsResponse, CommonManualPaymentMode } from '../core/api.service';
 import {
   MobileCommonManualPaymentDialogComponent,

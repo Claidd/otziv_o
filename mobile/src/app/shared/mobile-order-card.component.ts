@@ -1,3 +1,4 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ClientMessageStatus, OrderItem } from '../core/api.service';
@@ -13,6 +14,7 @@ export type MobileOrderStatusAction = {
 export type MobileOrderCopyKind = 'review' | 'payment';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-mobile-order-card',
   standalone: true,
   imports: [FormsModule, MobileNoteEditorComponent],

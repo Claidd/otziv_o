@@ -1,3 +1,4 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { inject } from '@angular/core';
 import { ManagerWorkerRiskApi } from '../core/manager-worker-risk.api';
 import { DatePipe } from '@angular/common';
@@ -9,7 +10,7 @@ import {
   IonRefresher,
   IonRefresherContent,
   RefresherCustomEvent
-} from '@ionic/angular/standalone';
+} from '@ionic/angular';
 import {
   type ApiService,
   Page,
@@ -39,6 +40,7 @@ const EMPTY_RISK_PAGE: Page<WorkerRiskIncident> = {
 };
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-worker-risk-mobile',
   imports: [
     DatePipe,

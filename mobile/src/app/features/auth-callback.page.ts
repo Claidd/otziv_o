@@ -1,9 +1,11 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
-import { IonButton, IonContent, IonSpinner } from '@ionic/angular/standalone';
+import { IonButton, IonContent, IonSpinner } from '@ionic/angular';
 import { AuthService } from '../core/auth.service';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-auth-callback',
   imports: [IonButton, IonContent, IonSpinner],
   template: `

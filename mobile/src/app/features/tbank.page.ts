@@ -1,3 +1,4 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { inject } from '@angular/core';
 import { OrderPaymentApi } from '../core/order-payment.api';
 import { PaymentAdministrationApi } from '../core/payment-administration.api';
@@ -12,7 +13,7 @@ import {
   IonRefresher,
   IonRefresherContent,
   RefresherCustomEvent
-} from '@ionic/angular/standalone';
+} from '@ionic/angular';
 import { firstValueFrom, forkJoin } from 'rxjs';
 import {
   AdminPaymentLinkResponse,
@@ -109,6 +110,7 @@ function currentMonthInput(): string {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-tbank-page',
   imports: [FormsModule, IonContent, IonModal, IonRefresher, IonRefresherContent, MobileBottomPagerComponent, MobileHeaderComponent, MobileRemindersComponent, MobileSearchBarComponent, MobileStatusSliderComponent],
   template: `

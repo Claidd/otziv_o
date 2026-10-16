@@ -128,7 +128,7 @@ public class AppDiagnosticsPlugin extends Plugin {
         String androidStateSummary = processState == null
                 ? ""
                 : new String(processState, StandardCharsets.UTF_8);
-        boolean androidStateSummaryRejected = !androidStateSummary.isBlank()
+        boolean androidStateSummaryRejected = !isBlank(androidStateSummary)
                 && !isOtzivProcessStateSummary(androidStateSummary);
         result.put("androidStateSummaryRejected", androidStateSummaryRejected);
         if (isOtzivProcessStateSummary(androidStateSummary)) {
@@ -172,11 +172,23 @@ public class AppDiagnosticsPlugin extends Plugin {
     }
 
     private String safeText(String value, int maxLength) {
-        if (value == null || value.isBlank()) {
+        if (value == null || isBlank(value)) {
             return "";
         }
         String normalized = value.replaceAll("[\\p{Cntrl}]", " ").trim();
         return normalized.substring(0, Math.min(normalized.length(), maxLength));
+    }
+
+    // String.isBlank() is unavailable before Android 13; keep its Unicode whitespace behavior.
+    static boolean isBlank(String value) {
+        for (int offset = 0; offset < value.length(); ) {
+            int codePoint = value.codePointAt(offset);
+            if (!Character.isWhitespace(codePoint)) {
+                return false;
+            }
+            offset += Character.charCount(codePoint);
+        }
+        return true;
     }
 
     static boolean isOtzivProcessStateSummary(String value) {

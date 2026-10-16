@@ -1,3 +1,4 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { ManagerOrdersApi } from '../core/manager-orders.api';
 import { ManagerReviewActionsApi } from '../core/manager-review-actions.api';
 import { ManagerReviewTasksApi } from '../core/manager-review-tasks.api';
@@ -21,7 +22,7 @@ import {
   IonRefresherContent,
   RefresherCustomEvent,
   ToastController
-} from '@ionic/angular/standalone';
+} from '@ionic/angular';
 import { Observable, Subscription, finalize, firstValueFrom } from 'rxjs';
 import {
   type ApiService,
@@ -78,6 +79,7 @@ const REVIEW_AI_ORDER_STATUSES = new Set(['новый', 'в проверку', '
 const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-order-details-mobile',
   providers: [PageWriteTracker],
   imports: [FormsModule, IonContent, IonModal, IonRefresher, IonRefresherContent, MobileBottomPagerComponent, MobileHeaderComponent, MobileRemindersComponent, MobileReviewCardShellComponent],

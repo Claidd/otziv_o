@@ -1,3 +1,4 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { ManagerCompanyBillingApi } from '../core/manager-company-billing.api';
 import { ManagerBoardApi } from '../core/manager-board.api';
 import { CommonBillingApi } from '../core/common-billing.api';
@@ -6,7 +7,7 @@ import { inject, Component, OnDestroy, OnInit, computed, signal } from '@angular
 import { HttpErrorResponse } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { IonContent, IonRefresher, IonRefresherContent, RefresherCustomEvent } from '@ionic/angular/standalone';
+import { IonContent, IonRefresher, IonRefresherContent, RefresherCustomEvent } from '@ionic/angular';
 import { firstValueFrom } from 'rxjs';
 import {
   type ApiService,
@@ -33,6 +34,7 @@ type CommonBillingDraft = {
 };
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-common-billing-admin-mobile',
   standalone: true,
   imports: [FormsModule, IonContent, IonRefresher, IonRefresherContent, MobileHeaderComponent, MobileOrderCardComponent],

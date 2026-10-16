@@ -1,0 +1,12 @@
+{
+  "enabled": true,
+  "versionCode": 75,
+  "versionName": "1.0.75",
+  "minSupportedVersionCode": 0,
+  "required": false,
+  "notes": "Обновлены мобильные экраны начислений и платежей. Переход на новый ключ подписи: для старых установок нужна ручная переустановка.",
+  "fileSize": 4381862,
+  "sha256": "A4CAB57BF353B918C64D2739CB8DD74B53BC63289A6699D1D2446299450EADB8",
+  "publishedAt": "2026-10-16T18:11:30.6558000+00:00",
+  "downloadUrl": "/android-new/otziv-v1.0.75.apk"
+}

@@ -309,7 +309,8 @@ public class AppUpdaterPlugin extends Plugin {
 
     private String safeVersionName(String value) {
         String normalized = value == null ? "update" : value.replaceAll("[^0-9A-Za-z._-]", "-");
-        return normalized.isBlank() ? "update" : normalized;
+        // The normalized name contains only ASCII filename characters. isBlank() requires Android 13.
+        return normalized.isEmpty() ? "update" : normalized;
     }
 
     private String downloadState(int status) {

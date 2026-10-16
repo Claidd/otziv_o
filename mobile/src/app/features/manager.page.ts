@@ -1,3 +1,4 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { commonInvoiceDeliveryWarning, deliveryOperationMessage } from '@otziv/client-common/billing-payments';
 import { ManagerCompanyActionsApi } from '../core/manager-company-actions.api';
 import { ManagerOrdersApi } from '../core/manager-orders.api';
@@ -19,7 +20,7 @@ import {
   IonRefresher,
   IonRefresherContent,
   RefresherCustomEvent
-} from '@ionic/angular/standalone';
+} from '@ionic/angular';
 import { Subscription, firstValueFrom } from 'rxjs';
 import {
   type ApiService,
@@ -134,6 +135,7 @@ type CompanyPreservedFields = Pick<
 >;
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-manager',
   providers: [ManagerOrderEditorFacade, PageWriteTracker],
   imports: [FormsModule, IonContent, IonModal, IonRefresher, IonRefresherContent, MobileBottomPagerComponent, MobileCompanyCardComponent, MobileHeaderComponent, MobileOrderCardComponent, MobileRemindersComponent, MobileSearchBarComponent, MobileStatusSliderComponent],

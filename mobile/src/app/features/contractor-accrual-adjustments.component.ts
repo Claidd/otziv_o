@@ -1,5 +1,6 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { Component, EventEmitter, Input, OnInit, Output, computed, signal } from '@angular/core';
-import { IonModal } from '@ionic/angular/standalone';
+import { IonModal } from '@ionic/angular';
 import { firstValueFrom } from 'rxjs';
 import {
   AdminUser, ApiService, ContractorAccrualAdjustment,
@@ -13,6 +14,7 @@ import {
 import { MobileConfirmService } from '../shared/mobile-confirm.service';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-contractor-accrual-adjustments',
   imports: [IonModal],
   template: `

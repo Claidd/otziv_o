@@ -1,10 +1,11 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { PublicPaymentsApi } from '../core/public-payments.api';
 import { watchPublicPaymentNavigation } from './public-payment-navigation-lifecycle';
 import { ClientContractError } from '@otziv/client-common/billing-payments';
 import { Component, HostListener, OnDestroy, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { IonContent } from '@ionic/angular/standalone';
+import { IonContent } from '@ionic/angular';
 import { Subscription } from 'rxjs';
 import { type ApiService, PublicPaymentLink, PublicSbpBank } from '../core/api.service';
 import { RouteEpochGuard, RouteEpochTicket } from '../core/route-epoch.guard';
@@ -13,6 +14,7 @@ import { configuredPaymentTarget, type PaymentNavigationPurpose } from '../share
 import { manualTransferDestinationPresentation } from '../shared/manual-transfer-destination';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-public-pay-page',
   imports: [FormsModule, IonContent, RouterLink],
   template: `

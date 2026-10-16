@@ -1,6 +1,7 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { IonContent, IonRefresher, IonRefresherContent, type RefresherCustomEvent } from '@ionic/angular/standalone';
+import { IonContent, IonRefresher, IonRefresherContent, type RefresherCustomEvent } from '@ionic/angular';
 import { firstValueFrom } from 'rxjs';
 import {
   WorkloadShadowReadApi,
@@ -24,6 +25,7 @@ type ReadinessTarget = 'CANARY' | 'LIVE';
 
 /** Monitoring deliberately exposes GET endpoints only. LIVE controls remain on the guarded web screen. */
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-admin-workload-shadow-page',
   imports: [FormsModule, IonContent, IonRefresher, IonRefresherContent, MobileHeaderComponent],
   template: `

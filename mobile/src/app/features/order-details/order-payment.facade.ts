@@ -1,7 +1,7 @@
 import { signal, type WritableSignal } from '@angular/core';
 import { finalize, firstValueFrom, Subscription } from 'rxjs';
 import type { ToastOptions } from '@ionic/core';
-import type { ToastController } from '@ionic/angular/standalone';
+import type { ToastController } from '@ionic/angular';
 import type { ManagerPaymentLinkResponse, PaymentRouteChangeContext, PaymentRouteChangeTarget, TbankPaymentStatus } from '../../core/api.service';
 import type { OrderPaymentApi } from '../../core/order-payment.api';
 import { EditorSession, type EditorTicket } from '../../core/editor-session';

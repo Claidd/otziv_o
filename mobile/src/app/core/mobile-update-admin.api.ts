@@ -2,6 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import type { Observable } from 'rxjs';
 import { mobileEnvironment } from './mobile-environment';
+import { mobileUpdateReleaseUrl } from './mobile-update.helpers';
 
 export interface MobilePublishedRelease {
   enabled: boolean;
@@ -21,6 +22,6 @@ export class MobileUpdateAdminApi {
   private readonly http = inject(HttpClient);
 
   current(): Observable<MobilePublishedRelease> {
-    return this.http.get<MobilePublishedRelease>(`${mobileEnvironment.apiBaseUrl}/api/mobile-update`);
+    return this.http.get<MobilePublishedRelease>(mobileUpdateReleaseUrl(mobileEnvironment.apiBaseUrl));
   }
 }

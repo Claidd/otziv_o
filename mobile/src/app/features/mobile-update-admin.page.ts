@@ -1,6 +1,6 @@
 import { Capacitor } from '@capacitor/core';
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
-import { IonContent, IonRefresher, IonRefresherContent, type RefresherCustomEvent } from '@ionic/angular/standalone';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { IonContent, IonRefresher, IonRefresherContent, type RefresherCustomEvent } from '@ionic/angular';
 import { firstValueFrom } from 'rxjs';
 import { AppUpdater, type AppUpdaterInfo } from '../core/mobile-app-update.plugin';
 import { MobileUpdateAdminApi, type MobilePublishedRelease } from '../core/mobile-update-admin.api';
@@ -42,7 +42,7 @@ const SIGNING_GUIDE = 'https://github.com/Claidd/otziv_o/blob/main/docs/ANDROID_
           }
           <section class="card release-flow">
             <h2>Как публикуется APK</h2>
-            <p>Новая версия проходит сборку и проверку подписи, CI точного коммита main, резервную копию и установку через управляемый выпуск. После него приложение сотрудников увидит обновление автоматически.</p>
+            <p>Новая версия проходит сборку и проверку подписи, CI точного коммита main, резервную копию и установку через управляемый выпуск. Приложения с новым сертификатом увидят обновление автоматически. Старые приложения требуют удаления и установки нового APK вручную.</p>
             <button type="button" (click)="openReleaseGuide()">Открыть инструкцию по выпуску</button>
             <button type="button" (click)="openSigningGuide()">Проверка подписи APK</button>
           </section>
@@ -50,6 +50,7 @@ const SIGNING_GUIDE = 'https://github.com/Claidd/otziv_o/blob/main/docs/ANDROID_
       </ion-content>
     </div>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: [`
     :host{display:contents}ion-content{--background:var(--otziv-background)}.update-page{display:grid;gap:.75rem;max-width:42rem;margin:auto;padding:1rem .8rem calc(5rem + env(safe-area-inset-bottom));color:var(--otziv-dark)}.page-head,.section-head{display:flex;align-items:center;justify-content:space-between;gap:.5rem}.page-head small{font-size:.65rem;font-weight:900;color:var(--otziv-info)}.page-head h1{margin:.1rem 0;font-size:1.3rem}.card{display:grid;gap:.7rem;padding:.85rem;border:1px solid rgba(108,155,207,.23);border-radius:.9rem;background:var(--otziv-white)}.card h2{margin:0;font-size:1rem}.card p{margin:0;color:var(--otziv-info);font-size:.77rem;line-height:1.45}.card p b{color:var(--otziv-dark)}.version{font-size:1.45rem}.metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.45rem}.metrics span{display:grid;gap:.2rem;min-width:0;padding:.55rem;border-radius:.6rem;background:var(--otziv-muted-surface)}.metrics small,.checksum small{font-size:.64rem;color:var(--otziv-info);font-weight:800}.metrics b{font-size:.8rem}.status{border-radius:999px;padding:.2rem .45rem;background:var(--otziv-muted-surface);font-size:.65rem;font-weight:900}.status.available{background:#ddf5ed;color:#13765b}.notes{white-space:pre-wrap}.checksum{display:grid;gap:.3rem}.checksum code{font-size:.67rem;overflow-wrap:anywhere}.update-status{font-weight:800}.release-flow button{justify-self:start}button{min-height:2.5rem;border:1px solid rgba(108,155,207,.3);border-radius:.7rem;padding:.5rem .7rem;background:var(--otziv-white);color:var(--otziv-primary);font:inherit;font-size:.76rem;font-weight:800}button:disabled{opacity:.5}.alert{margin:0;padding:.7rem;border-radius:.7rem;background:#fff0f4;color:var(--otziv-danger);font-size:.75rem}:host-context(body.otziv-dark-theme) .card,:host-context(body.otziv-dark-theme) button{background:#1f2629}
   `]

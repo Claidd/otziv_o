@@ -1,5 +1,6 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { Component, EventEmitter, OnInit, Output, signal } from '@angular/core';
-import { IonModal } from '@ionic/angular/standalone';
+import { IonModal } from '@ionic/angular';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../core/auth.service';
 import { ContractorPaymentSystemStatus, ContractorSystemApi } from '../core/contractor-system.api';
@@ -11,6 +12,7 @@ import {
 import { MobileConfirmService } from '../shared/mobile-confirm.service';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-contractor-system',
   imports: [IonModal],
   template: `

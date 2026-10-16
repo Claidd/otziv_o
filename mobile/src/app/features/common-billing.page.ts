@@ -1,9 +1,10 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { commonInvoiceDeliveryWarning, deliveryOperationMessage, DeliveryStatusWatcher } from '@otziv/client-common/billing-payments';
 import { CommonBillingApi } from '../core/common-billing.api';
 import { inject, Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, Router } from '@angular/router';
-import { IonContent, IonRefresher, IonRefresherContent, RefresherCustomEvent } from '@ionic/angular/standalone';
+import { IonContent, IonRefresher, IonRefresherContent, RefresherCustomEvent } from '@ionic/angular';
 import { Subscription, firstValueFrom } from 'rxjs';
 import {
   ApiService,
@@ -52,6 +53,7 @@ type InvoiceAction =
   | 'approve-review-orders';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-common-billing-mobile',
   imports: [IonContent, IonRefresher, IonRefresherContent, MobileHeaderComponent, MobileOrderCardComponent],
   template: `

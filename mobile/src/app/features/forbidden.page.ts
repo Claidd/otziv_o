@@ -1,8 +1,10 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { IonButton, IonContent } from '@ionic/angular/standalone';
+import { IonButton, IonContent } from '@ionic/angular';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-forbidden',
   imports: [IonButton, IonContent, RouterLink],
   template: `

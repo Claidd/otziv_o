@@ -1,8 +1,10 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { Component, EventEmitter, Input, Output, type OnChanges, type SimpleChanges } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { IonModal } from '@ionic/angular/standalone';
+import { IonModal } from '@ionic/angular';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-mobile-review-field-editor',
   standalone: true,
   imports: [FormsModule, IonModal],

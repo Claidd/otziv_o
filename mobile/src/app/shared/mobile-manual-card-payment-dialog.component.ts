@@ -1,3 +1,4 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { inject } from '@angular/core';
 import { ManagerManualPaymentsApi } from '../core/manager-manual-payments.api';
 import { Component, Input, OnInit, computed, signal } from '@angular/core';
@@ -12,7 +13,7 @@ import {
   IonTitle,
   IonToolbar,
   ModalController
-} from '@ionic/angular/standalone';
+} from '@ionic/angular';
 import { firstValueFrom } from 'rxjs';
 import {
   type ApiService,
@@ -42,6 +43,7 @@ export interface MobileManualCardPaymentOutcome {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-mobile-manual-card-payment-dialog',
   imports: [
     FormsModule,

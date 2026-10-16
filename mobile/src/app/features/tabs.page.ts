@@ -1,6 +1,7 @@
+import { ChangeDetectionStrategy } from '@angular/core';
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
-import { IonIcon, IonLabel, IonRouterOutlet, IonTabBar, IonTabButton, IonTabs } from '@ionic/angular/standalone';
+import { IonIcon, IonLabel, IonRouterOutlet, IonTabBar, IonTabButton, IonTabs } from '@ionic/angular';
 import { addIcons } from 'ionicons';
 import {
   businessOutline,
@@ -20,6 +21,7 @@ const SMART_TAB_HOLD_MS = 700;
 const SMART_TAB_DOUBLE_TAP_MS = 700;
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-tabs',
   imports: [IonIcon, IonLabel, IonRouterOutlet, IonTabBar, IonTabButton, IonTabs],
   template: `
