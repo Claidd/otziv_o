@@ -232,6 +232,50 @@ export async function validateGrafanaC29ActivationScan(publication, publicationP
   assert.equal(expected.unresolvedRiskReview, 'NONE', 'activation_grafana_c29_unresolved');
 }
 
+export function assertGrafanaC30KinOpenApi(raw) {
+  const grafana = (raw.Results || []).filter(result => result.Type === 'gobinary' &&
+    result.Target === 'usr/share/grafana/bin/grafana');
+  assert.equal(grafana.length, 1, 'activation_grafana_c30_binary_coverage');
+  const modules = (grafana[0].Packages || []).filter(pkg => pkg.Name === 'github.com/getkin/kin-openapi');
+  assert.equal(modules.length, 1, 'activation_grafana_c30_kin_openapi_coverage');
+  assert.equal(modules[0].Version, 'v0.149.0', 'activation_grafana_c30_kin_openapi_version');
+}
+
+export async function validateGrafanaC30ActivationScan(publication, publicationPath, read) {
+  assert.equal(publication.component, 'grafana', 'activation_grafana_c30_component');
+  const directory = dirname(publicationPath).replaceAll('\\', '/');
+  const [rawBytes, receiptBytes] = await Promise.all([
+    read(directory + '/vulnerabilities.json'), read(directory + '/vulnerabilities.adjudications.json')]);
+  const raw = JSON.parse(rawBytes), receipt = JSON.parse(receiptBytes);
+  const { review, reviewSha256 } = await loadReviewedProof('c30');
+  assert.equal(raw.Metadata?.ImageID, publication.imageId, 'activation_grafana_c30_report_image');
+  assertGrafanaC30KinOpenApi(raw);
+  assert.equal(receipt?.schema, 'otziv-image-adjudication-v1', 'activation_grafana_c30_schema');
+  assert.equal(receipt.status, 'EXACT_BINARY_FIXED_CODE_PROVEN', 'activation_grafana_c30_not_proven');
+  assert.equal(receipt.alloy?.status, 'NOT_APPLICABLE', 'activation_grafana_c30_alloy_scope');
+  assert.deepEqual(receipt.alloy.decisions, [], 'activation_grafana_c30_alloy_decisions');
+  assert.equal(receipt.reviewSha256, reviewSha256, 'activation_grafana_c30_review_changed');
+  assert.equal(receipt.rawReportSha256, sha256(rawBytes), 'activation_grafana_c30_raw_changed');
+  assert.equal(receipt.imageConfigId, publication.imageId, 'activation_grafana_c30_receipt_image');
+  assert.ok([publication.imageId, publication.reference.split('@')[1]].includes(receipt.immutableImageId),
+    'activation_grafana_c30_inspected_image');
+  assert.equal(receipt.binarySha256, review.binary.sha256, 'activation_grafana_c30_binary');
+  assert.equal(receipt.canonicalBuildInfoSha256, review.binary.canonicalBuildInfoSha256,
+    'activation_grafana_c30_build_info');
+  assert.equal(receipt.buildInfoReader, review.binary.buildInfoReader, 'activation_grafana_c30_reader');
+  assert.equal(receipt.rawReportModified, false, 'activation_grafana_c30_raw_modified');
+  assert.equal(receipt.inspectedBinaryExecuted, false, 'activation_grafana_c30_binary_executed');
+  assert.deepEqual(receipt.module, review.module, 'activation_grafana_c30_module');
+  assert.deepEqual(receipt.decisions, matchingFindings(raw, review), 'activation_grafana_c30_decisions');
+  assert.equal(receipt.decisions.length, 2, 'activation_grafana_c30_scope');
+  const expected = { ...combinedScanSummary(summarizeReport(raw),
+    { grafana: receipt, alloy: receipt.alloy }), scannerImage: TRIVY_IMAGE };
+  assert.deepEqual(publication.security, expected, 'activation_grafana_c30_summary');
+  assert.equal(expected.result, 'PASS', 'activation_grafana_c30_security_failed');
+  assert.equal(expected.effectiveBlockingFixedHighOrCritical, 0, 'activation_grafana_c30_fixed_findings');
+  assert.equal(expected.unresolvedRiskReview, 'NONE', 'activation_grafana_c30_unresolved');
+}
+
 export async function validateActivation(image, entry, manifestBytes, read) {
   assert.equal(entry.component, image.component, 'activation_component_mismatch');
   assert.match(entry.commit || '', /^[a-f0-9]{40}$/, 'activation_commit_missing');
@@ -260,6 +304,9 @@ export async function validateActivation(image, entry, manifestBytes, read) {
   }
   if (selected.manifestSet === 'c29-grafana') {
     await validateGrafanaC29ActivationScan(publication.value, entry.publication.path, read);
+  }
+  if (selected.manifestSet === 'c30-grafana') {
+    await validateGrafanaC30ActivationScan(publication.value, entry.publication.path, read);
   }
   if (requiresKeycloakDependencyProof(publicationImage)) {
     const checked = checkKeycloakRuntimeDependencies(

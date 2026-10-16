@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { gunzipSync } from 'node:zlib';
-import { loadReviewedProof, matchingFindings, validateObservedBinary, effectiveScanSummary } from './grafana-tempo-adjudication.mjs';
+import { loadReviewedProof, matchingFindings, validateObservedBinary, effectiveScanSummary,
+  adjudicateGrafanaImage } from './grafana-tempo-adjudication.mjs';
 import { summarizeReport } from './scan.mjs';
 
 const { review } = await loadReviewedProof();
@@ -58,6 +59,18 @@ test('C29 Grafana binds the same fixed Tempo source to the Go 1.27.2 executable'
   assert.equal(matchingFindings(report, current.review).length, 2);
   validateObservedBinary(report, inspect, current.review.binary.sha256, currentBuild, current.review);
   assert.throws(() => validateObservedBinary(report, inspect, current.review.binary.sha256, buildInfo, current.review), /build_info_mismatch/);
+});
+test('C30 Grafana cannot borrow C29 exact-binary proof while its identity is pending', async () => {
+  const { report } = fixture();
+  report.Metadata.ImageConfig.config.Labels['org.opencontainers.image.version'] = '12.4.10+otziv.3';
+  await assert.rejects(loadReviewedProof('c30'), /adjudication_c30_identity_pending/);
+  const receipt = await adjudicateGrafanaImage(report, Buffer.from(JSON.stringify(report)),
+    'sha256:' + 'a'.repeat(64), 'unused');
+  assert.equal(receipt.status, 'REJECTED');
+  assert.equal(receipt.reason, 'adjudication_c30_identity_pending');
+  assert.deepEqual(receipt.decisions, []);
+  assert.equal(effectiveScanSummary(summarizeReport(report), receipt).result, 'FAIL');
+  assert.equal((await loadReviewedProof('c29')).review.product.version, '12.4.10+otziv.2');
 });
 test('effective summary retains both raw HIGH findings and does not mutate the raw report', () => {
   const { report } = fixture(), before = JSON.stringify(report);

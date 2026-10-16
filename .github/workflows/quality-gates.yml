@@ -56,6 +56,7 @@ on:
           - c29-alloy
           - c29-tempo
           - c29-grafana
+          - c30-grafana
           - c29-mc
           - c29-local-s3
   pull_request:
