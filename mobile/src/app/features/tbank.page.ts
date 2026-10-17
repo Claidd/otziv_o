@@ -1229,6 +1229,7 @@ function currentMonthInput(): string {
       max-width: 44rem;
       width: 100%;
       min-height: 0;
+      --otziv-status-tile-min: 8.2rem;
       margin: 0 auto;
       flex-direction: column;
       gap: var(--otziv-page-gap, 0.65rem);
@@ -1600,24 +1601,26 @@ function currentMonthInput(): string {
       white-space: nowrap;
     }
 
+    .meta-grid strong {
+      overflow-wrap: anywhere;
+      white-space: normal;
+      line-height: 1.2;
+    }
+
     .amount-row small,
     .meta-grid small,
     .payment-context-row small {
-      font-size: 0.56rem;
+      font-size: 0.62rem;
       font-weight: 900;
-      line-height: 1.05;
+      line-height: 1.18;
     }
 
     .payment-context-row strong {
-      display: -webkit-box;
-      overflow: hidden;
       color: var(--otziv-dark);
-      font-size: 0.7rem;
+      font-size: 0.74rem;
       font-weight: 900;
-      line-height: 1.08;
+      line-height: 1.2;
       overflow-wrap: anywhere;
-      -webkit-box-orient: vertical;
-      -webkit-line-clamp: 2;
     }
 
     .copy-line {
@@ -1692,9 +1695,7 @@ function currentMonthInput(): string {
 
     .manual-note strong,
     .manual-note small {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      overflow-wrap: anywhere;
     }
 
     .manual-note strong {
@@ -2246,6 +2247,7 @@ function currentMonthInput(): string {
 
     :host-context(body.otziv-dark-theme) .search-strip label,
     :host-context(body.otziv-dark-theme) .date-strip label,
+    :host-context(body.otziv-dark-theme) .payment-context-row span,
     :host-context(body.otziv-dark-theme) .amount-row span,
     :host-context(body.otziv-dark-theme) .meta-grid span,
     :host-context(body.otziv-dark-theme) .copy-line,
@@ -2260,6 +2262,22 @@ function currentMonthInput(): string {
       background: #151b1d;
       border-color: rgba(151, 169, 183, 0.2);
       color: var(--otziv-dark);
+    }
+
+    :host-context(body.otziv-dark-theme) .status-pill.paid {
+      color: #83e0cd;
+      background: rgba(74, 198, 177, 0.18);
+    }
+
+    :host-context(body.otziv-dark-theme) .status-pill.refunded {
+      color: #a2c5f2;
+      background: rgba(116, 154, 207, 0.2);
+    }
+
+    :host-context(body.otziv-dark-theme) .status-pill.manual,
+    :host-context(body.otziv-dark-theme) .status-pill.neutral {
+      color: #e4c981;
+      background: rgba(218, 168, 36, 0.18);
     }
 
     @media (max-width: 360px) {

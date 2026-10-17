@@ -3,6 +3,17 @@
   min-width: 0;
   max-width: 100%;
   font-family: var(--otziv-font-family);
+  --bank-blue-text: #315f97;
+  --bank-green-text: #0c6b59;
+  --bank-amber-text: #7a5900;
+  --bank-danger-text: #9b293f;
+}
+
+:host-context(.otziv-dark-theme) {
+  --bank-blue-text: #a8c7ff;
+  --bank-green-text: #80d9c1;
+  --bank-amber-text: #f1cf82;
+  --bank-danger-text: #ff9cb4;
 }
 
 :host ::ng-deep app-admin-layout .admin-layout .page-heading,
@@ -198,7 +209,7 @@ input[type='search'] {
 }
 
 input[type='search']::placeholder {
-  color: rgba(103, 116, 131, 0.72);
+  color: var(--otziv-info);
 }
 
 .status-control,
@@ -298,7 +309,7 @@ input[type='search']::placeholder {
 .archive-run-action {
   width: fit-content;
   margin-left: auto;
-  color: #315f97;
+  color: var(--bank-blue-text);
   background: rgba(108, 155, 207, 0.13);
 }
 
@@ -381,7 +392,7 @@ input[type='search']::placeholder {
 }
 
 .metric-card.yellow > .material-icons-sharp {
-  color: #a57600;
+  color: var(--bank-amber-text);
   background: rgba(255, 198, 0, 0.16);
 }
 
@@ -506,29 +517,29 @@ input[type='search']::placeholder {
 
 .mode-pill.test,
 .status-pill.neutral {
-  color: #7a5900;
+  color: var(--bank-amber-text);
   background: rgba(255, 198, 0, 0.18);
 }
 
 .mode-pill.live,
 .status-pill.paid {
-  color: #0c6b59;
+  color: var(--bank-green-text);
   background: rgba(27, 156, 133, 0.15);
 }
 
 .status-pill.refunded {
-  color: #315f97;
+  color: var(--bank-blue-text);
   background: rgba(108, 155, 207, 0.16);
 }
 
 .status-pill.manual {
-  color: #7a5900;
+  color: var(--bank-amber-text);
   background: rgba(255, 198, 0, 0.18);
 }
 
 .status-pill.failed {
-  color: #9b293f;
-  background: #fff1f4;
+  color: var(--bank-danger-text);
+  background: color-mix(in srgb, var(--otziv-danger) 13%, var(--otziv-white));
 }
 
 .tbank-side {
@@ -651,7 +662,7 @@ input[type='search']::placeholder {
 }
 
 .payment-mode-copy .warning-text {
-  color: #9b293f;
+  color: var(--bank-danger-text);
 }
 
 .payment-mode-toggle {
@@ -858,7 +869,7 @@ input[type='search']::placeholder {
   height: 1.85rem;
   place-items: center;
   border-radius: 999px;
-  color: var(--otziv-white);
+  color: #fff;
   font-size: 0.66rem;
   font-weight: 950;
   letter-spacing: 0;
@@ -1038,7 +1049,7 @@ input[type='search']::placeholder {
   border: 1px solid rgba(103, 116, 131, 0.12);
   border-radius: var(--otziv-small-radius);
   padding: 0.5rem;
-  background: rgba(247, 250, 255, 0.72);
+  background: color-mix(in srgb, var(--otziv-theme-control) 7%, var(--otziv-white));
 }
 
 .manual-task-edit-card .route-segment {
@@ -1081,7 +1092,7 @@ input[type='search']::placeholder {
 }
 
 .manual-task-accounting-warning {
-  color: #a83f47 !important;
+  color: var(--bank-danger-text) !important;
   font-weight: 900 !important;
 }
 
@@ -1175,7 +1186,7 @@ input[type='search']::placeholder {
   min-width: 0;
   border-radius: 0.42rem;
   padding: 0.3rem 0.42rem;
-  color: #315f97;
+  color: var(--bank-blue-text);
   background: rgba(108, 155, 207, 0.1);
   font-size: 0.61rem;
   text-align: center;
@@ -1207,11 +1218,11 @@ input[type='search']::placeholder {
 }
 
 .routing-manager-row .selected-bank {
-  color: #315f97;
+  color: var(--bank-blue-text);
 }
 
 .routing-manager-row .pending-bank-change {
-  color: #a56f00;
+  color: var(--bank-amber-text);
 }
 
 .manager-profile-list {
@@ -1555,11 +1566,11 @@ button.copy-line.copy-line.copy-line {
 }
 
 .profile-line {
-  color: #315f97;
+  color: var(--bank-blue-text);
 }
 
 .method-line {
-  color: #0c6b59;
+  color: var(--bank-green-text);
 }
 
 .amount-cell strong {
@@ -1625,7 +1636,7 @@ button.copy-line.copy-line.copy-line {
 
 .refund-action.refund-action {
   border-color: rgba(255, 198, 0, 0.62);
-  color: #6e5200;
+  color: var(--bank-amber-text);
 }
 
 .unpaid-action.unpaid-action {
@@ -1635,12 +1646,12 @@ button.copy-line.copy-line.copy-line {
 
 .confirm-action.confirm-action {
   border-color: rgba(27, 156, 133, 0.4);
-  color: #0c6b59;
+  color: var(--bank-green-text);
 }
 
 .receipt-action.receipt-action {
   border-color: rgba(108, 155, 207, 0.42);
-  color: #315f97;
+  color: var(--bank-blue-text);
 }
 
 .archive-label {
@@ -1665,7 +1676,7 @@ button.copy-line.copy-line.copy-line {
 .quiet-action:hover,
 .icon-action:hover {
   border-color: var(--otziv-primary);
-  color: #2f4f7f;
+  color: var(--bank-blue-text);
   box-shadow: none;
 }
 
@@ -1868,7 +1879,7 @@ button:disabled,
     border: 1px solid rgba(116, 154, 207, 0.22);
     border-radius: 0.72rem;
     padding: 0 0.46rem;
-    color: #315f97;
+    color: var(--bank-blue-text);
     background: linear-gradient(145deg, var(--otziv-white) 0%, var(--otziv-muted-surface) 100%);
     box-shadow: none;
     font-size: 0.66rem;
@@ -2265,6 +2276,25 @@ button:disabled,
     overflow-wrap: anywhere;
   }
 
+  .status-cell .status-pill {
+    width: auto;
+    min-width: 0;
+    max-width: 100%;
+    margin-inline: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-align: left;
+    justify-self: start;
+  }
+
+  .row-actions button {
+    max-width: 100%;
+    height: auto;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.15;
+  }
+
 }
 
 @media (max-width: 420px) {
@@ -2275,4 +2305,234 @@ button:disabled,
     padding: 0 0.28rem;
   }
 
+}
+
+.contractor-audit-backdrop {
+  position: fixed;
+  z-index: 1200;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: auto;
+  padding: max(0.75rem, env(safe-area-inset-top)) max(0.75rem, env(safe-area-inset-right))
+    max(0.75rem, env(safe-area-inset-bottom)) max(0.75rem, env(safe-area-inset-left));
+  background: rgba(28, 39, 63, 0.64);
+}
+
+.contractor-audit-dialog {
+  box-sizing: border-box;
+  width: min(100%, 39rem);
+  max-height: calc(100dvh - 1.5rem);
+  overflow: auto;
+  border: 1px solid var(--otziv-surface-border-neutral);
+  border-radius: 1.15rem;
+  padding: 1rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-white);
+  box-shadow: 0 1.5rem 4rem rgba(20, 31, 55, 0.28);
+}
+
+.contractor-audit-header,
+.contractor-audit-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.contractor-audit-header small {
+  color: var(--otziv-info);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.contractor-audit-header h2 {
+  margin-top: 0.18rem;
+  font-size: 1.22rem;
+}
+
+.contractor-audit-close {
+  display: grid;
+  flex: 0 0 2.75rem;
+  width: 2.75rem;
+  height: 2.75rem;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  color: inherit;
+  background: var(--otziv-muted-surface);
+}
+
+.contractor-audit-explanation,
+.contractor-audit-warning,
+.contractor-audit-error {
+  margin: 0.8rem 0;
+  border-radius: 0.8rem;
+  padding: 0.7rem;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.contractor-audit-explanation {
+  background: color-mix(in srgb, var(--otziv-theme-control) 12%, var(--otziv-white));
+}
+
+.contractor-audit-warning {
+  border-left: 3px solid var(--otziv-warning);
+  color: var(--otziv-dark);
+  background: color-mix(in srgb, var(--otziv-warning) 17%, var(--otziv-white));
+}
+
+.contractor-audit-error {
+  border-left: 3px solid var(--otziv-danger);
+  color: var(--otziv-dark);
+  background: color-mix(in srgb, var(--otziv-danger) 15%, var(--otziv-white));
+}
+
+.contractor-audit-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+  margin: 0.8rem 0;
+}
+
+.contractor-audit-summary > div {
+  min-width: 0;
+  border-radius: 0.75rem;
+  padding: 0.65rem;
+  background: var(--otziv-muted-surface);
+}
+
+.contractor-audit-summary dt {
+  color: var(--otziv-info);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.contractor-audit-summary dd {
+  margin: 0.22rem 0 0;
+  overflow-wrap: anywhere;
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.contractor-audit-form,
+.contractor-audit-form > label {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.contractor-audit-form {
+  gap: 0.7rem;
+}
+
+.contractor-audit-form > label > span {
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.contractor-audit-form input[type='text'],
+.contractor-audit-form input[type='datetime-local'],
+.contractor-audit-form textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 2.75rem;
+  border: 1px solid var(--otziv-surface-border-neutral);
+  border-radius: 0.65rem;
+  padding: 0.65rem 0.75rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-field-background);
+  font: inherit;
+  font-size: 1rem;
+}
+
+.contractor-audit-form input[type='datetime-local'] {
+  color-scheme: light;
+}
+
+:host-context(.otziv-dark-theme) .contractor-audit-form input[type='datetime-local'] {
+  color-scheme: dark;
+}
+
+.contractor-audit-form textarea {
+  min-height: 5rem;
+  resize: vertical;
+}
+
+.contractor-audit-form input::placeholder,
+.contractor-audit-form textarea::placeholder {
+  color: var(--otziv-info);
+  opacity: 1;
+}
+
+.contractor-audit-form small {
+  color: var(--otziv-info);
+  font-size: 0.73rem;
+  line-height: 1.4;
+}
+
+.contractor-audit-statement {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 0.65rem !important;
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+  background: color-mix(in srgb, var(--otziv-success) 13%, var(--otziv-white));
+}
+
+.contractor-audit-statement input {
+  width: 1.2rem;
+  height: 1.2rem;
+  margin: 0.05rem 0 0;
+  accent-color: var(--otziv-success);
+}
+
+.contractor-audit-statement span {
+  line-height: 1.4;
+}
+
+.contractor-audit-actions {
+  justify-content: flex-end;
+  margin-top: 0.2rem;
+}
+
+.contractor-audit-actions button {
+  min-height: 2.8rem;
+  border-radius: 0.65rem;
+  padding: 0.55rem 0.9rem;
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.contractor-audit-cancel {
+  border: 1px solid var(--otziv-surface-border-neutral);
+  color: inherit;
+  background: var(--otziv-field-background);
+}
+
+.contractor-audit-submit {
+  border: 0;
+  color: #102a25;
+  background: var(--otziv-success);
+}
+
+.contractor-audit-actions button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+@media (max-width: 520px) {
+  .contractor-audit-dialog {
+    max-height: calc(100dvh - 1.5rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    padding: 0.85rem;
+  }
+
+  .contractor-audit-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .contractor-audit-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
 }

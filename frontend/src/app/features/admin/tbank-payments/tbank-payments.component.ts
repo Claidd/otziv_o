@@ -1,5 +1,5 @@
-import { DatePipe, DecimalPipe } from '@angular/common';
-import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
+import { DOCUMENT, DatePipe, DecimalPipe } from '@angular/common';
+import { Component, ElementRef, HostListener, OnDestroy, ViewChild, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { Subscription, forkJoin, switchMap, tap } from 'rxjs';
@@ -99,6 +99,43 @@ type StatusFilterOption = {
   icon: string;
 };
 
+export function parseContractorConfirmedTotalKopecks(
+  input: string,
+  maximumKopecks: number,
+  previouslyConfirmedKopecks: number
+): number | null {
+  if (!Number.isSafeInteger(maximumKopecks) || maximumKopecks <= 0
+    || !Number.isSafeInteger(previouslyConfirmedKopecks) || previouslyConfirmedKopecks < 0
+    || previouslyConfirmedKopecks > maximumKopecks) {
+    return null;
+  }
+  const value = input.replace(/\s/g, '').replace(',', '.');
+  if (!/^\d+(?:\.\d{1,2})?$/.test(value)) {
+    return null;
+  }
+  const [rubles, kopecks = ''] = value.split('.');
+  const total = Number(rubles) * 100 + Number(kopecks.padEnd(2, '0'));
+  return Number.isSafeInteger(total) && total > 0
+    && total >= previouslyConfirmedKopecks && total <= maximumKopecks ? total : null;
+}
+
+export function validContractorAuditEffectiveAt(input: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(input);
+  if (!match) {
+    return false;
+  }
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+  const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const daysInMonth = [31, leapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return year > 0 && month >= 1 && month <= 12
+    && day >= 1 && day <= daysInMonth[month - 1]
+    && hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59;
+}
+
 @Component({
   selector: 'app-tbank-payments',
   imports: [AdminLayoutComponent, DatePipe, DecimalPipe, FormsModule, LoadErrorCardComponent, ManagerManualCardPaymentModalComponent, MobileBottomPagerComponent, RouterLink],
@@ -113,6 +150,19 @@ export class TbankPaymentsComponent implements OnDestroy {
 
   private readonly paymentsApi = inject(PaymentsApi);
   private readonly toastService = inject(ToastService);
+  private readonly domDocument = inject(DOCUMENT);
+  private contractorAuditTrigger: HTMLElement | null = null;
+  @ViewChild('contractorAuditDialog') private contractorAuditDialog?: ElementRef<HTMLElement>;
+  @ViewChild('contractorAuditAmountInput')
+  set contractorAuditAmountElement(element: ElementRef<HTMLInputElement> | undefined) {
+    if (element) {
+      queueMicrotask(() => {
+        if (this.contractorAuditLink() && element.nativeElement.isConnected) {
+          element.nativeElement.focus();
+        }
+      });
+    }
+  }
   readonly isBankPaymentInstructionSource = isBankPaymentRouteType;
 
   readonly links = signal<AdminPaymentLinkResponse[]>([]);
@@ -154,6 +204,25 @@ export class TbankPaymentsComponent implements OnDestroy {
   private bootstrapEpoch = 0;
   private destroyed = false;
   readonly mutatingId = signal<number | null>(null);
+  readonly contractorAuditLink = signal<AdminPaymentLinkResponse | null>(null);
+  readonly contractorAuditAmount = signal('');
+  readonly contractorAuditEffectiveAt = signal('');
+  readonly contractorAuditReason = signal('');
+  readonly contractorAuditStatementChecked = signal(false);
+  readonly contractorAuditError = signal<string | null>(null);
+  readonly contractorAuditAmountKopecks = computed(() => {
+    const link = this.contractorAuditLink();
+    return link ? parseContractorConfirmedTotalKopecks(
+      this.contractorAuditAmount(), link.amountKopecks, link.confirmedAmountKopecks ?? 0
+    ) : null;
+  });
+  readonly canSubmitContractorAudit = computed(() => {
+    const link = this.contractorAuditLink();
+    return !!link && this.mutatingId() === null && this.canConfirmContractorSource(link)
+      && this.contractorAuditAmountKopecks() !== null
+      && validContractorAuditEffectiveAt(this.contractorAuditEffectiveAt())
+      && !!this.contractorAuditReason().trim() && this.contractorAuditStatementChecked();
+  });
   readonly mutatingTaskId = signal<number | null>(null);
   readonly editingTaskId = signal<number | null>(null);
   readonly editTaskPaymentType = signal<ManualPaymentType>('MOBILE_BANK');
@@ -1003,47 +1072,115 @@ export class TbankPaymentsComponent implements OnDestroy {
     this.loadRecipientMonthlySummary();
   }
 
-  confirmContractorSource(link: AdminPaymentLinkResponse): void {
-    if (!this.canConfirmContractorSource(link) || this.mutatingId()) {
+  confirmContractorSource(link: AdminPaymentLinkResponse, event?: Event): void {
+    if (!this.canConfirmContractorSource(link) || this.mutatingId() || this.contractorAuditLink()) {
       return;
     }
-    if (!window.confirm(
-      `Выписка получателя проверена и перевод относится именно к счету №${link.id}?`
-    )) {
+    const trigger = event?.currentTarget as HTMLElement | null;
+    const active = this.domDocument.activeElement as HTMLElement | null;
+    this.contractorAuditTrigger = typeof trigger?.focus === 'function'
+      ? trigger : active && active !== this.domDocument.body && typeof active.focus === 'function' ? active : null;
+    this.contractorAuditLink.set(link);
+    this.contractorAuditAmount.set('');
+    this.contractorAuditEffectiveAt.set('');
+    this.contractorAuditReason.set('');
+    this.contractorAuditStatementChecked.set(false);
+    this.contractorAuditError.set(null);
+  }
+
+  closeContractorSourceAudit(): void {
+    const link = this.contractorAuditLink();
+    if (!link || this.mutatingId() === link.id) {
       return;
     }
-    const currentRubles = Math.max(0, link.confirmedAmountKopecks ?? 0) / 100;
-    const amountInput = window.prompt(
-      `Укажите общую подтвержденную сумму поступлений именно по этому счету, ₽ (не больше ${link.amount}):`,
-      currentRubles > 0 ? String(currentRubles) : String(link.amount)
-    )?.trim() ?? '';
-    const amountRubles = Number(amountInput.replace(',', '.'));
-    const confirmedTotalKopecks = Math.round(amountRubles * 100);
-    if (!Number.isFinite(amountRubles)
-      || confirmedTotalKopecks <= 0
-      || confirmedTotalKopecks > link.amountKopecks) {
-      this.toastService.error('Поступление не подтверждено', 'Проверьте сумму: она должна быть больше нуля и не превышать сумму счета.');
+    this.contractorAuditLink.set(null);
+    this.contractorAuditAmount.set('');
+    this.contractorAuditEffectiveAt.set('');
+    this.contractorAuditReason.set('');
+    this.contractorAuditStatementChecked.set(false);
+    this.contractorAuditError.set(null);
+    const trigger = this.contractorAuditTrigger;
+    this.contractorAuditTrigger = null;
+    queueMicrotask(() => {
+      if (trigger?.isConnected) {
+        trigger.focus();
+      } else {
+        this.domDocument.querySelector<HTMLElement>('app-tbank-payments [data-bank-payments-focus-fallback]')?.focus();
+      }
+    });
+  }
+
+  @HostListener('document:keydown', ['$event'])
+  onContractorAuditKeydown(event: KeyboardEvent): void {
+    const link = this.contractorAuditLink();
+    if (!link) {
       return;
     }
-    const reason = window.prompt(
-      'Укажите основание сверки (дата выписки, назначение или другой неперсональный комментарий):',
-      ''
-    )?.trim() ?? '';
-    if (!reason) {
-      this.toastService.error('Поступление не подтверждено', 'Для аудита требуется основание сверки.');
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      this.closeContractorSourceAudit();
+      return;
+    }
+    if (event.key !== 'Tab') {
+      return;
+    }
+    const dialog = this.contractorAuditDialog?.nativeElement;
+    if (!dialog) {
+      return;
+    }
+    const focusable = Array.from(dialog.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
+    ));
+    if (!focusable.length) {
+      event.preventDefault();
+      dialog.focus();
+      return;
+    }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    const active = this.domDocument.activeElement;
+    if (!dialog.contains(active) || !focusable.includes(active as HTMLElement)) {
+      event.preventDefault();
+      (event.shiftKey ? last : first).focus();
+    } else if (event.shiftKey && active === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && active === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
+  submitContractorSourceAudit(): void {
+    const link = this.contractorAuditLink();
+    if (!link || this.mutatingId() || !this.canConfirmContractorSource(link)) {
+      return;
+    }
+    const confirmedTotalKopecks = this.contractorAuditAmountKopecks();
+    const effectiveAt = this.contractorAuditEffectiveAt();
+    const reason = this.contractorAuditReason().trim();
+    if (!validContractorAuditEffectiveAt(effectiveAt)) {
+      this.contractorAuditError.set('Укажите существующие дату и время поступления как в выписке получателя.');
+      return;
+    }
+    if (confirmedTotalKopecks === null || !reason || !this.contractorAuditStatementChecked()) {
+      this.contractorAuditError.set('Укажите точную сумму, основание и подтвердите проверку выписки получателя.');
       return;
     }
 
+    this.contractorAuditError.set(null);
     this.mutatingId.set(link.id);
     this.paymentsApi.confirmAdminContractorPaymentSource(link.id, {
       recipientStatementChecked: true,
       paymentReceived: true,
       confirmedTotalKopecks,
+      effectiveAt,
       reason
     }).subscribe({
       next: (updated) => {
         this.replaceLink(updated);
         this.mutatingId.set(null);
+        this.closeContractorSourceAudit();
         this.toastService.success(
           'Поступление подтверждено',
           `Учтено по счету №${link.id}: ${(confirmedTotalKopecks / 100).toFixed(2)} ₽`
@@ -1054,10 +1191,7 @@ export class TbankPaymentsComponent implements OnDestroy {
       },
       error: (err) => {
         this.mutatingId.set(null);
-        this.toastService.error(
-          'Поступление не подтверждено',
-          apiErrorDetail(err, 'Не удалось сохранить сверку по выбранному счету')
-        );
+        this.contractorAuditError.set(apiErrorDetail(err, 'Не удалось сохранить сверку по выбранному счету'));
       }
     });
   }

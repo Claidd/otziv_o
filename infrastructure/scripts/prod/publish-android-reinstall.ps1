@@ -3,6 +3,7 @@ param(
     [Parameter(Mandatory = $true)][string]$ApkPath,
     [Parameter(Mandatory = $true)][string]$ReleaseJsonPath,
     [switch]$VerifyOnly,
+    [switch]$StageOnly,
     [string]$VpsHost = '95.213.248.152',
     [string]$VpsUser = 'hunt',
     [ValidateRange(1, 65535)][int]$VpsPort = 22022,
@@ -13,6 +14,9 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+if ($VerifyOnly -and $StageOnly) {
+    throw 'Choose either standalone APK verification or VPS staging.'
+}
 
 # A replacement signer needs a separate channel. The old mobile release route
 # remains untouched so existing installations cannot receive an incompatible APK.
@@ -137,8 +141,8 @@ if ($release.versionCode -isnot [long] -and $release.versionCode -isnot [int]) {
 }
 $versionCode = [long]$release.versionCode
 $versionName = [string]$release.versionName
-if ($versionCode -ne 75 -or $versionName -cne '1.0.75') {
-    throw 'This standalone publication is pinned to release 1.0.75/code75.'
+if ($versionCode -lt 75 -or $versionCode -gt 2100000000 -or $versionName -cne "1.0.$versionCode") {
+    throw 'Standalone Android release must use versionCode 75 or higher and matching versionName.'
 }
 $fileName = "otziv-v$versionName.apk"
 $downloadUrl = "/android-new/$fileName"
@@ -180,7 +184,9 @@ foreach ($path in @($SshKey, $SshKnownHostsFile)) {
     }
 }
 [void](Get-Command scp -ErrorAction Stop)
-Assert-PublicReleaseMetadata -Expected $release
+if (-not $StageOnly) {
+    Assert-PublicReleaseMetadata -Expected $release
+}
 
 $remote = "$VpsUser@$VpsHost"
 $remoteStage = '/tmp/.otziv-android-new-' + [guid]::NewGuid().ToString('N') + '.apk'
@@ -256,6 +262,10 @@ $remoteResult = Invoke-RemotePython -Program $remoteProgram -Packet $packet -Ssh
 if ($remoteResult.sha256 -cne $expectedSha -or $remoteResult.fileSize -ne [long]$release.fileSize -or
         $remoteResult.path -cne ($VpsPath.TrimEnd('/') + '/data/nginx/www/android-new/' + $fileName)) {
     throw 'VPS reported a different standalone APK after atomic publication.'
+}
+if ($StageOnly) {
+    Write-Host "Standalone Android APK staged and hash-verified before web rollout: $fileName"
+    return
 }
 Assert-PublicApk -Url "$publicOrigin$downloadUrl" -ExpectedSha256 $expectedSha -ExpectedSize ([long]$release.fileSize)
 Write-Host "Standalone Android APK published and HTTP-verified: $publicOrigin$downloadUrl"

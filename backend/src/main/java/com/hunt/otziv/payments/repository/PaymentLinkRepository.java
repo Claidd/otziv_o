@@ -608,55 +608,73 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
     );
 
     @Query(value = """
-        SELECT receipt.sourceId AS sourceId,
-               receipt.amountKopecks AS amountKopecks,
-               receipt.effectiveAt AS effectiveAt
-        FROM (
-            SELECT link.id AS sourceId,
-                   COALESCE(
-                       link.confirmed_amount_kopecks,
-                       link.reserved_amount_kopecks,
-                       link.amount_kopecks
-                   ) AS amountKopecks,
-                   COALESCE(link.manual_confirmed_at, link.paid_at) AS effectiveAt
+        WITH manual_source AS (
+            SELECT link.id, link.status, link.manual_source, link.contractor_allocation_id,
+                   link.confirmed_amount_kopecks, link.reserved_amount_kopecks,
+                   link.amount_kopecks, link.manual_confirmed_at, link.paid_at
             FROM payment_links link
             WHERE link.payment_method IN ('MANUAL_MOBILE_BANK', 'MANUAL_EXTERNAL_LINK')
-              AND (
-                  link.manual_confirmed_at IS NOT NULL
-                  OR (link.status = 'CONFIRMED' AND link.paid_at IS NOT NULL)
-              )
-              AND COALESCE(link.manual_confirmed_at, link.paid_at) >= :from
-              AND COALESCE(link.manual_confirmed_at, link.paid_at) < :to
               AND NOT EXISTS (
-                  SELECT 1
-                  FROM contractor_actual_payment_attributions attribution
+                  SELECT 1 FROM contractor_actual_payment_attributions attribution
                   WHERE (attribution.source_kind = 'PAYMENT_LINK' AND attribution.source_id = link.id)
                      OR attribution.evidence_id = link.id
               )
             UNION ALL
-            SELECT archived.id AS sourceId,
-                   COALESCE(
-                       archived.confirmed_amount_kopecks,
-                       archived.reserved_amount_kopecks,
-                       archived.amount_kopecks
-                   ) AS amountKopecks,
-                   COALESCE(archived.manual_confirmed_at, archived.paid_at) AS effectiveAt
+            SELECT archived.id, archived.status, archived.manual_source, archived.contractor_allocation_id,
+                   archived.confirmed_amount_kopecks, archived.reserved_amount_kopecks,
+                   archived.amount_kopecks, archived.manual_confirmed_at, archived.paid_at
             FROM archive_payment_links archived
             WHERE archived.payment_method IN ('MANUAL_MOBILE_BANK', 'MANUAL_EXTERNAL_LINK')
-              AND (
-                  archived.manual_confirmed_at IS NOT NULL
-                  OR (archived.status = 'CONFIRMED' AND archived.paid_at IS NOT NULL)
-              )
-              AND COALESCE(archived.manual_confirmed_at, archived.paid_at) >= :from
-              AND COALESCE(archived.manual_confirmed_at, archived.paid_at) < :to
+              AND NOT EXISTS (SELECT 1 FROM payment_links live WHERE live.id = archived.id)
               AND NOT EXISTS (
-                  SELECT 1 FROM payment_links live WHERE live.id = archived.id
-              )
-              AND NOT EXISTS (
-                  SELECT 1
-                  FROM contractor_actual_payment_attributions attribution
+                  SELECT 1 FROM contractor_actual_payment_attributions attribution
                   WHERE (attribution.source_kind = 'PAYMENT_LINK' AND attribution.source_id = archived.id)
                      OR attribution.evidence_id = archived.id
+              )
+        ), confirmed_event AS (
+            SELECT source.id AS sourceId, event.amount_kopecks AS amountKopecks,
+                   event.effective_at AS effectiveAt,
+                   COALESCE(source.confirmed_amount_kopecks,
+                            source.reserved_amount_kopecks, source.amount_kopecks) AS expectedKopecks
+            FROM manual_source source
+            JOIN contractor_payment_allocations allocation
+              ON allocation.id = source.contractor_allocation_id
+             AND allocation.source_type = 'PAYMENT_LINK'
+             AND allocation.source_id = source.id
+            JOIN contractor_payment_allocation_events event
+              ON event.allocation_id = allocation.id
+             AND ((allocation.mode = 'LIVE' AND event.event_type = 'CONFIRMED')
+                  OR (allocation.mode = 'SHADOW' AND event.event_type = 'SIMULATED_CONFIRMED'))
+            WHERE source.manual_source = 'CONTRACTOR_PAYMENT_PROFILE'
+        ), event_covered_source AS (
+            -- Historical links may have a paid baseline that predates allocation events.
+            -- Keep the old full-link fallback unless the events cover the whole receipt.
+            SELECT sourceId
+            FROM confirmed_event
+            GROUP BY sourceId
+            HAVING SUM(amountKopecks) = MAX(expectedKopecks)
+        )
+        SELECT receipt.sourceId AS sourceId, receipt.amountKopecks AS amountKopecks,
+               receipt.effectiveAt AS effectiveAt
+        FROM (
+            -- Allocation events store each confirmed delta at its real effective time.
+            SELECT event.sourceId, event.amountKopecks, event.effectiveAt
+            FROM confirmed_event event
+            JOIN event_covered_source covered ON covered.sourceId = event.sourceId
+            WHERE event.effectiveAt >= :from AND event.effectiveAt < :to
+            UNION ALL
+            -- Old links without events keep their historical whole-link behavior.
+            SELECT source.id AS sourceId,
+                   COALESCE(source.confirmed_amount_kopecks,
+                            source.reserved_amount_kopecks, source.amount_kopecks) AS amountKopecks,
+                   COALESCE(source.manual_confirmed_at, source.paid_at) AS effectiveAt
+            FROM manual_source source
+            WHERE (source.manual_confirmed_at IS NOT NULL
+                   OR (source.status = 'CONFIRMED' AND source.paid_at IS NOT NULL))
+              AND COALESCE(source.manual_confirmed_at, source.paid_at) >= :from
+              AND COALESCE(source.manual_confirmed_at, source.paid_at) < :to
+              AND NOT EXISTS (
+                  SELECT 1 FROM event_covered_source covered WHERE covered.sourceId = source.id
               )
         ) receipt
         ORDER BY receipt.effectiveAt, receipt.sourceId

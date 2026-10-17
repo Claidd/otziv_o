@@ -2,7 +2,7 @@
   <section class="analytics-toolbar">
     <div class="toolbar-heading">
       <p class="eyebrow">ADMIN / БАНК</p>
-      <h2>Платежи, возвраты и чеки</h2>
+      <h2 tabindex="-1" data-bank-payments-focus-fallback>Платежи, возвраты и чеки</h2>
       @if (status(); as bank) {
         <p class="toolbar-note">
           {{ bank.enabled ? 'API T‑Bank включен' : 'API T‑Bank выключен' }} ·
@@ -405,7 +405,7 @@
                       <button
                         type="button"
                         class="confirm-action"
-                        (click)="confirmContractorSource(link)"
+                        (click)="confirmContractorSource(link, $event)"
                         [disabled]="isMutating(link)"
                         title="Сверить выписку и подтвердить полное или частичное поступление именно по этому счету"
                       >
@@ -1370,4 +1370,161 @@
     (closed)="closeJournalManualCardPayment()"
     (completed)="completeJournalManualCardPayment($event)"
   />
+}
+
+@if (contractorAuditLink(); as auditLink) {
+  <div class="contractor-audit-backdrop" role="presentation" (click)="closeContractorSourceAudit()">
+    <section
+      #contractorAuditDialog
+      class="contractor-audit-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="contractor-audit-title"
+      aria-describedby="contractor-audit-explanation"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+    >
+      <header class="contractor-audit-header">
+        <div>
+          <small>Заказ №{{ auditLink.orderId || '—' }} · счёт №{{ auditLink.id }}</small>
+          <h2 id="contractor-audit-title">Сверить поступление</h2>
+        </div>
+        <button
+          type="button"
+          class="contractor-audit-close"
+          (click)="closeContractorSourceAudit()"
+          [disabled]="mutatingId() === auditLink.id"
+          aria-label="Закрыть сверку"
+        >
+          <span class="material-icons-sharp" aria-hidden="true">close</span>
+        </button>
+      </header>
+
+      <p id="contractor-audit-explanation" class="contractor-audit-explanation">
+        Подтверждайте только деньги, которые видны в выписке получателя по реквизитам этого счёта.
+        Сумма ниже — накопительный итог по счёту №{{ auditLink.id }}, а не новый платёж.
+      </p>
+
+      <dl class="contractor-audit-summary">
+        <div>
+          <dt>Счёт и статус</dt>
+          <dd>№{{ auditLink.id }} · {{ statusLabel(auditLink.status) }}</dd>
+        </div>
+        <div>
+          <dt>Заказ</dt>
+          <dd>№{{ auditLink.orderId || '—' }} · {{ paymentTitle(auditLink) }}</dd>
+        </div>
+        <div>
+          <dt>Получатель по реквизитам</dt>
+          <dd>{{ auditLink.manualRecipientName?.trim() || 'Не указан в сохранённых реквизитах' }}</dd>
+        </div>
+        <div>
+          <dt>Профиль и маршрут</dt>
+          <dd>{{ auditLink.paymentProfileName?.trim() || auditLink.paymentProfileCode?.trim() || 'Профиль не указан' }} · {{ manualSourceLabel(auditLink) }}</dd>
+        </div>
+        <div>
+          <dt>Телефон или номер карты</dt>
+          <dd>{{ auditLink.manualPhone?.trim() || 'Не сохранён' }}</dd>
+        </div>
+        @if (auditLink.manualBankName?.trim()) {
+          <div>
+            <dt>Банк по реквизитам</dt>
+            <dd>{{ auditLink.manualBankName }}</dd>
+          </div>
+        }
+        <div>
+          <dt>Сумма счёта, максимум</dt>
+          <dd>{{ formatKopecks(auditLink.amountKopecks) }}</dd>
+        </div>
+        <div>
+          <dt>Уже подтверждено</dt>
+          <dd>{{ formatKopecks(auditLink.confirmedAmountKopecks) }}</dd>
+        </div>
+      </dl>
+
+      @if (!auditLink.manualRecipientName?.trim()) {
+        <p class="contractor-audit-warning" role="status">
+          Имя получателя в сохранённых реквизитах отсутствует. Сверьте счёт №{{ auditLink.id }}
+          и указанные выше реквизиты с выпиской перед подтверждением.
+        </p>
+      }
+
+      <form class="contractor-audit-form" (ngSubmit)="submitContractorSourceAudit()">
+        <label>
+          <span>Всего поступило по этому счёту, ₽</span>
+          <input
+            #contractorAuditAmountInput
+            name="contractorAuditAmount"
+            type="text"
+            inputmode="decimal"
+            autocomplete="off"
+            required
+            [ngModel]="contractorAuditAmount()"
+            (ngModelChange)="contractorAuditAmount.set($event || '')"
+            [disabled]="mutatingId() === auditLink.id"
+            aria-describedby="contractor-audit-amount-help"
+            placeholder="Например, 1400,00"
+          >
+        </label>
+        <small id="contractor-audit-amount-help">
+          @if ((auditLink.confirmedAmountKopecks || 0) > 0) {
+            Не меньше уже подтверждённых {{ formatKopecks(auditLink.confirmedAmountKopecks) }}.
+          } @else {
+            Сумма должна быть больше 0 руб.
+          }
+          Не больше {{ formatKopecks(auditLink.amountKopecks) }} и не более двух знаков после запятой.
+        </small>
+        <label>
+          <span>Дата и время поступления по выписке</span>
+          <input
+            name="contractorAuditEffectiveAt"
+            type="datetime-local"
+            required
+            [ngModel]="contractorAuditEffectiveAt()"
+            (ngModelChange)="contractorAuditEffectiveAt.set($event || '')"
+            [disabled]="mutatingId() === auditLink.id"
+            aria-describedby="contractor-audit-date-help"
+          >
+        </label>
+        <small id="contractor-audit-date-help">
+          Введите время как в выписке получателя, без часового пояса. Эта дата определяет месяц зачёта и резервов.
+        </small>
+        <label>
+          <span>Основание сверки</span>
+          <textarea
+            name="contractorAuditReason"
+            rows="3"
+            maxlength="500"
+            required
+            [ngModel]="contractorAuditReason()"
+            (ngModelChange)="contractorAuditReason.set($event || '')"
+            [disabled]="mutatingId() === auditLink.id"
+            placeholder="Дата и период выписки, назначение платежа. Полный номер карты не нужен."
+          ></textarea>
+        </label>
+        <label class="contractor-audit-statement">
+          <input
+            name="contractorAuditStatementChecked"
+            type="checkbox"
+            [ngModel]="contractorAuditStatementChecked()"
+            (ngModelChange)="contractorAuditStatementChecked.set($event)"
+            [disabled]="mutatingId() === auditLink.id"
+          >
+          <span>Я проверил(а) выписку получателя по указанным реквизитам и подтвердил(а)
+            фактическое поступление именно по счёту №{{ auditLink.id }}.</span>
+        </label>
+        @if (contractorAuditError()) {
+          <p class="contractor-audit-error" role="alert">{{ contractorAuditError() }}</p>
+        }
+        <div class="contractor-audit-actions">
+          <button type="button" class="contractor-audit-cancel" (click)="closeContractorSourceAudit()" [disabled]="mutatingId() === auditLink.id">
+            Отмена
+          </button>
+          <button type="submit" class="contractor-audit-submit" [disabled]="!canSubmitContractorAudit()">
+            {{ mutatingId() === auditLink.id ? 'Сохраняю' : 'Подтвердить поступление' }}
+          </button>
+        </div>
+      </form>
+    </section>
+  </div>
 }

@@ -1,12 +1,12 @@
 {
   "enabled": true,
-  "versionCode": 75,
-  "versionName": "1.0.75",
+  "versionCode": 76,
+  "versionName": "1.0.76",
   "minSupportedVersionCode": 0,
   "required": false,
-  "notes": "Обновлены мобильные экраны начислений и платежей. Переход на новый ключ подписи: для старых установок нужна ручная переустановка.",
-  "fileSize": 4381862,
-  "sha256": "A4CAB57BF353B918C64D2739CB8DD74B53BC63289A6699D1D2446299450EADB8",
-  "publishedAt": "2026-10-16T18:11:30.6558000+00:00",
-  "downloadUrl": "/android-new/otziv-v1.0.75.apk"
+  "notes": "Исправлено отображение платежей в тёмной теме. Обновление с 1.0.75 устанавливается поверх приложения.",
+  "fileSize": 4381850,
+  "sha256": "F24BD6CFE4D0A1F319A45CD55684D04CAE754B515D6B03648FB0B9DEB6941E94",
+  "publishedAt": "2026-10-17T13:33:30.7060128+00:00",
+  "downloadUrl": "/android-new/otziv-v1.0.76.apk"
 }
