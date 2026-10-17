@@ -32,7 +32,7 @@ if ($Help) {
     Write-Host '-LocalWorkRoot or OTZIV_LOCAL_WORK_ROOT places release evidence and temporary files on a chosen disk.'
     Write-Host '-FullRollout recreates all application services; database continuity guards still apply.'
     Write-Host 'Production configuration and the existing mobile APK are retained unless an APK path is supplied.'
-    Write-Host '-StandaloneMobileApkPath publishes a separately signed APK at /android-new after verified deployment.'
+    Write-Host '-StandaloneMobileApkPath stages a separately signed APK before rollout, then verifies its public /android-new URL after deployment.'
     return
 }
 if ($PSVersionTable.PSVersion.Major -lt 7) {
@@ -225,6 +225,16 @@ try {
         Start-Sleep -Seconds 2
         if ($tunnel.HasExited) { throw 'Private SSH tunnel could not start; production was not changed.' }
     }
+    if ($StandaloneMobileApkPath) {
+        $standaloneParameters = @{
+            ApkPath = $StandaloneMobileApkPath; ReleaseJsonPath = $standaloneMetadata
+            VpsHost = $VpsHost; VpsUser = $VpsUser; VpsPort = $VpsPort; VpsPath = $VpsPath
+            SshKey = $SshKey; SshKnownHostsFile = $SshKnownHostsFile
+        }
+        Set-OtzivReleaseStage -Path $timing -Stage 'standalone-android-prestage'
+        & $standalonePublisher @standaloneParameters -StageOnly
+        if ($LASTEXITCODE -ne 0) { throw 'Standalone Android APK staging failed before web rollout.' }
+    }
     $parameters = @{
         DockerHubNamespace = $registry.namespace; Tag = $Tag
         VpsHost = $VpsHost; VpsUser = $VpsUser; VpsPort = $VpsPort; VpsPath = $VpsPath
@@ -249,11 +259,6 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Installation completed, but daily-scan inventory registration failed. Preserve the release evidence and retry registration.' }
     if ($StandaloneMobileApkPath) {
         Set-OtzivReleaseStage -Path $timing -Stage 'standalone-android-publication'
-        $standaloneParameters = @{
-            ApkPath = $StandaloneMobileApkPath; ReleaseJsonPath = $standaloneMetadata
-            VpsHost = $VpsHost; VpsUser = $VpsUser; VpsPort = $VpsPort; VpsPath = $VpsPath
-            SshKey = $SshKey; SshKnownHostsFile = $SshKnownHostsFile
-        }
         try {
             & $standalonePublisher @standaloneParameters
             if ($LASTEXITCODE -ne 0) { throw 'Standalone publisher returned a nonzero exit code.' }
