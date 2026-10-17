@@ -23,6 +23,7 @@ import com.hunt.otziv.payments.model.PaymentMethod;
 import com.hunt.otziv.payments.model.PaymentProfile;
 import com.hunt.otziv.payments.model.PaymentReceiptStatus;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
+import java.math.BigDecimal;
 import java.net.URI;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -58,6 +59,8 @@ import static com.hunt.otziv.payments.service.ManualCardRoutePolicy.MANUAL_CARD_
 @Slf4j
 @RequiredArgsConstructor
 public class ManualCardPaymentWorkflow {
+
+    private final PaymentLinkAmountPolicy amountPolicy;
 
     private final PaymentLinkSettlementService settlementService;
 
@@ -140,6 +143,7 @@ public class ManualCardPaymentWorkflow {
             if (!hasOrderBinding(link, orderId) || link.getAmountKopecks() != route.amountKopecks()) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Платёжный источник заказа изменился");
             }
+            requireCurrentManualCardRouteAmount(order, link);
             return manualCardPaymentContextForRoute(order, link);
         });
     }
@@ -194,14 +198,14 @@ public class ManualCardPaymentWorkflow {
     OrderManualCardRoute selectManualCardPaymentRouteForOrder(Long orderId, Authentication authentication) {
         reconcileLegacyTerminalBankRoutesForManualCardPayment(orderId, authentication);
         return transactionExecutor.required(() -> {
-            if (orderId == null || orderRepository.findByIdForCounterUpdate(orderId).isEmpty()) {
-                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден");
-            }
+            Order order = orderId == null ? null : orderRepository.findByIdForCounterUpdate(orderId).orElse(null);
+            if (order == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден");
             managerAccessService.requireOrderAccess(orderId, authentication);
             List<PaymentLink> orderLinks = paymentLinkRepository.findByOrderIdForUpdate(orderId);
             PaymentLink selected = selectManualCardPaymentRoute(orderLinks);
             if (!isCompletedManualCardPayment(selected)) {
                 ensureOrderNotCoveredByActiveCommonInvoice(orderId);
+                requireCurrentManualCardRouteAmount(order, selected);
                 boolean competingPayment = orderLinks.stream().filter(candidate -> !sameLinkId(selected, candidate)).anyMatch(this::isCompetingManualCardPaymentRoute);
                 if (competingPayment) {
                     throw new ResponseStatusException(HttpStatus.CONFLICT, "У заказа найден другой активный или подтвержденный способ оплаты. " + "Оплата переводом не зачислена; нужна ручная сверка.");
@@ -209,6 +213,21 @@ public class ManualCardPaymentWorkflow {
             }
             return new OrderManualCardRoute(selected.getId(), selected.getAmountKopecks());
         });
+    }
+
+    private void requireCurrentManualCardRouteAmount(Order order, PaymentLink link) {
+        if (isCompletedManualCardPayment(link)) {
+            return;
+        }
+        long payableKopecks = amountPolicy.amountKopecks(amountPolicy.payableSum(order));
+        if (link.getAmountKopecks() != payableKopecks) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Старая платёжная ссылка №" + link.getId() + " на "
+                            + BigDecimal.valueOf(link.getAmountKopecks(), 2).stripTrailingZeros().toPlainString()
+                            + " ₽ не соответствует текущей сумме заказа "
+                            + BigDecimal.valueOf(payableKopecks, 2).stripTrailingZeros().toPlainString()
+                            + " ₽. Проверьте поступление по конкретной ссылке в разделе «Банк → Платежи».");
+        }
     }
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
