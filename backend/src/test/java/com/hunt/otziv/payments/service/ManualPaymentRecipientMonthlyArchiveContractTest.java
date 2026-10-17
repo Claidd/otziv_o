@@ -17,14 +17,18 @@ class ManualPaymentRecipientMonthlyArchiveContractTest {
         String commonItem = Files.readString(Path.of(
                 "src/main/java/com/hunt/otziv/common_billing/model/CommonInvoiceOrder.java"));
 
+        assertTrue(paymentLinks.contains("FROM payment_links link"));
         assertTrue(paymentLinks.contains("FROM archive_payment_links archived"));
         assertTrue(paymentLinks.contains("FROM payment_links live WHERE live.id = archived.id"));
         assertTrue(paymentLinks.contains("contractor_actual_payment_attributions attribution"));
         assertTrue(paymentLinks.contains("attribution.source_kind = 'PAYMENT_LINK'"));
-        assertTrue(paymentLinks.contains("link.manual_confirmed_at IS NOT NULL"));
-        assertTrue(paymentLinks.contains("archived.manual_confirmed_at IS NOT NULL"));
-        assertTrue(paymentLinks.contains("link.status = 'CONFIRMED' AND link.paid_at IS NOT NULL"));
-        assertTrue(paymentLinks.contains("archived.status = 'CONFIRMED' AND archived.paid_at IS NOT NULL"));
+        assertTrue(paymentLinks.contains("source.manual_confirmed_at IS NOT NULL"));
+        assertTrue(paymentLinks.contains("source.status = 'CONFIRMED' AND source.paid_at IS NOT NULL"));
+        assertTrue(paymentLinks.contains("JOIN contractor_payment_allocation_events event"));
+        assertTrue(paymentLinks.contains("event.effective_at AS effectiveAt"));
+        assertTrue(paymentLinks.contains("allocation.mode = 'LIVE' AND event.event_type = 'CONFIRMED'"));
+        assertTrue(paymentLinks.contains("allocation.mode = 'SHADOW' AND event.event_type = 'SIMULATED_CONFIRMED'"));
+        assertTrue(paymentLinks.contains("HAVING SUM(amountKopecks) = MAX(expectedKopecks)"));
 
         assertTrue(commonInvoices.contains("FROM archive_common_invoice_orders archived_item"));
         assertTrue(commonInvoices.contains("archived_invoice.restored_at IS NULL"));
