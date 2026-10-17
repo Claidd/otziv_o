@@ -6287,6 +6287,72 @@ class PaymentLinkServiceTest {
     }
 
     @Test
+    void manualCardPreviewAndManagerSubmitRejectStaleHistoricalBankRouteBeforeOwnerApproval() throws Exception {
+        PaymentLinkService service = service(properties());
+        Order order = order(25322L, "Casa", BigDecimal.valueOf(1400));
+        PaymentLink oldBank = new PaymentLink();
+        oldBank.setId(8288L);
+        oldBank.setOrder(order);
+        oldBank.setPaymentMethod(PaymentMethod.BANK_FORM);
+        oldBank.setStatus(PaymentLinkStatus.EXPIRED);
+        oldBank.setAmountKopecks(120_000L);
+        oldBank.setCreatedAt(LocalDateTime.now().minusDays(2));
+        PaymentLink canceledManagerRoute = contractorManualLink(
+                8327L, order, 140_000L, PaymentLinkStatus.CANCELED, 305L);
+        canceledManagerRoute.setCreatedAt(LocalDateTime.now().minusDays(1));
+
+        when(orderRepository.findByIdForCounterUpdate(25322L)).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByOrderIdForUpdate(25322L))
+                .thenReturn(List.of(oldBank, canceledManagerRoute));
+
+        ResponseStatusException previewError = assertThrows(ResponseStatusException.class,
+                () -> service.manualCardPaymentContextForOrder(25322L, authentication));
+        ResponseStatusException submitError = assertThrows(ResponseStatusException.class,
+                () -> service.submitManagerManualCardPaymentForOrder(
+                        25322L, "Выписка получателя проверена", null,
+                        ContractorRecipientType.OWNER, null, "OWNER", "manager@example.ru", authentication));
+
+        assertEquals(HttpStatus.CONFLICT, previewError.getStatusCode());
+        assertEquals(HttpStatus.CONFLICT, submitError.getStatusCode());
+        assertTrue(previewError.getReason().contains("8288"));
+        assertTrue(previewError.getReason().contains("1200"));
+        assertTrue(previewError.getReason().contains("1400"));
+        verifyNoInteractions(actualPaymentAttributionService, ownerManualCardPaymentApprovalRepository,
+                manualCardPaymentReviewNotificationService, tbankClient);
+        verify(orderTransactionService, never()).handlePaymentStatus(any(Order.class));
+        assertEquals(PaymentLinkStatus.EXPIRED, oldBank.getStatus());
+        assertEquals(PaymentLinkStatus.CANCELED, canceledManagerRoute.getStatus());
+    }
+
+    @Test
+    void manualCardPreviewAcceptsHistoricalBankRouteWhenItsAmountMatchesCurrentPayable() {
+        PaymentLinkService service = service(properties());
+        Order order = order(25323L, "Casa", BigDecimal.valueOf(1400));
+        PaymentLink oldBank = new PaymentLink();
+        oldBank.setId(8289L);
+        oldBank.setOrder(order);
+        oldBank.setPaymentMethod(PaymentMethod.BANK_FORM);
+        oldBank.setStatus(PaymentLinkStatus.EXPIRED);
+        oldBank.setAmountKopecks(140_000L);
+        oldBank.setCreatedAt(LocalDateTime.now().minusDays(2));
+        PaymentLink canceledManagerRoute = contractorManualLink(
+                8328L, order, 140_000L, PaymentLinkStatus.CANCELED, 306L);
+        canceledManagerRoute.setCreatedAt(LocalDateTime.now().minusDays(1));
+        ManualCardPaymentContextResponse expected = new ManualCardPaymentContextResponse(
+                25323L, 140_000L, null, List.of(), null, false, null, null, null);
+
+        when(orderRepository.findByIdForCounterUpdate(25323L)).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByOrderIdForUpdate(25323L))
+                .thenReturn(List.of(oldBank, canceledManagerRoute));
+        when(paymentLinkRepository.findByIdForUpdate(8289L)).thenReturn(Optional.of(oldBank));
+        when(actualPaymentAttributionService.manualCardPaymentContext(order, oldBank)).thenReturn(expected);
+
+        assertSame(expected, service.manualCardPaymentContextForOrder(25323L, authentication));
+        verify(actualPaymentAttributionService).manualCardPaymentContext(order, oldBank);
+        verifyNoInteractions(ownerManualCardPaymentApprovalRepository, tbankClient);
+    }
+
+    @Test
     void manualCardPaymentDoesNotRecoverExpiredManualRouteWithStaleAmount() throws Exception {
         PaymentLinkService service = service(properties());
         Order order = order(25065L, "Старая сумма ручного маршрута", BigDecimal.valueOf(1000));
@@ -9503,7 +9569,7 @@ class PaymentLinkServiceTest {
                 settlement, lifecycle, cancellation, presenter, routes, observations, paymentLinkRepository,
                 tochkaPaymentProfileResolver, paymentLinkReturnOutboxService);
         var manualCardPayments = new com.hunt.otziv.payments.service.ManualCardPaymentWorkflow(
-                settlement, lifecycle, manualConfirmation, preparation, manualRoutePolicy, observationApplication,
+                amounts, settlement, lifecycle, manualConfirmation, preparation, manualRoutePolicy, observationApplication,
                 cancellation, presenter, routes, observations, paymentLinkRepository, orderRepository, properties,
                 tbankClient, manualPaymentRecipientTelegramNotificationService, manualPaymentTaskService,
                 taskReceiptIntegrationService, paymentInvoiceRetryScheduler, orderPaymentIntegrityService,
