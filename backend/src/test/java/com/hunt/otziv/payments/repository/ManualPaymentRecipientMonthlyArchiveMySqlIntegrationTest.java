@@ -100,6 +100,89 @@ class ManualPaymentRecipientMonthlyArchiveMySqlIntegrationTest {
     }
 
     @Test
+    void frozenManualLinkUsesConfirmedDeltasAcrossMonthsAndExactAllocationAfterArchive() throws Exception {
+        jdbc.update("""
+                INSERT INTO payment_links
+                    (id, status, payment_method, manual_source, contractor_allocation_id,
+                     amount_kopecks, confirmed_amount_kopecks, manual_confirmed_at)
+                VALUES
+                    (11, 'AMOUNT_MISMATCH', 'MANUAL_MOBILE_BANK', 'CONTRACTOR_PAYMENT_PROFILE', 101,
+                     900, 900, '2026-10-02 10:00:00'),
+                    (13, 'CONFIRMED', 'MANUAL_MOBILE_BANK', 'CONTRACTOR_PAYMENT_PROFILE', 301,
+                     300, 300, '2026-10-03 10:00:00'),
+                    (14, 'CONFIRMED', 'MANUAL_MOBILE_BANK', NULL, NULL,
+                     700, 700, '2026-10-04 10:00:00'),
+                    (16, 'CONFIRMED', 'MANUAL_MOBILE_BANK', 'CONTRACTOR_PAYMENT_PROFILE', 601,
+                     100, 100, '2026-10-06 10:00:00'),
+                    (17, 'CONFIRMED', 'MANUAL_MOBILE_BANK', 'CONTRACTOR_PAYMENT_PROFILE', 701,
+                     110, 110, '2026-10-07 10:00:00'),
+                    (18, 'CONFIRMED', 'MANUAL_MOBILE_BANK', 'CONTRACTOR_PAYMENT_PROFILE', 801,
+                     150, 150, '2026-10-08 10:00:00'),
+                    (19, 'CONFIRMED', 'MANUAL_MOBILE_BANK', 'CONTRACTOR_PAYMENT_PROFILE', 901,
+                     175, 175, '2026-10-09 10:00:00'),
+                    (20, 'CONFIRMED', 'MANUAL_MOBILE_BANK', 'CONTRACTOR_PAYMENT_PROFILE', 1001,
+                     900, 900, '2026-10-10 10:00:00')
+                """);
+        jdbc.update("""
+                INSERT INTO archive_payment_links
+                    (id, status, payment_method, manual_source, contractor_allocation_id,
+                     amount_kopecks, confirmed_amount_kopecks, manual_confirmed_at)
+                VALUES
+                    (12, 'CONFIRMED', 'MANUAL_MOBILE_BANK', 'CONTRACTOR_PAYMENT_PROFILE', 201,
+                     600, 600, '2026-10-02 11:00:00'),
+                    (15, 'CONFIRMED', 'MANUAL_MOBILE_BANK', NULL, NULL,
+                     800, 800, '2026-10-05 10:00:00')
+                """);
+        jdbc.update("""
+                INSERT INTO contractor_payment_allocations (id, mode, source_type, source_id)
+                VALUES (101, 'LIVE', 'PAYMENT_LINK', 11),
+                       (102, 'SHADOW', 'PAYMENT_LINK', 11),
+                       (201, 'LIVE', 'PAYMENT_LINK', 12),
+                       (301, 'SHADOW', 'PAYMENT_LINK', 13),
+                       (601, 'LIVE', 'PAYMENT_LINK', 16),
+                       (701, 'LIVE', 'PAYMENT_LINK', 17),
+                       (801, 'LIVE', 'PAYMENT_LINK', 18),
+                       (802, 'LIVE', 'PAYMENT_LINK', 18),
+                       (901, 'LIVE', 'PAYMENT_LINK', 19),
+                       (1001, 'LIVE', 'PAYMENT_LINK', 20)
+                """);
+        jdbc.update("""
+                INSERT INTO contractor_payment_allocation_events
+                    (allocation_id, event_type, amount_kopecks, effective_at)
+                VALUES
+                    (101, 'CONFIRMED', 500, '2026-09-30 23:00:00'),
+                    (101, 'CONFIRMED', 400, '2026-10-02 10:00:00'),
+                    (102, 'SIMULATED_CONFIRMED', 900, '2026-09-30 23:00:00'),
+                    (201, 'CONFIRMED', 250, '2026-09-29 10:00:00'),
+                    (201, 'CONFIRMED', 350, '2026-10-02 11:00:00'),
+                    (301, 'SIMULATED_CONFIRMED', 100, '2026-09-28 10:00:00'),
+                    (301, 'SIMULATED_CONFIRMED', 200, '2026-10-03 10:00:00'),
+                    (601, 'CONFIRMED', 100, '2026-10-06 10:00:00'),
+                    (701, 'CONFIRMED', 110, '2026-10-07 10:00:00'),
+                    (801, 'CONFIRMED', 150, '2026-10-08 10:00:00'),
+                    (802, 'CONFIRMED', 100, '2026-10-08 10:00:00'),
+                    (1001, 'CONFIRMED', 400, '2026-10-10 10:00:00')
+                """);
+        jdbc.update("""
+                INSERT INTO contractor_actual_payment_attributions
+                    (source_kind, source_id, evidence_id)
+                VALUES ('PAYMENT_LINK', 16, NULL), ('PAYMENT_LINK', 999, 17)
+                """);
+
+        String sql = repositorySql(PaymentLinkRepository.class, LocalDateTime.class, LocalDateTime.class);
+        assertThat(execute(sql, LocalDateTime.of(2026, 9, 1, 0, 0),
+                LocalDateTime.of(2026, 10, 1, 0, 0)))
+                .containsExactlyInAnyOrderEntriesOf(Map.of(11L, 500L, 12L, 250L, 13L, 100L));
+        assertThat(execute(sql, LocalDateTime.of(2026, 10, 1, 0, 0),
+                LocalDateTime.of(2026, 11, 1, 0, 0)))
+                .containsExactlyInAnyOrderEntriesOf(Map.of(
+                        11L, 400L, 12L, 350L, 13L, 200L,
+                        14L, 700L, 15L, 800L, 18L, 150L, 19L, 175L,
+                        20L, 900L
+                ));
+    }
+
+    @Test
     void commonLegacyFactsUseItemEvidenceAndCanonicalLiveOrArchiveCopy() throws Exception {
         jdbc.update("""
                 INSERT INTO common_invoices (invoice_id, payment_method)
@@ -152,13 +235,15 @@ class ManualPaymentRecipientMonthlyArchiveMySqlIntegrationTest {
     }
 
     private Map<Long, Long> execute(String sql) {
-        Map<String, Object> params = Map.of(
-                "from", LocalDateTime.of(2026, 8, 1, 0, 0),
-                "to", LocalDateTime.of(2026, 9, 1, 0, 0)
-        );
+        return execute(sql, LocalDateTime.of(2026, 8, 1, 0, 0),
+                LocalDateTime.of(2026, 9, 1, 0, 0));
+    }
+
+    private Map<Long, Long> execute(String sql, LocalDateTime from, LocalDateTime to) {
+        Map<String, Object> params = Map.of("from", from, "to", to);
         Map<Long, Long> result = new LinkedHashMap<>();
         namedJdbc.query(sql, params, rs -> {
-            result.put(rs.getLong("sourceId"), rs.getLong("amountKopecks"));
+            result.merge(rs.getLong("sourceId"), rs.getLong("amountKopecks"), Math::addExact);
         });
         return result;
     }
@@ -172,6 +257,8 @@ class ManualPaymentRecipientMonthlyArchiveMySqlIntegrationTest {
     }
 
     private void dropTables() {
+        jdbc.execute("DROP TABLE IF EXISTS contractor_payment_allocation_events");
+        jdbc.execute("DROP TABLE IF EXISTS contractor_payment_allocations");
         jdbc.execute("DROP TABLE IF EXISTS archive_common_invoice_orders");
         jdbc.execute("DROP TABLE IF EXISTS archive_common_invoices");
         jdbc.execute("DROP TABLE IF EXISTS common_invoice_orders");
@@ -187,6 +274,8 @@ class ManualPaymentRecipientMonthlyArchiveMySqlIntegrationTest {
                     id BIGINT PRIMARY KEY,
                     status VARCHAR(32) NOT NULL,
                     payment_method VARCHAR(32) NOT NULL,
+                    manual_source VARCHAR(32) NULL,
+                    contractor_allocation_id BIGINT NULL,
                     amount_kopecks BIGINT NOT NULL,
                     reserved_amount_kopecks BIGINT NULL,
                     confirmed_amount_kopecks BIGINT NULL,
@@ -195,6 +284,23 @@ class ManualPaymentRecipientMonthlyArchiveMySqlIntegrationTest {
                 ) ENGINE=InnoDB
                 """);
         jdbc.execute("CREATE TABLE archive_payment_links LIKE payment_links");
+        jdbc.execute("""
+                CREATE TABLE contractor_payment_allocations (
+                    id BIGINT PRIMARY KEY,
+                    mode VARCHAR(16) NOT NULL,
+                    source_type VARCHAR(24) NOT NULL,
+                    source_id BIGINT NOT NULL
+                ) ENGINE=InnoDB
+                """);
+        jdbc.execute("""
+                CREATE TABLE contractor_payment_allocation_events (
+                    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                    allocation_id BIGINT NOT NULL,
+                    event_type VARCHAR(32) NOT NULL,
+                    amount_kopecks BIGINT NOT NULL,
+                    effective_at DATETIME(6) NOT NULL
+                ) ENGINE=InnoDB
+                """);
         jdbc.execute("""
                 CREATE TABLE contractor_actual_payment_attributions (
                     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
