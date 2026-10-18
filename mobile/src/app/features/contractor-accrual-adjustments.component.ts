@@ -3,7 +3,7 @@ import { Component, EventEmitter, Input, OnInit, Output, computed, signal } from
 import { IonModal } from '@ionic/angular';
 import { firstValueFrom } from 'rxjs';
 import {
-  AdminUser, ApiService, ContractorAccrualAdjustment,
+  AdminUser, ApiService, ContractorAccrualAdjustment, ContractorAccrualAdjustmentKind,
   ContractorAccrualAdjustmentPreview, ContractorPaymentProfile
 } from '../core/api.service';
 import { AuthService } from '../core/auth.service';
@@ -230,8 +230,12 @@ import { MobileConfirmService } from '../shared/mobile-confirm.service';
   `]
 })
 export class ContractorAccrualAdjustmentsComponent implements OnInit {
-  @Input({ required: true }) user!: AdminUser;
+  @Input({ required: true }) user!: Pick<AdminUser, 'id' | 'fio' | 'username'>;
+  @Input() initialKind: ContractorAccrualAdjustmentKind = 'BONUS';
+  @Input() initialProfileId: number | null = null;
+  @Input() onlyEnabledProfiles = false;
   @Output() readonly dismissed = new EventEmitter<void>();
+  @Output() readonly adjustmentSaved = new EventEmitter<void>();
 
   readonly isOpen = signal(true);
   readonly currentMonth = currentContractorAccrualMonth();
@@ -269,6 +273,7 @@ export class ContractorAccrualAdjustmentsComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
+    this.draft.set({ ...newContractorAccrualDraft(), kind: this.initialKind });
     void this.loadProfiles();
   }
 
@@ -289,9 +294,11 @@ export class ContractorAccrualAdjustmentsComponent implements OnInit {
     try {
       const profiles = await firstValueFrom(this.api.getAdminContractorPaymentProfiles(this.user.id));
       if (requestEpoch !== this.profilesRequestEpoch || !this.isOpen()) return;
-      this.profiles.set(profiles);
-      if (!profiles.some((profile) => profile.id === this.selectedProfileId())) {
-        this.selectProfile(profiles[0]?.id ?? null);
+      const visibleProfiles = this.onlyEnabledProfiles ? profiles.filter((profile) => profile.enabled) : profiles;
+      this.profiles.set(visibleProfiles);
+      if (!visibleProfiles.some((profile) => profile.id === this.selectedProfileId())) {
+        const preferred = visibleProfiles.find((profile) => profile.id === this.initialProfileId && profile.enabled);
+        this.selectProfile(preferred?.id ?? visibleProfiles[0]?.id ?? null);
       }
     } catch (error) {
       if (requestEpoch === this.profilesRequestEpoch && this.isOpen()) {
@@ -305,7 +312,7 @@ export class ContractorAccrualAdjustmentsComponent implements OnInit {
   selectProfile(profileId: number | null): void {
     if (this.mutationBusy() || profileId === this.selectedProfileId()) return;
     this.selectedProfileId.set(profileId);
-    this.draft.set(newContractorAccrualDraft());
+    this.draft.set({ ...newContractorAccrualDraft(), kind: this.draft().kind });
     this.clearPreview();
     this.actionError.set(null);
     this.actionSuccess.set(null);
@@ -372,9 +379,10 @@ export class ContractorAccrualAdjustmentsComponent implements OnInit {
     this.actionError.set(null);
     try {
       const saved = await firstValueFrom(this.api.createAdminContractorAccrualAdjustment(this.user.id, profileId, validated.request));
-      this.draft.set(newContractorAccrualDraft());
+      this.draft.set({ ...newContractorAccrualDraft(), kind: this.draft().kind });
       this.clearPreview();
       this.actionSuccess.set(saved.kind === 'BONUS' ? 'Премия проведена.' : 'Удержание проведено.');
+      this.adjustmentSaved.emit();
       await Promise.all([this.loadProfiles(), this.loadHistory(0)]);
     } catch (error) {
       this.actionError.set(this.errorMessage(error, 'Не удалось провести корректировку. Повторите действие с тем же расчётом.'));

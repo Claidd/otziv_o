@@ -1,0 +1,23 @@
+{
+  "schema": "otziv-reviewed-images-v1",
+  "repository": "ghcr.io/claidd/otziv-security",
+  "publicationSet": "c32-phpmyadmin",
+  "baselineManifestSha256": "d48bdb7d6d869cde5d6f1a7b089491765e3eeaf46e0b0b6bb51b7719b38d3ef2",
+  "images": [
+    {
+      "component": "phpmyadmin",
+      "sourceBeforeRef": "phpmyadmin@sha256:b68f318c5fd85541795ed8eb4ced28ea6908a89910871783b3e479cc6c6d1e1b",
+      "defaultReferencesBefore": [
+        { "path": "compose.yaml", "line": 224, "service": "phpmyadmin" },
+        { "path": "compose.prod-local.yaml", "line": 78, "service": "phpmyadmin" },
+        { "path": "docker-compose.yaml", "line": 82, "service": "phpmyadmin" }
+      ],
+      "context": "infrastructure/runtime-security/builds/c32-phpmyadmin",
+      "dockerfile": "infrastructure/runtime-security/builds/c32-phpmyadmin/Dockerfile",
+      "platform": "linux/amd64",
+      "candidateBaseRef": "ghcr.io/claidd/otziv-security@sha256:24e44775699a8c6b2fc5fa80686a3fda4bc7d1372c12e80992704f43f4f968f9",
+      "buildArgs": {},
+      "dockerfileSha256": "bdd870d48d03d1eae313f9e6c57a577ebd1d2aa78b3548f54052fee0b75e81f9"
+    }
+  ]
+}

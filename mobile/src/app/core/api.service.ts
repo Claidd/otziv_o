@@ -2977,6 +2977,13 @@ export interface ScoreUser {
   percentInWork?: number | null;
 }
 
+export interface ScoreContractorPaymentSummary {
+  profileId: number;
+  userId: number;
+  role: 'SPECIALIST' | 'MANAGER' | string;
+  profileEnabled: boolean;
+}
+
 export interface ScoreResponse {
   date: string;
   user: {
@@ -2987,6 +2994,7 @@ export interface ScoreResponse {
     reviewCount: number;
   };
   financeVisible: boolean;
+  contractorPayments?: ScoreContractorPaymentSummary[];
   groups: {
     managers: ScoreUser[];
     marketologs: ScoreUser[];

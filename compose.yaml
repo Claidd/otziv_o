@@ -233,7 +233,7 @@ services:
       internal_net:
 
   phpmyadmin:
-    image: ghcr.io/claidd/otziv-security@sha256:24e44775699a8c6b2fc5fa80686a3fda4bc7d1372c12e80992704f43f4f968f9
+    image: ghcr.io/claidd/otziv-security@sha256:82afc14c5009b78c8bb1f4a011199654277edf5d4ff0fa2061851bbb3ca1a6c9
     profiles: ["db-admin"]
     ports:
       - "127.0.0.1:6571:80"

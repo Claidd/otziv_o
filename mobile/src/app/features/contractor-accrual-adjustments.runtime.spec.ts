@@ -63,6 +63,8 @@ describe('mobile contractor accrual adjustments', () => {
   }
 
   it('requires a current preview and uses the same idempotency key when posting the reviewed amount', async () => {
+    const saved = vi.fn();
+    page.adjustmentSaved.subscribe(saved);
     fillDraft();
     const unreviewed = page.createAdjustment();
     await unreviewed;
@@ -91,9 +93,12 @@ describe('mobile contractor accrual adjustments', () => {
     expect(page.activeProfile()?.accruedMonthKopecks).toBe(45_000);
     expect(page.preview()).toBeNull();
     expect(page.draft().idempotencyKey).not.toBe(createRequest.request.body.idempotencyKey);
+    expect(saved).toHaveBeenCalledOnce();
   });
 
   it('drops an outdated preview after the draft changes and reloads profiles after a conflict', async () => {
+    const saved = vi.fn();
+    page.adjustmentSaved.subscribe(saved);
     fillDraft();
     const first = page.previewAdjustment();
     const staleRequest = http.expectOne(`${profileUrl}/preview`);
@@ -109,8 +114,33 @@ describe('mobile contractor accrual adjustments', () => {
     await pendingCreate;
     expect(page.preview()).toBeNull();
     expect(page.actionError()).toContain('Остаток зарезервирован');
+    expect(saved).not.toHaveBeenCalled();
     http.expectOne(root).flush([profile]);
     await settle();
+  });
+
+  it('starts the rating shortcut as a deduction on the chosen enabled profile', async () => {
+    const managerProfile = { ...profile, id: 28, role: 'MANAGER' as const };
+    page.selectProfile(null);
+    page.initialKind = 'DEDUCTION';
+    page.initialProfileId = managerProfile.id;
+    page.onlyEnabledProfiles = true;
+    page.ngOnInit();
+    http.expectOne(root).flush([{ ...profile, enabled: false }, managerProfile]);
+    await settle();
+    http.expectOne(`${root}/28/accrual-adjustments/pages?page=0`).flush({ items: [], hasMore: false });
+    await settle();
+
+    expect(page.profiles().map((item) => item.id)).toEqual([28]);
+    expect(page.selectedProfileId()).toBe(28);
+    expect(page.draft().kind).toBe('DEDUCTION');
+    page.updateDraft('amountRubles', '25');
+    page.updateDraft('reason', 'Исправление начисления');
+    const pendingPreview = page.previewAdjustment();
+    const request = http.expectOne(`${root}/28/accrual-adjustments/preview`);
+    expect(request.request.body.kind).toBe('DEDUCTION');
+    request.flush({ ...preview, accruedMonthAfterKopecks: 37_500 });
+    await pendingPreview;
   });
 
   it('paginates history and retries a reversal with the original operation key', async () => {

@@ -9,7 +9,9 @@ import { IonContent, IonModal, ToastController } from '@ionic/angular';
 import { firstValueFrom, Subscription } from 'rxjs';
 import {
   AnalyticsResponse,
+  AdminUser,
   CabinetProfile,
+  ContractorAccrualAdjustmentKind,
   ContractorPaymentSummary,
   DailyWorkProgress,
   DictionarySummary,
@@ -20,6 +22,7 @@ import {
   ManualPaymentTaskStatus,
   ManualPaymentType,
   ScoreResponse,
+  ScoreContractorPaymentSummary,
   ScoreUser,
   TeamMember,
   TeamResponse,
@@ -55,6 +58,7 @@ import {
 } from '../core/manager-report-review-access.service';
 import { MobileContractorPaymentSummaryComponent } from '../shared/mobile-contractor-payment-summary.component';
 import { MobileContractorAccrualHistoryComponent } from '../shared/mobile-contractor-accrual-history.component';
+import { ContractorAccrualAdjustmentsComponent } from './contractor-accrual-adjustments.component';
 import {
   shouldShowLegacyContractorMetrics
 } from '../shared/contractor-payment-summary';
@@ -73,6 +77,11 @@ type HomeTone = 'blue' | 'green' | 'teal' | 'violet' | 'yellow';
 type MetricTone = 'green' | 'blue' | 'yellow' | 'red';
 type TeamKey = 'managers' | 'marketologs' | 'workers' | 'operators';
 type TeamProgressMode = 'day' | 'month';
+type ScoreAccrualTarget = {
+  user: Pick<AdminUser, 'id' | 'fio' | 'username'>;
+  kind: ContractorAccrualAdjustmentKind;
+  profileId: number;
+};
 
 type HomeSectionLink = {
   key: HomeSectionKey;
@@ -112,7 +121,7 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
 @Component({
   changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-home',
-  imports: [FormsModule, IonContent, IonModal, MobileActionSheetComponent, MobileContractorPaymentSummaryComponent, MobileContractorAccrualHistoryComponent, MobileDictionariesComponent, MobileHeaderComponent, MobileStatusSliderComponent, RouterLink],
+  imports: [FormsModule, IonContent, IonModal, MobileActionSheetComponent, MobileContractorPaymentSummaryComponent, MobileContractorAccrualHistoryComponent, ContractorAccrualAdjustmentsComponent, MobileDictionariesComponent, MobileHeaderComponent, MobileStatusSliderComponent, RouterLink],
   template: `
     <div class="ion-page">
       <app-mobile-header [title]="sectionTitle()" />
@@ -922,8 +931,18 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
                           <article class="person-card score-card">
                             <b>{{ $index + 1 }}</b>
                             <img [src]="imageUrl(user.imageId)" [alt]="user.fio">
-                            <div>
-                              <strong>{{ user.fio }}</strong>
+                            <div class="score-identity">
+                              <div class="score-person-heading">
+                                <strong>{{ user.fio }}</strong>
+                                @if (eligibleScoreAccrualProfiles(section.key, user).length) {
+                                  <div class="score-adjustments" aria-label="Премия или удержание">
+                                    <button type="button" class="bonus" [attr.aria-label]="'Выдать премию: ' + user.fio"
+                                      (click)="openScoreAccrual(section.key, user, 'BONUS')">+</button>
+                                    <button type="button" class="deduction" [attr.aria-label]="'Создать удержание: ' + user.fio"
+                                      (click)="openScoreAccrual(section.key, user, 'DEDUCTION')">−</button>
+                                  </div>
+                                }
+                              </div>
                               <span>{{ user.role }}</span>
                             </div>
                             <dl>
@@ -1004,6 +1023,16 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
             </ion-content>
         </ng-template>
       </ion-modal>
+      @if (scoreAccrualTarget(); as target) {
+        <app-contractor-accrual-adjustments
+          [user]="target.user"
+          [initialKind]="target.kind"
+          [initialProfileId]="target.profileId"
+          [onlyEnabledProfiles]="true"
+          (adjustmentSaved)="onScoreAccrualSaved()"
+          (dismissed)="closeScoreAccrual()"
+        />
+      }
     </div>
   `,
   styles: [`
@@ -2407,9 +2436,56 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
 
     .score-card > b {
       position: absolute;
-      top: 0.55rem;
-      right: 0.65rem;
+      top: 0.45rem;
+      left: 0.45rem;
+      z-index: 1;
+      border-radius: 999px;
+      padding: 0.05rem 0.35rem;
       color: var(--otziv-primary);
+      background: var(--otziv-white);
+    }
+
+    .score-identity,
+    .score-person-heading {
+      min-width: 0;
+    }
+
+    .score-person-heading,
+    .score-adjustments {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+
+    .score-person-heading strong {
+      min-width: 0;
+      flex: 1 1 auto;
+    }
+
+    .score-adjustments {
+      flex: 0 0 auto;
+    }
+
+    .score-adjustments button {
+      width: 2.5rem;
+      height: 2.5rem;
+      min-width: 44px;
+      min-height: 44px;
+      border: 1px solid currentColor;
+      border-radius: 0.55rem;
+      background: var(--otziv-white);
+      font: inherit;
+      font-size: 1.05rem;
+      font-weight: 900;
+      line-height: 1;
+    }
+
+    .score-adjustments .bonus {
+      color: #11715d;
+    }
+
+    .score-adjustments .deduction {
+      color: #a33d52;
     }
 
     .notice,
@@ -2545,6 +2621,7 @@ export class HomePage implements OnInit, OnDestroy {
   readonly contractorAccrualHistoryError = signal<string | null>(null);
   readonly team = signal<TeamResponse | null>(null);
   readonly score = signal<ScoreResponse | null>(null);
+  readonly scoreAccrualTarget = signal<ScoreAccrualTarget | null>(null);
   readonly analytics = signal<AnalyticsResponse | null>(null);
   readonly dictionarySummary = signal<DictionarySummary | null>(null);
   readonly manualPaymentSettings = signal<ManagerManualPaymentSettings | null>(null);
@@ -3717,6 +3794,36 @@ export class HomePage implements OnInit, OnDestroy {
 
   scoreUsers(key: TeamKey): ScoreUser[] {
     return this.score()?.groups[key] ?? [];
+  }
+
+  eligibleScoreAccrualProfiles(key: TeamKey, user: ScoreUser): ScoreContractorPaymentSummary[] {
+    if (!this.score()?.financeVisible || !this.auth.hasAnyRealmRole(MOBILE_ROLES.ownerAdmin)
+      || !user.userId || (key !== 'managers' && key !== 'workers')) {
+      return [];
+    }
+    const expectedRole = key === 'managers' ? 'MANAGER' : 'SPECIALIST';
+    return (this.score()?.contractorPayments ?? [])
+      .filter((profile) => profile.userId === user.userId && profile.profileEnabled
+        && (profile.role === 'MANAGER' || profile.role === 'SPECIALIST'))
+      .sort((left, right) => Number(right.role === expectedRole) - Number(left.role === expectedRole));
+  }
+
+  openScoreAccrual(key: TeamKey, user: ScoreUser, kind: ContractorAccrualAdjustmentKind): void {
+    const profile = this.eligibleScoreAccrualProfiles(key, user)[0];
+    if (!user.userId || !profile || this.scoreAccrualTarget()) return;
+    this.scoreAccrualTarget.set({
+      user: { id: user.userId, fio: user.fio, username: user.fio },
+      kind,
+      profileId: profile.profileId
+    });
+  }
+
+  closeScoreAccrual(): void {
+    this.scoreAccrualTarget.set(null);
+  }
+
+  onScoreAccrualSaved(): void {
+    if (this.activeSection() === 'score') void this.reload(true);
   }
 
   scoreRows(key: TeamKey, user: ScoreUser): Row[] {
