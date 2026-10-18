@@ -52,11 +52,14 @@ public class AnalyticsAggregateScoreService {
 
         Map<Long, ScoreAccumulator> users = new LinkedHashMap<>();
         for (AnalyticsUserMetricAggregate row : sourceRows) {
-            if (row.getUser() == null || row.getUser().getId() == null) {
+            if (row.getUser() == null || row.getUser().getId() == null || !row.getUser().isActive()) {
                 continue;
             }
             users.computeIfAbsent(row.getUser().getId(), ignored -> new ScoreAccumulator(row.getUser(), row.getRoleName()))
                     .add(row);
+        }
+        if (users.isEmpty()) {
+            return Optional.of(List.of());
         }
         Map<Long, SalaryTotal> currentSalary = salarySourceService.totalsForUsers(
                 users.keySet(), monthStart, selectedDate

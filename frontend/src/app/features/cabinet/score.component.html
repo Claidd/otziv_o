@@ -16,6 +16,10 @@
     </div>
   </section>
 
+  @if (accrualSuccess()) {
+    <p class="accrual-success" role="status">{{ accrualSuccess() }}</p>
+  }
+
   @if (error()) {
     <app-load-error-card title="Рейтинг не загрузился" [message]="error()!" actionLabel="Повторить" [loading]="loading()" (retry)="refresh()" />
   }
@@ -61,7 +65,15 @@
               }
 
               <div class="person-main">
-                <h3>{{ user.fio }}</h3>
+                <div class="person-heading">
+                  <h3>{{ user.fio }}</h3>
+                  @if (score()?.financeVisible && !section.financialOnly && eligibleAccrualProfiles(user).length) {
+                    <div class="employee-adjustments">
+                      <button type="button" class="bonus-button" [attr.aria-label]="'Выдать премию: ' + user.fio" title="Выдать премию" (click)="openAccrual(user, 'BONUS')">+ <span>премия</span></button>
+                      <button type="button" class="deduction-button" [attr.aria-label]="'Создать удержание: ' + user.fio" title="Создать удержание" (click)="openAccrual(user, 'DEDUCTION')">− <span>удержание</span></button>
+                    </div>
+                  }
+                </div>
                 <p>{{ section.financialOnly ? 'В рейтинге за месяц отсутствует' : user.role }}</p>
               </div>
 
@@ -141,5 +153,73 @@
       <span class="material-icons-sharp">hourglass_top</span>
       <p>Загружаю рейтинг</p>
     </section>
+  }
+
+  @if (accrualTarget(); as target) {
+    @if (accrualDraft(); as draft) {
+      <div class="accrual-dialog-backdrop" (click)="closeAccrual()">
+        <section class="accrual-dialog" role="dialog" aria-modal="true" aria-labelledby="accrual-dialog-title" (click)="$event.stopPropagation()">
+          <header class="accrual-dialog-header">
+            <div>
+              <p>Рейтинг · {{ target.fio }}</p>
+              <h2 id="accrual-dialog-title">{{ target.kind === 'BONUS' ? 'Выдать премию' : 'Создать удержание' }}</h2>
+            </div>
+            <button type="button" class="accrual-dialog-close" aria-label="Закрыть" [disabled]="accrualSaving()" (click)="closeAccrual()">×</button>
+          </header>
+
+          <p class="accrual-dialog-note">Корректировка войдёт в начисление текущего месяца. Месяц основания можно указать прошлый; закрытые расчёты не изменятся. Причину увидит сотрудник.</p>
+
+          <div class="accrual-dialog-fields">
+            @if (target.profiles.length > 1) {
+              <label>
+                <span>Платёжный профиль</span>
+                <select [ngModel]="accrualProfileId()" (ngModelChange)="selectAccrualProfile($event)" [disabled]="accrualSaving()">
+                  @for (profile of target.profiles; track profile.profileId) {
+                    <option [value]="profile.profileId">{{ contractorRoleLabel(profile) }} · профиль №{{ profile.profileId }}</option>
+                  }
+                </select>
+              </label>
+            } @else {
+              <p class="accrual-profile-label">Платёжный профиль: {{ contractorRoleLabel(target.profiles[0]) }} · №{{ target.profiles[0].profileId }}</p>
+            }
+            <label>
+              <span>Сумма, ₽</span>
+              <input type="text" inputmode="decimal" placeholder="0,00" [ngModel]="draft.amountRubles" (ngModelChange)="updateAccrualDraft('amountRubles', $event)" [disabled]="accrualSaving()">
+            </label>
+            <label>
+              <span>Месяц основания</span>
+              <input type="month" [max]="currentAccrualMonth()" [ngModel]="draft.referenceMonth" (ngModelChange)="updateAccrualDraft('referenceMonth', $event)" [disabled]="accrualSaving()">
+            </label>
+            <label class="wide">
+              <span>Причина · видна сотруднику</span>
+              <input type="text" maxlength="255" placeholder="Например, премия за помощь команде" [ngModel]="draft.reason" (ngModelChange)="updateAccrualDraft('reason', $event)" [disabled]="accrualSaving()">
+            </label>
+            <label class="wide">
+              <span>ID документа · необязательно</span>
+              <input type="text" maxlength="160" placeholder="Без персональных данных" [ngModel]="draft.evidenceReference" (ngModelChange)="updateAccrualDraft('evidenceReference', $event)" [disabled]="accrualSaving()">
+            </label>
+          </div>
+
+          @if (accrualError()) {
+            <p class="accrual-dialog-error" role="alert">{{ accrualError() }}</p>
+          }
+          @if (accrualPreview(); as preview) {
+            <div class="accrual-dialog-preview" aria-label="Предварительный расчёт">
+              <strong>Проверьте расчёт перед проведением</strong>
+              <div><span>Начислено за месяц</span><b>{{ moneyKopecks(preview.accruedMonthBeforeKopecks) }} → {{ moneyKopecks(preview.accruedMonthAfterKopecks) }}</b></div>
+              <div><span>Уже оплачено всего</span><b>{{ moneyKopecks(preview.paidTotalKopecks) }}</b></div>
+              <div><span>Занято действующими счетами</span><b>{{ moneyKopecks(preview.outstandingKopecks) }}</b></div>
+              <div><span>Обязательства по заданиям</span><b>{{ moneyKopecks(preview.manualTaskCommitmentKopecks) }}</b></div>
+              <div><span>Свободно для новых оплат</span><b>{{ moneyKopecks(preview.freeForNewPaymentsBeforeKopecks) }} → {{ moneyKopecks(preview.freeForNewPaymentsAfterKopecks) }}</b></div>
+            </div>
+          }
+
+          <div class="accrual-dialog-actions">
+            <button type="button" class="secondary" [disabled]="accrualPreviewLoading() || accrualSaving()" (click)="previewAccrual()">{{ accrualPreviewLoading() ? 'Рассчитываю…' : 'Проверить расчёт' }}</button>
+            <button type="button" class="primary" [disabled]="!accrualPreview() || accrualPreviewKey() !== draft.idempotencyKey || accrualSaving()" (click)="saveAccrual()">{{ accrualSaving() ? 'Провожу…' : target.kind === 'BONUS' ? 'Провести премию' : 'Провести удержание' }}</button>
+          </div>
+        </section>
+      </div>
+    }
   }
 </app-admin-layout>

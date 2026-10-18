@@ -119,7 +119,9 @@ public class ContractorPaymentVisibilityService {
     @Transactional(readOnly = true)
     public List<ContractorPaymentAdminSummaryResponse> adminSummary(LocalDate selectedDate) {
         LocalDate monthStart = monthStart(selectedDate);
-        List<ContractorPaymentProfile> profiles = profileRepository.findAllWithUser();
+        List<ContractorPaymentProfile> profiles = profileRepository.findAllWithUser().stream()
+                .filter(profile -> profile.getUser() != null && profile.getUser().isActive())
+                .toList();
         if (profiles.isEmpty()) return List.of();
         SummaryPolicy policy = summaryPolicy();
         var ids = profiles.stream().map(ContractorPaymentProfile::getId).toList();
