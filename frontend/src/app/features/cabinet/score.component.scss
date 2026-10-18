@@ -163,7 +163,6 @@ input[type='date'] {
 
 .person-main {
   min-width: 0;
-  padding-right: 2.5rem;
 }
 
 .person-main h3,
@@ -177,6 +176,7 @@ input[type='date'] {
   display: flex;
   align-items: center;
   min-width: 0;
+  width: 100%;
   gap: 0.4rem;
 }
 
@@ -188,12 +188,15 @@ input[type='date'] {
   display: inline-flex;
   flex: none;
   gap: 0.25rem;
+  margin-left: auto;
 }
 
-.employee-adjustments button {
+.score-card .employee-adjustments button {
   display: grid;
-  width: 1.55rem;
-  height: 1.55rem;
+  width: 2rem;
+  min-width: 2rem;
+  height: 2rem;
+  min-height: 2rem;
   place-items: center;
   border: 1px solid rgba(103, 116, 131, 0.2);
   border-radius: 50%;
@@ -204,12 +207,12 @@ input[type='date'] {
   cursor: pointer;
 }
 
-.employee-adjustments .bonus-button {
+.score-card .employee-adjustments .bonus-button {
   color: var(--otziv-success);
   background: rgba(49, 164, 145, 0.12);
 }
 
-.employee-adjustments .deduction-button {
+.score-card .employee-adjustments .deduction-button {
   color: var(--otziv-primary);
   background: var(--otziv-light);
 }
