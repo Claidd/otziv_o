@@ -6,7 +6,9 @@
   display: grid;
   gap: 0.85rem;
   container-type: inline-size;
-  font-family: 'laptev_brush', var(--otziv-font-family);
+  font-family: var(--otziv-font-family);
+  font-size: 0.94rem;
+  line-height: 1.45;
 }
 
 .users-toolbar,
@@ -675,18 +677,18 @@ tr.unlinked td {
 
 .contractor-global-mode-copy small {
   color: var(--otziv-info);
-  font-size: 0.63rem;
-  font-weight: 800;
+  font-size: 0.8rem;
+  font-weight: 700;
 }
 
 .contractor-global-mode-copy strong {
   color: var(--otziv-dark);
-  font-size: 0.8rem;
+  font-size: 1rem;
 }
 
 .contractor-global-mode-copy > span:last-child > span {
   color: var(--otziv-info);
-  font-size: 0.66rem;
+  font-size: 0.82rem;
   font-weight: 700;
   line-height: 1.4;
 }
@@ -740,12 +742,12 @@ tr.unlinked td {
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  gap: 0.75rem;
+  gap: 1rem;
   box-sizing: border-box;
   border: 1px solid rgba(108, 155, 207, 0.22);
   border-radius: var(--otziv-small-radius);
-  padding: 0.85rem;
-  background: rgba(108, 155, 207, 0.045);
+  padding: 1rem;
+  background: var(--otziv-muted-surface);
 }
 
 .contractor-profile-card > header {
@@ -777,12 +779,12 @@ tr.unlinked td {
 
 .contractor-profile-card > header strong {
   color: var(--otziv-dark);
-  font-size: 0.86rem;
+  font-size: 1rem;
 }
 
 .contractor-profile-card > header small {
   color: var(--otziv-info);
-  font-size: 0.68rem;
+  font-size: 0.82rem;
   font-weight: 700;
 }
 
@@ -810,7 +812,7 @@ tr.unlinked td {
 .contractor-personal-routing > div > strong {
   min-width: 0;
   color: var(--otziv-dark);
-  font-size: 0.78rem;
+  font-size: 0.94rem;
   overflow-wrap: anywhere;
 }
 
@@ -818,7 +820,7 @@ tr.unlinked td {
   min-width: 0;
   max-width: 48rem;
   color: var(--otziv-info);
-  font-size: 0.66rem;
+  font-size: 0.8rem;
   font-weight: 700;
   line-height: 1.45;
   overflow-wrap: anywhere;
@@ -917,7 +919,7 @@ tr.unlinked td {
 .contractor-routing-switch > strong {
   min-width: 0;
   color: var(--otziv-dark);
-  font-size: 0.69rem;
+  font-size: 0.84rem;
   overflow-wrap: anywhere;
   text-align: left;
 }
@@ -930,7 +932,7 @@ tr.unlinked td {
   color: var(--otziv-action);
   background: var(--otziv-action-soft);
   font-family: inherit;
-  font-size: 0.68rem;
+  font-size: 0.82rem;
   font-weight: 900;
   white-space: nowrap;
   cursor: pointer;
@@ -958,14 +960,14 @@ tr.unlinked td {
 
 .opening-balance-field small {
   color: var(--otziv-info);
-  font-size: 0.63rem;
+  font-size: 0.8rem;
   font-weight: 700;
   line-height: 1.4;
 }
 
 .transfer-identifier-field small {
   color: var(--otziv-info);
-  font-size: 0.63rem;
+  font-size: 0.8rem;
   font-weight: 700;
   line-height: 1.4;
 }
@@ -984,8 +986,24 @@ tr.unlinked td {
 
 .opening-balance-reason small {
   color: var(--otziv-info);
-  font-size: 0.65rem;
+  font-size: 0.8rem;
   font-weight: 700;
+}
+
+.contractor-finance-summary {
+  display: grid;
+  min-width: 0;
+  gap: 0.65rem;
+  border-top: 1px solid var(--otziv-light);
+  padding-top: 0.9rem;
+}
+
+.contractor-finance-summary h4 {
+  margin: 0;
+  color: var(--otziv-dark);
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1.3;
 }
 
 .contractor-profile-metrics {
@@ -993,32 +1011,63 @@ tr.unlinked td {
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 0.45rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.6rem;
 }
 
 .contractor-profile-metrics > span {
   display: grid;
   min-width: 0;
-  gap: 0.15rem;
+  align-content: space-between;
+  gap: 0.35rem;
+  border: 1px solid rgba(103, 116, 131, 0.16);
   border-radius: 0.75rem;
-  padding: 0.55rem;
+  padding: 0.8rem;
   background: var(--otziv-white);
 }
 
 .contractor-profile-metrics small {
   min-width: 0;
   color: var(--otziv-info);
-  font-size: 0.61rem;
-  font-weight: 800;
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1.35;
   overflow-wrap: anywhere;
 }
 
 .contractor-profile-metrics strong {
   min-width: 0;
   color: var(--otziv-dark);
-  font-size: 0.76rem;
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
   overflow-wrap: anywhere;
+}
+
+.contractor-profile-metrics.is-primary > span {
+  border-color: var(--otziv-surface-border-neutral);
+  box-shadow: 0 0.15rem 0.55rem rgba(33, 47, 67, 0.04);
+}
+
+.contractor-profile-metrics.is-primary > span.available {
+  border-color: var(--otziv-surface-border-green);
+  background: var(--otziv-surface-gradient-green);
+}
+
+.contractor-profile-metrics.is-primary > span.available strong {
+  color: var(--otziv-success);
+}
+
+.contractor-metrics-details {
+  min-width: 0;
+}
+
+.contractor-metrics-details .contractor-profile-metrics {
+  margin-top: 0.65rem;
+}
+
+.contractor-profile-metrics.is-breakdown strong {
+  font-size: 0.95rem;
 }
 
 .opening-history {
@@ -1038,7 +1087,7 @@ tr.unlinked td {
 
 .accrual-adjustments > summary {
   color: var(--otziv-primary);
-  font-size: 0.78rem;
+  font-size: 0.9rem;
   font-weight: 900;
   cursor: pointer;
 }
@@ -1091,7 +1140,7 @@ tr.unlinked td {
 .accrual-adjustment-form label span,
 .accrual-reversal label span {
   color: var(--otziv-info);
-  font-size: 0.65rem;
+  font-size: 0.8rem;
   font-weight: 800;
 }
 
@@ -1124,7 +1173,7 @@ tr.unlinked td {
   border-radius: 0.7rem;
   padding: 0.65rem;
   background: var(--otziv-white);
-  font-size: 0.72rem;
+  font-size: 0.84rem;
 }
 
 .accrual-preview > div {
@@ -1206,7 +1255,7 @@ tr.unlinked td {
 
 .opening-history summary {
   color: var(--otziv-primary);
-  font-size: 0.72rem;
+  font-size: 0.9rem;
   font-weight: 900;
   cursor: pointer;
 }
@@ -1214,7 +1263,7 @@ tr.unlinked td {
 .opening-history p {
   margin: 0.55rem 0 0;
   color: var(--otziv-info);
-  font-size: 0.7rem;
+  font-size: 0.84rem;
   font-weight: 800;
 }
 
@@ -1235,7 +1284,7 @@ tr.unlinked td {
   padding: 0.5rem;
   color: var(--otziv-dark);
   background: var(--otziv-field-background);
-  font-size: 0.68rem;
+  font-size: 0.82rem;
 }
 
 .opening-history li span,
@@ -1255,8 +1304,8 @@ tr.unlinked td {
 
 .direct-settlements > summary,
 .direct-reversal-form > summary {
-  color: #176b5b;
-  font-size: 0.72rem;
+  color: var(--otziv-success);
+  font-size: 0.9rem;
   font-weight: 900;
   cursor: pointer;
 }
@@ -1278,7 +1327,7 @@ tr.unlinked td {
 .direct-settlement-form label span,
 .direct-reversal-form label span {
   color: var(--otziv-info);
-  font-size: 0.64rem;
+  font-size: 0.8rem;
   font-weight: 800;
 }
 
@@ -1318,7 +1367,7 @@ tr.unlinked td {
   display: grid;
   gap: 0.2rem;
   color: var(--otziv-dark);
-  font-size: 0.69rem;
+  font-size: 0.84rem;
 }
 
 .direct-settlement-history small,
@@ -1334,11 +1383,11 @@ tr.unlinked td {
 
 .contractor-queue-health {
   display: grid;
-  gap: 0.6rem;
-  border: 1px solid rgba(27, 156, 133, 0.18);
+  gap: 0.75rem;
+  border: 1px solid var(--otziv-surface-border-green);
   border-radius: var(--otziv-small-radius);
-  padding: 0.75rem;
-  background: rgba(27, 156, 133, 0.035);
+  padding: 1rem;
+  background: var(--otziv-surface-gradient-green);
 }
 
 .contractor-queue-health.has-problems {
@@ -1348,7 +1397,8 @@ tr.unlinked td {
 
 .contractor-queue-health > header {
   display: flex;
-  align-items: center;
+  flex-wrap: wrap;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 0.75rem;
 }
@@ -1358,32 +1408,80 @@ tr.unlinked td {
   margin: 0;
 }
 
+.contractor-queue-health h3 {
+  color: var(--otziv-dark);
+  font-size: 1.05rem;
+  line-height: 1.3;
+}
+
+.queue-health-description,
+.queue-health-observed {
+  color: var(--otziv-info);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.queue-health-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.queue-health-controls button {
+  min-height: 2.5rem;
+}
+
+.queue-health-status {
+  border: 1px solid var(--otziv-surface-border-neutral);
+  border-radius: 999px;
+  padding: 0.35rem 0.7rem;
+  color: var(--otziv-info);
+  background: var(--otziv-white);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.queue-health-status.ok {
+  border-color: var(--otziv-surface-border-green);
+  color: var(--otziv-success);
+}
+
+.queue-health-status.warning {
+  border-color: var(--otziv-surface-border-red);
+  color: var(--otziv-danger);
+}
+
 .queue-health-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.45rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin-top: 0.65rem;
 }
 
 .queue-health-grid > span {
   display: grid;
-  gap: 0.15rem;
+  gap: 0.25rem;
+  border: 1px solid rgba(103, 116, 131, 0.15);
   border-radius: 0.68rem;
-  padding: 0.55rem;
+  padding: 0.75rem;
   background: var(--otziv-white);
 }
 
 .queue-health-grid small,
 .queue-health-grid em,
-.contractor-queue-health > small {
+.queue-health-observed {
   color: var(--otziv-info);
-  font-size: 0.62rem;
+  font-size: 0.8rem;
   font-style: normal;
-  font-weight: 800;
+  font-weight: 650;
+  line-height: 1.35;
 }
 
 .queue-health-grid strong {
   color: var(--otziv-dark);
-  font-size: 0.74rem;
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .contractor-allocation-journal {
@@ -1394,11 +1492,8 @@ tr.unlinked td {
 }
 
 .journal-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: end;
-  justify-content: space-between;
-  gap: 0.75rem;
+  display: grid;
+  gap: 0.9rem;
 }
 
 .journal-toolbar > div:first-child {
@@ -1408,9 +1503,9 @@ tr.unlinked td {
 
 .journal-filters {
   display: grid;
-  flex: 1 1 34rem;
-  grid-template-columns: repeat(5, minmax(7rem, 1fr));
-  gap: 0.45rem;
+  width: 100%;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
 }
 
 .journal-toolbar h3,
@@ -1421,8 +1516,14 @@ tr.unlinked td {
 
 .journal-toolbar small {
   color: var(--otziv-info);
-  font-size: 0.7rem;
-  font-weight: 800;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.journal-toolbar h3 {
+  color: var(--otziv-dark);
+  font-size: 1.12rem;
+  line-height: 1.3;
 }
 
 .journal-toolbar label {
@@ -1437,21 +1538,21 @@ tr.unlinked td {
 
 .journal-toolbar label span {
   color: var(--otziv-info);
-  font-size: 0.68rem;
-  font-weight: 800;
+  font-size: 0.82rem;
+  font-weight: 700;
 }
 
 .journal-toolbar select,
 .journal-toolbar input {
-  min-height: 2.5rem;
+  min-height: 2.75rem;
   border: 1px solid rgba(103, 116, 131, 0.22);
   border-radius: var(--otziv-small-radius);
   padding: 0 0.7rem;
   color: var(--otziv-dark);
   background: var(--otziv-white);
   font: inherit;
-  font-size: 0.78rem;
-  font-weight: 800;
+  font-size: 0.9rem;
+  font-weight: 600;
 }
 
 .journal-state {
@@ -1484,11 +1585,11 @@ tr.unlinked td {
 
 .journal-card {
   display: grid;
-  gap: 0.7rem;
+  gap: 0.8rem;
   min-width: 0;
   border: 1px solid rgba(103, 116, 131, 0.18);
   border-radius: var(--otziv-small-radius);
-  padding: 0.8rem;
+  padding: 1rem;
   background: var(--otziv-white);
 }
 
@@ -1502,13 +1603,19 @@ tr.unlinked td {
 
 .journal-card > header > div {
   display: grid;
-  gap: 0.1rem;
+  gap: 0.2rem;
+}
+
+.journal-card > header strong {
+  color: var(--otziv-dark);
+  font-size: 1.05rem;
+  line-height: 1.3;
 }
 
 .journal-card > header small {
   color: var(--otziv-info);
-  font-size: 0.65rem;
-  font-weight: 800;
+  font-size: 0.8rem;
+  font-weight: 700;
 }
 
 .journal-status {
@@ -1516,13 +1623,13 @@ tr.unlinked td {
   padding: 0.35rem 0.55rem;
   color: var(--otziv-primary);
   background: var(--otziv-light);
-  font-size: 0.68rem;
+  font-size: 0.82rem;
   font-weight: 900;
 }
 
 .journal-status[data-status='CONFIRMED'],
 .journal-status[data-status='SIMULATED_PAID'] {
-  color: #176b5b;
+  color: var(--otziv-success);
   background: rgba(27, 156, 133, 0.12);
 }
 
@@ -1543,16 +1650,36 @@ tr.unlinked td {
 .journal-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.45rem;
+  gap: 0.6rem;
   margin: 0;
 }
 
 .journal-grid > div,
 .journal-timeline > span {
   min-width: 0;
+  border: 1px solid rgba(103, 116, 131, 0.12);
   border-radius: 0.65rem;
-  padding: 0.5rem;
+  padding: 0.75rem;
   background: var(--otziv-field-background);
+}
+
+.journal-grid-primary > div:nth-child(2),
+.journal-grid-primary > div:nth-child(3) {
+  border-color: var(--otziv-surface-border-green);
+  background: var(--otziv-surface-gradient-green);
+}
+
+.journal-extra {
+  min-width: 0;
+  border-top: 1px solid var(--otziv-light);
+  padding-top: 0.55rem;
+}
+
+.journal-extra .journal-grid,
+.journal-extra .journal-routing-decision,
+.journal-extra .journal-timeline,
+.journal-extra .journal-reconcile-health {
+  margin-top: 0.7rem;
 }
 
 .journal-reconcile-health {
@@ -1564,7 +1691,7 @@ tr.unlinked td {
   padding: 0.6rem;
   color: var(--otziv-danger);
   background: rgba(227, 49, 93, 0.04);
-  font-size: 0.68rem;
+  font-size: 0.82rem;
   font-weight: 900;
 }
 
@@ -1576,22 +1703,23 @@ tr.unlinked td {
 
 .journal-reconcile-health small {
   color: var(--otziv-info);
-  font-size: 0.6rem;
+  font-size: 0.8rem;
 }
 
 .journal-grid dt,
 .journal-timeline small {
   color: var(--otziv-info);
-  font-size: 0.6rem;
-  font-weight: 800;
+  font-size: 0.8rem;
+  font-weight: 700;
 }
 
 .journal-grid dd {
   margin: 0.15rem 0 0;
   overflow-wrap: anywhere;
   color: var(--otziv-dark);
-  font-size: 0.72rem;
-  font-weight: 900;
+  font-size: 0.95rem;
+  font-weight: 800;
+  line-height: 1.35;
 }
 
 .journal-routing-decision {
@@ -1611,15 +1739,15 @@ tr.unlinked td {
 
 .journal-routing-decision dt {
   color: var(--otziv-info);
-  font-size: 0.6rem;
-  font-weight: 800;
+  font-size: 0.8rem;
+  font-weight: 700;
 }
 
 .journal-routing-decision dd {
   margin: 0.15rem 0 0;
   overflow-wrap: anywhere;
   color: var(--otziv-dark);
-  font-size: 0.72rem;
+  font-size: 0.88rem;
   font-weight: 800;
 }
 
@@ -1633,7 +1761,7 @@ tr.unlinked td {
   display: grid;
   gap: 0.12rem;
   color: var(--otziv-dark);
-  font-size: 0.65rem;
+  font-size: 0.84rem;
   font-weight: 800;
 }
 
@@ -1641,9 +1769,9 @@ tr.unlinked td {
   margin: 0;
   border-left: 3px solid rgba(218, 155, 48, 0.55);
   padding: 0.45rem 0.6rem;
-  color: var(--otziv-info);
+  color: var(--otziv-dark);
   background: rgba(255, 190, 69, 0.07);
-  font-size: 0.7rem;
+  font-size: 0.86rem;
   overflow-wrap: anywhere;
 }
 
@@ -1654,7 +1782,7 @@ tr.unlinked td {
   padding: 0.65rem 0.75rem;
   color: var(--otziv-danger);
   background: rgba(227, 49, 93, 0.06);
-  font-size: 0.72rem;
+  font-size: 0.84rem;
   font-weight: 800;
 }
 
@@ -1665,7 +1793,7 @@ tr.unlinked td {
   padding: 0.65rem 0.75rem;
   color: var(--otziv-info);
   background: rgba(108, 155, 207, 0.07);
-  font-size: 0.7rem;
+  font-size: 0.84rem;
   font-weight: 800;
 }
 
@@ -1677,8 +1805,8 @@ tr.unlinked td {
 }
 
 .journal-return-form summary {
-  color: #8a5c12;
-  font-size: 0.72rem;
+  color: var(--otziv-action);
+  font-size: 0.9rem;
   font-weight: 900;
   cursor: pointer;
 }
@@ -1700,7 +1828,7 @@ tr.unlinked td {
 .journal-return-form label span,
 .journal-return-form > small {
   color: var(--otziv-info);
-  font-size: 0.62rem;
+  font-size: 0.8rem;
   font-weight: 800;
 }
 
@@ -1714,7 +1842,7 @@ tr.unlinked td {
   color: var(--otziv-dark);
   background: var(--otziv-white);
   font: inherit;
-  font-size: 0.74rem;
+  font-size: 0.9rem;
   font-weight: 800;
   box-sizing: border-box;
 }
@@ -1731,7 +1859,7 @@ tr.unlinked td {
 
 .journal-events summary {
   color: var(--otziv-primary);
-  font-size: 0.72rem;
+  font-size: 0.9rem;
   font-weight: 900;
   cursor: pointer;
 }
@@ -1748,7 +1876,7 @@ tr.unlinked td {
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 0.25rem 0.55rem;
   color: var(--otziv-dark);
-  font-size: 0.68rem;
+  font-size: 0.84rem;
 }
 
 .journal-events li small {
@@ -1762,8 +1890,93 @@ tr.unlinked td {
   justify-content: center;
   gap: 0.65rem;
   color: var(--otziv-info);
-  font-size: 0.72rem;
+  font-size: 0.84rem;
   font-weight: 900;
+}
+
+.contractor-metrics-details > summary,
+.accrual-adjustments > summary,
+.opening-history > summary,
+.direct-settlements > summary,
+.queue-health-details > summary,
+.journal-extra > summary,
+.journal-return-form > summary,
+.journal-events > summary {
+  display: flex;
+  min-height: 2.65rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  border: 1px solid var(--otziv-surface-border-neutral);
+  border-radius: 0.7rem;
+  padding: 0.5rem 0.8rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-white);
+  font-size: 0.9rem;
+  font-weight: 750;
+  line-height: 1.35;
+  list-style: none;
+  cursor: pointer;
+}
+
+.contractor-metrics-details > summary::-webkit-details-marker,
+.accrual-adjustments > summary::-webkit-details-marker,
+.opening-history > summary::-webkit-details-marker,
+.direct-settlements > summary::-webkit-details-marker,
+.queue-health-details > summary::-webkit-details-marker,
+.journal-extra > summary::-webkit-details-marker,
+.journal-return-form > summary::-webkit-details-marker,
+.journal-events > summary::-webkit-details-marker {
+  display: none;
+}
+
+.contractor-metrics-details > summary::after,
+.accrual-adjustments > summary::after,
+.opening-history > summary::after,
+.direct-settlements > summary::after,
+.queue-health-details > summary::after,
+.journal-extra > summary::after,
+.journal-return-form > summary::after,
+.journal-events > summary::after {
+  flex: 0 0 auto;
+  color: var(--otziv-info);
+  content: '⌄';
+  font-size: 1.2rem;
+  line-height: 1;
+  transition: transform 0.15s ease;
+}
+
+.contractor-metrics-details[open] > summary::after,
+.accrual-adjustments[open] > summary::after,
+.opening-history[open] > summary::after,
+.direct-settlements[open] > summary::after,
+.queue-health-details[open] > summary::after,
+.journal-extra[open] > summary::after,
+.journal-return-form[open] > summary::after,
+.journal-events[open] > summary::after {
+  transform: rotate(180deg);
+}
+
+.contractor-payments summary:focus-visible,
+.contractor-payments button:focus-visible,
+.contractor-payments input:focus-visible,
+.contractor-payments select:focus-visible {
+  outline: 3px solid var(--otziv-action);
+  outline-offset: 2px;
+}
+
+:host-context(body.otziv-dark-theme) .journal-status[data-status='RETURNED'],
+:host-context(body.otziv-dark-theme) .journal-status[data-status='PARTIALLY_RETURNED'],
+:host-context(body.otziv-dark-theme) .journal-status[data-status='RETURN_AMOUNT_PENDING'] {
+  color: var(--otziv-warning);
+}
+
+:host-context(body.otziv-dark-theme) .contractor-profile-readonly {
+  color: var(--otziv-warning);
+}
+
+:host-context(body.otziv-dark-theme) .direct-settlements > summary {
+  color: var(--otziv-dark);
 }
 
 @media (max-width: 1100px) {
@@ -1826,6 +2039,15 @@ tr.unlinked td {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .queue-health-grid,
+  .journal-grid,
+  .journal-routing-decision,
+  .journal-timeline,
+  .journal-reconcile-health,
+  .journal-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .contractor-routing-switch {
     grid-template-columns: auto minmax(0, 1fr);
   }
@@ -1838,6 +2060,20 @@ tr.unlinked td {
 
   .contractor-profile-metrics {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .queue-health-grid,
+  .journal-grid,
+  .journal-routing-decision,
+  .journal-timeline,
+  .journal-reconcile-health,
+  .journal-filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .queue-health-controls,
+  .queue-health-controls button {
+    width: 100%;
   }
 }
 

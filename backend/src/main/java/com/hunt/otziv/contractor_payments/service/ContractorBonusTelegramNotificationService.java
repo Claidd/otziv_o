@@ -5,7 +5,7 @@ import com.hunt.otziv.contractor_payments.model.ContractorAccrualAdjustmentKind;
 import com.hunt.otziv.contractor_payments.repository.ContractorBonusTelegramNotificationOutboxRepository;
 import com.hunt.otziv.contractor_payments.repository.ContractorBonusTelegramNotificationOutboxRepository.Bonus;
 import com.hunt.otziv.contractor_payments.repository.ContractorBonusTelegramNotificationOutboxRepository.Delivery;
-import com.hunt.otziv.t_telegrambot.service.TelegramService;
+import com.hunt.otziv.t_telegrambot.api.TelegramNotifications;
 import java.math.BigDecimal;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
@@ -30,7 +30,7 @@ public class ContractorBonusTelegramNotificationService {
 
     private final ContractorBonusTelegramNotificationOutboxRepository repository;
     private final ContractorBonusTelegramNotificationClaimService claimService;
-    private final TelegramService telegramService;
+    private final TelegramNotifications telegramNotifications;
 
     /** Called within the new adjustment transaction. The unique key prevents replay sends. */
     @Transactional(propagation = Propagation.MANDATORY)
@@ -41,11 +41,9 @@ public class ContractorBonusTelegramNotificationService {
         if (saved.getKind() != ContractorAccrualAdjustmentKind.BONUS) {
             return;
         }
-        if (saved.getProfile() == null || saved.getProfile().getUser() == null
-                || saved.getProfile().getUser().getId() == null) {
-            throw new IllegalArgumentException("Bonus recipient is required");
+        if (!repository.enqueue(saved.getId())) {
+            throw new IllegalStateException("Bonus Telegram notification intent was not stored");
         }
-        repository.enqueue(saved.getId(), saved.getProfile().getUser().getId());
     }
 
     @Scheduled(
@@ -104,12 +102,10 @@ public class ContractorBonusTelegramNotificationService {
         }
 
         // Bot API provides no idempotency key. One provider call per queue claim
-        // avoids compounding an ambiguous timeout with TelegramService's normal
+        // avoids compounding an ambiguous timeout with Telegram transport's normal
         // internal retries. A later queue retry may still duplicate an accepted
         // message whose acknowledgement was lost.
-        if (telegramService.sendMessageOnceWithInlineKeyboardMessageId(
-                chatId, message(bonus), null, null
-        ).isPresent()) {
+        if (telegramNotifications.sendTextOnce(chatId, message(bonus))) {
             boolean finalized = claimService.markSent(delivery);
             if (!finalized) {
                 log.warn("Bonus Telegram notification success was fenced: adjustmentId={}",

@@ -19,13 +19,17 @@ public class ContractorBonusTelegramNotificationOutboxRepository {
 
     private final NamedParameterJdbcTemplate jdbc;
 
-    public boolean enqueue(long adjustmentId, long recipientUserId) {
+    public boolean enqueue(long adjustmentId) {
         return jdbc.update("""
                 INSERT INTO contractor_bonus_telegram_notification_outbox (
                     adjustment_id, recipient_user_id
-                ) VALUES (:adjustmentId, :recipientUserId)
-                """, Map.of("adjustmentId", adjustmentId,
-                "recipientUserId", recipientUserId)) == 1;
+                )
+                SELECT adjustment.id, profile.user_id
+                FROM contractor_accrual_adjustments adjustment
+                JOIN contractor_payment_profiles profile ON profile.id = adjustment.profile_id
+                WHERE adjustment.id = :adjustmentId
+                  AND adjustment.kind = 'BONUS'
+                """, Map.of("adjustmentId", adjustmentId)) == 1;
     }
 
     public List<Long> findDueAdjustmentIds(int limit) {

@@ -1,6 +1,7 @@
 package com.hunt.otziv.contractor_payments.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -10,12 +11,10 @@ import static org.mockito.Mockito.when;
 
 import com.hunt.otziv.contractor_payments.model.ContractorAccrualAdjustment;
 import com.hunt.otziv.contractor_payments.model.ContractorAccrualAdjustmentKind;
-import com.hunt.otziv.contractor_payments.model.ContractorPaymentProfile;
 import com.hunt.otziv.contractor_payments.repository.ContractorBonusTelegramNotificationOutboxRepository;
 import com.hunt.otziv.contractor_payments.repository.ContractorBonusTelegramNotificationOutboxRepository.Bonus;
 import com.hunt.otziv.contractor_payments.repository.ContractorBonusTelegramNotificationOutboxRepository.Delivery;
-import com.hunt.otziv.t_telegrambot.service.TelegramService;
-import com.hunt.otziv.u_users.model.User;
+import com.hunt.otziv.t_telegrambot.api.TelegramNotifications;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -30,13 +29,13 @@ class ContractorBonusTelegramNotificationServiceTest {
 
     @Mock private ContractorBonusTelegramNotificationOutboxRepository repository;
     @Mock private ContractorBonusTelegramNotificationClaimService claimService;
-    @Mock private TelegramService telegramService;
+    @Mock private TelegramNotifications telegramNotifications;
 
     private ContractorBonusTelegramNotificationService service;
 
     @BeforeEach
     void setUp() {
-        service = new ContractorBonusTelegramNotificationService(repository, claimService, telegramService);
+        service = new ContractorBonusTelegramNotificationService(repository, claimService, telegramNotifications);
     }
 
     @Test
@@ -44,35 +43,39 @@ class ContractorBonusTelegramNotificationServiceTest {
         ContractorAccrualAdjustment bonus = new ContractorAccrualAdjustment();
         bonus.setId(42L);
         bonus.setKind(ContractorAccrualAdjustmentKind.BONUS);
-        User employee = new User();
-        employee.setId(5L);
-        ContractorPaymentProfile profile = new ContractorPaymentProfile();
-        profile.setUser(employee);
-        bonus.setProfile(profile);
+        when(repository.enqueue(42L)).thenReturn(true);
         service.enqueue(bonus);
-        verify(repository).enqueue(42L, 5L);
+        verify(repository).enqueue(42L);
 
         ContractorAccrualAdjustment deduction = new ContractorAccrualAdjustment();
         deduction.setId(43L);
         deduction.setKind(ContractorAccrualAdjustmentKind.DEDUCTION);
         service.enqueue(deduction);
-        verify(repository, never()).enqueue(eq(43L), eq(5L));
+        verify(repository, never()).enqueue(43L);
+    }
+
+    @Test
+    void missingBonusQueueIntentRejectsTheAccrualTransaction() {
+        ContractorAccrualAdjustment bonus = new ContractorAccrualAdjustment();
+        bonus.setId(42L);
+        bonus.setKind(ContractorAccrualAdjustmentKind.BONUS);
+        when(repository.enqueue(42L)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.enqueue(bonus))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("intent was not stored");
     }
 
     @Test
     void sendsBonusOnlyToCurrentPrivateEmployeeChatAndMarksSent() {
         Delivery delivery = due();
         when(repository.findBonus(42L)).thenReturn(Optional.of(bonus(true, 987L, false)));
-        when(telegramService.sendMessageOnceWithInlineKeyboardMessageId(
-                eq(987L), anyString(), eq(null), eq(null)
-        )).thenReturn(Optional.of(333));
+        when(telegramNotifications.sendTextOnce(eq(987L), anyString())).thenReturn(true);
         when(claimService.markSent(delivery)).thenReturn(true);
 
         assertThat(service.retryBatch()).isEqualTo(1);
 
-        verify(telegramService).sendMessageOnceWithInlineKeyboardMessageId(
-                eq(987L), anyString(), eq(null), eq(null)
-        );
+        verify(telegramNotifications).sendTextOnce(eq(987L), anyString());
         verify(claimService).markSent(delivery);
         verify(claimService, never()).markFailed(eq(delivery), anyString());
     }
@@ -85,7 +88,7 @@ class ContractorBonusTelegramNotificationServiceTest {
         assertThat(service.retryBatch()).isZero();
 
         verify(claimService).markSkipped(delivery, "employee_private_telegram_chat_missing");
-        verifyNoInteractions(telegramService);
+        verifyNoInteractions(telegramNotifications);
     }
 
     @Test
@@ -96,7 +99,7 @@ class ContractorBonusTelegramNotificationServiceTest {
         assertThat(service.retryBatch()).isZero();
 
         verify(claimService).markSkipped(delivery, "bonus_adjustment_reversed");
-        verifyNoInteractions(telegramService);
+        verifyNoInteractions(telegramNotifications);
     }
 
     @Test
@@ -107,16 +110,14 @@ class ContractorBonusTelegramNotificationServiceTest {
         assertThat(service.retryBatch()).isZero();
 
         verify(claimService).markSkipped(delivery, "employee_inactive");
-        verifyNoInteractions(telegramService);
+        verifyNoInteractions(telegramNotifications);
     }
 
     @Test
     void failedTelegramAttemptIsRetriedWithoutTouchingAccrual() {
         Delivery delivery = due();
         when(repository.findBonus(42L)).thenReturn(Optional.of(bonus(true, 987L, false)));
-        when(telegramService.sendMessageOnceWithInlineKeyboardMessageId(
-                eq(987L), anyString(), eq(null), eq(null)
-        )).thenReturn(Optional.empty());
+        when(telegramNotifications.sendTextOnce(eq(987L), anyString())).thenReturn(false);
 
         assertThat(service.retryBatch()).isZero();
 
