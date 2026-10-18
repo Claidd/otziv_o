@@ -6,6 +6,7 @@ RUN printf 'Acquire::Retries "1"; Acquire::http::Timeout "20"; Acquire::https::T
     apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends curl ca-certificates fonts-liberation fonts-dejavu openssl && \
     dpkg --compare-versions "$(dpkg-query -W -f='${Version}' curl)" ge '8.14.1-2+deb13u7' && \
     dpkg --compare-versions "$(dpkg-query -W -f='${Version}' libcurl4t64)" ge '8.14.1-2+deb13u7' && \
+    dpkg --compare-versions "$(dpkg-query -W -f='${Version}' libexpat1)" ge '2.9.0-1~deb13u1' && \
     curl --fail --location --retry 3 --connect-timeout 20 --max-time 300 'https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_153.0.8010.36-1_amd64.deb' --output /tmp/chrome.deb && \
     printf '%s  /tmp/chrome.deb\n' '9bb44e33031c2f2857cf36b4343051a12f93058e4b781e3c76313df87f6c8d32' | sha256sum --check --strict && \
     apt-get install -y --no-install-recommends /tmp/chrome.deb && \
