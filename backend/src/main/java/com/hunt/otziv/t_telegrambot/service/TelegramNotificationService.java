@@ -14,4 +14,11 @@ public class TelegramNotificationService implements TelegramNotifications {
     public boolean sendText(long chatId, String text) {
         return telegramService.sendMessage(chatId, text);
     }
+
+    @Override
+    public boolean sendTextOnce(long chatId, String text) {
+        return telegramService.sendMessageOnceWithInlineKeyboardMessageId(
+                chatId, text, null, null
+        ).isPresent();
+    }
 }

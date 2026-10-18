@@ -633,20 +633,28 @@
                       </label>
                     </div>
 
-                    <div class="contractor-profile-metrics">
-                      <span><small>Начислено за месяц</small><strong>{{ moneyKopecks(profile.accruedMonthKopecks) }}</strong></span>
-                      <span><small>За выполненные работы</small><strong>{{ moneyKopecks(profile.workAccruedMonthKopecks ?? profile.accruedMonthKopecks) }}</strong></span>
-                      <span><small>Премии с отменами за месяц</small><strong>{{ moneyKopecks(profile.bonusMonthKopecks) }}</strong></span>
-                      <span><small>Удержания с отменами за месяц</small><strong>{{ moneyKopecks(profile.deductionMonthKopecks) }}</strong></span>
-                      <span><small>Зарезервировано</small><strong>{{ moneyKopecks(profile.reservedKopecks) }}</strong></span>
-                      <span><small>Клиент сообщил</small><strong>{{ moneyKopecks(profile.clientReportedKopecks) }}</strong></span>
-                      <span><small>Частично подтверждено · остаток</small><strong>{{ moneyKopecks(profile.partiallyConfirmedOutstandingKopecks) }}</strong></span>
-                      <span><small>{{ profile.reportingLive ? 'Подтверждено за месяц' : 'Смоделировано за месяц' }}</small><strong>{{ moneyKopecks(profile.grossConfirmedMonthKopecks) }}</strong></span>
-                      <span><small>Возвращено за месяц</small><strong>{{ moneyKopecks(profile.returnedMonthKopecks) }}</strong></span>
-                      <span><small>Закрыто без поступления</small><strong>{{ moneyKopecks(profile.closedWithoutPaymentMonthKopecks) }}</strong></span>
-                      <span><small>Получено за вычетом возвратов</small><strong>{{ moneyKopecks(profile.netReceivedMonthKopecks) }}</strong></span>
-                      <span><small>Доступно</small><strong>{{ moneyKopecks(profile.availableKopecks) }}</strong></span>
-                    </div>
+                    <section class="contractor-finance-summary" aria-label="Сводка начислений и оплат">
+                      <h4>Начисления и оплаты</h4>
+                      <div class="contractor-profile-metrics is-primary">
+                        <span><small>Начислено за месяц</small><strong>{{ moneyKopecks(profile.accruedMonthKopecks) }}</strong></span>
+                        <span><small>Зарезервировано</small><strong>{{ moneyKopecks(profile.reservedKopecks) }}</strong></span>
+                        <span><small>Получено за месяц после возвратов</small><strong>{{ moneyKopecks(profile.netReceivedMonthKopecks) }}</strong></span>
+                        <span class="available"><small>Доступно для оплаты</small><strong>{{ moneyKopecks(profile.availableKopecks) }}</strong></span>
+                      </div>
+                      <details class="contractor-metrics-details">
+                        <summary>Показать подробный расчёт</summary>
+                        <div class="contractor-profile-metrics is-breakdown">
+                          <span><small>За выполненные работы</small><strong>{{ moneyKopecks(profile.workAccruedMonthKopecks ?? profile.accruedMonthKopecks) }}</strong></span>
+                          <span><small>Премии с отменами за месяц</small><strong>{{ moneyKopecks(profile.bonusMonthKopecks) }}</strong></span>
+                          <span><small>Удержания с отменами за месяц</small><strong>{{ moneyKopecks(profile.deductionMonthKopecks) }}</strong></span>
+                          <span><small>Клиент сообщил об оплате</small><strong>{{ moneyKopecks(profile.clientReportedKopecks) }}</strong></span>
+                          <span><small>Остаток частично подтверждённых оплат</small><strong>{{ moneyKopecks(profile.partiallyConfirmedOutstandingKopecks) }}</strong></span>
+                          <span><small>{{ profile.reportingLive ? 'Подтверждено за месяц' : 'Смоделировано за месяц' }}</small><strong>{{ moneyKopecks(profile.grossConfirmedMonthKopecks) }}</strong></span>
+                          <span><small>Возвращено за месяц</small><strong>{{ moneyKopecks(profile.returnedMonthKopecks) }}</strong></span>
+                          <span><small>Закрыто без поступления</small><strong>{{ moneyKopecks(profile.closedWithoutPaymentMonthKopecks) }}</strong></span>
+                        </div>
+                      </details>
+                    </section>
                     @if (profile.exposureOverrunKopecks > 0) {
                       <p class="error compact">
                         Требуется ручная сверка: поступления и активные назначения превышают обязательство на
@@ -1023,56 +1031,70 @@
               >
                 <header>
                   <div>
-                    <p class="eyebrow">QUEUE HEALTH</p>
+                    <p class="eyebrow">СОСТОЯНИЕ СИСТЕМЫ</p>
                     <h3>Фоновая сверка и восстановление</h3>
+                    <p class="queue-health-description">Повторные проверки счетов, начислений и маршрутов.</p>
                   </div>
-                  <button
-                    type="button"
-                    class="secondary"
-                    (click)="loadContractorQueueHealth()"
-                    [disabled]="contractorQueueHealthLoading()"
-                  >
-                    {{ contractorQueueHealthLoading() ? 'Обновляю' : 'Обновить' }}
-                  </button>
+                  <div class="queue-health-controls">
+                    <span
+                      class="queue-health-status"
+                      [class.ok]="contractorQueueHealth() && !contractorQueueHasProblems() && !contractorQueueHealthError()"
+                      [class.warning]="contractorQueueHasProblems()"
+                      aria-live="polite"
+                    >
+                      {{ contractorQueueHealthError() ? 'Нет данных' : contractorQueueHealthLoading() ? 'Проверка…' : contractorQueueHealth() ? (contractorQueueHasProblems() ? 'Нужна проверка' : 'Нет просроченных задач') : 'Нет данных' }}
+                    </span>
+                    <button
+                      type="button"
+                      class="secondary"
+                      (click)="loadContractorQueueHealth()"
+                      [disabled]="contractorQueueHealthLoading()"
+                    >
+                      {{ contractorQueueHealthLoading() ? 'Обновляю' : 'Обновить' }}
+                    </button>
+                  </div>
                 </header>
                 @if (contractorQueueHealthError()) {
                   <p class="error compact">{{ contractorQueueHealthError() }}</p>
                 } @else if (contractorQueueHealth()) {
-                  <div class="queue-health-grid">
-                    <span>
-                      <small>Сверка поступлений</small>
-                      <strong>{{ contractorQueueHealth()?.allocationReconciliation?.retrying || 0 }} повторов</strong>
-                      <em>{{ contractorQueueHealth()?.allocationReconciliation?.dueRetries || 0 }} просрочено</em>
-                      <em>{{ contractorQueueHealth()?.allocationReconciliation?.expiredClaims || 0 }} истёкших lease</em>
-                    </span>
-                    <span>
-                      <small>Восстановление начислений</small>
-                      <strong>{{ contractorQueueHealth()?.rewardRepair?.retrying || 0 }} повторов</strong>
-                      <em>{{ contractorQueueHealth()?.rewardRepair?.dueRetries || 0 }} просрочено</em>
-                      <em>{{ contractorQueueHealth()?.rewardRepair?.expiredClaims || 0 }} истёкших lease</em>
-                    </span>
-                    <span>
-                      <small>Подготовка тестовых маршрутов</small>
-                      <strong>{{ contractorQueueHealth()?.shadowBackfill?.retrying || 0 }} повторов</strong>
-                      <em>{{ contractorQueueHealth()?.shadowBackfill?.dueRetries || 0 }} просрочено</em>
-                      <em>{{ contractorQueueHealth()?.shadowBackfill?.expiredClaims || 0 }} истёкших lease</em>
-                    </span>
-                    <span>
-                      <small>Начисления за выполненные работы</small>
-                      <strong>{{ contractorQueueHealth()?.completionRewardRepair?.retrying || 0 }} повторов</strong>
-                      <em>{{ contractorQueueHealth()?.completionRewardRepair?.dueRetries || 0 }} просрочено</em>
-                      <em>{{ contractorQueueHealth()?.deferredActiveRecoveryBaseGaps || 0 }} ожидают завершения восстановления</em>
-                      <em>Код: {{ contractorQueueHealth()?.completionRewardRepair?.lastErrorCode || '—' }}</em>
-                    </span>
-                  </div>
-                  <small>Срез: {{ contractorDateTime(contractorQueueHealth()?.observedAt) }}</small>
+                  <details class="queue-health-details" [open]="contractorQueueHasProblems()">
+                    <summary>Подробности по фоновым процессам</summary>
+                    <div class="queue-health-grid">
+                      <span>
+                        <small>Сверка поступлений</small>
+                        <strong>{{ contractorQueueHealth()?.allocationReconciliation?.retrying || 0 }} в очереди на повтор</strong>
+                        <em>{{ contractorQueueHealth()?.allocationReconciliation?.dueRetries || 0 }} просрочено</em>
+                        <em>{{ contractorQueueHealth()?.allocationReconciliation?.expiredClaims || 0 }} истёкших захватов</em>
+                      </span>
+                      <span>
+                        <small>Восстановление начислений</small>
+                        <strong>{{ contractorQueueHealth()?.rewardRepair?.retrying || 0 }} в очереди на повтор</strong>
+                        <em>{{ contractorQueueHealth()?.rewardRepair?.dueRetries || 0 }} просрочено</em>
+                        <em>{{ contractorQueueHealth()?.rewardRepair?.expiredClaims || 0 }} истёкших захватов</em>
+                      </span>
+                      <span>
+                        <small>Подготовка тестовых маршрутов</small>
+                        <strong>{{ contractorQueueHealth()?.shadowBackfill?.retrying || 0 }} в очереди на повтор</strong>
+                        <em>{{ contractorQueueHealth()?.shadowBackfill?.dueRetries || 0 }} просрочено</em>
+                        <em>{{ contractorQueueHealth()?.shadowBackfill?.expiredClaims || 0 }} истёкших захватов</em>
+                      </span>
+                      <span>
+                        <small>Начисления за выполненные работы</small>
+                        <strong>{{ contractorQueueHealth()?.completionRewardRepair?.retrying || 0 }} в очереди на повтор</strong>
+                        <em>{{ contractorQueueHealth()?.completionRewardRepair?.dueRetries || 0 }} просрочено</em>
+                        <em>{{ contractorQueueHealth()?.deferredActiveRecoveryBaseGaps || 0 }} ожидают завершения восстановления</em>
+                        <em>Код последней ошибки: {{ contractorQueueHealth()?.completionRewardRepair?.lastErrorCode || '—' }}</em>
+                      </span>
+                    </div>
+                  </details>
+                  <small class="queue-health-observed">Последняя проверка: {{ contractorDateTime(contractorQueueHealth()?.observedAt) }}</small>
                 }
               </section>
 
               <section class="contractor-allocation-journal" aria-label="Журнал решений по счетам">
                 <div class="journal-toolbar">
                   <div>
-                    <p class="eyebrow">DECISION JOURNAL</p>
+                    <p class="eyebrow">ИСТОРИЯ СЧЕТОВ</p>
                     <h3>Журнал решений по счетам</h3>
                     <small>
                       Пользователь: {{ contractorJournalAllUsers()
@@ -1166,7 +1188,7 @@
                           </span>
                         </header>
 
-                        <dl class="journal-grid">
+                        <dl class="journal-grid journal-grid-primary">
                           <div>
                             <dt>Получатель</dt>
                             <dd>{{ contractorAllocationRecipient(item) }}</dd>
@@ -1183,62 +1205,68 @@
                             <dt>Возвращено</dt>
                             <dd>{{ moneyKopecks(item.returnedKopecks) }}</dd>
                           </div>
-                          <div>
-                            <dt>Заказ</dt>
-                            <dd>{{ item.orderId || '—' }}</dd>
-                          </div>
-                          <div>
-                            <dt>Общий счёт</dt>
-                            <dd>{{ item.commonInvoiceId || '—' }}</dd>
-                          </div>
-                          <div>
-                            <dt>Текущий специалист</dt>
-                            <dd>{{ item.currentWorkerId || '—' }}</dd>
-                          </div>
-                          <div>
-                            <dt>Текущий менеджер</dt>
-                            <dd>{{ item.currentManagerId || '—' }}</dd>
-                          </div>
                         </dl>
 
-                        @if (item.routingDecisionReason || item.specialistRejectionReason || item.managerRejectionReason) {
-                          <dl class="journal-routing-decision" aria-label="Обоснование выбора получателя">
-                            @if (item.routingDecisionReason) {
-                              <div>
-                                <dt>Итог маршрута</dt>
-                                <dd>{{ contractorRoutingDecisionLabel(item.routingDecisionReason) }}</dd>
-                              </div>
-                            }
-                            @if (item.specialistRejectionReason) {
-                              <div>
-                                <dt>Проверка специалиста</dt>
-                                <dd>{{ contractorRoutingDecisionLabel(item.specialistRejectionReason) }}</dd>
-                              </div>
-                            }
-                            @if (item.managerRejectionReason) {
-                              <div>
-                                <dt>Проверка менеджера</dt>
-                                <dd>{{ contractorRoutingDecisionLabel(item.managerRejectionReason) }}</dd>
-                              </div>
-                            }
+                        <details class="journal-extra">
+                          <summary>Маршрут и даты счёта</summary>
+                          <dl class="journal-grid journal-grid-secondary">
+                            <div>
+                              <dt>Заказ</dt>
+                              <dd>{{ item.orderId || '—' }}</dd>
+                            </div>
+                            <div>
+                              <dt>Общий счёт</dt>
+                              <dd>{{ item.commonInvoiceId || '—' }}</dd>
+                            </div>
+                            <div>
+                              <dt>Текущий специалист</dt>
+                              <dd>{{ item.currentWorkerId || '—' }}</dd>
+                            </div>
+                            <div>
+                              <dt>Текущий менеджер</dt>
+                              <dd>{{ item.currentManagerId || '—' }}</dd>
+                            </div>
                           </dl>
-                        }
 
-                        <div class="journal-timeline">
-                          <span><small>Создано</small>{{ contractorDateTime(item.createdAt) }}</span>
-                          <span><small>Резерв</small>{{ contractorDateTime(item.reservedAt) }}</span>
-                          <span><small>Сообщение клиента</small>{{ contractorDateTime(item.clientReportedAt) }}</span>
-                          <span><small>Подтверждение</small>{{ contractorDateTime(item.confirmedAt) }}</span>
-                          <span><small>Освобождение</small>{{ contractorDateTime(item.releasedAt) }}</span>
-                        </div>
+                          @if (item.routingDecisionReason || item.specialistRejectionReason || item.managerRejectionReason) {
+                            <dl class="journal-routing-decision" aria-label="Обоснование выбора получателя">
+                              @if (item.routingDecisionReason) {
+                                <div>
+                                  <dt>Итог маршрута</dt>
+                                  <dd>{{ contractorRoutingDecisionLabel(item.routingDecisionReason) }}</dd>
+                                </div>
+                              }
+                              @if (item.specialistRejectionReason) {
+                                <div>
+                                  <dt>Проверка специалиста</dt>
+                                  <dd>{{ contractorRoutingDecisionLabel(item.specialistRejectionReason) }}</dd>
+                                </div>
+                              }
+                              @if (item.managerRejectionReason) {
+                                <div>
+                                  <dt>Проверка менеджера</dt>
+                                  <dd>{{ contractorRoutingDecisionLabel(item.managerRejectionReason) }}</dd>
+                                </div>
+                              }
+                            </dl>
+                          }
 
-                        @if (item.reconcileAttempts > 0 || item.reconcileNextRetryAt || item.reconcileLastErrorCode) {
-                          <div class="journal-reconcile-health" aria-label="Состояние автоматической сверки">
-                            <span><small>Попыток сверки</small>{{ item.reconcileAttempts }}</span>
-                            <span><small>Следующая попытка</small>{{ contractorDateTime(item.reconcileNextRetryAt) }}</span>
-                            <span><small>Код последней ошибки</small>{{ item.reconcileLastErrorCode || '—' }}</span>
+                          <div class="journal-timeline">
+                            <span><small>Создано</small>{{ contractorDateTime(item.createdAt) }}</span>
+                            <span><small>Резерв</small>{{ contractorDateTime(item.reservedAt) }}</span>
+                            <span><small>Сообщение клиента</small>{{ contractorDateTime(item.clientReportedAt) }}</span>
+                            <span><small>Подтверждение</small>{{ contractorDateTime(item.confirmedAt) }}</span>
+                            <span><small>Освобождение</small>{{ contractorDateTime(item.releasedAt) }}</span>
                           </div>
-                        }
+
+                          @if (item.reconcileAttempts > 0 || item.reconcileNextRetryAt || item.reconcileLastErrorCode) {
+                            <div class="journal-reconcile-health" aria-label="Состояние автоматической сверки">
+                              <span><small>Попыток сверки</small>{{ item.reconcileAttempts }}</span>
+                              <span><small>Следующая попытка</small>{{ contractorDateTime(item.reconcileNextRetryAt) }}</span>
+                              <span><small>Код последней ошибки</small>{{ item.reconcileLastErrorCode || '—' }}</span>
+                            </div>
+                          }
+                        </details>
 
                         @if (item.reason) {
                           <p class="journal-reason"><strong>Причина:</strong> {{ item.reason }}</p>
