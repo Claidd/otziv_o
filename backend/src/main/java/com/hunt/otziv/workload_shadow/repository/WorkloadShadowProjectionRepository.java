@@ -295,6 +295,12 @@ public interface WorkloadShadowProjectionRepository
                        orders.order_worker AS worker_id,
                        orders.order_company AS company_id,
                        status.order_status_title AS status_title,
+                       tracked_order.worker_id AS lifecycle_worker_id,
+                       tracked_order.created_at AS lifecycle_created_at,
+                       tracked_order.available_at AS lifecycle_available_at,
+                       CASE WHEN tracked_order.excluded = TRUE THEN 1 ELSE 0 END
+                           AS lifecycle_excluded,
+                       tracked_order.exclusion_reason AS lifecycle_exclusion_reason,
                         COALESCE(
                             CASE
                                 WHEN orders.order_status_changed_at <= :observedAt
@@ -310,7 +316,11 @@ public interface WorkloadShadowProjectionRepository
                 JOIN order_statuses status ON status.order_status_id = orders.order_status
                 LEFT JOIN order_status_audit status_audit
                   ON status_audit.order_id = orders.order_id
+                LEFT JOIN worker_work_item_lifecycle tracked_order
+                  ON tracked_order.work_item_key = CONCAT('order:', orders.order_id)
                 WHERE orders.order_worker IN (:workerIds)
+                  AND (tracked_order.created_at IS NULL
+                       OR tracked_order.created_at <= :observedAt)
                   AND COALESCE(orders.order_complete, FALSE) = FALSE
                   AND COALESCE(orders.order_waiting_for_client, FALSE) = FALSE
                   AND status.order_status_title IN ('Новый', 'Коррекция')
@@ -321,6 +331,11 @@ public interface WorkloadShadowProjectionRepository
                    target_order.status_title,
                    1 AS units,
                    target_order.available_at,
+                   target_order.lifecycle_worker_id,
+                   target_order.lifecycle_created_at,
+                   target_order.lifecycle_available_at,
+                   target_order.lifecycle_excluded,
+                   target_order.lifecycle_exclusion_reason,
                    CONCAT(
                        'CORRECTION:',
                        target_order.order_id,
@@ -347,6 +362,11 @@ public interface WorkloadShadowProjectionRepository
                            TIMESTAMP('1970-01-01 00:00:00')
                        )
                    ) AS available_at,
+                   target_order.lifecycle_worker_id,
+                   target_order.lifecycle_created_at,
+                   target_order.lifecycle_available_at,
+                   target_order.lifecycle_excluded,
+                   target_order.lifecycle_exclusion_reason,
                    CONCAT('NEW:', review.review_id) AS batch_key
             FROM target_orders target_order
             JOIN order_details detail

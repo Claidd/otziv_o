@@ -483,7 +483,7 @@ public class StaffDailyProgressService {
                     .toList();
         }
         Map<Long, WorkerActiveStats> active = activeStats(activeItems, safeDate);
-        Map<Long, WorkerCompletionStats> completed = completionStats(workerIds, safeDate, ignoreOpenedAtOrAfter);
+        Map<Long, WorkerCompletionStats> completed = completionStats(workerIds, safeDate);
         Map<Long, WorkerActivityStats> activity = activityStats(workerUserIds, safeDate);
         Map<Long, WorkerAuxStats> aux = auxStats(workerIds, workerUserIds, workerUserIdByWorkerId, safeDate);
         Map<Long, Reached100State> reached100States = reached100States(workerIds, safeDate);
@@ -1030,12 +1030,17 @@ public class StaffDailyProgressService {
                 .addValue("nagulDate", date.plusDays(appSettingService.getInt(AppSettingService.NAGUL_LOOKAHEAD_DAYS, 60)));
 
         List<ActiveWorkItem> result = new ArrayList<>();
+        LocalDateTime observedAt = progressNow();
         jdbc.queryForList("""
                 SELECT active_items.worker_id,
                        active_items.item_type,
                        active_items.item_id,
                        active_items.opened_at,
-                       COALESCE(lifecycle.available_at, lifecycle.opened_at, active_items.opened_at) AS added_at
+                       COALESCE(lifecycle.available_at, lifecycle.opened_at, active_items.opened_at) AS added_at,
+                       lifecycle.created_at AS first_seen_at,
+                       lifecycle.worker_id AS lifecycle_worker_id,
+                       lifecycle.excluded AS lifecycle_excluded,
+                       lifecycle.exclusion_reason AS lifecycle_exclusion_reason
                 FROM (
                     SELECT o.order_worker AS worker_id,
                            'order' AS item_type,
@@ -1165,7 +1170,7 @@ public class StaffDailyProgressService {
                 stringValue(row.get("item_type")),
                 longValue(row.get("item_id")),
                 toLocalDateTime(row.get("opened_at")),
-                toLocalDateTime(row.get("added_at"))
+                effectiveAddedAt(row, observedAt)
         )));
         return result;
     }
@@ -1180,7 +1185,7 @@ public class StaffDailyProgressService {
                 }
                 WorkerActiveStats.Mutable stats = mutable.computeIfAbsent(item.workerId(), ignored -> new WorkerActiveStats.Mutable());
                 stats.active++;
-                LocalDateTime dueAt = dueAt(item.itemType(), item.openedAt());
+                LocalDateTime dueAt = dueAt(item.itemType(), laterOf(item.openedAt(), item.addedAt()));
                 if (dueAt != null && evaluationAt.isAfter(dueAt)) {
                     stats.totalOverdue++;
                     if (TYPE_ORDER.equals(item.itemType())) {
@@ -1194,11 +1199,7 @@ public class StaffDailyProgressService {
         return result;
     }
 
-    private Map<Long, WorkerCompletionStats> completionStats(
-            List<Long> workerIds,
-            LocalDate date,
-            LocalDateTime ignoreOpenedAtOrAfter
-    ) {
+    private Map<Long, WorkerCompletionStats> completionStats(List<Long> workerIds, LocalDate date) {
         MapSqlParameterSource params = new MapSqlParameterSource()
                 .addValue("workerIds", workerIds)
                 .addValue("from", date.atStartOfDay())
@@ -1212,7 +1213,11 @@ public class StaffDailyProgressService {
                        completed_items.item_id,
                        completed_items.opened_at,
                        completed_items.done_at,
-                       COALESCE(lifecycle.available_at, lifecycle.opened_at, completed_items.opened_at) AS added_at
+                       COALESCE(lifecycle.available_at, lifecycle.opened_at, completed_items.opened_at) AS added_at,
+                       lifecycle.created_at AS first_seen_at,
+                       lifecycle.worker_id AS lifecycle_worker_id,
+                       lifecycle.excluded AS lifecycle_excluded,
+                       lifecycle.exclusion_reason AS lifecycle_exclusion_reason
                 FROM (
                     SELECT o.order_worker AS worker_id,
                            'order' AS item_type,
@@ -1335,23 +1340,24 @@ public class StaffDailyProgressService {
                   ON lifecycle.work_item_key = CONCAT(completed_items.item_type, ':', completed_items.item_id)
                 WHERE completed_items.worker_id IS NOT NULL
                 """, params).forEach(row -> {
+            LocalDateTime openedAt = toLocalDateTime(row.get("opened_at"));
+            LocalDateTime doneAt = toLocalDateTime(row.get("done_at"));
+            LocalDateTime addedAt = effectiveCompletedAddedAt(row, doneAt);
+            LocalDateTime workStartedAt = laterOf(openedAt, addedAt);
             CompletedItem item = new CompletedItem(
                         longValue(row.get("worker_id")),
                         stringValue(row.get("item_type")),
                         longValue(row.get("item_id")),
-                        toLocalDateTime(row.get("opened_at")),
-                        toLocalDateTime(row.get("added_at")),
-                        toLocalDateTime(row.get("done_at")),
-                        effectiveSeconds(toLocalDateTime(row.get("opened_at")), toLocalDateTime(row.get("done_at"))),
-                        isOverdue(stringValue(row.get("item_type")), toLocalDateTime(row.get("opened_at")), toLocalDateTime(row.get("done_at")))
+                        openedAt,
+                        addedAt,
+                        doneAt,
+                        effectiveSeconds(workStartedAt, doneAt),
+                        isOverdue(stringValue(row.get("item_type")), workStartedAt, doneAt)
                 );
-            if (includedCompletedInEndOfDay(
-                    item.addedAt(),
-                    item.doneAt(),
-                    ignoreOpenedAtOrAfter
-            )) {
-                rowsByWorker.computeIfAbsent(item.workerId(), ignored -> new ArrayList<>()).add(item);
-            }
+            // A completed action belongs to its done_at calendar day. The
+            // 22:00 cutoff shifts only unfinished work; filtering completions
+            // here would lose work finished after 22:00 from both days.
+            rowsByWorker.computeIfAbsent(item.workerId(), ignored -> new ArrayList<>()).add(item);
         });
 
         Map<Long, WorkerCompletionStats> result = new HashMap<>();
@@ -1359,6 +1365,69 @@ public class StaffDailyProgressService {
             result.put(entry.getKey(), WorkerCompletionStats.from(entry.getValue()));
         }
         return result;
+    }
+
+    static LocalDateTime effectiveAddedAt(Map<String, Object> row, LocalDateTime observedAt) {
+        LocalDateTime sourceAddedAt = toLocalDateTime(row.get("added_at"));
+        LocalDateTime firstSeenAt = toLocalDateTime(row.get("first_seen_at"));
+        Long assignedWorkerId = nullableLong(row.get("worker_id"));
+        Long lifecycleWorkerId = nullableLong(row.get("lifecycle_worker_id"));
+        boolean reopenedAfterClientWait = booleanValue(row.get("lifecycle_excluded"))
+                && "waiting_for_client".equals(stringValue(row.get("lifecycle_exclusion_reason")));
+        LocalDateTime effectiveObservation = firstSeenAt == null
+                || !Objects.equals(assignedWorkerId, lifecycleWorkerId)
+                || reopenedAfterClientWait
+                ? observedAt
+                : firstSeenAt;
+        if (sourceAddedAt == null) {
+            return effectiveObservation;
+        }
+        return laterOf(sourceAddedAt, effectiveObservation);
+    }
+
+    static LocalDateTime effectiveCompletedAddedAt(Map<String, Object> row, LocalDateTime doneAt) {
+        LocalDateTime sourceAddedAt = toLocalDateTime(row.get("added_at"));
+        LocalDateTime sourceOpenedAt = toLocalDateTime(row.get("opened_at"));
+        LocalDateTime firstSeenAt = toLocalDateTime(row.get("first_seen_at"));
+        Long assignedWorkerId = nullableLong(row.get("worker_id"));
+        Long lifecycleWorkerId = nullableLong(row.get("lifecycle_worker_id"));
+        boolean reopenedAfterClientWait = booleanValue(row.get("lifecycle_excluded"))
+                && "waiting_for_client".equals(stringValue(row.get("lifecycle_exclusion_reason")));
+
+        // The completion proves availability no later than done_at. An absent
+        // lifecycle row can be observed only during a later reconciliation;
+        // using that observation would produce available_at > closed_at and
+        // erase the real work duration. Keep the source date in that case.
+        LocalDateTime availableAt = sourceAddedAt;
+        if (doneAt != null && (availableAt == null || availableAt.isAfter(doneAt))) {
+            availableAt = sourceOpenedAt;
+        }
+        if (firstSeenAt != null
+                && Objects.equals(assignedWorkerId, lifecycleWorkerId)
+                && !reopenedAfterClientWait
+                && (doneAt == null || !firstSeenAt.isAfter(doneAt))) {
+            availableAt = laterOf(availableAt, firstSeenAt);
+        } else if (firstSeenAt != null
+                && (!Objects.equals(assignedWorkerId, lifecycleWorkerId) || reopenedAfterClientWait)) {
+            // The previous worker's or pre-wait availability cannot establish
+            // this worker's start time; avoid an invented overdue interval.
+            availableAt = doneAt;
+        }
+        if (doneAt == null) {
+            return availableAt;
+        }
+        return availableAt == null || availableAt.isAfter(doneAt) ? doneAt : availableAt;
+    }
+
+    private static LocalDateTime laterOf(LocalDateTime first, LocalDateTime second) {
+        if (first == null) {
+            return second;
+        }
+        return second != null && second.isAfter(first) ? second : first;
+    }
+
+    private static Long nullableLong(Object value) {
+        return value instanceof Number number ? number.longValue() : null;
     }
 
     private Map<Long, WorkerActivityStats> activityStats(List<Long> workerUserIds, LocalDate date) {
@@ -1495,16 +1564,6 @@ public class StaffDailyProgressService {
         return result;
     }
 
-    static boolean includedCompletedInEndOfDay(
-            LocalDateTime addedAt,
-            LocalDateTime doneAt,
-            LocalDateTime cutoff
-    ) {
-        return cutoff == null
-                || includedInEndOfDay(addedAt, cutoff)
-                || (doneAt != null && doneAt.isBefore(cutoff));
-    }
-
     /**
      * Reconstructs moments when the whole team's queue was empty. Individual
      * reached_100 flags cannot be aggregated because workers may have cleared
@@ -1605,6 +1664,7 @@ public class StaffDailyProgressService {
                         item.itemType(),
                         item.itemId(),
                         item.openedAt(),
+                        item.addedAt(),
                         null,
                         true,
                         0,
@@ -1623,6 +1683,7 @@ public class StaffDailyProgressService {
                             item.itemType(),
                             item.itemId(),
                             item.openedAt(),
+                            item.addedAt(),
                             item.doneAt(),
                             false,
                             item.durationSeconds(),
@@ -1652,16 +1713,20 @@ public class StaffDailyProgressService {
                     :active, :overdue, 0, NULL
                 )
                 ON DUPLICATE KEY UPDATE
+                    -- Preserve the first appearance for this worker. A transfer or
+                    -- reopened client wait starts a new availability window.
+                    available_at = CASE
+                        WHEN worker_id <> VALUES(worker_id)
+                             OR (excluded = 1 AND exclusion_reason = 'waiting_for_client')
+                        THEN VALUES(available_at)
+                        ELSE COALESCE(available_at, VALUES(available_at))
+                    END,
                     worker_id = VALUES(worker_id),
                     worker_user_id = VALUES(worker_user_id),
                     section_code = VALUES(section_code),
                     opened_at = CASE
                         WHEN excluded = 1 AND exclusion_reason = 'waiting_for_client' THEN VALUES(opened_at)
                         ELSE LEAST(opened_at, VALUES(opened_at))
-                    END,
-                    available_at = CASE
-                        WHEN excluded = 1 AND exclusion_reason = 'waiting_for_client' THEN VALUES(available_at)
-                        ELSE COALESCE(available_at, VALUES(available_at))
                     END,
                     due_at = VALUES(due_at),
                     closed_at = VALUES(closed_at),
@@ -1697,12 +1762,14 @@ public class StaffDailyProgressService {
             String itemType,
             Long itemId,
             LocalDateTime openedAt,
+            LocalDateTime availableAt,
             LocalDateTime closedAt,
             boolean active,
             long effectiveCloseSeconds,
             boolean overdue
     ) {
         LocalDateTime safeOpenedAt = openedAt == null ? progressNow() : openedAt;
+        LocalDateTime safeAvailableAt = availableAt == null ? safeOpenedAt : availableAt;
         return new MapSqlParameterSource()
                 .addValue("workItemKey", itemType + ":" + itemId)
                 .addValue("workerId", workerId)
@@ -1711,8 +1778,8 @@ public class StaffDailyProgressService {
                 .addValue("itemType", itemType)
                 .addValue("itemId", itemId)
                 .addValue("openedAt", safeOpenedAt)
-                .addValue("availableAt", safeOpenedAt)
-                .addValue("dueAt", dueAt(itemType, safeOpenedAt))
+                .addValue("availableAt", safeAvailableAt)
+                .addValue("dueAt", dueAt(itemType, laterOf(safeOpenedAt, safeAvailableAt)))
                 .addValue("closedAt", closedAt)
                 .addValue("effectiveCloseSeconds", Math.max(0, effectiveCloseSeconds))
                 .addValue("active", active)

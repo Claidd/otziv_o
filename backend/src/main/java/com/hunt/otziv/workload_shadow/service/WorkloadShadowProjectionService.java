@@ -459,8 +459,70 @@ public class WorkloadShadowProjectionService {
             int unitMinutes = SECTION_CORRECTION.equals(section)
                     ? settings.correctionMinutesPerOrder()
                     : settings.newMinutesPerCard();
-            target.add(batch(row, section, units, unitMinutes, businessZone));
+            WorkBatch sourceBatch = batch(row, section, units, unitMinutes, businessZone);
+            LocalDateTime lifecycleCreatedAt =
+                    toLocalDateTime(row.get("lifecycle_created_at"), businessZone);
+            LocalDateTime lifecycleAvailableAt =
+                    toLocalDateTime(row.get("lifecycle_available_at"), businessZone);
+            Long lifecycleWorkerId = nullableLong(row.get("lifecycle_worker_id"));
+            boolean previouslyWaitingForClient = booleanValue(row.get("lifecycle_excluded"))
+                    && "waiting_for_client".equals(string(row.get("lifecycle_exclusion_reason")));
+            LocalDateTime availableAt = effectiveOrderAvailability(
+                    sourceBatch.availableAt(),
+                    lifecycleCreatedAt,
+                    lifecycleAvailableAt,
+                    lifecycleWorkerId,
+                    sourceBatch.workerId(),
+                    observedAt,
+                    previouslyWaitingForClient
+            );
+            LocalDateTime availabilityEpisodeAt = lifecycleWorkerId != null
+                    && (lifecycleWorkerId != sourceBatch.workerId()
+                    || previouslyWaitingForClient)
+                    ? laterOf(sourceBatch.availableAt(), observedAt)
+                    : laterOf(sourceBatch.availableAt(), lifecycleAvailableAt);
+            target.add(new WorkBatch(
+                    sourceBatch.workerId(), sourceBatch.companyId(), sourceBatch.orderId(),
+                    sourceBatch.section(), sourceBatch.units(), sourceBatch.unitMinutes(),
+                    availableAt, sourceBatch.batchKey(), sourceBatch.externalBlocked(),
+                    availabilityEpisodeAt
+            ));
         });
+    }
+
+    static LocalDateTime effectiveOrderAvailability(
+            LocalDateTime sourceAvailableAt,
+            LocalDateTime lifecycleCreatedAt,
+            LocalDateTime lifecycleAvailableAt,
+            Long lifecycleWorkerId,
+            long currentWorkerId,
+            LocalDateTime observedAt,
+            boolean previouslyWaitingForClient
+    ) {
+        if (lifecycleWorkerId == null) {
+            return sourceAvailableAt;
+        }
+        if (lifecycleWorkerId != currentWorkerId) {
+            // The lifecycle still belongs to the previous specialist. The current
+            // worker cannot inherit that specialist's old intake timestamp.
+            return laterOf(sourceAvailableAt, observedAt);
+        }
+        if (previouslyWaitingForClient) {
+            // The live order has reopened, but its lifecycle still records the
+            // previous client-wait exclusion until the next progress refresh.
+            return laterOf(sourceAvailableAt, observedAt);
+        }
+        LocalDateTime firstTrackedAt = lifecycleCreatedAt != null
+                && observedAt != null && lifecycleCreatedAt.isAfter(observedAt)
+                ? null : lifecycleCreatedAt;
+        LocalDateTime workerAvailableAt = lifecycleAvailableAt != null
+                && observedAt != null && lifecycleAvailableAt.isAfter(observedAt)
+                ? null : lifecycleAvailableAt;
+        return laterOf(laterOf(sourceAvailableAt, firstTrackedAt), workerAvailableAt);
+    }
+
+    private static LocalDateTime laterOf(LocalDateTime first, LocalDateTime second) {
+        return first == null || second != null && second.isAfter(first) ? second : first;
     }
 
     private void loadNagulBatches(
@@ -759,7 +821,8 @@ public class WorkloadShadowProjectionService {
                 observedAt,
                 shiftStart,
                 intakeCutoff,
-                recoveredObservation
+                recoveredObservation,
+                previousObservationAt
         );
         for (WorkBatch batch : orderedBatches) {
             long estimatedMinutes = batch.estimatedMinutes();
@@ -913,6 +976,22 @@ public class WorkloadShadowProjectionService {
             LocalDateTime intakeCutoff,
             boolean recoveredObservation
     ) {
+        return classifyDailyBatchDecisions(
+                batches, persistedDecisions, progressDate, observedAt, shiftStart,
+                intakeCutoff, recoveredObservation, null
+        );
+    }
+
+    static Map<String, BatchDecision> classifyDailyBatchDecisions(
+            List<WorkBatch> batches,
+            Map<String, BatchDecision> persistedDecisions,
+            LocalDate progressDate,
+            LocalDateTime observedAt,
+            LocalDateTime shiftStart,
+            LocalDateTime intakeCutoff,
+            boolean recoveredObservation,
+            LocalDateTime previousObservationAt
+    ) {
         if (batches == null || batches.isEmpty()) {
             return Map.of();
         }
@@ -945,9 +1024,21 @@ public class WorkloadShadowProjectionService {
                 continue;
             }
             BatchDecision effective = persisted;
+            boolean firstObservedAfterCutoff = intakeCutoff != null
+                    && persisted.firstObservedAt() != null
+                    && !persisted.firstObservedAt().isBefore(intakeCutoff);
             LocalDateTime availableAt = persisted.sourceAvailableAt() == null
                     ? batch.availableAt() : persisted.sourceAvailableAt();
-            if (intakeCutoff != null && availableAt != null && !availableAt.isBefore(intakeCutoff)) {
+            // A status change, reopening or reassignment starts a new availability
+            // episode even when this batch was mandatory earlier in the day. The
+            // lifecycle's first tracking timestamp alone is not such an episode.
+            availableAt = laterOf(availableAt, batch.availabilityEpisodeAt());
+            if (firstObservedAfterCutoff) {
+                availableAt = laterOf(availableAt, batch.availableAt());
+            }
+            if (persisted.decisionOrigin() == DecisionOrigin.AFTER_CUTOFF
+                    || intakeCutoff != null && availableAt != null
+                    && !availableAt.isBefore(intakeCutoff)) {
                 // Starting tomorrow's work must not pull its remainder into today's target.
                 effective = new BatchDecision(
                         persisted.batchKey(), DecisionCode.LATE, DecisionOrigin.AFTER_CUTOFF,
@@ -982,6 +1073,24 @@ public class WorkloadShadowProjectionService {
         List<WorkBatch> incoming = new ArrayList<>();
         for (WorkBatch batch : unseen) {
             LocalDateTime availableAt = batch.availableAt();
+            boolean firstSeenAfterCutoff = observedAt != null && intakeCutoff != null
+                    && !observedAt.isBefore(intakeCutoff)
+                    && previousObservationAt != null
+                    && (!previousObservationAt.isBefore(intakeCutoff)
+                    || !recoveredObservation
+                    && !previousObservationAt.isBefore(intakeCutoff.minusMinutes(10)));
+            if (firstSeenAfterCutoff && (availableAt == null
+                    || availableAt.isBefore(intakeCutoff))) {
+                // An already completed post-cutoff snapshot proves this batch was
+                // not part of the worker's earlier workload, even if its source
+                // order carries a historical timestamp.
+                result.put(batch.batchKey(), new BatchDecision(
+                        batch.batchKey(), DecisionCode.LATE, DecisionOrigin.AFTER_CUTOFF,
+                        cohortKey(batch), batch.units(), batch.estimatedMinutes(),
+                        observedAt, availableAt, 0, batch.estimatedMinutes()
+                ));
+                continue;
+            }
             boolean priorDayCarryOver = availableAt == null
                     || progressDate == null
                     || availableAt.toLocalDate().isBefore(progressDate);
@@ -1640,11 +1749,20 @@ public class WorkloadShadowProjectionService {
             int unitMinutes,
             LocalDateTime availableAt,
             String batchKey,
-            boolean externalBlocked
+            boolean externalBlocked,
+            LocalDateTime availabilityEpisodeAt
     ) {
         WorkBatch(long workerId, Long companyId, Long orderId, String section,
                   long units, int unitMinutes, LocalDateTime availableAt, String batchKey) {
-            this(workerId, companyId, orderId, section, units, unitMinutes, availableAt, batchKey, false);
+            this(workerId, companyId, orderId, section, units, unitMinutes,
+                    availableAt, batchKey, false, availableAt);
+        }
+
+        WorkBatch(long workerId, Long companyId, Long orderId, String section,
+                  long units, int unitMinutes, LocalDateTime availableAt, String batchKey,
+                  boolean externalBlocked) {
+            this(workerId, companyId, orderId, section, units, unitMinutes,
+                    availableAt, batchKey, externalBlocked, availableAt);
         }
 
         boolean mandatoryExternalBlocker(LocalDateTime intakeCutoff) {
