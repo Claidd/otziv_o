@@ -123,6 +123,32 @@ class InteractiveBatchQueriesMySqlIntegrationTest {
         assertThat(teamDirectory.forManagers(com.hunt.otziv.u_users.api.TeamDirectoryReader.Role.WORKER, List.of())).isEmpty();
     }
 
+    @Test void firedWorkerDisappearsFromAdminManagerAndOwnerTeamDirectories() {
+        var worker = workers.findAllWithUserAndImage().iterator().next();
+        var manager = managers.findAll().getFirst();
+        jdbc.update("INSERT IGNORE INTO managers_users (manager_id, user_id) VALUES (?, ?)",
+                manager.getId(), worker.getUser().getId());
+
+        var workerRole = com.hunt.otziv.u_users.api.TeamDirectoryReader.Role.WORKER;
+        assertThat(teamDirectory.allActive(workerRole)).extracting(
+                com.hunt.otziv.u_users.api.TeamDirectoryReader.Member::id).contains(worker.getId());
+        assertThat(teamDirectory.forManagers(workerRole, List.of(manager.getId()))).extracting(
+                com.hunt.otziv.u_users.api.TeamDirectoryReader.Member::id).contains(worker.getId());
+        assertThat(workers.findAllToManagerList(List.of(manager))).extracting(
+                com.hunt.otziv.u_users.model.Worker::getId).contains(worker.getId());
+
+        worker.getUser().setActive(false);
+        em.flush();
+        em.clear();
+
+        assertThat(teamDirectory.allActive(workerRole)).extracting(
+                com.hunt.otziv.u_users.api.TeamDirectoryReader.Member::id).doesNotContain(worker.getId());
+        assertThat(teamDirectory.forManagers(workerRole, List.of(manager.getId()))).extracting(
+                com.hunt.otziv.u_users.api.TeamDirectoryReader.Member::id).doesNotContain(worker.getId());
+        assertThat(workers.findAllToManagerList(List.of(manager))).extracting(
+                com.hunt.otziv.u_users.model.Worker::getId).doesNotContain(worker.getId());
+    }
+
     @Test void invoiceBatchFactsMatchLegacyEvidenceAndPrepaymentFilters() {
         var ids = new ArrayList<Long>();
         for (int index = 0; index < 3; index++) {

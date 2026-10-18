@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 class AnalyticsAggregateScoreServiceTest {
@@ -163,6 +164,26 @@ class AnalyticsAggregateScoreServiceTest {
         assertEquals(4L, score.get(1).getReview1Month());
     }
 
+    @Test
+    void excludesInactiveStaffFromScoreAndSalaryTotal() {
+        User active = user(10L, "Current Worker", null);
+        User inactive = user(11L, "Former Worker", null);
+        inactive.setActive(false);
+        when(readService.monthlyUsers(MONTH_START, MONTH_START)).thenReturn(List.of(
+                monthlyUser(active, "ROLE_WORKER", "100.00", "0.00", 1, 1, 0, 0, 0),
+                monthlyUser(inactive, "ROLE_WORKER", "500.00", "0.00", 5, 5, 0, 0, 0)
+        ));
+        when(salarySourceService.totalsForUsers(eq(java.util.Set.of(10L)), eq(MONTH_START), eq(DATE)))
+                .thenReturn(Map.of(10L, new SalaryTotal(new BigDecimal("100.00"), 1, 1)));
+
+        List<UserData> score = service.buildScore(DATE).orElseThrow();
+
+        assertEquals(1, score.size());
+        assertEquals(10L, score.getFirst().getUserId());
+        assertEquals(100L, score.getFirst().getZpTotal());
+        verify(financialSourceService).paymentTotalsForUsers(java.util.Set.of(10L), MONTH_START, DATE);
+    }
+
     private AnalyticsMonthlyUser monthlyUser(
             User user,
             String role,
@@ -203,6 +224,7 @@ class AnalyticsAggregateScoreServiceTest {
         User user = User.builder()
                 .id(id)
                 .fio(fio)
+                .active(true)
                 .build();
         if (imageId != null) {
             Image image = new Image();

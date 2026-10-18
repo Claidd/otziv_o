@@ -123,6 +123,30 @@ class ContractorPaymentVisibilityServiceTest {
     }
 
     @Test
+    void adminSummaryOmitsInactiveStaffButKeepsActiveProfileAmounts() {
+        User active = user(25L, "active-worker", "ROLE_WORKER");
+        active.setFio("Действующий сотрудник");
+        User inactive = user(26L, "former-worker", "ROLE_WORKER");
+        inactive.setFio("Бывший сотрудник");
+        inactive.setActive(false);
+        ContractorPaymentProfile activeProfile = profile(41L, active, ContractorRole.SPECIALIST);
+        ContractorPaymentProfile formerProfile = profile(42L, inactive, ContractorRole.SPECIALIST);
+        when(profileRepository.findAllWithUser()).thenReturn(List.of(activeProfile, formerProfile));
+        when(adminRead.read(any(), any(), any(), any(), any())).thenReturn(
+                new com.hunt.otziv.contractor_payments.repository.ContractorAdminFinancialReadRepository.Facts(
+                        java.util.Map.of(41L,
+                                new com.hunt.otziv.contractor_payments.repository.ContractorAdminFinancialReadRepository.Accrual(10_000, 10_000)),
+                        List.of(), java.util.Map.of(), java.util.Map.of()));
+
+        List<ContractorPaymentAdminSummaryResponse> summaries = service.adminSummary(LocalDate.of(2026, 10, 18));
+
+        assertEquals(1, summaries.size());
+        assertEquals(25L, summaries.getFirst().userId());
+        assertEquals(10_000L, summaries.getFirst().accruedMonthKopecks());
+        verify(adminRead).read(org.mockito.ArgumentMatchers.eq(List.of(41L)), any(), any(), any(), any());
+    }
+
+    @Test
     void adminSummaryUsesSelectedMonthInsteadOfLeakingCurrentMonth() {
         LocalDate selectedDate = LocalDate.of(2026, 8, 31);
         LocalDate augustStart = LocalDate.of(2026, 8, 1);
@@ -509,6 +533,7 @@ class ContractorPaymentVisibilityServiceTest {
         user.setId(id);
         user.setUsername(username);
         user.setRoles(List.of(role));
+        user.setActive(true);
         return user;
     }
 

@@ -62,7 +62,7 @@ describe('score finance helpers', () => {
     const orphan = payment({
       userId: 99,
       profileId: 4,
-      fio: 'Бывший сотрудник',
+      fio: 'Действующий сотрудник без записей за месяц',
       profileEnabled: false,
       outstandingDebtKopecks: 9_000
     });
