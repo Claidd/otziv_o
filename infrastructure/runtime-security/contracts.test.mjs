@@ -47,6 +47,9 @@ test('browser images refresh Debian security packages and require fixed libexpat
   for (const file of ['../../Dockerfile.whatsapp', '../../backend/external-review-worker/Dockerfile']) {
     const dockerfile = await readFile(new URL(file, import.meta.url), 'utf8');
     assert.match(dockerfile, /apt-get update && apt-get upgrade -y/);
+    const aptInstall = dockerfile.match(/apt-get install -y --no-install-recommends ([^&]+) &&/);
+    assert.ok(aptInstall, `${file}: expected explicit apt package install`);
+    assert.ok(aptInstall[1].split(/\s+/).includes('libexpat1'), `${file}: install libexpat1 before checking its version`);
     assert.match(dockerfile, /dpkg --compare-versions "\$\(dpkg-query -W -f='\$\{Version\}' libexpat1\)" ge '2\.9\.0-1~deb13u1'/);
   }
 });

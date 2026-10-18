@@ -3,7 +3,7 @@ FROM node:22-trixie-slim@sha256:7b8a0c89c54499bee567618f96578e1a12a800f062fbdbfd
 # Identical browser layer in both images; provenance: runtime-security/proofs/chrome153.
 RUN printf 'Acquire::Retries "1"; Acquire::http::Timeout "20"; Acquire::https::Timeout "20"; Acquire::ForceIPv4 "true";\n' > /etc/apt/apt.conf.d/80-bounded-network && \
     test "$(dpkg --print-architecture)" = amd64 && \
-    apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends curl ca-certificates fonts-liberation fonts-dejavu openssl && \
+    apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends curl ca-certificates fonts-liberation fonts-dejavu openssl libexpat1 && \
     dpkg --compare-versions "$(dpkg-query -W -f='${Version}' curl)" ge '8.14.1-2+deb13u7' && \
     dpkg --compare-versions "$(dpkg-query -W -f='${Version}' libcurl4t64)" ge '8.14.1-2+deb13u7' && \
     dpkg --compare-versions "$(dpkg-query -W -f='${Version}' libexpat1)" ge '2.9.0-1~deb13u1' && \
