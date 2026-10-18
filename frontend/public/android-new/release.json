@@ -1,12 +1,12 @@
 {
   "enabled": true,
-  "versionCode": 77,
-  "versionName": "1.0.77",
+  "versionCode": 78,
+  "versionName": "1.0.78",
   "minSupportedVersionCode": 0,
   "required": false,
-  "notes": "Полный текст отзыва в разделах «Выгул» и «Публикация» открывается в удобном окне для просмотра и правки.",
-  "fileSize": 4382498,
-  "sha256": "75B3ADB62DFCA1E82085F70FBE3C795F662D9C8D48A382CD4724A90F570A7B50",
-  "publishedAt": "2026-10-18T11:03:19Z",
-  "downloadUrl": "/android-new/otziv-v1.0.77.apk"
+  "notes": "В мобильном рейтинге администратор и владелец могут выдавать премии и удержания кнопками рядом с именем сотрудника.",
+  "fileSize": 4385307,
+  "sha256": "FA0D97A9ECF50E7F0DF262A3DE6B60C5D1CA95A18A640A852D48EC65D3D85C5C",
+  "publishedAt": "2026-10-18T19:30:42Z",
+  "downloadUrl": "/android-new/otziv-v1.0.78.apk"
 }
