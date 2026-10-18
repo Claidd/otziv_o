@@ -1,11 +1,13 @@
 import copy
 import datetime as dt
+import io
 import json
 import subprocess
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
+import urllib.error
 
 import release_ci as ci
 import release_registry as registry
@@ -45,6 +47,44 @@ class GitHubFixture:
 
     def get(self, path):
         return copy.deepcopy(self.responses[path])
+
+class GitHubReaderTest(unittest.TestCase):
+    def test_retries_the_same_read_after_transient_network_failure(self):
+        opener = Mock()
+        opener.open.side_effect = [
+            urllib.error.URLError('temporary connection failure'),
+            io.BytesIO(b'{"commit":{"sha":"verified"}}'),
+        ]
+        with patch.object(ci, 'github_token', return_value='fixture'), \
+                patch.object(ci.urllib.request, 'build_opener', return_value=opener), \
+                patch.object(ci.time, 'sleep') as sleep:
+            result = ci.github_reader(Path('.'))('/branches/main')
+        self.assertEqual('verified', result['commit']['sha'])
+        self.assertEqual(2, opener.open.call_count)
+        self.assertEqual(
+            opener.open.call_args_list[0].args[0].full_url,
+            opener.open.call_args_list[1].args[0].full_url,
+        )
+        sleep.assert_called_once_with(1)
+
+    def test_repeated_network_failure_and_http_error_still_block_release(self):
+        opener = Mock()
+        opener.open.side_effect = [urllib.error.URLError('unavailable')] * 4
+        with patch.object(ci, 'github_token', return_value='fixture'), \
+                patch.object(ci.urllib.request, 'build_opener', return_value=opener), \
+                patch.object(ci.time, 'sleep') as sleep:
+            with self.assertRaisesRegex(ci.GateError, 'no deployment started'):
+                ci.github_reader(Path('.'))('/branches/main')
+        self.assertEqual(4, opener.open.call_count)
+        self.assertEqual([1, 2, 4], [call.args[0] for call in sleep.call_args_list])
+
+        opener.open.reset_mock()
+        opener.open.side_effect = urllib.error.HTTPError('https://api.github.com', 403, 'forbidden', None, None)
+        with patch.object(ci, 'github_token', return_value='fixture'), \
+                patch.object(ci.urllib.request, 'build_opener', return_value=opener):
+            with self.assertRaisesRegex(ci.GateError, 'HTTP 403'):
+                ci.github_reader(Path('.'))('/branches/main')
+        opener.open.assert_called_once()
 
 class ReleaseGateTest(unittest.TestCase):
     def setUp(self):

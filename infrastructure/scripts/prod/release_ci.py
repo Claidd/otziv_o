@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import time
 import urllib.error
 import urllib.request
 
@@ -77,15 +78,18 @@ def github_reader(repo):
         request = urllib.request.Request(API + path, headers={
             'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json',
             'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'otziv-release-ci'})
-        try:
-            with opener.open(request, timeout=30) as response:
-                data = response.read(4 * 1024 * 1024 + 1)
-                require(len(data) <= 4 * 1024 * 1024, 'GitHub response is too large')
-                return json.loads(data)
-        except urllib.error.HTTPError as error:
-            raise GateError(f'GitHub CI cannot be verified (HTTP {error.code})') from None
-        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError):
-            raise GateError('GitHub CI cannot be verified; no deployment started') from None
+        for attempt in range(4):
+            try:
+                with opener.open(request, timeout=30) as response:
+                    data = response.read(4 * 1024 * 1024 + 1)
+                    require(len(data) <= 4 * 1024 * 1024, 'GitHub response is too large')
+                    return json.loads(data)
+            except urllib.error.HTTPError as error:
+                raise GateError(f'GitHub CI cannot be verified (HTTP {error.code})') from None
+            except (urllib.error.URLError, TimeoutError, json.JSONDecodeError):
+                if attempt == 3:
+                    raise GateError('GitHub CI cannot be verified; no deployment started') from None
+                time.sleep(2 ** attempt)
     return get
 
 def pages(get, path, key):
