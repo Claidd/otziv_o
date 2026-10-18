@@ -207,7 +207,7 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Could not prepare private image transport.' }
         $registryStarted = $true
         $registry = ($created -join '') | ConvertFrom-Json
-        & python -B $artifactHelper import --repo $repoRoot --input $manifest --registry $record --output $capacity
+        & python -B $artifactHelper import --repo $repoRoot --input $manifest --registry $record --output $capacity --cache-root (Join-Path $LocalWorkRoot 'releases')
         if ($LASTEXITCODE -ne 0) { throw 'CI image verification or private transport failed; production was not changed.' }
         # ProcessStartInfo keeps arguments separate, including paths containing spaces.
         $start = [Diagnostics.ProcessStartInfo]::new()

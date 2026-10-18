@@ -207,6 +207,57 @@ describe('WorkerBoardNoteFacade', () => {
     expect(facade.savedReviewFieldKey()).toBe('7-answer');
   });
 
+  it('keeps a reopened review text draft when the earlier save notification expires', () => {
+    vi.useFakeTimers();
+    try {
+      const item = review({ id: 7, text: 'Исходный текст' });
+      const { facade, boardSignal } = createFacade(board([], [item]));
+
+      facade.startReviewFieldEdit(item, 'text');
+      facade.setReviewFieldDraft(item, 'text', 'Сохранённый текст');
+      facade.saveReviewField(item, 'text');
+
+      expect(facade.editingReviewFieldKey()).toBeNull();
+      expect(facade.reviewFieldDrafts()['7-text']).toBeUndefined();
+
+      const updated = boardSignal()!.reviews.content[0];
+      facade.startReviewFieldEdit(updated, 'text');
+      facade.setReviewFieldDraft(updated, 'text', 'Новый несохранённый черновик');
+      vi.advanceTimersByTime(1000);
+
+      expect(facade.editingReviewFieldKey()).toBe('7-text');
+      expect(facade.reviewFieldValue(updated, 'text')).toBe('Новый несохранённый черновик');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps the latest saved marker through two quick saves of the same review text', () => {
+    vi.useFakeTimers();
+    try {
+      const item = review({ id: 7, text: 'Первый текст' });
+      const { facade, boardSignal } = createFacade(board([], [item]));
+
+      facade.startReviewFieldEdit(item, 'text');
+      facade.setReviewFieldDraft(item, 'text', 'Второй текст');
+      facade.saveReviewField(item, 'text');
+      vi.advanceTimersByTime(500);
+
+      const updated = boardSignal()!.reviews.content[0];
+      facade.startReviewFieldEdit(updated, 'text');
+      facade.setReviewFieldDraft(updated, 'text', 'Третий текст');
+      facade.saveReviewField(updated, 'text');
+      expect(facade.savedReviewFieldKey()).toBe('7-text');
+
+      vi.advanceTimersByTime(500);
+      expect(facade.savedReviewFieldKey()).toBe('7-text');
+      vi.advanceTimersByTime(500);
+      expect(facade.savedReviewFieldKey()).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('saves bad task text without editing the source review', () => {
     const item = review({
       id: 7,

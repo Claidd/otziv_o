@@ -319,7 +319,6 @@ export class WorkerBoardComponent implements OnDestroy {
   readonly editingReviewFieldKey = this.noteFacade.editingReviewFieldKey;
   readonly reviewFieldDrafts = this.noteFacade.reviewFieldDrafts;
   readonly savedReviewFieldKey = this.noteFacade.savedReviewFieldKey;
-  readonly expandedReviewTextIds = this.noteFacade.expandedReviewTextIds;
   readonly editingReviewNoteId = this.noteFacade.editingReviewNoteId;
   readonly reviewNoteDrafts = this.noteFacade.reviewNoteDrafts;
   readonly savedReviewNoteId = this.noteFacade.savedReviewNoteId;
@@ -809,10 +808,6 @@ export class WorkerBoardComponent implements OnDestroy {
 
   reviewFieldValue(review: WorkerReviewItem, field: ReviewEditableField): string {
     return this.noteFacade.reviewFieldValue(review, field);
-  }
-
-  toggleReviewText(review: WorkerReviewItem): void {
-    this.noteFacade.toggleReviewText(review);
   }
 
   startReviewNoteEdit(review: WorkerReviewItem): void {

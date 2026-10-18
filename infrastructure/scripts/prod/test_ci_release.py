@@ -10,8 +10,8 @@ from unittest.mock import Mock, patch
 import zipfile
 
 from ci_artifacts import extract_files, storage_url, validate_artifact
-from ci_image_bundle import SERVICES, export_image
-from ci_release import capacity_plan, collect, fetch_image, fetch_manifest, load_backend, validate_release
+from ci_image_bundle import SERVICES, export_image, file_hash
+from ci_release import capacity_plan, collect, fetch_image, fetch_manifest, load_backend, restore_cached_image, validate_release
 from production_images import inventory, record
 from release_ci import GateError
 from release_preflight import probe
@@ -27,6 +27,7 @@ class ReleaseArtifactsTest(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.directory = Path(self.temp.name)
         saved, _ = fixture(self.directory)
+        self.saved = saved
         self.images = []
         for index, component in enumerate(SERVICES, 1):
             image = export_image(saved, component, HEAD, self.directory / component, 123, 1)
@@ -103,6 +104,47 @@ class ReleaseArtifactsTest(unittest.TestCase):
         path = fetch_image(client, self.release, image, self.directory / 'received')
         self.assertEqual(image['archiveBytes'], path.stat().st_size)
         self.assertFalse((path.parent / 'download.zip').exists())
+
+    def test_local_cache_recreates_exact_current_ci_archive_without_download(self):
+        image = next(row for row in self.images if row['component'] == 'whatsapp')
+        cache = self.directory / 'releases'
+        previous = cache / 'prior-release' / 'images' / 'whatsapp'
+        export_image(self.saved, 'whatsapp', 'c' * 40, previous, 122, 1)
+        client = Mock()
+        client.get.return_value = self.metadata(image)
+        received = fetch_image(client, self.release, image, self.directory / 'received', cache)
+        self.assertEqual(image['archiveSha256'], file_hash(received))
+        self.assertEqual((self.directory / 'whatsapp' / image['archive']).read_bytes(), received.read_bytes())
+        client.download.assert_not_called()
+
+    def test_corrupt_local_cache_falls_back_to_signed_artifact(self):
+        image = next(row for row in self.images if row['component'] == 'whatsapp')
+        cache = self.directory / 'releases'
+        previous = cache / 'prior-release' / 'images' / 'whatsapp'
+        export_image(self.saved, 'whatsapp', 'c' * 40, previous, 122, 1)
+        (previous / image['archive']).write_bytes(b'corrupt')
+        client = Mock()
+        client.get.return_value = self.metadata(image)
+        def download(metadata, destination, maximum):
+            with zipfile.ZipFile(destination, 'w') as archive:
+                archive.write(self.directory / 'whatsapp' / image['archive'], image['archive'])
+                archive.write(self.directory / 'whatsapp' / 'whatsapp.json', 'whatsapp.json')
+            return destination
+        client.download.side_effect = download
+        received = fetch_image(client, self.release, image, self.directory / 'received', cache)
+        self.assertEqual(image['archiveSha256'], file_hash(received))
+        client.download.assert_called_once()
+
+    def test_rebuilt_cache_must_match_current_ci_archive_sha(self):
+        image = next(row for row in self.images if row['component'] == 'whatsapp')
+        cache = self.directory / 'releases'
+        previous = cache / 'prior-release' / 'images' / 'whatsapp'
+        export_image(self.saved, 'whatsapp', 'c' * 40, previous, 122, 1)
+        altered = dict(image, archiveSha256='f' * 64)
+        output = self.directory / 'received'
+        output.mkdir()
+        self.assertIsNone(restore_cached_image(cache, altered, output))
+        self.assertFalse((output / image['archive']).exists())
 
     def test_collector_reuses_successful_receipts_from_previous_partial_attempt(self):
         repo = self.directory / 'repo'

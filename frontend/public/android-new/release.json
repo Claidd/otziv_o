@@ -1,12 +1,12 @@
 {
   "enabled": true,
-  "versionCode": 76,
-  "versionName": "1.0.76",
+  "versionCode": 77,
+  "versionName": "1.0.77",
   "minSupportedVersionCode": 0,
   "required": false,
-  "notes": "Исправлено отображение платежей в тёмной теме. Обновление с 1.0.75 устанавливается поверх приложения.",
-  "fileSize": 4381850,
-  "sha256": "F24BD6CFE4D0A1F319A45CD55684D04CAE754B515D6B03648FB0B9DEB6941E94",
-  "publishedAt": "2026-10-17T13:33:30.7060128+00:00",
-  "downloadUrl": "/android-new/otziv-v1.0.76.apk"
+  "notes": "Полный текст отзыва в разделах «Выгул» и «Публикация» открывается в удобном окне для просмотра и правки.",
+  "fileSize": 4382498,
+  "sha256": "75B3ADB62DFCA1E82085F70FBE3C795F662D9C8D48A382CD4724A90F570A7B50",
+  "publishedAt": "2026-10-18T11:03:19Z",
+  "downloadUrl": "/android-new/otziv-v1.0.77.apk"
 }

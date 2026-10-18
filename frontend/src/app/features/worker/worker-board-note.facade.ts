@@ -50,6 +50,7 @@ export type WorkerBoardNoteFacadeDeps = {
 };
 
 export class WorkerBoardNoteFacade {
+  private reviewFieldSaveVersion = 0;
   readonly editingOrderNoteId = signal<number | null>(null);
   readonly savedOrderNoteId = signal<number | null>(null);
   readonly expandedOrderNoteIds = signal<Record<number, boolean>>({});
@@ -57,7 +58,6 @@ export class WorkerBoardNoteFacade {
   readonly editingReviewFieldKey = signal<string | null>(null);
   readonly reviewFieldDrafts = signal<Record<string, string>>({});
   readonly savedReviewFieldKey = signal<string | null>(null);
-  readonly expandedReviewTextIds = signal<Record<number, boolean>>({});
   readonly editingReviewNoteId = signal<number | null>(null);
   readonly reviewNoteDrafts = signal<Record<number, string>>({});
   readonly savedReviewNoteId = signal<number | null>(null);
@@ -207,19 +207,18 @@ export class WorkerBoardNoteFacade {
       next: () => {
         this.deps.setBoardPatch(workerPatchReviewField(this.deps.board(), review.id, field, value));
         this.deps.mutationKey.set(null);
+        if (this.editingReviewFieldKey() === fieldKey) {
+          this.editingReviewFieldKey.set(null);
+        }
+        this.reviewFieldDrafts.update((drafts) => workerRemoveRecordKey(drafts, fieldKey));
+        const saveVersion = ++this.reviewFieldSaveVersion;
         this.savedReviewFieldKey.set(fieldKey);
         this.deps.toastService.success(field === 'text' ? 'Текст сохранен' : 'Замечание сохранено', `Отзыв #${review.id} обновлен`);
 
         window.setTimeout(() => {
-          if (this.savedReviewFieldKey() === fieldKey) {
+          if (this.reviewFieldSaveVersion === saveVersion && this.savedReviewFieldKey() === fieldKey) {
             this.savedReviewFieldKey.set(null);
           }
-
-          if (this.editingReviewFieldKey() === fieldKey) {
-            this.editingReviewFieldKey.set(null);
-          }
-
-          this.reviewFieldDrafts.update((drafts) => workerRemoveRecordKey(drafts, fieldKey));
         }, 1000);
       },
       error: (err) => {
@@ -235,10 +234,6 @@ export class WorkerBoardNoteFacade {
   reviewFieldValue(review: WorkerReviewItem, field: ReviewEditableField): string {
     const key = workerReviewFieldKey(review, field);
     return this.reviewFieldDrafts()[key] ?? workerReviewFieldSourceValue(review, field);
-  }
-
-  toggleReviewText(review: WorkerReviewItem): void {
-    this.expandedReviewTextIds.update((items) => ({ ...items, [review.id]: !items[review.id] }));
   }
 
   startReviewNoteEdit(review: WorkerReviewItem): void {
