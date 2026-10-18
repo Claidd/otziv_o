@@ -69,6 +69,7 @@ class ContractorAccrualAdjustmentServiceTest {
     @Mock private ContractorPaymentBusinessClock businessClock;
     @Mock private BusinessAuditService businessAuditService;
     @Mock private ApplicationEventPublisher eventPublisher;
+    @Mock private ContractorBonusTelegramNotificationService bonusTelegramNotificationService;
 
     @InjectMocks private ContractorAccrualAdjustmentService service;
 
@@ -123,6 +124,7 @@ class ContractorAccrualAdjustmentServiceTest {
                 ContractorAccrualAdjustedEvent.class);
         verify(eventPublisher).publishEvent(published.capture());
         assertThat(published.getValue().effectiveOn()).isEqualTo(effectiveOn);
+        verify(bonusTelegramNotificationService).enqueue(entry.getValue());
         verify(businessAuditService).recordRequiredInCurrentTransaction(
                 eq("CREATE_CONTRACTOR_ACCRUAL_ADJUSTMENT"), eq("CONTRACTOR_ACCRUAL_ADJUSTMENT"),
                 eq(71L), any(), any(), any(), any(), any()
@@ -148,6 +150,27 @@ class ContractorAccrualAdjustmentServiceTest {
                 .hasMessageContaining("свободную сумму");
         verify(adjustmentRepository, never()).saveAndFlush(any());
         verifyNoInteractions(businessAuditService, eventPublisher);
+        verifyNoInteractions(bonusTelegramNotificationService);
+    }
+
+    @Test
+    void successfulDeductionDoesNotSendBonusNotification() {
+        stubLockedProfile();
+        LocalDate effectiveOn = LocalDate.of(2026, 10, 16);
+        when(businessClock.today()).thenReturn(effectiveOn);
+        when(businessClock.now()).thenReturn(effectiveOn.atStartOfDay());
+        when(taskCapacityService.ordinaryAvailable(profile, ContractorAllocationMode.LIVE))
+                .thenReturn(10_000L);
+        when(rewardLedgerService.totalAccrued(profile)).thenReturn(10_000L);
+        when(adjustmentRepository.saveAndFlush(any(ContractorAccrualAdjustment.class)))
+                .thenAnswer(invocation -> savedWithId(invocation.getArgument(0), 72L));
+
+        service.create(USER_ID, PROFILE_ID, request(
+                ContractorAccrualAdjustmentKind.DEDUCTION, 1_000L, "2026-10", "deduction-ok"
+        ));
+
+        verify(adjustmentRepository).saveAndFlush(any());
+        verifyNoInteractions(bonusTelegramNotificationService);
     }
 
     @Test
@@ -168,6 +191,7 @@ class ContractorAccrualAdjustmentServiceTest {
         assertThat(response.id()).isEqualTo(81L);
         verify(adjustmentRepository, never()).saveAndFlush(any());
         verifyNoInteractions(businessAuditService, eventPublisher);
+        verifyNoInteractions(bonusTelegramNotificationService);
     }
 
     @Test
@@ -241,6 +265,7 @@ class ContractorAccrualAdjustmentServiceTest {
                 ContractorAccrualAdjustedEvent.class);
         verify(eventPublisher).publishEvent(published.capture());
         assertThat(published.getValue().effectiveOn()).isEqualTo(effectiveOn);
+        verifyNoInteractions(bonusTelegramNotificationService);
     }
 
     @Test

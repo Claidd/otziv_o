@@ -64,6 +64,7 @@ public class ContractorAccrualAdjustmentService {
     private final ContractorPaymentBusinessClock businessClock;
     private final BusinessAuditService businessAuditService;
     private final ApplicationEventPublisher eventPublisher;
+    private final ContractorBonusTelegramNotificationService bonusTelegramNotificationService;
 
     @Transactional(readOnly = true)
     public List<ContractorAccrualAdjustmentResponse> history(Long userId, Long profileId) {
@@ -130,6 +131,9 @@ public class ContractorAccrualAdjustmentService {
         entry.setIdempotencyKey(validated.idempotencyKey());
         ContractorAccrualAdjustment saved = adjustmentRepository.saveAndFlush(entry);
         audit(saved, "CREATE_CONTRACTOR_ACCRUAL_ADJUSTMENT");
+        if (saved.getKind() == ContractorAccrualAdjustmentKind.BONUS) {
+            bonusTelegramNotificationService.enqueue(saved);
+        }
         eventPublisher.publishEvent(new ContractorAccrualAdjustedEvent(this, saved.getEffectiveOn()));
         return response(saved);
     }
