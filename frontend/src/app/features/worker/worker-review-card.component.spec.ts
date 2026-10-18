@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import type { WorkerReviewItem } from '../../core/worker.api';
 import { WorkerReviewCardComponent } from './worker-review-card.component';
+import { workerReviewFieldKey } from './worker-board-note.helpers';
 
 function review(overrides: Partial<WorkerReviewItem> = {}): WorkerReviewItem {
   return {
@@ -168,30 +169,111 @@ describe('WorkerReviewCardComponent', () => {
     expect(cardFooter?.lastElementChild?.tagName).toBe('FOOTER');
   });
 
-  it('marks a card as fluid when a long review text is expanded', () => {
+  it.each(['publish', 'nagul'] as const)('opens the complete review text in a dialog in %s and keeps the card compact', async (section) => {
     const fixture = TestBed.createComponent(WorkerReviewCardComponent);
     const component = fixture.componentInstance;
-    component.review = review({ text: 'Длинный текст отзыва. '.repeat(12) });
-    component.expandedReviewTextIds = { [component.review.id]: true };
-    let toggleRequested = false;
-    component.reviewTextToggled.subscribe(() => {
-      toggleRequested = true;
+    component.review = review({ text: 'Длинный текст отзыва. '.repeat(30) });
+    component.activeSection = section;
+    let editRequested = false;
+    component.reviewFieldEditStarted.subscribe((field) => {
+      editRequested = field === 'text';
     });
 
     fixture.detectChanges();
 
     const element = fixture.nativeElement as HTMLElement;
     const card = element.querySelector<HTMLElement>('.review-card');
-    const textEditor = element.querySelector<HTMLElement>('.review-field-editor--text');
-    const toggle = element.querySelector<HTMLElement>('.review-text-toggle');
+    const preview = element.querySelector<HTMLButtonElement>('.review-text-preview');
+    const dialog = element.querySelector<HTMLDialogElement>('.review-text-dialog');
 
-    expect(card?.classList.contains('review-card--fluid')).toBe(true);
-    expect(textEditor?.classList.contains('expanded')).toBe(true);
-    expect(toggle?.textContent?.trim()).toBe('свернуть');
+    expect(card?.classList.contains('review-card--fluid')).toBe(false);
+    expect(dialog?.open).toBe(false);
+    preview?.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
 
-    toggle?.click();
+    expect(editRequested).toBe(true);
+    expect(dialog?.open).toBe(true);
+    expect(element.querySelector<HTMLTextAreaElement>('.review-text-dialog__text')?.value).toBe(component.review.text);
 
-    expect(toggleRequested).toBe(true);
+    element.querySelector<HTMLButtonElement>('.review-text-dialog__close')?.click();
+    fixture.detectChanges();
+    expect(dialog?.open).toBe(false);
+  });
+
+  it.each(['publish', 'nagul'] as const)('keeps dialog actions in the visible viewport when the mobile keyboard opens in %s', (section) => {
+    const widthDescriptor = Object.getOwnPropertyDescriptor(window, 'innerWidth');
+    const viewportDescriptor = Object.getOwnPropertyDescriptor(window, 'visualViewport');
+    const viewport = Object.assign(new EventTarget(), { height: 480, offsetTop: 8 });
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+    Object.defineProperty(window, 'visualViewport', { configurable: true, value: viewport });
+
+    try {
+      const fixture = TestBed.createComponent(WorkerReviewCardComponent);
+      fixture.componentInstance.review = review();
+      fixture.componentInstance.activeSection = section;
+      fixture.detectChanges();
+      const element = fixture.nativeElement as HTMLElement;
+      element.querySelector<HTMLButtonElement>('.review-text-preview')?.click();
+      fixture.detectChanges();
+
+      const dialog = element.querySelector<HTMLDialogElement>('.review-text-dialog');
+      expect(dialog?.style.height).toBe('480px');
+      expect(dialog?.style.top).toBe('8px');
+
+      viewport.height = 310;
+      viewport.dispatchEvent(new Event('resize'));
+      fixture.detectChanges();
+      expect(dialog?.style.height).toBe('310px');
+      fixture.destroy();
+    } finally {
+      if (widthDescriptor) {
+        Object.defineProperty(window, 'innerWidth', widthDescriptor);
+      } else {
+        Reflect.deleteProperty(window, 'innerWidth');
+      }
+      if (viewportDescriptor) {
+        Object.defineProperty(window, 'visualViewport', viewportDescriptor);
+      } else {
+        Reflect.deleteProperty(window, 'visualViewport');
+      }
+    }
+  });
+
+  it.each(['publish', 'nagul'] as const)('edits review text in %s, saves through the existing event, and closes after success', (section) => {
+    const fixture = TestBed.createComponent(WorkerReviewCardComponent);
+    const component = fixture.componentInstance;
+    component.review = review({ text: 'Исходный текст' });
+    component.activeSection = section;
+    const key = workerReviewFieldKey(component.review, 'text');
+    let saved = false;
+    component.reviewFieldEditStarted.subscribe(() => {
+      component.editingReviewFieldKey = key;
+    });
+    component.reviewFieldDraftChanged.subscribe(({ value }) => {
+      component.reviewFieldDrafts = { [key]: value };
+    });
+    component.reviewFieldSaveRequested.subscribe(() => {
+      saved = true;
+    });
+
+    fixture.detectChanges();
+    const element = fixture.nativeElement as HTMLElement;
+    element.querySelector<HTMLButtonElement>('.review-text-preview')?.click();
+    fixture.detectChanges();
+
+    const textarea = element.querySelector<HTMLTextAreaElement>('.review-text-dialog__text')!;
+    expect(textarea.readOnly).toBe(false);
+    textarea.value = 'Полный исправленный текст';
+    textarea.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    element.querySelector<HTMLButtonElement>('.review-text-dialog__save')?.click();
+    expect(saved).toBe(true);
+
+    fixture.componentRef.setInput('savedReviewFieldKey', key);
+    fixture.detectChanges();
+    expect(element.querySelector<HTMLDialogElement>('.review-text-dialog')?.open).toBe(false);
   });
 
   it('adds soft section tones for review work cards', () => {
@@ -654,9 +736,9 @@ describe('WorkerReviewCardComponent', () => {
     fixture.detectChanges();
 
     const element = fixture.nativeElement as HTMLElement;
-    const textField = element.querySelector<HTMLTextAreaElement>(
-      '.review-field-editor--text textarea',
-    );
+    element.querySelector<HTMLButtonElement>('.review-text-preview')?.click();
+    fixture.detectChanges();
+    const textField = element.querySelector<HTMLTextAreaElement>('.review-text-dialog__text');
     textField!.value = 'New text';
     textField!.dispatchEvent(new Event('input', { bubbles: true }));
 

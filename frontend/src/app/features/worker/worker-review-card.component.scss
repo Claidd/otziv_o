@@ -362,13 +362,6 @@
   min-width: 0;
 }
 
-.review-text-box {
-  position: relative;
-  display: block;
-  min-width: 0;
-  line-height: 0;
-}
-
 .review-field-editor textarea {
   display: block;
   width: 100%;
@@ -393,32 +386,166 @@
   cursor: text;
 }
 
-.review-field-editor--text textarea {
-  padding-bottom: 1.95rem;
+.review-text-preview {
+  box-sizing: border-box;
+  display: -webkit-box;
+  width: 100%;
+  height: 9rem;
   overflow: hidden;
-}
-
-.review-field-editor--text.expanded textarea {
-  height: auto;
-  min-height: 14rem;
-  overflow: hidden;
-  field-sizing: content;
-}
-
-.review-text-toggle {
-  position: absolute;
-  right: 0.72rem;
-  bottom: 0.72rem;
-  z-index: 1;
-  padding-left: 0.25rem;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+  border: 1px solid rgba(103, 116, 131, 0.22);
+  border-radius: 0.8rem;
+  padding: 0.72rem;
+  color: var(--otziv-dark);
   background: var(--otziv-field-background);
-  color: var(--otziv-info);
-  font-family: var(--otziv-font-family);
-  font-size: 0.62rem;
-  font-weight: 900;
-  line-height: 1;
+  font: 700 0.82rem/1.35 var(--otziv-font-family);
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   cursor: pointer;
-  user-select: none;
+}
+
+.review-text-preview:focus-visible {
+  outline: 0.16rem solid #f4c542;
+  outline-offset: 0.12rem;
+}
+
+.review-text-dialog {
+  box-sizing: border-box;
+  width: min(46rem, calc(100vw - 2rem));
+  height: min(48rem, 90dvh);
+  max-width: none;
+  max-height: none;
+  margin: auto;
+  border: 1px solid rgba(103, 116, 131, 0.26);
+  border-radius: 1.1rem;
+  padding: 0;
+  color: var(--otziv-dark);
+  background: var(--otziv-white);
+  box-shadow: 0 1.5rem 4rem rgba(17, 22, 36, 0.32);
+}
+
+.review-text-dialog:not([open]) {
+  display: none;
+}
+
+.review-text-dialog[open] {
+  display: grid;
+}
+
+.review-text-dialog::backdrop {
+  background: rgba(12, 18, 30, 0.68);
+}
+
+.review-text-dialog__panel {
+  box-sizing: border-box;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 0.8rem;
+  min-height: 0;
+  padding: 1rem;
+}
+
+.review-text-dialog__header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.review-text-dialog__label {
+  color: var(--otziv-info);
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.review-text-dialog__header h2 {
+  margin: 0.15rem 0 0;
+  font-size: 1.3rem;
+  line-height: 1.2;
+}
+
+.review-text-dialog__close {
+  display: grid;
+  flex: 0 0 2.6rem;
+  width: 2.6rem;
+  height: 2.6rem;
+  place-items: center;
+  border: 1px solid rgba(103, 116, 131, 0.26);
+  border-radius: 0.8rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-field-background);
+  cursor: pointer;
+}
+
+.review-text-dialog__text {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 0;
+  resize: none;
+  overflow-y: auto;
+  border: 1px solid rgba(103, 116, 131, 0.26);
+  border-radius: 0.8rem;
+  padding: 0.9rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-field-background);
+  font: 500 max(1rem, 16px)/1.55 var(--otziv-font-family);
+  white-space: pre-wrap;
+  overscroll-behavior: contain;
+}
+
+.review-text-dialog__text:focus-visible {
+  outline: 0.16rem solid #f4c542;
+  outline-offset: 0.08rem;
+}
+
+.review-text-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.65rem;
+}
+
+.review-text-dialog__actions button {
+  min-width: 8rem;
+  min-height: 2.8rem;
+  border: 1px solid rgba(103, 116, 131, 0.26);
+  border-radius: 0.8rem;
+  padding: 0.45rem 0.8rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-field-background);
+  font: 800 0.95rem var(--otziv-font-family);
+  cursor: pointer;
+}
+
+.review-text-dialog__actions .review-text-dialog__save {
+  border-color: #8fd6bd;
+  color: #126c56;
+  background: #d9f5e9;
+}
+
+.review-text-dialog button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+:host-context(body.otziv-dark-theme) .review-text-dialog {
+  border-color: rgba(122, 167, 220, 0.3);
+  background: #20262f;
+}
+
+:host-context(body.otziv-dark-theme) .review-text-dialog__text,
+:host-context(body.otziv-dark-theme) .review-text-dialog__close,
+:host-context(body.otziv-dark-theme) .review-text-dialog__actions .review-text-dialog__cancel {
+  border-color: rgba(122, 167, 220, 0.3);
+  color: #eef4ff;
+  background: #161d26;
+}
+
+:host-context(body.otziv-dark-theme) .review-text-dialog__actions .review-text-dialog__save {
+  border-color: rgba(115, 211, 177, 0.46);
+  color: #a9ead3;
+  background: #274d43;
 }
 
 .review-field-editor--answer textarea {
@@ -994,33 +1121,11 @@
 
   .review-field-editor--text {
     min-height: 0;
-    grid-template-rows: minmax(0, 1fr) auto;
   }
 
-  .review-text-box {
-    display: grid;
-    min-height: 0;
-  }
-
-  .review-field-editor--text textarea {
+  .review-text-preview {
     height: 100%;
     min-height: 5.5rem;
-    field-sizing: fixed;
-  }
-
-  .review-field-editor--text.expanded textarea {
-    height: auto;
-    min-height: 14rem;
-    field-sizing: content;
-    overflow-y: hidden;
-    overscroll-behavior: auto;
-    scrollbar-width: auto;
-  }
-
-  .review-field-editor--text.editing textarea {
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    scrollbar-width: thin;
   }
 
   .review-card-footer {
@@ -1072,6 +1177,32 @@
   }
 }
 
+@media (max-width: 860px) {
+  .review-text-dialog {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: auto;
+    left: 0;
+    width: 100vw;
+    height: 100dvh;
+    border: 0;
+    border-radius: 0;
+    margin: 0;
+  }
+
+  .review-text-dialog__panel {
+    gap: 0.65rem;
+    padding: max(0.8rem, env(safe-area-inset-top)) max(0.8rem, env(safe-area-inset-right))
+      max(0.8rem, env(safe-area-inset-bottom)) max(0.8rem, env(safe-area-inset-left));
+  }
+
+  .review-text-dialog__actions button {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
 @media (max-width: 860px) and (max-height: 790px) {
   .worker-card {
     height: clamp(25rem, calc(100dvh - 16.5rem), 31rem);
@@ -1091,8 +1222,7 @@
     bottom: -0.55rem;
   }
 
-  .review-field-editor--text textarea,
-  .review-field-editor--text.expanded textarea {
+  .review-text-preview {
     min-height: 4rem;
   }
 
@@ -1136,8 +1266,7 @@
     gap: 0.2rem;
   }
 
-  .review-field-editor--text textarea,
-  .review-field-editor--text.expanded textarea {
+  .review-text-preview {
     min-height: 2.5rem;
   }
 

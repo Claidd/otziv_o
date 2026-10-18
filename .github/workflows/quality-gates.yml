@@ -48,8 +48,10 @@ on:
           - c26-keycloak
           - c26-nginx
           - c28-nginx
+          - c31-nginx
           - c26-phpmyadmin
           - c27-phpmyadmin
+          - c31-phpmyadmin
           - c29-dozzle
           - c29-prometheus
           - c29-loki

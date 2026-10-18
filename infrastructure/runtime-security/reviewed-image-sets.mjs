@@ -55,6 +55,7 @@ const RELEASE_SETS = Object.freeze({
   'c26-keycloak': { component: 'keycloak', path: 'infrastructure/runtime-security/reviewed-images-c26-keycloak.json', context: 'infrastructure/runtime-security/builds/c26-keycloak', dockerfile: 'infrastructure/runtime-security/builds/c26-keycloak/Dockerfile' },
   'c26-nginx': { component: 'nginx', path: 'infrastructure/runtime-security/reviewed-images-c26-nginx.json', context: 'infrastructure/runtime-security/builds/c26-nginx', dockerfile: 'infrastructure/runtime-security/builds/c26-nginx/Dockerfile' },
   'c28-nginx': { component: 'nginx', path: 'infrastructure/runtime-security/reviewed-images-c28-nginx.json', context: 'infrastructure/runtime-security/builds/c28-nginx', dockerfile: 'infrastructure/runtime-security/builds/c28-nginx/Dockerfile' },
+  'c31-nginx': { component: 'nginx', path: 'infrastructure/runtime-security/reviewed-images-c31-nginx.json', context: 'infrastructure/runtime-security/builds/c31-nginx', dockerfile: 'infrastructure/runtime-security/builds/c31-nginx/Dockerfile' },
   'c29-dozzle': { component: 'dozzle', path: 'infrastructure/runtime-security/reviewed-images-c29-dozzle.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c29-dozzle/Dockerfile' },
   'c29-prometheus': { component: 'prometheus', path: 'infrastructure/runtime-security/reviewed-images-c29-prometheus.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c29-prometheus/Dockerfile' },
   'c29-loki': { component: 'loki', path: 'infrastructure/runtime-security/reviewed-images-c29-loki.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c29-loki/Dockerfile' },
@@ -66,6 +67,7 @@ const RELEASE_SETS = Object.freeze({
   'c29-local-s3': { component: 'minio', path: 'infrastructure/runtime-security/reviewed-images-c29-local-s3.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c29-local-s3/Dockerfile' },
   'c26-phpmyadmin': { component: 'phpmyadmin', path: 'infrastructure/runtime-security/reviewed-images-c26-phpmyadmin.json', context: 'infrastructure/runtime-security/builds/c26-phpmyadmin', dockerfile: 'infrastructure/runtime-security/builds/c26-phpmyadmin/Dockerfile' },
   'c27-phpmyadmin': { component: 'phpmyadmin', path: 'infrastructure/runtime-security/reviewed-images-c27-phpmyadmin.json', context: 'infrastructure/runtime-security/builds/c27-phpmyadmin', dockerfile: 'infrastructure/runtime-security/builds/c27-phpmyadmin/Dockerfile' },
+  'c31-phpmyadmin': { component: 'phpmyadmin', path: 'infrastructure/runtime-security/reviewed-images-c31-phpmyadmin.json', context: 'infrastructure/runtime-security/builds/c31-phpmyadmin', dockerfile: 'infrastructure/runtime-security/builds/c31-phpmyadmin/Dockerfile' },
 });
 // These two local-stack dependencies were absent from the immutable C7 manifest.
 // Keep their original pins and service coverage explicit when adding publication.

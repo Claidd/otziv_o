@@ -1,4 +1,4 @@
-import { Component, DestroyRef, EventEmitter, inject, Input, Output } from '@angular/core';
+import { Component, DestroyRef, ElementRef, EventEmitter, inject, Input, OnChanges, Output, signal, SimpleChanges, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import type { WorkerReviewItem, WorkerSection } from '../../core/worker.api';
 import { mobileKeyboardActionBottom } from '../../shared/mobile-keyboard-action-bottom';
@@ -20,7 +20,6 @@ import {
   workerReviewFieldSourceValue,
   workerReviewNoteMutationKey,
   workerReviewNoteTitle,
-  workerReviewTextNeedsToggle,
   workerSaveReviewFieldMutationKey,
   workerSideNoteKey,
   workerSideNoteMutationKey,
@@ -43,8 +42,11 @@ export type SideNoteValueChange = {
   templateUrl: './worker-review-card.component.html',
   styleUrl: './worker-review-card.component.scss',
 })
-export class WorkerReviewCardComponent {
+export class WorkerReviewCardComponent implements OnChanges {
   private readonly destroyRef = inject(DestroyRef);
+
+  @ViewChild('reviewTextDialog') private reviewTextDialog?: ElementRef<HTMLDialogElement>;
+  @ViewChild('reviewTextPreview') private reviewTextPreview?: ElementRef<HTMLButtonElement>;
 
   @Input() review!: WorkerReviewItem;
   @Input() activeSection: WorkerSection = 'publish';
@@ -61,7 +63,6 @@ export class WorkerReviewCardComponent {
   @Input() recoveryTaskDateDrafts: Record<number, string> = {};
   @Input() editingRecoveryTaskDateId: number | null = null;
   @Input() savedRecoveryTaskDateId: number | null = null;
-  @Input() expandedReviewTextIds: Record<number, boolean> = {};
   @Input() editingReviewNoteId: number | null = null;
   @Input() reviewNoteDrafts: Record<number, string> = {};
   @Input() savedReviewNoteId: number | null = null;
@@ -78,13 +79,15 @@ export class WorkerReviewCardComponent {
   isReviewTitleExpanded = false;
   isBotNameEditing = false;
   botNameDraft = '';
+  reviewTextDialogOpen = false;
+  readonly reviewTextDialogViewportHeight = signal<string | null>(null);
+  readonly reviewTextDialogViewportTop = signal<string | null>(null);
   readonly mobileReviewActionBottom = mobileKeyboardActionBottom(this.destroyRef);
 
   @Output() readonly reviewFieldEditStarted = new EventEmitter<ReviewEditableField>();
   @Output() readonly reviewFieldDraftChanged = new EventEmitter<ReviewFieldValueChange>();
   @Output() readonly reviewFieldEditCanceled = new EventEmitter<ReviewEditableField>();
   @Output() readonly reviewFieldSaveRequested = new EventEmitter<ReviewEditableField>();
-  @Output() readonly reviewTextToggled = new EventEmitter<void>();
   @Output() readonly reviewNoteEditStarted = new EventEmitter<void>();
   @Output() readonly reviewNoteDraftChanged = new EventEmitter<string>();
   @Output() readonly reviewNoteEditCanceled = new EventEmitter<void>();
@@ -105,6 +108,88 @@ export class WorkerReviewCardComponent {
   @Output() readonly accountRepairRequested = new EventEmitter<string>();
   @Output() readonly doneRequested = new EventEmitter<void>();
   @Output() readonly editOpened = new EventEmitter<void>();
+
+  constructor() {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const viewport = window.visualViewport;
+    window.addEventListener('resize', this.syncReviewTextDialogViewport);
+    viewport?.addEventListener('resize', this.syncReviewTextDialogViewport);
+    viewport?.addEventListener('scroll', this.syncReviewTextDialogViewport);
+    this.destroyRef.onDestroy(() => {
+      window.removeEventListener('resize', this.syncReviewTextDialogViewport);
+      viewport?.removeEventListener('resize', this.syncReviewTextDialogViewport);
+      viewport?.removeEventListener('scroll', this.syncReviewTextDialogViewport);
+    });
+  }
+
+  private readonly syncReviewTextDialogViewport = (): void => {
+    const viewport = typeof window === 'undefined' ? null : window.visualViewport;
+    if (!viewport || window.innerWidth > 860) {
+      this.reviewTextDialogViewportHeight.set(null);
+      this.reviewTextDialogViewportTop.set(null);
+      return;
+    }
+
+    this.reviewTextDialogViewportHeight.set(`${Math.round(viewport.height)}px`);
+    this.reviewTextDialogViewportTop.set(`${Math.round(viewport.offsetTop)}px`);
+  };
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (this.reviewTextDialogOpen && changes['savedReviewFieldKey'] && this.isReviewFieldSaved('text')) {
+      this.closeReviewText(false);
+    }
+  }
+
+  openReviewText(): void {
+    const dialog = this.reviewTextDialog?.nativeElement;
+    if (!dialog || this.reviewTextDialogOpen) {
+      return;
+    }
+
+    this.reviewTextDialogOpen = true;
+    this.syncReviewTextDialogViewport();
+    this.reviewFieldEditStarted.emit('text');
+    if (typeof dialog.showModal === 'function') {
+      dialog.showModal();
+    } else {
+      dialog.setAttribute('open', '');
+    }
+    dialog.querySelector<HTMLButtonElement>('.review-text-dialog__close')?.focus();
+  }
+
+  closeReviewText(discardDraft = true): void {
+    if (!this.reviewTextDialogOpen || (discardDraft && this.isMutating(this.reviewFieldMutationKey('text')))) {
+      return;
+    }
+
+    this.reviewTextDialogOpen = false;
+    const dialog = this.reviewTextDialog?.nativeElement;
+    if (dialog?.open) {
+      if (typeof dialog.close === 'function') {
+        dialog.close();
+      } else {
+        dialog.removeAttribute('open');
+      }
+    }
+    if (discardDraft && this.isReviewFieldEditing('text')) {
+      this.reviewFieldEditCanceled.emit('text');
+    }
+    this.reviewTextPreview?.nativeElement.focus();
+  }
+
+  cancelReviewTextDialog(event: Event): void {
+    event.preventDefault();
+    this.closeReviewText();
+  }
+
+  closeReviewTextOnBackdrop(event: MouseEvent): void {
+    if (event.target === event.currentTarget) {
+      this.closeReviewText();
+    }
+  }
 
   isBadTask(): boolean {
     return !!this.review.badTask;
@@ -356,18 +441,6 @@ export class WorkerReviewCardComponent {
 
   reviewFieldMutationKey(field: ReviewEditableField): string {
     return workerSaveReviewFieldMutationKey(this.review, field);
-  }
-
-  shouldShowReviewTextToggle(): boolean {
-    return workerReviewTextNeedsToggle(this.review);
-  }
-
-  isReviewTextExpanded(): boolean {
-    return Boolean(this.expandedReviewTextIds[this.review.id]);
-  }
-
-  isReviewTextOpen(): boolean {
-    return this.isReviewTextExpanded() || this.isReviewFieldEditing('text');
   }
 
   reviewNoteValue(): string {

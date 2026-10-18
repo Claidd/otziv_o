@@ -1,0 +1,90 @@
+[
+    {
+        "Id": "sha256:c4730b6dcda075ce9592f48af8a7f5f7cdbaa43c399dfceaefe9bf5dfa8dc28d",
+        "RepoTags": [],
+        "RepoDigests": [
+            "ghcr.io/claidd/otziv-security@sha256:a08d8948f53646b5fc6ba2e02cb27467683b3c2fb3922007014888bea03b984d"
+        ],
+        "Parent": "",
+        "Comment": "buildkit.dockerfile.v0",
+        "Created": "2026-10-18T11:22:04.312535269Z",
+        "DockerVersion": "",
+        "Author": "",
+        "Config": {
+            "Hostname": "",
+            "Domainname": "",
+            "User": "",
+            "AttachStdin": false,
+            "AttachStdout": false,
+            "AttachStderr": false,
+            "ExposedPorts": {
+                "80/tcp": {}
+            },
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "NGINX_VERSION=1.30.4",
+                "PKG_RELEASE=1",
+                "DYNPKG_RELEASE=1",
+                "NJS_VERSION=1.0.1",
+                "NJS_RELEASE=1",
+                "ACME_VERSION=0.4.1"
+            ],
+            "Cmd": [
+                "nginx",
+                "-g",
+                "daemon off;"
+            ],
+            "Image": "",
+            "Volumes": null,
+            "WorkingDir": "/",
+            "Entrypoint": [
+                "/docker-entrypoint.sh"
+            ],
+            "OnBuild": null,
+            "Labels": {
+                "com.otziv.publication.revision": "67a688efb7bd089f1430c4439579b75fe48f7af2",
+                "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+                "com.otziv.reviewed-component": "nginx",
+                "com.otziv.security.patch": "Official nginx1.30.4 stable; same Alpine3.24 branch package updates",
+                "maintainer": "NGINX Docker Maintainers <docker-maint@nginx.com>"
+            },
+            "StopSignal": "SIGQUIT"
+        },
+        "Architecture": "amd64",
+        "Os": "linux",
+        "Size": 70432342,
+        "GraphDriver": {
+            "Data": {
+                "LowerDir": "/var/lib/docker/overlay2/eb4cb663af9ec2cc7e6d2347e68efca4e42b4ab867eaca68efc87b86907f7e3a/diff:/var/lib/docker/overlay2/ef8fd91ed181ed2853f861851a136b8ba11e41b81de90f62ee432cdb32d694ee/diff:/var/lib/docker/overlay2/de9909a9fbce80deacae7480c2032659866b45cec5a66da6537c9e55baa9f166/diff:/var/lib/docker/overlay2/c7f64da7c5aceb24ebab9f7f2cd2e2a1d6b9e92f390738d3433bd5ede5053efb/diff:/var/lib/docker/overlay2/9d801c421eea3896c7cf27fa3ab20609ff4b1a373070e7ba132a16d00f7ab0e2/diff:/var/lib/docker/overlay2/d68ac7f4f31da5364f365886b350730607613ba353600e4fa7a0e8b92c684f8c/diff:/var/lib/docker/overlay2/a7fc16d245855bd611830bc6a086e2b3c4cd5782ad473b6adb333d93976a9356/diff:/var/lib/docker/overlay2/7b18295fc13e14ccea6d3760f7e251d78e3b37e407809d992ea8d726e231482b/diff:/var/lib/docker/overlay2/ed07b5d061abf1dc48dd272edb084ec4aaf089004ac29f05a61c470064efc2b6/diff:/var/lib/docker/overlay2/5b86918dbe5873e0a6d86796d12c9d84f8c108b1f2c5d545f010da7799dcff02/diff:/var/lib/docker/overlay2/8cb0911295eb73b875121337d13b370f785581808ed2c03b23463ddeb78211eb/diff:/var/lib/docker/overlay2/35c46a6b27d2b80923c6808abe62dd3f8405148c46443466d0ea1287889d62c7/diff",
+                "MergedDir": "/var/lib/docker/overlay2/759f8866f5ba01f61af763ad2966bb56630483296ea60ebddeef3745db59ab3b/merged",
+                "UpperDir": "/var/lib/docker/overlay2/759f8866f5ba01f61af763ad2966bb56630483296ea60ebddeef3745db59ab3b/diff",
+                "WorkDir": "/var/lib/docker/overlay2/759f8866f5ba01f61af763ad2966bb56630483296ea60ebddeef3745db59ab3b/work"
+            },
+            "Name": "overlay2"
+        },
+        "RootFS": {
+            "Type": "layers",
+            "Layers": [
+                "sha256:34884abbe92863fce933ed7c39c0e045631af0ed86d5cc0dfbdf9fdca426ce3c",
+                "sha256:84cbdb555a82aa30be7379831c3b42f9e47ce6b5e9252366058cda8366aac407",
+                "sha256:bcfe61bf39042c8e0db3138c3734a674184cb2b1ea15ef058ca019500008666b",
+                "sha256:9cc2a427511c2b0faf863976585ec18a9328e6eb837c87a61a4f10df6355d6ce",
+                "sha256:52071f7f756a6f9465c3aed773d057e828624898ea580ad04b449c4a495ee34f",
+                "sha256:f0696cdb71fe6a6572049d909d1f88c3e0f4e7e4d4b3fc96f8955c75876fa63d",
+                "sha256:04c07f9c0de8bd4fa8167e8de635b1fdc3fe3fb0cfcda6bb2fb2977ccf0b1283",
+                "sha256:85bb3570019b196fb23076fbd5adad3920191ce2e05291b2e2f7e47217a5e916",
+                "sha256:168c390bc1744d244a26db88c20d7a30fb87f470de1ed31180cd8ec72b5ed1f3",
+                "sha256:0ee0497220cbb5937281554ac5a07da4b67dd04f423f20ae1ba3c44d91892d75",
+                "sha256:838c0acda45f4733055c3dcccecdce6ad4fdfdff4210622ec9da1850d8a08106",
+                "sha256:3cb31be94528997ca3d099e05bc9cc8f14451a6c210fe350070b3b0ab9effc8e",
+                "sha256:070d11c31cfca0ba6a26fe2b075fdcc34d0512618c8dd9b9784b7a1f1ccf9831"
+            ]
+        },
+        "Metadata": {
+            "LastTagTime": "0001-01-01T00:00:00Z"
+        }
+    }
+]

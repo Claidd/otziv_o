@@ -7,7 +7,7 @@
   [class.card-tone--recovery]="isRecoveryTone()"
   [class.card-tone--publication]="isPublicationTone()"
   [class.card-tone--bad]="isBadTone()"
-  [class.review-card--fluid]="isReviewTextOpen() || isReviewFieldEditing('answer')"
+  [class.review-card--fluid]="isReviewFieldEditing('answer')"
 >
   <header>
     @if (!usesInteractiveTitle() && isReviewTitleLinkEnabled()) {
@@ -205,68 +205,16 @@
     </div>
   </header>
 
-  <div
-    class="review-field-editor review-field-editor--text"
-    [class.editing]="isReviewFieldEditing('text')"
-    [class.expanded]="isReviewTextOpen()"
-  >
-    <div class="review-text-box">
-      <textarea
-        [name]="'review-text-' + review.id"
-        [readonly]="!isReviewFieldEditing('text')"
-        [ngModel]="reviewFieldValue('text')"
-        (ngModelChange)="reviewFieldDraftChanged.emit({ field: 'text', value: $event })"
-        (focus)="reviewFieldEditStarted.emit('text')"
-        (click)="reviewFieldEditStarted.emit('text')"
-        aria-label="Текст отзыва"
-        placeholder="Текст отзыва"
-      ></textarea>
-
-      @if (shouldShowReviewTextToggle()) {
-        <span
-          class="review-text-toggle"
-          role="button"
-          tabindex="0"
-          [attr.aria-expanded]="isReviewTextExpanded()"
-          (click)="reviewTextToggled.emit()"
-          (keydown.enter)="reviewTextToggled.emit()"
-          (keydown.space)="$event.preventDefault(); reviewTextToggled.emit()"
-        >
-          {{ isReviewTextExpanded() ? 'свернуть' : 'развернуть' }}
-        </span>
-      }
-    </div>
-
-    @if (isReviewFieldEditing('text')) {
-      <div class="review-field-edit-actions">
-        <span class="field-save-actions">
-          <button
-            type="button"
-            class="cancel"
-            (click)="reviewFieldEditCanceled.emit('text')"
-            [disabled]="isMutating(reviewFieldMutationKey('text'))"
-            title="Отменить"
-          >
-            X
-          </button>
-          <button
-            type="button"
-            class="save"
-            (click)="reviewFieldSaveRequested.emit('text')"
-            [disabled]="
-              isMutating(reviewFieldMutationKey('text')) ||
-              !isReviewFieldChanged('text') ||
-              !reviewFieldValue('text').trim()
-            "
-            title="Сохранить текст"
-          >
-            <span class="material-icons-sharp">
-              {{ isReviewFieldSaved('text') ? 'check' : 'save' }}
-            </span>
-          </button>
-        </span>
-      </div>
-    }
+  <div class="review-field-editor review-field-editor--text">
+    <button
+      #reviewTextPreview
+      type="button"
+      class="review-text-preview"
+      [attr.aria-label]="'Открыть полный текст отзыва №' + review.id"
+      (click)="openReviewText()"
+    >
+      {{ reviewFieldValue('text') || 'Текст отзыва' }}
+    </button>
   </div>
 
   <div class="review-card-footer">
@@ -542,3 +490,59 @@
   </footer>
   </div>
 </article>
+
+<dialog
+  #reviewTextDialog
+  class="review-text-dialog"
+  [attr.aria-labelledby]="'review-text-dialog-title-' + review.id"
+  [style.height]="reviewTextDialogViewportHeight()"
+  [style.top]="reviewTextDialogViewportTop()"
+  (cancel)="cancelReviewTextDialog($event)"
+  (click)="closeReviewTextOnBackdrop($event)"
+>
+  <div class="review-text-dialog__panel">
+    <header class="review-text-dialog__header">
+      <div>
+        <span class="review-text-dialog__label">Отзыв #{{ review.id }}</span>
+        <h2 [id]="'review-text-dialog-title-' + review.id">Текст отзыва</h2>
+      </div>
+      <button
+        type="button"
+        class="review-text-dialog__close"
+        aria-label="Закрыть текст отзыва"
+        (click)="closeReviewText()"
+        [disabled]="isMutating(reviewFieldMutationKey('text'))"
+      >
+        <span class="material-icons-sharp" aria-hidden="true">close</span>
+      </button>
+    </header>
+
+    <textarea
+      class="review-text-dialog__text"
+      [name]="'review-text-full-' + review.id"
+      [readonly]="!isReviewFieldEditing('text')"
+      [ngModel]="reviewFieldValue('text')"
+      (ngModelChange)="reviewFieldDraftChanged.emit({ field: 'text', value: $event })"
+      aria-label="Полный текст отзыва"
+    ></textarea>
+
+    <div class="review-text-dialog__actions">
+      @if (isReviewFieldEditing('text')) {
+        <button
+          type="button"
+          class="review-text-dialog__cancel"
+          (click)="closeReviewText()"
+          [disabled]="isMutating(reviewFieldMutationKey('text'))"
+        >Отменить</button>
+        <button
+          type="button"
+          class="review-text-dialog__save"
+          (click)="reviewFieldSaveRequested.emit('text')"
+          [disabled]="isMutating(reviewFieldMutationKey('text')) || !isReviewFieldChanged('text') || !reviewFieldValue('text').trim()"
+        >Сохранить</button>
+      } @else {
+        <button type="button" class="review-text-dialog__cancel" (click)="closeReviewText()">Закрыть</button>
+      }
+    </div>
+  </div>
+</dialog>

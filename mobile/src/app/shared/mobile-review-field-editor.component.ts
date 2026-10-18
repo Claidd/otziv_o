@@ -24,6 +24,7 @@ import { IonModal } from '@ionic/angular';
       </button>
     }
 
+    @if (renderModal) {
     <ion-modal
       class="sheet-modal review-edit-sheet review-text-edit-sheet"
       [isOpen]="editing"
@@ -64,6 +65,7 @@ import { IonModal } from '@ionic/angular';
         </form>
       </ng-template>
     </ion-modal>
+    }
   `,
   styles: [`
     :host {
@@ -146,6 +148,7 @@ export class MobileReviewFieldEditorComponent implements OnChanges {
   @Input() showToggle = false;
   @Input() expanded = false;
   @Input() saveDisabled = false;
+  @Input() renderModal = true;
 
   @Output() start = new EventEmitter<void>();
   @Output() valueChange = new EventEmitter<string>();

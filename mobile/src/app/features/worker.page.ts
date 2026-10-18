@@ -8,6 +8,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, ParamMap, Router } from '@angular/router';
 import {
   IonContent,
+  IonModal,
   IonRefresher,
   IonRefresherContent,
   RefresherCustomEvent
@@ -102,6 +103,7 @@ type WorkerListState = {
   updatedAt: number;
 };
 type CredentialWaitSection = 'publish' | 'nagul';
+type ReviewFieldEditorTarget = { review: WorkerReviewItem; field: ReviewEditableField };
 
 @Component({
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -109,6 +111,7 @@ type CredentialWaitSection = 'publish' | 'nagul';
   imports: [
     FormsModule,
     IonContent,
+    IonModal,
     IonRefresher,
     IonRefresherContent,
     MobileBottomPagerComponent,
@@ -266,13 +269,11 @@ type CredentialWaitSection = 'publish' | 'nagul';
               @for (review of board()?.reviews?.content ?? []; track reviewKey(review)) {
                 <app-mobile-review-card-shell
                   class="mobile-worker-review-card"
-                  [class.expanded-text]="isReviewTextExpanded(review)"
                   [title]="reviewTitle(review)"
                   [titleHref]="review.filialUrl || reviewDetailsHref(review)"
                   [idLabel]="'#' + review.id"
                   [toneClass]="reviewToneClass(review)"
                   [published]="!!review.publish"
-                  [expandedText]="isReviewTextExpanded(review)"
                   [photoMode]="needsReviewPhoto(review) ? (hasReviewPhoto(review) ? 'link' : 'file') : 'none'"
                   [photoUrl]="reviewPhotoUrl(review)"
                   [photoLoading]="uploadingPhotoReviewId() === review.id"
@@ -297,14 +298,9 @@ type CredentialWaitSection = 'publish' | 'nagul';
                     [disabled]="isMutating(reviewFieldMutationKey(review, 'text'))"
                     [value]="reviewFieldValue(review, 'text')"
                     [editing]="isReviewFieldEditing(review, 'text')"
-                    [showToggle]="shouldShowReviewTextToggle(review)"
-                    [expanded]="isReviewTextExpanded(review)"
+                    [renderModal]="false"
                     [saveDisabled]="!isReviewFieldChanged(review, 'text') || !reviewFieldValue(review, 'text').trim() || isMutating(reviewFieldMutationKey(review, 'text'))"
                     (start)="startReviewFieldEdit(review, 'text')"
-                    (valueChange)="setReviewFieldDraft(review, 'text', $event)"
-                    (toggle)="toggleReviewText(review)"
-                    (cancel)="cancelReviewFieldEdit(review, 'text')"
-                    (save)="saveReviewField(review, 'text')"
                   />
 
                   <app-mobile-review-field-editor
@@ -315,12 +311,10 @@ type CredentialWaitSection = 'publish' | 'nagul';
                     [readOnly]="!permissions().canWorkReviews || isMutating(reviewFieldMutationKey(review, 'answer'))"
                     [value]="reviewFieldValue(review, 'answer')"
                     [editing]="isReviewFieldEditing(review, 'answer')"
+                    [renderModal]="false"
                     [disabled]="isMutating(reviewFieldMutationKey(review, 'answer'))"
                     [saveDisabled]="!isReviewFieldChanged(review, 'answer') || isMutating(reviewFieldMutationKey(review, 'answer'))"
                     (start)="startReviewFieldEdit(review, 'answer')"
-                    (valueChange)="setReviewFieldDraft(review, 'answer', $event)"
-                    (cancel)="cancelReviewFieldEdit(review, 'answer')"
-                    (save)="saveReviewField(review, 'answer')"
                   />
 
                   <div class="order-city-row review-city-row" [title]="reviewCity(review)">
@@ -612,6 +606,52 @@ type CredentialWaitSection = 'publish' | 'nagul';
           (changed)="handleReviewEditChanged()"
         />
       </ion-content>
+
+      <ion-modal
+        class="sheet-modal review-edit-sheet review-text-edit-sheet worker-review-field-modal"
+        [isOpen]="reviewFieldEditor() !== null"
+        [canDismiss]="!isReviewFieldEditorSaving()"
+        (didDismiss)="dismissReviewFieldEditor()"
+        aria-labelledby="worker-review-field-title"
+      >
+        <ng-template>
+          @if (reviewFieldEditor(); as editor) {
+            <form class="sheet-body sheet-form review-text-edit-form worker-review-field-form" (ngSubmit)="saveReviewField(editor.review, editor.field)">
+              <header class="sheet-head review-text-edit-head">
+                <div>
+                  <p class="sheet-note">{{ reviewTitle(editor.review) }} · #{{ editor.review.id }}</p>
+                  <h2 id="worker-review-field-title">{{ editor.field === 'text' ? 'Полный текст отзыва' : 'Ответ на отзыв или замечание' }}</h2>
+                </div>
+                <button class="icon-button" type="button" (click)="cancelReviewFieldEdit(editor.review, editor.field)" [disabled]="isReviewFieldEditorSaving()" aria-label="Закрыть">
+                  <span class="material-icons-sharp">close</span>
+                </button>
+              </header>
+
+              <label class="sheet-field review-text-edit-field">
+                <span>{{ editor.field === 'text' ? 'Текст отзыва' : 'Ответ на отзыв или замечание' }}</span>
+                <textarea
+                  name="workerReviewFullEditor"
+                  [ngModel]="reviewFieldValue(editor.review, editor.field)"
+                  (ngModelChange)="setReviewFieldDraft(editor.review, editor.field, $event)"
+                  [disabled]="isReviewFieldEditorSaving()"
+                  [attr.aria-label]="editor.field === 'text' ? 'Полный текст отзыва' : 'Ответ на отзыв или замечание'"
+                ></textarea>
+              </label>
+
+              @if (error()) {
+                <p class="sheet-error" role="alert">{{ error() }}</p>
+              }
+
+              <footer class="sheet-actions review-text-edit-actions">
+                <button class="secondary" type="button" (click)="cancelReviewFieldEdit(editor.review, editor.field)" [disabled]="isReviewFieldEditorSaving()">Отмена</button>
+                <button type="submit" [disabled]="!isReviewFieldChanged(editor.review, editor.field) || (editor.field === 'text' && !reviewFieldValue(editor.review, editor.field).trim()) || isReviewFieldEditorSaving()">
+                  {{ isReviewFieldEditorSaving() ? 'Сохраняю' : 'Сохранить' }}
+                </button>
+              </footer>
+            </form>
+          }
+        </ng-template>
+      </ion-modal>
     </div>
   `,
   styles: [`
@@ -1649,9 +1689,9 @@ export class WorkerPage implements OnInit, OnDestroy {
   readonly openedOrderCompanyNoteId = signal<number | null>(null);
   readonly companyNoteDrafts = signal<Record<number, string>>({});
   readonly editingReviewFieldKey = signal<string | null>(null);
-  readonly savedReviewFieldKey = signal<string | null>(null);
+  readonly reviewFieldEditor = signal<ReviewFieldEditorTarget | null>(null);
+  readonly reviewFieldEditorClosing = signal(false);
   readonly reviewFieldDrafts = signal<Record<string, string>>({});
-  readonly expandedReviewTextIds = signal<Record<number, boolean>>({});
   readonly openedReviewNotesId = signal<number | null>(null);
   readonly reviewNoteDrafts = signal<Record<number, string>>({});
   readonly sideNoteDrafts = signal<Record<string, string>>({});
@@ -2003,12 +2043,14 @@ export class WorkerPage implements OnInit, OnDestroy {
   }
 
   startReviewFieldEdit(review: WorkerReviewItem, field: ReviewEditableField): void {
-    if (!this.permissions().canWorkReviews || this.isMutating(this.reviewFieldMutationKey(review, field))) {
+    if (!this.permissions().canWorkReviews || this.reviewFieldEditorClosing() || this.reviewFieldEditor()
+        || this.isMutating(this.reviewFieldMutationKey(review, field))) {
       return;
     }
     const key = this.reviewFieldKey(review, field);
-    this.savedReviewFieldKey.set(null);
+    this.error.set(null);
     this.editingReviewFieldKey.set(key);
+    this.reviewFieldEditor.set({ review, field });
     this.reviewFieldDrafts.update((drafts) => ({
       ...drafts,
       [key]: drafts[key] ?? this.reviewFieldSourceValue(review, field)
@@ -2024,8 +2066,23 @@ export class WorkerPage implements OnInit, OnDestroy {
       return;
     }
     const key = this.reviewFieldKey(review, field);
+    this.reviewFieldEditorClosing.set(true);
+    this.reviewFieldEditor.set(null);
     this.editingReviewFieldKey.set(null);
     this.reviewFieldDrafts.update((drafts) => this.removeKey(drafts, key));
+  }
+
+  dismissReviewFieldEditor(): void {
+    const editor = this.reviewFieldEditor();
+    if (editor) {
+      this.cancelReviewFieldEdit(editor.review, editor.field);
+    }
+    this.reviewFieldEditorClosing.set(false);
+  }
+
+  isReviewFieldEditorSaving(): boolean {
+    const editor = this.reviewFieldEditor();
+    return editor ? this.isMutating(this.reviewFieldMutationKey(editor.review, editor.field)) : false;
   }
 
   async saveReviewField(review: WorkerReviewItem, field: ReviewEditableField): Promise<void> {
@@ -2057,26 +2114,16 @@ export class WorkerPage implements OnInit, OnDestroy {
         await firstValueFrom(this.workerApi.updateWorkerReviewAnswer(review.id, review.orderId, value, this.workerActivitySource()));
       }
       this.patchReview(review.id, { [field]: value } as Partial<WorkerReviewItem>);
-      this.savedReviewFieldKey.set(this.reviewFieldKey(review, field));
-      setTimeout(() => {
-        const fieldKey = this.reviewFieldKey(review, field);
-        if (this.savedReviewFieldKey() === fieldKey) {
-          this.savedReviewFieldKey.set(null);
-        }
-        if (this.editingReviewFieldKey() === fieldKey) {
-          this.editingReviewFieldKey.set(null);
-        }
-        this.reviewFieldDrafts.update((drafts) => this.removeKey(drafts, fieldKey));
-      }, 1000);
+      const fieldKey = this.reviewFieldKey(review, field);
+      this.editingReviewFieldKey.set(null);
+      this.reviewFieldEditorClosing.set(true);
+      this.reviewFieldEditor.set(null);
+      this.reviewFieldDrafts.update((drafts) => this.removeKey(drafts, fieldKey));
     } catch (error) {
       this.error.set(this.apiErrorMessage(error, field === 'text' ? 'Текст не сохранился.' : 'Замечание не сохранилось.'));
     } finally {
       this.mutationKey.set(null);
     }
-  }
-
-  toggleReviewText(review: WorkerReviewItem): void {
-    this.expandedReviewTextIds.update((items) => ({ ...items, [review.id]: !items[review.id] }));
   }
 
   toggleReviewNotes(review: WorkerReviewItem): void {
@@ -2971,15 +3018,6 @@ export class WorkerPage implements OnInit, OnDestroy {
 
   isReviewFieldChanged(review: WorkerReviewItem, field: ReviewEditableField): boolean {
     return this.reviewFieldValue(review, field) !== this.reviewFieldSourceValue(review, field);
-  }
-
-  shouldShowReviewTextToggle(review: WorkerReviewItem): boolean {
-    const value = this.reviewFieldSourceValue(review, 'text');
-    return value.length > 190 || value.split(/\r?\n/).length > 5;
-  }
-
-  isReviewTextExpanded(review: WorkerReviewItem): boolean {
-    return Boolean(this.expandedReviewTextIds()[review.id]);
   }
 
   reviewNoteMutationKey(review: WorkerReviewItem): string {

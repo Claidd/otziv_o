@@ -1,15 +1,17 @@
 """Collect CI receipts and install only immutable artifacts from verified main CI."""
 import argparse
 import copy
+import io
 import json
 import os
 from pathlib import Path
 import re
 import tempfile
 import subprocess
+import tarfile
 
 from ci_artifacts import Client, extract_files, validate_artifact
-from ci_image_bundle import SERVICES, verify_bundle
+from ci_image_bundle import SERVICES, canonical, verify_bundle
 from deployment_capacity import freeze_image, validate_plan
 from release_ci import require
 from release_registry import upload_ci_image
@@ -132,7 +134,87 @@ def fetch_manifest(client, ci, output):
     return value
 
 
-def fetch_image(client, value, row, output):
+def restore_cached_image(cache_root, row, output):
+    """Recreate exact current CI bytes from locally verified, identical OCI blobs.
+
+    A reused image has the same OCI manifest and blobs, but its Docker tag and
+    OCI index annotations name the current revision. The final CI archive SHA
+    and full OCI verification are mandatory; any cache miss falls back to the
+    signed GitHub artifact.
+    """
+    def redirected(path):
+        return path.is_symlink() or getattr(path, 'is_junction', lambda: False)()
+
+    if cache_root is None:
+        return None
+    cache_root = Path(cache_root)
+    if not cache_root.is_absolute() or redirected(cache_root):
+        return None
+    root = cache_root.resolve()
+    if not root.is_dir():
+        return None
+    output = Path(output)
+    target = output / row['archive']
+    if target.exists():
+        return None
+    component = row['component']
+    candidates = []
+    for source in root.glob(f'*/images/{component}/{component}.oci.tar'):
+        try:
+            candidates.append((source.stat().st_mtime, source))
+        except OSError:
+            continue
+    for _, source in sorted(candidates, key=lambda item: item[0], reverse=True):
+        try:
+            if not source.resolve().is_relative_to(root) or source.resolve() == target.resolve():
+                continue
+            if any(redirected(path) for path in (source, *source.parents)
+                   if path == root or path.is_relative_to(root)):
+                continue
+            receipt = read(source.with_name(component + '.json'))
+            if (receipt.get('component') != component
+                    or receipt.get('manifestDigest') != row['manifestDigest']
+                    or receipt.get('configId') != row['configId']
+                    or receipt.get('layers') != row['layers']
+                    or source.stat().st_size != row['archiveBytes']):
+                continue
+            verify_bundle(source, receipt)
+            with tempfile.TemporaryDirectory(prefix='.cached-oci-', dir=output) as temporary:
+                rebuilt = Path(temporary) / row['archive']
+                with tarfile.open(source, 'r:') as incoming, tarfile.open(rebuilt, 'x:') as outgoing:
+                    index = json.load(incoming.extractfile('index.json'))
+                    index['manifests'][0]['annotations'] = {
+                        'io.containerd.image.name': f"docker.io/library/otziv-ci-{component}:{row['revision']}",
+                        'org.opencontainers.image.ref.name': row['revision']}
+                    compatibility = json.load(incoming.extractfile('manifest.json'))
+                    compatibility[0]['RepoTags'] = [f"otziv-ci-{component}:{row['revision']}"]
+                    for name, data in (
+                        ('oci-layout', b'{"imageLayoutVersion":"1.0.0"}'),
+                        ('index.json', canonical(index)),
+                        ('manifest.json', canonical(compatibility))):
+                        member = tarfile.TarInfo(name)
+                        member.size = len(data)
+                        member.mode = 0o600
+                        outgoing.addfile(member, io.BytesIO(data))
+                    blobs = sorted((member for member in incoming if member.name.startswith('blobs/sha256/')),
+                                   key=lambda member: member.name)
+                    for original in blobs:
+                        member = tarfile.TarInfo(original.name)
+                        member.size = original.size
+                        member.mode = 0o600
+                        with incoming.extractfile(original) as stream:
+                            outgoing.addfile(member, stream)
+                verify_bundle(rebuilt, row)
+                os.replace(rebuilt, target)
+            return target
+        except (OSError, ValueError, KeyError, TypeError, IndexError, EOFError, tarfile.TarError):
+            # Local evidence can be absent or damaged; the normal signed
+            # artifact download and all of its checks remain the fallback.
+            continue
+    return None
+
+
+def fetch_image(client, value, row, output, cache_root=None):
     validate_release(value, value['revision'])
     identity = row['artifact']
     item = client.get(f"/actions/artifacts/{identity['id']}")
@@ -140,6 +222,10 @@ def fetch_image(client, value, row, output):
     require(item['digest'] == identity['digest'], 'Image artifact was substituted')
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
+    cached = restore_cached_image(cache_root, row, output)
+    if cached is not None:
+        print('Exact CI image archive restored from local verified cache: ' + row['component'])
+        return cached
     archive = output / 'download.zip'
     # ZIP adds small headers; compression-level 0 is intentional for OCI blobs.
     client.download(item, archive, row['archiveBytes'] + 16 * 1024**2)
@@ -150,12 +236,12 @@ def fetch_image(client, value, row, output):
     return output / row['archive']
 
 
-def import_release(client, value, record, directory, worker=False):
+def import_release(client, value, record, directory, worker=False, cache_root=None):
     references = {}
     for row in value['images']:
         if not row['service'] or (row['service'] == 'external-review-worker' and not worker):
             continue
-        archive = fetch_image(client, value, row, Path(directory) / row['component'])
+        archive = fetch_image(client, value, row, Path(directory) / row['component'], cache_root)
         references[row['component']] = upload_ci_image(record, archive, row)
     return capacity_plan(value, references, worker)
 
@@ -199,6 +285,7 @@ def main():
     parser.add_argument('--registry', type=Path)
     parser.add_argument('--manifest', type=Path)
     parser.add_argument('--worker', action='store_true')
+    parser.add_argument('--cache-root', type=Path)
     parser.add_argument('--test-reuse', type=Path)
     args = parser.parse_args()
     if args.command == 'receipt':
@@ -213,7 +300,7 @@ def main():
         fetch_manifest(Client(args.repo), read(args.input), args.output)
         return
     elif args.command == 'import':
-        value = import_release(Client(args.repo), read(args.input), read(args.registry), args.output.parent / 'images', args.worker)
+        value = import_release(Client(args.repo), read(args.input), read(args.registry), args.output.parent / 'images', args.worker, args.cache_root)
     elif args.command == 'load-backend':
         value = load_backend(args.input, args.revision, args.run_id, args.attempt)
     else:

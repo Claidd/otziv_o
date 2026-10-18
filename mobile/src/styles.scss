@@ -1003,6 +1003,43 @@ ion-button {
   scrollbar-width: thin;
 }
 
+/* Keep the full review editor outside the clipped review card and give its
+   text area the available viewport space, including when the keyboard opens. */
+.worker-review-field-modal .worker-review-field-form {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-height: 100%;
+}
+
+.worker-review-field-modal .review-text-edit-head h2 {
+  display: block;
+  margin: 0.24rem 0 0;
+  font-size: 1.04rem;
+  line-height: 1.2;
+}
+
+.worker-review-field-modal .review-text-edit-field {
+  min-height: 0;
+}
+
+.worker-review-field-modal .review-text-edit-field textarea {
+  min-height: 0;
+  padding: 0.8rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-white);
+  font-size: max(1rem, 16px);
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.worker-review-field-modal .review-text-edit-actions button {
+  min-height: 2.8rem;
+  font-size: 0.86rem;
+}
+
+.worker-review-field-modal .sheet-error {
+  align-self: end;
+}
+
 body.otziv-keyboard-open .review-text-edit-sheet {
   --height: var(--otziv-viewport-height);
   --max-height: var(--otziv-viewport-height);
