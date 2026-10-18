@@ -126,7 +126,9 @@ class StaffDailyProgressServiceTest {
                 return sql.contains(") active_items") ? List.of(Map.of(
                         "worker_id", 7L, "item_type", "order", "item_id", 55L,
                         "opened_at", Timestamp.valueOf(yesterday.atTime(11, 0)),
-                        "added_at", Timestamp.valueOf(yesterday.atTime(11, 0)))) : List.of();
+                        "added_at", Timestamp.valueOf(yesterday.atTime(11, 0)),
+                        "first_seen_at", Timestamp.valueOf(yesterday.atTime(11, 0)),
+                        "lifecycle_worker_id", 7L)) : List.of();
             });
             StaffDailyProgressService localService = new StaffDailyProgressService(
                     localJdbc, settings, mock(WorkloadShadowProgressReadService.class));
@@ -215,6 +217,152 @@ class StaffDailyProgressServiceTest {
     }
 
     @Test
+    void firstAppearanceTimeWinsOverBackdatedSourceAndOldWorkerLifecycle() {
+        LocalDateTime sourceDate = LocalDate.of(2026, 2, 25).atTime(10, 0);
+        LocalDateTime observedAt = LocalDate.of(2026, 10, 17).atTime(23, 9);
+        Map<String, Object> row = new HashMap<>();
+        row.put("worker_id", 1L);
+        row.put("added_at", Timestamp.valueOf(sourceDate));
+        row.put("opened_at", Timestamp.valueOf(sourceDate));
+
+        assertEquals(observedAt, StaffDailyProgressService.effectiveAddedAt(row, observedAt));
+
+        row.put("first_seen_at", Timestamp.valueOf(sourceDate));
+        row.put("lifecycle_worker_id", 2L);
+        assertEquals(observedAt, StaffDailyProgressService.effectiveAddedAt(row, observedAt));
+
+        row.put("lifecycle_worker_id", 1L);
+        assertEquals(sourceDate, StaffDailyProgressService.effectiveAddedAt(row, observedAt));
+
+        LocalDateTime scheduledTomorrow = observedAt.plusDays(1);
+        row.put("added_at", Timestamp.valueOf(scheduledTomorrow));
+        assertEquals(scheduledTomorrow, StaffDailyProgressService.effectiveAddedAt(row, observedAt));
+        row.put("added_at", Timestamp.valueOf(sourceDate));
+
+        row.put("lifecycle_excluded", true);
+        row.put("lifecycle_exclusion_reason", "waiting_for_client");
+        assertEquals(observedAt, StaffDailyProgressService.effectiveAddedAt(row, observedAt));
+    }
+
+    @Test
+    void completedAvailabilityNeverFollowsCompletionEvenWhenLifecycleIsMissingOrLate() {
+        LocalDateTime sourceDate = LocalDate.of(2026, 10, 15).atTime(10, 0);
+        LocalDateTime doneAt = LocalDate.of(2026, 10, 17).atTime(23, 30);
+        Map<String, Object> row = new HashMap<>();
+        row.put("worker_id", 1L);
+        row.put("added_at", Timestamp.valueOf(sourceDate));
+        row.put("opened_at", Timestamp.valueOf(sourceDate));
+
+        assertEquals(sourceDate, StaffDailyProgressService.effectiveCompletedAddedAt(row, doneAt));
+
+        row.put("first_seen_at", Timestamp.valueOf(doneAt.plusMinutes(34)));
+        row.put("lifecycle_worker_id", 1L);
+        assertEquals(sourceDate, StaffDailyProgressService.effectiveCompletedAddedAt(row, doneAt));
+
+        row.put("first_seen_at", Timestamp.valueOf(doneAt.minusMinutes(21)));
+        assertEquals(doneAt.minusMinutes(21), StaffDailyProgressService.effectiveCompletedAddedAt(row, doneAt));
+
+        row.put("lifecycle_worker_id", 2L);
+        assertEquals(doneAt, StaffDailyProgressService.effectiveCompletedAddedAt(row, doneAt));
+
+        row.remove("first_seen_at");
+        row.remove("lifecycle_worker_id");
+        row.put("added_at", Timestamp.valueOf(doneAt.plusDays(1)));
+        assertEquals(sourceDate, StaffDailyProgressService.effectiveCompletedAddedAt(row, doneAt));
+        row.put("opened_at", Timestamp.valueOf(doneAt.plusDays(2)));
+        assertEquals(doneAt, StaffDailyProgressService.effectiveCompletedAddedAt(row, doneAt));
+    }
+
+    @Test
+    void completedOrderWithoutLifecycleRetainsWorkDurationAndValidLifecycleDates() {
+        LocalDate date = LocalDate.of(2026, 10, 17);
+        LocalDateTime openedAt = date.minusDays(2).atTime(10, 0);
+        LocalDateTime doneAt = date.atTime(23, 30);
+        NamedParameterJdbcTemplate localJdbc = mock(NamedParameterJdbcTemplate.class);
+        AppSettingService settings = mock(AppSettingService.class);
+        when(settings.getBoolean(AppSettingService.WORKER_PROGRESS_ENABLED, true)).thenReturn(true);
+        when(settings.getInt(AppSettingService.WORKER_PROGRESS_LATE_TASK_HOUR, 22)).thenReturn(22);
+        when(settings.getInt(AppSettingService.WORKER_PROGRESS_NIGHT_WINDOW_END_HOUR, 10)).thenReturn(10);
+        when(localJdbc.queryForList(anyString(), any(MapSqlParameterSource.class))).thenAnswer(invocation -> {
+            String sql = invocation.getArgument(0);
+            if (!sql.contains(") completed_items")) {
+                return List.of();
+            }
+            Map<String, Object> row = completedItem(1L, 42001L, openedAt, openedAt, doneAt);
+            row.remove("first_seen_at");
+            row.remove("lifecycle_worker_id");
+            return List.of(row);
+        });
+        StaffDailyProgressService localService = new StaffDailyProgressService(
+                localJdbc, settings, mock(WorkloadShadowProgressReadService.class));
+
+        DailyWorkProgressResponse progress = localService.workerProgressBySubjects(
+                List.of(new StaffDailyProgressService.WorkerProgressSubject(1L, 5L, "Тестовый специалист")), date).get(1L);
+        assertEquals(1, progress.completed());
+        assertTrue(progress.averageCloseSeconds() > 0);
+        assertEquals(1, progress.totalOverdueCount());
+
+        ArgumentCaptor<SqlParameterSource[]> batchCaptor = ArgumentCaptor.forClass(SqlParameterSource[].class);
+        verify(localJdbc).batchUpdate(anyString(), batchCaptor.capture());
+        SqlParameterSource lifecycle = batchCaptor.getValue()[0];
+        assertEquals(openedAt, lifecycle.getValue("availableAt"));
+        assertEquals(doneAt, lifecycle.getValue("closedAt"));
+        assertTrue(((LocalDateTime) lifecycle.getValue("availableAt"))
+                .isBefore((LocalDateTime) lifecycle.getValue("closedAt")));
+    }
+
+    @Test
+    void backdatedOrderFirstSeenAfterCutoffDoesNotBreakFinishedDay() {
+        LocalDate date = LocalDate.of(2026, 10, 17);
+        LocalDateTime sourceOpenedAt = LocalDate.of(2026, 2, 25).atTime(10, 0);
+        LocalDateTime firstSeenAt = date.atTime(23, 9);
+        NamedParameterJdbcTemplate localJdbc = mock(NamedParameterJdbcTemplate.class);
+        AppSettingService settings = mock(AppSettingService.class);
+        when(settings.getBoolean(AppSettingService.WORKER_PROGRESS_ENABLED, true)).thenReturn(true);
+        when(settings.getBoolean("workload.shadow.observation-enabled", true)).thenReturn(false);
+        when(settings.getInt(AppSettingService.WORKER_PROGRESS_LATE_TASK_HOUR, 22)).thenReturn(22);
+        when(settings.getInt(AppSettingService.WORKER_PROGRESS_LATE_TASK_DEADLINE_HOUR, 12)).thenReturn(12);
+        when(localJdbc.queryForList(anyString(), any(MapSqlParameterSource.class))).thenAnswer(invocation -> {
+            String sql = invocation.getArgument(0);
+            if (!sql.contains(") active_items")) {
+                return List.of();
+            }
+            assertTrue(sql.contains("lifecycle.created_at AS first_seen_at"));
+            assertTrue(sql.contains("lifecycle.worker_id AS lifecycle_worker_id"));
+            return List.of(Map.of(
+                    "worker_id", 1L,
+                    "item_type", "order",
+                    "item_id", 42001L,
+                    "opened_at", Timestamp.valueOf(sourceOpenedAt),
+                    "added_at", Timestamp.valueOf(sourceOpenedAt),
+                    "first_seen_at", Timestamp.valueOf(firstSeenAt),
+                    "lifecycle_worker_id", 1L
+            ));
+        });
+        StaffDailyProgressService localService = new StaffDailyProgressService(
+                localJdbc, settings, mock(WorkloadShadowProgressReadService.class));
+        Worker worker = Worker.builder().id(1L).build();
+
+        DailyWorkProgressResponse endOfDay = localService.workerEndOfDayProgressByWorkers(
+                List.of(worker), date, date.atTime(22, 0)).get(1L);
+        assertEquals(0, endOfDay.active());
+
+        DailyWorkProgressResponse live = localService.workerProgressBySubjects(
+                List.of(new StaffDailyProgressService.WorkerProgressSubject(1L, 5L, "Тестовый специалист")), date).get(1L);
+        assertEquals(1, live.active());
+        assertEquals(0, live.totalOverdueCount());
+        ArgumentCaptor<SqlParameterSource[]> batchCaptor = ArgumentCaptor.forClass(SqlParameterSource[].class);
+        ArgumentCaptor<String> upsertCaptor = ArgumentCaptor.forClass(String.class);
+        verify(localJdbc).batchUpdate(upsertCaptor.capture(), batchCaptor.capture());
+        assertEquals(sourceOpenedAt, batchCaptor.getValue()[0].getValue("openedAt"));
+        assertEquals(firstSeenAt, batchCaptor.getValue()[0].getValue("availableAt"));
+        assertEquals(date.plusDays(1).atTime(12, 0), batchCaptor.getValue()[0].getValue("dueAt"));
+        String upsert = upsertCaptor.getValue();
+        assertTrue(upsert.contains("WHEN worker_id <> VALUES(worker_id)"));
+        assertTrue(upsert.indexOf("available_at = CASE") < upsert.indexOf("worker_id = VALUES(worker_id)"));
+    }
+
+    @Test
     void newOrderContainerIsActiveOnlyWhileItHasPendingReviewCards() {
         NamedParameterJdbcTemplate localJdbc = mock(NamedParameterJdbcTemplate.class);
         AppSettingService settings = mock(AppSettingService.class);
@@ -252,7 +400,7 @@ class StaffDailyProgressServiceTest {
     }
 
     @Test
-    void endOfDayProgressKeepsWorkCompletedBeforeCutoffEvenWithFutureAvailability() {
+    void endOfDayProgressCreditsCompletionsOnTheirActionDateWithoutLosingLateWork() {
         NamedParameterJdbcTemplate localJdbc = mock(NamedParameterJdbcTemplate.class);
         AppSettingService settings = mock(AppSettingService.class);
         when(settings.getBoolean(AppSettingService.WORKER_PROGRESS_ENABLED, true)).thenReturn(true);
@@ -262,11 +410,15 @@ class StaffDailyProgressServiceTest {
                 return List.of();
             }
             LocalDate date = LocalDate.of(2026, 7, 17);
+            Map<String, Object> completedWithoutLifecycle = completedItem(
+                    7L, 3L, date.plusDays(2).atTime(10, 0), date.plusDays(2).atTime(10, 0),
+                    date.atTime(18, 54));
+            completedWithoutLifecycle.remove("first_seen_at");
+            completedWithoutLifecycle.remove("lifecycle_worker_id");
             return List.of(
                     completedItem(7L, 1L, date.atTime(21, 50), date.atTime(21, 50), date.atTime(23, 30)),
                     completedItem(7L, 2L, date.atTime(22, 20), date.atTime(22, 20), date.atTime(23, 40)),
-                    completedItem(7L, 3L, date.plusDays(2).atTime(10, 0), date.plusDays(2).atTime(10, 0),
-                            date.atTime(18, 54))
+                    completedWithoutLifecycle
             );
         });
         StaffDailyProgressService localService = new StaffDailyProgressService(
@@ -286,8 +438,8 @@ class StaffDailyProgressServiceTest {
                 date.atTime(22, 0)
         ).get(7L);
 
-        assertEquals(2, progress.completed());
-        assertEquals(2, progress.total());
+        assertEquals(3, progress.completed());
+        assertEquals(3, progress.total());
         assertEquals(100, progress.percent());
     }
 
@@ -307,7 +459,9 @@ class StaffDailyProgressServiceTest {
                         "item_type", "order",
                         "item_id", 99L,
                         "opened_at", Timestamp.valueOf(date.atTime(12, 0)),
-                        "added_at", Timestamp.valueOf(date.atTime(12, 0))
+                        "added_at", Timestamp.valueOf(date.atTime(12, 0)),
+                        "first_seen_at", Timestamp.valueOf(date.atTime(12, 0)),
+                        "lifecycle_worker_id", 7L
                 ));
             }
             return List.of();
@@ -785,6 +939,8 @@ class StaffDailyProgressServiceTest {
         row.put("item_id", itemId);
         row.put("opened_at", Timestamp.valueOf(openedAt));
         row.put("added_at", Timestamp.valueOf(addedAt));
+        row.put("first_seen_at", Timestamp.valueOf(addedAt));
+        row.put("lifecycle_worker_id", workerId);
         row.put("done_at", Timestamp.valueOf(doneAt));
         return row;
     }
@@ -800,7 +956,9 @@ class StaffDailyProgressServiceTest {
                 "item_type", itemType,
                 "item_id", itemId,
                 "opened_at", Timestamp.valueOf(openedAt),
-                "added_at", Timestamp.valueOf(openedAt)
+                "added_at", Timestamp.valueOf(openedAt),
+                "first_seen_at", Timestamp.valueOf(openedAt),
+                "lifecycle_worker_id", workerId
         );
     }
 }
