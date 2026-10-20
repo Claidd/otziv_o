@@ -29,14 +29,20 @@ import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.u_users.model.Manager;
 import java.math.BigDecimal;
 import java.security.SecureRandom;
+import java.sql.SQLException;
 import java.time.LocalDateTime;
+import java.util.ArrayDeque;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.Comparator;
+import java.util.Deque;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -77,6 +83,8 @@ public class PaymentLinkPreparationWorkflow {
     static final String LIVE_ROUTING_MISSING_ALLOCATION_PREFIX = "contractor_live_routing_missing_allocation:";
 
     static final String LIVE_ROUTING_FAIL_CLOSED_REMINDER_SOURCE = "PAYMENT_LIVE_ROUTING_FAIL_CLOSED";
+
+    private static final int DEADLOCK_PREPARATION_ATTEMPTS = 3;
 
     static final Set<PaymentLinkStatus> REUSABLE_STATUSES = Set.of(PaymentLinkStatus.CREATED, PaymentLinkStatus.INITIATED, PaymentLinkStatus.AUTHORIZED, PaymentLinkStatus.WAITING_MANUAL_PAYMENT, PaymentLinkStatus.MANUAL_REPORTED);
 
@@ -133,10 +141,79 @@ public class PaymentLinkPreparationWorkflow {
     }
 
     public ManagerPaymentLinkResponse createForOrderInNewTransaction(Long orderId) {
-        return transactionExecutor.required(() -> {
-            requirePaymentLinksEnabled();
-            return prepareForOrder(orderId, null, false).response();
-        });
+        return retryDeadlockedPreparation(orderId, () -> transactionExecutor.required(() -> {
+            try {
+                requirePaymentLinksEnabled();
+                return prepareForOrder(orderId, null, false).response();
+            } catch (RuntimeException failure) {
+                // Mark only failures inside the preparation work. An after-commit
+                // callback may throw after the link has already been committed;
+                // repeating that transaction could create a second instruction.
+                throw markPreparationDeadlock(failure);
+            }
+        }));
+    }
+
+    static <T> T retryDeadlockedPreparation(Long orderId, Supplier<T> transactionAttempt) {
+        for (int attempt = 1; ; attempt++) {
+            try {
+                // required() is proxied with REQUIRES_NEW. It finishes rollback
+                // before this call returns exceptionally and the next attempt starts.
+                return transactionAttempt.get();
+            } catch (PreparationDeadlock failure) {
+                if (attempt >= DEADLOCK_PREPARATION_ATTEMPTS) {
+                    throw failure.original;
+                }
+                log.warn("Payment-link preparation deadlock for order {}, retrying transaction ({}/{})",
+                        orderId, attempt, DEADLOCK_PREPARATION_ATTEMPTS);
+                try {
+                    Thread.sleep(50L * attempt);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw failure.original;
+                }
+            }
+        }
+    }
+
+    static RuntimeException markPreparationDeadlock(RuntimeException failure) {
+        return isMySqlDeadlock(failure) ? new PreparationDeadlock(failure) : failure;
+    }
+
+    private static boolean isMySqlDeadlock(Throwable failure) {
+        if (failure == null) {
+            return false;
+        }
+        Set<Throwable> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+        Deque<Throwable> pending = new ArrayDeque<>();
+        pending.add(failure);
+        while (!pending.isEmpty()) {
+            Throwable current = pending.removeFirst();
+            if (!seen.add(current)) {
+                continue;
+            }
+            if (current instanceof SQLException sql) {
+                if (sql.getErrorCode() == 1213 && "40001".equals(sql.getSQLState())) {
+                    return true;
+                }
+                if (sql.getNextException() != null) {
+                    pending.addLast(sql.getNextException());
+                }
+            }
+            if (current.getCause() != null) {
+                pending.addLast(current.getCause());
+            }
+        }
+        return false;
+    }
+
+    private static final class PreparationDeadlock extends RuntimeException {
+        private final RuntimeException original;
+
+        private PreparationDeadlock(RuntimeException original) {
+            super(original);
+            this.original = original;
+        }
     }
 
     /**

@@ -31,6 +31,20 @@ public interface PersonalReminderRepository extends JpaRepository<PersonalRemind
             + "AND r.completedAt IS NULL AND r.id > :afterId ORDER BY r.id")
     List<Long> findOpenSourceIdsAfter(@Param("sourceType") String sourceType,
                                       @Param("afterId") long afterId, Pageable pageable);
+
+    interface ReconciliationCandidate {
+        Long getId();
+        String getSourceType();
+        Long getSourceOrderId();
+    }
+
+    @Query("SELECT r.id AS id, r.sourceType AS sourceType, r.sourceOrderId AS sourceOrderId "
+            + "FROM PersonalReminder r WHERE r.id = :id AND r.completedAt IS NULL")
+    Optional<ReconciliationCandidate> findOpenReconciliationCandidate(@Param("id") Long id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT r FROM PersonalReminder r WHERE r.id = :id AND r.completedAt IS NULL")
+    Optional<PersonalReminder> findOpenByIdForUpdate(@Param("id") Long id);
     boolean existsBySourceTypeAndSourceIdAndCompletedAtIsNull(String sourceType, Long sourceId);
 
     List<PersonalReminder> findByUserIdAndCompletedAtIsNullOrderByUpdatedAtDesc(Long userId);
