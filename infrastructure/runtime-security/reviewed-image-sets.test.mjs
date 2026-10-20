@@ -206,3 +206,21 @@ test('C20 MC refresh is limited to the local S3 initializer and binds its OS rec
   assert.deepEqual(image.defaultReferencesBefore, [{path: 'compose.prod-local.yaml', service: 'minio-init'}]);
   assert.equal(hash((await readFile(new URL('../../' + image.dockerfile, import.meta.url), 'utf8')).replaceAll('\r\n', '\n')), image.dockerfileSha256);
 });
+
+test('C33 MC candidate pins the fixed compression module and only the local S3 initializer', async () => {
+  const loaded = await readReviewedImageSet(root, 'c33-mc');
+  const [image] = validateManifest(loaded.manifest);
+  assert.equal(image.component, 'mc');
+  assert.deepEqual(image.defaultReferencesBefore, [{path: 'compose.prod-local.yaml', service: 'minio-init'}]);
+  const recipe = await readFile(new URL('../../' + image.dockerfile, import.meta.url), 'utf8');
+  assert.equal(hash(recipe.replaceAll('\r\n', '\n')), image.dockerfileSha256);
+  assert.equal(image.candidateBaseRef, 'alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b');
+  assert.match(recipe, /FROM alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS runtime/);
+  assert.match(recipe, /test ! -e \/usr\/bin\/mc/);
+  assert.match(recipe, /COPY builds\/c33-mc\/mc\.go\.mod \/src\/go\.mod/);
+  const mod = await readFile(new URL('./builds/c33-mc/mc.go.mod', import.meta.url), 'utf8');
+  const sum = await readFile(new URL('./builds/c33-mc/mc.go.sum', import.meta.url), 'utf8');
+  assert.match(mod, /^\s*github\.com\/klauspost\/compress v1\.18\.7$/m);
+  assert.match(sum, /^github\.com\/klauspost\/compress v1\.18\.7 h1:aUyZsS4kH3QTKurYhAOwAHxllVPnOthb3vPfnF1Ehjw=$/m);
+  assert.doesNotMatch(mod, /github\.com\/klauspost\/compress v1\.18\.[0-6]\b/);
+});
