@@ -37,6 +37,7 @@ import com.hunt.otziv.payments.model.PaymentMethod;
 import com.hunt.otziv.payments.model.PaymentProfile;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.payments.service.PaymentProfileService;
+import com.hunt.otziv.payments.api.PaymentIssueCompletionOperations;
 import com.hunt.otziv.payments.service.ManualPaymentTaskService;
 import com.hunt.otziv.payments.api.StandalonePaymentState;
 import com.hunt.otziv.payments.service.PaymentUrlPolicy;
@@ -201,6 +202,8 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
 
     private final ManualPaymentTaskService manualPaymentTaskService;
 
+    private final PaymentIssueCompletionOperations paymentIssueReminderService;
+
     private final OrderStatusService orderStatusService;
 
     @Autowired
@@ -315,6 +318,7 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
                 invoice.setNextReminderAt(nextAutomaticPaymentReminderAt(LocalDateTime.now()));
             }
             invoiceRepository.save(invoice);
+            completePaidCommonInvoiceOrderIssue(invoice, target);
         }
         log.info("Оплата отдельной ссылки заказа {} зачтена в общий счет {}: {}", orderId, invoiceId, normalize(reason));
         return !alreadyApplied;
@@ -1460,8 +1464,29 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
         paymentNotificationOutboxRepository.enqueueClient(invoice.getId());
         invoiceRepository.save(invoice);
         manualPaymentTaskService.completeCommonInvoiceTaskIfTargetReached(invoice.getPaymentRouteManualTaskId());
+        items.forEach(item -> completePaidCommonInvoiceOrderIssue(invoice, item));
         openNextOrdersIfEnabled(invoice, items);
         scheduleContractorShadowReconcile(invoice.getId());
+    }
+
+    /** Resolves only the warning for this invoice position after its payment is settled. */
+    void completePaidCommonInvoiceOrderIssue(CommonInvoice invoice, CommonInvoiceOrder item) {
+        if (invoice == null || invoice.getId() == null || item == null || item.getOrder() == null
+                || item.getOrder().getId() == null || !item.isPaid() || item.getPaidAt() == null
+                || !isOrderPaid(item.getOrder())
+                || (invoice.getStatus() != CommonInvoiceStatus.PAID
+                    && invoice.getStatus() != CommonInvoiceStatus.PARTIALLY_PAID)
+                || item.getAmountKopecks() <= 0 || invoice.getAmountKopecks() <= 0
+                || invoice.getPaidKopecks() < item.getAmountKopecks()
+                || invoice.getPaidKopecks() > invoice.getAmountKopecks()
+                || (invoice.getStatus() == CommonInvoiceStatus.PAID
+                    && invoice.getPaidKopecks() != invoice.getAmountKopecks())
+                || PAYMENT_METHOD_MIXED.equals(normalize(invoice.getPaymentMethod()))
+                || !normalize(invoice.getLastError()).isBlank()) {
+            return;
+        }
+        paymentIssueReminderService.completePaidCommonInvoiceOrderIssueInCurrentTransaction(
+                invoice.getId(), item.getOrder().getId());
     }
 
     void recordFinalAttributionAndEnqueueRecipientNotifications(CommonInvoice invoice, Runnable finalAttribution) {

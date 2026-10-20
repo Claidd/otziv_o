@@ -61,6 +61,22 @@ class PersonalReminderServiceTest {
     private PersonalReminderService service;
 
     @Test
+    void completingOneInvoiceOrderKeepsBothStaffCardsAndTheirHistory() {
+        PersonalReminder manager = new PersonalReminder();
+        PersonalReminder owner = new PersonalReminder();
+        when(reminderRepository.findBySourceTypeAndSourceIdAndSourceOrderIdAndCompletedAtIsNullOrderByIdAsc(
+                "PAYMENT_FAIL_CLOSED", 182L, 25_686L)).thenReturn(List.of(manager, owner));
+
+        assertEquals(2, service.completeOpenSystemRemindersBySourceAndOrder(
+                "PAYMENT_FAIL_CLOSED", 182L, 25_686L));
+
+        assertNotNull(manager.getCompletedAt());
+        assertEquals(manager.getCompletedAt(), owner.getCompletedAt());
+        verify(reminderRepository).saveAll(List.of(manager, owner));
+        verify(reminderRepository, never()).deleteAll(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
     void scalarSystemReminderCommandResolvesRecipientAndKeepsExistingReminder() {
         User user = User.builder().id(5L).active(true).build();
         when(userService.findByIdToUserInfo(5L)).thenReturn(user);

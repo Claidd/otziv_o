@@ -1,6 +1,7 @@
 package com.hunt.otziv.payments.service;
 
 import com.hunt.otziv.c_companies.model.Company;
+import com.hunt.otziv.payments.api.PaymentIssueCompletionOperations;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
@@ -28,7 +29,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class PaymentIssueReminderService {
+public class PaymentIssueReminderService implements PaymentIssueCompletionOperations {
 
     public static final String SOURCE_PAYMENT_FAIL_CLOSED = "PAYMENT_FAIL_CLOSED";
     public static final String SOURCE_PAYMENT_RETURN_RECONCILIATION = "PAYMENT_RETURN_RECONCILIATION";
@@ -171,6 +172,18 @@ public class PaymentIssueReminderService {
             throw new IllegalArgumentException("Источник закрываемого платёжного замечания обязателен");
         }
         personalReminderService.deleteSystemRemindersBySource(sourceType(sourceType), sourceId);
+    }
+
+    /** Completes only this common invoice's paid order warnings, retaining the original cards. */
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public int completePaidCommonInvoiceOrderIssueInCurrentTransaction(Long invoiceId, Long orderId) {
+        if (invoiceId == null || invoiceId <= 0 || orderId == null || orderId <= 0) {
+            throw new IllegalArgumentException("Общий счёт и оплаченный заказ обязательны");
+        }
+        return personalReminderService.completeOpenSystemRemindersBySourceAndOrder(
+                SOURCE_PAYMENT_FAIL_CLOSED, invoiceId, orderId
+        );
     }
 
     @Transactional(readOnly = true)

@@ -45,6 +45,11 @@ public interface PersonalReminderRepository extends JpaRepository<PersonalRemind
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT r FROM PersonalReminder r WHERE r.id = :id AND r.completedAt IS NULL")
     Optional<PersonalReminder> findOpenByIdForUpdate(@Param("id") Long id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    List<PersonalReminder> findBySourceTypeAndSourceIdAndSourceOrderIdAndCompletedAtIsNullOrderByIdAsc(
+            String sourceType, Long sourceId, Long sourceOrderId
+    );
     boolean existsBySourceTypeAndSourceIdAndCompletedAtIsNull(String sourceType, Long sourceId);
 
     List<PersonalReminder> findByUserIdAndCompletedAtIsNullOrderByUpdatedAtDesc(Long userId);

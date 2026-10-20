@@ -293,6 +293,55 @@ class CommonBillingServiceTest {
     @Mock
     private R0ObservabilityMetrics observabilityMetrics;
 
+    @Test
+    void paidCommonInvoicePositionCompletesOnlyMatchingFailClosedWarning() {
+        CommonInvoice invoice = invoice(account());
+        invoice.setStatus(CommonInvoiceStatus.PAID);
+        invoice.setPaymentMethod(CommonInvoiceSettlementService.PAYMENT_METHOD_MANUAL);
+        invoice.setAmountKopecks(100_000L);
+        invoice.setPaidKopecks(100_000L);
+        CommonInvoiceOrder settled = item(invoice, order(101L));
+        settled.setPaid(true);
+        settled.setPaidAt(LocalDateTime.now());
+        settled.getOrder().setStatus(status("Оплачено"));
+        CommonInvoiceOrder sibling = item(invoice, order(102L));
+        CommonInvoiceSettlementService settlement =
+                (CommonInvoiceSettlementService) ReflectionTestUtils.getField(service, "settlementService");
+
+        settlement.completePaidCommonInvoiceOrderIssue(invoice, settled);
+        settlement.completePaidCommonInvoiceOrderIssue(invoice, sibling);
+
+        verify(paymentIssueReminderService).completePaidCommonInvoiceOrderIssueInCurrentTransaction(10L, 101L);
+        verify(paymentIssueReminderService, never()).completePaidCommonInvoiceOrderIssueInCurrentTransaction(10L, 102L);
+    }
+
+    @Test
+    void disputedOrMixedCommonInvoiceLeavesFailClosedWarningOpen() {
+        CommonInvoice invoice = invoice(account());
+        invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+        invoice.setPaymentMethod(CommonInvoiceSettlementService.PAYMENT_METHOD_MANUAL);
+        invoice.setAmountKopecks(100_000L);
+        invoice.setPaidKopecks(100_000L);
+        CommonInvoiceOrder item = item(invoice, order(101L));
+        item.setPaid(true);
+        item.setPaidAt(LocalDateTime.now());
+        item.getOrder().setStatus(status("Оплачено"));
+        CommonInvoiceSettlementService settlement =
+                (CommonInvoiceSettlementService) ReflectionTestUtils.getField(service, "settlementService");
+
+        settlement.completePaidCommonInvoiceOrderIssue(invoice, item);
+        invoice.setStatus(CommonInvoiceStatus.PAID);
+        invoice.setPaymentMethod(CommonInvoiceSettlementService.PAYMENT_METHOD_MIXED);
+        settlement.completePaidCommonInvoiceOrderIssue(invoice, item);
+        invoice.setPaymentMethod(CommonInvoiceSettlementService.PAYMENT_METHOD_MANUAL);
+        invoice.setPaidKopecks(90_000L);
+        settlement.completePaidCommonInvoiceOrderIssue(invoice, item);
+
+        verify(paymentIssueReminderService, never())
+                .completePaidCommonInvoiceOrderIssueInCurrentTransaction(org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any());
+    }
+
     @InjectMocks
     private CommonBillingService service;
     @Mock
@@ -322,7 +371,7 @@ class CommonBillingServiceTest {
                 invoiceOrderRepository, paymentRefRepository, paymentNotificationOutboxRepository,
                 orderRepository, orderAggregateMutationLockService, paymentLinkRepository,
                 new com.hunt.otziv.payments.service.StandalonePaymentStateService(paymentLinkRepository), afterCommitSender,
-                manualPaymentTaskService, orderStatusService, badReviewTaskService, paymentInvoiceRetryScheduler,
+                manualPaymentTaskService, paymentIssueReminderService, orderStatusService, badReviewTaskService, paymentInvoiceRetryScheduler,
                 manualPaymentAutoConfirmationService, appSettingService, contractorPaymentShadowService,
                 commonManualPaymentAttributionCoordinator, paymentProfileService, tokenSigner,
                 tochkaPaymentProfileResolver, tochkaPaymentOperationMapper, recoveryGateService, observabilityMetrics
@@ -4766,6 +4815,31 @@ class CommonBillingServiceTest {
         assertNull(invoice.getPaymentSuccessNotificationError());
         verify(messageSender, never()).deliverWithOperationId(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.anyString());
         verify(paymentNotificationOutboxRepository).enqueueClient(10L);
+    }
+
+    @Test
+    void settledManualCommonInvoiceCompletesItsFailClosedWarning() throws Exception {
+        CommonBillingAccount account = account();
+        account.setAutoRepeatOrders(false);
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.READY);
+        Order order = order(101L);
+        CommonInvoiceOrder item = item(invoice, order);
+        when(invoiceRepository.findByIdWithAccount(10L))
+                .thenReturn(Optional.of(invoice)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
+        when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
+        when(orderRepository.findOrderListRows(any())).thenReturn(List.of());
+        when(properties.getPublicBaseUrl()).thenReturn("https://o-ogo.ru");
+        doAnswer(invocation -> {
+            order.setStatus(status("Оплачено"));
+            return true;
+        }).when(orderTransactionService).handlePaymentStatus(order, false);
+
+        service.markPaid(10L);
+
+        verify(paymentIssueReminderService)
+                .completePaidCommonInvoiceOrderIssueInCurrentTransaction(10L, 101L);
     }
 
     @Test

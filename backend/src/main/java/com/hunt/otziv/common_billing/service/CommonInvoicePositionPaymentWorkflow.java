@@ -88,6 +88,7 @@ public class CommonInvoicePositionPaymentWorkflow {
         invoiceOrderRepository.save(item);
         recalculateInvoice(invoice);
         closePaidIfAllItemsPaid(invoice);
+        settlementService.completePaidCommonInvoiceOrderIssue(invoice, item);
         return invoiceAfterOrderPrelude(invoiceId);
     }
 

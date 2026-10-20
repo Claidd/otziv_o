@@ -43,6 +43,15 @@ class PaymentIssueReminderServiceTest {
     private PaymentIssueReminderService service;
 
     @Test
+    void commonInvoiceCompletionTargetsOnlyItsOrderAndPreservesReminderRows() {
+        service.completePaidCommonInvoiceOrderIssueInCurrentTransaction(182L, 25_686L);
+
+        verify(personalReminderService).completeOpenSystemRemindersBySourceAndOrder(
+                PaymentIssueReminderService.SOURCE_PAYMENT_FAIL_CLOSED, 182L, 25_686L);
+        verifyNoMoreInteractions(personalReminderService);
+    }
+
+    @Test
     void createsOneSystemCardForResponsibleManagerOwnersAndAdmins() {
         User managerUser = user(10L, true);
         User owner = user(20L, true);

@@ -490,6 +490,7 @@ public class CommonInvoiceRecoveryWorkflow {
         mergeInvoicePaymentMethod(invoice, latePaymentMethod);
         refreshInvoiceAmounts(invoice, items);
         finishLatePaymentApply(invoice, refs, items, closedOrderIds);
+        plannedItems.forEach(item -> settlementService.completePaidCommonInvoiceOrderIssue(invoice, item));
         return invoiceAfterOrderPrelude(invoiceId);
     }
 
