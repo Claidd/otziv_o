@@ -20,6 +20,9 @@ $whatsappChromiumLaunchPath = Join-Path $repoRoot 'whatsapp\chromium-launch.js'
 $whatsappChromiumSmokePath = Join-Path $repoRoot 'whatsapp\chromium-smoke.js'
 $buildComposePath = Join-Path $repoRoot 'docker-compose.build.yaml'
 $productionComposePath = Join-Path $repoRoot 'docker-compose.yaml'
+$productionNginxPath = Join-Path $repoRoot 'infrastructure\nginx\prod.conf'
+$standaloneAndroidReleasePath = Join-Path $repoRoot 'frontend\public\android-new\release.json'
+$standaloneAndroidPagePath = Join-Path $repoRoot 'frontend\public\android-new\index.html'
 
 $deploy = [IO.File]::ReadAllText($deployPath).Replace("`r`n", "`n")
 $snapshot = [IO.File]::ReadAllText($snapshotPath)
@@ -36,6 +39,9 @@ $whatsappChromiumLaunch = [IO.File]::ReadAllText($whatsappChromiumLaunchPath)
 $whatsappChromiumSmoke = [IO.File]::ReadAllText($whatsappChromiumSmokePath)
 $buildCompose = [IO.File]::ReadAllText($buildComposePath)
 $productionCompose = [IO.File]::ReadAllText($productionComposePath)
+$productionNginx = [IO.File]::ReadAllText($productionNginxPath)
+$standaloneAndroidRelease = [IO.File]::ReadAllText($standaloneAndroidReleasePath) | ConvertFrom-Json
+$standaloneAndroidPage = [IO.File]::ReadAllText($standaloneAndroidPagePath)
 . $snapshotPath
 
 # Exercise the real argument preparation without invoking deployment or SSH.
@@ -712,6 +718,24 @@ Assert-Match $deploy 'sudo -n chown -R "`\$deploy_uid:`\$deploy_gid" "`\$target_
 Assert-Match $deploy 'chown -R `\$deploy_uid:`\$deploy_gid /host-data/mobile-releases' 'The no-sudo APK publication fallback must recursively repair existing mobile release ownership.'
 Assert-Match $deploy 'Mobile release metadata is not readable after permission repair' 'APK publication must fail closed if release.json remains unreadable after ownership repair.'
 Assert-Match $deploy 'Mobile release storage must not be a symlink' 'Recursive mobile release ownership repair must reject a symlink target.'
+$standaloneDownloadUrl = [string]$standaloneAndroidRelease.downloadUrl
+if ($standaloneDownloadUrl -cnotmatch '^/android-new/otziv-v1\.0\.[0-9]+\.apk$') {
+    throw 'The standalone Android release must name a versioned APK in /android-new/.'
+}
+$apkLocation = [regex]::Match(
+    $productionNginx,
+    "(?ms)^\s*location\s*=\s*$([regex]::Escape($standaloneDownloadUrl))\s*\{(?<body>.*?)^\s*\}"
+)
+$androidCatchAll = [regex]::Match($productionNginx, '(?m)^\s*location\s+\^~\s+/android-new/\s*\{')
+if (-not $apkLocation.Success -or -not $androidCatchAll.Success -or
+    $apkLocation.Index -ge $androidCatchAll.Index) {
+    throw "The standalone APK $standaloneDownloadUrl must have an exact Nginx location before the /android-new/ catch-all."
+}
+Assert-Match $apkLocation.Groups['body'].Value 'root\s+/var/www/certbot\s*;' 'The standalone APK location must serve the persistent VPS artifact directory.'
+Assert-Match $apkLocation.Groups['body'].Value 'try_files\s+\$uri\s+=404\s*;' 'The standalone APK location must return 404 when the verified file is absent.'
+if (-not $standaloneAndroidPage.Contains("href=`"$standaloneDownloadUrl`"")) {
+    throw "The standalone Android download page must link to the current APK $standaloneDownloadUrl."
+}
 $mobilePermissionNormalizationCount = [regex]::Matches($deploy, 'Unable to normalize published mobile release permissions').Count
 if ($mobilePermissionNormalizationCount -ne 2) {
     throw "Verified existing and newly copied mobile releases must both normalize public file permissions; found $mobilePermissionNormalizationCount guarded paths."
