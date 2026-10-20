@@ -11,8 +11,10 @@ export const roleGuard: CanActivateFn = async (route, state) => {
   const router = inject(Router);
   const reportReview = inject(ManagerReportReviewAccessService);
 
-  if (!await auth.ensureAuthenticated()) {
-    return router.createUrlTree(['/login'], { queryParams: { target: state.url } });
+  if (!await auth.ensureAuthenticated() && !auth.isAuthenticated()) {
+    return router.createUrlTree(auth.tokens() ? ['/session-retry'] : ['/login'], {
+      queryParams: { target: state.url }
+    });
   }
 
   const roles = route.data['roles'] as readonly string[] | undefined;

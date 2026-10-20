@@ -10,6 +10,7 @@ import { SplashScreen } from '@capacitor/splash-screen';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { mobileEnvironment } from './mobile-environment';
 import { mobileViewportMode } from './mobile-viewport.helpers';
+import { workerAppLinkRoute } from './worker-app-link';
 import { MobileThemeService } from '../shared/mobile-theme.service';
 
 const DEFAULT_NETWORK_STATUS: ConnectionStatus = {
@@ -194,6 +195,12 @@ export class MobileNativeService {
       this.zone.run(() => void this.handleBackButton(canGoBack));
     });
     this.listenerHandles.push(backHandle);
+
+    // appUrlOpen handles a running app; getLaunchUrl covers a cold start from Telegram.
+    const launchUrl = await CapacitorApp.getLaunchUrl().catch(() => undefined);
+    if (launchUrl?.url) {
+      this.zone.run(() => this.handleDeepLink(launchUrl.url));
+    }
   }
 
   private async configureKeyboard(): Promise<void> {
@@ -292,6 +299,12 @@ export class MobileNativeService {
 
   private handleDeepLink(url: string): void {
     if (url.startsWith(mobileEnvironment.keycloak.nativeRedirectUri) || url.startsWith('otziv://logout')) {
+      return;
+    }
+
+    const workerRoute = workerAppLinkRoute(url);
+    if (workerRoute) {
+      void this.router.navigateByUrl(workerRoute, { replaceUrl: false });
       return;
     }
 

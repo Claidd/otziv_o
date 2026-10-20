@@ -260,15 +260,25 @@ describe('mobile authentication lifecycle', () => {
     expect(auth.tokens()).toBeNull();
   });
 
-  it('routes an expired retained session to the recoverable login screen without deleting it', async () => {
+  it.each(['network', 503])('routes a retained session to connection recovery after %s without opening login', async failure => {
     retain(); transport.mockRejectedValue(new TypeError('offline'));
+    if (failure === 503) transport.mockResolvedValue(new Response('', { status: 503 }));
     const route = { data: { roles: ['MANAGER'] }, queryParamMap: convertToParamMap({}) } as unknown as ActivatedRouteSnapshot;
     const state = { url: '/tabs/orders' } as RouterStateSnapshot;
     const result = await TestBed.runInInjectionContext(() => roleGuard(route, state));
     expect(result).toBe('login-tree');
-    expect(router.createUrlTree).toHaveBeenCalledWith(['/login'], { queryParams: { target: '/tabs/orders' } });
+    expect(router.createUrlTree).toHaveBeenCalledWith(['/session-retry'], { queryParams: { target: '/tabs/orders' } });
     expect(auth.status()).toBe('retrying');
     expect(storage.clearTokens).not.toHaveBeenCalled();
+  });
+
+  it('routes a terminally rejected refresh to login', async () => {
+    retain(); transport.mockResolvedValue(new Response('', { status: 401 }));
+    const route = { data: { roles: ['MANAGER'] } } as unknown as ActivatedRouteSnapshot;
+    const state = { url: '/tabs/orders' } as RouterStateSnapshot;
+    await TestBed.runInInjectionContext(() => roleGuard(route, state));
+    expect(router.createUrlTree).toHaveBeenCalledWith(['/login'], { queryParams: { target: '/tabs/orders' } });
+    expect(auth.tokens()).toBeNull();
   });
 
   it('does not overwrite a newer login with an older refresh response', async () => {

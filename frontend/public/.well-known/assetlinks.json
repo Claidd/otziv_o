@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.hunt.otziv",
+      "sha256_cert_fingerprints": [
+        "00:E2:49:AB:3D:6A:15:F0:51:C7:0F:66:B7:26:04:7F:CC:53:4F:C3:58:E4:09:A2:09:9B:4C:4C:46:1F:92:18"
+      ]
+    }
+  }
+]
