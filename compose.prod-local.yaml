@@ -208,7 +208,7 @@ services:
       - internal_net
 
   minio-init:
-    image: ghcr.io/claidd/otziv-security@sha256:7f68cacdb75dd9e2ff66b8b8efe37502880ac36d30ba14fad3399f25087adcf8
+    image: ghcr.io/claidd/otziv-security@sha256:665dd2dfefb98adfb7a9f212c2d3ec4be7c25f1a16c166e64477c8fe38c10b13
     restart: "no"
     logging: *default-logging
     mem_limit: 384m
