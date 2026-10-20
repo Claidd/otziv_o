@@ -194,6 +194,9 @@ public class ManagerControlItemActions {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Закрыть карточку можно после ответа специалиста или администратором/владельцем");
         }
         cardLifecycle.recordConcreteEpisode(concreteItem, status, false);
+        if (actionType == ManagerDailyControlActionType.DEFERRED && concreteItem.getDeferredAt() == null) {
+            concreteItem.setDeferredAt(now);
+        }
         concreteItem.setStatus(status);
         concreteItem.setActionType(actionType);
         concreteItem.setResolvedAt(status == ManagerDailyControlItemStatus.RESOLVED ? now : null);

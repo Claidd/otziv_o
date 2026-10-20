@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import java.security.Principal;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import static com.hunt.otziv.p_products.application.WorkerMutationDetails.*;
 
 /** Worker application commands for TaskAssignment. Existing domain transactions and best-effort audit ordering are preserved. */
@@ -22,6 +23,7 @@ public class WorkerTaskAssignmentCommands {
     private final WorkerAssignmentMutationGuardService assignmentMutationGuardService;
     private final WorkerStaffAccessPolicy staff;
 
+    @Transactional
     public void reassignBadReviewTask(Long taskId, Long workerId, WorkerOrderActor actor) {
         Authentication authentication = requireActor(actor, "ADMIN", "OWNER", "MANAGER");
         Principal principal = authentication;
@@ -36,6 +38,7 @@ public class WorkerTaskAssignmentCommands {
         }
     }
 
+    @Transactional
     public void reassignRecoveryTask(Long taskId, Long workerId, WorkerOrderActor actor) {
         Authentication authentication = requireActor(actor, "ADMIN", "OWNER", "MANAGER");
         Principal principal = authentication;

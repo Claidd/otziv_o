@@ -10,8 +10,10 @@ import com.hunt.otziv.client_chat_control.model.ClientChatUnansweredItem;
 import com.hunt.otziv.client_chat_control.model.ClientChatUnansweredStatus;
 import com.hunt.otziv.client_chat_control.repository.ClientChatUnansweredItemRepository;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlConcreteItem;
+import com.hunt.otziv.manager_control.model.ManagerDailyControl;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlItemStatus;
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlConcreteItemRepository;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -71,6 +73,32 @@ class ManagerReportReviewTaskContextServiceTest {
     @Test
     void treatsDeletedSourceTaskAsWithdrawn() {
         when(concreteRepository.findById(3545L)).thenReturn(Optional.empty());
+
+        assertThat(service.resolvedSatisfactorily(3545L)).isTrue();
+    }
+
+    @Test
+    void deferredCardDoesNotWithdrawAuditQuestion() {
+        ManagerDailyControlConcreteItem source = source(3545L, ManagerDailyControlItemStatus.DEFERRED);
+        when(concreteRepository.findById(3545L)).thenReturn(Optional.of(source));
+
+        assertThat(service.resolvedSatisfactorily(3545L)).isFalse();
+    }
+
+    @Test
+    void laterResolvedCardWithdrawsEarlierDeferredQuestion() {
+        ManagerDailyControlConcreteItem source = source(3545L, ManagerDailyControlItemStatus.DEFERRED);
+        source.setEntityType("COMMON_INVOICE");
+        source.setEntityKey("COMMON_INVOICE:175");
+        LocalDateTime deferredAt = LocalDateTime.now().minusDays(2);
+        source.setDeferredAt(deferredAt);
+        ManagerDailyControl control = mock(ManagerDailyControl.class);
+        when(control.managerId()).thenReturn(9L);
+        source.setControl(control);
+        when(concreteRepository.findById(3545L)).thenReturn(Optional.of(source));
+        when(concreteRepository.existsResolutionAfterDeferral(
+                9L, "COMMON_INVOICE:175", deferredAt, ManagerDailyControlItemStatus.RESOLVED))
+                .thenReturn(true);
 
         assertThat(service.resolvedSatisfactorily(3545L)).isTrue();
     }

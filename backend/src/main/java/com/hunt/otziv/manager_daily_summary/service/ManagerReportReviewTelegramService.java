@@ -1,6 +1,9 @@
 package com.hunt.otziv.manager_daily_summary.service;
 
 import com.hunt.otziv.config.settings.service.AppSettingService;
+import com.hunt.otziv.manager_control.model.ManagerDailyControlConcreteItem;
+import com.hunt.otziv.manager_control.model.ManagerDailyControlItemStatus;
+import com.hunt.otziv.manager_control.repository.ManagerDailyControlConcreteItemRepository;
 import com.hunt.otziv.manager_daily_summary.dto.ManagerDailySummaryResponse;
 import com.hunt.otziv.manager_daily_summary.model.ManagerReportReviewEvent;
 import com.hunt.otziv.manager_daily_summary.model.ManagerReportReviewSession;
@@ -22,6 +25,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -63,6 +67,7 @@ public class ManagerReportReviewTelegramService {
     private final ManagerReportReviewQualityService qualityService;
     private final ManagerSummaryFormatter formatter;
     private final ManagerWorkerDailyProgressService workerProgressService;
+    private final ManagerDailyControlConcreteItemRepository concreteItemRepository;
     private final TelegramService telegramService;
     private final NotificationMediaDeliveryService notificationMediaDeliveryService;
     private final UserService userService;
@@ -193,7 +198,8 @@ public class ManagerReportReviewTelegramService {
             Long recipientChatId,
             boolean testMode
     ) {
-        ManagerFormattedReport report = formatter.formatPersonal(summary);
+        List<ManagerDailyControlConcreteItem> overdueDeferred = overdueDeferred(manager.getId(), summary.date());
+        ManagerFormattedReport report = withDeferredCases(formatter.formatPersonal(summary), overdueDeferred);
         review.setSummaryDate(summary.date());
         review.setManager(manager);
         review.setManagerUserId(recipientUser.getId());
@@ -211,10 +217,11 @@ public class ManagerReportReviewTelegramService {
         review.setQuestionsContext(report.questionContext());
         review.setCurrentQuestionIndex(0);
         review.setMinimumReadSeconds(minimumReadSeconds(report.html(), testMode));
-        List<ManagerReportReviewQualityService.ReviewQuestion> goalQuestions =
-                previousDayGoalQuestions(manager.getId(), summary.date());
+        List<ManagerReportReviewQualityService.ReviewQuestion> mandatoryQuestions = new ArrayList<>(
+                previousDayGoalQuestions(manager.getId(), summary.date()));
+        mandatoryQuestions.addAll(deferredQuestions(overdueDeferred));
         int currentDayIssueCount = issueCount(summary);
-        int issueCount = currentDayIssueCount + goalQuestions.size();
+        int issueCount = currentDayIssueCount + mandatoryQuestions.size();
         review.setIssueCount(issueCount);
         List<ManagerReportReviewQualityService.ReviewQuestion> preparedQuestions = List.of();
         if (issueCount > 0) {
@@ -223,7 +230,7 @@ public class ManagerReportReviewTelegramService {
                             taskContextService.refresh(report.questionContext()), currentDayIssueCount)
                     : new ManagerReportReviewQualityService.QuestionGeneration(List.of(), true, "");
             preparedQuestions = generation.aiVerified()
-                    ? withGoalQuestions(generation.questions(), goalQuestions)
+                    ? withGoalQuestions(generation.questions(), mandatoryQuestions)
                     : List.of();
             review.setQuestionsJson(qualityService.questionsJson(preparedQuestions));
             review.setQuestionsSource(generation.aiVerified() ? QUESTIONS_AI : QUESTIONS_PENDING_AI);
@@ -1411,6 +1418,8 @@ public class ManagerReportReviewTelegramService {
                         : review.getQuestionsContext()),
                 Math.max(0, review.getIssueCount()
                         - previousDayGoalQuestions(review.getManager() == null ? null : review.getManager().getId(),
+                        review.getSummaryDate()).size()
+                        - overdueDeferred(review.getManager() == null ? null : review.getManager().getId(),
                         review.getSummaryDate()).size())
         );
         if (!generation.aiVerified()) {
@@ -1423,10 +1432,14 @@ public class ManagerReportReviewTelegramService {
             return List.of();
         }
         aiAvailabilityService.resume(review, LocalDateTime.now(), "question-generation");
-        List<ManagerReportReviewQualityService.ReviewQuestion> allQuestions = withGoalQuestions(
-                generation.questions(),
+        List<ManagerReportReviewQualityService.ReviewQuestion> mandatoryQuestions = new ArrayList<>(
                 previousDayGoalQuestions(review.getManager() == null ? null : review.getManager().getId(),
                         review.getSummaryDate()));
+        mandatoryQuestions.addAll(deferredQuestions(overdueDeferred(
+                review.getManager() == null ? null : review.getManager().getId(), review.getSummaryDate())));
+        List<ManagerReportReviewQualityService.ReviewQuestion> allQuestions = withGoalQuestions(
+                generation.questions(),
+                mandatoryQuestions);
         review.setQuestionsJson(qualityService.questionsJson(allQuestions));
         review.setQuestionsSource(QUESTIONS_AI);
         review.setIssueCount(allQuestions.size());
@@ -1505,6 +1518,61 @@ public class ManagerReportReviewTelegramService {
                 + Math.max(0, summary.taskOtherOpen())
                 + Math.max(0, summary.hardSlaBreachCount());
         return (int) Math.min(Integer.MAX_VALUE, Math.max(explicit, open));
+    }
+
+    private List<ManagerDailyControlConcreteItem> overdueDeferred(Long managerId, java.time.LocalDate reportDate) {
+        if (managerId == null || reportDate == null) return List.of();
+        List<ManagerDailyControlConcreteItem> candidates = concreteItemRepository.findOverdueDeferredForAudit(
+                managerId,
+                LocalDateTime.now().minusDays(1),
+                reportDate.plusDays(1).atStartOfDay(),
+                ManagerDailyControlItemStatus.RESOLVED);
+        if (candidates == null || candidates.isEmpty()) return List.of();
+        LinkedHashMap<String, ManagerDailyControlConcreteItem> distinct = new LinkedHashMap<>();
+        for (ManagerDailyControlConcreteItem item : candidates) {
+            distinct.putIfAbsent(item.getEntityKey() == null ? "id:" + item.getId() : item.getEntityKey(), item);
+        }
+        return List.copyOf(distinct.values());
+    }
+
+    private List<ManagerReportReviewQualityService.ReviewQuestion> deferredQuestions(
+            List<ManagerDailyControlConcreteItem> items
+    ) {
+        return items.stream().map(item -> new ManagerReportReviewQualityService.ReviewQuestion(
+                "Карточка «" + limit(item.getTitle(), 120) + "» отложена более суток и остаётся нерешённой. "
+                        + "Что конкретно мешает закрыть вопрос, какое действие вы выполните и когда проверите результат?",
+                List.of("конкретная причина задержки по карточке «" + limit(item.getTitle(), 120) + "»",
+                        "следующее действие менеджера или ответственного",
+                        "срок и способ проверки окончательного решения"),
+                List.of(item.getId())
+        )).toList();
+    }
+
+    private ManagerFormattedReport withDeferredCases(
+            ManagerFormattedReport report, List<ManagerDailyControlConcreteItem> items
+    ) {
+        if (items.isEmpty()) return report;
+        StringBuilder telegram = new StringBuilder("\n\n⏳ <b>Отложенные более суток вопросы</b>");
+        StringBuilder rich = new StringBuilder("<h3>⏳ Отложенные более суток вопросы</h3><ul>");
+        StringBuilder context = new StringBuilder("\n\nОБЯЗАТЕЛЬНЫЕ ВОПРОСЫ: отложены более суток, "
+                + "повторяются ежедневно до окончательного решения:\n");
+        for (ManagerDailyControlConcreteItem item : items) {
+            String title = limit(item.getTitle(), 120);
+            telegram.append("\n• ").append(escape(title));
+            rich.append("<li>").append(escape(title)).append("</li>");
+            context.append("- sourceTaskId=").append(item.getId())
+                    .append("; title=").append(title)
+                    .append("; deferredAt=").append(item.getDeferredAt())
+                    .append("; status=").append(item.getStatus())
+                    .append("; reason=").append(limit(item.getReason(), 300))
+                    .append("; managerComment=").append(limit(item.getComment(), 300))
+                    .append('\n');
+        }
+        rich.append("</ul>");
+        return new ManagerFormattedReport(
+                report.html() + telegram,
+                report.richHtml() + rich,
+                report.questionContext() + context);
     }
 
     private List<ManagerReportReviewQualityService.ReviewQuestion> previousDayGoalQuestions(

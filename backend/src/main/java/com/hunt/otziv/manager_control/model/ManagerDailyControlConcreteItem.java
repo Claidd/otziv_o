@@ -82,6 +82,9 @@ public class ManagerDailyControlConcreteItem {
     @Column(name = "last_manual_touch_at")
     private LocalDateTime lastManualTouchAt;
 
+    @Column(name = "deferred_at")
+    private LocalDateTime deferredAt;
+
     @Column(name = "worker_notification_attempted_at")
     private LocalDateTime workerNotificationAttemptedAt;
 
@@ -165,5 +168,8 @@ public class ManagerDailyControlConcreteItem {
     @PreUpdate
     void onUpdate() {
         updatedAt = LocalDateTime.now();
+        if (status == ManagerDailyControlItemStatus.RESOLVED) {
+            deferredAt = null;
+        }
     }
 }
