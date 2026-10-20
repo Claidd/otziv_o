@@ -62,7 +62,17 @@ public class ManagerReportReviewTaskContextService {
     }
 
     private boolean resolvedSatisfactorily(ManagerDailyControlConcreteItem source) {
-        if (source.getStatus() == ManagerDailyControlItemStatus.OPEN) return false;
+        if (source.getStatus() != ManagerDailyControlItemStatus.RESOLVED) {
+            boolean resolvedLater = source.getDeferredAt() != null
+                    && source.getControl() != null
+                    && source.getControl().getManager() != null
+                    && concreteItemRepository.existsResolutionAfterDeferral(
+                            source.getControl().getManager().getId(),
+                            source.getEntityKey(),
+                            source.getDeferredAt(),
+                            ManagerDailyControlItemStatus.RESOLVED);
+            if (!resolvedLater) return false;
+        }
         return clientChatItem(source)
                 .map(item -> item.getStatus() != ClientChatUnansweredStatus.OPEN
                         && !item.isAuditRequired()

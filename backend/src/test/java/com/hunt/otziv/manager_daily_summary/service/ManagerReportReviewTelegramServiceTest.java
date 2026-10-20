@@ -52,6 +52,7 @@ class ManagerReportReviewTelegramServiceTest {
     @Mock private ManagerReportReviewQualityService qualityService;
     @Mock private ManagerSummaryFormatter formatter;
     @Mock private ManagerWorkerDailyProgressService workerProgressService;
+    @Mock private com.hunt.otziv.manager_control.repository.ManagerDailyControlConcreteItemRepository concreteItemRepository;
     @Mock private TelegramService telegramService;
     @Mock private NotificationMediaDeliveryService notificationMediaDeliveryService;
     @Mock private UserService userService;
@@ -173,6 +174,40 @@ class ManagerReportReviewTelegramServiceTest {
                 review.getStatus() == ManagerReportReviewStatus.DELIVERED
                         && review.getIssueCount() == 1
                         && !review.isAutoCompleted()));
+    }
+
+    @Test
+    void overdueDeferredCardCreatesQuestionEvenWhenDailySummaryHasNoProblems() {
+        ManagerDailySummaryResponse summary = summary(0);
+        when(formatter.formatPersonal(summary)).thenReturn(new ManagerFormattedReport(
+                "Отчёт без замечаний", "<h2>Отчёт без замечаний</h2>"));
+        var deferred = new com.hunt.otziv.manager_control.model.ManagerDailyControlConcreteItem();
+        deferred.setId(175L);
+        deferred.setEntityKey("COMMON_INVOICE:175");
+        deferred.setTitle("Premium Service — общий счёт");
+        deferred.setDeferredAt(LocalDateTime.now().minusDays(2));
+        deferred.setStatus(com.hunt.otziv.manager_control.model.ManagerDailyControlItemStatus.DEFERRED);
+        when(concreteItemRepository.findOverdueDeferredForAudit(
+                eq(manager.getId()), any(LocalDateTime.class), any(LocalDateTime.class),
+                eq(com.hunt.otziv.manager_control.model.ManagerDailyControlItemStatus.RESOLVED)))
+                .thenReturn(List.of(deferred));
+        when(sessionRepository.findBySummaryDateAndManager_IdAndTestModeFalse(summary.date(), manager.getId()))
+                .thenReturn(Optional.empty());
+        when(qualityService.questionsJson(any())).thenReturn("[{}]");
+        when(telegramService.sendRichMessageWithInlineKeyboardMessageId(
+                eq(700L), any(String.class), any())).thenReturn(Optional.of(503));
+
+        assertThat(service.deliver(manager, summary)).isTrue();
+
+        verify(qualityService, never()).generateQuestions(any(String.class), anyInt());
+        verify(qualityService).questionsJson(org.mockito.ArgumentMatchers.argThat(questions ->
+                questions.size() == 1
+                        && questions.getFirst().question().contains("Premium Service")
+                        && questions.getFirst().sourceTaskIds().equals(List.of(175L))));
+        verify(sessionRepository, atLeastOnce()).save(org.mockito.ArgumentMatchers.argThat(review ->
+                review.getIssueCount() == 1
+                        && review.getReportSnapshot().contains("Отложенные более суток")
+                        && review.getQuestionsContext().contains("sourceTaskId=175")));
     }
 
     @Test

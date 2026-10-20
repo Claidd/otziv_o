@@ -45,6 +45,44 @@ public interface ManagerDailyControlConcreteItemRepository extends CrudRepositor
 
     List<ManagerDailyControlConcreteItem> findByControl(ManagerDailyControl control);
 
+    @Query("""
+            SELECT item FROM ManagerDailyControlConcreteItem item
+            WHERE item.control.manager.id = :managerId
+              AND item.deferredAt IS NOT NULL
+              AND item.deferredAt <= :cutoff
+              AND item.deferredAt < :reportEnd
+              AND item.status <> :resolved
+              AND NOT EXISTS (
+                  SELECT later.id FROM ManagerDailyControlConcreteItem later
+                  WHERE later.control.manager.id = :managerId
+                    AND later.entityKey = item.entityKey
+                    AND later.status = :resolved
+                    AND later.resolvedAt >= item.deferredAt
+              )
+            ORDER BY item.deferredAt ASC, item.id ASC
+            """)
+    List<ManagerDailyControlConcreteItem> findOverdueDeferredForAudit(
+            @Param("managerId") Long managerId,
+            @Param("cutoff") LocalDateTime cutoff,
+            @Param("reportEnd") LocalDateTime reportEnd,
+            @Param("resolved") ManagerDailyControlItemStatus resolved
+    );
+
+    @Query("""
+            SELECT CASE WHEN COUNT(later) > 0 THEN true ELSE false END
+            FROM ManagerDailyControlConcreteItem later
+            WHERE later.control.manager.id = :managerId
+              AND later.entityKey = :entityKey
+              AND later.status = :resolved
+              AND later.resolvedAt >= :deferredAt
+            """)
+    boolean existsResolutionAfterDeferral(
+            @Param("managerId") Long managerId,
+            @Param("entityKey") String entityKey,
+            @Param("deferredAt") LocalDateTime deferredAt,
+            @Param("resolved") ManagerDailyControlItemStatus resolved
+    );
+
     List<ManagerDailyControlConcreteItem> findByEntityTypeAndEntityId(String entityType, Long entityId);
 
     List<ManagerDailyControlConcreteItem> findByEntityTypeAndEntityIdAndControl_ControlDate(
