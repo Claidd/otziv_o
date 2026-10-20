@@ -17,13 +17,19 @@ import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.review_recovery.model.*;
 import com.hunt.otziv.review_recovery.repository.*;
 import com.hunt.otziv.review_recovery.service.*;
+import com.hunt.otziv.u_users.model.Manager;
+import com.hunt.otziv.u_users.model.User;
+import com.hunt.otziv.u_users.model.Worker;
+import com.hunt.otziv.u_users.service.ManagerService;
 import com.hunt.otziv.u_users.service.UserService;
+import com.hunt.otziv.u_users.service.WorkerService;
 import com.hunt.otziv.worker_activity.service.WorkerActivityService;
 import java.lang.reflect.Constructor;
 import java.sql.Connection;
 import java.time.LocalDate;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.hibernate.LazyInitializationException;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -139,6 +145,63 @@ class WorkerTaskCommandsMySqlIntegrationTest {
     }
 
     @AfterEach void clearAmbient() { SecurityContextHolder.clearContext(); }
+
+    @ParameterizedTest @ValueSource(longs={1,2})
+    void managerCanReplaceInactiveTaskWorkerWhileOrderManagerIsLazy(long taskId) {
+        Manager manager=Manager.builder().id(9L).build();
+        User actor=User.builder().id(301L).username("manager-a").build();
+        Worker former=Worker.builder().id(81L).user(User.builder().id(401L).active(false).build()).build();
+        Worker replacement=Worker.builder().id(82L).user(User.builder().id(402L).active(true).fio("Replacement").build()).build();
+        var users=mock(UserService.class);
+        var managers=mock(ManagerService.class);
+        var workers=mock(WorkerService.class);
+        when(users.findByUserName("manager-a")).thenReturn(Optional.of(actor));
+        when(managers.getManagerByUserId(301L)).thenReturn(manager);
+        when(workers.getAllWorkersToManager(manager)).thenReturn(List.of(replacement));
+        var staff=new WorkerStaffAccessPolicy(users,managers,workers);
+        if(taskId==1) {
+            doAnswer(inv -> {
+                lockTask(1L);
+                BadReviewTask task=loadBad(1L);
+                task.setOrder(lazyManagerOrder(10L,manager));
+                task.setWorker(former);
+                return Optional.of(task);
+            }).when(badRepository).findByIdForMutation(1L);
+        } else {
+            doAnswer(inv -> {
+                ReviewRecoveryTask task=loadRecovery(2L);
+                task.setOrder(lazyManagerOrder(20L,manager));
+                task.setWorker(former);
+                return Optional.of(task);
+            }).when(recoveryRepository).findById(2L);
+            doAnswer(inv -> {
+                lockTask(2L);
+                ReviewRecoveryTask task=loadRecovery(2L);
+                task.setOrder(lazyManagerOrder(20L,manager));
+                task.setWorker(former);
+                return Optional.of(task);
+            }).when(recoveryRepository).findByIdForMutation(2L);
+        }
+
+        var unproxied=new WorkerTaskAssignmentCommands(bad,recovery,guard,staff);
+        var managerActor=new WorkerOrderActor("manager-a",Set.of("MANAGER"));
+        // With OSIV disabled, the old boundary returned a task whose manager could no longer be loaded.
+        assertThatThrownBy(() -> {
+            if(taskId==1) unproxied.reassignBadReviewTask(1L,82L,managerActor);
+            else unproxied.reassignRecoveryTask(2L,82L,managerActor);
+        }).isInstanceOf(WorkerOrderCommandException.class)
+            .hasCauseInstanceOf(LazyInitializationException.class);
+
+        var assignment=proxy(new WorkerTaskAssignmentCommands(bad,recovery,guard,staff));
+        if(taskId==1) {
+            assignment.reassignBadReviewTask(1L,82L,managerActor);
+            verify(badRepository).save(argThat(task -> task.getWorker()!=null && task.getWorker().getId()==82L));
+        } else {
+            assignment.reassignRecoveryTask(2L,82L,managerActor);
+            verify(recoveryRepository).save(argThat(task -> task.getWorker()!=null && task.getWorker().getId()==82L));
+        }
+        verify(workers).getAllWorkersToManager(manager);
+    }
 
     @ParameterizedTest @ValueSource(booleans={false,true})
     void lockedMutationUsesExplicitActorWithEmptyOrDifferentAmbientContext(boolean ambientAdministrator) {
@@ -327,6 +390,18 @@ class WorkerTaskCommandsMySqlIntegrationTest {
     BadReviewTask loadBad(long id) { return BadReviewTask.builder().id(id).order(Order.builder().id(10L).build()).status(BadReviewTaskStatus.NEW).taskText(text(id)).scheduledDate(currentTaskDate(id)).build(); }
     ReviewRecoveryTask loadRecovery(long id) { return ReviewRecoveryTask.builder().id(id).order(Order.builder().id(20L).build()).status(ReviewRecoveryTaskStatus.PLANNED)
         .recoveryText(text(id)).scheduledDate(currentTaskDate(id)).bot(Bot.builder().id(81L).build()).build(); }
+    Order lazyManagerOrder(long id, Manager manager) {
+        Order order=new Order() {
+            @Override public Manager getManager() {
+                if(!TransactionSynchronizationManager.isActualTransactionActive()) {
+                    throw new LazyInitializationException("order.manager is unavailable outside the persistence context");
+                }
+                return manager;
+            }
+        };
+        order.setId(id);
+        return order;
+    }
     LocalDate currentTaskDate(long id) { return jdbc.queryForObject("SELECT scheduled_date FROM command_tasks WHERE id=?" + (TransactionSynchronizationManager.isCurrentTransactionReadOnly() ? "" : " FOR UPDATE"),java.sql.Date.class,id).toLocalDate(); }
     String text(long id) { return jdbc.queryForObject("SELECT text FROM command_tasks WHERE id=?",String.class,id); }
     int exclusions() { return jdbc.queryForObject("SELECT COUNT(*) FROM task_exclusions",Integer.class); }

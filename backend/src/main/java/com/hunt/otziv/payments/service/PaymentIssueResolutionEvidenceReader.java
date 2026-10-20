@@ -4,6 +4,7 @@ import com.hunt.otziv.payments.api.PaymentIssueEvidenceOperations;
 import com.hunt.otziv.payments.api.PaymentIssueEvidenceOperations.Evidence;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -43,23 +44,36 @@ public class PaymentIssueResolutionEvidenceReader implements PaymentIssueEvidenc
                 || check.paymentLinkId() == null)
             return Evidence.unresolved("check_without_settlement_snapshot");
 
-        // A second link, including an unfinished payment instruction, makes this fact ambiguous.
+        // A retry can leave expired instructions beside the one settled link.
+        // Only the exact link recorded by the active check may carry payment evidence.
         List<PaymentLinkFact> liveLinks = orderLinks("payment_links", params);
         List<PaymentLinkFact> archivedLinks = orderLinks("archive_payment_links", params);
-        if (liveLinks.size() + archivedLinks.size() != 1)
+        List<PaymentLinkFact> links = new ArrayList<>(liveLinks);
+        links.addAll(archivedLinks);
+        if (links.isEmpty())
             return Evidence.unresolved("link_missing_or_ambiguous");
-        PaymentLinkFact link = liveLinks.isEmpty() ? archivedLinks.getFirst() : liveLinks.getFirst();
-        if (link.id() != check.paymentLinkId() || !"CONFIRMED".equals(link.status())
+        List<PaymentLinkFact> matchingLinks = links.stream()
+                .filter(candidate -> candidate.id() == check.paymentLinkId())
+                .toList();
+        if (matchingLinks.size() != 1)
+            return Evidence.unresolved("link_missing_or_ambiguous");
+        PaymentLinkFact link = matchingLinks.getFirst();
+        if (!"CONFIRMED".equals(link.status())
                 || !link.paidAt() || link.amountKopecks() == null
                 || link.amountKopecks() != check.amountKopecks())
             return Evidence.unresolved("confirmed_link_missing_or_amount_mismatch");
         if (link.returnOrCancelMarkers())
             return Evidence.unresolved("payment_return_or_cancel_marker");
+        // Every other instruction must be terminal and have no sign of settlement
+        // or return. Pending, disputed or second confirmed links still require review.
+        if (links.stream().anyMatch(candidate -> candidate != link
+                && !isUnpaidTerminalLink(candidate)))
+            return Evidence.unresolved("link_missing_or_ambiguous");
 
         Long returnOutbox = jdbc.queryForObject("""
                 SELECT COUNT(*) FROM payment_link_return_reconciliation_outbox
-                WHERE payment_link_id = :linkId
-                """, Map.of("linkId", link.id()), Long.class);
+                WHERE payment_link_id IN (:linkIds)
+                """, Map.of("linkIds", links.stream().map(PaymentLinkFact::id).distinct().toList()), Long.class);
         if (returnOutbox == null || returnOutbox > 0)
             return Evidence.unresolved("payment_return_outbox");
         // A common invoice is a different route; mixed-route orders need manual review.
@@ -105,12 +119,24 @@ public class PaymentIssueResolutionEvidenceReader implements PaymentIssueEvidenc
     }
 
     private List<String> orderStatuses(String table, Map<String, Object> params) {
+        // A restored archive row is historical; the active copy in orders is
+        // the only order that can settle. Keep non-restored archive rows visible
+        // so a true duplicate still blocks automatic closure.
+        String activeArchiveOnly = "archive_orders".equals(table)
+                ? " AND base_order.restored_at IS NULL" : "";
         return jdbc.queryForList("""
                 SELECT status.order_status_title
                 FROM %s base_order
                 LEFT JOIN order_statuses status ON status.order_status_id = base_order.order_status
-                WHERE base_order.order_id = :orderId
-                """.formatted(table), params, String.class);
+                WHERE base_order.order_id = :orderId%s
+                """.formatted(table, activeArchiveOnly), params, String.class);
+    }
+
+    private boolean isUnpaidTerminalLink(PaymentLinkFact link) {
+        return ("EXPIRED".equals(link.status()) || "CANCELED".equals(link.status()))
+                && !link.paidAt()
+                && link.amountKopecks() == null
+                && !link.returnOrCancelMarkers();
     }
 
     private List<PaymentCheckFact> activeChecks(String table, Map<String, Object> params) {
