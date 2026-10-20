@@ -145,6 +145,10 @@ export const routes: Routes = [
     loadComponent: () => import('./features/login.page').then((m) => m.LoginPage)
   },
   {
+    path: 'session-retry',
+    loadComponent: () => import('./features/session-retry.page').then((m) => m.SessionRetryPage)
+  },
+  {
     path: 'auth/callback',
     loadComponent: () => import('./features/auth-callback.page').then((m) => m.AuthCallbackPage)
   },
