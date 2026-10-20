@@ -1,7 +1,7 @@
 package com.hunt.otziv.personal_reminders.service;
 
-import com.hunt.otziv.payments.service.PaymentIssueResolutionEvidenceReader;
-import com.hunt.otziv.payments.service.PaymentIssueResolutionEvidenceReader.Evidence;
+import com.hunt.otziv.payments.api.PaymentIssueEvidenceOperations;
+import com.hunt.otziv.payments.api.PaymentIssueEvidenceOperations.Evidence;
 import com.hunt.otziv.personal_reminders.model.PersonalReminder;
 import com.hunt.otziv.personal_reminders.repository.PersonalReminderRepository;
 import com.hunt.otziv.personal_reminders.repository.PersonalReminderRepository.ReconciliationCandidate;
@@ -26,7 +26,7 @@ import static org.mockito.Mockito.when;
 class PaymentFailClosedReminderReconciliationServiceTest {
 
     @Mock PersonalReminderRepository reminders;
-    @Mock PaymentIssueResolutionEvidenceReader evidenceReader;
+    @Mock PaymentIssueEvidenceOperations evidenceReader;
     @InjectMocks PaymentFailClosedReminderReconciliationService service;
 
     @Test

@@ -1,5 +1,7 @@
 package com.hunt.otziv.payments.service;
 
+import com.hunt.otziv.payments.api.PaymentIssueEvidenceOperations;
+import com.hunt.otziv.payments.api.PaymentIssueEvidenceOperations.Evidence;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
@@ -13,9 +15,10 @@ import org.springframework.transaction.annotation.Transactional;
 /** Reads one settled financial fact for a live or archived order; never changes payment data. */
 @Service
 @RequiredArgsConstructor
-public class PaymentIssueResolutionEvidenceReader {
+public class PaymentIssueResolutionEvidenceReader implements PaymentIssueEvidenceOperations {
     private final NamedParameterJdbcTemplate jdbc;
 
+    @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public Evidence confirmedPaidOrder(long orderId) {
         if (orderId <= 0) return Evidence.unresolved("missing_order");
@@ -82,6 +85,7 @@ public class PaymentIssueResolutionEvidenceReader {
     }
 
     /** Must run inside the reconciliation transaction before locking its reminder. */
+    @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean lockOrder(long orderId) {
         if (orderId <= 0) return false;
@@ -167,10 +171,4 @@ public class PaymentIssueResolutionEvidenceReader {
     private record PaymentLinkFact(long id, String status, Long amountKopecks,
                                    boolean paidAt, boolean returnOrCancelMarkers) {}
 
-    public record Evidence(boolean confirmed, String reason, Long paymentLinkId) {
-        static Evidence unresolved(String reason) { return new Evidence(false, reason, null); }
-        static Evidence confirmed(Long paymentLinkId) {
-            return new Evidence(true, "confirmed_paid_order", paymentLinkId);
-        }
-    }
 }

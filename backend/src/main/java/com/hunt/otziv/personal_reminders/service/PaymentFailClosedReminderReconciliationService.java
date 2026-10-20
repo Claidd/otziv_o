@@ -1,6 +1,6 @@
 package com.hunt.otziv.personal_reminders.service;
 
-import com.hunt.otziv.payments.service.PaymentIssueResolutionEvidenceReader;
+import com.hunt.otziv.payments.api.PaymentIssueEvidenceOperations;
 import com.hunt.otziv.personal_reminders.model.PersonalReminder;
 import com.hunt.otziv.personal_reminders.repository.PersonalReminderRepository;
 import java.time.Instant;
@@ -21,7 +21,7 @@ public class PaymentFailClosedReminderReconciliationService {
     );
 
     private final PersonalReminderRepository reminders;
-    private final PaymentIssueResolutionEvidenceReader evidenceReader;
+    private final PaymentIssueEvidenceOperations evidenceReader;
 
     @Transactional
     public Outcome reconcile(Long reminderId, boolean dryRun) {
