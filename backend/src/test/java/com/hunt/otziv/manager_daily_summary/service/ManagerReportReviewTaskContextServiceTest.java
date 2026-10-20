@@ -13,7 +13,6 @@ import com.hunt.otziv.manager_control.model.ManagerDailyControlConcreteItem;
 import com.hunt.otziv.manager_control.model.ManagerDailyControl;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlItemStatus;
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlConcreteItemRepository;
-import com.hunt.otziv.u_users.model.Manager;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -94,9 +93,7 @@ class ManagerReportReviewTaskContextServiceTest {
         LocalDateTime deferredAt = LocalDateTime.now().minusDays(2);
         source.setDeferredAt(deferredAt);
         ManagerDailyControl control = mock(ManagerDailyControl.class);
-        Manager manager = mock(Manager.class);
-        when(control.getManager()).thenReturn(manager);
-        when(manager.getId()).thenReturn(9L);
+        when(control.managerId()).thenReturn(9L);
         source.setControl(control);
         when(concreteRepository.findById(3545L)).thenReturn(Optional.of(source));
         when(concreteRepository.existsResolutionAfterDeferral(

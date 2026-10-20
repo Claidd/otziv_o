@@ -65,9 +65,9 @@ public class ManagerReportReviewTaskContextService {
         if (source.getStatus() != ManagerDailyControlItemStatus.RESOLVED) {
             boolean resolvedLater = source.getDeferredAt() != null
                     && source.getControl() != null
-                    && source.getControl().getManager() != null
+                    && source.getControl().managerId() != null
                     && concreteItemRepository.existsResolutionAfterDeferral(
-                            source.getControl().getManager().getId(),
+                            source.getControl().managerId(),
                             source.getEntityKey(),
                             source.getDeferredAt(),
                             ManagerDailyControlItemStatus.RESOLVED);
