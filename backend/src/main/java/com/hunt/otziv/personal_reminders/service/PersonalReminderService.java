@@ -20,6 +20,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -354,6 +355,27 @@ public class PersonalReminderService implements com.hunt.otziv.personal_reminder
                 sourceId
         );
         reminderRepository.flush();
+    }
+
+    /** Completes one order's staff warnings without deleting their audit history or sibling orders' cards. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public int completeOpenSystemRemindersBySourceAndOrder(
+            String sourceType, Long sourceId, Long sourceOrderId
+    ) {
+        if (sourceType == null || sourceType.isBlank() || sourceId == null || sourceId <= 0
+                || sourceOrderId == null || sourceOrderId <= 0) {
+            throw new IllegalArgumentException("Тип, источник и заказ закрываемого напоминания обязательны");
+        }
+        List<PersonalReminder> matching = reminderRepository
+                .findBySourceTypeAndSourceIdAndSourceOrderIdAndCompletedAtIsNullOrderByIdAsc(
+                        sourceType, sourceId, sourceOrderId);
+        if (matching.isEmpty()) {
+            return 0;
+        }
+        Instant now = Instant.now();
+        matching.forEach(reminder -> reminder.setCompletedAt(now));
+        reminderRepository.saveAll(matching);
+        return matching.size();
     }
 
     @Transactional(readOnly = true)
