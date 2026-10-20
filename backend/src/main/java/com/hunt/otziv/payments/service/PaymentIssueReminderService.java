@@ -9,6 +9,7 @@ import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.service.UserService;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -132,7 +133,7 @@ public class PaymentIssueReminderService {
         String cleanSourceType = sourceType(sourceType);
         Long cleanSourceId = sourceId == null || sourceId <= 0 ? order.getId() : sourceId;
         String cleanTitle = limit(valueOrDefault(title, "Нужна проверка оплаты заказа №" + order.getId()), 120);
-        String cleanText = limit(valueOrDefault(text, defaultText(order)), 1000);
+        String cleanText = reminderText(cleanSourceType, order.getId(), text, order);
 
         Map<Long, User> recipients = recipients(order);
         if (recipients.isEmpty()) {
@@ -213,6 +214,31 @@ public class PaymentIssueReminderService {
     private String defaultText(Order order) {
         return "По заказу №" + order.getId()
                 + " возникла платёжная ситуация, которую система оставила на ручную проверку.";
+    }
+
+    private String reminderText(String sourceType, Long orderId, String text, Order order) {
+        String cleanText = valueOrDefault(text, defaultText(order));
+        if (!SOURCE_PAYMENT_FAIL_CLOSED.equals(sourceType)
+                && !"PAYMENT_LIVE_ROUTING_FAIL_CLOSED".equals(sourceType)) {
+            return limit(cleanText, 1000);
+        }
+        String normalized = cleanText.toLowerCase(Locale.ROOT);
+        if (normalized.contains("deadlock")
+                || normalized.contains("jdbc")
+                || normalized.contains("sql [")
+                || normalized.contains("sqlexception")
+                || normalized.contains("sqlstate")
+                || normalized.contains("lock wait timeout")
+                || normalized.contains("for update")
+                || normalized.contains("org.hibernate")
+                || normalized.contains("com.mysql")) {
+            // Keep the full exception in the automation state and server log, not in a staff task.
+            return "Не удалось подготовить или сверить оплату из-за временной блокировки базы данных."
+                    + "\nЗаказ: №" + orderId
+                    + "\nПроверьте текущий статус заказа и платёжную ссылку. Если заказ не оплачен и счёт не выставлен, "
+                    + "повторите попытку или выполните ручную проверку. Не создавайте второй счёт до проверки.";
+        }
+        return limit(cleanText, 1000);
     }
 
     private String sourceType(String value) {

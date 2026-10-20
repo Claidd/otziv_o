@@ -11,6 +11,9 @@ import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -20,6 +23,9 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @ExtendWith(MockitoExtension.class)
@@ -84,6 +90,39 @@ class PaymentIssueReminderServiceTest {
 
         verify(personalReminderService).upsertSystemReminderDueNow(
                 companyManager, "title", "text", "PAYMENT_FAIL_CLOSED", 25047L, 25047L);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"PAYMENT_FAIL_CLOSED", "PAYMENT_LIVE_ROUTING_FAIL_CLOSED"})
+    void databaseDeadlockDetailsStayOutOfPersonalReminder(String sourceType) {
+        User manager = user(41L, true);
+        Order order = order(27_202L, manager, null);
+        String technicalError = "JDBC exception executing SQL [Deadlock found when trying to get lock; "
+                + "try restarting transaction] [ SELECT u.active FROM users u WHERE u.id = ? FOR UPDATE ]";
+        ArgumentCaptor<String> reminderText = ArgumentCaptor.forClass(String.class);
+
+        service.notifyOrderIssue(order, sourceType, order.getId(), "Платёж требует внимания", technicalError);
+
+        verify(personalReminderService).upsertSystemReminderDueNow(
+                eq(manager), eq("Платёж требует внимания"), reminderText.capture(),
+                eq(sourceType), eq(order.getId()), eq(order.getId()));
+        assertTrue(reminderText.getValue().contains("временной блокировки базы данных"));
+        assertTrue(reminderText.getValue().contains("Проверьте текущий статус заказа и платёжную ссылку"));
+        assertFalse(reminderText.getValue().contains("JDBC"));
+        assertFalse(reminderText.getValue().contains("SELECT"));
+    }
+
+    @Test
+    void ordinaryBusinessReasonRemainsVisible() {
+        User manager = user(42L, true);
+        Order order = order(27_203L, manager, null);
+        String businessReason = "Платёжный профиль не настроен. Проверьте реквизиты получателя.";
+
+        service.notifyOrderIssue(order, "PAYMENT_FAIL_CLOSED", order.getId(), "Платёж требует внимания", businessReason);
+
+        verify(personalReminderService).upsertSystemReminderDueNow(
+                manager, "Платёж требует внимания", businessReason,
+                "PAYMENT_FAIL_CLOSED", order.getId(), order.getId());
     }
 
     @Test
