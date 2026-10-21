@@ -54,6 +54,7 @@ const RELEASE_SETS = Object.freeze({
   'c23-alloy': { component: 'alloy', path: 'infrastructure/runtime-security/reviewed-images-c23-alloy.json', context: 'infrastructure/runtime-security/builds/c23-alloy', dockerfile: 'infrastructure/runtime-security/builds/c23-alloy/Dockerfile' },
   'c24-keycloak': { component: 'keycloak', path: 'infrastructure/runtime-security/reviewed-images-c24-keycloak.json', context: 'infrastructure/runtime-security/builds/c24-keycloak', dockerfile: 'infrastructure/runtime-security/builds/c24-keycloak/Dockerfile' },
   'c26-keycloak': { component: 'keycloak', path: 'infrastructure/runtime-security/reviewed-images-c26-keycloak.json', context: 'infrastructure/runtime-security/builds/c26-keycloak', dockerfile: 'infrastructure/runtime-security/builds/c26-keycloak/Dockerfile' },
+  'c35-keycloak': { component: 'keycloak', path: 'infrastructure/runtime-security/reviewed-images-c35-keycloak.json', context: 'infrastructure/runtime-security/builds/c35-keycloak', dockerfile: 'infrastructure/runtime-security/builds/c35-keycloak/Dockerfile' },
   'c26-nginx': { component: 'nginx', path: 'infrastructure/runtime-security/reviewed-images-c26-nginx.json', context: 'infrastructure/runtime-security/builds/c26-nginx', dockerfile: 'infrastructure/runtime-security/builds/c26-nginx/Dockerfile' },
   'c28-nginx': { component: 'nginx', path: 'infrastructure/runtime-security/reviewed-images-c28-nginx.json', context: 'infrastructure/runtime-security/builds/c28-nginx', dockerfile: 'infrastructure/runtime-security/builds/c28-nginx/Dockerfile' },
   'c31-nginx': { component: 'nginx', path: 'infrastructure/runtime-security/reviewed-images-c31-nginx.json', context: 'infrastructure/runtime-security/builds/c31-nginx', dockerfile: 'infrastructure/runtime-security/builds/c31-nginx/Dockerfile' },
@@ -127,7 +128,7 @@ export function validateReviewedImageSet(name, manifestBytes, baselineBytes = ma
   assert.equal(image.prepare, undefined, 'reviewed_image_set_preparation_forbidden');
   assert.equal(image.sourceBeforeRef, original.sourceBeforeRef, 'reviewed_image_set_historical_source_changed');
   assert.deepEqual(image.defaultReferencesBefore, original.defaultReferencesBefore, 'reviewed_image_set_service_coverage_changed');
-  if (name === 'c26-keycloak') assert.equal(image.knownRuntimeDependencyPolicy, C26_POLICY, 'reviewed_image_set_dependency_policy');
+  if (name === 'c26-keycloak' || name === 'c35-keycloak') assert.equal(image.knownRuntimeDependencyPolicy, C26_POLICY, 'reviewed_image_set_dependency_policy');
   return manifest;
 }
 

@@ -1,0 +1,27 @@
+{
+  "component": "keycloak",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:76ad15fac3c0041798b6b2b87632bbf91ae7c171ebfa813aa1d1633b48f90ff9",
+  "commit": "c81a29c1eda2ba157702560338467521cd3e484e",
+  "run": "36953214402",
+  "attempt": "1",
+  "manifest": {
+    "path": "infrastructure/runtime-security/reviewed-images-c26-keycloak.json",
+    "sha256": "b804ab9ce2c785083bc69b9031257b7016b787c73ad70dbfb66a90b324f47538"
+  },
+  "publication": {
+    "path": "infrastructure/runtime-security/proofs/c26-keycloak/publication/publication.json",
+    "sha256": "4acda885ab90c66f08660574456d379b97ea764e4c5ced2c423b3da3095f5734"
+  },
+  "anonymous": {
+    "path": "infrastructure/runtime-security/proofs/c26-keycloak/anonymous/anonymous-download.json",
+    "sha256": "fa89d9e046bf0438a751c4d5c2c15d6a57189d180ee4c925e5b8066030faef76"
+  },
+  "sslRefreshAcceptance": {
+    "path": "infrastructure/runtime-security/proofs/c26-keycloak/acceptance.json",
+    "sha256": "8ece112f8cb3e31e25165fc213c9d3402cef03253ddb4e5948ae6bc154ce5cba"
+  },
+  "migrationAcceptance": {
+    "path": "infrastructure/runtime-security/proofs/c26-keycloak/acceptance.json",
+    "sha256": "8ece112f8cb3e31e25165fc213c9d3402cef03253ddb4e5948ae6bc154ce5cba"
+  }
+}

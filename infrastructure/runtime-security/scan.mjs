@@ -13,6 +13,11 @@ import { combinedScanSummary } from './scan-verdict.mjs';
 
 export const TRIVY_IMAGE = 'aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969'; // 0.74.0
 
+export function scannerTimeout(timeoutMinutes = 20) {
+  if (![20, 45].includes(timeoutMinutes)) throw new Error('scanner_timeout_invalid');
+  return { trivy: `${timeoutMinutes}m`, processMs: timeoutMinutes * 60_000 + 100_000 };
+}
+
 export function scannerUserArguments(platform = process.platform, uid = process.getuid?.(), gid = process.getgid?.()) {
   // A root process without DAC_OVERRIDE cannot write a runner-owned 0755 bind.
   // Match the owner of mkdtemp on POSIX; Windows Docker mounts use their own ACL mapping.
@@ -34,8 +39,9 @@ export function summarizeReport(report, requireJava = false) {
     blockingFixedHighOrCritical: findings.filter(item => ['HIGH', 'CRITICAL'].includes(item.Severity) && item.FixedVersion).length };
 }
 
-export async function scan(kind, source, output) {
+export async function scan(kind, source, output, { timeoutMinutes = 20 } = {}) {
   if (!['image', 'java'].includes(kind)) throw new Error('scanner_mode_invalid');
+  const timeout = scannerTimeout(timeoutMinutes);
   await assertLocalDocker();
   const destination = resolve(output);
   const userArguments = scannerUserArguments();
@@ -66,9 +72,9 @@ export async function scan(kind, source, output) {
       '--mount', `type=bind,source=${scratch},target=/scratch`, '--env', 'TMPDIR=/scratch',
       '--mount', `type=bind,source=${results},target=/results`, TRIVY_IMAGE,
       // JAR analysis is intentionally enabled only in Trivy's post-build rootfs/image mode.
-      kind === 'image' ? 'image' : 'rootfs', '--cache-dir', '/cache', '--timeout', '20m',
+      kind === 'image' ? 'image' : 'rootfs', '--cache-dir', '/cache', '--timeout', timeout.trivy,
       '--scanners', 'vuln', '--ignorefile', '/dev/null', '--list-all-pkgs', '--format', 'json', '--output', '/results/report.json',
-      ...(kind === 'image' ? ['--input', '/input/image.tar'] : ['--pkg-types', 'library', '/input'])], { timeoutMs: 1_300_000 });
+      ...(kind === 'image' ? ['--input', '/input/image.tar'] : ['--pkg-types', 'library', '/input'])], { timeoutMs: timeout.processMs });
     // Only this scanner receives no secrets or host environment. Keep bounded diagnostic
     // evidence for DB, archive and resource failures; recovery subprocess logging stays private.
     let diagnostic = '';

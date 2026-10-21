@@ -171,7 +171,9 @@ async function publish(component, outputArgument) {
     assert.equal(actual.Config.Labels?.['com.otziv.reviewed-component'], component, 'registry_component_changed');
     record.imageId = actual.Id;
     if (component === 'keycloak') record.providerJarSha256 = await providerJarDigest(record.reference);
-    record.security = await scan('image', record.reference, resolve(output, 'vulnerabilities.json'));
+    // The C35 Keycloak Java graph needs a fresh ~941 MiB Trivy Java DB on new runners.
+    record.security = await scan('image', record.reference, resolve(output, 'vulnerabilities.json'),
+      selected.name === 'c35-keycloak' ? { timeoutMinutes: 45 } : undefined);
     if (component === 'keycloak') {
       record.knownRuntimeDependencies = checkKeycloakRuntimeDependencies(
         await readFile(resolve(output, 'vulnerabilities.json')), record.imageId, image.knownRuntimeDependencyPolicy);

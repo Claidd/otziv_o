@@ -25,6 +25,7 @@ import {validateKeycloakC22Acceptance,coupleKeycloakC22} from './keycloak-c22-ac
 import {validateSslRefreshActivation,validateSslRefreshTransition,coupleSslRefresh} from './ssl-refresh-activation.mjs';
 import {validateJacksonRefreshActivation} from './jackson-refresh-activation.mjs';
 import {validateJacksonCoreRefreshActivation} from './jackson-core-refresh-activation.mjs';
+import {validateVertxC35Activation,coupleVertxC35} from './vertx-c35-activation.mjs';
 
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 const DATABASE_HOLD = new Set(['mysql', 'postgres']);
@@ -331,6 +332,7 @@ export async function validateActivation(image, entry, manifestBytes, read) {
   }
   if(selected.manifestSet==='c24-keycloak')await validateJacksonRefreshActivation(publication.value,entry,read,validateActivation);
   if(selected.manifestSet==='c26-keycloak')await validateJacksonCoreRefreshActivation(publication.value,entry,read,validateActivation);
+  if(selected.manifestSet==='c35-keycloak')await validateVertxC35Activation(publication.value,entry,read,validateActivation);
   assert.equal(entry.reference, publication.value.reference, 'activation_registered_reference_mismatch');
   assert.equal(publication.value.security.effectiveBlockingFixedHighOrCritical, 0, 'activation_security_severity_mismatch');
   if (publication.value.security.unresolvedRiskReview === 'NONE') {
@@ -379,6 +381,20 @@ export async function validateActivation(image, entry, manifestBytes, read) {
   return entry.reference;
 }
 
+const SSL_REFRESH_KEYCLOAK_MANIFESTS = new Set([
+  'infrastructure/runtime-security/reviewed-images-c23-keycloak.json',
+  'infrastructure/runtime-security/reviewed-images-c24-keycloak.json',
+  'infrastructure/runtime-security/reviewed-images-c26-keycloak.json',
+]);
+
+export async function coupleRegisteredKeycloak(readiness, issuer, read) {
+  if (issuer?.manifest?.path === 'infrastructure/runtime-security/reviewed-images-c35-keycloak.json')
+    return coupleVertxC35(readiness, issuer, read, validateActivation);
+  if (SSL_REFRESH_KEYCLOAK_MANIFESTS.has(issuer?.manifest?.path))
+    return coupleSslRefresh(readiness, issuer, read);
+  return coupleKeycloakC22(readiness, issuer, read);
+}
+
 export async function validateReviewedDefaults(rows, manifestBytes, activations, read, includeSupplementalSources = false) {
   assert.equal(typeof includeSupplementalSources, 'boolean', 'activation_supplemental_sources_flag');
   const images = [...validateManifest(JSON.parse(manifestBytes)), ...(includeSupplementalSources ? supplementalReviewedSources() : [])];
@@ -402,9 +418,7 @@ export async function validateReviewedDefaults(rows, manifestBytes, activations,
   }
   if (databasePreparations.has('postgres')) {
     const issuer = registered.get('keycloak');
-    const coupled = await (['infrastructure/runtime-security/reviewed-images-c23-keycloak.json','infrastructure/runtime-security/reviewed-images-c24-keycloak.json','infrastructure/runtime-security/reviewed-images-c26-keycloak.json'].includes(issuer?.manifest?.path)
-      ? coupleSslRefresh(databasePreparations.get('postgres'), issuer, read)
-      : coupleKeycloakC22(databasePreparations.get('postgres'), issuer, read));
+    const coupled = await coupleRegisteredKeycloak(databasePreparations.get('postgres'), issuer, read);
     assertPostgresKeycloakCoupling(coupled, registered.get('keycloak'), rows,
       images.find(image => image.component === 'keycloak'));
   }

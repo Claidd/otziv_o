@@ -1,6 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { scannerUserArguments } from './scan.mjs';
+import { scannerTimeout, scannerUserArguments } from './scan.mjs';
+
+test('the C35 publication may wait for a fresh Java DB without weakening other scans', () => {
+  assert.deepEqual(scannerTimeout(), { trivy: '20m', processMs: 1_300_000 });
+  assert.deepEqual(scannerTimeout(45), { trivy: '45m', processMs: 2_800_000 });
+  for (const value of [0, 19, 46, '45', null]) {
+    assert.throws(() => scannerTimeout(value), /scanner_timeout_invalid/);
+  }
+});
 
 test('POSIX scanner and converter can use the owner of private bind directories', () => {
   assert.deepEqual(scannerUserArguments('linux', 1001, 1002), ['--user', '1001:1002']);

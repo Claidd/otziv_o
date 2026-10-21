@@ -46,6 +46,7 @@ on:
           - c24-keycloak
           - c25-certbot
           - c34-certbot
+          - c35-keycloak
           - c26-keycloak
           - c26-nginx
           - c28-nginx
