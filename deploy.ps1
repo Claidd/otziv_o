@@ -31,6 +31,7 @@ if ($Help) {
     Write-Host 'Images download directly on the VPS. -ImageTransport Local uses local Docker and an SSH tunnel.'
     Write-Host '-LocalWorkRoot or OTZIV_LOCAL_WORK_ROOT places release evidence and temporary files on a chosen disk.'
     Write-Host '-FullRollout recreates all application services; database continuity guards still apply.'
+    Write-Host '-CoordinatedSslRefresh explicitly changes C23 PostgreSQL to an accepted C36 image with active C35 Keycloak, after protected backups.'
     Write-Host 'Production configuration and the existing mobile APK are retained unless an APK path is supplied.'
     Write-Host '-StandaloneMobileApkPath stages a separately signed APK before rollout, then verifies its public /android-new URL after deployment.'
     return

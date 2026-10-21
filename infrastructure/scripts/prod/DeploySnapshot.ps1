@@ -397,26 +397,63 @@ function Get-OtzivCoordinatedSslBundlePaths {
     }
     $activationPath = 'infrastructure/runtime-security/reviewed-image-activations.json'
     $index = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $Repository $activationPath) | ConvertFrom-Json
-    $paths = @($activationPath, 'infrastructure/runtime-security/c23-parent-activations.json')
+    $parentPath = 'infrastructure/runtime-security/c36-parent-postgres.json'
+    $null = Read-OtzivBoundDeployEvidencePathOnly $parentPath 'fcc50b0b792637c08a9a74cf51057354d138b6a5a741a344ed6979a3c7a611b3'
+    $paths = @($activationPath, $parentPath)
     if (Test-Path -LiteralPath (Join-Path $Repository 'infrastructure/runtime-security/evidence-archive-c26.json')) {
         $paths += @('infrastructure/runtime-security/evidence-archive-c26.json', 'infrastructure/runtime-security/evidence_archive.py')
     }
-    foreach ($component in @('postgres', 'keycloak')) {
-        $entry = @($index.images | Where-Object { $_.component -eq $component })
-        if ($entry.Count -ne 1 -or
-            -not $entry[0].PSObject.Properties['sslRefreshAcceptance'] -or
-            -not $entry[0].sslRefreshAcceptance.path) {
-            throw "Missing accepted SSL cutover evidence: $component"
-        }
-        $reference = $entry[0].sslRefreshAcceptance
-        $acceptanceFile = Read-OtzivBoundDeployEvidencePathOnly $reference.path $reference.sha256
-        $accepted = Get-Content -Raw -Encoding UTF8 -LiteralPath $acceptanceFile | ConvertFrom-Json
-        if ($accepted.component -cne $component -or $accepted.result -cne 'PASS' -or
-            $accepted.schema -cne 'otziv-ssl-refresh-acceptance-v1') {
-            throw "Invalid accepted SSL cutover evidence: $component"
-        }
-        $paths += $reference.path
+    $postgres = @($index.images | Where-Object { $_.component -eq 'postgres' })
+    $keycloak = @($index.images | Where-Object { $_.component -eq 'keycloak' })
+    if ($postgres.Count -ne 1 -or $keycloak.Count -ne 1 -or
+        $postgres[0].manifest.path -cne 'infrastructure/runtime-security/reviewed-images-c36-postgres.json' -or
+        $keycloak[0].manifest.path -cne 'infrastructure/runtime-security/reviewed-images-c35-keycloak.json') {
+        throw 'Only the accepted C36 PostgreSQL and active C35 Keycloak pair permits this cutover.'
+    }
+    $pg = $postgres[0]; $kc = $keycloak[0]
+    foreach ($entry in @($pg, $kc)) {
+        $null = Read-OtzivBoundDeployEvidencePathOnly $entry.manifest.path $entry.manifest.sha256
+        $paths += $entry.manifest.path
+    }
+    if (-not $pg.PSObject.Properties['postgresC36Acceptance'] -or
+        -not $pg.postgresC36Acceptance.path -or
+        $pg.databaseTransition.path -cne $pg.postgresC36Acceptance.path -or
+        $pg.databaseTransition.sha256 -cne $pg.postgresC36Acceptance.sha256) {
+        throw 'Missing accepted SSL cutover evidence: postgres'
+    }
+    if (-not $kc.PSObject.Properties['vertxRefreshAcceptance'] -or
+        -not $kc.vertxRefreshAcceptance.path -or
+        $kc.migrationAcceptance.path -cne $kc.vertxRefreshAcceptance.path -or
+        $kc.migrationAcceptance.sha256 -cne $kc.vertxRefreshAcceptance.sha256) {
+        throw 'Missing accepted SSL cutover evidence: keycloak'
+    }
+    $pgAcceptance = Get-Content -Raw -Encoding UTF8 -LiteralPath `
+        (Read-OtzivBoundDeployEvidencePathOnly $pg.postgresC36Acceptance.path $pg.postgresC36Acceptance.sha256) | ConvertFrom-Json
+    $kcAcceptance = Get-Content -Raw -Encoding UTF8 -LiteralPath `
+        (Read-OtzivBoundDeployEvidencePathOnly $kc.vertxRefreshAcceptance.path $kc.vertxRefreshAcceptance.sha256) | ConvertFrom-Json
+    if ($pgAcceptance.schema -cne 'otziv-postgres-c36-acceptance-v1' -or
+        $pgAcceptance.result -cne 'PASS' -or $pgAcceptance.reference -cne $pg.reference -or
+        $pgAcceptance.parentReference -cne 'ghcr.io/claidd/otziv-security@sha256:c974c12a1107e314b1ba8cf65bd1fc5b6964645ced420c2151d336ee8a9a6534' -or
+        $pgAcceptance.parentConfigId -cne 'sha256:1f5c2590fadde6b449908569285f1ed91a10831d36535d5c4ed647e9a0afca6a' -or
+        $pgAcceptance.pair.postgres.reference -cne $pg.reference -or
+        $pgAcceptance.pair.postgres.imageConfigId -cne $pgAcceptance.imageConfigId -or
+        $pgAcceptance.pair.keycloak.reference -cne $kc.reference -or
+        $pgAcceptance.pair.keycloak.imageConfigId -cne 'sha256:60a8dd92cf43b8cf909a9e13f231da1f59103f9259cf482185c54856dcfd6a1b' -or
+        @(@('commit','run','attempt') | Where-Object { $pgAcceptance.$_ -cne $pg.$_ }).Count -gt 0) {
+        throw 'Invalid accepted SSL cutover evidence: postgres'
+    }
+    if ($kcAcceptance.schema -cne 'otziv-keycloak-vertx-c35-acceptance-v1' -or
+        $kcAcceptance.result -cne 'PASS' -or $kcAcceptance.reference -cne $kc.reference -or
+        $kcAcceptance.imageConfigId -cne 'sha256:60a8dd92cf43b8cf909a9e13f231da1f59103f9259cf482185c54856dcfd6a1b' -or
+        $kcAcceptance.postgres.reference -cne $pgAcceptance.parentReference -or
+        $kcAcceptance.postgres.imageConfigId -cne $pgAcceptance.parentConfigId -or
+        @(@('commit','run','attempt') | Where-Object { $kcAcceptance.$_ -cne $kc.$_ }).Count -gt 0) {
+        throw 'Invalid accepted SSL cutover evidence: keycloak'
+    }
+    $paths += @($pg.postgresC36Acceptance.path, $kc.vertxRefreshAcceptance.path)
+    foreach ($accepted in @($pgAcceptance, $kcAcceptance)) {
         foreach ($map in @($accepted.files, $accepted.executedSources)) {
+            if ($null -eq $map -or @($map.PSObject.Properties).Count -eq 0) { throw 'Accepted SSL cutover evidence is incomplete.' }
             foreach ($file in $map.PSObject.Properties) {
                 $null = Read-OtzivBoundDeployEvidencePathOnly $file.Name $file.Value
                 $paths += $file.Name

@@ -8,7 +8,9 @@ import { buildTriage } from './triage-report.mjs';
 import { adjudicateGrafanaImage } from './grafana-tempo-adjudication.mjs';
 import { adjudicateAlloyImage, adjudicatePostgresImage } from './ssl-refresh.mjs';
 import { adjudicateAlloyC29Image, C29_ALLOY_PROOF_LABEL } from './alloy-c29-adjudication.mjs';
+import { adjudicateAlloyC36Image, C36_ALLOY_PROOF_LABEL } from './alloy-c36-adjudication.mjs';
 import { adjudicatePostgresGosu } from './postgres-gosu-adjudication.mjs';
+import { adjudicatePostgresC36Image } from './postgres-c36-adjudication.mjs';
 import { combinedScanSummary } from './scan-verdict.mjs';
 
 export const TRIVY_IMAGE = 'aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969'; // 0.74.0
@@ -97,14 +99,25 @@ export async function scan(kind, source, output, { timeoutMinutes = 20 } = {}) {
     // Preserve ALL findings above. The automatic remediation gate blocks actionable fixes;
     // unresolved vendor findings remain explicit release risks, never implicit exemptions.
     const adjudication = kind === 'image' ? await adjudicateGrafanaImage(report, reportBytes, immutableImageId, scratch) : null;
-    const alloy = kind === 'image' ? await (report.Metadata?.ImageConfig?.config?.Labels?.['com.otziv.security.proof'] === C29_ALLOY_PROOF_LABEL
-      ? adjudicateAlloyC29Image(report, reportBytes, immutableImageId, scratch)
-      : adjudicateAlloyImage(report, reportBytes, immutableImageId, scratch)) : null;
-    const postgres = kind === 'image' ? await adjudicatePostgresImage(report, reportBytes, immutableImageId, scratch) : null;
-    const gosu = kind === 'image' ? await adjudicatePostgresGosu(report, reportBytes, immutableImageId, scratch, postgres) : null;
+    const alloyProofLabel = report.Metadata?.ImageConfig?.config?.Labels?.['com.otziv.security.proof'];
+    const alloy = kind === 'image' ? await (alloyProofLabel === C36_ALLOY_PROOF_LABEL
+      ? adjudicateAlloyC36Image(report, reportBytes, immutableImageId, scratch)
+      : alloyProofLabel === C29_ALLOY_PROOF_LABEL
+        ? adjudicateAlloyC29Image(report, reportBytes, immutableImageId, scratch)
+        : adjudicateAlloyImage(report, reportBytes, immutableImageId, scratch)) : null;
+    const postgresC36 = alloyProofLabel === 'postgres-c36-gosu-go1273';
+    const postgres = kind === 'image' ? await (postgresC36
+      ? adjudicatePostgresC36Image(report, reportBytes, immutableImageId, scratch)
+      : adjudicatePostgresImage(report, reportBytes, immutableImageId, scratch)) : null;
+    const gosu = kind === 'image' && !postgresC36
+      ? await adjudicatePostgresGosu(report, reportBytes, immutableImageId, scratch, postgres) : null;
     for (const receipt of [alloy, postgres]) if (receipt?.sslRefresh) {
       await copyFile(join(scratch, receipt.sslRefresh.component + '-runtime-refresh.json.gz'),
         destination.replace(/\.json$/, '') + '.runtime-refresh.json.gz');
+    }
+    if (postgresC36 && postgres?.runtimeProofSha256) {
+      await copyFile(join(scratch, 'postgres-runtime-c36.json.gz'),
+        destination.replace(/\.json$/, '') + '.runtime-c36.json.gz');
     }
     if (adjudication) await writeFile(destination.replace(/\.json$/, '') + '.adjudications.json',
       JSON.stringify({ ...adjudication, alloy, ...(postgres?.status !== 'NOT_APPLICABLE' && postgres ? { postgres } : {}), ...(gosu ? { gosu } : {}) }, null, 2) + '\n');

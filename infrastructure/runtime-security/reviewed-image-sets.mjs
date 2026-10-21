@@ -72,6 +72,17 @@ const RELEASE_SETS = Object.freeze({
   'c27-phpmyadmin': { component: 'phpmyadmin', path: 'infrastructure/runtime-security/reviewed-images-c27-phpmyadmin.json', context: 'infrastructure/runtime-security/builds/c27-phpmyadmin', dockerfile: 'infrastructure/runtime-security/builds/c27-phpmyadmin/Dockerfile' },
   'c31-phpmyadmin': { component: 'phpmyadmin', path: 'infrastructure/runtime-security/reviewed-images-c31-phpmyadmin.json', context: 'infrastructure/runtime-security/builds/c31-phpmyadmin', dockerfile: 'infrastructure/runtime-security/builds/c31-phpmyadmin/Dockerfile' },
   'c32-phpmyadmin': { component: 'phpmyadmin', path: 'infrastructure/runtime-security/reviewed-images-c32-phpmyadmin.json', context: 'infrastructure/runtime-security/builds/c32-phpmyadmin', dockerfile: 'infrastructure/runtime-security/builds/c32-phpmyadmin/Dockerfile' },
+  // C36 rebuilds currently activated Go services with Go 1.27.3. Historical
+  // default lookup stays stable until each new candidate has proof and activation.
+  'c36-dozzle': { component: 'dozzle', path: 'infrastructure/runtime-security/reviewed-images-c36-dozzle.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c36-dozzle/Dockerfile' },
+  'c36-prometheus': { component: 'prometheus', path: 'infrastructure/runtime-security/reviewed-images-c36-prometheus.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c36-prometheus/Dockerfile' },
+  'c36-loki': { component: 'loki', path: 'infrastructure/runtime-security/reviewed-images-c36-loki.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c36-loki/Dockerfile' },
+  'c36-alloy': { component: 'alloy', path: 'infrastructure/runtime-security/reviewed-images-c36-alloy.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c36-alloy/Dockerfile' },
+  'c36-tempo': { component: 'tempo', path: 'infrastructure/runtime-security/reviewed-images-c36-tempo.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c36-tempo/Dockerfile' },
+  'c36-grafana': { component: 'grafana', path: 'infrastructure/runtime-security/reviewed-images-c36-grafana.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c36-grafana/Dockerfile' },
+  'c36-mc': { component: 'mc', path: 'infrastructure/runtime-security/reviewed-images-c36-mc.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c36-mc/Dockerfile' },
+  'c36-minio': { component: 'minio', path: 'infrastructure/runtime-security/reviewed-images-c36-minio.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c36-local-s3/Dockerfile' },
+  'c36-postgres': { component: 'postgres', path: 'infrastructure/runtime-security/reviewed-images-c36-postgres.json', context: 'infrastructure/runtime-security/builds/c36-postgres', dockerfile: 'infrastructure/runtime-security/builds/c36-postgres/Dockerfile' },
 });
 // These two local-stack dependencies were absent from the immutable C7 manifest.
 // Keep their original pins and service coverage explicit when adding publication.

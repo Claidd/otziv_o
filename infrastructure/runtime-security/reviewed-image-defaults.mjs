@@ -14,6 +14,7 @@ import { effectiveScanSummary, loadReviewedProof, matchingFindings } from './gra
 import { summarizeReport, TRIVY_IMAGE } from './scan.mjs';
 import { combinedScanSummary } from './scan-verdict.mjs';
 import { C29_ALLOY_PROOF_LABEL, C29_ALLOY_BUILD_INFO_READER } from './alloy-c29-adjudication.mjs';
+import { C36_ALLOY_PROOF_LABEL, C36_ALLOY_BUILD_INFO_READER } from './alloy-c36-adjudication.mjs';
 import { BUILD_INFO_READER } from './go-binary-inspection.mjs';
 import { assertPublicationSet, reviewedImageSetForComponent, supplementalReviewedSources, validateReviewedImageSet } from './reviewed-image-sets.mjs';
 import { validateDatabaseTransitionReadiness } from './mysql-c30-readiness.mjs';
@@ -26,6 +27,8 @@ import {validateSslRefreshActivation,validateSslRefreshTransition,coupleSslRefre
 import {validateJacksonRefreshActivation} from './jackson-refresh-activation.mjs';
 import {validateJacksonCoreRefreshActivation} from './jackson-core-refresh-activation.mjs';
 import {validateVertxC35Activation,coupleVertxC35} from './vertx-c35-activation.mjs';
+import {validatePostgresC36Acceptance,validatePostgresC36Transition,
+  couplePostgresC36WithKeycloakC35} from './postgres-c36-activation.mjs';
 
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 const DATABASE_HOLD = new Set(['mysql', 'postgres']);
@@ -207,6 +210,61 @@ export async function validateAlloyC29ActivationScan(publication, publicationPat
   assert.equal(expected.unresolvedRiskReview, 'NONE', 'activation_alloy_c29_unresolved');
 }
 
+export async function validateAlloyC36ActivationScan(publication, publicationPath, read) {
+  assert.equal(publication.component, 'alloy', 'activation_alloy_c36_component');
+  const directory = dirname(publicationPath).replaceAll('\\', '/');
+  const [rawBytes, receiptBytes] = await Promise.all([
+    read(directory + '/vulnerabilities.json'), read(directory + '/vulnerabilities.adjudications.json')]);
+  const raw = JSON.parse(rawBytes), receipt = JSON.parse(receiptBytes).alloy;
+  assert.equal(raw.Metadata?.ImageID, publication.imageId, 'activation_alloy_c36_report_image');
+  const labels = raw.Metadata?.ImageConfig?.config?.Labels;
+  assert.equal(labels?.['com.otziv.security.proof'], C36_ALLOY_PROOF_LABEL, 'activation_alloy_c36_proof_label');
+  assert.equal(labels?.['org.opencontainers.image.source'], 'https://github.com/grafana/alloy', 'activation_alloy_c36_source');
+  assert.equal(labels?.['org.opencontainers.image.revision'], 'becfd489a7bb459c0496893b555fb87a003296b1', 'activation_alloy_c36_revision');
+  assert.equal(labels?.['org.opencontainers.image.version'], '1.19.2-otziv.3', 'activation_alloy_c36_version');
+  assert.equal(receipt?.schema, 'otziv-alloy-c36-adjudication-v1', 'activation_alloy_c36_receipt_schema');
+  assert.equal(receipt.status, 'EXACT_BINARY_AFFECTED_CODE_ABSENT', 'activation_alloy_c36_not_proven');
+  assert.equal(receipt.rawReportSha256, sha256(rawBytes), 'activation_alloy_c36_report_hash');
+  assert.equal(receipt.imageConfigId, publication.imageId, 'activation_alloy_c36_receipt_image');
+  assert.ok([publication.imageId, publication.reference.split('@')[1]].includes(receipt.immutableImageId),
+    'activation_alloy_c36_inspected_image');
+  assert.equal(receipt.rawReportModified, false, 'activation_alloy_c36_raw_modified');
+  assert.equal(receipt.inspectedBinaryExecuted, false, 'activation_alloy_c36_binary_executed');
+  assert.equal(receipt.buildInfoReader, C36_ALLOY_BUILD_INFO_READER, 'activation_alloy_c36_reader');
+  for (const key of ['binarySha256', 'functionNamesSha256', 'closureSha256', 'buildInfoSha256'])
+    assert.match(receipt[key] || '', /^[a-f0-9]{64}$/, 'activation_alloy_c36_' + key);
+  assert.ok(receipt.functionCount > 1000 && receipt.clientFunctions > 0 && receipt.packageCount > 1000,
+    'activation_alloy_c36_positive_controls');
+  assert.equal(receipt.daemonFunctions, 0, 'activation_alloy_c36_daemon_functions');
+  assert.equal(receipt.daemonPackages, 0, 'activation_alloy_c36_daemon_packages');
+  assert.deepEqual(receipt.decisions.map(item => item.cve).sort(),
+    ['CVE-2026-41567', 'CVE-2026-42306'], 'activation_alloy_c36_cve_scope');
+  for (const decision of receipt.decisions) {
+    const result = raw.Results?.[decision.resultIndex];
+    const finding = result?.Vulnerabilities?.[decision.findingIndex];
+    assert.equal(result?.Type, 'gobinary', 'activation_alloy_c36_result_type');
+    assert.equal(result?.Target, 'usr/bin/alloy', 'activation_alloy_c36_target');
+    assert.equal(decision.target, result.Target, 'activation_alloy_c36_decision_target');
+    assert.equal(decision.cve, finding?.VulnerabilityID, 'activation_alloy_c36_decision_cve');
+    assert.equal(decision.package, finding?.PkgName, 'activation_alloy_c36_decision_package');
+    assert.equal(decision.version, finding?.InstalledVersion, 'activation_alloy_c36_decision_version');
+    assert.equal(decision.package, 'github.com/docker/docker', 'activation_alloy_c36_module');
+    assert.equal(decision.version, 'v28.5.2+incompatible', 'activation_alloy_c36_module_version');
+    assert.equal(decision.state, 'not_affected', 'activation_alloy_c36_decision_state');
+    assert.equal(decision.justification, 'vulnerable_code_not_present', 'activation_alloy_c36_justification');
+    assert.equal(decision.fixedHighOrCritical,
+      ['HIGH', 'CRITICAL'].includes(finding.Severity) && Boolean(finding.FixedVersion),
+      'activation_alloy_c36_fixed_classification');
+    assert.equal(decision.unfixedHighOrCritical,
+      ['HIGH', 'CRITICAL'].includes(finding.Severity) && !finding.FixedVersion,
+      'activation_alloy_c36_unfixed_classification');
+  }
+  const expected = { ...combinedScanSummary(summarizeReport(raw), { alloy: receipt }), scannerImage: TRIVY_IMAGE };
+  assert.deepEqual(publication.security, expected, 'activation_alloy_c36_summary');
+  assert.equal(expected.result, 'PASS', 'activation_alloy_c36_security_failed');
+  assert.equal(expected.unresolvedRiskReview, 'NONE', 'activation_alloy_c36_unresolved');
+}
+
 export async function validateGrafanaC29ActivationScan(publication, publicationPath, read) {
   assert.equal(publication.component, 'grafana', 'activation_grafana_c29_component');
   const directory = dirname(publicationPath).replaceAll('\\', '/');
@@ -285,6 +343,41 @@ export async function validateGrafanaC30ActivationScan(publication, publicationP
   assert.equal(expected.unresolvedRiskReview, 'NONE', 'activation_grafana_c30_unresolved');
 }
 
+export async function validateGrafanaC36ActivationScan(publication, publicationPath, read) {
+  assert.equal(publication.component, 'grafana', 'activation_grafana_c36_component');
+  const directory = dirname(publicationPath).replaceAll('\\', '/');
+  const [rawBytes, receiptBytes] = await Promise.all([
+    read(directory + '/vulnerabilities.json'), read(directory + '/vulnerabilities.adjudications.json')]);
+  const raw = JSON.parse(rawBytes), receipt = JSON.parse(receiptBytes);
+  const { review, reviewSha256 } = await loadReviewedProof('c36');
+  assert.equal(raw.Metadata?.ImageID, publication.imageId, 'activation_grafana_c36_report_image');
+  assertGrafanaC30KinOpenApi(raw);
+  assert.equal(receipt?.schema, 'otziv-image-adjudication-v1', 'activation_grafana_c36_schema');
+  assert.equal(receipt.status, 'EXACT_BINARY_FIXED_CODE_PROVEN', 'activation_grafana_c36_not_proven');
+  assert.equal(receipt.alloy?.status, 'NOT_APPLICABLE', 'activation_grafana_c36_alloy_scope');
+  assert.deepEqual(receipt.alloy.decisions, [], 'activation_grafana_c36_alloy_decisions');
+  assert.equal(receipt.reviewSha256, reviewSha256, 'activation_grafana_c36_review_changed');
+  assert.equal(receipt.rawReportSha256, sha256(rawBytes), 'activation_grafana_c36_raw_changed');
+  assert.equal(receipt.imageConfigId, publication.imageId, 'activation_grafana_c36_receipt_image');
+  assert.ok([publication.imageId, publication.reference.split('@')[1]].includes(receipt.immutableImageId),
+    'activation_grafana_c36_inspected_image');
+  assert.equal(receipt.binarySha256, review.binary.sha256, 'activation_grafana_c36_binary');
+  assert.equal(receipt.canonicalBuildInfoSha256, review.binary.canonicalBuildInfoSha256,
+    'activation_grafana_c36_build_info');
+  assert.equal(receipt.buildInfoReader, review.binary.buildInfoReader, 'activation_grafana_c36_reader');
+  assert.equal(receipt.rawReportModified, false, 'activation_grafana_c36_raw_modified');
+  assert.equal(receipt.inspectedBinaryExecuted, false, 'activation_grafana_c36_binary_executed');
+  assert.deepEqual(receipt.module, review.module, 'activation_grafana_c36_module');
+  assert.deepEqual(receipt.decisions, matchingFindings(raw, review), 'activation_grafana_c36_decisions');
+  assert.equal(receipt.decisions.length, 2, 'activation_grafana_c36_scope');
+  const expected = { ...combinedScanSummary(summarizeReport(raw),
+    { grafana: receipt, alloy: receipt.alloy }), scannerImage: TRIVY_IMAGE };
+  assert.deepEqual(publication.security, expected, 'activation_grafana_c36_summary');
+  assert.equal(expected.result, 'PASS', 'activation_grafana_c36_security_failed');
+  assert.equal(expected.effectiveBlockingFixedHighOrCritical, 0, 'activation_grafana_c36_fixed_findings');
+  assert.equal(expected.unresolvedRiskReview, 'NONE', 'activation_grafana_c36_unresolved');
+}
+
 export async function validateActivation(image, entry, manifestBytes, read) {
   assert.equal(entry.component, image.component, 'activation_component_mismatch');
   assert.match(entry.commit || '', /^[a-f0-9]{40}$/, 'activation_commit_missing');
@@ -302,7 +395,9 @@ export async function validateActivation(image, entry, manifestBytes, read) {
   const anonymous = await proof(entry.anonymous);
   const identity = { commit: entry.commit, run: entry.run, attempt: entry.attempt };
   const digest = validatePublication(publication.value, identity, publicationImage, sha256(selected.manifestBytes), selected.manifestSet);
-  if (publicationImage.component === 'postgres' && selected.manifestSet !== 'c23-postgres') {
+  if (selected.manifestSet === 'c36-postgres') {
+    await validatePostgresC36Acceptance(entry, read);
+  } else if (publicationImage.component === 'postgres' && selected.manifestSet !== 'c23-postgres') {
     await validatePostgresActivationScan(publication.value, entry.publication.path, read);
   }
   if (['mc', 'minio'].includes(publicationImage.component)) {
@@ -311,11 +406,17 @@ export async function validateActivation(image, entry, manifestBytes, read) {
   if (selected.manifestSet === 'c29-alloy') {
     await validateAlloyC29ActivationScan(publication.value, entry.publication.path, read);
   }
+  if (selected.manifestSet === 'c36-alloy') {
+    await validateAlloyC36ActivationScan(publication.value, entry.publication.path, read);
+  }
   if (selected.manifestSet === 'c29-grafana') {
     await validateGrafanaC29ActivationScan(publication.value, entry.publication.path, read);
   }
   if (selected.manifestSet === 'c30-grafana') {
     await validateGrafanaC30ActivationScan(publication.value, entry.publication.path, read);
+  }
+  if (selected.manifestSet === 'c36-grafana') {
+    await validateGrafanaC36ActivationScan(publication.value, entry.publication.path, read);
   }
   if (requiresKeycloakDependencyProof(publicationImage)) {
     const checked = checkKeycloakRuntimeDependencies(
@@ -388,6 +489,8 @@ const SSL_REFRESH_KEYCLOAK_MANIFESTS = new Set([
 ]);
 
 export async function coupleRegisteredKeycloak(readiness, issuer, read) {
+  if (readiness?.postgresC36Acceptance)
+    return couplePostgresC36WithKeycloakC35(readiness, issuer, read, validateActivation);
   if (issuer?.manifest?.path === 'infrastructure/runtime-security/reviewed-images-c35-keycloak.json')
     return coupleVertxC35(readiness, issuer, read, validateActivation);
   if (SSL_REFRESH_KEYCLOAK_MANIFESTS.has(issuer?.manifest?.path))
@@ -412,7 +515,9 @@ export async function validateReviewedDefaults(rows, manifestBytes, activations,
         ? validateDatabaseTransitionReadiness(entry, image, read)
         : entry.manifest?.path === 'infrastructure/runtime-security/reviewed-images-c23-postgres.json'
           ? validateSslRefreshTransition(entry, image, read)
-          : validatePostgresTransitionReadiness(entry, image, read)));
+          : entry.manifest?.path === 'infrastructure/runtime-security/reviewed-images-c36-postgres.json'
+            ? validatePostgresC36Transition(entry, image, read)
+            : validatePostgresTransitionReadiness(entry, image, read)));
     }
     registered.set(entry.component, entry);
   }

@@ -3,6 +3,7 @@ import { effectiveScanSummary } from './grafana-tempo-adjudication.mjs';
 import { effectiveAlloySummary } from './alloy-daemon-adjudication.mjs';
 import { effectivePostgresSummary } from './ssl-refresh.mjs';
 import { effectiveGosuSummary } from './postgres-gosu-adjudication.mjs';
+import { effectivePostgresC36Summary } from './postgres-c36-adjudication.mjs';
 
 // Accept the raw counter summary, never an earlier verdict or pre-subtracted counters.
 // Inspection failures and finding counts are separate inputs to the final verdict.
@@ -41,6 +42,11 @@ export function combinedScanSummary(summary, { grafana = null, alloy = null, pos
   // PostgreSQL can account for those findings after exact runtime verification.
   // Carry counters forward and recompute severity; preserve every inspection failure.
   const { result: intermediateSeverityVerdict, ...counters } = legacy;
+  if (postgres.schema === 'otziv-postgres-c36-adjudication-v1') {
+    assert.equal(gosu, null, 'scan_verdict_c36_separate_gosu_forbidden');
+    const reviewed = effectivePostgresC36Summary(counters, postgres);
+    return rejected ? { ...reviewed, result: 'FAIL' } : reviewed;
+  }
   const reviewed = effectiveGosuSummary(effectivePostgresSummary(counters, postgres), gosu);
   return rejected ? { ...reviewed, result: 'FAIL' } : reviewed;
 }
