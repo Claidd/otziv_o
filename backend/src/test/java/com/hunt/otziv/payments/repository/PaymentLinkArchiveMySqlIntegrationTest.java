@@ -289,6 +289,7 @@ class PaymentLinkArchiveMySqlIntegrationTest {
     @Test
     void preparedPaidOrderArchiveCopiesAndDeletesExactActiveCheckSourceAtomically() {
         insertOldLink(LINK_ID, "REFUNDED");
+        jdbc.update("UPDATE payment_links SET provider_payment_type = 'digitalRuble' WHERE id = ?", LINK_ID);
         jdbc.update("""
                 INSERT INTO payment_check (check_id, check_payment_link, check_active)
                 VALUES (81, ?, 1)
@@ -306,6 +307,11 @@ class PaymentLinkArchiveMySqlIntegrationTest {
                 Integer.class,
                 LINK_ID
         )).isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                "SELECT provider_payment_type FROM archive_payment_links WHERE id = ?",
+                String.class,
+                LINK_ID
+        )).isEqualTo("digitalRuble");
         assertThat(jdbc.queryForObject(
                 "SELECT COUNT(*) FROM payment_links WHERE id = ?",
                 Integer.class,
@@ -617,6 +623,7 @@ class PaymentLinkArchiveMySqlIntegrationTest {
                     ADD COLUMN manual_confirmed_by VARCHAR(150) NULL,
                     ADD COLUMN manual_confirmed_at DATETIME(6) NULL,
                     ADD COLUMN payment_success_notification_error VARCHAR(1000) NULL,
+                    ADD COLUMN provider_payment_type VARCHAR(32) NULL,
                     ADD COLUMN expires_at DATETIME(6) NULL,
                     ADD COLUMN initiated_at DATETIME(6) NULL,
                     ADD COLUMN offer_consent_at DATETIME(6) NULL,
@@ -751,6 +758,7 @@ class PaymentLinkArchiveMySqlIntegrationTest {
                     ADD COLUMN payment_success_notification_error VARCHAR(1000) NULL,
                     ADD COLUMN payment_success_notification_retry_eligible TINYINT(1) NULL,
                     ADD COLUMN last_error VARCHAR(1000) NULL,
+                    ADD COLUMN provider_payment_type VARCHAR(32) NULL,
                     ADD COLUMN created_at DATETIME(6) NULL,
                     ADD COLUMN updated_at DATETIME(6) NULL,
                     ADD COLUMN expires_at DATETIME(6) NULL,

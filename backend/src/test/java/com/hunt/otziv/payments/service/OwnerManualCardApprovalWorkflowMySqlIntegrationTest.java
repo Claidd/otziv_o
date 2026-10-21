@@ -5,8 +5,6 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import com.hunt.otziv.c_companies.model.Company;
-import com.hunt.otziv.contractor_payments.dto.ManualCardPaymentContextResponse;
-import com.hunt.otziv.contractor_payments.dto.ManualCardPaymentRecipientResponse;
 import com.hunt.otziv.contractor_payments.model.ContractorCashDestinationKind;
 import com.hunt.otziv.contractor_payments.model.ContractorRecipientType;
 import com.hunt.otziv.contractor_payments.service.ContractorActualPaymentAttributionService;
@@ -250,12 +248,10 @@ class OwnerManualCardApprovalWorkflowMySqlIntegrationTest {
             when(approvals.saveAndFlush(any())).thenAnswer(call -> save(call.getArgument(0)));
             when(payments.validatedReceiptUrl(nullable(String.class))).thenReturn("");
             when(payments.selectManualCardPaymentRouteForOrder(7L, auth)).thenReturn(new ManualCardPaymentWorkflow.OrderManualCardRoute(71L, 100_00L));
-            var ownerCandidate = new ManualCardPaymentRecipientResponse(
-                    ContractorRecipientType.OWNER, null, null, "Владелец", 100_00L, 0L, true);
-            when(payments.manualCardPaymentContextForOrder(7L, auth))
-                    .thenReturn(new ManualCardPaymentContextResponse(
-                            7L, 100_00L, ownerCandidate, List.of(ownerCandidate),
-                            null, false, null, null, null));
+            when(payments.resolveManagerRecipientForOrder(
+                    7L, ContractorRecipientType.OWNER, null, "OWNER", auth))
+                    .thenReturn(new ManualCardRoutePolicy.SelectedManagerRecipient(
+                            ContractorRecipientType.OWNER, null, "OWNER"));
             workflow = proxied(new OwnerManualCardApprovalWorkflow(lifecycle,
                     mock(PaymentLinkPreparationWorkflow.class), policy, payments, presenter, routes,
                     links, orders, mock(ManagerAccessService.class), mock(ManualCardPaymentReviewNotificationService.class),
