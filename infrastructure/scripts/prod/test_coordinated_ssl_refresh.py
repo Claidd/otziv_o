@@ -26,12 +26,19 @@ class CoordinatedSslTests(unittest.TestCase):
             data=b'{}';(root.parent/'outside.json').write_bytes(data)
             with self.assertRaises(refresh.GuardError):refresh.proof(root,{'path':'../outside.json','sha256':refresh.digest(data)})
 
-    def test_accepted_pair_is_bound_before_docker(self):
+    def test_current_pair_is_bound_or_rejected_before_docker(self):
         root=HERE.parents[2]
         entries=json.loads((root/'infrastructure/runtime-security/reviewed-image-activations.json').read_bytes())['images']
         pair={x['component']:x for x in entries if x['component'] in ('postgres','keycloak')}
         resolved={'services':{'keycloak-postgres':{'image':pair['postgres']['reference']},'keycloak':{'image':pair['keycloak']['reference']}}}
         with patch.object(refresh,'run') as docker:
+            # The current C35 Keycloak was reviewed for its runtime refresh, not
+            # for the separate, explicit PostgreSQL SSL cutover procedure.
+            if pair['keycloak']['manifest']['path']=='infrastructure/runtime-security/reviewed-images-c35-keycloak.json':
+                with self.assertRaisesRegex(refresh.GuardError,'^coordinated_ssl_unreviewed_generation$'):
+                    refresh.reviewed_plan(root,resolved)
+                docker.assert_not_called()
+                return
             pg,kc,accepted=refresh.reviewed_plan(root,resolved)
             self.assertEqual(pg['reference'],accepted['pair']['postgres']['reference'])
             self.assertEqual(kc['reference'],accepted['pair']['keycloak']['reference'])
