@@ -215,9 +215,22 @@ public class PaymentLinkPresenter {
             return false;
         }
         if (isTochkaPaymentLink(link)) {
-            return (link.getStatus() == PaymentLinkStatus.CONFIRMED || link.getStatus() == PaymentLinkStatus.TEST_CONFIRMED || link.getStatus() == PaymentLinkStatus.AMOUNT_MISMATCH) && "APPROVED".equals(normalize(link.getProviderTerminalStatus()));
+            return (link.getStatus() == PaymentLinkStatus.CONFIRMED || link.getStatus() == PaymentLinkStatus.TEST_CONFIRMED || link.getStatus() == PaymentLinkStatus.AMOUNT_MISMATCH)
+                    && "APPROVED".equals(normalize(link.getProviderTerminalStatus()))
+                    && supportsTochkaApiRefund(link);
         }
         return REFUNDABLE_STATUSES.contains(link.getStatus());
+    }
+
+    boolean supportsTochkaApiRefund(PaymentLink link) {
+        String actualType = link == null ? "" : normalize(link.getProviderPaymentType());
+        // A legacy card-form link offered only CARD. Legacy SBP links may have used
+        // digital rubles, so their unknown actual type must be verified first.
+        return link != null && (("card".equals(actualType)
+                    && link.getPaymentMethod() == PaymentMethod.BANK_FORM)
+                || ("sbp".equals(actualType)
+                    && link.getPaymentMethod() == PaymentMethod.SBP_QR)
+                || (actualType.isBlank() && link.getPaymentMethod() == PaymentMethod.BANK_FORM));
     }
 
     PaymentProfile selectProfile(Order order) {

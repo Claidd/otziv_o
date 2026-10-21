@@ -79,6 +79,10 @@ public class CommonInvoicePaymentRef {
     @Column(name = "provider_payment_mode", length = 32)
     private String providerPaymentMode;
 
+    /** Actual provider paymentType; providerPaymentMode records the offered methods. */
+    @Column(name = "provider_payment_type", length = 32)
+    private String providerPaymentType;
+
     @Column(name = "provider_test_mode")
     private Boolean providerTestMode;
 

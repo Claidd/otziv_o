@@ -4294,6 +4294,32 @@ class CommonBillingServiceTest {
     }
 
     @Test
+    void commonInvoiceDigitalRubleRequiresApprovedSbpInTheFrozenModes() {
+        CommonInvoiceSettlementService settlement =
+                (CommonInvoiceSettlementService) ReflectionTestUtils.getField(service, "settlementService");
+        assertNotNull(settlement);
+
+        assertEquals(TochkaPaymentMode.SBP, settlement.observedTochkaPaymentMode(
+                "digitalRuble", "APPROVED", List.of(TochkaPaymentMode.SBP, TochkaPaymentMode.CARD)
+        ));
+        assertEquals(TochkaPaymentMode.SBP, settlement.observedTochkaPaymentMode(
+                "digitalRuble", "REFUNDED_PARTIALLY", List.of(TochkaPaymentMode.SBP)
+        ));
+        assertEquals(TochkaPaymentMode.SBP, settlement.observedTochkaPaymentMode(
+                "digitalRuble", "REFUNDED", List.of(TochkaPaymentMode.SBP)
+        ));
+        assertThrows(TochkaProviderException.class, () -> settlement.observedTochkaPaymentMode(
+                "digitalRuble", "APPROVED", List.of(TochkaPaymentMode.CARD)
+        ));
+        assertThrows(IllegalArgumentException.class, () -> settlement.observedTochkaPaymentMode(
+                "digitalRuble", "AUTHORIZED", List.of(TochkaPaymentMode.SBP)
+        ));
+        assertThrows(IllegalArgumentException.class, () -> settlement.observedTochkaPaymentMode(
+                "DigitalRuble", "APPROVED", List.of(TochkaPaymentMode.SBP)
+        ));
+    }
+
+    @Test
     void tochkaCreateResponseRejectsEveryFrozenIdentityMismatchAsOutcomeUnknown() {
         CommonInvoice invoice = invoice(account());
         invoice.setStatus(CommonInvoiceStatus.READY);
@@ -4440,7 +4466,7 @@ class CommonBillingServiceTest {
                 new PaymentInfoResponse(new PaymentInfoData(List.of(approved)), new ApiMeta(1))
         );
         when(tochkaPaymentOperationMapper.map(eq(approved), any(), eq(false))).thenReturn(
-                new MappedPayment(PaymentLinkStatus.CONFIRMED, PaymentMethod.SBP_QR, "APPROVED")
+                new MappedPayment(PaymentLinkStatus.CONFIRMED, PaymentMethod.SBP_QR, "APPROVED", "sbp")
         );
         when(tochkaClient.refund(eq(runtime), any())).thenReturn(new RefundResponse(
                 new RefundResponseData(
@@ -4456,6 +4482,83 @@ class CommonBillingServiceTest {
         assertEquals("CANCEL_PENDING", ref.getStatus());
         assertTrue(ref.getReason().startsWith("tochka_refund_submitting:"));
         verify(tochkaClient, times(1)).refund(eq(runtime), any());
+    }
+
+    @Test
+    void digitalRubleCommonInvoiceCancellationRequiresBankCabinetAndNeverPostsRefund() {
+        CommonInvoice invoice = invoice(account());
+        invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+        PaymentProfile entityProfile = tochkaEntityProfile();
+        TochkaPaymentProfile runtime = tochkaRuntimeProfile();
+        CommonInvoicePaymentRef ref = tochkaCancelPendingRef(invoice);
+        paymentRefStore.put(ref.getId(), ref);
+
+        when(paymentRefRepository.findProviderReconciliationCandidates(
+                eq(PaymentProfile.PROVIDER_TOCHKA), any(), any(LocalDateTime.class), any(Pageable.class)
+        )).thenReturn(List.of(ref));
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(paymentProfileService.lockByIdForRouting(2L)).thenReturn(entityProfile);
+        when(paymentProfileService.isTochkaProvider(entityProfile)).thenReturn(true);
+        when(tochkaPaymentProfileResolver.resolveForExistingPayment(entityProfile)).thenReturn(runtime);
+        PaymentOperation approved = tochkaOperation("APPROVED", "digitalRuble");
+        when(tochkaClient.getPaymentInfo(runtime, "tochka-operation-10")).thenReturn(
+                new PaymentInfoResponse(new PaymentInfoData(List.of(approved)), new ApiMeta(1))
+        );
+        when(tochkaPaymentOperationMapper.map(eq(approved), any(), eq(false))).thenReturn(
+                new MappedPayment(PaymentLinkStatus.CONFIRMED, PaymentMethod.SBP_QR,
+                        "APPROVED", "digitalRuble")
+        );
+
+        assertEquals(1, service.reconcileTochkaPaymentRefs(10));
+        assertEquals("digitalRuble", ref.getProviderPaymentType());
+        assertEquals("CANCEL_PENDING", ref.getStatus());
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+        assertTrue(invoice.getLastError().contains("кабинете Точки"));
+        verify(tochkaClient, never()).refund(any(), any());
+
+        PaymentOperation onRefund = tochkaOperation("ON-REFUND", "digitalRuble");
+        when(tochkaClient.getPaymentInfo(runtime, "tochka-operation-10")).thenReturn(
+                new PaymentInfoResponse(new PaymentInfoData(List.of(onRefund)), new ApiMeta(1))
+        );
+        when(tochkaPaymentOperationMapper.map(eq(onRefund), any(), eq(false))).thenReturn(
+                new MappedPayment(PaymentLinkStatus.NEEDS_RECONCILIATION, PaymentMethod.SBP_QR,
+                        "ON-REFUND", "digitalRuble")
+        );
+        assertEquals(1, service.reconcileTochkaPaymentRefs(10));
+        assertEquals("CANCEL_PENDING", ref.getStatus());
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+        verify(tochkaClient, never()).refund(any(), any());
+
+        PaymentOperation refunded = tochkaOperation("REFUNDED", "digitalRuble");
+        when(tochkaClient.getPaymentInfo(runtime, "tochka-operation-10")).thenReturn(
+                new PaymentInfoResponse(new PaymentInfoData(List.of(refunded)), new ApiMeta(1))
+        );
+        when(tochkaPaymentOperationMapper.map(eq(refunded), any(), eq(false))).thenReturn(
+                new MappedPayment(PaymentLinkStatus.REFUNDED, PaymentMethod.SBP_QR,
+                        "REFUNDED", "digitalRuble")
+        );
+        assertEquals(1, service.reconcileTochkaPaymentRefs(10));
+        assertEquals("CANCELED", ref.getStatus());
+        verify(tochkaClient, never()).refund(any(), any());
+    }
+
+    @Test
+    void conflictingActualTochkaPaymentTypeQuarantinesCommonInvoiceWithoutCrediting() {
+        CommonInvoice invoice = invoice(account());
+        invoice.setStatus(CommonInvoiceStatus.READY);
+        CommonInvoicePaymentRef ref = tochkaCancelPendingRef(invoice);
+        ref.setStatus("CURRENT");
+        ref.setProviderPaymentType("sbp");
+        CommonInvoiceSettlementService settlement =
+                (CommonInvoiceSettlementService) ReflectionTestUtils.getField(service, "settlementService");
+        assertNotNull(settlement);
+
+        assertFalse(settlement.recordTochkaActualPaymentType(invoice, ref, "digitalRuble"));
+
+        assertEquals("INIT_CONFLICT", ref.getStatus());
+        assertEquals("sbp", ref.getProviderPaymentType());
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+        verify(tochkaClient, never()).refund(any(), any());
     }
 
     @Test
@@ -4479,7 +4582,7 @@ class CommonBillingServiceTest {
                 new PaymentInfoResponse(new PaymentInfoData(List.of(approved)), new ApiMeta(1))
         );
         when(tochkaPaymentOperationMapper.map(eq(approved), any(), eq(false))).thenReturn(
-                new MappedPayment(PaymentLinkStatus.CONFIRMED, PaymentMethod.SBP_QR, "APPROVED")
+                new MappedPayment(PaymentLinkStatus.CONFIRMED, PaymentMethod.SBP_QR, "APPROVED", "sbp")
         );
         when(tochkaClient.refund(eq(runtime), any())).thenReturn(new RefundResponse(
                 new RefundResponseData(
@@ -4535,7 +4638,7 @@ class CommonBillingServiceTest {
                 .thenThrow(new TochkaProviderException("temporary GET failure", false, null))
                 .thenReturn(new PaymentInfoResponse(new PaymentInfoData(List.of(approved)), new ApiMeta(1)));
         when(tochkaPaymentOperationMapper.map(eq(approved), any(), eq(false))).thenReturn(
-                new MappedPayment(PaymentLinkStatus.CONFIRMED, PaymentMethod.SBP_QR, "APPROVED")
+                new MappedPayment(PaymentLinkStatus.CONFIRMED, PaymentMethod.SBP_QR, "APPROVED", "sbp")
         );
 
         assertEquals(1, service.reconcileTochkaPaymentRefs(10));
@@ -4622,7 +4725,7 @@ class CommonBillingServiceTest {
         when(paymentProfileService.isTochkaProvider(entityProfile)).thenReturn(true);
         when(tochkaPaymentProfileResolver.resolveForExistingPayment(entityProfile)).thenReturn(runtime);
         when(tochkaPaymentOperationMapper.map(any(PaymentOperation.class), any(), eq(false))).thenReturn(
-                new MappedPayment(PaymentLinkStatus.CONFIRMED, PaymentMethod.SBP_QR, "APPROVED")
+                new MappedPayment(PaymentLinkStatus.CONFIRMED, PaymentMethod.SBP_QR, "APPROVED", "sbp")
         );
 
         assertTrue(service.handleTochkaWebhook(webhook));

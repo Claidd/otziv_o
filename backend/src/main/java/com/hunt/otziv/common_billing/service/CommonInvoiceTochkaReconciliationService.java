@@ -201,7 +201,14 @@ public class CommonInvoiceTochkaReconciliationService {
     }
 
     boolean shouldSubmitTochkaRefund(PreparedTochkaReconciliation prepared, TochkaReconciliationObservation observation) {
-        return prepared != null && prepared.cancellation() && !prepared.refundSubmissionClaimed() && observation != null && observation.failure() == null && !observation.notFound() && observation.mapped() != null && observation.mapped().status() == PaymentLinkStatus.CONFIRMED;
+        return prepared != null && prepared.cancellation() && !prepared.refundSubmissionClaimed()
+                && observation != null && observation.failure() == null && !observation.notFound()
+                && observation.mapped() != null && observation.mapped().status() == PaymentLinkStatus.CONFIRMED
+                && supportsTochkaApiRefund(observation.mapped().providerPaymentType());
+    }
+
+    private boolean supportsTochkaApiRefund(String paymentType) {
+        return "card".equals(normalize(paymentType)) || "sbp".equals(normalize(paymentType));
     }
 
     /**
@@ -226,6 +233,9 @@ public class CommonInvoiceTochkaReconciliationService {
         Optional<CommonInvoicePaymentRef> foreign = paymentRefRepository.findByProviderAndProviderPaymentId(PROVIDER_TOCHKA, operationId).filter(candidate -> !Objects.equals(candidate.getId(), ref.getId()));
         if (foreign.isPresent()) {
             quarantineTochkaInit(invoice, ref, "tochka_refund_operation_collision");
+            return null;
+        }
+        if (!settlementService.recordTochkaActualPaymentType(invoice, ref, observation.mapped().providerPaymentType())) {
             return null;
         }
         LocalDateTime claimedAt = LocalDateTime.now();
@@ -361,6 +371,9 @@ public class CommonInvoiceTochkaReconciliationService {
             quarantineTochkaInit(invoice, ref, "tochka_reconciliation_operation_changed");
             return;
         }
+        if (!settlementService.recordTochkaActualPaymentType(invoice, ref, mapped.providerPaymentType())) {
+            return;
+        }
         ref.setProviderPaymentId(limit(operationId, 64));
         ref.setProviderStatus(limit(mapped.providerStatus(), 32));
         String safeUrl = PaymentUrlPolicy.safe(operation.paymentLink(), PaymentUrlPolicy.Purpose.TOCHKA_PAYMENT);
@@ -398,6 +411,20 @@ public class CommonInvoiceTochkaReconciliationService {
             invoice.setNextReminderAt(null);
             invoice.setPaymentUrl(null);
             invoice.setLastError(PAYMENT_CANCEL_FAILED_FINAL + ": частичный возврат Точки требует ручной проверки банка");
+            invoiceRepository.save(invoice);
+            return;
+        }
+        if (mapped.status() == PaymentLinkStatus.CONFIRMED
+                && "digitalRuble".equals(normalize(mapped.providerPaymentType()))) {
+            // Keep polling GET after the operator refunds in the bank cabinet.
+            ref.setStatus(PAYMENT_REF_CANCEL_PENDING);
+            setTochkaReasonUnlessRefundClaimed(ref, "tochka_digital_ruble_refund_bank_cabinet_only");
+            paymentRefRepository.save(ref);
+            invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+            invoice.setNextReminderAt(null);
+            invoice.setPaymentUrl(null);
+            invoice.setLastError(PAYMENT_CANCEL_FAILED_FINAL
+                    + ": цифровые рубли возвращаются только в кабинете Точки; выполните возврат там и сверьте платёж");
             invoiceRepository.save(invoice);
             return;
         }

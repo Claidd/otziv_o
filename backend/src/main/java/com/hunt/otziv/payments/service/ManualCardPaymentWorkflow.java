@@ -148,6 +148,14 @@ public class ManualCardPaymentWorkflow {
         });
     }
 
+    ManualCardRoutePolicy.SelectedManagerRecipient resolveManagerRecipientForOrder(
+            Long orderId, ContractorRecipientType requestedType, Long requestedProfileId,
+            String requestedKey, Authentication authentication) {
+        return manualCardRoutePolicy.resolveManagerRecipient(
+                manualCardPaymentContextForOrder(orderId, authentication),
+                requestedType, requestedProfileId, requestedKey);
+    }
+
     /**
      * Safely settles an order that was paid by a direct transfer while its
      * T-Bank payment page was still open. The provider state is read first. A

@@ -50,7 +50,8 @@ public class TochkaPaymentOperationMapper {
         return new MappedPayment(
                 mapStatus(providerStatus, paymentMethod, preAuthorization, false),
                 paymentMethod,
-                providerStatus
+                providerStatus,
+                operation.paymentType()
         );
     }
 
@@ -118,7 +119,7 @@ public class TochkaPaymentOperationMapper {
             return mapPaymentMethod(expectedMode, false);
         }
         String expectedCode = expectedMode.code();
-        if (!expectedCode.equals(paymentType)) {
+        if (!TochkaPaymentMode.matchesOperationType(paymentType, expectedCode, providerStatus)) {
             throw providerError(
                     "Точка API вернула другой или неизвестный способ оплаты платежной операции",
                     false
@@ -222,7 +223,11 @@ public class TochkaPaymentOperationMapper {
     public record MappedPayment(
             PaymentLinkStatus status,
             PaymentMethod paymentMethod,
-            String providerStatus
+            String providerStatus,
+            String providerPaymentType
     ) {
+        public MappedPayment(PaymentLinkStatus status, PaymentMethod paymentMethod, String providerStatus) {
+            this(status, paymentMethod, providerStatus, null);
+        }
     }
 }

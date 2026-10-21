@@ -314,6 +314,10 @@ public class PaymentLink {
     @Column(name = "provider_terminal_status", length = 32)
     private String providerTerminalStatus;
 
+    /** Actual provider paymentType, distinct from the payment method offered by the link. */
+    @Column(name = "provider_payment_type", length = 32)
+    private String providerPaymentType;
+
     /** Durable idempotency fence for paid-order recovery after a full return. */
     @Column(name = "return_recovery_processed_at")
     private LocalDateTime returnRecoveryProcessedAt;

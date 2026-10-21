@@ -67,6 +67,55 @@ class TochkaPaymentOperationMapperTest {
         assertEquals(PaymentMethod.SBP_QR, sbp.paymentMethod());
     }
 
+    @Test
+    void approvedDigitalRubleOnSbpLinkConfirmsTheExactOperation() {
+        var mapped = mapper.map(
+                operation("APPROVED", "digitalRuble"),
+                expected(TochkaPaymentMode.SBP),
+                false
+        );
+
+        assertEquals(PaymentLinkStatus.CONFIRMED, mapped.status());
+        assertEquals(PaymentMethod.SBP_QR, mapped.paymentMethod());
+        assertEquals("APPROVED", mapped.providerStatus());
+        assertEquals("digitalRuble", mapped.providerPaymentType());
+        assertThrows(TochkaProviderException.class, () -> mapper.map(
+                mismatchedOperation("amount", "digitalRuble"), expected(TochkaPaymentMode.SBP), false
+        ));
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "ON-REFUND, NEEDS_RECONCILIATION",
+            "REFUNDED, REFUNDED",
+            "REFUNDED_PARTIALLY, PARTIAL_REFUNDED"
+    })
+    void observesDigitalRubleRefundWithoutTreatingItAsAnotherApproval(
+            String providerStatus, PaymentLinkStatus expectedStatus
+    ) {
+        var mapped = mapper.map(
+                operation(providerStatus, "digitalRuble"), expected(TochkaPaymentMode.SBP), false
+        );
+        assertEquals(expectedStatus, mapped.status());
+        assertEquals("digitalRuble", mapped.providerPaymentType());
+        assertThrows(TochkaProviderException.class, () -> mapper.map(
+                mismatchedOperation("operationId", "digitalRuble"), expected(TochkaPaymentMode.SBP), false
+        ));
+    }
+
+    @Test
+    void digitalRubleCannotConfirmCardOrUnapprovedOperation() {
+        assertThrows(TochkaProviderException.class, () -> mapper.map(
+                operation("APPROVED", "digitalRuble"), expected(TochkaPaymentMode.CARD), false
+        ));
+        assertThrows(TochkaProviderException.class, () -> mapper.map(
+                operation("AUTHORIZED", "digitalRuble"), expected(TochkaPaymentMode.SBP), false
+        ));
+        assertThrows(TochkaProviderException.class, () -> mapper.map(
+                operation("APPROVED", "DigitalRuble"), expected(TochkaPaymentMode.SBP), false
+        ));
+    }
+
     @ParameterizedTest
     @CsvSource({
             "CREATED, INITIATED",
@@ -292,6 +341,10 @@ class TochkaPaymentOperationMapperTest {
     }
 
     private PaymentOperation mismatchedOperation(String field) {
+        return mismatchedOperation(field, "sbp");
+    }
+
+    private PaymentOperation mismatchedOperation(String field, String paymentType) {
         return operation(
                 "operationId".equals(field) ? "other-operation" : OPERATION_ID,
                 "paymentLinkId".equals(field) ? "other-link" : PAYMENT_LINK_ID,
@@ -299,7 +352,7 @@ class TochkaPaymentOperationMapperTest {
                 "merchantId".equals(field) ? "200000000009999" : MERCHANT_ID,
                 "amount".equals(field) ? new BigDecimal("123.46") : new BigDecimal("123.45"),
                 "APPROVED",
-                "sbp"
+                paymentType
         );
     }
 

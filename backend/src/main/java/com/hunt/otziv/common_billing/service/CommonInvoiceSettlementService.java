@@ -425,14 +425,16 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
 
     TochkaPaymentMode observedTochkaPaymentMode(String paymentType, String providerStatus, List<TochkaPaymentMode> allowedModes) {
         List<TochkaPaymentMode> allowed = allowedModes == null ? List.of() : allowedModes;
-        String cleanType = normalize(paymentType).toLowerCase(Locale.ROOT);
+        String cleanType = normalize(paymentType);
         if (cleanType.isBlank() && Set.of("CREATED", "EXPIRED").contains(normalize(providerStatus).toUpperCase(Locale.ROOT))) {
             if (allowed.isEmpty()) {
                 throw new TochkaProviderException("В платеже Точки не зафиксирован разрешённый способ оплаты", false, null);
             }
             return allowed.getFirst();
         }
-        TochkaPaymentMode observed = TochkaPaymentMode.fromCode(cleanType);
+        TochkaPaymentMode observed = TochkaPaymentMode.matchesOperationType(cleanType, TochkaPaymentMode.SBP.code(), providerStatus)
+                ? TochkaPaymentMode.SBP
+                : TochkaPaymentMode.fromCode(cleanType.toLowerCase(Locale.ROOT));
         if (!allowed.contains(observed)) {
             throw new TochkaProviderException("Точка сообщила способ оплаты, не разрешённый durable-записью", false, null);
         }
@@ -526,6 +528,9 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
         if (invoice == null || ref == null || mapped == null) {
             return;
         }
+        if (!recordTochkaActualPaymentType(invoice, ref, mapped.providerPaymentType())) {
+            return;
+        }
         String previousStatus = paymentRefStatus(ref);
         boolean cancellationLifecycle = isTochkaCancellationLifecycleStatus(previousStatus) || isTochkaRefundSubmissionClaimed(ref.getReason());
         ref.setProviderStatus(limit(mapped.providerStatus(), 32));
@@ -613,6 +618,28 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
                     invoiceRepository.save(invoice);
                 }
         }
+    }
+
+    boolean recordTochkaActualPaymentType(CommonInvoice invoice, CommonInvoicePaymentRef ref, String actualType) {
+        String observed = normalize(actualType);
+        String saved = normalize(ref.getProviderPaymentType());
+        if (observed.isBlank()) {
+            return true;
+        }
+        if (!saved.isBlank() && !saved.equals(observed)) {
+            ref.setStatus(isTochkaCancellationLifecycleStatus(paymentRefStatus(ref))
+                    ? PAYMENT_REF_CANCEL_FAILED_FINAL : PAYMENT_REF_INIT_CONFLICT);
+            ref.setReason("tochka_payment_type_changed_after_observation");
+            paymentRefRepository.save(ref);
+            invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+            invoice.setNextReminderAt(null);
+            invoice.setPaymentUrl(null);
+            invoice.setLastError("tochka_payment_type_changed_after_observation: требуется сверка в банке");
+            invoiceRepository.save(invoice);
+            return false;
+        }
+        ref.setProviderPaymentType(observed);
+        return true;
     }
 
     void applyConfirmedTochkaPayment(CommonInvoice invoice, CommonInvoicePaymentRef ref, String previousStatus, String source) {

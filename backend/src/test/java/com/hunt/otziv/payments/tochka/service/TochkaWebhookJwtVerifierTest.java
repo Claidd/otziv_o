@@ -83,6 +83,33 @@ class TochkaWebhookJwtVerifierTest {
     }
 
     @Test
+    void signedApprovedDigitalRubleMatchesOnlyTheExactSbpPayment() throws Exception {
+        expectOfficialJwkOnce();
+        Map<String, Object> claims = validClaims();
+        claims.put("paymentType", "digitalRuble");
+        String token = sign(claims, bankKeyPair);
+
+        assertEquals("digitalRuble", verifier.verifyAndMatch(token, expectation()).paymentType());
+        assertThrows(TochkaWebhookVerificationException.class, () -> verifier.verifyAndMatch(
+                token, new TochkaWebhookExpectation(CUSTOMER_CODE, MERCHANT_ID, new BigDecimal("123.46"),
+                        OPERATION_ID, PAYMENT_LINK_ID, "sbp")
+        ));
+        assertThrows(TochkaWebhookVerificationException.class, () -> verifier.verifyAndMatch(
+                token, new TochkaWebhookExpectation(CUSTOMER_CODE, MERCHANT_ID, amount(),
+                        OPERATION_ID, "another-link", "sbp")
+        ));
+        assertThrows(TochkaWebhookVerificationException.class, () -> verifier.verifyAndMatch(
+                token, new TochkaWebhookExpectation(CUSTOMER_CODE, MERCHANT_ID, amount(),
+                        OPERATION_ID, PAYMENT_LINK_ID, "card")
+        ));
+        claims.put("status", "AUTHORIZED");
+        assertThrows(TochkaWebhookVerificationException.class, () -> verifier.verifyAndMatch(
+                sign(claims, bankKeyPair), expectation()
+        ));
+        server.verify();
+    }
+
+    @Test
     void rejectsEveryMismatchAgainstPersistedPaymentValues() throws Exception {
         expectOfficialJwkOnce();
         String token = sign(validClaims(), bankKeyPair);

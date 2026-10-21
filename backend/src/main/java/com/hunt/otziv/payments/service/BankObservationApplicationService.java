@@ -107,6 +107,16 @@ public class BankObservationApplicationService {
 
     @Transactional(propagation = Propagation.MANDATORY, noRollbackFor = Exception.class)
     void applyValidatedTochkaState(PaymentLink link, MappedPayment mapped, PaymentProfile entityProfile, TochkaPaymentProfile runtimeProfile) {
+        String observedType = normalize(mapped.providerPaymentType());
+        String savedType = normalize(link.getProviderPaymentType());
+        if (!observedType.isBlank() && !savedType.isBlank() && !savedType.equals(observedType)) {
+            quarantineTochkaState(link, "tochka_payment_type_changed_after_observation");
+            link.setLastError("tochka_payment_type_changed_after_observation: требуется сверка в банке");
+            return;
+        }
+        if (!observedType.isBlank()) {
+            link.setProviderPaymentType(observedType);
+        }
         PaymentLinkStatus before = link.getStatus();
         link.setProviderTerminalStatus(mapped.providerStatus());
         link.setTbankTerminalKey(runtimeProfile.merchantId());

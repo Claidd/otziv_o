@@ -7702,21 +7702,28 @@ class PaymentLinkServiceTest {
         when(paymentLinkRepository.findByIdForUpdate(link.getId())).thenReturn(Optional.of(link));
         when(orderRepository.findByIdForCounterUpdate(order.getId())).thenReturn(Optional.of(order));
         when(tochkaClient.getPaymentInfo(runtime, link.getTbankPaymentId())).thenReturn(tochkaPaymentInfo(
-                tochkaOperation(
+                withTochkaPaymentType(tochkaOperation(
                         runtime,
                         link.getTbankOrderId(),
                         link.getTbankPaymentId(),
                         TochkaPaymentMode.SBP,
                         "APPROVED",
                         link.getAmountKopecks()
-                )
+                ), "digitalRuble")
         ));
         assertTrue(service.reconcileBankLink(link.getId(), LocalDateTime.now()));
 
         assertEquals(PaymentLinkStatus.CONFIRMED, link.getStatus());
         assertEquals("APPROVED", link.getProviderTerminalStatus());
+        assertEquals("digitalRuble", link.getProviderPaymentType());
         assertEquals("prepaid_waiting_order_completion", link.getLastError());
         assertNotNull(link.getPaidAt());
+        var settlement = ReflectionTestUtils.getField(service, "settlementService");
+        ReflectionTestUtils.invokeMethod(settlement, "applyTochkaMappedStatus", link,
+                new TochkaPaymentOperationMapper.MappedPayment(PaymentLinkStatus.NEEDS_RECONCILIATION,
+                        PaymentMethod.SBP_QR, "ON-REFUND", "digitalRuble"), false);
+        assertEquals(PaymentLinkStatus.CONFIRMED, link.getStatus());
+        assertEquals("digitalRuble", link.getProviderPaymentType());
         verify(paymentProfileService, never()).isTestTerminal(runtime.merchantId());
         verifyNoInteractions(tbankClient);
     }
@@ -8297,6 +8304,74 @@ class PaymentLinkServiceTest {
         verify(paymentLinkReturnOutboxService, never()).enqueue(link);
     }
 
+    @ParameterizedTest
+    @CsvSource({
+            "digitalRuble,кабинете Точки",
+            "legacyUnknown,способ оплаты"
+    })
+    void tochkaDigitalRubleOrLegacyUnknownSbpNeverCallsRefundApi(String actualType, String message) {
+        PaymentLinkService service = service(properties());
+        Order order = order(3_660L, "ООО Точка Безопасный Возврат", BigDecimal.valueOf(321));
+        PaymentProfile profile = tochkaEntityProfile(360L);
+        PaymentLink link = payableLink(order, "tochka-refund-unsupported", 32_100L);
+        link.setId(3_660L);
+        link.setPaymentProfile(profile);
+        link.setStatus(PaymentLinkStatus.CONFIRMED);
+        link.setPaymentMethod(PaymentMethod.SBP_QR);
+        link.setTbankOrderId("tochka-link-refund-unsupported");
+        link.setTbankPaymentId("tochka-operation-refund-unsupported");
+        link.setProviderTerminalStatus("APPROVED");
+        if (!"legacyUnknown".equals(actualType)) {
+            link.setProviderPaymentType(actualType);
+        }
+        when(paymentLinkRepository.findByIdWithOrder(link.getId())).thenReturn(Optional.of(link));
+        when(paymentLinkRepository.findByIdForUpdate(link.getId())).thenReturn(Optional.of(link));
+        when(orderRepository.findByIdForCounterUpdate(order.getId())).thenReturn(Optional.of(order));
+
+        ResponseStatusException failure = assertThrows(ResponseStatusException.class,
+                () -> service.cancel(link.getId()));
+
+        assertTrue(failure.getReason().contains(message));
+        assertFalse((Boolean) ReflectionTestUtils.invokeMethod(
+                ReflectionTestUtils.getField(service, "paymentPresenter"), "isRefundable", link));
+        assertNull(link.getBankCancelNonce());
+        verify(tochkaClient, never()).refund(any(), any());
+    }
+
+    @Test
+    void legacyTochkaCardOnlyRemainsEligibleForRefund() {
+        PaymentLinkService service = service(properties());
+        PaymentLink link = payableLink(order(3_661L, "ООО Точка Карта", BigDecimal.valueOf(321)),
+                "tochka-legacy-card", 32_100L);
+        link.setPaymentProfile(tochkaEntityProfile(361L));
+        link.setStatus(PaymentLinkStatus.CONFIRMED);
+        link.setPaymentMethod(PaymentMethod.BANK_FORM);
+        link.setTbankPaymentId("tochka-operation-legacy-card");
+        link.setProviderTerminalStatus("APPROVED");
+
+        assertTrue((Boolean) ReflectionTestUtils.invokeMethod(
+                ReflectionTestUtils.getField(service, "paymentPresenter"), "isRefundable", link));
+    }
+
+    @Test
+    void conflictingActualTochkaPaymentTypeCannotConfirmStandaloneOrder() throws Exception {
+        PaymentLinkService service = service(properties());
+        PaymentLink link = new PaymentLink();
+        link.setStatus(PaymentLinkStatus.INITIATED);
+        link.setProviderPaymentType("sbp");
+        var reconciliation = ReflectionTestUtils.getField(service, "bankPaymentReconciliation");
+        var application = ReflectionTestUtils.getField(reconciliation, "bankObservationApplication");
+
+        ReflectionTestUtils.invokeMethod(application, "applyValidatedTochkaState", link,
+                new TochkaPaymentOperationMapper.MappedPayment(PaymentLinkStatus.CONFIRMED,
+                        PaymentMethod.SBP_QR, "APPROVED", "digitalRuble"), null, null);
+
+        assertEquals(PaymentLinkStatus.NEEDS_RECONCILIATION, link.getStatus());
+        assertEquals("sbp", link.getProviderPaymentType());
+        assertTrue(link.getLastError().contains("payment_type_changed"));
+        verify(orderTransactionService, never()).handlePaymentStatus(any(Order.class));
+    }
+
     @Test
     void tochkaRefundAcceptanceQuarantinesUntilTerminalGetAndBlocksSecondPost() {
         PaymentLinkService service = service(properties());
@@ -8314,6 +8389,7 @@ class PaymentLinkServiceTest {
         link.setTbankPaymentId("tochka-operation-refund");
         link.setTbankTerminalKey(runtime.merchantId());
         link.setProviderTerminalStatus("APPROVED");
+        link.setProviderPaymentType("sbp");
 
         when(tochkaPaymentProfileResolver.resolveForExistingPayment(profile)).thenReturn(runtime);
         when(paymentLinkRepository.findByIdWithOrder(link.getId())).thenReturn(Optional.of(link));
@@ -8380,6 +8456,7 @@ class PaymentLinkServiceTest {
         link.setTbankPaymentId("tochka-operation-refund-ambiguous-http");
         link.setTbankTerminalKey(runtime.merchantId());
         link.setProviderTerminalStatus("APPROVED");
+        link.setProviderPaymentType("sbp");
 
         when(tochkaPaymentProfileResolver.resolveForExistingPayment(profile)).thenReturn(runtime);
         when(paymentLinkRepository.findByIdWithOrder(link.getId())).thenReturn(Optional.of(link));
@@ -8418,6 +8495,7 @@ class PaymentLinkServiceTest {
         link.setTbankPaymentId("tochka-operation-refund-get-failure");
         link.setTbankTerminalKey(runtime.merchantId());
         link.setProviderTerminalStatus("APPROVED");
+        link.setProviderPaymentType("sbp");
         String claimNonce = "tochka-refund-get-failure-nonce";
         LocalDateTime claimLease = LocalDateTime.now().plusMinutes(5);
         String originError = "confirmed-before-refund";
@@ -8518,6 +8596,7 @@ class PaymentLinkServiceTest {
         link.setTbankPaymentId("tochka-operation-late-refund");
         link.setTbankTerminalKey(runtime.merchantId());
         link.setProviderTerminalStatus("APPROVED");
+        link.setProviderPaymentType("sbp");
 
         when(tochkaPaymentProfileResolver.resolveForExistingPayment(profile)).thenReturn(runtime);
         when(paymentLinkRepository.findByIdWithOrder(link.getId())).thenReturn(Optional.of(link));
@@ -10072,6 +10151,13 @@ class PaymentLinkServiceTest {
 
     private PaymentInfoResponse tochkaPaymentInfo(PaymentOperation operation) {
         return new PaymentInfoResponse(new PaymentInfoData(List.of(operation)), null);
+    }
+
+    private PaymentOperation withTochkaPaymentType(PaymentOperation operation, String paymentType) {
+        return new PaymentOperation(operation.customerCode(), operation.taxSystemCode(), paymentType,
+                operation.paymentId(), operation.transactionId(), operation.createdAt(),
+                operation.amount(), operation.status(), operation.operationId(), operation.paymentLink(),
+                operation.merchantId(), operation.paidAt(), operation.paymentLinkId(), operation.orders());
     }
 
     private PaymentOperation tochkaOperation(
