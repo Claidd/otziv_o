@@ -287,14 +287,15 @@ class PaymentLinkInitializationWorkflowTransactionTest {
                     mock(ManualPaymentTaskRepository.class), common, integrity, access,
                     mock(ContractorPaymentLiveRoutingService.class), mock(ContractorPaymentShadowService.class),
                     mock(ContractorPaymentRuntimeSwitch.class), mock(ContractorActualPaymentAttributionService.class),
-                    mock(PaymentIssueReminderService.class), transactions), manager);
+                    mock(PaymentIssueReminderService.class), transactions,
+                    mock(SpecialistManualPaymentReviewGuard.class)), manager);
             resolution = proxied(new PublicPaymentLinkResolutionService(lifecycle, preparation, presenter, links, settings), manager);
             workflow = proxied(new PaymentLinkInitializationWorkflow(mock(PaymentLinkSettlementService.class),
                     lifecycle, state, preparation, resolution, mock(PaymentLinkCancellationWorkflow.class), presenter,
                     routes, observations, links, orders, properties, profiles, bank,
                     mock(TochkaPaymentProfileResolver.class), mock(TochkaClient.class), new TochkaPaymentOperationMapper(),
                     integrity, mock(PaymentLinkReturnOutboxService.class), mock(ContractorPaymentTargetAccessPolicy.class),
-                    transactions), manager);
+                    transactions, mock(SpecialistManualPaymentReviewGuard.class)), manager);
         }
 
         PublicPaymentInitResponse init() {

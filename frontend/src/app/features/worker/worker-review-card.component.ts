@@ -103,11 +103,28 @@ export class WorkerReviewCardComponent implements OnChanges {
   @Output() readonly copyRequested = new EventEmitter<ReviewCopyKind>();
   @Output() readonly titleCopyRequested = new EventEmitter<string>();
   @Output() readonly botChangeRequested = new EventEmitter<void>();
+  @Output() readonly accountActionCooldownReminderRequested = new EventEmitter<void>();
   @Output() readonly botNameSaveRequested = new EventEmitter<string>();
   @Output() readonly botDeactivateRequested = new EventEmitter<void>();
   @Output() readonly accountRepairRequested = new EventEmitter<string>();
   @Output() readonly doneRequested = new EventEmitter<void>();
   @Output() readonly editOpened = new EventEmitter<void>();
+
+  requestBotChange(): void {
+    if (this.accountActionCooldownLocked) {
+      this.accountActionCooldownReminderRequested.emit();
+      return;
+    }
+    this.botChangeRequested.emit();
+  }
+
+  requestBotDeactivate(): void {
+    if (this.accountActionCooldownLocked) {
+      this.accountActionCooldownReminderRequested.emit();
+      return;
+    }
+    this.botDeactivateRequested.emit();
+  }
 
   constructor() {
     if (typeof window === 'undefined') {

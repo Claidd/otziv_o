@@ -1,0 +1,74 @@
+[
+    {
+        "Id": "sha256:cefc494e145e5a670c3a8f3e4c1bfff4c9caf89a076cca118eee524bf0b3f3df",
+        "RepoTags": [],
+        "RepoDigests": [
+            "ghcr.io/claidd/otziv-security@sha256:7f151ac5485610079a5243d91c28f2681691083ac6c22e92d53f9a5a1e4ace58"
+        ],
+        "Parent": "",
+        "Comment": "buildkit.dockerfile.v0",
+        "Created": "2026-10-21T12:25:39.686919679Z",
+        "DockerVersion": "",
+        "Author": "",
+        "Config": {
+            "Hostname": "",
+            "Domainname": "",
+            "User": "",
+            "AttachStdin": false,
+            "AttachStdout": false,
+            "AttachStderr": false,
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "MC_CONFIG_DIR=/tmp/.mc"
+            ],
+            "Cmd": null,
+            "Image": "",
+            "Volumes": null,
+            "WorkingDir": "/",
+            "Entrypoint": [
+                "/usr/bin/mc"
+            ],
+            "OnBuild": null,
+            "Labels": {
+                "com.otziv.corresponding-source": "/usr/share/otziv-build/mc/corresponding-source.tar.gz",
+                "com.otziv.publication.revision": "0c56e0bb1ed6cc3310924144db3bf465970a82d1",
+                "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+                "com.otziv.reviewed-component": "mc",
+                "com.otziv.upstream.archived": "true",
+                "org.opencontainers.image.licenses": "AGPL-3.0-or-later",
+                "org.opencontainers.image.revision": "77f82e18b5401a65958f1619df6ebb994634bd88",
+                "org.opencontainers.image.source": "https://github.com/Claidd/otziv_o",
+                "org.opencontainers.image.version": "RELEASE.2025-11-06T16-25-29Z.otziv-c36.1"
+            }
+        },
+        "Architecture": "amd64",
+        "Os": "linux",
+        "Size": 48790237,
+        "GraphDriver": {
+            "Data": {
+                "LowerDir": "/var/lib/docker/overlay2/6947a916a3c150767ac9902f299f6fe77ab36e2669b4610b8a36fe8400593cc2/diff:/var/lib/docker/overlay2/ceed8d8157d8aa5ff404e1f6ed0e5206f627cddfa44fea361e863e662e347b31/diff:/var/lib/docker/overlay2/2a7039c6825a9e1c9be625264a83e2f4bcba1345ef1d16db171f86530181d010/diff:/var/lib/docker/overlay2/173904dccc4a5a80189781418b1e929084f27be7891f7e8369c1e68d866e009d/diff:/var/lib/docker/overlay2/f95f6740dce056513460ebcc96ac1de1b2a3204926fc8dd90ccd63f5e84354af/diff",
+                "MergedDir": "/var/lib/docker/overlay2/89cec2314b3ad4e778acb7837cbcbfc8b69eacd0d67fc6296d4e8f216b63936c/merged",
+                "UpperDir": "/var/lib/docker/overlay2/89cec2314b3ad4e778acb7837cbcbfc8b69eacd0d67fc6296d4e8f216b63936c/diff",
+                "WorkDir": "/var/lib/docker/overlay2/89cec2314b3ad4e778acb7837cbcbfc8b69eacd0d67fc6296d4e8f216b63936c/work"
+            },
+            "Name": "overlay2"
+        },
+        "RootFS": {
+            "Type": "layers",
+            "Layers": [
+                "sha256:34884abbe92863fce933ed7c39c0e045631af0ed86d5cc0dfbdf9fdca426ce3c",
+                "sha256:967c0c5f55043a3d734c8d2a722d015b63da1f318e2a5f9ed18eb41a8fb2f025",
+                "sha256:d316faba97ac1a4e2ff2b1e3346f4adb31c9d783c7f70ded9a92f20e23257ca2",
+                "sha256:f7ffb0c2ae35a9224e4477d9387a93d57f0b7875dc7d48b95128e87b8b64f7b8",
+                "sha256:227d23a2012926f421ef3b70d681a34d77452f5b2220fa14ad2e2385fd954a38",
+                "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef"
+            ]
+        },
+        "Metadata": {
+            "LastTagTime": "0001-01-01T00:00:00Z"
+        }
+    }
+]

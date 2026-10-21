@@ -19,6 +19,7 @@ export interface AccountActionAttempt {
 
 const STORAGE_PREFIX = 'otziv-worker-account-action-cooldown:v1:';
 const LEGACY_CHANGED_KEY = 'otziv-worker-account-action-changed';
+const REMINDER_DURATION_MS = 2_500;
 
 @Injectable({ providedIn: 'root' })
 export class WorkerAccountActionCooldownService {
@@ -30,10 +31,12 @@ export class WorkerAccountActionCooldownService {
   private newestServerTime = -Infinity;
   private deadline = 0;
   private timer?: ReturnType<typeof setInterval>;
+  private reminderTimer?: ReturnType<typeof setTimeout>;
   private syncingGeneration: number | null = null;
   private syncAgain = false;
   private nextSyncAt = 0;
   private readonly pending = signal(false);
+  private readonly reminderVisible = signal(false);
   readonly remainingSeconds = signal(0);
   readonly durationSeconds = signal(60);
   readonly enabled = signal(true);
@@ -46,6 +49,7 @@ export class WorkerAccountActionCooldownService {
   });
   readonly locked = computed(() => this.isSpecialist()
     && (this.pending() || (this.enabled() && this.remainingSeconds() > 0)));
+  readonly showReminder = computed(() => this.locked() && this.reminderVisible());
   readonly countdown = computed(() => {
     const seconds = this.remainingSeconds();
     return `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`;
@@ -60,7 +64,10 @@ export class WorkerAccountActionCooldownService {
       untracked(() => this.useSubject(subject));
     });
     const resume = () => {
-      if (document.visibilityState === 'visible') this.sync();
+      if (document.visibilityState === 'visible') {
+        this.remind();
+        this.sync();
+      }
     };
     const storage = (event: StorageEvent) => {
       if (event.key === LEGACY_CHANGED_KEY) {
@@ -75,6 +82,7 @@ export class WorkerAccountActionCooldownService {
     window.addEventListener('storage', storage);
     this.destroyRef.onDestroy(() => {
       this.stopTimer();
+      this.hideReminder();
       window.removeEventListener('focus', resume);
       document.removeEventListener('visibilitychange', resume);
       window.removeEventListener('storage', storage);
@@ -84,12 +92,17 @@ export class WorkerAccountActionCooldownService {
   /** Called before dispatch, after any confirmation; shared by every API entry point. */
   begin(): AccountActionAttempt | null {
     this.ensureSubject();
-    if (!this.subject || this.locked()) return null;
+    if (!this.subject) return null;
+    if (this.locked()) {
+      this.remind();
+      return null;
+    }
     this.pending.set(true);
     if (this.enabled()) {
       this.deadline = performance.now() + this.durationSeconds() * 1000;
       this.tick();
     }
+    this.remind();
     return { subject: this.subject, generation: this.generation, receivedState: false };
   }
 
@@ -107,6 +120,7 @@ export class WorkerAccountActionCooldownService {
     if (isCooldownState(state)) {
       attempt.receivedState = true;
       this.applyState(state, true);
+      this.remind();
       try {
         localStorage.setItem(LEGACY_CHANGED_KEY, `${Date.now()}-${Math.random()}`);
       } catch { /* Legacy tabs also reconcile when they resume. */ }
@@ -165,6 +179,7 @@ export class WorkerAccountActionCooldownService {
   private useSubject(subject: string | null): void {
     if (subject === this.subject) return;
     this.subject = subject;
+    this.hideReminder();
     this.generation += 1;
     this.newestServerTime = -Infinity;
     this.deadline = 0;
@@ -192,6 +207,7 @@ export class WorkerAccountActionCooldownService {
     const serverTime = Date.parse(state.serverNow);
     // A delayed GET or response from another tab must not replace newer server state.
     if (serverTime < this.newestServerTime) return;
+    const wasLocked = this.locked();
     this.newestServerTime = serverTime;
     this.enabled.set(state.enabled);
     this.durationSeconds.set(state.durationSeconds);
@@ -199,6 +215,7 @@ export class WorkerAccountActionCooldownService {
       ? Math.max(0, Date.parse(state.availableAt) - serverTime - elapsedMs) : 0;
     this.deadline = performance.now() + remaining;
     this.tick();
+    if (!wasLocked && this.locked()) this.remind();
     if (broadcast && this.subject) {
       try {
         localStorage.setItem(this.storageKey(), JSON.stringify({ state, receivedAt: Date.now() }));
@@ -228,6 +245,22 @@ export class WorkerAccountActionCooldownService {
   private stopTimer(): void {
     if (this.timer) clearInterval(this.timer);
     this.timer = undefined;
+  }
+
+  remind(): void {
+    if (!this.locked()) return;
+    if (this.reminderTimer) clearTimeout(this.reminderTimer);
+    this.reminderVisible.set(true);
+    this.reminderTimer = setTimeout(() => {
+      this.reminderVisible.set(false);
+      this.reminderTimer = undefined;
+    }, REMINDER_DURATION_MS);
+  }
+
+  private hideReminder(): void {
+    if (this.reminderTimer) clearTimeout(this.reminderTimer);
+    this.reminderTimer = undefined;
+    this.reminderVisible.set(false);
   }
 
   private storageKey(): string {

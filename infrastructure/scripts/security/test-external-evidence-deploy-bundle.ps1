@@ -37,19 +37,45 @@ try {
     $loaderPath = 'infrastructure/runtime-security/evidence_archive.py'
     $repository = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../..'))
     $null = Fixture-Write $loaderPath ([IO.File]::ReadAllText((Join-Path $repository $loaderPath)))
-    $null = Fixture-Write 'infrastructure/runtime-security/c23-parent-activations.json' '{}'
+    $null = Fixture-Write 'infrastructure/runtime-security/c36-parent-postgres.json' `
+        ([IO.File]::ReadAllText((Join-Path $repository 'infrastructure/runtime-security/c36-parent-postgres.json')))
+    $pgManifest = 'infrastructure/runtime-security/reviewed-images-c36-postgres.json'
+    $kcManifest = 'infrastructure/runtime-security/reviewed-images-c35-keycloak.json'
+    $null = Fixture-Write $pgManifest '{}'
+    $null = Fixture-Write $kcManifest '{}'
     $proofPath = 'infrastructure/runtime-security/proofs/c26-keycloak/proof.json'
     $null = Fixture-Write $proofPath '{"result":"PASS"}'
     $evidencePaths = @($proofPath)
-    $index = @{ images = @() }
-    foreach ($component in @('postgres','keycloak')) {
-        $path = "infrastructure/runtime-security/proofs/c26-keycloak/$component-acceptance.json"
-        $accepted = @{ component = $component; result = 'PASS'; schema = 'otziv-ssl-refresh-acceptance-v1'
-            files = @{ $proofPath = (Fixture-Hash $proofPath) }; executedSources = @{ $sourcePath = (Fixture-Hash $sourcePath) } }
-        $null = Fixture-Write $path ($accepted | ConvertTo-Json -Depth 6 -Compress)
-        $evidencePaths += $path
-        $index.images += @{ component = $component; sslRefreshAcceptance = @{ path = $path; sha256 = (Fixture-Hash $path) } }
-    }
+    $candidate = 'ghcr.io/claidd/otziv-security@sha256:' + ('a' * 64)
+    $candidateId = 'sha256:' + ('b' * 64)
+    $source = 'ghcr.io/claidd/otziv-security@sha256:c974c12a1107e314b1ba8cf65bd1fc5b6964645ced420c2151d336ee8a9a6534'
+    $sourceId = 'sha256:1f5c2590fadde6b449908569285f1ed91a10831d36535d5c4ed647e9a0afca6a'
+    $issuer = 'ghcr.io/claidd/otziv-security@sha256:c28364544835f5fbef6d4e0b0b3e63154127f7fb440b05432760f11235b5f4a9'
+    $issuerId = 'sha256:60a8dd92cf43b8cf909a9e13f231da1f59103f9259cf482185c54856dcfd6a1b'
+    $pgPath = 'infrastructure/runtime-security/proofs/c36-postgres/postgres-acceptance.json'
+    $kcPath = 'infrastructure/runtime-security/proofs/c36-postgres/keycloak-acceptance.json'
+    $run = '123'; $attempt = '1'; $commit = 'c' * 40
+    $pgAccepted = @{ schema = 'otziv-postgres-c36-acceptance-v1'; result = 'PASS'; reference = $candidate
+        parentReference = $source; parentConfigId = $sourceId; imageConfigId = $candidateId
+        commit = $commit; run = $run; attempt = $attempt
+        pair = @{ postgres = @{ reference = $candidate; imageConfigId = $candidateId }
+                  keycloak = @{ reference = $issuer; imageConfigId = $issuerId } }
+        files = @{ $proofPath = (Fixture-Hash $proofPath) }; executedSources = @{ $sourcePath = (Fixture-Hash $sourcePath) } }
+    $kcAccepted = @{ schema = 'otziv-keycloak-vertx-c35-acceptance-v1'; result = 'PASS'; component = 'keycloak'
+        reference = $issuer; imageConfigId = $issuerId; postgres = @{ reference = $source; imageConfigId = $sourceId }
+        commit = $commit; run = $run; attempt = $attempt
+        files = @{ $proofPath = (Fixture-Hash $proofPath) }; executedSources = @{ $sourcePath = (Fixture-Hash $sourcePath) } }
+    $null = Fixture-Write $pgPath ($pgAccepted | ConvertTo-Json -Depth 9 -Compress)
+    $null = Fixture-Write $kcPath ($kcAccepted | ConvertTo-Json -Depth 9 -Compress)
+    $pgBound = @{ path = $pgPath; sha256 = (Fixture-Hash $pgPath) }
+    $kcBound = @{ path = $kcPath; sha256 = (Fixture-Hash $kcPath) }
+    $index = @{ images = @(
+        @{ component = 'postgres'; reference = $candidate; commit = $commit; run = $run; attempt = $attempt
+           manifest = @{ path = $pgManifest; sha256 = (Fixture-Hash $pgManifest) }
+           postgresC36Acceptance = $pgBound; databaseTransition = $pgBound },
+        @{ component = 'keycloak'; reference = $issuer; commit = $commit; run = $run; attempt = $attempt
+           manifest = @{ path = $kcManifest; sha256 = (Fixture-Hash $kcManifest) }
+           vertxRefreshAcceptance = $kcBound; migrationAcceptance = $kcBound }) }
     $null = Fixture-Write 'infrastructure/runtime-security/reviewed-image-activations.json' ($index | ConvertTo-Json -Depth 6 -Compress)
     $manifestPath = 'infrastructure/runtime-security/evidence-archive-c26.json'
     $files = @($evidencePaths | Sort-Object -CaseSensitive | ForEach-Object {

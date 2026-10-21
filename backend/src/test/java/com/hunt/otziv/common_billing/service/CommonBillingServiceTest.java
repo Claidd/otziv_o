@@ -445,7 +445,8 @@ class CommonBillingServiceTest {
                 accountCompanyRepository, invoiceRepository, invoiceOrderRepository, paymentRefRepository,
                 orderRepository, orderAggregateMutationLockService, nextOrderRequests,
                 paymentLinkRepository, orderStatusService, badReviewTaskService, appSettingService,
-                publicationBlockerService);
+                publicationBlockerService,
+                org.mockito.Mockito.mock(com.hunt.otziv.payments.service.SpecialistManualPaymentReviewGuard.class));
         ReflectionTestUtils.setField(service, "invoiceMembershipWorkflow", membership);
         CommonBillingCompanyReconciliationWorkflow companyReconciliation = new CommonBillingCompanyReconciliationWorkflow(
                 membership, manualPayments, initialization, settlement, accountRepository,

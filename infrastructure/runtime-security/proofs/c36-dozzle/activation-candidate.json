@@ -1,0 +1,19 @@
+{
+  "component": "dozzle",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:704cb4424920407d43d1eebd1782af56f3fd1b65648530aeae6f3ad6e34f3f92",
+  "commit": "0c56e0bb1ed6cc3310924144db3bf465970a82d1",
+  "run": "39598852158",
+  "attempt": "1",
+  "manifest": {
+    "path": "infrastructure/runtime-security/reviewed-images-c36-dozzle.json",
+    "sha256": "b0d4e23cd42b7527e4281c21a15f543dcc48ca2fee949eab55a70aafb3862c59"
+  },
+  "publication": {
+    "path": "infrastructure/runtime-security/proofs/c36-dozzle/publication/publication.json",
+    "sha256": "8945a58f8b1e1c42936f54aa46c91a9eee44a4800c481d2cce8cfb5d9a260c88"
+  },
+  "anonymous": {
+    "path": "infrastructure/runtime-security/proofs/c36-dozzle/anonymous/anonymous-download.json",
+    "sha256": "6024c478e115df6b3a2e1a30f7bce0972443c1f27d4e4f3aaa3ba471091b6e17"
+  }
+}

@@ -89,7 +89,7 @@ public class BankPaymentReconciliationWorkflow {
     private final PaymentLinkTransactionExecutor transactionExecutor;
 
     private ProviderStateObservation observeBankState(PaymentLink link) {
-        return bankObservations.observeBankState(link);
+        return bankObservations.observeBankStateForReconciliation(link);
     }
 
     private TochkaPaymentMode expectedTochkaMode(PaymentMethod paymentMethod) {
@@ -421,7 +421,11 @@ public class BankPaymentReconciliationWorkflow {
     }
 
     private boolean isReconciliationEligible(PaymentLink link, LocalDateTime eligibleBefore) {
-        return link != null && (SYNCABLE_BANK_STATUSES.contains(link.getStatus()) || link.getBankCancelOriginStatus() != null) && !normalize(link.getTbankPaymentId()).isBlank() && (link.getBankReconciliationAttemptedAt() == null || !link.getBankReconciliationAttemptedAt().isAfter(eligibleBefore));
+        return link != null && (SYNCABLE_BANK_STATUSES.contains(link.getStatus())
+                || PaymentBankObservationService.SETTLED_BANK_STATUSES.contains(link.getStatus())
+                || link.getBankCancelOriginStatus() != null)
+                && !normalize(link.getTbankPaymentId()).isBlank()
+                && (link.getBankReconciliationAttemptedAt() == null || !link.getBankReconciliationAttemptedAt().isAfter(eligibleBefore));
     }
 
     private String paymentFailureReason(Throwable failure) {

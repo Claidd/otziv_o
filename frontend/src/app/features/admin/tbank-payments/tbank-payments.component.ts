@@ -22,6 +22,7 @@ import type {
   PaymentPolicy,
   PaymentProfilePolicyRequest,
   PaymentProfileResponse,
+  SpecialistPaymentReview,
   TbankPaymentPageMode,
   TbankPaymentStatus,
   TbankRuntimeMode,
@@ -72,6 +73,7 @@ import {
   manualPaymentAccountingSourceLabel
 } from '../../../shared/manual-payment-recipient-summary';
 import { manualPaymentTaskWorklist } from '../../../shared/manual-payment-task-visibility';
+import { SpecialistPaymentReviewsComponent } from './specialist-payment-reviews.component';
 
 type PaymentMetric = {
   label: string;
@@ -138,7 +140,7 @@ export function validContractorAuditEffectiveAt(input: string): boolean {
 
 @Component({
   selector: 'app-tbank-payments',
-  imports: [AdminLayoutComponent, DatePipe, DecimalPipe, FormsModule, LoadErrorCardComponent, ManagerManualCardPaymentModalComponent, MobileBottomPagerComponent, RouterLink],
+  imports: [AdminLayoutComponent, DatePipe, DecimalPipe, FormsModule, LoadErrorCardComponent, ManagerManualCardPaymentModalComponent, MobileBottomPagerComponent, RouterLink, SpecialistPaymentReviewsComponent],
   templateUrl: './tbank-payments.component.html',
   styleUrl: './tbank-payments.component.scss'
 })
@@ -152,6 +154,7 @@ export class TbankPaymentsComponent implements OnDestroy {
   private readonly toastService = inject(ToastService);
   private readonly domDocument = inject(DOCUMENT);
   private contractorAuditTrigger: HTMLElement | null = null;
+  @ViewChild(SpecialistPaymentReviewsComponent) private specialistReviews?: SpecialistPaymentReviewsComponent;
   @ViewChild('contractorAuditDialog') private contractorAuditDialog?: ElementRef<HTMLElement>;
   @ViewChild('contractorAuditAmountInput')
   set contractorAuditAmountElement(element: ElementRef<HTMLInputElement> | undefined) {
@@ -166,6 +169,7 @@ export class TbankPaymentsComponent implements OnDestroy {
   readonly isBankPaymentInstructionSource = isBankPaymentRouteType;
 
   readonly links = signal<AdminPaymentLinkResponse[]>([]);
+  readonly specialistOpenReviews = signal<SpecialistPaymentReview[]>([]);
   readonly status = signal<TbankPaymentStatus | null>(null);
   readonly profiles = signal<PaymentProfileResponse[]>([]);
   readonly managerProfiles = signal<ManagerPaymentProfileResponse[]>([]);
@@ -518,6 +522,7 @@ export class TbankPaymentsComponent implements OnDestroy {
 
   load(): void {
     if (this.destroyed) return;
+    this.specialistReviews?.load();
     const epoch = ++this.bootstrapEpoch;
     this.bootstrapRead?.unsubscribe();
     this.bootstrapLoading.set(true);
@@ -546,6 +551,12 @@ export class TbankPaymentsComponent implements OnDestroy {
         this.toastService.error('Банковские платежи не загрузились', message);
       }
     });
+  }
+
+  onSpecialistPaymentChanged(): void {
+    this.loadPaymentLinks();
+    this.loadProfilesOnly(true);
+    this.loadRecipientMonthlySummary();
   }
 
   setRecipientSummaryMonth(value: string): void {
@@ -1054,6 +1065,12 @@ export class TbankPaymentsComponent implements OnDestroy {
 
   completeJournalManualCardPayment(result: ManagerManualCardPaymentCompleted): void {
     this.journalManualCardPaymentOrder.set(null);
+    if (result.result.status === 'SPECIALIST_REVIEW_PENDING') {
+      this.toastService.warning('Ожидается проверка специалиста', result.result.message);
+      this.specialistReviews?.load();
+      this.loadPaymentLinks();
+      return;
+    }
     if (result.result.status === 'OWNER_APPROVAL_PENDING') {
       this.toastService.warning(
         'Ожидается подтверждение владельца',
@@ -1758,6 +1775,7 @@ export class TbankPaymentsComponent implements OnDestroy {
 
   canConfirmManual(link: AdminPaymentLinkResponse): boolean {
     return !link.archived
+      && !this.specialistReviewForLink(link.id)
       && this.isManualPayment(link)
       && link.manualSource !== 'CONTRACTOR_PAYMENT_PROFILE'
       && (link.status === 'WAITING_MANUAL_PAYMENT' || link.status === 'MANUAL_REPORTED');
@@ -1772,7 +1790,11 @@ export class TbankPaymentsComponent implements OnDestroy {
   }
 
   canCloseManualAsUnpaid(link: AdminPaymentLinkResponse): boolean {
-    return !link.archived && canCloseManualPaymentAsUnpaid(link);
+    return !link.archived && !this.specialistReviewForLink(link.id) && canCloseManualPaymentAsUnpaid(link);
+  }
+
+  specialistReviewForLink(linkId: number): SpecialistPaymentReview | undefined {
+    return this.specialistOpenReviews().find(review => review.paymentLinkId === linkId);
   }
 
   canMarkManualReceipt(link: AdminPaymentLinkResponse): boolean {

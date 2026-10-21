@@ -115,6 +115,11 @@
     </div>
   </section>
 
+  <app-specialist-payment-reviews
+    (reviewsChanged)="specialistOpenReviews.set($event)"
+    (paymentChanged)="onSpecialistPaymentChanged()"
+  />
+
   <section class="analytics-section recipient-summary-section" aria-label="Подтверждённые ручные оплаты по получателям до возвратов">
     <div class="section-title recipient-summary-title">
       <span class="material-icons-sharp">account_balance_wallet</span>
@@ -337,7 +342,7 @@
                 <small>{{ link.amountKopecks }} коп.</small>
               </td>
               <td class="status-cell" data-label="Статус">
-                <span [class]="statusClass(link.status)">{{ statusLabel(link.status) }}</span>
+                <span [class]="statusClass(link.status)">{{ specialistReviewForLink(link.id) ? 'Ожидает специалиста' : statusLabel(link.status) }}</span>
                 @if (link.lastError) {
                   <small class="error-text">{{ link.lastError }}</small>
                 }

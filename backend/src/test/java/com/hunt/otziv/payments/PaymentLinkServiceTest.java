@@ -23,6 +23,7 @@ import com.hunt.otziv.payments.config.TbankPaymentProperties;
 import com.hunt.otziv.payments.dto.AdminPaymentLinkResponse;
 import com.hunt.otziv.payments.dto.AdminPaymentLinksPageResponse;
 import com.hunt.otziv.payments.dto.ManagerPaymentLinkResponse;
+import com.hunt.otziv.payments.dto.ManagerManualCardPaymentResultResponse;
 import com.hunt.otziv.payments.dto.ManualPaymentTaskRouteSnapshot;
 import com.hunt.otziv.payments.dto.PaymentLinkAdminSummary;
 import com.hunt.otziv.payments.dto.PaymentRouteChangeContextResponse;
@@ -73,6 +74,7 @@ import com.hunt.otziv.payments.model.PaymentMethod;
 import com.hunt.otziv.payments.model.PaymentPolicy;
 import com.hunt.otziv.payments.model.PaymentProfile;
 import com.hunt.otziv.payments.model.PaymentReceiptStatus;
+import com.hunt.otziv.payments.model.SpecialistManualPaymentReview;
 import com.hunt.otziv.payments.model.OwnerManualCardPaymentApproval;
 import com.hunt.otziv.payments.model.OwnerManualCardPaymentApprovalStatus;
 import com.hunt.otziv.payments.model.TbankRuntimeMode;
@@ -83,6 +85,7 @@ import com.hunt.otziv.payments.service.ManualPaymentTaskReceiptIntegrationServic
 import com.hunt.otziv.payments.service.ManualPaymentTaskService;
 import com.hunt.otziv.payments.service.ManualPaymentRecipientTelegramNotificationService;
 import com.hunt.otziv.payments.service.ManualCardPaymentReviewNotificationService;
+import com.hunt.otziv.payments.service.SpecialistManualPaymentReviewService;
 import com.hunt.otziv.contractor_payments.service.ContractorActualPaymentAttributionService;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentLiveRoutingService;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentRuntimeSwitch;
@@ -239,6 +242,9 @@ class PaymentLinkServiceTest {
 
     @Mock
     private ManualCardPaymentReviewNotificationService manualCardPaymentReviewNotificationService;
+
+    @Mock
+    private SpecialistManualPaymentReviewService specialistManualPaymentReviewService;
 
     @Mock
     private OwnerManualCardPaymentApprovalRepository ownerManualCardPaymentApprovalRepository;
@@ -1062,7 +1068,7 @@ class PaymentLinkServiceTest {
     }
 
     @Test
-    void scheduledReconciliationDoesNotApplyLateRejectedObservationAfterConfirmation() {
+    void scheduledReconciliationDoesNotApplyLateRejectedObservationAfterConfirmation() throws Exception {
         TbankPaymentProperties properties = properties();
         properties.setEnabled(true);
         PaymentLinkService service = service(properties);
@@ -1107,12 +1113,17 @@ class PaymentLinkServiceTest {
         assertFalse(service.reconcileBankLink(446L));
 
         assertEquals(PaymentLinkStatus.CONFIRMED, confirmed.getStatus());
-        assertNull(confirmed.getBankReconciliationAttemptedAt());
+        // Paid bank links remain eligible for slower scheduled checks so a
+        // missed external refund can still be discovered. The late REJECTED
+        // state is stale, but the attempt timestamp must be persisted.
+        assertNotNull(confirmed.getBankReconciliationAttemptedAt());
+        assertNull(confirmed.getProviderTerminalStatus());
         InOrder ordered = inOrder(tbankClient, orderRepository, paymentLinkRepository);
         ordered.verify(tbankClient).getState(any(TbankPaymentProfile.class), eq("payment-446"));
         ordered.verify(orderRepository).findByIdForCounterUpdate(446L);
         ordered.verify(paymentLinkRepository).findByIdForUpdate(446L);
-        verify(paymentLinkRepository, never()).save(confirmed);
+        verify(paymentLinkRepository).save(confirmed);
+        verify(orderTransactionService, never()).handlePaymentStatus(any(Order.class));
     }
 
     @Test
@@ -6048,6 +6059,101 @@ class PaymentLinkServiceTest {
     }
 
     @Test
+    void ownerConfirmedMonthlyLimitTransferWithOpenRecoveryRemainsPrepaymentUntilRelease() throws Exception {
+        PaymentLinkService service = service(properties());
+        Order order = order(25_665L, "Гразвел Проект", BigDecimal.valueOf(2_500));
+        order.setAmount(10);
+        order.setCounter(10);
+        order.getManager().setAuditTelegramGroupChatId(-10025665L);
+        order.getCompany().setManager(order.getManager());
+        PaymentLink link = contractorManualLink(
+                8_405L, order, 250_000L, PaymentLinkStatus.WAITING_MANUAL_PAYMENT, 2_168L);
+        link.setManualSource(ManualPaymentSource.PROFILE_MONTHLY_LIMIT);
+        var owner = new ManualCardPaymentRecipientResponse(
+                ContractorRecipientType.OWNER, null, null, "Мария", 250_000L, 0L, true,
+                "OWNER", ContractorCashDestinationKind.OWNER,
+                null, null, null, "Мария", "Владелец",
+                "Поступление подтверждает владелец", "Мария");
+        stubManualCardRecipients(order, link, owner);
+        when(actualPaymentAttributionService.actualRecipientAccountingEnabled()).thenReturn(true);
+        when(reviewRecoveryGateService.hasActiveRecoveryTasks(order.getId())).thenReturn(true);
+        when(orderRepository.findByIdForCounterUpdate(order.getId())).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByOrderIdForUpdate(order.getId())).thenReturn(List.of(link));
+        when(paymentLinkRepository.findByIdWithOrder(link.getId())).thenReturn(Optional.of(link));
+        when(paymentLinkRepository.findByIdForUpdate(link.getId())).thenReturn(Optional.of(link));
+        doAnswer(invocation -> {
+            PaymentLink frozen = invocation.getArgument(1);
+            frozen.setManualActualRecipientType(ContractorRecipientType.OWNER);
+            frozen.setManualActualCashDestinationKind(ContractorCashDestinationKind.OWNER);
+            frozen.setManualActualReason(invocation.getArgument(5));
+            frozen.setManualActualActor(invocation.getArgument(7));
+            frozen.setManualActualRecipientFrozenAt(LocalDateTime.now());
+            return null;
+        }).when(actualPaymentAttributionService).freezePaymentLinkRecipientIntent(
+                any(), any(), any(), any(), any(), anyString(), any(), anyString());
+        java.util.concurrent.atomic.AtomicReference<OwnerManualCardPaymentApproval> approvalRef =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        when(ownerManualCardPaymentApprovalRepository.findByPaymentLinkIdForUpdate(link.getId()))
+                .thenReturn(Optional.empty());
+        when(ownerManualCardPaymentApprovalRepository.saveAndFlush(any(OwnerManualCardPaymentApproval.class)))
+                .thenAnswer(invocation -> {
+                    OwnerManualCardPaymentApproval approval = invocation.getArgument(0);
+                    approval.setId(9_665L);
+                    approvalRef.set(approval);
+                    return approval;
+                });
+        when(ownerManualCardPaymentApprovalRepository.findByIdForUpdate(9_665L))
+                .thenAnswer(invocation -> Optional.ofNullable(approvalRef.get()));
+        when(ownerManualCardPaymentApprovalRepository.findBindingById(9_665L))
+                .thenAnswer(invocation -> approvalBinding(approvalRef.get()));
+        when(paymentLinkRepository.findFirstByOrder_IdAndStatusAndLastErrorStartingWithOrderByPaidAtDesc(
+                order.getId(), PaymentLinkStatus.CONFIRMED, "prepaid_waiting_order_completion"))
+                .thenReturn(Optional.of(link), Optional.empty());
+        when(orderTransactionService.handlePaymentStatus(order)).thenReturn(true);
+
+        var pending = service.submitManagerManualCardPaymentForOrder(
+                order.getId(), "Перевод получен владельцем", null,
+                ContractorRecipientType.OWNER, null, "OWNER", "manager@example.ru", authentication);
+
+        assertEquals("OWNER_APPROVAL_PENDING", pending.status());
+        assertEquals(PaymentLinkStatus.WAITING_MANUAL_PAYMENT, link.getStatus());
+        verify(orderTransactionService, never()).handlePaymentStatus(order);
+        ArgumentCaptor<ManualCardPaymentReviewNotificationService.OwnerApprovalRequest> request =
+                ArgumentCaptor.forClass(ManualCardPaymentReviewNotificationService.OwnerApprovalRequest.class);
+        verify(manualCardPaymentReviewNotificationService).notifyOwnerApprovalAfterCommit(request.capture());
+        User approver = new User();
+        approver.setId(7L);
+        approver.setUsername("owner@example.ru");
+        approver.setActive(true);
+        Role ownerRole = new Role();
+        ownerRole.setName("ROLE_OWNER");
+        approver.setRoles(List.of(ownerRole));
+        when(authentication.getName()).thenReturn("owner@example.ru");
+
+        var confirmed = service.approveOwnerManualCardPayment(
+                9_665L, request.getValue().callbackToken(), -10025665L, approver, authentication);
+
+        assertFalse(confirmed.alreadyCompleted());
+        assertEquals(OwnerManualCardPaymentApprovalStatus.CONFIRMED, approvalRef.get().getStatus());
+        assertEquals(PaymentLinkStatus.CONFIRMED, link.getStatus());
+        assertEquals(250_000L, link.getConfirmedAmountKopecks());
+        assertEquals("prepaid_waiting_order_completion", link.getLastError());
+        verify(orderTransactionService, never()).handlePaymentStatus(order);
+        verify(paymentCheckService, never()).assertActiveCheckBoundToPaymentLink(anyLong(), anyLong());
+
+        when(reviewRecoveryGateService.hasActiveRecoveryTasks(order.getId())).thenReturn(false);
+        assertTrue(service.applyConfirmedPrepaymentIfReady(order.getId()));
+        assertFalse(service.applyConfirmedPrepaymentIfReady(order.getId()));
+        assertNull(link.getLastError());
+        verify(orderTransactionService, times(1)).handlePaymentStatus(order);
+        verify(paymentCheckService, times(1))
+                .assertActiveCheckBoundToPaymentLink(order.getId(), link.getId());
+        verify(actualPaymentAttributionService, times(1))
+                .recordPaymentLinkFinalAttribution(order, link, link);
+        verifyNoInteractions(tbankClient);
+    }
+
+    @Test
     void paperInvoiceOwnerCandidateUsesOwnerKeyDespitePaperRouteRevision() throws Exception {
         PaymentLinkService service = service(properties());
         Order order = order(25277L, "Бумажный счёт владельца", BigDecimal.valueOf(1000));
@@ -6425,7 +6531,7 @@ class PaymentLinkServiceTest {
     }
 
     @Test
-    void managerSpecialistRequisitesStillConfirmDirectlyWithoutOwnerApproval() throws Exception {
+    void managerSpecialistRequisitesCreateReviewWithoutPrematurePayment() throws Exception {
         PaymentLinkService service = service(properties());
         Order order = order(25272L, "Реквизиты специалиста", BigDecimal.valueOf(1000));
         PaymentLink link = contractorManualLink(
@@ -6434,23 +6540,18 @@ class PaymentLinkServiceTest {
         when(paymentLinkRepository.findByOrderIdForUpdate(25272L)).thenReturn(List.of(link));
         when(paymentLinkRepository.findByIdWithOrder(5372L)).thenReturn(Optional.of(link));
         when(paymentLinkRepository.findByIdForUpdate(5372L)).thenReturn(Optional.of(link));
-        when(actualPaymentAttributionService.actualRecipientAccountingEnabled()).thenReturn(true);
         stubManualCardRecipients(order, link, new ManualCardPaymentRecipientResponse(
                 ContractorRecipientType.SPECIALIST, 25L, null, "Специалист", 100_000L, 0L, true));
-        doAnswer(invocation -> {
-            PaymentLink frozen = invocation.getArgument(1);
-            frozen.setManualActualRecipientType(ContractorRecipientType.SPECIALIST);
-            frozen.setManualActualRecipientProfileId(25L);
-            frozen.setManualActualCashDestinationKind(ContractorCashDestinationKind.CONTRACTOR_PROFILE);
-            frozen.setManualActualReason(invocation.getArgument(5));
-            frozen.setManualActualActor(invocation.getArgument(7));
-            frozen.setManualActualRecipientFrozenAt(LocalDateTime.now());
-            return null;
-        }).when(actualPaymentAttributionService).freezePaymentLinkRecipientIntent(
-                any(), any(), any(), any(), any(), anyString(), any(), anyString()
-        );
-        when(orderTransactionService.handlePaymentStatus(order)).thenReturn(true);
-        when(paymentLinkRepository.saveAndFlush(link)).thenReturn(link);
+        SpecialistManualPaymentReview review = new SpecialistManualPaymentReview();
+        review.setId(9_372L);
+        review.setOrderId(order.getId());
+        review.setPaymentLinkId(link.getId());
+        when(specialistManualPaymentReviewService.request(
+                25272L, 5372L, 100_000L, 25L, "PROFILE:25",
+                "Специалист подтвердил поступление", "", "manager@example.ru", authentication))
+                .thenReturn(review);
+        when(specialistManualPaymentReviewService.result(review))
+                .thenReturn(ManagerManualCardPaymentResultResponse.specialistReviewPending(25272L, 5372L));
 
         var result = service.submitManagerManualCardPaymentForOrder(
                 25272L, "Специалист подтвердил поступление", null,
@@ -6458,12 +6559,17 @@ class PaymentLinkServiceTest {
                 "manager@example.ru", authentication
         );
 
-        assertEquals("COMPLETED", result.status());
-        assertEquals(PaymentLinkStatus.CONFIRMED, link.getStatus());
+        assertEquals("SPECIALIST_REVIEW_PENDING", result.status());
+        assertEquals(25272L, result.orderId());
+        assertEquals(5372L, result.paymentLinkId());
+        assertEquals(PaymentLinkStatus.MANUAL_REPORTED, link.getStatus());
+        verify(specialistManualPaymentReviewService).deliver(9_372L);
         verifyNoInteractions(ownerManualCardPaymentApprovalRepository);
         verify(tbankClient, never()).getState(any(TbankPaymentProfile.class), anyString());
         verify(tbankClient, never()).cancel(any(TbankPaymentProfile.class), any(TbankCancelCommand.class));
-        verify(orderTransactionService).handlePaymentStatus(order);
+        verify(orderTransactionService, never()).handlePaymentStatus(order);
+        verify(actualPaymentAttributionService, never())
+                .recordPaymentLinkFinalAttribution(any(), any(), any());
     }
 
     @Test
@@ -9892,7 +9998,8 @@ class PaymentLinkServiceTest {
                 amounts, settlement, lifecycle, cancellation, presenter, routes, paymentLinkRepository, orderRepository,
                 manualPaymentRecipientTelegramNotificationService, manualPaymentTaskService,
                 taskReceiptIntegrationService, managerAccessService, contractorPaymentLiveRoutingService,
-                actualPaymentAttributionService, contractorPaymentTargetAccessPolicy, transactionExecutor);
+                actualPaymentAttributionService, contractorPaymentTargetAccessPolicy, transactionExecutor,
+                org.mockito.Mockito.mock(com.hunt.otziv.payments.service.SpecialistManualPaymentReviewGuard.class));
         var initializationState = new com.hunt.otziv.payments.service.BankInitializationStateService(
                 lifecycle, presenter, routes, paymentLinkRepository);
         var preparation = new com.hunt.otziv.payments.service.PaymentLinkPreparationWorkflow(
@@ -9901,7 +10008,8 @@ class PaymentLinkServiceTest {
                 taskReceiptIntegrationService, manualPaymentTaskRepository, commonBillingService,
                 orderPaymentIntegrityService, managerAccessService, contractorPaymentLiveRoutingService,
                 contractorPaymentShadowService, contractorPaymentRuntimeSwitch, actualPaymentAttributionService,
-                paymentIssueReminderService, transactionExecutor);
+                paymentIssueReminderService, transactionExecutor,
+                org.mockito.Mockito.mock(com.hunt.otziv.payments.service.SpecialistManualPaymentReviewGuard.class));
         var publicResolution = new com.hunt.otziv.payments.service.PublicPaymentLinkResolutionService(
                 lifecycle, preparation, presenter, paymentLinkRepository, runtimeSettingsService);
         var initialization = new com.hunt.otziv.payments.service.PaymentLinkInitializationWorkflow(
@@ -9909,7 +10017,8 @@ class PaymentLinkServiceTest {
                 presenter, routes, observations, paymentLinkRepository, orderRepository, properties,
                 paymentProfileService, tbankClient, tochkaPaymentProfileResolver, tochkaClient,
                 tochkaPaymentOperationMapper, orderPaymentIntegrityService, paymentLinkReturnOutboxService,
-                contractorPaymentTargetAccessPolicy, transactionExecutor);
+                contractorPaymentTargetAccessPolicy, transactionExecutor,
+                org.mockito.Mockito.mock(com.hunt.otziv.payments.service.SpecialistManualPaymentReviewGuard.class));
         var manualRoutePolicy = new com.hunt.otziv.payments.service.ManualCardRoutePolicy(
                 lifecycle, manualConfirmation, presenter, contractorPaymentRuntimeSwitch, actualPaymentAttributionService);
         var observationApplication = new com.hunt.otziv.payments.service.BankObservationApplicationService(
@@ -9921,11 +10030,15 @@ class PaymentLinkServiceTest {
                 tbankClient, manualPaymentRecipientTelegramNotificationService, manualPaymentTaskService,
                 taskReceiptIntegrationService, paymentInvoiceRetryScheduler, orderPaymentIntegrityService,
                 managerAccessService, actualPaymentAttributionService, contractorPaymentTargetAccessPolicy,
-                transactionExecutor);
+                transactionExecutor,
+                org.mockito.Mockito.mock(com.hunt.otziv.payments.service.SpecialistManualPaymentReviewGuard.class));
         var ownerApproval = new com.hunt.otziv.payments.service.OwnerManualCardApprovalWorkflow(
                 lifecycle, preparation, manualRoutePolicy, manualCardPayments, presenter, routes,
                 paymentLinkRepository, orderRepository, managerAccessService, manualCardPaymentReviewNotificationService,
-                ownerManualCardPaymentApprovalRepository, transactionExecutor);
+                ownerManualCardPaymentApprovalRepository,
+                specialistManualPaymentReviewService,
+                org.mockito.Mockito.mock(com.hunt.otziv.payments.service.SpecialistManualPaymentReviewGuard.class),
+                transactionExecutor);
         var bankPaymentReconciliation = new com.hunt.otziv.payments.service.BankPaymentReconciliationWorkflow(
                 settlement, lifecycle, initializationState, observationApplication, cancellation, presenter, routes,
                 observations, paymentLinkRepository, orderRepository, paymentProfileService,

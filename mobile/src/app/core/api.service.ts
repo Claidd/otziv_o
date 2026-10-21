@@ -1130,7 +1130,7 @@ export interface ManualCardPaymentConfirmationRequest {
   recipientProfileId?: number | null;
 }
 
-export type ManagerManualCardPaymentResultStatus = 'COMPLETED' | 'OWNER_APPROVAL_PENDING';
+export type ManagerManualCardPaymentResultStatus = 'COMPLETED' | 'OWNER_APPROVAL_PENDING' | 'SPECIALIST_REVIEW_PENDING';
 
 export interface ManagerManualCardPaymentResult {
   status: ManagerManualCardPaymentResultStatus;

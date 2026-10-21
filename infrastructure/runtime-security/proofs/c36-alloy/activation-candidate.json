@@ -1,0 +1,19 @@
+{
+  "component": "alloy",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:1f0578124292e4664c50657836cba77288a9148f9b41950b7fad6040b08bbe6e",
+  "commit": "0c56e0bb1ed6cc3310924144db3bf465970a82d1",
+  "run": "39599087377",
+  "attempt": "1",
+  "manifest": {
+    "path": "infrastructure/runtime-security/reviewed-images-c36-alloy.json",
+    "sha256": "e1ed8c806db0c98bcdad198d6136622530281e3028da425fa9f18bf1e3998a14"
+  },
+  "publication": {
+    "path": "infrastructure/runtime-security/proofs/c36-alloy/publication/publication.json",
+    "sha256": "706712d7308bcc28eb72fd46156f6622fd7a025dfaf5e3350897b4d029ec398b"
+  },
+  "anonymous": {
+    "path": "infrastructure/runtime-security/proofs/c36-alloy/anonymous/anonymous-download.json",
+    "sha256": "4ec08826125d622ca94ce412e159411d4f3c3a23280377d294bb00e48b41f0e2"
+  }
+}

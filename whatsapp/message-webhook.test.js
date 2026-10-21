@@ -85,6 +85,25 @@ test("delivers group webhook when getChat throws", async () => {
   assert.equal(logs[0].extra.stage, "get_chat");
 });
 
+test("delivers a group reply when WhatsApp chat metadata hangs", async () => {
+  const calls = [];
+  const handler = createMessageHandler({
+    clientId: "whatsapp_lika",
+    metadataTimeoutMs: 5,
+    postWebhook: async (route, payload) => calls.push({ route, payload }),
+  });
+  await handler({
+    from: "12001@g.us",
+    author: "79990001122@c.us",
+    body: "Большое спасибо, оплату получили!",
+    id: { _serialized: "manual-reply-1" },
+    getChat: () => new Promise(() => {}),
+  });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].payload.groupId, "12001@g.us");
+  assert.equal(calls[0].payload.messageId, "manual-reply-1");
+});
+
 test("outreach controller ignores groups before loading chat metadata", async () => {
   let webhookCalls = 0;
   let metadataCalls = 0;

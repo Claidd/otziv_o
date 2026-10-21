@@ -46,7 +46,9 @@ export class MobileManualCardPaymentFlowService {
     const toast = await this.toastController.create({
       message: completed
         ? `Оплата отмечена. Получатель — ${mobileManualCardRecipientLabel(result.data.recipient)}`
-        : result.data.result.message || 'Запрос отправлен владельцу. До подтверждения заказ не считается оплаченным.',
+        : result.data.result.message || (result.data.result.status === 'SPECIALIST_REVIEW_PENDING'
+          ? 'Специалист уведомлён. Зачисление ожидает его проверку или окончания 24 часов без возражения.'
+          : 'Запрос отправлен владельцу. До подтверждения заказ не считается оплаченным.'),
       duration: 3200,
       position: 'top',
       color: completed ? 'success' : 'warning'

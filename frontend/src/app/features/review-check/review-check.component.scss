@@ -1531,7 +1531,9 @@
   }
 
   .review-field-editor--text.review-field-editor--text-expanded .review-display-field--text {
+    height: auto;
     min-height: 11.7rem;
+    overflow: visible;
   }
 
   .review-text-actions {

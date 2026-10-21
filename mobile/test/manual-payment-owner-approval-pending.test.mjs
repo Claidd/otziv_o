@@ -53,7 +53,7 @@ function assertNonCompletedReturnsBefore(source, boundary, label) {
 test('manual-card confirmation API exposes the backend result instead of erasing it as void', () => {
   assert.match(
     apiSource,
-    /export\s+type\s+ManagerManualCardPaymentResultStatus\s*=\s*['"]COMPLETED['"]\s*\|\s*['"]OWNER_APPROVAL_PENDING['"]\s*;/
+    /export\s+type\s+ManagerManualCardPaymentResultStatus\s*=\s*['"]COMPLETED['"]\s*\|\s*['"]OWNER_APPROVAL_PENDING['"]\s*\|\s*['"]SPECIALIST_REVIEW_PENDING['"]\s*;/
   );
   assert.match(
     apiSource,

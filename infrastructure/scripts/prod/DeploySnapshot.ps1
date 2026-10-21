@@ -380,6 +380,85 @@ function Export-OtzivCommittedDeployBundle {
     }
 }
 
+function Get-OtzivBoundSplitEvidencePaths {
+    param(
+        [Parameter(Mandatory = $true)][string]$Repository,
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Sha256
+    )
+    $relative = $Path.Replace('\', '/')
+    if ($relative -notmatch '^infrastructure/runtime-security/proofs/[A-Za-z0-9_-]+/(?:publication|anonymous)/registry-attestation-[0-9]+-payload-[0-9]+\.json$' -or
+        $Sha256 -cnotmatch '^[a-f0-9]{64}$') {
+        throw 'SSL cutover evidence must use bounded repository paths.'
+    }
+    $original = Join-Path $Repository $relative
+    $metadataPath = "$original.parts.json"
+    if (Test-Path -LiteralPath $original) {
+        if (Test-Path -LiteralPath $metadataPath) { throw 'Accepted SSL cutover evidence changed.' }
+        if ((Get-FileHash -LiteralPath $original -Algorithm SHA256).Hash.ToLowerInvariant() -cne $Sha256) {
+            throw 'Accepted SSL cutover evidence changed.'
+        }
+        return @($relative)
+    }
+    if (-not (Test-Path -LiteralPath $metadataPath -PathType Leaf) -or
+        (Get-Item -LiteralPath $metadataPath).Length -gt 4096 -or
+        (Get-Item -LiteralPath $metadataPath).LinkType) {
+        throw 'Accepted SSL cutover evidence changed.'
+    }
+    $metadata = Get-Content -Raw -Encoding UTF8 -LiteralPath $metadataPath | ConvertFrom-Json
+    $metadataKeys = @($metadata.PSObject.Properties.Name | Sort-Object)
+    if (@(Compare-Object $metadataKeys @('bytes','parts','schema','sha256')).Count -gt 0 -or
+        $metadata.schema -cne 'otziv-raw-evidence-parts-v1' -or
+        $metadata.sha256 -cne $Sha256 -or
+        $metadata.bytes -isnot [long] -and $metadata.bytes -isnot [int] -or
+        $metadata.bytes -le (5 * 1024 * 1024) -or $metadata.bytes -gt (8 * 1024 * 1024) -or
+        @($metadata.parts).Count -ne 2) {
+        throw 'Accepted SSL cutover evidence changed.'
+    }
+    $name = [IO.Path]::GetFileName($relative)
+    $expectedNames = @("$name.part001", "$name.part002", "$name.parts.json")
+    $foundNames = @(Get-ChildItem -LiteralPath (Split-Path -Parent $metadataPath) -Force |
+        Where-Object { $_.Name.StartsWith("$name.part", [StringComparison]::Ordinal) } |
+        ForEach-Object Name | Sort-Object)
+    if (@(Compare-Object $foundNames @($expectedNames | Sort-Object)).Count -gt 0) {
+        throw 'Accepted SSL cutover evidence changed.'
+    }
+    $digest = [Security.Cryptography.IncrementalHash]::CreateHash([Security.Cryptography.HashAlgorithmName]::SHA256)
+    $total = 0L
+    try {
+        for ($i = 0; $i -lt 2; $i++) {
+            $part = $metadata.parts[$i]
+            $partKeys = @($part.PSObject.Properties.Name | Sort-Object)
+            if (@(Compare-Object $partKeys @('bytes','file','sha256')).Count -gt 0 -or
+                $part.file -cne $expectedNames[$i] -or
+                $part.bytes -isnot [long] -and $part.bytes -isnot [int] -or
+                $part.bytes -le 0 -or $part.bytes -gt (4 * 1024 * 1024) -or
+                $part.sha256 -cnotmatch '^[a-f0-9]{64}$') {
+                throw 'Accepted SSL cutover evidence changed.'
+            }
+            $partPath = "$original.part00$($i + 1)"
+            $item = Get-Item -LiteralPath $partPath -Force
+            if ($item.LinkType -or $item.PSIsContainer -or $item.Length -ne $part.bytes) {
+                throw 'Accepted SSL cutover evidence changed.'
+            }
+            $bytes = [IO.File]::ReadAllBytes($partPath)
+            if ($bytes.Length -ne $part.bytes -or
+                (Get-FileHash -LiteralPath $partPath -Algorithm SHA256).Hash.ToLowerInvariant() -cne $part.sha256) {
+                throw 'Accepted SSL cutover evidence changed.'
+            }
+            $digest.AppendData($bytes)
+            $total += $bytes.Length
+        }
+        $actual = [BitConverter]::ToString($digest.GetHashAndReset()).Replace('-', '').ToLowerInvariant()
+    } finally {
+        $digest.Dispose()
+    }
+    if ($total -ne $metadata.bytes -or $actual -cne $Sha256) {
+        throw 'Accepted SSL cutover evidence changed.'
+    }
+    return @("$relative.part001", "$relative.part002", "$relative.parts.json")
+}
+
 function Get-OtzivCoordinatedSslBundlePaths {
     param([Parameter(Mandatory = $true)][string]$Repository)
     function Read-OtzivBoundDeployEvidencePathOnly([string]$Path, [string]$Sha256) {
@@ -455,8 +534,13 @@ function Get-OtzivCoordinatedSslBundlePaths {
         foreach ($map in @($accepted.files, $accepted.executedSources)) {
             if ($null -eq $map -or @($map.PSObject.Properties).Count -eq 0) { throw 'Accepted SSL cutover evidence is incomplete.' }
             foreach ($file in $map.PSObject.Properties) {
-                $null = Read-OtzivBoundDeployEvidencePathOnly $file.Name $file.Value
-                $paths += $file.Name
+                if ($file.Name -match '/registry-attestation-[0-9]+-payload-[0-9]+\.json$' -and
+                    $file.Name -match '^infrastructure/runtime-security/proofs/') {
+                    $paths += @(Get-OtzivBoundSplitEvidencePaths -Repository $Repository -Path $file.Name -Sha256 $file.Value)
+                } else {
+                    $null = Read-OtzivBoundDeployEvidencePathOnly $file.Name $file.Value
+                    $paths += $file.Name
+                }
             }
         }
     }

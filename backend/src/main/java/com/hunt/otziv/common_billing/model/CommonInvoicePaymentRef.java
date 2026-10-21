@@ -95,6 +95,9 @@ public class CommonInvoicePaymentRef {
     @Column(name = "provider_expires_at")
     private LocalDateTime providerExpiresAt;
 
+    @Column(name = "next_provider_check_at")
+    private LocalDateTime nextProviderCheckAt;
+
     @Column(name = "amount_kopecks")
     private Long amountKopecks;
 

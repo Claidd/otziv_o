@@ -217,3 +217,35 @@ test("discovery failure is visible and holds dispatch until a successful recover
   await recoverHistory({ client: { getChats: async () => [chat([message(1)])] }, inbox, clientId: "client" });
   assert.equal(inbox.snapshot().historyDiscoveryFailed, false); assert.equal(inbox.paused, false);
 });
+
+test("hanging chat discovery stops promptly and keeps live messages queued", async t => {
+  const { inbox } = fixture(t);
+  inbox.enqueue(route, payload());
+  await assert.rejects(recoverHistory({ client: { getChats: () => new Promise(() => {}) },
+    inbox, clientId: "client", discoveryTimeoutMs: 5 }), /inbound_history_discovery_timeout/);
+  assert.equal(inbox.snapshot().pending, 1);
+  assert.equal(inbox.snapshot().historyDiscoveryFailed, true);
+  assert.equal(inbox.snapshot().historyPaused, true);
+});
+
+test("a slow history scan blocks only its chat after discovery", async t => {
+  const { inbox } = fixture(t);
+  inbox.enqueue(route, payload("live-first", 10, "first@g.us"));
+  inbox.enqueue(route, payload("live-second", 10, "second@g.us"));
+  let releaseSecond;
+  const secondReady = new Promise(resolve => { releaseSecond = resolve; });
+  let signalSecond;
+  const secondStarted = new Promise(resolve => { signalSecond = resolve; });
+  const secondChat = { id: { _serialized: "second@g.us" }, isGroup: true, name: "Second chat",
+    async fetchMessages() { signalSecond(); await secondReady; return []; } };
+  const recovery = recoverHistory({ client: { getChats: async () => [chat([]), secondChat] }, inbox, clientId: "client" });
+  await secondStarted;
+  const sent = [];
+  await inbox.drain(async (_route, body) => { sent.push(body.messageId); return { status: 200 }; });
+  assert.deepEqual(sent, ["live-first"]);
+  assert.equal(inbox.snapshot().pending, 1);
+  releaseSecond();
+  await recovery;
+  await inbox.drain(async (_route, body) => { sent.push(body.messageId); return { status: 200 }; });
+  assert.deepEqual(sent, ["live-first", "live-second"]);
+});

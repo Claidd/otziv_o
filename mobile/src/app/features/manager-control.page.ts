@@ -561,6 +561,13 @@ import {
                             Починить
                           </button>
                         }
+                        @if (canHandoffUncertainDelivery(card)) {
+                          <button type="button" class="muted" (click)="handoffUncertainDelivery(card)"
+                            [disabled]="!card.controlEntityId || mutatingId() === card.controlEntityId">
+                            <span class="material-icons-sharp">support_agent</span>
+                            Передать вручную
+                          </button>
+                        }
                         @if (canRequestWorkerTask(card)) {
                           <button type="button" class="warning" (click)="requestWorker(card)" [disabled]="!card.controlEntityId || mutatingId() === card.controlEntityId || isWorkerWaitingForExplanation(card) || !!card.workerExplanationAt">
                             <span class="material-icons-sharp">contact_support</span>
@@ -1511,6 +1518,7 @@ export class ManagerControlPage implements OnInit, OnDestroy {
   }
 
   showRepair(card: ManagerControlConcreteItem): boolean {
+    if ((card.reason ?? '').includes('manual_delivery_handoff_pending')) return false;
     if (card.type === 'COMMON_INVOICE') {
       return isExplicitlyRepairableCommonInvoiceReason(card.reason);
     }
@@ -1520,6 +1528,12 @@ export class ManagerControlPage implements OnInit, OnDestroy {
       || text.includes('telegram')
       || text.includes('автоответчик')
       || text.includes('очеред');
+  }
+
+  canHandoffUncertainDelivery(card: ManagerControlConcreteItem): boolean {
+    return this.isOwnerAdminView()
+      && (card.type === 'AUTOMATION_FAILURE' || card.type === 'COMMON_INVOICE_AUTOMATION')
+      && (card.reason ?? '').includes('state_transaction_outcome_uncertain');
   }
 
   commentText(card: ManagerControlConcreteItem): string {
@@ -1697,6 +1711,28 @@ export class ManagerControlPage implements OnInit, OnDestroy {
       return;
     }
     await this.runCardMutation(id, () => this.managerControlApi.repairManagerControlConcreteItem(id).toPromise(), 'Починка запущена.');
+  }
+
+  async handoffUncertainDelivery(card: ManagerControlConcreteItem): Promise<void> {
+    const id = card.controlEntityId;
+    if (!id || this.mutatingId() === id) return;
+    try {
+      const preview = await firstValueFrom(this.managerControlApi.uncertainDelivery(id));
+      if (!window.confirm(`Проверьте чат клиента.\n\nОперация: ${preview.operationId}\n` +
+          `Подготовлена: ${preview.preparedAt}\n\nТекст:\n${preview.message}\n\n` +
+          'Передать человеку без повторной отправки и без отметки о доставке?')) return;
+      const note = window.prompt('Что проверили в чате и что сделаете для клиента? (10–400 символов)')?.trim();
+      if (!note) return;
+      if (note.length < 10 || note.length > 400) {
+        this.notice.set('Опишите результат проверки чата: 10–400 символов.');
+        return;
+      }
+      await this.runCardMutation(id,
+        () => this.managerControlApi.handoffUncertainDelivery(id, preview.operationId, note).toPromise(),
+        'Передано вручную. Исход отправки не подтверждён, карточка остаётся открытой.');
+    } catch (err) {
+      this.error.set(this.errorMessage(err));
+    }
   }
 
   async markItemAction(item: ManagerControlItemDetail, actionType: ManagerControlActionPayload['actionType']): Promise<void> {

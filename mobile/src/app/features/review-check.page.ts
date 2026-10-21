@@ -116,6 +116,7 @@ type ReviewDraft = {
             <section
               class="review-check-list"
               [class.review-check-list--expanded]="listExpanded()"
+              [class.review-check-list--text-expanded]="expandedReviewId() === details.reviews[activeReviewIndex()]?.id"
               aria-label="Отзывы на проверке"
               (scroll)="onReviewScroll($event)"
             >
@@ -124,6 +125,7 @@ type ReviewDraft = {
                   class="review-check-card"
                   [class.active]="activeReviewIndex() === index"
                   [class.published]="review.publish"
+                  [class.review-check-card--text-expanded]="isReviewTextOpen(review)"
                   [attr.data-card-index]="index"
                 >
                   <header>
@@ -150,7 +152,7 @@ type ReviewDraft = {
                   </header>
 
                   <app-mobile-review-field-editor
-                    class="review-text-editor review-field--text"
+                    class="review-text-editor review-field--text review-text-editor--flowing"
                     [class.open]="isReviewTextOpen(review)"
                     [class.editing]="isReviewFieldEditing(review, 'text')"
                     placeholder="Текст отзыва"
@@ -160,6 +162,8 @@ type ReviewDraft = {
                     [disabled]="busy()"
                     [showToggle]="shouldShowTextToggle(review)"
                     [expanded]="isReviewTextOpen(review)"
+                    [expandToContent]="true"
+                    [readOnly]="!details.permissions.canSave"
                     [saveDisabled]="!canSaveReviewField(review, 'text')"
                     (start)="startReviewFieldEdit(review, 'text')"
                     (valueChange)="setReviewFieldDraft(review, 'text', $event)"
@@ -451,6 +455,11 @@ type ReviewDraft = {
       display: none;
     }
 
+    .review-check-list--text-expanded {
+      align-items: flex-start;
+      overflow-y: auto;
+    }
+
     .review-check-list--expanded {
       display: grid;
       grid-template-columns: minmax(0, 1fr);
@@ -479,6 +488,11 @@ type ReviewDraft = {
       background: linear-gradient(180deg, var(--otziv-tone-walk-surface) 0%, var(--otziv-white) 44%, var(--otziv-white) 100%);
       box-shadow: 0 0.55rem 1.2rem rgba(132, 139, 200, 0.14);
       scroll-snap-align: start;
+    }
+
+    .review-check-card--text-expanded {
+      height: auto;
+      max-height: none;
     }
 
     .review-check-list--expanded .review-check-card {

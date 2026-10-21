@@ -4,7 +4,7 @@ import { OrderPaymentApi } from '../core/order-payment.api';
 import { PaymentAdministrationApi } from '../core/payment-administration.api';
 import { PaymentConfigurationApi } from '../core/payment-configuration.api';
 import { ManualPaymentTasksApi } from '../core/manual-payment-tasks.api';
-import { Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, ViewChild, computed, signal } from '@angular/core';
 import { EditorSession } from '../core/editor-session';
 import { FormsModule } from '@angular/forms';
 import {
@@ -68,6 +68,8 @@ import { MobileManualCardPaymentFlowService } from '../shared/mobile-manual-card
 import { mobileManualCardPaymentIsCompleted } from '../shared/mobile-manual-card-payment';
 import { MobileManualPaymentTaskOperationKeyDraft } from '../shared/manual-payment-operation-key';
 import { manualPaymentTaskWorklist } from '../shared/manual-payment-task-visibility';
+import { SpecialistPaymentReviewsComponent } from './specialist-payment-reviews.component';
+import type { SpecialistPaymentReview } from '../core/payment-administration.api';
 import {
   canCloseManualPaymentAsUnpaid,
   canConfirmContractorPaymentSource,
@@ -112,7 +114,7 @@ function currentMonthInput(): string {
 @Component({
   changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-tbank-page',
-  imports: [FormsModule, IonContent, IonModal, IonRefresher, IonRefresherContent, MobileBottomPagerComponent, MobileHeaderComponent, MobileRemindersComponent, MobileSearchBarComponent, MobileStatusSliderComponent],
+  imports: [FormsModule, IonContent, IonModal, IonRefresher, IonRefresherContent, MobileBottomPagerComponent, MobileHeaderComponent, MobileRemindersComponent, MobileSearchBarComponent, MobileStatusSliderComponent, SpecialistPaymentReviewsComponent],
   template: `
     <div class="ion-page">
       <app-mobile-header title="Банк" />
@@ -186,6 +188,10 @@ function currentMonthInput(): string {
           }
 
           @if (mode() === 'payments') {
+            <app-specialist-payment-reviews
+              (reviewsChanged)="specialistOpenReviews.set($event)"
+              (paymentChanged)="onSpecialistPaymentChanged()"
+            />
             <section class="payment-list" aria-label="Журнал платежей">
               @if (loading()) {
                 <div class="empty-state">
@@ -199,7 +205,7 @@ function currentMonthInput(): string {
                       <div>
                         <h2>{{ paymentTitle(link) }}</h2>
                       </div>
-                      <span class="status-pill {{ statusClass(link.status) }}">{{ statusLabel(link.status) }}</span>
+                      <span class="status-pill {{ statusClass(link.status) }}">{{ specialistReviewForLink(link.id) ? 'Ожидает специалиста' : statusLabel(link.status) }}</span>
                     </header>
 
                     @if (paymentAddress(link) || paymentCategory(link)) {
@@ -2297,6 +2303,7 @@ function currentMonthInput(): string {
   `]
 })
 export class TbankPage implements OnInit, OnDestroy {
+  @ViewChild(SpecialistPaymentReviewsComponent) private specialistReviews?: SpecialistPaymentReviewsComponent;
   private readonly orderPaymentApi = inject(OrderPaymentApi);
   private readonly paymentAdministrationApi = inject(PaymentAdministrationApi);
   private readonly paymentConfigurationApi = inject(PaymentConfigurationApi);
@@ -2313,6 +2320,7 @@ export class TbankPage implements OnInit, OnDestroy {
 
   readonly mode = signal<TbankMode>('payments');
   readonly links = signal<AdminPaymentLinkResponse[]>([]);
+  readonly specialistOpenReviews = signal<SpecialistPaymentReview[]>([]);
   readonly status = signal<TbankPaymentStatus | null>(null);
   readonly profiles = signal<PaymentProfileResponse[]>([]);
   readonly managerProfiles = signal<ManagerPaymentProfileResponse[]>([]);
@@ -2646,6 +2654,7 @@ export class TbankPage implements OnInit, OnDestroy {
 
   async load(): Promise<void> {
     if (!this.pageVisible || this.destroyed) return;
+    this.specialistReviews?.load();
     const ticket = this.pageReads.beginRead('bootstrap');
     if (!ticket) return;
     this.bootstrapLoading.set(true);
@@ -2671,6 +2680,11 @@ export class TbankPage implements OnInit, OnDestroy {
       if (this.pageReads.accepts(ticket)) this.bootstrapLoading.set(false);
     }
     await journal;
+  }
+
+  onSpecialistPaymentChanged(): void {
+    void this.loadPaymentLinks();
+    void this.loadRecipientMonthlySummary();
   }
 
   setMode(mode: TbankMode): void {
@@ -3201,6 +3215,8 @@ export class TbankPage implements OnInit, OnDestroy {
             const outcome = await this.manualCardPaymentFlow.confirm(orderId);
             if (mobileManualCardPaymentIsCompleted(outcome?.result)) {
               await this.load();
+            } else if (outcome?.result.status === 'SPECIALIST_REVIEW_PENDING') {
+              await this.load();
             }
           } catch (typedError) {
             this.error.set(mobilePaymentRouteErrorMessage(
@@ -3611,6 +3627,7 @@ export class TbankPage implements OnInit, OnDestroy {
 
   canConfirmManual(link: AdminPaymentLinkResponse): boolean {
     return !link.archived
+      && !this.specialistReviewForLink(link.id)
       && this.isManualPayment(link)
       && link.manualSource !== 'CONTRACTOR_PAYMENT_PROFILE'
       && (link.status === 'WAITING_MANUAL_PAYMENT' || link.status === 'MANUAL_REPORTED');
@@ -3621,7 +3638,11 @@ export class TbankPage implements OnInit, OnDestroy {
   }
 
   canCloseManualAsUnpaid(link: AdminPaymentLinkResponse): boolean {
-    return canCloseManualPaymentAsUnpaid(link);
+    return !this.specialistReviewForLink(link.id) && canCloseManualPaymentAsUnpaid(link);
+  }
+
+  specialistReviewForLink(linkId: number): SpecialistPaymentReview | undefined {
+    return this.specialistOpenReviews().find(review => review.paymentLinkId === linkId);
   }
 
   canMarkManualReceipt(link: AdminPaymentLinkResponse): boolean {

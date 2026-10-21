@@ -3149,10 +3149,10 @@ chmod +x infrastructure/scripts/prod/apply-keycloak-prod-settings.sh || true
 chmod +x infrastructure/scripts/prod/validate-flyway-migrations.sh || true
 chmod +x infrastructure/scripts/prod/create-pre-deploy-db-backup.sh || true
 chmod +x infrastructure/scripts/prod/register-max-webhook.sh || true
-# The separate, explicit C23 SSL cutover keeps the ordinary continuity guard
+# The separate, explicit C23-to-C36 PostgreSQL cutover keeps the ordinary continuity guard
 # intact. It runs under this lock, after the verified encrypted main DB backup,
-# retains an additional verified encrypted PG backup on the VPS, and restores
-# the old image on the same volume if any cutover check fails.
+# with the active C35 Keycloak, retains an additional verified encrypted PG
+# backup on the VPS, and restores the old image on the same volume if a check fails.
 if [ "$coordinatedSslEnabled" = "1" ]; then
   python3 infrastructure/scripts/prod/coordinated_ssl_refresh.py \
     --root "`$remote_path" --env-file "`$remote_path/`$env_file" \

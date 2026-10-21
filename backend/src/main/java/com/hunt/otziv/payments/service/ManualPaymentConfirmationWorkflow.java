@@ -77,6 +77,7 @@ public class ManualPaymentConfirmationWorkflow {
     private final ContractorPaymentTargetAccessPolicy contractorPaymentTargetAccessPolicy;
 
     private final PaymentLinkTransactionExecutor transactionExecutor;
+    private final SpecialistManualPaymentReviewGuard specialistReviewGuard;
 
     private boolean isFrozenContractorRoute(PaymentLink link) {
         return commonInvoiceRouteSelector.isFrozenContractorRoute(link);
@@ -151,6 +152,7 @@ public class ManualPaymentConfirmationWorkflow {
         if (orderId == null || orderRepository.findByIdForCounterUpdate(orderId).isEmpty()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ платежной ссылки не найден");
         }
+        specialistReviewGuard.requireNoPendingReview(orderId);
         List<PaymentLink> links = paymentLinkRepository.findByOrderIdForUpdate(orderId);
         PaymentLink source = links.stream().filter(link -> Objects.equals(link.getId(), linkId)).findFirst().orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежная ссылка не найдена"));
         validateContractorSourceConfirmation(source, confirmedTotalKopecks, effectiveAt, reason);
@@ -250,6 +252,7 @@ public class ManualPaymentConfirmationWorkflow {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ платежной ссылки не найден");
         }
         managerAccessService.requireOrderAccess(orderId, authentication);
+        specialistReviewGuard.requireNoPendingReview(orderId);
         PaymentLink link = paymentLinkRepository.findByIdForUpdate(linkId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежная ссылка не найдена"));
         if (!hasOrderBinding(link, orderId)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Заказ платежной ссылки изменился");
@@ -280,6 +283,7 @@ public class ManualPaymentConfirmationWorkflow {
         if (orderId == null || orderRepository.findByIdForCounterUpdate(orderId).isEmpty()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ платежной ссылки не найден");
         }
+        specialistReviewGuard.requireNoPendingReview(orderId);
         PaymentLink link = paymentLinkRepository.findByIdForUpdate(linkId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежная ссылка не найдена"));
         if (!hasOrderBinding(link, orderId)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Заказ платежной ссылки изменился");

@@ -44,6 +44,27 @@ class TelegramServiceSendRetryTest {
     }
 
     @Test
+    void paymentReviewNoticeQuarantinesUncertainTelegramResponseWithoutRetry() {
+        for (int code : new int[]{500, 429, 408}) {
+            PaymentReviewTelegramService service = new PaymentReviewTelegramService(code);
+
+            assertThrows(IllegalStateException.class, () -> service.sendPaymentReviewNoticeOnce(
+                    123L, "Проверьте перевод", "Оспорить", "specialist-payment-dispute:101"));
+
+            assertEquals(1, service.attempts);
+        }
+    }
+
+    @Test
+    void paymentReviewNoticeTreatsExplicitBadRequestAsDefiniteRejection() {
+        PaymentReviewTelegramService service = new PaymentReviewTelegramService(400);
+
+        assertFalse(service.sendPaymentReviewNoticeOnce(
+                123L, "Проверьте перевод", "Оспорить", "specialist-payment-dispute:101"));
+        assertEquals(1, service.attempts);
+    }
+
+    @Test
     void copyTextCompatibleResponseRejectsMalformedSuccessWithoutMessageId() {
         TelegramService.CopyTextCompatibleSendMessage message =
                 new TelegramService.CopyTextCompatibleSendMessage();
@@ -228,6 +249,28 @@ class TelegramServiceSendRetryTest {
         @Override
         void sleepBeforeRetry(long delayMillis) {
             sleeps++;
+        }
+    }
+
+    private static final class PaymentReviewTelegramService extends TelegramService {
+        private final int responseCode;
+        private int attempts;
+
+        private PaymentReviewTelegramService(int responseCode) {
+            super(new DefaultBotOptions(), "123456:abcdefghijklmnopqrstuvwxyz", "test_bot", true, "",
+                    null, null, null, null, null, null, null, null, null, null);
+            this.responseCode = responseCode;
+        }
+
+        @Override
+        Message executeTelegramMessage(SendMessage message) throws TelegramApiException {
+            attempts++;
+            throw new TelegramApiRequestException("Telegram response " + responseCode) {
+                @Override
+                public Integer getErrorCode() {
+                    return responseCode;
+                }
+            };
         }
     }
 

@@ -36,7 +36,7 @@ describe('Worker account action cooldown', () => {
   beforeEach(() => {
     localStorage.clear();
     vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
-    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date', 'performance'] });
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'setTimeout', 'clearTimeout', 'Date', 'performance'] });
     roles = ['WORKER'];
     auth = { authenticated: signal(true), tokenParsed: signal<{ sub: string } | undefined>({ sub: 'worker-a' }) };
     TestBed.configureTestingModule({
@@ -84,6 +84,35 @@ describe('Worker account action cooldown', () => {
     expect(service.countdown()).toBe('00:01');
     vi.advanceTimersByTime(1000);
     expect(service.locked()).toBe(false);
+  });
+
+  it('hides the reminder after 2.5 seconds while the cooldown stays active and shows it on return', () => {
+    http.post(CHANGE_URL, {}).subscribe();
+    requests.expectOne(CHANGE_URL).flush({}, { headers: headers(state(60, '2026-09-07T10:00:01Z')) });
+    expect(service.showReminder()).toBe(true);
+
+    vi.advanceTimersByTime(2500);
+    expect(service.showReminder()).toBe(false);
+    expect(service.locked()).toBe(true);
+    expect(service.remainingSeconds()).toBe(58);
+
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+    window.dispatchEvent(new Event('focus'));
+    requests.expectOne(STATE_URL).flush(state(57, '2026-09-07T10:00:04Z'));
+    expect(service.showReminder()).toBe(true);
+    vi.advanceTimersByTime(2500);
+    expect(service.showReminder()).toBe(false);
+    expect(service.locked()).toBe(true);
+  });
+
+  it('repeats a short reminder for a blocked action without extending the cooldown', () => {
+    http.post(CHANGE_URL, {}).subscribe();
+    requests.expectOne(CHANGE_URL).flush({}, { headers: headers(state(60, '2026-09-07T10:00:01Z')) });
+    vi.advanceTimersByTime(2500);
+    expect(service.showReminder()).toBe(false);
+    expect(service.begin()).toBeNull();
+    expect(service.showReminder()).toBe(true);
+    expect(service.remainingSeconds()).toBe(58);
   });
 
   it('leaves other actions and page reads available throughout the timer', () => {

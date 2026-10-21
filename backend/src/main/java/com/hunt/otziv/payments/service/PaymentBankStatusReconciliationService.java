@@ -32,6 +32,7 @@ public class PaymentBankStatusReconciliationService {
             PaymentLinkStatus.PARTIAL_REFUNDED
     );
     private static final int BATCH_SIZE = 50;
+    private static final int SETTLED_BATCH_SIZE = 25;
 
     private final PaymentLinkRepository paymentLinkRepository;
     private final PaymentLinkService paymentLinkService;
@@ -68,6 +69,14 @@ public class PaymentBankStatusReconciliationService {
                         attemptBefore,
                         PageRequest.of(0, BATCH_SIZE)
                 );
+        LocalDateTime settledAttemptBefore = now.minusHours(24);
+        List<PaymentBankReconciliationCandidateView> settledCandidates =
+                paymentLinkRepository.findStatusBankReconciliationCandidates(
+                        PaymentBankObservationService.SETTLED_BANK_STATUSES,
+                        attemptBefore,
+                        settledAttemptBefore,
+                        PageRequest.of(0, SETTLED_BATCH_SIZE)
+                );
         List<Long> candidates = mergeCandidates(statusCandidates, cancelCandidates);
         int changed = 0;
         for (Long linkId : candidates) {
@@ -79,8 +88,23 @@ public class PaymentBankStatusReconciliationService {
                 log.warn("Scheduled T-Bank reconciliation failed: linkId={}", linkId, exception);
             }
         }
-        if (!candidates.isEmpty()) {
-            log.info("Scheduled T-Bank reconciliation finished: checked={}, changed={}", candidates.size(), changed);
+        int settledChecked = 0;
+        for (PaymentBankReconciliationCandidateView candidate : settledCandidates) {
+            Long linkId = candidate == null ? null : candidate.getId();
+            if (linkId == null || candidates.contains(linkId)) {
+                continue;
+            }
+            try {
+                settledChecked++;
+                if (paymentLinkService.reconcileBankLink(linkId, settledAttemptBefore)) {
+                    changed++;
+                }
+            } catch (RuntimeException exception) {
+                log.warn("Scheduled settled bank payment reconciliation failed: linkId={}", linkId, exception);
+            }
+        }
+        if (!candidates.isEmpty() || settledChecked > 0) {
+            log.info("Scheduled bank reconciliation finished: pendingChecked={}, settledChecked={}, changed={}", candidates.size(), settledChecked, changed);
         }
     }
 

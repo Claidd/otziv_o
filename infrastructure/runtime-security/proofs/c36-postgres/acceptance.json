@@ -1,0 +1,48 @@
+{
+  "schema": "otziv-postgres-c36-acceptance-v1",
+  "result": "PASS",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:26663e414ba75586834873d6a43d8c1a105c12f58804e7fb961581d61a6dbdd5",
+  "imageConfigId": "sha256:6cca407023398603e7122cb588dbed2078730b34774c9b8366191526a47149fc",
+  "parentReference": "ghcr.io/claidd/otziv-security@sha256:c974c12a1107e314b1ba8cf65bd1fc5b6964645ced420c2151d336ee8a9a6534",
+  "parentConfigId": "sha256:1f5c2590fadde6b449908569285f1ed91a10831d36535d5c4ed647e9a0afca6a",
+  "commit": "0c56e0bb1ed6cc3310924144db3bf465970a82d1",
+  "run": "39599114842",
+  "attempt": "1",
+  "pair": {
+    "postgres": {
+      "reference": "ghcr.io/claidd/otziv-security@sha256:26663e414ba75586834873d6a43d8c1a105c12f58804e7fb961581d61a6dbdd5",
+      "imageConfigId": "sha256:6cca407023398603e7122cb588dbed2078730b34774c9b8366191526a47149fc"
+    },
+    "keycloak": {
+      "reference": "ghcr.io/claidd/otziv-security@sha256:c28364544835f5fbef6d4e0b0b3e63154127f7fb440b05432760f11235b5f4a9",
+      "imageConfigId": "sha256:60a8dd92cf43b8cf909a9e13f231da1f59103f9259cf482185c54856dcfd6a1b"
+    }
+  },
+  "runtimePath": "infrastructure/runtime-security/proofs/c36-postgres/publication/vulnerabilities.runtime-c36.json.gz",
+  "capturePath": "infrastructure/runtime-security/proofs/c36-postgres/rehearsal/capture.json",
+  "replayPath": "infrastructure/runtime-security/proofs/c36-postgres/rehearsal/replay.json",
+  "files": {
+    "infrastructure/runtime-security/proofs/c36-postgres/publication/build-metadata.json": "96da4ff18587382bbd99fd517901ef5dbbb258e85d9ccdaadd7bf84d2f048e17",
+    "infrastructure/runtime-security/proofs/c36-postgres/publication/publication.json": "5e23336fa73fd724dab0cc29df433bfba11064b6af5a264d60611299b36fabfa",
+    "infrastructure/runtime-security/proofs/c36-postgres/publication/registry-amd64-config.json": "6cca407023398603e7122cb588dbed2078730b34774c9b8366191526a47149fc",
+    "infrastructure/runtime-security/proofs/c36-postgres/publication/registry-amd64-manifest.json": "3ea4c6826eb5a9d8024b0bf216064f45bf0fa58db255441740b4e1e73224942d",
+    "infrastructure/runtime-security/proofs/c36-postgres/publication/registry-attestation-0-payload-0.json": "d0baa59727ded00c3189667c80df99b2810ec3c39ec4bf63cc3673ff1607f561",
+    "infrastructure/runtime-security/proofs/c36-postgres/publication/registry-attestation-0-payload-1.json": "a746bdf2792475ebfaf7451b4e69cedfe0ea3d883b96bbee181e9d9382820093",
+    "infrastructure/runtime-security/proofs/c36-postgres/publication/registry-attestation-0.json": "b10454069a3a398b0461ea90f176d6034af019a82caadbcab038ee4d3363b838",
+    "infrastructure/runtime-security/proofs/c36-postgres/publication/registry-index.json": "26663e414ba75586834873d6a43d8c1a105c12f58804e7fb961581d61a6dbdd5",
+    "infrastructure/runtime-security/proofs/c36-postgres/publication/vulnerabilities.adjudications.json": "df9b1ea2803415571003898457a5a45ed1328108bb827da90f0ec4461475afa0",
+    "infrastructure/runtime-security/proofs/c36-postgres/publication/vulnerabilities.json": "256bcc35ba1771313a6094f7951517fba56dad4f386c88d6f9db64504c1c23c1",
+    "infrastructure/runtime-security/proofs/c36-postgres/publication/vulnerabilities.runtime-c36.json.gz": "907eb2a314e560068d7f2443961d55a800cf9f071d2afc526011e4ccae2ceea4",
+    "infrastructure/runtime-security/proofs/c36-postgres/publication/vulnerabilities.sbom.cdx.json": "6d82807f13b34e6166ba3361a9e6856d2a3aa105fd173e11fd01c75667a773d0",
+    "infrastructure/runtime-security/proofs/c36-postgres/publication/vulnerabilities.scanner.log": "1a94e58c3387954c1e81fde595f60ce7ba3006df6ab48c98361e2944847c8a5c",
+    "infrastructure/runtime-security/proofs/c36-postgres/publication/vulnerabilities.triage.json": "99b94c764186bffd84df0331b23d3aa9f5187f329eb27420ee4f8fd66dc87a65",
+    "infrastructure/runtime-security/proofs/c36-postgres/rehearsal/capture.json": "c29822d69bf58b13ed2243a5cf2abb79abd07de3b88846be02062b154190635b",
+    "infrastructure/runtime-security/proofs/c36-postgres/rehearsal/replay.json": "f0695b26d7c479c238a0569ccbe783959180280483a8eb8e7ccd684de596b910"
+  },
+  "executedSources": {
+    "infrastructure/runtime-security/postgres-c36-inspection.py": "e0de013eda1c3ab96cb0b6274cd70718b1d55e259bd1c3eadabe615e6a2fbdc1",
+    "infrastructure/runtime-security/ssl-refresh-inspection.py": "4969ebbd33456ba2fa10e377d2ff6877dca7651334c33536ca03362f83af1e1d",
+    "infrastructure/runtime-security/postgres-c36-adjudication.mjs": "0eff23bb7981904ff3f4544a7cbc633e9854fb9b0f2bb9b9e47d129efe2a18fa",
+    "infrastructure/runtime-security/postgres-c36-rehearsal.py": "d959cf34e3b75e8f3db41584432014d7dd977462f4faa7ff93c32365d18611e3"
+  }
+}

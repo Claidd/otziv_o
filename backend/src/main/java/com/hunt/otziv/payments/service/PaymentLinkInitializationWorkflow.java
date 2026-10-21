@@ -108,6 +108,8 @@ public class PaymentLinkInitializationWorkflow {
 
     private final PaymentLinkTransactionExecutor transactionExecutor;
 
+    private final SpecialistManualPaymentReviewGuard specialistReviewGuard;
+
     private void ensureOrderNotCoveredByActiveCommonInvoice(Long orderId) {
         preparationWorkflow.ensureOrderNotCoveredByActiveCommonInvoice(orderId);
     }
@@ -343,6 +345,7 @@ public class PaymentLinkInitializationWorkflow {
         if (observedOrderId == null || orderRepository.findByIdForCounterUpdate(observedOrderId).isEmpty()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ платежной ссылки не найден");
         }
+        specialistReviewGuard.requireNoPendingReview(observedOrderId);
         // The order lock serializes this check with common-invoice attachment.
         // A disclosed legacy token must not be able to create a second bank
         // payment after the order has moved under one common payment route.

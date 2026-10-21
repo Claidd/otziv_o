@@ -1,0 +1,87 @@
+[
+    {
+        "Id": "sha256:6cca407023398603e7122cb588dbed2078730b34774c9b8366191526a47149fc",
+        "RepoTags": [],
+        "RepoDigests": [
+            "ghcr.io/claidd/otziv-security@sha256:26663e414ba75586834873d6a43d8c1a105c12f58804e7fb961581d61a6dbdd5"
+        ],
+        "Parent": "",
+        "Comment": "buildkit.dockerfile.v0",
+        "Created": "2026-10-21T12:24:31.830091005Z",
+        "DockerVersion": "",
+        "Author": "",
+        "Config": {
+            "Hostname": "",
+            "Domainname": "",
+            "User": "",
+            "AttachStdin": false,
+            "AttachStdout": false,
+            "AttachStderr": false,
+            "ExposedPorts": {
+                "5432/tcp": {}
+            },
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "PATH=/usr/local/pgsql/bin:/usr/local/bin:/usr/bin:/bin",
+                "LANG=en_US.utf8",
+                "PG_MAJOR=17",
+                "PG_VERSION=17.11",
+                "PGDATA=/var/lib/postgresql/data"
+            ],
+            "Cmd": [
+                "postgres"
+            ],
+            "ArgsEscaped": true,
+            "Image": "",
+            "Volumes": {
+                "/var/lib/postgresql/data": {}
+            },
+            "WorkingDir": "/",
+            "Entrypoint": [
+                "docker-entrypoint.sh"
+            ],
+            "OnBuild": null,
+            "Labels": {
+                "com.otziv.gosu.go": "1.27.3",
+                "com.otziv.gosu.source": "https://github.com/tianon/gosu/tree/6456aaa0f3c854d199d0f037f068eb97515b7513",
+                "com.otziv.gosu.source-sha256": "33d7537d588ea49458b9509bcf4554bdf5ceacc66da71e5caa1058ea3b689c3b",
+                "com.otziv.postgres.optional-interfaces": "LLVM JIT and systemd-notify omitted; SQL/XML ICU SSL GSS LDAP PAM SELinux UUID lz4 zstd retained",
+                "com.otziv.publication.revision": "0c56e0bb1ed6cc3310924144db3bf465970a82d1",
+                "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+                "com.otziv.reviewed-component": "postgres",
+                "com.otziv.security.generation": "c16-pcre2",
+                "com.otziv.security.proof": "postgres-c36-gosu-go1273",
+                "com.otziv.security.scope": "C16 PCRE2 10.48; unchanged C14 PostgreSQL17.11, glibc, locales and entrypoint"
+            },
+            "StopSignal": "SIGINT"
+        },
+        "Architecture": "amd64",
+        "Os": "linux",
+        "Size": 217897308,
+        "GraphDriver": {
+            "Data": {
+                "LowerDir": "/var/lib/docker/overlay2/68dd0b60844e5f33edd605ad65717e1998863da12e7e62b836198aa882d11904/diff:/var/lib/docker/overlay2/2692186fb45e180a8b0ba8163f3d5e3b8b54ceb78748e39a39efba0073135d40/diff:/var/lib/docker/overlay2/a6896c73ef8694850cff6c6cb253c318468c27ddbfdcfffe384baa6b3183c0bf/diff:/var/lib/docker/overlay2/19c476a0c929f200d88598635eb072940c607a31727153dab02eecca627b42e5/diff:/var/lib/docker/overlay2/b40efd55778c6f271a25478cb17cdff682e3c02795c7a9e8e58c2cafc32eb9a0/diff",
+                "MergedDir": "/var/lib/docker/overlay2/ccd700acb5ff35effdddeafde10a0ed3d37d10bcf09f9fa228985e28c3ee4c93/merged",
+                "UpperDir": "/var/lib/docker/overlay2/ccd700acb5ff35effdddeafde10a0ed3d37d10bcf09f9fa228985e28c3ee4c93/diff",
+                "WorkDir": "/var/lib/docker/overlay2/ccd700acb5ff35effdddeafde10a0ed3d37d10bcf09f9fa228985e28c3ee4c93/work"
+            },
+            "Name": "overlay2"
+        },
+        "RootFS": {
+            "Type": "layers",
+            "Layers": [
+                "sha256:3412f6e84bf5df2d548131d5a86650e84d37ed1758ea532826a7a25477fc8945",
+                "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef",
+                "sha256:e9ea9f91c84d0aef4aa8e972f69267500c22cd0348233f2d30882d9c143ca91e",
+                "sha256:c9ea5dac1ab11f4724c4b28c81d6f25b7b1c638f24002a18c9ce06f787775b02",
+                "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef",
+                "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef"
+            ]
+        },
+        "Metadata": {
+            "LastTagTime": "0001-01-01T00:00:00Z"
+        }
+    }
+]

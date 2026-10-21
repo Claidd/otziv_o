@@ -84,6 +84,37 @@ export interface CloseManualPaymentUnpaidRequest {
   note: string;
 }
 
+export type SpecialistPaymentReviewStatus =
+  | 'PENDING_DELIVERY' | 'WAITING' | 'SETTLING' | 'ADMIN_SETTLING'
+  | 'DISPUTED' | 'CONFIRMED' | 'NEEDS_ATTENTION' | 'SUPERSEDED';
+
+export interface SpecialistPaymentReview {
+  id: number;
+  orderId: number;
+  paymentLinkId: number;
+  amountKopecks: number;
+  recipientUserId: number;
+  status: SpecialistPaymentReviewStatus;
+  requestedAt: string;
+  notifiedAt: string | null;
+  deadlineAt: string;
+  lastError: string | null;
+  retryNotificationAllowed: boolean;
+}
+
+export interface SpecialistPaymentAbsentRequest {
+  recipientStatementChecked: true;
+  paymentAbsent: true;
+  note: string;
+}
+
+export interface SpecialistPaymentVerifyRequest {
+  recipientStatementChecked: true;
+  paymentReceived: true;
+  receivedAmountKopecks: number;
+  note: string;
+}
+
 export interface ContractorPaymentSourceConfirmationRequest {
   recipientStatementChecked: true;
   paymentReceived: true;
@@ -385,6 +416,36 @@ export class PaymentsApi {
     .set(SKIP_AUTH_TOKEN, true);
 
   constructor(private readonly http: HttpClient) {}
+
+  getSpecialistPaymentReviews(): Observable<SpecialistPaymentReview[]> {
+    return this.http.get<SpecialistPaymentReview[]>(
+      `${appEnvironment.apiBaseUrl}/api/admin/payments/specialist-reviews`
+    );
+  }
+
+  retrySpecialistPaymentNotification(id: number): Observable<SpecialistPaymentReview> {
+    return this.http.post<SpecialistPaymentReview>(
+      `${appEnvironment.apiBaseUrl}/api/admin/payments/specialist-reviews/${id}/retry-notification`, {}
+    );
+  }
+
+  reconcileSpecialistPaymentReview(id: number): Observable<SpecialistPaymentReview> {
+    return this.http.post<SpecialistPaymentReview>(
+      `${appEnvironment.apiBaseUrl}/api/admin/payments/specialist-reviews/${id}/reconcile`, {}
+    );
+  }
+
+  markSpecialistPaymentAbsent(id: number, request: SpecialistPaymentAbsentRequest): Observable<SpecialistPaymentReview> {
+    return this.http.post<SpecialistPaymentReview>(
+      `${appEnvironment.apiBaseUrl}/api/admin/payments/specialist-reviews/${id}/mark-absent`, request
+    );
+  }
+
+  verifySpecialistPaymentReceived(id: number, request: SpecialistPaymentVerifyRequest): Observable<SpecialistPaymentReview> {
+    return this.http.post<SpecialistPaymentReview>(
+      `${appEnvironment.apiBaseUrl}/api/admin/payments/specialist-reviews/${id}/verify-received`, request
+    );
+  }
 
   getPublicPaymentLink(token: string): Observable<PublicPaymentLink> {
     return this.http.get<unknown>(

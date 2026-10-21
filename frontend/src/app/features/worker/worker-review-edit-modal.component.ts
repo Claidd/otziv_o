@@ -60,9 +60,18 @@ export class WorkerReviewEditModalComponent {
   @Output() readonly submitted = new EventEmitter<void>();
   @Output() readonly deleted = new EventEmitter<void>();
   @Output() readonly newAccountRequested = new EventEmitter<void>();
+  @Output() readonly accountActionCooldownReminderRequested = new EventEmitter<void>();
   @Output() readonly photoSelected = new EventEmitter<File>();
   @Output() readonly taskWorkerChangeRequested = new EventEmitter<number>();
   @Output() readonly draftChange = new EventEmitter<WorkerReviewEditDraftChange>();
+
+  requestNewAccount(): void {
+    if (this.accountActionCooldownLocked) {
+      this.accountActionCooldownReminderRequested.emit();
+      return;
+    }
+    this.newAccountRequested.emit();
+  }
 
   setField<K extends keyof ReviewEditDraft>(field: K, value: ReviewEditDraft[K]): void {
     if (field === 'vigul' && this.canOnlyUnsetVigul && value === true) {

@@ -1,0 +1,24 @@
+{
+  "schema": "otziv-reviewed-image-activation-draft-v1",
+  "activationReady": false,
+  "remaining": "same-volume PostgreSQL acceptance and C35 Keycloak coupling",
+  "entry": {
+    "component": "postgres",
+    "reference": "ghcr.io/claidd/otziv-security@sha256:26663e414ba75586834873d6a43d8c1a105c12f58804e7fb961581d61a6dbdd5",
+    "commit": "0c56e0bb1ed6cc3310924144db3bf465970a82d1",
+    "run": "39599114842",
+    "attempt": "1",
+    "manifest": {
+      "path": "infrastructure/runtime-security/reviewed-images-c36-postgres.json",
+      "sha256": "879b56973c9b2a789a4cdad393f06d6c5169bde73f78840e8c45da66f33d3471"
+    },
+    "publication": {
+      "path": "infrastructure/runtime-security/proofs/c36-postgres/publication/publication.json",
+      "sha256": "5e23336fa73fd724dab0cc29df433bfba11064b6af5a264d60611299b36fabfa"
+    },
+    "anonymous": {
+      "path": "infrastructure/runtime-security/proofs/c36-postgres/anonymous/anonymous-download.json",
+      "sha256": "091ddb2c98a2052d814d11786395637f696f9b79088f84ded7334a9affb22ab1"
+    }
+  }
+}

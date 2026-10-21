@@ -9,6 +9,7 @@ import static com.hunt.otziv.manager_control.service.ManagerControlDayLifecycle.
 import static com.hunt.otziv.manager_control.service.ManagerControlConcreteSnapshotWorkflow.*;
 import static com.hunt.otziv.manager_control.service.ManagerControlProblemExamples.*;
 import com.hunt.otziv.client_chat_control.service.ClientChatMessageTrackerService;
+import com.hunt.otziv.client_messages.repository.ScheduledClientMessageStateRepository;
 import com.hunt.otziv.manager.service.ManagerPermissionService;
 import com.hunt.otziv.manager_control.dto.ManagerControlConcreteItemResponse;
 import com.hunt.otziv.manager_control.dto.ManagerControlItemActionRequest;
@@ -80,6 +81,7 @@ public class ManagerControlItemActions {
     private final ManagerControlInvoiceDiagnostics invoiceDiagnostics;
 
     private final ManagerAutomationFailureService managerAutomationFailureService;
+    private final ScheduledClientMessageStateRepository scheduledClientMessageStateRepository;
 
     private final ManagerDailyControlRepository dailyControlRepository;
 
@@ -145,6 +147,18 @@ public class ManagerControlItemActions {
         ManagerDailyControlConcreteItem concreteItem = dailyControlConcreteItemRepository.findById(concreteItemId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Карточка контроля не найдена"));
         ManagerDailyControl control = concreteItem.getControl();
         accessPolicy.requireControlAccess(control, principal, authentication);
+        if (ManagerAutomationFailureService.ENTITY_AUTOMATION_FAILURE.equals(concreteItem.getEntityType())
+                || ManagerAutomationFailureService.ENTITY_COMMON_INVOICE_AUTOMATION.equals(concreteItem.getEntityType())) {
+            managerAutomationFailureService.findIssue(control.getManager(), concreteItem.getEntityType(),
+                    concreteItem.getEntityId()).map(ManagerAutomationFailureService.AutomationFailureIssue::stateId)
+                    .flatMap(scheduledClientMessageStateRepository::findById)
+                    .filter(state -> "UNKNOWN".equals(state.getDeliveryStatus()))
+                    .ifPresent(state -> {
+                        throw new ResponseStatusException(HttpStatus.CONFLICT,
+                                "Неизвестный исход отправки нельзя закрыть обычным действием. "
+                                + "Проверьте чат и используйте ручную передачу.");
+                    });
+        }
         ManagerDailyControlActionType actionType = parseActionType(request == null ? null : request.actionType());
         requireConcreteActionAllowed(concreteItem, actionType);
         if ("COMMON_INVOICE".equals(concreteItem.getEntityType()) && (actionType == ManagerDailyControlActionType.ACTION_TAKEN || actionType == ManagerDailyControlActionType.RESOLVED)) {

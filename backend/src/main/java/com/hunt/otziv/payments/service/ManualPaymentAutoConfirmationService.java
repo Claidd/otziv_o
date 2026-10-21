@@ -55,11 +55,18 @@ public class ManualPaymentAutoConfirmationService {
     private final ContractorPaymentShadowService contractorPaymentShadowService;
     private final ManualPaymentTaskReceiptIntegrationService taskReceiptIntegrationService;
 
+    private final SpecialistManualPaymentReviewGuard specialistReviewGuard;
+
     @Transactional(readOnly = true)
     public void ensureCanCloseOrderManually(Order order) {
         if (order == null || order.getId() == null) {
             return;
         }
+
+        // This is the generic order-status route, not the trusted settlement
+        // path for a particular specialist review. All unresolved review
+        // states, including SETTLING and ADMIN_SETTLING, must block it.
+        specialistReviewGuard.requireNoPendingReview(order.getId());
 
         List<PaymentLink> links = paymentLinkRepository
                 .findByOrder_IdAndStatusIn(order.getId(), BANK_REVIEW_STATUSES);
@@ -74,7 +81,7 @@ public class ManualPaymentAutoConfirmationService {
                 .anyMatch(link -> requiresPrivilegedBankRouteReconciliation(link, hasOrdinaryManualPayment));
 
         boolean hasFrozenLiveContractorSource = links.stream().anyMatch(link ->
-                isFrozenLiveContractorSource(link)
+                requiresActualRecipientReview(link)
                         || (link != null && link.getManualSource() == ManualPaymentSource.MANUAL_TASK));
 
         if (hasFrozenLiveContractorSource) {
@@ -143,6 +150,10 @@ public class ManualPaymentAutoConfirmationService {
             return;
         }
 
+        // Recheck inside the final paid-status transaction before confirming
+        // any manual link. This also covers links without an allocation ID.
+        specialistReviewGuard.requireNoPendingReview(order.getId());
+
         PaymentLink source = paymentLinkRepository
                 .findFirstByOrder_IdAndPaymentMethodInAndStatusInOrderByCreatedAtDesc(
                         order.getId(),
@@ -153,7 +164,7 @@ public class ManualPaymentAutoConfirmationService {
         if (source == null) {
             return;
         }
-        if (isFrozenLiveContractorSource(source)
+        if (requiresActualRecipientReview(source)
                 || source.getManualSource() == ManualPaymentSource.MANUAL_TASK) {
             throw ManualPaymentTaskRouteErrors.actualRecipientRequired();
         }
@@ -243,6 +254,23 @@ public class ManualPaymentAutoConfirmationService {
         return link != null
                 && link.getContractorAllocationId() != null
                 && link.getManualSource() == ManualPaymentSource.CONTRACTOR_PAYMENT_PROFILE;
+    }
+
+    /** A monthly-limit fallback still has an immutable LIVE payment allocation.
+     * The owner must verify the actual receipt before its link can be confirmed.
+     * Closed historical instructions do not gate a newer payable route.
+     */
+    private boolean requiresActualRecipientReview(PaymentLink link) {
+        if (isFrozenLiveContractorSource(link)) {
+            return true;
+        }
+        return link != null
+                && link.getContractorAllocationId() != null
+                && link.getManualSource() == ManualPaymentSource.PROFILE_MONTHLY_LIMIT
+                && MANUAL_PAYMENT_METHODS.contains(link.getPaymentMethod())
+                && (link.getStatus() == PaymentLinkStatus.WAITING_MANUAL_PAYMENT
+                    || link.getStatus() == PaymentLinkStatus.MANUAL_REPORTED
+                    || link.getStatus() == PaymentLinkStatus.CONFIRMED);
     }
 
     private void reconcileContractorRouteAfterCommit(Long paymentLinkId) {

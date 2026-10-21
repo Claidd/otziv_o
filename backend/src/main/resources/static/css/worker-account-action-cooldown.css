@@ -17,3 +17,21 @@
 .worker-account-action-cooldown-toast[hidden] { display: none; }
 .worker-account-action-cooldown-toast strong { display: block; font-size: .94rem; }
 .worker-account-action-cooldown-toast span { display: block; margin-top: .3rem; font-size: .8rem; }
+form[onsubmit*="changeBot"] button[aria-disabled="true"],
+form[onsubmit*="deActivateBot"] button[aria-disabled="true"] {
+    opacity: .58;
+    cursor: help;
+}
+@media (max-width: 760px) {
+    .worker-account-action-cooldown-toast {
+        top: auto;
+        right: .75rem;
+        bottom: calc(5.25rem + env(safe-area-inset-bottom));
+        left: .75rem;
+        width: auto;
+        max-width: 24rem;
+        margin-left: auto;
+        padding: .55rem .7rem;
+    }
+    .worker-account-action-cooldown-toast span { display: none; }
+}

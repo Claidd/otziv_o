@@ -267,6 +267,54 @@ regexes = [
   '''^f509c801d070f8ea9f7400d5093c888ff1fee02e$''',
 ]
 
+# C36 Alloy's SPDX packageVerificationCodeValue is SHA-1 of empty content,
+# independently reproduced with hashlib.sha1(b'').hexdigest(). The raw OCI
+# attestations stay unchanged; only this exact value in these exact files is
+# exempted from the Sourcegraph token detector.
+[[allowlists]]
+description = "Exact empty-content SPDX checksum in C36 Alloy anonymous attestation"
+targetRules = ["sourcegraph-access-token"]
+condition = "AND"
+regexTarget = "secret"
+paths = ['''(^|/)infrastructure/runtime\-security/proofs/c36\-alloy/anonymous/registry\-attestation\-0\-payload\-0\.json$''']
+regexes = ['''^da39a3ee5e6b4b0d3255bfef95601890afd80709$''']
+
+[[allowlists]]
+description = "Exact empty-content SPDX checksum in C36 Alloy publication attestation"
+targetRules = ["sourcegraph-access-token"]
+condition = "AND"
+regexTarget = "secret"
+paths = ['''(^|/)infrastructure/runtime\-security/proofs/c36\-alloy/publication/registry\-attestation\-0\-payload\-0\.json$''']
+regexes = ['''^da39a3ee5e6b4b0d3255bfef95601890afd80709$''']
+
+# Eight exact SHA-1 values occur only as public util-linux GitHub commit URLs
+# in the retained C36 Alloy vulnerability references. Other values, paths,
+# detectors and all proof bytes remain subject to normal scanning.
+[[allowlists]]
+description = "Exact public util-linux commits in C36 Alloy vulnerability references"
+targetRules = ["sourcegraph-access-token"]
+condition = "AND"
+regexTarget = "secret"
+paths = ['''(^|/)infrastructure/runtime\-security/proofs/c36\-alloy/publication/vulnerabilities\.json$''']
+regexes = [
+  '''^05c2dbadf34cc74192287f377904afaaf4061623$''',
+  '''^31e37c1c7dcf25b76ccf41391fe934a75644c661$''',
+  '''^53ff0fcdab12d69c60c971c69a3d0d173fa46ca9$''',
+  '''^9cbfb823500f510b34767edabd3ffd5b436987b4$''',
+  '''^a2d858176b609ab5b8535021a3af9cd302d23d31$''',
+  '''^cc81bbcec598cb91f0eb8456282f33eed820ed5f$''',
+  '''^e9d544d013267ea86b70ee8ff78abd280e6641af$''',
+  '''^fd6b4d94ff013dc7ed680d4e864610da5b9751f1$''',
+]
+
+[[allowlists]]
+description = "Exact public Grafana Tempo commit in C36 Grafana CycloneDX advisory"
+targetRules = ["sourcegraph-access-token"]
+condition = "AND"
+regexTarget = "secret"
+paths = ['''(^|/)infrastructure/runtime\-security/proofs/c36\-grafana/publication/vulnerabilities\.sbom\.cdx\.json$''']
+regexes = ['''^650eb1985a0776789c8564122990f588a742356f$''']
+
 [[allowlists]]
 description = "Exact public metadata hashes in C8 publication/vulnerabilities.sbom.cdx.json"
 targetRules = ["sourcegraph-access-token"]

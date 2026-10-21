@@ -9,14 +9,26 @@ import { IonModal } from '@ionic/angular';
   standalone: true,
   imports: [FormsModule, IonModal],
   template: `
-    <textarea
-      readonly
-      [disabled]="disabled"
-      [ngModel]="value"
-      (focus)="requestStart($event)"
-      (click)="requestStart($event)"
-      [placeholder]="placeholder"
-    ></textarea>
+    @if (expandToContent && expanded && !editing) {
+      <div
+        class="review-text-full"
+        [class.review-text-full--empty]="!value"
+        [attr.role]="readOnly || disabled ? null : 'button'"
+        [attr.tabindex]="readOnly || disabled ? null : 0"
+        (click)="requestStart($event)"
+        (keydown.enter)="requestStart($event)"
+        (keydown.space)="$event.preventDefault(); requestStart($event)"
+      >{{ value || placeholder }}</div>
+    } @else {
+      <textarea
+        readonly
+        [disabled]="disabled"
+        [ngModel]="value"
+        (focus)="requestStart($event)"
+        (click)="requestStart($event)"
+        [placeholder]="placeholder"
+      ></textarea>
+    }
 
     @if (showToggle) {
       <button class="review-text-toggle" type="button" (click)="toggle.emit()">
@@ -96,6 +108,31 @@ import { IonModal } from '@ionic/angular';
       vertical-align: top;
     }
 
+    .review-text-full {
+      box-sizing: border-box;
+      display: block;
+      width: 100%;
+      min-width: 0;
+      min-height: var(--otziv-review-text-height, 9.1rem);
+      border: 1px solid rgba(103, 116, 131, 0.22);
+      border-radius: 0.8rem;
+      padding: 0.48rem;
+      color: var(--otziv-dark);
+      background: var(--otziv-field-background);
+      font: 700 0.7rem/1.24 var(--otziv-font-family);
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .review-text-full--empty {
+      color: var(--otziv-info);
+    }
+
+    .review-text-full[role="button"]:focus-visible {
+      outline: 2px solid #f4c542;
+      outline-offset: 2px;
+    }
+
     :host-context(.expanded-text):host(.review-field--text) textarea,
     :host(.review-field--text.editing) textarea,
     :host(.editing.review-field--text) textarea {
@@ -129,6 +166,12 @@ import { IonModal } from '@ionic/angular';
       font: 900 0.58rem/1 var(--otziv-font-family);
     }
 
+    :host(.review-text-editor--flowing.open) .review-text-toggle {
+      position: static;
+      justify-self: end;
+      padding: 0.2rem 0.42rem;
+    }
+
     :host(.editing) .review-text-toggle {
       display: none;
     }
@@ -147,6 +190,7 @@ export class MobileReviewFieldEditorComponent implements OnChanges {
   @Input() editing = false;
   @Input() showToggle = false;
   @Input() expanded = false;
+  @Input() expandToContent = false;
   @Input() saveDisabled = false;
   @Input() renderModal = true;
 

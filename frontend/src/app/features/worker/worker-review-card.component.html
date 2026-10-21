@@ -389,16 +389,18 @@
     </button>
     <button
       type="button"
-      (click)="botChangeRequested.emit()"
-      [disabled]="accountActionCooldownLocked || isMutating('review-' + review.id + '-change-bot')"
+      (click)="requestBotChange()"
+      [disabled]="isMutating('review-' + review.id + '-change-bot')"
+      [attr.aria-disabled]="accountActionCooldownLocked ? 'true' : null"
       [title]="accountActionCooldownLocked ? accountActionCooldownTitle : 'Сменить аккаунт'"
     >
       {{ isMutating('review-' + review.id + '-change-bot') ? '...' : 'смена' }}
     </button>
     <button
       type="button"
-      (click)="botDeactivateRequested.emit()"
-      [disabled]="accountActionCooldownLocked || blockLockedByCredentials || !review.botId || isMutating('review-' + review.id + '-block-bot')"
+      (click)="requestBotDeactivate()"
+      [disabled]="blockLockedByCredentials || !review.botId || isMutating('review-' + review.id + '-block-bot')"
+      [attr.aria-disabled]="accountActionCooldownLocked ? 'true' : null"
       [title]="blockLockedByCredentials ? 'Сначала скопируйте логин и пароль текущего аккаунта' : accountActionTitle()"
     >
       {{ isMutating('review-' + review.id + '-block-bot') ? '...' : 'блок' }}

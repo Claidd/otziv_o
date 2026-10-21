@@ -255,7 +255,9 @@ class OwnerManualCardApprovalWorkflowMySqlIntegrationTest {
             workflow = proxied(new OwnerManualCardApprovalWorkflow(lifecycle,
                     mock(PaymentLinkPreparationWorkflow.class), policy, payments, presenter, routes,
                     links, orders, mock(ManagerAccessService.class), mock(ManualCardPaymentReviewNotificationService.class),
-                    approvals, proxied(new PaymentLinkTransactionExecutor(), transactions)), transactions);
+                    approvals, mock(SpecialistManualPaymentReviewService.class),
+                    mock(SpecialistManualPaymentReviewGuard.class),
+                    proxied(new PaymentLinkTransactionExecutor(), transactions)), transactions);
             clearInvocations(payments);
         }
 

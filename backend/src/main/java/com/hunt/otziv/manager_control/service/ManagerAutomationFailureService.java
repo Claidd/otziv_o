@@ -6,6 +6,7 @@ import com.hunt.otziv.client_messages.model.ClientMessageScenario;
 import com.hunt.otziv.client_messages.model.ScheduledClientMessageState;
 import com.hunt.otziv.client_messages.repository.ScheduledClientMessageStateRepository;
 import com.hunt.otziv.client_messages.service.ClientMessageOrderStatusService;
+import com.hunt.otziv.client_messages.service.ClientMessageStateSafety;
 import com.hunt.otziv.common_billing.model.CommonInvoice;
 import com.hunt.otziv.common_billing.model.CommonInvoiceOrder;
 import com.hunt.otziv.common_billing.model.CommonInvoiceStatus;
@@ -182,6 +183,10 @@ public class ManagerAutomationFailureService {
                 reasonParts.add(errorMessage);
             }
         }
+        if (ClientMessageStateSafety.MANUAL_DELIVERY_HANDOFF_PENDING.equals(errorCode)) {
+            reasonParts.add("Отправка не подтверждена и автоматический повтор запрещён. "
+                    + "Администратор передал случай на ручную связь с клиентом; подтвердите результат в чате и завершите заказ вручную.");
+        }
         reasonParts.add("неудачных попыток подряд: " + state.getConsecutiveFailures());
         if (state.getNextAttemptAt() != null) {
             reasonParts.add("следующая попытка: " + state.getNextAttemptAt());
@@ -190,6 +195,8 @@ public class ManagerAutomationFailureService {
             reasonParts.add("Нажмите «Привязать Telegram»: если бот еще не добавлен, выберите группу по ссылке; "
                     + "если бот уже в группе, отправьте в ней одноразовую команду. "
                     + "После подтверждения задача повторится автоматически");
+        } else if (ClientMessageStateSafety.MANUAL_DELIVERY_HANDOFF_PENDING.equals(errorCode)) {
+            reasonParts.add("Ручная проверка продолжается. Эта карточка остаётся открытой до завершения общения с клиентом");
         } else if (policy.isLegacyPreparationFailure(state)) {
             reasonParts.add("Нажмите «Починить»: система проверит цикл заказа и журнал операций. "
                     + "Задача вернется в очередь только при подтверждении, что отправка еще не начиналась");

@@ -70,6 +70,10 @@ public class OwnerManualCardApprovalWorkflow {
 
     private final OwnerManualCardPaymentApprovalRepository ownerManualCardPaymentApprovalRepository;
 
+    private final SpecialistManualPaymentReviewService specialistReviewService;
+
+    private final SpecialistManualPaymentReviewGuard specialistReviewGuard;
+
     private final PaymentLinkTransactionExecutor transactionExecutor;
 
     private final SecureRandom secureRandom = new SecureRandom();
@@ -104,9 +108,25 @@ public class OwnerManualCardApprovalWorkflow {
             // canonical selection, rather than by an untrusted recipientType.
             ManualCardRoutePolicy.SelectedManagerRecipient selected = manualCardPayments.resolveManagerRecipientForOrder(
                     orderId, recipientType, recipientProfileId, recipientKey, authentication);
+            if (selected.recipientType() != ContractorRecipientType.SPECIALIST) {
+                specialistReviewGuard.requireNoPendingReview(orderId);
+            }
             if (selected.recipientType() == ContractorRecipientType.OWNER) {
                 return requestOwnerManualCardPaymentApproval(orderId, route, cleanReason, cleanReceiptUrl,
                         selected.recipientType(), selected.recipientProfileId(), selected.recipientKey(), cleanActor, authentication);
+            }
+            if (selected.recipientType() == ContractorRecipientType.SPECIALIST) {
+                var review = transactionExecutor.required(() -> specialistReviewService.request(
+                        orderId, route.linkId(), route.amountKopecks(),
+                        selected.recipientProfileId(), selected.recipientKey(), cleanReason,
+                        cleanReceiptUrl, cleanActor, authentication));
+                try {
+                    specialistReviewService.deliver(review.getId());
+                } catch (RuntimeException notificationFailure) {
+                    log.warn("Specialist payment review notification deferred: reviewId={}",
+                            review.getId(), notificationFailure);
+                }
+                return specialistReviewService.result(review);
             }
             recipientType = selected.recipientType();
             recipientProfileId = selected.recipientProfileId();
@@ -120,6 +140,7 @@ public class OwnerManualCardApprovalWorkflow {
         return transactionExecutor.required(() -> {
             Order order = orderRepository.findByIdForCounterUpdate(orderId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден"));
             managerAccessService.requireOrderAccess(orderId, authentication);
+            specialistReviewGuard.requireNoPendingReview(orderId);
             ensureOrderNotCoveredByActiveCommonInvoice(orderId);
             PaymentLink link = paymentLinkRepository.findByIdForUpdate(route.linkId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежная ссылка не найдена"));
             if (!hasOrderBinding(link, orderId) || link.getAmountKopecks() != route.amountKopecks() || !isOwnerApprovalEligibleRoute(link)) {

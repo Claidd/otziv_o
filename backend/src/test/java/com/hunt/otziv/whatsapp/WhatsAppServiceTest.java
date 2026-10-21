@@ -12,7 +12,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.HttpServerErrorException;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -90,6 +92,41 @@ class WhatsAppServiceTest {
                 .thenReturn("{\"operationId\":\"durable-operation\",\"state\":\"SUCCEEDED\",\"messageId\":\"verified-message\",\"envelopeHash\":\"" + hash + "\"}");
         assertEquals(hash, service.getOperationStatus("fixture", "durable-operation").envelopeHash());
         org.mockito.Mockito.verify(restTemplate, org.mockito.Mockito.never()).postForEntity(anyString(), any(), eq(String.class));
+    }
+
+    @Test
+    void operationReconciliationPostsMessageReferenceAndRequiresMatchingReceipt() {
+        WhatsAppProperties.ClientConfig config = new WhatsAppProperties.ClientConfig();
+        config.setId("fixture"); config.setUrl("http://fixture:3000");
+        when(properties.getClients()).thenReturn(List.of(config));
+        String hash = com.hunt.otziv.whatsapp.dto.WhatsAppOperationEnvelope.groupHash(
+                "fixture", "12345678@g.us", "fixture");
+        when(restTemplate.postForEntity(eq("http://fixture:3000/operations/durable-operation/reconcile"),
+                any(), eq(String.class))).thenReturn(ResponseEntity.ok("{\"operationId\":\"durable-operation\","
+                + "\"state\":\"SUCCEEDED\",\"messageId\":\"verified-message\",\"envelopeHash\":\"" + hash + "\"}"));
+
+        var receipt = service.reconcileOperation("fixture", "durable-operation", "verified-message");
+        assertEquals("SUCCEEDED", receipt.state());
+        assertEquals(hash, receipt.envelopeHash());
+        var request = org.mockito.ArgumentCaptor.forClass(org.springframework.http.HttpEntity.class);
+        org.mockito.Mockito.verify(restTemplate).postForEntity(
+                eq("http://fixture:3000/operations/durable-operation/reconcile"), request.capture(), eq(String.class));
+        assertTrue(request.getValue().getBody().toString().contains("\"messageId\":\"verified-message\""));
+        org.mockito.Mockito.verify(restTemplate, org.mockito.Mockito.never()).postForEntity(
+                eq("http://fixture:3000/send-group"), any(), eq(String.class));
+    }
+
+    @Test
+    void receiptHistoryDoesNotMistakeGatewayUnavailableForAnEmptyChat() {
+        WhatsAppProperties.ClientConfig config = new WhatsAppProperties.ClientConfig();
+        config.setId("fixture"); config.setUrl("http://fixture:3000");
+        when(properties.getClients()).thenReturn(List.of(config));
+        when(restTemplate.postForEntity(eq("http://fixture:3000/groups/reconcile-messages"),
+                any(), eq(String.class))).thenThrow(new HttpServerErrorException(HttpStatus.SERVICE_UNAVAILABLE));
+
+        org.junit.jupiter.api.Assertions.assertThrows(HttpServerErrorException.class,
+                () -> service.reconcileGroupMessagesForReceipt("fixture",
+                        List.of(new WhatsAppChatMessageCursor("12345678@g.us", 1788883200L))));
     }
 
     @org.junit.jupiter.params.ParameterizedTest
@@ -265,6 +302,7 @@ class WhatsAppServiceTest {
                 {
                   "status":"ok",
                   "clientId":"whatsapp_vika",
+                  "failedGroupCount":0,
                   "messages":[{
                     "clientId":"whatsapp_vika",
                     "groupId":"1203633063@g.us",
@@ -288,5 +326,58 @@ class WhatsAppServiceTest {
         assertEquals(1, messages.size());
         assertEquals("message-42", messages.getFirst().messageId());
         assertEquals("Ответ сотрудника", messages.getFirst().message());
+    }
+
+    @Test
+    void reconcileGroupMessagesDoesNotReportNoReplyWhenGatewayHistoryIsUnavailable() {
+        WhatsAppProperties.ClientConfig config = new WhatsAppProperties.ClientConfig();
+        config.setId("whatsapp_vika");
+        config.setUrl("http://whatsapp_vika:3000");
+        when(properties.getClients()).thenReturn(List.of(config));
+        when(restTemplate.postForEntity(eq("http://whatsapp_vika:3000/groups/reconcile-messages"),
+                any(), eq(String.class)))
+                .thenThrow(new HttpServerErrorException(HttpStatus.SERVICE_UNAVAILABLE));
+
+        ResponseStatusException error = org.junit.jupiter.api.Assertions.assertThrows(
+                ResponseStatusException.class,
+                () -> service.reconcileGroupMessages("whatsapp_vika",
+                        List.of(new WhatsAppChatMessageCursor("1203633063@g.us", 1785132000L))));
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, error.getStatusCode());
+    }
+
+    @Test
+    void reconcileGroupMessagesDoesNotReportNoReplyForPartialHistory() {
+        WhatsAppProperties.ClientConfig config = new WhatsAppProperties.ClientConfig();
+        config.setId("whatsapp_vika");
+        config.setUrl("http://whatsapp_vika:3000");
+        when(properties.getClients()).thenReturn(List.of(config));
+        when(restTemplate.postForEntity(eq("http://whatsapp_vika:3000/groups/reconcile-messages"),
+                any(), eq(String.class)))
+                .thenReturn(ResponseEntity.ok("""
+                        {"status":"ok","clientId":"whatsapp_vika","failedGroupCount":1,"messages":[]}
+                        """));
+
+        ResponseStatusException error = org.junit.jupiter.api.Assertions.assertThrows(
+                ResponseStatusException.class,
+                () -> service.reconcileGroupMessages("whatsapp_vika",
+                        List.of(new WhatsAppChatMessageCursor("1203633063@g.us", 1785132000L))));
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, error.getStatusCode());
+    }
+
+    @Test
+    void reconcileGroupMessagesDoesNotReportNoReplyAfterHistoryTimeout() {
+        WhatsAppProperties.ClientConfig config = new WhatsAppProperties.ClientConfig();
+        config.setId("whatsapp_vika");
+        config.setUrl("http://whatsapp_vika:3000");
+        when(properties.getClients()).thenReturn(List.of(config));
+        when(restTemplate.postForEntity(eq("http://whatsapp_vika:3000/groups/reconcile-messages"),
+                any(), eq(String.class)))
+                .thenThrow(new ResourceAccessException("history read timed out"));
+
+        ResponseStatusException error = org.junit.jupiter.api.Assertions.assertThrows(
+                ResponseStatusException.class,
+                () -> service.reconcileGroupMessages("whatsapp_vika",
+                        List.of(new WhatsAppChatMessageCursor("1203633063@g.us", 1785132000L))));
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, error.getStatusCode());
     }
 }

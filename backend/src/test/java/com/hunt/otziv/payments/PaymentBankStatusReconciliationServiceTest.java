@@ -37,7 +37,10 @@ class PaymentBankStatusReconciliationServiceTest {
         LocalDateTime now = LocalDateTime.now();
         when(paymentLinkRepository.findStatusBankReconciliationCandidates(
                 any(), any(), any(), any(Pageable.class)
-        )).thenReturn(List.of(candidate(1024L, null, now.minusMinutes(2))));
+        )).thenReturn(
+                List.of(candidate(1024L, null, now.minusMinutes(2))),
+                List.of(candidate(8128L, now.minusDays(2), now.minusDays(3)))
+        );
         when(paymentLinkRepository.findCancelBankReconciliationCandidates(
                 any(), any(), any(Pageable.class)
         )).thenReturn(List.of(
@@ -49,7 +52,7 @@ class PaymentBankStatusReconciliationServiceTest {
         service.reconcileStaleBankPayments();
 
         ArgumentCaptor<Collection> statuses = ArgumentCaptor.forClass(Collection.class);
-        verify(paymentLinkRepository).findStatusBankReconciliationCandidates(
+        verify(paymentLinkRepository, org.mockito.Mockito.times(2)).findStatusBankReconciliationCandidates(
                 statuses.capture(),
                 any(),
                 any(),
@@ -60,11 +63,15 @@ class PaymentBankStatusReconciliationServiceTest {
                 any(),
                 any(Pageable.class)
         );
-        assertTrue(statuses.getValue().contains(PaymentLinkStatus.NEEDS_RECONCILIATION));
-        assertTrue(statuses.getValue().contains(PaymentLinkStatus.PARTIAL_REVERSED));
-        assertTrue(statuses.getValue().contains(PaymentLinkStatus.PARTIAL_REFUNDED));
+        assertTrue(statuses.getAllValues().get(0).contains(PaymentLinkStatus.NEEDS_RECONCILIATION));
+        assertTrue(statuses.getAllValues().get(0).contains(PaymentLinkStatus.PARTIAL_REVERSED));
+        assertTrue(statuses.getAllValues().get(0).contains(PaymentLinkStatus.PARTIAL_REFUNDED));
+        assertTrue(statuses.getAllValues().get(1).contains(PaymentLinkStatus.CONFIRMED));
+        assertTrue(statuses.getAllValues().get(1).contains(PaymentLinkStatus.TEST_CONFIRMED));
+        assertTrue(statuses.getAllValues().get(1).contains(PaymentLinkStatus.AMOUNT_MISMATCH));
         verify(paymentLinkService).reconcileBankLink(eq(1024L), any());
         verify(paymentLinkService).reconcileBankLink(eq(4095L), any());
+        verify(paymentLinkService).reconcileBankLink(eq(8128L), any());
     }
 
     private PaymentBankReconciliationCandidateView candidate(

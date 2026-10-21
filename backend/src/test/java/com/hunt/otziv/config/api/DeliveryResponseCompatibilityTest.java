@@ -57,7 +57,8 @@ class DeliveryResponseCompatibilityTest {
                 new CommonBillingAdminController(billing, mock(com.hunt.otziv.common_billing.service.CommonInvoiceDisputedOrderArchiveWorkflow.class), mock(CommonBillingPublicationApprovalFailureMarker.class),
                         mock(ContractorPaymentTargetAccessPolicy.class), mock(ContractorActualPaymentAttributionFlowPolicy.class)),
                 new ApiManagerControlController(manager, new PerformanceMetrics(new SimpleMeterRegistry()),
-                        mock(ManagerQueueStateService.class), mock(ManagerSiteActivityService.class), mock(ManagerClientDeliveryStatus.class)))
+                        mock(ManagerQueueStateService.class), mock(ManagerSiteActivityService.class), mock(ManagerClientDeliveryStatus.class),
+                        mock(com.hunt.otziv.manager_control.service.ManagerControlManualDeliveryHandoffWorkflow.class)))
                 .setControllerAdvice(new ApiExceptionHandler()).build();
         String path = command.equals("send") || command.equals("remind")
                 ? "/api/common-billing/invoices/7/" + command

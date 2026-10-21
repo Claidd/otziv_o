@@ -14,6 +14,8 @@
     let epoch = 0;
     let syncSequence = 0;
     let ticker = null;
+    let reminderTimer = null;
+    let reminderUntil = 0;
     let lastSyncAt = Date.now();
     const originalButtons = new WeakMap();
     const toast = document.createElement('aside');
@@ -42,18 +44,26 @@
                 : 'Смена и блокировка доступны через '
                     + String(Math.floor(seconds / 60)).padStart(2, '0') + ':'
                     + String(seconds % 60).padStart(2, '0');
-        toast.hidden = !blocked;
+        toast.hidden = !blocked || performance.now() >= reminderUntil;
         title.textContent = message;
         document.querySelectorAll(buttons).forEach(function (button) {
             if (blocked) {
                 if (!originalButtons.has(button)) {
-                    originalButtons.set(button, { disabled: button.disabled, title: button.getAttribute('title') });
+                    originalButtons.set(button, {
+                        disabled: button.disabled,
+                        title: button.getAttribute('title'),
+                        ariaDisabled: button.getAttribute('aria-disabled')
+                    });
                 }
-                button.disabled = true;
+                // Keep cooldown buttons focusable and actionable only to repeat the reminder.
+                button.disabled = originalButtons.get(button).disabled;
+                button.setAttribute('aria-disabled', 'true');
                 button.title = message;
             } else if (originalButtons.has(button)) {
                 const original = originalButtons.get(button);
                 button.disabled = original.disabled;
+                if (original.ariaDisabled === null) button.removeAttribute('aria-disabled');
+                else button.setAttribute('aria-disabled', original.ariaDisabled);
                 if (original.title === null) button.removeAttribute('title');
                 else button.setAttribute('title', original.title);
                 originalButtons.delete(button);
@@ -69,17 +79,31 @@
         }
     }
 
+    function remind() {
+        if (!locked()) return;
+        reminderUntil = performance.now() + 2500;
+        if (reminderTimer !== null) window.clearTimeout(reminderTimer);
+        reminderTimer = window.setTimeout(function () {
+            reminderTimer = null;
+            render();
+        }, 2500);
+        render();
+    }
+
     function apply(state) {
         if (!state || typeof state.enabled !== 'boolean') return false;
         const now = Date.parse(state.serverNow);
         const available = state.availableAt ? Date.parse(state.availableAt) : now;
         if (!Number.isFinite(now) || !Number.isFinite(available)) return false;
+        const wasReady = ready;
+        const previousSeconds = secondsLeft();
         enabled = state.enabled;
         if (Number.isInteger(state.durationSeconds) && state.durationSeconds >= 0 && state.durationSeconds <= 3600) {
             durationSeconds = state.durationSeconds;
         }
         deadline = enabled ? performance.now() + Math.max(0, available - now) : 0;
         ready = true;
+        if ((!wasReady || previousSeconds === 0) && secondsLeft() > 0) remind();
         render();
         return true;
     }
@@ -109,12 +133,16 @@
 
     window.workerAccountActionCooldown = {
         locked: locked,
+        remind: remind,
         begin: function () {
-            if (locked()) return false;
+            if (locked()) {
+                remind();
+                return false;
+            }
             epoch++;
             pending = true;
             if (enabled) deadline = performance.now() + durationSeconds * 1000;
-            render();
+            remind();
             return true;
         },
         response: function (response) {
@@ -132,6 +160,7 @@
         },
         finish: function () {
             pending = false;
+            remind();
             render();
             void sync();
         }
@@ -147,10 +176,10 @@
     window.addEventListener('storage', function (event) {
         if (event.key === changeKey) void sync();
     });
-    window.addEventListener('pageshow', function () { void sync(); });
+    window.addEventListener('pageshow', function () { remind(); void sync(); });
     document.addEventListener('visibilitychange', function () {
-        if (document.visibilityState === 'visible') { render(); void sync(); }
+        if (document.visibilityState === 'visible') { remind(); void sync(); }
     });
-    render();
+    remind();
     void sync();
 }());
