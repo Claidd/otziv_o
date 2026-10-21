@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {C26_REFERENCE, C26_CONFIG, C23_POSTGRES, C23_POSTGRES_CONFIG, C35_JARS, C35_NETTY_JARS,
   validateVertxC35Inspection, validateVertxC35Rehearsal, validateVertxC35Activation,
   validateC35LibraryScan} from './vertx-c35-activation.mjs';
-import {createEvidenceReader, coupleRegisteredKeycloak} from './reviewed-image-defaults.mjs';
+import {createEvidenceReader, coupleRegisteredKeycloak, validateActivation} from './reviewed-image-defaults.mjs';
 import {validateSslRefreshTransition} from './ssl-refresh-activation.mjs';
 
 const candidate = 'ghcr.io/claidd/otziv-security@sha256:' + 'b'.repeat(64);
@@ -161,16 +161,35 @@ test('C35 rejects a replay from the old C22 Keycloak or altered database image',
   assert.throws(() => validateVertxC35Rehearsal(second.capture, second.replay, candidate, candidateConfig, 'a'.repeat(64)), /postgres_changed/);
 });
 
-test('existing C26 Keycloak still couples to the active C23 PostgreSQL proof', async () => {
+test('accepted C26 Keycloak still couples to the active C23 PostgreSQL proof', async () => {
   const read = await createEvidenceReader(process.cwd());
   const activations = JSON.parse(await read('infrastructure/runtime-security/reviewed-image-activations.json'));
   const baseline = JSON.parse(await read('infrastructure/runtime-security/reviewed-images.json'));
   const postgresEntry = activations.images.find(entry => entry.component === 'postgres');
-  const issuerEntry = activations.images.find(entry => entry.component === 'keycloak');
+  const issuerEntry = JSON.parse(await read('infrastructure/runtime-security/c35-parent-keycloak.json'));
   const postgresImage = baseline.images.find(image => image.component === 'postgres');
   const readiness = await validateSslRefreshTransition(postgresEntry, postgresImage, read);
   const coupled = await coupleRegisteredKeycloak(readiness, issuerEntry, read);
   assert.equal(coupled.requiredKeycloakReference, C26_REFERENCE);
+  assert.equal(coupled.postgresReference, C23_POSTGRES);
+  assert.deepEqual(issuerEntry.migrationAcceptance,
+    {path: coupled.acceptancePath, sha256: coupled.proofSha256});
+});
+
+test('published C35 Keycloak validates its proofs and couples to C23 PostgreSQL', async () => {
+  const read = await createEvidenceReader(process.cwd());
+  const manifest = await read('infrastructure/runtime-security/reviewed-images.json');
+  const baseline = JSON.parse(manifest);
+  const activations = JSON.parse(await read('infrastructure/runtime-security/reviewed-image-activations.json'));
+  const postgresEntry = activations.images.find(entry => entry.component === 'postgres');
+  const issuerEntry = activations.images.find(entry => entry.component === 'keycloak');
+  assert.equal(issuerEntry.manifest.path, 'infrastructure/runtime-security/reviewed-images-c35-keycloak.json');
+  const image = baseline.images.find(image => image.component === 'keycloak');
+  assert.equal(await validateActivation(image, issuerEntry, manifest, read), issuerEntry.reference);
+  const postgresImage = baseline.images.find(image => image.component === 'postgres');
+  const readiness = await validateSslRefreshTransition(postgresEntry, postgresImage, read);
+  const coupled = await coupleRegisteredKeycloak(readiness, issuerEntry, read);
+  assert.equal(coupled.requiredKeycloakReference, issuerEntry.reference);
   assert.equal(coupled.postgresReference, C23_POSTGRES);
   assert.deepEqual(issuerEntry.migrationAcceptance,
     {path: coupled.acceptancePath, sha256: coupled.proofSha256});

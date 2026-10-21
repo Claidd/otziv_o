@@ -1,0 +1,399 @@
+{
+  "buildx.build.provenance": {
+    "builder": {
+      "id": ""
+    },
+    "buildType": "https://mobyproject.org/buildkit@v1",
+    "materials": [
+      {
+        "uri": "pkg:docker/docker/buildkit-syft-scanner?digest=sha256:ae4f3b554449e7e25548e7d8ccc029d17357348e30c6e3df01b92bc93654d6a9\u0026platform=linux%2Famd64",
+        "digest": {
+          "sha256": "ae4f3b554449e7e25548e7d8ccc029d17357348e30c6e3df01b92bc93654d6a9"
+        }
+      },
+      {
+        "uri": "pkg:docker/ghcr.io/claidd/otziv-security?digest=sha256:76ad15fac3c0041798b6b2b87632bbf91ae7c171ebfa813aa1d1633b48f90ff9\u0026platform=linux%2Famd64",
+        "digest": {
+          "sha256": "76ad15fac3c0041798b6b2b87632bbf91ae7c171ebfa813aa1d1633b48f90ff9"
+        }
+      },
+      {
+        "uri": "https://repo.maven.apache.org/maven2/io/netty/netty-buffer/4.1.139.Final/netty-buffer-4.1.139.Final.jar",
+        "digest": {
+          "sha256": "48d805b74e56dc5f92b1f288858185abc86db16d293e8da183542df6243427f2"
+        }
+      },
+      {
+        "uri": "https://repo.maven.apache.org/maven2/io/netty/netty-codec-dns/4.1.139.Final/netty-codec-dns-4.1.139.Final.jar",
+        "digest": {
+          "sha256": "e044715cfd72e4717a06e41f4614dea0246ac20059d3aa72f36f16be20bc623c"
+        }
+      },
+      {
+        "uri": "https://repo.maven.apache.org/maven2/io/netty/netty-codec-haproxy/4.1.139.Final/netty-codec-haproxy-4.1.139.Final.jar",
+        "digest": {
+          "sha256": "3109e099f34523799479c70b12b7d3731b9bb891acc8654a145eefd189a63472"
+        }
+      },
+      {
+        "uri": "https://repo.maven.apache.org/maven2/io/netty/netty-codec-http/4.1.139.Final/netty-codec-http-4.1.139.Final.jar",
+        "digest": {
+          "sha256": "627cfdac2cd5dbd8a33af85977fb81fa6b46f0c00389ab4c8677a415f0f85480"
+        }
+      },
+      {
+        "uri": "https://repo.maven.apache.org/maven2/io/netty/netty-codec-http2/4.1.139.Final/netty-codec-http2-4.1.139.Final.jar",
+        "digest": {
+          "sha256": "4cb8bc95386112f3a9da935272781d577d9e70ca4c56cf0eef603a45e9526e02"
+        }
+      },
+      {
+        "uri": "https://repo.maven.apache.org/maven2/io/netty/netty-codec-socks/4.1.139.Final/netty-codec-socks-4.1.139.Final.jar",
+        "digest": {
+          "sha256": "94d6800d5f717b40db5d0bf42a77b448d472cd9033735e69e7b18311bd902f23"
+        }
+      },
+      {
+        "uri": "https://repo.maven.apache.org/maven2/io/netty/netty-codec/4.1.139.Final/netty-codec-4.1.139.Final.jar",
+        "digest": {
+          "sha256": "ad43f07219dfb757a87b9c2b4765002be478c5401971379954e3d182f285fe6b"
+        }
+      },
+      {
+        "uri": "https://repo.maven.apache.org/maven2/io/netty/netty-common/4.1.139.Final/netty-common-4.1.139.Final.jar",
+        "digest": {
+          "sha256": "50372d86e27b4b1cf0810d75eb534795966a199049a1e85a0c41bbd2bb97f519"
+        }
+      },
+      {
+        "uri": "https://repo.maven.apache.org/maven2/io/netty/netty-handler-proxy/4.1.139.Final/netty-handler-proxy-4.1.139.Final.jar",
+        "digest": {
+          "sha256": "9c92c2407b6fd3c120ab5efb900475a1fe40ce099703d2500c8679d3c75a90cb"
+        }
+      },
+      {
+        "uri": "https://repo.maven.apache.org/maven2/io/netty/netty-handler/4.1.139.Final/netty-handler-4.1.139.Final.jar",
+        "digest": {
+          "sha256": "ff85f00781b956d618b20f33da076c839a5e43e0084108b07bab0c19737168ec"
+        }
+      },
+      {
+        "uri": "https://repo.maven.apache.org/maven2/io/netty/netty-resolver-dns/4.1.139.Final/netty-resolver-dns-4.1.139.Final.jar",
+        "digest": {
+          "sha256": "15feeffd0cbc2987ba35b798ca5b05fa1bc10cb880b8aa13e9bd81af3d483525"
+        }
+      },
+      {
+        "uri": "https://repo.maven.apache.org/maven2/io/netty/netty-resolver/4.1.139.Final/netty-resolver-4.1.139.Final.jar",
+        "digest": {
+          "sha256": "562a5388c88325b7d6ed05e8168736871ce0e64ab01e0ce52ea7710760b9b457"
+        }
+      },
+      {
+        "uri": "https://repo.maven.apache.org/maven2/io/netty/netty-tcnative-classes/2.0.84.Final/netty-tcnative-classes-2.0.84.Final.jar",
+        "digest": {
+          "sha256": "7a4437abf98b0cec053af4443fe321177d2cfccfec7bcad4e7d8b75571bbec4d"
+        }
+      },
+      {
+        "uri": "https://repo.maven.apache.org/maven2/io/netty/netty-transport-classes-epoll/4.1.139.Final/netty-transport-classes-epoll-4.1.139.Final.jar",
+        "digest": {
+          "sha256": "99ea06d67e3e2792cc93521b686223c78da2561bfdf98533ebb29fed1729cce4"
+        }
+      },
+      {
+        "uri": "https://repo.maven.apache.org/maven2/io/netty/netty-transport-native-epoll/4.1.139.Final/netty-transport-native-epoll-4.1.139.Final-linux-aarch_64.jar",
+        "digest": {
+          "sha256": "039c9ce3bef089dfde34987cac3c928466cb71d54d3df79c0068fd17ee166e51"
+        }
+      },
+      {
+        "uri": "https://repo.maven.apache.org/maven2/io/netty/netty-transport-native-epoll/4.1.139.Final/netty-transport-native-epoll-4.1.139.Final-linux-x86_64.jar",
+        "digest": {
+          "sha256": "696fff4fb645d64fec6bc54fae27d9b643d64814e9be3bf42cbd94a608e2bcd0"
+        }
+      },
+      {
+        "uri": "https://repo.maven.apache.org/maven2/io/netty/netty-transport-native-unix-common/4.1.139.Final/netty-transport-native-unix-common-4.1.139.Final.jar",
+        "digest": {
+          "sha256": "8e660ac8a485fc8d8b47d87d04ea33d19902dc6fc5a113e9353b762188b3f333"
+        }
+      },
+      {
+        "uri": "https://repo.maven.apache.org/maven2/io/netty/netty-transport/4.1.139.Final/netty-transport-4.1.139.Final.jar",
+        "digest": {
+          "sha256": "be7bff8b6274e7fae12bbad3c565777539e9b069517e0b3acc06d9ac2cd6ec05"
+        }
+      },
+      {
+        "uri": "https://repo.maven.apache.org/maven2/io/vertx/vertx-auth-common/4.5.35/vertx-auth-common-4.5.35.jar",
+        "digest": {
+          "sha256": "5103b6ce5121aa783707278b4ec08a19a0405d87b91dced1d9f6054d7ffb5dc1"
+        }
+      },
+      {
+        "uri": "https://repo.maven.apache.org/maven2/io/vertx/vertx-bridge-common/4.5.35/vertx-bridge-common-4.5.35.jar",
+        "digest": {
+          "sha256": "a004fef3622ce6db8ba11c502f2c752dd0975eaf7c8e940e71c4c4ca0ccbf4cd"
+        }
+      },
+      {
+        "uri": "https://repo.maven.apache.org/maven2/io/vertx/vertx-codegen/4.5.35/vertx-codegen-4.5.35.jar",
+        "digest": {
+          "sha256": "b82fe8fe7324af7a37fd41940c228af99ea9c400e96ac55d0cfe8016b85b5337"
+        }
+      },
+      {
+        "uri": "https://repo.maven.apache.org/maven2/io/vertx/vertx-core/4.5.35/vertx-core-4.5.35.jar",
+        "digest": {
+          "sha256": "1a274ba3739dc72506d5e801a8337ab734e07fbfd48ece7e77a518fbf40cea9a"
+        }
+      },
+      {
+        "uri": "https://repo.maven.apache.org/maven2/io/vertx/vertx-grpc-client/4.5.35/vertx-grpc-client-4.5.35.jar",
+        "digest": {
+          "sha256": "474b83d79944d1b4869452a9712b8cb51c9b6584e48d32ef113720c4de1072f7"
+        }
+      },
+      {
+        "uri": "https://repo.maven.apache.org/maven2/io/vertx/vertx-grpc-common/4.5.35/vertx-grpc-common-4.5.35.jar",
+        "digest": {
+          "sha256": "908557303faea174e8755e6a1fb01771208db2e215dbeaff2549891855b50f8e"
+        }
+      },
+      {
+        "uri": "https://repo.maven.apache.org/maven2/io/vertx/vertx-grpc-server/4.5.35/vertx-grpc-server-4.5.35.jar",
+        "digest": {
+          "sha256": "115d31258beffa4c2205ccd614981653df4a3ff48ad6dfb428fb9bd2a8a46962"
+        }
+      },
+      {
+        "uri": "https://repo.maven.apache.org/maven2/io/vertx/vertx-grpc/4.5.35/vertx-grpc-4.5.35.jar",
+        "digest": {
+          "sha256": "70c91f9d4d9716f130057bc6d286687da9222a7fb96251dd91ac0a7bb55ed143"
+        }
+      },
+      {
+        "uri": "https://repo.maven.apache.org/maven2/io/vertx/vertx-web-common/4.5.35/vertx-web-common-4.5.35.jar",
+        "digest": {
+          "sha256": "e6938a7c555ae87ccde10af71cfb264483ea7f952e7d7724e4196bef21cec64d"
+        }
+      },
+      {
+        "uri": "https://repo.maven.apache.org/maven2/io/vertx/vertx-web/4.5.35/vertx-web-4.5.35.jar",
+        "digest": {
+          "sha256": "a8d9d06554e23286edb542d9adf15d057bda0399455a8f04ceb27e39bea1a0ac"
+        }
+      }
+    ],
+    "invocation": {
+      "configSource": {
+        "entryPoint": "Dockerfile"
+      },
+      "parameters": {
+        "frontend": "dockerfile.v0",
+        "args": {
+          "label:com.otziv.publication.revision": "3b17618fa9013ffb1c4f703027a7128d9d5c7bfd",
+          "label:com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+          "label:com.otziv.reviewed-component": "keycloak"
+        },
+        "locals": [
+          {
+            "name": "context"
+          },
+          {
+            "name": "dockerfile"
+          }
+        ],
+        "root": {
+          "configSource": {
+            "path": "Dockerfile"
+          },
+          "request": {
+            "args": {
+              "label:com.otziv.publication.revision": "3b17618fa9013ffb1c4f703027a7128d9d5c7bfd",
+              "label:com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+              "label:com.otziv.reviewed-component": "keycloak",
+              "vcs:localdir:context": "infrastructure/runtime-security/builds/c35-keycloak",
+              "vcs:localdir:dockerfile": "infrastructure/runtime-security/builds/c35-keycloak",
+              "vcs:revision": "3b17618fa9013ffb1c4f703027a7128d9d5c7bfd",
+              "vcs:source": "https://github.com/Claidd/otziv_o"
+            }
+          }
+        },
+        "compatibilityVersion": 30
+      },
+      "environment": {
+        "dockerfileVersion": "1.26.0",
+        "github_actor": "Claidd",
+        "github_actor_id": "121088694",
+        "github_event_name": "workflow_dispatch",
+        "github_event_payload": {
+          "inputs": {
+            "publish-reviewed-images": "true",
+            "reviewed-image-set": "c35-keycloak"
+          },
+          "ref": "refs/heads/codex/payment-confirmation-hardening-20261020",
+          "repository": {
+            "allow_forking": true,
+            "archive_url": "https://api.github.com/repos/Claidd/otziv_o/{archive_format}{/ref}",
+            "archived": false,
+            "assignees_url": "https://api.github.com/repos/Claidd/otziv_o/assignees{/user}",
+            "blobs_url": "https://api.github.com/repos/Claidd/otziv_o/git/blobs{/sha}",
+            "branches_url": "https://api.github.com/repos/Claidd/otziv_o/branches{/branch}",
+            "clone_url": "https://github.com/Claidd/otziv_o.git",
+            "collaborators_url": "https://api.github.com/repos/Claidd/otziv_o/collaborators{/collaborator}",
+            "comments_url": "https://api.github.com/repos/Claidd/otziv_o/comments{/number}",
+            "commits_url": "https://api.github.com/repos/Claidd/otziv_o/commits{/sha}",
+            "compare_url": "https://api.github.com/repos/Claidd/otziv_o/compare/{base}...{head}",
+            "contents_url": "https://api.github.com/repos/Claidd/otziv_o/contents/{+path}",
+            "contributors_url": "https://api.github.com/repos/Claidd/otziv_o/contributors",
+            "created_at": "2023-06-07T18:29:16Z",
+            "default_branch": "main",
+            "deployments_url": "https://api.github.com/repos/Claidd/otziv_o/deployments",
+            "description": null,
+            "disabled": false,
+            "downloads_url": "https://api.github.com/repos/Claidd/otziv_o/downloads",
+            "events_url": "https://api.github.com/repos/Claidd/otziv_o/events",
+            "fork": false,
+            "forks": 0,
+            "forks_count": 0,
+            "forks_url": "https://api.github.com/repos/Claidd/otziv_o/forks",
+            "full_name": "Claidd/otziv_o",
+            "git_commits_url": "https://api.github.com/repos/Claidd/otziv_o/git/commits{/sha}",
+            "git_refs_url": "https://api.github.com/repos/Claidd/otziv_o/git/refs{/sha}",
+            "git_tags_url": "https://api.github.com/repos/Claidd/otziv_o/git/tags{/sha}",
+            "git_url": "git://github.com/Claidd/otziv_o.git",
+            "has_discussions": false,
+            "has_downloads": false,
+            "has_issues": true,
+            "has_pages": false,
+            "has_projects": true,
+            "has_pull_requests": true,
+            "has_wiki": true,
+            "homepage": null,
+            "hooks_url": "https://api.github.com/repos/Claidd/otziv_o/hooks",
+            "html_url": "https://github.com/Claidd/otziv_o",
+            "id": 650754525,
+            "is_template": false,
+            "issue_comment_url": "https://api.github.com/repos/Claidd/otziv_o/issues/comments{/number}",
+            "issue_events_url": "https://api.github.com/repos/Claidd/otziv_o/issues/events{/number}",
+            "issues_url": "https://api.github.com/repos/Claidd/otziv_o/issues{/number}",
+            "keys_url": "https://api.github.com/repos/Claidd/otziv_o/keys{/key_id}",
+            "labels_url": "https://api.github.com/repos/Claidd/otziv_o/labels{/name}",
+            "language": "Java",
+            "languages_url": "https://api.github.com/repos/Claidd/otziv_o/languages",
+            "license": null,
+            "merges_url": "https://api.github.com/repos/Claidd/otziv_o/merges",
+            "milestones_url": "https://api.github.com/repos/Claidd/otziv_o/milestones{/number}",
+            "mirror_url": null,
+            "name": "otziv_o",
+            "node_id": "R_kgDOJsm53Q",
+            "notifications_url": "https://api.github.com/repos/Claidd/otziv_o/notifications{?since,all,participating}",
+            "open_issues": 1,
+            "open_issues_count": 1,
+            "owner": {
+              "avatar_url": "https://avatars.githubusercontent.com/u/121088694?v=4",
+              "events_url": "https://api.github.com/users/Claidd/events{/privacy}",
+              "followers_url": "https://api.github.com/users/Claidd/followers",
+              "following_url": "https://api.github.com/users/Claidd/following{/other_user}",
+              "gists_url": "https://api.github.com/users/Claidd/gists{/gist_id}",
+              "gravatar_id": "",
+              "html_url": "https://github.com/Claidd",
+              "id": 121088694,
+              "login": "Claidd",
+              "node_id": "U_kgDOBzeqtg",
+              "organizations_url": "https://api.github.com/users/Claidd/orgs",
+              "received_events_url": "https://api.github.com/users/Claidd/received_events",
+              "repos_url": "https://api.github.com/users/Claidd/repos",
+              "site_admin": false,
+              "starred_url": "https://api.github.com/users/Claidd/starred{/owner}{/repo}",
+              "subscriptions_url": "https://api.github.com/users/Claidd/subscriptions",
+              "type": "User",
+              "url": "https://api.github.com/users/Claidd",
+              "user_view_type": "public"
+            },
+            "private": false,
+            "pull_request_creation_policy": "all",
+            "pulls_url": "https://api.github.com/repos/Claidd/otziv_o/pulls{/number}",
+            "pushed_at": "2026-10-21T06:21:46Z",
+            "releases_url": "https://api.github.com/repos/Claidd/otziv_o/releases{/id}",
+            "size": 634379,
+            "ssh_url": "git@github.com:Claidd/otziv_o.git",
+            "stargazers_count": 0,
+            "stargazers_url": "https://api.github.com/repos/Claidd/otziv_o/stargazers",
+            "statuses_url": "https://api.github.com/repos/Claidd/otziv_o/statuses/{sha}",
+            "subscribers_url": "https://api.github.com/repos/Claidd/otziv_o/subscribers",
+            "subscription_url": "https://api.github.com/repos/Claidd/otziv_o/subscription",
+            "svn_url": "https://github.com/Claidd/otziv_o",
+            "tags_url": "https://api.github.com/repos/Claidd/otziv_o/tags",
+            "teams_url": "https://api.github.com/repos/Claidd/otziv_o/teams",
+            "topics": [],
+            "trees_url": "https://api.github.com/repos/Claidd/otziv_o/git/trees{/sha}",
+            "updated_at": "2026-10-20T23:35:43Z",
+            "url": "https://api.github.com/repos/Claidd/otziv_o",
+            "visibility": "public",
+            "watchers": 0,
+            "watchers_count": 0,
+            "web_commit_signoff_required": false
+          },
+          "sender": {
+            "avatar_url": "https://avatars.githubusercontent.com/u/121088694?v=4",
+            "events_url": "https://api.github.com/users/Claidd/events{/privacy}",
+            "followers_url": "https://api.github.com/users/Claidd/followers",
+            "following_url": "https://api.github.com/users/Claidd/following{/other_user}",
+            "gists_url": "https://api.github.com/users/Claidd/gists{/gist_id}",
+            "gravatar_id": "",
+            "html_url": "https://github.com/Claidd",
+            "id": 121088694,
+            "login": "Claidd",
+            "node_id": "U_kgDOBzeqtg",
+            "organizations_url": "https://api.github.com/users/Claidd/orgs",
+            "received_events_url": "https://api.github.com/users/Claidd/received_events",
+            "repos_url": "https://api.github.com/users/Claidd/repos",
+            "site_admin": false,
+            "starred_url": "https://api.github.com/users/Claidd/starred{/owner}{/repo}",
+            "subscriptions_url": "https://api.github.com/users/Claidd/subscriptions",
+            "type": "User",
+            "url": "https://api.github.com/users/Claidd",
+            "user_view_type": "public"
+          },
+          "workflow": ".github/workflows/quality-gates.yml"
+        },
+        "github_job": "reviewed-image-publication",
+        "github_ref": "refs/heads/codex/payment-confirmation-hardening-20261020",
+        "github_ref_name": "codex/payment-confirmation-hardening-20261020",
+        "github_ref_protected": "false",
+        "github_ref_type": "branch",
+        "github_repository": "Claidd/otziv_o",
+        "github_repository_id": "650754525",
+        "github_repository_owner": "Claidd",
+        "github_repository_owner_id": "121088694",
+        "github_run_attempt": "1",
+        "github_run_id": "39555030982",
+        "github_run_number": "529",
+        "github_runner_arch": "X64",
+        "github_runner_environment": "github-hosted",
+        "github_runner_image_os": "ubuntu24",
+        "github_runner_image_version": "20261018.339.1",
+        "github_runner_name": "GitHub Actions 1000020234",
+        "github_runner_os": "Linux",
+        "github_runner_tracking_id": "github_f834790b-d639-4288-a6a8-bceb0b2b6f30",
+        "github_server_url": "https://github.com",
+        "github_triggering_actor": "Claidd",
+        "github_workflow": "Quality gates",
+        "github_workflow_ref": "Claidd/otziv_o/.github/workflows/quality-gates.yml@refs/heads/codex/payment-confirmation-hardening-20261020",
+        "github_workflow_sha": "3b17618fa9013ffb1c4f703027a7128d9d5c7bfd",
+        "platform": "linux/amd64"
+      }
+    }
+  },
+  "buildx.build.ref": "otziv-review-keycloak-39555030982-1/otziv-review-keycloak-39555030982-10/pacohh2vticucny4tybbtjzhz",
+  "containerimage.descriptor": {
+    "mediaType": "application/vnd.oci.image.index.v1+json",
+    "digest": "sha256:c28364544835f5fbef6d4e0b0b3e63154127f7fb440b05432760f11235b5f4a9",
+    "size": 858
+  },
+  "containerimage.digest": "sha256:c28364544835f5fbef6d4e0b0b3e63154127f7fb440b05432760f11235b5f4a9",
+  "image.name": "ghcr.io/claidd/otziv-security:keycloak-3b17618fa9013ffb1c4f703027a7128d9d5c7bfd-39555030982-1"
+}

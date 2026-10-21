@@ -145,7 +145,7 @@ services:
       - internal_net
 
   keycloak:
-    image: ${OTZIV_KEYCLOAK_IMAGE:-ghcr.io/claidd/otziv-security@sha256:76ad15fac3c0041798b6b2b87632bbf91ae7c171ebfa813aa1d1633b48f90ff9}
+    image: ${OTZIV_KEYCLOAK_IMAGE:-ghcr.io/claidd/otziv-security@sha256:c28364544835f5fbef6d4e0b0b3e63154127f7fb440b05432760f11235b5f4a9}
     restart: unless-stopped
     logging: *default-logging
     mem_limit: ${KEYCLOAK_MEMORY_LIMIT:-2g}

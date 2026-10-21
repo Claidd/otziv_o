@@ -1122,6 +1122,16 @@ regexes = [
 ]
 
 [[allowlists]]
+description = "Exact public C35 Keycloak crypto artifact in immutable Trivy inventory (generic-api-key)"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''(?:^|/)infrastructure/runtime\-security/proofs/c35\-keycloak/publication/vulnerabilities\.json$''']
+regexes = [
+  '''^\n?\ \ \ \ \ \ \ \ \ \ "Name":\ "org\.keycloak:keycloak\-crypto\-fips1402",\r?$''',
+]
+
+[[allowlists]]
 description = "Exact public C14 migration metadata in otziv-realm-migration-provenance.json (generic-api-key)"
 targetRules = ["generic-api-key"]
 condition = "AND"
