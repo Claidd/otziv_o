@@ -272,6 +272,12 @@ public class BankObservationApplicationService {
     }
 
     boolean isStateConsistent(PaymentLink link, TbankGetStateResponse state, TbankPaymentProfile runtimeProfile) {
+        if ("CONFIRMED".equalsIgnoreCase(normalize(state.status()))
+                && !TbankConfirmedEvidence.validGetStateConfirmation(state)) {
+            link.setLastError("CONFIRMED GetState без успешного ответа, PaymentId и положительной суммы");
+            log.warn("T-Bank GetState confirmation evidence incomplete: linkId={}", link.getId());
+            return false;
+        }
         String responseTerminal = normalize(state.terminalKey());
         if (!responseTerminal.isBlank() && !responseTerminal.equals(runtimeProfile.terminalKey())) {
             link.setLastError("TerminalKey GetState не совпадает с платежной ссылкой");

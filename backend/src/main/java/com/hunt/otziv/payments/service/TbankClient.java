@@ -148,6 +148,11 @@ public class TbankClient {
             if (!body.success()) {
                 throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, body.errorText());
             }
+            if ("CONFIRMED".equalsIgnoreCase(body.status())
+                    && !TbankConfirmedEvidence.validGetStateConfirmation(body)) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                        "Т-Банк вернул CONFIRMED без подтверждённых реквизитов платежа");
+            }
             return body;
         } catch (RestClientResponseException e) {
             throw new ResponseStatusException(

@@ -8182,6 +8182,137 @@ class CommonBillingServiceTest {
     }
 
     @Test
+    void inconsistentSignedTbankConfirmationCannotPayCommonInvoice() throws Exception {
+        Map<String, String> valid = confirmedWebhookPayload();
+        PaymentProfile profile = paymentProfile();
+        when(paymentProfileService.findByTerminalKey("terminal")).thenReturn(Optional.of(profile));
+        when(paymentProfileService.toRuntimeForTerminal(profile, "terminal")).thenReturn(runtimeProfile());
+        when(tokenSigner.matches(any(), eq("password"), eq("token"))).thenReturn(true);
+
+        for (Map.Entry<String, String> invalid : Map.of(
+                "Success", "false", "ErrorCode", "5", "Amount", "0", "PaymentId", " ").entrySet()) {
+            Map<String, String> payload = new LinkedHashMap<>(valid);
+            payload.put(invalid.getKey(), invalid.getValue());
+            assertThrows(ResponseStatusException.class,
+                    () -> service.handleTbankWebhook(payload), invalid.getKey());
+        }
+
+        verify(invoiceRepository, never()).save(any());
+        verify(paymentRefRepository, never()).save(any());
+        verify(orderTransactionService, never()).handlePaymentStatus(any(), anyBoolean());
+    }
+
+    @Test
+    void delayedAuthorizedWebhookCannotDowngradeRefLoadedBeforePaidInvoiceLock() throws Exception {
+        CommonInvoice invoice = invoice(account());
+        invoice.setStatus(CommonInvoiceStatus.READY);
+        invoice.setAmountKopecks(100_000L);
+        CommonInvoicePaymentRef ref = paymentRef(203L, invoice, "CURRENT",
+                "old-order", "old-payment", "terminal", 100_000L);
+        paymentRefStore.put(ref.getId(), ref);
+        Map<String, String> payload = confirmedWebhookPayload();
+        payload.put("Status", "AUTHORIZED");
+        PaymentProfile profile = paymentProfile();
+        when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(paymentProfileService.findByTerminalKey("terminal")).thenReturn(Optional.of(profile));
+        when(paymentProfileService.toRuntimeForTerminal(profile, "terminal")).thenReturn(runtimeProfile());
+        when(tokenSigner.matches(payload, "password", "token")).thenReturn(true);
+        doAnswer(invocation -> {
+            if (invocation.getArgument(0) == invoice) {
+                // A confirmation committed while this callback waited for the
+                // invoice lock; refresh must expose the paid invoice too.
+                invoice.setStatus(CommonInvoiceStatus.PAID);
+                invoice.setPaidKopecks(100_000L);
+            } else if (invocation.getArgument(0) == ref) {
+                // Another transaction completed while this callback waited for
+                // the invoice lock; refresh must expose the committed ref state.
+                ref.setStatus("APPLIED");
+                ref.setProviderStatus("CONFIRMED");
+            }
+            return null;
+        }).when(entityManager).refresh(any());
+
+        assertTrue(service.handleTbankWebhook(payload));
+
+        assertEquals(CommonInvoiceStatus.PAID, invoice.getStatus());
+        assertEquals("APPLIED", ref.getStatus());
+        assertEquals("CONFIRMED", ref.getProviderStatus());
+        verify(entityManager, atLeastOnce()).refresh(invoice);
+        verify(entityManager).refresh(ref);
+        verify(paymentRefRepository, never()).save(ref);
+        verify(orderTransactionService, never()).handlePaymentStatus(any(), anyBoolean());
+    }
+
+    @Test
+    void repeatedConfirmedWebhookRepairsSoleStaleRefWithoutReopeningPaidInvoice() throws Exception {
+        CommonInvoice invoice = invoice(account());
+        invoice.setStatus(CommonInvoiceStatus.PAID);
+        invoice.setPaymentMethod("TBANK");
+        invoice.setAmountKopecks(100_000L);
+        invoice.setPaidKopecks(100_000L);
+        CommonInvoiceOrder item = item(invoice, order(1L));
+        item.setPaid(true);
+        item.setPaymentMethod("TBANK");
+        CommonInvoicePaymentRef ref = paymentRef(203L, invoice, "CURRENT",
+                "old-order", "old-payment", "terminal", 100_000L);
+        paymentRefStore.put(ref.getId(), ref);
+        Map<String, String> payload = confirmedWebhookPayload();
+        PaymentProfile profile = paymentProfile();
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
+        when(paymentRefRepository.findByInvoiceIdOrderByCreatedAtAsc(10L)).thenReturn(List.of(ref));
+        when(paymentProfileService.findByTerminalKey("terminal")).thenReturn(Optional.of(profile));
+        when(paymentProfileService.toRuntimeForTerminal(profile, "terminal")).thenReturn(runtimeProfile());
+        when(tokenSigner.matches(payload, "password", "token")).thenReturn(true);
+
+        assertTrue(service.handleTbankWebhook(payload));
+
+        assertEquals(CommonInvoiceStatus.PAID, invoice.getStatus());
+        assertEquals(100_000L, invoice.getPaidKopecks());
+        assertEquals("APPLIED", ref.getStatus());
+        assertEquals("CONFIRMED", ref.getProviderStatus());
+        assertEquals("confirmed_after_paid_exact_tbank_ref", ref.getReason());
+        verify(paymentRefRepository).save(ref);
+        verify(invoiceRepository, never()).save(invoice);
+        verify(orderTransactionService, never()).handlePaymentStatus(any(), anyBoolean());
+    }
+
+    @Test
+    void confirmedSecondRefOnPaidInvoiceStillRequiresAttention() throws Exception {
+        CommonInvoice invoice = invoice(account());
+        invoice.setStatus(CommonInvoiceStatus.PAID);
+        invoice.setPaymentMethod("TBANK");
+        invoice.setAmountKopecks(100_000L);
+        invoice.setPaidKopecks(100_000L);
+        CommonInvoiceOrder item = item(invoice, order(1L));
+        item.setPaid(true);
+        item.setPaymentMethod("TBANK");
+        CommonInvoicePaymentRef stale = paymentRef(203L, invoice, "CURRENT",
+                "old-order", "old-payment", "terminal", 100_000L);
+        CommonInvoicePaymentRef applied = paymentRef(202L, invoice, "APPLIED",
+                "other-order", "other-payment", "terminal", 100_000L);
+        paymentRefStore.put(stale.getId(), stale);
+        paymentRefStore.put(applied.getId(), applied);
+        Map<String, String> payload = confirmedWebhookPayload();
+        PaymentProfile profile = paymentProfile();
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(paymentRefRepository.findByInvoiceIdOrderByCreatedAtAsc(10L)).thenReturn(List.of(applied, stale));
+        when(paymentProfileService.findByTerminalKey("terminal")).thenReturn(Optional.of(profile));
+        when(paymentProfileService.toRuntimeForTerminal(profile, "terminal")).thenReturn(runtimeProfile());
+        when(tokenSigner.matches(payload, "password", "token")).thenReturn(true);
+
+        assertTrue(service.handleTbankWebhook(payload));
+
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+        assertEquals("CONFIRMED", stale.getStatus());
+        assertEquals("APPLIED", applied.getStatus());
+        assertTrue(invoice.getLastError().startsWith("late_tbank_payment"));
+        verify(invoiceRepository).save(invoice);
+        verify(orderTransactionService, never()).handlePaymentStatus(any(), anyBoolean());
+    }
+
+    @Test
     void webhookCurrentRegistryConstraintIsQuarantinedAndAcknowledged() {
         CommonBillingAccount account = account();
         CommonInvoice invoice = invoice(account);

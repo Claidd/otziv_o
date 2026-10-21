@@ -180,6 +180,12 @@ public class PaymentLinkSettlementService {
             log.info("Stale T-Bank status ignored for terminal payment: linkId={}, current={}, incoming={}", link.getId(), link.getStatus(), status);
             return;
         }
+        if ("CONFIRMED".equals(status)
+                && (!success || !"0".equals(normalize(errorCode))
+                || normalize(link.getTbankPaymentId()).isBlank() || link.getAmountKopecks() <= 0)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "CONFIRMED Т-Банка без успешного ответа и реквизитов платежа требует сверки");
+        }
         switch(status) {
             case "CONFIRMED" ->
                 confirmPayment(link);

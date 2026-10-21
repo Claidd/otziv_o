@@ -127,6 +127,7 @@ public class BankPaymentReconciliationWorkflow {
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void handleTbankWebhook(Map<String, String> payload) {
         VerifiedWebhookProfile verified = verifyWebhook(payload);
+        TbankConfirmedEvidence.requireValidWebhook(payload);
         String orderId = normalize(payload.get("OrderId"));
         String paymentId = normalize(payload.get("PaymentId"));
         Optional<PaymentLink> linkCandidate = !orderId.isBlank() ? paymentLinkRepository.findByTbankOrderIdWithOrder(orderId) : Optional.empty();

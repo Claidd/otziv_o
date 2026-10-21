@@ -3614,6 +3614,37 @@ class PaymentLinkServiceTest {
     }
 
     @Test
+    void inconsistentSignedTbankConfirmationCannotPayStandaloneOrder() throws Exception {
+        TbankPaymentProperties properties = properties();
+        properties.setTerminalKey("terminal");
+        properties.setPassword("password");
+        properties.setApplyConfirmedPayments(true);
+        TbankTokenSigner signer = new TbankTokenSigner();
+        PaymentLinkService service = service(properties, signer);
+        Order order = order(2021L, "ООО Проверка банка", BigDecimal.valueOf(11.11));
+        PaymentLink link = new PaymentLink();
+        link.setId(2021L);
+        link.setOrder(order);
+        link.setToken("token");
+        link.setTbankOrderId("o2021");
+        link.setAmountKopecks(1111L);
+        link.setStatus(PaymentLinkStatus.INITIATED);
+
+        for (Map.Entry<String, String> invalid : Map.of(
+                "Success", "false", "ErrorCode", "5", "Amount", "0", "PaymentId", " ").entrySet()) {
+            Map<String, String> payload = signedWebhook(signer, "o2021", "bank-2021", "CONFIRMED", 1111L);
+            payload.put(invalid.getKey(), invalid.getValue());
+            payload.put("Token", signer.sign(payload, "password"));
+            assertThrows(ResponseStatusException.class, () -> service.handleTbankWebhook(payload), invalid.getKey());
+        }
+
+        assertEquals(PaymentLinkStatus.INITIATED, link.getStatus());
+        verify(paymentLinkRepository, never()).findByTbankOrderIdWithOrder(anyString());
+        verify(orderTransactionService, never()).handlePaymentStatus(any(), anyBoolean());
+        verify(paymentLinkRepository, never()).save(any());
+    }
+
+    @Test
     void unknownFailedWebhookCannotReleaseReconciliationQuarantineOrAllowNewInvoice() throws Exception {
         TbankPaymentProperties properties = properties();
         properties.setTerminalKey("terminal");
