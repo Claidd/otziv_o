@@ -403,7 +403,9 @@ function Get-OtzivCoordinatedSslBundlePaths {
     }
     foreach ($component in @('postgres', 'keycloak')) {
         $entry = @($index.images | Where-Object { $_.component -eq $component })
-        if ($entry.Count -ne 1 -or -not $entry[0].sslRefreshAcceptance.path) {
+        if ($entry.Count -ne 1 -or
+            -not $entry[0].PSObject.Properties['sslRefreshAcceptance'] -or
+            -not $entry[0].sslRefreshAcceptance.path) {
             throw "Missing accepted SSL cutover evidence: $component"
         }
         $reference = $entry[0].sslRefreshAcceptance

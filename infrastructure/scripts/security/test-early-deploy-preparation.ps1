@@ -10,25 +10,41 @@ function Fixture-Git([string[]]$Arguments) {
 }
 try {
     New-Item -ItemType Directory -Path (Join-Path $fixture 'infrastructure/scripts/prod') -Force | Out-Null
-    # Exercise the real deploy inventory, including the optional bound SSL proofs.
+    # Exercise the real deploy inventory. The optional SSL cutover is approved only
+    # for image generations with an sslRefreshAcceptance proof on both components.
     # A tiny fixture alone misses extra assignments in the actual deploy script.
     $repository = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../..'))
     $ordinaryPaths = @(Get-OtzivDeployBundlePaths -Repository $repository)
-    $sslPaths = @(Get-OtzivDeployBundlePaths -Repository $repository -CoordinatedSslRefresh)
-    $extraPaths = @(Get-OtzivCoordinatedSslBundlePaths -Repository $repository)
-    if ($sslPaths.Count -le $ordinaryPaths.Count -or $extraPaths.Count -lt 10) {
-        throw 'Coordinated SSL archive is missing accepted evidence.'
+    $activation = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repository 'infrastructure/runtime-security/reviewed-image-activations.json') | ConvertFrom-Json
+    $keycloak = @($activation.images | Where-Object { $_.component -eq 'keycloak' })
+    if ($keycloak.Count -ne 1) { throw 'Expected exactly one active Keycloak image.' }
+    $sslApproved = [bool]$keycloak[0].PSObject.Properties['sslRefreshAcceptance']
+    $extraPaths = @()
+    if ($sslApproved) {
+        $sslPaths = @(Get-OtzivDeployBundlePaths -Repository $repository -CoordinatedSslRefresh)
+        $extraPaths = @(Get-OtzivCoordinatedSslBundlePaths -Repository $repository)
+        if ($sslPaths.Count -le $ordinaryPaths.Count -or $extraPaths.Count -lt 10) {
+            throw 'Coordinated SSL archive is missing accepted evidence.'
+        }
+    } else {
+        $rejected = $false
+        try { $null = Get-OtzivDeployBundlePaths -Repository $repository -CoordinatedSslRefresh }
+        catch {
+            if ($_.Exception.Message -ne 'Missing accepted SSL cutover evidence: keycloak') { throw }
+            $rejected = $true
+        }
+        if (-not $rejected) { throw 'Unreviewed Keycloak generation entered the SSL cutover archive.' }
     }
     $realRevision = (& git -C $repository rev-parse HEAD).Trim()
     if ($LASTEXITCODE -ne 0) { throw 'Cannot read the actual repository revision.' }
     $realEvidence = Join-Path $fixture 'real-release-evidence'
     New-Item -ItemType Directory -Path $realEvidence | Out-Null
     $realPrepared = New-OtzivPreparedDeployArchive -Repository $repository -Revision $realRevision `
-        -Directory $realEvidence -CoordinatedSslRefresh
-    foreach ($path in $extraPaths) {
+        -Directory $realEvidence -CoordinatedSslRefresh:$sslApproved
+    foreach ($path in @($ordinaryPaths + $extraPaths | Select-Object -Unique)) {
         if ($path -notin $realPrepared.paths -or
             -not (Test-Path -LiteralPath (Join-Path $realEvidence ('verified-source/' + $path)))) {
-            throw "Accepted SSL evidence absent from the committed archive: $path"
+            throw "Deployment input absent from the committed archive: $path"
         }
     }
     $fixtureSecurity = Join-Path $fixture 'infrastructure/runtime-security'
