@@ -9,6 +9,7 @@ import com.hunt.otziv.client_messages.dto.ArchiveCompanyMessageCandidate;
 import com.hunt.otziv.client_messages.dto.ClientMessageSendResult;
 import com.hunt.otziv.client_messages.api.ClientMessageDelivery;
 import com.hunt.otziv.client_messages.api.PaymentDeadlineNoticeSource;
+import com.hunt.otziv.client_messages.api.UncertainClientMessageDelivery;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hunt.otziv.client_messages.dto.TelegramTransferCopyButton;
 import com.hunt.otziv.client_messages.model.ClientMessageScenario;
@@ -80,7 +81,7 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class ScheduledClientMessageService implements PaymentDeadlineNoticeSource {
+public class ScheduledClientMessageService implements PaymentDeadlineNoticeSource, UncertainClientMessageDelivery {
 
     private static final ObjectMapper DELIVERY_JSON = new ObjectMapper();
 
@@ -436,6 +437,31 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
 
     public record UncertainDeliveryPreview(Long stateId, String operationId, String message,
                                            LocalDateTime preparedAt) { }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean hasUnknownOutcome(Long stateId) {
+        return stateId != null && stateRepository.findById(stateId)
+                .map(state -> "UNKNOWN".equals(state.getDeliveryStatus())).orElse(false);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public UncertainClientMessageDelivery.Preview preview(Long stateId) {
+        UncertainDeliveryPreview result = uncertainDeliveryPreview(stateId);
+        return new UncertainClientMessageDelivery.Preview(result.stateId(), result.operationId(),
+                result.message(), result.preparedAt());
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public UncertainClientMessageDelivery.Preview handoff(Long stateId, String operationId,
+                                                            Long actorUserId, Long controlEntityId, String note) {
+        UncertainDeliveryPreview result = handoffUncertainOrdinaryDelivery(
+                stateId, operationId, actorUserId, controlEntityId, note);
+        return new UncertainClientMessageDelivery.Preview(result.stateId(), result.operationId(),
+                result.message(), result.preparedAt());
+    }
 
     @Transactional(readOnly = true)
     public UncertainDeliveryPreview uncertainDeliveryPreview(Long stateId) {

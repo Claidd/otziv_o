@@ -9,7 +9,7 @@ import static com.hunt.otziv.manager_control.service.ManagerControlDayLifecycle.
 import static com.hunt.otziv.manager_control.service.ManagerControlConcreteSnapshotWorkflow.*;
 import static com.hunt.otziv.manager_control.service.ManagerControlProblemExamples.*;
 import com.hunt.otziv.client_chat_control.service.ClientChatMessageTrackerService;
-import com.hunt.otziv.client_messages.repository.ScheduledClientMessageStateRepository;
+import com.hunt.otziv.client_messages.api.UncertainClientMessageDelivery;
 import com.hunt.otziv.manager.service.ManagerPermissionService;
 import com.hunt.otziv.manager_control.dto.ManagerControlConcreteItemResponse;
 import com.hunt.otziv.manager_control.dto.ManagerControlItemActionRequest;
@@ -81,7 +81,7 @@ public class ManagerControlItemActions {
     private final ManagerControlInvoiceDiagnostics invoiceDiagnostics;
 
     private final ManagerAutomationFailureService managerAutomationFailureService;
-    private final ScheduledClientMessageStateRepository scheduledClientMessageStateRepository;
+    private final UncertainClientMessageDelivery uncertainClientMessageDelivery;
 
     private final ManagerDailyControlRepository dailyControlRepository;
 
@@ -151,9 +151,8 @@ public class ManagerControlItemActions {
                 || ManagerAutomationFailureService.ENTITY_COMMON_INVOICE_AUTOMATION.equals(concreteItem.getEntityType())) {
             managerAutomationFailureService.findIssue(control.getManager(), concreteItem.getEntityType(),
                     concreteItem.getEntityId()).map(ManagerAutomationFailureService.AutomationFailureIssue::stateId)
-                    .flatMap(scheduledClientMessageStateRepository::findById)
-                    .filter(state -> "UNKNOWN".equals(state.getDeliveryStatus()))
-                    .ifPresent(state -> {
+                    .filter(uncertainClientMessageDelivery::hasUnknownOutcome)
+                    .ifPresent(stateId -> {
                         throw new ResponseStatusException(HttpStatus.CONFLICT,
                                 "Неизвестный исход отправки нельзя закрыть обычным действием. "
                                 + "Проверьте чат и используйте ручную передачу.");

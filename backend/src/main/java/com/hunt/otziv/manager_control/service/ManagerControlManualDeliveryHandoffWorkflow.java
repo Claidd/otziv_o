@@ -1,6 +1,6 @@
 package com.hunt.otziv.manager_control.service;
 
-import com.hunt.otziv.client_messages.service.ScheduledClientMessageService;
+import com.hunt.otziv.client_messages.api.UncertainClientMessageDelivery;
 import com.hunt.otziv.manager.service.ManagerPermissionService;
 import com.hunt.otziv.manager_control.dto.ManagerControlConcreteItemResponse;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlActionType;
@@ -26,7 +26,7 @@ public class ManagerControlManualDeliveryHandoffWorkflow {
     private final ManagerControlAccessPolicy access;
     private final ManagerPermissionService permissions;
     private final ManagerAutomationFailureService failures;
-    private final ScheduledClientMessageService messages;
+    private final UncertainClientMessageDelivery messages;
     private final ManagerControlCardLifecycle lifecycle;
     private final ManagerControlConcretePresenter presenter;
 
@@ -37,7 +37,7 @@ public class ManagerControlManualDeliveryHandoffWorkflow {
     @Transactional(readOnly = true)
     public Preview preview(Long cardId, Principal principal, Authentication authentication) {
         var card = eligibleCard(cardId, principal, authentication);
-        var operation = messages.uncertainDeliveryPreview(stateId(card));
+        var operation = messages.preview(stateId(card));
         return new Preview(operation.stateId(), operation.operationId(), operation.message(),
                 operation.preparedAt(), card.getChatUrl());
     }
@@ -54,7 +54,7 @@ public class ManagerControlManualDeliveryHandoffWorkflow {
         var card = eligibleCard(cardId, principal, authentication);
         Long stateId = stateId(card);
         Long actorId = access.actorUserId(principal);
-        var handoff = messages.handoffUncertainOrdinaryDelivery(stateId, request.operationId(),
+        var handoff = messages.handoff(stateId, request.operationId(),
                 actorId, cardId, request.note());
         card.setStatus(ManagerDailyControlItemStatus.OPEN);
         card.setActionType(ManagerDailyControlActionType.ACTION_TAKEN);

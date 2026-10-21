@@ -274,10 +274,25 @@ public class ManualCardPaymentWorkflow {
     AdminPaymentLinkResponse confirmSpecialistReviewPayment(Long reviewId, Long linkId,
             Long receivedAmountKopecks, String note, String receiptUrl, String actor,
             Authentication authentication, ManualCardPaymentContext context,
-            ContractorRecipientType recipientType, Long recipientProfileId, String recipientKey) {
+            Long recipientProfileId, String recipientKey) {
         return confirmPaidByManualCardTransferInternal(linkId, receivedAmountKopecks, note,
-                receiptUrl, actor, authentication, context, recipientType, recipientProfileId,
+                receiptUrl, actor, authentication, context, ContractorRecipientType.SPECIALIST, recipientProfileId,
                 recipientKey, false, reviewId);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    void prepareSpecialistReviewRecipient(Long orderId, PaymentLink link, Long recipientProfileId,
+                                          String recipientKey, String reason, String receiptUrl, String actor) {
+        Order order = orderRepository.findByIdForCounterUpdate(orderId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден"));
+        requireManualCardPaymentLocalEligibility(order, link, orderId);
+        freezeActualRecipientIntentIfRequired(order, link, ContractorRecipientType.SPECIALIST,
+                recipientProfileId, recipientKey, reason, receiptUrl, actor);
+        if (link.getManualActualRecipientType() != ContractorRecipientType.SPECIALIST
+                || !Objects.equals(link.getManualActualRecipientProfileId(), recipientProfileId)
+                || link.getManualActualRecipientUserId() == null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Получатель оплаты не совпал со специалистом");
+        }
     }
 
     private AdminPaymentLinkResponse confirmPaidByManualCardTransferInternal(Long linkId, Long receivedAmountKopecks, String note, String receiptUrl, String actor, Authentication authentication, ManualCardPaymentContext context, ContractorRecipientType requestedRecipientType, Long requestedRecipientProfileId, String requestedRecipientKey, boolean signedOwnerApproval, Long specialistReviewId) {
@@ -392,7 +407,9 @@ public class ManualCardPaymentWorkflow {
                     ? SpecialistManualPaymentReviewStatus.SETTLING
                     : SpecialistManualPaymentReviewStatus.ADMIN_SETTLING;
         specialistReviewGuard.requireManualPaymentAllowed(orderId, link, amountKopecks,
-                recipientType, profileId, recipientKey, specialistReviewId, expected);
+                recipientType == ContractorRecipientType.SPECIALIST, profileId, recipientKey,
+                link != null && link.getManualActualRecipientType() == ContractorRecipientType.SPECIALIST,
+                specialistReviewId, expected);
     }
 
     private void reconcileLegacyTerminalBankRoutesForManualCardPayment(Long orderId, Authentication authentication) {

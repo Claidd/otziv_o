@@ -34,7 +34,7 @@ import com.hunt.otziv.payments.model.PaymentLink;
 import com.hunt.otziv.payments.model.PaymentLinkStatus;
 import com.hunt.otziv.payments.model.InvoicePaymentMode;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
-import com.hunt.otziv.payments.service.SpecialistManualPaymentReviewGuard;
+import com.hunt.otziv.payments.api.SpecialistPaymentReviewGate;
 import jakarta.persistence.EntityManager;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -119,7 +119,7 @@ public class CommonInvoiceMembershipWorkflow implements com.hunt.otziv.common_bi
 
     private final CommonInvoicePublicationBlockerService publicationBlockerService;
 
-    private final SpecialistManualPaymentReviewGuard specialistReviewGuard;
+    private final SpecialistPaymentReviewGate specialistReviewGuard;
 
     @Transactional
     public boolean attachOrderIfNeeded(Order order) {

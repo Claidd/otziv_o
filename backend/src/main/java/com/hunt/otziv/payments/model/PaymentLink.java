@@ -61,6 +61,11 @@ public class PaymentLink {
     @JoinColumn(name = "order_id", nullable = false)
     private Order order;
 
+    /** Scalar order identity for payment workflows that must not inspect the Order entity. */
+    public Long getOrderId() {
+        return order == null ? null : order.getId();
+    }
+
     @Column(name = "amount_kopecks", nullable = false)
     private long amountKopecks;
 

@@ -1061,6 +1061,7 @@ $deployBundlePaths = @(
     "whatsapp\groups-cache.js",
     "whatsapp\last-seen.js",
     "whatsapp\remote-browser.js",
+    "whatsapp\browser-read-health.js",
     "docs\WHATSAPP_INBOUND_DELIVERY_RUNBOOK.md",
     "docs\WHATSAPP_REMOTE_SESSION_RECOVERY.md",
     "infrastructure\nginx",

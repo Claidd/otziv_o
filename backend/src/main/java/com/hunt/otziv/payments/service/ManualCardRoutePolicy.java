@@ -53,6 +53,13 @@ public class ManualCardRoutePolicy {
 
     private final ContractorActualPaymentAttributionService actualPaymentAttributionService;
 
+    boolean isSpecialistReviewRecipient(PaymentLink link, Long recipientUserId, Long recipientProfileId) {
+        return link != null
+                && link.getManualActualRecipientType() == ContractorRecipientType.SPECIALIST
+                && Objects.equals(link.getManualActualRecipientUserId(), recipientUserId)
+                && Objects.equals(link.getManualActualRecipientProfileId(), recipientProfileId);
+    }
+
     private boolean isPaperInvoice(PaymentLink link) {
         return paymentPresenter.isPaperInvoice(link);
     }

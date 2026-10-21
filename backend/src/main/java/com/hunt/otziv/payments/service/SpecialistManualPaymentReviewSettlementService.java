@@ -1,13 +1,12 @@
 package com.hunt.otziv.payments.service;
 
-import com.hunt.otziv.contractor_payments.model.ContractorRecipientType;
-import com.hunt.otziv.contractor_payments.service.ContractorPaymentTargetAccessPolicy;
+import com.hunt.otziv.contractor_payments.api.PaymentReviewTargetAuthorization;
 import com.hunt.otziv.payments.dto.SpecialistManualPaymentReviewResponse;
 import com.hunt.otziv.payments.model.SpecialistManualPaymentReview;
 import com.hunt.otziv.payments.model.SpecialistManualPaymentReviewStatus;
 import com.hunt.otziv.payments.repository.SpecialistManualPaymentReviewRepository;
-import com.hunt.otziv.u_users.model.User;
-import com.hunt.otziv.u_users.repository.UserRepository;
+import com.hunt.otziv.u_users.api.SpecialistPaymentReviewDirectory;
+import org.springframework.security.core.GrantedAuthority;
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -29,9 +28,9 @@ public class SpecialistManualPaymentReviewSettlementService {
     private final SpecialistManualPaymentReviewRepository reviews;
     private final PaymentLinkTransactionExecutor transactions;
     private final ManualCardPaymentWorkflow manualPayments;
-    private final UserRepository users;
+    private final SpecialistPaymentReviewDirectory users;
     private final PaymentIssueReminderService issues;
-    private final ContractorPaymentTargetAccessPolicy targetAccess;
+    private final PaymentReviewTargetAuthorization targetAccess;
     private final SpecialistManualPaymentReviewService reviewReconciliation;
 
     /** Owner/admin evidence can resolve a dispute before the automatic deadline. */
@@ -58,7 +57,7 @@ public class SpecialistManualPaymentReviewSettlementService {
                     new ManualCardPaymentWorkflow.ManualCardPaymentContext(
                             ManualCardPaymentWorkflow.ManualCardPaymentMode.OWNER_VERIFIED,
                             cleanNote),
-                    ContractorRecipientType.SPECIALIST, claim.profileId(), claim.recipientKey());
+                    claim.profileId(), claim.recipientKey());
             SpecialistManualPaymentReviewResponse response = transactions.required(() -> {
                 SpecialistManualPaymentReview review = reviews.lockById(reviewId)
                         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Запрос не найден"));
@@ -153,7 +152,7 @@ public class SpecialistManualPaymentReviewSettlementService {
                     new ManualCardPaymentWorkflow.ManualCardPaymentContext(
                             ManualCardPaymentWorkflow.ManualCardPaymentMode.MANAGER_REPORTED,
                             claim.reason()),
-                    ContractorRecipientType.SPECIALIST, claim.profileId(), claim.recipientKey());
+                    claim.profileId(), claim.recipientKey());
             transactions.required(() -> {
                 SpecialistManualPaymentReview review = reviews.lockById(reviewId).orElse(null);
                 if (review != null && review.getStatus() == SpecialistManualPaymentReviewStatus.SETTLING) {
@@ -195,9 +194,8 @@ public class SpecialistManualPaymentReviewSettlementService {
                 && review.getLastAttemptAt().isAfter(now.minusMinutes(5))) {
             return null;
         }
-        User requester = users.findById(review.getRequestedByUserId()).orElse(null);
-        if (requester == null || !requester.isActive() || requester.getUsername() == null
-                || requester.getRoles() == null || requester.getRoles().isEmpty()) {
+        SpecialistPaymentReviewDirectory.Actor requester = users.activeActor(review.getRequestedByUserId()).orElse(null);
+        if (requester == null) {
             review.setStatus(SpecialistManualPaymentReviewStatus.NEEDS_ATTENTION);
             review.setLastError("Исходный менеджер больше не имеет доступа");
             reviews.save(review);
@@ -213,8 +211,8 @@ public class SpecialistManualPaymentReviewSettlementService {
         reviews.save(review);
         return new Claim(review.getOrderId(), review.getPaymentLinkId(), review.getAmountKopecks(),
                 review.getRecipientProfileId(), review.getRecipientKey(), review.getReason(),
-                review.getReceiptUrl(), review.getRequestedBy(), requester.getUsername(),
-                List.copyOf(requester.getRoles()));
+                review.getReceiptUrl(), review.getRequestedBy(), requester.username(),
+                requester.authorities());
     }
 
     private void recordFailure(Long reviewId, Long orderId, RuntimeException failure) {
@@ -253,6 +251,6 @@ public class SpecialistManualPaymentReviewSettlementService {
 
     private record Claim(Long orderId, Long linkId, long amountKopecks, Long profileId,
                          String recipientKey, String reason, String receiptUrl, String actor,
-                         String username, List<com.hunt.otziv.u_users.model.Role> authorities) {
+                         String username, List<GrantedAuthority> authorities) {
     }
 }

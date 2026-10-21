@@ -211,6 +211,73 @@
         "x-automatic-retry" : false
       }
     },
+    "/api/admin/manager-control/concrete-items/{concreteItemId}/handoff-uncertain-delivery" : {
+      "post" : {
+        "operationId" : "ApiManagerControlController_handoffUncertainDelivery",
+        "x-java-handler" : "com.hunt.otziv.manager_control.controller.ApiManagerControlController#handoffUncertainDelivery",
+        "requestBody" : {
+          "required" : true,
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ManagerControlManualDeliveryHandoffWorkflowRequestInput"
+              }
+            }
+          }
+        },
+        "parameters" : [ {
+          "name" : "concreteItemId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer"
+          }
+        } ],
+        "x-preauthorize" : "hasAnyRole('ADMIN', 'OWNER')",
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Declared controller response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ManagerControlConcreteItemResponseOutput"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Validation or domain rejection",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication rejected; a write is not automatically retried"
+          },
+          "403" : {
+            "description" : "Server denied access; authority is not inferred from client state"
+          },
+          "409" : {
+            "description" : "Conflict; read current state before an explicit user retry",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          }
+        },
+        "x-automatic-retry" : false
+      }
+    },
     "/api/admin/manager-control/concrete-items/{concreteItemId}/mark-staff-message" : {
       "post" : {
         "operationId" : "ApiManagerControlController_markClientMessageMisclassified",
@@ -496,6 +563,63 @@
               "application/json" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/ManagerControlConcreteItemResponseOutput"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Validation or domain rejection",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication rejected; a write is not automatically retried"
+          },
+          "403" : {
+            "description" : "Server denied access; authority is not inferred from client state"
+          },
+          "409" : {
+            "description" : "Conflict; read current state before an explicit user retry",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          }
+        },
+        "x-automatic-retry" : false
+      }
+    },
+    "/api/admin/manager-control/concrete-items/{concreteItemId}/uncertain-delivery" : {
+      "get" : {
+        "operationId" : "ApiManagerControlController_uncertainDelivery",
+        "x-java-handler" : "com.hunt.otziv.manager_control.controller.ApiManagerControlController#uncertainDelivery",
+        "parameters" : [ {
+          "name" : "concreteItemId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer"
+          }
+        } ],
+        "x-preauthorize" : "hasAnyRole('ADMIN', 'OWNER')",
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Declared controller response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ManagerControlManualDeliveryHandoffWorkflowPreviewOutput"
                 }
               }
             }
@@ -2404,6 +2528,364 @@
               "application/json" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/OwnerManualCardPaymentApprovalReconciliationServiceResultOutput"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Validation or domain rejection",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication rejected; a write is not automatically retried"
+          },
+          "403" : {
+            "description" : "Server denied access; authority is not inferred from client state"
+          },
+          "409" : {
+            "description" : "Conflict; read current state before an explicit user retry",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          }
+        },
+        "x-automatic-retry" : false
+      }
+    },
+    "/api/admin/payments/specialist-reviews" : {
+      "get" : {
+        "operationId" : "SpecialistManualPaymentReviewAdminController_open",
+        "x-java-handler" : "com.hunt.otziv.payments.controller.SpecialistManualPaymentReviewAdminController#open",
+        "parameters" : [ ],
+        "x-preauthorize" : "hasAnyRole('ADMIN', 'OWNER')",
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Declared controller response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/SpecialistManualPaymentReviewResponseOutput"
+                  }
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Validation or domain rejection",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication rejected; a write is not automatically retried"
+          },
+          "403" : {
+            "description" : "Server denied access; authority is not inferred from client state"
+          },
+          "409" : {
+            "description" : "Conflict; read current state before an explicit user retry",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          }
+        },
+        "x-automatic-retry" : false
+      }
+    },
+    "/api/admin/payments/specialist-reviews/{id}" : {
+      "get" : {
+        "operationId" : "SpecialistManualPaymentReviewAdminController_read",
+        "x-java-handler" : "com.hunt.otziv.payments.controller.SpecialistManualPaymentReviewAdminController#read",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer"
+          }
+        } ],
+        "x-preauthorize" : "hasAnyRole('ADMIN', 'OWNER')",
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Declared controller response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SpecialistManualPaymentReviewResponseOutput"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Validation or domain rejection",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication rejected; a write is not automatically retried"
+          },
+          "403" : {
+            "description" : "Server denied access; authority is not inferred from client state"
+          },
+          "409" : {
+            "description" : "Conflict; read current state before an explicit user retry",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          }
+        },
+        "x-automatic-retry" : false
+      }
+    },
+    "/api/admin/payments/specialist-reviews/{id}/mark-absent" : {
+      "post" : {
+        "operationId" : "SpecialistManualPaymentReviewAdminController_markAbsent",
+        "x-java-handler" : "com.hunt.otziv.payments.controller.SpecialistManualPaymentReviewAdminController#markAbsent",
+        "requestBody" : {
+          "required" : true,
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SpecialistPaymentAbsentRequestInput"
+              }
+            }
+          }
+        },
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer"
+          }
+        } ],
+        "x-preauthorize" : "hasAnyRole('ADMIN', 'OWNER')",
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Declared controller response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SpecialistManualPaymentReviewResponseOutput"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Validation or domain rejection",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication rejected; a write is not automatically retried"
+          },
+          "403" : {
+            "description" : "Server denied access; authority is not inferred from client state"
+          },
+          "409" : {
+            "description" : "Conflict; read current state before an explicit user retry",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          }
+        },
+        "x-automatic-retry" : false
+      }
+    },
+    "/api/admin/payments/specialist-reviews/{id}/reconcile" : {
+      "post" : {
+        "operationId" : "SpecialistManualPaymentReviewAdminController_reconcile",
+        "x-java-handler" : "com.hunt.otziv.payments.controller.SpecialistManualPaymentReviewAdminController#reconcile",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer"
+          }
+        } ],
+        "x-preauthorize" : "hasAnyRole('ADMIN', 'OWNER')",
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Declared controller response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SpecialistManualPaymentReviewResponseOutput"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Validation or domain rejection",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication rejected; a write is not automatically retried"
+          },
+          "403" : {
+            "description" : "Server denied access; authority is not inferred from client state"
+          },
+          "409" : {
+            "description" : "Conflict; read current state before an explicit user retry",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          }
+        },
+        "x-automatic-retry" : false
+      }
+    },
+    "/api/admin/payments/specialist-reviews/{id}/retry-notification" : {
+      "post" : {
+        "operationId" : "SpecialistManualPaymentReviewAdminController_retry",
+        "x-java-handler" : "com.hunt.otziv.payments.controller.SpecialistManualPaymentReviewAdminController#retry",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer"
+          }
+        } ],
+        "x-preauthorize" : "hasAnyRole('ADMIN', 'OWNER')",
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Declared controller response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SpecialistManualPaymentReviewResponseOutput"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Validation or domain rejection",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication rejected; a write is not automatically retried"
+          },
+          "403" : {
+            "description" : "Server denied access; authority is not inferred from client state"
+          },
+          "409" : {
+            "description" : "Conflict; read current state before an explicit user retry",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          }
+        },
+        "x-automatic-retry" : false
+      }
+    },
+    "/api/admin/payments/specialist-reviews/{id}/verify-received" : {
+      "post" : {
+        "operationId" : "SpecialistManualPaymentReviewAdminController_verifyReceived",
+        "x-java-handler" : "com.hunt.otziv.payments.controller.SpecialistManualPaymentReviewAdminController#verifyReceived",
+        "requestBody" : {
+          "required" : true,
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SpecialistPaymentVerifyRequestInput"
+              }
+            }
+          }
+        },
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer"
+          }
+        } ],
+        "x-preauthorize" : "hasAnyRole('ADMIN', 'OWNER')",
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Declared controller response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SpecialistManualPaymentReviewResponseOutput"
                 }
               }
             }
@@ -18843,6 +19325,79 @@
         "additionalProperties" : true,
         "x-server-permission-fields" : [ "canCloseDay" ]
       },
+      "ManagerControlManualDeliveryHandoffWorkflowPreviewOutput" : {
+        "x-java-type" : "com.hunt.otziv.manager_control.service.ManagerControlManualDeliveryHandoffWorkflow$Preview",
+        "type" : "object",
+        "properties" : {
+          "chatUrl" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "message" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "operationId" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "preparedAt" : {
+            "anyOf" : [ {
+              "type" : "string",
+              "x-date-time-kind" : "local"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "stateId" : {
+            "anyOf" : [ {
+              "type" : "integer"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        },
+        "required" : [ "chatUrl", "message", "operationId", "preparedAt", "stateId" ],
+        "additionalProperties" : true
+      },
+      "ManagerControlManualDeliveryHandoffWorkflowRequestInput" : {
+        "x-java-type" : "com.hunt.otziv.manager_control.service.ManagerControlManualDeliveryHandoffWorkflow$Request",
+        "type" : "object",
+        "properties" : {
+          "checkedChat" : {
+            "anyOf" : [ {
+              "type" : "boolean"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "note" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "operationId" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        },
+        "required" : [ ],
+        "additionalProperties" : true
+      },
       "ManagerControlOverdueStatusResponseOutput" : {
         "x-java-type" : "com.hunt.otziv.manager_control.dto.ManagerControlOverdueStatusResponse",
         "type" : "object",
@@ -24433,6 +24988,158 @@
         "required" : [ "empty", "sorted", "unsorted" ],
         "additionalProperties" : true
       },
+      "SpecialistManualPaymentReviewResponseOutput" : {
+        "x-java-type" : "com.hunt.otziv.payments.dto.SpecialistManualPaymentReviewResponse",
+        "type" : "object",
+        "properties" : {
+          "amountKopecks" : {
+            "type" : "integer",
+            "x-money-unit" : "kopecks"
+          },
+          "deadlineAt" : {
+            "anyOf" : [ {
+              "type" : "string",
+              "x-date-time-kind" : "local"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "id" : {
+            "anyOf" : [ {
+              "type" : "integer"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "lastError" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "notifiedAt" : {
+            "anyOf" : [ {
+              "type" : "string",
+              "x-date-time-kind" : "local"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "orderId" : {
+            "anyOf" : [ {
+              "type" : "integer"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "paymentLinkId" : {
+            "anyOf" : [ {
+              "type" : "integer"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "recipientUserId" : {
+            "anyOf" : [ {
+              "type" : "integer"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "requestedAt" : {
+            "anyOf" : [ {
+              "type" : "string",
+              "x-date-time-kind" : "local"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "retryNotificationAllowed" : {
+            "type" : "boolean"
+          },
+          "status" : {
+            "anyOf" : [ {
+              "$ref" : "#/components/schemas/SpecialistManualPaymentReviewStatusOutput"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        },
+        "required" : [ "amountKopecks", "deadlineAt", "id", "lastError", "notifiedAt", "orderId", "paymentLinkId", "recipientUserId", "requestedAt", "retryNotificationAllowed", "status" ],
+        "additionalProperties" : true
+      },
+      "SpecialistManualPaymentReviewStatusOutput" : {
+        "x-java-type" : "com.hunt.otziv.payments.model.SpecialistManualPaymentReviewStatus",
+        "type" : "string",
+        "enum" : [ "PENDING_DELIVERY", "WAITING", "SETTLING", "ADMIN_SETTLING", "DISPUTED", "CONFIRMED", "NEEDS_ATTENTION", "SUPERSEDED" ]
+      },
+      "SpecialistPaymentAbsentRequestInput" : {
+        "x-java-type" : "com.hunt.otziv.payments.dto.SpecialistPaymentAbsentRequest",
+        "type" : "object",
+        "properties" : {
+          "note" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "paymentAbsent" : {
+            "anyOf" : [ {
+              "type" : "boolean"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "recipientStatementChecked" : {
+            "anyOf" : [ {
+              "type" : "boolean"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        },
+        "required" : [ ],
+        "additionalProperties" : true
+      },
+      "SpecialistPaymentVerifyRequestInput" : {
+        "x-java-type" : "com.hunt.otziv.payments.dto.SpecialistPaymentVerifyRequest",
+        "type" : "object",
+        "properties" : {
+          "note" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "paymentReceived" : {
+            "anyOf" : [ {
+              "type" : "boolean"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "receivedAmountKopecks" : {
+            "anyOf" : [ {
+              "type" : "integer"
+            }, {
+              "type" : "null"
+            } ],
+            "x-money-unit" : "kopecks"
+          },
+          "recipientStatementChecked" : {
+            "anyOf" : [ {
+              "type" : "boolean"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        },
+        "required" : [ ],
+        "additionalProperties" : true
+      },
       "StatusChangeRequestInput" : {
         "x-java-type" : "com.hunt.otziv.manager.dto.api.StatusChangeRequest",
         "type" : "object",
@@ -25717,7 +26424,7 @@
     "sha256" : "796cc452d2006e0d1028523fd004b3d668364553be7e0d6a7acb7278d7c7c62d"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/manager_control/controller/ApiManagerControlController.java",
-    "sha256" : "994eef7e9836237cf45805f4643df44bdd44647cdab0b2752ae7484c8078ca1c"
+    "sha256" : "b897af3b568ba4d229c8e268fb4cf76c31312864352005ea0c0a39cf3498fa23"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/manager_control/controller/ManagerClientReplyOperationController.java",
     "sha256" : "28f7dfb73d90d3fca83eb5b5d988fe7d0833afb39a152e1f232377a4f73117ba"
@@ -25779,6 +26486,9 @@
     "path" : "backend/src/main/java/com/hunt/otziv/manager_control/dto/ManagerQueueStateResponse.java",
     "sha256" : "2ce2975de9d998ee50c317bad51d80e924264ee9edb2ee7521e9faba86f4ebdc"
   }, {
+    "path" : "backend/src/main/java/com/hunt/otziv/manager_control/service/ManagerControlManualDeliveryHandoffWorkflow.java",
+    "sha256" : "91901ce3a93d945528a71f8190c33b32aaa985ff842a1eeaa6d9446ea1c10fd0"
+  }, {
     "path" : "backend/src/main/java/com/hunt/otziv/manager_daily_summary/controller/ApiManagerDailySummaryController.java",
     "sha256" : "3b28d51155bc2fea539cec2a5edf112a33cf7c3390137d540f2caef3a7dfe437"
   }, {
@@ -25833,6 +26543,9 @@
     "path" : "backend/src/main/java/com/hunt/otziv/payments/controller/PublicPaymentController.java",
     "sha256" : "ac05c988345b8f30f3023bce295cf067e10c2a235eb238f21fb91f8bfcd7cafb"
   }, {
+    "path" : "backend/src/main/java/com/hunt/otziv/payments/controller/SpecialistManualPaymentReviewAdminController.java",
+    "sha256" : "acd9cfda2bdd13bfcfb235c99012ea71733dad24b10786ed84aa9dcdb865941e"
+  }, {
     "path" : "backend/src/main/java/com/hunt/otziv/payments/dto/AdminPaymentLinkResponse.java",
     "sha256" : "f99660dfd09964b54128bd9749990daf4d56208402545b5c293653225bd0f7d7"
   }, {
@@ -25852,7 +26565,7 @@
     "sha256" : "bc5ce9f84eeb20619cd6bd14c99313f6cf010867f2e680f6d6d5ea299183b70a"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/payments/dto/ManagerManualCardPaymentResultResponse.java",
-    "sha256" : "f1fb4668031437f773065924e784d64542c28367f50eba42250dcf06ab7cc9a8"
+    "sha256" : "b74956f6a4ba6bc28c8d1b461ec8370c685f79db88aaeffdfb7d00fa1d92199d"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/payments/dto/ManagerManualPaymentSettingsResponse.java",
     "sha256" : "0acf4cf65817f05a43107de9d7e6aa08b830258af6e9dcd55b28d3bdd2d4c3b0"
@@ -25926,6 +26639,15 @@
     "path" : "backend/src/main/java/com/hunt/otziv/payments/dto/ResolveAmbiguousBankInitRequest.java",
     "sha256" : "27889a44a03b444071cc50d76f65e9672c61a8ff844f9b8c316df0e0d575652e"
   }, {
+    "path" : "backend/src/main/java/com/hunt/otziv/payments/dto/SpecialistManualPaymentReviewResponse.java",
+    "sha256" : "0cf9752da3fdd39891b1e8703c578a2e51d0bbdcb3b4c744cce24c4ab48806cd"
+  }, {
+    "path" : "backend/src/main/java/com/hunt/otziv/payments/dto/SpecialistPaymentAbsentRequest.java",
+    "sha256" : "d182daf6ff12c59d227c2fdf9e9519a6b7792c5951c7ef79ab976d86f3bd5cf5"
+  }, {
+    "path" : "backend/src/main/java/com/hunt/otziv/payments/dto/SpecialistPaymentVerifyRequest.java",
+    "sha256" : "26bfc943fdd440731f939302f4f36f4baed8ab96d0b8f2145be017135e2833c5"
+  }, {
     "path" : "backend/src/main/java/com/hunt/otziv/payments/dto/TbankClientPaymentModeResponse.java",
     "sha256" : "26b63a94d5cdf2d6d55384fa98c8a5a39c51898943709e98e0b6e67f35f801d1"
   }, {
@@ -25970,6 +26692,9 @@
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/payments/model/ManualPaymentType.java",
     "sha256" : "0dd94a24b74ffff33fee9f15d6c8a464f4f69932283e1e69f7e773f5d3328bf1"
+  }, {
+    "path" : "backend/src/main/java/com/hunt/otziv/payments/model/SpecialistManualPaymentReviewStatus.java",
+    "sha256" : "25fca6a4c4d01ad5b94084a8665ce7a146bcad920ed783b2b9034af26b03459b"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/payments/service/OwnerManualCardPaymentApprovalReconciliationService.java",
     "sha256" : "cd4764bcf4d6dcc8f67e25afca24e987087373c4070d25c1ac982932cc66b4e5"
@@ -26141,6 +26866,8 @@
     "ManagerControlItemDetailResponseOutput" : "com.hunt.otziv.manager_control.dto.ManagerControlItemDetailResponse",
     "ManagerControlManagerDetailResponseOutput" : "com.hunt.otziv.manager_control.dto.ManagerControlManagerDetailResponse",
     "ManagerControlManagerResponseOutput" : "com.hunt.otziv.manager_control.dto.ManagerControlManagerResponse",
+    "ManagerControlManualDeliveryHandoffWorkflowPreviewOutput" : "com.hunt.otziv.manager_control.service.ManagerControlManualDeliveryHandoffWorkflow$Preview",
+    "ManagerControlManualDeliveryHandoffWorkflowRequestInput" : "com.hunt.otziv.manager_control.service.ManagerControlManualDeliveryHandoffWorkflow$Request",
     "ManagerControlOverdueStatusResponseOutput" : "com.hunt.otziv.manager_control.dto.ManagerControlOverdueStatusResponse",
     "ManagerControlProblemResponseOutput" : "com.hunt.otziv.manager_control.dto.ManagerControlProblemResponse",
     "ManagerControlSectionResponseOutput" : "com.hunt.otziv.manager_control.dto.ManagerControlSectionResponse",
@@ -26225,6 +26952,10 @@
     "ReviewSafetyReportOutput" : "com.hunt.otziv.reputationai.domain.ReviewSafetyReport",
     "ReviewTextUpdateRequestInput" : "com.hunt.otziv.manager.dto.api.ReviewTextUpdateRequest",
     "SortOutput" : "org.springframework.data.domain.Sort",
+    "SpecialistManualPaymentReviewResponseOutput" : "com.hunt.otziv.payments.dto.SpecialistManualPaymentReviewResponse",
+    "SpecialistManualPaymentReviewStatusOutput" : "com.hunt.otziv.payments.model.SpecialistManualPaymentReviewStatus",
+    "SpecialistPaymentAbsentRequestInput" : "com.hunt.otziv.payments.dto.SpecialistPaymentAbsentRequest",
+    "SpecialistPaymentVerifyRequestInput" : "com.hunt.otziv.payments.dto.SpecialistPaymentVerifyRequest",
     "StatusChangeRequestInput" : "com.hunt.otziv.manager.dto.api.StatusChangeRequest",
     "TbankClientPaymentModeResponseOutput" : "com.hunt.otziv.payments.dto.TbankClientPaymentModeResponse",
     "TbankPaymentProfilesResponseOutput" : "com.hunt.otziv.payments.dto.TbankPaymentProfilesResponse",

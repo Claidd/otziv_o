@@ -15,7 +15,7 @@ import com.hunt.otziv.manager_daily_summary.service.ManagerReportReviewTelegramS
 import com.hunt.otziv.performers.service.PerformerTelegramCallbackService;
 import com.hunt.otziv.performers.service.PerformerTelegramLinkService;
 import com.hunt.otziv.payments.service.OwnerManualCardPaymentApprovalTelegramCallbackService;
-import com.hunt.otziv.payments.service.SpecialistManualPaymentReviewTelegramCallbackService;
+import com.hunt.otziv.payments.api.SpecialistPaymentDisputeCallback;
 import com.hunt.otziv.t_telegrambot.dto.TelegramChatMigrationResult;
 import com.hunt.otziv.t_telegrambot.api.TelegramAdminDocuments;
 import com.hunt.otziv.u_users.model.Role;
@@ -75,7 +75,7 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException;
 
 @Component
 @Slf4j
-public class TelegramService extends TelegramLongPollingBot implements TelegramAdminDocuments {
+public class TelegramService extends TelegramLongPollingBot implements TelegramAdminDocuments, com.hunt.otziv.t_telegrambot.api.SpecialistPaymentReviewNotice {
 
     private static final Pattern BOT_TOKEN_PATTERN = Pattern.compile("\\d{6,}:[A-Za-z0-9_-]{20,}");
     private static final int MAX_TELEGRAM_MESSAGE_LENGTH = 3900;
@@ -102,7 +102,7 @@ public class TelegramService extends TelegramLongPollingBot implements TelegramA
             workloadTransferTelegramCallbackServiceProvider;
     private ObjectProvider<OwnerManualCardPaymentApprovalTelegramCallbackService>
             ownerManualCardPaymentApprovalTelegramCallbackServiceProvider;
-    private ObjectProvider<SpecialistManualPaymentReviewTelegramCallbackService>
+    private ObjectProvider<SpecialistPaymentDisputeCallback>
             specialistManualPaymentReviewTelegramCallbackServiceProvider;
     private final TelegramChatMigrationService telegramChatMigrationService;
     private final ClientChatMessageTrackerService clientChatMessageTrackerService;
@@ -156,7 +156,7 @@ public class TelegramService extends TelegramLongPollingBot implements TelegramA
 
     @Autowired(required = false)
     void setSpecialistManualPaymentReviewTelegramCallbackServiceProvider(
-            ObjectProvider<SpecialistManualPaymentReviewTelegramCallbackService> provider
+            ObjectProvider<SpecialistPaymentDisputeCallback> provider
     ) {
         this.specialistManualPaymentReviewTelegramCallbackServiceProvider = provider;
     }
@@ -493,11 +493,13 @@ public class TelegramService extends TelegramLongPollingBot implements TelegramA
             }
         }
 
-        SpecialistManualPaymentReviewTelegramCallbackService specialistPaymentService =
+        SpecialistPaymentDisputeCallback specialistPaymentService =
                 specialistManualPaymentReviewTelegramCallbackServiceProvider == null
                         ? null : specialistManualPaymentReviewTelegramCallbackServiceProvider.getIfAvailable();
         if (specialistPaymentService != null) {
-            Optional<String> specialistPaymentAnswer = specialistPaymentService.handle(callbackQuery);
+            Optional<String> specialistPaymentAnswer = specialistPaymentService.handle(callbackQuery.getData(),
+                    callbackQuery.getFrom() == null ? null : callbackQuery.getFrom().getId(),
+                    callbackQuery.getMessage() == null ? null : callbackQuery.getMessage().getChatId());
             if (specialistPaymentAnswer.isPresent()) {
                 answerCallback(callbackQuery.getId(), specialistPaymentAnswer.get());
                 return;

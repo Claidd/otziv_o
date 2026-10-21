@@ -1,6 +1,5 @@
 package com.hunt.otziv.payments.service;
 
-import com.hunt.otziv.contractor_payments.model.ContractorRecipientType;
 import com.hunt.otziv.payments.model.PaymentLink;
 import com.hunt.otziv.payments.model.SpecialistManualPaymentReview;
 import com.hunt.otziv.payments.model.SpecialistManualPaymentReviewStatus;
@@ -16,7 +15,7 @@ import org.springframework.web.server.ResponseStatusException;
 /** Prevents a second payment route or generic paid transition during specialist review. */
 @Service
 @RequiredArgsConstructor
-public class SpecialistManualPaymentReviewGuard {
+public class SpecialistManualPaymentReviewGuard implements com.hunt.otziv.payments.api.SpecialistPaymentReviewGate {
 
     private static final EnumSet<SpecialistManualPaymentReviewStatus> UNRESOLVED = EnumSet.of(
             SpecialistManualPaymentReviewStatus.PENDING_DELIVERY,
@@ -43,8 +42,9 @@ public class SpecialistManualPaymentReviewGuard {
 
     /** Call after locking Order and PaymentLink, in the transaction that will post money. */
     public void requireManualPaymentAllowed(Long orderId, PaymentLink link, Long amountKopecks,
-                                            ContractorRecipientType recipientType,
+                                            boolean specialistRecipient,
                                             Long recipientProfileId, String recipientKey,
+                                            boolean linkActualSpecialist,
                                             Long trustedReviewId,
                                             SpecialistManualPaymentReviewStatus trustedStatus) {
         List<SpecialistManualPaymentReview> unresolved = reviews.lockUnresolvedByOrderId(orderId, UNRESOLVED);
@@ -59,13 +59,13 @@ public class SpecialistManualPaymentReviewGuard {
                         || trustedStatus == SpecialistManualPaymentReviewStatus.ADMIN_SETTLING)
                     && Objects.equals(review.getOrderId(), orderId)
                     && Objects.equals(review.getPaymentLinkId(), link.getId())
-                    && link.getOrder() != null && Objects.equals(link.getOrder().getId(), orderId)
+                    && Objects.equals(link.getOrderId(), orderId)
                     && Objects.equals(review.getAmountKopecks(), amountKopecks)
                     && link.getAmountKopecks() == review.getAmountKopecks()
-                    && recipientType == ContractorRecipientType.SPECIALIST
+                    && specialistRecipient
                     && Objects.equals(review.getRecipientProfileId(), recipientProfileId)
                     && Objects.equals(review.getRecipientKey(), recipientKey)
-                    && link.getManualActualRecipientType() == ContractorRecipientType.SPECIALIST
+                    && linkActualSpecialist
                     && Objects.equals(link.getManualActualRecipientProfileId(), review.getRecipientProfileId())
                     && Objects.equals(link.getManualActualRecipientUserId(), review.getRecipientUserId())) {
                 return;

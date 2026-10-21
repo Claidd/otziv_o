@@ -1,11 +1,8 @@
 package com.hunt.otziv.payments.service;
 
-import com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler;
-import com.hunt.otziv.contractor_payments.model.ContractorRecipientType;
-import com.hunt.otziv.contractor_payments.service.ContractorPaymentTargetAccessPolicy;
-import com.hunt.otziv.manager.service.ManagerAccessService;
-import com.hunt.otziv.p_products.model.Order;
-import com.hunt.otziv.p_products.repository.OrderRepository;
+import com.hunt.otziv.client_messages.api.ManualPaymentAutomationControl;
+import com.hunt.otziv.contractor_payments.api.PaymentReviewTargetAuthorization;
+import com.hunt.otziv.manager.api.PaymentReviewOrderAccess;
 import com.hunt.otziv.payments.dto.ManagerManualCardPaymentResultResponse;
 import com.hunt.otziv.payments.dto.SpecialistManualPaymentReviewResponse;
 import com.hunt.otziv.payments.model.PaymentLink;
@@ -15,9 +12,8 @@ import com.hunt.otziv.payments.model.SpecialistManualPaymentReview;
 import com.hunt.otziv.payments.model.SpecialistManualPaymentReviewStatus;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.payments.repository.SpecialistManualPaymentReviewRepository;
-import com.hunt.otziv.t_telegrambot.service.TelegramService;
-import com.hunt.otziv.u_users.model.User;
-import com.hunt.otziv.u_users.repository.UserRepository;
+import com.hunt.otziv.t_telegrambot.api.SpecialistPaymentReviewNotice;
+import com.hunt.otziv.u_users.api.SpecialistPaymentReviewDirectory;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Objects;
@@ -53,15 +49,14 @@ public class SpecialistManualPaymentReviewService {
             SpecialistManualPaymentReviewStatus.NEEDS_ATTENTION);
 
     private final SpecialistManualPaymentReviewRepository reviews;
-    private final OrderRepository orders;
     private final PaymentLinkRepository links;
-    private final UserRepository users;
-    private final ManagerAccessService managerAccess;
+    private final SpecialistPaymentReviewDirectory users;
+    private final PaymentReviewOrderAccess managerAccess;
     private final ManualCardPaymentWorkflow manualPayments;
-    private final PaymentInvoiceRetryScheduler invoiceMessages;
-    private final TelegramService telegram;
+    private final ManualPaymentAutomationControl invoiceMessages;
+    private final SpecialistPaymentReviewNotice telegram;
     private final PaymentIssueReminderService issues;
-    private final ContractorPaymentTargetAccessPolicy targetAccess;
+    private final PaymentReviewTargetAuthorization targetAccess;
     private final SpecialistManualPaymentReviewGuard reviewGuard;
     private final ManualCardRoutePolicy manualRoutePolicy;
     private final ManualPaymentConfirmationWorkflow manualConfirmation;
@@ -81,12 +76,12 @@ public class SpecialistManualPaymentReviewService {
             String actor,
             Authentication authentication
     ) {
-        Order order = orders.findByIdForCounterUpdate(orderId)
+        orderPaymentIntegrity.lockSpecialistReviewOrderEvidence(orderId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден"));
         managerAccess.requireOrderAccess(orderId, authentication);
         PaymentLink link = links.findByIdForUpdate(linkId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платёжный источник не найден"));
-        if (link.getOrder() == null || !Objects.equals(link.getOrder().getId(), orderId)
+        if (!Objects.equals(link.getOrderId(), orderId)
                 || link.getAmountKopecks() != amountKopecks) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Платёжный источник изменился");
         }
@@ -109,17 +104,9 @@ public class SpecialistManualPaymentReviewService {
                     "Платёж специалисту уже оспорен или требует отдельной сверки");
         }
         reviewGuard.requireNoPendingReview(orderId);
-        manualPayments.requireManualCardPaymentLocalEligibility(order, link, orderId);
-        manualPayments.freezeActualRecipientIntentIfRequired(order, link,
-                ContractorRecipientType.SPECIALIST, specialistProfileId, recipientKey,
-                reason, receiptUrl, actor);
-        if (link.getManualActualRecipientType() != ContractorRecipientType.SPECIALIST
-                || !Objects.equals(link.getManualActualRecipientProfileId(), specialistProfileId)
-                || link.getManualActualRecipientUserId() == null) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Получатель оплаты не совпал со специалистом");
-        }
-        User manager = users.findByUsername(authentication.getName())
-                .filter(User::isActive)
+        manualPayments.prepareSpecialistReviewRecipient(orderId, link, specialistProfileId,
+                recipientKey, reason, receiptUrl, actor);
+        Long managerId = users.activeUserIdByUsername(authentication.getName())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Менеджер не найден"));
         SpecialistManualPaymentReview review = new SpecialistManualPaymentReview();
         review.setOrderId(orderId);
@@ -128,7 +115,7 @@ public class SpecialistManualPaymentReviewService {
         review.setRecipientProfileId(specialistProfileId);
         review.setRecipientUserId(link.getManualActualRecipientUserId());
         review.setRecipientKey(recipientKey);
-        review.setRequestedByUserId(manager.getId());
+        review.setRequestedByUserId(managerId);
         review.setRequestedBy(actor);
         review.setReason(reason);
         review.setReceiptUrl(receiptUrl);
@@ -185,7 +172,7 @@ public class SpecialistManualPaymentReviewService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Запрос не найден"));
         targetAccess.requireCanManagePaymentLink(snapshot.getPaymentLinkId());
         targetAccess.requireCanManageUser(snapshot.getRecipientUserId());
-        Order order = orders.findByIdForCounterUpdate(snapshot.getOrderId())
+        boolean settledOrderEvidence = orderPaymentIntegrity.lockSpecialistReviewOrderEvidence(snapshot.getOrderId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден"));
         PaymentLink link = links.findByIdForUpdate(snapshot.getPaymentLinkId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платёжный источник не найден"));
@@ -199,12 +186,11 @@ public class SpecialistManualPaymentReviewService {
                 && Objects.equals(link.getConfirmedAmountKopecks(), review.getAmountKopecks())
                 && link.getManualConfirmedAt() != null;
         boolean confirmedBankHandoff = manualRoutePolicy.isCompletedManualCardPayment(link);
-        if (providerPaidForThisReview(order, link, review)) {
+        if (providerPaidForThisReview(settledOrderEvidence, link, review)) {
             supersedeAfterBankPayment(review);
         } else if ((confirmedDirectManual || confirmedBankHandoff)
-                && link.getManualActualRecipientType() == ContractorRecipientType.SPECIALIST
-                && Objects.equals(link.getManualActualRecipientUserId(), review.getRecipientUserId())
-                && Objects.equals(link.getManualActualRecipientProfileId(), review.getRecipientProfileId())) {
+                && manualRoutePolicy.isSpecialistReviewRecipient(link,
+                        review.getRecipientUserId(), review.getRecipientProfileId())) {
             review.setStatus(SpecialistManualPaymentReviewStatus.CONFIRMED);
             review.setSettledAt(LocalDateTime.now());
         } else if (link.getStatus() == PaymentLinkStatus.CANCELED
@@ -230,17 +216,18 @@ public class SpecialistManualPaymentReviewService {
             if (snapshot == null) {
                 return false;
             }
-            Order order = orders.findByIdForCounterUpdate(snapshot.getOrderId()).orElse(null);
+            Boolean settledOrderEvidence = orderPaymentIntegrity.lockSpecialistReviewOrderEvidence(snapshot.getOrderId())
+                    .orElse(null);
             PaymentLink link = links.findByIdForUpdate(snapshot.getPaymentLinkId()).orElse(null);
             SpecialistManualPaymentReview review = reviews.lockById(reviewId).orElse(null);
-            if (order == null || link == null || review == null) {
+            if (settledOrderEvidence == null || link == null || review == null) {
                 return false;
             }
             if (review.getStatus() == SpecialistManualPaymentReviewStatus.SUPERSEDED) {
                 return true;
             }
             if (review.getStatus() == SpecialistManualPaymentReviewStatus.CONFIRMED
-                    || !providerPaidForThisReview(order, link, review)) {
+                    || !providerPaidForThisReview(settledOrderEvidence, link, review)) {
                 return false;
             }
             supersedeAfterBankPayment(review);
@@ -252,22 +239,22 @@ public class SpecialistManualPaymentReviewService {
         });
     }
 
-    private boolean providerPaidForThisReview(Order order, PaymentLink link,
+    private boolean providerPaidForThisReview(boolean settledOrderEvidence, PaymentLink link,
                                                SpecialistManualPaymentReview review) {
-        if (order == null || link == null || review == null || link.getOrder() == null) {
+        if (link == null || review == null || link.getOrderId() == null) {
             return false;
         }
         PaymentMethod method = link.getPaymentMethod();
         return (method == PaymentMethod.BANK_FORM || method == PaymentMethod.SBP_QR)
                 && link.getStatus() == PaymentLinkStatus.CONFIRMED
-                && Objects.equals(link.getOrder().getId(), review.getOrderId())
+                && Objects.equals(link.getOrderId(), review.getOrderId())
                 && Objects.equals(link.getId(), review.getPaymentLinkId())
                 && link.getAmountKopecks() == review.getAmountKopecks()
                 && Objects.equals(link.getConfirmedAmountKopecks(), review.getAmountKopecks())
                 && link.getPaidAt() != null
                 && link.getManualConfirmedAt() == null
                 && link.getTbankPaymentId() != null && !link.getTbankPaymentId().isBlank()
-                && orderPaymentIntegrity.hasSettledPaymentEvidence(order);
+                && settledOrderEvidence;
     }
 
     private void supersedeAfterBankPayment(SpecialistManualPaymentReview review) {
@@ -293,7 +280,7 @@ public class SpecialistManualPaymentReviewService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Запрос не найден"));
         targetAccess.requireCanManagePaymentLink(snapshot.getPaymentLinkId());
         targetAccess.requireCanManageUser(snapshot.getRecipientUserId());
-        Order order = orders.findByIdForCounterUpdate(snapshot.getOrderId())
+        boolean settledOrderEvidence = orderPaymentIntegrity.lockSpecialistReviewOrderEvidence(snapshot.getOrderId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден"));
         PaymentLink link = links.findByIdForUpdate(snapshot.getPaymentLinkId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платёжный источник не найден"));
@@ -307,7 +294,7 @@ public class SpecialistManualPaymentReviewService {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Заявление уже закрыто или зачисление началось; проверьте источник оплаты");
         }
-        if (providerPaidForThisReview(order, link, review)) {
+        if (providerPaidForThisReview(settledOrderEvidence, link, review)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Банк уже подтвердил оплату этого счёта; сначала выполните сверку банковского поступления");
         }
@@ -401,9 +388,8 @@ public class SpecialistManualPaymentReviewService {
                 return null;
             }
         }
-        User recipient = users.findById(review.getRecipientUserId()).orElse(null);
-        Long chatId = recipient == null ? null : recipient.getTelegramChatId();
-        if (recipient == null || !recipient.isActive() || chatId == null || chatId <= 0) {
+        Long chatId = users.activePersonalTelegramChatId(review.getRecipientUserId()).orElse(null);
+        if (chatId == null) {
             notificationFailure(review, "У специалиста нет активного личного Telegram-чата");
             return null;
         }
@@ -469,10 +455,9 @@ public class SpecialistManualPaymentReviewService {
     public String dispute(Long reviewId, Long telegramUserId) {
         SpecialistManualPaymentReview review = reviews.lockById(reviewId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Запрос не найден"));
-        User recipient = users.findById(review.getRecipientUserId())
+        Long recipientChatId = users.activePersonalTelegramChatId(review.getRecipientUserId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Получатель не найден"));
-        if (!recipient.isActive() || telegramUserId == null
-                || !telegramUserId.equals(recipient.getTelegramChatId())) {
+        if (telegramUserId == null || !telegramUserId.equals(recipientChatId)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     "Оспорить поступление может только указанный специалист");
         }

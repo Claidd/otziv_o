@@ -6,30 +6,28 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
-import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
+import com.hunt.otziv.payments.api.SpecialistPaymentDisputeCallback;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class SpecialistManualPaymentReviewTelegramCallbackService {
+public class SpecialistManualPaymentReviewTelegramCallbackService implements SpecialistPaymentDisputeCallback {
 
     private static final String PREFIX = "specialist-payment-dispute:";
 
     private final SpecialistManualPaymentReviewService reviews;
 
-    public Optional<String> handle(CallbackQuery callback) {
-        String data = callback == null ? null : callback.getData();
+    @Override
+    public Optional<String> handle(String data, Long fromUserId, Long chatId) {
         if (data == null || !data.startsWith(PREFIX)) {
             return Optional.empty();
         }
-        if (callback.getFrom() == null || callback.getFrom().getId() == null
-                || callback.getMessage() == null
-                || !Objects.equals(callback.getMessage().getChatId(), callback.getFrom().getId())) {
+        if (fromUserId == null || !Objects.equals(chatId, fromUserId)) {
             return Optional.of("Откройте личный чат с ботом под своей учётной записью");
         }
         try {
             Long reviewId = Long.valueOf(data.substring(PREFIX.length()));
-            return Optional.of(reviews.dispute(reviewId, callback.getFrom().getId()));
+            return Optional.of(reviews.dispute(reviewId, fromUserId));
         } catch (NumberFormatException malformed) {
             return Optional.of("Повреждённый запрос оплаты");
         } catch (ResponseStatusException rejected) {

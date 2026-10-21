@@ -2096,6 +2096,13 @@
         "teamCompletionScore" : 2
       }
     },
+    "ManagerControlManualDeliveryHandoffWorkflowPreviewOutput" : {
+      "stateId" : 2,
+      "operationId" : "contract-example",
+      "message" : "contract-example",
+      "preparedAt" : "2026-09-07T08:00:00",
+      "chatUrl" : "contract-example"
+    },
     "ManagerControlOverdueStatusResponseOutput" : {
       "status" : "contract-example",
       "count" : 2,
@@ -3645,6 +3652,20 @@
       "sorted" : true,
       "unsorted" : false
     },
+    "SpecialistManualPaymentReviewResponseOutput" : {
+      "id" : 2,
+      "orderId" : 2,
+      "paymentLinkId" : 2,
+      "amountKopecks" : 2,
+      "recipientUserId" : 2,
+      "status" : "PENDING_DELIVERY",
+      "requestedAt" : "2026-09-07T08:00:00",
+      "notifiedAt" : "2026-09-07T08:00:00",
+      "deadlineAt" : "2026-09-07T08:00:00",
+      "lastError" : "contract-example",
+      "retryNotificationAllowed" : false
+    },
+    "SpecialistManualPaymentReviewStatusOutput" : "PENDING_DELIVERY",
     "TbankClientPaymentModeResponseOutput" : {
       "enabled" : false,
       "paymentInstructionSource" : "contract-example"
@@ -3972,6 +3993,11 @@
       "comment" : "contract-example",
       "manualWorkerNotification" : false
     },
+    "ManagerControlManualDeliveryHandoffWorkflowRequestInput" : {
+      "checkedChat" : false,
+      "note" : "contract-example",
+      "operationId" : "contract-example"
+    },
     "ManagerControlStageRequestInput" : {
       "comment" : "contract-example",
       "stage" : "contract-example"
@@ -4090,6 +4116,17 @@
     },
     "ReviewTextUpdateRequestInput" : {
       "text" : "contract-example"
+    },
+    "SpecialistPaymentAbsentRequestInput" : {
+      "note" : "contract-example",
+      "paymentAbsent" : false,
+      "recipientStatementChecked" : false
+    },
+    "SpecialistPaymentVerifyRequestInput" : {
+      "note" : "contract-example",
+      "paymentReceived" : false,
+      "receivedAmountKopecks" : 2,
+      "recipientStatementChecked" : false
     },
     "StatusChangeRequestInput" : {
       "status" : "contract-example"

@@ -5,6 +5,7 @@ import com.hunt.otziv.common_billing.model.CommonInvoicePaymentRef;
 import com.hunt.otziv.common_billing.model.CommonInvoiceStatus;
 import com.hunt.otziv.common_billing.repository.CommonInvoicePaymentRefRepository;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceRepository;
+import com.hunt.otziv.payments.service.SettledBankPaymentObservationService;
 import com.hunt.otziv.payments.dto.TbankGetStateResponse;
 import com.hunt.otziv.payments.dto.TbankPaymentProfile;
 import com.hunt.otziv.payments.model.PaymentProfile;
@@ -58,8 +59,8 @@ class CommonInvoiceSettledBankReturnReconciliationServiceTest {
     void setUp() {
         service = new CommonInvoiceSettledBankReturnReconciliationService(
                 settlementService, paymentRefRepository, invoiceRepository,
-                paymentProfileService, tbankClient, tochkaClient,
-                tochkaPaymentProfileResolver, new TochkaPaymentOperationMapper());
+                new SettledBankPaymentObservationService(paymentProfileService, tbankClient,
+                        tochkaClient, tochkaPaymentProfileResolver, new TochkaPaymentOperationMapper()));
         invoice = new CommonInvoice();
         invoice.setId(7L);
         invoice.setStatus(CommonInvoiceStatus.PAID);
@@ -140,9 +141,6 @@ class CommonInvoiceSettledBankReturnReconciliationServiceTest {
                 3L, "tochka", "Tochka", true, "customer", "terminal-3", "jwt", "", false,
                 null, null, null, null, "", "", List.of(TochkaPaymentMode.SBP), Duration.ofMinutes(30));
         when(tochkaPaymentProfileResolver.resolveForExistingPayment(profile)).thenReturn(runtime);
-        when(settlementService.parseTochkaPaymentModes("sbp")).thenReturn(List.of(TochkaPaymentMode.SBP));
-        when(settlementService.observedTochkaPaymentMode("sbp", "REFUNDED_PARTIALLY", List.of(TochkaPaymentMode.SBP)))
-                .thenReturn(TochkaPaymentMode.SBP);
         PaymentOperation operation = new PaymentOperation("customer", null, "sbp", null, null, null,
                 new BigDecimal("1400.00"), "REFUNDED_PARTIALLY", "pay-9", null, "terminal-3", null,
                 "order-7", List.of());

@@ -1,5 +1,7 @@
 package com.hunt.otziv.contractor_payments.service;
 
+import com.hunt.otziv.contractor_payments.api.PaymentReviewTargetAuthorization;
+
 import com.hunt.otziv.contractor_payments.repository.ContractorPaymentAllocationRepository;
 import com.hunt.otziv.u_users.repository.UserRepository;
 import java.util.Objects;
@@ -21,7 +23,7 @@ import org.springframework.web.server.ResponseStatusException;
  */
 @Service
 @RequiredArgsConstructor
-public class ContractorPaymentTargetAccessPolicy {
+public class ContractorPaymentTargetAccessPolicy implements PaymentReviewTargetAuthorization {
 
     private static final Set<String> PRIVILEGED_TARGET_ROLES = Set.of("ROLE_ADMIN", "ROLE_OWNER");
 

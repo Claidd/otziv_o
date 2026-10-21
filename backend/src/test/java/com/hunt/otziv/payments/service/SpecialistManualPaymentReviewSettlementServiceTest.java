@@ -1,13 +1,11 @@
 package com.hunt.otziv.payments.service;
 
-import com.hunt.otziv.contractor_payments.model.ContractorRecipientType;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentTargetAccessPolicy;
 import com.hunt.otziv.payments.model.SpecialistManualPaymentReview;
 import com.hunt.otziv.payments.model.SpecialistManualPaymentReviewStatus;
 import com.hunt.otziv.payments.repository.SpecialistManualPaymentReviewRepository;
-import com.hunt.otziv.u_users.model.Role;
-import com.hunt.otziv.u_users.model.User;
-import com.hunt.otziv.u_users.repository.UserRepository;
+import com.hunt.otziv.u_users.api.SpecialistPaymentReviewDirectory;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -31,7 +29,7 @@ class SpecialistManualPaymentReviewSettlementServiceTest {
 
     @Mock private SpecialistManualPaymentReviewRepository reviews;
     @Mock private ManualCardPaymentWorkflow manualPayments;
-    @Mock private UserRepository users;
+    @Mock private SpecialistPaymentReviewDirectory users;
     @Mock private PaymentIssueReminderService issues;
     @Mock private ContractorPaymentTargetAccessPolicy targetAccess;
     @Mock private SpecialistManualPaymentReviewService reviewReconciliation;
@@ -45,7 +43,7 @@ class SpecialistManualPaymentReviewSettlementServiceTest {
         service().settle(101L);
 
         verify(manualPayments, never()).confirmSpecialistReviewPayment(
-                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
         assertEquals(SpecialistManualPaymentReviewStatus.WAITING, review.getStatus());
     }
 
@@ -58,31 +56,28 @@ class SpecialistManualPaymentReviewSettlementServiceTest {
         service().settle(101L);
 
         verify(manualPayments, never()).confirmSpecialistReviewPayment(
-                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
     void acceptedNoticeAndElapsedWindowUsesFrozenRecipientExactlyOnce() {
         SpecialistManualPaymentReview review = dueWaiting();
         when(reviews.lockById(101L)).thenReturn(Optional.of(review));
-        User requester = new User(); requester.setId(17L); requester.setActive(true);
-        requester.setUsername("manager");
-        Role role = new Role(); role.setName("ROLE_MANAGER");
-        requester.setRoles(List.of(role));
-        when(users.findById(17L)).thenReturn(Optional.of(requester));
+        when(users.activeActor(17L)).thenReturn(Optional.of(new SpecialistPaymentReviewDirectory.Actor(
+                "manager", List.of(new SimpleGrantedAuthority("ROLE_MANAGER")))));
 
         service().settle(101L);
 
         assertEquals(SpecialistManualPaymentReviewStatus.CONFIRMED, review.getStatus());
         verify(manualPayments).confirmSpecialistReviewPayment(
                 eq(101L), eq(71L), eq(140_000L), any(), eq(""), eq("manager"), any(), any(),
-                eq(ContractorRecipientType.SPECIALIST), eq(27L), eq("profile:27"));
+                eq(27L), eq("profile:27"));
         verify(issues).resolveOrderIssue(7L,
                 SpecialistManualPaymentReviewService.SETTLEMENT_ISSUE, 101L);
         service().settle(101L);
         verify(manualPayments).confirmSpecialistReviewPayment(
                 eq(101L), eq(71L), eq(140_000L), any(), eq(""), eq("manager"), any(), any(),
-                eq(ContractorRecipientType.SPECIALIST), eq(27L), eq("profile:27"));
+                eq(27L), eq("profile:27"));
     }
 
     @Test
@@ -95,7 +90,7 @@ class SpecialistManualPaymentReviewSettlementServiceTest {
         assertThrows(ResponseStatusException.class, () -> service().verifyReceived(
                 101L, true, true, 139_999L, "Выписка сверена", admin));
         verify(manualPayments, never()).confirmSpecialistReviewPayment(
-                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
 
         service().verifyReceived(101L, true, true, 140_000L, "Выписка сверена", admin);
 
@@ -103,21 +98,18 @@ class SpecialistManualPaymentReviewSettlementServiceTest {
         assertEquals("ADMIN_VERIFIED_RECEIPT", review.getResolutionKind());
         verify(manualPayments).confirmSpecialistReviewPayment(
                 eq(101L), eq(71L), eq(140_000L), any(), eq(""), eq("admin"), eq(admin), any(),
-                eq(ContractorRecipientType.SPECIALIST), eq(27L), eq("profile:27"));
+                eq(27L), eq("profile:27"));
     }
 
     @Test
     void bankPaymentWinningDuringManualSettlementClosesReviewWithoutManualError() {
         SpecialistManualPaymentReview review = dueWaiting();
         when(reviews.lockById(101L)).thenReturn(Optional.of(review));
-        User requester = new User(); requester.setId(17L); requester.setActive(true);
-        requester.setUsername("manager");
-        Role role = new Role(); role.setName("ROLE_MANAGER");
-        requester.setRoles(List.of(role));
-        when(users.findById(17L)).thenReturn(Optional.of(requester));
+        when(users.activeActor(17L)).thenReturn(Optional.of(new SpecialistPaymentReviewDirectory.Actor(
+                "manager", List.of(new SimpleGrantedAuthority("ROLE_MANAGER")))));
         org.mockito.Mockito.doThrow(new ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT))
                 .when(manualPayments).confirmSpecialistReviewPayment(
-                        any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+                        any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
         when(reviewReconciliation.supersedeOnConfirmedBankPayment(101L)).thenReturn(true);
 
         service().settle(101L);

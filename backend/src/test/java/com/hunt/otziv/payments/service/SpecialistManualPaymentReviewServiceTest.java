@@ -5,7 +5,6 @@ import com.hunt.otziv.contractor_payments.model.ContractorRecipientType;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentTargetAccessPolicy;
 import com.hunt.otziv.manager.service.ManagerAccessService;
 import com.hunt.otziv.p_products.model.Order;
-import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.payments.model.PaymentLink;
 import com.hunt.otziv.payments.model.PaymentLinkStatus;
 import com.hunt.otziv.payments.model.PaymentMethod;
@@ -14,8 +13,7 @@ import com.hunt.otziv.payments.model.SpecialistManualPaymentReviewStatus;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.payments.repository.SpecialistManualPaymentReviewRepository;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
-import com.hunt.otziv.u_users.model.User;
-import com.hunt.otziv.u_users.repository.UserRepository;
+import com.hunt.otziv.u_users.api.SpecialistPaymentReviewDirectory;
 import java.time.LocalDateTime;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -44,9 +42,8 @@ import static org.mockito.Mockito.when;
 class SpecialistManualPaymentReviewServiceTest {
 
     @Mock private SpecialistManualPaymentReviewRepository reviews;
-    @Mock private OrderRepository orders;
     @Mock private PaymentLinkRepository links;
-    @Mock private UserRepository users;
+    @Mock private SpecialistPaymentReviewDirectory users;
     @Mock private ManagerAccessService managerAccess;
     @Mock private ManualCardPaymentWorkflow manualPayments;
     @Mock private PaymentInvoiceRetryScheduler invoiceMessages;
@@ -65,18 +62,17 @@ class SpecialistManualPaymentReviewServiceTest {
         Order order = new Order(); order.setId(7L);
         PaymentLink link = new PaymentLink(); link.setId(71L); link.setOrder(order);
         link.setAmountKopecks(140_000L);
-        User manager = activeUser(17L, null);
-        when(orders.findByIdForCounterUpdate(7L)).thenReturn(Optional.of(order));
+        when(orderPaymentIntegrity.lockSpecialistReviewOrderEvidence(7L)).thenReturn(Optional.of(false));
         when(links.findByIdForUpdate(71L)).thenReturn(Optional.of(link));
-        when(users.findByUsername("manager")).thenReturn(Optional.of(manager));
+        when(users.activeUserIdByUsername("manager")).thenReturn(Optional.of(17L));
         when(reviews.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
         doAnswer(call -> {
             link.setManualActualRecipientType(ContractorRecipientType.SPECIALIST);
             link.setManualActualRecipientProfileId(27L);
             link.setManualActualRecipientUserId(37L);
             return null;
-        }).when(manualPayments).freezeActualRecipientIntentIfRequired(
-                eq(order), eq(link), eq(ContractorRecipientType.SPECIALIST), eq(27L),
+        }).when(manualPayments).prepareSpecialistReviewRecipient(
+                eq(7L), eq(link), eq(27L),
                 eq("profile:27"), eq("Менеджер проверил чек"), eq(""), eq("manager"));
 
         SpecialistManualPaymentReview review = service.request(7L, 71L, 140_000L,
@@ -96,7 +92,7 @@ class SpecialistManualPaymentReviewServiceTest {
         SpecialistManualPaymentReview review = pending();
         review.setRecipientProfileId(27L);
         review.setRecipientKey("profile:27");
-        when(orders.findByIdForCounterUpdate(7L)).thenReturn(Optional.of(order()));
+        when(orderPaymentIntegrity.lockSpecialistReviewOrderEvidence(7L)).thenReturn(Optional.of(false));
         when(links.findByIdForUpdate(71L)).thenReturn(Optional.of(link()));
         when(reviews.lockByPaymentLinkId(71L)).thenReturn(Optional.of(review));
 
@@ -110,9 +106,8 @@ class SpecialistManualPaymentReviewServiceTest {
     void telegramAcceptanceOpensDisputeWindowWithoutChangingDeadline() {
         SpecialistManualPaymentReview review = pending();
         review.setId(101L);
-        User recipient = activeUser(37L, 999L);
         when(reviews.lockById(101L)).thenReturn(Optional.of(review));
-        when(users.findById(37L)).thenReturn(Optional.of(recipient));
+        when(users.activePersonalTelegramChatId(37L)).thenReturn(Optional.of(999L));
         when(telegram.sendPaymentReviewNoticeOnce(eq(999L), any(), any(), eq("specialist-payment-dispute:101")))
                 .thenReturn(true);
         LocalDateTime originalDeadline = review.getDeadlineAt();
@@ -130,7 +125,7 @@ class SpecialistManualPaymentReviewServiceTest {
     void failedNotificationNeverEnablesAutomaticCredit() {
         SpecialistManualPaymentReview review = pending(); review.setId(101L);
         when(reviews.lockById(101L)).thenReturn(Optional.of(review));
-        when(users.findById(37L)).thenReturn(Optional.of(activeUser(37L, 999L)));
+        when(users.activePersonalTelegramChatId(37L)).thenReturn(Optional.of(999L));
         when(telegram.sendPaymentReviewNoticeOnce(eq(999L), any(), any(), any())).thenReturn(false);
 
         service.deliver(101L);
@@ -171,7 +166,7 @@ class SpecialistManualPaymentReviewServiceTest {
     void uncertainTelegramOutcomeRequiresManualReconciliationWithoutRetry() {
         SpecialistManualPaymentReview review = pending(); review.setId(101L);
         when(reviews.lockById(101L)).thenReturn(Optional.of(review));
-        when(users.findById(37L)).thenReturn(Optional.of(activeUser(37L, 999L)));
+        when(users.activePersonalTelegramChatId(37L)).thenReturn(Optional.of(999L));
         when(telegram.sendPaymentReviewNoticeOnce(eq(999L), any(), any(), any()))
                 .thenThrow(new IllegalStateException("connection lost"));
 
@@ -189,7 +184,7 @@ class SpecialistManualPaymentReviewServiceTest {
         review.setStatus(SpecialistManualPaymentReviewStatus.WAITING);
         review.setNotifiedAt(LocalDateTime.now());
         when(reviews.lockById(101L)).thenReturn(Optional.of(review));
-        when(users.findById(37L)).thenReturn(Optional.of(activeUser(37L, 999L)));
+        when(users.activePersonalTelegramChatId(37L)).thenReturn(Optional.of(999L));
 
         assertThrows(ResponseStatusException.class, () -> service.dispute(101L, 998L));
         assertEquals(SpecialistManualPaymentReviewStatus.WAITING, review.getStatus());
@@ -220,7 +215,7 @@ class SpecialistManualPaymentReviewServiceTest {
         bankLink.setStatus(PaymentLinkStatus.CREATED);
         when(reviews.findById(101L)).thenReturn(Optional.of(review));
         when(reviews.lockById(101L)).thenReturn(Optional.of(review));
-        when(orders.findByIdForCounterUpdate(7L)).thenReturn(Optional.of(order()));
+        when(orderPaymentIntegrity.lockSpecialistReviewOrderEvidence(7L)).thenReturn(Optional.of(false));
         when(links.findByIdForUpdate(71L)).thenReturn(Optional.of(bankLink));
 
         service.markAbsent(101L, true, true, "Специалист проверил выписку; денег нет",
@@ -245,9 +240,10 @@ class SpecialistManualPaymentReviewServiceTest {
         review.setRecipientProfileId(27L);
         when(reviews.findById(101L)).thenReturn(Optional.of(review));
         when(reviews.lockById(101L)).thenReturn(Optional.of(review));
-        when(orders.findByIdForCounterUpdate(7L)).thenReturn(Optional.of(order()));
+        when(orderPaymentIntegrity.lockSpecialistReviewOrderEvidence(7L)).thenReturn(Optional.of(false));
         when(links.findByIdForUpdate(71L)).thenReturn(Optional.of(bankLink));
         when(manualRoutePolicy.isCompletedManualCardPayment(bankLink)).thenReturn(true);
+        when(manualRoutePolicy.isSpecialistReviewRecipient(bankLink, 37L, 27L)).thenReturn(true);
 
         service.reconcileOperatorOutcome(101L);
 
@@ -265,9 +261,8 @@ class SpecialistManualPaymentReviewServiceTest {
         bankLink.setTbankPaymentId("provider-payment-71");
         when(reviews.findById(101L)).thenReturn(Optional.of(review));
         when(reviews.lockById(101L)).thenReturn(Optional.of(review));
-        when(orders.findByIdForCounterUpdate(7L)).thenReturn(Optional.of(order()));
+        when(orderPaymentIntegrity.lockSpecialistReviewOrderEvidence(7L)).thenReturn(Optional.of(true));
         when(links.findByIdForUpdate(71L)).thenReturn(Optional.of(bankLink));
-        when(orderPaymentIntegrity.hasSettledPaymentEvidence(any())).thenReturn(true);
 
         assertTrue(service.supersedeOnConfirmedBankPayment(101L));
 
@@ -276,7 +271,7 @@ class SpecialistManualPaymentReviewServiceTest {
         verify(issues).resolveOrderIssueInCurrentTransaction(
                 SpecialistManualPaymentReviewService.SETTLEMENT_ISSUE, 101L);
         verify(manualPayments, never()).confirmSpecialistReviewPayment(
-                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -290,7 +285,7 @@ class SpecialistManualPaymentReviewServiceTest {
         bankLink.setTbankPaymentId("provider-payment-71");
         when(reviews.findById(101L)).thenReturn(Optional.of(review));
         when(reviews.lockById(101L)).thenReturn(Optional.of(review));
-        when(orders.findByIdForCounterUpdate(7L)).thenReturn(Optional.of(order()));
+        when(orderPaymentIntegrity.lockSpecialistReviewOrderEvidence(7L)).thenReturn(Optional.of(false));
         when(links.findByIdForUpdate(71L)).thenReturn(Optional.of(bankLink));
 
         assertEquals(false, service.supersedeOnConfirmedBankPayment(101L));
@@ -315,8 +310,4 @@ class SpecialistManualPaymentReviewServiceTest {
         return review;
     }
 
-    private User activeUser(Long id, Long chatId) {
-        User user = new User(); user.setId(id); user.setActive(true);
-        user.setTelegramChatId(chatId); return user;
-    }
 }

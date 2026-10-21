@@ -5,21 +5,9 @@ import com.hunt.otziv.common_billing.model.CommonInvoicePaymentRef;
 import com.hunt.otziv.common_billing.model.CommonInvoiceStatus;
 import com.hunt.otziv.common_billing.repository.CommonInvoicePaymentRefRepository;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceRepository;
-import com.hunt.otziv.payments.dto.TbankGetStateResponse;
-import com.hunt.otziv.payments.dto.TbankPaymentProfile;
-import com.hunt.otziv.payments.model.PaymentLinkStatus;
-import com.hunt.otziv.payments.model.PaymentProfile;
-import com.hunt.otziv.payments.service.PaymentProfileService;
-import com.hunt.otziv.payments.service.TbankClient;
-import com.hunt.otziv.payments.tochka.dto.TochkaApiModels.PaymentInfoResponse;
-import com.hunt.otziv.payments.tochka.dto.TochkaApiModels.PaymentOperation;
-import com.hunt.otziv.payments.tochka.dto.TochkaPaymentProfile;
-import com.hunt.otziv.payments.tochka.model.TochkaPaymentMode;
-import com.hunt.otziv.payments.tochka.service.TochkaClient;
-import com.hunt.otziv.payments.tochka.service.TochkaPaymentOperationMapper;
-import com.hunt.otziv.payments.tochka.service.TochkaPaymentOperationMapper.ExpectedPayment;
-import com.hunt.otziv.payments.tochka.service.TochkaPaymentOperationMapper.MappedPayment;
-import com.hunt.otziv.payments.tochka.service.TochkaPaymentProfileResolver;
+import com.hunt.otziv.payments.api.SettledBankPaymentObservation;
+import com.hunt.otziv.payments.api.SettledBankPaymentObservation.Observation;
+import com.hunt.otziv.payments.api.SettledBankPaymentObservation.Request;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -46,18 +34,12 @@ public class CommonInvoiceSettledBankReturnReconciliationService {
     private static final String T_BANK = "T_BANK";
     private static final String TOCHKA = "TOCHKA";
     private static final Set<String> SETTLED_REF_STATUSES = Set.of("APPLIED", "PREPAID", "CONFIRMED");
-    private static final Set<String> TBANK_RETURN_STATUSES = Set.of(
-            "REVERSED", "PARTIAL_REVERSED", "REFUNDED", "PARTIAL_REFUNDED");
     private static final int BATCH_SIZE = 25;
 
     private final CommonInvoiceSettlementService settlementService;
     private final CommonInvoicePaymentRefRepository paymentRefRepository;
     private final CommonInvoiceRepository invoiceRepository;
-    private final PaymentProfileService paymentProfileService;
-    private final TbankClient tbankClient;
-    private final TochkaClient tochkaClient;
-    private final TochkaPaymentProfileResolver tochkaPaymentProfileResolver;
-    private final TochkaPaymentOperationMapper tochkaPaymentOperationMapper;
+    private final SettledBankPaymentObservation bankObservation;
 
     @Scheduled(
             fixedDelayString = "${common-billing.settled-bank-reconcile.fixed-delay:PT5M}",
@@ -81,7 +63,7 @@ public class CommonInvoiceSettledBankReturnReconciliationService {
                 if (prepared == null) {
                     continue;
                 }
-                ProviderObservation observation = observe(prepared);
+                Observation observation = observe(prepared);
                 settlementService.writeTransaction(() -> {
                     apply(prepared, observation);
                     return null;
@@ -121,110 +103,19 @@ public class CommonInvoiceSettledBankReturnReconciliationService {
                 normalized(ref.getProviderPaymentType()), ref.getProviderTestMode(), claimUntil);
     }
 
-    private ProviderObservation observe(PreparedRef ref) {
-        if (ref.amountKopecks() == null || ref.amountKopecks() <= 0
-                || ref.providerOrderId().isBlank() || ref.providerPaymentId().isBlank()
-                || ref.merchantId().isBlank()) {
-            return ProviderObservation.ambiguous("bank_ref_identity_incomplete");
-        }
+    private Observation observe(PreparedRef ref) {
         try {
-            return switch (ref.provider()) {
-                case T_BANK -> observeTbank(ref);
-                case TOCHKA -> observeTochka(ref);
-                default -> ProviderObservation.ambiguous("bank_ref_provider_unknown");
-            };
+            return bankObservation.observe(new Request(ref.provider(), ref.providerOrderId(),
+                    ref.providerPaymentId(), ref.merchantId(), ref.profileId(), ref.amountKopecks(),
+                    ref.paymentMode(), ref.paymentType(), ref.testMode()));
         } catch (RuntimeException failure) {
             log.warn("Settled common bank provider GET failed: refId={}, provider={}, cause={}",
                     ref.refId(), ref.provider(), failure.getClass().getSimpleName());
-            return ProviderObservation.temporarilyUnavailable();
+            return Observation.temporarilyUnavailable();
         }
     }
 
-    private ProviderObservation observeTbank(PreparedRef ref) {
-        PaymentProfile profile = ref.profileId() == null
-                ? paymentProfileService.findByTerminalKey(ref.merchantId()).orElse(null)
-                : paymentProfileService.findById(ref.profileId()).orElse(null);
-        if (profile == null || !T_BANK.equals(upper(profile.normalizedProvider()))) {
-            return ProviderObservation.ambiguous("tbank_pinned_profile_unavailable");
-        }
-        TbankPaymentProfile runtime;
-        try {
-            runtime = paymentProfileService.toRuntimeForTerminal(profile, ref.merchantId());
-        } catch (RuntimeException invalidProfile) {
-            return ProviderObservation.ambiguous("tbank_pinned_profile_invalid");
-        }
-        if (!runtime.hasCredentials() || !ref.merchantId().equals(normalized(runtime.terminalKey()))) {
-            return ProviderObservation.ambiguous("tbank_pinned_terminal_changed");
-        }
-        TbankGetStateResponse state = tbankClient.getState(runtime, ref.providerPaymentId());
-        if (state == null || !state.success() || !ref.providerPaymentId().equals(normalized(state.paymentId()))
-                || !ref.providerOrderId().equals(normalized(state.orderId()))
-                || !Objects.equals(state.amount(), ref.amountKopecks())
-                || (!normalized(state.terminalKey()).isBlank()
-                    && !ref.merchantId().equals(normalized(state.terminalKey())))) {
-            return ProviderObservation.ambiguous("tbank_settled_identity_mismatch");
-        }
-        String status = upper(state.status());
-        if (TBANK_RETURN_STATUSES.contains(status)) {
-            return ProviderObservation.returned(status, status);
-        }
-        return "CONFIRMED".equals(status)
-                ? ProviderObservation.confirmed(status)
-                : ProviderObservation.ambiguous("tbank_settled_status_changed");
-    }
-
-    private ProviderObservation observeTochka(PreparedRef ref) {
-        if (ref.profileId() == null || ref.testMode() == null || ref.paymentMode().isBlank()) {
-            return ProviderObservation.ambiguous("tochka_pinned_profile_incomplete");
-        }
-        PaymentProfile profile = paymentProfileService.findById(ref.profileId()).orElse(null);
-        if (profile == null || !TOCHKA.equals(upper(profile.normalizedProvider()))) {
-            return ProviderObservation.ambiguous("tochka_pinned_profile_unavailable");
-        }
-        TochkaPaymentProfile runtime;
-        try {
-            runtime = tochkaPaymentProfileResolver.resolveForExistingPayment(profile);
-        } catch (RuntimeException invalidProfile) {
-            return ProviderObservation.ambiguous("tochka_pinned_profile_invalid");
-        }
-        if (!ref.merchantId().equals(normalized(runtime.merchantId()))
-                || !Objects.equals(ref.testMode(), runtime.testMode())) {
-            return ProviderObservation.ambiguous("tochka_pinned_merchant_changed");
-        }
-        PaymentInfoResponse response = tochkaClient.getPaymentInfo(runtime, ref.providerPaymentId());
-        List<PaymentOperation> operations = response == null || response.data() == null
-                ? List.of() : response.data().operations();
-        if (operations == null || operations.size() != 1 || operations.getFirst() == null) {
-            return ProviderObservation.ambiguous("tochka_settled_operation_ambiguous");
-        }
-        PaymentOperation operation = operations.getFirst();
-        MappedPayment mapped;
-        try {
-            List<TochkaPaymentMode> modes = settlementService.parseTochkaPaymentModes(ref.paymentMode());
-            TochkaPaymentMode observedMode = settlementService.observedTochkaPaymentMode(
-                    operation.paymentType(), operation.status(), modes);
-            mapped = tochkaPaymentOperationMapper.map(operation,
-                    new ExpectedPayment(ref.providerPaymentId(), ref.providerOrderId(),
-                            runtime.customerCode(), runtime.merchantId(), ref.amountKopecks(), observedMode), false);
-        } catch (RuntimeException invalidObservation) {
-            return ProviderObservation.ambiguous("tochka_settled_identity_or_status_mismatch");
-        }
-        if (!ref.paymentType().isBlank()
-                && !ref.paymentType().equals(normalized(mapped.providerPaymentType()))) {
-            return ProviderObservation.ambiguous("tochka_settled_payment_type_changed");
-        }
-        if (mapped.status() == PaymentLinkStatus.REFUNDED) {
-            return ProviderObservation.returned("REFUNDED", mapped.providerStatus());
-        }
-        if (mapped.status() == PaymentLinkStatus.PARTIAL_REFUNDED) {
-            return ProviderObservation.returned("PARTIAL_REFUNDED", mapped.providerStatus());
-        }
-        return mapped.status() == PaymentLinkStatus.CONFIRMED
-                ? ProviderObservation.confirmed(mapped.providerStatus())
-                : ProviderObservation.ambiguous("tochka_settled_status_changed");
-    }
-
-    private void apply(PreparedRef prepared, ProviderObservation observation) {
+    private void apply(PreparedRef prepared, Observation observation) {
         CommonInvoice invoice = settlementService.lockedInvoice(prepared.invoiceId()).orElse(null);
         CommonInvoicePaymentRef ref = paymentRefRepository.findByIdForUpdate(prepared.refId()).orElse(null);
         if (invoice == null || ref == null || !sameClaimedRef(prepared, ref)) {
@@ -294,22 +185,4 @@ public class CommonInvoiceSettledBankReturnReconciliationService {
                                String paymentType, Boolean testMode, LocalDateTime claimUntil) {
     }
 
-    private record ProviderObservation(String returnStatus, String providerStatus,
-                                       String problemCode, boolean unavailable) {
-        private static ProviderObservation returned(String status, String providerStatus) {
-            return new ProviderObservation(status, providerStatus, null, false);
-        }
-
-        private static ProviderObservation confirmed(String providerStatus) {
-            return new ProviderObservation(null, providerStatus, null, false);
-        }
-
-        private static ProviderObservation ambiguous(String code) {
-            return new ProviderObservation(null, null, code, false);
-        }
-
-        private static ProviderObservation temporarilyUnavailable() {
-            return new ProviderObservation(null, null, null, true);
-        }
-    }
 }

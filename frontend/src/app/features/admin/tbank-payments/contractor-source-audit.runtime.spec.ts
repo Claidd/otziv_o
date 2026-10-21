@@ -103,6 +103,7 @@ describe('contractor payment source audit through HttpClient', () => {
       request.flush(url === journalUrl ? paymentPage(items)
         : url.endsWith('bank-profiles') ? { profiles: [], managers: [] }
         : url.endsWith('manual-tasks') ? []
+        : url.endsWith('specialist-reviews') ? []
         : url.includes('monthly-summary') ? { items: [] }
         : {});
     }
@@ -298,6 +299,7 @@ describe('contractor audit dialog', () => {
         page: 0, size: 25, totalElements: 2, totalPages: 1
       } : url.endsWith('bank-profiles') ? { profiles: [], managers: [] }
         : url.endsWith('manual-tasks') ? []
+        : url.endsWith('specialist-reviews') ? []
         : url.includes('monthly-summary') ? { items: [] }
         : {});
     }

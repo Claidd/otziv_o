@@ -59,13 +59,13 @@ class SpecialistManualPaymentReviewGuardTest {
                     .thenReturn(List.of(review));
 
             assertDoesNotThrow(() -> guard.requireManualPaymentAllowed(7L, link, 140_000L,
-                    ContractorRecipientType.SPECIALIST, 27L, "profile:27", 101L, status));
+                    true, 27L, "profile:27", true, 101L, status));
             assertThrows(ResponseStatusException.class, () -> guard.requireManualPaymentAllowed(
-                    7L, link, 140_000L, ContractorRecipientType.SPECIALIST,
-                    28L, "profile:27", 101L, status));
+                    7L, link, 140_000L, true,
+                    28L, "profile:27", true, 101L, status));
             assertThrows(ResponseStatusException.class, () -> guard.requireManualPaymentAllowed(
-                    7L, link, 140_000L, ContractorRecipientType.SPECIALIST,
-                    27L, "profile:27", null, null));
+                    7L, link, 140_000L, true,
+                    27L, "profile:27", true, null, null));
         }
     }
 
@@ -77,10 +77,10 @@ class SpecialistManualPaymentReviewGuardTest {
                 .thenReturn(List.of(review(SpecialistManualPaymentReviewStatus.WAITING)));
 
         assertDoesNotThrow(() -> guard.requireManualPaymentAllowed(7L, link(), 140_000L,
-                ContractorRecipientType.SPECIALIST, 27L, "profile:27", null, null));
+                true, 27L, "profile:27", true, null, null));
         assertThrows(ResponseStatusException.class, () -> guard.requireManualPaymentAllowed(
-                7L, link(), 140_000L, ContractorRecipientType.SPECIALIST,
-                27L, "profile:27", null, null));
+                7L, link(), 140_000L, true,
+                27L, "profile:27", true, null, null));
     }
 
     private PaymentLink link() {
