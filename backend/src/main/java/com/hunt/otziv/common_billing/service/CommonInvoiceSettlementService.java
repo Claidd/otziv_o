@@ -42,7 +42,7 @@ import com.hunt.otziv.payments.service.ManualPaymentTaskService;
 import com.hunt.otziv.payments.api.StandalonePaymentState;
 import com.hunt.otziv.payments.service.PaymentUrlPolicy;
 import com.hunt.otziv.payments.service.TbankTokenSigner;
-import com.hunt.otziv.payments.service.TbankConfirmedEvidence;
+import com.hunt.otziv.payments.api.TbankConfirmedEvidence;
 import com.hunt.otziv.payments.service.ManualPaymentAutoConfirmationService;
 import com.hunt.otziv.payments.tochka.dto.TochkaAcquiringInternetPaymentWebhook;
 import com.hunt.otziv.payments.tochka.dto.TochkaApiModels.PaymentOperation;

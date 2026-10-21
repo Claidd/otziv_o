@@ -1,4 +1,4 @@
-package com.hunt.otziv.payments.service;
+package com.hunt.otziv.payments.api;
 
 import com.hunt.otziv.payments.dto.TbankGetStateResponse;
 import java.util.Map;

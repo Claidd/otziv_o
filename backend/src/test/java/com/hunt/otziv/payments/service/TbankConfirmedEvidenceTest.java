@@ -1,5 +1,7 @@
 package com.hunt.otziv.payments.service;
 
+import com.hunt.otziv.payments.api.TbankConfirmedEvidence;
+
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;

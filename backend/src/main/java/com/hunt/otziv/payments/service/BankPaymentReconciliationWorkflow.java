@@ -1,5 +1,7 @@
 package com.hunt.otziv.payments.service;
 
+import com.hunt.otziv.payments.api.TbankConfirmedEvidence;
+
 import com.hunt.otziv.common_billing.api.CommonInvoicePaymentOperations;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.payments.dto.TbankPaymentProfile;

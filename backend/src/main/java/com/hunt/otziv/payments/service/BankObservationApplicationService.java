@@ -1,5 +1,7 @@
 package com.hunt.otziv.payments.service;
 
+import com.hunt.otziv.payments.api.TbankConfirmedEvidence;
+
 import com.hunt.otziv.payments.dto.TbankGetStateResponse;
 import com.hunt.otziv.payments.dto.TbankPaymentProfile;
 import com.hunt.otziv.payments.tochka.dto.TochkaPaymentProfile;

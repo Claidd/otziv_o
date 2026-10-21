@@ -1,5 +1,7 @@
 package com.hunt.otziv.payments.service;
 
+import com.hunt.otziv.payments.api.TbankConfirmedEvidence;
+
 import com.hunt.otziv.payments.config.TbankPaymentProperties;
 import com.hunt.otziv.payments.dto.TbankCancelCommand;
 import com.hunt.otziv.payments.dto.TbankCancelResponse;
