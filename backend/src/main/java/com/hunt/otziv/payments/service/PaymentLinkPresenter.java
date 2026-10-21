@@ -42,6 +42,7 @@ import org.springframework.stereotype.Service;
 @Slf4j
 @RequiredArgsConstructor
 public class PaymentLinkPresenter {
+    static final String TOCHKA_PAYMENT_TYPE_CONFLICT = "tochka_payment_type_changed_after_observation";
 
     private final CommonInvoiceRouteSelector commonInvoiceRouteSelector;
 
@@ -226,11 +227,15 @@ public class PaymentLinkPresenter {
         String actualType = link == null ? "" : normalize(link.getProviderPaymentType());
         // A legacy card-form link offered only CARD. Legacy SBP links may have used
         // digital rubles, so their unknown actual type must be verified first.
-        return link != null && (("card".equals(actualType)
+        return link != null && !hasTochkaPaymentTypeConflict(link) && (("card".equals(actualType)
                     && link.getPaymentMethod() == PaymentMethod.BANK_FORM)
                 || ("sbp".equals(actualType)
                     && link.getPaymentMethod() == PaymentMethod.SBP_QR)
                 || (actualType.isBlank() && link.getPaymentMethod() == PaymentMethod.BANK_FORM));
+    }
+
+    boolean hasTochkaPaymentTypeConflict(PaymentLink link) {
+        return link != null && normalize(link.getLastError()).startsWith(TOCHKA_PAYMENT_TYPE_CONFLICT);
     }
 
     PaymentProfile selectProfile(Order order) {

@@ -8373,6 +8373,41 @@ class PaymentLinkServiceTest {
     }
 
     @Test
+    void conflictingActualTochkaPaymentTypeAfterConfirmationBlocksRefundApi() {
+        PaymentLinkService service = service(properties());
+        Order order = order(3_667L, "ООО Точка Спорный Возврат", BigDecimal.valueOf(321));
+        PaymentLink link = payableLink(order, "tochka-refund-type-conflict", 32_100L);
+        link.setId(3_667L);
+        link.setPaymentProfile(tochkaEntityProfile(367L));
+        link.setStatus(PaymentLinkStatus.CONFIRMED);
+        link.setPaymentMethod(PaymentMethod.SBP_QR);
+        link.setTbankPaymentId("tochka-operation-type-conflict");
+        link.setProviderTerminalStatus("APPROVED");
+        link.setProviderPaymentType("sbp");
+
+        var reconciliation = ReflectionTestUtils.getField(service, "bankPaymentReconciliation");
+        var application = ReflectionTestUtils.getField(reconciliation, "bankObservationApplication");
+        ReflectionTestUtils.invokeMethod(application, "applyValidatedTochkaState", link,
+                new TochkaPaymentOperationMapper.MappedPayment(PaymentLinkStatus.CONFIRMED,
+                        PaymentMethod.SBP_QR, "APPROVED", "digitalRuble"), null, null);
+
+        assertEquals(PaymentLinkStatus.CONFIRMED, link.getStatus());
+        assertEquals("sbp", link.getProviderPaymentType());
+        assertFalse((Boolean) ReflectionTestUtils.invokeMethod(
+                ReflectionTestUtils.getField(service, "paymentPresenter"), "isRefundable", link));
+        when(paymentLinkRepository.findByIdWithOrder(link.getId())).thenReturn(Optional.of(link));
+        when(paymentLinkRepository.findByIdForUpdate(link.getId())).thenReturn(Optional.of(link));
+        when(orderRepository.findByIdForCounterUpdate(order.getId())).thenReturn(Optional.of(order));
+
+        ResponseStatusException failure = assertThrows(ResponseStatusException.class,
+                () -> service.cancel(link.getId()));
+
+        assertTrue(failure.getReason().contains("способ оплаты Точки изменился"));
+        assertNull(link.getBankCancelNonce());
+        verify(tochkaClient, never()).refund(any(), any());
+    }
+
+    @Test
     void tochkaRefundAcceptanceQuarantinesUntilTerminalGetAndBlocksSecondPost() {
         PaymentLinkService service = service(properties());
         Order order = order(3_662L, "ООО Точка Возврат", BigDecimal.valueOf(321));

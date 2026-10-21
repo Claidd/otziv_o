@@ -22,21 +22,21 @@
     },
     {
       "component": "certbot",
-      "reference": "ghcr.io/claidd/otziv-security@sha256:fc21f2b893f9db7550cbad759cb2ad50fbf49bee61d5f58a3a45b009037a8764",
-      "commit": "a243b2a891f7b6a2ca3dd4af3fe5f0bc72ef530a",
-      "run": "36771565118",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:e74ff9f71d224293f21ab35bfc4b445f3ef5dd731d91009fc63afb0e1a8306a3",
+      "commit": "2358fabe7d5db858f5c3c988bd01ed69b0ad5ed0",
+      "run": "39544242314",
       "attempt": "1",
       "publication": {
-        "path": "infrastructure/runtime-security/proofs/c25-certbot/publication/publication.json",
-        "sha256": "f727f0331a69929aa20f214a6a3b6c7e946491733edfc73bce28b9bc90858ff1"
+        "path": "infrastructure/runtime-security/proofs/c34-certbot/publication/publication.json",
+        "sha256": "7b54e324e3c861e9a4a7cacac6a07c2ee7515ac9f6d0f1da698d9bf1c3afea9d"
       },
       "anonymous": {
-        "path": "infrastructure/runtime-security/proofs/c25-certbot/anonymous/anonymous-download.json",
-        "sha256": "04682191eaf94fb61fb3e331eee560d7f514cc2dccb2dd41d1d705f74a33ad6f"
+        "path": "infrastructure/runtime-security/proofs/c34-certbot/anonymous/anonymous-download.json",
+        "sha256": "6d883e68ceadda048032f09244f60b4822f240b1cff0a26f91371f4868f5d390"
       },
       "manifest": {
-        "path": "infrastructure/runtime-security/reviewed-images-c25-certbot.json",
-        "sha256": "b70d841b904bab7543f0d066749fd3d5b818bf76d3a23ac948c32d0b08fd895e"
+        "path": "infrastructure/runtime-security/reviewed-images-c34-certbot.json",
+        "sha256": "ffd4f62f8906b068a6f017ddff53970f2e20c703359ae5e6eb8efd48bfd14cdd"
       }
     },
     {

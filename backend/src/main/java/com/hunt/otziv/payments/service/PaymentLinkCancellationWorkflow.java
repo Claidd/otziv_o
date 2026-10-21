@@ -194,6 +194,10 @@ public class PaymentLinkCancellationWorkflow {
         if (!isTochkaPaymentLink(link) || paymentPresenter.supportsTochkaApiRefund(link)) {
             return;
         }
+        if (paymentPresenter.hasTochkaPaymentTypeConflict(link)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Фактический способ оплаты Точки изменился. Сверьте платёж в банке перед возвратом.");
+        }
         if ("digitalRuble".equals(normalize(link.getProviderPaymentType()))) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Цифровые рубли возвращаются только в кабинете Точки. Выполните возврат там и сверьте платёж в системе.");

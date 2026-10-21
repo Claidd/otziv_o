@@ -862,7 +862,7 @@ services:
       - internal_net
 
   certbot:
-    image: ghcr.io/claidd/otziv-security@sha256:fc21f2b893f9db7550cbad759cb2ad50fbf49bee61d5f58a3a45b009037a8764
+    image: ghcr.io/claidd/otziv-security@sha256:e74ff9f71d224293f21ab35bfc4b445f3ef5dd731d91009fc63afb0e1a8306a3
     logging: *default-logging
     profiles:
       - certbot

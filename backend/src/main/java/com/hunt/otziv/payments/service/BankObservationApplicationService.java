@@ -110,8 +110,8 @@ public class BankObservationApplicationService {
         String observedType = normalize(mapped.providerPaymentType());
         String savedType = normalize(link.getProviderPaymentType());
         if (!observedType.isBlank() && !savedType.isBlank() && !savedType.equals(observedType)) {
-            quarantineTochkaState(link, "tochka_payment_type_changed_after_observation");
-            link.setLastError("tochka_payment_type_changed_after_observation: требуется сверка в банке");
+            quarantineTochkaState(link, PaymentLinkPresenter.TOCHKA_PAYMENT_TYPE_CONFLICT);
+            link.setLastError(PaymentLinkPresenter.TOCHKA_PAYMENT_TYPE_CONFLICT + ": требуется сверка в банке");
             return;
         }
         if (!observedType.isBlank()) {
