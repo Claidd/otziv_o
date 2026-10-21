@@ -8,15 +8,17 @@ import {validateSslRefreshTransition,coupleSslRefresh} from './ssl-refresh-activ
 const root=resolve(new URL('../../',import.meta.url).pathname.replace(/^\/([A-Z]:)/i,'$1'));
 const read=await createEvidenceReader(root);
 const entries=JSON.parse(await read('infrastructure/runtime-security/reviewed-image-activations.json')).images;
-const pg=entries.find(x=>x.component==='postgres'),kc=entries.find(x=>x.component==='keycloak');
+const pg=entries.find(x=>x.component==='postgres'),activeKeycloak=entries.find(x=>x.component==='keycloak');
+const kc=JSON.parse(await read('infrastructure/runtime-security/c35-parent-keycloak.json'));
 const image=JSON.parse(await read('infrastructure/runtime-security/reviewed-images.json')).images.find(x=>x.component==='postgres');
-test('retained C23 rehearsal pairs the exact issuer and database while ordinary upgrade remains forbidden',async()=>{
+test('retained C23/C26 rehearsal pairs the exact issuer and database while ordinary upgrade remains forbidden',async()=>{
  const ready=await validateSslRefreshTransition(pg,image,read),paired=await coupleSslRefresh(ready,kc,read);
  assert.equal(paired.mode,'COORDINATED_CANDIDATE_PREPARATION');
  assert.equal(paired.ordinaryDeploymentUpgradeAuthorized,false);
  assert.equal(paired.postgresReference,pg.reference);assert.equal(paired.requiredKeycloakReference,kc.reference);
  assert.equal(paired.acceptancePath,kc.migrationAcceptance.path);assert.equal(paired.proofSha256,kc.migrationAcceptance.sha256);
  await assert.rejects(coupleSslRefresh({...ready,postgresReference:kc.reference},kc,read),/ssl_refresh_coupling_postgres/);
+ await assert.rejects(coupleSslRefresh(ready,activeKeycloak,read),/ssl_refresh_acceptance_missing/);
 });
 for(const [name,mutate,error] of [
  ['role preservation failure',r=>{r.checks.find(x=>x.name==='existing_roles_and_credentials_preserved').passed=false},/ssl_refresh_acceptance_checks_failed/],
