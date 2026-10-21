@@ -1,0 +1,24 @@
+Updating the configuration and installing your custom providers, if any. Please wait.
+2026-10-21 06:40:46,390 WARN  [org.keycloak.common.Profile] (build-35) Deprecated features identity-brokering-api:v1, twitter-broker:v1 enabled by default. Check the upgrading guide for steps to use later versions if available.
+2026-10-21 06:40:46,802 WARN  [org.keycloak.services] (build-16) KC-SERVICES0047: otziv-security (com.hunt.otziv.issuer.GenerationResource) is implementing the internal SPI realm-restapi-extension. This SPI is internal and may change without notice
+2026-10-21 06:40:46,909 WARN  [org.keycloak.services] (build-16) KC-SERVICES0047: otziv-security-generation (com.hunt.otziv.issuer.GenerationEntities) is implementing the internal SPI jpa-entity-provider. This SPI is internal and may change without notice
+2026-10-21 06:40:47,116 WARN  [org.keycloak.services] (build-16) KC-SERVICES0047: otziv-generation-browser-password (com.hunt.otziv.issuer.GenerationBrowserPassword) is implementing the internal SPI authenticator. This SPI is internal and may change without notice
+2026-10-21 06:40:47,118 WARN  [org.keycloak.services] (build-16) KC-SERVICES0047: otziv-generation-direct-password (com.hunt.otziv.issuer.GenerationDirectPassword) is implementing the internal SPI authenticator. This SPI is internal and may change without notice
+2026-10-21 06:40:47,381 WARN  [org.keycloak.services] (build-16) KC-SERVICES0047: otziv-security-generation (com.hunt.otziv.issuer.GenerationEvents) is implementing the internal SPI eventsListener. This SPI is internal and may change without notice
+2026-10-21 06:40:55,274 INFO  [io.quarkus.deployment.QuarkusAugmentor] (main) Quarkus augmentation completed in 11646ms
+Running the server in development mode. DO NOT use this configuration in production.
+2026-10-21 06:40:59,914 INFO  [org.infinispan.CONTAINER] (main) ISPN000974: Virtual threads support: enabled
+2026-10-21 06:41:01,262 INFO  [org.hibernate.orm.jdbc.batch] (JPA Startup Thread) HHH100501: Automatic JDBC statement batching enabled (maximum batch size 32)
+2026-10-21 06:41:01,427 WARN  [org.keycloak.common.Profile] (main) Deprecated features identity-brokering-api:v1, twitter-broker:v1 enabled by default. Check the upgrading guide for steps to use later versions if available.
+2026-10-21 06:41:01,912 INFO  [org.keycloak.quarkus.runtime.storage.database.jpa.DatabaseIndexChecker] (db-index-checker) Running database index checker
+2026-10-21 06:41:03,108 INFO  [org.infinispan.CONTAINER] (main) ISPN000556: Starting user marshaller 'org.infinispan.commons.marshall.ImmutableProtoStreamMarshaller'
+2026-10-21 06:41:03,655 INFO  [org.keycloak.connections.infinispan.DefaultInfinispanConnectionProviderFactory] (main) Node name: node_426983, Site name: null, Cluster name: ISPN
+2026-10-21 06:41:03,752 INFO  [org.keycloak.models.workflow.WorkflowsEventListenerFactory] (main) Workflow runner task scheduled: next execution at 18:41:03, then every PT12H
+2026-10-21 06:41:03,795 INFO  [org.keycloak.exportimport.dir.DirImportProvider] (main) Importing from directory /opt/keycloak/bin/../data/import
+2026-10-21 06:41:04,481 INFO  [org.keycloak.services] (main) KC-SERVICES0030: Full model import requested. Strategy: IGNORE_EXISTING
+2026-10-21 06:41:04,808 INFO  [org.keycloak.exportimport.util.ImportUtils] (main) Realm 'fixture-59f28c4c-a1ad-4fbf-9ef4-e061f69a3fff' already exists. Import skipped
+2026-10-21 06:41:04,828 INFO  [org.keycloak.services] (main) KC-SERVICES0032: Import finished successfully
+2026-10-21 06:41:04,951 INFO  [org.keycloak.services.resources.KeycloakApplication] (main) Bootstrap completed in 3.522000 seconds
+2026-10-21 06:41:05,058 INFO  [io.quarkus] (main) Keycloak 26.7.3 on JVM (powered by Quarkus 3.33.3.1) started in 9.638s. Listening on: http://0.0.0.0:8080. Management interface listening on http://0.0.0.0:9000.
+2026-10-21 06:41:05,059 INFO  [io.quarkus] (main) Profile dev activated. 
+2026-10-21 06:41:05,059 INFO  [io.quarkus] (main) Installed features: [agroal, cdi, hibernate-orm, jdbc-postgresql, keycloak, micrometer, narayana-jta, opentelemetry, rest, rest-jackson, smallrye-context-propagation, smallrye-health, vertx]
