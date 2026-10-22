@@ -87,6 +87,8 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class ScheduledClientMessageServiceTest {
+    @Mock private com.hunt.otziv.client_messages.api.OrderManualContactReservation manualContactReservation;
+    @Mock private com.hunt.otziv.p_products.api.OrderDeliveryControlContext orderDeliveryContext;
     @Mock private org.springframework.context.ApplicationEventPublisher applicationEvents;
 
     @Mock
@@ -1376,6 +1378,7 @@ class ScheduledClientMessageServiceTest {
                 .build();
 
         when(stateRepository.findById(501L)).thenReturn(Optional.of(state));
+        when(stateRepository.findOrderIdByStateId(501L)).thenReturn(Optional.of(77L));
         when(transactionRunner.callInNewTransaction(
                 org.mockito.ArgumentMatchers.<java.util.function.Supplier<Boolean>>any()
         )).thenAnswer(invocation -> invocation.<java.util.function.Supplier<Boolean>>getArgument(0).get());
@@ -1690,6 +1693,47 @@ class ScheduledClientMessageServiceTest {
         verify(stateRepository, never()).lockDispatchBudget();
         verify(stateRepository, never()).save(any(ScheduledClientMessageState.class));
         verify(attemptRepository, never()).save(any(ScheduledClientMessageAttempt.class));
+    }
+
+    @Test
+    void scheduledPreparationYieldsToManualReservationWithoutLosingItsKnownUnsentEnvelope() {
+        LocalDateTime now = LocalDateTime.now().withNano(0);
+        var state = ScheduledClientMessageState.builder().id(5823L).orderId(77L)
+                .scenario(ClientMessageScenario.REVIEW_CHECK_REMINDER).status(ScheduledMessageStateStatus.ACTIVE)
+                .targetKey("order:77:2026-07-14T00:00").deliveryStatus("CLAIMED")
+                .deliveryEnvelope("frozen known-unsent envelope").deliveryToken("original-token")
+                .lockedUntil(now.plusMinutes(5)).lastErrorCode("state_transaction_in_progress").build();
+        when(stateRepository.findOrderIdByStateId(5823L)).thenReturn(Optional.of(77L));
+        when(manualContactReservation.blocksScheduledContact(77L)).thenReturn(true);
+        when(stateRepository.findByIdForUpdate(5823L)).thenReturn(Optional.of(state));
+
+        assertNull(ReflectionTestUtils.invokeMethod(service, "processClaimedState", 5823L, now, now.plusMinutes(5)));
+
+        var ordered = inOrder(stateRepository, manualContactReservation);
+        ordered.verify(stateRepository).findOrderIdByStateId(5823L);
+        ordered.verify(manualContactReservation).blocksScheduledContact(77L);
+        ordered.verify(stateRepository).findByIdForUpdate(5823L);
+        verify(stateRepository, never()).findById(any());
+        verifyNoInteractions(messageSender, orderStatusNotificationService);
+        assertEquals("RETRYABLE", state.getDeliveryStatus());
+        assertEquals("original-token", state.getDeliveryToken());
+        assertEquals("frozen known-unsent envelope", state.getDeliveryEnvelope());
+        assertEquals("manual_contact_reserved", state.getLastErrorCode());
+        assertNull(state.getLockedUntil());
+        assertTrue(state.getNextAttemptAt().isAfter(now));
+    }
+
+    @Test
+    void preparationRejectsAnOrderBindingChangedWhileWaitingForTheReservationLock() {
+        var state = ScheduledClientMessageState.builder().id(5824L).orderId(88L)
+                .scenario(ClientMessageScenario.REVIEW_CHECK_REMINDER).status(ScheduledMessageStateStatus.ACTIVE).build();
+        when(stateRepository.findOrderIdByStateId(5824L)).thenReturn(Optional.of(77L));
+        when(stateRepository.findByIdForUpdate(5824L)).thenReturn(Optional.of(state));
+        assertThrows(IllegalStateException.class, () -> ReflectionTestUtils.invokeMethod(service, "processClaimedState",
+                5824L, LocalDateTime.now(), LocalDateTime.now().plusMinutes(5)));
+        verify(manualContactReservation).blocksScheduledContact(77L);
+        verify(stateRepository, never()).save(any());
+        verifyNoInteractions(messageSender, orderStatusNotificationService);
     }
 
     @Test

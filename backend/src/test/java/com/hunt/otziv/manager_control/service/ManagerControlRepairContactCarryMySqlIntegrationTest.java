@@ -60,6 +60,33 @@ class ManagerControlRepairContactCarryMySqlIntegrationTest {
     }
 
     @Test
+    void contactReservationSeesAnotherCardRepairCommittedAfterAnEarlierRead() {
+        jdbc.execute("DROP TABLE IF EXISTS carry_order_mutex");
+        jdbc.execute("CREATE TABLE carry_order_mutex(id BIGINT PRIMARY KEY) ENGINE=InnoDB");
+        jdbc.update("INSERT INTO carry_order_mutex VALUES(77)");
+        jdbc.update("UPDATE manager_daily_control_concrete_items SET item_status='OPEN'");
+        var transactions = new org.springframework.jdbc.datasource.DataSourceTransactionManager(jdbc.getDataSource());
+        var factory = new org.springframework.aop.framework.ProxyFactory(new ManagerControlTransactionRunner());
+        factory.setProxyTargetClass(true);
+        factory.addAdvice(new org.springframework.transaction.interceptor.TransactionInterceptor(transactions,
+                new org.springframework.transaction.annotation.AnnotationTransactionAttributeSource()));
+        var runner = (ManagerControlTransactionRunner) factory.getProxy();
+        runner.contactReservation(() -> {
+            assertThat(carry.latest(order)).isEmpty();
+            // Independent committed repair of another daily card, after our first consistent read.
+            var concurrent = new JdbcTemplate(new DriverManagerDataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword()));
+            concurrent.update("UPDATE manager_daily_control_concrete_items SET item_status='ACTION_TAKEN'");
+            jdbc.queryForObject("SELECT id FROM carry_order_mutex WHERE id=77 FOR UPDATE", Long.class);
+            assertThat(carry.latest(order).orElseThrow().followUpAt()).isEqualTo(followUp);
+            assertThat(org.springframework.transaction.support.TransactionSynchronizationManager.getCurrentTransactionIsolationLevel())
+                    .isEqualTo(java.sql.Connection.TRANSACTION_READ_COMMITTED);
+            return null;
+        });
+        assertThat(jdbc.queryForObject("SELECT follow_up_at FROM manager_daily_control_concrete_items WHERE control_entity_id=10", java.sql.Timestamp.class).toLocalDateTime())
+                .isEqualTo(followUp);
+    }
+
+    @Test
     void laterAutomaticReminderDoesNotExtendTheRepairDeadlineOrCreateARepair() {
         jdbc.update("INSERT INTO scheduled_client_message_attempts VALUES(1,40,'SENT',?)", touched.minusMinutes(1));
         jdbc.update("UPDATE scheduled_client_message_state SET last_success_at=CURRENT_TIMESTAMP(6),sent_count=2");

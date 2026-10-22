@@ -93,6 +93,7 @@ class ManagerControlClientSendMySqlIntegrationTest {
     private ManagerControlOrderDeliveryState deliveryState;
     private ManagerControlRepairContactCarry repairCarry;
     private com.hunt.otziv.client_messages.api.CurrentOrderDeliveryUncertainty uncertainty;
+    private com.hunt.otziv.p_products.api.OrderDeliveryControlContext contexts;
 
     private BadReviewPaymentInstructionOrchestrator payments;
     private OrderService orderService;
@@ -203,7 +204,7 @@ class ManagerControlClientSendMySqlIntegrationTest {
                 new com.hunt.otziv.security.credentials.CredentialCipher(encryption)));
         repairCarry = mock(ManagerControlRepairContactCarry.class);
         uncertainty = mock(com.hunt.otziv.client_messages.api.CurrentOrderDeliveryUncertainty.class);
-        var contexts = mock(com.hunt.otziv.p_products.api.OrderDeliveryControlContext.class);
+        contexts = mock(com.hunt.otziv.p_products.api.OrderDeliveryControlContext.class);
         when(contexts.read(77L)).thenAnswer(call -> Optional.of(context()));
         when(contexts.lock(77L)).thenAnswer(call -> Optional.of(context()));
         deliveryState = new ManagerControlOrderDeliveryState(queue, contexts, uncertainty, repairCarry);
@@ -238,6 +239,161 @@ class ManagerControlClientSendMySqlIntegrationTest {
 
     private void due() { jdbc.update("UPDATE manager_client_message_queue SET next_attempt_at=CURRENT_TIMESTAMP(6)"); }
     private com.hunt.otziv.client_messages.api.DeliveryOperation deliveryState() { return queue.status(1L, operation.get()); }
+
+    private ManagerControlScheduledContactGuard realReservationState() {
+        jdbc.execute("DROP TABLE IF EXISTS scheduled_client_message_state,orders,order_statuses");
+        jdbc.execute("CREATE TABLE order_statuses(order_status_id BIGINT PRIMARY KEY,order_status_title VARCHAR(80)) ENGINE=InnoDB");
+        jdbc.execute("CREATE TABLE orders(order_id BIGINT PRIMARY KEY,order_manager BIGINT,order_status BIGINT,client_message_generation BIGINT,order_status_changed_at DATETIME(6),order_changed DATE,order_created DATE,order_waiting_for_client BOOLEAN,order_waiting_for_client_changed_at DATETIME(6)) ENGINE=InnoDB");
+        jdbc.execute("CREATE TABLE scheduled_client_message_state(state_id BIGINT PRIMARY KEY,order_id BIGINT,target_key VARCHAR(100),state_status VARCHAR(30),delivery_status VARCHAR(30),last_error_code VARCHAR(100),delivery_envelope TEXT,sent_count INT DEFAULT 0,last_success_at DATETIME(6)) ENGINE=InnoDB");
+        jdbc.update("INSERT INTO order_statuses VALUES(1,?)", currentOrderStatus.get());
+        jdbc.update("INSERT INTO orders VALUES(77,4,1,?,?,NULL,NULL,FALSE,NULL)", generation.get(), cycle.get());
+        var currentOrders = proxy(new com.hunt.otziv.p_products.service.OrderDeliveryControlContextService(mock(OrderRepository.class), jdbc));
+        when(contexts.lock(77L)).thenAnswer(call -> currentOrders.lock(77L));
+        var states = mock(ScheduledClientMessageStateRepository.class);
+        when(states.findByOrderIdIn(any())).thenAnswer(call -> jdbc.query("SELECT * FROM scheduled_client_message_state WHERE order_id=77", (rs,n) ->
+                com.hunt.otziv.client_messages.model.ScheduledClientMessageState.builder().id(rs.getLong("state_id"))
+                    .orderId(77L).targetKey(rs.getString("target_key"))
+                    .status(com.hunt.otziv.client_messages.model.ScheduledMessageStateStatus.valueOf(rs.getString("state_status")))
+                    .deliveryStatus(rs.getString("delivery_status")).lastErrorCode(rs.getString("last_error_code")).build()));
+        var currentScheduled = proxy(new com.hunt.otziv.client_messages.service.CurrentOrderDeliveryUncertaintyService(states, jdbc));
+        when(uncertainty.hasUncertainCurrentDeliveryForUpdate(anyLong(), anyString(), nullable(String.class), anyBoolean()))
+                .thenAnswer(call -> currentScheduled.hasUncertainCurrentDeliveryForUpdate(call.getArgument(0), call.getArgument(1), call.getArgument(2), call.getArgument(3)));
+        when(uncertainty.hasUncertainCurrentDelivery(anyLong(), anyString(), nullable(String.class)))
+                .thenAnswer(call -> currentScheduled.hasUncertainCurrentDelivery(call.getArgument(0), call.getArgument(1), call.getArgument(2)));
+        when(uncertainty.hasRecentCurrentDeliveryForUpdate(anyLong(), anyString(), nullable(String.class), any()))
+                .thenAnswer(call -> currentScheduled.hasRecentCurrentDeliveryForUpdate(call.getArgument(0), call.getArgument(1), call.getArgument(2), call.getArgument(3)));
+        when(uncertainty.hasRecentCurrentDelivery(anyLong(), anyString(), nullable(String.class), any()))
+                .thenAnswer(call -> currentScheduled.hasRecentCurrentDelivery(call.getArgument(0), call.getArgument(1), call.getArgument(2), call.getArgument(3)));
+        return proxy(new ManagerControlScheduledContactGuard(currentOrders, queue, repairCarry));
+    }
+
+    private void scheduledReservation(String deliveryStatus, String code) {
+        jdbc.update("INSERT INTO scheduled_client_message_state(state_id,order_id,target_key,state_status,delivery_status,last_error_code,delivery_envelope) VALUES(40,77,?,'ACTIVE',?,?,NULL)",
+                "order:77:" + cycle.get().withNano(0), deliveryStatus, code);
+    }
+
+    @ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({"UNKNOWN,state_transaction_outcome_uncertain", "UNKNOWN,manual_delivery_handoff_pending", "PREPARED,delivery_prepared", "CLAIMED,state_transaction_in_progress"})
+    void currentScheduledReservationBlocksNewManualSendAndExposesTheReason(String deliveryStatus, String code) {
+        realReservationState();
+        scheduledReservation(deliveryStatus, code);
+        assertThatThrownBy(() -> workflow.sendClientMessage(1L, PRINCIPAL, AUTH)).isInstanceOf(ResponseStatusException.class);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM manager_client_message_queue", Integer.class)).isZero();
+        assertThat(deliveryState.sendBlockedReason(readCard(false))).contains("Не отправляйте повторное сообщение");
+        assertThat(state()).isEqualTo("OPEN");
+        assertThat(comment()).isEqualTo("original");
+        assertThat(sends.get()).isZero();
+    }
+
+    @ParameterizedTest @ValueSource(strings = {"PREPARED", "UNKNOWN"})
+    void scheduledPreparationAppearingAfterEnqueueBlocksProviderDispatch(String deliveryStatus) {
+        realReservationState();
+        enqueue();
+        scheduledReservation(deliveryStatus, "state_transaction_outcome_uncertain");
+        worker.drain();
+        assertThat(sends.get()).isZero();
+        assertThat(deliveryState().errorCode()).isEqualTo("context_changed");
+        assertThat(jdbc.queryForObject("SELECT delivery_status FROM scheduled_client_message_state", String.class)).isEqualTo(deliveryStatus);
+    }
+
+    @Test void bareSchedulerClaimYieldsToTheAlreadyDurableManualReservation() {
+        var scheduledGuard = realReservationState();
+        enqueue();
+        scheduledReservation("CLAIMED", "state_transaction_in_progress");
+        jdbc.update("UPDATE scheduled_client_message_state SET delivery_envelope='frozen previously known-unsent retry'");
+        assertThat(Boolean.TRUE.equals(new TransactionTemplate(transactions).execute(status -> scheduledGuard.blocksScheduledContact(77L)))).isTrue();
+        worker.drain();
+        assertThat(sends.get()).isEqualTo(1);
+        assertThat(deliveryState().status()).isEqualTo("SENT");
+        assertThat(deliveryState().errorCode()).isNull();
+        // A promptly completed manual receipt still postpones the competing scheduled contact.
+        assertThat(Boolean.TRUE.equals(new TransactionTemplate(transactions).execute(status -> scheduledGuard.blocksScheduledContact(77L)))).isTrue();
+    }
+
+    @Test void scheduledReservationFromThePreviousCycleDoesNotBlockCurrentContact() {
+        realReservationState();
+        scheduledReservation("UNKNOWN", "manual_delivery_handoff_pending");
+        jdbc.update("UPDATE scheduled_client_message_state SET target_key='order:77:old-cycle'");
+        enqueue();
+        worker.drain();
+        assertThat(sends.get()).isEqualTo(1);
+    }
+
+    @Test void fastAutomaticSuccessBlocksAnotherManualContactWithoutChangingBusinessPending() {
+        realReservationState();
+        scheduledReservation(null, null);
+        jdbc.update("UPDATE scheduled_client_message_state SET sent_count=1,last_success_at=CURRENT_TIMESTAMP(6)");
+        assertThatThrownBy(() -> workflow.sendClientMessage(1L, PRINCIPAL, AUTH)).isInstanceOf(ResponseStatusException.class);
+        assertThat(deliveryState.sendBlockedReason(readCard(false))).contains("Автоматическая отправка клиенту уже подтверждена");
+        assertThat(deliveryState.pending(readCard(false))).isFalse();
+        new TransactionTemplate(transactions).execute(status -> { deliveryState.requireMutationAllowed(readCard(false)); return null; });
+        assertThat(state()).isEqualTo("OPEN");
+        assertThat(readCard(false).getFollowUpAt()).isNull();
+        assertThat(sends.get()).isZero();
+        jdbc.update("UPDATE scheduled_client_message_state SET delivery_status='UNKNOWN',last_error_code='manual_delivery_handoff_pending'");
+        assertThat(deliveryState.sendBlockedReason(readCard(false))).contains("Исход автоматической отправки");
+    }
+
+    @Test void automaticReceiptAppearingAfterManualEnqueueBlocksDispatchWithoutRenewingIt() {
+        realReservationState();
+        enqueue();
+        scheduledReservation(null, null);
+        jdbc.update("UPDATE scheduled_client_message_state SET sent_count=1,last_success_at=CURRENT_TIMESTAMP(6)");
+        var receiptBefore = jdbc.queryForMap("SELECT sent_count,last_success_at FROM scheduled_client_message_state");
+        worker.drain();
+        assertThat(sends.get()).isZero();
+        assertThat(deliveryState().errorCode()).isEqualTo("context_changed");
+        assertThat(jdbc.queryForMap("SELECT sent_count,last_success_at FROM scheduled_client_message_state")).isEqualTo(receiptBefore);
+    }
+
+    @ParameterizedTest @ValueSource(strings = {"expired", "old_cycle", "no_sent_count"})
+    void onlyProvenRecentAutomaticContactFromThisCycleBlocksManualSend(String exception) {
+        realReservationState();
+        scheduledReservation(null, null);
+        jdbc.update("UPDATE scheduled_client_message_state SET sent_count=1,last_success_at=CURRENT_TIMESTAMP(6)");
+        if (exception.equals("expired")) jdbc.update("UPDATE scheduled_client_message_state SET last_success_at=DATE_SUB(CURRENT_TIMESTAMP(6),INTERVAL 3 DAY)");
+        if (exception.equals("old_cycle")) jdbc.update("UPDATE scheduled_client_message_state SET target_key='order:77:older-cycle'");
+        if (exception.equals("no_sent_count")) jdbc.update("UPDATE scheduled_client_message_state SET sent_count=0");
+        enqueue(); worker.drain();
+        assertThat(sends.get()).isEqualTo(1);
+    }
+
+    @Test void scheduledCurrentReadSeesACommitAfterAnEarlierRepeatableReadSnapshot() {
+        realReservationState();
+        new TransactionTemplate(transactions).execute(status -> {
+            assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM scheduled_client_message_state", Integer.class)).isZero();
+            new JdbcTemplate(new DriverManagerDataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword()))
+                    .update("INSERT INTO scheduled_client_message_state(state_id,order_id,target_key,state_status,delivery_status,last_error_code,delivery_envelope) VALUES(40,77,?,'ACTIVE','UNKNOWN','manual_delivery_handoff_pending',NULL)", "order:77:" + cycle.get());
+            assertThat(uncertainty.hasUncertainCurrentDeliveryForUpdate(77L, "order:77:" + cycle.get(), null, true)).isTrue();
+            return null;
+        });
+    }
+
+    @Test void concurrentScheduledPreparationOwnsTheOrderUntilItsDurableEnvelopeCommits() throws Exception {
+        var scheduledGuard = realReservationState();
+        var reserved = new CountDownLatch(1);
+        var commit = new CountDownLatch(1);
+        try (var pool = Executors.newFixedThreadPool(2)) {
+            var scheduled = pool.submit(() -> new TransactionTemplate(transactions).execute(status -> {
+                assertThat(scheduledGuard.blocksScheduledContact(77L)).isFalse();
+                reserved.countDown();
+                try { assertThat(commit.await(5, TimeUnit.SECONDS)).isTrue(); }
+                catch (InterruptedException interrupted) { throw new IllegalStateException(interrupted); }
+                scheduledReservation("PREPARED", "delivery_prepared");
+                return null;
+            }));
+            assertThat(reserved.await(5, TimeUnit.SECONDS)).isTrue();
+            var manual = pool.submit(() -> assertThatThrownBy(() -> workflow.sendClientMessage(1L, PRINCIPAL, AUTH))
+                    .isInstanceOf(ResponseStatusException.class));
+            try {
+                assertThatThrownBy(() -> manual.get(200, TimeUnit.MILLISECONDS)).isInstanceOf(java.util.concurrent.TimeoutException.class);
+            } finally { commit.countDown(); }
+            scheduled.get(5, TimeUnit.SECONDS);
+            manual.get(5, TimeUnit.SECONDS);
+        }
+        assertThat(sends.get()).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM manager_client_message_queue", Integer.class)).isZero();
+    }
 
     @Test void receiptRepairCannotOverwriteAnExistingManagerDeliveryFence() {
         enqueue();
@@ -375,6 +531,94 @@ class ManagerControlClientSendMySqlIntegrationTest {
         assertThat(deliveryState().errorCode()).isNull();
         assertThat(state()).isEqualTo("ACTION_TAKEN");
         assertThat(readCard(false).getFollowUpAt()).isAfter(LocalDateTime.now().plusDays(1));
+        assertThat(sends.get()).isEqualTo(1);
+    }
+
+    private String historicalSuccessor(String state, String code, LocalDateTime createdAt, LocalDateTime updatedAt) throws Exception {
+        var original = queue.snapshot(operation.get());
+        var json = new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules();
+        var frozen = (com.fasterxml.jackson.databind.node.ObjectNode) json.readTree(original.preparedJson());
+        String id = UUID.randomUUID().toString();
+        frozen.put("deliveryToken", id);
+        var copy = new ManagerClientMessageQueue.Command(id, original.cardId(), "CONTROL", frozen.toString(), original.actor());
+        new TransactionTemplate(transactions).execute(status -> { queue.enqueue(copy); return null; });
+        jdbc.update("UPDATE manager_client_message_queue SET state=?,error_code=?,created_at=?,updated_at=?,next_attempt_at=TIMESTAMPADD(DAY,1,CURRENT_TIMESTAMP(6)) WHERE operation_id=?",
+                state, code, createdAt, updatedAt, id);
+        return id;
+    }
+
+    private String supersededContact(int successorAgeDays) throws Exception {
+        failAudit.set(true); enqueue(); worker.drain(); failAudit.set(false);
+        LocalDateTime now = jdbc.queryForObject("SELECT CURRENT_TIMESTAMP(6)", Timestamp.class).toLocalDateTime();
+        jdbc.update("UPDATE manager_client_message_queue SET created_at=?,updated_at=?,next_attempt_at=CURRENT_TIMESTAMP(6) WHERE operation_id=?",
+                now.minusDays(10), now.minusDays(9), operation.get());
+        LocalDateTime contact = now.minusDays(successorAgeDays);
+        String successor = historicalSuccessor("SENT", null, contact.minusMinutes(1), contact);
+        jdbc.update("UPDATE mc_send_card SET status='ACTION_TAKEN',comment='later confirmed contact',touched=?,follow_up=? WHERE id=1",
+                contact, contact.plusDays(2));
+        when(sender.recordedOutcome(operation.get())).thenReturn(ClientMessageSendResult.sent("WhatsApp", "fixture-provider-message"));
+        return successor;
+    }
+
+    @ParameterizedTest @ValueSource(ints = {0, 4})
+    void supersededConfirmedOperationRetiresOnlyItsLeaseWithoutRenewingContact(int successorAgeDays) throws Exception {
+        String successor = supersededContact(successorAgeDays);
+        var cardBefore = jdbc.queryForMap("SELECT * FROM mc_send_card WHERE id=1");
+        var parentBefore = jdbc.queryForMap("SELECT * FROM mc_send_parent WHERE id=2");
+        var sourceBefore = jdbc.queryForMap("SELECT * FROM mc_send_source WHERE id=77");
+        var oldClock = jdbc.queryForMap("SELECT created_at,updated_at,next_attempt_at,attempts FROM manager_client_message_queue WHERE operation_id=?", operation.get());
+        var newerBefore = jdbc.queryForMap("SELECT * FROM manager_client_message_queue WHERE operation_id=?", successor);
+        int eventsBefore = jdbc.queryForObject("SELECT COUNT(*) FROM mc_send_events", Integer.class);
+
+        worker.drain();
+
+        assertThat(deliveryState().status()).isEqualTo("SENT");
+        assertThat(deliveryState().errorCode()).isEqualTo("superseded_by_confirmed_contact");
+        assertThat(jdbc.queryForMap("SELECT created_at,updated_at,next_attempt_at,attempts FROM manager_client_message_queue WHERE operation_id=?", operation.get())).isEqualTo(oldClock);
+        assertThat(jdbc.queryForMap("SELECT * FROM manager_client_message_queue WHERE operation_id=?", successor)).isEqualTo(newerBefore);
+        assertThat(jdbc.queryForMap("SELECT * FROM mc_send_card WHERE id=1")).isEqualTo(cardBefore);
+        assertThat(jdbc.queryForMap("SELECT * FROM mc_send_parent WHERE id=2")).isEqualTo(parentBefore);
+        assertThat(jdbc.queryForMap("SELECT * FROM mc_send_source WHERE id=77")).isEqualTo(sourceBefore);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM mc_send_events", Integer.class)).isEqualTo(eventsBefore);
+        assertThat(queue.claim()).isEmpty();
+        assertThat(sends.get()).isEqualTo(1);
+        if (successorAgeDays > 2) {
+            var copy = readCard(false); copy.setStatus(ManagerDailyControlItemStatus.OPEN); copy.setFollowUpAt(null);
+            assertThat(deliveryState.restoreConfirmedContact(copy)).isFalse();
+            assertThat(deliveryState.delivery(copy)).isNull();
+        }
+    }
+
+    @ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({"UNKNOWN,receipt_unavailable", "SENDING,", "RETRYABLE,gateway_not_ready", "FAILED,context_changed", "SENT,finalization_required"})
+    void aNewerUncertainOperationPreventsRetiringAnOldConfirmedFence(String state, String code) throws Exception {
+        supersededContact(4);
+        LocalDateTime now = jdbc.queryForObject("SELECT CURRENT_TIMESTAMP(6)", Timestamp.class).toLocalDateTime();
+        historicalSuccessor(state, code, now.minusDays(1), now.minusDays(1));
+        var cardBefore = jdbc.queryForMap("SELECT * FROM mc_send_card WHERE id=1");
+        worker.drain();
+        assertThat(deliveryState().status()).isEqualTo("SENT");
+        assertThat(deliveryState().errorCode()).isEqualTo("finalization_required");
+        assertThat(jdbc.queryForMap("SELECT * FROM mc_send_card WHERE id=1")).isEqualTo(cardBefore);
+        assertThat(sends.get()).isEqualTo(1);
+    }
+
+    @ParameterizedTest @ValueSource(strings = {"source", "cycle", "receipt", "claim"})
+    void supersededSettlementRequiresUnchangedSourceProofAndClaim(String change) throws Exception {
+        supersededContact(4);
+        var cardBefore = jdbc.queryForMap("SELECT * FROM mc_send_card WHERE id=1");
+        if (change.equals("source")) orderSum.set(new java.math.BigDecimal("1500.00"));
+        if (change.equals("cycle")) generation.incrementAndGet();
+        if (change.equals("receipt")) when(sender.recordedOutcome(operation.get()))
+                .thenReturn(ClientMessageSendResult.failed("operation_envelope_mismatch", "fixture rejected receipt"));
+        if (change.equals("claim")) {
+            var claim = queue.claim().orElseThrow();
+            jdbc.update("UPDATE manager_client_message_queue SET claim_token='replacement-worker' WHERE operation_id=?", operation.get());
+            workflow.completeQueued(claim, queue.snapshot(operation.get()), ClientMessageSendResult.sent("WhatsApp", "fixture-provider-message"), AUTH, "SENT", null, 0);
+        } else worker.drain();
+        assertThat(deliveryState().status()).isEqualTo("SENT");
+        assertThat(deliveryState().errorCode()).isEqualTo("finalization_required");
+        assertThat(jdbc.queryForMap("SELECT * FROM mc_send_card WHERE id=1")).isEqualTo(cardBefore);
         assertThat(sends.get()).isEqualTo(1);
     }
 

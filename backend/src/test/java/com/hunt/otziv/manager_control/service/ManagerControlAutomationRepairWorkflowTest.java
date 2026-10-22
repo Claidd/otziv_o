@@ -39,7 +39,7 @@ class ManagerControlAutomationRepairWorkflowTest {
         var workflow = new ManagerControlAutomationRepairWorkflow(mock(ManagerControlChatRepairWorkflow.class), outcome,
                 mock(ManagerControlProblemExamples.class), diagnostics, messages, states,
                 mock(ClientChatMessageReconciliationService.class), mock(ManagerAutomationFailureService.class),
-                new com.hunt.otziv.client_messages.service.CurrentOrderDeliveryUncertaintyService(states));
+                new com.hunt.otziv.client_messages.service.CurrentOrderDeliveryUncertaintyService(states, mock(org.springframework.jdbc.core.JdbcTemplate.class)));
         var order = new com.hunt.otziv.p_products.model.Order(); order.setId(77L);
         order.setStatusChangedAt(LocalDateTime.of(2026, 7, 14, 0, 0));
         var state = ScheduledClientMessageState.builder().id(3938L).orderId(77L)
@@ -98,7 +98,7 @@ class ManagerControlAutomationRepairWorkflowTest {
                 mock(ManagerControlChatRepairWorkflow.class), repairOutcome,
                 mock(ManagerControlProblemExamples.class), mock(ManagerControlOrderAutomationDiagnostics.class),
                 scheduledMessages, stateRepository, mock(ClientChatMessageReconciliationService.class), failures,
-                new com.hunt.otziv.client_messages.service.CurrentOrderDeliveryUncertaintyService(stateRepository));
+                new com.hunt.otziv.client_messages.service.CurrentOrderDeliveryUncertaintyService(stateRepository, mock(org.springframework.jdbc.core.JdbcTemplate.class)));
 
         var manager = new Manager();
         manager.setId(3L);

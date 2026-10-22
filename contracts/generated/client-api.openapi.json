@@ -18541,6 +18541,13 @@
               "type" : "null"
             } ]
           },
+          "clientMessageSendBlockedReason" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
           "comment" : {
             "anyOf" : [ {
               "type" : "string"
@@ -18791,7 +18798,7 @@
             } ]
           }
         },
-        "required" : [ "actionType", "ageDays", "auditCommitments", "canRollback", "chatUrl", "comment", "contactText", "controlEntityId", "delivery", "diagnosis", "entityId", "firstObservedAt", "followUpAt", "hardDeadlineAt", "itemStatus", "lastManualTouchAt", "orderDetailsId", "penaltyPoints", "reason", "resolvedAt", "riskResolutionAction", "rollbackMessage", "rollbackStatus", "slaState", "specialistName", "status", "subtitle", "targetDeadlineAt", "targetUrl", "title", "type", "updatedAt", "workerExplanation", "workerExplanationAt", "workerNotificationAcceptedAt", "workerNotificationAcceptedByUserId", "workerNotificationAttemptedAt", "workerNotificationFailureReason", "workerNotificationSentAt" ],
+        "required" : [ "actionType", "ageDays", "auditCommitments", "canRollback", "chatUrl", "clientMessageSendBlockedReason", "comment", "contactText", "controlEntityId", "delivery", "diagnosis", "entityId", "firstObservedAt", "followUpAt", "hardDeadlineAt", "itemStatus", "lastManualTouchAt", "orderDetailsId", "penaltyPoints", "reason", "resolvedAt", "riskResolutionAction", "rollbackMessage", "rollbackStatus", "slaState", "specialistName", "status", "subtitle", "targetDeadlineAt", "targetUrl", "title", "type", "updatedAt", "workerExplanation", "workerExplanationAt", "workerNotificationAcceptedAt", "workerNotificationAcceptedByUserId", "workerNotificationAttemptedAt", "workerNotificationFailureReason", "workerNotificationSentAt" ],
         "additionalProperties" : true
       },
       "ManagerControlEventResponseOutput" : {
@@ -27206,7 +27213,7 @@
     "sha256" : "9d4b050d106692f019c545ecf7beab453e2c3b77a32f1a352f8945bac8a81e11"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/manager_control/dto/ManagerControlConcreteItemResponse.java",
-    "sha256" : "5a56c0d8753d3c869f987cd49c5c59f8bbdae379c8edbd5fdb5e992289271a0e"
+    "sha256" : "1aca91b466dcf7dfb99217b9543634949d141d9cc70bdff061a1dd49d5dba0c0"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/manager_control/dto/ManagerControlEventResponse.java",
     "sha256" : "4e73c4a84ba002441dc4a5d13063da460ba33bfd931728a547c56643d2986df7"
@@ -27530,7 +27537,7 @@
     "sha256" : "ec632e21d38c13762c66e4a42ee20e6cd042b058049eaf136f806eacb479b39d"
   }, {
     "path" : "contracts/client-api.config.json",
-    "sha256" : "4a688a74f5c5484ba979008f42681d39c0f7e2aa4895da74071a2a256cce2b41"
+    "sha256" : "bc043cff10eb05ac35ea7557917986fd10b9f2ca4f9f11f7a7e6949f5f51dee4"
   } ],
   "x-source-fingerprint-normalization" : "UTF-8 text with CRLF normalized to LF",
   "x-schema-java-types" : {

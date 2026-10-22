@@ -45,6 +45,7 @@ import { shouldImmediatelyCloseRiskControlCard } from './manager-control-risk-cl
 import { ManagerProblemDiagnosisComponent } from './manager-problem-diagnosis.component';
 import { ManagerReviewCommitmentsComponent } from './manager-review-commitments.component';
 import { ManagerReviewAnswerAttemptsComponent } from './manager-review-answer-attempts.component';
+import { ManagerDeliveryHandoffDialogComponent } from './manager-delivery-handoff-dialog.component';
 
 const ORDER_LIST_STATUSES = new Set([
   'Все',
@@ -169,7 +170,7 @@ export function needsManagerControlDetailSync(
 
 @Component({
   selector: 'app-manager-control',
-  imports: [AdminLayoutComponent, DatePipe, FormsModule, LoadErrorCardComponent, NgTemplateOutlet, ManagerProblemDiagnosisComponent, ManagerReviewCommitmentsComponent, ManagerReviewAnswerAttemptsComponent],
+  imports: [AdminLayoutComponent, DatePipe, FormsModule, LoadErrorCardComponent, NgTemplateOutlet, ManagerProblemDiagnosisComponent, ManagerReviewCommitmentsComponent, ManagerReviewAnswerAttemptsComponent, ManagerDeliveryHandoffDialogComponent],
   templateUrl: './manager-control.component.html',
   styleUrl: './manager-control.component.scss'
 })
@@ -197,11 +198,17 @@ export class ManagerControlComponent implements OnInit {
   private readonly deliveryTracker = new CardDeliveryTracker();
   readonly deliveries = signal<Record<number, DeliveryOperation>>({});
   deliveryMessage(card: ManagerControlConcreteItem): string | null {
-    return deliveryOperationMessage(this.deliveries()[card.controlEntityId ?? 0] ?? managerCardDelivery(card));
+    return this.clientMessageSendBlockedReason(card)
+      || deliveryOperationMessage(this.deliveries()[card.controlEntityId ?? 0] ?? managerCardDelivery(card));
   }
   deliveryBlocked(card: ManagerControlConcreteItem): boolean {
+    if (this.clientMessageSendBlockedReason(card)) return true;
     const operation = this.deliveries()[card.controlEntityId ?? 0] ?? managerCardDelivery(card);
     return !!operation && (operation.status !== 'FAILED' || !!operation.errorCode && ['context_changed', 'finalization_required'].includes(operation.errorCode));
+  }
+  private clientMessageSendBlockedReason(card: ManagerControlConcreteItem): string | null {
+    return (card.type === 'ORDER' || card.type === 'WORKER_ORDER_NEW')
+      ? card.clientMessageSendBlockedReason?.trim() || null : null;
   }
   private observeDelivery(card: ManagerControlConcreteItem): void {
     const id = card.controlEntityId, operation = managerCardDelivery(card);
@@ -248,6 +255,7 @@ export class ManagerControlComponent implements OnInit {
   readonly chatLinkEditor = signal<ManagerControlConcreteItem | null>(null);
   readonly chatLinkDraft = signal('');
   readonly chatLinkSaving = signal(false);
+  readonly deliveryHandoffItem = signal<ManagerControlConcreteItem | null>(null);
   readonly isDetailPage = computed(() => this.detailPageManagerId() !== null);
   readonly clock = signal(Date.now());
   readonly managers = computed(() => {
@@ -1461,6 +1469,10 @@ export class ManagerControlComponent implements OnInit {
       return;
     }
     if (this.requiresPreparedContact(example, actionType)) {
+      if (this.deliveryBlocked(example)) {
+        this.toast.error('Сначала проверьте отправку', this.deliveryMessage(example) || 'Результат предыдущей отправки ещё не подтверждён');
+        return;
+      }
       this.toast.error('Сначала подготовьте сообщение', 'Нажмите «Текст», отправьте его клиенту, затем отметьте действие');
       return;
     }
@@ -1495,6 +1507,7 @@ export class ManagerControlComponent implements OnInit {
   }
 
   async copyContactText(example: ManagerControlConcreteItem): Promise<void> {
+    if (this.deliveryBlocked(example)) return;
     const text = this.contactText(example);
     if (!text) {
       this.toast.error('Текст не собран', 'У карточки нет текста для ручной отправки');
@@ -1589,32 +1602,27 @@ export class ManagerControlComponent implements OnInit {
       && (example.reason ?? '').includes('state_transaction_outcome_uncertain');
   }
 
-  async handoffUncertainDelivery(example: ManagerControlConcreteItem): Promise<void> {
+  handoffUncertainDelivery(example: ManagerControlConcreteItem): void {
     const itemId = example.controlEntityId;
-    if (!itemId || this.isConcreteUpdating(itemId)) return;
+    if (!itemId || this.isConcreteUpdating(itemId) || this.deliveryHandoffItem()
+      || !this.isUncertainDeliveryForHandoff(example)) return;
     this.setConcreteUpdating(itemId, true);
-    try {
-      const preview = await firstValueFrom(this.api.uncertainDelivery(itemId));
-      const accepted = window.confirm(
-        `Проверьте клиентский чат и эту старую отправку.\n\nОперация: ${preview.operationId}\n` +
-        `Подготовлена: ${preview.preparedAt}\n\nТекст:\n${preview.message}\n\n` +
-        'Продолжить ручную передачу? Система не отправит сообщение повторно и не отметит его доставленным.');
-      if (!accepted) return;
-      const note = window.prompt('Что вы увидели в чате и что сделаете для связи с клиентом? (10–400 символов)')?.trim();
-      if (!note) return;
-      if (note.length < 10 || note.length > 400) {
-        this.toast.error('Укажите результат проверки', 'Напишите 10–400 символов.');
-        return;
-      }
-      const updated = await firstValueFrom(this.api.handoffUncertainDelivery(itemId, preview.operationId, note));
-      this.patchDetailConcreteItem(example, updated);
-      this.toast.warning('Передано вручную', 'Исход отправки не подтверждён. Карточка остаётся открытой.');
-      this.load({ silent: true });
-    } catch (err) {
-      this.toast.error('Ручная передача не сохранена', apiErrorMessage(err, 'Не удалось проверить старую отправку'));
-    } finally {
-      this.setConcreteUpdating(itemId, false);
-    }
+    this.deliveryHandoffItem.set(example);
+  }
+
+  closeDeliveryHandoff(): void {
+    const itemId = this.deliveryHandoffItem()?.controlEntityId;
+    this.deliveryHandoffItem.set(null);
+    if (itemId) this.setConcreteUpdating(itemId, false);
+  }
+
+  completeDeliveryHandoff(updated: ManagerControlConcreteItem): void {
+    const example = this.deliveryHandoffItem();
+    if (!example) return;
+    this.patchDetailConcreteItem(example, updated);
+    this.closeDeliveryHandoff();
+    this.toast.warning('Передано вручную', 'Исход отправки не подтверждён. Карточка остаётся открытой.');
+    this.load({ silent: true });
   }
 
   private completeConcreteRepair(
@@ -2129,7 +2137,7 @@ export class ManagerControlComponent implements OnInit {
   requiresPreparedContact(example: ManagerControlConcreteItem, actionType: ManagerControlActionType): boolean {
     return actionType === 'ACTION_TAKEN'
       && this.canContactOrder(example)
-      && !this.isContactTextCopied(example);
+      && (this.deliveryBlocked(example) || !this.isContactTextCopied(example));
   }
 
   concreteActionComment(example: ManagerControlConcreteItem, actionType: ManagerControlActionType): string | null {
@@ -2153,6 +2161,9 @@ export class ManagerControlComponent implements OnInit {
   }
 
   concreteActionTitle(example: ManagerControlConcreteItem, actionType: ManagerControlActionType, fallback: string): string {
+    if (actionType === 'ACTION_TAKEN' && this.canContactOrder(example) && this.deliveryBlocked(example)) {
+      return this.deliveryMessage(example) || 'Сначала проверьте результат предыдущей отправки';
+    }
     if (example.type === 'COMMON_INVOICE' && actionType === 'ACTION_TAKEN') {
       return 'Проверить текущее состояние счёта и закрыть карточку, если проблема устранена';
     }
@@ -2227,6 +2238,9 @@ export class ManagerControlComponent implements OnInit {
   }
 
   contactFollowUpHint(example: ManagerControlConcreteItem): string {
+    if (this.deliveryBlocked(example)) {
+      return this.deliveryMessage(example) || 'Сначала проверьте результат предыдущей отправки';
+    }
     if (this.isAutomationWaitingForSlot(example)) {
       return this.automationWaitingSlotText(example);
     }

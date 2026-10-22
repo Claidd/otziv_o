@@ -46,12 +46,21 @@ public class ManagerClientMessageQueue implements com.hunt.otziv.client_messages
     }
 
     List<RecordedControl> controlHistory(long orderId, boolean lock) {
+        return controlHistory(orderId, lock, false);
+    }
+
+    /** Settlement must see old successful successors and every intervening pending operation. */
+    List<RecordedControl> controlHistoryForSettlement(long orderId) {
+        return controlHistory(orderId, true, true);
+    }
+
+    private List<RecordedControl> controlHistory(long orderId, boolean lock, boolean includeSettledHistory) {
         return jdbc.query("""
                 SELECT q.operation_id,q.card_id,q.state,q.attempts,q.error_code,q.created_at,q.updated_at,q.envelope_ciphertext
                 FROM manager_client_message_queue q
                 WHERE q.command_kind='CONTROL' AND q.card_id IN (SELECT c.control_entity_id
                     FROM manager_daily_control_concrete_items c WHERE c.entity_id=? AND c.entity_type IN ('ORDER','WORKER_ORDER_NEW'))
-                  AND (q.state IN ('QUEUED','SENDING','RETRYABLE','UNKNOWN')
+                  AND (? OR q.state IN ('QUEUED','SENDING','RETRYABLE','UNKNOWN')
                     OR q.error_code IN ('finalization_required','context_changed')
                     OR (q.state='SENT' AND q.updated_at>=DATE_SUB(CURRENT_TIMESTAMP(6),INTERVAL 2 DAY)))
                 ORDER BY q.created_at DESC,q.operation_id DESC
@@ -67,7 +76,7 @@ public class ManagerClientMessageQueue implements com.hunt.otziv.client_messages
                 throw new IllegalStateException("Manager command source identity mismatch");
             return new RecordedControl(new DeliveryOperation(id, rs.getString(3), rs.getInt(4), rs.getString(5)),
                     rs.getLong(2), rs.getTimestamp(6).toLocalDateTime(), rs.getTimestamp(7).toLocalDateTime(), source);
-        }, orderId);
+        }, orderId, includeSettledHistory);
     }
 
     DeliveryOperation blockingForCard(long cardId) {
@@ -148,6 +157,17 @@ public class ManagerClientMessageQueue implements com.hunt.otziv.client_messages
                     attempts=GREATEST(0,attempts-?),next_attempt_at=TIMESTAMPADD(SECOND,?,CURRENT_TIMESTAMP(6)),updated_at=CURRENT_TIMESTAMP(6)
                 WHERE operation_id=? AND claim_token=?
                 """, state, code, "live_disabled".equals(code) && claim.mayDispatch() ? 1 : 0, delaySeconds, claim.operationId(), claim.token());
+    }
+
+    /** Retire bookkeeping only. Preserve proof, original timestamps, and every business/card field. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    void settleSuperseded(Claim claim) {
+        int changed = jdbc.update("""
+                UPDATE manager_client_message_queue
+                SET error_code='superseded_by_confirmed_contact',claim_token=NULL,lease_until=NULL
+                WHERE operation_id=? AND claim_token=? AND state='SENT' AND error_code='finalization_required'
+                """, claim.operationId(), claim.token());
+        if (changed != 1) throw new IllegalStateException("Confirmed settlement claim changed");
     }
 
     String encode(Object value) {

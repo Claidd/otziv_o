@@ -69,7 +69,7 @@ public class ManagerControlClientSendWorkflow {
                     "Предыдущая отправка не завершилась. Карточка переведена на ручную сверку; проверьте чат клиента"
             );
         }
-        return managerControlTransactionRunner.required(() -> {
+        return managerControlTransactionRunner.contactReservation(() -> {
             PreparedClientMessage prepared = prepareClientMessage(concreteItemId, principal, authentication);
             queue.enqueue(new ManagerClientMessageQueue.Command(prepared.deliveryToken(), concreteItemId, "CONTROL",
                     queue.encode(prepared), actors.capture(authentication)));
@@ -80,11 +80,14 @@ public class ManagerControlClientSendWorkflow {
 
     void validateQueued(ManagerClientMessageQueue.Command command, Authentication authentication) {
         PreparedClientMessage prepared = queuedSnapshot(command);
-        managerControlTransactionRunner.required(() -> {
+        managerControlTransactionRunner.contactReservation(() -> {
             var card = lockedPreparedClientMessage(prepared);
             accessPolicy.requireControlAccess(card.getControl(), authentication, authentication);
             var order = orderRepository.findByIdForCounterUpdate(prepared.orderId()).orElseThrow();
             accessPolicy.requireCurrentOrderAccess(order.getId(), authentication);
+            // Our committed manual reservation wins over a bare scheduler claim, which has not dispatched.
+            // The scheduler's symmetric order guard will postpone it; PREPARED/UNKNOWN still block us.
+            deliveryState.requireNoScheduledContact(deliveryContext(order), false);
             if (!Objects.equals(prepared.orderManagerId(), order.getManager() == null ? null : order.getManager().getId())
                     || !Objects.equals(prepared.orderStatus(), clientMessageText.orderStatusTitle(order))
                     || !sameAmount(prepared.orderSum(), order.getSum()) || prepared.orderAmount() != order.getAmount()
@@ -111,6 +114,9 @@ public class ManagerControlClientSendWorkflow {
             dailyControlConcreteItemRepository.findByIdForUpdate(prepared.concreteItemId()).orElseThrow();
             orderRepository.findByIdForCounterUpdate(prepared.orderId()).orElseThrow();
             if (!queue.owns(claim)) return null;
+            if ("SENT".equals(claim.previousState()) && "SENT".equals(state) && code == null
+                    && result != null && result.sent() && result.messageId() != null && !result.messageId().isBlank()
+                    && settleSupersededConfirmedContact(claim, prepared, authentication)) return null;
             if ("SENT".equals(claim.previousState()) && !"finalization_required".equals(code))
                 restoreConfirmedFence(prepared, authentication);
             lockedPreparedClientMessage(prepared);
@@ -357,9 +363,9 @@ public class ManagerControlClientSendWorkflow {
         var card = dailyControlConcreteItemRepository.findByIdForUpdate(prepared.concreteItemId()).orElseThrow();
         accessPolicy.requireControlAccess(card.getControl(), authentication, authentication);
         String comment = safe(card.getComment());
-        if (comment.equals(CLIENT_MESSAGE_DELIVERY_PREPARED_PREFIX + prepared.deliveryToken())
-                || comment.equals(CLIENT_MESSAGE_DELIVERY_UNKNOWN_PREFIX + prepared.deliveryToken())) return;
-        if (!(card.getStatus() == ManagerDailyControlItemStatus.OPEN && comment.isBlank())
+        boolean ownFence = comment.equals(CLIENT_MESSAGE_DELIVERY_PREPARED_PREFIX + prepared.deliveryToken())
+                || comment.equals(CLIENT_MESSAGE_DELIVERY_UNKNOWN_PREFIX + prepared.deliveryToken());
+        if (!ownFence && !(card.getStatus() == ManagerDailyControlItemStatus.OPEN && comment.isBlank())
                 && !(card.getStatus() == ManagerDailyControlItemStatus.ACTION_TAKEN
                 && comment.startsWith(ManagerControlOrderDeliveryState.CONFIRMED_CONTACT)))
             throw new IllegalStateException("Card action changed after delivery");
@@ -368,7 +374,9 @@ public class ManagerControlClientSendWorkflow {
         var history = deliveryState.history(deliveryContext(order));
         var recorded = history.stream().filter(row -> row.delivery().operationId().equals(prepared.deliveryToken()))
                 .findFirst().orElseThrow(() -> new IllegalStateException("Delivered operation belongs to an older cycle"));
-        if (history.stream().anyMatch(row -> row.createdAt().isAfter(recorded.createdAt())))
+        if (queue.controlHistoryForSettlement(order.getId()).stream()
+                .filter(row -> ManagerControlOrderDeliveryState.sameCycle(row, deliveryContext(order)))
+                .anyMatch(row -> row.createdAt().isAfter(recorded.createdAt())))
             throw new IllegalStateException("A newer contact operation owns this order cycle");
         if (!Objects.equals(prepared.orderManagerId(), order.getManager() == null ? null : order.getManager().getId())
                 || !Objects.equals(prepared.orderStatus(), clientMessageText.orderStatusTitle(order))
@@ -377,8 +385,40 @@ public class ManagerControlClientSendWorkflow {
                 || !Objects.equals(prepared.managerClientId(), order.getManager() == null ? null : order.getManager().getClientId())
                 || !Objects.equals(prepared.groupId(), order.getCompany() == null ? null : order.getCompany().getGroupId())
                 || !sameCycle(prepared, order)) throw new IllegalStateException("Delivered source changed");
+        if (ownFence) return;
         card.setComment(CLIENT_MESSAGE_DELIVERY_PREPARED_PREFIX + prepared.deliveryToken());
         dailyControlConcreteItemRepository.save(card);
+    }
+
+    /** Worker reached this branch only after the frozen operation's exact positive receipt lookup. */
+    private boolean settleSupersededConfirmedContact(ManagerClientMessageQueue.Claim claim, PreparedClientMessage prepared,
+                                                     Authentication authentication) {
+        var card = dailyControlConcreteItemRepository.findByIdForUpdate(prepared.concreteItemId()).orElseThrow();
+        accessPolicy.requireControlAccess(card.getControl(), authentication, authentication);
+        var order = orderRepository.findByIdForCounterUpdate(prepared.orderId()).orElseThrow();
+        accessPolicy.requireCurrentOrderAccess(order.getId(), authentication);
+        if (!Objects.equals(prepared.orderManagerId(), order.getManager() == null ? null : order.getManager().getId())
+                || !Objects.equals(prepared.orderStatus(), clientMessageText.orderStatusTitle(order))
+                || !sameAmount(prepared.orderSum(), order.getSum()) || prepared.orderAmount() != order.getAmount()
+                || !Objects.equals(prepared.company(), ManagerControlMessageCompany.capture(order.getCompany()))
+                || !Objects.equals(prepared.managerClientId(), order.getManager() == null ? null : order.getManager().getClientId())
+                || !Objects.equals(prepared.groupId(), order.getCompany() == null ? null : order.getCompany().getGroupId())
+                || !sameCycle(prepared, order)) throw new IllegalStateException("Delivered source changed");
+        var history = queue.controlHistoryForSettlement(order.getId()).stream()
+                .filter(row -> ManagerControlOrderDeliveryState.sameCycle(row, deliveryContext(order))).toList();
+        var original = history.stream().filter(row -> row.delivery().operationId().equals(prepared.deliveryToken()))
+                .findFirst().orElseThrow();
+        var newer = history.stream().filter(row -> row.createdAt().isAfter(original.createdAt())).toList();
+        if (newer.stream().anyMatch(row -> ManagerControlOrderDeliveryState.blocks(row.delivery()))) return false;
+        boolean covered = newer.stream().filter(row -> "SENT".equals(row.delivery().status()) && row.delivery().errorCode() == null)
+                .anyMatch(row -> Objects.equals(row.source().company(), prepared.company())
+                    && Objects.equals(row.source().managerClientId(), prepared.managerClientId())
+                    && Objects.equals(row.source().groupId(), prepared.groupId())
+                    && sameAmount(row.source().orderSum(), prepared.orderSum())
+                    && row.source().orderAmount() == prepared.orderAmount());
+        if (!covered) return false;
+        queue.settleSuperseded(claim);
+        return true;
     }
 
     private boolean sameCycle(PreparedClientMessage prepared, Order order) {

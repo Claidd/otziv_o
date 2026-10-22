@@ -58,6 +58,7 @@ public class ManagerControlConcretePresenter {
         if (isChatBindingIssueConcrete(item)) {
             targetUrl = companyBoardUrlByKeyword(item.getTitle(), targetUrl);
         }
+        String sendBlockedReason = deliveryState.sendBlockedReason(item);
         ManagerControlConcreteItemResponse response = new ManagerControlConcreteItemResponse(
                 item.getId(),
                 item.getEntityType(),
@@ -66,7 +67,7 @@ public class ManagerControlConcretePresenter {
                 item.getSubtitle(),
                 item.getStatusLabel(),
                 item.getAgeDays(),
-                item.getReason(),
+                contactDisplayReason(item.getReason(), sendBlockedReason),
                 targetUrl,
                 item.getOrderDetailsId(),
                 item.getChatUrl(),
@@ -98,7 +99,17 @@ public class ManagerControlConcretePresenter {
         );
         return slaPolicy.decorateConcreteSla(item.getParentItem(), response.withSla(item.getCreatedAt(), null, null, null))
                 .withDiagnosis(diagnostics.latest(item.getId())).withAuditCommitments(commitments.forSource(item.getId()))
-                .withDelivery(deliveryState.delivery(item));
+                .withDelivery(deliveryState.delivery(item))
+                .withClientMessageSendBlockedReason(sendBlockedReason);
+    }
+
+    private String contactDisplayReason(String reason, String sendBlockedReason) {
+        if (sendBlockedReason == null || sendBlockedReason.isBlank()) return reason;
+        // Older clients render only reason; never keep the obsolete resend advice alongside a delivery fence.
+        String currentReason = safe(reason).replace(
+                "Если починка недоступна или не помогла, скопируйте текст, откройте чат, отправьте ссылку на проверку и нажмите «Отправлено».",
+                "").trim();
+        return currentReason.isBlank() ? sendBlockedReason : currentReason + "\n" + sendBlockedReason;
     }
 
     String companyBoardUrlByKeyword(String keyword, String fallbackUrl) {

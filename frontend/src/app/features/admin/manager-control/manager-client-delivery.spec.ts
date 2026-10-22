@@ -44,7 +44,7 @@ describe('queued manager messages in the web card', () => {
     fixture.destroy();
   });
 
-  function pageWithFreshCard(fresh: ManagerControlConcreteItem) {
+  function pageWithFreshCard(fresh: ManagerControlConcreteItem, admin = false) {
     const receipts = new Subject<typeof delivery>();
     const toast = { info: vi.fn(), success: vi.fn(), error: vi.fn() };
     const api = {
@@ -52,6 +52,7 @@ describe('queued manager messages in the web card', () => {
       repairConcreteItem: vi.fn().mockReturnValue(of({ ...card, delivery: null, comment: null })),
       sendClientMessage: vi.fn().mockReturnValue(of(fresh)),
       replyToClientMessage: vi.fn().mockReturnValue(of(fresh)),
+      actionConcreteItem: vi.fn(),
       deliveryOperation: vi.fn().mockReturnValue(receipts),
       managerDetails: vi.fn(),
       today: () => of({ managers: [] })
@@ -60,7 +61,7 @@ describe('queued manager messages in the web card', () => {
       { provide: ManagerControlApi, useValue: api },
       { provide: ManagerApi, useValue: {} },
       { provide: ToastService, useValue: toast },
-      { provide: AuthService, useValue: { hasAnyRealmRole: () => false } },
+      { provide: AuthService, useValue: { hasAnyRealmRole: () => admin } },
       { provide: ActivatedRoute, useValue: { snapshot: { data: {} }, paramMap: new Subject() } },
       { provide: Router, useValue: {} }
     ] });
@@ -81,6 +82,56 @@ describe('queued manager messages in the web card', () => {
     expect(page.deliveryBlocked(fresh)).toBe(false);
     expect(page.deliveryMessage(fresh)).toBeNull();
     expect(page.deliveries()[41]).toBeUndefined();
+    fixture.destroy();
+  });
+
+  it('retains the scheduled uncertainty after reload without starting a receipt poll or a repeat send', async () => {
+    const reason = 'Результат старой отправки неизвестен. Проверьте клиентский чат.';
+    const fresh = { ...card, delivery: null, clientMessageSendBlockedReason: reason, chatUrl: 'https://chat.example.test' };
+    const { fixture, page, api, toast } = pageWithFreshCard(fresh);
+    page.markStage('MORNING_DONE');
+    const current = page.detail()!.items[0].examples[0];
+    page.preparedContactItemIds.set(new Set([41]));
+
+    expect(page.deliveryBlocked(current)).toBe(true);
+    expect(page.deliveryMessage(current)).toBe(reason);
+    expect(page.contactFollowUpHint(current)).toBe(reason);
+    expect(page.concreteActionTitle(current, 'ACTION_TAKEN', 'Отправлено')).toBe(reason);
+    expect(page.isConcreteActionDisabled(current, 'ACTION_TAKEN')).toBe(true);
+    expect(page.chatUrl(current)).toBe(fresh.chatUrl);
+    page.sendClientMessage(current);
+    page.markConcreteDone(current);
+    await page.copyContactText(current);
+    expect(api.sendClientMessage).not.toHaveBeenCalled();
+    expect(api.actionConcreteItem).not.toHaveBeenCalled();
+    expect(api.deliveryOperation).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith('Сначала проверьте отправку', reason);
+    fixture.destroy();
+  });
+
+  it('allows a different client reply instead of blocking all communications for an order reminder', () => {
+    const fresh = { ...card, type: 'CLIENT_CHAT_UNANSWERED', delivery: null,
+      clientMessageSendBlockedReason: 'Не повторяйте напоминание заказа' };
+    const { fixture, page, api } = pageWithFreshCard(fresh);
+    page.unansweredReplyDrafts.set({ 41: 'Ответ на новый вопрос клиента' });
+    expect(page.deliveryBlocked(fresh)).toBe(false);
+    page.sendUnansweredReply(fresh);
+    expect(api.replyToClientMessage).toHaveBeenCalledOnce();
+    fixture.destroy();
+  });
+
+  it('opens one handoff dialog and releases the card when the user cancels', () => {
+    const fresh = { ...card, type: 'AUTOMATION_FAILURE', reason: 'state_transaction_outcome_uncertain' };
+    const { fixture, page, api } = pageWithFreshCard(fresh, true);
+    page.handoffUncertainDelivery(fresh);
+    page.handoffUncertainDelivery({ ...fresh, controlEntityId: 42 });
+    expect(page.deliveryHandoffItem()).toBe(fresh);
+    expect(page.isConcreteUpdating(41)).toBe(true);
+    expect(page.isConcreteUpdating(42)).toBe(false);
+    page.closeDeliveryHandoff();
+    expect(page.deliveryHandoffItem()).toBeNull();
+    expect(page.isConcreteUpdating(41)).toBe(false);
+    expect(api.sendClientMessage).not.toHaveBeenCalled();
     fixture.destroy();
   });
 

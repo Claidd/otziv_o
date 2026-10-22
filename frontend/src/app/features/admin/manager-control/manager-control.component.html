@@ -1,3 +1,8 @@
+@if (deliveryHandoffItem(); as handoff) {
+  <app-manager-delivery-handoff-dialog [itemId]="handoff.controlEntityId!"
+    (closed)="closeDeliveryHandoff()" (saved)="completeDeliveryHandoff($event)" />
+}
+
 @if (chatLinkEditor(); as editor) {
   <div class="control-modal-backdrop" role="presentation" (click)="closeControlChatLinkEditor()">
     <section class="control-chat-link-modal" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
@@ -1175,7 +1180,9 @@
                                 </button>
                               }
                               @if (canContactOrder(example)) {
-                                <button type="button" class="review-action text-action" [class.done]="isContactTextCopied(example)" (click)="copyContactText(example)">
+                                <button type="button" class="review-action text-action" [class.done]="isContactTextCopied(example)" (click)="copyContactText(example)"
+                                  [disabled]="isConcreteUpdating(example.controlEntityId) || deliveryBlocked(example)"
+                                  [title]="deliveryMessage(example) || 'Скопировать текст клиенту'">
                                   <span class="material-icons-sharp">content_copy</span>
                                   {{ isContactTextCopied(example) ? 'Текст готов' : 'Текст' }}
                                 </button>

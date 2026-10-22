@@ -101,6 +101,10 @@ public interface ScheduledClientMessageStateRepository extends CrudRepository<Sc
     @Query("SELECT s FROM ScheduledClientMessageState s WHERE s.id = :id")
     Optional<ScheduledClientMessageState> findByIdForUpdate(@Param("id") Long id);
 
+    /** Scalar lookup avoids caching the state before waiting for the order reservation lock. */
+    @Query("SELECT s.orderId FROM ScheduledClientMessageState s WHERE s.id = :id")
+    Optional<Long> findOrderIdByStateId(@Param("id") Long id);
+
     List<ScheduledClientMessageState> findByOrderIdIn(Collection<Long> orderIds);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
