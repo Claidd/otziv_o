@@ -72,8 +72,9 @@ jobs:
     name: Maven dependency-check
     runs-on: ubuntu-24.04
     # An uncached complete NVD import is rate limited without an API key.
-    # Keep the audit blocking while allowing the measured cold-start import.
-    timeout-minutes: 90
+    # Bound two OWASP mirror refresh attempts and leave time for every scan
+    # and an early public-database cache save, including after refresh failure.
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
@@ -100,37 +101,96 @@ jobs:
         with:
           path: |
             ${{ runner.temp }}/otziv-dependency-check-data/odc.mv.db
-          key: ${{ runner.os }}-dependency-check-13-public-v1-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: ${{ runner.os }}-dependency-check-13-public-v1-
-      # Cache versions include the path list. Migrate the public NVD database
-      # from the previous archive on the first run of each eligible branch.
-      # Legacy advisory files are never consulted (OSS Index is disabled) and
-      # are excluded from the new cache saved below. No Sonatype request is made.
-      - name: Migrate legacy public NVD cache
-        if: steps.nvd-cache.outputs.cache-matched-key == ''
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            ${{ runner.temp }}/otziv-dependency-check-data/odc.mv.db
-            ${{ runner.temp }}/otziv-dependency-check-data/oss_cache
-          key: ${{ runner.os }}-dependency-check-13-public-v1-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: ${{ runner.os }}-dependency-check-13-public-v1-
+          key: ${{ runner.os }}-dependency-check-13-public-v2-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: ${{ runner.os }}-dependency-check-13-public-v2-
+      # The upstream OWASP mirror is best-effort, so refuse a stale snapshot.
+      # https://dependency-check.github.io/DependencyCheck/data/mirrornvd.html
+      - name: Check public NVD mirror freshness
+        run: |
+          curl --fail --location --retry 3 --retry-all-errors \
+            --connect-timeout 20 --max-time 120 \
+            -o "$RUNNER_TEMP/nvdcve-modified.meta" \
+            'https://dependency-check.github.io/DependencyCheck_Builder/nvd_cache/nvdcve-modified.meta'
+          python3 - "$RUNNER_TEMP/nvdcve-modified.meta" <<'PY'
+          from datetime import datetime, timedelta, timezone
+          from pathlib import Path
+          import sys
+
+          lines = Path(sys.argv[1]).read_text(encoding="utf-8").splitlines()
+          stamps = [line.partition(":")[2].strip() for line in lines if line.startswith("lastModifiedDate:")]
+          if len(stamps) != 1:
+              raise SystemExit("NVD mirror metadata lacks a unique lastModifiedDate")
+          stamp = datetime.fromisoformat(stamps[0].replace("Z", "+00:00"))
+          if stamp.tzinfo is None:
+              raise SystemExit("NVD mirror timestamp lacks a timezone")
+          age = datetime.now(timezone.utc) - stamp
+          print(f"NVD mirror snapshot age: {age}")
+          if not -timedelta(minutes=5) <= age <= timedelta(hours=72):
+              raise SystemExit("NVD mirror snapshot is stale or dated in the future")
+          PY
       - name: Build reviewed Maven tooling and test transport
         id: bootstrap
         working-directory: backend
         run: |
           chmod +x ./mvnw
           bash ./mvnw -B -ntp -f build-support/pom.xml install
+      - name: Refresh public NVD database from the OWASP mirror
+        id: nvd-warmup
+        if: ${{ !cancelled() && steps.bootstrap.outcome == 'success' }}
+        working-directory: backend
+        run: |
+          # A failed feed download may leave a usable partial H2 database.
+          # Retry in a new Maven process; never skip the public feed or
+          # treat an incomplete update as a successful vulnerability audit.
+          for attempt in 1 2; do
+            echo "OWASP NVD mirror refresh attempt $attempt of 2"
+            if timeout --signal=TERM --kill-after=30s 60m \
+              bash ./mvnw -B -ntp -N \
+              -DdataDirectory="$RUNNER_TEMP/otziv-dependency-check-data" \
+              -DnvdDatafeedUrl='https://dependency-check.github.io/DependencyCheck_Builder/nvd_cache/nvdcve-{0}.json.gz' \
+              -DautoUpdate=true -DfailOnError=true -DossIndexAnalyzerEnabled=false \
+              org.owasp:dependency-check-maven:13.0.0:update-only; then
+              test -s "$RUNNER_TEMP/otziv-dependency-check-data/odc.mv.db"
+              exit 0
+            else
+              result=$?
+              echo "OWASP NVD mirror refresh attempt $attempt failed (exit $result)" >&2
+            fi
+            if [ "$attempt" -lt 2 ]; then sleep 20; fi
+          done
+          exit 1
+      - name: Check public NVD cache file
+        id: nvd-db
+        if: ${{ !cancelled() && (steps.nvd-warmup.outcome == 'success' || steps.nvd-warmup.outcome == 'failure') }}
+        env:
+          WARMUP_OUTCOME: ${{ steps.nvd-warmup.outcome }}
+        run: |
+          if [ -s "$RUNNER_TEMP/otziv-dependency-check-data/odc.mv.db" ]; then
+            echo 'present=true' >> "$GITHUB_OUTPUT"
+          elif [ "$WARMUP_OUTCOME" = success ]; then
+            echo 'NVD refresh succeeded without a database file' >&2
+            exit 1
+          fi
+      # Preserve partial public-feed progress even when the warmup fails.
+      # A later run must still finish the refresh before any audit may pass.
+      - name: Save public NVD data
+        id: nvd-save
+        if: ${{ !cancelled() && steps.nvd-db.outputs.present == 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ${{ runner.temp }}/otziv-dependency-check-data/odc.mv.db
+          key: ${{ runner.os }}-dependency-check-13-public-v2-${{ github.run_id }}-${{ github.run_attempt }}
       - name: OWASP dependency-check (CVSS 7+ blocks)
         id: audit
-        if: ${{ !cancelled() && steps.bootstrap.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.bootstrap.outcome == 'success' && steps.nvd-warmup.outcome == 'success' && steps.nvd-db.outputs.present == 'true' }}
         run: |
           rm -f -- target/dependency-check-report.json target/dependency-check-report.html target/plugin-audit-scope.json
           bash ./mvnw -B -ntp -Psecurity-audit -DskipTests verify
         working-directory: backend
       - name: Audit every build-support module and its effective plugins
         id: bootstrap-audit
-        if: ${{ !cancelled() && steps.bootstrap.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.bootstrap.outcome == 'success' && steps.nvd-warmup.outcome == 'success' && steps.nvd-db.outputs.present == 'true' }}
         run: >-
           python3 backend/build-support/audit.py
           --maven "$GITHUB_WORKSPACE/backend/mvnw"
@@ -139,7 +199,7 @@ jobs:
           --data-directory "$RUNNER_TEMP/otziv-dependency-check-data"
       - name: Select the standalone issuer's supported Java runtime
         id: issuer-java
-        if: ${{ !cancelled() && steps.bootstrap.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.bootstrap.outcome == 'success' && steps.nvd-warmup.outcome == 'success' && steps.nvd-db.outputs.present == 'true' }}
         uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
         with:
           distribution: temurin
@@ -147,7 +207,7 @@ jobs:
           show-download-progress: true
       - name: Audit the standalone issuer including provided and plugin dependencies
         id: issuer-audit
-        if: ${{ !cancelled() && steps.bootstrap.outcome == 'success' && steps.issuer-java.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.bootstrap.outcome == 'success' && steps.nvd-warmup.outcome == 'success' && steps.nvd-db.outputs.present == 'true' && steps.issuer-java.outcome == 'success' }}
         run: >-
           python3 backend/build-support/audit.py
           --standalone-project keycloak
@@ -159,17 +219,8 @@ jobs:
         id: osv-audit
         if: ${{ !cancelled() && steps.bootstrap.outcome == 'success' }}
         run: python3 backend/build-support/osv_audit.py
-      # NVD and OSV audits are independently blocking and run despite findings in an earlier
-      # audit, so independent project coverage is never skipped.
-      # Findings or remote errors still fail the job. Retain public data after
-      # that failure so the next full audit can reuse the public database.
-      - name: Save public NVD data
-        if: ${{ !cancelled() && (steps.audit.outcome == 'success' || steps.audit.outcome == 'failure' || steps.bootstrap-audit.outcome == 'success' || steps.bootstrap-audit.outcome == 'failure' || steps.issuer-audit.outcome == 'success' || steps.issuer-audit.outcome == 'failure') }}
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            ${{ runner.temp }}/otziv-dependency-check-data/odc.mv.db
-          key: ${{ runner.os }}-dependency-check-13-public-v1-${{ github.run_id }}-${{ github.run_attempt }}
+      # NVD and OSV audits remain independently blocking despite findings in an
+      # earlier audit. Missing NVD reports also fail the OSV inventory check.
       - name: Upload dependency-check reports
         if: always()
         uses: ./.github/actions/upload-report

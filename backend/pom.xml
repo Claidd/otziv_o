@@ -488,7 +488,7 @@
 						</dependencies>
 						<configuration>
 							<scanPlugins>true</scanPlugins>
-							<nvdDatafeedUrl>https://nvd.nist.gov/feeds/json/cve/2.0/nvdcve-2.0-{0}.json.gz</nvdDatafeedUrl>
+							<nvdDatafeedUrl>https://dependency-check.github.io/DependencyCheck_Builder/nvd_cache/nvdcve-{0}.json.gz</nvdDatafeedUrl>
 							<ossIndexAnalyzerEnabled>false</ossIndexAnalyzerEnabled>
 							<failOnError>true</failOnError>
 							<suppressionFiles>
