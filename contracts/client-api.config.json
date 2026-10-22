@@ -17,7 +17,8 @@
   "optionalForCompatibility": {
     "ManagerArchiveOrderDetailsResponse": ["recoveryWorkers", "recoveryTasks"],
     "DailyWorkProgressResponse": ["calculatedAt"],
-    "ManagerControlConcreteItemResponse": ["delivery"],
+    "ManagerControlConcreteItemResponse": ["delivery", "diagnosis", "auditCommitments"],
+    "ManagerReportReviewResponse": ["answerAttempts"],
     "CommonInvoiceDetailsResponse": ["delivery"],
     "CommonInvoicePaymentRouteChangeContextResponse": ["ownerManualRoute"]
   },

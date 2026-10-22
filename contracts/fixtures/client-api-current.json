@@ -1770,7 +1770,51 @@
         "status" : "contract-example",
         "attempts" : 2,
         "errorCode" : "contract-example"
-      }
+      },
+      "diagnosis" : {
+        "caseId" : 2,
+        "version" : 2,
+        "episode" : 2,
+        "status" : "contract-example",
+        "observedAt" : "2026-09-07T08:00:00",
+        "facts" : [ {
+          "reference" : "contract-example",
+          "subject" : "contract-example",
+          "field" : "contract-example",
+          "value" : "contract-example"
+        } ],
+        "diagnosis" : {
+          "summary" : "contract-example",
+          "confirmedFacts" : [ {
+            "text" : "contract-example",
+            "evidenceRefs" : [ "contract-example" ]
+          } ],
+          "hypotheses" : [ {
+            "text" : "contract-example",
+            "evidenceRefs" : [ "contract-example" ]
+          } ],
+          "missingEvidence" : [ "contract-example" ],
+          "actions" : [ {
+            "code" : "contract-example",
+            "text" : "contract-example",
+            "owner" : "contract-example",
+            "verification" : "contract-example",
+            "evidenceRefs" : [ "contract-example" ]
+          } ],
+          "verification" : [ "contract-example" ]
+        },
+        "model" : "contract-example",
+        "promptVersion" : "contract-example",
+        "rolloutMode" : "contract-example"
+      },
+      "auditCommitments" : [ {
+        "id" : 2,
+        "action" : "contract-example",
+        "owner" : "contract-example",
+        "dueAt" : "2026-09-07T08:00:00",
+        "verification" : "contract-example",
+        "status" : "contract-example"
+      } ]
     },
     "ManagerControlEventResponseOutput" : {
       "eventId" : 2,
@@ -1839,7 +1883,51 @@
           "status" : "contract-example",
           "attempts" : 2,
           "errorCode" : "contract-example"
-        }
+        },
+        "diagnosis" : {
+          "caseId" : 2,
+          "version" : 2,
+          "episode" : 2,
+          "status" : "contract-example",
+          "observedAt" : "2026-09-07T08:00:00",
+          "facts" : [ {
+            "reference" : "contract-example",
+            "subject" : "contract-example",
+            "field" : "contract-example",
+            "value" : "contract-example"
+          } ],
+          "diagnosis" : {
+            "summary" : "contract-example",
+            "confirmedFacts" : [ {
+              "text" : "contract-example",
+              "evidenceRefs" : [ "contract-example" ]
+            } ],
+            "hypotheses" : [ {
+              "text" : "contract-example",
+              "evidenceRefs" : [ "contract-example" ]
+            } ],
+            "missingEvidence" : [ "contract-example" ],
+            "actions" : [ {
+              "code" : "contract-example",
+              "text" : "contract-example",
+              "owner" : "contract-example",
+              "verification" : "contract-example",
+              "evidenceRefs" : [ "contract-example" ]
+            } ],
+            "verification" : [ "contract-example" ]
+          },
+          "model" : "contract-example",
+          "promptVersion" : "contract-example",
+          "rolloutMode" : "contract-example"
+        },
+        "auditCommitments" : [ {
+          "id" : 2,
+          "action" : "contract-example",
+          "owner" : "contract-example",
+          "dueAt" : "2026-09-07T08:00:00",
+          "verification" : "contract-example",
+          "status" : "contract-example"
+        } ]
       } ],
       "hiddenExampleCount" : 2,
       "createdAt" : "2026-09-07T08:00:00",
@@ -1934,7 +2022,51 @@
             "status" : "contract-example",
             "attempts" : 2,
             "errorCode" : "contract-example"
-          }
+          },
+          "diagnosis" : {
+            "caseId" : 2,
+            "version" : 2,
+            "episode" : 2,
+            "status" : "contract-example",
+            "observedAt" : "2026-09-07T08:00:00",
+            "facts" : [ {
+              "reference" : "contract-example",
+              "subject" : "contract-example",
+              "field" : "contract-example",
+              "value" : "contract-example"
+            } ],
+            "diagnosis" : {
+              "summary" : "contract-example",
+              "confirmedFacts" : [ {
+                "text" : "contract-example",
+                "evidenceRefs" : [ "contract-example" ]
+              } ],
+              "hypotheses" : [ {
+                "text" : "contract-example",
+                "evidenceRefs" : [ "contract-example" ]
+              } ],
+              "missingEvidence" : [ "contract-example" ],
+              "actions" : [ {
+                "code" : "contract-example",
+                "text" : "contract-example",
+                "owner" : "contract-example",
+                "verification" : "contract-example",
+                "evidenceRefs" : [ "contract-example" ]
+              } ],
+              "verification" : [ "contract-example" ]
+            },
+            "model" : "contract-example",
+            "promptVersion" : "contract-example",
+            "rolloutMode" : "contract-example"
+          },
+          "auditCommitments" : [ {
+            "id" : 2,
+            "action" : "contract-example",
+            "owner" : "contract-example",
+            "dueAt" : "2026-09-07T08:00:00",
+            "verification" : "contract-example",
+            "status" : "contract-example"
+          } ]
         } ],
         "hiddenExampleCount" : 2,
         "createdAt" : "2026-09-07T08:00:00",
@@ -2464,6 +2596,79 @@
       "teamProgressMissedWorkerDays" : 2,
       "teamCompletionScore" : 2
     },
+    "ManagerProblemDiagnosticsServiceActionOutput" : {
+      "code" : "contract-example",
+      "text" : "contract-example",
+      "owner" : "contract-example",
+      "verification" : "contract-example",
+      "evidenceRefs" : [ "contract-example" ]
+    },
+    "ManagerProblemDiagnosticsServiceDiagnosisOutput" : {
+      "summary" : "contract-example",
+      "confirmedFacts" : [ {
+        "text" : "contract-example",
+        "evidenceRefs" : [ "contract-example" ]
+      } ],
+      "hypotheses" : [ {
+        "text" : "contract-example",
+        "evidenceRefs" : [ "contract-example" ]
+      } ],
+      "missingEvidence" : [ "contract-example" ],
+      "actions" : [ {
+        "code" : "contract-example",
+        "text" : "contract-example",
+        "owner" : "contract-example",
+        "verification" : "contract-example",
+        "evidenceRefs" : [ "contract-example" ]
+      } ],
+      "verification" : [ "contract-example" ]
+    },
+    "ManagerProblemDiagnosticsServiceDiagnosticViewOutput" : {
+      "caseId" : 2,
+      "version" : 2,
+      "episode" : 2,
+      "status" : "contract-example",
+      "observedAt" : "2026-09-07T08:00:00",
+      "facts" : [ {
+        "reference" : "contract-example",
+        "subject" : "contract-example",
+        "field" : "contract-example",
+        "value" : "contract-example"
+      } ],
+      "diagnosis" : {
+        "summary" : "contract-example",
+        "confirmedFacts" : [ {
+          "text" : "contract-example",
+          "evidenceRefs" : [ "contract-example" ]
+        } ],
+        "hypotheses" : [ {
+          "text" : "contract-example",
+          "evidenceRefs" : [ "contract-example" ]
+        } ],
+        "missingEvidence" : [ "contract-example" ],
+        "actions" : [ {
+          "code" : "contract-example",
+          "text" : "contract-example",
+          "owner" : "contract-example",
+          "verification" : "contract-example",
+          "evidenceRefs" : [ "contract-example" ]
+        } ],
+        "verification" : [ "contract-example" ]
+      },
+      "model" : "contract-example",
+      "promptVersion" : "contract-example",
+      "rolloutMode" : "contract-example"
+    },
+    "ManagerProblemDiagnosticsServiceFactOutput" : {
+      "reference" : "contract-example",
+      "subject" : "contract-example",
+      "field" : "contract-example",
+      "value" : "contract-example"
+    },
+    "ManagerProblemDiagnosticsServiceFindingOutput" : {
+      "text" : "contract-example",
+      "evidenceRefs" : [ "contract-example" ]
+    },
     "ManagerQueueStateResponseOutput" : {
       "enabled" : false,
       "date" : "2026-09-07",
@@ -2483,6 +2688,50 @@
       "averageReactionSeconds" : 2,
       "reactionCount" : 2,
       "observedAt" : "2026-09-07T08:00:00"
+    },
+    "ManagerReportReviewAnswerAttemptResponseClaimOutput" : {
+      "kind" : "contract-example",
+      "status" : "contract-example",
+      "answerAttempt" : 2,
+      "answerQuote" : "contract-example",
+      "evidenceRefs" : [ "contract-example" ],
+      "reason" : "contract-example"
+    },
+    "ManagerReportReviewAnswerAttemptResponseCriterionOutput" : {
+      "criterionIndex" : 2,
+      "criterion" : "contract-example",
+      "status" : "contract-example",
+      "answerAttempt" : 2,
+      "answerQuote" : "contract-example",
+      "evidenceRefs" : [ "contract-example" ],
+      "reason" : "contract-example"
+    },
+    "ManagerReportReviewAnswerAttemptResponseOutput" : {
+      "attemptNumber" : 2,
+      "questionIndex" : 2,
+      "question" : "contract-example",
+      "answer" : "contract-example",
+      "recordedAt" : "contract-example",
+      "decision" : "contract-example",
+      "reason" : "contract-example",
+      "structuredAssessment" : false,
+      "criteria" : [ {
+        "criterionIndex" : 2,
+        "criterion" : "contract-example",
+        "status" : "contract-example",
+        "answerAttempt" : 2,
+        "answerQuote" : "contract-example",
+        "evidenceRefs" : [ "contract-example" ],
+        "reason" : "contract-example"
+      } ],
+      "claims" : [ {
+        "kind" : "contract-example",
+        "status" : "contract-example",
+        "answerAttempt" : 2,
+        "answerQuote" : "contract-example",
+        "evidenceRefs" : [ "contract-example" ],
+        "reason" : "contract-example"
+      } ]
     },
     "ManagerReportReviewEventResponseOutput" : {
       "eventId" : 2,
@@ -2572,6 +2821,33 @@
         "source" : "contract-example",
         "payload" : "contract-example",
         "createdAt" : "2026-09-07T08:00:00"
+      } ],
+      "answerAttempts" : [ {
+        "attemptNumber" : 2,
+        "questionIndex" : 2,
+        "question" : "contract-example",
+        "answer" : "contract-example",
+        "recordedAt" : "contract-example",
+        "decision" : "contract-example",
+        "reason" : "contract-example",
+        "structuredAssessment" : false,
+        "criteria" : [ {
+          "criterionIndex" : 2,
+          "criterion" : "contract-example",
+          "status" : "contract-example",
+          "answerAttempt" : 2,
+          "answerQuote" : "contract-example",
+          "evidenceRefs" : [ "contract-example" ],
+          "reason" : "contract-example"
+        } ],
+        "claims" : [ {
+          "kind" : "contract-example",
+          "status" : "contract-example",
+          "answerAttempt" : 2,
+          "answerQuote" : "contract-example",
+          "evidenceRefs" : [ "contract-example" ],
+          "reason" : "contract-example"
+        } ]
       } ]
     },
     "ManagerReportReviewTestStartResponseOutput" : {
@@ -2581,6 +2857,14 @@
       "sourceManagerName" : "contract-example",
       "recipient" : "contract-example",
       "issueCount" : 2
+    },
+    "ManagerReviewCommitmentViewOutput" : {
+      "id" : 2,
+      "action" : "contract-example",
+      "owner" : "contract-example",
+      "dueAt" : "2026-09-07T08:00:00",
+      "verification" : "contract-example",
+      "status" : "contract-example"
     },
     "ManagerSummaryPreviewResponseOutput" : {
       "date" : "2026-09-07",
