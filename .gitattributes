@@ -122,3 +122,7 @@ infrastructure/runtime-security/proofs/c36-postgres/publication/vulnerabilities.
 
 # Recovery receipts bind the manifest's exact UTF-8 bytes on every platform.
 infrastructure/artifact-recovery/** text eol=lf
+
+# C38 activation binds the publication manifest and normalized build recipe.
+infrastructure/runtime-security/reviewed-images-c38-nginx.json text eol=lf
+infrastructure/runtime-security/builds/c38-nginx/** text eol=lf

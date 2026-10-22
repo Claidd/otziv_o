@@ -1,0 +1,91 @@
+[
+    {
+        "Id": "sha256:e35c5caa69d524c59412e149a54649f5f3e06c9c89e819f5f7e83d0f7fa50367",
+        "RepoTags": [],
+        "RepoDigests": [
+            "ghcr.io/claidd/otziv-security@sha256:8921dafa2cda60de1348d76b629b23af5aac5ef7cdfa870a39531ac049bce3dd"
+        ],
+        "Parent": "",
+        "Comment": "buildkit.dockerfile.v0",
+        "Created": "2026-10-22T21:39:48.820691833Z",
+        "DockerVersion": "",
+        "Author": "",
+        "Config": {
+            "Hostname": "",
+            "Domainname": "",
+            "User": "",
+            "AttachStdin": false,
+            "AttachStdout": false,
+            "AttachStderr": false,
+            "ExposedPorts": {
+                "80/tcp": {}
+            },
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "NGINX_VERSION=1.30.6",
+                "PKG_RELEASE=1",
+                "DYNPKG_RELEASE=1",
+                "NJS_VERSION=1.0.2",
+                "NJS_RELEASE=1",
+                "ACME_VERSION=0.4.1"
+            ],
+            "Cmd": [
+                "nginx",
+                "-g",
+                "daemon off;"
+            ],
+            "Image": "",
+            "Volumes": null,
+            "WorkingDir": "/",
+            "Entrypoint": [
+                "/docker-entrypoint.sh"
+            ],
+            "OnBuild": null,
+            "Labels": {
+                "com.otziv.publication.revision": "cbe5fd8727f2c482562143f5bbd5714a0ccc6ccf",
+                "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+                "com.otziv.reviewed-component": "nginx",
+                "com.otziv.security.patch": "Official nginx 1.30.6 stable and matching modules; preserve unrelated C31 packages",
+                "maintainer": "NGINX Docker Maintainers <docker-maint@nginx.com>"
+            },
+            "StopSignal": "SIGQUIT"
+        },
+        "Architecture": "amd64",
+        "Os": "linux",
+        "Size": 91381273,
+        "GraphDriver": {
+            "Data": {
+                "LowerDir": "/var/lib/docker/overlay2/2dfb008a61166992159e18a403c25f22b4c6c81c6a1f8fbd82d66fcf34d6c306/diff:/var/lib/docker/overlay2/0c25382e07703bc7bb47f0b7a258fcf681d001721fc30d7d42bb2d6d5d9b2816/diff:/var/lib/docker/overlay2/004412a8b2784f1de61bc82871de0800d55de5c09e6436949ca90a40b290acbc/diff:/var/lib/docker/overlay2/e95fdbf61335aac392ac842a8b19e02f625ab7ae582cf8f3811afd19d28cfb95/diff:/var/lib/docker/overlay2/af6da84027d817d448a5b2bd3776b7a9ed228a190e18f7bc7a1294b215291010/diff:/var/lib/docker/overlay2/19f7100757b74e51dadf5883f4692fc1f4a8ef013b14d20a8b0bea1a21b38433/diff:/var/lib/docker/overlay2/0d1ecdc66d300a7350e5e631a75067a923fc055fbc6b0820bc5a90f9cfb60843/diff:/var/lib/docker/overlay2/55de86bd3f10fa25948e6eca6515584f639a7b7999623b6974383d50e022eece/diff:/var/lib/docker/overlay2/25ee449a526f756224373f8ad1f6bc6087ef3fd92557418e883bca3841de7aa4/diff:/var/lib/docker/overlay2/619da2b89a14ad9f1a672173e6f12d66a5fca39a98ace81264373a2894fb0169/diff:/var/lib/docker/overlay2/7ed7f6fefd1f318ea78e4b41e693e735875fffd55e277070f807d36b5965dcd5/diff:/var/lib/docker/overlay2/26c92fe47ee823124fc9b71ae7e6de401a4f39292dd55c5de72c2f48c420dc8f/diff:/var/lib/docker/overlay2/35c46a6b27d2b80923c6808abe62dd3f8405148c46443466d0ea1287889d62c7/diff",
+                "MergedDir": "/var/lib/docker/overlay2/1e5b6f0bf5d57b87c5717607371eabe3ad3a4a361d213fe0d9ef908806218cd4/merged",
+                "UpperDir": "/var/lib/docker/overlay2/1e5b6f0bf5d57b87c5717607371eabe3ad3a4a361d213fe0d9ef908806218cd4/diff",
+                "WorkDir": "/var/lib/docker/overlay2/1e5b6f0bf5d57b87c5717607371eabe3ad3a4a361d213fe0d9ef908806218cd4/work"
+            },
+            "Name": "overlay2"
+        },
+        "RootFS": {
+            "Type": "layers",
+            "Layers": [
+                "sha256:34884abbe92863fce933ed7c39c0e045631af0ed86d5cc0dfbdf9fdca426ce3c",
+                "sha256:84cbdb555a82aa30be7379831c3b42f9e47ce6b5e9252366058cda8366aac407",
+                "sha256:bcfe61bf39042c8e0db3138c3734a674184cb2b1ea15ef058ca019500008666b",
+                "sha256:9cc2a427511c2b0faf863976585ec18a9328e6eb837c87a61a4f10df6355d6ce",
+                "sha256:52071f7f756a6f9465c3aed773d057e828624898ea580ad04b449c4a495ee34f",
+                "sha256:f0696cdb71fe6a6572049d909d1f88c3e0f4e7e4d4b3fc96f8955c75876fa63d",
+                "sha256:04c07f9c0de8bd4fa8167e8de635b1fdc3fe3fb0cfcda6bb2fb2977ccf0b1283",
+                "sha256:85bb3570019b196fb23076fbd5adad3920191ce2e05291b2e2f7e47217a5e916",
+                "sha256:168c390bc1744d244a26db88c20d7a30fb87f470de1ed31180cd8ec72b5ed1f3",
+                "sha256:0ee0497220cbb5937281554ac5a07da4b67dd04f423f20ae1ba3c44d91892d75",
+                "sha256:838c0acda45f4733055c3dcccecdce6ad4fdfdff4210622ec9da1850d8a08106",
+                "sha256:3cb31be94528997ca3d099e05bc9cc8f14451a6c210fe350070b3b0ab9effc8e",
+                "sha256:070d11c31cfca0ba6a26fe2b075fdcc34d0512618c8dd9b9784b7a1f1ccf9831",
+                "sha256:3f11219145bb246b1d556b7e3567b16d48dcfb85c2292896c2eba3c06d4dbe17"
+            ]
+        },
+        "Metadata": {
+            "LastTagTime": "0001-01-01T00:00:00Z"
+        }
+    }
+]

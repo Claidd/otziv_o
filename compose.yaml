@@ -57,7 +57,7 @@ services:
       internal_net:
 
   nginx:
-    image: ghcr.io/claidd/otziv-security@sha256:a08d8948f53646b5fc6ba2e02cb27467683b3c2fb3922007014888bea03b984d
+    image: ghcr.io/claidd/otziv-security@sha256:8921dafa2cda60de1348d76b629b23af5aac5ef7cdfa870a39531ac049bce3dd
     ports:
       - '127.0.0.1:80:80'
       - '127.0.0.1:443:443'

@@ -604,7 +604,7 @@ try {
     $frontendOverrides = $frontendPackageJson['overrides']
     $requiredFrontendOverrides = [ordered]@{
         'hono' = '4.13.13'
-        'ip-address' = '10.7.1'
+        'ip-address' = '10.7.4'
     }
     foreach ($dependency in $requiredFrontendOverrides.Keys) {
         if ($frontendOverrides[$dependency] -ne $requiredFrontendOverrides[$dependency]) {
