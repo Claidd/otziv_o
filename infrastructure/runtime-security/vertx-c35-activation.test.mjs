@@ -163,9 +163,8 @@ test('C35 rejects a replay from the old C22 Keycloak or altered database image',
 
 test('accepted C26 Keycloak still couples to the active C23 PostgreSQL proof', async () => {
   const read = await createEvidenceReader(process.cwd());
-  const activations = JSON.parse(await read('infrastructure/runtime-security/reviewed-image-activations.json'));
   const baseline = JSON.parse(await read('infrastructure/runtime-security/reviewed-images.json'));
-  const postgresEntry = activations.images.find(entry => entry.component === 'postgres');
+  const postgresEntry = JSON.parse(await read('infrastructure/runtime-security/c36-parent-postgres.json'));
   const issuerEntry = JSON.parse(await read('infrastructure/runtime-security/c35-parent-keycloak.json'));
   const postgresImage = baseline.images.find(image => image.component === 'postgres');
   const readiness = await validateSslRefreshTransition(postgresEntry, postgresImage, read);
@@ -181,7 +180,7 @@ test('published C35 Keycloak validates its proofs and couples to C23 PostgreSQL'
   const manifest = await read('infrastructure/runtime-security/reviewed-images.json');
   const baseline = JSON.parse(manifest);
   const activations = JSON.parse(await read('infrastructure/runtime-security/reviewed-image-activations.json'));
-  const postgresEntry = activations.images.find(entry => entry.component === 'postgres');
+  const postgresEntry = JSON.parse(await read('infrastructure/runtime-security/c36-parent-postgres.json'));
   const issuerEntry = activations.images.find(entry => entry.component === 'keycloak');
   assert.equal(issuerEntry.manifest.path, 'infrastructure/runtime-security/reviewed-images-c35-keycloak.json');
   const image = baseline.images.find(image => image.component === 'keycloak');

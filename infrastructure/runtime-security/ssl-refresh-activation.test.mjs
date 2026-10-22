@@ -8,7 +8,8 @@ import {validateSslRefreshTransition,coupleSslRefresh} from './ssl-refresh-activ
 const root=resolve(new URL('../../',import.meta.url).pathname.replace(/^\/([A-Z]:)/i,'$1'));
 const read=await createEvidenceReader(root);
 const entries=JSON.parse(await read('infrastructure/runtime-security/reviewed-image-activations.json')).images;
-const pg=entries.find(x=>x.component==='postgres'),activeKeycloak=entries.find(x=>x.component==='keycloak');
+const pg=JSON.parse(await read('infrastructure/runtime-security/c36-parent-postgres.json'));
+const activeKeycloak=entries.find(x=>x.component==='keycloak');
 const kc=JSON.parse(await read('infrastructure/runtime-security/c35-parent-keycloak.json'));
 const image=JSON.parse(await read('infrastructure/runtime-security/reviewed-images.json')).images.find(x=>x.component==='postgres');
 test('retained C23/C26 rehearsal pairs the exact issuer and database while ordinary upgrade remains forbidden',async()=>{
