@@ -7,6 +7,7 @@ import com.hunt.otziv.client_chat_control.repository.ClientChatUnansweredItemRep
 import com.hunt.otziv.manager_control.model.ManagerDailyControlConcreteItem;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlItemStatus;
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlConcreteItemRepository;
+import com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosticsService;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -28,16 +29,20 @@ public class ManagerReportReviewTaskContextService {
 
     private final ManagerDailyControlConcreteItemRepository concreteItemRepository;
     private final ClientChatUnansweredItemRepository unansweredRepository;
+    private final ManagerProblemDiagnosticsService diagnosticsService;
 
-    @Transactional(readOnly = true)
-    public String refresh(String context) {
-        String source = context == null ? "" : context;
+    @Transactional
+    public String refresh(String context, Long managerId) {
+        String source = context == null ? "" : context.replace("СЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:", "Ранее сохранённый контекст:");
         Set<Long> ids = sourceIds(source);
         if (ids.isEmpty()) return source;
         StringBuilder result = new StringBuilder(source)
                 .append("\n\nТЕКУЩЕЕ СОСТОЯНИЕ И РЕЗУЛЬТАТ СВЯЗАННЫХ ЗАДАЧ. ")
                 .append("Этот блок новее снимка отчёта и имеет приоритет:\n");
+        Set<Long> found = new LinkedHashSet<>();
         for (ManagerDailyControlConcreteItem item : concreteItemRepository.findAllById(ids)) {
+            if (managerId == null || item.getControl() == null || !managerId.equals(item.getControl().managerId())) continue;
+            found.add(item.getId());
             result.append("- sourceTaskId=").append(item.getId())
                     .append("; currentStatus=").append(item.getStatus())
                     .append("; title=").append(clean(item.getTitle()));
@@ -50,6 +55,10 @@ public class ManagerReportReviewTaskContextService {
                     .append("; auditRequired=").append(chat.isAuditRequired()));
             result.append('\n');
         }
+        ids.stream().filter(id -> !found.contains(id)).forEach(id -> result
+                .append("- sourceTaskId=").append(id)
+                .append("; evidenceStatus=UNAVAILABLE; источник отсутствует, выполнение не подтверждено\n"));
+        result.append('\n').append(diagnosticsService.contextForAudit(found));
         return result.toString().trim();
     }
 
@@ -58,7 +67,7 @@ public class ManagerReportReviewTaskContextService {
         if (sourceTaskId == null || sourceTaskId <= 0) return false;
         return concreteItemRepository.findById(sourceTaskId)
                 .map(this::resolvedSatisfactorily)
-                .orElse(true);
+                .orElse(false);
     }
 
     private boolean resolvedSatisfactorily(ManagerDailyControlConcreteItem source) {
@@ -73,7 +82,12 @@ public class ManagerReportReviewTaskContextService {
                             ManagerDailyControlItemStatus.RESOLVED);
             if (!resolvedLater) return false;
         }
-        return clientChatItem(source)
+        var chatSource = clientChatItem(source);
+        if (CLIENT_CHAT_TYPES.contains(clean(source.getEntityType())) && chatSource.isEmpty()) return false;
+        if (clean(source.getEntityType()).startsWith("COMMON_INVOICE") || "AUTOMATION_FAILURE".equals(source.getEntityType())) {
+            return diagnosticsService.resolutionState(source.getId()) == ManagerProblemDiagnosticsService.ResolutionState.RESOLVED;
+        }
+        return chatSource
                 .map(item -> item.getStatus() != ClientChatUnansweredStatus.OPEN
                         && !item.isAuditRequired()
                         && item.getReplyQuality() != ClientChatReplyQuality.PARTIAL

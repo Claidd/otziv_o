@@ -119,6 +119,48 @@ class ContractorActualPaymentAttributionServiceTest {
     private ContractorPaymentProfile specialist;
     private ContractorPaymentProfile manager;
 
+    @Test
+    void revokedOwnerIntentClearsEveryFrozenSnapshotField() {
+        PaymentLink link = new PaymentLink();
+        link.setId(SOURCE_ID);
+        var fields = java.util.Arrays.stream(PaymentLink.class.getDeclaredFields())
+                .filter(field -> field.getName().startsWith("manualActual"))
+                .toList();
+        assertThat(fields).hasSize(25);
+        for (var field : fields) {
+            Class<?> type = field.getType();
+            Object value = type == Long.class ? 1L
+                    : type == String.class ? "value"
+                    : type == LocalDateTime.class ? LocalDateTime.now()
+                    : type.isEnum() ? type.getEnumConstants()[0] : null;
+            assertThat(value).as(field.getName()).isNotNull();
+            ReflectionTestUtils.setField(link, field.getName(), value);
+        }
+        when(attributionRepository.findAllBySourceForUpdate(
+                ContractorActualPaymentSourceKind.PAYMENT_LINK, SOURCE_ID)).thenReturn(List.of());
+
+        service.clearRevokedPaymentLinkRecipientIntent(link);
+
+        for (var field : fields) {
+            assertThat(ReflectionTestUtils.getField(link, field.getName()))
+                    .as(field.getName()).isNull();
+        }
+    }
+
+    @Test
+    void recordedAttributionPreventsRevokingFrozenIntent() {
+        PaymentLink link = new PaymentLink();
+        link.setId(SOURCE_ID);
+        link.setManualActualRecipientFrozenAt(LocalDateTime.now());
+        when(attributionRepository.findAllBySourceForUpdate(
+                ContractorActualPaymentSourceKind.PAYMENT_LINK, SOURCE_ID))
+                .thenReturn(List.of(org.mockito.Mockito.mock(ContractorActualPaymentAttribution.class)));
+
+        assertThatThrownBy(() -> service.clearRevokedPaymentLinkRecipientIntent(link))
+                .isInstanceOf(ResponseStatusException.class);
+        assertThat(link.getManualActualRecipientFrozenAt()).isNotNull();
+    }
+
     @BeforeEach
     void setUp() {
         specialist = profile(1L, 11L, ContractorRole.SPECIALIST, "Анна Специалист");

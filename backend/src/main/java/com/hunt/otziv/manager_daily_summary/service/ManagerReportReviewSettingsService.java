@@ -2,6 +2,7 @@ package com.hunt.otziv.manager_daily_summary.service;
 
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.manager_daily_summary.dto.ManagerReportReviewManagerSettingResponse;
+import com.hunt.otziv.manager_daily_summary.dto.ManagerReportReviewEvidenceSettings;
 import com.hunt.otziv.manager_daily_summary.dto.ManagerReportReviewSettingsRequest;
 import com.hunt.otziv.manager_daily_summary.dto.ManagerReportReviewSettingsResponse;
 import com.hunt.otziv.manager_daily_summary.model.ManagerReportReviewEvent;
@@ -17,6 +18,10 @@ import com.hunt.otziv.u_users.repository.ManagerRepository;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+import java.util.Arrays;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -56,14 +61,7 @@ public class ManagerReportReviewSettingsService {
         saveInt("test-minimum-read-seconds", request.testMinimumReadSeconds(), 3, 30, "Время чтения в тесте");
         saveInt("reminder-one-minutes", request.reminderOneMinutes(), 5, 1440, "Первое напоминание");
         saveInt("reminder-three-minutes", request.reminderThreeMinutes(), 10, 4320, "Срок прохождения");
-        saveInt("minimum-answer-score", request.minimumAnswerScore(), 60, 100, "Проходной балл");
-        saveInt("max-answer-characters", request.maxAnswerCharacters(), 120, 2000, "Длина ответа");
-        saveInt("max-plan-characters", request.maxPlanCharacters(), 120, 3000, "Длина плана");
-        saveInt("fast-paste-seconds", request.fastPasteSeconds(), 1, 120, "Порог быстрой вставки");
-        saveInt("fast-paste-min-characters", request.fastPasteMinCharacters(), 40, 2000, "Длина быстрой вставки");
-        saveInt("copy-gram-size", request.copyGramSize(), 2, 12, "Размер фрагмента сравнения");
-        saveInt("copy-similarity-percent", request.copySimilarityPercent(), 30, 100, "Сходство ответов");
-        saveInt("ai-timeout-seconds", request.aiTimeoutSeconds(), 5, 60, "Таймаут AI");
+        // Legacy JSON fields remain readable for old clients; they no longer control evidence verification.
         saveInt(
                 "question-generation-max-tokens",
                 request.questionGenerationMaxTokens(),
@@ -78,6 +76,12 @@ public class ManagerReportReviewSettingsService {
                 24000,
                 "Лимит повторной генерации"
         );
+        if (request.evidence() != null) {
+            saveEvidence(request.evidence());
+            managerRepository.findAllForReportReviewSettings().stream()
+                    .map(Manager::getUser).filter(java.util.Objects::nonNull)
+                    .map(User::getId).filter(java.util.Objects::nonNull).forEach(accessPolicy::invalidate);
+        }
         if (!request.enabled()) {
             List<ManagerReportReviewSession> reviews = sessionRepository.findByCompletedAtIsNull();
             closeReviews(reviews, "Аудит отключён глобально в справочнике");
@@ -132,7 +136,8 @@ public class ManagerReportReviewSettingsService {
                 settings.getInt(PREFIX + "ai-timeout-seconds", 25),
                 settings.getInt(PREFIX + "question-generation-max-tokens", 8000),
                 settings.getInt(PREFIX + "question-generation-retry-max-tokens", 12000),
-                managers
+                managers,
+                evidenceSettings()
         );
     }
 
@@ -202,14 +207,6 @@ public class ManagerReportReviewSettingsService {
                     "Срок прохождения должен быть больше времени первого напоминания"
             );
         }
-        validateRange(request.minimumAnswerScore(), 60, 100, "Проходной балл");
-        validateRange(request.maxAnswerCharacters(), 120, 2000, "Длина ответа");
-        validateRange(request.maxPlanCharacters(), 120, 3000, "Длина плана");
-        validateRange(request.fastPasteSeconds(), 1, 120, "Порог быстрой вставки");
-        validateRange(request.fastPasteMinCharacters(), 40, 2000, "Длина быстрой вставки");
-        validateRange(request.copyGramSize(), 2, 12, "Размер фрагмента сравнения");
-        validateRange(request.copySimilarityPercent(), 30, 100, "Сходство ответов");
-        validateRange(request.aiTimeoutSeconds(), 5, 60, "Таймаут AI");
         validateRange(request.questionGenerationMaxTokens(), 2000, 16000, "Лимит генерации вопросов");
         validateRange(
                 request.questionGenerationRetryMaxTokens(),
@@ -217,6 +214,87 @@ public class ManagerReportReviewSettingsService {
                 24000,
                 "Лимит повторной генерации"
         );
+        if (request.evidence() != null) validateEvidence(request.evidence());
+    }
+
+    private ManagerReportReviewEvidenceSettings evidenceSettings() {
+        return new ManagerReportReviewEvidenceSettings(
+                settings.getString("manager-control.diagnostics.mode", "SHADOW"),
+                readIds("manager-control.diagnostics.pilot-manager-ids"),
+                settings.getInt("manager-control.diagnostics.max-requests-per-hour", 60),
+                settings.getInt("manager-control.diagnostics.max-output-tokens", 8000),
+                settings.getInt("manager-control.diagnostics.timeout-seconds", 45),
+                settings.getBoolean("manager-control.diagnostics.thinking-enabled", true),
+                settings.getString(PREFIX + "evidence-mode", "SHADOW"),
+                readIds(PREFIX + "evidence-pilot-manager-ids"),
+                settings.getInt(PREFIX + "answer-assessment-max-tokens", 6000),
+                settings.getInt(PREFIX + "answer-assessment-timeout-seconds", 90),
+                settings.getBoolean(PREFIX + "answer-assessment-thinking", true),
+                settings.getInt(PREFIX + "question-generation-timeout-seconds", 90),
+                settings.getBoolean(PREFIX + "question-generation-thinking", true),
+                settings.getInt(PREFIX + "evidence-max-age-minutes", 15));
+    }
+
+    private void validateEvidence(ManagerReportReviewEvidenceSettings value) {
+        String diagnosis = mode(value.diagnosisMode(), Set.of("OFF", "SHADOW", "PILOT", "ENFORCE"));
+        String answer = mode(value.answerMode(), Set.of("SHADOW", "PILOT", "ENFORCE"));
+        validatePilotIds(value.diagnosisPilotManagerIds(), diagnosis, "диагностики");
+        validatePilotIds(value.answerPilotManagerIds(), answer, "проверки ответов");
+        validateRange(value.diagnosisMaxRequestsPerHour(), 1, 1000, "Запросов диагностики в час");
+        validateRange(value.diagnosisMaxOutputTokens(), 1500, 12000, "Лимит ответа диагностики");
+        validateRange(value.diagnosisTimeoutSeconds(), 10, 60, "Таймаут диагностики");
+        validateRange(value.answerMaxTokens(), 2000, 16000, "Лимит проверки ответа");
+        validateRange(value.answerTimeoutSeconds(), 5, 240, "Таймаут проверки ответа");
+        validateRange(value.questionTimeoutSeconds(), 5, 240, "Таймаут генерации вопросов");
+        validateRange(value.evidenceMaxAgeMinutes(), 1, 120, "Максимальный возраст фактов");
+    }
+
+    private void validatePilotIds(List<Long> ids, String mode, String label) {
+        if (ids == null || ids.stream().anyMatch(id -> id == null || id <= 0) || ids.size() > 100
+                || joinIds(ids).length() > 500) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Некорректный список менеджеров для " + label);
+        }
+        if ("PILOT".equals(mode) && ids.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Выберите менеджеров пилота " + label);
+        }
+        for (Long id : ids.stream().distinct().toList()) {
+            if (!managerRepository.existsById(id)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Менеджер #" + id + " не найден");
+            }
+        }
+    }
+
+    private String mode(String value, Set<String> allowed) {
+        String normalized = value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
+        if (!allowed.contains(normalized)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Неизвестный режим проверки");
+        return normalized;
+    }
+
+    private void saveEvidence(ManagerReportReviewEvidenceSettings value) {
+        settings.setString("manager-control.diagnostics.mode", mode(value.diagnosisMode(), Set.of("OFF", "SHADOW", "PILOT", "ENFORCE")));
+        settings.setString("manager-control.diagnostics.pilot-manager-ids", joinIds(value.diagnosisPilotManagerIds()));
+        settings.setInt("manager-control.diagnostics.max-requests-per-hour", value.diagnosisMaxRequestsPerHour());
+        settings.setInt("manager-control.diagnostics.max-output-tokens", value.diagnosisMaxOutputTokens());
+        settings.setInt("manager-control.diagnostics.timeout-seconds", value.diagnosisTimeoutSeconds());
+        settings.setBoolean("manager-control.diagnostics.thinking-enabled", value.diagnosisThinkingEnabled());
+        settings.setString(PREFIX + "evidence-mode", mode(value.answerMode(), Set.of("SHADOW", "PILOT", "ENFORCE")));
+        settings.setString(PREFIX + "evidence-pilot-manager-ids", joinIds(value.answerPilotManagerIds()));
+        settings.setInt(PREFIX + "answer-assessment-max-tokens", value.answerMaxTokens());
+        settings.setInt(PREFIX + "answer-assessment-timeout-seconds", value.answerTimeoutSeconds());
+        settings.setBoolean(PREFIX + "answer-assessment-thinking", value.answerThinkingEnabled());
+        settings.setInt(PREFIX + "question-generation-timeout-seconds", value.questionTimeoutSeconds());
+        settings.setBoolean(PREFIX + "question-generation-thinking", value.questionThinkingEnabled());
+        settings.setInt(PREFIX + "evidence-max-age-minutes", value.evidenceMaxAgeMinutes());
+    }
+
+    private List<Long> readIds(String key) {
+        String value = settings.getString(key, "");
+        return Arrays.stream((value == null ? "" : value).split(",")).map(String::trim)
+                .filter(id -> id.matches("[0-9]{1,18}")).map(Long::valueOf).filter(id -> id > 0).distinct().sorted().toList();
+    }
+
+    private String joinIds(List<Long> ids) {
+        return ids.stream().distinct().sorted().map(String::valueOf).collect(Collectors.joining(","));
     }
 
     private void validateRange(int value, int minimum, int maximum, String label) {

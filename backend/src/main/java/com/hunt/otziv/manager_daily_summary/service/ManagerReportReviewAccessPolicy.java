@@ -19,16 +19,19 @@ public class ManagerReportReviewAccessPolicy {
     private final ManagerReportReviewSessionRepository repository;
     private final AppSettingService appSettingService;
     private final ManagerReportReviewQualityService qualityService;
+    private final ManagerReportReviewRolloutPolicy rolloutPolicy;
     private final Map<Long, CachedState> cache = new ConcurrentHashMap<>();
 
     public ManagerReportReviewAccessPolicy(
             ManagerReportReviewSessionRepository repository,
             AppSettingService appSettingService,
-            ManagerReportReviewQualityService qualityService
+            ManagerReportReviewQualityService qualityService,
+            ManagerReportReviewRolloutPolicy rolloutPolicy
     ) {
         this.repository = repository;
         this.appSettingService = appSettingService;
         this.qualityService = qualityService;
+        this.rolloutPolicy = rolloutPolicy;
     }
 
     public AccessState state(User user) {
@@ -60,7 +63,7 @@ public class ManagerReportReviewAccessPolicy {
                                 ManagerReportReviewStatus.COMPLETED,
                                 ManagerReportReviewStatus.DISPUTED
                         )
-                )
+                ).filter(review -> !rolloutPolicy.isShadowFor(review))
                 : Optional.empty();
         Optional<ManagerReportReviewSession> pending = overdue.isPresent()
                 ? overdue

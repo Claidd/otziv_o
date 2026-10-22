@@ -31,6 +31,24 @@ export interface ManagerReportReviewSettings {
   questionGenerationMaxTokens: number;
   questionGenerationRetryMaxTokens: number;
   managers: ManagerReportReviewManagerSetting[];
+  evidence?: ManagerReportReviewEvidenceSettings | null;
+}
+
+export interface ManagerReportReviewEvidenceSettings {
+  diagnosisMode: 'OFF' | 'SHADOW' | 'PILOT' | 'ENFORCE';
+  diagnosisPilotManagerIds: number[];
+  diagnosisMaxRequestsPerHour: number;
+  diagnosisMaxOutputTokens: number;
+  diagnosisTimeoutSeconds: number;
+  diagnosisThinkingEnabled: boolean;
+  answerMode: 'SHADOW' | 'PILOT' | 'ENFORCE';
+  answerPilotManagerIds: number[];
+  answerMaxTokens: number;
+  answerTimeoutSeconds: number;
+  answerThinkingEnabled: boolean;
+  questionTimeoutSeconds: number;
+  questionThinkingEnabled: boolean;
+  evidenceMaxAgeMinutes: number;
 }
 
 export type ManagerReportReviewSettingsRequest = Omit<ManagerReportReviewSettings, 'managers'>;

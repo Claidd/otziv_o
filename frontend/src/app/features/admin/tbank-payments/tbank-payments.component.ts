@@ -17,6 +17,7 @@ import type {
   ManualPaymentTaskStatus,
   ManualPaymentType,
   ManagerPaymentProfileResponse,
+  OwnerManualCardApproval,
   PaymentLinkListSource,
   PaymentInstructionSource,
   PaymentPolicy,
@@ -156,6 +157,7 @@ export class TbankPaymentsComponent implements OnDestroy {
   private contractorAuditTrigger: HTMLElement | null = null;
   @ViewChild(SpecialistPaymentReviewsComponent) private specialistReviews?: SpecialistPaymentReviewsComponent;
   @ViewChild('contractorAuditDialog') private contractorAuditDialog?: ElementRef<HTMLElement>;
+  @ViewChild('ownerApprovalDialog') private ownerApprovalDialog?: ElementRef<HTMLElement>;
   @ViewChild('contractorAuditAmountInput')
   set contractorAuditAmountElement(element: ElementRef<HTMLInputElement> | undefined) {
     if (element) {
@@ -214,6 +216,23 @@ export class TbankPaymentsComponent implements OnDestroy {
   readonly contractorAuditReason = signal('');
   readonly contractorAuditStatementChecked = signal(false);
   readonly contractorAuditError = signal<string | null>(null);
+  readonly ownerApprovalLink = signal<AdminPaymentLinkResponse | null>(null);
+  readonly ownerApproval = signal<OwnerManualCardApproval | null>(null);
+  readonly ownerApprovalLoading = signal(false);
+  readonly ownerApprovalReason = signal('');
+  readonly ownerApprovalAcknowledged = signal(false);
+  readonly ownerApprovalError = signal<string | null>(null);
+  private ownerApprovalLookup?: Subscription;
+  private ownerApprovalTrigger: HTMLElement | null = null;
+  readonly canRevokeOwnerApproval = computed(() => {
+    const link = this.ownerApprovalLink();
+    const approval = this.ownerApproval();
+    return !!link && !!approval && approval.status === 'PENDING'
+      && approval.orderId === link.orderId && approval.paymentLinkId === link.id
+      && this.canInspectOwnerApproval(link)
+      && this.mutatingId() === null && !this.ownerApprovalLoading()
+      && this.ownerApprovalReason().trim().length >= 10 && this.ownerApprovalAcknowledged();
+  });
   readonly contractorAuditAmountKopecks = computed(() => {
     const link = this.contractorAuditLink();
     return link ? parseContractorConfirmedTotalKopecks(
@@ -512,6 +531,7 @@ export class TbankPaymentsComponent implements OnDestroy {
     this.bootstrapRead?.unsubscribe();
     this.journalRead.cancel();
     this.recipientSummaryRead?.unsubscribe();
+    this.ownerApprovalLookup?.unsubscribe();
     this.bootstrapLoading.set(false);
     this.journalLoading.set(false);
     this.loadingRecipientSummary.set(false);
@@ -1087,6 +1107,140 @@ export class TbankPaymentsComponent implements OnDestroy {
     this.loadProfilesOnly(true);
     this.loadManualTasks();
     this.loadRecipientMonthlySummary();
+  }
+
+  canInspectOwnerApproval(link: AdminPaymentLinkResponse): boolean {
+    return !link.archived && !!link.orderId && !this.isManualPayment(link)
+      && link.status === 'CREATED' && !link.initiatedAt && !link.tbankPaymentId
+      && !link.paymentUrl && !link.paidAt && !link.manualConfirmedAt;
+  }
+
+  inspectOwnerApproval(link: AdminPaymentLinkResponse, event?: Event): void {
+    if (!this.canInspectOwnerApproval(link) || this.mutatingId() !== null
+      || this.ownerApprovalLink() || this.contractorAuditLink()) {
+      return;
+    }
+    const trigger = event?.currentTarget as HTMLElement | null;
+    this.ownerApprovalTrigger = typeof trigger?.focus === 'function' ? trigger : null;
+    this.ownerApprovalLink.set(link);
+    this.ownerApproval.set(null);
+    this.ownerApprovalReason.set('');
+    this.ownerApprovalAcknowledged.set(false);
+    this.ownerApprovalError.set(null);
+    this.ownerApprovalLoading.set(true);
+    queueMicrotask(() => this.ownerApprovalDialog?.nativeElement.focus());
+    this.ownerApprovalLookup?.unsubscribe();
+    this.ownerApprovalLookup = this.paymentsApi.getOwnerApprovalForPaymentLink(link.id).subscribe({
+      next: approval => {
+        if (this.ownerApprovalLink()?.id !== link.id) return;
+        this.ownerApprovalLoading.set(false);
+        if (approval.orderId !== link.orderId || approval.paymentLinkId !== link.id) {
+          this.ownerApprovalError.set('Запрос относится к другому заказу или счёту. Действие заблокировано.');
+          return;
+        }
+        this.ownerApproval.set(approval);
+      },
+      error: err => {
+        if (this.ownerApprovalLink()?.id !== link.id) return;
+        this.ownerApprovalLoading.set(false);
+        this.ownerApprovalError.set(err?.status === 404
+          ? 'Ожидающий запрос владельцу по этому счёту не найден.'
+          : apiErrorDetail(err, 'Не удалось проверить запрос владельцу'));
+      }
+    });
+  }
+
+  closeOwnerApproval(): void {
+    const link = this.ownerApprovalLink();
+    if (!link || this.mutatingId() === link.id) return;
+    this.ownerApprovalLookup?.unsubscribe();
+    this.ownerApprovalLookup = undefined;
+    this.ownerApprovalLink.set(null);
+    this.ownerApproval.set(null);
+    this.ownerApprovalLoading.set(false);
+    this.ownerApprovalReason.set('');
+    this.ownerApprovalAcknowledged.set(false);
+    this.ownerApprovalError.set(null);
+    const trigger = this.ownerApprovalTrigger;
+    this.ownerApprovalTrigger = null;
+    queueMicrotask(() => {
+      if (trigger?.isConnected) {
+        trigger.focus();
+      } else {
+        this.domDocument.querySelector<HTMLElement>('app-tbank-payments [data-bank-payments-focus-fallback]')?.focus();
+      }
+    });
+  }
+
+  @HostListener('document:keydown', ['$event'])
+  onOwnerApprovalKeydown(event: KeyboardEvent): void {
+    const link = this.ownerApprovalLink();
+    if (!link) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      this.closeOwnerApproval();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const dialog = this.ownerApprovalDialog?.nativeElement;
+    if (!dialog) return;
+    const focusable = Array.from(dialog.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    ));
+    if (!focusable.length) {
+      event.preventDefault();
+      dialog.focus();
+      return;
+    }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    const active = this.domDocument.activeElement;
+    if (!dialog.contains(active) || !focusable.includes(active as HTMLElement)) {
+      event.preventDefault();
+      (event.shiftKey ? last : first).focus();
+    } else if (event.shiftKey && active === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && active === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
+  revokeOwnerApproval(): void {
+    const link = this.ownerApprovalLink();
+    const approval = this.ownerApproval();
+    if (!link || !approval || !this.canRevokeOwnerApproval()) return;
+    this.ownerApprovalError.set(null);
+    this.mutatingId.set(link.id);
+    this.paymentsApi.revokePendingOwnerApproval(approval.approvalId, {
+      expectedOrderId: link.orderId!,
+      expectedPaymentLinkId: link.id,
+      reason: this.ownerApprovalReason().trim()
+    }).subscribe({
+      next: result => {
+        this.mutatingId.set(null);
+        if (result.orderId !== link.orderId || result.paymentLinkId !== link.id || result.status !== 'REVOKED') {
+          this.ownerApprovalError.set('Ответ сервера не совпал с выбранным заказом или счётом. Обновите журнал.');
+          this.loadPaymentLinks();
+          return;
+        }
+        this.closeOwnerApproval();
+        this.toastService.success(
+          'Запрос владельцу отозван',
+          `Старое подтверждение больше не действует. По заказу №${link.orderId} выберите фактического получателя через «Оплачено».`
+        );
+        this.loadPaymentLinks();
+      },
+      error: err => {
+        this.mutatingId.set(null);
+        this.ownerApprovalError.set(apiErrorDetail(err, 'Не удалось отозвать запрос владельцу'));
+        if (err?.status === 409) {
+          this.ownerApproval.set(null);
+          this.loadPaymentLinks();
+        }
+      }
+    });
   }
 
   confirmContractorSource(link: AdminPaymentLinkResponse, event?: Event): void {

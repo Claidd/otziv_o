@@ -1,0 +1,93 @@
+<section class="problem-diagnosis" aria-label="Разбор замечания">
+  <header>
+    <strong>Разбор замечания</strong>
+    <small>Данные на {{ view().observedAt | date: 'dd.MM.yyyy HH:mm' }}</small>
+  </header>
+  <p class="diagnosis-status" role="status">{{ statusText() }}</p>
+  @if (analysis(); as result) {
+    <p class="diagnosis-summary">{{ result.summary }}</p>
+    @if (result.confirmedFacts.length) {
+      <h4>Что подтверждено</h4>
+      <ul>
+        @for (finding of result.confirmedFacts; track $index) {
+          <li>
+            <span class="confirmed-fact">{{ confirmedText(finding) }}</span>
+            @if (finding.evidenceRefs.length) {
+              <details class="finding-evidence">
+                <summary>Доказательства</summary>
+                @for (reference of finding.evidenceRefs; track $index) {
+                  <p>{{ evidenceText(reference) }} <small class="evidence-ref">{{ reference }}</small></p>
+                }
+              </details>
+            }
+          </li>
+        }
+      </ul>
+    }
+    @if (result.hypotheses.length) {
+      <h4>Возможные причины — требуют проверки</h4>
+      <ul class="hypotheses">
+        @for (finding of result.hypotheses; track $index) {
+          <li>
+            {{ finding.text }}
+            @if (finding.evidenceRefs.length) {
+              <details class="finding-evidence">
+                <summary>На каких данных основано предположение</summary>
+                @for (reference of finding.evidenceRefs; track $index) {
+                  <p>{{ evidenceText(reference) }} <small class="evidence-ref">{{ reference }}</small></p>
+                }
+              </details>
+            }
+          </li>
+        }
+      </ul>
+    }
+    @if (result.missingEvidence.length) {
+      <h4>Каких данных не хватает</h4>
+      <ul>
+        @for (missing of result.missingEvidence; track $index) { <li>{{ missing }}</li> }
+      </ul>
+    }
+    @if (result.actions.length) {
+      <h4>Следующие действия</h4>
+      <ol>
+        @for (action of result.actions; track $index) {
+          <li>
+            <span>{{ action.text }}</span>
+            @if (action.owner) { <small class="action-detail">Ответственный: {{ ownerLabel(action.owner) }}</small> }
+            @if (action.verification) { <small class="action-detail">Проверка результата: {{ action.verification }}</small> }
+            @if (action.evidenceRefs.length) {
+              <details class="finding-evidence">
+                <summary>Данные для проверки</summary>
+                @for (reference of action.evidenceRefs; track $index) {
+                  <p>{{ evidenceText(reference) }} <small class="evidence-ref">{{ reference }}</small></p>
+                }
+              </details>
+            }
+          </li>
+        }
+      </ol>
+    }
+    @if (result.verification.length) {
+      <h4>Как проверить решение</h4>
+      <ul>
+        @for (check of result.verification; track $index) { <li>{{ check }}</li> }
+      </ul>
+    }
+    <p class="diagnosis-note">После действия проверьте результат в исходной карточке. План действий сам по себе не подтверждает устранение проблемы.</p>
+  }
+  @if (view().facts.length) {
+    <details>
+      <summary>Исходные данные ({{ view().facts.length }})</summary>
+      <small>Случай №{{ view().caseId }}, эпизод {{ view().episode }}, версия {{ view().version }}</small>
+      <dl>
+        @for (fact of view().facts; track $index) {
+          <div>
+            <dt><b>{{ fact.reference }}</b> · {{ fact.subject }} · {{ fact.field }}</dt>
+            <dd>{{ fact.value }}</dd>
+          </div>
+        }
+      </dl>
+    </details>
+  }
+</section>

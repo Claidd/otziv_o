@@ -84,11 +84,26 @@ public class OwnerManualCardPaymentApproval {
     @Column(name = "approved_at")
     private LocalDateTime approvedAt;
 
+    @Column(name = "revoked_at")
+    private LocalDateTime revokedAt;
+
+    @Column(name = "revoked_by", length = 150)
+    private String revokedBy;
+
+    @Column(name = "revocation_reason", length = 500)
+    private String revocationReason;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    public boolean hasOwnerRecipientIntent() {
+        return recipientType == ContractorRecipientType.OWNER
+                && recipientProfileId == null
+                && "OWNER".equals(recipientKey);
+    }
 
     @PrePersist
     void onCreate() {

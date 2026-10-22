@@ -87,6 +87,7 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class ScheduledClientMessageServiceTest {
+    @Mock private org.springframework.context.ApplicationEventPublisher applicationEvents;
 
     @Mock
     private ScheduledClientMessageStateRepository stateRepository;

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hunt.otziv.manager_daily_summary.dto.ManagerReportReviewEventResponse;
 import com.hunt.otziv.manager_daily_summary.dto.ManagerReportReviewResponse;
 import com.hunt.otziv.manager_daily_summary.dto.ManagerReportReviewIssueResponse;
+import com.hunt.otziv.manager_daily_summary.dto.ManagerReportReviewAnswerAttemptResponse;
 import com.hunt.otziv.manager_daily_summary.model.ManagerReportReviewDispute;
 import com.hunt.otziv.manager_daily_summary.model.ManagerReportReviewDisputeStatus;
 import com.hunt.otziv.manager_daily_summary.model.ManagerReportReviewSession;
@@ -13,10 +14,13 @@ import com.hunt.otziv.manager_daily_summary.repository.ManagerReportReviewSessio
 import java.time.LocalDate;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +28,12 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class ManagerReportReviewQueryService {
+
+    private static final Pattern PRIVATE_KEY = Pattern.compile("-----BEGIN [^-]*PRIVATE KEY-----.*?-----END [^-]*PRIVATE KEY-----", Pattern.DOTALL);
+    private static final Pattern AUTH_HEADER = Pattern.compile("(?i)\\b(authorization|cookie|set-cookie)\\s*:\\s*[^\\r\\n]+");
+    private static final Pattern CREDENTIAL = Pattern.compile("(?i)(api[_-]?key|password|secret|access[_-]?token|refresh[_-]?token|token)[\\\"']?\\s*[=:]\\s*[\\\"']?[^\\s,;\\\"'}&]+");
+    private static final Pattern BEARER = Pattern.compile("(?i)\\bbearer\\s+[A-Za-z0-9._~+/-]+=*");
+    private static final Pattern API_KEY = Pattern.compile("\\bsk-[A-Za-z0-9_-]{10,}\\b");
 
     private final ManagerReportReviewSessionRepository sessionRepository;
     private final ManagerReportReviewEventRepository eventRepository;
@@ -52,7 +62,7 @@ public class ManagerReportReviewQueryService {
                                 event.getActorUserId(),
                                 event.getActorRole(),
                                 event.getSource(),
-                                event.getPayloadText(),
+                                safeDisplayText(event.getPayloadText()),
                                 event.getCreatedAt()
                         ))
                         .toList();
@@ -130,8 +140,81 @@ public class ManagerReportReviewQueryService {
                 review.getRestrictionReleasedAt(),
                 openDisputes,
                 issues,
-                events
+                events,
+                answerAttempts(review)
         );
+    }
+
+    private List<ManagerReportReviewAnswerAttemptResponse> answerAttempts(ManagerReportReviewSession review) {
+        JsonNode answers = jsonArray(review.getAnswersJson());
+        JsonNode questions = jsonArray(review.getQuestionsJson());
+        List<ManagerReportReviewAnswerAttemptResponse> result = new ArrayList<>();
+        int attemptNumber = 0;
+        for (JsonNode answer : answers) {
+            attemptNumber++;
+            if (!answer.isObject()) continue;
+            int questionIndex = answer.path("questionIndex").asInt(-1);
+            JsonNode points = questionIndex >= 0 && questionIndex < questions.size()
+                    ? questions.path(questionIndex).path("expectedPoints") : objectMapper.createArrayNode();
+            JsonNode assessment = answer.path("assessment");
+            boolean structured = assessment.isObject() && !assessment.path("decision").asText("").isBlank();
+            List<ManagerReportReviewAnswerAttemptResponse.Criterion> criteria = new ArrayList<>();
+            if (assessment.path("criteria").isArray()) for (JsonNode criterion : assessment.path("criteria")) {
+                if (!criterion.isObject()) continue;
+                int index = criterion.path("criterionIndex").asInt(-1);
+                String label = index >= 0 && points.isArray() && index < points.size()
+                        ? safeDisplayText(points.path(index).asText("")) : "";
+                criteria.add(new ManagerReportReviewAnswerAttemptResponse.Criterion(index, label,
+                        text(criterion, "status"), criterion.path("answerAttempt").asInt(-1),
+                        text(criterion, "answerQuote"), references(criterion.path("evidenceRefs")), text(criterion, "reason")));
+            }
+            List<ManagerReportReviewAnswerAttemptResponse.Claim> claims = new ArrayList<>();
+            if (assessment.path("claims").isArray()) for (JsonNode claim : assessment.path("claims")) {
+                if (!claim.isObject()) continue;
+                claims.add(new ManagerReportReviewAnswerAttemptResponse.Claim(text(claim, "kind"), text(claim, "status"),
+                        claim.path("answerAttempt").asInt(-1), text(claim, "answerQuote"),
+                        references(claim.path("evidenceRefs")), text(claim, "reason")));
+            }
+            result.add(new ManagerReportReviewAnswerAttemptResponse(attemptNumber, questionIndex,
+                    text(answer, "question"), text(answer, "answer"), validRecordedAt(answer.path("recordedAt").asText("")),
+                    structured ? text(assessment, "decision") : answer.path("accepted").asBoolean(false) ? "LEGACY_ACCEPTED" : "LEGACY_REJECTED",
+                    text(answer, "reason"), structured, List.copyOf(criteria), List.copyOf(claims)));
+        }
+        return List.copyOf(result);
+    }
+
+    private JsonNode jsonArray(String json) {
+        try {
+            JsonNode value = objectMapper.readTree(json == null ? "[]" : json);
+            return value != null && value.isArray() ? value : objectMapper.createArrayNode();
+        } catch (Exception ignored) {
+            return objectMapper.createArrayNode();
+        }
+    }
+
+    private String validRecordedAt(String value) {
+        try { return LocalDateTime.parse(value).toString(); } catch (RuntimeException ignored) { }
+        try { return java.time.ZonedDateTime.parse(value).toOffsetDateTime().toString(); } catch (RuntimeException ignored) { }
+        try { return OffsetDateTime.parse(value).toString(); } catch (RuntimeException ignored) { return null; }
+    }
+
+    private List<String> references(JsonNode node) {
+        if (!node.isArray()) return List.of();
+        List<String> result = new ArrayList<>();
+        for (JsonNode reference : node) if (reference.isTextual()) result.add(safeDisplayText(reference.asText()));
+        return List.copyOf(result);
+    }
+
+    private String text(JsonNode node, String field) { return safeDisplayText(node.path(field).asText("")); }
+
+    /** Keep the complete recorded text while hiding recognizable credential values. Never expose raw provider envelopes. */
+    private String safeDisplayText(String value) {
+        if (value == null) return "";
+        String text = PRIVATE_KEY.matcher(value).replaceAll("[ключ скрыт]");
+        text = AUTH_HEADER.matcher(text).replaceAll("$1: [скрыто]");
+        text = CREDENTIAL.matcher(text).replaceAll("$1=[скрыто]");
+        text = BEARER.matcher(text).replaceAll("Bearer [скрыто]");
+        return API_KEY.matcher(text).replaceAll("[ключ скрыт]");
     }
 
     private long totalReviewSeconds(ManagerReportReviewSession review) {

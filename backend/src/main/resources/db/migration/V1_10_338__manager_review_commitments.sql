@@ -1,0 +1,20 @@
+CREATE TABLE manager_review_commitments (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    review_id BIGINT NOT NULL,
+    question_index INT NOT NULL,
+    position INT NOT NULL,
+    manager_id BIGINT NOT NULL,
+    source_task_id BIGINT NOT NULL,
+    action_text VARCHAR(2000) NOT NULL,
+    responsible VARCHAR(220) NOT NULL,
+    verification VARCHAR(2000) NOT NULL,
+    dependencies VARCHAR(2000),
+    due_at DATETIME(6) NOT NULL,
+    status VARCHAR(32) NOT NULL,
+    created_at DATETIME(6) NOT NULL,
+    checked_at DATETIME(6),
+    UNIQUE KEY uk_manager_commitment_answer (review_id, question_index, position),
+    KEY idx_manager_commitment_due (manager_id, status, due_at),
+    KEY idx_manager_commitment_source (source_task_id, status),
+    KEY idx_manager_commitment_check (status, checked_at)
+);

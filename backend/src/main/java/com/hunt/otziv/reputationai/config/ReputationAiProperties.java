@@ -279,7 +279,7 @@ public class ReputationAiProperties {
         private String apiKey = "";
         private String baseUrl = "https://api.deepseek.com";
         private String anthropicBaseUrl = "https://api.deepseek.com/anthropic";
-        private String model = "deepseek-v4-pro";
+        private String model = "deepseek-flash";
         private Duration timeout = Duration.ofMinutes(10);
         private int maxTokens = 24000;
         private boolean thinkingEnabled = true;
@@ -323,7 +323,7 @@ public class ReputationAiProperties {
         }
 
         public void setModel(String model) {
-            this.model = model == null || model.isBlank() ? "deepseek-v4-pro" : model.trim();
+            this.model = model == null || model.isBlank() ? "deepseek-flash" : model.trim();
         }
 
         public Duration getTimeout() {

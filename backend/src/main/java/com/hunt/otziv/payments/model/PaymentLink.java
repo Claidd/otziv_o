@@ -66,6 +66,44 @@ public class PaymentLink {
         return order == null ? null : order.getId();
     }
 
+    /** Only a locked, unstarted owner request may use this recipient snapshot. */
+    public boolean hasFrozenOwnerRecipientIntent() {
+        return manualActualRecipientFrozenAt != null
+                && manualActualRecipientType == ContractorRecipientType.OWNER
+                && manualActualRecipientProfileId == null
+                && manualActualCashDestinationKind == ContractorCashDestinationKind.OWNER
+                && manualActualTaskId == null;
+    }
+
+    /** Called only after the ledger owner has ruled out final attribution. */
+    public void clearManualActualRecipientIntent() {
+        manualActualAccountingMode = null;
+        manualActualOriginalCashDestinationKind = null;
+        manualActualOriginalTaskId = null;
+        manualActualOriginalTaskGeneration = null;
+        manualActualOriginalTaskTargetKind = null;
+        manualActualOriginalAllocationId = null;
+        manualActualClientFacingAllocationId = null;
+        manualActualOriginalRecipientType = null;
+        manualActualOriginalRecipientProfileId = null;
+        manualActualOriginalRecipientUserId = null;
+        manualActualOriginalRecipientNameSnapshot = null;
+        manualActualCashDestinationKind = null;
+        manualActualTaskId = null;
+        manualActualTaskGeneration = null;
+        manualActualTaskTargetKind = null;
+        manualActualRecipientType = null;
+        manualActualRecipientProfileId = null;
+        manualActualRecipientUserId = null;
+        manualActualRecipientNameSnapshot = null;
+        manualActualCurrentWorkerId = null;
+        manualActualCurrentManagerId = null;
+        manualActualReason = null;
+        manualActualReceiptUrl = null;
+        manualActualActor = null;
+        manualActualRecipientFrozenAt = null;
+    }
+
     @Column(name = "amount_kopecks", nullable = false)
     private long amountKopecks;
 

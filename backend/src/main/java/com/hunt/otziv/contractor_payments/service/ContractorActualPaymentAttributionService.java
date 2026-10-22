@@ -1,5 +1,6 @@
 package com.hunt.otziv.contractor_payments.service;
 
+import com.hunt.otziv.contractor_payments.api.PaymentLinkAttributionGuard;
 import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.contractor_payments.dto.ContractorActualPaymentRecipientCommand;
@@ -59,7 +60,7 @@ import org.springframework.web.server.ResponseStatusException;
  */
 @Service
 @RequiredArgsConstructor
-public class ContractorActualPaymentAttributionService {
+public class ContractorActualPaymentAttributionService implements PaymentLinkAttributionGuard {
 
     private static final int MAX_REASON_LENGTH = 500;
     private static final int MAX_EVIDENCE_REFERENCE_LENGTH = 160;
@@ -604,6 +605,27 @@ public class ContractorActualPaymentAttributionService {
         link.setManualActualReceiptUrl(receiptUrl);
         link.setManualActualActor(actor);
         link.setManualActualRecipientFrozenAt(LocalDateTime.now());
+    }
+
+    /** Clears an unconsumed owner selection after its approval has been revoked. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void clearRevokedPaymentLinkRecipientIntent(PaymentLink link) {
+        if (link == null || link.getId() == null || link.getManualActualRecipientFrozenAt() == null) {
+            throw new ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT,
+                    "Выбор получателя уже изменился");
+        }
+        requireNoFinalAttributionForPaymentLink(link.getId());
+        link.clearManualActualRecipientIntent();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void requireNoFinalAttributionForPaymentLink(Long paymentLinkId) {
+        if (!attributionRepository.findAllBySourceForUpdate(
+                ContractorActualPaymentSourceKind.PAYMENT_LINK, paymentLinkId).isEmpty()) {
+            throw new ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT,
+                    "Поступление уже учтено; смена получателя требует отдельной сверки");
+        }
     }
 
     @Transactional(propagation = Propagation.MANDATORY)

@@ -16,6 +16,7 @@ import com.hunt.otziv.t_telegrambot.api.SpecialistPaymentReviewNotice;
 import com.hunt.otziv.u_users.api.SpecialistPaymentReviewDirectory;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.Objects;
 import java.util.EnumSet;
 import java.util.List;
@@ -361,7 +362,9 @@ public class SpecialistManualPaymentReviewService {
         if (review == null || review.getStatus() != SpecialistManualPaymentReviewStatus.PENDING_DELIVERY) {
             return null;
         }
-        LocalDateTime now = LocalDateTime.now();
+        // MySQL stores last_attempt_at as DATETIME(6). Keep the claim token at
+        // that precision so the next transaction can match the persisted value.
+        LocalDateTime now = LocalDateTime.now().truncatedTo(ChronoUnit.MICROS);
         if (review.getDeadlineAt() == null || !now.isBefore(review.getDeadlineAt())) {
             review.setStatus(SpecialistManualPaymentReviewStatus.NEEDS_ATTENTION);
             review.setLastError("За 24 часа не было подтверждено уведомление специалиста");

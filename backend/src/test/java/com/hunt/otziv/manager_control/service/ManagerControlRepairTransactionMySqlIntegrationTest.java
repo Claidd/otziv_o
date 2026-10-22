@@ -180,10 +180,10 @@ class ManagerControlRepairTransactionMySqlIntegrationTest {
         });
 
         var access = new ManagerControlAccessPolicy(mock(ManagerRepository.class), users, mock(ManagerAccessService.class), permissions);
-        var lifecycle = new ManagerControlCardLifecycle(cards, items, events, mock(ManagerPerformanceService.class), mock(ManagerControlReadSnapshots.class));
+        var lifecycle = new ManagerControlCardLifecycle(cards, items, events, mock(ManagerPerformanceService.class), mock(ManagerControlReadSnapshots.class), mock(com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosticsService.class));
         var lookup = mock(ManagerControlWorkerTaskLookup.class);
         when(lookup.userDisplayName(any())).thenReturn("");
-        var presenter = new ManagerControlConcretePresenter(mock(WorkerRiskIncidentRepository.class), lookup,
+        var presenter = new ManagerControlConcretePresenter(mock(com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosticsService.class), mock(com.hunt.otziv.manager_daily_summary.service.ManagerReportReviewCommitmentService.class), mock(WorkerRiskIncidentRepository.class), lookup,
                 mock(ManagerControlInvoiceDiagnostics.class), mock(ScheduledClientMessageStateRepository.class),
                 mock(CompanyRepository.class), new ManagerControlSlaPolicy(mock(AppSettingService.class)));
         var outcome = proxy(new ManagerControlRepairOutcome(examples, access, lifecycle, presenter, controls, cards));

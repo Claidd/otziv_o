@@ -32,4 +32,6 @@ public interface OwnerManualCardPaymentApprovalRepository
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT approval FROM OwnerManualCardPaymentApproval approval WHERE approval.paymentLinkId = :linkId")
     Optional<OwnerManualCardPaymentApproval> findByPaymentLinkIdForUpdate(@Param("linkId") Long linkId);
+
+    Optional<OwnerManualCardPaymentApproval> findByPaymentLinkId(Long paymentLinkId);
 }

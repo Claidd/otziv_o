@@ -47,7 +47,7 @@ class DeepSeekAnthropicProviderTest {
             String body = """
                     {
                       "id": "msg_%s",
-                      "model": "deepseek-v4-pro",
+                      "model": "deepseek-flash",
                       "stop_reason": "end_turn",
                       "usage": {
                         "input_tokens": 100,
@@ -105,7 +105,7 @@ class DeepSeekAnthropicProviderTest {
             assertThat(requestBodies).hasSize(5);
 
             JsonNode identityStage = objectMapper.readTree(requestBodies.get(0));
-            assertThat(identityStage.path("model").asText()).isEqualTo("deepseek-v4-pro");
+            assertThat(identityStage.path("model").asText()).isEqualTo("deepseek-flash");
             assertThat(identityStage.path("tools").path(0).path("type").asText()).isEqualTo("web_search_20250305");
             assertThat(identityStage.path("tools").path(0).path("max_uses").asInt()).isEqualTo(5);
             assertThat(identityStage.path("messages").path(0).path("content").path(0).path("text").asText())

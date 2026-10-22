@@ -39,6 +39,7 @@ public class ManagerReportReviewReminderJob {
     private final ManagerReportReviewAccessPolicy accessPolicy;
     private final ManagerReportReviewQualityService qualityService;
     private final ManagerReportReviewAiAvailabilityService aiAvailabilityService;
+    private final ManagerReportReviewRolloutPolicy rolloutPolicy;
 
     @Scheduled(
             cron = "${manager.report-review.reminder-cron:0 */10 * * * *}",
@@ -56,6 +57,7 @@ public class ManagerReportReviewReminderJob {
         List<ManagerReportReviewSession> pending =
                 repository.findPendingForReminder(PENDING, now.minusMinutes(firstMinutes));
         for (ManagerReportReviewSession review : pending) {
+            if (rolloutPolicy.isShadowFor(review)) continue;
             if (review.getDeadlineStartedAt() == null || review.getRecipientChatId() == null) continue;
             if (review.getAiUnavailableStartedAt() != null) {
                 continue;

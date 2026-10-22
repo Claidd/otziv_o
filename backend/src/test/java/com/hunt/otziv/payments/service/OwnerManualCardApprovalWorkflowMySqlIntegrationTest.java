@@ -110,7 +110,7 @@ class OwnerManualCardApprovalWorkflowMySqlIntegrationTest {
     }
 
     @Test
-    void concurrentReplacementRequestFinishesAndOldCallbackFailsWithoutLockInversion() throws Exception {
+    void concurrentRetryRequestFinishesAndOldCallbackFailsWithoutLockInversion() throws Exception {
         CountDownLatch requestHasOrder = new CountDownLatch(1);
         CountDownLatch allowRequest = new CountDownLatch(1);
         CountDownLatch callbackReadBinding = new CountDownLatch(1);
@@ -124,7 +124,7 @@ class OwnerManualCardApprovalWorkflowMySqlIntegrationTest {
         try (var pool = Executors.newFixedThreadPool(2)) {
             var request = pool.submit(() -> {
                 Thread.currentThread().setName("approval-request");
-                return f.workflow.submitManagerManualCardPaymentForOrder(7L, "Replacement request", null,
+                return f.workflow.submitManagerManualCardPaymentForOrder(7L, "Fixture transfer", null,
                         ContractorRecipientType.OWNER, null, "OWNER", "fixture-manager", f.auth);
             });
             assertThat(requestHasOrder.await(5, TimeUnit.SECONDS)).isTrue();
@@ -143,6 +143,8 @@ class OwnerManualCardApprovalWorkflowMySqlIntegrationTest {
         assertThat(f.status()).isEqualTo("PENDING");
         assertThat(f.jdbc.queryForObject("SELECT token_hash FROM approval_requests WHERE id=91", String.class))
                 .isNotEqualTo(hash("fixture-token"));
+        assertThat(f.jdbc.queryForObject("SELECT reason FROM approval_requests WHERE id=91", String.class))
+                .isEqualTo("Fixture transfer");
         verify(f.payments, never()).confirmPaidByManualCardTransferInternal(anyLong(), anyLong(), anyString(),
                 nullable(String.class), anyString(), any(), any(), any(), nullable(Long.class), anyString(), eq(true));
     }
@@ -247,6 +249,12 @@ class OwnerManualCardApprovalWorkflowMySqlIntegrationTest {
             when(approvals.save(any())).thenAnswer(call -> save(call.getArgument(0)));
             when(approvals.saveAndFlush(any())).thenAnswer(call -> save(call.getArgument(0)));
             when(payments.validatedReceiptUrl(nullable(String.class))).thenReturn("");
+            doAnswer(call -> {
+                PaymentLink selected = call.getArgument(1);
+                assertThat(call.getArgument(5, String.class)).isEqualTo(selected.getManualActualReason());
+                return null;
+            }).when(payments).freezeActualRecipientIntentIfRequired(any(Order.class), any(PaymentLink.class),
+                    eq(ContractorRecipientType.OWNER), isNull(), eq("OWNER"), anyString(), anyString(), anyString());
             when(payments.selectManualCardPaymentRouteForOrder(7L, auth)).thenReturn(new ManualCardPaymentWorkflow.OrderManualCardRoute(71L, 100_00L));
             when(payments.resolveManagerRecipientForOrder(
                     7L, ContractorRecipientType.OWNER, null, "OWNER", auth))
@@ -272,6 +280,7 @@ class OwnerManualCardApprovalWorkflowMySqlIntegrationTest {
             link.setStatus(PaymentLinkStatus.CREATED); link.setPaymentMethod(PaymentMethod.BANK_FORM);
             link.setManualActualRecipientType(ContractorRecipientType.OWNER);
             link.setManualActualCashDestinationKind(ContractorCashDestinationKind.OWNER);
+            link.setManualActualReason("Fixture transfer");
             link.setManualActualRecipientFrozenAt(LocalDateTime.now()); return link;
         }
 

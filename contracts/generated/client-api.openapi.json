@@ -2505,6 +2505,63 @@
         "x-automatic-retry" : false
       }
     },
+    "/api/admin/payments/owner-approvals/by-payment-link/{paymentLinkId}" : {
+      "get" : {
+        "operationId" : "OwnerManualCardPaymentApprovalAdminController_byPaymentLink",
+        "x-java-handler" : "com.hunt.otziv.payments.controller.OwnerManualCardPaymentApprovalAdminController#byPaymentLink",
+        "parameters" : [ {
+          "name" : "paymentLinkId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer"
+          }
+        } ],
+        "x-preauthorize" : "hasAnyRole('ADMIN', 'OWNER')",
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Declared controller response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OwnerManualCardPaymentApprovalRevocationServiceApprovalViewOutput"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Validation or domain rejection",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication rejected; a write is not automatically retried"
+          },
+          "403" : {
+            "description" : "Server denied access; authority is not inferred from client state"
+          },
+          "409" : {
+            "description" : "Conflict; read current state before an explicit user retry",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          }
+        },
+        "x-automatic-retry" : false
+      }
+    },
     "/api/admin/payments/owner-approvals/{approvalId}/close-superseded" : {
       "post" : {
         "operationId" : "OwnerManualCardPaymentApprovalAdminController_closeSuperseded",
@@ -2528,6 +2585,73 @@
               "application/json" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/OwnerManualCardPaymentApprovalReconciliationServiceResultOutput"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Validation or domain rejection",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication rejected; a write is not automatically retried"
+          },
+          "403" : {
+            "description" : "Server denied access; authority is not inferred from client state"
+          },
+          "409" : {
+            "description" : "Conflict; read current state before an explicit user retry",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          }
+        },
+        "x-automatic-retry" : false
+      }
+    },
+    "/api/admin/payments/owner-approvals/{approvalId}/revoke-pending" : {
+      "post" : {
+        "operationId" : "OwnerManualCardPaymentApprovalAdminController_revokePending",
+        "x-java-handler" : "com.hunt.otziv.payments.controller.OwnerManualCardPaymentApprovalAdminController#revokePending",
+        "requestBody" : {
+          "required" : true,
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RevokePendingOwnerApprovalRequestInput"
+              }
+            }
+          }
+        },
+        "parameters" : [ {
+          "name" : "approvalId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer"
+          }
+        } ],
+        "x-preauthorize" : "hasAnyRole('ADMIN', 'OWNER')",
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Declared controller response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OwnerManualCardPaymentApprovalRevocationServiceRevocationResultOutput"
                 }
               }
             }
@@ -18393,6 +18517,16 @@
               "type" : "null"
             } ]
           },
+          "auditCommitments" : {
+            "anyOf" : [ {
+              "type" : "array",
+              "items" : {
+                "$ref" : "#/components/schemas/ManagerReviewCommitmentViewOutput"
+              }
+            }, {
+              "type" : "null"
+            } ]
+          },
           "canRollback" : {
             "anyOf" : [ {
               "type" : "boolean"
@@ -18431,6 +18565,13 @@
           "delivery" : {
             "anyOf" : [ {
               "$ref" : "#/components/schemas/DeliveryOperationOutput"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "diagnosis" : {
+            "anyOf" : [ {
+              "$ref" : "#/components/schemas/ManagerProblemDiagnosticsServiceDiagnosticViewOutput"
             }, {
               "type" : "null"
             } ]
@@ -18650,7 +18791,7 @@
             } ]
           }
         },
-        "required" : [ "actionType", "ageDays", "canRollback", "chatUrl", "comment", "contactText", "controlEntityId", "delivery", "entityId", "firstObservedAt", "followUpAt", "hardDeadlineAt", "itemStatus", "lastManualTouchAt", "orderDetailsId", "penaltyPoints", "reason", "resolvedAt", "riskResolutionAction", "rollbackMessage", "rollbackStatus", "slaState", "specialistName", "status", "subtitle", "targetDeadlineAt", "targetUrl", "title", "type", "updatedAt", "workerExplanation", "workerExplanationAt", "workerNotificationAcceptedAt", "workerNotificationAcceptedByUserId", "workerNotificationAttemptedAt", "workerNotificationFailureReason", "workerNotificationSentAt" ],
+        "required" : [ "actionType", "ageDays", "auditCommitments", "canRollback", "chatUrl", "comment", "contactText", "controlEntityId", "delivery", "diagnosis", "entityId", "firstObservedAt", "followUpAt", "hardDeadlineAt", "itemStatus", "lastManualTouchAt", "orderDetailsId", "penaltyPoints", "reason", "resolvedAt", "riskResolutionAction", "rollbackMessage", "rollbackStatus", "slaState", "specialistName", "status", "subtitle", "targetDeadlineAt", "targetUrl", "title", "type", "updatedAt", "workerExplanation", "workerExplanationAt", "workerNotificationAcceptedAt", "workerNotificationAcceptedByUserId", "workerNotificationAttemptedAt", "workerNotificationFailureReason", "workerNotificationSentAt" ],
         "additionalProperties" : true
       },
       "ManagerControlEventResponseOutput" : {
@@ -20470,6 +20611,252 @@
         "required" : [ "actionTotal", "averageOverdueAgeDays", "avgDailyOverdue", "avgDailyWorkload", "backlogCount", "clientReplyMedianMinutes", "clientReplyP90Minutes", "clientResponseScore", "clientSlaRate", "controlAcceptedCount", "controlClosedCount", "controlDisciplineScore", "fastClickCount", "grade", "handledCount", "incomingProblemCount", "loadAdjustedPerformanceScore", "managerId", "managerUserId", "openCount", "overdueControlScore", "overdueRate", "performanceScore", "problemSlaRate", "problemSpeedScore", "reopenRate", "riskQualityScore", "riskResolutionAvgHours", "specialistRiskScore", "stabilityScore", "teamCompletionScore", "teamProgressAveragePercent", "teamProgressEligibleDays", "teamProgressIncompleteDays", "teamProgressMissedWorkerDays", "teamProgressReached100Days", "teamProgressReached100Rate", "workloadIndex", "workloadLevel", "workloadOrder", "workloadTotal", "workloadWorker" ],
         "additionalProperties" : true
       },
+      "ManagerProblemDiagnosticsServiceActionOutput" : {
+        "x-java-type" : "com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosticsService$Action",
+        "type" : "object",
+        "properties" : {
+          "code" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "evidenceRefs" : {
+            "anyOf" : [ {
+              "type" : "array",
+              "items" : {
+                "type" : "string"
+              }
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "owner" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "text" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "verification" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        },
+        "required" : [ "code", "evidenceRefs", "owner", "text", "verification" ],
+        "additionalProperties" : true
+      },
+      "ManagerProblemDiagnosticsServiceDiagnosisOutput" : {
+        "x-java-type" : "com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosticsService$Diagnosis",
+        "type" : "object",
+        "properties" : {
+          "actions" : {
+            "anyOf" : [ {
+              "type" : "array",
+              "items" : {
+                "$ref" : "#/components/schemas/ManagerProblemDiagnosticsServiceActionOutput"
+              }
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "confirmedFacts" : {
+            "anyOf" : [ {
+              "type" : "array",
+              "items" : {
+                "$ref" : "#/components/schemas/ManagerProblemDiagnosticsServiceFindingOutput"
+              }
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "hypotheses" : {
+            "anyOf" : [ {
+              "type" : "array",
+              "items" : {
+                "$ref" : "#/components/schemas/ManagerProblemDiagnosticsServiceFindingOutput"
+              }
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "missingEvidence" : {
+            "anyOf" : [ {
+              "type" : "array",
+              "items" : {
+                "type" : "string"
+              }
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "summary" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "verification" : {
+            "anyOf" : [ {
+              "type" : "array",
+              "items" : {
+                "type" : "string"
+              }
+            }, {
+              "type" : "null"
+            } ]
+          }
+        },
+        "required" : [ "actions", "confirmedFacts", "hypotheses", "missingEvidence", "summary", "verification" ],
+        "additionalProperties" : true
+      },
+      "ManagerProblemDiagnosticsServiceDiagnosticViewOutput" : {
+        "x-java-type" : "com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosticsService$DiagnosticView",
+        "type" : "object",
+        "properties" : {
+          "caseId" : {
+            "anyOf" : [ {
+              "type" : "integer"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "diagnosis" : {
+            "anyOf" : [ {
+              "$ref" : "#/components/schemas/ManagerProblemDiagnosticsServiceDiagnosisOutput"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "episode" : {
+            "type" : "integer"
+          },
+          "facts" : {
+            "anyOf" : [ {
+              "type" : "array",
+              "items" : {
+                "$ref" : "#/components/schemas/ManagerProblemDiagnosticsServiceFactOutput"
+              }
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "model" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "observedAt" : {
+            "anyOf" : [ {
+              "type" : "string",
+              "x-date-time-kind" : "local"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "promptVersion" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "rolloutMode" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "status" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "version" : {
+            "type" : "integer"
+          }
+        },
+        "required" : [ "caseId", "diagnosis", "episode", "facts", "model", "observedAt", "promptVersion", "rolloutMode", "status", "version" ],
+        "additionalProperties" : true
+      },
+      "ManagerProblemDiagnosticsServiceFactOutput" : {
+        "x-java-type" : "com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosticsService$Fact",
+        "type" : "object",
+        "properties" : {
+          "field" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "reference" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "subject" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "value" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        },
+        "required" : [ "field", "reference", "subject", "value" ],
+        "additionalProperties" : true
+      },
+      "ManagerProblemDiagnosticsServiceFindingOutput" : {
+        "x-java-type" : "com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosticsService$Finding",
+        "type" : "object",
+        "properties" : {
+          "evidenceRefs" : {
+            "anyOf" : [ {
+              "type" : "array",
+              "items" : {
+                "type" : "string"
+              }
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "text" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        },
+        "required" : [ "evidenceRefs", "text" ],
+        "additionalProperties" : true
+      },
       "ManagerQueueStateResponseOutput" : {
         "x-java-type" : "com.hunt.otziv.manager_control.dto.ManagerQueueStateResponse",
         "type" : "object",
@@ -20566,6 +20953,179 @@
           }
         },
         "required" : [ ],
+        "additionalProperties" : true
+      },
+      "ManagerReportReviewAnswerAttemptResponseClaimOutput" : {
+        "x-java-type" : "com.hunt.otziv.manager_daily_summary.dto.ManagerReportReviewAnswerAttemptResponse$Claim",
+        "type" : "object",
+        "properties" : {
+          "answerAttempt" : {
+            "type" : "integer"
+          },
+          "answerQuote" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "evidenceRefs" : {
+            "anyOf" : [ {
+              "type" : "array",
+              "items" : {
+                "type" : "string"
+              }
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "kind" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "reason" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "status" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        },
+        "required" : [ "answerAttempt", "answerQuote", "evidenceRefs", "kind", "reason", "status" ],
+        "additionalProperties" : true
+      },
+      "ManagerReportReviewAnswerAttemptResponseCriterionOutput" : {
+        "x-java-type" : "com.hunt.otziv.manager_daily_summary.dto.ManagerReportReviewAnswerAttemptResponse$Criterion",
+        "type" : "object",
+        "properties" : {
+          "answerAttempt" : {
+            "type" : "integer"
+          },
+          "answerQuote" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "criterion" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "criterionIndex" : {
+            "type" : "integer"
+          },
+          "evidenceRefs" : {
+            "anyOf" : [ {
+              "type" : "array",
+              "items" : {
+                "type" : "string"
+              }
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "reason" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "status" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        },
+        "required" : [ "answerAttempt", "answerQuote", "criterion", "criterionIndex", "evidenceRefs", "reason", "status" ],
+        "additionalProperties" : true
+      },
+      "ManagerReportReviewAnswerAttemptResponseOutput" : {
+        "x-java-type" : "com.hunt.otziv.manager_daily_summary.dto.ManagerReportReviewAnswerAttemptResponse",
+        "type" : "object",
+        "properties" : {
+          "answer" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "attemptNumber" : {
+            "type" : "integer"
+          },
+          "claims" : {
+            "anyOf" : [ {
+              "type" : "array",
+              "items" : {
+                "$ref" : "#/components/schemas/ManagerReportReviewAnswerAttemptResponseClaimOutput"
+              }
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "criteria" : {
+            "anyOf" : [ {
+              "type" : "array",
+              "items" : {
+                "$ref" : "#/components/schemas/ManagerReportReviewAnswerAttemptResponseCriterionOutput"
+              }
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "decision" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "question" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "questionIndex" : {
+            "type" : "integer"
+          },
+          "reason" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "recordedAt" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "structuredAssessment" : {
+            "type" : "boolean"
+          }
+        },
+        "required" : [ "answer", "attemptNumber", "claims", "criteria", "decision", "question", "questionIndex", "reason", "recordedAt", "structuredAssessment" ],
         "additionalProperties" : true
       },
       "ManagerReportReviewEventResponseOutput" : {
@@ -20759,6 +21319,16 @@
           },
           "answerAttemptCount" : {
             "type" : "integer"
+          },
+          "answerAttempts" : {
+            "anyOf" : [ {
+              "type" : "array",
+              "items" : {
+                "$ref" : "#/components/schemas/ManagerReportReviewAnswerAttemptResponseOutput"
+              }
+            }, {
+              "type" : "null"
+            } ]
           },
           "answerQuality" : {
             "anyOf" : [ {
@@ -20975,7 +21545,7 @@
             "type" : "integer"
           }
         },
-        "required" : [ "acceptedAnswerCount", "actionPlan", "aiUnavailableSeconds", "aiVerificationPaused", "answerAttemptCount", "answerQuality", "answerQualityReason", "auditRequired", "autoCompleted", "completedAt", "currentQuestionIndex", "deadlineStartedAt", "deliveredAt", "disputeText", "disputedAt", "events", "issueCount", "issues", "managerId", "managerName", "managerUserId", "minimumReadSeconds", "openDisputeCount", "questionCount", "questionsSource", "quickReview", "readSeconds", "readingConfirmedAt", "reminderOneSentAt", "reminderThreeSentAt", "restrictedAt", "restrictionReleasedAt", "reviewId", "startedAt", "status", "summaryDate", "suspiciousAnswerCount", "testMode", "testOwnerUserId", "totalReviewSeconds" ],
+        "required" : [ "acceptedAnswerCount", "actionPlan", "aiUnavailableSeconds", "aiVerificationPaused", "answerAttemptCount", "answerAttempts", "answerQuality", "answerQualityReason", "auditRequired", "autoCompleted", "completedAt", "currentQuestionIndex", "deadlineStartedAt", "deliveredAt", "disputeText", "disputedAt", "events", "issueCount", "issues", "managerId", "managerName", "managerUserId", "minimumReadSeconds", "openDisputeCount", "questionCount", "questionsSource", "quickReview", "readSeconds", "readingConfirmedAt", "reminderOneSentAt", "reminderThreeSentAt", "restrictedAt", "restrictionReleasedAt", "reviewId", "startedAt", "status", "summaryDate", "suspiciousAnswerCount", "testMode", "testOwnerUserId", "totalReviewSeconds" ],
         "additionalProperties" : true
       },
       "ManagerReportReviewTestStartResponseOutput" : {
@@ -21023,6 +21593,57 @@
           }
         },
         "required" : [ "date", "issueCount", "recipient", "reviewId", "sourceManagerId", "sourceManagerName" ],
+        "additionalProperties" : true
+      },
+      "ManagerReviewCommitmentViewOutput" : {
+        "x-java-type" : "com.hunt.otziv.manager_control.dto.ManagerReviewCommitmentView",
+        "type" : "object",
+        "properties" : {
+          "action" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "dueAt" : {
+            "anyOf" : [ {
+              "type" : "string",
+              "x-date-time-kind" : "local"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "id" : {
+            "anyOf" : [ {
+              "type" : "integer"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "owner" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "status" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "verification" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        },
+        "required" : [ "action", "dueAt", "id", "owner", "status", "verification" ],
         "additionalProperties" : true
       },
       "ManagerSummaryPreviewResponseOutput" : {
@@ -22748,6 +23369,122 @@
           }
         },
         "required" : [ "alreadyClosed", "approvalId", "orderId", "status" ],
+        "additionalProperties" : true
+      },
+      "OwnerManualCardPaymentApprovalRevocationServiceApprovalViewOutput" : {
+        "x-java-type" : "com.hunt.otziv.payments.service.OwnerManualCardPaymentApprovalRevocationService$ApprovalView",
+        "type" : "object",
+        "properties" : {
+          "amountKopecks" : {
+            "type" : "integer",
+            "x-money-unit" : "kopecks"
+          },
+          "approvalId" : {
+            "anyOf" : [ {
+              "type" : "integer"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "orderId" : {
+            "anyOf" : [ {
+              "type" : "integer"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "paymentLinkId" : {
+            "anyOf" : [ {
+              "type" : "integer"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "requestedAt" : {
+            "anyOf" : [ {
+              "type" : "string",
+              "x-date-time-kind" : "local"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "requestedBy" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "revocationReason" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "revokedAt" : {
+            "anyOf" : [ {
+              "type" : "string",
+              "x-date-time-kind" : "local"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "revokedBy" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "status" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        },
+        "required" : [ "amountKopecks", "approvalId", "orderId", "paymentLinkId", "requestedAt", "requestedBy", "revocationReason", "revokedAt", "revokedBy", "status" ],
+        "additionalProperties" : true
+      },
+      "OwnerManualCardPaymentApprovalRevocationServiceRevocationResultOutput" : {
+        "x-java-type" : "com.hunt.otziv.payments.service.OwnerManualCardPaymentApprovalRevocationService$RevocationResult",
+        "type" : "object",
+        "properties" : {
+          "alreadyRevoked" : {
+            "type" : "boolean"
+          },
+          "approvalId" : {
+            "anyOf" : [ {
+              "type" : "integer"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "orderId" : {
+            "anyOf" : [ {
+              "type" : "integer"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "paymentLinkId" : {
+            "anyOf" : [ {
+              "type" : "integer"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "status" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        },
+        "required" : [ "alreadyRevoked", "approvalId", "orderId", "paymentLinkId", "status" ],
         "additionalProperties" : true
       },
       "PageOfWorkerRiskIncidentResponseOutput" : {
@@ -24971,6 +25708,24 @@
         "required" : [ ],
         "additionalProperties" : true
       },
+      "RevokePendingOwnerApprovalRequestInput" : {
+        "x-java-type" : "com.hunt.otziv.payments.dto.RevokePendingOwnerApprovalRequest",
+        "type" : "object",
+        "properties" : {
+          "expectedOrderId" : {
+            "type" : "integer"
+          },
+          "expectedPaymentLinkId" : {
+            "type" : "integer"
+          },
+          "reason" : {
+            "type" : "string",
+            "x-not-blank" : true
+          }
+        },
+        "required" : [ "expectedOrderId", "expectedPaymentLinkId", "reason" ],
+        "additionalProperties" : true
+      },
       "SortOutput" : {
         "x-java-type" : "org.springframework.data.domain.Sort",
         "type" : "object",
@@ -26429,6 +27184,9 @@
     "path" : "backend/src/main/java/com/hunt/otziv/manager_control/controller/ManagerClientReplyOperationController.java",
     "sha256" : "28f7dfb73d90d3fca83eb5b5d988fe7d0833afb39a152e1f232377a4f73117ba"
   }, {
+    "path" : "backend/src/main/java/com/hunt/otziv/manager_control/diagnostics/ManagerProblemDiagnosticsService.java",
+    "sha256" : "1bf6e8350f018b2161e77691b0bf3ccb9f70382b885ae9f9c029bd6423557bf4"
+  }, {
     "path" : "backend/src/main/java/com/hunt/otziv/manager_control/dto/ManagerClientReplyResolutionRequest.java",
     "sha256" : "9ecbb6e10bd95f6c0b3981c68549a56fa5350f5d8c9a4cbe501e3be401e0926d"
   }, {
@@ -26448,7 +27206,7 @@
     "sha256" : "9d4b050d106692f019c545ecf7beab453e2c3b77a32f1a352f8945bac8a81e11"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/manager_control/dto/ManagerControlConcreteItemResponse.java",
-    "sha256" : "14863291fbb39b3d221403ad958b6ffdaba3d0a6224ba0bd003b7e1942a35395"
+    "sha256" : "5a56c0d8753d3c869f987cd49c5c59f8bbdae379c8edbd5fdb5e992289271a0e"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/manager_control/dto/ManagerControlEventResponse.java",
     "sha256" : "4e73c4a84ba002441dc4a5d13063da460ba33bfd931728a547c56643d2986df7"
@@ -26486,6 +27244,9 @@
     "path" : "backend/src/main/java/com/hunt/otziv/manager_control/dto/ManagerQueueStateResponse.java",
     "sha256" : "2ce2975de9d998ee50c317bad51d80e924264ee9edb2ee7521e9faba86f4ebdc"
   }, {
+    "path" : "backend/src/main/java/com/hunt/otziv/manager_control/dto/ManagerReviewCommitmentView.java",
+    "sha256" : "f5c93d6fb354ea4f786eb117ac0cec8e274c04c7d7fabcee10e9c1f01141d126"
+  }, {
     "path" : "backend/src/main/java/com/hunt/otziv/manager_control/service/ManagerControlManualDeliveryHandoffWorkflow.java",
     "sha256" : "ef85cfcf4b5075d99299e2745e2b2fd63dd84e5eebce73a5f86b3c1db58e258e"
   }, {
@@ -26501,6 +27262,9 @@
     "path" : "backend/src/main/java/com/hunt/otziv/manager_daily_summary/dto/ManagerReportDisputeResolutionRequest.java",
     "sha256" : "753023944c748b2529f197edabbe3e284eb54e370d66bd135485bbb53d0063e9"
   }, {
+    "path" : "backend/src/main/java/com/hunt/otziv/manager_daily_summary/dto/ManagerReportReviewAnswerAttemptResponse.java",
+    "sha256" : "fb5814b43eda9c3021ed4f2fd91e05a00fee3ad0250ef279329eeedc4f79ccab"
+  }, {
     "path" : "backend/src/main/java/com/hunt/otziv/manager_daily_summary/dto/ManagerReportReviewEventResponse.java",
     "sha256" : "88fb740235b8c30209d20c3c168e0055ddf881708db5b05115444a0d6576c60d"
   }, {
@@ -26508,7 +27272,7 @@
     "sha256" : "1ca4a6f9f58f437d429921af10e53e4d984a439f24f9e16efbf9c9d3c37b55ba"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/manager_daily_summary/dto/ManagerReportReviewResponse.java",
-    "sha256" : "aeb54c9ddbcd2879e369087b2f5422025f2c915dfbb65060d1aa106b47408126"
+    "sha256" : "3d9e41c753baae4fd86dc375d7e377361e6d06ad5ad180400172f0dc87395256"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/manager_daily_summary/dto/ManagerReportReviewTestStartResponse.java",
     "sha256" : "f467f4ed1487f3d5404859a4d8b80439bbaa8c07f61c2849555bc53245fdebcf"
@@ -26535,7 +27299,7 @@
     "sha256" : "3ba2d32e8add2f699019c8cab9e380be1ef1dceb88b33b9249b803a1a2d927ee"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/payments/controller/OwnerManualCardPaymentApprovalAdminController.java",
-    "sha256" : "021fef976b2e750bdf4a25d8a560fb9ece4db45b18109aff676719b01b282ea9"
+    "sha256" : "816b9350e5e618413037982bc686d121cb59670684b71b6ca000d28472cfbda2"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/payments/controller/PaymentReturnReconciliationAdminController.java",
     "sha256" : "63874907475ebf4908482c288f63c1f17801df755503dfe8254623fc16b3c24c"
@@ -26639,6 +27403,9 @@
     "path" : "backend/src/main/java/com/hunt/otziv/payments/dto/ResolveAmbiguousBankInitRequest.java",
     "sha256" : "27889a44a03b444071cc50d76f65e9672c61a8ff844f9b8c316df0e0d575652e"
   }, {
+    "path" : "backend/src/main/java/com/hunt/otziv/payments/dto/RevokePendingOwnerApprovalRequest.java",
+    "sha256" : "2a7ca923a4e14942f0ced48dcf7ae93c0424d997ed7a068f91ef8bb6d4ba4dcb"
+  }, {
     "path" : "backend/src/main/java/com/hunt/otziv/payments/dto/SpecialistManualPaymentReviewResponse.java",
     "sha256" : "0cf9752da3fdd39891b1e8703c578a2e51d0bbdcb3b4c744cce24c4ab48806cd"
   }, {
@@ -26697,7 +27464,10 @@
     "sha256" : "25fca6a4c4d01ad5b94084a8665ce7a146bcad920ed783b2b9034af26b03459b"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/payments/service/OwnerManualCardPaymentApprovalReconciliationService.java",
-    "sha256" : "cd4764bcf4d6dcc8f67e25afca24e987087373c4070d25c1ac982932cc66b4e5"
+    "sha256" : "271b9c0a943eefa6b2b0fbed7e51c3f9d7b4e6795f479e52c974d505452394aa"
+  }, {
+    "path" : "backend/src/main/java/com/hunt/otziv/payments/service/OwnerManualCardPaymentApprovalRevocationService.java",
+    "sha256" : "22135aa5043a23d61655dd0f603ee9891dc703876a75cf7a38be941f01b0109a"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/r_review/capability/service/ReviewCheckCapabilityService.java",
     "sha256" : "f71f5d13bd914f93c56990b0f2a3c36ece54a84ac420f397359ce4c1dee7a2b5"
@@ -26760,7 +27530,7 @@
     "sha256" : "ec632e21d38c13762c66e4a42ee20e6cd042b058049eaf136f806eacb479b39d"
   }, {
     "path" : "contracts/client-api.config.json",
-    "sha256" : "414d091cc839164c33e6aa1d40faa36d229f1f9f1c5ee902fedddcdc1b17a1f1"
+    "sha256" : "4a688a74f5c5484ba979008f42681d39c0f7e2aa4895da74071a2a256cce2b41"
   } ],
   "x-source-fingerprint-normalization" : "UTF-8 text with CRLF normalized to LF",
   "x-schema-java-types" : {
@@ -26884,13 +27654,22 @@
     "ManagerPaymentProfileAssignmentRequestInput" : "com.hunt.otziv.payments.dto.ManagerPaymentProfileAssignmentRequest",
     "ManagerPaymentProfileResponseOutput" : "com.hunt.otziv.payments.dto.ManagerPaymentProfileResponse",
     "ManagerPerformanceScoreResponseOutput" : "com.hunt.otziv.manager_performance.dto.ManagerPerformanceScoreResponse",
+    "ManagerProblemDiagnosticsServiceActionOutput" : "com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosticsService$Action",
+    "ManagerProblemDiagnosticsServiceDiagnosisOutput" : "com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosticsService$Diagnosis",
+    "ManagerProblemDiagnosticsServiceDiagnosticViewOutput" : "com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosticsService$DiagnosticView",
+    "ManagerProblemDiagnosticsServiceFactOutput" : "com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosticsService$Fact",
+    "ManagerProblemDiagnosticsServiceFindingOutput" : "com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosticsService$Finding",
     "ManagerQueueStateResponseOutput" : "com.hunt.otziv.manager_control.dto.ManagerQueueStateResponse",
     "ManagerReportDisputeResolutionRequestInput" : "com.hunt.otziv.manager_daily_summary.dto.ManagerReportDisputeResolutionRequest",
+    "ManagerReportReviewAnswerAttemptResponseClaimOutput" : "com.hunt.otziv.manager_daily_summary.dto.ManagerReportReviewAnswerAttemptResponse$Claim",
+    "ManagerReportReviewAnswerAttemptResponseCriterionOutput" : "com.hunt.otziv.manager_daily_summary.dto.ManagerReportReviewAnswerAttemptResponse$Criterion",
+    "ManagerReportReviewAnswerAttemptResponseOutput" : "com.hunt.otziv.manager_daily_summary.dto.ManagerReportReviewAnswerAttemptResponse",
     "ManagerReportReviewEventResponseOutput" : "com.hunt.otziv.manager_daily_summary.dto.ManagerReportReviewEventResponse",
     "ManagerReportReviewIssueResponseOutput" : "com.hunt.otziv.manager_daily_summary.dto.ManagerReportReviewIssueResponse",
     "ManagerReportReviewOwnerNotificationServiceDeliveryResultOutput" : "com.hunt.otziv.manager_daily_summary.service.ManagerReportReviewOwnerNotificationService$DeliveryResult",
     "ManagerReportReviewResponseOutput" : "com.hunt.otziv.manager_daily_summary.dto.ManagerReportReviewResponse",
     "ManagerReportReviewTestStartResponseOutput" : "com.hunt.otziv.manager_daily_summary.dto.ManagerReportReviewTestStartResponse",
+    "ManagerReviewCommitmentViewOutput" : "com.hunt.otziv.manager_control.dto.ManagerReviewCommitmentView",
     "ManagerSummaryPreviewResponseOutput" : "com.hunt.otziv.manager_daily_summary.dto.ManagerSummaryPreviewResponse",
     "ManagerSummaryTelegramSendResponseOutput" : "com.hunt.otziv.manager_daily_summary.dto.ManagerSummaryTelegramSendResponse",
     "ManualCardPaymentContextResponseOutput" : "com.hunt.otziv.contractor_payments.dto.ManualCardPaymentContextResponse",
@@ -26912,6 +27691,8 @@
     "OrderProductResponseOutput" : "com.hunt.otziv.manager.dto.api.OrderProductResponse",
     "OrderUpdateRequestInput" : "com.hunt.otziv.manager.dto.api.OrderUpdateRequest",
     "OwnerManualCardPaymentApprovalReconciliationServiceResultOutput" : "com.hunt.otziv.payments.service.OwnerManualCardPaymentApprovalReconciliationService$Result",
+    "OwnerManualCardPaymentApprovalRevocationServiceApprovalViewOutput" : "com.hunt.otziv.payments.service.OwnerManualCardPaymentApprovalRevocationService$ApprovalView",
+    "OwnerManualCardPaymentApprovalRevocationServiceRevocationResultOutput" : "com.hunt.otziv.payments.service.OwnerManualCardPaymentApprovalRevocationService$RevocationResult",
     "PageOfWorkerRiskIncidentResponseOutput" : "org.springframework.data.domain.Page<com.hunt.otziv.worker_activity.dto.WorkerRiskIncidentResponse>",
     "PageResponseOfCommonInvoiceArchiveListItemOutput" : "com.hunt.otziv.manager.dto.api.PageResponse<com.hunt.otziv.common_billing.dto.CommonInvoiceArchiveListItem>",
     "PageResponseOfCompanyListDTOOutput" : "com.hunt.otziv.manager.dto.api.PageResponse<com.hunt.otziv.c_companies.dto.CompanyListDTO>",
@@ -26951,6 +27732,7 @@
     "ReviewRecoveryTaskUpdateRequestInput" : "com.hunt.otziv.manager.dto.api.ReviewRecoveryTaskUpdateRequest",
     "ReviewSafetyReportOutput" : "com.hunt.otziv.reputationai.domain.ReviewSafetyReport",
     "ReviewTextUpdateRequestInput" : "com.hunt.otziv.manager.dto.api.ReviewTextUpdateRequest",
+    "RevokePendingOwnerApprovalRequestInput" : "com.hunt.otziv.payments.dto.RevokePendingOwnerApprovalRequest",
     "SortOutput" : "org.springframework.data.domain.Sort",
     "SpecialistManualPaymentReviewResponseOutput" : "com.hunt.otziv.payments.dto.SpecialistManualPaymentReviewResponse",
     "SpecialistManualPaymentReviewStatusOutput" : "com.hunt.otziv.payments.model.SpecialistManualPaymentReviewStatus",

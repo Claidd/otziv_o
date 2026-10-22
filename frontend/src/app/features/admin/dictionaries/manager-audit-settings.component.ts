@@ -2,12 +2,21 @@ import { Component, computed, inject, output, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import {
   ManagerReportReviewManagerSetting,
+  ManagerReportReviewEvidenceSettings,
   ManagerReportReviewSettings,
   ManagerReportReviewSettingsApi,
   ManagerReportReviewSettingsRequest
 } from '../../../core/manager-report-review-settings.api';
 import { apiErrorMessage } from '../../../shared/api-error-message';
 import { ToastService } from '../../../shared/toast.service';
+
+export const DEFAULT_MANAGER_EVIDENCE_SETTINGS: ManagerReportReviewEvidenceSettings = {
+  diagnosisMode: 'SHADOW', diagnosisPilotManagerIds: [], diagnosisMaxRequestsPerHour: 60,
+  diagnosisMaxOutputTokens: 8000, diagnosisTimeoutSeconds: 45, diagnosisThinkingEnabled: true,
+  answerMode: 'SHADOW', answerPilotManagerIds: [], answerMaxTokens: 6000, answerTimeoutSeconds: 90,
+  answerThinkingEnabled: true, questionTimeoutSeconds: 90, questionThinkingEnabled: true,
+  evidenceMaxAgeMinutes: 15
+};
 
 @Component({
   selector: 'app-manager-audit-settings',
@@ -51,16 +60,24 @@ export class ManagerAuditSettingsComponent {
     testMinimumReadSeconds: [10, [Validators.required, Validators.min(3), Validators.max(30)]],
     reminderOneMinutes: [60, [Validators.required, Validators.min(5), Validators.max(1440)]],
     reminderThreeMinutes: [180, [Validators.required, Validators.min(10), Validators.max(4320)]],
-    minimumAnswerScore: [75, [Validators.required, Validators.min(60), Validators.max(100)]],
-    maxAnswerCharacters: [420, [Validators.required, Validators.min(120), Validators.max(2000)]],
-    maxPlanCharacters: [600, [Validators.required, Validators.min(120), Validators.max(3000)]],
-    fastPasteSeconds: [12, [Validators.required, Validators.min(1), Validators.max(120)]],
-    fastPasteMinCharacters: [140, [Validators.required, Validators.min(40), Validators.max(2000)]],
-    copyGramSize: [4, [Validators.required, Validators.min(2), Validators.max(12)]],
-    copySimilarityPercent: [65, [Validators.required, Validators.min(30), Validators.max(100)]],
-    aiTimeoutSeconds: [25, [Validators.required, Validators.min(5), Validators.max(60)]],
     questionGenerationMaxTokens: [8000, [Validators.required, Validators.min(2000), Validators.max(16000)]],
-    questionGenerationRetryMaxTokens: [12000, [Validators.required, Validators.min(2000), Validators.max(24000)]]
+    questionGenerationRetryMaxTokens: [12000, [Validators.required, Validators.min(2000), Validators.max(24000)]] ,
+    evidence: this.fb.nonNullable.group({
+      diagnosisMode: ['SHADOW' as ManagerReportReviewEvidenceSettings['diagnosisMode'], Validators.required],
+      diagnosisPilotManagerIds: this.fb.nonNullable.control<number[]>([]),
+      diagnosisMaxRequestsPerHour: [60, [Validators.required, Validators.min(1), Validators.max(1000)]],
+      diagnosisMaxOutputTokens: [8000, [Validators.required, Validators.min(1500), Validators.max(12000)]],
+      diagnosisTimeoutSeconds: [45, [Validators.required, Validators.min(10), Validators.max(60)]],
+      diagnosisThinkingEnabled: [true],
+      answerMode: ['SHADOW' as ManagerReportReviewEvidenceSettings['answerMode'], Validators.required],
+      answerPilotManagerIds: this.fb.nonNullable.control<number[]>([]),
+      answerMaxTokens: [6000, [Validators.required, Validators.min(2000), Validators.max(16000)]],
+      answerTimeoutSeconds: [90, [Validators.required, Validators.min(5), Validators.max(240)]],
+      answerThinkingEnabled: [true],
+      questionTimeoutSeconds: [90, [Validators.required, Validators.min(5), Validators.max(240)]],
+      questionThinkingEnabled: [true],
+      evidenceMaxAgeMinutes: [15, [Validators.required, Validators.min(1), Validators.max(120)]]
+    })
   });
 
   constructor() {
@@ -87,7 +104,16 @@ export class ManagerAuditSettingsComponent {
       this.form.markAllAsTouched();
       return;
     }
-    const request: ManagerReportReviewSettingsRequest = this.form.getRawValue();
+    const current = this.settings();
+    if (!current) return;
+    const { managers: _managers, ...previous } = current;
+    const request: ManagerReportReviewSettingsRequest = { ...previous, ...this.form.getRawValue() };
+    const evidence = request.evidence!;
+    if ((evidence.diagnosisMode === 'PILOT' && !evidence.diagnosisPilotManagerIds.length)
+      || (evidence.answerMode === 'PILOT' && !evidence.answerPilotManagerIds.length)) {
+      this.error.set('Выберите хотя бы одного менеджера для каждого включённого пилота.');
+      return;
+    }
     if (request.reminderThreeMinutes <= request.reminderOneMinutes) {
       this.error.set('Срок прохождения должен быть больше времени первого напоминания.');
       return;
@@ -165,7 +191,6 @@ export class ManagerAuditSettingsComponent {
   private apply(settings: ManagerReportReviewSettings): void {
     this.settings.set(settings);
     this.managerCount.emit(settings.managers.length);
-    const { managers: _managers, ...formValue } = settings;
-    this.form.setValue(formValue);
+    this.form.patchValue({ ...settings, evidence: settings.evidence ?? DEFAULT_MANAGER_EVIDENCE_SETTINGS });
   }
 }

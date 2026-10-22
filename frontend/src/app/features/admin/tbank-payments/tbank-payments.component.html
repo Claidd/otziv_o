@@ -430,6 +430,18 @@
                         {{ isMutating(link) ? 'Закрываю' : 'Платежа нет' }}
                       </button>
                     }
+                    @if (canInspectOwnerApproval(link)) {
+                      <button
+                        type="button"
+                        class="owner-approval-action"
+                        (click)="inspectOwnerApproval(link, $event)"
+                        [disabled]="isMutating(link)"
+                        title="Проверить и при необходимости отозвать ошибочный запрос подтверждения владельцу"
+                      >
+                        <span class="material-icons-sharp" aria-hidden="true">manage_accounts</span>
+                        Запрос владельцу
+                      </button>
+                    }
                     @if (canMarkManualReceipt(link)) {
                       <button
                         type="button"
@@ -1530,6 +1542,87 @@
           </button>
         </div>
       </form>
+    </section>
+  </div>
+}
+
+@if (ownerApprovalLink(); as approvalLink) {
+  <div class="contractor-audit-backdrop" role="presentation" (click)="closeOwnerApproval()">
+    <section
+      #ownerApprovalDialog
+      class="contractor-audit-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="owner-approval-title"
+      aria-describedby="owner-approval-explanation"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+    >
+      <header class="contractor-audit-header">
+        <div>
+          <small>Заказ №{{ approvalLink.orderId }} · счёт №{{ approvalLink.id }}</small>
+          <h2 id="owner-approval-title">Запрос подтверждения владельцу</h2>
+        </div>
+        <button type="button" class="contractor-audit-close" (click)="closeOwnerApproval()"
+          [disabled]="mutatingId() === approvalLink.id" aria-label="Закрыть запрос владельцу">
+          <span class="material-icons-sharp" aria-hidden="true">close</span>
+        </button>
+      </header>
+
+      <p id="owner-approval-explanation" class="contractor-audit-explanation">
+        Если менеджер указал владельца по ошибке, ожидающий запрос можно отозвать.
+        Это не подтверждает оплату и не создаёт начислений.
+      </p>
+
+      @if (ownerApprovalLoading()) {
+        <p class="contractor-audit-explanation" role="status">Проверяю состояние запроса на сервере…</p>
+      }
+      @if (ownerApproval(); as approval) {
+        <dl class="contractor-audit-summary">
+          <div><dt>Запрос</dt><dd>№{{ approval.approvalId }} · {{ approval.status }}</dd></div>
+          <div><dt>Сумма</dt><dd>{{ formatKopecks(approval.amountKopecks) }}</dd></div>
+          <div><dt>Кто запросил</dt><dd>{{ approval.requestedBy || 'Не указан' }}</dd></div>
+          <div><dt>Когда</dt><dd>{{ approval.requestedAt | date:'dd.MM.yyyy HH:mm' }}</dd></div>
+        </dl>
+        @if (approval.status === 'PENDING') {
+          <p class="contractor-audit-warning" role="status">
+            Старую кнопку в Telegram нельзя нажимать после отзыва. Менеджеру потребуется заново нажать
+            «Оплачено» и выбрать реального получателя. До отдельного подтверждения деньги не будут зачтены.
+          </p>
+          <form class="contractor-audit-form" (ngSubmit)="revokeOwnerApproval()">
+            <label>
+              <span>Почему получатель указан неверно</span>
+              <textarea name="ownerApprovalReason" rows="3" maxlength="500" required
+                [ngModel]="ownerApprovalReason()" (ngModelChange)="ownerApprovalReason.set($event || '')"
+                [disabled]="mutatingId() === approvalLink.id"
+                placeholder="Например: перевод по выписке поступил специалисту, запрос владельцу создан по ошибке"
+              ></textarea>
+            </label>
+            <label class="contractor-audit-statement">
+              <input name="ownerApprovalAcknowledged" type="checkbox"
+                [ngModel]="ownerApprovalAcknowledged()" (ngModelChange)="ownerApprovalAcknowledged.set($event)"
+                [disabled]="mutatingId() === approvalLink.id">
+              <span>Я сверил(а) заказ и счёт; понимаю, что старый запрос владельцу станет недействительным,
+                а фактическую оплату нужно оформить отдельно.</span>
+            </label>
+            @if (ownerApprovalError()) {
+              <p class="contractor-audit-error" role="alert">{{ ownerApprovalError() }}</p>
+            }
+            <div class="contractor-audit-actions">
+              <button type="button" class="contractor-audit-cancel" (click)="closeOwnerApproval()"
+                [disabled]="mutatingId() === approvalLink.id">Закрыть</button>
+              <button type="submit" class="owner-approval-submit" [disabled]="!canRevokeOwnerApproval()">
+                {{ mutatingId() === approvalLink.id ? 'Отзываю…' : 'Отозвать запрос владельцу' }}
+              </button>
+            </div>
+          </form>
+        } @else {
+          <p class="contractor-audit-explanation" role="status">Этот запрос уже не ожидает подтверждения. Отзыв недоступен.</p>
+        }
+      }
+      @if (ownerApprovalError() && !ownerApproval()) {
+        <p class="contractor-audit-error" role="alert">{{ ownerApprovalError() }}</p>
+      }
     </section>
   </div>
 }

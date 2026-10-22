@@ -24,12 +24,14 @@ class ManagerReportReviewTaskContextServiceTest {
     private ManagerDailyControlConcreteItemRepository concreteRepository;
     private ClientChatUnansweredItemRepository unansweredRepository;
     private ManagerReportReviewTaskContextService service;
+    private com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosticsService diagnostics;
 
     @BeforeEach
     void setUp() {
         concreteRepository = mock(ManagerDailyControlConcreteItemRepository.class);
         unansweredRepository = mock(ClientChatUnansweredItemRepository.class);
-        service = new ManagerReportReviewTaskContextService(concreteRepository, unansweredRepository);
+        diagnostics = mock(com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosticsService.class);
+        service = new ManagerReportReviewTaskContextService(concreteRepository, unansweredRepository, diagnostics);
     }
 
     @Test
@@ -45,7 +47,7 @@ class ManagerReportReviewTaskContextServiceTest {
         when(concreteRepository.findById(3545L)).thenReturn(Optional.of(source));
         when(unansweredRepository.findById(1387L)).thenReturn(Optional.of(chat));
 
-        String context = service.refresh("Карточка Каприз\nsourceTaskId=3545");
+        String context = service.refresh("Карточка Каприз\nsourceTaskId=3545", 9L);
 
         assertThat(context)
                 .contains("currentStatus=RESOLVED")
@@ -71,10 +73,10 @@ class ManagerReportReviewTaskContextServiceTest {
     }
 
     @Test
-    void treatsDeletedSourceTaskAsWithdrawn() {
+    void missingSourceIsNotEvidenceOfResolution() {
         when(concreteRepository.findById(3545L)).thenReturn(Optional.empty());
 
-        assertThat(service.resolvedSatisfactorily(3545L)).isTrue();
+        assertThat(service.resolvedSatisfactorily(3545L)).isFalse();
     }
 
     @Test
@@ -99,8 +101,40 @@ class ManagerReportReviewTaskContextServiceTest {
         when(concreteRepository.existsResolutionAfterDeferral(
                 9L, "COMMON_INVOICE:175", deferredAt, ManagerDailyControlItemStatus.RESOLVED))
                 .thenReturn(true);
+        when(diagnostics.resolutionState(3545L)).thenReturn(
+                com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosticsService.ResolutionState.RESOLVED);
 
         assertThat(service.resolvedSatisfactorily(3545L)).isTrue();
+    }
+
+    @Test
+    void staleResolvedCardDoesNotWithdrawLiveInvoiceFailure() {
+        var source = source(3545L, ManagerDailyControlItemStatus.RESOLVED);
+        source.setEntityType("COMMON_INVOICE");
+        when(concreteRepository.findById(3545L)).thenReturn(Optional.of(source));
+        when(diagnostics.resolutionState(3545L)).thenReturn(
+                com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosticsService.ResolutionState.OPEN);
+        assertThat(service.resolvedSatisfactorily(3545L)).isFalse();
+    }
+
+    @Test
+    void foreignSourceCannotExposeMessagesOrSupplyAuditFacts() {
+        var source = source(3545L, ManagerDailyControlItemStatus.OPEN);
+        when(concreteRepository.findAllById(java.util.Set.of(3545L))).thenReturn(List.of(source));
+
+        String context = service.refresh("sourceTaskId=3545", 17L);
+
+        assertThat(context).contains("evidenceStatus=UNAVAILABLE").doesNotContain("currentStatus=", "Каприз");
+        org.mockito.Mockito.verifyNoInteractions(unansweredRepository);
+        org.mockito.Mockito.verify(diagnostics).contextForAudit(java.util.Set.of());
+    }
+
+    @Test
+    void storedAuthoritativeMarkerCannotPretendToBeFreshWithoutSources() {
+        String context = service.refresh("СЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:\nстарый статус", 9L);
+        assertThat(context).doesNotContain("СЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:")
+                .contains("Ранее сохранённый контекст:");
+        org.mockito.Mockito.verifyNoInteractions(diagnostics, unansweredRepository);
     }
 
     private ManagerDailyControlConcreteItem source(
@@ -113,6 +147,9 @@ class ManagerReportReviewTaskContextServiceTest {
         source.setEntityId(1387L);
         source.setTitle("Каприз");
         source.setStatus(status);
+        var control = mock(ManagerDailyControl.class);
+        org.mockito.Mockito.lenient().when(control.managerId()).thenReturn(9L);
+        source.setControl(control);
         return source;
     }
 

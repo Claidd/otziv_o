@@ -64,6 +64,8 @@ class ManagerReportReviewTelegramServiceTest {
     @Mock private ManagerReportReviewAiAvailabilityService aiAvailabilityService;
     @Mock private ManagerReportReviewIssueService issueService;
     @Mock private ManagerReportReviewTaskContextService taskContextService;
+    @Mock private ManagerReportReviewCommitmentService commitmentService;
+    @Mock private ManagerReportReviewRolloutPolicy rolloutPolicy;
 
     @InjectMocks
     private ManagerReportReviewTelegramService service;
@@ -83,7 +85,7 @@ class ManagerReportReviewTelegramServiceTest {
         manager = Manager.builder().id(9L).user(user).build();
         lenient().when(appSettingService.getBoolean("manager.report-review.enabled", true)).thenReturn(true);
         lenient().when(appSettingService.getInt("manager.report-review.minimum-read-seconds", 60)).thenReturn(60);
-        lenient().when(taskContextService.refresh(any(String.class)))
+        lenient().when(taskContextService.refresh(any(String.class), org.mockito.ArgumentMatchers.nullable(Long.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(issueService.isPending(any(ManagerReportReviewSession.class), anyInt()))
                 .thenReturn(true);
@@ -512,7 +514,7 @@ class ManagerReportReviewTelegramServiceTest {
         );
         verify(telegramService).sendMessageWithInlineKeyboard(
                 eq(700L),
-                org.mockito.ArgumentMatchers.contains("Автоматическая проверка временно недоступна"),
+                org.mockito.ArgumentMatchers.contains("Проверка ожидает данных"),
                 eq("HTML"),
                 any()
         );
@@ -550,7 +552,7 @@ class ManagerReportReviewTelegramServiceTest {
         assertThat(review.getCompletedAt()).isNull();
         verify(telegramService).sendMessageWithInlineKeyboard(
                 eq(700L),
-                org.mockito.ArgumentMatchers.contains("Автоматическая проверка временно недоступна"),
+                org.mockito.ArgumentMatchers.contains("Проверка ожидает данных"),
                 eq("HTML"),
                 any()
         );
@@ -615,7 +617,7 @@ class ManagerReportReviewTelegramServiceTest {
         when(qualityService.readQuestions("[{}]")).thenReturn(List.of(question));
         when(qualityService.previousAcceptedContext(null, 0)).thenReturn(List.of());
         when(qualityService.assessAnswer(
-                eq("Отчёт"),
+                org.mockito.ArgumentMatchers.contains("СВЕЖАЯ ПРОВЕРКА ИСТОЧНИКОВ:"),
                 eq(question),
                 eq("Я ознакомилась"),
                 eq(false),
@@ -647,8 +649,8 @@ class ManagerReportReviewTelegramServiceTest {
                 eq(700L), text.capture(), eq("HTML"), any()
         );
         assertThat(text.getValue())
-                .contains("Недостаточно конкретно.\nНужно назвать действие.")
-                .contains("Что вы проверите?\nНазовите один шаг.")
+                .contains("Ответ")
+                .doesNotContain("Нужно назвать действие", "Что вы проверите?")
                 .doesNotContain("<br>");
     }
 

@@ -42,6 +42,9 @@ import {
   shouldShowManagerControlDetailItem
 } from './manager-control-detail-visibility';
 import { shouldImmediatelyCloseRiskControlCard } from './manager-control-risk-close';
+import { ManagerProblemDiagnosisComponent } from './manager-problem-diagnosis.component';
+import { ManagerReviewCommitmentsComponent } from './manager-review-commitments.component';
+import { ManagerReviewAnswerAttemptsComponent } from './manager-review-answer-attempts.component';
 
 const ORDER_LIST_STATUSES = new Set([
   'Все',
@@ -166,7 +169,7 @@ export function needsManagerControlDetailSync(
 
 @Component({
   selector: 'app-manager-control',
-  imports: [AdminLayoutComponent, DatePipe, FormsModule, LoadErrorCardComponent, NgTemplateOutlet],
+  imports: [AdminLayoutComponent, DatePipe, FormsModule, LoadErrorCardComponent, NgTemplateOutlet, ManagerProblemDiagnosisComponent, ManagerReviewCommitmentsComponent, ManagerReviewAnswerAttemptsComponent],
   templateUrl: './manager-control.component.html',
   styleUrl: './manager-control.component.scss'
 })
@@ -502,7 +505,7 @@ export class ManagerControlComponent implements OnInit {
         return 'ждём план';
       case 'COMPLETED':
         if (review.autoCompleted) return 'принят автоматически · замечаний нет';
-        return review.quickReview ? 'завершён слишком быстро' : 'отчёт принят';
+        return 'отчёт принят';
       case 'DISPUTE_PENDING':
         return 'формулирует спор';
       case 'DISPUTED':
@@ -515,7 +518,6 @@ export class ManagerControlComponent implements OnInit {
   reportReviewTone(review: ManagerReportReview): string {
     if ((review.restrictedAt && !review.restrictionReleasedAt && !review.aiVerificationPaused)
       || review.status === 'DISPUTED'
-      || review.quickReview
       || review.auditRequired) return 'red';
     if (review.status === 'COMPLETED') return 'green';
     return 'yellow';
@@ -553,6 +555,10 @@ export class ManagerControlComponent implements OnInit {
       case 'DEADLINE_STARTED': return 'Начат трёхчасовой срок';
       case 'ANSWER_ACCEPTED': return 'Ответ принят';
       case 'ANSWER_REJECTED': return 'Запрошено уточнение';
+      case 'ANSWER_EVIDENCE_SNAPSHOT': return 'Данные, использованные при проверке ответа';
+      case 'ANSWER_SHADOW_ASSESSED': return 'Результат проверки в режиме наблюдения';
+      case 'PLAN_SHADOW_ASSESSED': return 'Проверка плана в режиме наблюдения';
+      case 'ANSWER_CHECK_DEFERRED': return 'Ответ сохранён, проверка ожидается';
       case 'PLAN_ACCEPTED': return 'План принят';
       case 'PLAN_REJECTED': return 'План отправлен на уточнение';
       case 'DISPUTE_REQUESTED': return 'Запрошено описание спора';

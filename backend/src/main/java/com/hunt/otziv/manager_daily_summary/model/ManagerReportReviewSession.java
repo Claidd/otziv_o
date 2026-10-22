@@ -31,6 +31,7 @@ import lombok.Setter;
         )
 )
 public class ManagerReportReviewSession {
+    public Long managerId() { return manager == null ? null : manager.getId(); }
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

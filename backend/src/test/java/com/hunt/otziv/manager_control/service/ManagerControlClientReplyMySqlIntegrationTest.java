@@ -147,9 +147,9 @@ class ManagerControlClientReplyMySqlIntegrationTest {
         when(permissions.hasRole(AUTH, "ADMIN")).thenReturn(true);
         User actor = new User(); actor.setId(5L); when(users.findByUserName(PRINCIPAL.getName())).thenReturn(Optional.of(actor));
         access = new ManagerControlAccessPolicy(managers, users, companyAccess, permissions);
-        lifecycle = new ManagerControlCardLifecycle(cards, items, events, mock(ManagerPerformanceService.class), mock(ManagerControlReadSnapshots.class));
+        lifecycle = new ManagerControlCardLifecycle(cards, items, events, mock(ManagerPerformanceService.class), mock(ManagerControlReadSnapshots.class), mock(com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosticsService.class));
         var lookup = mock(ManagerControlWorkerTaskLookup.class); when(lookup.userDisplayName(any())).thenReturn("");
-        presenter = new ManagerControlConcretePresenter(mock(WorkerRiskIncidentRepository.class), lookup,
+        presenter = new ManagerControlConcretePresenter(mock(com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosticsService.class), mock(com.hunt.otziv.manager_daily_summary.service.ManagerReportReviewCommitmentService.class), mock(WorkerRiskIncidentRepository.class), lookup,
                 mock(ManagerControlInvoiceDiagnostics.class), mock(ScheduledClientMessageStateRepository.class),
                 mock(CompanyRepository.class), new ManagerControlSlaPolicy(mock(AppSettingService.class)));
         when(sender.sendToPlatformWithOperationId(any(), any(), any(), any(), any(), any(), anyString())).thenAnswer(call -> {

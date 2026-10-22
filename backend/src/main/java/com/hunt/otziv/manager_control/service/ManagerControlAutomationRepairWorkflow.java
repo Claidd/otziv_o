@@ -84,6 +84,12 @@ public class ManagerControlAutomationRepairWorkflow {
                         "История WhatsApp сейчас недоступна. Отправка остаётся заблокированной, чтобы не создать дубль. "
                         + "Повторите «Починить» после восстановления соединения с WhatsApp.");
             }
+            if (receipt == ScheduledClientMessageService.OrdinaryDeliveryRecoveryResult.HISTORY_CHECKED_NO_RECEIPT) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "История WhatsApp проверена, но квитанция прежней отправки не найдена. "
+                        + "Сообщение всё ещё могло дойти до клиента. Нажмите «Передать вручную», "
+                        + "чтобы зафиксировать проверку чата и связаться с клиентом; автоматический повтор заблокирован.");
+            }
             if (receipt == ScheduledClientMessageService.OrdinaryDeliveryRecoveryResult.UNRESOLVED) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
                         "Исход предыдущей отправки пока не подтверждён. Система проверила сохранённую операцию и историю чата, "

@@ -86,6 +86,8 @@ export interface ManagerControlItemDetail {
 }
 
 export interface ManagerControlConcreteItem {
+  diagnosis?: ManagerProblemDiagnosticView | null;
+  auditCommitments?: ManagerReviewCommitment[] | null;
   delivery?: import('@otziv/client-common/delivery-operations').DeliveryOperation | null;
   controlEntityId?: number | null;
   type: 'ORDER' | 'RISK' | string;
@@ -125,6 +127,35 @@ export interface ManagerControlConcreteItem {
   slaState?: 'TARGET' | 'LATE' | 'OVERDUE' | 'COMPLETED_TARGET' | 'COMPLETED_LATE' | 'COMPLETED_OVERDUE' | null;
   companyId?: number | null;
   companyTitle?: string | null;
+}
+
+export interface ManagerReviewCommitment {
+  id: number;
+  action: string;
+  owner: string;
+  dueAt: string;
+  verification: string;
+  status: 'PLANNED' | 'OVERDUE' | 'NEEDS_CONTEXT' | 'CASE_RESOLVED' | 'REPLANNED' | string;
+}
+
+export interface ManagerProblemDiagnosticView {
+  caseId: number;
+  version: number;
+  episode: number;
+  status: 'QUEUED' | 'RUNNING' | 'READY' | 'RETRY' | 'UNAVAILABLE' | 'NEEDS_CONTEXT' | string;
+  observedAt: string;
+  facts: { reference: string; subject: string; field: string; value: string }[];
+  diagnosis?: {
+    summary: string;
+    confirmedFacts: { text: string; evidenceRefs: string[] }[];
+    hypotheses: { text: string; evidenceRefs: string[] }[];
+    missingEvidence: string[];
+    actions: { code: string; text: string; owner: string; verification: string; evidenceRefs: string[] }[];
+    verification: string[];
+  } | null;
+  model?: string | null;
+  promptVersion?: string | null;
+  rolloutMode?: 'OFF' | 'SHADOW' | 'PILOT' | 'ENFORCE' | string;
 }
 
 export interface ManagerControlManagerDetail {
@@ -438,6 +469,35 @@ export interface ManagerReportReview {
   openDisputeCount: number;
   issues: ManagerReportReviewIssue[];
   events: ManagerReportReviewEvent[];
+  answerAttempts?: ManagerReportReviewAnswerAttempt[];
+}
+
+export interface ManagerReportReviewAnswerAttempt {
+  attemptNumber: number;
+  questionIndex: number;
+  question: string;
+  answer: string;
+  recordedAt?: string | null;
+  decision: string;
+  reason: string;
+  structuredAssessment: boolean;
+  criteria: {
+    criterionIndex: number;
+    criterion: string;
+    status: string;
+    answerAttempt: number;
+    answerQuote: string;
+    evidenceRefs: string[];
+    reason: string;
+  }[];
+  claims: {
+    kind: string;
+    status: string;
+    answerAttempt: number;
+    answerQuote: string;
+    evidenceRefs: string[];
+    reason: string;
+  }[];
 }
 
 export interface ManagerReportDisputeResolutionPayload {

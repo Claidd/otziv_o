@@ -44,6 +44,10 @@ class OwnerManualCardPaymentApprovalReconciliationServiceTest {
         approval.setAmountKopecks(60000);
         approval.setStatus(OwnerManualCardPaymentApprovalStatus.PENDING);
         original = link(7410L, PaymentLinkStatus.CANCELED, 60000);
+        var binding = mock(OwnerManualCardPaymentApprovalRepository.ApprovalBinding.class);
+        when(binding.getOrderId()).thenReturn(order.getId());
+        when(binding.getPaymentLinkId()).thenReturn(7410L);
+        when(approvals.findBindingById(2L)).thenReturn(Optional.of(binding));
         when(approvals.findByIdForUpdate(2L)).thenReturn(Optional.of(approval));
         when(orders.findByIdForCounterUpdate(order.getId())).thenReturn(Optional.of(order));
         when(links.findByIdForUpdate(7410L)).thenReturn(Optional.of(original));
@@ -97,7 +101,7 @@ class OwnerManualCardPaymentApprovalReconciliationServiceTest {
 
         assertThat(service.closeSuperseded(2L, actor).alreadyClosed()).isTrue();
 
-        verify(links, never()).findByIdForUpdate(any());
+        verify(links).findByIdForUpdate(7410L);
         verify(links, never()).save(any());
         verify(approvals, never()).save(any());
     }

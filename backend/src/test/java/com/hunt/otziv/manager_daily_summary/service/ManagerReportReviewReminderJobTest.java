@@ -64,7 +64,8 @@ class ManagerReportReviewReminderJobTest {
                 settings,
                 accessPolicy,
                 qualityService,
-                aiAvailabilityService
+                aiAvailabilityService,
+                mock(ManagerReportReviewRolloutPolicy.class)
         );
         job.remind();
 
@@ -109,7 +110,8 @@ class ManagerReportReviewReminderJobTest {
                 settings,
                 accessPolicy,
                 qualityService,
-                aiAvailabilityService
+                aiAvailabilityService,
+                mock(ManagerReportReviewRolloutPolicy.class)
         );
         job.remind();
 

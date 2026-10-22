@@ -5924,6 +5924,91 @@ class PaymentLinkServiceTest {
     }
 
     @Test
+    void pendingOwnerRequestCanResendAfterSilentTelegramFailureWithoutErasingCallbackAttempts() throws Exception {
+        PaymentLinkService service = service(properties());
+        Order order = order(25278L, "Повтор запроса владельцу", BigDecimal.valueOf(1000));
+        order.getManager().setAuditTelegramGroupChatId(-10025278L);
+        order.getCompany().setManager(order.getManager());
+        PaymentLink link = initiatedBankLink(5378L, order, 100_000L);
+        java.util.concurrent.atomic.AtomicReference<OwnerManualCardPaymentApproval> approvalRef =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        when(orderRepository.findByIdForCounterUpdate(order.getId())).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByOrderIdForUpdate(order.getId())).thenReturn(List.of(link));
+        when(paymentLinkRepository.findByIdWithOrder(link.getId())).thenReturn(Optional.of(link));
+        when(paymentLinkRepository.findByIdForUpdate(link.getId())).thenReturn(Optional.of(link));
+        when(actualPaymentAttributionService.actualRecipientAccountingEnabled()).thenReturn(true);
+        stubManualCardRecipients(order, link, new ManualCardPaymentRecipientResponse(
+                ContractorRecipientType.OWNER, null, null, "Владелец", 100_000L, 0L, true));
+        doAnswer(invocation -> {
+            PaymentLink frozen = invocation.getArgument(1);
+            if (frozen.getManualActualRecipientFrozenAt() == null) {
+                frozen.setManualActualRecipientType(ContractorRecipientType.OWNER);
+                frozen.setManualActualCashDestinationKind(ContractorCashDestinationKind.OWNER);
+                frozen.setManualActualReason(invocation.getArgument(5));
+                frozen.setManualActualActor(invocation.getArgument(7));
+                frozen.setManualActualRecipientFrozenAt(LocalDateTime.now());
+            }
+            return null;
+        }).when(actualPaymentAttributionService).freezePaymentLinkRecipientIntent(
+                any(), any(), any(), any(), any(), anyString(), any(), anyString());
+        when(ownerManualCardPaymentApprovalRepository.findByPaymentLinkIdForUpdate(link.getId()))
+                .thenAnswer(invocation -> Optional.ofNullable(approvalRef.get()));
+        when(ownerManualCardPaymentApprovalRepository.saveAndFlush(any(OwnerManualCardPaymentApproval.class)))
+                .thenAnswer(invocation -> {
+                    OwnerManualCardPaymentApproval approval = invocation.getArgument(0);
+                    if (approval.getId() == null) {
+                        approval.setId(95L);
+                    }
+                    approvalRef.set(approval);
+                    return approval;
+                });
+        when(ownerManualCardPaymentApprovalRepository.findBindingById(95L))
+                .thenAnswer(invocation -> approvalBinding(approvalRef.get()));
+
+        // The notifier may swallow a Telegram delivery error after commit. The
+        // second identical manager action must issue a new, usable button.
+        service.submitManagerManualCardPaymentForOrder(order.getId(), "Сверить поступление", null,
+                ContractorRecipientType.OWNER, null, "OWNER", "manager@example.ru", authentication);
+        service.submitManagerManualCardPaymentForOrder(order.getId(), "Сверить поступление", null,
+                ContractorRecipientType.OWNER, null, "OWNER", "manager@example.ru", authentication);
+
+        ArgumentCaptor<ManualCardPaymentReviewNotificationService.OwnerApprovalRequest> notifications =
+                ArgumentCaptor.forClass(ManualCardPaymentReviewNotificationService.OwnerApprovalRequest.class);
+        verify(manualCardPaymentReviewNotificationService, times(2))
+                .notifyOwnerApprovalAfterCommit(notifications.capture());
+        String firstToken = notifications.getAllValues().get(0).callbackToken();
+        String secondToken = notifications.getAllValues().get(1).callbackToken();
+        assertNotEquals(firstToken, secondToken);
+        assertEquals(0, approvalRef.get().getAttemptCount());
+        assertNull(approvalRef.get().getLastAttemptAt());
+        verify(paymentLinkRepository, times(1)).save(link);
+
+        User owner = new User();
+        owner.setId(8L);
+        owner.setUsername("owner@example.ru");
+        owner.setActive(true);
+        Role ownerRole = new Role();
+        ownerRole.setName("ROLE_OWNER");
+        owner.setRoles(List.of(ownerRole));
+        when(authentication.getName()).thenReturn("owner@example.ru");
+        ResponseStatusException oldButton = assertThrows(ResponseStatusException.class,
+                () -> service.approveOwnerManualCardPayment(
+                        95L, firstToken, -10025278L, owner, authentication));
+        assertEquals(HttpStatus.FORBIDDEN, oldButton.getStatusCode());
+        verify(tbankClient, never()).getState(any(TbankPaymentProfile.class), anyString());
+        verify(orderTransactionService, never()).handlePaymentStatus(any(Order.class));
+
+        approvalRef.get().setAttemptCount(1);
+        approvalRef.get().setLastAttemptAt(LocalDateTime.now());
+        service.submitManagerManualCardPaymentForOrder(order.getId(), "Сверить поступление", null,
+                ContractorRecipientType.OWNER, null, "OWNER", "manager@example.ru", authentication);
+        verify(manualCardPaymentReviewNotificationService, times(2))
+                .notifyOwnerApprovalAfterCommit(any());
+        assertEquals(1, approvalRef.get().getAttemptCount());
+        assertEquals(OwnerManualCardPaymentApprovalStatus.PENDING, approvalRef.get().getStatus());
+    }
+
+    @Test
     void managerCannotDisguiseOwnerKeyAsSpecialist() throws Exception {
         PaymentLinkService service = service(properties());
         Order order = order(25275L, "Реквизиты владельца", BigDecimal.valueOf(1000));

@@ -239,7 +239,7 @@
                 >
                   <summary>
                     <span class="material-icons-sharp">
-                      {{ review.status === 'COMPLETED' && !review.quickReview ? 'task_alt' : review.status === 'DISPUTED' ? 'gavel' : 'schedule' }}
+                      {{ review.status === 'COMPLETED' ? 'task_alt' : review.status === 'DISPUTED' ? 'gavel' : 'schedule' }}
                     </span>
                     <span>
                       <strong>
@@ -255,12 +255,12 @@
                     <p><b>Чтение отчёта:</b> {{ reportReviewDuration(review.readSeconds) }} из расчётных {{ reportReviewDuration(review.minimumReadSeconds) }}</p>
                     <p><b>Вся проверка:</b> {{ reportReviewDuration(review.totalReviewSeconds) }}</p>
                     @if (review.aiVerificationPaused) {
-                      <p class="report-review-restriction"><b>Проверка DeepSeek приостановлена.</b> Трёхчасовой срок не идёт, доступ не ограничивается.</p>
+                      <p class="report-review-restriction"><b>Проверка приостановлена: ожидаются данные, ответ модели или сверка владельцем.</b> Трёхчасовой срок не идёт, доступ не ограничивается.</p>
                     } @else if (review.aiUnavailableSeconds > 0) {
-                      <p><b>Срок продлён из-за сбоя DeepSeek:</b> {{ reportReviewDuration(review.aiUnavailableSeconds) }}</p>
+                      <p><b>Время ожидания данных или проверки:</b> {{ reportReviewDuration(review.aiUnavailableSeconds) }}</p>
                     }
                     @if (review.suspiciousAnswerCount > 0) {
-                      <p class="report-review-dispute"><b>Проверка самостоятельности:</b> {{ review.suspiciousAnswerCount }} быстрых длинных ответов; менеджеру заданы короткие уточнения своими словами.</p>
+                      <p><b>Исторические отметки прежней проверки о скорости:</b> {{ review.suspiciousAnswerCount }}. Скорость ответа сама по себе не подтверждает нарушение.</p>
                     }
                     @if (review.startedAt) {
                       <p><b>Открыт:</b> {{ review.startedAt | date: 'dd.MM, HH:mm' }}</p>
@@ -277,6 +277,7 @@
                     @if (review.actionPlan) {
                       <p><b>План менеджера:</b> {{ review.actionPlan }}</p>
                     }
+                    <app-manager-review-answer-attempts [attempts]="review.answerAttempts ?? []" />
                     @if (review.disputeText) {
                       <p class="report-review-dispute"><b>Спор:</b> {{ review.disputeText }}</p>
                     }
@@ -352,7 +353,14 @@
                             <div>
                               <b>{{ reportReviewEventLabel(event.eventType) }}</b>
                               @if (event.payload) {
-                                <span>{{ event.payload }}</span>
+                                @if (event.eventType === 'ANSWER_EVIDENCE_SNAPSHOT' || event.payload.length > 1500) {
+                                  <details>
+                                    <summary>Показать сохранённые данные</summary>
+                                    <span style="white-space: pre-wrap; overflow-wrap: anywhere">{{ event.payload }}</span>
+                                  </details>
+                                } @else {
+                                  <span>{{ event.payload }}</span>
+                                }
                               }
                             </div>
                           </article>
@@ -1109,6 +1117,13 @@
                               }
                             </span>
                           </a>
+
+                          @if (example.diagnosis; as diagnosis) {
+                            <app-manager-problem-diagnosis [view]="diagnosis" />
+                          }
+                          @if (example.auditCommitments?.length) {
+                            <app-manager-review-commitments [commitments]="example.auditCommitments || []" />
+                          }
 
                           @if (isClientChatAudit(example)) {
                             <div class="client-audit-task" role="note">

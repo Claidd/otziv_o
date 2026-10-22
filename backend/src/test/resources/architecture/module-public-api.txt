@@ -1,9 +1,14 @@
 # Explicit public module seams. This file does not export controllers, models, or all services.
+# Manager problem diagnostics contracts: docs/manager-problem-diagnostics.md, module contracts.
+com.hunt.otziv.config.settings.api.ManagerProblemDiagnosticSettings
+com.hunt.otziv.reputationai.api.ProblemDiagnosticModel
 # A new export requires an owner, caller, authorization and transaction contract in the relevant ADR/catalogue.
 # Platform event for contractor-ledger projection requests; listener records marker in caller transaction.
 com.hunt.otziv.common.events.ContractorAccrualAdjustedEvent
 # ADR-019: boolean audit evidence and pre-mutation worker account guard; no ORM exposure.
 com.hunt.otziv.business_audit.api.CredentialRevealEvidence
+# Audit owner: payments revocation calls this inside its transaction; audit failure aborts the mutation.
+com.hunt.otziv.business_audit.api.RequiredTransactionAudit
 com.hunt.otziv.worker_activity.api.WorkerAccountBlockGuard
 com.hunt.otziv.api.dto.*
 com.hunt.otziv.c_companies.api.*
@@ -16,6 +21,8 @@ com.hunt.otziv.s3.api.*
 com.hunt.otziv.p_products.controller.OrderCommandHttpAdapter
 com.hunt.otziv.client_messages.api.*
 com.hunt.otziv.contractor_payments.api.PaymentReviewTargetAuthorization
+# Ledger owner: authorized payment revocation calls this under order/link locks; it locks attribution evidence.
+com.hunt.otziv.contractor_payments.api.PaymentLinkAttributionGuard
 com.hunt.otziv.manager.api.PaymentReviewOrderAccess
 com.hunt.otziv.t_telegrambot.api.SpecialistPaymentReviewNotice
 # A01 / ADR-008: scalar projections, source-authorized reminders and best-effort text notifications.

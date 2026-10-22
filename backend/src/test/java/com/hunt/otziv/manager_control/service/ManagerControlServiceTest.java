@@ -1,5 +1,7 @@
 package com.hunt.otziv.manager_control.service;
 
+import static org.mockito.Mockito.mock;
+
 import com.hunt.otziv.bad_reviews.service.BadReviewTaskService;
 import com.hunt.otziv.bad_reviews.model.BadReviewTask;
 import com.hunt.otziv.c_companies.model.Company;
@@ -256,10 +258,10 @@ class ManagerControlServiceTest {
     invoiceDiagnostics = new ManagerControlInvoiceDiagnostics(commonInvoiceRepository, commonInvoiceOrderRepository, commonInvoicePublicationBlockerService, paymentLinkRepository, appSettingService);
     invoiceRepairWorkflow = new ManagerControlInvoiceRepairWorkflow(commonInvoiceRepository, commonInvoiceOrderRepository, commonInvoicePublicationBlockerService, commonBillingService, invoiceDiagnostics);
     ManagerControlAccessPolicy accessPolicy = new ManagerControlAccessPolicy(managerRepository, userService, managerAccessService, managerPermissionService);
-    ManagerControlCardLifecycle cardLifecycle = new ManagerControlCardLifecycle(dailyControlConcreteItemRepository, dailyControlItemRepository, dailyControlEventRepository, managerPerformanceService, org.mockito.Mockito.mock(ManagerControlReadSnapshots.class));
+    ManagerControlCardLifecycle cardLifecycle = new ManagerControlCardLifecycle(dailyControlConcreteItemRepository, dailyControlItemRepository, dailyControlEventRepository, managerPerformanceService, org.mockito.Mockito.mock(ManagerControlReadSnapshots.class), org.mockito.Mockito.mock(com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosticsService.class));
     ManagerControlClientMessageText clientMessageText = new ManagerControlClientMessageText(scheduledClientMessageService, orderRepository);
     ManagerControlSlaPolicy slaPolicy = new ManagerControlSlaPolicy(appSettingService);
-    ManagerControlConcretePresenter concretePresenter = new ManagerControlConcretePresenter(riskIncidentRepository, workerTaskLookup, invoiceDiagnostics, scheduledClientMessageStateRepository, companyRepository, slaPolicy);
+    ManagerControlConcretePresenter concretePresenter = new ManagerControlConcretePresenter(mock(com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosticsService.class), mock(com.hunt.otziv.manager_daily_summary.service.ManagerReportReviewCommitmentService.class), riskIncidentRepository, workerTaskLookup, invoiceDiagnostics, scheduledClientMessageStateRepository, companyRepository, slaPolicy);
     deliveryQueue = new MemoryManagerMessageQueue();
     var deliveryActors = org.mockito.Mockito.mock(com.hunt.otziv.u_users.api.DeferredUserAuthority.class);
     lenient().when(deliveryActors.capture(any())).thenReturn(new com.hunt.otziv.u_users.api.DeferredUserAuthority.Actor(1L, "fixture", 0, java.util.Set.of("ROLE_ADMIN")));
@@ -279,7 +281,7 @@ class ManagerControlServiceTest {
     var clientReplyWorkflow = new ManagerControlClientReplyWorkflow(managerControlTransactionRunner, dailyControlConcreteItemRepository, dailyControlRepository, clientChatUnansweredItemRepository, replyOperations, clientChatMessageSender, deliveryQueue, deliveryActors, org.mockito.Mockito.mock(com.hunt.otziv.whatsapp.service.service.WhatsAppService.class), clientChatMessageTrackerService, accessPolicy, cardLifecycle, concretePresenter);
     var clientConversationWorkflow = new ManagerControlClientConversationWorkflow(dailyControlConcreteItemRepository, dailyControlRepository, clientChatUnansweredItemRepository, clientChatMessageTrackerService, clientChatReplySuggestionService, clientChatMessageReconciliationService, replyOperations, accessPolicy, cardLifecycle, concretePresenter);
     var problemExamples = new ManagerControlProblemExamples(clientMessageText, concretePresenter, new ManagerControlOrderAutomationDiagnostics(orderRepository, scheduledClientMessageStateRepository), orderService, clientMessageOrderStatusService, appSettingService, clientChatMessageTrackerService, badReviewTaskService, reviewRecoveryTaskService, reviewRepository, orderRepository, companyRepository, paymentLinkRepository, invoiceDiagnostics, managerAutomationFailureService, riskIncidentRepository, dailyControlRepository, dailyControlConcreteItemRepository);
-    var concreteSnapshot = new ManagerControlConcreteSnapshotWorkflow(problemExamples, cardLifecycle, slaPolicy, concretePresenter, dailyControlConcreteItemRepository);
+    var concreteSnapshot = new ManagerControlConcreteSnapshotWorkflow(mock(com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosticsService.class), problemExamples, cardLifecycle, slaPolicy, concretePresenter, dailyControlConcreteItemRepository);
     var dayLifecycle = new ManagerControlDayLifecycle(problemExamples, accessPolicy, cardLifecycle, qualityQueries, dailyControlRepository, dailyControlItemRepository, dailyControlConcreteItemRepository);
     var dailySnapshot = new ManagerControlDailySnapshotWorkflow(dayLifecycle, problemExamples, cardLifecycle, slaPolicy, workerTaskLookup, workerExplanationQueries, orderAutomationDiagnostics, orderService, clientChatMessageTrackerService, badReviewTaskService, reviewRecoveryTaskService, reviewService, reviewRepository, orderRepository, companyRepository, invoiceDiagnostics, managerAutomationFailureService, riskIncidentRepository, dailyControlRepository, dailyControlItemRepository, dailyControlConcreteItemRepository, managerActionBalanceService, managerOperationalMetricsService, leadsRepository);
     var boardWorkflow = new ManagerControlBoardWorkflow(dailySnapshot, dayLifecycle, concreteSnapshot, problemExamples, accessPolicy, cardLifecycle, workerExplanationQueries, qualityQueries, managerRepository, managerPermissionService, scheduledClientMessageService, dailyControlRepository, dailyControlItemRepository, managerPerformanceService, org.mockito.Mockito.mock(ManagerControlReadSnapshots.class), org.mockito.Mockito.mock(com.hunt.otziv.u_users.api.CabinetCacheScope.class));
