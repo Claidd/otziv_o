@@ -1,6 +1,7 @@
 """Collect CI receipts and install only immutable artifacts from verified main CI."""
 import argparse
 import copy
+import hashlib
 import io
 import json
 import os
@@ -17,6 +18,8 @@ from release_ci import require
 from release_registry import upload_ci_image
 
 SCHEMA = 'otziv-ci-release-v1'
+RECEIPT_ARTIFACT = re.compile(r'^ci-receipt-([a-z0-9-]+)-attempt-([1-9][0-9]*)$')
+CAPACITY_ARTIFACT = re.compile(r'^ci-capacity-([A-Za-z0-9_-]+)-attempt-([1-9][0-9]*)$')
 
 
 def write(path, value):
@@ -97,6 +100,76 @@ def collect(repo, inputs, revision, run_id, attempt, test_reuse=None):
     if test_reuse is not None:
         result['testEvidence'] = read(test_reuse)
     return validate_release(result, revision, run_id, attempt)
+
+
+def select_receipt_artifacts(artifacts, revision, run_id, attempt):
+    """Pick the newest receipt for each identity before downloading ZIP bytes.
+
+    A failed-job rerun may retain successful receipts from an earlier attempt.
+    Older superseded artifacts must not be fetched: GitHub may no longer be able
+    to serve one even though a newer verified receipt exists for that component.
+    """
+    require(re.fullmatch(r'[a-f0-9]{40}', revision or '') and type(run_id) is int and run_id > 0
+            and type(attempt) is int and attempt > 0, 'Invalid CI artifact source')
+    grouped = {}
+    for item in artifacts:
+        name = item.get('name', '')
+        if not isinstance(name, str):
+            continue
+        match = RECEIPT_ARTIFACT.fullmatch(name)
+        if match and match[1] in SERVICES:
+            kind, identity = 'receipt', match[1]
+        else:
+            match = CAPACITY_ARTIFACT.fullmatch(name)
+            if not match:
+                continue
+            kind, identity = 'capacity', match[1]
+        row_attempt = int(match[2])
+        require(row_attempt <= attempt, 'CI artifact is from a future attempt')
+        grouped.setdefault((kind, identity), []).append((row_attempt, item))
+    require({identity for kind, identity in grouped if kind == 'receipt'} == set(SERVICES),
+            'Incomplete CI image receipts')
+    require(any(kind == 'capacity' for kind, _ in grouped), 'Missing runtime capacity receipts')
+    selected = []
+    for (kind, identity), matches in sorted(grouped.items()):
+        newest = max(row_attempt for row_attempt, _ in matches)
+        current = [item for row_attempt, item in matches if row_attempt == newest]
+        require(len(current) == 1, 'Ambiguous CI artifact: ' + kind + '/' + identity)
+        item = validate_artifact(current[0], run_id, revision, current[0]['name'])
+        selected.append((kind, identity, newest, item))
+    return selected
+
+
+def download_receipts(client, output, revision, run_id, attempt):
+    """Download only selected immutable ZIPs, then bind each JSON to its name."""
+    output = Path(output)
+    require(not output.exists(), 'CI receipt output already exists')
+    selected = select_receipt_artifacts(client.artifacts(run_id), revision, run_id, attempt)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix='ci-receipts-', dir=output.parent) as scratch:
+        scratch = Path(scratch)
+        for kind, identity, row_attempt, item in selected:
+            filename = ('receipt-' if kind == 'receipt' else 'upstream-') + identity + '.json'
+            archive = client.download(item, scratch / (str(item['id']) + '.zip'), 4 * 1024**2)
+            destination = scratch / item['name']
+            extract_files(archive, destination, {filename: 1024**2})
+            row = read(destination / filename)
+            require(isinstance(row, dict) and row.get('revision') == revision and row.get('runId') == run_id
+                    and row.get('runAttempt') == row_attempt, 'CI receipt does not match its artifact attempt')
+            if kind == 'receipt':
+                require(row.get('component') == identity, 'CI image receipt has a different component')
+            else:
+                image = row.get('image')
+                require(isinstance(image, dict), 'CI capacity receipt has no image')
+                reference = image.get('reference', '')
+                require(isinstance(reference, str) and re.fullmatch(r'[A-Za-z0-9._/:+-]+@sha256:[a-f0-9]{64}', reference),
+                        'CI capacity receipt has an invalid reference')
+                repository = reference.split('@', 1)[0]
+                expected_id = re.sub(r'[^A-Za-z0-9_-]', '-', repository) + '-' + hashlib.sha256(reference.encode()).hexdigest()[:10]
+                require(identity == expected_id, 'CI capacity receipt has a different image identity')
+            archive.unlink()
+        scratch.replace(output)
+    return len(selected)
 
 
 def capacity_plan(value, references=None, worker=False):
@@ -272,7 +345,7 @@ def load_backend(inputs, revision, run_id, attempt):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['receipt', 'upstream', 'collect', 'fetch', 'import', 'validate-plan', 'load-backend'])
+    parser.add_argument('command', choices=['receipt', 'upstream', 'download-receipts', 'collect', 'fetch', 'import', 'validate-plan', 'load-backend'])
     parser.add_argument('--repo', type=Path, default=Path.cwd())
     parser.add_argument('--input', type=Path)
     parser.add_argument('--output', type=Path, required=True)
@@ -296,6 +369,10 @@ def main():
         value = {'revision': args.revision, 'runId': args.run_id, 'runAttempt': args.attempt, 'image': freeze_image(args.image)}
     elif args.command == 'collect':
         value = collect(args.repo, args.input, args.revision, args.run_id, args.attempt, args.test_reuse)
+    elif args.command == 'download-receipts':
+        count = download_receipts(Client(args.repo), args.output, args.revision, args.run_id, args.attempt)
+        print(f'Verified and downloaded {count} selected CI receipt artifacts')
+        return
     elif args.command == 'fetch':
         fetch_manifest(Client(args.repo), read(args.input), args.output)
         return

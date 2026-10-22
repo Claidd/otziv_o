@@ -1,4 +1,5 @@
 import copy
+import hashlib
 import io
 import json
 from pathlib import Path
@@ -11,7 +12,7 @@ import zipfile
 
 from ci_artifacts import extract_files, storage_url, validate_artifact
 from ci_image_bundle import SERVICES, export_image, file_hash
-from ci_release import capacity_plan, collect, fetch_image, fetch_manifest, load_backend, restore_cached_image, validate_release
+from ci_release import capacity_plan, collect, download_receipts, fetch_image, fetch_manifest, load_backend, restore_cached_image, select_receipt_artifacts, validate_release
 from production_images import inventory, record
 from release_ci import GateError
 from release_preflight import probe
@@ -43,6 +44,19 @@ class ReleaseArtifactsTest(unittest.TestCase):
     def metadata(self, image):
         return dict(image['artifact'], expired=False, size_in_bytes=1024,
                     workflow_run={'id': 123, 'head_sha': HEAD})
+
+    def receipt_artifact(self, name, artifact_id):
+        return {'id': artifact_id, 'name': name, 'expired': False, 'size_in_bytes': 1024,
+                'digest': SHA, 'workflow_run': {'id': 123, 'head_sha': HEAD}}
+
+    def receipt_artifacts(self, attempt=1):
+        reference = self.release['runtimeCapacity']['images'][0]['reference']
+        repository = reference.split('@', 1)[0]
+        capacity_id = repository.replace('.', '-').replace('/', '-') + '-' + hashlib.sha256(reference.encode()).hexdigest()[:10]
+        artifacts = [self.receipt_artifact(f'ci-receipt-{component}-attempt-{attempt}', index)
+                     for index, component in enumerate(SERVICES, 1)]
+        artifacts.append(self.receipt_artifact(f'ci-capacity-{capacity_id}-attempt-{attempt}', 100))
+        return artifacts, capacity_id
 
     def test_complete_release_retains_runtime_and_expected_enabled_images(self):
         validate_release(self.release, HEAD, 123, 1)
@@ -168,6 +182,76 @@ class ReleaseArtifactsTest(unittest.TestCase):
         self.assertEqual(2, value['runAttempt'])
         self.assertEqual(2, next(row for row in value['images'] if row['component'] == 'backend')['runAttempt'])
         self.assertEqual(1, next(row for row in value['images'] if row['component'] == 'web')['runAttempt'])
+
+    def test_artifact_selector_skips_superseded_old_zips_and_keeps_partial_reruns(self):
+        old, capacity_id = self.receipt_artifacts()
+        current = [self.receipt_artifact('ci-receipt-backend-attempt-3', 201),
+                   self.receipt_artifact(f'ci-capacity-{capacity_id}-attempt-3', 202)]
+        old[0]['expired'] = True
+        old[-1]['digest'] = 'unavailable'
+        selected = select_receipt_artifacts(old + current, HEAD, 123, 3)
+        chosen = {(kind, identity): (row_attempt, item['id']) for kind, identity, row_attempt, item in selected}
+        self.assertEqual((3, 201), chosen[('receipt', 'backend')])
+        self.assertEqual((1, old[1]['id']), chosen[('receipt', 'web')])
+        self.assertEqual((3, 202), chosen[('capacity', capacity_id)])
+
+    def test_artifact_selector_rejects_missing_duplicate_future_and_wrong_source(self):
+        artifacts, _ = self.receipt_artifacts()
+        cases = [artifacts[1:],
+                 artifacts + [copy.deepcopy(artifacts[0])],
+                 artifacts + [self.receipt_artifact('ci-receipt-backend-attempt-2', 201)],
+                 [{**artifacts[0], 'workflow_run': {'id': 999, 'head_sha': HEAD}}, *artifacts[1:]]]
+        for index, rows in enumerate(cases):
+            with self.subTest(case=index), self.assertRaises(GateError):
+                select_receipt_artifacts(rows, HEAD, 123, 1)
+
+    def test_download_receipts_extracts_only_latest_verified_artifacts(self):
+        artifacts, capacity_id = self.receipt_artifacts()
+        updated = self.receipt_artifact('ci-receipt-backend-attempt-2', 201)
+        artifacts.append(updated)
+        artifacts[0]['expired'] = True
+        client = Mock()
+        client.artifacts.return_value = artifacts
+        capacity = {'revision': HEAD, 'runId': 123, 'runAttempt': 1,
+                    'image': self.release['runtimeCapacity']['images'][0]}
+        def download(item, destination, maximum):
+            name = item['name']
+            if name.startswith('ci-capacity-'):
+                filename, row = f'upstream-{capacity_id}.json', capacity
+            else:
+                component = name.removeprefix('ci-receipt-').split('-attempt-', 1)[0]
+                filename = f'receipt-{component}.json'
+                row = dict(next(image for image in self.images if image['component'] == component),
+                           runAttempt=2 if component == 'backend' else 1)
+            with zipfile.ZipFile(destination, 'w') as archive:
+                archive.writestr(filename, json.dumps(row))
+            return destination
+        client.download.side_effect = download
+        output = self.directory / 'selected-receipts'
+        self.assertEqual(7, download_receipts(client, output, HEAD, 123, 2))
+        self.assertEqual(2, json.loads((output / updated['name'] / 'receipt-backend.json').read_text())['runAttempt'])
+        self.assertEqual(1, json.loads((output / 'ci-receipt-web-attempt-1' / 'receipt-web.json').read_text())['runAttempt'])
+        self.assertNotIn(artifacts[0]['id'], [call.args[0]['id'] for call in client.download.call_args_list])
+
+    def test_download_receipts_fails_closed_if_selected_zip_is_unavailable(self):
+        artifacts, capacity_id = self.receipt_artifacts()
+        updated = self.receipt_artifact('ci-receipt-backend-attempt-2', 201)
+        artifacts.append(updated)
+        client = Mock()
+        client.artifacts.return_value = artifacts
+        def download(item, destination, maximum):
+            if item['id'] == updated['id']:
+                raise GateError('Selected ZIP unavailable')
+            with zipfile.ZipFile(destination, 'w') as archive:
+                archive.writestr(f'upstream-{capacity_id}.json', json.dumps({
+                    'revision': HEAD, 'runId': 123, 'runAttempt': 1,
+                    'image': self.release['runtimeCapacity']['images'][0]}))
+            return destination
+        client.download.side_effect = download
+        with self.assertRaisesRegex(GateError, 'Selected ZIP unavailable'):
+            download_receipts(client, self.directory / 'unavailable', HEAD, 123, 2)
+        self.assertIn(updated['id'], [call.args[0]['id'] for call in client.download.call_args_list])
+        self.assertNotIn(artifacts[0]['id'], [call.args[0]['id'] for call in client.download.call_args_list])
 
     def test_production_inventory_is_recorded_only_for_matching_running_configs(self):
         observed = [{'service': 'app', 'configId': self.images[0]['configId'], 'reference': 'private-transport'}]
