@@ -29,7 +29,7 @@ class ManagerControlConcretePresenterTest {
         assertThat(response.reason()).contains(FACTS, blocked).doesNotContain(OLD_ADVICE, "скопируйте текст");
         assertThat(response.clientMessageSendBlockedReason()).isEqualTo(blocked);
         assertThat(response.ageDays()).isEqualTo(108L);
-        assertThat(response.statusLabel()).isEqualTo("На проверке");
+        assertThat(response.status()).isEqualTo("На проверке");
         assertThat(card.getReason()).isEqualTo(FACTS + " " + OLD_ADVICE);
     }
 
