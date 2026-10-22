@@ -13,6 +13,42 @@ Exact package/version and listed CVEs only. Does not accept a vulnerability or s
     <cve>CVE-2026-54285</cve>
   </suppress>
   <suppress>
+    <notes>The vendor advisory applies to the npm @opentelemetry/core W3C baggage propagator, not this Java instrumentation API artifact.
+Artifact SHA-256: 4eae68272790153fabbfdc08741e7f3909af43adeb6ea4a30dd8a53d3bac4cd7
+Observed CPE: cpe:2.3:a:opentelemetry:opentelemetry:2.1.0:alpha:*:*:*:*:*:*
+Primary evidence: https://github.com/open-telemetry/opentelemetry-js/security/advisories/GHSA-8988-4f7v-96qf
+Exact Maven package/version and CVE only; all other findings remain blocking.</notes>
+    <packageUrl>pkg:maven/io.opentelemetry.instrumentation/opentelemetry-instrumentation-api-incubator@2.1.0-alpha</packageUrl>
+    <cve>CVE-2026-54285</cve>
+  </suppress>
+  <suppress>
+    <notes>The vendor advisory applies to the npm @opentelemetry/core W3C baggage propagator, not this Java SDK artifact.
+Artifact SHA-256: d63231ea6fd33e0457c776a9aa8ae7ba778379b03119228ec56a5c8c16f9480e
+Observed CPE: cpe:2.3:a:opentelemetry:opentelemetry:1.55.0:*:*:*:*:*:*:*
+Primary evidence: https://github.com/open-telemetry/opentelemetry-js/security/advisories/GHSA-8988-4f7v-96qf
+Exact Maven package/version and CVE only; all other findings remain blocking.</notes>
+    <packageUrl>pkg:maven/io.opentelemetry/opentelemetry-sdk@1.55.0</packageUrl>
+    <cve>CVE-2026-54285</cve>
+  </suppress>
+  <suppress>
+    <notes>The vendor advisory applies to the npm @opentelemetry/core W3C baggage propagator, not this Java API artifact.
+Artifact SHA-256: 88bbfc3fcc81af3299e7f69cddcc9672e410ffcf7435e8b50a474cf2e454b410
+Observed CPE: cpe:2.3:a:opentelemetry:opentelemetry:1.57.0:*:*:*:*:*:*:*
+Primary evidence: https://github.com/open-telemetry/opentelemetry-js/security/advisories/GHSA-8988-4f7v-96qf
+Exact Maven package/version and CVE only; all other findings remain blocking.</notes>
+    <packageUrl>pkg:maven/io.opentelemetry/opentelemetry-api@1.57.0</packageUrl>
+    <cve>CVE-2026-54285</cve>
+  </suppress>
+  <suppress>
+    <notes>The vendor advisory applies to the npm @opentelemetry/core W3C baggage propagator, not this Java incubating API artifact.
+Artifact SHA-256: 1e2fe498522d00b674d42b9db8819f46d455bd541937fbd44a5a920b8bb6e91e
+Observed CPE: cpe:2.3:a:opentelemetry:opentelemetry:1.57.0:alpha:*:*:*:*:*:*
+Primary evidence: https://github.com/open-telemetry/opentelemetry-js/security/advisories/GHSA-8988-4f7v-96qf
+Exact Maven package/version and CVE only; all other findings remain blocking.</notes>
+    <packageUrl>pkg:maven/io.opentelemetry/opentelemetry-api-incubator@1.57.0-alpha</packageUrl>
+    <cve>CVE-2026-54285</cve>
+  </suppress>
+  <suppress>
     <notes>Vendor patch changes KAPT incremental-cache deserialization in plugins/kapt3/kapt3-base; kotlin-stdlib does not contain org/jetbrains/kotlin/kapt3 classes. No Kotlin Gradle plugin or KAPT artifact is in this Maven project dependency graph.
 Artifact SHA-256: 6558a3d233da56a20934b32159f9db5f86ed5816ef098f78a2c223dc6abb79dd
 Observed CPEs:

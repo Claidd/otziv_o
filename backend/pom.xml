@@ -23,8 +23,9 @@
 		<pdfbox.version>3.0.8</pdfbox.version>
 		<testcontainers.version>2.0.5</testcontainers.version>
 		<aws.sdk.version>2.44.1</aws.sdk.version>
-		<!-- Boot 4.0.8 aligns Netty 4.2.17, Spring Framework 7.0.9 and Security 7.0.7.
+		<!-- Boot 4.0.8 selects Netty 4.2.17; 4.2.18 fixes CVE-2026-89044.
 		     Keep newer transport fixes above its BOM; HttpClient 5.6.4 targets Core 5.4.3. -->
+		<netty.version>4.2.18.Final</netty.version>
 		<tomcat.version>11.0.25</tomcat.version>
 		<httpclient5.version>5.6.4</httpclient5.version>
 		<httpcore5.version>5.4.3</httpcore5.version>
