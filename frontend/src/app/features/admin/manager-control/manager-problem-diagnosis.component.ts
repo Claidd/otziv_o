@@ -93,6 +93,7 @@ export class ManagerProblemDiagnosisComponent {
   private factText(fact: EvidenceFact): string {
     const identifier = fact.reference.split(':')[1];
     const subject = SUBJECT_LABELS[fact.subject];
+    if (!subject) return `${fact.subject}: ${fact.field} — ${fact.value}`;
     const source = subject ? `${subject}${/^\d+$/.test(identifier ?? '') ? ` №${identifier}` : ''}` : fact.subject;
     let value = fact.value;
     if (fact.subject === 'invoice' && fact.field === 'status') value = INVOICE_STATUS_LABELS[value] ?? value;
