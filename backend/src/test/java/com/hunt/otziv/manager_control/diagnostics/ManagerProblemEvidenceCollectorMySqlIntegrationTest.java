@@ -9,6 +9,7 @@ import com.hunt.otziv.common_billing.model.CommonInvoiceOrder;
 import com.hunt.otziv.common_billing.model.CommonBillingAccount;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.p_products.model.Order;
+import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.manager_control.model.ManagerDailyControl;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlConcreteItem;
 import jakarta.persistence.Column;
@@ -46,7 +47,11 @@ class ManagerProblemEvidenceCollectorMySqlIntegrationTest {
         jdbc = new JdbcTemplate(new DriverManagerDataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword()));
         for (Class<?> type : List.of(ManagerDailyControl.class, ManagerDailyControlConcreteItem.class, CommonInvoice.class,
                 CommonInvoiceOrder.class, ScheduledClientMessageState.class, ScheduledClientMessageAttempt.class,
-                ClientChatMessage.class, ClientChatUnansweredItem.class, CommonBillingAccount.class, Company.class, Order.class)) createFromEntityMapping(type);
+                ClientChatMessage.class, ClientChatUnansweredItem.class, CommonBillingAccount.class, Company.class, Order.class,
+                OrderStatus.class)) createFromEntityMapping(type);
+        jdbc.execute("DROP TABLE IF EXISTS manager_client_message_queue");
+        new org.springframework.jdbc.datasource.init.ResourceDatabasePopulator(new org.springframework.core.io.ClassPathResource(
+                "db/migration/V1_10_313__manager_client_message_queue.sql")).execute(jdbc.getDataSource());
         collector = new ManagerProblemEvidenceCollector(jdbc);
         jdbc.update("INSERT INTO manager_daily_controls(daily_control_id,manager_id) VALUES(1,2)");
     }
@@ -148,6 +153,64 @@ class ManagerProblemEvidenceCollectorMySqlIntegrationTest {
         jdbc.update("UPDATE client_chat_unanswered_items SET manager_id=99 WHERE id=55");
         assertThat(collector.collect(10L).facts()).anyMatch(f -> f.subject().equals("coverage"));
         assertThat(collector.collect(10L).facts()).noneMatch(f -> f.subject().equals("recorded_chat_message"));
+    }
+
+    @Test
+    void orderEvidenceIncludesCurrentCycleAndManualDeliveryAcrossDaysWithoutExportingEnvelopes() {
+        orderFixture();
+        for (int i = 1; i <= 7; i++) {
+            jdbc.update("INSERT INTO scheduled_client_message_attempts(attempt_id,state_id,attempt_status,error_code,attempted_at) VALUES(?,40,'UNKNOWN','operation_unknown',NOW())", i);
+            jdbc.update("""
+                    INSERT INTO manager_client_message_queue(operation_id,card_id,command_kind,envelope_ciphertext,state,error_code,created_at)
+                    VALUES(?,10,'CONTROL','enc:do-not-export-secret',?,?,TIMESTAMPADD(MINUTE,?, '2026-10-22 11:00:00'))
+                    """, "operation-" + i, i == 7 ? "UNKNOWN" : "SENT", i == 7 ? "operation_unknown" : null, i);
+        }
+        jdbc.update("INSERT INTO manager_daily_controls(daily_control_id,manager_id) VALUES(2,99)");
+        jdbc.update("INSERT INTO manager_daily_control_concrete_items(control_entity_id,control_id,entity_key,entity_type,entity_id,item_status) VALUES(12,2,'order:9970','ORDER',9970,'OPEN')");
+        jdbc.update("INSERT INTO manager_client_message_queue(operation_id,card_id,command_kind,envelope_ciphertext,state,error_code) VALUES('foreign-operation',12,'CONTROL','enc:hidden','FAILED','foreign_error')");
+
+        var evidence = collector.collect(10L);
+        assertThat(evidence.sourceTaskId()).isEqualTo(11L);
+        assertThat(evidence.facts()).anyMatch(f -> f.reference().equals("order:9970:status") && f.value().equals("На проверке"));
+        assertThat(evidence.facts()).anyMatch(f -> f.reference().equals("automation:40:delivery_status") && f.value().equals("UNKNOWN"));
+        assertThat(evidence.facts()).noneMatch(f -> f.reference().startsWith("automation:41:"));
+        assertThat(evidence.facts().stream().filter(f -> f.subject().equals("automation_attempt") && f.field().equals("attempt_id"))).hasSize(5);
+        assertThat(evidence.facts().stream().filter(f -> f.subject().equals("manager_delivery") && f.field().equals("state")).map(ManagerProblemDiagnosticsService.Fact::value))
+                .containsExactly("UNKNOWN", "SENT", "SENT", "SENT", "SENT");
+        assertThat(evidence.facts()).anyMatch(f -> f.field().equals("manual_delivery_history_truncated"));
+        assertThat(evidence.facts()).anyMatch(f -> f.field().equals("manual_delivery_cycle_unverified"));
+        assertThat(evidence.facts()).anyMatch(f -> f.field().equals("business_resolution"));
+        assertThat(evidence.facts().toString()).doesNotContain("do-not-export-secret", "foreign-operation", "foreign_error");
+        assertThat(collector.sourcesForEntity("AUTOMATION_FAILURE", 40L)).contains(11L);
+    }
+
+    @Test
+    void reassignedOrderDoesNotExposeAnotherManagersDeliveryLogs() {
+        orderFixture();
+        jdbc.update("UPDATE orders SET order_manager=99 WHERE order_id=9970");
+        var facts = collector.collect(10L).facts();
+        assertThat(facts).anyMatch(f -> f.reference().equals("order:9970:availability"));
+        assertThat(facts).noneMatch(f -> List.of("order", "automation", "automation_attempt", "manager_delivery").contains(f.subject()));
+    }
+
+    @Test
+    void missingOrderCycleDoesNotAttributeOldAutomationToTheCurrentProblem() {
+        orderFixture();
+        jdbc.update("UPDATE orders SET order_status_changed_at=NULL,order_changed=NULL,order_created=NULL WHERE order_id=9970");
+        var facts = collector.collect(10L).facts();
+        assertThat(facts).anyMatch(f -> f.reference().equals("order:9970:cycle_coverage"));
+        assertThat(facts).noneMatch(f -> f.subject().equals("automation"));
+    }
+
+    private void orderFixture() {
+        jdbc.update("INSERT INTO manager_daily_control_concrete_items(control_entity_id,control_id,entity_key,entity_type,entity_id,item_status) VALUES(10,1,'order:9970','ORDER',9970,'OPEN'),(11,1,'order:9970','ORDER',9970,'OPEN')");
+        jdbc.update("INSERT INTO order_statuses(order_status_id,order_status_title) VALUES(3,'На проверке')");
+        jdbc.update("INSERT INTO orders(order_id,order_manager,order_status,order_status_changed_at,client_message_generation) VALUES(9970,2,3,'2026-07-14 10:00:00',1)");
+        jdbc.update("""
+                INSERT INTO scheduled_client_message_state(state_id,order_id,scenario,target_key,state_status,delivery_status,last_error_code)
+                VALUES(40,9970,'REVIEW_CHECK_REMINDER','order:9970:2026-07-14T10:00','ACTIVE','UNKNOWN','state_transaction_outcome_uncertain'),
+                      (41,9970,'REVIEW_CHECK_REMINDER','order:9970:2026-06-01T10:00','DONE','SENT',NULL)
+                """);
     }
 
     private void invoiceFixture() {

@@ -90,6 +90,7 @@ public class ManagerControlItemActions {
     private final ManagerDailyControlConcreteItemRepository dailyControlConcreteItemRepository;
 
     private final GamificationEventService gamificationEventService;
+    private final ManagerControlOrderDeliveryState deliveryState;
 
     void notifyOwnersAboutDeferredConcreteItem(ManagerDailyControl control, ManagerDailyControlConcreteItem concreteItem, Principal principal) {
         reminderWorkflow.notifyOwnersAboutDeferredConcreteItem(control, concreteItem, principal);
@@ -144,9 +145,10 @@ public class ManagerControlItemActions {
         if (concreteItemId == null || concreteItemId <= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Некорректная карточка контроля");
         }
-        ManagerDailyControlConcreteItem concreteItem = dailyControlConcreteItemRepository.findById(concreteItemId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Карточка контроля не найдена"));
+        ManagerDailyControlConcreteItem concreteItem = dailyControlConcreteItemRepository.findByIdForUpdate(concreteItemId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Карточка контроля не найдена"));
         ManagerDailyControl control = concreteItem.getControl();
         accessPolicy.requireControlAccess(control, principal, authentication);
+        deliveryState.requireMutationAllowed(concreteItem);
         if (ManagerAutomationFailureService.ENTITY_AUTOMATION_FAILURE.equals(concreteItem.getEntityType())
                 || ManagerAutomationFailureService.ENTITY_COMMON_INVOICE_AUTOMATION.equals(concreteItem.getEntityType())) {
             managerAutomationFailureService.findIssue(control.getManager(), concreteItem.getEntityType(),

@@ -92,6 +92,9 @@ public class Order {
     @JoinColumn(name = "order_manager")
     private Manager manager;
 
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Long notificationManagerId() { return manager == null ? null : manager.getId(); }
+
     //    каждый бот имеет Работника, который его добавлял
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "order_company")

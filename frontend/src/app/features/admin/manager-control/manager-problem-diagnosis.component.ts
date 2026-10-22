@@ -5,14 +5,21 @@ import { ManagerProblemDiagnosticView } from '../../../core/manager-control.api'
 type EvidenceFact = ManagerProblemDiagnosticView['facts'][number];
 
 const SUBJECT_LABELS: Record<string, string> = {
-  invoice: 'Счёт', invoice_order: 'Позиция счёта', card: 'Замечание',
+  invoice: 'Счёт', invoice_order: 'Позиция счёта', order: 'Заказ', card: 'Замечание',
+  manager_delivery: 'Отправка менеджера',
   automation: 'Автоматическое сообщение', automation_attempt: 'Попытка отправки',
   client_chat: 'Переписка с клиентом', client_chat_message: 'Сообщение',
   recorded_chat_message: 'Записанное сообщение', coverage: 'Полнота данных', history_coverage: 'История попыток'
 };
 const FIELD_LABELS: Record<string, string> = {
   status: 'статус', item_status: 'статус замечания', state_status: 'состояние автоматизации',
-  attempt_status: 'результат попытки', delivery_status: 'статус доставки',
+  attempt_status: 'результат попытки', delivery_status: 'статус доставки', state: 'состояние отправки',
+  card_id: 'номер замечания', attempts: 'попыток отправки', created_at: 'создано', updated_at: 'обновлено',
+  order_amount: 'количество отзывов', order_sum: 'сумма заказа', client_message_generation: 'версия отправки',
+  order_waiting_for_client: 'ожидание клиента', cycle_started_at: 'начало текущего этапа',
+  waiting_cycle_started_at: 'начало ожидания клиента', business_resolution: 'проверка результата',
+  manual_delivery_cycle_unverified: 'границы истории ручных отправок',
+  manual_delivery_history_truncated: 'неполная история ручных отправок',
   orderCount: 'позиций в счёте', readyCount: 'готовых позиций', orderIds: 'номера позиций',
   invoice_id: 'номер счёта', order_id: 'номер заказа', state_id: 'номер автоматизации', attempt_id: 'номер попытки', id: 'номер записи',
   amount_kopecks: 'сумма, коп.', paid_kopecks: 'оплачено, коп.', ready: 'позиция готова', paid: 'позиция оплачена',
@@ -89,11 +96,15 @@ export class ManagerProblemDiagnosisComponent {
     const source = subject ? `${subject}${/^\d+$/.test(identifier ?? '') ? ` №${identifier}` : ''}` : fact.subject;
     let value = fact.value;
     if (fact.subject === 'invoice' && fact.field === 'status') value = INVOICE_STATUS_LABELS[value] ?? value;
-    if (['ready', 'paid', 'active_membership', 'manual_override', 'audit_required', 'routing_ambiguous'].includes(fact.field)) {
+    if (['ready', 'paid', 'active_membership', 'manual_override', 'audit_required', 'routing_ambiguous', 'order_waiting_for_client'].includes(fact.field)) {
       value = ({ true: 'да', false: 'нет', '1': 'да', '0': 'нет' } as Record<string, string>)[value.toLowerCase()] ?? value;
     }
     if (fact.field === 'state_status') value = ({ ACTIVE: 'Активно', PAUSED: 'Приостановлено', DONE: 'Завершено', DISABLED: 'Отключено' } as Record<string, string>)[value] ?? value;
     if (fact.field === 'attempt_status') value = ({ SENT: 'Отправлено', FAILED: 'Ошибка', SKIPPED: 'Пропущено' } as Record<string, string>)[value] ?? value;
+    if (fact.subject === 'manager_delivery' && fact.field === 'state') value = ({
+      QUEUED: 'В очереди', SENDING: 'Отправляется', RETRYABLE: 'Ожидает повторной попытки',
+      UNKNOWN: 'Результат не подтверждён', SENT: 'Отправлено', FAILED: 'Ошибка'
+    } as Record<string, string>)[value] ?? value;
     return `${source}: ${FIELD_LABELS[fact.field] ?? fact.field} — ${value}`;
   }
 

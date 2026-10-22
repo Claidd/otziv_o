@@ -95,6 +95,8 @@ public class ManagerProblemEvidenceCollector {
                 stateIds = new ArrayList<>(stateIds.subList(0, 40));
                 facts.add(new Fact("invoice:" + entityId + ":automation_coverage", "coverage", "automation_states_truncated", "Показаны только 40 состояний автоматизации; наличие других ошибок не исключено"));
             }
+        } else if ("ORDER".equals(type) && entityId != null) {
+            stateIds.addAll(collectOrder(facts, entityId, managerId));
         } else if ("AUTOMATION_FAILURE".equals(type) && entityId != null) {
             List<Long> ownedState = jdbc.queryForList("""
                     SELECT s.state_id FROM scheduled_client_message_state s
@@ -173,6 +175,67 @@ public class ManagerProblemEvidenceCollector {
                 """, Long.class, afterId, limit);
     }
 
+    private List<Long> collectOrder(List<Fact> facts, long orderId, long managerId) {
+        List<Map<String, Object>> orders = jdbc.queryForList("""
+                SELECT o.order_id, s.order_status_title AS status, o.order_amount, o.order_sum,
+                       o.client_message_generation, o.order_waiting_for_client,
+                       COALESCE(o.order_status_changed_at,TIMESTAMP(o.order_changed),TIMESTAMP(o.order_created)) AS cycle_started_at,
+                       COALESCE(o.order_waiting_for_client_changed_at,o.order_status_changed_at,
+                           TIMESTAMP(o.order_changed),TIMESTAMP(o.order_created)) AS waiting_cycle_started_at
+                FROM orders o LEFT JOIN order_statuses s ON s.order_status_id=o.order_status
+                WHERE o.order_id=? AND o.order_manager=?
+                """, orderId, managerId);
+        if (orders.isEmpty()) {
+            facts.add(new Fact("order:" + orderId + ":availability", "coverage", "availability",
+                    "Заказ отсутствует или больше не относится к менеджеру"));
+            return List.of();
+        }
+        Map<String, Object> order = orders.getFirst();
+        addRow(facts, "order:" + orderId, "order", order, "order_id", "status", "order_amount", "order_sum",
+                "client_message_generation", "order_waiting_for_client", "cycle_started_at", "waiting_cycle_started_at");
+        // A delivered reminder proves contact, not completion of the customer's review or the order.
+        facts.add(new Fact("order:" + orderId + ":resolution_coverage", "coverage", "business_resolution",
+                "Доставка напоминания не подтверждает проверку клиентом, оплату или завершение заказа; результат проверяется отдельно"));
+        List<Long> states = new ArrayList<>();
+        LocalDateTime cycle = timestamp(order.get("cycle_started_at"));
+        LocalDateTime waitingCycle = timestamp(order.get("waiting_cycle_started_at"));
+        if (cycle != null && waitingCycle != null) {
+            states.addAll(jdbc.queryForList("""
+                    SELECT state_id FROM scheduled_client_message_state
+                    WHERE order_id=? AND target_key IN (?,?,?) ORDER BY state_id DESC LIMIT 41
+                    """, Long.class, orderId, "order:" + orderId + ":" + cycle.withNano(0),
+                    "payment-return:" + orderId + ":" + cycle.withNano(0),
+                    "client-text:" + orderId + ":" + waitingCycle.withNano(0)));
+            if (states.size() > 40) {
+                facts.add(new Fact("order:" + orderId + ":automation_coverage", "coverage", "automation_states_truncated",
+                        "Показаны только 40 состояний текущего цикла заказа; наличие других ошибок не исключено"));
+                states = new ArrayList<>(states.subList(0, 40));
+            }
+        } else facts.add(new Fact("order:" + orderId + ":cycle_coverage", "coverage", "availability",
+                "Время текущего цикла заказа отсутствует; история автоматизации не приписывается текущему циклу"));
+        List<Map<String, Object>> deliveries = jdbc.queryForList("""
+                SELECT q.operation_id,q.card_id,q.state,q.attempts,q.error_code,q.created_at,q.updated_at
+                FROM manager_client_message_queue q
+                JOIN manager_daily_control_concrete_items i ON i.control_entity_id=q.card_id
+                JOIN manager_daily_controls c ON c.daily_control_id=i.control_id
+                WHERE q.command_kind='CONTROL' AND i.entity_type='ORDER' AND i.entity_id=? AND c.manager_id=?
+                ORDER BY q.created_at DESC,q.operation_id DESC LIMIT 6
+                """, orderId, managerId);
+        deliveries.stream().limit(5).forEach(row -> addRow(facts, "manager_delivery:" + string(row, "operation_id"),
+                "manager_delivery", row, "card_id", "state", "attempts", "error_code", "created_at", "updated_at"));
+        if (!deliveries.isEmpty()) facts.add(new Fact("order:" + orderId + ":manual_delivery_coverage", "history_coverage",
+                "manual_delivery_cycle_unverified", "Показана история ручных отправок по дневным карточкам заказа этого менеджера. "
+                + "Принадлежность операции текущему циклу и устранение проблемы не подтверждаются одними статусом и временем отправки."));
+        if (deliveries.size() > 5) facts.add(new Fact("order:" + orderId + ":manual_delivery_truncated", "history_coverage",
+                "manual_delivery_history_truncated", "Показаны только 5 последних ручных операций; отсутствие более ранних действий не подтверждается"));
+        return states;
+    }
+
+    private static LocalDateTime timestamp(Object value) {
+        if (value instanceof java.sql.Timestamp timestamp) return timestamp.toLocalDateTime();
+        return value instanceof LocalDateTime timestamp ? timestamp : null;
+    }
+
     /** Existing source cards only; this method never creates tasks or widens manager ownership. */
     public List<Long> sourcesForEntity(String entityType, Long entityId) {
         if (entityId == null || entityType == null) return List.of();
@@ -181,12 +244,14 @@ public class ManagerProblemEvidenceCollector {
                     SELECT MAX(i.control_entity_id) AS source_id FROM manager_daily_control_concrete_items i
                     JOIN manager_daily_controls c ON c.daily_control_id=i.control_id
                     WHERE (i.entity_type='AUTOMATION_FAILURE' AND i.entity_id=?)
+                       OR (i.entity_type='ORDER' AND i.entity_id IN (
+                           SELECT s.order_id FROM scheduled_client_message_state s WHERE s.state_id=?))
                        OR (i.entity_type LIKE 'COMMON_INVOICE%' AND i.entity_id IN (
                            SELECT o.invoice_id FROM common_invoice_orders o JOIN scheduled_client_message_state s ON s.order_id=o.order_id
                            WHERE s.state_id=? AND o.active_membership=TRUE))
                     GROUP BY c.manager_id,CASE WHEN i.entity_type LIKE 'COMMON_INVOICE%' THEN 'COMMON_INVOICE' ELSE i.entity_type END,i.entity_id
                     ORDER BY source_id DESC LIMIT 50
-                    """, Long.class, entityId, entityId);
+                    """, Long.class, entityId, entityId, entityId);
         }
         return jdbc.queryForList("""
                 SELECT MAX(i.control_entity_id) AS source_id FROM manager_daily_control_concrete_items i

@@ -151,7 +151,7 @@ class ManagerControlClientReplyMySqlIntegrationTest {
         var lookup = mock(ManagerControlWorkerTaskLookup.class); when(lookup.userDisplayName(any())).thenReturn("");
         presenter = new ManagerControlConcretePresenter(mock(com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosticsService.class), mock(com.hunt.otziv.manager_daily_summary.service.ManagerReportReviewCommitmentService.class), mock(WorkerRiskIncidentRepository.class), lookup,
                 mock(ManagerControlInvoiceDiagnostics.class), mock(ScheduledClientMessageStateRepository.class),
-                mock(CompanyRepository.class), new ManagerControlSlaPolicy(mock(AppSettingService.class)));
+                mock(CompanyRepository.class), new ManagerControlSlaPolicy(mock(AppSettingService.class)), mock(ManagerControlOrderDeliveryState.class));
         when(sender.sendToPlatformWithOperationId(any(), any(), any(), any(), any(), any(), anyString())).thenAnswer(call -> {
             sends.incrementAndGet(); token.set(call.getArgument(6));
             assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();

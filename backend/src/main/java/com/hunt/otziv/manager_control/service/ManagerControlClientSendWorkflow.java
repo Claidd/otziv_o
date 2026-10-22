@@ -13,6 +13,7 @@ import com.hunt.otziv.manager_control.model.ManagerDailyControlItemStatus;
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlConcreteItemRepository;
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlRepository;
 import com.hunt.otziv.p_products.model.Order;
+import com.hunt.otziv.p_products.api.OrderDeliveryControlContext.Snapshot;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.service.OrderService;
 import com.hunt.otziv.payments.service.BadReviewPaymentInstructionOrchestrator;
@@ -55,6 +56,7 @@ public class ManagerControlClientSendWorkflow {
     private final ManagerControlCardLifecycle cardLifecycle;
     private final ManagerControlClientMessageText clientMessageText;
     private final ManagerControlConcretePresenter concretePresenter;
+    private final ManagerControlOrderDeliveryState deliveryState;
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public ManagerControlConcreteItemResponse sendClientMessage(Long concreteItemId, Principal principal, Authentication authentication) {
@@ -88,7 +90,8 @@ public class ManagerControlClientSendWorkflow {
                     || !sameAmount(prepared.orderSum(), order.getSum()) || prepared.orderAmount() != order.getAmount()
                     || !Objects.equals(prepared.company(), ManagerControlMessageCompany.capture(order.getCompany()))
                     || !Objects.equals(prepared.managerClientId(), order.getManager() == null ? null : order.getManager().getClientId())
-                    || !Objects.equals(prepared.groupId(), order.getCompany() == null ? null : order.getCompany().getGroupId()))
+                    || !Objects.equals(prepared.groupId(), order.getCompany() == null ? null : order.getCompany().getGroupId())
+                    || !sameCycle(prepared, order))
                 throw new IllegalStateException("Manager command source changed");
             return null;
         });
@@ -105,9 +108,12 @@ public class ManagerControlClientSendWorkflow {
         PreparedClientMessage prepared = queuedSnapshot(command);
         managerControlTransactionRunner.required(() -> {
             // Same ordering as enqueue: card, order/payment source, then queue claim.
-            lockedPreparedClientMessage(prepared);
+            dailyControlConcreteItemRepository.findByIdForUpdate(prepared.concreteItemId()).orElseThrow();
             orderRepository.findByIdForCounterUpdate(prepared.orderId()).orElseThrow();
             if (!queue.owns(claim)) return null;
+            if ("SENT".equals(claim.previousState()) && !"finalization_required".equals(code))
+                restoreConfirmedFence(prepared, authentication);
+            lockedPreparedClientMessage(prepared);
             if ("finalization_required".equals(code) || "context_changed".equals(code)) {
                 var card = lockedPreparedClientMessage(prepared);
                 card.setComment(CLIENT_MESSAGE_DELIVERY_UNKNOWN_PREFIX + prepared.deliveryToken());
@@ -204,6 +210,7 @@ public class ManagerControlClientSendWorkflow {
         Order order = orderRepository.findByIdForCounterUpdate(concreteItem.getEntityId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ карточки контроля не найден"));
         accessPolicy.requireCurrentOrderAccess(order.getId(), authentication);
+        deliveryState.requireSendAllowed(concreteItem, deliveryContext(order));
         BadReviewPaymentInstructionOrchestrator.PreparedPaymentInstruction paymentInstruction =
                 clientMessageText.isPaymentControlOrder(order)
                         ? paymentInstructionOrchestrator.prepareAuthorized(order.getId(), authentication)
@@ -234,7 +241,8 @@ public class ManagerControlClientSendWorkflow {
                 concreteItem.getLastManualTouchAt(),
                 concreteItem.getFollowUpAt(),
                 concreteItem.getResolvedAt(),
-                concreteItem.isAutomaticResolution()
+                concreteItem.isAutomaticResolution(),
+                order.getClientMessageGeneration(), cycleAt(order)
         );
         concreteItem.setStatus(ManagerDailyControlItemStatus.ACTION_TAKEN);
         concreteItem.setActionType(ManagerDailyControlActionType.ACTION_TAKEN);
@@ -260,22 +268,35 @@ public class ManagerControlClientSendWorkflow {
         Long currentManagerId = order.getManager() == null ? null : order.getManager().getId();
         if (!Objects.equals(prepared.orderManagerId(), currentManagerId)
                 || !Objects.equals(prepared.orderStatus(), clientMessageText.orderStatusTitle(order))
-                || !sameAmount(prepared.orderSum(), order.getSum()) || prepared.orderAmount() != order.getAmount()) {
+                || !sameAmount(prepared.orderSum(), order.getSum()) || prepared.orderAmount() != order.getAmount()
+                || !Objects.equals(prepared.company(), ManagerControlMessageCompany.capture(order.getCompany()))
+                || !Objects.equals(prepared.managerClientId(), order.getManager() == null ? null : order.getManager().getClientId())
+                || !Objects.equals(prepared.groupId(), order.getCompany() == null ? null : order.getCompany().getGroupId())
+                || !sameCycle(prepared, order)) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Менеджер или статус заказа изменился во время отправки"
             );
         }
         LocalDateTime now = LocalDateTime.now();
-        cardLifecycle.recordConcreteEpisode(concreteItem, ManagerDailyControlItemStatus.RESOLVED, false);
-        concreteItem.setStatus(ManagerDailyControlItemStatus.RESOLVED);
-        concreteItem.setActionType(ManagerDailyControlActionType.RESOLVED);
+        // Invoice delivery advances the business stage; retain its existing completion semantics.
+        // Ordinary reminders establish contact and must leave the underlying review/payment open.
+        boolean awaitingClient = !ENTITY_WORKER_ORDER_NEW.equals(concreteItem.getEntityType())
+                && !"Опубликовано".equals(prepared.orderStatus())
+                && !ORDER_STATUS_TO_PAY.equals(prepared.orderStatus());
+        var completedStatus = awaitingClient ? ManagerDailyControlItemStatus.ACTION_TAKEN : ManagerDailyControlItemStatus.RESOLVED;
+        var completedAction = awaitingClient ? ManagerDailyControlActionType.ACTION_TAKEN : ManagerDailyControlActionType.RESOLVED;
+        concreteItem.setStatus(prepared.previousStatus());
+        cardLifecycle.recordConcreteEpisode(concreteItem, completedStatus, false);
+        concreteItem.setStatus(completedStatus);
+        concreteItem.setActionType(completedAction);
         concreteItem.setLastManualTouchAt(now);
-        concreteItem.setFollowUpAt(null);
-        concreteItem.setResolvedAt(now);
+        concreteItem.setFollowUpAt(awaitingClient ? now.plusDays(ManagerControlItemActions.MANUAL_FOLLOW_UP_DAYS) : null);
+        concreteItem.setResolvedAt(awaitingClient ? null : now);
         concreteItem.setAutomaticResolution(false);
         String statusNote = applyOrderStatusAfterClientSend(concreteItem, order);
-        concreteItem.setComment(limit("Сообщение клиенту отправлено через " + safe(result.channel()) + statusNote, 1000));
+        concreteItem.setComment(limit("Сообщение клиенту отправлено через " + safe(result.channel()) + statusNote
+                + (awaitingClient ? ". Ожидаем ответ до " + concreteItem.getFollowUpAt() + "; заказ остаётся на контроле." : ""), 1000));
         ManagerDailyControlConcreteItem savedConcreteItem = dailyControlConcreteItemRepository.save(concreteItem);
 
         cardLifecycle.updateParentItemFromConcreteItems(savedConcreteItem.getParentItem());
@@ -291,8 +312,8 @@ public class ManagerControlClientSendWorkflow {
                 control,
                 savedConcreteItem.getParentItem(),
                 accessPolicy.actorUserId(principal),
-                ManagerDailyControlEventType.ITEM_ACTION,
-                ManagerDailyControlActionType.RESOLVED,
+                awaitingClient ? ManagerDailyControlEventType.ITEM_ACTION : ManagerDailyControlEventType.ITEM_RESOLVED,
+                completedAction,
                 "Клиенту отправлено сообщение по карточке: " + concreteItem.getTitle()
                         + " через " + safe(result.channel())
                         + " за " + (System.currentTimeMillis() - startedAt) + " мс"
@@ -331,6 +352,54 @@ public class ManagerControlClientSendWorkflow {
         return item;
     }
 
+    /** A proven old SENT may repair a lost legacy card fence, but never authorizes another dispatch. */
+    private void restoreConfirmedFence(PreparedClientMessage prepared, Authentication authentication) {
+        var card = dailyControlConcreteItemRepository.findByIdForUpdate(prepared.concreteItemId()).orElseThrow();
+        accessPolicy.requireControlAccess(card.getControl(), authentication, authentication);
+        String comment = safe(card.getComment());
+        if (comment.equals(CLIENT_MESSAGE_DELIVERY_PREPARED_PREFIX + prepared.deliveryToken())
+                || comment.equals(CLIENT_MESSAGE_DELIVERY_UNKNOWN_PREFIX + prepared.deliveryToken())) return;
+        if (!(card.getStatus() == ManagerDailyControlItemStatus.OPEN && comment.isBlank())
+                && !(card.getStatus() == ManagerDailyControlItemStatus.ACTION_TAKEN
+                && comment.startsWith(ManagerControlOrderDeliveryState.CONFIRMED_CONTACT)))
+            throw new IllegalStateException("Card action changed after delivery");
+        var order = orderRepository.findByIdForCounterUpdate(prepared.orderId()).orElseThrow();
+        accessPolicy.requireCurrentOrderAccess(order.getId(), authentication);
+        var history = deliveryState.history(deliveryContext(order));
+        var recorded = history.stream().filter(row -> row.delivery().operationId().equals(prepared.deliveryToken()))
+                .findFirst().orElseThrow(() -> new IllegalStateException("Delivered operation belongs to an older cycle"));
+        if (history.stream().anyMatch(row -> row.createdAt().isAfter(recorded.createdAt())))
+            throw new IllegalStateException("A newer contact operation owns this order cycle");
+        if (!Objects.equals(prepared.orderManagerId(), order.getManager() == null ? null : order.getManager().getId())
+                || !Objects.equals(prepared.orderStatus(), clientMessageText.orderStatusTitle(order))
+                || !sameAmount(prepared.orderSum(), order.getSum()) || prepared.orderAmount() != order.getAmount()
+                || !Objects.equals(prepared.company(), ManagerControlMessageCompany.capture(order.getCompany()))
+                || !Objects.equals(prepared.managerClientId(), order.getManager() == null ? null : order.getManager().getClientId())
+                || !Objects.equals(prepared.groupId(), order.getCompany() == null ? null : order.getCompany().getGroupId())
+                || !sameCycle(prepared, order)) throw new IllegalStateException("Delivered source changed");
+        card.setComment(CLIENT_MESSAGE_DELIVERY_PREPARED_PREFIX + prepared.deliveryToken());
+        dailyControlConcreteItemRepository.save(card);
+    }
+
+    private boolean sameCycle(PreparedClientMessage prepared, Order order) {
+        return prepared.sourceGeneration() == null
+                ? deliveryState.history(deliveryContext(order)).stream().anyMatch(row -> row.delivery().operationId().equals(prepared.deliveryToken()))
+                : prepared.sourceGeneration() == order.getClientMessageGeneration()
+                    && Objects.equals(prepared.sourceStatusChangedAt(), cycleAt(order));
+    }
+
+    private Snapshot deliveryContext(Order order) {
+        return new Snapshot(order.getId(), order.notificationManagerId(), clientMessageText.orderStatusTitle(order),
+                order.getClientMessageGeneration(), cycleAt(order), order.isWaitingForClient(), order.getWaitingForClientChangedAt());
+    }
+
+    private static LocalDateTime cycleAt(Order order) {
+        if (order.getStatusChangedAt() != null) return order.getStatusChangedAt();
+        if (order.getChanged() != null) return order.getChanged().atStartOfDay();
+        if (order.getCreated() != null) return order.getCreated().atStartOfDay();
+        return LocalDateTime.MIN;
+    }
+
     record PreparedClientMessage(
             Long concreteItemId,
             Long orderId,
@@ -350,7 +419,9 @@ public class ManagerControlClientSendWorkflow {
             LocalDateTime previousLastManualTouchAt,
             LocalDateTime previousFollowUpAt,
             LocalDateTime previousResolvedAt,
-            boolean previousAutomaticResolution
+            boolean previousAutomaticResolution,
+            Long sourceGeneration,
+            LocalDateTime sourceStatusChangedAt
     ) {
     }
 

@@ -39,15 +39,31 @@ public class ManagerControlRepairOutcome {
 
     private final ManagerDailyControlConcreteItemRepository dailyControlConcreteItemRepository;
 
+    private final ManagerControlOrderDeliveryState deliveryState;
+
     ManagerControlConcreteItemResponse resolveRepairedConcreteItem(ManagerDailyControlConcreteItem concreteItem, ManagerDailyControl control, String comment, Principal principal, String eventComment) {
+        return finish(concreteItem, control, comment, principal, eventComment, false);
+    }
+
+    ManagerControlConcreteItemResponse recordConfirmedContact(ManagerDailyControlConcreteItem concreteItem, ManagerDailyControl control, String comment, Principal principal, String eventComment, String expectedTarget) {
+        var locked = dailyControlConcreteItemRepository.findByIdForUpdate(concreteItem.getId())
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Карточка контроля не найдена"));
+        deliveryState.requireNoManagerDeliveryPending(locked, expectedTarget);
+        return finish(locked, locked.getControl(), comment, principal, eventComment, true);
+    }
+
+    private ManagerControlConcreteItemResponse finish(ManagerDailyControlConcreteItem concreteItem, ManagerDailyControl control,
+            String comment, Principal principal, String eventComment, boolean awaitingClient) {
         LocalDateTime now = LocalDateTime.now();
-        cardLifecycle.recordConcreteEpisode(concreteItem, ManagerDailyControlItemStatus.RESOLVED, false);
-        concreteItem.setStatus(ManagerDailyControlItemStatus.RESOLVED);
-        concreteItem.setActionType(ManagerDailyControlActionType.RESOLVED);
+        var status = awaitingClient ? ManagerDailyControlItemStatus.ACTION_TAKEN : ManagerDailyControlItemStatus.RESOLVED;
+        var action = awaitingClient ? ManagerDailyControlActionType.ACTION_TAKEN : ManagerDailyControlActionType.RESOLVED;
+        cardLifecycle.recordConcreteEpisode(concreteItem, status, false);
+        concreteItem.setStatus(status);
+        concreteItem.setActionType(action);
         concreteItem.setComment(limit(comment, 1000));
-        concreteItem.setResolvedAt(now);
+        concreteItem.setResolvedAt(awaitingClient ? null : now);
         concreteItem.setAutomaticResolution(false);
-        concreteItem.setFollowUpAt(null);
+        concreteItem.setFollowUpAt(awaitingClient ? now.plusDays(MANUAL_FOLLOW_UP_DAYS) : null);
         concreteItem.setLastManualTouchAt(now);
         ManagerDailyControlConcreteItem savedConcreteItem = dailyControlConcreteItemRepository.save(concreteItem);
         cardLifecycle.updateParentItemFromConcreteItems(savedConcreteItem.getParentItem());
@@ -57,7 +73,9 @@ public class ManagerControlRepairOutcome {
         control.setLastActivityAt(now);
         control.setStatus(cardLifecycle.recalculateControlStatus(control));
         dailyControlRepository.save(control);
-        cardLifecycle.saveEvent(control, savedConcreteItem.getParentItem(), accessPolicy.actorUserId(principal), ManagerDailyControlEventType.ITEM_RESOLVED, ManagerDailyControlActionType.RESOLVED, eventComment + ": " + savedConcreteItem.getTitle());
+        cardLifecycle.saveEvent(control, savedConcreteItem.getParentItem(), accessPolicy.actorUserId(principal),
+                awaitingClient ? ManagerDailyControlEventType.ITEM_ACTION : ManagerDailyControlEventType.ITEM_RESOLVED,
+                action, eventComment + ": " + savedConcreteItem.getTitle());
         return concretePresenter.concreteItemResponse(savedConcreteItem);
     }
 

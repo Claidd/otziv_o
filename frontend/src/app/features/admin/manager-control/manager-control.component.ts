@@ -206,7 +206,15 @@ export class ManagerControlComponent implements OnInit {
   private observeDelivery(card: ManagerControlConcreteItem): void {
     const id = card.controlEntityId, operation = managerCardDelivery(card);
     const managerId = this.detail()?.managerId;
-    if (!id || !operation) return;
+    if (!id) return;
+    // A fresh card response replaces the previous cycle, including its receipt reader.
+    this.deliveryTracker.cancel(id);
+    this.deliveries.update(values => {
+      const next = { ...values };
+      delete next[id];
+      return next;
+    });
+    if (!operation) return;
     this.deliveryTracker.track(id, operation, () => firstValueFrom(this.api.deliveryOperation(id, operation.operationId)),
       value => {
         const previous = this.deliveries()[id];
@@ -1300,7 +1308,7 @@ export class ManagerControlComponent implements OnInit {
     this.updatingControl.set(true);
     this.api.markStage(controlId, { stage }).subscribe({
       next: (updated) => {
-        this.detail.set(updated);
+        this.applyDetail(updated);
         this.updatingControl.set(false);
         this.toast.success('Этап отмечен', this.stageLabel(stage));
         this.load({ silent: true });
@@ -1526,12 +1534,17 @@ export class ManagerControlComponent implements OnInit {
         });
         const merged = this.patchDetailConcreteItem(example, updated);
         if (updated.delivery) {
-          this.toast.info('Сообщение в очереди', deliveryOperationMessage(updated.delivery) ?? 'Запрос сохранён');
-          this.observeDelivery(merged);
+          if (updated.delivery.status === 'SENT' && !updated.delivery.errorCode) {
+            this.toast.success('Сообщение отправлено', this.clientMessageOutcomeText(merged));
+          } else {
+            this.toast.info('Статус отправки', deliveryOperationMessage(updated.delivery) ?? 'Запрос сохранён');
+          }
           return;
         }
-        this.toast.success('Сообщение отправлено', 'Карточка закрыта');
-        this.removeConcreteItemFromDetail(merged);
+        this.toast.success('Сообщение отправлено', this.clientMessageOutcomeText(merged));
+        if (this.shouldHideConcreteItemAfterAction(merged)) {
+          this.removeConcreteItemFromDetail(merged);
+        }
         this.load({ silent: true });
       },
       error: (err) => {
@@ -1918,16 +1931,14 @@ export class ManagerControlComponent implements OnInit {
         });
         const merged = this.patchDetailConcreteItem(example, updated);
         if (updated.delivery) {
-          this.toast.info('Ответ в очереди', deliveryOperationMessage(updated.delivery) ?? 'Запрос сохранён');
-          this.observeDelivery(merged);
+          if (updated.delivery.status === 'SENT' && !updated.delivery.errorCode) {
+            this.toast.success('Ответ отправлен', this.clientMessageOutcomeText(merged));
+          } else {
+            this.toast.info('Статус ответа', deliveryOperationMessage(updated.delivery) ?? 'Запрос сохранён');
+          }
           return;
         }
-        this.toast.success(
-          'Ответ отправлен',
-          this.isClientChatAudit(example)
-            ? 'Ответ зафиксирован, проверка закрыта'
-            : 'Карточка закрыта как отвеченная'
-        );
+        this.toast.success('Ответ отправлен', this.clientMessageOutcomeText(merged));
         if (this.shouldHideConcreteItemAfterAction(merged)) {
           this.removeConcreteItemFromDetail(merged);
         }
@@ -2833,6 +2844,7 @@ export class ManagerControlComponent implements OnInit {
       ...comments,
       [itemId]: merged.comment ?? ''
     }));
+    this.observeDelivery(merged);
     return merged;
   }
 
@@ -2846,6 +2858,12 @@ export class ManagerControlComponent implements OnInit {
     return !!example.itemStatus
       && example.itemStatus !== 'OPEN'
       && (!!example.followUpAt || example.itemStatus === 'RESOLVED');
+  }
+
+  private clientMessageOutcomeText(example: ManagerControlConcreteItem): string {
+    if (example.itemStatus === 'RESOLVED') return 'Карточка закрыта';
+    if (example.followUpAt) return `Повторная проверка: ${this.shortDateTime(example.followUpAt)}`;
+    return 'Карточка остаётся на контроле';
   }
 
   private removeConcreteItemFromDetail(example: ManagerControlConcreteItem): void {

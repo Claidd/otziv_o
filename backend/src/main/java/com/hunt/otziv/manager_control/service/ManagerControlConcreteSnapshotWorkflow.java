@@ -43,6 +43,7 @@ public class ManagerControlConcreteSnapshotWorkflow {
     private final ManagerControlConcretePresenter concretePresenter;
 
     private final ManagerDailyControlConcreteItemRepository dailyControlConcreteItemRepository;
+    private final ManagerControlOrderDeliveryState deliveryState;
 
     List<ManagerControlItemDetailResponse> detailItems(Manager manager, List<ManagerDailyControlItem> items,
             LocalDate today, boolean syncConcrete) {
@@ -93,6 +94,8 @@ public class ManagerControlConcreteSnapshotWorkflow {
         resolveStaleConcreteItems(parentItem, storedByKey, freshKeys);
         boolean reopenedUnanswered = false;
         for (ManagerDailyControlConcreteItem stored : storedExamples) {
+            if (freshKeys.contains(stored.getEntityKey()) && deliveryState.restoreConfirmedContact(stored))
+                dailyControlConcreteItemRepository.save(stored);
             if (freshKeys.contains(stored.getEntityKey()) && reopenActiveClientChatUnanswered(stored)) {
                 dailyControlConcreteItemRepository.save(stored);
                 reopenedUnanswered = true;
@@ -152,6 +155,7 @@ public class ManagerControlConcreteSnapshotWorkflow {
                 created = true;
             }
             boolean changed = applyConcreteItemSnapshot(concreteItem, example);
+            if (deliveryState.restoreConfirmedContact(concreteItem)) changed = true;
             if (reopenActiveClientChatUnanswered(concreteItem)) {
                 changed = true;
                 reopenedUnanswered = true;
@@ -217,6 +221,7 @@ public class ManagerControlConcreteSnapshotWorkflow {
             if (item == null || item.getStatus() == ManagerDailyControlItemStatus.RESOLVED || freshKeys.contains(item.getEntityKey())) {
                 continue;
             }
+            if (deliveryState.pending(item)) continue;
             cardLifecycle.recordConcreteEpisode(item, ManagerDailyControlItemStatus.RESOLVED, true);
             item.setStatus(ManagerDailyControlItemStatus.RESOLVED);
             item.setActionType(ManagerDailyControlActionType.RESOLVED);
@@ -352,6 +357,7 @@ public class ManagerControlConcreteSnapshotWorkflow {
         if (parentItem == null || concreteItem == null || parentItem.getStatus() != ManagerDailyControlItemStatus.OPEN || parentItem.getGroup() != ManagerDailyControlGroup.ACTION || concreteItem.getStatus() != ManagerDailyControlItemStatus.RESOLVED) {
             return false;
         }
+        if (deliveryState.restoreConfirmedContact(concreteItem) || deliveryState.pending(concreteItem)) return false;
         reopenConcreteItem(concreteItem);
         return true;
     }
