@@ -1641,14 +1641,12 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          pattern: ci-receipt-*-attempt-*
-          path: ${{ runner.temp }}/receipts
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          pattern: ci-capacity-*-attempt-*
-          path: ${{ runner.temp }}/receipts
+      - name: Download the newest verified receipt for each image and capacity source
+        env:
+          OTZIV_GITHUB_READ_TOKEN: ${{ github.token }}
+        run: >-
+          python3 -B infrastructure/scripts/prod/ci_release.py download-receipts
+          --output "$RUNNER_TEMP/receipts"
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: ci-test-reuse-attempt-${{ github.run_attempt }}
