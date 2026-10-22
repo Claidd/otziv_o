@@ -27,6 +27,67 @@ import static org.mockito.Mockito.when;
 
 class ManagerControlAutomationRepairWorkflowTest {
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = ScheduledClientMessageService.OrdinaryDeliveryRecoveryResult.class,
+            names = {"HISTORY_UNAVAILABLE", "HISTORY_CHECKED_NO_RECEIPT", "UNRESOLVED", "SENT_CONFIRMED"})
+    void orderCardReconcilesTheExistingUncertainOperationWithoutRearmingOrSending(
+            ScheduledClientMessageService.OrdinaryDeliveryRecoveryResult receipt) {
+        var messages = mock(ScheduledClientMessageService.class);
+        var states = mock(ScheduledClientMessageStateRepository.class);
+        var diagnostics = new ManagerControlOrderAutomationDiagnostics(mock(com.hunt.otziv.p_products.repository.OrderRepository.class), states);
+        var outcome = mock(ManagerControlRepairOutcome.class);
+        var workflow = new ManagerControlAutomationRepairWorkflow(mock(ManagerControlChatRepairWorkflow.class), outcome,
+                mock(ManagerControlProblemExamples.class), diagnostics, messages, states,
+                mock(ClientChatMessageReconciliationService.class), mock(ManagerAutomationFailureService.class),
+                new com.hunt.otziv.client_messages.service.CurrentOrderDeliveryUncertaintyService(states));
+        var order = new com.hunt.otziv.p_products.model.Order(); order.setId(77L);
+        order.setStatusChangedAt(LocalDateTime.of(2026, 7, 14, 0, 0));
+        var state = ScheduledClientMessageState.builder().id(3938L).orderId(77L)
+                .scenario(ClientMessageScenario.REVIEW_CHECK_REMINDER).targetKey("order:77:2026-07-14T00:00")
+                .deliveryStatus("UNKNOWN").lastErrorCode(ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN).build();
+        when(messages.orderAutomationScenario(order)).thenReturn(Optional.of(ClientMessageScenario.REVIEW_CHECK_REMINDER));
+        when(states.findByOrderIdIn(java.util.List.of(77L))).thenReturn(java.util.List.of(state));
+        when(states.findById(3938L)).thenReturn(Optional.of(state));
+        when(messages.recoverUncertainOrdinaryDelivery(3938L)).thenReturn(receipt);
+        var card = new ManagerDailyControlConcreteItem(); card.setEntityType("ORDER"); card.setEntityId(77L);
+        var control = new ManagerDailyControl();
+        if (receipt == ScheduledClientMessageService.OrdinaryDeliveryRecoveryResult.SENT_CONFIRMED)
+            workflow.repairOrderAutomationConcreteItem(card, control, order, () -> "manager");
+        else assertThrows(ResponseStatusException.class,
+                () -> workflow.repairOrderAutomationConcreteItem(card, control, order, () -> "manager"));
+        verify(messages).recoverUncertainOrdinaryDelivery(3938L);
+        verify(messages, never()).ensureOrderAutomationForOrder(org.mockito.ArgumentMatchers.any());
+        verify(messages, never()).retryNow(anyLong());
+        if (receipt == ScheduledClientMessageService.OrdinaryDeliveryRecoveryResult.SENT_CONFIRMED)
+            verify(outcome).recordConfirmedContact(org.mockito.ArgumentMatchers.eq(card), org.mockito.ArgumentMatchers.eq(control),
+                    org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.eq(state.getTargetKey()));
+        verify(outcome, never()).resolveRepairedConcreteItem(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString());
+    }
+
+    @Test void recoveredContactRetainsFollowUpWhenTheOpenParentIsRefreshed() {
+        var cards = mock(com.hunt.otziv.manager_control.repository.ManagerDailyControlConcreteItemRepository.class);
+        when(cards.save(org.mockito.ArgumentMatchers.any())).thenAnswer(call -> call.getArgument(0));
+        var lifecycle = mock(ManagerControlCardLifecycle.class);
+        var outcome = new ManagerControlRepairOutcome(mock(ManagerControlProblemExamples.class), mock(ManagerControlAccessPolicy.class),
+                lifecycle, mock(ManagerControlConcretePresenter.class), mock(com.hunt.otziv.manager_control.repository.ManagerDailyControlRepository.class), cards,
+                mock(ManagerControlOrderDeliveryState.class));
+        var card = new ManagerDailyControlConcreteItem(); card.setId(1L); card.setEntityType("ORDER"); card.setControl(new ManagerDailyControl());
+        when(cards.findByIdForUpdate(1L)).thenReturn(Optional.of(card));
+        card.setStatus(com.hunt.otziv.manager_control.model.ManagerDailyControlItemStatus.OPEN);
+        var parent = new com.hunt.otziv.manager_control.model.ManagerDailyControlItem();
+        parent.setStatus(com.hunt.otziv.manager_control.model.ManagerDailyControlItemStatus.OPEN);
+        parent.setGroup(com.hunt.otziv.manager_control.model.ManagerDailyControlGroup.ACTION);
+        outcome.recordConfirmedContact(card, card.getControl(), "fixture receipt confirmed", () -> "manager", "fixture", "order:77:2026-07-14T00:00");
+        var snapshot = new ManagerControlConcreteSnapshotWorkflow(mock(com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosticsService.class),
+                mock(ManagerControlProblemExamples.class), lifecycle, mock(ManagerControlSlaPolicy.class),
+                mock(ManagerControlConcretePresenter.class), cards, mock(ManagerControlOrderDeliveryState.class));
+        assertEquals(com.hunt.otziv.manager_control.model.ManagerDailyControlItemStatus.ACTION_TAKEN, card.getStatus());
+        assertEquals(null, card.getResolvedAt());
+        assertTrue(snapshot.isConcreteSnoozed(card));
+        org.junit.jupiter.api.Assertions.assertFalse(snapshot.reopenResolvedConcreteItemStillActive(parent, card));
+    }
+
     @Test
     void checkedHistoryWithoutReceiptRequiresManualHandoffWithoutRetry() {
         var stateRepository = mock(ScheduledClientMessageStateRepository.class);
@@ -36,7 +97,8 @@ class ManagerControlAutomationRepairWorkflowTest {
         var workflow = new ManagerControlAutomationRepairWorkflow(
                 mock(ManagerControlChatRepairWorkflow.class), repairOutcome,
                 mock(ManagerControlProblemExamples.class), mock(ManagerControlOrderAutomationDiagnostics.class),
-                scheduledMessages, stateRepository, mock(ClientChatMessageReconciliationService.class), failures);
+                scheduledMessages, stateRepository, mock(ClientChatMessageReconciliationService.class), failures,
+                new com.hunt.otziv.client_messages.service.CurrentOrderDeliveryUncertaintyService(stateRepository));
 
         var manager = new Manager();
         manager.setId(3L);

@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -34,6 +35,49 @@ public class ManagerClientMessageQueue implements com.hunt.otziv.client_messages
     record Command(String operationId, long cardId, String kind, String preparedJson, Actor actor) { }
     record Claim(String operationId, long cardId, String kind, String previousState, int attempts, String token) {
         boolean mayDispatch() { return "QUEUED".equals(previousState) || "RETRYABLE".equals(previousState); }
+    }
+
+    record RecordedControl(DeliveryOperation delivery, long cardId, LocalDateTime createdAt,
+                           LocalDateTime updatedAt, ManagerControlClientSendWorkflow.PreparedClientMessage source) { }
+
+    /** Same order across daily copies. The encrypted snapshot supplies the cycle and authority fence. */
+    List<RecordedControl> controlHistory(long orderId) {
+        return controlHistory(orderId, false);
+    }
+
+    List<RecordedControl> controlHistory(long orderId, boolean lock) {
+        return jdbc.query("""
+                SELECT q.operation_id,q.card_id,q.state,q.attempts,q.error_code,q.created_at,q.updated_at,q.envelope_ciphertext
+                FROM manager_client_message_queue q
+                WHERE q.command_kind='CONTROL' AND q.card_id IN (SELECT c.control_entity_id
+                    FROM manager_daily_control_concrete_items c WHERE c.entity_id=? AND c.entity_type IN ('ORDER','WORKER_ORDER_NEW'))
+                  AND (q.state IN ('QUEUED','SENDING','RETRYABLE','UNKNOWN')
+                    OR q.error_code IN ('finalization_required','context_changed')
+                    OR (q.state='SENT' AND q.updated_at>=DATE_SUB(CURRENT_TIMESTAMP(6),INTERVAL 2 DAY)))
+                ORDER BY q.created_at DESC,q.operation_id DESC
+                """ + (lock ? " FOR UPDATE" : ""), (rs, row) -> {
+            String id = rs.getString(1);
+            String encrypted = rs.getString(8);
+            if (encrypted == null || !encrypted.startsWith("enc:")) throw new IllegalStateException("Manager command encryption is missing");
+            var command = decode(cipher.decrypt(encrypted), Command.class);
+            if (!Objects.equals(command.operationId(), id) || command.cardId() != rs.getLong(2)
+                    || !"CONTROL".equals(command.kind())) throw new IllegalStateException("Manager command identity mismatch");
+            var source = decode(command.preparedJson(), ManagerControlClientSendWorkflow.PreparedClientMessage.class);
+            if (!Objects.equals(source.deliveryToken(), id) || !Objects.equals(source.concreteItemId(), rs.getLong(2)))
+                throw new IllegalStateException("Manager command source identity mismatch");
+            return new RecordedControl(new DeliveryOperation(id, rs.getString(3), rs.getInt(4), rs.getString(5)),
+                    rs.getLong(2), rs.getTimestamp(6).toLocalDateTime(), rs.getTimestamp(7).toLocalDateTime(), source);
+        }, orderId);
+    }
+
+    DeliveryOperation blockingForCard(long cardId) {
+        return jdbc.query("""
+                SELECT operation_id,state,attempts,error_code FROM manager_client_message_queue
+                WHERE card_id=? AND (state IN ('QUEUED','SENDING','RETRYABLE','UNKNOWN')
+                  OR error_code IN ('finalization_required','context_changed'))
+                ORDER BY created_at DESC LIMIT 1
+                """, (rs, row) -> new DeliveryOperation(rs.getString(1), rs.getString(2), rs.getInt(3), rs.getString(4)), cardId)
+                .stream().findFirst().orElse(null);
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
@@ -75,14 +119,16 @@ public class ManagerClientMessageQueue implements com.hunt.otziv.client_messages
     public Optional<Claim> claim() {
         var claims = jdbc.query("""
                 SELECT operation_id,card_id,command_kind,state,attempts FROM manager_client_message_queue
-                WHERE state IN ('QUEUED','RETRYABLE','SENDING','UNKNOWN') AND next_attempt_at<=CURRENT_TIMESTAMP(6)
+                WHERE (state IN ('QUEUED','RETRYABLE','SENDING','UNKNOWN')
+                  OR (state='SENT' AND error_code='finalization_required')) AND next_attempt_at<=CURRENT_TIMESTAMP(6)
                   AND (lease_until IS NULL OR lease_until<CURRENT_TIMESTAMP(6))
                 ORDER BY next_attempt_at,created_at LIMIT 1 FOR UPDATE SKIP LOCKED
                 """, (rs, row) -> new Claim(rs.getString(1), rs.getLong(2), rs.getString(3), rs.getString(4), rs.getInt(5), UUID.randomUUID().toString()));
         if (claims.isEmpty()) return Optional.empty();
         Claim claim = claims.getFirst();
         jdbc.update("""
-                UPDATE manager_client_message_queue SET state='SENDING',claim_token=?,attempts=attempts+?,
+                UPDATE manager_client_message_queue SET state=CASE WHEN state='SENT' THEN 'SENT' ELSE 'SENDING' END,
+                    claim_token=?,attempts=attempts+?,
                     lease_until=TIMESTAMPADD(MINUTE,5,CURRENT_TIMESTAMP(6)) WHERE operation_id=?
                 """, claim.token(), claim.mayDispatch() ? 1 : 0, claim.operationId());
         return Optional.of(claim);

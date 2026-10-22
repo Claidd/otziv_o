@@ -33,6 +33,7 @@ public class ManagerControlConcretePresenter {
     private final ScheduledClientMessageStateRepository scheduledClientMessageStateRepository;
     private final CompanyRepository companyRepository;
     private final ManagerControlSlaPolicy slaPolicy;
+    private final ManagerControlOrderDeliveryState deliveryState;
 
     ManagerControlConcreteItemResponse concreteItemResponse(ManagerDailyControlConcreteItem item) {
         return concreteItemResponse(item, null);
@@ -96,7 +97,8 @@ public class ManagerControlConcretePresenter {
                 null
         );
         return slaPolicy.decorateConcreteSla(item.getParentItem(), response.withSla(item.getCreatedAt(), null, null, null))
-                .withDiagnosis(diagnostics.latest(item.getId())).withAuditCommitments(commitments.forSource(item.getId()));
+                .withDiagnosis(diagnostics.latest(item.getId())).withAuditCommitments(commitments.forSource(item.getId()))
+                .withDelivery(deliveryState.delivery(item));
     }
 
     String companyBoardUrlByKeyword(String keyword, String fallbackUrl) {

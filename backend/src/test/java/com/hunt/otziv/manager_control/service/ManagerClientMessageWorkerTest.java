@@ -119,7 +119,8 @@ class ManagerClientMessageWorkerTest {
         when(control.dispatchQueued(command)).thenReturn(ClientMessageSendResult.sent("WhatsApp", "provider-id"));
         when(actors.revalidate(command.actor())).thenReturn(auth).thenThrow(new AccessDeniedException("revoked"));
         worker.drain();
-        verify(control).completeQueued(eq(claim), eq(command), any(), isNull(), eq("SENT"), eq("finalization_required"), eq(0));
+        // Receipt-only finalization backs off to avoid a hot retry loop after authorization changes.
+        verify(control).completeQueued(eq(claim), eq(command), any(), isNull(), eq("SENT"), eq("finalization_required"), eq(300));
         verify(control, never()).completeQueued(any(), any(), any(), eq(auth), any(), any(), anyInt());
         verify(control, times(1)).dispatchQueued(command);
     }

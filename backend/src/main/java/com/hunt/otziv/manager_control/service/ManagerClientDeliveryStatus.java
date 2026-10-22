@@ -16,12 +16,14 @@ public class ManagerClientDeliveryStatus {
     private final ManagerDailyControlConcreteItemRepository cards;
     private final ManagerControlAccessPolicy access;
     private final ManagerClientMessageQueue queue;
+    private final ManagerControlOrderDeliveryState deliveryState;
 
     @Transactional(readOnly = true)
     public DeliveryOperation get(long cardId, String operationId, Principal principal, Authentication authentication) {
         var card = cards.findById(cardId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
         access.requireControlAccess(card.getControl(), principal, authentication);
         var result = queue.status(cardId, operationId);
+        if (result == null) result = deliveryState.delivery(card, operationId);
         if (result == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         return result;
     }

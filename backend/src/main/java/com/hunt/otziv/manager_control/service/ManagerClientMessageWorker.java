@@ -42,7 +42,11 @@ public class ManagerClientMessageWorker {
     private void process(ManagerClientMessageQueue.Claim claim) {
         ManagerClientMessageQueue.Command command;
         try { command = queue.snapshot(claim.operationId()); }
-        catch (RuntimeException unreadable) { finish(claim, "UNKNOWN", "snapshot_unreadable", 300); return; }
+        catch (RuntimeException unreadable) {
+            finish(claim, "SENT".equals(claim.previousState()) ? "SENT" : "UNKNOWN",
+                    "SENT".equals(claim.previousState()) ? "finalization_required" : "snapshot_unreadable", 300);
+            return;
+        }
         ClientMessageSendResult result;
         Authentication authentication = null;
         if (claim.mayDispatch()) {
@@ -64,10 +68,19 @@ public class ManagerClientMessageWorker {
             } catch (RuntimeException uncertain) { holdUnknown(claim, command, "sender_exception"); return; }
         } else {
             try { result = delivery.recordedOutcome(claim.operationId()); }
-            catch (RuntimeException unavailable) { holdUnknown(claim, command, "receipt_unavailable"); return; }
+            catch (RuntimeException unavailable) {
+                if ("SENT".equals(claim.previousState())) finish(claim, "SENT", "finalization_required", 300);
+                else holdUnknown(claim, command, "receipt_unavailable");
+                return;
+            }
         }
         boolean confirmed = result != null && result.sent() && result.messageId() != null
                 && !result.messageId().isBlank() && result.messageId().length() <= 512;
+        // Delivery proof is monotonic. A missing/inconsistent later receipt can never re-arm a SENT operation.
+        if ("SENT".equals(claim.previousState()) && !confirmed) {
+            finish(claim, "SENT", "finalization_required", 300);
+            return;
+        }
         boolean knownUnsent = ClientMessageDelivery.isKnownUnsent(result);
         int attempts = claim.attempts() + (claim.mayDispatch() ? 1 : 0);
         String state = confirmed ? "SENT" : knownUnsent ? (attempts >= 5 ? "FAILED" : "RETRYABLE") : "UNKNOWN";
@@ -88,9 +101,9 @@ public class ManagerClientMessageWorker {
             // Preserve proven delivery, but never re-arm or close a changed business source.
             String heldState = "RETRYABLE".equals(state) ? "FAILED" : state;
             try {
-                if ("CONTROL".equals(command.kind())) control.completeQueued(claim, command, result, null, heldState, "finalization_required", 0);
-                else reply.completeQueued(claim, command, result, null, heldState, "finalization_required", 0);
-            } catch (RuntimeException unavailable) { finish(claim, heldState, "finalization_required", 0); }
+                if ("CONTROL".equals(command.kind())) control.completeQueued(claim, command, result, null, heldState, "finalization_required", 300);
+                else reply.completeQueued(claim, command, result, null, heldState, "finalization_required", 300);
+            } catch (RuntimeException unavailable) { finish(claim, heldState, "finalization_required", 300); }
             log.warn("Manager command needs business reconciliation: operationId={}", claim.operationId());
         } finally { SecurityContextHolder.setContext(previousContext); }
     }
