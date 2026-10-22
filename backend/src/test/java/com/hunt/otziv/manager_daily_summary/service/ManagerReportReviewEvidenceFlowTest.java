@@ -53,6 +53,7 @@ class ManagerReportReviewEvidenceFlowTest {
     private ManagerReportReviewTaskContextService context;
     private ManagerReportReviewCommitmentService commitments;
     private ManagerReportReviewRolloutPolicy rollout;
+    private UserService users;
     private ManagerReportReviewTelegramService service;
     private ManagerReportReviewSession review;
     private ManagerReportReviewQualityService.ReviewQuestion question;
@@ -70,11 +71,12 @@ class ManagerReportReviewEvidenceFlowTest {
         context = mock(ManagerReportReviewTaskContextService.class);
         commitments = mock(ManagerReportReviewCommitmentService.class);
         rollout = mock(ManagerReportReviewRolloutPolicy.class);
+        users = mock(UserService.class);
         quality = spy(new ManagerReportReviewQualityService(mock(AiProviderRouter.class), mapper, settings));
         var availability = new ManagerReportReviewAiAvailabilityService(sessions, events, access);
         service = new ManagerReportReviewTelegramService(sessions, events, quality,
                 mock(ManagerSummaryFormatter.class), mock(ManagerWorkerDailyProgressService.class), sources,
-                telegram, mock(NotificationMediaDeliveryService.class), mock(UserService.class),
+                telegram, mock(NotificationMediaDeliveryService.class), users,
                 mock(ManagerRepository.class), settings, mock(ManagerReportReviewOwnerNotificationService.class),
                 access, mock(ManagerReportReviewAdminService.class), availability, issues, context, commitments, rollout);
         user = User.builder().id(17L).active(true).telegramChatId(700L).username("manager").build();
@@ -97,6 +99,8 @@ class ManagerReportReviewEvidenceFlowTest {
         when(sessions.findFirstByManagerUserIdAndRecipientChatIdAndReplyPromptMessageId(17L, 700L, 777))
                 .thenReturn(Optional.of(review));
         when(sessions.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(sessions.findForUpdateById(41L)).thenReturn(Optional.of(review));
+        when(users.findByChatId(700L)).thenReturn(Optional.of(user));
         when(issues.isPending(review, 0)).thenReturn(true);
         var issue = new ManagerReportReviewIssue();
         issue.setId(101L);
@@ -298,6 +302,136 @@ class ManagerReportReviewEvidenceFlowTest {
         verify(context).refresh("sourceTaskId=42", 9L);
         assertThat(review.getStatus()).isEqualTo(ManagerReportReviewStatus.COMPLETED);
         assertThat(quality.latestAnswerRecordedAt(review.getAnswersJson(), 0)).isEqualTo(submittedAt);
+    }
+
+    @Test
+    void pausedQuestionOffersNewReplyAndAssessesItAgainstFreshFacts() {
+        assessWith(assessment(ManagerReportReviewQualityService.Decision.NEEDS_CONTEXT, "Не хватает данных"));
+        assertThat(service.handleTextMessage(700L, user, "Прежний ответ.", 777)).isTrue();
+        var pausedAt = review.getAiUnavailableStartedAt();
+        verify(telegram).sendMessageWithInlineKeyboard(eq(700L), anyString(), eq("HTML"),
+                org.mockito.ArgumentMatchers.argThat(keyboard -> keyboard.stream().flatMap(List::stream)
+                        .anyMatch(button -> button.getText().contains("Ответить заново")
+                                && button.getCallbackData().equals("manager-review:answer:41"))));
+        when(telegram.sendForceReplyMessageId(eq(700L), anyString())).thenReturn(Optional.of(601));
+
+        assertThat(service.handle(callback("answer", 700L, 700L))).contains("Напишите ответ на вопрос");
+
+        assertThat(review.getReplyPromptMessageId()).isEqualTo(601);
+        assertThat(review.getAiUnavailableStartedAt()).isEqualTo(pausedAt);
+        assertThat(review.getCompletedAt()).isNull();
+        when(sessions.findFirstByManagerUserIdAndRecipientChatIdAndReplyPromptMessageId(17L, 700L, 601))
+                .thenReturn(Optional.of(review));
+        when(context.refresh("sourceTaskId=42", 9L)).thenReturn("СЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:\nPAID");
+        assessWith(assessment(ManagerReportReviewQualityService.Decision.ACCEPTED, "Новая попытка верна"));
+
+        assertThat(service.handleTextMessage(700L, user, "Теперь счёт оплачен.", 601)).isTrue();
+
+        verify(quality).assessAnswer(org.mockito.ArgumentMatchers.contains("PAID"), eq(question),
+                eq("Теперь счёт оплачен."), eq(false), eq(List.of("Прежний ответ.")), eq(false));
+    }
+
+    @Test
+    void pausedLegacyPlanCanRestoreLostGroupPromptWithoutChangingReviewState() {
+        review.setStatus(ManagerReportReviewStatus.PLAN_PENDING);
+        review.setRecipientChatId(-100900L);
+        review.setReplyPromptMessageId(null);
+        review.setAiUnavailableStartedAt(LocalDateTime.now().minusHours(1));
+        review.setRestrictedAt(LocalDateTime.now().minusHours(2));
+        var pausedAt = review.getAiUnavailableStartedAt();
+        var restrictedAt = review.getRestrictedAt();
+        String history = legacyAnswer(-1);
+        review.setAnswersJson(history);
+        when(telegram.sendMessageWithInlineKeyboardMessageId(eq(-100900L), anyString(), eq(null), eq(List.of())))
+                .thenReturn(Optional.of(615));
+        ReflectionTestUtils.invokeMethod(service, "sendAiUnavailable", review);
+        verify(telegram).sendMessageWithInlineKeyboard(eq(-100900L), anyString(), eq("HTML"),
+                org.mockito.ArgumentMatchers.argThat(keyboard -> keyboard.stream().flatMap(List::stream)
+                        .anyMatch(button -> button.getText().contains("Ответить заново"))));
+
+        assertThat(service.handle(callback("answer", 700L, -100900L))).contains("Напишите новый план действий");
+
+        assertThat(review.getReplyPromptMessageId()).isEqualTo(615);
+        assertThat(review.getAnswersJson()).isEqualTo(history);
+        assertThat(review.getStatus()).isEqualTo(ManagerReportReviewStatus.PLAN_PENDING);
+        assertThat(review.getAiUnavailableStartedAt()).isEqualTo(pausedAt);
+        assertThat(review.getRestrictedAt()).isEqualTo(restrictedAt);
+        assertThat(review.getCompletedAt()).isNull();
+        org.mockito.Mockito.verifyNoInteractions(context, access, commitments);
+        when(sessions.findFirstByManagerUserIdAndRecipientChatIdAndReplyPromptMessageId(17L, -100900L, 615))
+                .thenReturn(Optional.of(review));
+        doReturn(assessment(ManagerReportReviewQualityService.Decision.NEEDS_CONTEXT, "Ожидает подтверждения"))
+                .when(quality).assessAnswer(anyString(), any(), eq("Новый план."), eq(true));
+
+        assertThat(service.handleTextMessage(-100900L, user, "Новый план.", 615)).isTrue();
+
+        verify(quality).assessAnswer(anyString(), any(), eq("Новый план."), eq(true));
+        verify(context).refresh(review.getQuestionsContext(), 9L);
+    }
+
+    @Test
+    void continueLegacyQuestionWithoutTimestampRequestsNewAttemptAndPreservesHistory() {
+        assertLegacyContinueRequestsNewAttempt(ManagerReportReviewStatus.QUESTION_PENDING, 0);
+    }
+
+    @Test
+    void continueLegacyPlanWithoutTimestampRequestsNewAttemptAndPreservesHistory() {
+        assertLegacyContinueRequestsNewAttempt(ManagerReportReviewStatus.PLAN_PENDING, -1);
+    }
+
+    @Test
+    void newPlanReplyCallbackStillRejectsOtherManagersAndWrongChat() {
+        review.setStatus(ManagerReportReviewStatus.PLAN_PENDING);
+        review.setRecipientChatId(-100900L);
+        review.setReplyPromptMessageId(null);
+        User other = User.builder().id(22L).active(true).telegramChatId(800L).build();
+        when(users.findByChatId(800L)).thenReturn(Optional.of(other));
+
+        assertThat(service.handle(callback("answer", 800L, -100900L))).contains("Этот разбор назначен другому менеджеру");
+        assertThat(service.handle(callback("answer", 700L, -100901L))).contains("Этот разбор назначен другому менеджеру");
+
+        assertThat(review.getReplyPromptMessageId()).isNull();
+        org.mockito.Mockito.verifyNoInteractions(telegram, context, access, commitments);
+    }
+
+    private void assertLegacyContinueRequestsNewAttempt(ManagerReportReviewStatus status, int questionIndex) {
+        review.setStatus(status);
+        review.setAiUnavailableStartedAt(LocalDateTime.now().minusHours(1));
+        var pausedAt = review.getAiUnavailableStartedAt();
+        String history = legacyAnswer(questionIndex);
+        review.setAnswersJson(history);
+        when(telegram.sendForceReplyMessageId(eq(700L), anyString())).thenReturn(Optional.of(616));
+
+        assertThat(service.handle(callback("start", 700L, 700L))).isPresent();
+
+        assertThat(review.getReplyPromptMessageId()).isEqualTo(616);
+        assertThat(review.getAnswersJson()).isEqualTo(history);
+        assertThat(review.getStatus()).isEqualTo(status);
+        assertThat(review.getAiUnavailableStartedAt()).isEqualTo(pausedAt);
+        assertThat(review.getCompletedAt()).isNull();
+        org.mockito.Mockito.verifyNoInteractions(context, access, commitments);
+        verify(quality, never()).assessAnswer(anyString(), any(), anyString(), org.mockito.ArgumentMatchers.anyBoolean());
+        verify(quality, never()).assessAnswer(anyString(), any(), anyString(), org.mockito.ArgumentMatchers.anyBoolean(), any(), org.mockito.ArgumentMatchers.anyBoolean());
+        verify(quality, never()).assessAnswer(anyString(), any(), anyString(), org.mockito.ArgumentMatchers.anyBoolean(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any());
+    }
+
+    private String legacyAnswer(int questionIndex) {
+        return quality.appendAnswer(null, new ManagerReportReviewQualityService.ReviewAnswer(
+                questionIndex, "Прежний вопрос", "Прежний ответ.", false, 0, "Ожидает данных", "deepseek"));
+    }
+
+    private org.telegram.telegrambots.meta.api.objects.CallbackQuery callback(String action, long actorId, long chatId) {
+        var callback = new org.telegram.telegrambots.meta.api.objects.CallbackQuery();
+        callback.setData("manager-review:" + action + ":41");
+        var actor = new org.telegram.telegrambots.meta.api.objects.User();
+        actor.setId(actorId);
+        callback.setFrom(actor);
+        var chat = new org.telegram.telegrambots.meta.api.objects.Chat();
+        chat.setId(chatId);
+        var message = new org.telegram.telegrambots.meta.api.objects.Message();
+        message.setChat(chat);
+        callback.setMessage(message);
+        return callback;
     }
 
     private void assessWith(ManagerReportReviewQualityService.Assessment assessment) {

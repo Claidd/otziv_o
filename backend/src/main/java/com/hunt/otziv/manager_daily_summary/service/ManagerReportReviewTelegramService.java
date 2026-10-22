@@ -428,6 +428,10 @@ public class ManagerReportReviewTelegramService {
             return Optional.of(confirmReading(review, actor));
         }
         if (ANSWER.equals(command.action())) {
+            if (review.getStatus() == ManagerReportReviewStatus.PLAN_PENDING) {
+                sendPlanPrompt(review, "");
+                return Optional.of("Напишите новый план действий");
+            }
             promptAnswer(review);
             return Optional.of("Напишите ответ на вопрос");
         }
@@ -691,7 +695,12 @@ public class ManagerReportReviewTelegramService {
             if (review.getAiUnavailableStartedAt() != null && !rolloutPolicy.isShadowFor(review)) {
                 var savedPlan = qualityService.previousAcceptedContext(review.getAnswersJson(), -1);
                 if (!savedPlan.isEmpty()) {
-                    handleActionPlan(review, actor, savedPlan.getLast(), qualityService.latestAnswerRecordedAt(review.getAnswersJson(), -1));
+                    var submittedAt = qualityService.latestAnswerRecordedAt(review.getAnswersJson(), -1);
+                    if (submittedAt == null) {
+                        sendPlanPrompt(review, "Время отправки прежнего плана не сохранено. Напишите новый план; прежний останется в истории.");
+                        return "Для проверки нужен новый план действий";
+                    }
+                    handleActionPlan(review, actor, savedPlan.getLast(), submittedAt);
                     return "Сохранённый план повторно проверен";
                 }
             }
@@ -704,8 +713,12 @@ public class ManagerReportReviewTelegramService {
                 List<String> saved = qualityService.previousAcceptedContext(
                         review.getAnswersJson(), review.getCurrentQuestionIndex());
                 if (!saved.isEmpty()) {
-                    handleQuestionAnswer(review, actor, saved.getLast(),
-                            qualityService.latestAnswerRecordedAt(review.getAnswersJson(), review.getCurrentQuestionIndex()));
+                    var submittedAt = qualityService.latestAnswerRecordedAt(review.getAnswersJson(), review.getCurrentQuestionIndex());
+                    if (submittedAt == null) {
+                        promptAnswer(review);
+                        return "Время прежнего ответа не сохранено. Ответьте заново; прежний ответ останется в истории";
+                    }
+                    handleQuestionAnswer(review, actor, saved.getLast(), submittedAt);
                     return "Сохранённый ответ повторно проверен по данным на момент его отправки";
                 }
             }
@@ -1588,14 +1601,20 @@ public class ManagerReportReviewTelegramService {
     }
 
     private void sendAiUnavailable(ManagerReportReviewSession review) {
+        boolean canAnswerAgain = review.getStatus() == ManagerReportReviewStatus.QUESTION_PENDING
+                || review.getStatus() == ManagerReportReviewStatus.PLAN_PENDING;
         telegramService.sendMessageWithInlineKeyboard(
                 review.getRecipientChatId(),
                 "⏸ <b>Проверка ожидает данных</b>\n\n"
                         + "Ваш прогресс сохранён. Трёхчасовой срок приостановлен и доступ "
                         + "не будет ограничен из-за недоступной проверки или неполных фактов. "
-                        + "Нажмите «Продолжить проверку» позже или оспорьте замечание для разбора владельцем.",
+                        + "Нажмите «Продолжить проверку» позже"
+                        + (canAnswerAgain ? " или «Ответить заново», чтобы отправить новую попытку по текущим данным." : "."),
                 "HTML",
-                continueKeyboard(review.getId())
+                canAnswerAgain ? List.of(
+                        List.of(button("Продолжить проверку", START, review.getId())),
+                        List.of(button("✍️ Ответить заново", ANSWER, review.getId()))
+                ) : continueKeyboard(review.getId())
         );
     }
 
