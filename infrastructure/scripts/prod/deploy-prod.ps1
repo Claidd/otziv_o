@@ -3166,11 +3166,72 @@ if [ "`$coordinated_mysql_enabled" = "1" ]; then
     --lock-token "`$deploy_lock_token" --main-revision $coordinatedMainRevisionQuoted \
     --explicit-reviewed-mysql-cutover
 fi
-# The separate, explicit C23-to-C36 PostgreSQL cutover keeps the ordinary continuity guard
-# intact. It runs under this lock, after the verified encrypted main DB backup,
-# with the active C35 Keycloak, retains an additional verified encrypted PG
-# backup on the VPS, and restores the old image on the same volume if a check fails.
+# The PostgreSQL transition requires the reviewed C35 Keycloak to be active.
+# Preserve the C23 identity database first: the ordinary pre-deploy backup covers
+# MySQL only. The prepare step stops C26 Keycloak briefly, verifies an encrypted
+# PostgreSQL backup and restarts C26 before its image is changed. Both reviewed
+# images are pulled before that pause, while the old services are still healthy.
 if [ "`$coordinated_ssl_enabled" = "1" ]; then
+  python3 infrastructure/scripts/prod/coordinated_ssl_refresh.py \
+    --root "`$remote_path" --env-file "`$remote_path/`$env_file" \
+    --lock-token "`$deploy_lock_token" --main-revision $coordinatedMainRevisionQuoted \
+    --explicit-reviewed-ssl-cutover --prepare-keycloak-cutover
+  if [ "`$(docker inspect --format '{{.Image}}' keycloak-postgres)" != \
+      'sha256:1f5c2590fadde6b449908569285f1ed91a10831d36535d5c4ed647e9a0afca6a' ]; then
+    echo "C23 PostgreSQL changed before reviewed C35 Keycloak activation." >&2
+    exit 1
+  fi
+  # The preparation helper has already proved that this immutable C26 image
+  # and a verified, encrypted C23 backup exist. Keep a local-only rollback
+  # override in the protected release backup directory before replacing C26.
+  c26_keycloak_image='ghcr.io/claidd/otziv-security@sha256:76ad15fac3c0041798b6b2b87632bbf91ae7c171ebfa813aa1d1633b48f90ff9'
+  c26_rollback_compose="`$backup_dir/keycloak-c26-rollback.compose.json"
+  if [ -e "`$c26_rollback_compose" ] || [ -L "`$c26_rollback_compose" ]; then
+    echo "Refusing to replace an existing Keycloak rollback override." >&2
+    exit 1
+  fi
+  ( set -C; printf '%s\n' \
+      '{"services":{"keycloak":{"image":"ghcr.io/claidd/otziv-security@sha256:76ad15fac3c0041798b6b2b87632bbf91ae7c171ebfa813aa1d1633b48f90ff9","pull_policy":"never"}}}' \
+      > "`$c26_rollback_compose" )
+  chmod 600 "`$c26_rollback_compose"
+  c35_activation_failed="0"
+  if ! compose up -d --no-deps --pull never --force-recreate keycloak; then
+    c35_activation_failed="1"
+  elif ! wait_service_healthy keycloak 900; then
+    c35_activation_failed="1"
+  else
+    c35_expected_id="`$(docker image inspect --format '{{.Id}}' "`$keycloak_image" 2>/dev/null || true)"
+    c35_running_id="`$(docker inspect --format '{{.Image}}' otziv-prod-keycloak-1 2>/dev/null || true)"
+    if [ "`$c35_expected_id" != \
+        'sha256:60a8dd92cf43b8cf909a9e13f231da1f59103f9259cf482185c54856dcfd6a1b' ] \
+        || [ "`$c35_running_id" != "`$c35_expected_id" ]; then
+      echo "Reviewed C35 Keycloak image identity did not match after activation." >&2
+      c35_activation_failed="1"
+    fi
+  fi
+  if [ "`$c35_activation_failed" = "1" ]; then
+    echo "C35 Keycloak activation failed; restoring the verified C26 image on unchanged C23 PostgreSQL..." >&2
+    if [ "`$(docker inspect --format '{{.Image}}' keycloak-postgres 2>/dev/null || true)" != \
+        'sha256:1f5c2590fadde6b449908569285f1ed91a10831d36535d5c4ed647e9a0afca6a' ]; then
+      echo "CRITICAL: PostgreSQL identity changed; refusing an unreviewed C26 rollback." >&2
+      exit 1
+    fi
+    if ! compose -f "`$c26_rollback_compose" up -d --no-deps --pull never --force-recreate keycloak \
+        || ! wait_service_healthy keycloak 900; then
+      echo "CRITICAL: C26 Keycloak rollback did not become healthy; keep the protected lock and inspect the backup." >&2
+      exit 1
+    fi
+    assert_running_service_image keycloak "`$c26_keycloak_image"
+    echo "C26 Keycloak restored; the release remains failed and protected by its lock." >&2
+    exit 1
+  fi
+  if [ "`$(docker inspect --format '{{.Image}}' keycloak-postgres)" != \
+      'sha256:1f5c2590fadde6b449908569285f1ed91a10831d36535d5c4ed647e9a0afca6a' ]; then
+    echo "C23 PostgreSQL changed while reviewed C35 Keycloak was activated." >&2
+    exit 1
+  fi
+  # The separate C23-to-C36 cutover now snapshots the database again under
+  # active C35, checks every table and restores C23 on any failed cutover check.
   python3 infrastructure/scripts/prod/coordinated_ssl_refresh.py \
     --root "`$remote_path" --env-file "`$remote_path/`$env_file" \
     --lock-token "`$deploy_lock_token" --main-revision $coordinatedMainRevisionQuoted \
