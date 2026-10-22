@@ -32,7 +32,7 @@ PROPERTIES = {
     "failOnError": "true",
     "formats": "HTML,JSON",
     "ossIndexAnalyzerEnabled": "false",
-    "nvdDatafeedUrl": "https://nvd.nist.gov/feeds/json/cve/2.0/nvdcve-2.0-{0}.json.gz",
+    "nvdDatafeedUrl": "https://dependency-check.github.io/DependencyCheck_Builder/nvd_cache/nvdcve-{0}.json.gz",
     "autoUpdate": "true",
 }
 
