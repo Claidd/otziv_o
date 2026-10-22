@@ -158,6 +158,7 @@ def invoke(record, action, **extra):
         packet['modules'] = {name: (Path(__file__).parent/(name+'.py')).read_text(encoding='utf-8-sig') for name in MODULES}
     command = ['ssh', '-T', '-p', str(record['port']), '-i', record['key'], '-o', 'BatchMode=yes',
                '-o', 'IdentitiesOnly=yes', '-o', 'StrictHostKeyChecking=yes', '-o', 'ConnectTimeout=15',
+               '-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=3',
                '-o', 'UserKnownHostsFile='+record['known_hosts'].replace('\\','/'), record['user']+'@'+record['host'],
                'python3 -B -c '+shlex.quote(BOOTSTRAP)]
     result = subprocess.run(command, input=json.dumps(packet).encode(), capture_output=True, timeout=1800 if action=='prepare' else 180)

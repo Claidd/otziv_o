@@ -22,6 +22,22 @@ def run(*args):
         raise RuntimeError('Private registry command failed: ' + args[0])
     return result.stdout
 
+def pinned_image_available():
+    """Use an offline image only when Docker proves the exact pinned platform."""
+    try:
+        images = json.loads(run('image', 'inspect', IMAGE))
+    except (RuntimeError, ValueError):
+        return False
+    if not isinstance(images, list) or len(images) != 1 or not isinstance(images[0], dict):
+        return False
+    image = images[0]
+    digest = IMAGE.rsplit('@', 1)[1]
+    references = {'registry@' + digest, 'docker.io/library/registry@' + digest}
+    return (image.get('Os') == 'linux' and image.get('Architecture') == 'amd64'
+            and isinstance(image.get('RepoDigests'), list)
+            and bool(references.intersection(image['RepoDigests'])))
+
+
 def validate(record):
     owner = record['owner']
     if not re.fullmatch('[0-9a-f]{32}', owner) or record['container'] != 'otziv-release-' + owner \
@@ -87,7 +103,10 @@ def create(path, port=0, owner=None):
     record = dict(owner=owner, port=port, container='otziv-release-' + owner,
         volume='otziv-release-' + owner + '-data', namespace=f'127.0.0.1:{port}/otziv-prepared', state='creating')
     path.write_text(json.dumps(record, indent=2) + '\n')
-    run('pull', IMAGE)
+    if not pinned_image_available():
+        run('pull', IMAGE)
+        if not pinned_image_available():
+            raise RuntimeError('Pinned private registry image or Linux/amd64 platform could not be verified')
     run('volume', 'create', '--label', LABEL + '=' + owner, record['volume'])
     start(record, path.parent, False)
     record['state'] = 'staging'
