@@ -114,6 +114,12 @@ class DurableInboundInbox {
     this.write(`${key}.json`, updated); this.records.set(key, updated); return true;
   }
 
+  isReadyForGateway() {
+    // A failed discovery pauses every chat until the next successful scan.
+    // The short pause during an ordinary scan must not flap gateway readiness.
+    return this.healthy && this.records.size < this.maxRecords && !this.historyDiscoveryFailed;
+  }
+
   snapshot() {
     const records = [...this.records.values()];
     return { healthy: this.healthy, pending: records.filter(r => r.status === "PENDING").length,

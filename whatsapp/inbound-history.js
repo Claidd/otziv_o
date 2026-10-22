@@ -1,6 +1,43 @@
 "use strict";
 
+const { Chat } = require("whatsapp-web.js");
 const { serializedId, trackedBody, messageId, reconciliationPayloads } = require("./message-webhook");
+
+// getChats() serializes every chat and refreshes group metadata for every
+// group. One stalled metadata request can therefore block the entire history
+// scan even while the authenticated browser is still responsive. Read only
+// the collection's IDs and titles; Chat.fetchMessages() uses the raw chat by
+// ID and does not require that metadata refresh.
+async function discoverHistoryChats(client) {
+  const descriptors = await client.pupPage.evaluate(() => {
+    const collection = window.require("WAWebCollections").Chat;
+    const chats = collection.getModelsArray();
+    if (!Array.isArray(chats)) throw new Error("inbound_history_chat_list_invalid");
+    return chats.map(chat => {
+      const id = chat && chat.id;
+      const chatId = id && (id._serialized || (typeof id.toString === "function" ? id.toString() : ""));
+      return {
+        id: typeof chatId === "string" ? chatId : "",
+        name: String(chat && (chat.name || chat.formattedTitle || chat.groupMetadata && chat.groupMetadata.subject) || ""),
+        isGroup: Boolean(chat && chat.groupMetadata),
+      };
+    });
+  });
+  if (!Array.isArray(descriptors)) throw new Error("inbound_history_chat_list_invalid");
+  // Skipping a malformed ID would silently omit that chat while letting the
+  // global history scan report success and release queued live messages.
+  for (const descriptor of descriptors) {
+    const id = descriptor && descriptor.id;
+    if (typeof id !== "string" || id.length > 256 || !/^[^\s@]+@[A-Za-z0-9._-]+$/.test(id)) {
+      throw new Error("inbound_history_chat_id_invalid");
+    }
+  }
+  return descriptors.map(descriptor => new Chat(client, {
+    id: { _serialized: descriptor.id },
+    formattedTitle: descriptor.name,
+    isGroup: descriptor.isGroup || descriptor.id.endsWith("@g.us"),
+  }));
+}
 
 // whatsapp-web.js exposes a limit, not offset/cursor pagination. Expanding windows
 // ask its supported loadEarlierMsgs implementation for earlier available history.
@@ -31,7 +68,8 @@ async function recoverHistory({ client, inbox, clientId, groupEnabled = true, ou
     // Discovery is independent of backend OPEN conversations, including first replies.
     let discoveryTimer;
     const chats = await Promise.race([
-      Promise.resolve().then(() => client.getChats()),
+      Promise.resolve().then(() => typeof client.pupPage?.evaluate === "function"
+        ? discoverHistoryChats(client) : client.getChats()),
       new Promise((_, reject) => {
         discoveryTimer = setTimeout(() => reject(new Error("inbound_history_discovery_timeout")), discoveryTimeoutMs);
       }),
@@ -93,4 +131,4 @@ async function recoverHistory({ client, inbox, clientId, groupEnabled = true, ou
   return { errors, gaps: inbox.historyGaps.size };
 }
 
-module.exports = { fetchAvailableWindow, recoverHistory };
+module.exports = { discoverHistoryChats, fetchAvailableWindow, recoverHistory };

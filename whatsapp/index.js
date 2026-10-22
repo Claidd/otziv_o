@@ -37,7 +37,7 @@ const { chromiumLaunchArgs } = require("./chromium-launch");
 const { fetchRecentMessagesFromRawChat } = require("./raw-chat-reconciliation");
 const { createLastSeenLookup } = require("./last-seen");
 const { DurableInboundInbox } = require("./inbound-inbox");
-const { BrowserReadHealth } = require("./browser-read-health");
+const { BrowserReadHealth, assessBrowserReadFailure } = require("./browser-read-health");
 const { recoverHistory } = require("./inbound-history");
 const {
   installRemoteBrowserLifecycle,
@@ -388,7 +388,7 @@ function statusPayload() {
 
 function minimalStatusPayload() {
   return {
-    status: ready && authenticated ? "ok" : "not_ready",
+    status: gatewayReady() ? "ok" : "not_ready",
     clientId: CLIENT_ID,
     browserProfileId: BROWSER_PROFILE_ID,
     browserMode: REMOTE_BROWSER_ENABLED ? "peoples-profile" : "local",
@@ -402,6 +402,16 @@ function minimalStatusPayload() {
     state: lastState,
     hasQr: Boolean(currentQr),
   };
+}
+
+function gatewayReady() {
+  return ready && authenticated && !shuttingDown && operationLedger.admission().acceptingNew
+    && inboundInbox.isReadyForGateway();
+}
+
+function respondReady(_req, res) {
+  const payload = minimalStatusPayload();
+  res.status(payload.status === "ok" ? 200 : 503).json(payload);
 }
 
 function requireReady(res) {
@@ -536,12 +546,20 @@ function wireClientEvents(instance, current, trackEvent) {
         participantResolver: participantPhoneResolver, log, current,
         maxMessages: Math.min(parsePositiveInt(process.env.WHATSAPP_INBOUND_HISTORY_MAX_MESSAGES, 10000), 100000) }))
         .then(() => browserReadHealth.success())
-        .catch(error => {
+        .catch(async error => {
           log("warn", "Inbound history discovery failed", {
             stage: "history_discovery",
             error: String(error?.message || error).split(/\r?\n/, 1)[0].slice(0, 240),
           });
-          if (current()) browserReadHealth.failure("history_discovery");
+          if (current()) {
+            const assessment = await assessBrowserReadFailure({ client: instance, health: browserReadHealth,
+              reason: "history_discovery", current });
+            if (assessment.responsive) {
+              log("warn", "History unavailable while WhatsApp browser remains responsive", {
+                stage: "history_discovery",
+              });
+            }
+          }
         })
         .finally(() => { inboundHistoryRunning = false; });
     };
@@ -946,14 +964,7 @@ app.get("/health", (req, res) => {
   res.json(minimalStatusPayload());
 });
 
-app.get("/ready", (req, res) => {
-  if (!ready || !authenticated || shuttingDown || !operationLedger.admission().acceptingNew || !inboundInbox.healthy
-      || inboundInbox.records.size >= inboundInbox.maxRecords) {
-    res.status(503).json(minimalStatusPayload());
-    return;
-  }
-  res.json(minimalStatusPayload());
-});
+app.get("/ready", respondReady);
 
 app.use(createInternalAuthMiddleware({
   secret: GATEWAY_SHARED_SECRET,
@@ -961,14 +972,7 @@ app.use(createInternalAuthMiddleware({
   minimumSecretLength: REMOTE_BROWSER_REQUIRED ? 32 : 1,
 }));
 
-app.get("/internal/ready", (req, res) => {
-  if (!ready || !authenticated || shuttingDown || !operationLedger.admission().acceptingNew || !inboundInbox.healthy
-      || inboundInbox.records.size >= inboundInbox.maxRecords) {
-    res.status(503).json(minimalStatusPayload());
-    return;
-  }
-  res.json(minimalStatusPayload());
-});
+app.get("/internal/ready", respondReady);
 
 app.get("/internal/task-metrics", (_req, res) => {
   res.set("Cache-Control", "no-store");
@@ -1253,7 +1257,8 @@ app.post("/groups/reconcile-messages", asyncRoute(async (req, res) => {
 
   const failedGroupCount = batches.filter(batch => batch.failed).length;
   if (failedGroupCount === batches.length) {
-    browserReadHealth.failure("group_reconciliation");
+    await assessBrowserReadFailure({ client, health: browserReadHealth,
+      reason: "group_reconciliation", current: () => ready && !shuttingDown });
     res.status(503).json({ status: "error", code: "whatsapp_history_unavailable", failedGroupCount });
     return;
   }

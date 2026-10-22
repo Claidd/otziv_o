@@ -11,6 +11,9 @@ import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -80,10 +83,13 @@ class SpecialistManualPaymentReviewSettlementServiceTest {
                 eq(27L), eq("profile:27"));
     }
 
-    @Test
-    void disputedReceiptNeedsExactAmountAndOwnerVerification() {
+    @ParameterizedTest
+    @EnumSource(value = SpecialistManualPaymentReviewStatus.class,
+            names = {"DISPUTED", "NEEDS_ATTENTION"})
+    void adminVerifiedReceiptKeepsFrozenManagerReasonAndAuditsStatementSeparately(
+            SpecialistManualPaymentReviewStatus initialStatus) {
         SpecialistManualPaymentReview review = dueWaiting();
-        review.setStatus(SpecialistManualPaymentReviewStatus.DISPUTED);
+        review.setStatus(initialStatus);
         when(reviews.lockById(101L)).thenReturn(Optional.of(review));
         var admin = new UsernamePasswordAuthenticationToken("admin", null);
 
@@ -96,9 +102,17 @@ class SpecialistManualPaymentReviewSettlementServiceTest {
 
         assertEquals(SpecialistManualPaymentReviewStatus.CONFIRMED, review.getStatus());
         assertEquals("ADMIN_VERIFIED_RECEIPT", review.getResolutionKind());
+        assertEquals("Выписка сверена", review.getResolutionNote());
+        ArgumentCaptor<ManualCardPaymentWorkflow.ManualCardPaymentContext> context =
+                ArgumentCaptor.forClass(ManualCardPaymentWorkflow.ManualCardPaymentContext.class);
         verify(manualPayments).confirmSpecialistReviewPayment(
-                eq(101L), eq(71L), eq(140_000L), any(), eq(""), eq("admin"), eq(admin), any(),
+                eq(101L), eq(71L), eq(140_000L),
+                eq("Выписка получателя проверена: Выписка сверена"), eq(""), eq("admin"),
+                eq(admin), context.capture(),
                 eq(27L), eq("profile:27"));
+        assertEquals(ManualCardPaymentWorkflow.ManualCardPaymentMode.OWNER_VERIFIED,
+                context.getValue().mode());
+        assertEquals("Проверенный чек", context.getValue().reason());
     }
 
     @Test

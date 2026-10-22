@@ -32,4 +32,39 @@ class BrowserReadHealth {
   }
 }
 
-module.exports = { BrowserReadHealth };
+// A failed history or reconciliation request does not prove that Chromium is
+// unresponsive: WhatsApp can stall while loading one chat's remote metadata.
+// Probe the page independently before spending an authenticated session on a
+// restart. The probe never reads chat contents or changes browser state.
+async function probeBrowserRead(client, timeoutMs = 5000) {
+  const page = client && client.pupPage;
+  if (!page || typeof page.evaluate !== "function" || page.isClosed?.()) return false;
+  let timer;
+  try {
+    return Boolean(await Promise.race([
+      Promise.resolve().then(() => page.evaluate(() => Boolean(
+        window.WWebJS && typeof window.require === "function"
+          && window.require("WAWebCollections")?.Chat?.getModelsArray
+      ))),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error("browser_read_probe_timeout")), timeoutMs);
+      }),
+    ]));
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function assessBrowserReadFailure({ client, health, reason, current = () => true, timeoutMs = 5000 }) {
+  const responsive = await probeBrowserRead(client, timeoutMs);
+  if (!current()) return { responsive, restartScheduled: false };
+  if (responsive) {
+    health.success();
+    return { responsive: true, restartScheduled: false };
+  }
+  return { responsive: false, restartScheduled: health.failure(reason) };
+}
+
+module.exports = { BrowserReadHealth, probeBrowserRead, assessBrowserReadFailure };
