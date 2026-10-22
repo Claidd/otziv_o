@@ -624,7 +624,7 @@ jobs:
       - name: Build MySQL and scan the exact reviewed PostgreSQL image
         if: ${{ needs.changes.outputs.infrastructure == 'true' }}
         run: |
-          docker build -t otziv-mysql-ci infrastructure/runtime-security/builds/c30-mysql
+          docker build -t otziv-mysql-ci infrastructure/runtime-security/builds/c37-mysql
           POSTGRES_IMAGE="$(node infrastructure/runtime-security/ci-postgres-c36-fixture.mjs)"
           docker pull --platform linux/amd64 "$POSTGRES_IMAGE"
           docker tag "$POSTGRES_IMAGE" otziv-postgres-ci
