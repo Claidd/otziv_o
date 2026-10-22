@@ -579,7 +579,7 @@ Assert-Match $legacyDeploy 'Copy-DeployPath[^\r\n]+-RelativePath "whatsapp"' 'SS
 Assert-Match $whatsappIndex 'chromiumLaunchArgs\(proxyServerArg\(\)\)' 'WhatsApp clients must use the shared audited Chromium launch arguments.'
 Assert-Match $whatsappIndex 'webVersionCache:\s*\{[\s\S]{0,300}type:\s*"none"' 'WhatsApp Web cache must stay disabled because its default local persistence targets the read-only application directory before READY.'
 Assert-Match $whatsappPackage '"brace-expansion"\s*:\s*"2\.1\.7"' 'WhatsApp must retain the patched brace-expansion override.'
-Assert-Match $whatsappPackage '"ip-address"\s*:\s*"10\.7\.1"' 'WhatsApp must retain the patched ip-address override.'
+Assert-Match $whatsappPackage '"ip-address"\s*:\s*"10\.7\.4"' 'WhatsApp must retain the patched ip-address override.'
 Assert-NotMatch ($whatsappIndex + "`n" + $whatsappChromiumLaunch) '--no-sandbox|--disable-setuid-sandbox|--no-zygote' 'WhatsApp Chromium must keep its Linux sandbox enabled without the incompatible no-zygote flag.'
 Assert-Match $whatsappChromiumSmoke 'require\("puppeteer"\)[\s\S]{0,300}require\("\./chromium-launch"\)[\s\S]{0,500}puppeteer\.launch[\s\S]{0,500}args: chromiumLaunchArgs\(""\)' 'Chromium smoke test must launch real Puppeteer with the same audited arguments as production.'
 Assert-Match $deploy 'compose run --rm --no-deps --interactive=false -T --entrypoint node whatsapp_lika chromium-smoke\.js </dev/null' 'Deploy must run the real Chromium sandbox smoke test under the production Compose security profile.'
