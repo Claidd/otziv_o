@@ -186,21 +186,21 @@
     },
     {
       "component": "nginx",
-      "reference": "ghcr.io/claidd/otziv-security@sha256:a08d8948f53646b5fc6ba2e02cb27467683b3c2fb3922007014888bea03b984d",
-      "commit": "67a688efb7bd089f1430c4439579b75fe48f7af2",
-      "run": "39122865633",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:8921dafa2cda60de1348d76b629b23af5aac5ef7cdfa870a39531ac049bce3dd",
+      "commit": "cbe5fd8727f2c482562143f5bbd5714a0ccc6ccf",
+      "run": "39858937164",
       "attempt": "1",
       "manifest": {
-        "path": "infrastructure/runtime-security/reviewed-images-c31-nginx.json",
-        "sha256": "00249a605341f64ddd5b4cb15d01e7f6be9c5583141a98185ffdba49c0b21cbe"
+        "path": "infrastructure/runtime-security/reviewed-images-c38-nginx.json",
+        "sha256": "9e27b1ca675a9da7269ff7954b146847b33a8169799dec72e786c6809725f96c"
       },
       "publication": {
-        "path": "infrastructure/runtime-security/proofs/c31-nginx/publication/publication.json",
-        "sha256": "88a9b4c4dbc05ebfc06b9f69b6c726803563642dc16e552a6de30e29112022a0"
+        "path": "infrastructure/runtime-security/proofs/c38-nginx/publication/publication.json",
+        "sha256": "cdd5c97288e31a065dda5b51a3ea7de4ce54e058006b22e9f94da22f8139a41c"
       },
       "anonymous": {
-        "path": "infrastructure/runtime-security/proofs/c31-nginx/anonymous/anonymous-download.json",
-        "sha256": "b4c1474ca68e2f54e3f622a4888fb70b0efabdef971b0ae1703d945aed52810a"
+        "path": "infrastructure/runtime-security/proofs/c38-nginx/anonymous/anonymous-download.json",
+        "sha256": "59fb510eb03e9263733995a26d12941b056554ac35998053f30ae49b8279965b"
       }
     },
     {
