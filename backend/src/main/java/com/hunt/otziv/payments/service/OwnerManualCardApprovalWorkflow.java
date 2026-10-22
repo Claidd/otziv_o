@@ -154,8 +154,35 @@ public class OwnerManualCardApprovalWorkflow {
             if (!isFrozenOwnerRecipientForApproval(link, recipientKey)) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Для подтверждения владельца должен быть выбран именно владелец");
             }
+            OwnerManualCardPaymentApproval approval = ownerManualCardPaymentApprovalRepository.findByPaymentLinkIdForUpdate(link.getId()).orElse(null);
+            if (approval != null) {
+                if (approval.getStatus() == OwnerManualCardPaymentApprovalStatus.PENDING
+                        && Objects.equals(approval.getOrderId(), orderId)
+                        && Objects.equals(approval.getPaymentLinkId(), link.getId())
+                        && approval.getAmountKopecks() == link.getAmountKopecks()
+                        && approval.getRecipientType() == ContractorRecipientType.OWNER
+                        && approval.getRecipientProfileId() == null
+                        && Objects.equals(approval.getRecipientKey(), normalize(recipientKey))
+                        && Objects.equals(approval.getReason(), reason)
+                        && Objects.equals(normalize(approval.getReceiptUrl()), normalize(receiptUrl))) {
+                    // A Telegram send can fail after commit without changing PENDING.
+                    // Reissue a fresh button only before the first callback attempt.
+                    // Once a callback has started, its token and attempt evidence stay intact.
+                    if (approval.getAttemptCount() == 0 && approval.getLastAttemptAt() == null) {
+                        String retryToken = newOwnerApprovalToken();
+                        approval.setCallbackTokenHash(ownerApprovalTokenHash(retryToken));
+                        ownerManualCardPaymentApprovalRepository.saveAndFlush(approval);
+                        notifyOwnerApproval(order, link, approval, retryToken);
+                    }
+                    return ManagerManualCardPaymentResultResponse.ownerApprovalPending(orderId, link.getId());
+                }
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        approval.getStatus() == OwnerManualCardPaymentApprovalStatus.REVOKED
+                                ? "Прежний запрос владельцу отменён; выберите другого получателя для этого счёта"
+                                : "Запрос владельцу по этому счёту уже существует");
+            }
+            approval = new OwnerManualCardPaymentApproval();
             String callbackToken = newOwnerApprovalToken();
-            OwnerManualCardPaymentApproval approval = ownerManualCardPaymentApprovalRepository.findByPaymentLinkIdForUpdate(link.getId()).orElseGet(OwnerManualCardPaymentApproval::new);
             approval.setPaymentLinkId(link.getId());
             approval.setOrderId(orderId);
             approval.setAmountKopecks(link.getAmountKopecks());
@@ -176,11 +203,23 @@ public class OwnerManualCardApprovalWorkflow {
             approval.setApprovedAt(null);
             approval = ownerManualCardPaymentApprovalRepository.saveAndFlush(approval);
             paymentLinkRepository.save(link);
-            Company company = order.getCompany();
-            Manager companyManager = company == null ? null : company.getManager();
-            manualCardPaymentReviewNotificationService.notifyOwnerApprovalAfterCommit(new ManualCardPaymentReviewNotificationService.OwnerApprovalRequest(approval.getId(), callbackToken, link.getId(), orderId, company == null ? null : company.getTitle(), link.getAmountKopecks(), actor, reason, link.getStatus() == null ? null : link.getStatus().name(), companyManager == null ? null : companyManager.getId(), companyManager == null ? null : companyManager.getAuditTelegramGroupChatId()));
+            notifyOwnerApproval(order, link, approval, callbackToken);
             return ManagerManualCardPaymentResultResponse.ownerApprovalPending(orderId, link.getId());
         });
+    }
+
+    private void notifyOwnerApproval(Order order, PaymentLink link,
+            OwnerManualCardPaymentApproval approval, String callbackToken) {
+        Company company = order.getCompany();
+        Manager companyManager = company == null ? null : company.getManager();
+        manualCardPaymentReviewNotificationService.notifyOwnerApprovalAfterCommit(
+                new ManualCardPaymentReviewNotificationService.OwnerApprovalRequest(
+                        approval.getId(), callbackToken, link.getId(), order.getId(),
+                        company == null ? null : company.getTitle(), link.getAmountKopecks(),
+                        approval.getRequestedBy(), approval.getReason(),
+                        link.getStatus() == null ? null : link.getStatus().name(),
+                        companyManager == null ? null : companyManager.getId(),
+                        companyManager == null ? null : companyManager.getAuditTelegramGroupChatId()));
     }
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -202,6 +241,10 @@ public class OwnerManualCardApprovalWorkflow {
         transactionExecutor.required(() -> {
             OwnerManualCardPaymentApproval approval = requireOwnerApproval(approvalId, callbackToken);
             if (approval.getStatus() != OwnerManualCardPaymentApprovalStatus.CONFIRMED) {
+                if (approval.getStatus() != OwnerManualCardPaymentApprovalStatus.PENDING) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT,
+                            "Запрос владельцу закрыт; подтверждение не записано");
+                }
                 approval.setStatus(OwnerManualCardPaymentApprovalStatus.CONFIRMED);
                 approval.setApprovedByUserId(approver == null ? null : approver.getId());
                 approval.setApprovedBy(approver == null ? null : limit(normalize(approver.getUsername()), 150));
@@ -240,6 +283,10 @@ public class OwnerManualCardApprovalWorkflow {
         }
         if (approval.getStatus() == OwnerManualCardPaymentApprovalStatus.SUPERSEDED) {
             throw new ResponseStatusException(HttpStatus.GONE, "Запрос закрыт: заказ уже оплачен по другому счёту. Повторное зачисление не требуется");
+        }
+        if (approval.getStatus() == OwnerManualCardPaymentApprovalStatus.REVOKED) {
+            throw new ResponseStatusException(HttpStatus.GONE,
+                    "Запрос владельцу отменён: получатель исправляется. Оплата не зачислена.");
         }
         if (approval.getStatus() != OwnerManualCardPaymentApprovalStatus.PENDING) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Запрос уже не действует");

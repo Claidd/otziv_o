@@ -270,6 +270,7 @@ input[type='search']::placeholder {
 .icon-action,
 .refund-action,
 .unpaid-action,
+.owner-approval-action,
 .archive-run-action,
 .copy-line,
 .mode-pill,
@@ -285,6 +286,7 @@ input[type='search']::placeholder {
 .icon-action,
 .refund-action,
 .unpaid-action,
+.owner-approval-action,
 .archive-run-action {
   min-height: 2.25rem;
   justify-content: center;
@@ -1615,6 +1617,7 @@ button.copy-line.copy-line.copy-line {
 .icon-action .material-icons-sharp,
 .refund-action .material-icons-sharp,
 .unpaid-action .material-icons-sharp,
+.owner-approval-action .material-icons-sharp,
 .confirm-action .material-icons-sharp,
 .receipt-action .material-icons-sharp,
 .archive-label .material-icons-sharp,
@@ -1625,6 +1628,7 @@ button.copy-line.copy-line.copy-line {
 
 .refund-action.refund-action,
 .unpaid-action.unpaid-action,
+.owner-approval-action.owner-approval-action,
 .confirm-action.confirm-action,
 .receipt-action.receipt-action {
   min-width: 0;
@@ -1642,6 +1646,11 @@ button.copy-line.copy-line.copy-line {
 .unpaid-action.unpaid-action {
   border-color: rgba(196, 66, 80, 0.42);
   color: var(--otziv-danger);
+}
+
+.owner-approval-action.owner-approval-action {
+  border-color: rgba(122, 89, 0, 0.35);
+  color: var(--bank-amber-text);
 }
 
 .confirm-action.confirm-action {
@@ -1671,6 +1680,7 @@ button.copy-line.copy-line.copy-line {
 
 .refund-action:not(:disabled):hover,
 .unpaid-action:not(:disabled):hover,
+.owner-approval-action:not(:disabled):hover,
 .confirm-action:not(:disabled):hover,
 .receipt-action:not(:disabled):hover,
 .quiet-action:hover,
@@ -1683,6 +1693,7 @@ button.copy-line.copy-line.copy-line {
 button:disabled,
 .refund-action:disabled,
 .unpaid-action:disabled,
+.owner-approval-action:disabled,
 .confirm-action:disabled,
 .receipt-action:disabled {
   cursor: not-allowed;
@@ -2514,6 +2525,12 @@ button:disabled,
   border: 0;
   color: #102a25;
   background: var(--otziv-success);
+}
+
+.owner-approval-submit {
+  border: 0;
+  color: #fff;
+  background: var(--otziv-danger);
 }
 
 .contractor-audit-actions button:disabled {

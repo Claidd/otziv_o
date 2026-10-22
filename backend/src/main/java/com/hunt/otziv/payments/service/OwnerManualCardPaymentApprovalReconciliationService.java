@@ -28,11 +28,20 @@ public class OwnerManualCardPaymentApprovalReconciliationService {
 
     @Transactional
     public Result closeSuperseded(Long approvalId, Authentication authentication) {
-        var approval = approvals.findByIdForUpdate(approvalId)
+        var binding = approvals.findBindingById(approvalId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Запрос не найден"));
-        access.requireOrderAccess(approval.getOrderId(), authentication);
-        Order order = orders.findByIdForCounterUpdate(approval.getOrderId())
+        access.requireOrderAccess(binding.getOrderId(), authentication);
+        Order order = orders.findByIdForCounterUpdate(binding.getOrderId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден"));
+        PaymentLink original = links.findByIdForUpdate(binding.getPaymentLinkId())
+                .orElseThrow(() -> conflict("Исходный счёт не найден"));
+        var approval = approvals.findByIdForUpdate(approvalId)
+                .orElseThrow(() -> conflict("Запрос изменился"));
+        if (!Objects.equals(approval.getOrderId(), order.getId())
+                || !Objects.equals(approval.getPaymentLinkId(), original.getId())
+                || !Objects.equals(original.getOrderId(), order.getId())) {
+            throw conflict("Связь запроса с заказом или счётом изменилась");
+        }
         if (approval.getStatus() == OwnerManualCardPaymentApprovalStatus.SUPERSEDED) {
             notifications.closeOwnerApprovalReminders(approvalId);
             return new Result(approvalId, order.getId(), "SUPERSEDED", true);
@@ -41,8 +50,6 @@ public class OwnerManualCardPaymentApprovalReconciliationService {
                 || order.getStatus() == null || !"Оплачено".equals(order.getStatus().getTitle())) {
             throw conflict("Закрыть можно только устаревший запрос по уже оплаченному заказу");
         }
-        PaymentLink original = links.findByIdForUpdate(approval.getPaymentLinkId())
-                .orElseThrow(() -> conflict("Исходный счёт не найден"));
         if (original.getOrder() == null || !Objects.equals(original.getOrder().getId(), order.getId())
                 || original.getStatus() != PaymentLinkStatus.CANCELED) {
             throw conflict("Исходный счёт должен быть отменён; действующее подтверждение не закрыто");

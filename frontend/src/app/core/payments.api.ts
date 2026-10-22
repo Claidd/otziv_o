@@ -84,6 +84,33 @@ export interface CloseManualPaymentUnpaidRequest {
   note: string;
 }
 
+export interface OwnerManualCardApproval {
+  approvalId: number;
+  orderId: number;
+  paymentLinkId: number;
+  status: 'PENDING' | 'CONFIRMED' | 'SUPERSEDED' | 'REVOKED';
+  amountKopecks: number;
+  requestedAt: string;
+  requestedBy: string;
+  revokedAt?: string | null;
+  revokedBy?: string | null;
+  revocationReason?: string | null;
+}
+
+export interface RevokePendingOwnerApprovalRequest {
+  expectedOrderId: number;
+  expectedPaymentLinkId: number;
+  reason: string;
+}
+
+export interface RevokePendingOwnerApprovalResult {
+  approvalId: number;
+  orderId: number;
+  paymentLinkId: number;
+  status: 'REVOKED';
+  alreadyRevoked: boolean;
+}
+
 export type SpecialistPaymentReviewStatus =
   | 'PENDING_DELIVERY' | 'WAITING' | 'SETTLING' | 'ADMIN_SETTLING'
   | 'DISPUTED' | 'CONFIRMED' | 'NEEDS_ATTENTION' | 'SUPERSEDED';
@@ -416,6 +443,22 @@ export class PaymentsApi {
     .set(SKIP_AUTH_TOKEN, true);
 
   constructor(private readonly http: HttpClient) {}
+
+  getOwnerApprovalForPaymentLink(paymentLinkId: number): Observable<OwnerManualCardApproval> {
+    return this.http.get<OwnerManualCardApproval>(
+      `${appEnvironment.apiBaseUrl}/api/admin/payments/owner-approvals/by-payment-link/${paymentLinkId}`
+    );
+  }
+
+  revokePendingOwnerApproval(
+    approvalId: number,
+    request: RevokePendingOwnerApprovalRequest
+  ): Observable<RevokePendingOwnerApprovalResult> {
+    return this.http.post<RevokePendingOwnerApprovalResult>(
+      `${appEnvironment.apiBaseUrl}/api/admin/payments/owner-approvals/${approvalId}/revoke-pending`,
+      request
+    );
+  }
 
   getSpecialistPaymentReviews(): Observable<SpecialistPaymentReview[]> {
     return this.http.get<SpecialistPaymentReview[]>(

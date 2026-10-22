@@ -606,6 +606,45 @@ public class ContractorActualPaymentAttributionService {
         link.setManualActualRecipientFrozenAt(LocalDateTime.now());
     }
 
+    /** Clears an unconsumed owner selection after its approval has been revoked. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void clearRevokedPaymentLinkRecipientIntent(PaymentLink link) {
+        if (link == null || link.getId() == null || link.getManualActualRecipientFrozenAt() == null) {
+            throw new ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT,
+                    "Выбор получателя уже изменился");
+        }
+        if (!attributionRepository.findAllBySourceForUpdate(
+                ContractorActualPaymentSourceKind.PAYMENT_LINK, link.getId()).isEmpty()) {
+            throw new ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT,
+                    "Поступление уже учтено; смена получателя требует отдельной сверки");
+        }
+        link.setManualActualAccountingMode(null);
+        link.setManualActualOriginalCashDestinationKind(null);
+        link.setManualActualOriginalTaskId(null);
+        link.setManualActualOriginalTaskGeneration(null);
+        link.setManualActualOriginalTaskTargetKind(null);
+        link.setManualActualOriginalAllocationId(null);
+        link.setManualActualClientFacingAllocationId(null);
+        link.setManualActualOriginalRecipientType(null);
+        link.setManualActualOriginalRecipientProfileId(null);
+        link.setManualActualOriginalRecipientUserId(null);
+        link.setManualActualOriginalRecipientNameSnapshot(null);
+        link.setManualActualCashDestinationKind(null);
+        link.setManualActualTaskId(null);
+        link.setManualActualTaskGeneration(null);
+        link.setManualActualTaskTargetKind(null);
+        link.setManualActualRecipientType(null);
+        link.setManualActualRecipientProfileId(null);
+        link.setManualActualRecipientUserId(null);
+        link.setManualActualRecipientNameSnapshot(null);
+        link.setManualActualCurrentWorkerId(null);
+        link.setManualActualCurrentManagerId(null);
+        link.setManualActualReason(null);
+        link.setManualActualReceiptUrl(null);
+        link.setManualActualActor(null);
+        link.setManualActualRecipientFrozenAt(null);
+    }
+
     @Transactional(propagation = Propagation.MANDATORY)
     public ContractorActualPaymentAttribution recordPaymentLinkFinalAttribution(
             Order order,

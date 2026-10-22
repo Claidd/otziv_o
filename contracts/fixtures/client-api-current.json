@@ -3384,6 +3384,25 @@
       "status" : "contract-example",
       "alreadyClosed" : false
     },
+    "OwnerManualCardPaymentApprovalRevocationServiceApprovalViewOutput" : {
+      "approvalId" : 2,
+      "orderId" : 2,
+      "paymentLinkId" : 2,
+      "status" : "contract-example",
+      "amountKopecks" : 2,
+      "requestedAt" : "2026-09-07T08:00:00",
+      "requestedBy" : "contract-example",
+      "revokedAt" : "2026-09-07T08:00:00",
+      "revokedBy" : "contract-example",
+      "revocationReason" : "contract-example"
+    },
+    "OwnerManualCardPaymentApprovalRevocationServiceRevocationResultOutput" : {
+      "approvalId" : 2,
+      "orderId" : 2,
+      "paymentLinkId" : 2,
+      "status" : "contract-example",
+      "alreadyRevoked" : false
+    },
     "PageOfWorkerRiskIncidentResponseOutput" : {
       "content" : [ {
         "id" : 2,
@@ -4400,6 +4419,11 @@
     },
     "ReviewTextUpdateRequestInput" : {
       "text" : "contract-example"
+    },
+    "RevokePendingOwnerApprovalRequestInput" : {
+      "expectedOrderId" : 2,
+      "expectedPaymentLinkId" : 2,
+      "reason" : "contract-example"
     },
     "SpecialistPaymentAbsentRequestInput" : {
       "note" : "contract-example",

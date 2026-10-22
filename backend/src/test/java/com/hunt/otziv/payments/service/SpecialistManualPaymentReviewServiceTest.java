@@ -15,6 +15,7 @@ import com.hunt.otziv.payments.repository.SpecialistManualPaymentReviewRepositor
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.api.SpecialistPaymentReviewDirectory;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -119,6 +120,27 @@ class SpecialistManualPaymentReviewServiceTest {
         assertEquals(originalDeadline, review.getDeadlineAt());
         verify(issues).resolveOrderIssueInCurrentTransaction(
                 SpecialistManualPaymentReviewService.DELIVERY_ISSUE, 101L);
+    }
+
+    @Test
+    void telegramAcceptanceSurvivesMySqlMicrosecondRoundTrip() {
+        SpecialistManualPaymentReview review = pending();
+        review.setId(101L);
+        when(reviews.lockById(101L)).thenAnswer(call -> {
+            if (review.getLastAttemptAt() != null) {
+                review.setLastAttemptAt(review.getLastAttemptAt().truncatedTo(ChronoUnit.MICROS));
+            }
+            return Optional.of(review);
+        });
+        when(users.activePersonalTelegramChatId(37L)).thenReturn(Optional.of(999L));
+        when(telegram.sendPaymentReviewNoticeOnce(eq(999L), any(), any(), any())).thenReturn(true);
+
+        service.deliver(101L);
+
+        assertEquals(SpecialistManualPaymentReviewStatus.WAITING, review.getStatus());
+        assertNotNull(review.getNotifiedAt());
+        assertEquals(review.getLastAttemptAt(),
+                review.getLastAttemptAt().truncatedTo(ChronoUnit.MICROS));
     }
 
     @Test

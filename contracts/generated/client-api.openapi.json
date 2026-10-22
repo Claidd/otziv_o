@@ -2505,6 +2505,63 @@
         "x-automatic-retry" : false
       }
     },
+    "/api/admin/payments/owner-approvals/by-payment-link/{paymentLinkId}" : {
+      "get" : {
+        "operationId" : "OwnerManualCardPaymentApprovalAdminController_byPaymentLink",
+        "x-java-handler" : "com.hunt.otziv.payments.controller.OwnerManualCardPaymentApprovalAdminController#byPaymentLink",
+        "parameters" : [ {
+          "name" : "paymentLinkId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer"
+          }
+        } ],
+        "x-preauthorize" : "hasAnyRole('ADMIN', 'OWNER')",
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Declared controller response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OwnerManualCardPaymentApprovalRevocationServiceApprovalViewOutput"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Validation or domain rejection",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication rejected; a write is not automatically retried"
+          },
+          "403" : {
+            "description" : "Server denied access; authority is not inferred from client state"
+          },
+          "409" : {
+            "description" : "Conflict; read current state before an explicit user retry",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          }
+        },
+        "x-automatic-retry" : false
+      }
+    },
     "/api/admin/payments/owner-approvals/{approvalId}/close-superseded" : {
       "post" : {
         "operationId" : "OwnerManualCardPaymentApprovalAdminController_closeSuperseded",
@@ -2528,6 +2585,73 @@
               "application/json" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/OwnerManualCardPaymentApprovalReconciliationServiceResultOutput"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Validation or domain rejection",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication rejected; a write is not automatically retried"
+          },
+          "403" : {
+            "description" : "Server denied access; authority is not inferred from client state"
+          },
+          "409" : {
+            "description" : "Conflict; read current state before an explicit user retry",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          }
+        },
+        "x-automatic-retry" : false
+      }
+    },
+    "/api/admin/payments/owner-approvals/{approvalId}/revoke-pending" : {
+      "post" : {
+        "operationId" : "OwnerManualCardPaymentApprovalAdminController_revokePending",
+        "x-java-handler" : "com.hunt.otziv.payments.controller.OwnerManualCardPaymentApprovalAdminController#revokePending",
+        "requestBody" : {
+          "required" : true,
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RevokePendingOwnerApprovalRequestInput"
+              }
+            }
+          }
+        },
+        "parameters" : [ {
+          "name" : "approvalId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer"
+          }
+        } ],
+        "x-preauthorize" : "hasAnyRole('ADMIN', 'OWNER')",
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Declared controller response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OwnerManualCardPaymentApprovalRevocationServiceRevocationResultOutput"
                 }
               }
             }
@@ -23247,6 +23371,122 @@
         "required" : [ "alreadyClosed", "approvalId", "orderId", "status" ],
         "additionalProperties" : true
       },
+      "OwnerManualCardPaymentApprovalRevocationServiceApprovalViewOutput" : {
+        "x-java-type" : "com.hunt.otziv.payments.service.OwnerManualCardPaymentApprovalRevocationService$ApprovalView",
+        "type" : "object",
+        "properties" : {
+          "amountKopecks" : {
+            "type" : "integer",
+            "x-money-unit" : "kopecks"
+          },
+          "approvalId" : {
+            "anyOf" : [ {
+              "type" : "integer"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "orderId" : {
+            "anyOf" : [ {
+              "type" : "integer"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "paymentLinkId" : {
+            "anyOf" : [ {
+              "type" : "integer"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "requestedAt" : {
+            "anyOf" : [ {
+              "type" : "string",
+              "x-date-time-kind" : "local"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "requestedBy" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "revocationReason" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "revokedAt" : {
+            "anyOf" : [ {
+              "type" : "string",
+              "x-date-time-kind" : "local"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "revokedBy" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "status" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        },
+        "required" : [ "amountKopecks", "approvalId", "orderId", "paymentLinkId", "requestedAt", "requestedBy", "revocationReason", "revokedAt", "revokedBy", "status" ],
+        "additionalProperties" : true
+      },
+      "OwnerManualCardPaymentApprovalRevocationServiceRevocationResultOutput" : {
+        "x-java-type" : "com.hunt.otziv.payments.service.OwnerManualCardPaymentApprovalRevocationService$RevocationResult",
+        "type" : "object",
+        "properties" : {
+          "alreadyRevoked" : {
+            "type" : "boolean"
+          },
+          "approvalId" : {
+            "anyOf" : [ {
+              "type" : "integer"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "orderId" : {
+            "anyOf" : [ {
+              "type" : "integer"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "paymentLinkId" : {
+            "anyOf" : [ {
+              "type" : "integer"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "status" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        },
+        "required" : [ "alreadyRevoked", "approvalId", "orderId", "paymentLinkId", "status" ],
+        "additionalProperties" : true
+      },
       "PageOfWorkerRiskIncidentResponseOutput" : {
         "x-java-type" : "org.springframework.data.domain.Page<com.hunt.otziv.worker_activity.dto.WorkerRiskIncidentResponse>",
         "type" : "object",
@@ -25468,6 +25708,24 @@
         "required" : [ ],
         "additionalProperties" : true
       },
+      "RevokePendingOwnerApprovalRequestInput" : {
+        "x-java-type" : "com.hunt.otziv.payments.dto.RevokePendingOwnerApprovalRequest",
+        "type" : "object",
+        "properties" : {
+          "expectedOrderId" : {
+            "type" : "integer"
+          },
+          "expectedPaymentLinkId" : {
+            "type" : "integer"
+          },
+          "reason" : {
+            "type" : "string",
+            "x-not-blank" : true
+          }
+        },
+        "required" : [ "expectedOrderId", "expectedPaymentLinkId", "reason" ],
+        "additionalProperties" : true
+      },
       "SortOutput" : {
         "x-java-type" : "org.springframework.data.domain.Sort",
         "type" : "object",
@@ -27041,7 +27299,7 @@
     "sha256" : "3ba2d32e8add2f699019c8cab9e380be1ef1dceb88b33b9249b803a1a2d927ee"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/payments/controller/OwnerManualCardPaymentApprovalAdminController.java",
-    "sha256" : "021fef976b2e750bdf4a25d8a560fb9ece4db45b18109aff676719b01b282ea9"
+    "sha256" : "816b9350e5e618413037982bc686d121cb59670684b71b6ca000d28472cfbda2"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/payments/controller/PaymentReturnReconciliationAdminController.java",
     "sha256" : "63874907475ebf4908482c288f63c1f17801df755503dfe8254623fc16b3c24c"
@@ -27145,6 +27403,9 @@
     "path" : "backend/src/main/java/com/hunt/otziv/payments/dto/ResolveAmbiguousBankInitRequest.java",
     "sha256" : "27889a44a03b444071cc50d76f65e9672c61a8ff844f9b8c316df0e0d575652e"
   }, {
+    "path" : "backend/src/main/java/com/hunt/otziv/payments/dto/RevokePendingOwnerApprovalRequest.java",
+    "sha256" : "2a7ca923a4e14942f0ced48dcf7ae93c0424d997ed7a068f91ef8bb6d4ba4dcb"
+  }, {
     "path" : "backend/src/main/java/com/hunt/otziv/payments/dto/SpecialistManualPaymentReviewResponse.java",
     "sha256" : "0cf9752da3fdd39891b1e8703c578a2e51d0bbdcb3b4c744cce24c4ab48806cd"
   }, {
@@ -27203,7 +27464,10 @@
     "sha256" : "25fca6a4c4d01ad5b94084a8665ce7a146bcad920ed783b2b9034af26b03459b"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/payments/service/OwnerManualCardPaymentApprovalReconciliationService.java",
-    "sha256" : "cd4764bcf4d6dcc8f67e25afca24e987087373c4070d25c1ac982932cc66b4e5"
+    "sha256" : "271b9c0a943eefa6b2b0fbed7e51c3f9d7b4e6795f479e52c974d505452394aa"
+  }, {
+    "path" : "backend/src/main/java/com/hunt/otziv/payments/service/OwnerManualCardPaymentApprovalRevocationService.java",
+    "sha256" : "ee5c86486a1a996b7cd024f2a0135e3a1f236d9d0b0e701f72eb93f1e6c9fde3"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/r_review/capability/service/ReviewCheckCapabilityService.java",
     "sha256" : "f71f5d13bd914f93c56990b0f2a3c36ece54a84ac420f397359ce4c1dee7a2b5"
@@ -27427,6 +27691,8 @@
     "OrderProductResponseOutput" : "com.hunt.otziv.manager.dto.api.OrderProductResponse",
     "OrderUpdateRequestInput" : "com.hunt.otziv.manager.dto.api.OrderUpdateRequest",
     "OwnerManualCardPaymentApprovalReconciliationServiceResultOutput" : "com.hunt.otziv.payments.service.OwnerManualCardPaymentApprovalReconciliationService$Result",
+    "OwnerManualCardPaymentApprovalRevocationServiceApprovalViewOutput" : "com.hunt.otziv.payments.service.OwnerManualCardPaymentApprovalRevocationService$ApprovalView",
+    "OwnerManualCardPaymentApprovalRevocationServiceRevocationResultOutput" : "com.hunt.otziv.payments.service.OwnerManualCardPaymentApprovalRevocationService$RevocationResult",
     "PageOfWorkerRiskIncidentResponseOutput" : "org.springframework.data.domain.Page<com.hunt.otziv.worker_activity.dto.WorkerRiskIncidentResponse>",
     "PageResponseOfCommonInvoiceArchiveListItemOutput" : "com.hunt.otziv.manager.dto.api.PageResponse<com.hunt.otziv.common_billing.dto.CommonInvoiceArchiveListItem>",
     "PageResponseOfCompanyListDTOOutput" : "com.hunt.otziv.manager.dto.api.PageResponse<com.hunt.otziv.c_companies.dto.CompanyListDTO>",
@@ -27466,6 +27732,7 @@
     "ReviewRecoveryTaskUpdateRequestInput" : "com.hunt.otziv.manager.dto.api.ReviewRecoveryTaskUpdateRequest",
     "ReviewSafetyReportOutput" : "com.hunt.otziv.reputationai.domain.ReviewSafetyReport",
     "ReviewTextUpdateRequestInput" : "com.hunt.otziv.manager.dto.api.ReviewTextUpdateRequest",
+    "RevokePendingOwnerApprovalRequestInput" : "com.hunt.otziv.payments.dto.RevokePendingOwnerApprovalRequest",
     "SortOutput" : "org.springframework.data.domain.Sort",
     "SpecialistManualPaymentReviewResponseOutput" : "com.hunt.otziv.payments.dto.SpecialistManualPaymentReviewResponse",
     "SpecialistManualPaymentReviewStatusOutput" : "com.hunt.otziv.payments.model.SpecialistManualPaymentReviewStatus",
