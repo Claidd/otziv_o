@@ -1,12 +1,8 @@
 package com.hunt.otziv.payments.service;
 
-import com.hunt.otziv.business_audit.service.BusinessAuditService;
-import com.hunt.otziv.contractor_payments.model.ContractorCashDestinationKind;
-import com.hunt.otziv.contractor_payments.model.ContractorRecipientType;
-import com.hunt.otziv.contractor_payments.service.ContractorActualPaymentAttributionService;
-import com.hunt.otziv.manager.service.ManagerAccessService;
-import com.hunt.otziv.p_products.model.Order;
-import com.hunt.otziv.p_products.repository.OrderRepository;
+import com.hunt.otziv.business_audit.api.RequiredTransactionAudit;
+import com.hunt.otziv.contractor_payments.api.PaymentLinkAttributionGuard;
+import com.hunt.otziv.manager.api.PaymentReviewOrderAccess;
 import com.hunt.otziv.payments.dto.RevokePendingOwnerApprovalRequest;
 import com.hunt.otziv.payments.model.OwnerManualCardPaymentApproval;
 import com.hunt.otziv.payments.model.OwnerManualCardPaymentApprovalStatus;
@@ -31,15 +27,14 @@ import org.springframework.web.server.ResponseStatusException;
 public class OwnerManualCardPaymentApprovalRevocationService {
 
     private final OwnerManualCardPaymentApprovalRepository approvals;
-    private final OrderRepository orders;
     private final PaymentLinkRepository links;
     private final SpecialistManualPaymentReviewRepository reviews;
-    private final ManagerAccessService access;
+    private final PaymentReviewOrderAccess access;
     private final ManualCardRoutePolicy routePolicy;
     private final OrderPaymentIntegrityService orderPaymentIntegrity;
-    private final ContractorActualPaymentAttributionService attribution;
+    private final PaymentLinkAttributionGuard attribution;
     private final ManualCardPaymentReviewNotificationService notifications;
-    private final BusinessAuditService audit;
+    private final RequiredTransactionAudit audit;
 
     @Transactional(readOnly = true)
     public ApprovalView findByPaymentLink(Long paymentLinkId, Authentication authentication) {
@@ -73,15 +68,16 @@ public class OwnerManualCardPaymentApprovalRevocationService {
         }
 
         // Match the callback's lock order. The scalar binding is rechecked after all locks.
-        Order order = orders.findByIdForCounterUpdate(binding.getOrderId())
+        boolean settledOrderEvidence = orderPaymentIntegrity.lockSpecialistReviewOrderEvidence(binding.getOrderId())
                 .orElseThrow(() -> conflict("Заказ больше не существует"));
-        List<PaymentLink> orderLinks = links.findByOrderIdForUpdate(order.getId());
+        Long orderId = binding.getOrderId();
+        List<PaymentLink> orderLinks = links.findByOrderIdForUpdate(orderId);
         PaymentLink link = orderLinks.stream()
                 .filter(value -> Objects.equals(value.getId(), binding.getPaymentLinkId()))
                 .findFirst().orElseThrow(() -> conflict("Счёт больше не относится к заказу"));
         OwnerManualCardPaymentApproval approval = approvals.findByIdForUpdate(approvalId)
                 .orElseThrow(() -> conflict("Запрос владельцу изменился"));
-        if (!Objects.equals(approval.getOrderId(), order.getId())
+        if (!Objects.equals(approval.getOrderId(), orderId)
                 || !Objects.equals(approval.getPaymentLinkId(), link.getId())
                 || !Objects.equals(approval.getOrderId(), request.expectedOrderId())
                 || !Objects.equals(approval.getPaymentLinkId(), request.expectedPaymentLinkId())) {
@@ -89,35 +85,28 @@ public class OwnerManualCardPaymentApprovalRevocationService {
         }
         if (approval.getStatus() == OwnerManualCardPaymentApprovalStatus.REVOKED) {
             notifications.closeOwnerApprovalReminders(approvalId);
-            return new RevocationResult(approvalId, order.getId(), link.getId(), "REVOKED", true);
+            return new RevocationResult(approvalId, orderId, link.getId(), "REVOKED", true);
         }
         if (approval.getStatus() != OwnerManualCardPaymentApprovalStatus.PENDING
                 || approval.getAttemptCount() != 0 || approval.getLastAttemptAt() != null) {
             throw conflict("Подтверждение уже выполнялось или запрос закрыт; требуется отдельная сверка");
         }
-        if (orderPaymentIntegrity.hasSettledPaymentEvidence(order)
-                || orderLinks.stream().anyMatch(this::hasPaymentEvidence)) {
+        if (settledOrderEvidence || orderLinks.stream().anyMatch(this::hasPaymentEvidence)) {
             throw conflict("По заказу уже есть признаки платежа; смена получателя требует отдельной сверки");
         }
         if (!routePolicy.isUnstartedCreatedBankRoute(link) || hasProviderAttempt(link)
                 || !Objects.equals(link.getAmountKopecks(), approval.getAmountKopecks())) {
             throw conflict("Банковский маршрут уже начат или счёт изменился");
         }
-        if (approval.getRecipientType() != ContractorRecipientType.OWNER
-                || approval.getRecipientProfileId() != null
-                || !"OWNER".equals(approval.getRecipientKey())
-                || link.getManualActualRecipientFrozenAt() == null
-                || link.getManualActualRecipientType() != ContractorRecipientType.OWNER
-                || link.getManualActualRecipientProfileId() != null
-                || link.getManualActualCashDestinationKind() != ContractorCashDestinationKind.OWNER
-                || link.getManualActualTaskId() != null) {
+        if (!approval.hasOwnerRecipientIntent() || !link.hasFrozenOwnerRecipientIntent()) {
             throw conflict("Выбор получателя уже изменился");
         }
         if (reviews.lockByPaymentLinkId(link.getId()).isPresent()) {
             throw conflict("По счёту уже есть проверка специалиста");
         }
 
-        attribution.clearRevokedPaymentLinkRecipientIntent(link);
+        attribution.requireNoFinalAttributionForPaymentLink(link.getId());
+        link.clearManualActualRecipientIntent();
         String actor = authentication == null || authentication.getName() == null
                 ? "" : authentication.getName().trim();
         if (actor.isBlank() || actor.length() > 150) {
@@ -131,10 +120,10 @@ public class OwnerManualCardPaymentApprovalRevocationService {
         links.saveAndFlush(link);
         notifications.closeOwnerApprovalReminders(approvalId);
         audit.recordRequiredInCurrentTransaction(authentication, "OWNER_APPROVAL_REVOKED",
-                "OWNER_MANUAL_CARD_APPROVAL", approvalId, order.getId(), null,
+                "OWNER_MANUAL_CARD_APPROVAL", approvalId, orderId, null,
                 "PENDING owner recipient, payment link " + link.getId(),
                 "REVOKED recipient intent cleared", reason);
-        return new RevocationResult(approvalId, order.getId(), link.getId(), "REVOKED", false);
+        return new RevocationResult(approvalId, orderId, link.getId(), "REVOKED", false);
     }
 
     private boolean hasPaymentEvidence(PaymentLink link) {

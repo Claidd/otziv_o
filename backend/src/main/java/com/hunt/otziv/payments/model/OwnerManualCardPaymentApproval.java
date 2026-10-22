@@ -99,6 +99,12 @@ public class OwnerManualCardPaymentApproval {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    public boolean hasOwnerRecipientIntent() {
+        return recipientType == ContractorRecipientType.OWNER
+                && recipientProfileId == null
+                && "OWNER".equals(recipientKey);
+    }
+
     @PrePersist
     void onCreate() {
         LocalDateTime now = LocalDateTime.now();

@@ -1,5 +1,6 @@
 package com.hunt.otziv.contractor_payments.service;
 
+import com.hunt.otziv.contractor_payments.api.PaymentLinkAttributionGuard;
 import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.contractor_payments.dto.ContractorActualPaymentRecipientCommand;
@@ -59,7 +60,7 @@ import org.springframework.web.server.ResponseStatusException;
  */
 @Service
 @RequiredArgsConstructor
-public class ContractorActualPaymentAttributionService {
+public class ContractorActualPaymentAttributionService implements PaymentLinkAttributionGuard {
 
     private static final int MAX_REASON_LENGTH = 500;
     private static final int MAX_EVIDENCE_REFERENCE_LENGTH = 160;
@@ -613,36 +614,18 @@ public class ContractorActualPaymentAttributionService {
             throw new ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT,
                     "Выбор получателя уже изменился");
         }
+        requireNoFinalAttributionForPaymentLink(link.getId());
+        link.clearManualActualRecipientIntent();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void requireNoFinalAttributionForPaymentLink(Long paymentLinkId) {
         if (!attributionRepository.findAllBySourceForUpdate(
-                ContractorActualPaymentSourceKind.PAYMENT_LINK, link.getId()).isEmpty()) {
+                ContractorActualPaymentSourceKind.PAYMENT_LINK, paymentLinkId).isEmpty()) {
             throw new ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT,
                     "Поступление уже учтено; смена получателя требует отдельной сверки");
         }
-        link.setManualActualAccountingMode(null);
-        link.setManualActualOriginalCashDestinationKind(null);
-        link.setManualActualOriginalTaskId(null);
-        link.setManualActualOriginalTaskGeneration(null);
-        link.setManualActualOriginalTaskTargetKind(null);
-        link.setManualActualOriginalAllocationId(null);
-        link.setManualActualClientFacingAllocationId(null);
-        link.setManualActualOriginalRecipientType(null);
-        link.setManualActualOriginalRecipientProfileId(null);
-        link.setManualActualOriginalRecipientUserId(null);
-        link.setManualActualOriginalRecipientNameSnapshot(null);
-        link.setManualActualCashDestinationKind(null);
-        link.setManualActualTaskId(null);
-        link.setManualActualTaskGeneration(null);
-        link.setManualActualTaskTargetKind(null);
-        link.setManualActualRecipientType(null);
-        link.setManualActualRecipientProfileId(null);
-        link.setManualActualRecipientUserId(null);
-        link.setManualActualRecipientNameSnapshot(null);
-        link.setManualActualCurrentWorkerId(null);
-        link.setManualActualCurrentManagerId(null);
-        link.setManualActualReason(null);
-        link.setManualActualReceiptUrl(null);
-        link.setManualActualActor(null);
-        link.setManualActualRecipientFrozenAt(null);
     }
 
     @Transactional(propagation = Propagation.MANDATORY)

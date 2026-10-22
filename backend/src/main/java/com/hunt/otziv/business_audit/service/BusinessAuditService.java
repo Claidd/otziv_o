@@ -1,5 +1,6 @@
 package com.hunt.otziv.business_audit.service;
 
+import com.hunt.otziv.business_audit.api.RequiredTransactionAudit;
 import com.hunt.otziv.business_audit.model.BusinessAuditEvent;
 import com.hunt.otziv.business_audit.repository.BusinessAuditEventRepository;
 import jakarta.servlet.http.HttpServletRequest;
@@ -19,7 +20,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 
 @Service
 @Slf4j
-public class BusinessAuditService {
+public class BusinessAuditService implements RequiredTransactionAudit {
 
     private static final int VALUE_LIMIT = 2_000;
     private static final int DETAILS_LIMIT = 1_000;
