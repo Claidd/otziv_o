@@ -87,6 +87,20 @@ class RemoteTransportTest(unittest.TestCase):
         self.assertIn('SIGNED_PRIVATE_URL',str(packet['links']))
         self.assertNotIn('token',packet)
 
+    def test_long_remote_prepare_uses_ssh_keepalives(self):
+        record={'host':'server.example','user':'hunt','port':22,'path':'/docker','key':'key','known_hosts':'known','owner':'a'*32}
+        with patch('remote_release_transport.subprocess.run',return_value=Mock(returncode=0,stdout=b'{}')) as run:
+            invoke(record,'prepare')
+            command=run.call_args.args[0]
+            self.assertIn('ServerAliveInterval=15',command)
+            self.assertIn('ServerAliveCountMax=3',command)
+            self.assertEqual(1800,run.call_args.kwargs['timeout'])
+
+            invoke(record,'status')
+            self.assertIn('ServerAliveInterval=15',run.call_args.args[0])
+            self.assertIn('ServerAliveCountMax=3',run.call_args.args[0])
+            self.assertEqual(180,run.call_args.kwargs['timeout'])
+
     def test_remote_plan_rejects_wrong_owner_and_any_changed_image(self):
         fixture=fixture_module.ReleaseArtifactsTest();fixture.setUp();self.addCleanup(fixture.doCleanups)
         from ci_release import capacity_plan

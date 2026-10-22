@@ -186,6 +186,59 @@ class CanonicalWorkspaceTest(unittest.TestCase):
 
 
 class RegistrySafetyTest(unittest.TestCase):
+    def test_exact_cached_registry_image_skips_network_pull(self):
+        image = {'Os': 'linux', 'Architecture': 'amd64',
+            'RepoDigests': ['registry@' + registry.IMAGE.rsplit('@', 1)[1]]}
+        with tempfile.TemporaryDirectory() as temp:
+            with patch.object(registry, 'run', return_value=json.dumps([image]).encode()) as docker, \
+                 patch.object(registry, 'start') as start:
+                registry.create(Path(temp) / 'registry.json')
+            self.assertEqual(docker.call_args_list[0].args, ('image', 'inspect', registry.IMAGE))
+            self.assertEqual(docker.call_args_list[1].args[:2], ('volume', 'create'))
+            self.assertEqual(docker.call_count, 2)
+            start.assert_called_once()
+
+    def test_missing_registry_image_is_pulled_then_verified(self):
+        image = {'Os': 'linux', 'Architecture': 'amd64',
+            'RepoDigests': ['registry@' + registry.IMAGE.rsplit('@', 1)[1]]}
+        inspections = iter([RuntimeError('missing'), json.dumps([image]).encode()])
+        calls = []
+
+        def docker(*args):
+            calls.append(args)
+            if args[:2] == ('image', 'inspect'):
+                result = next(inspections)
+                if isinstance(result, Exception):
+                    raise result
+                return result
+            return b''
+
+        with tempfile.TemporaryDirectory() as temp:
+            with patch.object(registry, 'run', side_effect=docker), patch.object(registry, 'start'):
+                registry.create(Path(temp) / 'registry.json')
+        self.assertEqual([args[0] for args in calls], ['image', 'pull', 'image', 'volume'])
+        self.assertEqual(calls[1], ('pull', registry.IMAGE))
+
+    def test_wrong_registry_digest_or_platform_never_starts(self):
+        digest = registry.IMAGE.rsplit('@', 1)[1]
+        for image in [
+            {'Os': 'linux', 'Architecture': 'amd64', 'RepoDigests': ['registry@sha256:' + '0' * 64]},
+            {'Os': 'linux', 'Architecture': 'arm64', 'RepoDigests': ['registry@' + digest]},
+            {'Os': 'windows', 'Architecture': 'amd64', 'RepoDigests': ['registry@' + digest]},
+        ]:
+            with self.subTest(image=image), tempfile.TemporaryDirectory() as temp:
+                calls = []
+
+                def docker(*args):
+                    calls.append(args)
+                    return json.dumps([image]).encode()
+
+                with patch.object(registry, 'run', side_effect=docker), patch.object(registry, 'start') as start, \
+                     self.assertRaisesRegex(RuntimeError, 'could not be verified'):
+                    registry.create(Path(temp) / 'registry.json')
+                self.assertEqual([args[0] for args in calls], ['image', 'pull', 'image'])
+                start.assert_not_called()
+
     def test_foreign_resource_names_rejected_before_docker(self):
         record = dict(owner='a'*32, container='some-production-service', volume='database', port=5000)
         with patch.object(registry, 'run') as docker, self.assertRaises(ValueError): registry.owned(record)
