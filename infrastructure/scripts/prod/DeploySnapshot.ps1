@@ -369,8 +369,10 @@ function Export-OtzivCommittedDeployBundle {
     } elseif (Test-Path -LiteralPath $archive) { throw 'Committed deployment archive already exists.' }
     try {
         if (-not $PreparedArchive) {
+            # Git for Windows applies core.autocrlf while archiving unless disabled;
+            # bound evidence must retain the exact committed blob bytes.
             $result = Invoke-OtzivSnapshotGit -Repository $Repository `
-                -Arguments (@('archive', '--format=tar', "--output=$archive", $exact, '--') + $paths)
+                -Arguments (@('-c', 'core.autocrlf=false', 'archive', '--format=tar', "--output=$archive", $exact, '--') + $paths)
             if ($result.ExitCode -ne 0) { throw 'Cannot archive committed deployment inputs.' }
         }
         & tar -xf $archive -C $StageRoot
