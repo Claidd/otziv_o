@@ -52,6 +52,7 @@ on:
           - c26-nginx
           - c28-nginx
           - c31-nginx
+          - c38-nginx
           - c26-phpmyadmin
           - c27-phpmyadmin
           - c31-phpmyadmin
