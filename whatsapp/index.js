@@ -388,7 +388,7 @@ function statusPayload() {
 
 function minimalStatusPayload() {
   return {
-    status: ready && authenticated ? "ok" : "not_ready",
+    status: gatewayReady() ? "ok" : "not_ready",
     clientId: CLIENT_ID,
     browserProfileId: BROWSER_PROFILE_ID,
     browserMode: REMOTE_BROWSER_ENABLED ? "peoples-profile" : "local",
@@ -402,6 +402,16 @@ function minimalStatusPayload() {
     state: lastState,
     hasQr: Boolean(currentQr),
   };
+}
+
+function gatewayReady() {
+  return ready && authenticated && !shuttingDown && operationLedger.admission().acceptingNew
+    && inboundInbox.isReadyForGateway();
+}
+
+function respondReady(_req, res) {
+  const payload = minimalStatusPayload();
+  res.status(payload.status === "ok" ? 200 : 503).json(payload);
 }
 
 function requireReady(res) {
@@ -954,14 +964,7 @@ app.get("/health", (req, res) => {
   res.json(minimalStatusPayload());
 });
 
-app.get("/ready", (req, res) => {
-  if (!ready || !authenticated || shuttingDown || !operationLedger.admission().acceptingNew || !inboundInbox.healthy
-      || inboundInbox.records.size >= inboundInbox.maxRecords) {
-    res.status(503).json(minimalStatusPayload());
-    return;
-  }
-  res.json(minimalStatusPayload());
-});
+app.get("/ready", respondReady);
 
 app.use(createInternalAuthMiddleware({
   secret: GATEWAY_SHARED_SECRET,
@@ -969,14 +972,7 @@ app.use(createInternalAuthMiddleware({
   minimumSecretLength: REMOTE_BROWSER_REQUIRED ? 32 : 1,
 }));
 
-app.get("/internal/ready", (req, res) => {
-  if (!ready || !authenticated || shuttingDown || !operationLedger.admission().acceptingNew || !inboundInbox.healthy
-      || inboundInbox.records.size >= inboundInbox.maxRecords) {
-    res.status(503).json(minimalStatusPayload());
-    return;
-  }
-  res.json(minimalStatusPayload());
-});
+app.get("/internal/ready", respondReady);
 
 app.get("/internal/task-metrics", (_req, res) => {
   res.set("Cache-Control", "no-store");

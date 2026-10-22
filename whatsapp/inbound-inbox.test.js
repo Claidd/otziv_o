@@ -24,6 +24,26 @@ function chat(messages, limits = []) {
 const message = (n) => ({ id: { _serialized: `m${n}` }, from: "first@g.us", author: "user@c.us",
   timestamp: n, body: `body ${n}`, fromMe: false, type: "chat" });
 
+test("gateway readiness exposes failed discovery without flapping during an ordinary scan", async t => {
+  const { inbox } = fixture(t, { maxRecords: 1 });
+  assert.equal(inbox.isReadyForGateway(), true);
+  inbox.paused = true;
+  assert.equal(inbox.isReadyForGateway(), true);
+  inbox.historyDiscoveryFailed = true;
+  assert.equal(inbox.isReadyForGateway(), false);
+  inbox.historyDiscoveryFailed = false;
+  assert.equal(inbox.isReadyForGateway(), true);
+  inbox.enqueue(route, payload());
+  assert.equal(inbox.isReadyForGateway(), false);
+  await inbox.drain(async () => ({ status: 200 }));
+  assert.equal(inbox.isReadyForGateway(), false);
+  inbox.paused = false;
+  await inbox.drain(async () => ({ status: 200 }));
+  assert.equal(inbox.isReadyForGateway(), true);
+  inbox.healthy = false;
+  assert.equal(inbox.isReadyForGateway(), false);
+});
+
 test("outage beyond old retry budget and process restart retains payload until actual ACK", async t => {
   let now = 1000; const { directory, inbox } = fixture(t, { now: () => now });
   inbox.enqueue(route, payload());
