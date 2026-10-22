@@ -29,14 +29,54 @@ public class ManagerControlOrderDeliveryState {
             throw conflict("По этому циклу заказа уже есть отправка. Проверьте её результат; повторная отправка сейчас заблокирована.");
         }
         if (repairCarry.latest(order).isPresent()) throw conflict("Предыдущий контакт подтверждён при сверке. Дождитесь срока повторной проверки карточки; новое сообщение сейчас не требуется.");
-        if (scheduledUnknown(order)) throw conflict("Исход автоматической отправки этого заказа не подтверждён. Нажмите «Починить» для сверки существующей операции; новое сообщение не отправляется.");
+        requireNoScheduledContact(order, true);
     }
 
-    private boolean scheduledUnknown(Snapshot order) {
+    void requireNoScheduledContact(Snapshot expected, boolean includeClaimed) {
+        var current = orders.lock(expected.orderId()).orElseThrow(() -> conflict("Заказ больше не доступен"));
+        if (!Objects.equals(expected, current)) throw conflict("Менеджер или цикл заказа изменился. Обновите карточку.");
+        if (scheduledUnknown(current, true, includeClaimed)) throw conflict(SCHEDULED_CONTACT_BLOCKED);
+        if (scheduledRecent(current, true)) throw conflict(RECENT_SCHEDULED_CONTACT);
+    }
+
+    private static final String SCHEDULED_CONTACT_BLOCKED = "Исход автоматической отправки этого заказа не подтверждён. Проверьте существующую операцию через «Починить» или передайте администратору. Не отправляйте повторное сообщение вручную.";
+    private static final String RECENT_SCHEDULED_CONTACT = "Автоматическая отправка клиенту уже подтверждена в течение последних двух дней. Дождитесь срока повторной проверки; повторное сообщение сейчас не требуется.";
+
+    String sendBlockedReason(ManagerDailyControlConcreteItem card) {
+        Snapshot order = order(card);
+        if (order == null) return null;
+        if (scheduledUnknown(order)) return SCHEDULED_CONTACT_BLOCKED;
+        if (scheduledRecent(order, false)) return RECENT_SCHEDULED_CONTACT;
+        if (history(order).stream().anyMatch(row -> blocks(row.delivery())))
+            return "Предыдущая ручная отправка ещё не завершена или требует сверки. Не отправляйте сообщение повторно.";
+        if (history(order).stream().anyMatch(ManagerControlOrderDeliveryState::recent) || repairCarry.latest(order).isPresent())
+            return "Контакт с клиентом уже подтверждён. Дождитесь срока повторной проверки; новое сообщение пока не требуется.";
+        return null;
+    }
+
+    private boolean scheduledRecent(Snapshot order, boolean lock) {
         String target = "order:" + order.orderId() + ":" + order.cycleAt().withNano(0);
         var waitingAt = order.waitingAt() == null ? order.cycleAt() : order.waitingAt();
         String waitingTarget = order.waitingForClient() ? "client-text:" + order.orderId() + ":" + waitingAt.withNano(0) : null;
-        return scheduled.hasUncertainCurrentDelivery(order.orderId(), target, waitingTarget);
+        LocalDateTime since = LocalDateTime.now().minusDays(ManagerControlItemActions.MANUAL_FOLLOW_UP_DAYS);
+        return lock ? scheduled.hasRecentCurrentDeliveryForUpdate(order.orderId(), target, waitingTarget, since)
+                : scheduled.hasRecentCurrentDelivery(order.orderId(), target, waitingTarget, since);
+    }
+
+    private boolean scheduledUnknown(Snapshot order) {
+        return scheduledUnknown(order, false);
+    }
+
+    private boolean scheduledUnknown(Snapshot order, boolean lock) {
+        return scheduledUnknown(order, lock, true);
+    }
+
+    private boolean scheduledUnknown(Snapshot order, boolean lock, boolean includeClaimed) {
+        String target = "order:" + order.orderId() + ":" + order.cycleAt().withNano(0);
+        var waitingAt = order.waitingAt() == null ? order.cycleAt() : order.waitingAt();
+        String waitingTarget = order.waitingForClient() ? "client-text:" + order.orderId() + ":" + waitingAt.withNano(0) : null;
+        return lock ? scheduled.hasUncertainCurrentDeliveryForUpdate(order.orderId(), target, waitingTarget, includeClaimed)
+                : scheduled.hasUncertainCurrentDelivery(order.orderId(), target, waitingTarget);
     }
 
     void requireMutationAllowed(ManagerDailyControlConcreteItem card) {
@@ -58,7 +98,7 @@ public class ManagerControlOrderDeliveryState {
         Snapshot order = isOrder(card) ? orders.lock(card.getEntityId()).orElse(null) : null;
         boolean blocked = order == null ? queue.blockingForCard(card.getId()) != null
                 : queue.controlHistory(order.orderId(), true).stream().filter(row -> sameCycle(row, order))
-                    .anyMatch(row -> blocks(row.delivery())) || (checkScheduled && scheduledUnknown(order));
+                    .anyMatch(row -> blocks(row.delivery())) || (checkScheduled && scheduledUnknown(order, true));
         if (blocked) throw conflict("Отправка ещё не завершена или требует сверки. Нельзя закрывать карточку или менять её действие до проверки существующей операции.");
     }
 
@@ -88,7 +128,7 @@ public class ManagerControlOrderDeliveryState {
         if (order == null || !"ORDER".equals(card.getEntityType())
                 || card.getStatus() == ManagerDailyControlItemStatus.DEFERRED) return false;
         var rows = history(order);
-        var receipt = rows.stream().filter(this::recent)
+        var receipt = rows.stream().filter(ManagerControlOrderDeliveryState::recent)
                 .filter(row -> !List.of("Опубликовано", "Выставлен счет").contains(row.source().orderStatus()))
                 .findFirst().orElse(null);
         var repair = receipt == null ? repairCarry.latest(order).orElse(null) : null;
@@ -137,11 +177,11 @@ public class ManagerControlOrderDeliveryState {
         return !order.cycleAt().isAfter(row.createdAt());
     }
 
-    private boolean recent(ManagerClientMessageQueue.RecordedControl row) {
+    static boolean recent(ManagerClientMessageQueue.RecordedControl row) {
         return "SENT".equals(row.delivery().status()) && row.delivery().errorCode() == null
                 && row.updatedAt().plusDays(ManagerControlItemActions.MANUAL_FOLLOW_UP_DAYS).isAfter(LocalDateTime.now());
     }
-    private static boolean blocks(DeliveryOperation op) {
+    static boolean blocks(DeliveryOperation op) {
         return List.of("QUEUED", "SENDING", "RETRYABLE", "UNKNOWN").contains(op.status())
                 || "finalization_required".equals(op.errorCode()) || "context_changed".equals(op.errorCode());
     }

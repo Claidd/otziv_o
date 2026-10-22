@@ -194,6 +194,8 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
     private final SchedulerLeaseService schedulerLeaseService;
     private final ClientMessageTime messageTime;
     private final org.springframework.context.ApplicationEventPublisher applicationEvents;
+    private final com.hunt.otziv.client_messages.api.OrderManualContactReservation manualContactReservation;
+    private final com.hunt.otziv.p_products.api.OrderDeliveryControlContext orderDeliveryContext;
     @Value("${client.messages.reconcile-interval:PT5M}")
     private Duration reconcileInterval;
     @Value("${client.messages.reconcile-lease-duration:PT10M}")
@@ -2063,7 +2065,10 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
     /** This branch executes only before any provider call, so non-delivery is known. */
     private void pausePreparedWithoutDispatch(Long stateId, Long orderId, String token,
             ClientMessageScenario scenario, String targetKey, LocalDateTime nowStorage) {
-        if (orderId != null) orderRepository.findByIdForMutation(orderId);
+        if (orderId != null) {
+            orderDeliveryContext.lock(orderId);
+            orderRepository.findByIdForMutation(orderId);
+        }
         ScheduledClientMessageState state = stateRepository.findByIdForUpdate(stateId).orElse(null);
         if (state == null || state.getStatus() != ScheduledMessageStateStatus.ACTIVE
                 || !"PREPARED".equals(state.getDeliveryStatus()) || !Objects.equals(state.getDeliveryToken(), token)
@@ -2125,6 +2130,7 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
 
     private boolean finalizeScheduledDelivery(PreparedScheduledDelivery prepared, ClientMessageSendResult result,
             LocalDateTime nowStorage, long durationMs) {
+        if (prepared.orderId() != null) orderDeliveryContext.lock(prepared.orderId());
         Order order = prepared.orderId() == null ? null : orderRepository.findByIdForMutation(prepared.orderId()).orElse(null);
         ScheduledClientMessageState state = stateRepository.findByIdForUpdate(prepared.stateId()).orElse(null);
         if (state == null
@@ -2225,13 +2231,16 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
             LocalDateTime expectedLockedUntil,
             boolean reconcilePaymentBeforeRetry
     ) {
-        // Order -> state -> shared budget is the preparation/finalization lock order.
-        ScheduledClientMessageState snapshot = stateRepository.findById(stateId).orElse(null);
-        if (snapshot != null && snapshot.getOrderId() != null) orderRepository.findByIdForMutation(snapshot.getOrderId());
+        // A real current order lock serializes the durable reservations of both send workflows.
+        Long reservedOrderId = stateRepository.findOrderIdByStateId(stateId).orElse(null);
+        boolean manualContactReserved = reservedOrderId != null
+                && manualContactReservation.blocksScheduledContact(reservedOrderId);
         ScheduledClientMessageState state = stateRepository.findByIdForUpdate(stateId).orElse(null);
         if (state == null || state.getStatus() != ScheduledMessageStateStatus.ACTIVE) {
             return null;
         }
+        if (!Objects.equals(reservedOrderId, state.getOrderId()))
+            throw new IllegalStateException("Scheduled delivery order changed while acquiring its reservation");
         LocalDateTime currentLockedUntil = messageTime.databaseTimestamp(state.getLockedUntil());
         LocalDateTime currentTime = messageTime.databaseTimestamp(messageTime.nowStorage());
         if (!ClientMessageStateSafety.isTransactionInProgress(state)
@@ -2249,7 +2258,14 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
             return null;
         }
         if (requiresClientMessageSlot(state.getScenario())) stateRepository.lockDispatchBudget();
-        PreparedScheduledDelivery prepared = processState(stateId, messageTime.databaseTimestamp(messageTime.nowStorage()));
+        PreparedScheduledDelivery prepared;
+        if (manualContactReserved && requiresClientMessageSlot(state.getScenario())) {
+            postpone(state, currentTime.plusMinutes(5), "manual_contact_reserved",
+                    "Ручная отправка текущего цикла уже сохранена или подтверждена; автоматическое сообщение отложено без отправки");
+            prepared = null;
+        } else {
+            prepared = processState(stateId, messageTime.databaseTimestamp(messageTime.nowStorage()));
+        }
         if (prepared == null && "CLAIMED".equals(state.getDeliveryStatus())) {
             state.setDeliveryStatus(hasText(state.getDeliveryEnvelope()) ? "RETRYABLE" : null);
             stateRepository.save(state);

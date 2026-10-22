@@ -89,6 +89,7 @@ export interface ManagerControlConcreteItem {
   diagnosis?: ManagerProblemDiagnosticView | null;
   auditCommitments?: ManagerReviewCommitment[] | null;
   delivery?: import('@otziv/client-common/delivery-operations').DeliveryOperation | null;
+  clientMessageSendBlockedReason?: string | null;
   controlEntityId?: number | null;
   type: 'ORDER' | 'RISK' | string;
   entityId?: number | null;

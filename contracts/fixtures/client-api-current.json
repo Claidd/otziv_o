@@ -1814,7 +1814,8 @@
         "dueAt" : "2026-09-07T08:00:00",
         "verification" : "contract-example",
         "status" : "contract-example"
-      } ]
+      } ],
+      "clientMessageSendBlockedReason" : "contract-example"
     },
     "ManagerControlEventResponseOutput" : {
       "eventId" : 2,
@@ -1927,7 +1928,8 @@
           "dueAt" : "2026-09-07T08:00:00",
           "verification" : "contract-example",
           "status" : "contract-example"
-        } ]
+        } ],
+        "clientMessageSendBlockedReason" : "contract-example"
       } ],
       "hiddenExampleCount" : 2,
       "createdAt" : "2026-09-07T08:00:00",
@@ -2066,7 +2068,8 @@
             "dueAt" : "2026-09-07T08:00:00",
             "verification" : "contract-example",
             "status" : "contract-example"
-          } ]
+          } ],
+          "clientMessageSendBlockedReason" : "contract-example"
         } ],
         "hiddenExampleCount" : 2,
         "createdAt" : "2026-09-07T08:00:00",

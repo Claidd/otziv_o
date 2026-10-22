@@ -43,8 +43,57 @@ public record ManagerControlConcreteItemResponse(
         String slaState,
         com.hunt.otziv.client_messages.api.DeliveryOperation delivery,
         DiagnosticView diagnosis,
-        List<ManagerReviewCommitmentView> auditCommitments
+        List<ManagerReviewCommitmentView> auditCommitments,
+        String clientMessageSendBlockedReason
 ) {
+    public ManagerControlConcreteItemResponse(
+        Long controlEntityId,
+        String type,
+        Long entityId,
+        String title,
+        String subtitle,
+        String status,
+        Long ageDays,
+        String reason,
+        String targetUrl,
+        String orderDetailsId,
+        String chatUrl,
+        LocalDateTime followUpAt,
+        LocalDateTime lastManualTouchAt,
+        String itemStatus,
+        String actionType,
+        String comment,
+        LocalDateTime updatedAt,
+        LocalDateTime resolvedAt,
+        LocalDateTime workerNotificationAttemptedAt,
+        LocalDateTime workerNotificationSentAt,
+        LocalDateTime workerNotificationAcceptedAt,
+        Long workerNotificationAcceptedByUserId,
+        String workerNotificationFailureReason,
+        String contactText,
+        String riskResolutionAction,
+        String workerExplanation,
+        LocalDateTime workerExplanationAt,
+        Integer penaltyPoints,
+        String rollbackStatus,
+        String rollbackMessage,
+        Boolean canRollback,
+        String specialistName,
+        LocalDateTime firstObservedAt,
+        LocalDateTime targetDeadlineAt,
+        LocalDateTime hardDeadlineAt,
+        String slaState,
+        com.hunt.otziv.client_messages.api.DeliveryOperation delivery,
+        DiagnosticView diagnosis,
+        List<ManagerReviewCommitmentView> auditCommitments
+    ) {
+        this(controlEntityId, type, entityId, title, subtitle, status, ageDays, reason, targetUrl, orderDetailsId, chatUrl, followUpAt, lastManualTouchAt, itemStatus, actionType, comment, updatedAt, resolvedAt, workerNotificationAttemptedAt, workerNotificationSentAt, workerNotificationAcceptedAt, workerNotificationAcceptedByUserId, workerNotificationFailureReason, contactText, riskResolutionAction, workerExplanation, workerExplanationAt, penaltyPoints, rollbackStatus, rollbackMessage, canRollback, specialistName, firstObservedAt, targetDeadlineAt, hardDeadlineAt, slaState, delivery, diagnosis, auditCommitments, null);
+    }
+
+    public ManagerControlConcreteItemResponse withClientMessageSendBlockedReason(String blockedReason) {
+        return new ManagerControlConcreteItemResponse(controlEntityId, type, entityId, title, subtitle, status, ageDays, reason, targetUrl, orderDetailsId, chatUrl, followUpAt, lastManualTouchAt, itemStatus, actionType, comment, updatedAt, resolvedAt, workerNotificationAttemptedAt, workerNotificationSentAt, workerNotificationAcceptedAt, workerNotificationAcceptedByUserId, workerNotificationFailureReason, contactText, riskResolutionAction, workerExplanation, workerExplanationAt, penaltyPoints, rollbackStatus, rollbackMessage, canRollback, specialistName, firstObservedAt, targetDeadlineAt, hardDeadlineAt, slaState, delivery, diagnosis, auditCommitments, blockedReason);
+    }
+
     public ManagerControlConcreteItemResponse {
         auditCommitments = auditCommitments == null ? List.of() : List.copyOf(auditCommitments);
     }
@@ -135,15 +184,15 @@ public record ManagerControlConcreteItemResponse(
     }
 
     public ManagerControlConcreteItemResponse withDelivery(com.hunt.otziv.client_messages.api.DeliveryOperation delivery) {
-        return new ManagerControlConcreteItemResponse(controlEntityId, type, entityId, title, subtitle, status, ageDays, reason, targetUrl, orderDetailsId, chatUrl, followUpAt, lastManualTouchAt, itemStatus, actionType, comment, updatedAt, resolvedAt, workerNotificationAttemptedAt, workerNotificationSentAt, workerNotificationAcceptedAt, workerNotificationAcceptedByUserId, workerNotificationFailureReason, contactText, riskResolutionAction, workerExplanation, workerExplanationAt, penaltyPoints, rollbackStatus, rollbackMessage, canRollback, specialistName, firstObservedAt, targetDeadlineAt, hardDeadlineAt, slaState, delivery, diagnosis, auditCommitments);
+        return new ManagerControlConcreteItemResponse(controlEntityId, type, entityId, title, subtitle, status, ageDays, reason, targetUrl, orderDetailsId, chatUrl, followUpAt, lastManualTouchAt, itemStatus, actionType, comment, updatedAt, resolvedAt, workerNotificationAttemptedAt, workerNotificationSentAt, workerNotificationAcceptedAt, workerNotificationAcceptedByUserId, workerNotificationFailureReason, contactText, riskResolutionAction, workerExplanation, workerExplanationAt, penaltyPoints, rollbackStatus, rollbackMessage, canRollback, specialistName, firstObservedAt, targetDeadlineAt, hardDeadlineAt, slaState, delivery, diagnosis, auditCommitments, clientMessageSendBlockedReason);
     }
 
     public ManagerControlConcreteItemResponse withDiagnosis(DiagnosticView diagnosis) {
-        return new ManagerControlConcreteItemResponse(controlEntityId, type, entityId, title, subtitle, status, ageDays, reason, targetUrl, orderDetailsId, chatUrl, followUpAt, lastManualTouchAt, itemStatus, actionType, comment, updatedAt, resolvedAt, workerNotificationAttemptedAt, workerNotificationSentAt, workerNotificationAcceptedAt, workerNotificationAcceptedByUserId, workerNotificationFailureReason, contactText, riskResolutionAction, workerExplanation, workerExplanationAt, penaltyPoints, rollbackStatus, rollbackMessage, canRollback, specialistName, firstObservedAt, targetDeadlineAt, hardDeadlineAt, slaState, delivery, diagnosis, auditCommitments);
+        return new ManagerControlConcreteItemResponse(controlEntityId, type, entityId, title, subtitle, status, ageDays, reason, targetUrl, orderDetailsId, chatUrl, followUpAt, lastManualTouchAt, itemStatus, actionType, comment, updatedAt, resolvedAt, workerNotificationAttemptedAt, workerNotificationSentAt, workerNotificationAcceptedAt, workerNotificationAcceptedByUserId, workerNotificationFailureReason, contactText, riskResolutionAction, workerExplanation, workerExplanationAt, penaltyPoints, rollbackStatus, rollbackMessage, canRollback, specialistName, firstObservedAt, targetDeadlineAt, hardDeadlineAt, slaState, delivery, diagnosis, auditCommitments, clientMessageSendBlockedReason);
     }
 
     public ManagerControlConcreteItemResponse withAuditCommitments(List<ManagerReviewCommitmentView> auditCommitments) {
-        return new ManagerControlConcreteItemResponse(controlEntityId, type, entityId, title, subtitle, status, ageDays, reason, targetUrl, orderDetailsId, chatUrl, followUpAt, lastManualTouchAt, itemStatus, actionType, comment, updatedAt, resolvedAt, workerNotificationAttemptedAt, workerNotificationSentAt, workerNotificationAcceptedAt, workerNotificationAcceptedByUserId, workerNotificationFailureReason, contactText, riskResolutionAction, workerExplanation, workerExplanationAt, penaltyPoints, rollbackStatus, rollbackMessage, canRollback, specialistName, firstObservedAt, targetDeadlineAt, hardDeadlineAt, slaState, delivery, diagnosis, auditCommitments);
+        return new ManagerControlConcreteItemResponse(controlEntityId, type, entityId, title, subtitle, status, ageDays, reason, targetUrl, orderDetailsId, chatUrl, followUpAt, lastManualTouchAt, itemStatus, actionType, comment, updatedAt, resolvedAt, workerNotificationAttemptedAt, workerNotificationSentAt, workerNotificationAcceptedAt, workerNotificationAcceptedByUserId, workerNotificationFailureReason, contactText, riskResolutionAction, workerExplanation, workerExplanationAt, penaltyPoints, rollbackStatus, rollbackMessage, canRollback, specialistName, firstObservedAt, targetDeadlineAt, hardDeadlineAt, slaState, delivery, diagnosis, auditCommitments, clientMessageSendBlockedReason);
     }
 
     public ManagerControlConcreteItemResponse(
@@ -422,7 +471,7 @@ public record ManagerControlConcreteItemResponse(
                 workerNotificationAcceptedAt, workerNotificationAcceptedByUserId, workerNotificationFailureReason,
                 contactText, riskResolutionAction, workerExplanation, workerExplanationAt, penaltyPoints,
                 rollbackStatus, rollbackMessage, canRollback, specialistName, firstObservedAt,
-                targetDeadlineAt, hardDeadlineAt, slaState, delivery, diagnosis, auditCommitments
+                targetDeadlineAt, hardDeadlineAt, slaState, delivery, diagnosis, auditCommitments, clientMessageSendBlockedReason
         );
     }
 }
