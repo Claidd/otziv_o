@@ -26487,7 +26487,7 @@
     "sha256" : "2ce2975de9d998ee50c317bad51d80e924264ee9edb2ee7521e9faba86f4ebdc"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/manager_control/service/ManagerControlManualDeliveryHandoffWorkflow.java",
-    "sha256" : "91901ce3a93d945528a71f8190c33b32aaa985ff842a1eeaa6d9446ea1c10fd0"
+    "sha256" : "ef85cfcf4b5075d99299e2745e2b2fd63dd84e5eebce73a5f86b3c1db58e258e"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/manager_daily_summary/controller/ApiManagerDailySummaryController.java",
     "sha256" : "3b28d51155bc2fea539cec2a5edf112a33cf7c3390137d540f2caef3a7dfe437"

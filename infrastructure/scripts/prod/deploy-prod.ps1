@@ -42,6 +42,7 @@ param(
     [switch]$RebuildWhatsApp,
     [switch]$RequireMainCi,
     [switch]$FullRollout,
+    [switch]$CoordinatedMysqlRefresh,
     [switch]$CoordinatedSslRefresh,
     [switch]$Help
 )
@@ -75,6 +76,8 @@ Useful options:
   -MobileApkPath <path>          Publish this signed release APK. By default uses the highest code from mobile/builds.
   -SkipMobileApkUpload           Do not include a mobile APK in this deployment.
   -PreDeployBackupDirectory      Local directory for the mandatory encrypted pre-migration DB backup.
+  -CoordinatedMysqlRefresh       Reviewed C30-to-C37 MySQL cutover after the protected backup.
+  -CoordinatedSslRefresh         Reviewed C23-to-C36 PostgreSQL cutover after protected backups.
   -NoBuildCache                  Build images without Docker cache.
   -AllowDirtyWorktree            Emergency only: bypass the clean automatic snapshot.
   -SkipAutoSnapshotValidation    Emergency only: skip local gates for an automatic snapshot.
@@ -770,8 +773,8 @@ if (-not (Test-Path -LiteralPath $snapshotLibraryPath -PathType Leaf)) {
 . $snapshotLibraryPath
 
 $canonicalMainWorkspace = ''
-if ($CoordinatedSslRefresh -and -not $RequireMainCi) {
-    throw 'Explicit reviewed SSL cutover requires protected main CI and the mandatory backup.'
+if (($CoordinatedMysqlRefresh -or $CoordinatedSslRefresh) -and -not $RequireMainCi) {
+    throw 'Explicit reviewed database cutover requires protected main CI and the mandatory backup.'
 }
 if ($RequireMainCi) {
     if (-not ($PreparedDeploySnapshot -and $SkipBuildPush -and $CiReleaseManifest -and
@@ -1084,6 +1087,7 @@ $deployBundlePaths = @(
     "infrastructure\scripts\prod\create-pre-deploy-db-backup.sh",
     "infrastructure\scripts\prod\otziv-prod-up.sh",
     "infrastructure\scripts\prod\database_image_guard.py",
+    "infrastructure\scripts\prod\coordinated_mysql_refresh.py",
     "infrastructure\scripts\prod\coordinated_ssl_refresh.py",
     "infrastructure\scripts\prod\deployment_capacity.py",
     "infrastructure\scripts\prod\whatsapp_deploy_state.py",
@@ -1096,8 +1100,8 @@ $deployBundlePaths = @(
 )
 # The early prepared archive and installation use the same bounded evidence list.
 $effectiveDeployBundlePaths = @($deployBundlePaths)
-if ($CoordinatedSslRefresh) {
-    $effectiveDeployBundlePaths = @($deployBundlePaths + @(Get-OtzivCoordinatedSslBundlePaths -Repository $repoRoot) | Select-Object -Unique)
+if ($CoordinatedMysqlRefresh -or $CoordinatedSslRefresh) {
+    $effectiveDeployBundlePaths = @(Get-OtzivDeployBundlePaths -Repository $repoRoot -CoordinatedMysqlRefresh:$CoordinatedMysqlRefresh -CoordinatedSslRefresh:$CoordinatedSslRefresh)
 }
 $remote = "${VpsUser}@${VpsHost}"
 $remoteDeployLockToken = [System.Guid]::NewGuid().ToString('N')
@@ -1842,8 +1846,9 @@ retain_deploy_lock="1"
     $preDeployFlywayFingerprintQuoted = ConvertTo-BashSingleQuoted $preDeployFlywayFingerprint
 
     $fullRolloutArgument = if ($FullRollout) { "--full" } else { "" }
+    $coordinatedMysqlEnabled = if ($CoordinatedMysqlRefresh) { '1' } else { '0' }
     $coordinatedSslEnabled = if ($CoordinatedSslRefresh) { '1' } else { '0' }
-    $coordinatedMainRevisionQuoted = if ($CoordinatedSslRefresh) { ConvertTo-BashSingleQuoted $preparedSnapshotRevision } else { "''" }
+    $coordinatedMainRevisionQuoted = if ($CoordinatedMysqlRefresh -or $CoordinatedSslRefresh) { ConvertTo-BashSingleQuoted $preparedSnapshotRevision } else { "''" }
     $remoteScript = @"
 set -Eeuo pipefail
 umask 077
@@ -1886,6 +1891,8 @@ active_systemd_unit_stage=""
 database_guard_temp=""
 capacity_check_dir=""
 database_image_override=""
+coordinated_mysql_enabled=$coordinatedMysqlEnabled
+coordinated_ssl_enabled=$coordinatedSslEnabled
 
 assert_self_heal_stopped() {
   for unit in "`$self_heal_timer" "`$self_heal_service"; do
@@ -3150,11 +3157,20 @@ chmod +x infrastructure/scripts/prod/apply-keycloak-prod-settings.sh || true
 chmod +x infrastructure/scripts/prod/validate-flyway-migrations.sh || true
 chmod +x infrastructure/scripts/prod/create-pre-deploy-db-backup.sh || true
 chmod +x infrastructure/scripts/prod/register-max-webhook.sh || true
+# The separate, explicit C30-to-C37 MySQL cutover runs first under the same
+# protected lock and after the verified encrypted main DB backup. Its own
+# evidence, same-volume checks, and rollback gate the PostgreSQL transition.
+if [ "`$coordinated_mysql_enabled" = "1" ]; then
+  python3 infrastructure/scripts/prod/coordinated_mysql_refresh.py \
+    --root "`$remote_path" --env-file "`$remote_path/`$env_file" \
+    --lock-token "`$deploy_lock_token" --main-revision $coordinatedMainRevisionQuoted \
+    --explicit-reviewed-mysql-cutover
+fi
 # The separate, explicit C23-to-C36 PostgreSQL cutover keeps the ordinary continuity guard
 # intact. It runs under this lock, after the verified encrypted main DB backup,
 # with the active C35 Keycloak, retains an additional verified encrypted PG
 # backup on the VPS, and restores the old image on the same volume if a check fails.
-if [ "$coordinatedSslEnabled" = "1" ]; then
+if [ "`$coordinated_ssl_enabled" = "1" ]; then
   python3 infrastructure/scripts/prod/coordinated_ssl_refresh.py \
     --root "`$remote_path" --env-file "`$remote_path/`$env_file" \
     --lock-token "`$deploy_lock_token" --main-revision $coordinatedMainRevisionQuoted \

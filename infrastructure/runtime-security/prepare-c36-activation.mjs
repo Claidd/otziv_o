@@ -19,6 +19,7 @@ import { combinedScanSummary } from './scan-verdict.mjs';
 const ROOT = resolve(fileURLToPath(new URL('../../', import.meta.url)));
 const PREFIX = 'infrastructure/runtime-security/';
 const COMPONENTS = new Set(['dozzle', 'prometheus', 'loki', 'alloy', 'tempo', 'grafana', 'mc', 'minio', 'postgres']);
+const MYSQL_REFRESH_SET = 'c37-mysql';
 const REGISTRY_FILE = /^registry-(?:index|amd64-(?:manifest|config)|attestation-[0-9]+(?:-payload-[0-9]+)?)\.json$/;
 const PUBLICATION_FILE = /^(?:publication\.json|build-metadata\.json|known-runtime-dependencies\.json|vulnerabilities\.[A-Za-z0-9.-]+)$/;
 const ANONYMOUS_FILE = /^(?:anonymous-(?:download|image-inspect|job-failure)\.json|anonymous-pull\.(?:stdout|stderr)\.log|before-(?:image-ids|reference-inspect)\.txt|docker-client-isolation\.json)$/;
@@ -103,7 +104,8 @@ export async function prepareActivationPair({ manifestSet, publicationFiles, ano
   const component = manifestSet?.replace(/^c[0-9]+-/, '');
   const selected = reviewedImageSet(manifestSet);
   assert.ok(manifestSet === 'c36-' + component && COMPONENTS.has(component) ||
-    manifestSet === 'c29-dozzle', 'c36_component_not_supported');
+    manifestSet === 'c29-dozzle' || manifestSet === MYSQL_REFRESH_SET,
+  'c36_component_not_supported');
   const baselineBytes = await readFile(resolve(root, PREFIX + 'reviewed-images.json'));
   const manifestBytes = await readFile(resolve(root, selected.path));
   const manifest = validateReviewedImageSet(manifestSet, manifestBytes, baselineBytes);
@@ -173,8 +175,10 @@ export async function prepareActivationPair({ manifestSet, publicationFiles, ano
     assert.ok(original, 'c36_original_component_missing');
     await validateActivation(original, entry, baselineBytes, read);
   }
-  return { entry, activationReady: component !== 'postgres',
-    ...(component === 'postgres' ? { remaining: 'same-volume PostgreSQL acceptance and C35 Keycloak coupling' } : {}) };
+  const activationReady = component !== 'postgres' && manifestSet !== MYSQL_REFRESH_SET;
+  return { entry, activationReady,
+    ...(component === 'postgres' ? { remaining: 'same-volume PostgreSQL acceptance and C35 Keycloak coupling' } : {}),
+    ...(manifestSet === MYSQL_REFRESH_SET ? { remaining: 'published-digest MySQL rehearsal and coordinated database cutover' } : {}) };
 }
 
 function assertReleaseUnlocked(root) {
@@ -192,7 +196,8 @@ export async function stageActivationPair({ manifestSet, publicationDirectory, a
   const anonymousFiles = await readArtifactDirectory(anonymousDirectory, 'anonymous');
   const result = await prepareActivationPair({ manifestSet, publicationFiles, anonymousFiles, expectedIdentity, root });
   if (!write) return { ...result, mode: 'DRY_RUN', proofDirectory: null };
-  assert.ok(manifestSet.startsWith('c36-'), 'c36_write_requires_c36');
+  assert.ok(manifestSet.startsWith('c36-') || manifestSet === MYSQL_REFRESH_SET,
+    'c36_write_requires_supported_set');
   assertReleaseUnlocked(root);
   const proofsRoot = resolve(root, PREFIX + 'proofs');
   const destination = resolve(proofsRoot, manifestSet);
@@ -220,9 +225,10 @@ export async function stageActivationPair({ manifestSet, publicationDirectory, a
 function argumentsFrom(argv) {
   const [manifestSet, publicationDirectory, anonymousDirectory, commit, run, attempt, ...rest] = argv;
   assert.ok(manifestSet && publicationDirectory && anonymousDirectory && commit && run && attempt,
-    'usage: prepare-c36-activation.mjs c36-<component> <publication-dir> <anonymous-dir> <commit> <run> <attempt> [--write]');
+    'usage: prepare-c36-activation.mjs c36-<component>|c37-mysql <publication-dir> <anonymous-dir> <commit> <run> <attempt> [--write]');
   assert.ok(rest.length === 0 || rest.length === 1 && rest[0] === '--write', 'c36_arguments_invalid');
-  assert.ok(manifestSet.startsWith('c36-'), 'c36_cli_requires_c36_set');
+  assert.ok(manifestSet.startsWith('c36-') || manifestSet === MYSQL_REFRESH_SET,
+    'c36_cli_requires_supported_set');
   return { manifestSet, publicationDirectory: resolve(publicationDirectory), anonymousDirectory: resolve(anonymousDirectory),
     expectedIdentity: { commit, run, attempt }, write: rest[0] === '--write' };
 }

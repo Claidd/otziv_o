@@ -18,7 +18,9 @@ try {
     $activation = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repository 'infrastructure/runtime-security/reviewed-image-activations.json') | ConvertFrom-Json
     $keycloak = @($activation.images | Where-Object { $_.component -eq 'keycloak' })
     $postgres = @($activation.images | Where-Object { $_.component -eq 'postgres' })
+    $mysql = @($activation.images | Where-Object { $_.component -eq 'mysql' })
     if ($keycloak.Count -ne 1 -or $postgres.Count -ne 1) { throw 'Expected one active PostgreSQL and Keycloak image.' }
+    if ($mysql.Count -ne 1) { throw 'Expected one active MySQL image.' }
     $splitPath = 'infrastructure/runtime-security/proofs/c35-keycloak/publication/registry-attestation-0-payload-0.json'
     $splitAcceptance = Get-Content -Raw -Encoding UTF8 -LiteralPath `
         (Join-Path $repository 'infrastructure/runtime-security/proofs/c35-keycloak/acceptance.json') | ConvertFrom-Json
@@ -67,13 +69,49 @@ try {
         }
         if (-not $rejected) { throw 'Unaccepted PostgreSQL generation entered the cutover archive.' }
     }
+    $mysqlApproved = $mysql[0].manifest.path -eq 'infrastructure/runtime-security/reviewed-images-c37-mysql.json' -and
+        [bool]$mysql[0].PSObject.Properties['databaseTransition'] -and
+        $mysql[0].databaseTransition.path -eq 'infrastructure/runtime-security/proofs/c37-mysql/rehearsal.json'
+    $mysqlPaths = @()
+    if ($mysqlApproved) {
+        $mysqlPaths = @(Get-OtzivCoordinatedMysqlBundlePaths -Repository $repository)
+        $combinedMysqlPaths = @(Get-OtzivDeployBundlePaths -Repository $repository -CoordinatedMysqlRefresh)
+        if ($mysqlPaths.Count -lt 7 -or
+            @($mysqlPaths | Where-Object { $_ -notin $combinedMysqlPaths }).Count -gt 0 -or
+            'infrastructure/runtime-security/proofs/c37-mysql/rehearsal.json' -in $ordinaryPaths) {
+            throw 'Reviewed MySQL C37 evidence entered the wrong deployment inventory.'
+        }
+        $tamperedRoot = Join-Path $fixture 'mysql-evidence'
+        foreach ($path in $mysqlPaths) {
+            $destination = Join-Path $tamperedRoot $path
+            New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
+            Copy-Item -LiteralPath (Join-Path $repository $path) -Destination $destination
+        }
+        $proof = Join-Path $tamperedRoot 'infrastructure/runtime-security/proofs/c37-mysql/rehearsal.json'
+        [IO.File]::AppendAllText($proof, 'tampered')
+        $rejectedMysql = $false
+        try { $null = Get-OtzivCoordinatedMysqlBundlePaths -Repository $tamperedRoot }
+        catch {
+            if ($_.Exception.Message -ne 'Accepted MySQL C37 evidence changed.') { throw }
+            $rejectedMysql = $true
+        }
+        if (-not $rejectedMysql) { throw 'Changed MySQL C37 rehearsal entered the deployment archive.' }
+    } else {
+        $rejectedMysql = $false
+        try { $null = Get-OtzivDeployBundlePaths -Repository $repository -CoordinatedMysqlRefresh }
+        catch {
+            if ($_.Exception.Message -ne 'Only the accepted C37 MySQL image permits this cutover.') { throw }
+            $rejectedMysql = $true
+        }
+        if (-not $rejectedMysql) { throw 'Unaccepted MySQL image entered the coordinated archive.' }
+    }
     $realRevision = (& git -C $repository rev-parse HEAD).Trim()
     if ($LASTEXITCODE -ne 0) { throw 'Cannot read the actual repository revision.' }
     $realEvidence = Join-Path $fixture 'real-release-evidence'
     New-Item -ItemType Directory -Path $realEvidence | Out-Null
     $realPrepared = New-OtzivPreparedDeployArchive -Repository $repository -Revision $realRevision `
-        -Directory $realEvidence -CoordinatedSslRefresh:$sslApproved
-    foreach ($path in @($ordinaryPaths + $extraPaths | Select-Object -Unique)) {
+        -Directory $realEvidence -CoordinatedMysqlRefresh:$mysqlApproved -CoordinatedSslRefresh:$sslApproved
+    foreach ($path in @($ordinaryPaths + $extraPaths + $mysqlPaths | Select-Object -Unique)) {
         if ($path -notin $realPrepared.paths -or
             -not (Test-Path -LiteralPath (Join-Path $realEvidence ('verified-source/' + $path)))) {
             throw "Deployment input absent from the committed archive: $path"

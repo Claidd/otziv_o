@@ -815,8 +815,8 @@ public class PersonalServiceImpl implements PersonalService {
         // Создаем карту для результатов
         Map<String, UserData> result = new HashMap<>();
 
-        // Параллельная обработка данных и сохранение в карту
-        zps.entrySet().parallelStream().forEach(entry -> {
+        // HashMap is not safe for concurrent writes; each salary row must appear in the report.
+        zps.entrySet().forEach(entry -> {
             String fio = entry.getKey();
             TelegramSalary pair = entry.getValue();
             Long totalSum = pcs.getOrDefault(fio, Pair.of(0L, 0L)).getFirst();
@@ -1277,8 +1277,8 @@ public class PersonalServiceImpl implements PersonalService {
         // Создаем карту для результатов
         Map<String, UserData> result = new HashMap<>();
 
-        // Параллельная обработка данных и сохранение в карту
-        zps.entrySet().parallelStream().forEach(entry -> {
+        // Сохраняем строки последовательно: HashMap не поддерживает параллельную запись.
+        zps.entrySet().forEach(entry -> {
             String fio = entry.getKey();
             TelegramSalary pair = entry.getValue();
             Long totalSum = pcs.getOrDefault(fio, Pair.of(0L, 0L)).getFirst();
@@ -1355,8 +1355,8 @@ public class PersonalServiceImpl implements PersonalService {
         // Создаем карту для результатов
         Map<String, UserData> result = new HashMap<>();
 
-        // Параллельная обработка данных и сохранение в карту
-        zps.entrySet().parallelStream().forEach(entry -> {
+        // Сохраняем строки последовательно: HashMap не поддерживает параллельную запись.
+        zps.entrySet().forEach(entry -> {
             String fio = entry.getKey();
             TelegramSalary pair = entry.getValue();
             Long totalSum = pcs.getOrDefault(fio, Pair.of(0L, 0L)).getFirst();
@@ -1492,8 +1492,8 @@ public class PersonalServiceImpl implements PersonalService {
         // Создаем карту для результатов
         Map<String, UserData> result = new HashMap<>();
 
-        // Параллельная обработка данных и сохранение в карту
-        zps.entrySet().parallelStream().forEach(entry -> {
+        // Сохраняем строки последовательно: HashMap не поддерживает параллельную запись.
+        zps.entrySet().forEach(entry -> {
             String fio = entry.getKey();
             TelegramSalary pair = entry.getValue();
             Long totalSum = pcs.getOrDefault(fio, Pair.of(0L, 0L)).getFirst();

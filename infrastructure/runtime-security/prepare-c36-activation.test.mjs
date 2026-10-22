@@ -52,3 +52,20 @@ test('rejects changed raw scanner bytes even if summary still says PASS', async 
   input.publicationFiles.set('vulnerabilities.json', Buffer.from(JSON.stringify(raw)));
   await assert.rejects(prepareActivationPair(input), /c36_scan_receipt_raw_hash/);
 });
+
+test('C37 MySQL publication is strictly verified and staged only as an incomplete database activation', async () => {
+  const c37 = resolve(root, 'infrastructure/runtime-security/proofs/c37-mysql');
+  const publicationDirectory = resolve(c37, 'publication');
+  const anonymousDirectory = resolve(c37, 'anonymous');
+  const published = JSON.parse(await readFile(resolve(publicationDirectory, 'publication.json')));
+  const prepared = await prepareActivationPair({
+    manifestSet: 'c37-mysql',
+    publicationFiles: await readArtifactDirectory(publicationDirectory, 'publication'),
+    anonymousFiles: await readArtifactDirectory(anonymousDirectory, 'anonymous'),
+    expectedIdentity: { commit: published.commit, run: published.run, attempt: published.attempt },
+    root,
+  });
+  assert.equal(prepared.entry.reference, published.reference);
+  assert.equal(prepared.activationReady, false);
+  assert.match(prepared.remaining, /published-digest MySQL rehearsal/);
+});

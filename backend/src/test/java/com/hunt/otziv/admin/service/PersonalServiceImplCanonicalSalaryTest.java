@@ -15,8 +15,10 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -41,10 +43,14 @@ class PersonalServiceImplCanonicalSalaryTest {
         LocalDate today = LocalDate.now();
         LocalDate start = today.withDayOfMonth(1);
         LocalDate end = today.withDayOfMonth(today.lengthOfMonth());
-        when(salaries.totalsForActiveUsers(start, end)).thenReturn(List.of(
+        List<UserSalaryTotal> salaryRows = new ArrayList<>(List.of(
                 new UserSalaryTotal(1L, "Менеджер", "ROLE_MANAGER", new BigDecimal("10.50"), 0L, 0L),
                 new UserSalaryTotal(2L, "Специалист", "ROLE_WORKER", new BigDecimal("-0.75"), 0L, 0L)
         ));
+        IntStream.range(0, 512).forEach(index -> salaryRows.add(new UserSalaryTotal(
+                1_000L + index, "Сотрудник " + index, "ROLE_WORKER", BigDecimal.ZERO, 0L, 0L
+        )));
+        when(salaries.totalsForActiveUsers(start, end)).thenReturn(salaryRows);
         when(payments.getAllPaymentToMonth(start, end)).thenReturn(Map.of());
         when(companies.getAllNewCompanies(start, end)).thenReturn(Map.of());
         when(orders.getNewOrderAll("Новый", "Коррекция")).thenReturn(Map.of());
@@ -57,6 +63,7 @@ class PersonalServiceImplCanonicalSalaryTest {
 
         Map<String, com.hunt.otziv.admin.dto.personal.UserData> result = service.getPersonalsAndCountToMap();
 
+        assertThat(result).hasSize(salaryRows.size());
         assertThat(result.get("Менеджер").getSalaryKopecks()).isEqualTo(1_050L);
         assertThat(result.get("Специалист").getSalaryKopecks()).isEqualTo(-75L);
         assertThat(result.get("Менеджер").getZpTotalKopecks()).isEqualTo(975L);
