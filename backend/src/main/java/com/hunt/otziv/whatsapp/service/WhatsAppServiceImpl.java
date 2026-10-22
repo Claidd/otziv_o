@@ -16,12 +16,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -207,6 +209,32 @@ public class WhatsAppServiceImpl implements WhatsAppService {
     }
 
     @Override
+    public com.hunt.otziv.whatsapp.dto.WhatsAppOperationStatus reconcileOperation(
+            String clientId, String operationId, String messageId) {
+        if (operationId == null || !operationId.matches("[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
+                || !hasText(messageId) || messageId.length() > 512) {
+            throw new IllegalArgumentException("Invalid operation evidence");
+        }
+        try {
+            String url = baseUrl(clientId) + "/operations/" + operationId + "/reconcile";
+            HttpEntity<String> request = jsonEntity(Map.of("messageId", messageId));
+            ResponseEntity<String> response = restTemplate.postForEntity(url, request, String.class);
+            JsonNode receipt = MAPPER.readTree(response.getBody() == null ? "{}" : response.getBody());
+            if (!operationId.equals(receipt.path("operationId").asText())
+                    || !"SUCCEEDED".equals(receipt.path("state").asText())
+                    || !messageId.equals(receipt.path("messageId").asText())
+                    || !receipt.path("envelopeHash").isTextual()
+                    || !receipt.path("envelopeHash").asText().matches("[a-f0-9]{64}")) {
+                throw new IllegalStateException("Invalid WhatsApp reconciliation evidence");
+            }
+            return new com.hunt.otziv.whatsapp.dto.WhatsAppOperationStatus(
+                    operationId, "SUCCEEDED", messageId, receipt.path("envelopeHash").asText());
+        } catch (RestClientResponseException | ResourceAccessException | JsonProcessingException error) {
+            throw new IllegalStateException("WhatsApp operation reconciliation unavailable", error);
+        }
+    }
+
+    @Override
     public String sendMessageToGroup(String clientId, String groupId, String message) {
         return rejectLegacy("send-group");
     }
@@ -373,23 +401,59 @@ public class WhatsAppServiceImpl implements WhatsAppService {
                     response.getBody() == null ? "{}" : response.getBody(),
                     WhatsAppReconciledMessagesResponse.class
             );
-            return payload.messages() == null ? List.of() : payload.messages();
+            if (!"ok".equals(payload.status()) || payload.messages() == null
+                    || payload.failedGroupCount() != null && payload.failedGroupCount() != 0) {
+                throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                        "История WhatsApp доступна не полностью. Повторите проверку позже");
+            }
+            return payload.messages();
+        } catch (ResponseStatusException e) {
+            throw e;
         } catch (WhatsAppConfigurationException e) {
             log.warn("WhatsApp-сообщения не сверены: {}", e.getMessage());
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "Клиент WhatsApp не настроен для проверки ответов", e);
         } catch (RestClientResponseException e) {
             log.warn(
                     "WhatsApp API вернул HTTP {} при сверке сообщений клиента {}",
                     e.getStatusCode().value(),
                     clientId
             );
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "История WhatsApp сейчас недоступна. Повторите проверку позже", e);
         } catch (ResourceAccessException e) {
             log.warn("WhatsApp-клиент {} недоступен при сверке сообщений: {}", clientId, e.getMessage());
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "История WhatsApp сейчас недоступна. Повторите проверку позже", e);
         } catch (JsonProcessingException e) {
             log.warn("Не удалось разобрать ответ сверки WhatsApp-клиента {}", clientId, e);
-        } catch (Exception e) {
-            log.warn("Не удалось сверить WhatsApp-сообщения клиента {}", clientId, e);
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "Не удалось прочитать историю WhatsApp. Повторите проверку позже", e);
         }
-        return List.of();
+    }
+
+    @Override
+    public List<WhatsAppReconciledMessage> reconcileGroupMessagesForReceipt(
+            String clientId, List<WhatsAppChatMessageCursor> chats) {
+        if (chats == null || chats.isEmpty()) return List.of();
+        try {
+            String url = baseUrl(clientId) + "/groups/reconcile-messages";
+            HttpEntity<String> request = jsonEntity(Map.of("chats", chats));
+            ResponseEntity<String> response = restTemplate.postForEntity(url, request, String.class);
+            JsonNode payload = MAPPER.readTree(response.getBody() == null ? "{}" : response.getBody());
+            if (!"ok".equals(payload.path("status").asText())
+                    || payload.path("failedGroupCount").asInt(0) != 0
+                    || !payload.path("messages").isArray()) {
+                throw new IllegalStateException("WhatsApp history result is incomplete");
+            }
+            List<WhatsAppReconciledMessage> messages = new ArrayList<>();
+            for (JsonNode message : payload.path("messages")) {
+                messages.add(MAPPER.treeToValue(message, WhatsAppReconciledMessage.class));
+            }
+            return messages;
+        } catch (JsonProcessingException error) {
+            throw new IllegalStateException("WhatsApp history result is unreadable", error);
+        }
     }
 
     @Override

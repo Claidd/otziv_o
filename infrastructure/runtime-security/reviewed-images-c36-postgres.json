@@ -1,0 +1,43 @@
+{
+  "schema": "otziv-reviewed-images-v1",
+  "repository": "ghcr.io/claidd/otziv-security",
+  "publicationSet": "c36-postgres",
+  "baselineManifestSha256": "d48bdb7d6d869cde5d6f1a7b089491765e3eeaf46e0b0b6bb51b7719b38d3ef2",
+  "images": [
+    {
+      "component": "postgres",
+      "sourceBeforeRef": "postgres@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d",
+      "defaultReferencesBefore": [
+        {
+          "path": "compose.yaml",
+          "line": 258,
+          "service": "keycloak-postgres"
+        },
+        {
+          "path": "compose.prod-local.yaml",
+          "line": 101,
+          "service": "keycloak-postgres"
+        },
+        {
+          "path": "docker-compose.yaml",
+          "line": 108,
+          "service": "keycloak-postgres"
+        }
+      ],
+      "context": "infrastructure/runtime-security/builds/c36-postgres",
+      "dockerfile": "infrastructure/runtime-security/builds/c36-postgres/Dockerfile",
+      "platform": "linux/amd64",
+      "candidateBaseRef": "ghcr.io/claidd/otziv-security@sha256:c974c12a1107e314b1ba8cf65bd1fc5b6964645ced420c2151d336ee8a9a6534",
+      "buildImageRefs": [
+        "golang:1.27.3-bookworm@sha256:21ade014faf952365b9ecbd8dbdb87176fbacb82fac9fb132d9f2a7b8cc3f132"
+      ],
+      "buildArgs": {},
+      "version": "PostgreSQL 17.11 / Debian trixie, gosu 1.19 rebuilt with Go 1.27.3",
+      "dockerfileSha256": "61cf9cba8bc859a10e2cd2dece098b3808c08e3bd8385b97b0fd06942d71cf47",
+      "publishedDigest": null,
+      "publicationStatus": "NOT_PUBLISHED",
+      "deploymentStatus": "NOT_ACTIVATED",
+      "unfixedRiskReview": "REQUIRED"
+    }
+  ]
+}

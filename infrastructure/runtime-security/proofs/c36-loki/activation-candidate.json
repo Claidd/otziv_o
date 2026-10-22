@@ -1,0 +1,19 @@
+{
+  "component": "loki",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:4ee21ecfd0dfb4e0906c57c7c5fb22d7a548122ba03034489ee0b17da204b9f6",
+  "commit": "0c56e0bb1ed6cc3310924144db3bf465970a82d1",
+  "run": "39599081274",
+  "attempt": "1",
+  "manifest": {
+    "path": "infrastructure/runtime-security/reviewed-images-c36-loki.json",
+    "sha256": "b4203be6c7f907575029030e859724fb36e02117bb954d14cecbca056f88ea4e"
+  },
+  "publication": {
+    "path": "infrastructure/runtime-security/proofs/c36-loki/publication/publication.json",
+    "sha256": "0aaaa4e7f3981c9d097989d3a8cb0dccb39c7137dd45a8f1e05fe98f982969cd"
+  },
+  "anonymous": {
+    "path": "infrastructure/runtime-security/proofs/c36-loki/anonymous/anonymous-download.json",
+    "sha256": "e6ef020773dd33a099a69df58d07b6bf7928c3e15b77c5813b08ee4b294f088f"
+  }
+}

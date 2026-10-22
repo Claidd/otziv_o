@@ -124,6 +124,8 @@ public class PaymentLinkPreparationWorkflow {
 
     private final PaymentLinkTransactionExecutor transactionExecutor;
 
+    private final SpecialistManualPaymentReviewGuard specialistReviewGuard;
+
     private final SecureRandom secureRandom = new SecureRandom();
 
     @Transactional
@@ -301,6 +303,7 @@ public class PaymentLinkPreparationWorkflow {
     private PaymentInstructionPreparation prepareForOrder(Long orderId, Authentication authentication, boolean requireAuthorization) {
         Optional<Order> lockedOrder = orderRepository.findByIdForCounterUpdate(orderId);
         Order order = (requireAuthorization ? lockedOrder : lockedOrder.or(() -> orderRepository.findByIdForMutation(orderId))).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден"));
+        specialistReviewGuard.requireNoPendingReview(orderId);
         if (requireAuthorization) {
             managerAccessService.requireOrderAccess(orderId, authentication);
             requirePaymentLinksEnabled();

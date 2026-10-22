@@ -89,8 +89,8 @@ public class OwnerManualCardPaymentApprovalTelegramCallbackService {
                     outcome
             );
             return Optional.of(outcome.alreadyCompleted()
-                    ? "Оплата уже была подтверждена"
-                    : "Поступление владельцу подтверждено, заказ оплачен");
+                    ? "Поступление уже было подтверждено"
+                    : "Поступление владельцу подтверждено");
         } catch (ResponseStatusException exception) {
             String answer = limit(message(exception), 180);
             if (exception.getStatusCode().value() == 400
@@ -181,7 +181,7 @@ public class OwnerManualCardPaymentApprovalTelegramCallbackService {
                 + "Заказ: <b>№" + outcome.orderId() + "</b>\n"
                 + "Сумма: <b>" + rubles(outcome.amountKopecks()) + " ₽</b>\n"
                 + "Платёжный источник проверен и закрыт при необходимости. "
-                + "Заказ отмечен оплаченным один раз.";
+                + "Если есть незавершённые работы или восстановления, заказ будет отмечен оплаченным после их завершения.";
     }
 
     private String rubles(long kopecks) {

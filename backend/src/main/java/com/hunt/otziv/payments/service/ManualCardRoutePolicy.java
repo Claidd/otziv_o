@@ -13,6 +13,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
@@ -52,6 +53,13 @@ public class ManualCardRoutePolicy {
 
     private final ContractorActualPaymentAttributionService actualPaymentAttributionService;
 
+    boolean isSpecialistReviewRecipient(PaymentLink link, Long recipientUserId, Long recipientProfileId) {
+        return link != null
+                && link.getManualActualRecipientType() == ContractorRecipientType.SPECIALIST
+                && Objects.equals(link.getManualActualRecipientUserId(), recipientUserId)
+                && Objects.equals(link.getManualActualRecipientProfileId(), recipientProfileId);
+    }
+
     private boolean isPaperInvoice(PaymentLink link) {
         return paymentPresenter.isPaperInvoice(link);
     }
@@ -74,6 +82,47 @@ public class ManualCardRoutePolicy {
             return new ManualCardPaymentContextResponse(order == null ? null : order.getId(), link == null ? 0L : link.getAmountKopecks(), recipient, List.of(recipient), "Старая оплата до запуска новой системы будет закрыта без нового учёта выплат.", false, null, null, null, "TASK_RECIPIENT_V1", HISTORICAL_PRE_CUTOVER_MANUAL_CARD_RECIPIENT_KEY + ":" + (link == null ? "" : link.getId()));
         }
         return actualPaymentAttributionService.manualCardPaymentContext(order, link);
+    }
+
+    SelectedManagerRecipient resolveManagerRecipient(
+            ManualCardPaymentContextResponse context, ContractorRecipientType requestedType,
+            Long requestedProfileId, String requestedKey) {
+        if (context == null || context.candidates() == null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Получатели платежа изменились; обновите карточку заказа");
+        }
+        List<ManualCardPaymentRecipientResponse> candidates = context.candidates();
+        String key = normalize(requestedKey);
+        ManualCardPaymentRecipientResponse selected;
+        if (!key.isBlank()) {
+            selected = candidates.stream()
+                    .filter(candidate -> candidate != null && key.equals(candidate.key()))
+                    .findFirst()
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT,
+                            "Выбранный получатель больше не доступен; обновите карточку заказа"));
+        } else if (requestedType == null && requestedProfileId == null) {
+            selected = context.originalRecipient();
+        } else {
+            selected = candidates.stream()
+                    .filter(candidate -> candidate != null && candidate.recipientType() == requestedType)
+                    .filter(candidate -> Objects.equals(candidate.recipientProfileId(), requestedProfileId))
+                    .findFirst()
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT,
+                            "Выбранный получатель больше не доступен; обновите карточку заказа"));
+        }
+        if (selected == null || selected.key() == null || selected.key().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Получатель платежа не определён; обновите карточку заказа");
+        }
+        if ((requestedType != null && selected.recipientType() != requestedType)
+                || (requestedProfileId != null && !Objects.equals(selected.recipientProfileId(), requestedProfileId))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Указанные тип, профиль и ключ получателя противоречат друг другу");
+        }
+        return new SelectedManagerRecipient(
+                selected.recipientType(), selected.recipientProfileId(), selected.key());
+    }
+
+    record SelectedManagerRecipient(
+            ContractorRecipientType recipientType, Long recipientProfileId, String recipientKey) {
     }
 
     private ManualCardPaymentRecipientResponse historicalPreCutoverManualCardRecipient(PaymentLink link) {

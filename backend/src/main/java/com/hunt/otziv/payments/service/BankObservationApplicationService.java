@@ -1,5 +1,7 @@
 package com.hunt.otziv.payments.service;
 
+import com.hunt.otziv.payments.api.TbankConfirmedEvidence;
+
 import com.hunt.otziv.payments.dto.TbankGetStateResponse;
 import com.hunt.otziv.payments.dto.TbankPaymentProfile;
 import com.hunt.otziv.payments.tochka.dto.TochkaPaymentProfile;
@@ -105,6 +107,16 @@ public class BankObservationApplicationService {
 
     @Transactional(propagation = Propagation.MANDATORY, noRollbackFor = Exception.class)
     void applyValidatedTochkaState(PaymentLink link, MappedPayment mapped, PaymentProfile entityProfile, TochkaPaymentProfile runtimeProfile) {
+        String observedType = normalize(mapped.providerPaymentType());
+        String savedType = normalize(link.getProviderPaymentType());
+        if (!observedType.isBlank() && !savedType.isBlank() && !savedType.equals(observedType)) {
+            quarantineTochkaState(link, PaymentLinkPresenter.TOCHKA_PAYMENT_TYPE_CONFLICT);
+            link.setLastError(PaymentLinkPresenter.TOCHKA_PAYMENT_TYPE_CONFLICT + ": требуется сверка в банке");
+            return;
+        }
+        if (!observedType.isBlank()) {
+            link.setProviderPaymentType(observedType);
+        }
         PaymentLinkStatus before = link.getStatus();
         link.setProviderTerminalStatus(mapped.providerStatus());
         link.setTbankTerminalKey(runtimeProfile.merchantId());
@@ -272,6 +284,12 @@ public class BankObservationApplicationService {
     }
 
     boolean isStateConsistent(PaymentLink link, TbankGetStateResponse state, TbankPaymentProfile runtimeProfile) {
+        if ("CONFIRMED".equalsIgnoreCase(normalize(state.status()))
+                && !TbankConfirmedEvidence.validGetStateConfirmation(state)) {
+            link.setLastError("CONFIRMED GetState без успешного ответа, PaymentId и положительной суммы");
+            log.warn("T-Bank GetState confirmation evidence incomplete: linkId={}", link.getId());
+            return false;
+        }
         String responseTerminal = normalize(state.terminalKey());
         if (!responseTerminal.isBlank() && !responseTerminal.equals(runtimeProfile.terminalKey())) {
             link.setLastError("TerminalKey GetState не совпадает с платежной ссылкой");

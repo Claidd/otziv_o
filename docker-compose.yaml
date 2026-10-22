@@ -47,7 +47,7 @@ services:
   mysql:
     # A different running DB image is blocked by the ordinary deployment guard.
     # Upgrade the retained volume only through the reviewed coordinated cutover.
-    image: ghcr.io/claidd/otziv-security@sha256:28521a2c331136328abde7b504ae0ded617c74caa8a4a2554f1f0494d4df9009
+    image: ghcr.io/claidd/otziv-security@sha256:eda70c6cb0a835e788a5ec96539610e9ef6a574ffc4129c9c5717acd647e159a
     user: "999:999"
     container_name: my-mysql
     restart: unless-stopped
@@ -122,7 +122,7 @@ services:
       start_period: 20s
 
   keycloak-postgres:
-    image: ghcr.io/claidd/otziv-security@sha256:c974c12a1107e314b1ba8cf65bd1fc5b6964645ced420c2151d336ee8a9a6534
+    image: ghcr.io/claidd/otziv-security@sha256:26663e414ba75586834873d6a43d8c1a105c12f58804e7fb961581d61a6dbdd5
     container_name: keycloak-postgres
     restart: unless-stopped
     logging: *default-logging
@@ -145,7 +145,7 @@ services:
       - internal_net
 
   keycloak:
-    image: ${OTZIV_KEYCLOAK_IMAGE:-ghcr.io/claidd/otziv-security@sha256:76ad15fac3c0041798b6b2b87632bbf91ae7c171ebfa813aa1d1633b48f90ff9}
+    image: ${OTZIV_KEYCLOAK_IMAGE:-ghcr.io/claidd/otziv-security@sha256:c28364544835f5fbef6d4e0b0b3e63154127f7fb440b05432760f11235b5f4a9}
     restart: unless-stopped
     logging: *default-logging
     mem_limit: ${KEYCLOAK_MEMORY_LIMIT:-2g}
@@ -862,7 +862,7 @@ services:
       - internal_net
 
   certbot:
-    image: ghcr.io/claidd/otziv-security@sha256:fc21f2b893f9db7550cbad759cb2ad50fbf49bee61d5f58a3a45b009037a8764
+    image: ghcr.io/claidd/otziv-security@sha256:e74ff9f71d224293f21ab35bfc4b445f3ef5dd731d91009fc63afb0e1a8306a3
     logging: *default-logging
     profiles:
       - certbot
@@ -874,7 +874,7 @@ services:
       - internal_net
 
   dozzle:
-    image: ghcr.io/claidd/otziv-security@sha256:ba8cd824797578f70a51d211f859a4e5ed30d4e14449081280fd42e591c2cac5
+    image: ghcr.io/claidd/otziv-security@sha256:704cb4424920407d43d1eebd1782af56f3fd1b65648530aeae6f3ad6e34f3f92
     container_name: log-viewer
     restart: unless-stopped
     logging: *default-logging
@@ -900,7 +900,7 @@ services:
       start_period: 10s
 
   prometheus:
-    image: ghcr.io/claidd/otziv-security@sha256:265f09428f7b04245333b7171bf3710189e1a94d44009cbd1e7d664461ce6663
+    image: ghcr.io/claidd/otziv-security@sha256:1b317647ec6d8a34e3041ca625a658da2c83c774bb43b125612a237fbed58aec
     container_name: prometheus
     restart: unless-stopped
     logging: *default-logging
@@ -931,7 +931,7 @@ services:
       - internal_net
 
   loki:
-    image: ghcr.io/claidd/otziv-security@sha256:0e33a90fc7cf951bf966f4801e062b588dfae1168dde953d175e67c1061205e7
+    image: ghcr.io/claidd/otziv-security@sha256:4ee21ecfd0dfb4e0906c57c7c5fb22d7a548122ba03034489ee0b17da204b9f6
     container_name: loki
     restart: unless-stopped
     logging: *default-logging
@@ -952,7 +952,7 @@ services:
       - internal_net
 
   tempo:
-    image: ghcr.io/claidd/otziv-security@sha256:212d33e10827df28d1207a194f95b69b5227b83ccf4a37704414c334dfedb808
+    image: ghcr.io/claidd/otziv-security@sha256:2bdc304812f800c5c9d0344b748630936a131e24ae8e56d13dfa2e9bbb55ea98
     stop_grace_period: 30s
     container_name: tempo
     restart: unless-stopped
@@ -974,7 +974,7 @@ services:
       - internal_net
 
   alloy:
-    image: ghcr.io/claidd/otziv-security@sha256:4e742bcabebac215f9277f20f7cdaeebee062814ed03ed929910c1aa394ce50e
+    image: ghcr.io/claidd/otziv-security@sha256:1f0578124292e4664c50657836cba77288a9148f9b41950b7fad6040b08bbe6e
     container_name: alloy
     restart: unless-stopped
     logging: *default-logging
@@ -1006,7 +1006,7 @@ services:
       - internal_net
 
   grafana:
-    image: ghcr.io/claidd/otziv-security@sha256:3e0e52079cc164961d5152600588ca6bf827a40b0de0ef5b20512e6e45c04913
+    image: ghcr.io/claidd/otziv-security@sha256:64b884ccb67f556a18f439ecf8e486414d48d406711a521016cd8186e5a5721a
     restart: unless-stopped
     logging: *default-logging
     pids_limit: ${GRAFANA_PIDS_LIMIT:-512}

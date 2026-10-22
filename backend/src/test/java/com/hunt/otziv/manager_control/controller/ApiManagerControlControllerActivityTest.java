@@ -43,7 +43,8 @@ class ApiManagerControlControllerActivityTest {
                 new PerformanceMetrics(new SimpleMeterRegistry()),
                 queueStateService,
                 managerSiteActivityService,
-                mock(com.hunt.otziv.manager_control.service.ManagerClientDeliveryStatus.class)
+                mock(com.hunt.otziv.manager_control.service.ManagerClientDeliveryStatus.class),
+                mock(com.hunt.otziv.manager_control.service.ManagerControlManualDeliveryHandoffWorkflow.class)
         );
         principal = () -> "manager";
         authentication = new UsernamePasswordAuthenticationToken("manager", "n/a", List.of());

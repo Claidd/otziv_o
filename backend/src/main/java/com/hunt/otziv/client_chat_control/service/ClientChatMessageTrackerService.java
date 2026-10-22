@@ -552,7 +552,12 @@ public class ClientChatMessageTrackerService {
                         platform,
                         limit(chatId, 160),
                         ClientChatUnansweredStatus.OPEN
-                ).forEach(item -> {
+                ).stream()
+                .filter(item -> item.getLastClientMessageAt() == null
+                        || resolutionMessage == null
+                        || resolutionMessage.getMessageAt() == null
+                        || !resolutionMessage.getMessageAt().isBefore(item.getLastClientMessageAt()))
+                .forEach(item -> {
                     ClientChatReplyQualityService.Result quality =
                             quality(item.getLastMessageText(), resolutionMessage == null ? null : resolutionMessage.getMessageText());
                     close(

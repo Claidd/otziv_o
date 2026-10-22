@@ -234,6 +234,7 @@ class PaymentLinkSettlementServiceTransactionTest {
             order.setId(7L); order.setSum(new BigDecimal("100.00")); order.setComplete(true);
             link.setId(71L); link.setOrder(order); link.setAmountKopecks(100_00L);
             link.setStatus(PaymentLinkStatus.INITIATED); link.setTbankTerminalKey("fixture-terminal");
+            link.setTbankPaymentId("payment-71");
             when(runtime.isApplyConfirmedPayments()).thenReturn(true);
             when(presenter.normalize(nullable(String.class))).thenAnswer(call -> {
                 String value = call.getArgument(0); return value == null ? "" : value.trim();

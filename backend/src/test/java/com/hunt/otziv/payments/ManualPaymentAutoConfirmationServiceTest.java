@@ -9,7 +9,10 @@ import com.hunt.otziv.payments.model.PaymentMethod;
 import com.hunt.otziv.payments.model.PaymentReceiptStatus;
 import com.hunt.otziv.payments.model.ManualPaymentSource;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
+import com.hunt.otziv.payments.model.SpecialistManualPaymentReviewStatus;
+import com.hunt.otziv.payments.repository.SpecialistManualPaymentReviewRepository;
 import com.hunt.otziv.payments.service.ManualPaymentAutoConfirmationService;
+import com.hunt.otziv.payments.service.SpecialistManualPaymentReviewGuard;
 import com.hunt.otziv.config.api.CodedResponseStatusException;
 import com.hunt.otziv.payments.service.ManualPaymentTaskRouteErrors;
 import com.hunt.otziv.payments.service.ManualPaymentTaskService;
@@ -20,6 +23,8 @@ import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.Mock;
@@ -34,6 +39,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -50,6 +56,35 @@ class ManualPaymentAutoConfirmationServiceTest {
     private ContractorPaymentShadowService contractorPaymentShadowService;
     @Mock
     private ManualPaymentTaskReceiptIntegrationService taskReceiptIntegrationService;
+
+    @Mock
+    private SpecialistManualPaymentReviewRepository specialistManualPaymentReviewRepository;
+
+    @ParameterizedTest
+    @EnumSource(value = SpecialistManualPaymentReviewStatus.class,
+            names = {"SETTLING", "ADMIN_SETTLING"})
+    void unresolvedSpecialistSettlementBlocksGenericPaidBeforeAnyLinkLookup(
+            SpecialistManualPaymentReviewStatus unresolvedStatus) {
+        ManualPaymentAutoConfirmationService service = service();
+        Order order = new Order();
+        order.setId(25_672L);
+        when(specialistManualPaymentReviewRepository.existsByOrderIdAndStatusIn(
+                eq(order.getId()), any(Collection.class)))
+                .thenAnswer(invocation -> {
+                    Collection<SpecialistManualPaymentReviewStatus> guardedStatuses = invocation.getArgument(1);
+                    return guardedStatuses.contains(unresolvedStatus);
+                });
+
+        ResponseStatusException preflight = assertThrows(ResponseStatusException.class,
+                () -> service.ensureCanCloseOrderManually(order));
+        ResponseStatusException finalCheck = assertThrows(ResponseStatusException.class,
+                () -> service.confirmForPaidOrder(order));
+
+        assertEquals(HttpStatus.CONFLICT, preflight.getStatusCode());
+        assertEquals(HttpStatus.CONFLICT, finalCheck.getStatusCode());
+        verifyNoInteractions(paymentLinkRepository, manualPaymentTaskService,
+                paymentSuccessNotificationDeliveryService);
+    }
 
     @Test
     void confirmsLatestManualPaymentLinkForPaidOrder() {
@@ -273,7 +308,7 @@ class ManualPaymentAutoConfirmationServiceTest {
     }
 
     @Test
-    void shadowOrOwnerFallbackManualRouteKeepsLegacyPaidStatusBehavior() {
+    void unallocatedHistoricalMonthlyLimitRouteKeepsLegacyPaidStatusBehavior() {
         ManualPaymentAutoConfirmationService service = service();
         Order order = new Order();
         order.setId(433L);
@@ -295,6 +330,56 @@ class ManualPaymentAutoConfirmationServiceTest {
 
         assertEquals(PaymentLinkStatus.CONFIRMED, ownerFallback.getStatus());
         verify(paymentLinkRepository).save(ownerFallback);
+    }
+
+    @Test
+    void liveMonthlyLimitOwnerFallbackRequiresOwnerReviewBeforeOrderIsPaid() {
+        ManualPaymentAutoConfirmationService service = service();
+        Order order = new Order();
+        order.setId(25665L);
+        PaymentLink ownerFallback = new PaymentLink();
+        ownerFallback.setId(8405L);
+        ownerFallback.setAmountKopecks(250_000L);
+        ownerFallback.setStatus(PaymentLinkStatus.WAITING_MANUAL_PAYMENT);
+        ownerFallback.setPaymentMethod(PaymentMethod.MANUAL_MOBILE_BANK);
+        ownerFallback.setManualSource(ManualPaymentSource.PROFILE_MONTHLY_LIMIT);
+        ownerFallback.setContractorAllocationId(2168L);
+
+        when(paymentLinkRepository.findByOrder_IdAndStatusIn(eq(25665L), any(Collection.class)))
+                .thenReturn(List.of(ownerFallback));
+        when(paymentLinkRepository.findFirstByOrder_IdAndPaymentMethodInAndStatusInOrderByCreatedAtDesc(
+                eq(25665L), any(Collection.class), any(Collection.class)
+        )).thenReturn(Optional.of(ownerFallback));
+
+        ResponseStatusException conflict = assertThrows(ResponseStatusException.class,
+                () -> service.ensureCanCloseOrderManually(order));
+        assertEquals(HttpStatus.CONFLICT, conflict.getStatusCode());
+        assertInstanceOf(CodedResponseStatusException.class, conflict);
+        assertEquals(ManualPaymentTaskRouteErrors.ACTUAL_RECIPIENT_REQUIRED,
+                ((CodedResponseStatusException) conflict).code());
+        assertThrows(ResponseStatusException.class, () -> service.confirmForPaidOrder(order));
+        verify(paymentLinkRepository, never()).save(any());
+
+        // A confirmed prepayment must wait for the recovery gate as well;
+        // pressing the generic order button again cannot bypass that wait.
+        ownerFallback.setStatus(PaymentLinkStatus.CONFIRMED);
+        assertThrows(ResponseStatusException.class, () -> service.ensureCanCloseOrderManually(order));
+    }
+
+    @Test
+    void closedMonthlyLimitInstructionDoesNotBlockLaterPaymentRoute() {
+        ManualPaymentAutoConfirmationService service = service();
+        Order order = new Order();
+        order.setId(25666L);
+        PaymentLink closed = new PaymentLink();
+        closed.setStatus(PaymentLinkStatus.CANCELED);
+        closed.setPaymentMethod(PaymentMethod.MANUAL_MOBILE_BANK);
+        closed.setManualSource(ManualPaymentSource.PROFILE_MONTHLY_LIMIT);
+        closed.setContractorAllocationId(2169L);
+        when(paymentLinkRepository.findByOrder_IdAndStatusIn(eq(25666L), any(Collection.class)))
+                .thenReturn(List.of(closed));
+
+        service.ensureCanCloseOrderManually(order);
     }
 
     @Test
@@ -524,7 +609,8 @@ class ManualPaymentAutoConfirmationServiceTest {
                 manualPaymentTaskService,
                 paymentSuccessNotificationDeliveryService,
                 contractorPaymentShadowService,
-                taskReceiptIntegrationService
+                taskReceiptIntegrationService,
+                new SpecialistManualPaymentReviewGuard(specialistManualPaymentReviewRepository)
         );
     }
 }

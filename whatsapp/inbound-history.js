@@ -23,18 +23,32 @@ async function fetchAvailableWindow(chat, cutoff, { pageSize = 100, maxMessages 
 
 async function recoverHistory({ client, inbox, clientId, groupEnabled = true, outreachEnabled = false,
   outboundRegistry, generatedMessageStore, participantResolver, log = () => {},
-  overlapSeconds = 120, pageSize = 100, maxMessages = 10000, current = () => true }) {
+  overlapSeconds = 120, pageSize = 100, maxMessages = 10000, discoveryTimeoutMs = 30000,
+  current = () => true }) {
   inbox.paused = true;
   let errors = 0;
   try {
     // Discovery is independent of backend OPEN conversations, including first replies.
-    const chats = await client.getChats();
+    let discoveryTimer;
+    const chats = await Promise.race([
+      Promise.resolve().then(() => client.getChats()),
+      new Promise((_, reject) => {
+        discoveryTimer = setTimeout(() => reject(new Error("inbound_history_discovery_timeout")), discoveryTimeoutMs);
+      }),
+    ]).finally(() => clearTimeout(discoveryTimer));
     inbox.historyDiscoveryFailed = false;
-    for (const chat of chats) {
+    const eligibleChats = chats.map(chat => ({ chat, chatId: serializedId(chat.id) }))
+      .filter(({ chat, chatId }) => {
+        const isGroup = chat.isGroup || chatId.endsWith("@g.us");
+        return chatId && chatId !== "status@broadcast" && (isGroup ? groupEnabled : outreachEnabled);
+      });
+    // Hold each chat until its own history is covered. Other chats can drain
+    // during a long scan instead of waiting behind a global pause.
+    for (const { chatId } of eligibleChats) inbox.blockedHistoryChats.add(chatId);
+    inbox.paused = false;
+    for (const { chat, chatId } of eligibleChats) {
       if (!current()) break;
-      const chatId = serializedId(chat.id);
       const isGroup = chat.isGroup || chatId.endsWith("@g.us");
-      if (!chatId || chatId === "status@broadcast" || (isGroup ? !groupEnabled : !outreachEnabled)) continue;
       const cutoff = Math.max(inbox.metadata.since, inbox.cursor(chatId) - overlapSeconds);
       try {
         const window = await fetchAvailableWindow(chat, cutoff, { pageSize, maxMessages });

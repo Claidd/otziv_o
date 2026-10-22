@@ -1,0 +1,89 @@
+[
+    {
+        "Id": "sha256:51fb837fe96d509348234440159e55b4dcab63fedb63f22d9325aa4074093893",
+        "RepoTags": [],
+        "RepoDigests": [
+            "ghcr.io/claidd/otziv-security@sha256:e74ff9f71d224293f21ab35bfc4b445f3ef5dd731d91009fc63afb0e1a8306a3"
+        ],
+        "Parent": "",
+        "Comment": "buildkit.dockerfile.v0",
+        "Created": "2026-10-21T04:29:39.304361303Z",
+        "DockerVersion": "",
+        "Author": "",
+        "Config": {
+            "Hostname": "",
+            "Domainname": "",
+            "User": "",
+            "AttachStdin": false,
+            "AttachStdout": false,
+            "AttachStderr": false,
+            "ExposedPorts": {
+                "443/tcp": {},
+                "80/tcp": {}
+            },
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "PATH=/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "PYTHON_VERSION=3.14.7",
+                "PYTHON_SHA256=3b48dac8fb59f62eaa67ac83c1eb12bda1b7a08406dd286e252c11a66be27f81"
+            ],
+            "Cmd": null,
+            "Image": "",
+            "Volumes": {
+                "/etc/letsencrypt": {},
+                "/var/lib/letsencrypt": {}
+            },
+            "WorkingDir": "/opt/certbot",
+            "Entrypoint": [
+                "certbot"
+            ],
+            "OnBuild": null,
+            "Labels": {
+                "com.otziv.publication.revision": "2358fabe7d5db858f5c3c988bd01ed69b0ad5ed0",
+                "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+                "com.otziv.reviewed-component": "certbot",
+                "com.otziv.security.patch": "Certbot5.8.0 unchanged; Alpine3.23 updates; actual installer code removed from runtime"
+            }
+        },
+        "Architecture": "amd64",
+        "Os": "linux",
+        "Size": 196329997,
+        "GraphDriver": {
+            "Data": {
+                "LowerDir": "/var/lib/docker/overlay2/d873304e51674fe0c220cb1ddec07f721dd1335b449e172c212b92a789eafe63/diff:/var/lib/docker/overlay2/b961e6a4cc06f43be5bbf5577dd0cc366560004ccf25910a7b07807946e72555/diff:/var/lib/docker/overlay2/c2239a496e89e4fadb60b126e52cf00d5e0cbb8d2e1681018dee5651cee348df/diff:/var/lib/docker/overlay2/8d1906efeca515e7f1e2332b10a3aa057ad547a245b4bec2d63c9e87e75aa336/diff:/var/lib/docker/overlay2/bc21ddad3bd7f0eb4fd300c4f1ace2beea65d002df2086dbe08af9dee8c46ae8/diff:/var/lib/docker/overlay2/ed34919a94b98ba9cd31864088f66834c5ea6c7fa3276d9e745d075b27e4b2eb/diff:/var/lib/docker/overlay2/459eb4b70a7e0f6754d7fba9e2dec6fe5e2d0d3f1f527c13d93d9dcd5a92ceec/diff:/var/lib/docker/overlay2/5913adc7e54b898d328a9a32c763ac45d83811506ecb39f9822ee8c117d079ac/diff:/var/lib/docker/overlay2/7878c7e35d62098314ba6948ec5828b90da79faf23da13933192cd9147db1be7/diff:/var/lib/docker/overlay2/89d5cc9fd506ab22eae0c7b79892ab08fe089956a65a7492009fd90082e54ecd/diff:/var/lib/docker/overlay2/d093d9c6129f12f32d1a8917244390e8bcd6890e259a47002f77f123b91086a8/diff:/var/lib/docker/overlay2/feda6bc3599deea866fde06147059092ea71adaf4ab072edf6808089cd21d779/diff:/var/lib/docker/overlay2/66d2418db23e720374f4bd4b89b8fb90d85e276679740ef3af5c4fc34f4102bf/diff:/var/lib/docker/overlay2/5e0a159ae1c6767390b2941f4a4bebf1d50f22ce05d44154a5a4c4d5f9766b3f/diff:/var/lib/docker/overlay2/8cf0231478e0689dc1fb5a137c29a2fe0f787a5a0ef68c35e1af7729eed38b71/diff:/var/lib/docker/overlay2/9d2c7f4c2e127829fbce7c47b7f5766691329482b9b147f33cb8a6c139938c9f/diff:/var/lib/docker/overlay2/eba4bddad03ebe2076c8c95fcd466de47721a0f40f5eaacb19cdf103f4399400/diff",
+                "MergedDir": "/var/lib/docker/overlay2/83d9222299cfba04ffc5028993d8d93335c7034236363651533cf003851595f2/merged",
+                "UpperDir": "/var/lib/docker/overlay2/83d9222299cfba04ffc5028993d8d93335c7034236363651533cf003851595f2/diff",
+                "WorkDir": "/var/lib/docker/overlay2/83d9222299cfba04ffc5028993d8d93335c7034236363651533cf003851595f2/work"
+            },
+            "Name": "overlay2"
+        },
+        "RootFS": {
+            "Type": "layers",
+            "Layers": [
+                "sha256:31ad4a471c6852bfec14d757cc75a566c82a9769f12c3918cf6bf52cc0eeb3d0",
+                "sha256:6c89462f1460a25010ce1c5b803e0f73b7abeadb8aadd19780e5f274524244d9",
+                "sha256:8db1db438929d6f87dc658090a5b7620f843d5d55334bf19ff1d34d02fae6de5",
+                "sha256:9984ce7ca1602dbac8dd09f767174873da04ac6417484d05fa486d89ae5acd0d",
+                "sha256:77848973927cb0e07e0495c330d4bd6293555dca3b9eea3ee251df147f119d9c",
+                "sha256:70049969887b7b32a22595836d7e9526ba3f71377559adf03dd1edb9b40a75d1",
+                "sha256:33b5c658b86ace0793c87fd0437ad297d5c507ecec1fe5daba5b863b0adfa06b",
+                "sha256:c8db08cab275cd1170038f0961a793e88d691553ce9f47a6799c6b45f8b8755b",
+                "sha256:8c57e113b6b30c2511ab0ca6246f774687d153050ed069393a5b7dbb31fb0518",
+                "sha256:116f1062bba68bf69c01776043f457687d059c29092fca37f7b530f25a5970c4",
+                "sha256:c4a36adc5b2a91b0effc266bea649c51e93d1cc2828f1cd1dd252c11c2f4bcca",
+                "sha256:221f62de9c71f8b02cf5117411c6be66011223886b9f6c3be57e2fb9ef0544df",
+                "sha256:be00f9beb9f3d12d481d4db567967a3c73514c347b3305605e1de7e3296e8f3c",
+                "sha256:8d15518bf7362e8561dbac07be55cc1e189a58c3023f1ddb31365e4fa91de996",
+                "sha256:f3d45131e25cd65a77dafcabd1fd6941fb2a37889ed8c4c9788ddc6e2ff6d33f",
+                "sha256:f4d3438d567355e7ca4d52c1a8ed957a5d0aa05fa3bd903ef7c07134b59e720e",
+                "sha256:a85fdc110b1da5309700752dc5ea754e2f80fbe53ce3dbd967f8e13dd0e03bb3",
+                "sha256:8e7a7c354e31591ce2f23d24f6bc981fd093c5b39b9ba8e5c244b80e9cd3f091"
+            ]
+        },
+        "Metadata": {
+            "LastTagTime": "0001-01-01T00:00:00Z"
+        }
+    }
+]

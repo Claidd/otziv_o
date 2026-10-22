@@ -248,10 +248,16 @@ class OwnerManualCardApprovalWorkflowMySqlIntegrationTest {
             when(approvals.saveAndFlush(any())).thenAnswer(call -> save(call.getArgument(0)));
             when(payments.validatedReceiptUrl(nullable(String.class))).thenReturn("");
             when(payments.selectManualCardPaymentRouteForOrder(7L, auth)).thenReturn(new ManualCardPaymentWorkflow.OrderManualCardRoute(71L, 100_00L));
+            when(payments.resolveManagerRecipientForOrder(
+                    7L, ContractorRecipientType.OWNER, null, "OWNER", auth))
+                    .thenReturn(new ManualCardRoutePolicy.SelectedManagerRecipient(
+                            ContractorRecipientType.OWNER, null, "OWNER"));
             workflow = proxied(new OwnerManualCardApprovalWorkflow(lifecycle,
                     mock(PaymentLinkPreparationWorkflow.class), policy, payments, presenter, routes,
                     links, orders, mock(ManagerAccessService.class), mock(ManualCardPaymentReviewNotificationService.class),
-                    approvals, proxied(new PaymentLinkTransactionExecutor(), transactions)), transactions);
+                    approvals, mock(SpecialistManualPaymentReviewService.class),
+                    mock(SpecialistManualPaymentReviewGuard.class),
+                    proxied(new PaymentLinkTransactionExecutor(), transactions)), transactions);
             clearInvocations(payments);
         }
 

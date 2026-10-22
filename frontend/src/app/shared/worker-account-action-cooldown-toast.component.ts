@@ -4,7 +4,7 @@ import { WorkerAccountActionCooldownService } from '../core/worker-account-actio
 @Component({
   selector: 'app-worker-account-action-cooldown-toast',
   template: `
-    @if (cooldown.locked()) {
+    @if (cooldown.showReminder()) {
       <aside class="account-cooldown" aria-label="Ожидание смены и блокировки аккаунта">
         <span class="material-icons-sharp" aria-hidden="true">timer</span>
         <div>

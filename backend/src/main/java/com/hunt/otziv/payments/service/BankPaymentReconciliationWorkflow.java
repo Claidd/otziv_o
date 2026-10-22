@@ -1,5 +1,7 @@
 package com.hunt.otziv.payments.service;
 
+import com.hunt.otziv.payments.api.TbankConfirmedEvidence;
+
 import com.hunt.otziv.common_billing.api.CommonInvoicePaymentOperations;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.payments.dto.TbankPaymentProfile;
@@ -87,7 +89,7 @@ public class BankPaymentReconciliationWorkflow {
     private final PaymentLinkTransactionExecutor transactionExecutor;
 
     private ProviderStateObservation observeBankState(PaymentLink link) {
-        return bankObservations.observeBankState(link);
+        return bankObservations.observeBankStateForReconciliation(link);
     }
 
     private TochkaPaymentMode expectedTochkaMode(PaymentMethod paymentMethod) {
@@ -127,6 +129,7 @@ public class BankPaymentReconciliationWorkflow {
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void handleTbankWebhook(Map<String, String> payload) {
         VerifiedWebhookProfile verified = verifyWebhook(payload);
+        TbankConfirmedEvidence.requireValidWebhook(payload);
         String orderId = normalize(payload.get("OrderId"));
         String paymentId = normalize(payload.get("PaymentId"));
         Optional<PaymentLink> linkCandidate = !orderId.isBlank() ? paymentLinkRepository.findByTbankOrderIdWithOrder(orderId) : Optional.empty();
@@ -418,7 +421,11 @@ public class BankPaymentReconciliationWorkflow {
     }
 
     private boolean isReconciliationEligible(PaymentLink link, LocalDateTime eligibleBefore) {
-        return link != null && (SYNCABLE_BANK_STATUSES.contains(link.getStatus()) || link.getBankCancelOriginStatus() != null) && !normalize(link.getTbankPaymentId()).isBlank() && (link.getBankReconciliationAttemptedAt() == null || !link.getBankReconciliationAttemptedAt().isAfter(eligibleBefore));
+        return link != null && (SYNCABLE_BANK_STATUSES.contains(link.getStatus())
+                || PaymentBankObservationService.SETTLED_BANK_STATUSES.contains(link.getStatus())
+                || link.getBankCancelOriginStatus() != null)
+                && !normalize(link.getTbankPaymentId()).isBlank()
+                && (link.getBankReconciliationAttemptedAt() == null || !link.getBankReconciliationAttemptedAt().isAfter(eligibleBefore));
     }
 
     private String paymentFailureReason(Throwable failure) {

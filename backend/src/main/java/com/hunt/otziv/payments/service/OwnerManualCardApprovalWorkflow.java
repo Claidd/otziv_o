@@ -9,6 +9,8 @@ import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.payments.dto.AdminPaymentLinkResponse;
 import com.hunt.otziv.payments.dto.ManagerManualCardPaymentResultResponse;
 import com.hunt.otziv.payments.model.PaymentLink;
+import com.hunt.otziv.payments.model.ManualPaymentSource;
+import com.hunt.otziv.payments.model.ManualPaymentTaskAccountingTargetKind;
 import com.hunt.otziv.payments.model.OwnerManualCardPaymentApproval;
 import com.hunt.otziv.payments.model.OwnerManualCardPaymentApprovalStatus;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
@@ -68,6 +70,10 @@ public class OwnerManualCardApprovalWorkflow {
 
     private final OwnerManualCardPaymentApprovalRepository ownerManualCardPaymentApprovalRepository;
 
+    private final SpecialistManualPaymentReviewService specialistReviewService;
+
+    private final SpecialistManualPaymentReviewGuard specialistReviewGuard;
+
     private final PaymentLinkTransactionExecutor transactionExecutor;
 
     private final SecureRandom secureRandom = new SecureRandom();
@@ -96,8 +102,35 @@ public class OwnerManualCardApprovalWorkflow {
         String cleanActor = normalize(actor);
         OrderManualCardRoute route = selectManualCardPaymentRouteForOrder(orderId, authentication);
         PaymentLink snapshot = paymentLinkRepository.findByIdWithOrder(route.linkId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежная ссылка не найдена"));
-        if (!isCompletedManualCardPayment(snapshot) && recipientType == ContractorRecipientType.OWNER) {
-            return requestOwnerManualCardPaymentApproval(orderId, route, cleanReason, cleanReceiptUrl, recipientType, recipientProfileId, recipientKey, cleanActor, authentication);
+        if (!isCompletedManualCardPayment(snapshot)) {
+            // A non-empty recipientKey takes precedence over the other request fields
+            // when the actual recipient is frozen. Route approval by that same
+            // canonical selection, rather than by an untrusted recipientType.
+            ManualCardRoutePolicy.SelectedManagerRecipient selected = manualCardPayments.resolveManagerRecipientForOrder(
+                    orderId, recipientType, recipientProfileId, recipientKey, authentication);
+            if (selected.recipientType() != ContractorRecipientType.SPECIALIST) {
+                specialistReviewGuard.requireNoPendingReview(orderId);
+            }
+            if (selected.recipientType() == ContractorRecipientType.OWNER) {
+                return requestOwnerManualCardPaymentApproval(orderId, route, cleanReason, cleanReceiptUrl,
+                        selected.recipientType(), selected.recipientProfileId(), selected.recipientKey(), cleanActor, authentication);
+            }
+            if (selected.recipientType() == ContractorRecipientType.SPECIALIST) {
+                var review = transactionExecutor.required(() -> specialistReviewService.request(
+                        orderId, route.linkId(), route.amountKopecks(),
+                        selected.recipientProfileId(), selected.recipientKey(), cleanReason,
+                        cleanReceiptUrl, cleanActor, authentication));
+                try {
+                    specialistReviewService.deliver(review.getId());
+                } catch (RuntimeException notificationFailure) {
+                    log.warn("Specialist payment review notification deferred: reviewId={}",
+                            review.getId(), notificationFailure);
+                }
+                return specialistReviewService.result(review);
+            }
+            recipientType = selected.recipientType();
+            recipientProfileId = selected.recipientProfileId();
+            recipientKey = selected.recipientKey();
         }
         AdminPaymentLinkResponse completed = confirmPaidByManualCardTransferInternal(route.linkId(), route.amountKopecks(), "Причина менеджера: " + cleanReason, cleanReceiptUrl, cleanActor, authentication, new ManualCardPaymentContext(ManualCardPaymentMode.MANAGER_REPORTED, cleanReason), recipientType, recipientProfileId, recipientKey);
         return ManagerManualCardPaymentResultResponse.completed(orderId, completed.id());
@@ -107,6 +140,7 @@ public class OwnerManualCardApprovalWorkflow {
         return transactionExecutor.required(() -> {
             Order order = orderRepository.findByIdForCounterUpdate(orderId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден"));
             managerAccessService.requireOrderAccess(orderId, authentication);
+            specialistReviewGuard.requireNoPendingReview(orderId);
             ensureOrderNotCoveredByActiveCommonInvoice(orderId);
             PaymentLink link = paymentLinkRepository.findByIdForUpdate(route.linkId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежная ссылка не найдена"));
             if (!hasOrderBinding(link, orderId) || link.getAmountKopecks() != route.amountKopecks() || !isOwnerApprovalEligibleRoute(link)) {
@@ -117,7 +151,7 @@ public class OwnerManualCardApprovalWorkflow {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Некорректный исполнитель операции");
             }
             freezeActualRecipientIntentIfRequired(order, link, recipientType, recipientProfileId, recipientKey, reason, receiptUrl, actor);
-            if (link.getManualActualRecipientType() != ContractorRecipientType.OWNER || link.getManualActualRecipientProfileId() != null || link.getManualActualCashDestinationKind() != ContractorCashDestinationKind.OWNER) {
+            if (!isFrozenOwnerRecipientForApproval(link, recipientKey)) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Для подтверждения владельца должен быть выбран именно владелец");
             }
             String callbackToken = newOwnerApprovalToken();
@@ -211,7 +245,7 @@ public class OwnerManualCardApprovalWorkflow {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Запрос уже не действует");
         }
         PaymentLink link = lockedLink.orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "T-Bank-ссылка больше не существует. Оплата не зачислена."));
-        if (!hasOrderBinding(link, approval.getOrderId()) || link.getAmountKopecks() != approval.getAmountKopecks() || !isOwnerApprovalEligibleRoute(link) || link.getManualActualRecipientFrozenAt() == null || link.getManualActualRecipientType() != ContractorRecipientType.OWNER || link.getManualActualRecipientProfileId() != null || link.getManualActualCashDestinationKind() != ContractorCashDestinationKind.OWNER) {
+        if (!hasOrderBinding(link, approval.getOrderId()) || link.getAmountKopecks() != approval.getAmountKopecks() || !isOwnerApprovalEligibleRoute(link) || approval.getRecipientType() != ContractorRecipientType.OWNER || approval.getRecipientProfileId() != null || !isFrozenOwnerRecipientForApproval(link, approval.getRecipientKey())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Счёт или получатель изменился после запроса. Оплата не зачислена.");
         }
         approval.setAttemptCount(approval.getAttemptCount() + 1);
@@ -228,6 +262,29 @@ public class OwnerManualCardApprovalWorkflow {
         if (callbackChatId == null || callbackChatId >= 0 || expectedChatId == null || expectedChatId >= 0 || !expectedChatId.equals(callbackChatId)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Подтверждение доступно только в чате назначенного компании менеджера");
         }
+    }
+
+    private boolean isFrozenOwnerRecipientForApproval(PaymentLink link, String recipientKey) {
+        if (link.getManualActualRecipientFrozenAt() == null
+                || link.getManualActualRecipientType() != ContractorRecipientType.OWNER
+                || link.getManualActualRecipientProfileId() != null) {
+            return false;
+        }
+        if (link.getManualActualCashDestinationKind() == ContractorCashDestinationKind.OWNER) {
+            return "OWNER".equals(normalize(recipientKey));
+        }
+        if (link.getManualActualCashDestinationKind() != ContractorCashDestinationKind.MANUAL_PAYMENT_TASK
+                || link.getManualSource() != ManualPaymentSource.MANUAL_TASK
+                || link.getManualActualTaskTargetKind() != ManualPaymentTaskAccountingTargetKind.OWNER
+                || link.getManualActualTaskId() == null || link.getManualActualTaskId() <= 0
+                || link.getManualActualTaskGeneration() == null || link.getManualActualTaskGeneration() <= 0
+                || link.getManualPaymentTask() == null
+                || !Objects.equals(link.getManualPaymentTask().getId(), link.getManualActualTaskId())) {
+            return false;
+        }
+        return ManualPaymentTaskLedgerService.candidateKey(
+                link.getManualActualTaskId(), link.getManualActualTaskGeneration())
+                .equals(normalize(recipientKey));
     }
 
     private OwnerManualCardPaymentApproval requireOwnerApproval(Long approvalId, String callbackToken) {

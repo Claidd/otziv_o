@@ -36,6 +36,7 @@ on:
           - c22-nginx
           - c22-mysql
           - c30-mysql
+          - c37-mysql
           - c22-keycloak
           - c22-mc
           - c22-phpmyadmin
@@ -45,6 +46,8 @@ on:
           - c23-alloy
           - c24-keycloak
           - c25-certbot
+          - c34-certbot
+          - c35-keycloak
           - c26-keycloak
           - c26-nginx
           - c28-nginx
@@ -63,6 +66,15 @@ on:
           - c29-mc
           - c33-mc
           - c29-local-s3
+          - c36-dozzle
+          - c36-prometheus
+          - c36-loki
+          - c36-alloy
+          - c36-tempo
+          - c36-grafana
+          - c36-mc
+          - c36-minio
+          - c36-postgres
   pull_request:
   push:
     branches: [main]
@@ -608,12 +620,14 @@ jobs:
         run: bash ./mvnw -f ../infrastructure/keycloak/security-generation/pom.xml -B -ntp verify
       - name: Build the real issuer release image
         if: ${{ needs.changes.outputs.infrastructure == 'true' }}
-        run: docker build -t otziv-issuer-ci infrastructure/runtime-security/builds/c26-keycloak
-      - name: Build and scan reviewed database candidates
+        run: docker build -t otziv-issuer-ci infrastructure/runtime-security/builds/c35-keycloak
+      - name: Build MySQL and scan the exact reviewed PostgreSQL image
         if: ${{ needs.changes.outputs.infrastructure == 'true' }}
         run: |
-          docker build -t otziv-mysql-ci infrastructure/runtime-security/builds/c30-mysql
-          docker build -t otziv-postgres-ci infrastructure/runtime-security/builds/c23-postgres
+          docker build -t otziv-mysql-ci infrastructure/runtime-security/builds/c37-mysql
+          POSTGRES_IMAGE="$(node infrastructure/runtime-security/ci-postgres-c36-fixture.mjs)"
+          docker pull --platform linux/amd64 "$POSTGRES_IMAGE"
+          docker tag "$POSTGRES_IMAGE" otziv-postgres-ci
           node infrastructure/runtime-security/scan.mjs image otziv-mysql-ci "$RUNNER_TEMP/mysql-vulnerabilities.json"
           node infrastructure/runtime-security/scan.mjs image otziv-postgres-ci "$RUNNER_TEMP/postgres-vulnerabilities.json"
       - name: Verify PostgreSQL minor upgrade and separate backup rollback

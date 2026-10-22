@@ -1,5 +1,7 @@
 package com.hunt.otziv.manager.service;
 
+import com.hunt.otziv.manager.api.PaymentReviewOrderAccess;
+
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.u_users.model.Manager;
@@ -20,7 +22,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
-public class ManagerAccessService {
+public class ManagerAccessService implements PaymentReviewOrderAccess {
 
     private static final String OWNER_CONTROL_ALL_MANAGERS = "ALL_MANAGERS";
 

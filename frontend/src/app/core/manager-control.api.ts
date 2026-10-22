@@ -575,6 +575,17 @@ export class ManagerControlApi {
     );
   }
 
+  uncertainDelivery(concreteItemId: number): Observable<{ stateId: number; operationId: string; message: string; preparedAt: string; chatUrl: string | null }> {
+    return this.http.get<{ stateId: number; operationId: string; message: string; preparedAt: string; chatUrl: string | null }>(
+      `${appEnvironment.apiBaseUrl}/api/admin/manager-control/concrete-items/${concreteItemId}/uncertain-delivery`);
+  }
+
+  handoffUncertainDelivery(concreteItemId: number, operationId: string, note: string): Observable<ManagerControlConcreteItem> {
+    return this.http.post<ManagerControlConcreteItem>(
+      `${appEnvironment.apiBaseUrl}/api/admin/manager-control/concrete-items/${concreteItemId}/handoff-uncertain-delivery`,
+      { operationId, note, checkedChat: true });
+  }
+
   managerDetails(managerId: number): Observable<ManagerControlManagerDetail> {
     return this.http.get<ManagerControlManagerDetail>(
       `${appEnvironment.apiBaseUrl}/api/admin/manager-control/managers/${managerId}/today`

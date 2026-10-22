@@ -26,6 +26,11 @@ public interface WhatsAppService {
         return com.hunt.otziv.client_messages.dto.ClientMessageSendResult.failed("invalid_request","Шлюз не поддерживает файлы");
     }
     com.hunt.otziv.whatsapp.dto.WhatsAppOperationStatus getOperationStatus(String clientId, String operationId);
+    /** Confirm an UNKNOWN operation using a message the gateway reads back from WhatsApp. Never dispatches. */
+    default com.hunt.otziv.whatsapp.dto.WhatsAppOperationStatus reconcileOperation(
+            String clientId, String operationId, String messageId) {
+        throw new UnsupportedOperationException("WhatsApp operation reconciliation is unavailable");
+    }
     List<WhatsAppGroupInfo> listGroups(String clientId);
     default List<WhatsAppGroupInfo> listGroups(String clientId, boolean forceRefresh) {
         return listGroups(clientId);
@@ -35,5 +40,10 @@ public interface WhatsAppService {
             String clientId,
             List<WhatsAppChatMessageCursor> chats
     );
+    /** Receipt recovery must distinguish unavailable history from a complete empty result. */
+    default List<WhatsAppReconciledMessage> reconcileGroupMessagesForReceipt(
+            String clientId, List<WhatsAppChatMessageCursor> chats) {
+        return reconcileGroupMessages(clientId, chats);
+    }
     WhatsAppClientStatusDto getClientStatus(String clientId);
 }

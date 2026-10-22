@@ -34,6 +34,7 @@ import com.hunt.otziv.payments.model.PaymentLink;
 import com.hunt.otziv.payments.model.PaymentLinkStatus;
 import com.hunt.otziv.payments.model.InvoicePaymentMode;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
+import com.hunt.otziv.payments.api.SpecialistPaymentReviewGate;
 import jakarta.persistence.EntityManager;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -117,6 +118,8 @@ public class CommonInvoiceMembershipWorkflow implements com.hunt.otziv.common_bi
     private final AppSettingService appSettingService;
 
     private final CommonInvoicePublicationBlockerService publicationBlockerService;
+
+    private final SpecialistPaymentReviewGate specialistReviewGuard;
 
     @Transactional
     public boolean attachOrderIfNeeded(Order order) {
@@ -651,6 +654,7 @@ public class CommonInvoiceMembershipWorkflow implements com.hunt.otziv.common_bi
         Set<Long> orderIdsToLock = new TreeSet<>(expectedBindings.keySet());
         orderIdsToLock.add(orderId);
         Map<Long, Order> lockedOrders = lockOrderAggregatesWithEntities(orderIdsToLock);
+        specialistReviewGuard.requireNoPendingReview(orderId);
         Map<Long, List<PaymentLink>> lockedPaymentLinks = lockPaymentLinksForOrders(Set.of(orderId));
         closeProvablyUnstartedStandaloneRoutesOrThrow(lockedPaymentLinks, null);
         Map<Long, CommonBillingAccount> lockedAccounts = lockAccountsInCanonicalOrder(Map.of(accountId, accountSnapshot));

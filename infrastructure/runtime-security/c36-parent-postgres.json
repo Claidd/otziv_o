@@ -1,0 +1,27 @@
+{
+  "component": "postgres",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:c974c12a1107e314b1ba8cf65bd1fc5b6964645ced420c2151d336ee8a9a6534",
+  "commit": "f2239d547142ad4e73f0b7f4b25799f410a240b9",
+  "run": "36716365254",
+  "attempt": "1",
+  "manifest": {
+    "path": "infrastructure/runtime-security/reviewed-images-c23-postgres.json",
+    "sha256": "3f13c4ccd2d220f8821a2a2b096f85fc1acee15669b815ff9047147ee9a5ad87"
+  },
+  "publication": {
+    "path": "infrastructure/runtime-security/proofs/c23-postgres/publication/publication.json",
+    "sha256": "ca493ac4a13f6c9037eabb4ce9627caca58812128babdcb176f5f7de50c5629a"
+  },
+  "anonymous": {
+    "path": "infrastructure/runtime-security/proofs/c23-postgres/anonymous/anonymous-download.json",
+    "sha256": "35a614826672fb3a57973e669b507a3c1df076c8932fec1f8225363dbe6c4e46"
+  },
+  "sslRefreshAcceptance": {
+    "path": "infrastructure/runtime-security/proofs/c26-keycloak/postgres-pair-acceptance.json",
+    "sha256": "41f1a14784e1ad45704b9b4b42a3e69eeafadb416eff93dd28089d6885664cc4"
+  },
+  "databaseTransition": {
+    "path": "infrastructure/runtime-security/proofs/c26-keycloak/postgres-pair-acceptance.json",
+    "sha256": "41f1a14784e1ad45704b9b4b42a3e69eeafadb416eff93dd28089d6885664cc4"
+  }
+}

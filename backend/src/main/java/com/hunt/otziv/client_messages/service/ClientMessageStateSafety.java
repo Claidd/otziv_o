@@ -6,6 +6,7 @@ public final class ClientMessageStateSafety {
 
     public static final String TRANSACTION_IN_PROGRESS = "state_transaction_in_progress";
     public static final String TRANSACTION_OUTCOME_UNCERTAIN = "state_transaction_outcome_uncertain";
+    public static final String MANUAL_DELIVERY_HANDOFF_PENDING = "manual_delivery_handoff_pending";
     public static final String LEGACY_PREPARATION_UNVERIFIED = "legacy_operation_unverified";
     public static final String DELIVERY_PREPARED = "PREPARED";
     public static final String DELIVERY_OUTCOME_UNKNOWN = "UNKNOWN";

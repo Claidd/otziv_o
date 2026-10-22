@@ -42,6 +42,7 @@ import com.hunt.otziv.payments.service.ManualPaymentTaskService;
 import com.hunt.otziv.payments.api.StandalonePaymentState;
 import com.hunt.otziv.payments.service.PaymentUrlPolicy;
 import com.hunt.otziv.payments.service.TbankTokenSigner;
+import com.hunt.otziv.payments.api.TbankConfirmedEvidence;
 import com.hunt.otziv.payments.service.ManualPaymentAutoConfirmationService;
 import com.hunt.otziv.payments.tochka.dto.TochkaAcquiringInternetPaymentWebhook;
 import com.hunt.otziv.payments.tochka.dto.TochkaApiModels.PaymentOperation;
@@ -424,14 +425,16 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
 
     TochkaPaymentMode observedTochkaPaymentMode(String paymentType, String providerStatus, List<TochkaPaymentMode> allowedModes) {
         List<TochkaPaymentMode> allowed = allowedModes == null ? List.of() : allowedModes;
-        String cleanType = normalize(paymentType).toLowerCase(Locale.ROOT);
+        String cleanType = normalize(paymentType);
         if (cleanType.isBlank() && Set.of("CREATED", "EXPIRED").contains(normalize(providerStatus).toUpperCase(Locale.ROOT))) {
             if (allowed.isEmpty()) {
                 throw new TochkaProviderException("В платеже Точки не зафиксирован разрешённый способ оплаты", false, null);
             }
             return allowed.getFirst();
         }
-        TochkaPaymentMode observed = TochkaPaymentMode.fromCode(cleanType);
+        TochkaPaymentMode observed = TochkaPaymentMode.matchesOperationType(cleanType, TochkaPaymentMode.SBP.code(), providerStatus)
+                ? TochkaPaymentMode.SBP
+                : TochkaPaymentMode.fromCode(cleanType.toLowerCase(Locale.ROOT));
         if (!allowed.contains(observed)) {
             throw new TochkaProviderException("Точка сообщила способ оплаты, не разрешённый durable-записью", false, null);
         }
@@ -525,6 +528,9 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
         if (invoice == null || ref == null || mapped == null) {
             return;
         }
+        if (!recordTochkaActualPaymentType(invoice, ref, mapped.providerPaymentType())) {
+            return;
+        }
         String previousStatus = paymentRefStatus(ref);
         boolean cancellationLifecycle = isTochkaCancellationLifecycleStatus(previousStatus) || isTochkaRefundSubmissionClaimed(ref.getReason());
         ref.setProviderStatus(limit(mapped.providerStatus(), 32));
@@ -614,6 +620,28 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
         }
     }
 
+    boolean recordTochkaActualPaymentType(CommonInvoice invoice, CommonInvoicePaymentRef ref, String actualType) {
+        String observed = normalize(actualType);
+        String saved = normalize(ref.getProviderPaymentType());
+        if (observed.isBlank()) {
+            return true;
+        }
+        if (!saved.isBlank() && !saved.equals(observed)) {
+            ref.setStatus(isTochkaCancellationLifecycleStatus(paymentRefStatus(ref))
+                    ? PAYMENT_REF_CANCEL_FAILED_FINAL : PAYMENT_REF_INIT_CONFLICT);
+            ref.setReason("tochka_payment_type_changed_after_observation");
+            paymentRefRepository.save(ref);
+            invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+            invoice.setNextReminderAt(null);
+            invoice.setPaymentUrl(null);
+            invoice.setLastError("tochka_payment_type_changed_after_observation: требуется сверка в банке");
+            invoiceRepository.save(invoice);
+            return false;
+        }
+        ref.setProviderPaymentType(observed);
+        return true;
+    }
+
     void applyConfirmedTochkaPayment(CommonInvoice invoice, CommonInvoicePaymentRef ref, String previousStatus, String source) {
         if (PAYMENT_REF_APPLIED.equals(previousStatus) || PAYMENT_REF_PREPAID.equals(previousStatus)) {
             return;
@@ -692,6 +720,7 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
 
     boolean handleTbankWebhookInTransaction(Map<String, String> payload) {
         VerifiedWebhookProfile verified = verifyWebhook(payload);
+        TbankConfirmedEvidence.requireValidWebhook(payload);
         String orderId = normalize(payload.get("OrderId"));
         String paymentId = normalize(payload.get("PaymentId"));
         String status = normalize(payload.get("Status")).toUpperCase(Locale.ROOT);
@@ -738,6 +767,12 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
         }
         if (hasForeignPaymentIdBinding(paymentId, invoice.getId(), currentAnchor == null ? null : currentAnchor.getId())) {
             quarantineWebhookPaymentIdCollision(invoice, currentAnchor, paymentId);
+            return true;
+        }
+        if (invoice.getStatus() == CommonInvoiceStatus.PAID
+                && !isTerminalPaymentWebhook(status, success, errorCode)) {
+            // A delayed NEW/AUTHORIZED callback cannot reopen an already paid
+            // invoice, even when it started while the confirmation was in flight.
             return true;
         }
         invoice.setTbankPaymentId(paymentId.isBlank() ? invoice.getTbankPaymentId() : paymentId);
@@ -853,6 +888,16 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
         boolean success = "true".equalsIgnoreCase(normalize(payload.get("Success")));
         String errorCode = normalize(payload.get("ErrorCode"));
         String originalStatus = normalize(paymentRef.getStatus()).toUpperCase(Locale.ROOT);
+        if (PAYMENT_REF_CONFIRMED.equals(status) && alreadyPaidByThisTbankRef(invoice, paymentRef)) {
+            // A settled invoice can outlive a stale CURRENT ref when a pending
+            // callback races with settlement. The exact sole bank payment is
+            // already represented by paid items; only repair its durable ref.
+            paymentRef.setStatus(PAYMENT_REF_APPLIED);
+            paymentRef.setProviderStatus(PAYMENT_REF_CONFIRMED);
+            paymentRef.setReason(limit("confirmed_after_paid_exact_tbank_ref", 160));
+            paymentRefRepository.save(paymentRef);
+            return true;
+        }
         if (isIdempotentArchivedWebhook(paymentRef, status, success, errorCode)) {
             log.info("Повторный webhook старой ссылки общего счета {} уже обработан: {} ({})", invoice.getId(), paymentRefLabel(paymentRef), status);
             return true;
@@ -1842,11 +1887,40 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
         return currentStatus.equals(status) && isTerminalPaymentWebhook(status, success, errorCode);
     }
 
+    boolean alreadyPaidByThisTbankRef(CommonInvoice invoice, CommonInvoicePaymentRef ref) {
+        if (invoice == null || ref == null || ref.getId() == null
+                || invoice.getStatus() != CommonInvoiceStatus.PAID
+                || !PAYMENT_REF_CURRENT.equals(normalize(ref.getStatus()).toUpperCase(Locale.ROOT))
+                || !PROVIDER_TBANK.equals(normalizedPaymentProvider(ref))
+                || !PAYMENT_METHOD_TBANK.equals(normalize(invoice.getPaymentMethod()).toUpperCase(Locale.ROOT))
+                || invoice.getAmountKopecks() <= 0
+                || invoice.getPaidKopecks() != invoice.getAmountKopecks()
+                || ref.getAmountKopecks() == null
+                || ref.getAmountKopecks() != invoice.getAmountKopecks()) {
+            return false;
+        }
+        List<CommonInvoicePaymentRef> refs = paymentRefRepository.findByInvoiceIdOrderByCreatedAtAsc(invoice.getId());
+        if (refs.size() != 1 || !Objects.equals(refs.get(0).getId(), ref.getId())) {
+            return false;
+        }
+        List<CommonInvoiceOrder> items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoice.getId());
+        return !items.isEmpty() && items.stream().allMatch(item -> item.isPaid()
+                && PAYMENT_METHOD_TBANK.equals(normalize(item.getPaymentMethod()).toUpperCase(Locale.ROOT))
+                && item.getSourcePaymentLinkId() == null
+                && normalize(item.getActualPaymentEvidenceReference()).isBlank()
+                && normalize(item.getManualPaidBy()).isBlank());
+    }
+
     Optional<CommonInvoicePaymentRef> lockedPaymentRef(CommonInvoicePaymentRef ref) {
         if (ref == null || ref.getId() == null) {
             return Optional.ofNullable(ref);
         }
-        return paymentRefRepository.findByIdForUpdate(ref.getId());
+        Optional<CommonInvoicePaymentRef> locked = paymentRefRepository.findByIdForUpdate(ref.getId());
+        // The provider lookup happens before the invoice lock. Hibernate can
+        // return that already-managed, stale ref from SELECT FOR UPDATE; refresh
+        // it after locking before deciding whether a webhook may change status.
+        locked.ifPresent(entityManager::refresh);
+        return locked;
     }
 
     boolean allOrdersReady(List<CommonInvoiceOrder> items) {
@@ -2160,6 +2234,12 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
         if (anchor == null) {
             return;
         }
+        String currentStatus = normalize(anchor.getStatus()).toUpperCase(Locale.ROOT);
+        boolean pendingUpdate = PAYMENT_REF_CURRENT.equals(targetStatus);
+        if (pendingUpdate && PAYMENT_REF_NONTERMINAL_DOWNGRADE_PROTECTED_STATUSES.contains(currentStatus)) {
+            // Do not even re-save an applied payment on a delayed pending event.
+            return;
+        }
         if (!normalize(paymentId).isBlank()) {
             anchor.setTbankPaymentId(limit(paymentId, 64));
         }
@@ -2167,8 +2247,6 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
             anchor.setTbankTerminalKey(limit(terminalKey, 64));
         }
         enrichPaymentRefAmountFromWebhook(anchor, payload);
-        String currentStatus = normalize(anchor.getStatus()).toUpperCase(Locale.ROOT);
-        boolean pendingUpdate = PAYMENT_REF_CURRENT.equals(targetStatus);
         if (!pendingUpdate || currentStatus.isBlank() || PAYMENT_REF_INIT_PREPARED.equals(currentStatus) || PAYMENT_REF_INIT_CONFLICT.equals(currentStatus) || PAYMENT_REF_CURRENT.equals(currentStatus)) {
             anchor.setStatus(limit(targetStatus, 32));
             anchor.setReason(limit(reason, 160));

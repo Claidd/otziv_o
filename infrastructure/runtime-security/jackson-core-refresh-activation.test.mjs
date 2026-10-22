@@ -68,7 +68,7 @@ for(const [field,path] of [
  const {gzipSync,gunzipSync}=await import('node:zlib');
  const {fileURLToPath}=await import('node:url');
  const read=await createEvidenceReader(fileURLToPath(new URL('../../',import.meta.url)));
- const entry=JSON.parse(await read('infrastructure/runtime-security/reviewed-image-activations.json')).images.find(x=>x.component==='keycloak');
+ const entry=JSON.parse(await read('infrastructure/runtime-security/c35-parent-keycloak.json'));
  const accepted=JSON.parse(await read(entry.sslRefreshAcceptance.path));
  const publication=JSON.parse(await read(entry.publication.path));
  const record=JSON.parse(gunzipSync(await read(accepted.runtimePath)));

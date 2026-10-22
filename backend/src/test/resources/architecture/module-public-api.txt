@@ -15,6 +15,9 @@ com.hunt.otziv.s3.api.*
 # Exact HTTP exception mapper, callable only from transport (application-to-controller is forbidden).
 com.hunt.otziv.p_products.controller.OrderCommandHttpAdapter
 com.hunt.otziv.client_messages.api.*
+com.hunt.otziv.contractor_payments.api.PaymentReviewTargetAuthorization
+com.hunt.otziv.manager.api.PaymentReviewOrderAccess
+com.hunt.otziv.t_telegrambot.api.SpecialistPaymentReviewNotice
 # A01 / ADR-008: scalar projections, source-authorized reminders and best-effort text notifications.
 com.hunt.otziv.u_users.api.WorkerRiskReviewerDirectory
 com.hunt.otziv.personal_reminders.api.SystemReminderCommands
@@ -26,6 +29,8 @@ com.hunt.otziv.client_messages.dto.ClientMessageSendResult
 com.hunt.otziv.client_messages.dto.TelegramTransferCopyButton
 # Platform encryption capability; no business persistence or transport methods.
 com.hunt.otziv.security.credentials.CredentialCipher
+# ADR-024: shared JPA converter across entities; no business authority.
+com.hunt.otziv.security.credentials.EncryptedCredentialConverter
 # Monitoring consumes these existing snapshot-only services; neither exposes mutation methods.
 com.hunt.otziv.integration.outbox.service.IntegrationOutboxStatusService
 com.hunt.otziv.integration.outbox.dto.IntegrationOutboxStatusResponse
@@ -35,6 +40,7 @@ com.hunt.otziv.config.settings.api.OutboundMessagePolicy
 com.hunt.otziv.config.settings.api.PublicationProgressSettings
 com.hunt.otziv.config.api.DeliveryResponseCompatibility
 com.hunt.otziv.u_users.api.DeferredUserAuthority
+com.hunt.otziv.u_users.api.SpecialistPaymentReviewDirectory
 com.hunt.otziv.u_users.api.CabinetCacheScope
 com.hunt.otziv.u_users.api.BoardIdentityReadScope
 # ADR-018: identity-owned display fields; authorized caller scope, read-only REQUIRED transaction.

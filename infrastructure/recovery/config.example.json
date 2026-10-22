@@ -4,7 +4,7 @@
   "keyId": "REQUIRED",
   "releaseCommit": "REQUIRED",
   "keycloakVersion": "REQUIRED",
-  "postgresImage": "ghcr.io/claidd/otziv-security@sha256:c974c12a1107e314b1ba8cf65bd1fc5b6964645ced420c2151d336ee8a9a6534",
+  "postgresImage": "ghcr.io/claidd/otziv-security@sha256:26663e414ba75586834873d6a43d8c1a105c12f58804e7fb961581d61a6dbdd5",
   "workDirectory": "/var/lib/otziv-recovery",
   "rpoSeconds": null,
   "rtoSeconds": null,

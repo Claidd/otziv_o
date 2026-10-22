@@ -15,6 +15,7 @@ import com.hunt.otziv.manager_daily_summary.service.ManagerReportReviewTelegramS
 import com.hunt.otziv.performers.service.PerformerTelegramCallbackService;
 import com.hunt.otziv.performers.service.PerformerTelegramLinkService;
 import com.hunt.otziv.payments.service.OwnerManualCardPaymentApprovalTelegramCallbackService;
+import com.hunt.otziv.payments.api.SpecialistPaymentDisputeCallback;
 import com.hunt.otziv.t_telegrambot.dto.TelegramChatMigrationResult;
 import com.hunt.otziv.t_telegrambot.api.TelegramAdminDocuments;
 import com.hunt.otziv.u_users.model.Role;
@@ -74,7 +75,7 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException;
 
 @Component
 @Slf4j
-public class TelegramService extends TelegramLongPollingBot implements TelegramAdminDocuments {
+public class TelegramService extends TelegramLongPollingBot implements TelegramAdminDocuments, com.hunt.otziv.t_telegrambot.api.SpecialistPaymentReviewNotice {
 
     private static final Pattern BOT_TOKEN_PATTERN = Pattern.compile("\\d{6,}:[A-Za-z0-9_-]{20,}");
     private static final int MAX_TELEGRAM_MESSAGE_LENGTH = 3900;
@@ -101,6 +102,8 @@ public class TelegramService extends TelegramLongPollingBot implements TelegramA
             workloadTransferTelegramCallbackServiceProvider;
     private ObjectProvider<OwnerManualCardPaymentApprovalTelegramCallbackService>
             ownerManualCardPaymentApprovalTelegramCallbackServiceProvider;
+    private ObjectProvider<SpecialistPaymentDisputeCallback>
+            specialistManualPaymentReviewTelegramCallbackServiceProvider;
     private final TelegramChatMigrationService telegramChatMigrationService;
     private final ClientChatMessageTrackerService clientChatMessageTrackerService;
     private final HttpClient richMessageHttpClient;
@@ -149,6 +152,13 @@ public class TelegramService extends TelegramLongPollingBot implements TelegramA
             ObjectProvider<OwnerManualCardPaymentApprovalTelegramCallbackService> provider
     ) {
         this.ownerManualCardPaymentApprovalTelegramCallbackServiceProvider = provider;
+    }
+
+    @Autowired(required = false)
+    void setSpecialistManualPaymentReviewTelegramCallbackServiceProvider(
+            ObjectProvider<SpecialistPaymentDisputeCallback> provider
+    ) {
+        this.specialistManualPaymentReviewTelegramCallbackServiceProvider = provider;
     }
 
     @Autowired
@@ -483,6 +493,19 @@ public class TelegramService extends TelegramLongPollingBot implements TelegramA
             }
         }
 
+        SpecialistPaymentDisputeCallback specialistPaymentService =
+                specialistManualPaymentReviewTelegramCallbackServiceProvider == null
+                        ? null : specialistManualPaymentReviewTelegramCallbackServiceProvider.getIfAvailable();
+        if (specialistPaymentService != null) {
+            Optional<String> specialistPaymentAnswer = specialistPaymentService.handle(callbackQuery.getData(),
+                    callbackQuery.getFrom() == null ? null : callbackQuery.getFrom().getId(),
+                    callbackQuery.getMessage() == null ? null : callbackQuery.getMessage().getChatId());
+            if (specialistPaymentAnswer.isPresent()) {
+                answerCallback(callbackQuery.getId(), specialistPaymentAnswer.get());
+                return;
+            }
+        }
+
         WorkloadTransferTelegramCallbackService workloadTransferCallbackService =
                 workloadTransferTelegramCallbackServiceProvider == null
                         ? null
@@ -700,6 +723,36 @@ public class TelegramService extends TelegramLongPollingBot implements TelegramA
         }
 
         return sendSingleMessage(chatId, text, null, inlineKeyboard(buttonText, callbackData));
+    }
+
+    /** A payment dispute notice must never be retried after an ambiguous network failure. */
+    public boolean sendPaymentReviewNoticeOnce(long chatId, String text, String buttonText, String callbackData) {
+        if (!sendingEnabled || !looksLikeTelegramBotToken(getBotToken())
+                || !hasText(text) || !hasText(buttonText) || !hasText(callbackData)) {
+            return false;
+        }
+        SendMessage request = new SendMessage();
+        request.setChatId(String.valueOf(chatId));
+        request.setText(text);
+        request.setDisableWebPagePreview(true);
+        request.setReplyMarkup(inlineKeyboard(buttonText, callbackData));
+        try {
+            Message accepted = executeTelegramMessage(request);
+            if (accepted == null) {
+                throw new IllegalStateException("Telegram did not return a message receipt");
+            }
+            return true;
+        } catch (TelegramApiRequestException rejected) {
+            Integer code = rejected.getErrorCode();
+            if (code != null && code >= 400 && code < 500 && code != 408 && code != 429) {
+                log.warn("Telegram rejected specialist payment notice chatId={}: {}", chatId,
+                        safeRichSendError(rejected));
+                return false;
+            }
+            throw new IllegalStateException("Telegram payment notice outcome is uncertain", rejected);
+        } catch (TelegramApiException uncertain) {
+            throw new IllegalStateException("Telegram payment notice outcome is uncertain", uncertain);
+        }
     }
 
     /**

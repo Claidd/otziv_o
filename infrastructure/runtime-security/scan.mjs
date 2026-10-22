@@ -8,10 +8,17 @@ import { buildTriage } from './triage-report.mjs';
 import { adjudicateGrafanaImage } from './grafana-tempo-adjudication.mjs';
 import { adjudicateAlloyImage, adjudicatePostgresImage } from './ssl-refresh.mjs';
 import { adjudicateAlloyC29Image, C29_ALLOY_PROOF_LABEL } from './alloy-c29-adjudication.mjs';
+import { adjudicateAlloyC36Image, C36_ALLOY_PROOF_LABEL } from './alloy-c36-adjudication.mjs';
 import { adjudicatePostgresGosu } from './postgres-gosu-adjudication.mjs';
+import { adjudicatePostgresC36Image } from './postgres-c36-adjudication.mjs';
 import { combinedScanSummary } from './scan-verdict.mjs';
 
 export const TRIVY_IMAGE = 'aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969'; // 0.74.0
+
+export function scannerTimeout(timeoutMinutes = 20) {
+  if (![20, 45].includes(timeoutMinutes)) throw new Error('scanner_timeout_invalid');
+  return { trivy: `${timeoutMinutes}m`, processMs: timeoutMinutes * 60_000 + 100_000 };
+}
 
 export function scannerUserArguments(platform = process.platform, uid = process.getuid?.(), gid = process.getgid?.()) {
   // A root process without DAC_OVERRIDE cannot write a runner-owned 0755 bind.
@@ -34,8 +41,9 @@ export function summarizeReport(report, requireJava = false) {
     blockingFixedHighOrCritical: findings.filter(item => ['HIGH', 'CRITICAL'].includes(item.Severity) && item.FixedVersion).length };
 }
 
-export async function scan(kind, source, output) {
+export async function scan(kind, source, output, { timeoutMinutes = 20 } = {}) {
   if (!['image', 'java'].includes(kind)) throw new Error('scanner_mode_invalid');
+  const timeout = scannerTimeout(timeoutMinutes);
   await assertLocalDocker();
   const destination = resolve(output);
   const userArguments = scannerUserArguments();
@@ -66,9 +74,9 @@ export async function scan(kind, source, output) {
       '--mount', `type=bind,source=${scratch},target=/scratch`, '--env', 'TMPDIR=/scratch',
       '--mount', `type=bind,source=${results},target=/results`, TRIVY_IMAGE,
       // JAR analysis is intentionally enabled only in Trivy's post-build rootfs/image mode.
-      kind === 'image' ? 'image' : 'rootfs', '--cache-dir', '/cache', '--timeout', '20m',
+      kind === 'image' ? 'image' : 'rootfs', '--cache-dir', '/cache', '--timeout', timeout.trivy,
       '--scanners', 'vuln', '--ignorefile', '/dev/null', '--list-all-pkgs', '--format', 'json', '--output', '/results/report.json',
-      ...(kind === 'image' ? ['--input', '/input/image.tar'] : ['--pkg-types', 'library', '/input'])], { timeoutMs: 1_300_000 });
+      ...(kind === 'image' ? ['--input', '/input/image.tar'] : ['--pkg-types', 'library', '/input'])], { timeoutMs: timeout.processMs });
     // Only this scanner receives no secrets or host environment. Keep bounded diagnostic
     // evidence for DB, archive and resource failures; recovery subprocess logging stays private.
     let diagnostic = '';
@@ -91,14 +99,25 @@ export async function scan(kind, source, output) {
     // Preserve ALL findings above. The automatic remediation gate blocks actionable fixes;
     // unresolved vendor findings remain explicit release risks, never implicit exemptions.
     const adjudication = kind === 'image' ? await adjudicateGrafanaImage(report, reportBytes, immutableImageId, scratch) : null;
-    const alloy = kind === 'image' ? await (report.Metadata?.ImageConfig?.config?.Labels?.['com.otziv.security.proof'] === C29_ALLOY_PROOF_LABEL
-      ? adjudicateAlloyC29Image(report, reportBytes, immutableImageId, scratch)
-      : adjudicateAlloyImage(report, reportBytes, immutableImageId, scratch)) : null;
-    const postgres = kind === 'image' ? await adjudicatePostgresImage(report, reportBytes, immutableImageId, scratch) : null;
-    const gosu = kind === 'image' ? await adjudicatePostgresGosu(report, reportBytes, immutableImageId, scratch, postgres) : null;
+    const alloyProofLabel = report.Metadata?.ImageConfig?.config?.Labels?.['com.otziv.security.proof'];
+    const alloy = kind === 'image' ? await (alloyProofLabel === C36_ALLOY_PROOF_LABEL
+      ? adjudicateAlloyC36Image(report, reportBytes, immutableImageId, scratch)
+      : alloyProofLabel === C29_ALLOY_PROOF_LABEL
+        ? adjudicateAlloyC29Image(report, reportBytes, immutableImageId, scratch)
+        : adjudicateAlloyImage(report, reportBytes, immutableImageId, scratch)) : null;
+    const postgresC36 = alloyProofLabel === 'postgres-c36-gosu-go1273';
+    const postgres = kind === 'image' ? await (postgresC36
+      ? adjudicatePostgresC36Image(report, reportBytes, immutableImageId, scratch)
+      : adjudicatePostgresImage(report, reportBytes, immutableImageId, scratch)) : null;
+    const gosu = kind === 'image' && !postgresC36
+      ? await adjudicatePostgresGosu(report, reportBytes, immutableImageId, scratch, postgres) : null;
     for (const receipt of [alloy, postgres]) if (receipt?.sslRefresh) {
       await copyFile(join(scratch, receipt.sslRefresh.component + '-runtime-refresh.json.gz'),
         destination.replace(/\.json$/, '') + '.runtime-refresh.json.gz');
+    }
+    if (postgresC36 && postgres?.runtimeProofSha256) {
+      await copyFile(join(scratch, 'postgres-runtime-c36.json.gz'),
+        destination.replace(/\.json$/, '') + '.runtime-c36.json.gz');
     }
     if (adjudication) await writeFile(destination.replace(/\.json$/, '') + '.adjudications.json',
       JSON.stringify({ ...adjudication, alloy, ...(postgres?.status !== 'NOT_APPLICABLE' && postgres ? { postgres } : {}), ...(gosu ? { gosu } : {}) }, null, 2) + '\n');

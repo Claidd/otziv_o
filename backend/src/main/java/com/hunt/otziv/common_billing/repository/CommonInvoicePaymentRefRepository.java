@@ -135,6 +135,22 @@ public interface CommonInvoicePaymentRefRepository extends CrudRepository<Common
             Pageable pageable
     );
 
+    @Query("""
+            select ref
+            from CommonInvoicePaymentRef ref
+            join fetch ref.invoice invoice
+            where ref.provider in :providers
+              and ref.status in :statuses
+              and (ref.nextProviderCheckAt is null or ref.nextProviderCheckAt <= :now)
+            order by ref.nextProviderCheckAt asc, ref.id asc
+            """)
+    List<CommonInvoicePaymentRef> findSettledBankReturnCheckCandidates(
+            @Param("providers") java.util.Collection<String> providers,
+            @Param("statuses") java.util.Collection<String> statuses,
+            @Param("now") java.time.LocalDateTime now,
+            Pageable pageable
+    );
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
             select ref

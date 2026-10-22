@@ -269,6 +269,7 @@ public class ClientMessageMonitorService {
     @Transactional
     public ClientMessageMonitorResponse retryNow(Long stateId) {
         ScheduledClientMessageState state = activeState(stateId);
+        rejectUncertainDelivery(state);
         LocalDateTime nowStorage = LocalDateTime.now(clock).withNano(0);
         rejectActiveProcessingClaim(state, nowStorage);
         state.setNextAttemptAt(nowStorage);
@@ -283,6 +284,7 @@ public class ClientMessageMonitorService {
     @Transactional
     public ClientMessageMonitorResponse disable(Long stateId) {
         ScheduledClientMessageState state = activeState(stateId);
+        rejectUncertainDelivery(state);
         LocalDateTime nowStorage = LocalDateTime.now(clock).withNano(0);
         rejectActiveProcessingClaim(state, nowStorage);
         state.setStatus(ScheduledMessageStateStatus.DISABLED);
@@ -299,6 +301,7 @@ public class ClientMessageMonitorService {
     @Transactional
     public ClientMessageMonitorResponse markDone(Long stateId) {
         ScheduledClientMessageState state = activeState(stateId);
+        rejectUncertainDelivery(state);
         LocalDateTime nowStorage = LocalDateTime.now(clock).withNano(0);
         rejectActiveProcessingClaim(state, nowStorage);
         state.setStatus(ScheduledMessageStateStatus.DONE);
@@ -310,6 +313,15 @@ public class ClientMessageMonitorService {
         stateRepository.save(state);
         recordManualAttempt(state, "manual_done", "Кандидат помечен выполненным вручную из мониторинга");
         return snapshot();
+    }
+
+    private void rejectUncertainDelivery(ScheduledClientMessageState state) {
+        if (state != null && ("UNKNOWN".equalsIgnoreCase(state.getDeliveryStatus())
+                || "PREPARED".equalsIgnoreCase(state.getDeliveryStatus()))) {
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT,
+                    "Исход отправки не подтверждён. Используйте ручную передачу с проверкой чата; "
+                    + "задачу нельзя помечать выполненной или запускать повторно.");
+        }
     }
 
     private List<ClientMessageMonitorResponse.ScenarioSummary> scenarioSummaries(

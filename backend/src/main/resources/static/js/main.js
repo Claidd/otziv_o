@@ -387,7 +387,10 @@ function changeBot(event, form) {
 
 function deActivateBot(event, form) {
     event.preventDefault();
-    if (window.workerAccountActionCooldown?.locked()) return;
+    if (window.workerAccountActionCooldown?.locked()) {
+        window.workerAccountActionCooldown.remind();
+        return;
+    }
     console.log('deActivateBot called');
 
     // Сохраняем ссылку на форму

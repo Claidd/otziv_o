@@ -37,6 +37,7 @@ const { chromiumLaunchArgs } = require("./chromium-launch");
 const { fetchRecentMessagesFromRawChat } = require("./raw-chat-reconciliation");
 const { createLastSeenLookup } = require("./last-seen");
 const { DurableInboundInbox } = require("./inbound-inbox");
+const { BrowserReadHealth } = require("./browser-read-health");
 const { recoverHistory } = require("./inbound-history");
 const {
   installRemoteBrowserLifecycle,
@@ -150,6 +151,14 @@ const inboundInbox = new DurableInboundInbox(
 );
 // Establish available history before draining potentially newer live/backlog events.
 inboundInbox.paused = GROUP_WEBHOOK_ENABLED || OUTREACH_WEBHOOK_ENABLED;
+const browserReadHealth = new BrowserReadHealth({
+  onUnhealthy: reason => {
+    if (!ready || shuttingDown || clientLifecycle.transition) return;
+    lastError = `WhatsApp browser reads failed repeatedly: ${reason}`;
+    log("warn", "Restarting unresponsive WhatsApp browser", { reason });
+    scheduleRestart();
+  },
+});
 const participantPhoneResolver = new ParticipantPhoneResolver({
   ttlMs: WHATSAPP_LID_PHONE_CACHE_TTL_MS,
   log,
@@ -526,7 +535,14 @@ function wireClientEvents(instance, current, trackEvent) {
         outboundRegistry, generatedMessageStore: deliveryIdempotencyStore,
         participantResolver: participantPhoneResolver, log, current,
         maxMessages: Math.min(parsePositiveInt(process.env.WHATSAPP_INBOUND_HISTORY_MAX_MESSAGES, 10000), 100000) }))
-        .catch(() => log("warn", "Inbound history discovery failed", { stage: "history_discovery" }))
+        .then(() => browserReadHealth.success())
+        .catch(error => {
+          log("warn", "Inbound history discovery failed", {
+            stage: "history_discovery",
+            error: String(error?.message || error).split(/\r?\n/, 1)[0].slice(0, 240),
+          });
+          if (current()) browserReadHealth.failure("history_discovery");
+        })
         .finally(() => { inboundHistoryRunning = false; });
     };
     clearInterval(inboundHistoryTimer);
@@ -1180,7 +1196,7 @@ app.post("/groups/reconcile-messages", asyncRoute(async (req, res) => {
         WHATSAPP_GROUPS_TIMEOUT_MS,
         `Recent messages for ${groupId}`
       );
-      return reconciliationPayloads({
+      return { failed: false, messages: await reconciliationPayloads({
         clientId: CLIENT_ID,
         groupId,
         groupName: direct.groupName,
@@ -1190,7 +1206,7 @@ app.post("/groups/reconcile-messages", asyncRoute(async (req, res) => {
         generatedMessageStore: deliveryIdempotencyStore,
         participantResolver: participantPhoneResolver,
         log,
-      });
+      }) };
     } catch (primaryError) {
       try {
         const raw = await withTimeout(
@@ -1203,7 +1219,7 @@ app.post("/groups/reconcile-messages", asyncRoute(async (req, res) => {
             groupId,
             primaryError: errorMessage(primaryError),
           });
-          return [];
+          return { failed: true, messages: [] };
         }
         const cachedGroup = groupsCache && Array.isArray(groupsCache.groups)
           ? groupsCache.groups.find((group) => group && group.groupId === groupId)
@@ -1213,7 +1229,7 @@ app.post("/groups/reconcile-messages", asyncRoute(async (req, res) => {
           messageCount: raw.messages.length,
           primaryError: errorMessage(primaryError).split(/\r?\n/, 1)[0],
         });
-        return reconciliationPayloads({
+        return { failed: false, messages: await reconciliationPayloads({
           clientId: CLIENT_ID,
           groupId,
           groupName: raw.groupName || cachedGroup && cachedGroup.name || "",
@@ -1223,20 +1239,27 @@ app.post("/groups/reconcile-messages", asyncRoute(async (req, res) => {
           generatedMessageStore: deliveryIdempotencyStore,
           participantResolver: participantPhoneResolver,
           log,
-        });
+        }) };
       } catch (fallbackError) {
         log("warn", "WhatsApp message reconciliation skipped for group", {
           groupId,
           primaryError: errorMessage(primaryError),
           fallbackError: errorMessage(fallbackError),
         });
-        return [];
+        return { failed: true, messages: [] };
       }
     }
   });
 
+  const failedGroupCount = batches.filter(batch => batch.failed).length;
+  if (failedGroupCount === batches.length) {
+    browserReadHealth.failure("group_reconciliation");
+    res.status(503).json({ status: "error", code: "whatsapp_history_unavailable", failedGroupCount });
+    return;
+  }
+  browserReadHealth.success();
   const uniqueMessages = new Map();
-  for (const message of batches.flat()) {
+  for (const message of batches.flatMap(batch => batch.messages)) {
     const key = `${message.groupId}|${message.messageId}`;
     if (!uniqueMessages.has(key)) {
       uniqueMessages.set(key, message);
@@ -1251,6 +1274,7 @@ app.post("/groups/reconcile-messages", asyncRoute(async (req, res) => {
   res.json({
     status: "ok",
     clientId: CLIENT_ID,
+    failedGroupCount,
     messages,
   });
 }));

@@ -1076,6 +1076,11 @@ export class ManagerBoardComponent implements OnDestroy {
   completeManualCardPayment(result: ManagerManualCardPaymentCompleted): void {
     const order = this.manualCardPaymentOrder();
     this.manualCardPaymentOrder.set(null);
+    if (result.result.status === 'SPECIALIST_REVIEW_PENDING') {
+      this.toastService.warning('Ожидается проверка специалиста', result.result.message);
+      this.loadBoard();
+      return;
+    }
     if (result.result.status === 'OWNER_APPROVAL_PENDING') {
       this.toastService.warning(
         'Ожидается подтверждение владельца',

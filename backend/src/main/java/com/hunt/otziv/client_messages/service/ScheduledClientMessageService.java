@@ -9,6 +9,7 @@ import com.hunt.otziv.client_messages.dto.ArchiveCompanyMessageCandidate;
 import com.hunt.otziv.client_messages.dto.ClientMessageSendResult;
 import com.hunt.otziv.client_messages.api.ClientMessageDelivery;
 import com.hunt.otziv.client_messages.api.PaymentDeadlineNoticeSource;
+import com.hunt.otziv.client_messages.api.UncertainClientMessageDelivery;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hunt.otziv.client_messages.dto.TelegramTransferCopyButton;
 import com.hunt.otziv.client_messages.model.ClientMessageScenario;
@@ -69,6 +70,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -79,7 +81,7 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class ScheduledClientMessageService implements PaymentDeadlineNoticeSource {
+public class ScheduledClientMessageService implements PaymentDeadlineNoticeSource, UncertainClientMessageDelivery {
 
     private static final ObjectMapper DELIVERY_JSON = new ObjectMapper();
 
@@ -187,6 +189,7 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
     private final ObjectProvider<CommonBillingService> commonBillingServiceProvider;
     private final OrderPaymentIntegrityService orderPaymentIntegrityService;
     private final ClientMessageTransactionRunner transactionRunner;
+    private final JdbcTemplate jdbcTemplate;
     private final ScheduledDeliveryRecovery deliveryRecovery;
     private final SchedulerLeaseService schedulerLeaseService;
     private final ClientMessageTime messageTime;
@@ -426,6 +429,159 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
         }
         ScheduledClientMessageState refreshed = stateRepository.findById(state.getId()).orElse(state);
         return manualRetryResult(refreshed, true);
+    }
+
+    public enum OrdinaryDeliveryRecoveryResult {
+        UNRESOLVED, HISTORY_UNAVAILABLE, HISTORY_CHECKED_NO_RECEIPT, SENT_CONFIRMED, UNSENT_CONFIRMED
+    }
+
+    public record UncertainDeliveryPreview(Long stateId, String operationId, String message,
+                                           LocalDateTime preparedAt) { }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean hasUnknownOutcome(Long stateId) {
+        return stateId != null && stateRepository.findById(stateId)
+                .map(state -> "UNKNOWN".equals(state.getDeliveryStatus())).orElse(false);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public UncertainClientMessageDelivery.Preview preview(Long stateId) {
+        UncertainDeliveryPreview result = uncertainDeliveryPreview(stateId);
+        return new UncertainClientMessageDelivery.Preview(result.stateId(), result.operationId(),
+                result.message(), result.preparedAt());
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public UncertainClientMessageDelivery.Preview handoff(Long stateId, String operationId,
+                                                            Long actorUserId, Long controlEntityId, String note) {
+        UncertainDeliveryPreview result = handoffUncertainOrdinaryDelivery(
+                stateId, operationId, actorUserId, controlEntityId, note);
+        return new UncertainClientMessageDelivery.Preview(result.stateId(), result.operationId(),
+                result.message(), result.preparedAt());
+    }
+
+    @Transactional(readOnly = true)
+    public UncertainDeliveryPreview uncertainDeliveryPreview(Long stateId) {
+        ScheduledClientMessageState state = stateRepository.findById(stateId).orElseThrow(() ->
+                new ResponseStatusException(HttpStatus.NOT_FOUND, "Задача отправки не найдена"));
+        if (state.getStatus() != ScheduledMessageStateStatus.ACTIVE
+                || !"UNKNOWN".equals(state.getDeliveryStatus())
+                || !ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN.equals(state.getLastErrorCode())
+                || state.getScenario() == ClientMessageScenario.BAD_REVIEW_INVOICE
+                || !hasText(state.getDeliveryEnvelope())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Эта отправка не ожидает ручной проверки");
+        }
+        PreparedScheduledDelivery prepared = decodeScheduledDelivery(state);
+        if (!Objects.equals(stateId, prepared.stateId())
+                || !Objects.equals(state.getDeliveryToken(), prepared.token())
+                || !hasText(prepared.operationId())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Сохранённая операция отправки не совпадает с задачей");
+        }
+        return new UncertainDeliveryPreview(stateId, prepared.operationId(), prepared.message(),
+                state.getDeliveryPreparedAt());
+    }
+
+    /** Human handoff leaves the immutable operation UNKNOWN. It never implies delivery or permission to resend. */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public UncertainDeliveryPreview handoffUncertainOrdinaryDelivery(Long stateId, String operationId,
+                                                                     Long actorUserId, Long controlEntityId,
+                                                                     String note) {
+        if (actorUserId == null || actorUserId <= 0 || controlEntityId == null || controlEntityId <= 0
+                || note == null || note.trim().length() < 10 || note.trim().length() > 400) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Укажите результат проверки чата (10–400 символов)");
+        }
+        UncertainDeliveryPreview preview = uncertainDeliveryPreview(stateId);
+        if (!Objects.equals(preview.operationId(), operationId)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Операция изменилась. Обновите карточку.");
+        }
+        OrdinaryDeliveryRecoveryResult check = recoverUncertainOrdinaryDelivery(stateId);
+        if (check == OrdinaryDeliveryRecoveryResult.HISTORY_UNAVAILABLE) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "История WhatsApp недоступна. Ручная передача пока заблокирована.");
+        }
+        if (check != OrdinaryDeliveryRecoveryResult.HISTORY_CHECKED_NO_RECEIPT) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Квитанция или текущее состояние операции требуют повторной проверки. Обновите карточку.");
+        }
+        return transactionRunner.callInNewTransaction(() -> {
+            ScheduledClientMessageState locked = stateRepository.findByIdForUpdate(stateId).orElseThrow();
+            PreparedScheduledDelivery lockedPrepared = decodeScheduledDelivery(locked);
+            if (locked.getStatus() != ScheduledMessageStateStatus.ACTIVE
+                    || !"UNKNOWN".equals(locked.getDeliveryStatus())
+                    || !ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN.equals(locked.getLastErrorCode())
+                    || !Objects.equals(locked.getDeliveryToken(), lockedPrepared.token())
+                    || !Objects.equals(lockedPrepared.operationId(), operationId)
+                    || !Objects.equals(lockedPrepared.message(), preview.message())
+                    || !Objects.equals(locked.getDeliveryPreparedAt(), preview.preparedAt())) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Операция изменилась во время проверки");
+            }
+            LocalDateTime now = messageTime.databaseTimestamp(messageTime.nowStorage());
+            locked.setLastErrorCode(ClientMessageStateSafety.MANUAL_DELIVERY_HANDOFF_PENDING);
+            locked.setLastErrorMessage("Старая отправка осталась без подтверждения. Передана на ручную проверку чата и связи с клиентом; автоматический повтор запрещён.");
+            locked.setDeliveryRecoveryCheckedAt(now);
+            locked.setLastAttemptAt(now);
+            locked.setNextAttemptAt(null);
+            locked.setLockedUntil(null);
+            stateRepository.save(locked);
+            jdbcTemplate.update("""
+                    INSERT INTO scheduled_client_message_manual_handoffs
+                    (state_id, operation_id, control_entity_id, actor_user_id, checked_at, note, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """, stateId, operationId, controlEntityId, actorUserId,
+                    now, note.trim(), now);
+            return preview;
+        });
+    }
+
+    /** Reconcile a saved operation without sending. UNKNOWN remains held when proof is unavailable. */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public OrdinaryDeliveryRecoveryResult recoverUncertainOrdinaryDelivery(Long stateId) {
+        if (stateId == null || stateId <= 0) return OrdinaryDeliveryRecoveryResult.UNRESOLVED;
+        ScheduledClientMessageState snapshot = stateRepository.findById(stateId).orElse(null);
+        if (snapshot == null || snapshot.getStatus() != ScheduledMessageStateStatus.ACTIVE
+                || snapshot.getScenario() == ClientMessageScenario.BAD_REVIEW_INVOICE
+                || !"UNKNOWN".equals(snapshot.getDeliveryStatus())
+                || !ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN.equals(snapshot.getLastErrorCode())
+                || !hasText(snapshot.getDeliveryEnvelope()) || !hasText(snapshot.getDeliveryToken())) {
+            return OrdinaryDeliveryRecoveryResult.UNRESOLVED;
+        }
+        PreparedScheduledDelivery prepared;
+        try {
+            prepared = decodeScheduledDelivery(snapshot);
+        } catch (RuntimeException unreadable) {
+            log.warn("Saved delivery cannot be reconciled: stateId={}", stateId);
+            return OrdinaryDeliveryRecoveryResult.UNRESOLVED;
+        }
+        if (!Objects.equals(stateId, prepared.stateId())
+                || !Objects.equals(snapshot.getDeliveryToken(), prepared.token())
+                || !Objects.equals(snapshot.getTargetKey(), prepared.targetKey())
+                || snapshot.getScenario() != prepared.scenario()
+                || !Objects.equals(snapshot.getOrderId(), prepared.orderId())
+                || !hasText(prepared.operationId())) {
+            return OrdinaryDeliveryRecoveryResult.UNRESOLVED;
+        }
+        ClientMessageSendResult receipt = messageSender.recoverRecordedOutcomeFromChat(
+                prepared.operationId(), snapshot.getDeliveryPreparedAt());
+        if (receipt != null && "whatsapp_history_unavailable".equals(receipt.errorCode())) {
+            return OrdinaryDeliveryRecoveryResult.HISTORY_UNAVAILABLE;
+        }
+        if (receipt != null && "whatsapp_history_checked_no_receipt".equals(receipt.errorCode())) {
+            return OrdinaryDeliveryRecoveryResult.HISTORY_CHECKED_NO_RECEIPT;
+        }
+        if (receipt == null || (!receipt.sent() && !ClientChatMessageSender.isKnownUnsent(receipt))) {
+            return OrdinaryDeliveryRecoveryResult.UNRESOLVED;
+        }
+        LocalDateTime now = messageTime.databaseTimestamp(messageTime.nowStorage());
+        boolean finalized = transactionRunner.callInNewTransaction(
+                () -> finalizeScheduledDelivery(prepared, receipt, now, 0));
+        if (!finalized) return OrdinaryDeliveryRecoveryResult.UNRESOLVED;
+        notifyScheduledDeliveryOutcome(prepared, receipt, now);
+        return receipt.sent() ? OrdinaryDeliveryRecoveryResult.SENT_CONFIRMED
+                : OrdinaryDeliveryRecoveryResult.UNSENT_CONFIRMED;
     }
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)

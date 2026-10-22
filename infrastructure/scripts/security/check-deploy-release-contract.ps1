@@ -6,6 +6,7 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $deployPath = Join-Path $repoRoot 'infrastructure\scripts\prod\deploy-prod.ps1'
+$frontDeployPath = Join-Path $repoRoot 'deploy.ps1'
 $snapshotPath = Join-Path $repoRoot 'infrastructure\scripts\prod\DeploySnapshot.ps1'
 $snapshotValidatorPath = Join-Path $repoRoot 'infrastructure\scripts\prod\validate-deploy-snapshot.ps1'
 $legacyDeployPath = Join-Path $repoRoot 'infrastructure\scripts\prod\deploy-prod-ssh-images.ps1'
@@ -25,6 +26,7 @@ $standaloneAndroidReleasePath = Join-Path $repoRoot 'frontend\public\android-new
 $standaloneAndroidPagePath = Join-Path $repoRoot 'frontend\public\android-new\index.html'
 
 $deploy = [IO.File]::ReadAllText($deployPath).Replace("`r`n", "`n")
+$frontDeploy = [IO.File]::ReadAllText($frontDeployPath).Replace("`r`n", "`n")
 $snapshot = [IO.File]::ReadAllText($snapshotPath)
 $snapshotValidator = [IO.File]::ReadAllText($snapshotValidatorPath)
 $legacyDeploy = [IO.File]::ReadAllText($legacyDeployPath)
@@ -619,6 +621,18 @@ if ($publicBindNormalizerCallCount -ne 1) {
 }
 Assert-Order $deploy 'selective_rollout.py" sync' 'normalize_public_bind_mount_permissions' 'Public bind permissions must be normalized only after protected bundle extraction.'
 Assert-Order $deploy 'normalize_public_bind_mount_permissions' 'compose up -d --no-deps mysql keycloak-postgres' 'Public bind permissions must be normalized before any affected production container starts.'
+
+Assert-Match $frontDeploy '\[switch\]\$CoordinatedMysqlRefresh' 'The main release entry point must expose an explicit MySQL cutover switch.'
+Assert-Match $frontDeploy 'New-OtzivPreparedDeployArchive[^\r\n]+-CoordinatedMysqlRefresh:\$CoordinatedMysqlRefresh' 'The reviewed MySQL evidence must enter the exact committed source archive.'
+Assert-Match $frontDeploy 'CoordinatedMysqlRefresh = \$CoordinatedMysqlRefresh' 'The main release entry point must pass the cutover choice to production installation.'
+Assert-Match $deploy '\(\$CoordinatedMysqlRefresh -or \$CoordinatedSslRefresh\) -and -not \$RequireMainCi' 'Both database cutovers must require protected main CI.'
+Assert-Match $deploy '"infrastructure\\scripts\\prod\\coordinated_mysql_refresh\.py"' 'The production bundle must carry the reviewed MySQL cutover helper.'
+Assert-Match $deploy 'Get-OtzivDeployBundlePaths[^\r\n]+-CoordinatedMysqlRefresh:\$CoordinatedMysqlRefresh' 'The production bundle must include MySQL acceptance evidence only on the explicit path.'
+Assert-Match $deploy 'python3 infrastructure/scripts/prod/coordinated_mysql_refresh\.py\s+\\\s*--root "`\$remote_path" --env-file "`\$remote_path/`\$env_file"\s+\\\s*--lock-token "`\$deploy_lock_token" --main-revision \$coordinatedMainRevisionQuoted\s+\\\s*--explicit-reviewed-mysql-cutover' 'MySQL cutover must use the protected root, environment, lock, exact main revision, and explicit approval flag.'
+Assert-Order $deploy 'Verified local encrypted DB backup' 'python3 infrastructure/scripts/prod/coordinated_mysql_refresh.py' 'MySQL cutover must follow the verified encrypted main database backup.'
+Assert-Order $deploy 'python3 infrastructure/scripts/prod/coordinated_mysql_refresh.py' 'python3 infrastructure/scripts/prod/coordinated_ssl_refresh.py' 'MySQL cutover must complete before the separate PostgreSQL cutover.'
+Assert-Order $deploy 'python3 infrastructure/scripts/prod/coordinated_ssl_refresh.py' "guard_database_images`nrequire_compose_service" 'The ordinary immutable database guard must run after both explicit cutovers.'
+Assert-Match $deploy 'deploy_cleanup\(\)[\s\S]{0,2200}systemctl disable "`\$self_heal_timer"' 'A failed cutover must leave the self-heal timer disabled.'
 
 Assert-Order $deploy 'Creating and verifying mandatory pre-deploy database backup on VPS' 'bash infrastructure/scripts/prod/validate-flyway-migrations.sh' 'The mandatory DB backup must finish before Flyway validation and app startup.'
 Assert-Match $deploy 'deploy_lock_token[\s\S]{0,5000}mkdir "`\$deploy_lock_dir"' 'The rollout must acquire a durable cross-session lock before creating the backup.'

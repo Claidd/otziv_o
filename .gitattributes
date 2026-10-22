@@ -103,5 +103,22 @@ infrastructure/runtime-security/c26-parent-keycloak.json text eol=lf
 infrastructure/runtime-security/evidence-archive-c26.json text eol=lf
 infrastructure/runtime-security/evidence_archive.py text eol=lf
 
+# C30 and C35 acceptance binds exact source and parent snapshot bytes.
+infrastructure/runtime-security/mysql-c30-rehearsal.py text eol=lf
+infrastructure/runtime-security/reviewed-images-c30-mysql.json text eol=lf
+infrastructure/runtime-security/c35-parent-keycloak.json text eol=lf
+infrastructure/runtime-security/reviewed-images-c35-keycloak.json text eol=lf
+infrastructure/runtime-security/vertx-c35-*.py text eol=lf
+infrastructure/runtime-security/vertx-c35-*.mjs text eol=lf
+infrastructure/runtime-security/c36-parent-postgres.json text eol=lf
+infrastructure/runtime-security/reviewed-images-c36-postgres.json text eol=lf
+infrastructure/runtime-security/postgres-c36-inspection.py text eol=lf
+infrastructure/runtime-security/postgres-c36-adjudication.mjs text eol=lf
+infrastructure/runtime-security/postgres-c36-rehearsal.py text eol=lf
+# Quarkus startup logs are retained verbatim by the C35 acceptance hashes.
+infrastructure/runtime-security/proofs/c35-keycloak/*.log -whitespace
+# C36 acceptance binds the scanner log byte for byte, including its trailing blank line.
+infrastructure/runtime-security/proofs/c36-postgres/publication/vulnerabilities.scanner.log -whitespace
+
 # Recovery receipts bind the manifest's exact UTF-8 bytes on every platform.
 infrastructure/artifact-recovery/** text eol=lf

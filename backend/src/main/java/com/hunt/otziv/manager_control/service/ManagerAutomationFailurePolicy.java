@@ -50,6 +50,7 @@ public class ManagerAutomationFailurePolicy {
         }
         LocalDateTime effectiveNow = now == null ? LocalDateTime.now() : now;
         if (ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN.equals(code)
+                || ClientMessageStateSafety.MANUAL_DELIVERY_HANDOFF_PENDING.equals(code)
                 || ClientMessageStateSafety.LEGACY_PREPARATION_UNVERIFIED.equals(code)) {
             return true;
         }

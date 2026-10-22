@@ -40,6 +40,23 @@ public class ApiManagerControlController {
     private final ManagerQueueStateService queueStateService;
     private final ManagerSiteActivityService managerSiteActivityService;
     private final com.hunt.otziv.manager_control.service.ManagerClientDeliveryStatus deliveryStatus;
+    private final com.hunt.otziv.manager_control.service.ManagerControlManualDeliveryHandoffWorkflow manualDeliveryHandoff;
+
+    @GetMapping("/concrete-items/{concreteItemId}/uncertain-delivery")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    public com.hunt.otziv.manager_control.service.ManagerControlManualDeliveryHandoffWorkflow.Preview uncertainDelivery(
+            @PathVariable Long concreteItemId, Principal principal, Authentication authentication) {
+        return manualDeliveryHandoff.preview(concreteItemId, principal, authentication);
+    }
+
+    @PostMapping("/concrete-items/{concreteItemId}/handoff-uncertain-delivery")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    public ManagerControlConcreteItemResponse handoffUncertainDelivery(
+            @PathVariable Long concreteItemId,
+            @RequestBody com.hunt.otziv.manager_control.service.ManagerControlManualDeliveryHandoffWorkflow.Request request,
+            Principal principal, Authentication authentication) {
+        return manualDeliveryHandoff.handoff(concreteItemId, request, principal, authentication);
+    }
 
     @GetMapping("/concrete-items/{concreteItemId}/delivery-operations/{operationId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")

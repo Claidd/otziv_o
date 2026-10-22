@@ -85,7 +85,7 @@ $reviewedSql004 = @{
 # mapping or another predicate requires fresh review, including staged mode.
 $reviewedArchiveOrder = @{
     Path = 'backend/src/main/java/com/hunt/otziv/payments/repository/PaymentLinkArchiveRepository.java'
-    SourceSha256 = '26b2d85fef4b837c40046b6aad3ad0e797dfb13a4ed445a6cf6b7cd9315ecc60'
+    SourceSha256 = 'df7c73d2b8e9611064f83db390e0ab0ce29fef201752029230b8c65ac7bad757'
     Lines = @(
         '""" + filterWhereClause() + " ORDER BY apl.created_at " + order + ", apl.id " + order + """'
     )

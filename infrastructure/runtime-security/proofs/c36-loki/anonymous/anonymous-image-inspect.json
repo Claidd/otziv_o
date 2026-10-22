@@ -1,0 +1,104 @@
+[
+    {
+        "Id": "sha256:1db3d8b36a31be2ef47de400447083739b10eb82b14f2f810c0b7417e9c5207e",
+        "RepoTags": [],
+        "RepoDigests": [
+            "ghcr.io/claidd/otziv-security@sha256:4ee21ecfd0dfb4e0906c57c7c5fb22d7a548122ba03034489ee0b17da204b9f6"
+        ],
+        "Parent": "",
+        "Comment": "buildkit.dockerfile.v0",
+        "Created": "2026-10-21T12:28:24.655375917Z",
+        "DockerVersion": "",
+        "Author": "",
+        "Config": {
+            "Hostname": "",
+            "Domainname": "",
+            "User": "10001",
+            "AttachStdin": false,
+            "AttachStdout": false,
+            "AttachStderr": false,
+            "ExposedPorts": {
+                "3100/tcp": {}
+            },
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt"
+            ],
+            "Cmd": [
+                "-config.file=/etc/loki/local-config.yaml"
+            ],
+            "Healthcheck": {
+                "Test": [
+                    "CMD",
+                    "/usr/bin/http-ready",
+                    "http://127.0.0.1:3100/ready"
+                ],
+                "Interval": 10000000000,
+                "Timeout": 3000000000,
+                "StartPeriod": 40000000000,
+                "Retries": 12
+            },
+            "ArgsEscaped": true,
+            "Image": "",
+            "Volumes": null,
+            "WorkingDir": "/",
+            "Entrypoint": [
+                "/usr/bin/loki"
+            ],
+            "OnBuild": null,
+            "Labels": {
+                "com.otziv.publication.revision": "0c56e0bb1ed6cc3310924144db3bf465970a82d1",
+                "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+                "com.otziv.reviewed-component": "loki",
+                "com.otziv.security.patch": "Go1.27.3; golang.org/x/net0.60.0; google.golang.org/grpc1.83.2; loopback HTTP200 readiness helper",
+                "org.opencontainers.image.revision": "7a40404f32b3e6464c9cfc6cc7dd75a40f3931da",
+                "org.opencontainers.image.source": "https://github.com/grafana/loki",
+                "org.opencontainers.image.version": "3.7.7-otziv.3"
+            }
+        },
+        "Architecture": "amd64",
+        "Os": "linux",
+        "Size": 313667652,
+        "GraphDriver": {
+            "Data": {
+                "LowerDir": "/var/lib/docker/overlay2/f3db84b1567429dcfe5abb89947593169fe44245f1aafd1020e48130b2f6e3ec/diff:/var/lib/docker/overlay2/fbfd654ad992f036c0b7ec32879f123f405f3a50c1451d8660bb4e10de9b94ba/diff:/var/lib/docker/overlay2/07e3d5d45032bd74c487a205e1f110d11707737b17ae30e68d9d316212d43af3/diff:/var/lib/docker/overlay2/f73b112b853f287acdfe957d948968b26c3fc1658e6d59fbae5f93333cbd0119/diff:/var/lib/docker/overlay2/827640c1ea21815512c54bf9a19de735a5a215bc292d22a4143000f110c3b0de/diff:/var/lib/docker/overlay2/ab2277271cbf5c603f580d459491bf983e8890af9f82a5398456f5a6a3336c28/diff:/var/lib/docker/overlay2/c4c51cdba26c22bd63e8f1bb7e79eb341e4c144d21818deffc28411d9ba42f66/diff:/var/lib/docker/overlay2/ceb121d0c797009523bddd4ac3ef06bff09e8b9de12165640103a89defe4156f/diff:/var/lib/docker/overlay2/d34292b36e7c679177c8e9dff26ba1ae2f8a9c88de053da66e8e5c9228662010/diff:/var/lib/docker/overlay2/f667c75c29d248a08a6dcf8c714c12118fc0f05fee75988e650a978a647286a6/diff:/var/lib/docker/overlay2/d8ecc8bdad55259fa1b69591d87b5cd0c3aab77007ad449f72f440afb09be260/diff:/var/lib/docker/overlay2/c2f8ad21dc6dfda874aa0f36b6febeeb107a55cc87371afec42e034933e91f43/diff:/var/lib/docker/overlay2/3c1ae705ee762301275c88ff979fcd813f70265fba5a76c6056bf14dac8e8069/diff:/var/lib/docker/overlay2/55525d015ba2112ccf024b5aa63bd22aa55939aac0d69cab809270178cea5c3b/diff:/var/lib/docker/overlay2/61a5c63b85c399aa5f928cca77e140180ba7164560f779f81613020759c43d7e/diff:/var/lib/docker/overlay2/ab09f6536d51a704f7a75e19e2b630788b25bf33dc845b3596ad92f9c4c3e247/diff:/var/lib/docker/overlay2/a8ef44128c438fb8a8d773c57e07264ea593c7db3a0b4af28dc4de3d17b87f7b/diff:/var/lib/docker/overlay2/8fac772f6735d10dea40c1a7f011e1c27f18d6b7ccb6227b4bf6fd03b0ca5156/diff:/var/lib/docker/overlay2/58e6cedd890606523274ff911b55dd4f5e5ae3709ce457f63d6ff0f8294c7a55/diff:/var/lib/docker/overlay2/bc2812fb427f902e8bde3b4d9c9747b4c4050cd3486dd7265321638abf3351d5/diff",
+                "MergedDir": "/var/lib/docker/overlay2/72f9302c2d2ad19b3935ff2ca79ef50bd18f04bf22a27eb16c750ec8c4897f0d/merged",
+                "UpperDir": "/var/lib/docker/overlay2/72f9302c2d2ad19b3935ff2ca79ef50bd18f04bf22a27eb16c750ec8c4897f0d/diff",
+                "WorkDir": "/var/lib/docker/overlay2/72f9302c2d2ad19b3935ff2ca79ef50bd18f04bf22a27eb16c750ec8c4897f0d/work"
+            },
+            "Name": "overlay2"
+        },
+        "RootFS": {
+            "Type": "layers",
+            "Layers": [
+                "sha256:50abe06dfc0957e14cb8332ed242e8b884ef2563a9eb202e5172f243f62792f7",
+                "sha256:621c35e751a51a9a9dc3e80aa0b7fe8be2a93402ea6ccd307d30852cd7776cda",
+                "sha256:c8b007d0206e4b10ed4d3b3d99dfeab47c2648e82011989fd78a5731baf33fc3",
+                "sha256:bec7e6bb35e05d1284f28b10d2150c259717d91c658c4c10c08424bb9466caba",
+                "sha256:275a30dd8ce958b21daa9ad962c6fbc09f98306ee2f486b65c9075dc257b1412",
+                "sha256:4d049f83d9cf21d1f5cc0e11deaf36df02790d0e60c1a3829538fb4b61685368",
+                "sha256:af5aa97ebe6ce1604747ec1e21af7136ded391bcabe4acef882e718a87c86bcc",
+                "sha256:6f1cdceb6a3146f0ccb986521156bef8a422cdbb0863396f7f751f575ba308f4",
+                "sha256:bd3cdfae1d3fdd83a2231d608969b38b82349777c2fff9a7c12d54f8ac5c9b38",
+                "sha256:4cde6b0bb6f50a5f255eef7b2a42162c661cf776b803225dcac9a659e396bb6b",
+                "sha256:ad51d0769d16ba578106a177987dfe3d2e02c1668c852b795b2f6b024068242a",
+                "sha256:187cfc6d1e3e8a40a5e64653bcd3239c140807dcf1c09e48021178705a5a6139",
+                "sha256:f2392a9484bf6b18f06beaf705b994e31dbb2716c99cf7d03c9c495cd107f364",
+                "sha256:e627cdb61e018e483b37c5b230d833515f6fe6639f63be7ac6adc4b50ad34826",
+                "sha256:ae90035bb7c7ce2105fbb0ed2250de7512b7a35df089587423166511c74b765b",
+                "sha256:944fb555f159bb9c2a4519c07240f3482b58f0b0077d738fa556aab9503165bd",
+                "sha256:b6b3779976ff77dc54ba10f7e83f4b20c53214ef65548ff6e86bbbb3e72d78e2",
+                "sha256:802512c6906aaf5a654452b6976e9a54ff4383a9e9ce5cb1b49d44c0912381b7",
+                "sha256:c421027f734dd01b12c4413b17866b2b5f9e3f332295ce3296e005d416d22a65",
+                "sha256:d44fa1b6044db3fbd29514fd631c2cf7075bc491ece1587910331c6bcc776781",
+                "sha256:5a46914c09c1c7a074458834ced5dd942e10f8689b79406e53a33c50c7ec4130"
+            ]
+        },
+        "Metadata": {
+            "LastTagTime": "0001-01-01T00:00:00Z"
+        }
+    }
+]

@@ -17,11 +17,70 @@ export interface CloseManualPaymentUnpaidRequest {
   note: string;
 }
 
+export type SpecialistPaymentReviewStatus =
+  | 'PENDING_DELIVERY' | 'WAITING' | 'SETTLING' | 'ADMIN_SETTLING'
+  | 'DISPUTED' | 'CONFIRMED' | 'NEEDS_ATTENTION' | 'SUPERSEDED';
+
+export interface SpecialistPaymentReview {
+  id: number;
+  orderId: number;
+  paymentLinkId: number;
+  amountKopecks: number;
+  recipientUserId: number;
+  status: SpecialistPaymentReviewStatus;
+  requestedAt: string;
+  notifiedAt: string | null;
+  deadlineAt: string;
+  lastError: string | null;
+  retryNotificationAllowed: boolean;
+}
+
+export interface SpecialistPaymentAbsentRequest {
+  recipientStatementChecked: true;
+  paymentAbsent: true;
+  note: string;
+}
+
+export interface SpecialistPaymentVerifyRequest {
+  recipientStatementChecked: true;
+  paymentReceived: true;
+  receivedAmountKopecks: number;
+  note: string;
+}
+
 /** Stateless feature transport; authentication and error handling stay in Angular interceptors. */
 @Injectable({ providedIn: 'root' })
 export class PaymentAdministrationApi {
   private readonly http = inject(HttpClient);
   private apiUrl(path: string): string { return mobileEnvironment.apiBaseUrl + path; }
+
+  getSpecialistPaymentReviews(): Observable<SpecialistPaymentReview[]> {
+    return this.http.get<SpecialistPaymentReview[]>(this.apiUrl('/api/admin/payments/specialist-reviews'));
+  }
+
+  retrySpecialistPaymentNotification(id: number): Observable<SpecialistPaymentReview> {
+    return this.http.post<SpecialistPaymentReview>(
+      this.apiUrl(`/api/admin/payments/specialist-reviews/${id}/retry-notification`), {}
+    );
+  }
+
+  reconcileSpecialistPaymentReview(id: number): Observable<SpecialistPaymentReview> {
+    return this.http.post<SpecialistPaymentReview>(
+      this.apiUrl(`/api/admin/payments/specialist-reviews/${id}/reconcile`), {}
+    );
+  }
+
+  markSpecialistPaymentAbsent(id: number, request: SpecialistPaymentAbsentRequest): Observable<SpecialistPaymentReview> {
+    return this.http.post<SpecialistPaymentReview>(
+      this.apiUrl(`/api/admin/payments/specialist-reviews/${id}/mark-absent`), request
+    );
+  }
+
+  verifySpecialistPaymentReceived(id: number, request: SpecialistPaymentVerifyRequest): Observable<SpecialistPaymentReview> {
+    return this.http.post<SpecialistPaymentReview>(
+      this.apiUrl(`/api/admin/payments/specialist-reviews/${id}/verify-received`), request
+    );
+  }
 
   getAdminTbankPaymentLinks(params?: {
     page?: number;

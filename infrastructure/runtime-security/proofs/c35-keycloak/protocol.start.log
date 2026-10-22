@@ -1,0 +1,45 @@
+Changes detected in configuration. Updating the server image.
+The previous optimized build will be overridden with the following build options:
+	- http-relative-path=<unset> > http-relative-path=/keycloak
+To avoid that, run the 'build' command again and then start the optimized server instance using the '--optimized' flag.
+Updating the configuration and installing your custom providers, if any. Please wait.
+2026-10-21 06:48:09,932 WARN  [org.keycloak.common.Profile] (build-23) Deprecated features identity-brokering-api:v1, twitter-broker:v1 enabled by default. Check the upgrading guide for steps to use later versions if available.
+2026-10-21 06:48:10,286 WARN  [org.keycloak.services] (build-27) KC-SERVICES0047: otziv-security (com.hunt.otziv.issuer.GenerationResource) is implementing the internal SPI realm-restapi-extension. This SPI is internal and may change without notice
+2026-10-21 06:48:10,421 WARN  [org.keycloak.services] (build-27) KC-SERVICES0047: otziv-security-generation (com.hunt.otziv.issuer.GenerationEntities) is implementing the internal SPI jpa-entity-provider. This SPI is internal and may change without notice
+2026-10-21 06:48:10,675 WARN  [org.keycloak.services] (build-27) KC-SERVICES0047: otziv-generation-browser-password (com.hunt.otziv.issuer.GenerationBrowserPassword) is implementing the internal SPI authenticator. This SPI is internal and may change without notice
+2026-10-21 06:48:10,676 WARN  [org.keycloak.services] (build-27) KC-SERVICES0047: otziv-generation-direct-password (com.hunt.otziv.issuer.GenerationDirectPassword) is implementing the internal SPI authenticator. This SPI is internal and may change without notice
+2026-10-21 06:48:10,915 WARN  [org.keycloak.services] (build-27) KC-SERVICES0047: otziv-security-generation (com.hunt.otziv.issuer.GenerationEvents) is implementing the internal SPI eventsListener. This SPI is internal and may change without notice
+2026-10-21 06:48:18,975 INFO  [io.quarkus.deployment.QuarkusAugmentor] (main) Quarkus augmentation completed in 11597ms
+Server configuration updated and persisted. Run the following command to review the configuration:
+
+	kc.sh show-config
+
+Next time you run the server, just add --optimized to the command to ensure this build is used.
+2026-10-21 06:48:22,719 INFO  [org.infinispan.CONTAINER] (main) ISPN000974: Virtual threads support: enabled
+2026-10-21 06:48:23,838 INFO  [org.hibernate.orm.jdbc.batch] (JPA Startup Thread) HHH100501: Automatic JDBC statement batching enabled (maximum batch size 32)
+2026-10-21 06:48:23,989 WARN  [org.keycloak.common.Profile] (executor-thread-1) Deprecated features identity-brokering-api:v1, twitter-broker:v1 enabled by default. Check the upgrading guide for steps to use later versions if available.
+2026-10-21 06:48:24,077 INFO  [io.quarkus] (main) Keycloak 26.7.3 on JVM (powered by Quarkus 3.33.3.1) started in 5.001s. Listening on: http://0.0.0.0:8080. Management interface listening on http://0.0.0.0:9000.
+2026-10-21 06:48:24,077 INFO  [io.quarkus] (main) Profile prod activated. 
+2026-10-21 06:48:24,077 INFO  [io.quarkus] (main) Installed features: [agroal, cdi, hibernate-orm, jdbc-postgresql, keycloak, micrometer, narayana-jta, opentelemetry, rest, rest-jackson, smallrye-context-propagation, smallrye-health, vertx]
+2026-10-21 06:48:24,754 WARN  [org.keycloak.quarkus.runtime.services.BootstrapFilter] (vert.x-eventloop-thread-14) Request received during bootstrapping, returning a 503 error. Use the readiness health endpoint to ensure the service is ready before forwarding requests to the service.
+2026-10-21 06:48:25,159 INFO  [org.keycloak.quarkus.runtime.storage.database.liquibase.QuarkusJpaUpdaterProvider] (executor-thread-1) Initializing database schema. Using changelog META-INF/jpa-changelog-master.xml
+2026-10-21 06:48:32,781 INFO  [org.keycloak.quarkus.runtime.storage.database.liquibase.QuarkusJpaUpdaterProvider] (executor-thread-1) Initializing database schema. Using changelog META-INF/otziv-security-generation.xml
+2026-10-21 06:48:33,537 INFO  [org.keycloak.spi.infinispan.impl.embedded.JGroupsConfigurator] (executor-thread-1) JGroups JDBC_PING discovery enabled.
+2026-10-21 06:48:34,031 INFO  [org.keycloak.spi.infinispan.impl.embedded.JGroupsConfigurator] (executor-thread-1) JGroups Encryption enabled (mTLS).
+2026-10-21 06:48:34,470 INFO  [org.keycloak.jgroups.certificates.CertificateReloadManager] (executor-thread-1) Starting JGroups certificate reload manager
+2026-10-21 06:48:34,729 INFO  [org.infinispan.CONTAINER] (executor-thread-1) ISPN000556: Starting user marshaller 'org.infinispan.commons.marshall.ImmutableProtoStreamMarshaller'
+2026-10-21 06:48:34,866 INFO  [org.infinispan.CLUSTER] (executor-thread-1) ISPN000078: Starting JGroups channel `ISPN` with stack `jdbc-ping`
+2026-10-21 06:48:34,868 INFO  [org.jgroups.JChannel] (executor-thread-1) local_addr: 00000000-0000-0000-0000-000000000001(v=16.0.14), name: e6b6d85c6894-52189
+2026-10-21 06:48:34,873 INFO  [org.jgroups.protocols.FD_SOCK2] (executor-thread-1) server listening on *:57800
+2026-10-21 06:48:34,924 INFO  [org.infinispan.CLUSTER] (executor-thread-1) ISPN000094: Received new cluster view for channel ISPN: [e6b6d85c6894-52189(v=16.0.14)|0] (1) [e6b6d85c6894-52189(v=16.0.14)]
+2026-10-21 06:48:34,927 INFO  [org.keycloak.jgroups.certificates.CertificateReloadManager] (executor-thread-1) Reloading JGroups Certificate
+2026-10-21 06:48:34,993 INFO  [org.infinispan.CLUSTER] (executor-thread-1) ISPN000079: Channel `ISPN` local address is `e6b6d85c6894-52189`, physical addresses are `[172.20.0.4:7800]`
+2026-10-21 06:48:35,424 INFO  [org.keycloak.connections.infinispan.DefaultInfinispanConnectionProviderFactory] (executor-thread-1) Node name: e6b6d85c6894-52189, Site name: null, Cluster name: ISPN
+2026-10-21 06:48:35,572 INFO  [org.keycloak.quarkus.runtime.storage.database.jpa.DatabaseIndexChecker] (db-index-checker) Running database index checker
+2026-10-21 06:48:35,665 INFO  [org.keycloak.models.workflow.WorkflowsEventListenerFactory] (executor-thread-1) Workflow runner task scheduled: next execution at 18:48:35, then every PT12H
+2026-10-21 06:48:35,688 INFO  [org.keycloak.exportimport.dir.DirImportProvider] (executor-thread-1) Importing from directory /opt/keycloak/bin/../data/import
+2026-10-21 06:48:35,698 INFO  [org.keycloak.services] (executor-thread-1) KC-SERVICES0050: Initializing master realm
+2026-10-21 06:48:37,098 INFO  [org.keycloak.services] (executor-thread-1) KC-SERVICES0030: Full model import requested. Strategy: IGNORE_EXISTING
+2026-10-21 06:48:38,504 INFO  [org.keycloak.exportimport.util.ImportUtils] (executor-thread-1) Realm 'fixture-5d15e8d0-ecd8-4f54-8a9d-b0c94b77ab25' imported
+2026-10-21 06:48:38,513 INFO  [org.keycloak.services] (executor-thread-1) KC-SERVICES0032: Import finished successfully
+2026-10-21 06:48:38,844 INFO  [org.keycloak.services.resources.KeycloakApplication] (executor-thread-1) Bootstrap completed in 14.855000 seconds

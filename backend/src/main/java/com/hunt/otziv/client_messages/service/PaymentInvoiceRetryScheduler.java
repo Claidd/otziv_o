@@ -1,5 +1,7 @@
 package com.hunt.otziv.client_messages.service;
 
+import com.hunt.otziv.client_messages.api.ManualPaymentAutomationControl;
+
 import com.hunt.otziv.client_messages.model.ClientMessageScenario;
 import com.hunt.otziv.client_messages.model.ClientMessageTargetType;
 import com.hunt.otziv.client_messages.model.ScheduledClientMessageState;
@@ -25,7 +27,7 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class PaymentInvoiceRetryScheduler {
+public class PaymentInvoiceRetryScheduler implements ManualPaymentAutomationControl {
 
     private static final Set<ClientMessageScenario> PAYMENT_AUTOMATION_SCENARIOS = Set.of(
             ClientMessageScenario.PAYMENT_INVOICE_RETRY,

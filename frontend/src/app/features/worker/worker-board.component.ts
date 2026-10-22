@@ -645,7 +645,10 @@ export class WorkerBoardComponent implements OnDestroy {
   }
 
   changeReviewBot(review: WorkerReviewItem): void {
-    if (this.accountActionCooldown.locked()) return;
+    if (this.accountActionCooldown.locked()) {
+      this.accountActionCooldown.remind();
+      return;
+    }
     this.actionFacade.changeReviewBot(review);
   }
 
@@ -654,7 +657,10 @@ export class WorkerBoardComponent implements OnDestroy {
   }
 
   deactivateReviewBot(review: WorkerReviewItem): void {
-    if (this.accountActionCooldown.locked()) return;
+    if (this.accountActionCooldown.locked()) {
+      this.accountActionCooldown.remind();
+      return;
+    }
     if (this.blockLockedByCredentials(review)) {
       this.toastService.error('Сначала скопируйте логин и пароль', 'Используйте кнопки в карточке текущего аккаунта.');
       return;
@@ -770,7 +776,10 @@ export class WorkerBoardComponent implements OnDestroy {
   }
 
   assignReviewNewAccount(): void {
-    if (this.accountActionCooldown.locked()) return;
+    if (this.accountActionCooldown.locked()) {
+      this.accountActionCooldown.remind();
+      return;
+    }
     this.editFacade.assignReviewNewAccount();
   }
 

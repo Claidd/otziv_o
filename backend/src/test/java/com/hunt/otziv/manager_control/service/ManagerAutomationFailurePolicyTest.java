@@ -68,6 +68,12 @@ class ManagerAutomationFailurePolicyTest {
         assertTrue(policy.isActionable(state, now, 3, 60));
     }
 
+    @Test void keepsManualHandoffVisibleImmediately() {
+        ScheduledClientMessageState state = state("manual_delivery_handoff_pending", 0, now);
+        state.setDeliveryStatus("UNKNOWN");
+        assertTrue(policy.isActionable(state, now, 3, 60));
+    }
+
     @Test
     void exposesInProgressTransactionOnlyAfterItsClaimExpires() {
         ScheduledClientMessageState state = state("state_transaction_in_progress", 0, null);

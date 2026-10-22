@@ -13,6 +13,7 @@ import com.hunt.otziv.payments.model.PaymentLinkStatus;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -62,6 +63,12 @@ public class OrderPaymentIntegrityService {
         }
         String status = order.getStatus() == null ? "" : order.getStatus().getTitle();
         return (order.isComplete() && order.getPayDay() != null) || STATUS_PAID.equals(status);
+    }
+
+    /** Locks the order before its payment link and exposes only settlement evidence. */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public Optional<Boolean> lockSpecialistReviewOrderEvidence(Long orderId) {
+        return orderRepository.findByIdForCounterUpdate(orderId).map(this::hasSettledPaymentEvidence);
     }
 
     public boolean isDuplicatePaymentCycle(Order order) {

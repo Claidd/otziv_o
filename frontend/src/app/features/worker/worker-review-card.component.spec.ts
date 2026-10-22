@@ -46,24 +46,37 @@ describe('WorkerReviewCardComponent', () => {
     }).compileComponents();
   });
 
-  it.each(['publish', 'nagul', 'bad', 'recovery'] as const)('disables both account buttons during cooldown in %s without blocking copying', (section) => {
+  it.each(['publish', 'nagul', 'bad', 'recovery'] as const)('repeats the reminder without requesting account actions in %s', (section) => {
     const fixture = TestBed.createComponent(WorkerReviewCardComponent);
     const component = fixture.componentInstance;
     component.review = review({ badTask: section === 'bad', recoveryTask: section === 'recovery' });
     component.activeSection = section;
     component.accountActionCooldownLocked = true;
     component.accountActionCooldownTitle = 'Смена и блокировка доступны через 00:42';
+    let reminders = 0;
+    let actions = 0;
+    component.accountActionCooldownReminderRequested.subscribe(() => reminders++);
+    component.botChangeRequested.subscribe(() => actions++);
+    component.botDeactivateRequested.subscribe(() => actions++);
     fixture.detectChanges();
     const buttons = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button'));
     const button = (label: string) => buttons.find((item) => item.textContent?.trim() === label)!;
-    expect(button('смена').disabled).toBe(true);
-    expect(button('блок').disabled).toBe(true);
+    expect(button('смена').disabled).toBe(false);
+    expect(button('блок').disabled).toBe(false);
+    expect(button('смена').getAttribute('aria-disabled')).toBe('true');
+    expect(button('блок').getAttribute('aria-disabled')).toBe('true');
     expect(button('смена').title).toContain('00:42');
+    button('смена').click();
+    button('блок').click();
+    expect(reminders).toBe(2);
+    expect(actions).toBe(0);
     expect(button('ответ').disabled).toBe(false);
     fixture.componentRef.setInput('accountActionCooldownLocked', false);
     fixture.detectChanges();
     expect(button('смена').disabled).toBe(false);
     expect(button('блок').disabled).toBe(false);
+    button('смена').click();
+    expect(actions).toBe(1);
   });
 
   it('renders review data, bot label and task controls', () => {

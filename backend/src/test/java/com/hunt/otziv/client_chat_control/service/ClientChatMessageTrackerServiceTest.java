@@ -159,6 +159,25 @@ class ClientChatMessageTrackerServiceTest {
     }
 
     @Test
+    void delayedEarlierStaffMessageDoesNotCloseNewerClientQuestion() {
+        ClientChatUnansweredItem open = new ClientChatUnansweredItem();
+        open.setStatus(ClientChatUnansweredStatus.OPEN);
+        open.setLastClientMessageAt(LocalDateTime.now());
+        when(unansweredRepository.findByPlatformAndChatIdAndStatus(
+                ClientChatPlatform.WHATSAPP, "12001@g.us", ClientChatUnansweredStatus.OPEN
+        )).thenReturn(List.of(open));
+        ClientChatMessageCommand olderReply = new ClientChatMessageCommand(
+                ClientChatPlatform.WHATSAPP, ClientChatDirection.OUTGOING,
+                "12001@g.us", "Компания", "older-staff-reply", "12001@g.us",
+                "Менеджер", "Ответ", LocalDateTime.now().minusMinutes(5));
+
+        service.track(olderReply, ClientChatSenderRole.STAFF);
+
+        assertEquals(ClientChatUnansweredStatus.OPEN, open.getStatus());
+        verify(unansweredRepository, never()).save(open);
+    }
+
+    @Test
     void storesActualStaffUserInsteadOfAssumingCompanyManager() {
         User actualAuthor = User.builder().id(88L).active(true).build();
         when(participantClassifier.resolveStaffUser(

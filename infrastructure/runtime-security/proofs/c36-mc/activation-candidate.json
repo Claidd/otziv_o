@@ -1,0 +1,19 @@
+{
+  "component": "mc",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:7f151ac5485610079a5243d91c28f2681691083ac6c22e92d53f9a5a1e4ace58",
+  "commit": "0c56e0bb1ed6cc3310924144db3bf465970a82d1",
+  "run": "39599103889",
+  "attempt": "1",
+  "manifest": {
+    "path": "infrastructure/runtime-security/reviewed-images-c36-mc.json",
+    "sha256": "06a2d3fcb6609c83c092d7e5ddf09e5abcb475bd8f7daa6215756cbfafb8ac08"
+  },
+  "publication": {
+    "path": "infrastructure/runtime-security/proofs/c36-mc/publication/publication.json",
+    "sha256": "b08bec9911e55d16d1239381b62a170e5936d2995cca5196744f20c03f987f0c"
+  },
+  "anonymous": {
+    "path": "infrastructure/runtime-security/proofs/c36-mc/anonymous/anonymous-download.json",
+    "sha256": "15547df4126e4206112c92851f31f4e36a595ae1cba2f9e47da31118ff3a1685"
+  }
+}

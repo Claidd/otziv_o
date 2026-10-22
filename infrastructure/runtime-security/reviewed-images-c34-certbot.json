@@ -1,0 +1,25 @@
+{
+  "schema": "otziv-reviewed-images-v1",
+  "repository": "ghcr.io/claidd/otziv-security",
+  "publicationSet": "c34-certbot",
+  "baselineManifestSha256": "d48bdb7d6d869cde5d6f1a7b089491765e3eeaf46e0b0b6bb51b7719b38d3ef2",
+  "images": [
+    {
+      "component": "certbot",
+      "sourceBeforeRef": "certbot/certbot@sha256:34ee91d2f43008eb78a007d22f23ed4b2eaa9a454cb27ca2c042b49527a695b4",
+      "defaultReferencesBefore": [
+        {
+          "path": "docker-compose.yaml",
+          "line": 844,
+          "service": "certbot"
+        }
+      ],
+      "context": "infrastructure/runtime-security/builds/c34-certbot",
+      "dockerfile": "infrastructure/runtime-security/builds/c34-certbot/Dockerfile",
+      "platform": "linux/amd64",
+      "candidateBaseRef": "ghcr.io/claidd/otziv-security@sha256:fc21f2b893f9db7550cbad759cb2ad50fbf49bee61d5f58a3a45b009037a8764",
+      "buildArgs": {},
+      "dockerfileSha256": "d5e4a863de9c5a111ff73ed75136816eabaa39d279c6f3cb971026597097e1dd"
+    }
+  ]
+}

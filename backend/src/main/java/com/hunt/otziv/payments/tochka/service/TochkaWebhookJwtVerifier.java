@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hunt.otziv.payments.tochka.dto.TochkaAcquiringInternetPaymentWebhook;
 import com.hunt.otziv.payments.tochka.dto.TochkaWebhookExpectation;
+import com.hunt.otziv.payments.tochka.model.TochkaPaymentMode;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.net.URI;
@@ -138,7 +139,9 @@ public class TochkaWebhookJwtVerifier {
         requireAmount(claims.amount(), expected.amount());
         requireExact(claims.operationId(), expected.operationId(), "operationId");
         requireExact(claims.paymentLinkId(), expected.paymentLinkId(), "paymentLinkId");
-        requireExact(claims.paymentType(), expected.paymentType(), "paymentType");
+        if (!TochkaPaymentMode.matchesOperationType(claims.paymentType(), expected.paymentType(), claims.status())) {
+            throw rejected("Webhook JWT paymentType does not match the payment");
+        }
         return claims;
     }
 

@@ -2972,7 +2972,11 @@ export class ManagerPage implements OnInit, OnDestroy {
         throw error;
       }
       const outcome = await this.manualCardPaymentFlow.confirm(order.id);
-      if (!outcome || !mobileManualCardPaymentIsCompleted(outcome.result)) {
+      if (!outcome) {
+        return false;
+      }
+      if (!mobileManualCardPaymentIsCompleted(outcome.result)) {
+        await this.load();
         return false;
       }
     }

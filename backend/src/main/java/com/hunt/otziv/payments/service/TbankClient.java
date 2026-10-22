@@ -1,5 +1,7 @@
 package com.hunt.otziv.payments.service;
 
+import com.hunt.otziv.payments.api.TbankConfirmedEvidence;
+
 import com.hunt.otziv.payments.config.TbankPaymentProperties;
 import com.hunt.otziv.payments.dto.TbankCancelCommand;
 import com.hunt.otziv.payments.dto.TbankCancelResponse;
@@ -147,6 +149,11 @@ public class TbankClient {
             }
             if (!body.success()) {
                 throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, body.errorText());
+            }
+            if ("CONFIRMED".equalsIgnoreCase(body.status())
+                    && !TbankConfirmedEvidence.validGetStateConfirmation(body)) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                        "Т-Банк вернул CONFIRMED без подтверждённых реквизитов платежа");
             }
             return body;
         } catch (RestClientResponseException e) {

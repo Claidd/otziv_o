@@ -44,7 +44,7 @@ def fixture():
     return result
 
 
-def native_mysql_fixture(image_id=guard.REVIEWED_MYSQL_CONFIG):
+def native_mysql_fixture(image_id=guard.REVIEWED_MYSQL_CONFIG, reference=guard.REVIEWED_MYSQL_REFERENCE):
     state = fixture()
     image_config = {"Entrypoint": ["/entrypoint.sh"], "Cmd": ["mysqld"],
                     "Env": ["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
@@ -54,9 +54,9 @@ def native_mysql_fixture(image_id=guard.REVIEWED_MYSQL_CONFIG):
                "--enforce-gtid-consistency=OFF", "--log-bin=mysql-bin", "--binlog-format=ROW", "--event-scheduler=OFF"]
     runtime = "/var/run/mysqld:rw,noexec,nosuid,size=16m,uid=999,gid=999,mode=0755"
     service = state["config"]["services"]["mysql"]
-    service.update(image=guard.REVIEWED_MYSQL_REFERENCE, user="999:999", command=command, tmpfs=[runtime])
+    service.update(image=reference, user="999:999", command=command, tmpfs=[runtime])
     service["volumes"][0]["volume"] = {"nocopy": True}
-    state["images"][guard.REVIEWED_MYSQL_REFERENCE] = {"Id": image_id, "RepoDigests": [guard.REVIEWED_MYSQL_REFERENCE],
+    state["images"][reference] = {"Id": image_id, "RepoDigests": [reference],
                                                     "Os": "linux", "Architecture": "amd64", "Config": image_config}
     container = state["containers"]["1" * 64]
     container["Image"] = image_id
@@ -328,13 +328,26 @@ class ContinuityTests(unittest.TestCase):
                                                                       "keycloak-postgres": {"pull_policy": "never"}}})
 
     def test_native_mysql_identity_constants_bind_the_retained_published_oci_index_and_configuration(self):
-        publication = HERE.parents[1] / "runtime-security/proofs/c30-mysql/publication"
-        index = (publication / "registry-index.json").read_bytes()
-        config = (publication / "registry-amd64-config.json").read_bytes()
-        self.assertEqual("sha256:" + hashlib.sha256(index).hexdigest(), guard.REVIEWED_MYSQL_INDEX)
-        self.assertEqual("sha256:" + hashlib.sha256(config).hexdigest(), guard.REVIEWED_MYSQL_CONFIG)
-        self.assertEqual(json.loads((publication / "publication.json").read_bytes())["reference"], guard.REVIEWED_MYSQL_REFERENCE)
-        self.assertEqual(json.loads(config)["config"]["Entrypoint"], ["/entrypoint.sh"])
+        for proof, index_id, config_id, reference in [
+            ("c30-mysql", guard.REVIEWED_MYSQL_INDEX, guard.REVIEWED_MYSQL_CONFIG, guard.REVIEWED_MYSQL_REFERENCE),
+            ("c37-mysql", guard.REVIEWED_MYSQL_C37_INDEX, guard.REVIEWED_MYSQL_C37_CONFIG, guard.REVIEWED_MYSQL_C37_REFERENCE),
+        ]:
+            with self.subTest(proof=proof):
+                publication = HERE.parents[1] / "runtime-security/proofs" / proof / "publication"
+                index = (publication / "registry-index.json").read_bytes()
+                config = (publication / "registry-amd64-config.json").read_bytes()
+                self.assertEqual("sha256:" + hashlib.sha256(index).hexdigest(), index_id)
+                self.assertEqual("sha256:" + hashlib.sha256(config).hexdigest(), config_id)
+                self.assertEqual(json.loads((publication / "publication.json").read_bytes())["reference"], reference)
+                self.assertEqual(json.loads(config)["config"]["Entrypoint"], ["/entrypoint.sh"])
+
+    def test_c37_candidate_requires_coordinated_cutover_but_already_activated_c37_can_restart(self):
+        for image_id in [guard.REVIEWED_MYSQL_C37_CONFIG, guard.REVIEWED_MYSQL_C37_INDEX]:
+            with self.subTest(image_id=image_id):
+                self.state = native_mysql_fixture(image_id, guard.REVIEWED_MYSQL_C37_REFERENCE)
+                self.assertEqual(self.evaluate()["services"]["mysql"], {"pull_policy": "never"})
+                self.state["containers"]["1" * 64]["Image"] = guard.REVIEWED_MYSQL_CONFIG
+                self.reject("Database image change refused")
 
     def test_candidate_native_contract_never_authorizes_opening_the_old_running_database(self):
         self.state = native_mysql_fixture()
@@ -678,7 +691,7 @@ class ActualComposeConfigurationTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, "Repository Compose configuration must resolve")
         command = json.loads(result.stdout)["services"]["mysql"]["command"]
         self.assertIn("--innodb-buffer-pool-size=536870912", command)
-        state = native_mysql_fixture()
+        state = native_mysql_fixture(guard.REVIEWED_MYSQL_C37_CONFIG, guard.REVIEWED_MYSQL_C37_REFERENCE)
         state["config"]["services"]["mysql"]["command"] = command
         self.assertEqual(guard.checked_override(state["config"], FixtureDocker(state))["services"]["mysql"],
                          {"pull_policy": "never"})

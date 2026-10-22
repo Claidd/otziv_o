@@ -1,0 +1,53 @@
+:host { display: block; min-width: 0; }
+
+.specialist-reviews {
+  display: grid;
+  gap: .8rem;
+  padding: clamp(.85rem, 2vw, 1.3rem);
+  border: 1px solid var(--otziv-border, #d8e1ec);
+  border-radius: var(--otziv-card-radius, 20px);
+  background: var(--otziv-white, #fff);
+  color: var(--otziv-text, #273447);
+  box-shadow: var(--otziv-shadow);
+}
+
+header, .review-head, .review-actions { display: flex; align-items: flex-start; justify-content: space-between; gap: .65rem; flex-wrap: wrap; }
+header h2 { margin: .1rem 0; font-size: 1.1rem; }
+header h2 span { display: inline-grid; place-items: center; min-width: 1.7rem; height: 1.7rem; padding: 0 .3rem; border-radius: 50%; background: #fff2d2; color: #785700; font-size: .82rem; }
+header p, .review-form p { margin: 0; line-height: 1.4; color: var(--otziv-info, #697b91); }
+.eyebrow { font-size: .7rem; font-weight: 800; letter-spacing: .07em; }
+button { min-height: 2.4rem; padding: .45rem .8rem; border: 1px solid #bfccd9; border-radius: .7rem; background: var(--otziv-white, #fff); color: inherit; font: inherit; font-size: .83rem; font-weight: 700; cursor: pointer; }
+button:disabled { opacity: .55; cursor: default; }
+button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid #437bad; outline-offset: 2px; }
+.review-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); gap: .7rem; }
+.review-card { min-width: 0; padding: .85rem; border: 1px solid #d9e4ee; border-radius: .9rem; background: var(--otziv-white, #fff); }
+.review-card.review-disputed { border-color: #e9afb6; }
+.review-head { align-items: center; }
+.review-head > div { display: grid; gap: .1rem; }
+.review-head small { color: var(--otziv-info, #697b91); }
+.review-status { padding: .3rem .5rem; border-radius: .6rem; background: #fff0d3; color: #785700; font-size: .72rem; font-weight: 750; }
+dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .45rem; margin: .8rem 0; }
+dl div { display: grid; gap: .15rem; min-width: 0; }
+dt { color: var(--otziv-info, #697b91); font-size: .72rem; }
+dd { margin: 0; font-size: .83rem; font-weight: 700; overflow-wrap: anywhere; }
+.review-actions { justify-content: flex-start; align-items: center; }
+.review-actions .submit { border-color: #339b80; background: #ddf5eb; color: #075e48; }
+.review-form { display: grid; gap: .65rem; margin-top: .8rem; padding: .75rem; border: 1px solid #bad5e1; border-radius: .75rem; background: rgba(89, 163, 188, .08); }
+.review-form h3 { margin: 0; font-size: .93rem; }
+.review-form label { display: grid; gap: .3rem; font-size: .78rem; font-weight: 700; }
+.review-form input:not([type=checkbox]), .review-form textarea { width: 100%; min-width: 0; box-sizing: border-box; padding: .65rem; border: 1px solid #bac9d8; border-radius: .55rem; background: var(--otziv-white, #fff); color: inherit; font: inherit; }
+.review-form .statement-check { display: flex; align-items: center; }
+.statement-check input { width: 1.15rem; height: 1.15rem; }
+.review-error { margin: 0; padding: .55rem; border-radius: .5rem; background: #ffe8ed; color: #8b2338; font-size: .8rem; overflow-wrap: anywhere; }
+.review-empty { margin: 0; color: var(--otziv-info, #697b91); }
+
+:host-context(body.otziv-dark-theme) .specialist-reviews,
+:host-context(body.otziv-dark-theme) .review-card,
+:host-context(body.otziv-dark-theme) button,
+:host-context(body.otziv-dark-theme) .review-form input:not([type=checkbox]),
+:host-context(body.otziv-dark-theme) .review-form textarea { background: #202a35; color: #e9f0f7; border-color: #465669; }
+:host-context(body.otziv-dark-theme) .review-form { background: #263440; border-color: #465669; }
+:host-context(body.otziv-dark-theme) .review-status,
+:host-context(body.otziv-dark-theme) header h2 span { background: #524325; color: #f6dda2; }
+:host-context(body.otziv-dark-theme) .review-error { background: #513440; color: #ffd6e0; }
+:host-context(body.otziv-dark-theme) .review-actions .submit { background: #174d40; color: #d4fff0; }

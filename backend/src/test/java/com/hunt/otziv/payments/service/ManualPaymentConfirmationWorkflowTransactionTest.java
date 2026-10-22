@@ -150,6 +150,37 @@ class ManualPaymentConfirmationWorkflowTransactionTest {
     }
 
     @Test
+    void pendingSpecialistReviewBlocksGenericSourceConfirmation() {
+        Fixture f = new Fixture();
+        doThrow(new ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT))
+                .when(f.specialistReviewGuard).requireNoPendingReview(7L);
+
+        assertThatThrownBy(() -> f.workflow.confirmContractorPaymentSource(
+                71L, 100_00L, null, "fixture statement", "fixture actor"))
+                .isInstanceOf(ResponseStatusException.class);
+
+        verify(f.specialistReviewGuard).requireNoPendingReview(7L);
+        verify(f.links, never()).findByOrderIdForUpdate(anyLong());
+        verifyNoInteractions(f.settlement, f.notifications);
+    }
+
+    @Test
+    void pendingSpecialistReviewBlocksGenericUnpaidClosure() {
+        Fixture f = new Fixture();
+        doThrow(new ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT))
+                .when(f.specialistReviewGuard).requireNoPendingReview(7L);
+
+        assertThatThrownBy(() -> f.workflow.closeManualAsUnpaid(71L, true, true,
+                "fixture statement checked", "fixture actor",
+                new UsernamePasswordAuthenticationToken("fixture actor", "unused")))
+                .isInstanceOf(ResponseStatusException.class);
+
+        assertThat(f.link.getStatus()).isEqualTo(PaymentLinkStatus.WAITING_MANUAL_PAYMENT);
+        verify(f.links, never()).findByIdForUpdate(71L);
+        verifyNoInteractions(f.receipts, f.settlement);
+    }
+
+    @Test
     void expiredPublicValidationPreservesTheOwnersNoRollbackPolicyAndReleasesTheReservation() {
         Fixture f = new Fixture();
         f.link.setExpiresAt(LocalDateTime.now().minusHours(1));
@@ -198,6 +229,7 @@ class ManualPaymentConfirmationWorkflowTransactionTest {
         final ContractorPaymentLiveRoutingService liveRouting = mock(ContractorPaymentLiveRoutingService.class);
         final ContractorPaymentTargetAccessPolicy access = mock(ContractorPaymentTargetAccessPolicy.class);
         final ManagerAccessService managerAccess = mock(ManagerAccessService.class);
+        final SpecialistManualPaymentReviewGuard specialistReviewGuard = mock(SpecialistManualPaymentReviewGuard.class);
         final Order order = new Order();
         final PaymentLink link = new PaymentLink();
         final PaymentLinkTransactionExecutor executor = proxied(new PaymentLinkTransactionExecutor(), manager);
@@ -236,7 +268,7 @@ class ManualPaymentConfirmationWorkflowTransactionTest {
             workflow = proxied(new ManualPaymentConfirmationWorkflow(amounts, settlement, lifecycle,
                     cancellation, presenter, routes, links, orders, notifications, mock(ManualPaymentTaskService.class),
                     receipts, managerAccess, liveRouting, mock(ContractorActualPaymentAttributionService.class),
-                    access, executor), manager);
+                    access, executor, specialistReviewGuard), manager);
         }
 
     }

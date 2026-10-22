@@ -182,12 +182,14 @@
   background: #c461dc;
 }
 
-.review-actions button:disabled {
+.review-actions button:disabled,
+.review-actions button[aria-disabled="true"],
+.review-actions button[aria-disabled="true"]:hover {
   border-color: rgba(103, 116, 131, 0.12);
   color: rgba(103, 116, 131, 0.42);
   background: rgba(226, 232, 240, 0.58);
   box-shadow: none;
-  cursor: not-allowed;
+  cursor: help;
 }
 
 .review-card {

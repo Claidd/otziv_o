@@ -45,6 +45,14 @@ public class PaymentBankObservationService {
 
     static final Set<PaymentLinkStatus> SYNCABLE_BANK_STATUSES = Set.of(PaymentLinkStatus.INITIATED, PaymentLinkStatus.AUTHORIZED, PaymentLinkStatus.NEEDS_RECONCILIATION, PaymentLinkStatus.PARTIAL_REVERSED, PaymentLinkStatus.PARTIAL_REFUNDED);
 
+    // Paid attempts are checked by the scheduled worker at a much lower rate.
+    // Keep them out of the public-page polling path, which may run on every reload.
+    static final Set<PaymentLinkStatus> SETTLED_BANK_STATUSES = Set.of(
+            PaymentLinkStatus.CONFIRMED,
+            PaymentLinkStatus.TEST_CONFIRMED,
+            PaymentLinkStatus.AMOUNT_MISMATCH
+    );
+
     static final Duration PUBLIC_BANK_STATE_MIN_INTERVAL = Duration.ofSeconds(10);
 
     private final TbankRuntimeSettingsService runtimeSettingsService;
@@ -144,6 +152,19 @@ public class PaymentBankObservationService {
         return isTochkaPaymentLink(link) ? observeTochkaState(link) : observeTbankState(link);
     }
 
+    ProviderStateObservation observeBankStateForReconciliation(PaymentLink link) {
+        if (link == null || !SETTLED_BANK_STATUSES.contains(link.getStatus())) {
+            return observeBankState(link);
+        }
+        if (normalize(link.getTbankPaymentId()).isBlank()) {
+            return null;
+        }
+        if (isTochkaPaymentLink(link)) {
+            return requestTochkaState(link);
+        }
+        return runtimeSettingsService.isTbankEnabled() ? requestTbankState(link) : null;
+    }
+
     boolean isTochkaPaymentLink(PaymentLink link) {
         return link != null && link.getPaymentProfile() != null && paymentProfileService.isTochkaProvider(link.getPaymentProfile());
     }
@@ -152,6 +173,10 @@ public class PaymentBankObservationService {
         if (!shouldObserveBankState(link) || !isTochkaPaymentLink(link)) {
             return null;
         }
+        return requestTochkaState(link);
+    }
+
+    private TochkaStateObservation requestTochkaState(PaymentLink link) {
         String operationId = normalize(link.getTbankPaymentId());
         PaymentProfile entityProfile = link.getPaymentProfile();
         Long profileId = entityProfile == null ? null : entityProfile.getId();

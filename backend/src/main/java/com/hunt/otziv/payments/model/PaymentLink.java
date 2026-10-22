@@ -61,6 +61,11 @@ public class PaymentLink {
     @JoinColumn(name = "order_id", nullable = false)
     private Order order;
 
+    /** Scalar order identity for payment workflows that must not inspect the Order entity. */
+    public Long getOrderId() {
+        return order == null ? null : order.getId();
+    }
+
     @Column(name = "amount_kopecks", nullable = false)
     private long amountKopecks;
 
@@ -313,6 +318,10 @@ public class PaymentLink {
     /** Last authoritative terminal state reported by the payment provider. */
     @Column(name = "provider_terminal_status", length = 32)
     private String providerTerminalStatus;
+
+    /** Actual provider paymentType, distinct from the payment method offered by the link. */
+    @Column(name = "provider_payment_type", length = 32)
+    private String providerPaymentType;
 
     /** Durable idempotency fence for paid-order recovery after a full return. */
     @Column(name = "return_recovery_processed_at")

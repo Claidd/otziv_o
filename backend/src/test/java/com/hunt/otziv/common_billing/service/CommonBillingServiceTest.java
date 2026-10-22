@@ -445,7 +445,8 @@ class CommonBillingServiceTest {
                 accountCompanyRepository, invoiceRepository, invoiceOrderRepository, paymentRefRepository,
                 orderRepository, orderAggregateMutationLockService, nextOrderRequests,
                 paymentLinkRepository, orderStatusService, badReviewTaskService, appSettingService,
-                publicationBlockerService);
+                publicationBlockerService,
+                org.mockito.Mockito.mock(com.hunt.otziv.payments.service.SpecialistManualPaymentReviewGuard.class));
         ReflectionTestUtils.setField(service, "invoiceMembershipWorkflow", membership);
         CommonBillingCompanyReconciliationWorkflow companyReconciliation = new CommonBillingCompanyReconciliationWorkflow(
                 membership, manualPayments, initialization, settlement, accountRepository,
@@ -4294,6 +4295,32 @@ class CommonBillingServiceTest {
     }
 
     @Test
+    void commonInvoiceDigitalRubleRequiresApprovedSbpInTheFrozenModes() {
+        CommonInvoiceSettlementService settlement =
+                (CommonInvoiceSettlementService) ReflectionTestUtils.getField(service, "settlementService");
+        assertNotNull(settlement);
+
+        assertEquals(TochkaPaymentMode.SBP, settlement.observedTochkaPaymentMode(
+                "digitalRuble", "APPROVED", List.of(TochkaPaymentMode.SBP, TochkaPaymentMode.CARD)
+        ));
+        assertEquals(TochkaPaymentMode.SBP, settlement.observedTochkaPaymentMode(
+                "digitalRuble", "REFUNDED_PARTIALLY", List.of(TochkaPaymentMode.SBP)
+        ));
+        assertEquals(TochkaPaymentMode.SBP, settlement.observedTochkaPaymentMode(
+                "digitalRuble", "REFUNDED", List.of(TochkaPaymentMode.SBP)
+        ));
+        assertThrows(TochkaProviderException.class, () -> settlement.observedTochkaPaymentMode(
+                "digitalRuble", "APPROVED", List.of(TochkaPaymentMode.CARD)
+        ));
+        assertThrows(IllegalArgumentException.class, () -> settlement.observedTochkaPaymentMode(
+                "digitalRuble", "AUTHORIZED", List.of(TochkaPaymentMode.SBP)
+        ));
+        assertThrows(IllegalArgumentException.class, () -> settlement.observedTochkaPaymentMode(
+                "DigitalRuble", "APPROVED", List.of(TochkaPaymentMode.SBP)
+        ));
+    }
+
+    @Test
     void tochkaCreateResponseRejectsEveryFrozenIdentityMismatchAsOutcomeUnknown() {
         CommonInvoice invoice = invoice(account());
         invoice.setStatus(CommonInvoiceStatus.READY);
@@ -4440,7 +4467,7 @@ class CommonBillingServiceTest {
                 new PaymentInfoResponse(new PaymentInfoData(List.of(approved)), new ApiMeta(1))
         );
         when(tochkaPaymentOperationMapper.map(eq(approved), any(), eq(false))).thenReturn(
-                new MappedPayment(PaymentLinkStatus.CONFIRMED, PaymentMethod.SBP_QR, "APPROVED")
+                new MappedPayment(PaymentLinkStatus.CONFIRMED, PaymentMethod.SBP_QR, "APPROVED", "sbp")
         );
         when(tochkaClient.refund(eq(runtime), any())).thenReturn(new RefundResponse(
                 new RefundResponseData(
@@ -4456,6 +4483,83 @@ class CommonBillingServiceTest {
         assertEquals("CANCEL_PENDING", ref.getStatus());
         assertTrue(ref.getReason().startsWith("tochka_refund_submitting:"));
         verify(tochkaClient, times(1)).refund(eq(runtime), any());
+    }
+
+    @Test
+    void digitalRubleCommonInvoiceCancellationRequiresBankCabinetAndNeverPostsRefund() {
+        CommonInvoice invoice = invoice(account());
+        invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+        PaymentProfile entityProfile = tochkaEntityProfile();
+        TochkaPaymentProfile runtime = tochkaRuntimeProfile();
+        CommonInvoicePaymentRef ref = tochkaCancelPendingRef(invoice);
+        paymentRefStore.put(ref.getId(), ref);
+
+        when(paymentRefRepository.findProviderReconciliationCandidates(
+                eq(PaymentProfile.PROVIDER_TOCHKA), any(), any(LocalDateTime.class), any(Pageable.class)
+        )).thenReturn(List.of(ref));
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(paymentProfileService.lockByIdForRouting(2L)).thenReturn(entityProfile);
+        when(paymentProfileService.isTochkaProvider(entityProfile)).thenReturn(true);
+        when(tochkaPaymentProfileResolver.resolveForExistingPayment(entityProfile)).thenReturn(runtime);
+        PaymentOperation approved = tochkaOperation("APPROVED", "digitalRuble");
+        when(tochkaClient.getPaymentInfo(runtime, "tochka-operation-10")).thenReturn(
+                new PaymentInfoResponse(new PaymentInfoData(List.of(approved)), new ApiMeta(1))
+        );
+        when(tochkaPaymentOperationMapper.map(eq(approved), any(), eq(false))).thenReturn(
+                new MappedPayment(PaymentLinkStatus.CONFIRMED, PaymentMethod.SBP_QR,
+                        "APPROVED", "digitalRuble")
+        );
+
+        assertEquals(1, service.reconcileTochkaPaymentRefs(10));
+        assertEquals("digitalRuble", ref.getProviderPaymentType());
+        assertEquals("CANCEL_PENDING", ref.getStatus());
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+        assertTrue(invoice.getLastError().contains("кабинете Точки"));
+        verify(tochkaClient, never()).refund(any(), any());
+
+        PaymentOperation onRefund = tochkaOperation("ON-REFUND", "digitalRuble");
+        when(tochkaClient.getPaymentInfo(runtime, "tochka-operation-10")).thenReturn(
+                new PaymentInfoResponse(new PaymentInfoData(List.of(onRefund)), new ApiMeta(1))
+        );
+        when(tochkaPaymentOperationMapper.map(eq(onRefund), any(), eq(false))).thenReturn(
+                new MappedPayment(PaymentLinkStatus.NEEDS_RECONCILIATION, PaymentMethod.SBP_QR,
+                        "ON-REFUND", "digitalRuble")
+        );
+        assertEquals(1, service.reconcileTochkaPaymentRefs(10));
+        assertEquals("CANCEL_PENDING", ref.getStatus());
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+        verify(tochkaClient, never()).refund(any(), any());
+
+        PaymentOperation refunded = tochkaOperation("REFUNDED", "digitalRuble");
+        when(tochkaClient.getPaymentInfo(runtime, "tochka-operation-10")).thenReturn(
+                new PaymentInfoResponse(new PaymentInfoData(List.of(refunded)), new ApiMeta(1))
+        );
+        when(tochkaPaymentOperationMapper.map(eq(refunded), any(), eq(false))).thenReturn(
+                new MappedPayment(PaymentLinkStatus.REFUNDED, PaymentMethod.SBP_QR,
+                        "REFUNDED", "digitalRuble")
+        );
+        assertEquals(1, service.reconcileTochkaPaymentRefs(10));
+        assertEquals("CANCELED", ref.getStatus());
+        verify(tochkaClient, never()).refund(any(), any());
+    }
+
+    @Test
+    void conflictingActualTochkaPaymentTypeQuarantinesCommonInvoiceWithoutCrediting() {
+        CommonInvoice invoice = invoice(account());
+        invoice.setStatus(CommonInvoiceStatus.READY);
+        CommonInvoicePaymentRef ref = tochkaCancelPendingRef(invoice);
+        ref.setStatus("CURRENT");
+        ref.setProviderPaymentType("sbp");
+        CommonInvoiceSettlementService settlement =
+                (CommonInvoiceSettlementService) ReflectionTestUtils.getField(service, "settlementService");
+        assertNotNull(settlement);
+
+        assertFalse(settlement.recordTochkaActualPaymentType(invoice, ref, "digitalRuble"));
+
+        assertEquals("INIT_CONFLICT", ref.getStatus());
+        assertEquals("sbp", ref.getProviderPaymentType());
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+        verify(tochkaClient, never()).refund(any(), any());
     }
 
     @Test
@@ -4479,7 +4583,7 @@ class CommonBillingServiceTest {
                 new PaymentInfoResponse(new PaymentInfoData(List.of(approved)), new ApiMeta(1))
         );
         when(tochkaPaymentOperationMapper.map(eq(approved), any(), eq(false))).thenReturn(
-                new MappedPayment(PaymentLinkStatus.CONFIRMED, PaymentMethod.SBP_QR, "APPROVED")
+                new MappedPayment(PaymentLinkStatus.CONFIRMED, PaymentMethod.SBP_QR, "APPROVED", "sbp")
         );
         when(tochkaClient.refund(eq(runtime), any())).thenReturn(new RefundResponse(
                 new RefundResponseData(
@@ -4535,7 +4639,7 @@ class CommonBillingServiceTest {
                 .thenThrow(new TochkaProviderException("temporary GET failure", false, null))
                 .thenReturn(new PaymentInfoResponse(new PaymentInfoData(List.of(approved)), new ApiMeta(1)));
         when(tochkaPaymentOperationMapper.map(eq(approved), any(), eq(false))).thenReturn(
-                new MappedPayment(PaymentLinkStatus.CONFIRMED, PaymentMethod.SBP_QR, "APPROVED")
+                new MappedPayment(PaymentLinkStatus.CONFIRMED, PaymentMethod.SBP_QR, "APPROVED", "sbp")
         );
 
         assertEquals(1, service.reconcileTochkaPaymentRefs(10));
@@ -4622,7 +4726,7 @@ class CommonBillingServiceTest {
         when(paymentProfileService.isTochkaProvider(entityProfile)).thenReturn(true);
         when(tochkaPaymentProfileResolver.resolveForExistingPayment(entityProfile)).thenReturn(runtime);
         when(tochkaPaymentOperationMapper.map(any(PaymentOperation.class), any(), eq(false))).thenReturn(
-                new MappedPayment(PaymentLinkStatus.CONFIRMED, PaymentMethod.SBP_QR, "APPROVED")
+                new MappedPayment(PaymentLinkStatus.CONFIRMED, PaymentMethod.SBP_QR, "APPROVED", "sbp")
         );
 
         assertTrue(service.handleTochkaWebhook(webhook));
@@ -8179,6 +8283,137 @@ class CommonBillingServiceTest {
         assertEquals(400, error.getStatusCode().value());
         verify(invoiceRepository, never()).save(any());
         verify(paymentRefRepository, never()).save(any());
+    }
+
+    @Test
+    void inconsistentSignedTbankConfirmationCannotPayCommonInvoice() throws Exception {
+        Map<String, String> valid = confirmedWebhookPayload();
+        PaymentProfile profile = paymentProfile();
+        when(paymentProfileService.findByTerminalKey("terminal")).thenReturn(Optional.of(profile));
+        when(paymentProfileService.toRuntimeForTerminal(profile, "terminal")).thenReturn(runtimeProfile());
+        when(tokenSigner.matches(any(), eq("password"), eq("token"))).thenReturn(true);
+
+        for (Map.Entry<String, String> invalid : Map.of(
+                "Success", "false", "ErrorCode", "5", "Amount", "0", "PaymentId", " ").entrySet()) {
+            Map<String, String> payload = new LinkedHashMap<>(valid);
+            payload.put(invalid.getKey(), invalid.getValue());
+            assertThrows(ResponseStatusException.class,
+                    () -> service.handleTbankWebhook(payload), invalid.getKey());
+        }
+
+        verify(invoiceRepository, never()).save(any());
+        verify(paymentRefRepository, never()).save(any());
+        verify(orderTransactionService, never()).handlePaymentStatus(any(), anyBoolean());
+    }
+
+    @Test
+    void delayedAuthorizedWebhookCannotDowngradeRefLoadedBeforePaidInvoiceLock() throws Exception {
+        CommonInvoice invoice = invoice(account());
+        invoice.setStatus(CommonInvoiceStatus.READY);
+        invoice.setAmountKopecks(100_000L);
+        CommonInvoicePaymentRef ref = paymentRef(203L, invoice, "CURRENT",
+                "old-order", "old-payment", "terminal", 100_000L);
+        paymentRefStore.put(ref.getId(), ref);
+        Map<String, String> payload = confirmedWebhookPayload();
+        payload.put("Status", "AUTHORIZED");
+        PaymentProfile profile = paymentProfile();
+        when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(paymentProfileService.findByTerminalKey("terminal")).thenReturn(Optional.of(profile));
+        when(paymentProfileService.toRuntimeForTerminal(profile, "terminal")).thenReturn(runtimeProfile());
+        when(tokenSigner.matches(payload, "password", "token")).thenReturn(true);
+        doAnswer(invocation -> {
+            if (invocation.getArgument(0) == invoice) {
+                // A confirmation committed while this callback waited for the
+                // invoice lock; refresh must expose the paid invoice too.
+                invoice.setStatus(CommonInvoiceStatus.PAID);
+                invoice.setPaidKopecks(100_000L);
+            } else if (invocation.getArgument(0) == ref) {
+                // Another transaction completed while this callback waited for
+                // the invoice lock; refresh must expose the committed ref state.
+                ref.setStatus("APPLIED");
+                ref.setProviderStatus("CONFIRMED");
+            }
+            return null;
+        }).when(entityManager).refresh(any());
+
+        assertTrue(service.handleTbankWebhook(payload));
+
+        assertEquals(CommonInvoiceStatus.PAID, invoice.getStatus());
+        assertEquals("APPLIED", ref.getStatus());
+        assertEquals("CONFIRMED", ref.getProviderStatus());
+        verify(entityManager, atLeastOnce()).refresh(invoice);
+        verify(entityManager).refresh(ref);
+        verify(paymentRefRepository, never()).save(ref);
+        verify(orderTransactionService, never()).handlePaymentStatus(any(), anyBoolean());
+    }
+
+    @Test
+    void repeatedConfirmedWebhookRepairsSoleStaleRefWithoutReopeningPaidInvoice() throws Exception {
+        CommonInvoice invoice = invoice(account());
+        invoice.setStatus(CommonInvoiceStatus.PAID);
+        invoice.setPaymentMethod("TBANK");
+        invoice.setAmountKopecks(100_000L);
+        invoice.setPaidKopecks(100_000L);
+        CommonInvoiceOrder item = item(invoice, order(1L));
+        item.setPaid(true);
+        item.setPaymentMethod("TBANK");
+        CommonInvoicePaymentRef ref = paymentRef(203L, invoice, "CURRENT",
+                "old-order", "old-payment", "terminal", 100_000L);
+        paymentRefStore.put(ref.getId(), ref);
+        Map<String, String> payload = confirmedWebhookPayload();
+        PaymentProfile profile = paymentProfile();
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
+        when(paymentRefRepository.findByInvoiceIdOrderByCreatedAtAsc(10L)).thenReturn(List.of(ref));
+        when(paymentProfileService.findByTerminalKey("terminal")).thenReturn(Optional.of(profile));
+        when(paymentProfileService.toRuntimeForTerminal(profile, "terminal")).thenReturn(runtimeProfile());
+        when(tokenSigner.matches(payload, "password", "token")).thenReturn(true);
+
+        assertTrue(service.handleTbankWebhook(payload));
+
+        assertEquals(CommonInvoiceStatus.PAID, invoice.getStatus());
+        assertEquals(100_000L, invoice.getPaidKopecks());
+        assertEquals("APPLIED", ref.getStatus());
+        assertEquals("CONFIRMED", ref.getProviderStatus());
+        assertEquals("confirmed_after_paid_exact_tbank_ref", ref.getReason());
+        verify(paymentRefRepository).save(ref);
+        verify(invoiceRepository, never()).save(invoice);
+        verify(orderTransactionService, never()).handlePaymentStatus(any(), anyBoolean());
+    }
+
+    @Test
+    void confirmedSecondRefOnPaidInvoiceStillRequiresAttention() throws Exception {
+        CommonInvoice invoice = invoice(account());
+        invoice.setStatus(CommonInvoiceStatus.PAID);
+        invoice.setPaymentMethod("TBANK");
+        invoice.setAmountKopecks(100_000L);
+        invoice.setPaidKopecks(100_000L);
+        CommonInvoiceOrder item = item(invoice, order(1L));
+        item.setPaid(true);
+        item.setPaymentMethod("TBANK");
+        CommonInvoicePaymentRef stale = paymentRef(203L, invoice, "CURRENT",
+                "old-order", "old-payment", "terminal", 100_000L);
+        CommonInvoicePaymentRef applied = paymentRef(202L, invoice, "APPLIED",
+                "other-order", "other-payment", "terminal", 100_000L);
+        paymentRefStore.put(stale.getId(), stale);
+        paymentRefStore.put(applied.getId(), applied);
+        Map<String, String> payload = confirmedWebhookPayload();
+        PaymentProfile profile = paymentProfile();
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(paymentRefRepository.findByInvoiceIdOrderByCreatedAtAsc(10L)).thenReturn(List.of(applied, stale));
+        when(paymentProfileService.findByTerminalKey("terminal")).thenReturn(Optional.of(profile));
+        when(paymentProfileService.toRuntimeForTerminal(profile, "terminal")).thenReturn(runtimeProfile());
+        when(tokenSigner.matches(payload, "password", "token")).thenReturn(true);
+
+        assertTrue(service.handleTbankWebhook(payload));
+
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+        assertEquals("CONFIRMED", stale.getStatus());
+        assertEquals("APPLIED", applied.getStatus());
+        assertTrue(invoice.getLastError().startsWith("late_tbank_payment"));
+        verify(invoiceRepository).save(invoice);
+        verify(orderTransactionService, never()).handlePaymentStatus(any(), anyBoolean());
     }
 
     @Test

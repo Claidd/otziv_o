@@ -1,0 +1,77 @@
+{
+  "schema": "otziv-anonymous-download-v1",
+  "component": "postgres",
+  "commit": "0c56e0bb1ed6cc3310924144db3bf465970a82d1",
+  "run": "39599114842",
+  "attempt": "1",
+  "manifestSet": "c36-postgres",
+  "manifestPath": "infrastructure/runtime-security/reviewed-images-c36-postgres.json",
+  "runner": "GitHub Actions 1000020545",
+  "startedAt": "2026-10-21T12:25:42.022Z",
+  "sourcePublicationSha256": "5e23336fa73fd724dab0cc29df433bfba11064b6af5a264d60611299b36fabfa",
+  "result": "PASS",
+  "accountCredentialsUsed": false,
+  "dockerCredentialHelpersAvailable": false,
+  "dockerTransport": "unix:///var/run/docker.sock",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:26663e414ba75586834873d6a43d8c1a105c12f58804e7fb961581d61a6dbdd5",
+  "imageAbsentBeforePull": true,
+  "daemonVersion": "\"28.0.4\"",
+  "attestationEvidence": {
+    "schema": "otziv-registry-evidence-v1",
+    "imageManifestDigest": "sha256:3ea4c6826eb5a9d8024b0bf216064f45bf0fa58db255441740b4e1e73224942d",
+    "predicates": [
+      "https://slsa.dev/provenance/v1",
+      "https://spdx.dev/Document"
+    ],
+    "artifacts": [
+      {
+        "file": "registry-index.json",
+        "digest": "sha256:26663e414ba75586834873d6a43d8c1a105c12f58804e7fb961581d61a6dbdd5",
+        "size": 857
+      },
+      {
+        "file": "registry-amd64-manifest.json",
+        "digest": "sha256:3ea4c6826eb5a9d8024b0bf216064f45bf0fa58db255441740b4e1e73224942d",
+        "size": 1426
+      },
+      {
+        "file": "registry-amd64-config.json",
+        "digest": "sha256:6cca407023398603e7122cb588dbed2078730b34774c9b8366191526a47149fc",
+        "size": 4521
+      },
+      {
+        "file": "registry-attestation-0.json",
+        "digest": "sha256:b10454069a3a398b0461ea90f176d6034af019a82caadbcab038ee4d3363b838",
+        "size": 1112
+      },
+      {
+        "file": "registry-attestation-0-payload-0.json",
+        "digest": "sha256:d0baa59727ded00c3189667c80df99b2810ec3c39ec4bf63cc3673ff1607f561",
+        "size": 1609526
+      },
+      {
+        "file": "registry-attestation-0-payload-1.json",
+        "digest": "sha256:a746bdf2792475ebfaf7451b4e69cedfe0ea3d883b96bbee181e9d9382820093",
+        "size": 22037
+      }
+    ],
+    "sourceBinding": "LOCAL_GIT_METADATA_CHECKED_AGAINST_CLEAN_CHECKOUT_NOT_INDEPENDENT_SOURCE_AUTHENTICATION"
+  },
+  "pullExitCode": 0,
+  "imageId": "sha256:6cca407023398603e7122cb588dbed2078730b34774c9b8366191526a47149fc",
+  "platform": "linux/amd64",
+  "labels": {
+    "com.otziv.gosu.go": "1.27.3",
+    "com.otziv.gosu.source": "https://github.com/tianon/gosu/tree/6456aaa0f3c854d199d0f037f068eb97515b7513",
+    "com.otziv.gosu.source-sha256": "33d7537d588ea49458b9509bcf4554bdf5ceacc66da71e5caa1058ea3b689c3b",
+    "com.otziv.postgres.optional-interfaces": "LLVM JIT and systemd-notify omitted; SQL/XML ICU SSL GSS LDAP PAM SELinux UUID lz4 zstd retained",
+    "com.otziv.publication.revision": "0c56e0bb1ed6cc3310924144db3bf465970a82d1",
+    "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+    "com.otziv.reviewed-component": "postgres",
+    "com.otziv.security.generation": "c16-pcre2",
+    "com.otziv.security.proof": "postgres-c36-gosu-go1273",
+    "com.otziv.security.scope": "C16 PCRE2 10.48; unchanged C14 PostgreSQL17.11, glibc, locales and entrypoint"
+  },
+  "publicDownloadReadiness": "VERIFIED_ANONYMOUS_DIGEST_PULL",
+  "finishedAt": "2026-10-21T12:25:49.353Z"
+}

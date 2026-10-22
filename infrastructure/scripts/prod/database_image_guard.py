@@ -34,6 +34,15 @@ EXTRA_MOUNTS = {"mysql": {"/backup", "/var/lib/mysql-files"}, "keycloak-postgres
 REVIEWED_MYSQL_CONFIG = "sha256:985c9594c5a0a7ff588a7a86819dacd2b47847984fdb56dce825cc949c948124"
 REVIEWED_MYSQL_INDEX = "sha256:28521a2c331136328abde7b504ae0ded617c74caa8a4a2554f1f0494d4df9009"
 REVIEWED_MYSQL_REFERENCE = "ghcr.io/claidd/otziv-security@" + REVIEWED_MYSQL_INDEX
+REVIEWED_MYSQL_C37_CONFIG = "sha256:dcde12d588294e67f7de3a037ec69fd00d0e50c0c4b5d81dc3400545abe298dc"
+REVIEWED_MYSQL_C37_INDEX = "sha256:eda70c6cb0a835e788a5ec96539610e9ef6a574ffc4129c9c5717acd647e159a"
+REVIEWED_MYSQL_C37_REFERENCE = "ghcr.io/claidd/otziv-security@" + REVIEWED_MYSQL_C37_INDEX
+REVIEWED_MYSQL_NATIVE_IDS = {
+    REVIEWED_MYSQL_CONFIG: REVIEWED_MYSQL_REFERENCE,
+    REVIEWED_MYSQL_INDEX: REVIEWED_MYSQL_REFERENCE,
+    REVIEWED_MYSQL_C37_CONFIG: REVIEWED_MYSQL_C37_REFERENCE,
+    REVIEWED_MYSQL_C37_INDEX: REVIEWED_MYSQL_C37_REFERENCE,
+}
 NATIVE_MYSQL_OPTIONS = {
     "user": "999", "character-set-server": "utf8mb4", "collation-server": "utf8mb4_unicode_ci",
     "default-time-zone": "+08:00", "restrict-fk-on-non-standard-key": "OFF",
@@ -230,12 +239,13 @@ def checked_override(config, docker):
         target_image = one_object(docker("image", "inspect", image))
         target_id = target_image.get("Id", "")
         require(isinstance(target_id, str) and IMAGE_ID.fullmatch(target_id), f"Image has no immutable identity: {service_name}")
-        native_mysql = service_name == "mysql" and target_id in {REVIEWED_MYSQL_CONFIG, REVIEWED_MYSQL_INDEX}
+        native_mysql = service_name == "mysql" and target_id in REVIEWED_MYSQL_NATIVE_IDS
         if native_mysql:
             require(target_image.get("Os") == "linux" and target_image.get("Architecture") == "amd64",
                     "Reviewed MySQL platform changed")
-            if target_id == REVIEWED_MYSQL_INDEX:
-                require(REVIEWED_MYSQL_REFERENCE in target_image.get("RepoDigests", []), "Reviewed MySQL immutable index binding missing")
+            if target_id in {REVIEWED_MYSQL_INDEX, REVIEWED_MYSQL_C37_INDEX}:
+                require(REVIEWED_MYSQL_NATIVE_IDS[target_id] in target_image.get("RepoDigests", []),
+                        "Reviewed MySQL immutable index binding missing")
         checked_launch(service, target_image.get("Config"), service_name, data_path, native_mysql=native_mysql)
         mounts = service.get("volumes", [])
         require(isinstance(mounts, list) and all(isinstance(mount, dict) for mount in mounts), f"Invalid database mounts: {service_name}")

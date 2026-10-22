@@ -68,6 +68,38 @@ public class ManagerControlAutomationRepairWorkflow {
             ScheduledClientMessageService.RecoveredBadReviewDeliveryResult result = recovered.get();
             return resolveRepairedConcreteItem(concreteItem, control, result.message(), principal, result.retryScheduled() ? "Подтверждена старая отправка счета и запланирована безопасная новая" : "Подтверждена и закрыта зависшая отправка счета");
         }
+        ScheduledClientMessageState uncertainState = scheduledClientMessageStateRepository
+                .findById(issue.stateId()).orElse(null);
+        if (uncertainState != null && ClientMessageStateSafety.MANUAL_DELIVERY_HANDOFF_PENDING.equals(
+                uncertainState.getLastErrorCode())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Эта отправка передана на ручную проверку. Автоматический повтор остаётся заблокированным; "
+                    + "завершите общение с клиентом по карточке.");
+        }
+        if (uncertainState != null && uncertainState.getScenario() != ClientMessageScenario.BAD_REVIEW_INVOICE
+                && ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN.equals(uncertainState.getLastErrorCode())) {
+            var receipt = scheduledClientMessageService.recoverUncertainOrdinaryDelivery(issue.stateId());
+            if (receipt == ScheduledClientMessageService.OrdinaryDeliveryRecoveryResult.HISTORY_UNAVAILABLE) {
+                throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                        "История WhatsApp сейчас недоступна. Отправка остаётся заблокированной, чтобы не создать дубль. "
+                        + "Повторите «Починить» после восстановления соединения с WhatsApp.");
+            }
+            if (receipt == ScheduledClientMessageService.OrdinaryDeliveryRecoveryResult.UNRESOLVED) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Исход предыдущей отправки пока не подтверждён. Система проверила сохранённую операцию и историю чата, "
+                        + "но достоверной квитанции нет. Проверьте сообщение в клиентском чате; автоматический повтор "
+                        + "заблокирован, чтобы не отправить его дважды. После восстановления истории нажмите «Починить» ещё раз.");
+            }
+            if (receipt == ScheduledClientMessageService.OrdinaryDeliveryRecoveryResult.SENT_CONFIRMED) {
+                if (managerAutomationFailureService.findIssue(manager, concreteItem.getEntityType(), concreteItem.getEntityId()).isPresent()) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT,
+                            "Отправка подтверждена по квитанции, но у карточки осталась другая ошибка. Обновите список замечаний.");
+                }
+                return resolveRepairedConcreteItem(concreteItem, control,
+                        "Предыдущая отправка подтверждена по WhatsApp; повторного сообщения клиенту не было",
+                        principal, "Подтверждена зависшая отправка по квитанции WhatsApp");
+            }
+        }
         ScheduledClientMessageService.ManualRetryResult retry = scheduledClientMessageService.retryNow(issue.stateId());
         Optional<ManagerAutomationFailureService.AutomationFailureIssue> remaining = managerAutomationFailureService.findIssue(manager, concreteItem.getEntityType(), concreteItem.getEntityId());
         if (remaining.isPresent()) {

@@ -7,7 +7,11 @@ import com.hunt.otziv.client_messages.dto.TelegramTransferCopyButton;
 import com.hunt.otziv.maxbot.service.MaxBotClient;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.whatsapp.dto.WhatsAppSendResult;
+import com.hunt.otziv.whatsapp.dto.WhatsAppChatMessageCursor;
+import com.hunt.otziv.whatsapp.dto.WhatsAppOperationEnvelope;
 import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Locale;
 import java.util.List;
 import java.util.Map;
@@ -56,6 +60,59 @@ public class ClientChatMessageSender implements com.hunt.otziv.client_messages.a
             log.warn("Scheduled delivery receipt unavailable: operationId={}", operationId);
         }
         return ClientMessageOperationFence.unknown();
+    }
+
+    /** Manual receipt recovery only: the gateway validates the candidate's own ACK and frozen envelope. */
+    public ClientMessageSendResult recoverRecordedOutcomeFromChat(String operationId, LocalDateTime preparedAt) {
+        ClientMessageSendResult current = recordedOutcome(operationId);
+        if (current.sent() || isKnownUnsent(current) || preparedAt == null) return current;
+        try {
+            var frozen = businessOperations.findFrozen(operationId).orElse(null);
+            if (frozen == null || !"send-group".equals(frozen.kind())) return current;
+            long afterTimestamp = Math.max(0L,
+                    preparedAt.minusMinutes(2).atZone(ZoneId.systemDefault()).toEpochSecond());
+            String expectedHash = WhatsAppOperationEnvelope.groupHash(
+                    frozen.clientId(), frozen.destination(), frozen.message());
+            java.util.List<com.hunt.otziv.whatsapp.dto.WhatsAppReconciledMessage> candidates;
+            try {
+                candidates = whatsAppService.reconcileGroupMessagesForReceipt(frozen.clientId(),
+                        List.of(new WhatsAppChatMessageCursor(frozen.destination(), afterTimestamp)));
+            } catch (RuntimeException unavailable) {
+                log.warn("WhatsApp history unavailable for saved operation: operationId={}", operationId);
+                return ClientMessageSendResult.failed("whatsapp_history_unavailable",
+                        "История WhatsApp недоступна для сверки отправки");
+            }
+            boolean matchingCandidateRejected = false;
+            for (var candidate : candidates) {
+                if (candidate == null || !Boolean.TRUE.equals(candidate.fromMe())
+                        || !frozen.destination().equals(candidate.groupId())
+                        || candidate.messageId() == null || candidate.messageId().isBlank()
+                        || candidate.message() == null
+                        || !frozen.message().trim().equals(candidate.message().trim())) continue;
+                matchingCandidateRejected = true;
+                try {
+                    var receipt = whatsAppService.reconcileOperation(
+                            frozen.clientId(), operationId, candidate.messageId());
+                    if (receipt != null && operationId.equals(receipt.operationId())
+                            && "SUCCEEDED".equals(receipt.state())
+                            && candidate.messageId().equals(receipt.messageId())
+                            && expectedHash.equals(receipt.envelopeHash())) {
+                        return ClientMessageSendResult.sent("WhatsApp", receipt.messageId());
+                    }
+                } catch (RuntimeException rejectedEvidence) {
+                    matchingCandidateRejected = true;
+                    log.warn("WhatsApp delivery candidate did not confirm saved operation: operationId={}", operationId);
+                }
+            }
+            return ClientMessageSendResult.failed(
+                    matchingCandidateRejected ? "whatsapp_history_evidence_rejected" : "whatsapp_history_checked_no_receipt",
+                    matchingCandidateRejected
+                            ? "В истории найдено похожее сообщение без подтверждённой квитанции операции"
+                            : "История WhatsApp проверена; квитанция прежней отправки не найдена");
+        } catch (RuntimeException unavailable) {
+            log.warn("WhatsApp delivery chat receipt unavailable: operationId={}", operationId);
+        }
+        return current;
     }
 
     @Override public boolean publicationProgressEnabled(Long companyId) {

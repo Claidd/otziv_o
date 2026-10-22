@@ -9,6 +9,7 @@ const BASELINE_PATH = 'infrastructure/runtime-security/reviewed-images.json';
 const C12_PATH = 'infrastructure/runtime-security/reviewed-images-c12-phpmyadmin.json';
 const C12_CONTEXT = 'infrastructure/runtime-security/builds/phpmyadmin-alpine';
 const RELEASE_SETS = Object.freeze({
+  'c34-certbot': { component: 'certbot', path: 'infrastructure/runtime-security/reviewed-images-c34-certbot.json', context: 'infrastructure/runtime-security/builds/c34-certbot', dockerfile: 'infrastructure/runtime-security/builds/c34-certbot/Dockerfile' },
   'c25-certbot': { component: 'certbot', path: 'infrastructure/runtime-security/reviewed-images-c25-certbot.json', context: 'infrastructure/runtime-security/builds/c25-certbot', dockerfile: 'infrastructure/runtime-security/builds/c25-certbot/Dockerfile' },
 
   'c21-mysql': { component: 'mysql', path: 'infrastructure/runtime-security/reviewed-images-c21-mysql.json',
@@ -44,6 +45,7 @@ const RELEASE_SETS = Object.freeze({
   'c22-nginx': { component: 'nginx', path: 'infrastructure/runtime-security/reviewed-images-c22-nginx.json', context: 'infrastructure/runtime-security/builds/c22-nginx', dockerfile: 'infrastructure/runtime-security/builds/c22-nginx/Dockerfile' },
   'c22-mysql': { component: 'mysql', path: 'infrastructure/runtime-security/reviewed-images-c22-mysql.json', context: 'infrastructure/runtime-security/builds/c22-mysql', dockerfile: 'infrastructure/runtime-security/builds/c22-mysql/Dockerfile' },
   'c30-mysql': { component: 'mysql', path: 'infrastructure/runtime-security/reviewed-images-c30-mysql.json', context: 'infrastructure/runtime-security/builds/c30-mysql', dockerfile: 'infrastructure/runtime-security/builds/c30-mysql/Dockerfile' },
+  'c37-mysql': { component: 'mysql', path: 'infrastructure/runtime-security/reviewed-images-c37-mysql.json', context: 'infrastructure/runtime-security/builds/c37-mysql', dockerfile: 'infrastructure/runtime-security/builds/c37-mysql/Dockerfile' },
   'c22-keycloak': { component: 'keycloak', path: 'infrastructure/runtime-security/reviewed-images-c22-keycloak.json', context: 'infrastructure/runtime-security/builds/c22-keycloak', dockerfile: 'infrastructure/runtime-security/builds/c22-keycloak/Dockerfile' },
   'c22-mc': { component: 'mc', path: 'infrastructure/runtime-security/reviewed-images-c22-mc.json', context: 'infrastructure/runtime-security/builds/c22-mc', dockerfile: 'infrastructure/runtime-security/builds/c22-mc/Dockerfile' },
   'c22-phpmyadmin': { component: 'phpmyadmin', path: 'infrastructure/runtime-security/reviewed-images-c22-phpmyadmin.json', context: 'infrastructure/runtime-security/builds/c22-phpmyadmin', dockerfile: 'infrastructure/runtime-security/builds/c22-phpmyadmin/Dockerfile' },
@@ -53,6 +55,7 @@ const RELEASE_SETS = Object.freeze({
   'c23-alloy': { component: 'alloy', path: 'infrastructure/runtime-security/reviewed-images-c23-alloy.json', context: 'infrastructure/runtime-security/builds/c23-alloy', dockerfile: 'infrastructure/runtime-security/builds/c23-alloy/Dockerfile' },
   'c24-keycloak': { component: 'keycloak', path: 'infrastructure/runtime-security/reviewed-images-c24-keycloak.json', context: 'infrastructure/runtime-security/builds/c24-keycloak', dockerfile: 'infrastructure/runtime-security/builds/c24-keycloak/Dockerfile' },
   'c26-keycloak': { component: 'keycloak', path: 'infrastructure/runtime-security/reviewed-images-c26-keycloak.json', context: 'infrastructure/runtime-security/builds/c26-keycloak', dockerfile: 'infrastructure/runtime-security/builds/c26-keycloak/Dockerfile' },
+  'c35-keycloak': { component: 'keycloak', path: 'infrastructure/runtime-security/reviewed-images-c35-keycloak.json', context: 'infrastructure/runtime-security/builds/c35-keycloak', dockerfile: 'infrastructure/runtime-security/builds/c35-keycloak/Dockerfile' },
   'c26-nginx': { component: 'nginx', path: 'infrastructure/runtime-security/reviewed-images-c26-nginx.json', context: 'infrastructure/runtime-security/builds/c26-nginx', dockerfile: 'infrastructure/runtime-security/builds/c26-nginx/Dockerfile' },
   'c28-nginx': { component: 'nginx', path: 'infrastructure/runtime-security/reviewed-images-c28-nginx.json', context: 'infrastructure/runtime-security/builds/c28-nginx', dockerfile: 'infrastructure/runtime-security/builds/c28-nginx/Dockerfile' },
   'c31-nginx': { component: 'nginx', path: 'infrastructure/runtime-security/reviewed-images-c31-nginx.json', context: 'infrastructure/runtime-security/builds/c31-nginx', dockerfile: 'infrastructure/runtime-security/builds/c31-nginx/Dockerfile' },
@@ -70,6 +73,17 @@ const RELEASE_SETS = Object.freeze({
   'c27-phpmyadmin': { component: 'phpmyadmin', path: 'infrastructure/runtime-security/reviewed-images-c27-phpmyadmin.json', context: 'infrastructure/runtime-security/builds/c27-phpmyadmin', dockerfile: 'infrastructure/runtime-security/builds/c27-phpmyadmin/Dockerfile' },
   'c31-phpmyadmin': { component: 'phpmyadmin', path: 'infrastructure/runtime-security/reviewed-images-c31-phpmyadmin.json', context: 'infrastructure/runtime-security/builds/c31-phpmyadmin', dockerfile: 'infrastructure/runtime-security/builds/c31-phpmyadmin/Dockerfile' },
   'c32-phpmyadmin': { component: 'phpmyadmin', path: 'infrastructure/runtime-security/reviewed-images-c32-phpmyadmin.json', context: 'infrastructure/runtime-security/builds/c32-phpmyadmin', dockerfile: 'infrastructure/runtime-security/builds/c32-phpmyadmin/Dockerfile' },
+  // C36 rebuilds currently activated Go services with Go 1.27.3. Historical
+  // default lookup stays stable until each new candidate has proof and activation.
+  'c36-dozzle': { component: 'dozzle', path: 'infrastructure/runtime-security/reviewed-images-c36-dozzle.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c36-dozzle/Dockerfile' },
+  'c36-prometheus': { component: 'prometheus', path: 'infrastructure/runtime-security/reviewed-images-c36-prometheus.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c36-prometheus/Dockerfile' },
+  'c36-loki': { component: 'loki', path: 'infrastructure/runtime-security/reviewed-images-c36-loki.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c36-loki/Dockerfile' },
+  'c36-alloy': { component: 'alloy', path: 'infrastructure/runtime-security/reviewed-images-c36-alloy.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c36-alloy/Dockerfile' },
+  'c36-tempo': { component: 'tempo', path: 'infrastructure/runtime-security/reviewed-images-c36-tempo.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c36-tempo/Dockerfile' },
+  'c36-grafana': { component: 'grafana', path: 'infrastructure/runtime-security/reviewed-images-c36-grafana.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c36-grafana/Dockerfile' },
+  'c36-mc': { component: 'mc', path: 'infrastructure/runtime-security/reviewed-images-c36-mc.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c36-mc/Dockerfile' },
+  'c36-minio': { component: 'minio', path: 'infrastructure/runtime-security/reviewed-images-c36-minio.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c36-local-s3/Dockerfile' },
+  'c36-postgres': { component: 'postgres', path: 'infrastructure/runtime-security/reviewed-images-c36-postgres.json', context: 'infrastructure/runtime-security/builds/c36-postgres', dockerfile: 'infrastructure/runtime-security/builds/c36-postgres/Dockerfile' },
 });
 // These two local-stack dependencies were absent from the immutable C7 manifest.
 // Keep their original pins and service coverage explicit when adding publication.
@@ -126,7 +140,7 @@ export function validateReviewedImageSet(name, manifestBytes, baselineBytes = ma
   assert.equal(image.prepare, undefined, 'reviewed_image_set_preparation_forbidden');
   assert.equal(image.sourceBeforeRef, original.sourceBeforeRef, 'reviewed_image_set_historical_source_changed');
   assert.deepEqual(image.defaultReferencesBefore, original.defaultReferencesBefore, 'reviewed_image_set_service_coverage_changed');
-  if (name === 'c26-keycloak') assert.equal(image.knownRuntimeDependencyPolicy, C26_POLICY, 'reviewed_image_set_dependency_policy');
+  if (name === 'c26-keycloak' || name === 'c35-keycloak') assert.equal(image.knownRuntimeDependencyPolicy, C26_POLICY, 'reviewed_image_set_dependency_policy');
   return manifest;
 }
 

@@ -79,11 +79,13 @@ class OwnerManualCardPaymentApprovalTelegramCallbackServiceTest {
 
         Optional<String> result = service.handle(callback("ompa:a:91:token", 100L, -500L));
 
-        assertEquals("Поступление владельцу подтверждено, заказ оплачен", result.orElseThrow());
+        assertEquals("Поступление владельцу подтверждено", result.orElseThrow());
         verify(notificationService).closeOwnerApprovalReminders(91L);
         verify(telegramService).editMessageText(
                 eq(-500L), eq(17),
-                org.mockito.ArgumentMatchers.contains("Поступление владельцу подтверждено"),
+                org.mockito.ArgumentMatchers.argThat(text -> text.contains("Поступление владельцу подтверждено")
+                        && text.contains("после их завершения")
+                        && !text.contains("Заказ отмечен оплаченным один раз")),
                 eq("HTML"),
                 org.mockito.ArgumentMatchers.isNull()
         );

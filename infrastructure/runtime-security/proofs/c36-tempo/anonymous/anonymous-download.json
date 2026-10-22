@@ -1,0 +1,74 @@
+{
+  "schema": "otziv-anonymous-download-v1",
+  "component": "tempo",
+  "commit": "0c56e0bb1ed6cc3310924144db3bf465970a82d1",
+  "run": "39599093432",
+  "attempt": "1",
+  "manifestSet": "c36-tempo",
+  "manifestPath": "infrastructure/runtime-security/reviewed-images-c36-tempo.json",
+  "runner": "GitHub Actions 1000020554",
+  "startedAt": "2026-10-21T12:30:09.695Z",
+  "sourcePublicationSha256": "82b349df7cd7bb27c207a9e6b16881f8e8a461ea834d3199d6a82b840413f5fc",
+  "result": "PASS",
+  "accountCredentialsUsed": false,
+  "dockerCredentialHelpersAvailable": false,
+  "dockerTransport": "unix:///var/run/docker.sock",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:2bdc304812f800c5c9d0344b748630936a131e24ae8e56d13dfa2e9bbb55ea98",
+  "imageAbsentBeforePull": true,
+  "daemonVersion": "\"28.0.4\"",
+  "attestationEvidence": {
+    "schema": "otziv-registry-evidence-v1",
+    "imageManifestDigest": "sha256:ba891dd2c140fdcc2cc5cf46583c32f2edddd2015c6ce0765f6c07491752b907",
+    "predicates": [
+      "https://slsa.dev/provenance/v1",
+      "https://spdx.dev/Document"
+    ],
+    "artifacts": [
+      {
+        "file": "registry-index.json",
+        "digest": "sha256:2bdc304812f800c5c9d0344b748630936a131e24ae8e56d13dfa2e9bbb55ea98",
+        "size": 857
+      },
+      {
+        "file": "registry-amd64-manifest.json",
+        "digest": "sha256:ba891dd2c140fdcc2cc5cf46583c32f2edddd2015c6ce0765f6c07491752b907",
+        "size": 4079
+      },
+      {
+        "file": "registry-amd64-config.json",
+        "digest": "sha256:345e8cb908abda9d61147d2961d19c830a133e37a770b8e980ef474810b3727e",
+        "size": 5290
+      },
+      {
+        "file": "registry-attestation-0.json",
+        "digest": "sha256:c1c7472ef8a4415a18060a2b689b6f79d20489d4517a9d11300b7b4eb81fedb9",
+        "size": 1112
+      },
+      {
+        "file": "registry-attestation-0-payload-0.json",
+        "digest": "sha256:13f066980e75b6c31d268f4fb7edac56c7fd5fb04990066f93e0fe24f0ed323d",
+        "size": 1268519
+      },
+      {
+        "file": "registry-attestation-0-payload-1.json",
+        "digest": "sha256:46880a80a1bd83106ea2f7f16e2e1bb7fe4f3815e22bdf835498893c4d88180c",
+        "size": 46145
+      }
+    ],
+    "sourceBinding": "LOCAL_GIT_METADATA_CHECKED_AGAINST_CLEAN_CHECKOUT_NOT_INDEPENDENT_SOURCE_AUTHENTICATION"
+  },
+  "pullExitCode": 0,
+  "imageId": "sha256:345e8cb908abda9d61147d2961d19c830a133e37a770b8e980ef474810b3727e",
+  "platform": "linux/amd64",
+  "labels": {
+    "com.otziv.publication.revision": "0c56e0bb1ed6cc3310924144db3bf465970a82d1",
+    "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+    "com.otziv.reviewed-component": "tempo",
+    "com.otziv.security.patch": "Go1.27.3; grpc1.83.2; thrift0.24.0; xcrypto0.57.0; x/net0.60.0; exact required transitive versions; request queue drain patch; loopback HTTP200 readiness",
+    "org.opencontainers.image.revision": "f0f3ed59197bfe9f54f3b0f8015ccca112f9e544",
+    "org.opencontainers.image.source": "https://github.com/grafana/tempo",
+    "org.opencontainers.image.version": "2.10.8-otziv.4"
+  },
+  "publicDownloadReadiness": "VERIFIED_ANONYMOUS_DIGEST_PULL",
+  "finishedAt": "2026-10-21T12:30:14.348Z"
+}

@@ -214,6 +214,88 @@ class ScheduledDeliveryProtocolTest {
         verify(sender, never()).deliverWithOperationId(any(), any(), any(), any(), any(), any());
     }
 
+    @Test void manualRepairKeepsUnknownDeliveryHeldWhenChatHasNoReceipt() {
+        var prepared = prepare("message", null);
+        state.setDeliveryStatus("UNKNOWN");
+        state.setLastErrorCode(ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN);
+        when(states.findById(71L)).thenReturn(Optional.of(state));
+        when(sender.recoverRecordedOutcomeFromChat(prepared.operationId(), NOW))
+                .thenReturn(ClientMessageOperationFence.unknown());
+
+        assertThat(service.recoverUncertainOrdinaryDelivery(71L))
+                .isEqualTo(ScheduledClientMessageService.OrdinaryDeliveryRecoveryResult.UNRESOLVED);
+        assertThat(state.getDeliveryStatus()).isEqualTo("UNKNOWN");
+        assertThat(state.getSentCount()).isZero();
+        verify(sender, never()).deliverWithOperationId(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test void manualRepairFinalizesConfirmedReceiptWithoutDispatch() {
+        var prepared = prepare("message", null);
+        state.setDeliveryStatus("UNKNOWN");
+        state.setLastErrorCode(ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN);
+        when(states.findById(71L)).thenReturn(Optional.of(state));
+        when(sender.recoverRecordedOutcomeFromChat(prepared.operationId(), NOW))
+                .thenReturn(ClientMessageSendResult.sent("WhatsApp", "confirmed-id"));
+
+        assertThat(service.recoverUncertainOrdinaryDelivery(71L))
+                .isEqualTo(ScheduledClientMessageService.OrdinaryDeliveryRecoveryResult.SENT_CONFIRMED);
+        assertThat(state.getSentCount()).isEqualTo(1);
+        assertThat(state.getDeliveryEnvelope()).isNull();
+        verify(sender, never()).deliverWithOperationId(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test void manualRepairReportsUnavailableHistoryWithoutChangingUnknownState() {
+        var prepared = prepare("message", null);
+        state.setDeliveryStatus("UNKNOWN");
+        state.setLastErrorCode(ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN);
+        when(states.findById(71L)).thenReturn(Optional.of(state));
+        when(sender.recoverRecordedOutcomeFromChat(prepared.operationId(), NOW))
+                .thenReturn(ClientMessageSendResult.failed("whatsapp_history_unavailable", "gateway 503"));
+
+        assertThat(service.recoverUncertainOrdinaryDelivery(71L))
+                .isEqualTo(ScheduledClientMessageService.OrdinaryDeliveryRecoveryResult.HISTORY_UNAVAILABLE);
+        assertThat(state.getDeliveryStatus()).isEqualTo("UNKNOWN");
+        verify(sender, never()).deliverWithOperationId(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test void manualHandoffRetainsUnknownOperationAndWritesAuditWithoutResend() {
+        var prepared = prepare("message", null);
+        state.setDeliveryStatus("UNKNOWN");
+        state.setLastErrorCode(ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN);
+        when(states.findById(71L)).thenReturn(Optional.of(state));
+        when(sender.recoverRecordedOutcomeFromChat(prepared.operationId(), NOW))
+                .thenReturn(ClientMessageSendResult.failed("whatsapp_history_checked_no_receipt", "not found"));
+
+        var preview = service.handoffUncertainOrdinaryDelivery(71L, prepared.operationId(), 4L, 17L,
+                "Проверен чат, требуется связаться с клиентом");
+
+        assertThat(preview.operationId()).isEqualTo(prepared.operationId());
+        assertThat(state.getStatus()).isEqualTo(ScheduledMessageStateStatus.ACTIVE);
+        assertThat(state.getDeliveryStatus()).isEqualTo("UNKNOWN");
+        assertThat(state.getDeliveryEnvelope()).contains("message");
+        assertThat(state.getLastErrorCode()).isEqualTo(ClientMessageStateSafety.MANUAL_DELIVERY_HANDOFF_PENDING);
+        assertThat(state.getSentCount()).isZero();
+        verify(dependency(service, "jdbcTemplate", org.springframework.jdbc.core.JdbcTemplate.class))
+                .update(anyString(), eq(71L), eq(prepared.operationId()), eq(17L), eq(4L), any(),
+                        eq("Проверен чат, требуется связаться с клиентом"), any());
+        verify(sender, never()).deliverWithOperationId(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test void manualHandoffRefusesUnavailableHistory() {
+        var prepared = prepare("message", null);
+        state.setDeliveryStatus("UNKNOWN");
+        state.setLastErrorCode(ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN);
+        when(states.findById(71L)).thenReturn(Optional.of(state));
+        when(sender.recoverRecordedOutcomeFromChat(prepared.operationId(), NOW))
+                .thenReturn(ClientMessageSendResult.failed("whatsapp_history_unavailable", "gateway 503"));
+
+        assertThatThrownBy(() -> service.handoffUncertainOrdinaryDelivery(71L, prepared.operationId(),
+                4L, 17L, "Проверен чат, требуется связаться с клиентом"))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+        assertThat(state.getLastErrorCode()).isEqualTo(ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN);
+        verifyNoInteractions(dependency(service, "jdbcTemplate", org.springframework.jdbc.core.JdbcTemplate.class));
+    }
+
     @Test void lateReceiptForClosedTaskIsRecordedOnceWithoutBusinessEffectsOrResend() {
         state.setScenario(ClientMessageScenario.REVIEW_RECOVERY_NOTICE);
         var prepared = ReflectionTestUtils.<ScheduledClientMessageService.PreparedScheduledDelivery>invokeMethod(service,

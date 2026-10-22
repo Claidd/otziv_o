@@ -40,9 +40,15 @@ p {
 
 @media (max-width: 760px) {
   .account-cooldown {
-    // Leave the mobile menu/header readable and all navigation tappable.
-    top: calc(4.2rem + env(safe-area-inset-top));
-    max-width: calc(100vw - 1rem);
+    // Keep the plan tabs and search visible; the reminder does not block taps.
+    top: auto;
+    bottom: calc(5.25rem + env(safe-area-inset-bottom));
+    width: calc(100vw - 1.5rem);
+    max-width: 24rem;
     padding: 0.5rem 0.65rem;
+
+    p {
+      display: none;
+    }
   }
 }

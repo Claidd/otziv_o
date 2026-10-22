@@ -1564,6 +1564,40 @@ export class ManagerControlComponent implements OnInit {
     });
   }
 
+  isUncertainDeliveryForHandoff(example: ManagerControlConcreteItem): boolean {
+    return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER'])
+      && (example.type === 'AUTOMATION_FAILURE' || example.type === 'COMMON_INVOICE_AUTOMATION')
+      && (example.reason ?? '').includes('state_transaction_outcome_uncertain');
+  }
+
+  async handoffUncertainDelivery(example: ManagerControlConcreteItem): Promise<void> {
+    const itemId = example.controlEntityId;
+    if (!itemId || this.isConcreteUpdating(itemId)) return;
+    this.setConcreteUpdating(itemId, true);
+    try {
+      const preview = await firstValueFrom(this.api.uncertainDelivery(itemId));
+      const accepted = window.confirm(
+        `Проверьте клиентский чат и эту старую отправку.\n\nОперация: ${preview.operationId}\n` +
+        `Подготовлена: ${preview.preparedAt}\n\nТекст:\n${preview.message}\n\n` +
+        'Продолжить ручную передачу? Система не отправит сообщение повторно и не отметит его доставленным.');
+      if (!accepted) return;
+      const note = window.prompt('Что вы увидели в чате и что сделаете для связи с клиентом? (10–400 символов)')?.trim();
+      if (!note) return;
+      if (note.length < 10 || note.length > 400) {
+        this.toast.error('Укажите результат проверки', 'Напишите 10–400 символов.');
+        return;
+      }
+      const updated = await firstValueFrom(this.api.handoffUncertainDelivery(itemId, preview.operationId, note));
+      this.patchDetailConcreteItem(example, updated);
+      this.toast.warning('Передано вручную', 'Исход отправки не подтверждён. Карточка остаётся открытой.');
+      this.load({ silent: true });
+    } catch (err) {
+      this.toast.error('Ручная передача не сохранена', apiErrorMessage(err, 'Не удалось проверить старую отправку'));
+    } finally {
+      this.setConcreteUpdating(itemId, false);
+    }
+  }
+
   private completeConcreteRepair(
     example: ManagerControlConcreteItem,
     updated: ManagerControlConcreteItem,
@@ -2004,6 +2038,9 @@ export class ManagerControlComponent implements OnInit {
 
   canRepairAutomationIssue(example: ManagerControlConcreteItem): boolean {
     const reason = (example.reason ?? '').toLowerCase();
+    if (reason.includes('manual_delivery_handoff_pending')) {
+      return false;
+    }
     if (this.isAutomationWaitingForSlot(example)) {
       return false;
     }

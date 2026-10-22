@@ -10,30 +10,128 @@ function Fixture-Git([string[]]$Arguments) {
 }
 try {
     New-Item -ItemType Directory -Path (Join-Path $fixture 'infrastructure/scripts/prod') -Force | Out-Null
-    # Exercise the real deploy inventory, including the optional bound SSL proofs.
+    # Exercise the real deploy inventory. The optional cutover is approved only
+    # for exact C36 PostgreSQL and C35 Keycloak with bound acceptance.
     # A tiny fixture alone misses extra assignments in the actual deploy script.
     $repository = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../..'))
     $ordinaryPaths = @(Get-OtzivDeployBundlePaths -Repository $repository)
-    $sslPaths = @(Get-OtzivDeployBundlePaths -Repository $repository -CoordinatedSslRefresh)
-    $extraPaths = @(Get-OtzivCoordinatedSslBundlePaths -Repository $repository)
-    if ($sslPaths.Count -le $ordinaryPaths.Count -or $extraPaths.Count -lt 10) {
-        throw 'Coordinated SSL archive is missing accepted evidence.'
+    $activation = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repository 'infrastructure/runtime-security/reviewed-image-activations.json') | ConvertFrom-Json
+    $keycloak = @($activation.images | Where-Object { $_.component -eq 'keycloak' })
+    $postgres = @($activation.images | Where-Object { $_.component -eq 'postgres' })
+    $mysql = @($activation.images | Where-Object { $_.component -eq 'mysql' })
+    if ($keycloak.Count -ne 1 -or $postgres.Count -ne 1) { throw 'Expected one active PostgreSQL and Keycloak image.' }
+    if ($mysql.Count -ne 1) { throw 'Expected one active MySQL image.' }
+    $splitPath = 'infrastructure/runtime-security/proofs/c35-keycloak/publication/registry-attestation-0-payload-0.json'
+    $splitAcceptance = Get-Content -Raw -Encoding UTF8 -LiteralPath `
+        (Join-Path $repository 'infrastructure/runtime-security/proofs/c35-keycloak/acceptance.json') | ConvertFrom-Json
+    $splitSha256 = $splitAcceptance.files.PSObject.Properties[$splitPath].Value
+    $splitPhysicalPaths = @(Get-OtzivBoundSplitEvidencePaths -Repository $repository -Path $splitPath -Sha256 $splitSha256)
+    $expectedSplitPaths = @("$splitPath.part001", "$splitPath.part002", "$splitPath.parts.json")
+    if (@(Compare-Object $splitPhysicalPaths $expectedSplitPaths).Count -gt 0 -or
+        $splitPath -in $splitPhysicalPaths) { throw 'Accepted split evidence was not bound to its physical parts.' }
+    $splitFixture = Join-Path $fixture 'split'
+    $splitFixtureDirectory = Join-Path $splitFixture (Split-Path -Parent $splitPath)
+    New-Item -ItemType Directory -Path $splitFixtureDirectory -Force | Out-Null
+    foreach ($path in $splitPhysicalPaths) {
+        Copy-Item -LiteralPath (Join-Path $repository $path) -Destination (Join-Path $splitFixture $path)
+    }
+    $null = Get-OtzivBoundSplitEvidencePaths -Repository $splitFixture -Path $splitPath -Sha256 $splitSha256
+    $changedPartPath = Join-Path $splitFixture "$splitPath.part002"
+    $changedPart = [IO.File]::ReadAllBytes($changedPartPath)
+    $changedPart[0] = $changedPart[0] -bxor 1
+    [IO.File]::WriteAllBytes($changedPartPath, $changedPart)
+    $rejectedSplit = $false
+    try { $null = Get-OtzivBoundSplitEvidencePaths -Repository $splitFixture -Path $splitPath -Sha256 $splitSha256 }
+    catch {
+        if ($_.Exception.Message -ne 'Accepted SSL cutover evidence changed.') { throw }
+        $rejectedSplit = $true
+    }
+    if (-not $rejectedSplit) { throw 'Changed split evidence entered the cutover archive.' }
+    $sslApproved = $postgres[0].manifest.path -eq 'infrastructure/runtime-security/reviewed-images-c36-postgres.json' -and
+        [bool]$postgres[0].PSObject.Properties['postgresC36Acceptance'] -and
+        $keycloak[0].manifest.path -eq 'infrastructure/runtime-security/reviewed-images-c35-keycloak.json'
+    $extraPaths = @()
+    if ($sslApproved) {
+        $sslPaths = @(Get-OtzivDeployBundlePaths -Repository $repository -CoordinatedSslRefresh)
+        $extraPaths = @(Get-OtzivCoordinatedSslBundlePaths -Repository $repository)
+        if ($sslPaths.Count -le $ordinaryPaths.Count -or $extraPaths.Count -lt 10) {
+            throw 'Coordinated SSL archive is missing accepted evidence.'
+        }
+        if ($splitPath -in $sslPaths -or @($expectedSplitPaths | Where-Object { $_ -notin $sslPaths }).Count -gt 0) {
+            throw 'Coordinated SSL archive lost committed split evidence.'
+        }
+    } else {
+        $rejected = $false
+        try { $null = Get-OtzivDeployBundlePaths -Repository $repository -CoordinatedSslRefresh }
+        catch {
+            if ($_.Exception.Message -ne 'Only the accepted C36 PostgreSQL and active C35 Keycloak pair permits this cutover.') { throw }
+            $rejected = $true
+        }
+        if (-not $rejected) { throw 'Unaccepted PostgreSQL generation entered the cutover archive.' }
+    }
+    $mysqlApproved = $mysql[0].manifest.path -eq 'infrastructure/runtime-security/reviewed-images-c37-mysql.json' -and
+        [bool]$mysql[0].PSObject.Properties['databaseTransition'] -and
+        $mysql[0].databaseTransition.path -eq 'infrastructure/runtime-security/proofs/c37-mysql/rehearsal.json'
+    $mysqlPaths = @()
+    if ($mysqlApproved) {
+        $mysqlPaths = @(Get-OtzivCoordinatedMysqlBundlePaths -Repository $repository)
+        $combinedMysqlPaths = @(Get-OtzivDeployBundlePaths -Repository $repository -CoordinatedMysqlRefresh)
+        if ($mysqlPaths.Count -lt 7 -or
+            @($mysqlPaths | Where-Object { $_ -notin $combinedMysqlPaths }).Count -gt 0 -or
+            'infrastructure/runtime-security/proofs/c37-mysql/rehearsal.json' -in $ordinaryPaths) {
+            throw 'Reviewed MySQL C37 evidence entered the wrong deployment inventory.'
+        }
+        $tamperedRoot = Join-Path $fixture 'mysql-evidence'
+        foreach ($path in $mysqlPaths) {
+            $destination = Join-Path $tamperedRoot $path
+            New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
+            Copy-Item -LiteralPath (Join-Path $repository $path) -Destination $destination
+        }
+        $proof = Join-Path $tamperedRoot 'infrastructure/runtime-security/proofs/c37-mysql/rehearsal.json'
+        [IO.File]::AppendAllText($proof, 'tampered')
+        $rejectedMysql = $false
+        try { $null = Get-OtzivCoordinatedMysqlBundlePaths -Repository $tamperedRoot }
+        catch {
+            if ($_.Exception.Message -ne 'Accepted MySQL C37 evidence changed.') { throw }
+            $rejectedMysql = $true
+        }
+        if (-not $rejectedMysql) { throw 'Changed MySQL C37 rehearsal entered the deployment archive.' }
+    } else {
+        $rejectedMysql = $false
+        try { $null = Get-OtzivDeployBundlePaths -Repository $repository -CoordinatedMysqlRefresh }
+        catch {
+            if ($_.Exception.Message -ne 'Only the accepted C37 MySQL image permits this cutover.') { throw }
+            $rejectedMysql = $true
+        }
+        if (-not $rejectedMysql) { throw 'Unaccepted MySQL image entered the coordinated archive.' }
     }
     $realRevision = (& git -C $repository rev-parse HEAD).Trim()
     if ($LASTEXITCODE -ne 0) { throw 'Cannot read the actual repository revision.' }
     $realEvidence = Join-Path $fixture 'real-release-evidence'
     New-Item -ItemType Directory -Path $realEvidence | Out-Null
     $realPrepared = New-OtzivPreparedDeployArchive -Repository $repository -Revision $realRevision `
-        -Directory $realEvidence -CoordinatedSslRefresh
-    foreach ($path in $extraPaths) {
+        -Directory $realEvidence -CoordinatedMysqlRefresh:$mysqlApproved -CoordinatedSslRefresh:$sslApproved
+    foreach ($path in @($ordinaryPaths + $extraPaths + $mysqlPaths | Select-Object -Unique)) {
         if ($path -notin $realPrepared.paths -or
             -not (Test-Path -LiteralPath (Join-Path $realEvidence ('verified-source/' + $path)))) {
-            throw "Accepted SSL evidence absent from the committed archive: $path"
+            throw "Deployment input absent from the committed archive: $path"
         }
     }
     $fixtureSecurity = Join-Path $fixture 'infrastructure/runtime-security'
     New-Item -ItemType Directory -Path $fixtureSecurity | Out-Null
-    $invalidIndex = @{ images = @(@{ component = 'postgres'; sslRefreshAcceptance = @{ path = '../local-secret.txt'; sha256 = ('a' * 64) } }) }
+    [IO.File]::WriteAllBytes((Join-Path $fixtureSecurity 'c36-parent-postgres.json'),
+        [IO.File]::ReadAllBytes((Join-Path $repository 'infrastructure/runtime-security/c36-parent-postgres.json')))
+    $bad = @{ path = '../local-secret.txt'; sha256 = ('a' * 64) }
+    $issuer = @{ path = 'infrastructure/runtime-security/issuer.json'; sha256 = ('b' * 64) }
+    $pgManifestPath = Join-Path $fixtureSecurity 'reviewed-images-c36-postgres.json'
+    $kcManifestPath = Join-Path $fixtureSecurity 'reviewed-images-c35-keycloak.json'
+    [IO.File]::WriteAllText($pgManifestPath, '{}')
+    [IO.File]::WriteAllText($kcManifestPath, '{}')
+    $invalidIndex = @{ images = @(
+        @{ component = 'postgres'; manifest = @{ path = 'infrastructure/runtime-security/reviewed-images-c36-postgres.json'; sha256 = (Get-FileHash -LiteralPath $pgManifestPath -Algorithm SHA256).Hash.ToLowerInvariant() }
+           postgresC36Acceptance = $bad; databaseTransition = $bad },
+        @{ component = 'keycloak'; manifest = @{ path = 'infrastructure/runtime-security/reviewed-images-c35-keycloak.json'; sha256 = (Get-FileHash -LiteralPath $kcManifestPath -Algorithm SHA256).Hash.ToLowerInvariant() }
+           vertxRefreshAcceptance = $issuer; migrationAcceptance = $issuer }) }
     $invalidIndex | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $fixtureSecurity 'reviewed-image-activations.json') -Encoding utf8
     $rejected = $false
     try { $null = Get-OtzivCoordinatedSslBundlePaths -Repository $fixture }
@@ -42,7 +140,7 @@ try {
         $rejected = $true
     }
     if (-not $rejected) { throw 'SSL evidence escaped the repository.' }
-    $invalidIndex.images[0].sslRefreshAcceptance.path = 'infrastructure/runtime-security/invalid-proof.json'
+    $invalidIndex.images[0].postgresC36Acceptance.path = 'infrastructure/runtime-security/invalid-proof.json'
     [IO.File]::WriteAllText((Join-Path $fixtureSecurity 'invalid-proof.json'), '{}')
     $invalidIndex | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $fixtureSecurity 'reviewed-image-activations.json') -Encoding utf8
     $rejected = $false
@@ -52,7 +150,7 @@ try {
         $rejected = $true
     }
     if (-not $rejected) { throw 'Changed accepted SSL evidence was packaged.' }
-    Remove-Item -LiteralPath @((Join-Path $fixtureSecurity 'reviewed-image-activations.json'), (Join-Path $fixtureSecurity 'invalid-proof.json')) -Force
+    Remove-Item -LiteralPath @((Join-Path $fixtureSecurity 'reviewed-image-activations.json'), (Join-Path $fixtureSecurity 'invalid-proof.json'), (Join-Path $fixtureSecurity 'c36-parent-postgres.json'), $pgManifestPath, $kcManifestPath) -Force
     Remove-Item -LiteralPath $fixtureSecurity -Force
     Fixture-Git @('init','-q') | Out-Null
     Fixture-Git @('config','user.name','Early preparation test') | Out-Null

@@ -468,12 +468,18 @@ class DeliveredMessageCache {
 
 }
 
-async function groupMetadata(message, groupId, log) {
+async function groupMetadata(message, groupId, log, timeoutMs = 2000) {
   if (!message || typeof message.getChat !== "function") {
     return { groupId, groupName: "" };
   }
+  let timer;
   try {
-    const chat = await message.getChat();
+    const chat = await Promise.race([
+      Promise.resolve().then(() => message.getChat()),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error("group_metadata_timeout")), timeoutMs);
+      }),
+    ]);
     return {
       groupId: serializedId(chat && chat.id) || groupId,
       groupName: String(chat && chat.name || "").trim(),
@@ -488,11 +494,13 @@ async function groupMetadata(message, groupId, log) {
       });
     }
     return { groupId, groupName: "" };
+  } finally {
+    clearTimeout(timer);
   }
 }
 
 function createMessageHandler({ clientId, postWebhook, outboundRegistry, participantResolver, groupWebhookEnabled = true,
-  outreachWebhookEnabled = true, log }) {
+  outreachWebhookEnabled = true, metadataTimeoutMs = 2000, log }) {
   if (typeof postWebhook !== "function") {
     throw new Error("postWebhook is required");
   }
@@ -516,7 +524,7 @@ function createMessageHandler({ clientId, postWebhook, outboundRegistry, partici
       }
       const rawParticipantId = serializedId(message.author) || from;
       const [metadata, participantId] = await Promise.all([
-        groupMetadata(message, groupId, log),
+        groupMetadata(message, groupId, log, metadataTimeoutMs),
         resolvedParticipantId(participantResolver, rawParticipantId, log),
       ]);
       const systemGenerated = Boolean(message.fromMe)

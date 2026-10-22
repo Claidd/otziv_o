@@ -152,6 +152,7 @@ public class PaymentLinkCancellationWorkflow {
         if (link.getBankCancelOriginStatus() != null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Предыдущий возврат принят банком и ожидает финальной сверки");
         }
+        requireTochkaApiRefundSupported(link);
         if (!isRefundable(link)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Платеж не готов к возврату через банк");
         }
@@ -167,6 +168,7 @@ public class PaymentLinkCancellationWorkflow {
         TochkaPaymentProfile tochkaProfile = isTochkaPaymentLink(link) ? tochkaPaymentProfileResolver.resolveForExistingPayment(profile) : null;
         TbankPaymentProfile runtimeProfile = tochkaProfile == null ? runtimeProfileForLink(profile, link) : null;
         if (tochkaProfile != null) {
+            requireTochkaApiRefundSupported(link);
             expectedTochkaMode(link.getPaymentMethod());
             if (!normalize(link.getTbankTerminalKey()).equals(tochkaProfile.merchantId())) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "MerchantId платежа Точки не совпадает с закрепленным профилем");
@@ -186,6 +188,22 @@ public class PaymentLinkCancellationWorkflow {
         link.setLastError(limit(BANK_CANCEL_IN_PROGRESS_PREFIX + " previous_status=" + originalStatus.name(), 512));
         paymentLinkRepository.save(link);
         return new CancelReservation(link.getId(), orderId, originalStatus, nonce, normalize(link.getTbankPaymentId()), normalize(link.getTbankOrderId()), link.getAmountKopecks(), normalize(link.getTbankTerminalKey()), link.getPaymentProfile() == null ? null : link.getPaymentProfile().getId(), link.getPaymentMethod(), runtimeProfile, tochkaProfile);
+    }
+
+    private void requireTochkaApiRefundSupported(PaymentLink link) {
+        if (!isTochkaPaymentLink(link) || paymentPresenter.supportsTochkaApiRefund(link)) {
+            return;
+        }
+        if (paymentPresenter.hasTochkaPaymentTypeConflict(link)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Фактический способ оплаты Точки изменился. Сверьте платёж в банке перед возвратом.");
+        }
+        if ("digitalRuble".equals(normalize(link.getProviderPaymentType()))) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Цифровые рубли возвращаются только в кабинете Точки. Выполните возврат там и сверьте платёж в системе.");
+        }
+        throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "Фактический способ оплаты Точки не установлен. Сверьте платёж в банке перед возвратом.");
     }
 
     private AdminPaymentLinkResponse applyTochkaRefundAccepted(CancelReservation reservation, RefundResponse response) {

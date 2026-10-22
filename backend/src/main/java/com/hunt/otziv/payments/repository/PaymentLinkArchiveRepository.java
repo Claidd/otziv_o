@@ -74,6 +74,7 @@ public class PaymentLinkArchiveRepository {
             "payment_success_notification_error",
             "payment_success_notification_retry_eligible",
             "last_error",
+            "provider_payment_type",
             "return_recovery_processed_at",
             "return_recovery_payment_check_id",
             "return_recovery_outcome",
