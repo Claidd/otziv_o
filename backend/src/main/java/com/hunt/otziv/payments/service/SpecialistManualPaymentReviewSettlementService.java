@@ -56,7 +56,7 @@ public class SpecialistManualPaymentReviewSettlementService {
                     claim.receiptUrl(), authentication.getName(), authentication,
                     new ManualCardPaymentWorkflow.ManualCardPaymentContext(
                             ManualCardPaymentWorkflow.ManualCardPaymentMode.OWNER_VERIFIED,
-                            cleanNote),
+                            claim.reason()),
                     claim.profileId(), claim.recipientKey());
             SpecialistManualPaymentReviewResponse response = transactions.required(() -> {
                 SpecialistManualPaymentReview review = reviews.lockById(reviewId)

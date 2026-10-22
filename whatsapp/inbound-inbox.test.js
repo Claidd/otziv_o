@@ -4,9 +4,10 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const vm = require("node:vm");
 const { spawnSync } = require("node:child_process");
 const { DurableInboundInbox, identity } = require("./inbound-inbox");
-const { recoverHistory, fetchAvailableWindow } = require("./inbound-history");
+const { recoverHistory, fetchAvailableWindow, discoverHistoryChats } = require("./inbound-history");
 const { createMessageHandler } = require("./message-webhook");
 const route = "/webhook/whatsapp-group-reply";
 const payload = (id = "m1", timestamp = 1, groupId = "first@g.us") =>
@@ -226,6 +227,67 @@ test("hanging chat discovery stops promptly and keeps live messages queued", asy
   assert.equal(inbox.snapshot().pending, 1);
   assert.equal(inbox.snapshot().historyDiscoveryFailed, true);
   assert.equal(inbox.snapshot().historyPaused, true);
+});
+
+test("history discovery avoids bulk chat metadata refresh and still fetches group history", async t => {
+  const { inbox } = fixture(t);
+  let rawFetches = 0;
+  const browserMessage = { id: { _serialized: "m1", id: "m1", fromMe: false },
+    from: "first@g.us", author: "user@c.us", t: 1, body: "hello", type: "chat" };
+  const browserWindow = {
+    require(name) {
+      if (name === "WAWebChatLoadMessages") return { loadEarlierMsgs: async () => [] };
+      assert.equal(name, "WAWebCollections");
+      return { Chat: { getModelsArray: () => [
+        { id: { _serialized: "first@g.us" }, name: "First chat", groupMetadata: { subject: "First chat",
+          update: () => { throw new Error("group metadata should not refresh"); } } },
+        { id: { _serialized: "private@c.us" }, name: "Private chat" },
+      ] } };
+    },
+    WWebJS: {
+      async getChat(id, options) {
+        rawFetches++;
+        assert.equal(id, "first@g.us");
+        assert.equal(options.getAsModel, false);
+        return { msgs: { getModelsArray: () => [browserMessage] } };
+      },
+      getMessageModel: message => message,
+    },
+  };
+  const client = {
+    getChats: () => { throw new Error("bulk getChats must not run"); },
+    pupPage: { evaluate: (callback, ...args) =>
+      vm.runInNewContext(`(${callback.toString()})(...args)`, { window: browserWindow, args }) },
+  };
+  const chats = await discoverHistoryChats(client);
+  assert.deepEqual(chats.map(chat => [chat.id._serialized, chat.name, chat.isGroup]), [
+    ["first@g.us", "First chat", true], ["private@c.us", "Private chat", false],
+  ]);
+  const result = await recoverHistory({ client, inbox, clientId: "client" });
+  assert.deepEqual(result, { errors: 0, gaps: 0 });
+  assert.equal(rawFetches, 1);
+  assert.equal(inbox.snapshot().pending, 1);
+  assert.equal(inbox.cursor("first@g.us"), 1);
+  assert.equal(inbox.snapshot().historyDiscoveryFailed, false);
+  assert.equal(inbox.snapshot().historyPaused, false);
+});
+
+test("one invalid serialized chat ID blocks discovery instead of silently skipping history", async t => {
+  const { inbox } = fixture(t);
+  inbox.enqueue(route, payload("live-before-discovery"));
+  const client = {
+    getChats: () => { throw new Error("bulk getChats must not run"); },
+    pupPage: { evaluate: async () => [
+      { id: "first@g.us", name: "First chat", isGroup: true },
+      { id: "[object Object]", name: "Unidentified chat", isGroup: true },
+    ] },
+  };
+  await assert.rejects(recoverHistory({ client, inbox, clientId: "client" }),
+    /inbound_history_chat_id_invalid/);
+  assert.equal(inbox.snapshot().historyDiscoveryFailed, true);
+  assert.equal(inbox.snapshot().historyPaused, true);
+  assert.equal(inbox.snapshot().pending, 1);
+  assert.equal(inbox.cursor("first@g.us"), 0);
 });
 
 test("a slow history scan blocks only its chat after discovery", async t => {
