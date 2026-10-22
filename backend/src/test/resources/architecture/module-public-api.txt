@@ -1,4 +1,7 @@
 # Explicit public module seams. This file does not export controllers, models, or all services.
+# Manager problem diagnostics contracts: docs/manager-problem-diagnostics.md, module contracts.
+com.hunt.otziv.config.settings.api.ManagerProblemDiagnosticSettings
+com.hunt.otziv.reputationai.api.ProblemDiagnosticModel
 # A new export requires an owner, caller, authorization and transaction contract in the relevant ADR/catalogue.
 # Platform event for contractor-ledger projection requests; listener records marker in caller transaction.
 com.hunt.otziv.common.events.ContractorAccrualAdjustedEvent

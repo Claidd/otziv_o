@@ -85,6 +85,8 @@ public interface ManagerDailyControlConcreteItemRepository extends CrudRepositor
 
     List<ManagerDailyControlConcreteItem> findByEntityTypeAndEntityId(String entityType, Long entityId);
 
+    List<ManagerDailyControlConcreteItem> findByEntityTypeStartingWithAndEntityId(String entityType, Long entityId);
+
     List<ManagerDailyControlConcreteItem> findByEntityTypeAndEntityIdAndControl_ControlDate(
             String entityType,
             Long entityId,

@@ -247,6 +247,7 @@ button:disabled {
 }
 
 .field-grid input,
+.field-grid select,
 .manager-search input {
   width: 100%;
   box-sizing: border-box;
@@ -257,6 +258,11 @@ button:disabled {
   font: inherit;
   outline: none;
 }
+
+.field-grid select { min-height: 42px; padding: 9px; }
+.field-grid select[multiple] { min-height: 120px; }
+.full-field { grid-column: 1 / -1; }
+.setting-note { color: #64748b; font-size: 13px; line-height: 1.5; margin: 12px 0 0; }
 
 .field-grid input {
   min-height: 43px;

@@ -32,6 +32,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @RequiredArgsConstructor
 public class ManagerControlConcreteSnapshotWorkflow {
+    private final com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosticsService diagnostics;
 
     private final ManagerControlProblemExamples problemExamples;
 
@@ -173,16 +174,19 @@ public class ManagerControlConcreteSnapshotWorkflow {
             if (isResolvedConcreteItemHiddenForToday(concreteItem)) {
                 if (created || changed) {
                     dailyControlConcreteItemRepository.save(concreteItem);
+                    diagnostics.requestRefresh(concreteItem.getId());
                 }
                 continue;
             }
             if (isConcreteSnoozed(concreteItem)) {
                 if (created || changed) {
                     dailyControlConcreteItemRepository.save(concreteItem);
+                    diagnostics.requestRefresh(concreteItem.getId());
                 }
                 continue;
             }
             ManagerDailyControlConcreteItem saved = created || changed ? dailyControlConcreteItemRepository.save(concreteItem) : concreteItem;
+            if (created || changed) diagnostics.requestRefresh(saved.getId());
             existing.put(key, saved);
             synced.add(concretePresenter.concreteItemResponse(saved, example.contactText(), example.specialistName()));
         }

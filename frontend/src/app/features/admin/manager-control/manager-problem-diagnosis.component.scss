@@ -1,0 +1,30 @@
+:host { display: block; margin-top: 12px; }
+.problem-diagnosis {
+  border: 1px solid var(--border, #d6dee8);
+  border-radius: 12px;
+  padding: 14px;
+  background: var(--surface, #fff);
+  color: var(--text, #243348);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+header { display: flex; flex-wrap: wrap; gap: 4px 12px; justify-content: space-between; }
+small, .diagnosis-status, .diagnosis-note { color: var(--text-muted, #617087); }
+p { margin: 8px 0; }
+h4 { margin: 14px 0 5px; font-size: 13px; }
+ul, ol { padding-left: 20px; margin: 0; }
+li + li { margin-top: 6px; }
+.action-detail { display: block; }
+.evidence-ref { font-size: 11px; }
+.finding-evidence { margin-top: 4px; padding-top: 0; border: 0; }
+.finding-evidence summary { font-size: 12px; color: var(--text-muted, #617087); font-weight: normal; }
+.finding-evidence .evidence-ref { display: block; }
+.hypotheses { border-left: 3px solid #c99d3d; padding-left: 23px; }
+.diagnosis-note { margin-top: 14px; font-size: 12px; }
+details { margin-top: 12px; border-top: 1px solid var(--border, #d6dee8); padding-top: 10px; }
+summary { cursor: pointer; font-weight: 600; }
+dl { margin: 8px 0 0; }
+dl > div + div { margin-top: 10px; }
+dt { font-size: 11px; color: var(--text-muted, #617087); }
+dd { margin: 2px 0 0; white-space: pre-wrap; }

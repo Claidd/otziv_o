@@ -34,7 +34,7 @@ class ManagerReportReviewAccessPolicyTest {
         when(settings.getBoolean("manager.report-review.restriction-enabled", true)).thenReturn(true);
         when(settings.getInt("manager.report-review.reminder-three-minutes", 180)).thenReturn(180);
         when(qualityService.aiAvailable()).thenReturn(true);
-        policy = new ManagerReportReviewAccessPolicy(repository, settings, qualityService);
+        policy = new ManagerReportReviewAccessPolicy(repository, settings, qualityService, mock(ManagerReportReviewRolloutPolicy.class));
         manager = User.builder().id(17L).username("manager").active(true).build();
     }
 

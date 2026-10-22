@@ -26,7 +26,7 @@ class DeepSeekProviderTest {
         HttpServer server = completionServer(requestBody, authorization, """
                 {
                   "id": "chat_test",
-                  "model": "deepseek-v4-pro",
+                  "model": "deepseek-flash",
                   "choices": [
                     {
                       "finish_reason": "stop",
@@ -65,7 +65,7 @@ class DeepSeekProviderTest {
             assertThat(authorization.get()).isEqualTo("Bearer test-deepseek-key");
 
             JsonNode sent = objectMapper.readTree(requestBody.get());
-            assertThat(sent.path("model").asText()).isEqualTo("deepseek-v4-pro");
+            assertThat(sent.path("model").asText()).isEqualTo("deepseek-flash");
             assertThat(sent.path("max_tokens").asInt()).isEqualTo(9000);
             assertThat(sent.path("thinking").path("type").asText()).isEqualTo("enabled");
             assertThat(sent.path("reasoning_effort").asText()).isEqualTo("high");
@@ -143,7 +143,6 @@ class DeepSeekProviderTest {
         ReputationAiProperties properties = new ReputationAiProperties();
         properties.getDeepseek().setApiKey("test-deepseek-key");
         properties.getDeepseek().setBaseUrl("http://127.0.0.1:" + server.getAddress().getPort());
-        properties.getDeepseek().setModel("deepseek-v4-pro");
         properties.getDeepseek().setTimeout(Duration.ofSeconds(5));
         properties.getDeepseek().setMaxTokens(24000);
         properties.getDeepseek().setThinkingEnabled(true);

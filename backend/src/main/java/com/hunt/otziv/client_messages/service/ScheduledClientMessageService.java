@@ -193,6 +193,7 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
     private final ScheduledDeliveryRecovery deliveryRecovery;
     private final SchedulerLeaseService schedulerLeaseService;
     private final ClientMessageTime messageTime;
+    private final org.springframework.context.ApplicationEventPublisher applicationEvents;
     @Value("${client.messages.reconcile-interval:PT5M}")
     private Duration reconcileInterval;
     @Value("${client.messages.reconcile-lease-duration:PT10M}")
@@ -3358,6 +3359,7 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
                 .messagePreview(limit(message, 500))
                 .durationMs(durationMs)
                 .build());
+        applicationEvents.publishEvent(new com.hunt.otziv.client_messages.api.ClientMessageAttemptRecorded(state.getId()));
     }
 
     private Company resolveCompany(ScheduledClientMessageState state) {

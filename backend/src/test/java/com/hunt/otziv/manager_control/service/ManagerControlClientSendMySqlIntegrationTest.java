@@ -179,9 +179,9 @@ class ManagerControlClientSendMySqlIntegrationTest {
         });
         var access = new ManagerControlAccessPolicy(mock(ManagerRepository.class), users,
                 mock(ManagerAccessService.class), permissions);
-        var lifecycle = new ManagerControlCardLifecycle(cards, items, events, mock(ManagerPerformanceService.class), mock(ManagerControlReadSnapshots.class));
+        var lifecycle = new ManagerControlCardLifecycle(cards, items, events, mock(ManagerPerformanceService.class), mock(ManagerControlReadSnapshots.class), mock(com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosticsService.class));
         var texts = new ManagerControlClientMessageText(mock(ScheduledClientMessageService.class), orders);
-        var presenter = new ManagerControlConcretePresenter(mock(WorkerRiskIncidentRepository.class), lookup,
+        var presenter = new ManagerControlConcretePresenter(mock(com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosticsService.class), mock(com.hunt.otziv.manager_daily_summary.service.ManagerReportReviewCommitmentService.class), mock(WorkerRiskIncidentRepository.class), lookup,
                 mock(ManagerControlInvoiceDiagnostics.class), mock(ScheduledClientMessageStateRepository.class),
                 mock(CompanyRepository.class), new ManagerControlSlaPolicy(mock(AppSettingService.class)));
         jdbc.execute("DROP TABLE IF EXISTS manager_client_message_queue");

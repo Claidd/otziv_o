@@ -1,6 +1,7 @@
 package com.hunt.otziv.manager_control.service;
 
 import com.hunt.otziv.manager_control.model.ManagerDailyControl;
+import com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosticsService;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlActionType;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlConcreteItem;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlEvent;
@@ -28,6 +29,7 @@ public class ManagerControlCardLifecycle {
     private final ManagerDailyControlEventRepository dailyControlEventRepository;
     private final ManagerPerformanceService managerPerformanceService;
     private final ManagerControlReadSnapshots readSnapshots;
+    private final ManagerProblemDiagnosticsService diagnostics;
 
     void recordItemEpisode(
             ManagerDailyControlItem item,
@@ -56,6 +58,11 @@ public class ManagerControlCardLifecycle {
             ManagerDailyControlItemStatus outcome,
             boolean automatic
     ) {
+        // Emit before counters/status are changed; the listener reads the final row only AFTER_COMMIT.
+        // Deferred cards also close: they must be observed even though episode counters apply only to OPEN.
+        if (item != null && outcome == ManagerDailyControlItemStatus.RESOLVED && item.getId() != null) {
+            diagnostics.requestRefresh(item.getId());
+        }
         if (item == null || item.getStatus() != ManagerDailyControlItemStatus.OPEN || outcome == null) {
             return;
         }

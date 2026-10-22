@@ -25,6 +25,8 @@ import java.util.Locale;
 @Service
 @RequiredArgsConstructor
 public class ManagerControlConcretePresenter {
+    private final com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosticsService diagnostics;
+    private final com.hunt.otziv.manager_daily_summary.service.ManagerReportReviewCommitmentService commitments;
     private final WorkerRiskIncidentRepository riskIncidentRepository;
     private final ManagerControlWorkerTaskLookup workerTaskLookup;
     private final ManagerControlInvoiceDiagnostics invoiceDiagnostics;
@@ -93,7 +95,8 @@ public class ManagerControlConcretePresenter {
                 null,
                 null
         );
-        return slaPolicy.decorateConcreteSla(item.getParentItem(), response.withSla(item.getCreatedAt(), null, null, null));
+        return slaPolicy.decorateConcreteSla(item.getParentItem(), response.withSla(item.getCreatedAt(), null, null, null))
+                .withDiagnosis(diagnostics.latest(item.getId())).withAuditCommitments(commitments.forSource(item.getId()));
     }
 
     String companyBoardUrlByKeyword(String keyword, String fallbackUrl) {
@@ -202,7 +205,8 @@ public class ManagerControlConcretePresenter {
                 null,
                 null
         );
-        return slaPolicy.decorateConcreteSla(item.getParentItem(), response.withSla(item.getCreatedAt(), null, null, null));
+        return slaPolicy.decorateConcreteSla(item.getParentItem(), response.withSla(item.getCreatedAt(), null, null, null))
+                .withDiagnosis(diagnostics.latest(item.getId())).withAuditCommitments(commitments.forSource(item.getId()));
     }
 
     String companySpecialistName(Company company) {

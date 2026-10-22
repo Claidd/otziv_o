@@ -1,11 +1,20 @@
 package com.hunt.otziv.manager_daily_summary.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.hunt.otziv.config.settings.service.AppSettingService;
+import com.hunt.otziv.manager_daily_summary.dto.ManagerReportReviewEvidenceSettings;
+import com.hunt.otziv.manager_daily_summary.dto.ManagerReportReviewSettingsRequest;
 import com.hunt.otziv.manager_daily_summary.model.ManagerReportReviewEvent;
 import com.hunt.otziv.manager_daily_summary.model.ManagerReportReviewIssue;
 import com.hunt.otziv.manager_daily_summary.model.ManagerReportReviewIssueStatus;
@@ -109,5 +118,94 @@ class ManagerReportReviewSettingsServiceTest {
         assertThat(manager.isReportReviewEnabled()).isTrue();
         verify(managerRepository).save(manager);
         verify(accessPolicy).invalidate(17L);
+    }
+
+    @Test
+    void storesIndependentRolloutAndBudgetsAndInvalidatesWorkingAccessCache() {
+        User user = User.builder().id(17L).build();
+        when(managerRepository.findAllForReportReviewSettings()).thenReturn(List.of(
+                Manager.builder().id(2L).user(user).build()));
+        when(managerRepository.existsById(2L)).thenReturn(true);
+        defaultReads();
+        var evidence = evidence("PILOT", List.of(2L), "ENFORCE", List.of());
+
+        service.update(request(evidence));
+
+        verify(settings).setString("manager-control.diagnostics.mode", "PILOT");
+        verify(settings).setString("manager-control.diagnostics.pilot-manager-ids", "2");
+        verify(settings).setString("manager.report-review.evidence-mode", "ENFORCE");
+        verify(settings).setInt("manager-control.diagnostics.max-requests-per-hour", 40);
+        verify(settings).setInt("manager.report-review.answer-assessment-max-tokens", 7000);
+        verify(settings).setInt("manager.report-review.answer-assessment-timeout-seconds", 100);
+        verify(settings).setBoolean("manager.report-review.answer-assessment-thinking", true);
+        verify(settings).setInt("manager.report-review.question-generation-timeout-seconds", 120);
+        verify(settings).setBoolean("manager.report-review.question-generation-thinking", false);
+        verify(settings).setInt("manager.report-review.evidence-max-age-minutes", 10);
+        verify(accessPolicy).invalidate(17L);
+    }
+
+    @Test
+    void legacyRequestKeepsRolloutSettingsAndIgnoresRetiredHeuristics() {
+        defaultReads();
+        service.update(request(null));
+        verify(settings, never()).setString(eq("manager.report-review.evidence-mode"), anyString());
+        verify(settings, never()).setInt(eq("manager.report-review.minimum-answer-score"), anyInt());
+        verify(settings, never()).setInt(eq("manager.report-review.fast-paste-seconds"), anyInt());
+        verify(settings, never()).setInt(eq("manager.report-review.max-answer-characters"), anyInt());
+    }
+
+    @Test
+    void rejectsEmptyPilotBeforeWritingAnySettings() {
+        assertThatThrownBy(() -> service.update(request(evidence("SHADOW", List.of(), "PILOT", List.of()))))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .hasMessageContaining("Выберите менеджеров пилота");
+        verifyNoInteractions(settings);
+    }
+
+    @Test
+    void rejectsUnknownManagerBeforeWritingAnySettings() {
+        when(managerRepository.existsById(999L)).thenReturn(false);
+        assertThatThrownBy(() -> service.update(request(evidence("PILOT", List.of(999L), "SHADOW", List.of()))))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .hasMessageContaining("999");
+        verifyNoInteractions(settings);
+    }
+
+    @Test
+    void rejectsUnknownModeInsteadOfSilentlyEnforcing() {
+        assertThatThrownBy(() -> service.update(request(evidence("PILTO", List.of(), "SHADOW", List.of()))))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .hasMessageContaining("Неизвестный режим");
+        verifyNoInteractions(settings);
+    }
+
+    @Test
+    void reportsConfiguredRolloutAndResourceSettings() {
+        defaultReads();
+        when(settings.getString("manager.report-review.evidence-mode", "SHADOW")).thenReturn("PILOT");
+        when(settings.getString("manager.report-review.evidence-pilot-manager-ids", "")).thenReturn("2, 2, 3");
+        var response = service.settings();
+        assertThat(response.evidence().answerMode()).isEqualTo("PILOT");
+        assertThat(response.evidence().answerPilotManagerIds()).containsExactly(2L, 3L);
+        assertThat(response.evidence().answerTimeoutSeconds()).isEqualTo(90);
+        assertThat(response.evidence().diagnosisMaxOutputTokens()).isEqualTo(8000);
+    }
+
+    private void defaultReads() {
+        when(settings.getInt(anyString(), anyInt())).thenAnswer(call -> call.getArgument(1));
+        when(settings.getBoolean(anyString(), anyBoolean())).thenAnswer(call -> call.getArgument(1));
+        when(settings.getString(anyString(), anyString())).thenAnswer(call -> call.getArgument(1));
+    }
+
+    private ManagerReportReviewSettingsRequest request(ManagerReportReviewEvidenceSettings evidence) {
+        // Retired JSON fields may be omitted (zero) by current clients.
+        return new ManagerReportReviewSettingsRequest(true, true, true, 8, 60, 10, 60, 180,
+                0, 0, 0, 0, 0, 0, 0, 0, 8000, 12000, evidence);
+    }
+
+    private ManagerReportReviewEvidenceSettings evidence(String diagnosis, List<Long> diagnosisIds,
+                                                        String answer, List<Long> answerIds) {
+        return new ManagerReportReviewEvidenceSettings(diagnosis, diagnosisIds, 40, 5000, 45, true,
+                answer, answerIds, 7000, 100, true, 120, false, 10);
     }
 }
