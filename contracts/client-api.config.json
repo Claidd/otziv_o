@@ -9,7 +9,8 @@
     "/api/admin/manager-control/",
     "/api/admin/manager-daily-summary/",
     "/api/cabinet/payment-profile/",
-    "/api/cabinet/manual-payment-tasks"
+    "/api/cabinet/manual-payment-tasks",
+    "/api/orders/{orderId}/manual-payment-review"
   ],
   "statusOverrides": {
     "GET /api/payments/public/tbank-status": 404
@@ -19,6 +20,8 @@
     "DailyWorkProgressResponse": ["calculatedAt"],
     "ManagerControlConcreteItemResponse": ["delivery", "diagnosis", "auditCommitments", "clientMessageSendBlockedReason"],
     "ManagerReportReviewResponse": ["answerAttempts"],
+    "ManagerManualCardPaymentResultResponse": ["manualPaymentReview"],
+    "SpecialistManualPaymentReviewResponse": ["creditedAt", "confirmationBasis"],
     "CommonInvoiceDetailsResponse": ["delivery"],
     "CommonInvoicePaymentRouteChangeContextResponse": ["ownerManualRoute"]
   },

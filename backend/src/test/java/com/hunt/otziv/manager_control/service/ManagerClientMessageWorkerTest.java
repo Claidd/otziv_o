@@ -124,4 +124,28 @@ class ManagerClientMessageWorkerTest {
         verify(control, never()).completeQueued(any(), any(), any(), eq(auth), any(), any(), anyInt());
         verify(control, times(1)).dispatchQueued(command);
     }
+
+    @Test void explicitRepairClaimsOnlyExistingReceiptAndUsesHistoryWithoutDispatch() {
+        var claim = new ManagerClientMessageQueue.Claim("op", 7L, "CONTROL", "UNKNOWN", 1, "lease");
+        when(queue.claimReceipt("op")).thenReturn(Optional.of(claim));
+        var preparedAt = java.time.LocalDateTime.now().minusDays(3);
+        when(queue.createdAt("op")).thenReturn(preparedAt);
+        var proof = ClientMessageSendResult.sent("WhatsApp", "proved-message");
+        when(delivery.recoverRecordedOutcomeFromChat("op", preparedAt)).thenReturn(proof);
+        worker.reconcileExisting("op");
+        verify(control).completeQueued(claim, command, proof, auth, "SENT", null, 0);
+        verify(control, never()).dispatchQueued(any());
+        verify(control, never()).validateQueued(any(), any());
+        verify(queue, never()).claim();
+    }
+
+    @Test void receiptOnlyAdmissionErrorCannotRearmTheUnknownOperation() {
+        var claim = claim("UNKNOWN", 1);
+        when(delivery.recoverRecordedOutcomeFromChat(eq("op"), any()))
+                .thenReturn(ClientMessageSendResult.failed("gateway_not_ready", "cannot prove old outcome"));
+        worker.drain();
+        verify(control).completeQueued(claim, command, null, null, "UNKNOWN", "gateway_not_ready", 300);
+        verify(control, never()).dispatchQueued(any());
+        verify(queue, never()).finish(any(), eq("RETRYABLE"), any(), anyInt());
+    }
 }

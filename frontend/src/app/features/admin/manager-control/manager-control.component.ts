@@ -1612,7 +1612,8 @@ export class ManagerControlComponent implements OnInit {
     }
     this.updatingConcreteItemIds.update((ids) => new Set(ids).add(itemId));
     this.api.repairConcreteItem(itemId).subscribe({
-      next: (updated) => this.completeConcreteRepair(example, updated),
+      next: (updated) => this.completeConcreteRepair(example, updated,
+        this.isDeliveryReconciliation(example) ? 'Результат отправки проверен' : 'Карточка починена'),
       error: (err) => {
         this.setConcreteUpdating(itemId, false);
         const message = apiErrorMessage(err, 'Автоматическая починка не сработала');
@@ -1620,10 +1621,21 @@ export class ManagerControlComponent implements OnInit {
           this.showManualChatBindingRepairToast(message, example);
           return;
         }
-        this.toast.error('Не удалось починить', message);
+        if (this.isDeliveryReconciliation(example)) this.toast.warning('Проверка отправки', message);
+        else this.toast.error('Не удалось починить', message);
         this.load({ silent: true });
       }
     });
+  }
+
+  isDeliveryReconciliation(example: ManagerControlConcreteItem): boolean {
+    if (!['ORDER', 'WORKER_ORDER_NEW', 'AUTOMATION_FAILURE', 'COMMON_INVOICE_AUTOMATION'].includes(example.type)) return false;
+    if (example.delivery?.status === 'UNKNOWN' || example.delivery?.errorCode === 'finalization_required') return true;
+    return /state_transaction_outcome_uncertain|manual_delivery_handoff_pending|ручная проверка продолжается|исход (?:предыдущей )?отправки (?:ещё )?не подтвержд|результат предыдущей отправки клиенту не подтвержд/i.test(example.reason ?? '');
+  }
+
+  repairActionLabel(example: ManagerControlConcreteItem): string {
+    return this.isDeliveryReconciliation(example) ? 'Проверить отправку' : 'Починить';
   }
 
   isUncertainDeliveryForHandoff(example: ManagerControlConcreteItem): boolean {
@@ -2093,9 +2105,8 @@ export class ManagerControlComponent implements OnInit {
 
   canRepairAutomationIssue(example: ManagerControlConcreteItem): boolean {
     const reason = (example.reason ?? '').toLowerCase();
-    if (reason.includes('manual_delivery_handoff_pending') || reason.includes('ручная проверка продолжается')) {
-      return false;
-    }
+    if ((example.type === 'ORDER' || example.type === 'WORKER_ORDER_NEW')
+      && (example.delivery?.status === 'UNKNOWN' || example.delivery?.errorCode === 'finalization_required')) return true;
     if (this.isAutomationWaitingForSlot(example)) {
       return false;
     }

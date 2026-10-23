@@ -312,6 +312,47 @@ class ManagerProblemDiagnosticsServiceTest {
         assertThat(service.resolutionState(10L)).isEqualTo(ResolutionState.OPEN);
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"READY", "NEEDS_CONTEXT"})
+    void storedReadinessAdviceKeepsAiAttributionButCannotCloseByDeadline(String status) throws Exception {
+        when(settings.mode()).thenReturn("ENFORCE");
+        var facts = ManagerProblemInvoiceReadinessPolicyTest.facts();
+        var original = ManagerProblemInvoiceReadinessPolicyTest.advice();
+        String stored = new ObjectMapper().writeValueAsString(original);
+        when(store.latestForSource(10L)).thenReturn(new ManagerProblemDiagnosisStore.Stored(1, 2, 1, 2, status,
+                LocalDateTime.now(), facts, original, "deepseek-flash", "manager-problem-evidence-v3", null, 1));
+        var result = service.latest(10L);
+        assertThat(result.model()).isEqualTo("deepseek-flash");
+        assertThat(result.status()).isEqualTo(status);
+        assertThat(result.diagnosis().summary()).isEqualTo(original.summary());
+        assertThat(result.diagnosis().verification().getLast()).contains("не закрывают");
+        assertThat(result.diagnosis().actions()).allSatisfy(a -> assertThat(a.verification()).contains("остаётся открытым"));
+        assertThat(new ObjectMapper().writeValueAsString(original)).isEqualTo(stored);
+        verify(store).latestForSource(10L);
+        verifyNoMoreInteractions(store);
+        verifyNoInteractions(collector, events);
+    }
+
+    @Test
+    void auditAdviceUsesReadinessClosureWithoutTurningThePolicyIntoAuthoritativeFacts() throws Exception {
+        when(settings.mode()).thenReturn("ENFORCE");
+        var facts = ManagerProblemInvoiceReadinessPolicyTest.facts();
+        var original = ManagerProblemInvoiceReadinessPolicyTest.advice();
+        var evidence = new ManagerProblemEvidenceCollector.Evidence("2:COMMON_INVOICE:1", 2, 10, false, facts, LocalDateTime.now());
+        when(collector.collect(10L)).thenReturn(evidence);
+        when(store.capture(evidence)).thenReturn(new ManagerProblemDiagnosisStore.Stored(1, 2, 1, 2, "READY", LocalDateTime.now(),
+                facts, original, "deepseek-flash", PROMPT_VERSION, null, 1));
+        String context = service.contextForAudit(List.of(10L));
+        String advice = context.lines().filter(line -> line.startsWith("Рекомендация ИИ caseId=")).findFirst().orElseThrow();
+        var json = new ObjectMapper().readTree(advice.substring(advice.indexOf(": ") + 2));
+        assertThat(json.path("verification").get(1).asText()).contains("не закрывают");
+        assertThat(json.path("actions").get(1).path("verification").asText()).contains("остаётся открытым");
+        assertThat(context.substring(context.lastIndexOf("СЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:")))
+                .contains("COLLECTING").doesNotContain("не закрывают", "остаётся открытым");
+        assertThat(original.actions().getLast().verification()).isEqualTo("Согласованный срок ещё не истёк.");
+        verifyNoInteractions(events);
+    }
+
     private void stub(List<Fact> facts) {
         var evidence = new ManagerProblemEvidenceCollector.Evidence("2:COMMON_INVOICE:189", 2, 10, false, facts, LocalDateTime.now());
         when(collector.collect(10L)).thenReturn(evidence);

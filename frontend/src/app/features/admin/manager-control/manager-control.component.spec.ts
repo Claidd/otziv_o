@@ -48,11 +48,17 @@ describe('Telegram automation binding', () => {
     })).toBe(true);
   });
 
-  it('keeps repair blocked while a delivery is being checked manually', () => {
+  it('allows a receipt-only recheck while a delivery is being checked manually', () => {
     const canRepair = ManagerControlComponent.prototype.canRepairAutomationIssue;
-    expect(canRepair.call({} as ManagerControlComponent, {
+    expect(canRepair.call({ isAutomationWaitingForSlot: () => false } as any, {
       type: 'AUTOMATION_FAILURE', reason: 'Группа Telegram не привязана к компании · Ручная проверка продолжается. Эта карточка остаётся открытой.'
-    } as any)).toBe(false);
+    } as any)).toBe(true);
+  });
+
+  it('offers receipt reconciliation for a manual UNKNOWN order operation even without a scheduled error', () => {
+    const card = { type: 'ORDER', reason: 'Заказ долго ожидает проверки', delivery: { status: 'UNKNOWN' } } as any;
+    expect(ManagerControlComponent.prototype.canRepairAutomationIssue.call({} as any, card)).toBe(true);
+    expect(ManagerControlComponent.prototype.isDeliveryReconciliation.call({} as any, card)).toBe(true);
   });
 
   it('recognizes a missing Telegram chatId as a binding action', () => {

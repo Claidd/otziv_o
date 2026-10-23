@@ -19,7 +19,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
-/** Retries only the immutable manager report after its accepted Telegram notice has aged 24h. */
+/** Posts an authorised receipt immediately; the deadline only finalises its dispute metadata. */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -50,14 +50,14 @@ public class SpecialistManualPaymentReviewSettlementService {
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Запрос не найден"));
         }
         try {
-            manualPayments.confirmSpecialistReviewPayment(
+            if (!claim.alreadyCredited()) manualPayments.confirmRecipientReviewPayment(
                     reviewId, claim.linkId(), receivedAmountKopecks,
                     "Выписка получателя проверена: " + cleanNote,
                     claim.receiptUrl(), authentication.getName(), authentication,
                     new ManualCardPaymentWorkflow.ManualCardPaymentContext(
                             ManualCardPaymentWorkflow.ManualCardPaymentMode.OWNER_VERIFIED,
                             claim.reason()),
-                    claim.profileId(), claim.recipientKey());
+                    claim.recipientType(), claim.profileId(), claim.recipientKey());
             SpecialistManualPaymentReviewResponse response = transactions.required(() -> {
                 SpecialistManualPaymentReview review = reviews.lockById(reviewId)
                         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Запрос не найден"));
@@ -131,88 +131,114 @@ public class SpecialistManualPaymentReviewSettlementService {
         reviews.save(review);
         return new Claim(review.getOrderId(), review.getPaymentLinkId(), review.getAmountKopecks(),
                 review.getRecipientProfileId(), review.getRecipientKey(), review.getReason(),
-                review.getReceiptUrl(), authentication.getName(), authentication.getName(), List.of());
+                review.getReceiptUrl(), authentication.getName(), List.of(), review.getRecipientType(), review.getCreditedAt() != null);
     }
 
+    /** Idempotent finalisation: never calls a money-posting workflow. */
     public void settle(Long reviewId) {
-        Claim claim = transactions.required(() -> claim(reviewId));
-        if (claim == null) {
-            return;
-        }
-        SecurityContext previousContext = SecurityContextHolder.getContext();
+        transactions.required(() -> {
+            SpecialistManualPaymentReview review = reviews.lockById(reviewId).orElse(null);
+            if (review == null || review.getCreditedAt() == null || review.getDeadlineAt() == null
+                    || LocalDateTime.now().isBefore(review.getDeadlineAt()) || review.getDisputedAt() != null
+                    || review.getStatus() == SpecialistManualPaymentReviewStatus.DISPUTED
+                    || review.getStatus() == SpecialistManualPaymentReviewStatus.ADMIN_SETTLING
+                    || review.getStatus() == SpecialistManualPaymentReviewStatus.CONFIRMED
+                    || review.getStatus() == SpecialistManualPaymentReviewStatus.SUPERSEDED) return null;
+            review.setStatus(SpecialistManualPaymentReviewStatus.CONFIRMED);
+            review.setSettledAt(LocalDateTime.now());
+            review.setResolutionKind("NO_OBJECTION_24H");
+            review.setResolvedAt(LocalDateTime.now());
+            review.setResolvedBy("system");
+            review.setResolutionNote("За 24 часа от отметки менеджера спор не зарегистрирован; банковская проверка не выполнялась");
+            reviews.save(review);
+            issues.resolveOrderIssueInCurrentTransaction(SpecialistManualPaymentReviewService.SETTLEMENT_ISSUE, reviewId);
+            return null;
+        });
+    }
+
+    /** Used by new submissions and narrowly eligible legacy manager reports, never by bank callbacks. */
+    public void creditNow(Long reviewId) {
+        if (reviewReconciliation.supersedeOnConfirmedBankPayment(reviewId)) return;
+        Claim claim = transactions.required(() -> claimImmediate(reviewId));
+        if (claim == null) return;
+        SecurityContext previous = SecurityContextHolder.getContext();
+        SecurityContext context = SecurityContextHolder.createEmptyContext();
+        Authentication authentication = new UsernamePasswordAuthenticationToken(
+                claim.actor(), null, claim.authorities());
+        context.setAuthentication(authentication);
+        SecurityContextHolder.setContext(context);
         try {
-            Authentication auth = new UsernamePasswordAuthenticationToken(
-                    claim.username(), null, claim.authorities());
-            SecurityContext context = SecurityContextHolder.createEmptyContext();
-            context.setAuthentication(auth);
-            SecurityContextHolder.setContext(context);
-            manualPayments.confirmSpecialistReviewPayment(
-                    reviewId, claim.linkId(), claim.amountKopecks(), "Причина менеджера: " + claim.reason(),
-                    claim.receiptUrl(), claim.actor(), auth,
+            manualPayments.confirmRecipientReviewPayment(reviewId, claim.linkId(), claim.amountKopecks(),
+                    "Причина менеджера: " + claim.reason(), claim.receiptUrl(), claim.actor(), authentication,
                     new ManualCardPaymentWorkflow.ManualCardPaymentContext(
-                            ManualCardPaymentWorkflow.ManualCardPaymentMode.MANAGER_REPORTED,
-                            claim.reason()),
-                    claim.profileId(), claim.recipientKey());
-            transactions.required(() -> {
-                SpecialistManualPaymentReview review = reviews.lockById(reviewId).orElse(null);
-                if (review != null && review.getStatus() == SpecialistManualPaymentReviewStatus.SETTLING) {
-                    review.setStatus(SpecialistManualPaymentReviewStatus.CONFIRMED);
-                    review.setSettledAt(LocalDateTime.now());
-                    review.setLastError(null);
-                    reviews.save(review);
-                }
-                return null;
-            });
-            issues.resolveOrderIssue(claim.orderId(),
-                    SpecialistManualPaymentReviewService.SETTLEMENT_ISSUE, reviewId);
-        } catch (RuntimeException failure) {
-            if (!reviewReconciliation.supersedeOnConfirmedBankPayment(reviewId)) {
-                recordFailure(reviewId, claim.orderId(), failure);
+                            ManualCardPaymentWorkflow.ManualCardPaymentMode.MANAGER_REPORTED, claim.reason()),
+                    claim.recipientType(), claim.profileId(), claim.recipientKey());
+            if (!transactions.required(() -> finishImmediate(reviewId))) {
+                throw new IllegalStateException("Финансовая транзакция не сохранила подтверждение зачисления");
             }
+        } catch (RuntimeException failure) {
+            // A failure after commit must not turn a proven receipt into an unpaid retry.
+            if (transactions.required(() -> finishImmediate(reviewId))) return;
+            if (reviewReconciliation.supersedeOnConfirmedBankPayment(reviewId)) return;
+            recordFailure(reviewId, claim.orderId(), failure);
+            throw failure;
         } finally {
-            SecurityContextHolder.setContext(previousContext);
+            SecurityContextHolder.setContext(previous);
         }
     }
 
-    private Claim claim(Long id) {
-        SpecialistManualPaymentReview review = reviews.lockById(id).orElse(null);
-        if (review == null || review.getNotifiedAt() == null || review.getDeadlineAt() == null) {
+    private Claim claimImmediate(Long reviewId) {
+        SpecialistManualPaymentReview review = reviews.lockById(reviewId).orElse(null);
+        if (review == null) return null;
+        if (review.getCreditedAt() != null) {
+            finishImmediate(reviewId);
             return null;
         }
-        LocalDateTime now = LocalDateTime.now();
-        if (now.isBefore(review.getDeadlineAt())) {
-            return null;
-        }
-        boolean waiting = review.getStatus() == SpecialistManualPaymentReviewStatus.WAITING;
-        boolean abandonedAttempt = review.getStatus() == SpecialistManualPaymentReviewStatus.SETTLING
-                && review.getLastAttemptAt() != null
-                && review.getLastAttemptAt().isBefore(now.minusMinutes(15));
-        if (!waiting && !abandonedAttempt) {
-            return null;
-        }
-        if (review.getLastAttemptAt() != null
-                && review.getLastAttemptAt().isAfter(now.minusMinutes(5))) {
-            return null;
-        }
-        SpecialistPaymentReviewDirectory.Actor requester = users.activeActor(review.getRequestedByUserId()).orElse(null);
-        if (requester == null) {
+        boolean notificationOnly = review.getStatus() == SpecialistManualPaymentReviewStatus.NEEDS_ATTENTION
+                && review.getLastError() != null
+                && (review.getLastError().startsWith("Уведомление")
+                    || review.getLastError().startsWith("Исход отправки Telegram")
+                    || review.getLastError().startsWith("Исход предыдущей отправки Telegram")
+                    || review.getLastError().startsWith("За 24 часа не было подтверждено уведомление"));
+        boolean staleClaim = review.getStatus() == SpecialistManualPaymentReviewStatus.SETTLING
+                && review.getCreditClaimedAt() != null
+                && review.getCreditClaimedAt().isBefore(LocalDateTime.now().minusMinutes(15));
+        if (review.getDisputedAt() != null || review.getResolvedAt() != null
+                || review.getRequestedAt() == null || review.getDeadlineAt() == null
+                || review.getAmountKopecks() <= 0 || review.getRecipientType() == null
+                || review.getRecipientKey() == null || review.getRecipientKey().isBlank()
+                || (review.getStatus() != SpecialistManualPaymentReviewStatus.PENDING_DELIVERY
+                    && review.getStatus() != SpecialistManualPaymentReviewStatus.WAITING
+                    && !notificationOnly && !staleClaim)) return null;
+        SpecialistPaymentReviewDirectory.Actor original = users.activeActor(review.getRequestedByUserId()).orElse(null);
+        if (original == null) {
             review.setStatus(SpecialistManualPaymentReviewStatus.NEEDS_ATTENTION);
-            review.setLastError("Исходный менеджер больше не имеет доступа");
+            review.setLastError("Исходный менеджер больше не имеет активного доступа; требуется ручная сверка");
             reviews.save(review);
-            issues.notifyOrderIssueAfterCommit(review.getOrderId(),
-                    SpecialistManualPaymentReviewService.SETTLEMENT_ISSUE, review.getId(),
-                    "Оплата специалисту требует сверки: заказ №" + review.getOrderId(),
-                    review.getLastError());
             return null;
         }
         review.setStatus(SpecialistManualPaymentReviewStatus.SETTLING);
-        review.setLastAttemptAt(now);
+        review.setCreditClaimedAt(LocalDateTime.now());
         review.setAttemptCount(review.getAttemptCount() + 1);
-        reviews.save(review);
+        reviews.saveAndFlush(review);
         return new Claim(review.getOrderId(), review.getPaymentLinkId(), review.getAmountKopecks(),
-                review.getRecipientProfileId(), review.getRecipientKey(), review.getReason(),
-                review.getReceiptUrl(), review.getRequestedBy(), requester.username(),
-                requester.authorities());
+                review.getRecipientProfileId(), review.getRecipientKey(), review.getReason(), review.getReceiptUrl(),
+                original.username(), original.authorities(), review.getRecipientType(), false);
+    }
+
+    private boolean finishImmediate(Long reviewId) {
+        SpecialistManualPaymentReview review = reviews.lockById(reviewId).orElse(null);
+        if (review == null || review.getCreditedAt() == null) return false;
+        if (review.getStatus() == SpecialistManualPaymentReviewStatus.SETTLING) {
+            review.setStatus(review.getNotifiedAt() == null
+                    ? SpecialistManualPaymentReviewStatus.PENDING_DELIVERY : SpecialistManualPaymentReviewStatus.WAITING);
+            // Existing ambiguous/delayed notification remains quarantined; it is never resent.
+            if (review.getNotifiedAt() == null && review.getLastError() != null) {
+                review.setStatus(SpecialistManualPaymentReviewStatus.NEEDS_ATTENTION);
+            }
+            reviews.save(review);
+        }
+        return true;
     }
 
     private void recordFailure(Long reviewId, Long orderId, RuntimeException failure) {
@@ -251,6 +277,6 @@ public class SpecialistManualPaymentReviewSettlementService {
 
     private record Claim(Long orderId, Long linkId, long amountKopecks, Long profileId,
                          String recipientKey, String reason, String receiptUrl, String actor,
-                         String username, List<GrantedAuthority> authorities) {
+                         List<GrantedAuthority> authorities, String recipientType, boolean alreadyCredited) {
     }
 }

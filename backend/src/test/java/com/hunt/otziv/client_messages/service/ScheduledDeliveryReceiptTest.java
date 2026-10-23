@@ -134,4 +134,17 @@ class ScheduledDeliveryReceiptTest {
         verify(whatsapp, never()).reconcileOperation(any(), any(), any());
         verify(whatsapp, never()).sendMessageToGroup(any(), any(), any(), any());
     }
+
+    @Test void multipleIdenticalOutgoingMessagesAreNotAssignedArbitrarilyToAnOperation() {
+        frozen();
+        when(whatsapp.reconcileGroupMessagesForReceipt(eq("client"), anyList())).thenReturn(List.of(
+                new WhatsAppReconciledMessage("client", "12345678@g.us", null, null, null,
+                        "provider-42", 1788883200L, true, true, "1200 руб."),
+                new WhatsAppReconciledMessage("client", "12345678@g.us", null, null, null,
+                        "provider-43", 1788883201L, true, true, "1200 руб.")));
+        assertThat(sender.recoverRecordedOutcomeFromChat("operation:1", LocalDateTime.of(2026, 9, 8, 10, 0)).errorCode())
+                .isEqualTo("whatsapp_history_evidence_ambiguous");
+        verify(whatsapp, never()).reconcileOperation(any(), any(), any());
+        verify(whatsapp, never()).sendMessageToGroup(any(), any(), any(), any());
+    }
 }

@@ -20,15 +20,34 @@ final class ManagerProblemBusinessDiagnosis {
         if (diagnosis == null) return null;
         String type = value(facts, "card", "entity_type");
         List<String> verification;
-        if ("CLIENT_CHAT_UNANSWERED".equals(type)) {
+        List<Action> actions = diagnosis.actions();
+        if (ordinaryInvoiceReadiness(facts)) {
+            verification = List.of("Все необходимые позиции подтверждённо готовы либо их ненужность или исключение обоснованы в исходных заказах и счёте, а причина замечания устранена. Либо источник штатно подтверждает, что сама причина отсутствует или больше не актуальна.",
+                    "Согласованный срок, внешняя зависимость или передача ответственному разрешают лишь отложить проверку. Они не закрывают замечание, даже если названы результатом отдельного действия.");
+            actions = actions.stream().map(action -> new Action(action.code(), action.text(), action.owner(),
+                    "WAIT_FOR_DEPENDENCY".equals(action.code())
+                            ? "Зафиксированы зависимость и срок следующей проверки; замечание отложено и остаётся открытым до подтверждения результата в источнике."
+                            : "Результат шага подтверждён записью исходного заказа или счёта. Срок или сообщение сотрудника не заменяют готовность позиции; при сохраняющейся причине замечание остаётся открытым.",
+                    action.evidenceRefs())).toList();
+        } else if ("CLIENT_CHAT_UNANSWERED".equals(type)) {
             verification = List.of("В исходной переписке после последнего сообщения клиента записан проверенный ответ по существу либо штатно подтверждено, что ответ не требуется, с зафиксированной причиной.",
                     "Передача обращения, назначение ответственного, взятие в работу и обещание ответить сами по себе не подтверждают устранение причины и не разрешают закрыть замечание.");
         } else if ("AUTOMATION_FAILURE".equals(type) && currentPaymentPreparationFailure(facts) != null) {
             verification = List.of("Исходный заказ и счёт подтверждают успешную подготовку существующего счёта и проверенный результат его отправки либо штатно зафиксированную ненужность этих действий с причиной.",
                     "Передача администратору, назначение срока следующей проверки и повторная неудачная попытка сами по себе не устраняют причину и не разрешают закрыть замечание.");
         } else return diagnosis;
-        return new Diagnosis(diagnosis.summary(), diagnosis.confirmedFacts(), diagnosis.hypotheses(), diagnosis.missingEvidence(), diagnosis.actions(),
+        return new Diagnosis(diagnosis.summary(), diagnosis.confirmedFacts(), diagnosis.hypotheses(), diagnosis.missingEvidence(), actions,
                 verification);
+    }
+
+    /** Readiness is not payment, archival reconciliation or an uncertain delivery. Unknown counts are not zero. */
+    static boolean ordinaryInvoiceReadiness(List<Fact> facts) {
+        if (!Set.of("COMMON_INVOICE", "COMMON_INVOICE_AUTOMATION").contains(value(facts, "card", "entity_type"))
+                || !"COLLECTING".equals(value(facts, "invoice", "status"))
+                || !uncertainDelivery(facts).isEmpty() || hasHistoricalInvoiceArchive(facts)
+                || number(facts, "invoice", "archivedActiveCount") != 0) return false;
+        long total = number(facts, "invoice", "orderCount"), ready = number(facts, "invoice", "readyCount");
+        return total > 0 && ready >= 0 && ready < total;
     }
 
     static boolean readable(Diagnosis value) {

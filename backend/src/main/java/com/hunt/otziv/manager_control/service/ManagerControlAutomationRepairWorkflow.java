@@ -57,6 +57,8 @@ public class ManagerControlAutomationRepairWorkflow {
 
     private final com.hunt.otziv.client_messages.api.CurrentOrderDeliveryUncertainty deliveryUncertainty;
 
+    private final ManagerControlManualDeliveryRepair manualDeliveryRepair;
+
     ManagerControlConcreteItemResponse repairAutomationFailureConcreteItem(ManagerDailyControlConcreteItem concreteItem, ManagerDailyControl control, Principal principal) {
         Manager manager = control.getManager();
         Optional<ManagerAutomationFailureService.AutomationFailureIssue> currentIssue = managerAutomationFailureService.findIssue(manager, concreteItem.getEntityType(), concreteItem.getEntityId());
@@ -64,7 +66,6 @@ public class ManagerControlAutomationRepairWorkflow {
             return resolveRepairedConcreteItem(concreteItem, control, "Ошибка автоматизации уже устранена, карточка перепроверена", principal, "Перепроверена устраненная ошибка автоматизации");
         }
         ManagerAutomationFailureService.AutomationFailureIssue issue = currentIssue.get();
-        ensureAutomationChatReady(issue);
         Optional<ScheduledClientMessageService.RecoveredBadReviewDeliveryResult> recovered = recoverUncertainBadReviewDelivery(issue, manager);
         if (recovered.isPresent()) {
             ScheduledClientMessageService.RecoveredBadReviewDeliveryResult result = recovered.get();
@@ -72,14 +73,9 @@ public class ManagerControlAutomationRepairWorkflow {
         }
         ScheduledClientMessageState uncertainState = scheduledClientMessageStateRepository
                 .findById(issue.stateId()).orElse(null);
-        if (uncertainState != null && ClientMessageStateSafety.MANUAL_DELIVERY_HANDOFF_PENDING.equals(
-                uncertainState.getLastErrorCode())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Эта отправка передана на ручную проверку. Автоматический повтор остаётся заблокированным; "
-                    + "завершите общение с клиентом по карточке.");
-        }
         if (uncertainState != null && uncertainState.getScenario() != ClientMessageScenario.BAD_REVIEW_INVOICE
-                && ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN.equals(uncertainState.getLastErrorCode())) {
+                && (ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN.equals(uncertainState.getLastErrorCode())
+                    || ClientMessageStateSafety.MANUAL_DELIVERY_HANDOFF_PENDING.equals(uncertainState.getLastErrorCode()))) {
             var receipt = scheduledClientMessageService.recoverUncertainOrdinaryDelivery(issue.stateId());
             if (receipt == ScheduledClientMessageService.OrdinaryDeliveryRecoveryResult.HISTORY_UNAVAILABLE) {
                 throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
@@ -88,7 +84,9 @@ public class ManagerControlAutomationRepairWorkflow {
             }
             if (receipt == ScheduledClientMessageService.OrdinaryDeliveryRecoveryResult.HISTORY_CHECKED_NO_RECEIPT) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
-                        "История WhatsApp проверена, но квитанция прежней отправки не найдена. "
+                        ClientMessageStateSafety.MANUAL_DELIVERY_HANDOFF_PENDING.equals(uncertainState.getLastErrorCode())
+                        ? "Существующая отправка проверена повторно, но квитанция не найдена. Ручная проверка сохраняется; новое сообщение не отправлялось. Отсутствие записи в истории не доказывает, что сообщение не доставлено."
+                        : "История WhatsApp проверена, но квитанция прежней отправки не найдена. "
                         + "Сообщение всё ещё могло дойти до клиента. Нажмите «Передать вручную», "
                         + "чтобы зафиксировать проверку чата и связаться с клиентом; автоматический повтор заблокирован.");
             }
@@ -108,6 +106,7 @@ public class ManagerControlAutomationRepairWorkflow {
                         principal, "Подтверждена зависшая отправка по квитанции WhatsApp");
             }
         }
+        ensureAutomationChatReady(issue);
         ScheduledClientMessageService.ManualRetryResult retry = scheduledClientMessageService.retryNow(issue.stateId());
         Optional<ManagerAutomationFailureService.AutomationFailureIssue> remaining = managerAutomationFailureService.findIssue(manager, concreteItem.getEntityType(), concreteItem.getEntityId());
         if (remaining.isPresent()) {
@@ -128,8 +127,10 @@ public class ManagerControlAutomationRepairWorkflow {
         if (state == null || state.getScenario() != ClientMessageScenario.BAD_REVIEW_INVOICE || !ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN.equals(state.getLastErrorCode())) {
             return Optional.empty();
         }
-        boolean chatVerified = verifyUncertainDeliveryInWhatsAppChat(manager, state);
-        return scheduledClientMessageService.recoverUncertainBadReviewInvoiceDelivery(state.getId(), chatVerified);
+        var recovered = scheduledClientMessageService.recoverUncertainBadReviewInvoiceDelivery(state.getId(), false);
+        if (recovered.isEmpty()) throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "Исход отправки счёта пока не подтверждён квитанцией исходной операции. Совпадения текста недостаточно; новое сообщение не отправлялось.");
+        return recovered;
     }
 
     boolean verifyUncertainDeliveryInWhatsAppChat(Manager manager, ScheduledClientMessageState state) {
@@ -159,13 +160,12 @@ public class ManagerControlAutomationRepairWorkflow {
     }
 
     ManagerControlConcreteItemResponse repairOrderAutomationConcreteItem(ManagerDailyControlConcreteItem concreteItem, ManagerDailyControl control, Order order, Principal principal) {
+        var manual = manualDeliveryRepair.repair(concreteItem.getId(), order.getId(), control.managerId());
+        if (manual.isPresent()) return manual.get();
         Optional<ClientMessageScenario> currentScenario = scheduledClientMessageService.orderAutomationScenario(order);
         if (currentScenario.isPresent()) {
             var current = currentOrderAutomationState(order, currentScenario.get(), scheduledStatesByOrderId(List.of(order)));
             if (current != null && deliveryUncertainty.requiresReconciliation(current.getId())) {
-                if (ClientMessageStateSafety.MANUAL_DELIVERY_HANDOFF_PENDING.equals(current.getLastErrorCode()))
-                    throw new ResponseStatusException(HttpStatus.CONFLICT,
-                            "Отправка передана на ручную проверку. Новое сообщение заблокировано; завершите сверку существующей операции.");
                 var receipt = scheduledClientMessageService.recoverUncertainOrdinaryDelivery(current.getId());
                 if (receipt == ScheduledClientMessageService.OrdinaryDeliveryRecoveryResult.SENT_CONFIRMED)
                     return repairOutcome.recordConfirmedContact(concreteItem, control,

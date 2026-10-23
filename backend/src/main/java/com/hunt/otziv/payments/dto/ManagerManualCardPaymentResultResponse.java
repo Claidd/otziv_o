@@ -4,8 +4,20 @@ public record ManagerManualCardPaymentResultResponse(
         String status,
         Long orderId,
         Long paymentLinkId,
-        String message
+        String message,
+        ManualPaymentReviewView manualPaymentReview
 ) {
+    public ManagerManualCardPaymentResultResponse(String status, Long orderId, Long paymentLinkId, String message) {
+        this(status, orderId, paymentLinkId, message, null);
+    }
+
+    public static ManagerManualCardPaymentResultResponse credited(Long orderId, Long linkId, ManualPaymentReviewView review) {
+        String message = "CONFIRMED".equals(review.status()) ? "Оплата окончательно подтверждена"
+                : "DISPUTED".equals(review.status()) ? "Оплата учтена. Спор зарегистрирован; окончательное подтверждение остановлено"
+                : "Оплата учтена сразу. Специалист или получатель может сообщить менеджеру о споре в течение 24 часов от отметки; без спора подтверждение станет окончательным.";
+        return new ManagerManualCardPaymentResultResponse(COMPLETED, orderId, linkId, message, review);
+    }
+
     public static final String COMPLETED = "COMPLETED";
     public static final String OWNER_APPROVAL_PENDING = "OWNER_APPROVAL_PENDING";
     public static final String SPECIALIST_REVIEW_PENDING = "SPECIALIST_REVIEW_PENDING";
@@ -33,7 +45,7 @@ public record ManagerManualCardPaymentResultResponse(
                 SPECIALIST_REVIEW_PENDING,
                 orderId,
                 paymentLinkId,
-                "Запрос на проверку поступления сохранён. Отсчёт 24 часов идёт с отметки менеджера. До подтверждённой отправки специалисту и завершения проверки заказ не считается оплаченным."
+                "Отметка сохранена, но зачисление ещё не завершено. Требуется сверка исходного платежа."
         );
     }
 }

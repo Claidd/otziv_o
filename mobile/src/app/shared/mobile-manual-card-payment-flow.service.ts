@@ -1,15 +1,14 @@
 import { inject } from '@angular/core';
+import { manualPaymentResultNotice } from '@otziv/client-common/billing-payments';
 import { ManagerManualPaymentsApi } from '../core/manager-manual-payments.api';
 import { Injectable } from '@angular/core';
 import { ModalController, ToastController } from '@ionic/angular';
 import { firstValueFrom } from 'rxjs';
-import { ApiService } from '../core/api.service';
 import {
   MobileManualCardPaymentDialogComponent,
   type MobileManualCardPaymentOutcome
 } from './mobile-manual-card-payment-dialog.component';
 import {
-  mobileManualCardPaymentIsCompleted,
   mobileManualCardPaymentSelectionRecipient,
   mobileManualCardRecipientLabel,
 } from './mobile-manual-card-payment';
@@ -42,16 +41,12 @@ export class MobileManualCardPaymentFlowService {
     if (result.role !== 'submitted' || !result.data) {
       return null;
     }
-    const completed = mobileManualCardPaymentIsCompleted(result.data.result);
+    const notice = manualPaymentResultNotice(result.data.result);
     const toast = await this.toastController.create({
-      message: completed
-        ? `Оплата отмечена. Получатель — ${mobileManualCardRecipientLabel(result.data.recipient)}`
-        : result.data.result.message || (result.data.result.status === 'SPECIALIST_REVIEW_PENDING'
-          ? 'Специалист уведомлён. Зачисление ожидает его проверку или окончания 24 часов без возражения.'
-          : 'Запрос отправлен владельцу. До подтверждения заказ не считается оплаченным.'),
-      duration: 3200,
+      message: `${notice.title}. Получатель — ${mobileManualCardRecipientLabel(result.data.recipient)}. ${notice.detail}`,
+      duration: 6500,
       position: 'top',
-      color: completed ? 'success' : 'warning'
+      color: notice.tone
     });
     await toast.present();
     return result.data;

@@ -1,6 +1,7 @@
 package com.hunt.otziv.payments.service;
 
 import com.hunt.otziv.payments.model.PaymentLink;
+import java.time.LocalDateTime;
 import com.hunt.otziv.payments.model.SpecialistManualPaymentReview;
 import com.hunt.otziv.payments.model.SpecialistManualPaymentReviewStatus;
 import com.hunt.otziv.payments.repository.SpecialistManualPaymentReviewRepository;
@@ -47,6 +48,14 @@ public class SpecialistManualPaymentReviewGuard implements com.hunt.otziv.paymen
                                             boolean linkActualSpecialist,
                                             Long trustedReviewId,
                                             SpecialistManualPaymentReviewStatus trustedStatus) {
+        requireRecipientReviewAllowed(orderId, link, amountKopecks,
+                specialistRecipient ? "SPECIALIST" : null,
+                recipientProfileId, recipientKey, linkActualSpecialist ? "SPECIALIST" : null, trustedReviewId, trustedStatus);
+    }
+
+    public void requireRecipientReviewAllowed(Long orderId, PaymentLink link, Long amountKopecks,
+            String recipientType, Long recipientProfileId, String recipientKey,
+            String actualRecipientType, Long trustedReviewId, SpecialistManualPaymentReviewStatus trustedStatus) {
         List<SpecialistManualPaymentReview> unresolved = reviews.lockUnresolvedByOrderId(orderId, UNRESOLVED);
         if (trustedReviewId == null && unresolved.isEmpty()) {
             return;
@@ -62,10 +71,10 @@ public class SpecialistManualPaymentReviewGuard implements com.hunt.otziv.paymen
                     && Objects.equals(link.getOrderId(), orderId)
                     && Objects.equals(review.getAmountKopecks(), amountKopecks)
                     && link.getAmountKopecks() == review.getAmountKopecks()
-                    && specialistRecipient
+                    && Objects.equals(recipientType, review.getRecipientType())
                     && Objects.equals(review.getRecipientProfileId(), recipientProfileId)
                     && Objects.equals(review.getRecipientKey(), recipientKey)
-                    && linkActualSpecialist
+                    && Objects.equals(actualRecipientType, review.getRecipientType())
                     && Objects.equals(link.getManualActualRecipientProfileId(), review.getRecipientProfileId())
                     && Objects.equals(link.getManualActualRecipientUserId(), review.getRecipientUserId())) {
                 return;
@@ -74,4 +83,21 @@ public class SpecialistManualPaymentReviewGuard implements com.hunt.otziv.paymen
         throw new ResponseStatusException(HttpStatus.CONFLICT,
                 "Оплата специалисту ожидает сверки. Используйте исходный запрос подтверждения");
     }
+    /** Joins the financial transaction: the credit marker cannot commit without the receipt. */
+    @org.springframework.transaction.annotation.Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public void recordCredit(Long reviewId, Long sourceLinkId, LocalDateTime creditedAt) {
+        if (reviewId == null) return;
+        SpecialistManualPaymentReview review = reviews.lockById(reviewId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "Запрос оплаты утрачен"));
+        if (!Objects.equals(review.getPaymentLinkId(), sourceLinkId)
+                || (review.getStatus() != SpecialistManualPaymentReviewStatus.SETTLING
+                    && review.getStatus() != SpecialistManualPaymentReviewStatus.ADMIN_SETTLING)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Состояние подтверждения оплаты изменилось");
+        }
+        if (review.getCreditedAt() == null) {
+            review.setCreditedAt(creditedAt);
+            reviews.saveAndFlush(review);
+        }
+    }
+
 }

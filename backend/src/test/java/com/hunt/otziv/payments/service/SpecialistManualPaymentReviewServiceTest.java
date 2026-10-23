@@ -72,8 +72,8 @@ class SpecialistManualPaymentReviewServiceTest {
             link.setManualActualRecipientProfileId(27L);
             link.setManualActualRecipientUserId(37L);
             return null;
-        }).when(manualPayments).prepareSpecialistReviewRecipient(
-                eq(7L), eq(link), eq(27L),
+        }).when(manualPayments).prepareReviewRecipient(
+                eq(7L), eq(link), eq("SPECIALIST"), eq(27L),
                 eq("profile:27"), eq("Менеджер проверил чек"), eq(""), eq("manager"));
 
         SpecialistManualPaymentReview review = service.request(7L, 71L, 140_000L,
@@ -105,7 +105,7 @@ class SpecialistManualPaymentReviewServiceTest {
 
     @Test
     void telegramAcceptanceOpensDisputeWindowWithoutChangingDeadline() {
-        SpecialistManualPaymentReview review = pending();
+        SpecialistManualPaymentReview review = pending(); review.setCreditedAt(LocalDateTime.now());
         review.setId(101L);
         when(reviews.lockById(101L)).thenReturn(Optional.of(review));
         when(users.activePersonalTelegramChatId(37L)).thenReturn(Optional.of(999L));
@@ -124,7 +124,7 @@ class SpecialistManualPaymentReviewServiceTest {
 
     @Test
     void telegramAcceptanceSurvivesMySqlMicrosecondRoundTrip() {
-        SpecialistManualPaymentReview review = pending();
+        SpecialistManualPaymentReview review = pending(); review.setCreditedAt(LocalDateTime.now());
         review.setId(101L);
         when(reviews.lockById(101L)).thenAnswer(call -> {
             if (review.getLastAttemptAt() != null) {
@@ -145,7 +145,7 @@ class SpecialistManualPaymentReviewServiceTest {
 
     @Test
     void failedNotificationNeverEnablesAutomaticCredit() {
-        SpecialistManualPaymentReview review = pending(); review.setId(101L);
+        SpecialistManualPaymentReview review = pending(); review.setCreditedAt(LocalDateTime.now()); review.setId(101L);
         when(reviews.lockById(101L)).thenReturn(Optional.of(review));
         when(users.activePersonalTelegramChatId(37L)).thenReturn(Optional.of(999L));
         when(telegram.sendPaymentReviewNoticeOnce(eq(999L), any(), any(), any())).thenReturn(false);
@@ -161,7 +161,7 @@ class SpecialistManualPaymentReviewServiceTest {
 
     @Test
     void delayedNotificationDoesNotShortenSpecialistDisputeWindow() {
-        SpecialistManualPaymentReview review = pending(); review.setId(101L);
+        SpecialistManualPaymentReview review = pending(); review.setCreditedAt(LocalDateTime.now()); review.setId(101L);
         review.setRequestedAt(LocalDateTime.now().minusMinutes(6));
         when(reviews.lockById(101L)).thenReturn(Optional.of(review));
 
@@ -173,7 +173,7 @@ class SpecialistManualPaymentReviewServiceTest {
 
     @Test
     void unknownPriorTelegramAttemptCannotBeSentTwice() {
-        SpecialistManualPaymentReview review = pending(); review.setId(101L);
+        SpecialistManualPaymentReview review = pending(); review.setCreditedAt(LocalDateTime.now()); review.setId(101L);
         review.setRequestedAt(LocalDateTime.now().minusMinutes(4));
         review.setLastAttemptAt(LocalDateTime.now().minusMinutes(2));
         when(reviews.lockById(101L)).thenReturn(Optional.of(review));
@@ -186,7 +186,7 @@ class SpecialistManualPaymentReviewServiceTest {
 
     @Test
     void uncertainTelegramOutcomeRequiresManualReconciliationWithoutRetry() {
-        SpecialistManualPaymentReview review = pending(); review.setId(101L);
+        SpecialistManualPaymentReview review = pending(); review.setCreditedAt(LocalDateTime.now()); review.setId(101L);
         when(reviews.lockById(101L)).thenReturn(Optional.of(review));
         when(users.activePersonalTelegramChatId(37L)).thenReturn(Optional.of(999L));
         when(telegram.sendPaymentReviewNoticeOnce(eq(999L), any(), any(), any()))
@@ -218,7 +218,7 @@ class SpecialistManualPaymentReviewServiceTest {
 
     @Test
     void lateTelegramDeliveryRequiresManualReviewEvenWhenApiAccepted() {
-        SpecialistManualPaymentReview review = pending(); review.setId(101L);
+        SpecialistManualPaymentReview review = pending(); review.setCreditedAt(LocalDateTime.now()); review.setId(101L);
         review.setDeadlineAt(LocalDateTime.now().minusSeconds(1));
         when(reviews.lockById(101L)).thenReturn(Optional.of(review));
 
@@ -235,7 +235,7 @@ class SpecialistManualPaymentReviewServiceTest {
         review.setStatus(SpecialistManualPaymentReviewStatus.DISPUTED);
         PaymentLink bankLink = link(); bankLink.setPaymentMethod(PaymentMethod.BANK_FORM);
         bankLink.setStatus(PaymentLinkStatus.CREATED);
-        when(reviews.findById(101L)).thenReturn(Optional.of(review));
+        when(reviews.findBindingById(101L)).thenReturn(Optional.of(binding()));
         when(reviews.lockById(101L)).thenReturn(Optional.of(review));
         when(orderPaymentIntegrity.lockSpecialistReviewOrderEvidence(7L)).thenReturn(Optional.of(false));
         when(links.findByIdForUpdate(71L)).thenReturn(Optional.of(bankLink));
@@ -320,6 +320,95 @@ class SpecialistManualPaymentReviewServiceTest {
     private PaymentLink link() {
         PaymentLink link = new PaymentLink(); link.setId(71L); link.setOrder(order());
         link.setAmountKopecks(140_000L); return link;
+    }
+
+    @Test
+    void managerCanRecordRecipientDisputeForExactlyTheDisplayedPaymentWithoutChangingCredit() {
+        var review=pending(); review.setId(101L); review.setCreditedAt(LocalDateTime.now());
+        var credited=review.getCreditedAt();
+        when(orderPaymentIntegrity.lockSpecialistReviewOrderEvidence(7L)).thenReturn(Optional.of(true));
+        when(reviews.findLatestIdByOrderId(7L)).thenReturn(Optional.of(101L));
+        when(reviews.lockById(101L)).thenReturn(Optional.of(review));
+        var auth=new UsernamePasswordAuthenticationToken("manager",null);
+        assertThrows(ResponseStatusException.class,()->service.disputeForOrder(7L,102L,true,"Получатель сообщил об отсутствии",auth));
+        var result=service.disputeForOrder(7L,101L,true,"Получатель сообщил об отсутствии",auth);
+        verify(reviews,never()).findFirstByOrderIdOrderByIdDesc(anyLong());
+        assertEquals("DISPUTED",result.status());assertEquals(credited,result.creditedAt());
+        assertEquals("manager",review.getResolvedBy());assertNotNull(review.getDisputedAt());
+        verify(managerAccess,org.mockito.Mockito.times(2)).requireOrderAccess(7L,auth);
+        verify(manualConfirmation,never()).closeManualAsUnpaid(any(),anyBoolean(),anyBoolean(),any(),any(),any());
+    }
+
+    @Test
+    void creditedAbsenceRegistersDisputeWithoutPretendingToRefundOrCancelMoney() {
+        var review=pending();review.setId(101L);review.setCreditedAt(LocalDateTime.now());
+        when(reviews.findBindingById(101L)).thenReturn(Optional.of(binding()));
+        when(reviews.lockById(101L)).thenReturn(Optional.of(review));
+        when(orderPaymentIntegrity.lockSpecialistReviewOrderEvidence(7L)).thenReturn(Optional.of(true));
+        var source=link();source.setManualConfirmedAt(LocalDateTime.now());
+        when(links.findByIdForUpdate(71L)).thenReturn(Optional.of(source));
+        var response=service.markAbsent(101L,true,true,"Получатель проверил выписку",new UsernamePasswordAuthenticationToken("admin",null));
+        assertEquals(SpecialistManualPaymentReviewStatus.DISPUTED,response.status());assertNotNull(response.creditedAt());
+        verify(manualConfirmation,never()).closeManualAsUnpaid(any(),anyBoolean(),anyBoolean(),any(),any(),any());
+    }
+
+    @Test void genericReconcileDoesNotEndCreditedDisputeWindowOrResolveDispute() {
+        var review=pending();review.setId(101L);review.setCreditedAt(LocalDateTime.now());
+        review.setStatus(SpecialistManualPaymentReviewStatus.DISPUTED);
+        when(reviews.findById(101L)).thenReturn(Optional.of(review));when(reviews.lockById(101L)).thenReturn(Optional.of(review));
+        when(orderPaymentIntegrity.lockSpecialistReviewOrderEvidence(7L)).thenReturn(Optional.of(true));
+        when(links.findByIdForUpdate(71L)).thenReturn(Optional.of(link()));
+        var result=service.reconcileOperatorOutcome(101L);
+        assertEquals(SpecialistManualPaymentReviewStatus.DISPUTED,result.status());
+        verify(reviews,never()).save(any());verify(issues,never()).resolveOrderIssueInCurrentTransaction(any(),any());
+    }
+
+    @Test void identicalPaidSubmitReturnsExistingWindowWhileChangedReceiptIsRejected() {
+        var review=pending();review.setId(101L);review.setCreditedAt(LocalDateTime.now());review.setRecipientProfileId(27L);
+        review.setRecipientKey("PROFILE:27");review.setReason("Получено по чеку");review.setReceiptUrl("");
+        when(reviews.findFirstByOrderIdOrderByIdDesc(7L)).thenReturn(Optional.of(review));
+        var auth=new UsernamePasswordAuthenticationToken("manager",null);
+        var result=service.replayCredited(7L,"SPECIALIST",27L,"PROFILE:27","Получено по чеку","",auth);
+        assertEquals("COMPLETED",result.status());assertEquals(101L,result.manualPaymentReview().id());
+        assertEquals(review.getDeadlineAt(),result.manualPaymentReview().deadlineAt());
+        assertThrows(ResponseStatusException.class,()->service.replayCredited(7L,"SPECIALIST",27L,"PROFILE:27","Другое основание","",auth));
+        verify(manualPayments).requireCreditedReviewReplay(review,auth);
+        verify(links,never()).findById(anyLong());
+        verify(reviews,never()).save(any());verify(targetAccess,org.mockito.Mockito.times(2)).requireCanManagePaymentLink(71L);
+    }
+
+    @Test void disputeUsesLockedFinalStatusWithoutMaterialisingAnEarlierReviewEntity() {
+        var review=pending();review.setId(101L);review.setCreditedAt(LocalDateTime.now());
+        review.setStatus(SpecialistManualPaymentReviewStatus.CONFIRMED);
+        when(orderPaymentIntegrity.lockSpecialistReviewOrderEvidence(7L)).thenReturn(Optional.of(true));
+        when(reviews.findLatestIdByOrderId(7L)).thenReturn(Optional.of(101L));
+        when(reviews.lockById(101L)).thenReturn(Optional.of(review));
+        assertThrows(ResponseStatusException.class,()->service.disputeForOrder(7L,101L,true,
+                "Специалист сообщил об отсутствии",new UsernamePasswordAuthenticationToken("manager",null)));
+        assertEquals(SpecialistManualPaymentReviewStatus.CONFIRMED,review.getStatus());
+        verify(reviews,never()).findFirstByOrderIdOrderByIdDesc(anyLong());
+        verify(reviews,never()).findById(anyLong());verify(reviews,never()).saveAndFlush(any());
+    }
+
+    @Test void administratorAbsenceUsesLockedFinalStatusWithoutPreloadingReview() {
+        var review=pending();review.setId(101L);review.setCreditedAt(LocalDateTime.now());
+        review.setStatus(SpecialistManualPaymentReviewStatus.CONFIRMED);
+        when(reviews.findBindingById(101L)).thenReturn(Optional.of(binding()));
+        when(orderPaymentIntegrity.lockSpecialistReviewOrderEvidence(7L)).thenReturn(Optional.of(true));
+        when(links.findByIdForUpdate(71L)).thenReturn(Optional.of(link()));
+        when(reviews.lockById(101L)).thenReturn(Optional.of(review));
+        assertThrows(ResponseStatusException.class,()->service.markAbsent(101L,true,true,
+                "Специалист сообщил об отсутствии",new UsernamePasswordAuthenticationToken("admin",null)));
+        assertEquals(SpecialistManualPaymentReviewStatus.CONFIRMED,review.getStatus());
+        verify(reviews,never()).findById(anyLong());verify(reviews,never()).saveAndFlush(any());
+    }
+
+    private SpecialistManualPaymentReviewRepository.ReviewBinding binding() {
+        return new SpecialistManualPaymentReviewRepository.ReviewBinding() {
+            public Long getOrderId(){return 7L;}
+            public Long getPaymentLinkId(){return 71L;}
+            public Long getRecipientUserId(){return 37L;}
+        };
     }
 
     private SpecialistManualPaymentReview pending() {

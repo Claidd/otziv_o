@@ -3,6 +3,7 @@ package com.hunt.otziv.payments.service;
 import com.hunt.otziv.payments.model.SpecialistManualPaymentReviewStatus;
 import com.hunt.otziv.payments.repository.SpecialistManualPaymentReviewRepository;
 import java.time.LocalDateTime;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -22,6 +23,10 @@ public class SpecialistManualPaymentReviewScheduler {
 
     @Scheduled(fixedDelayString = "${otziv.payments.specialist-review-delay-ms:60000}")
     public void run() {
+        for (Long id : reviews.findCommittedClaimIds(LocalDateTime.now().minusMinutes(1), PageRequest.of(0,BATCH_SIZE))) {
+            try { settlement.creditNow(id); }
+            catch (RuntimeException failure) { log.warn("Committed payment review recovery failed: reviewId={}",id,failure); }
+        }
         for (Long id : reviews.findRetryableIds(
                 SpecialistManualPaymentReviewStatus.PENDING_DELIVERY,
                 LocalDateTime.now().minusMinutes(1), PageRequest.of(0, BATCH_SIZE))) {
@@ -31,26 +36,24 @@ public class SpecialistManualPaymentReviewScheduler {
                 log.warn("Specialist payment review notification failed: reviewId={}", id, failure);
             }
         }
-        for (Long id : reviews.findDueIds(
-                SpecialistManualPaymentReviewStatus.WAITING, LocalDateTime.now(),
-                LocalDateTime.now().minusMinutes(5),
-                PageRequest.of(0, BATCH_SIZE))) {
+        for (Long id : reviews.findUncreditedIds(List.of(
+                SpecialistManualPaymentReviewStatus.PENDING_DELIVERY, SpecialistManualPaymentReviewStatus.WAITING,
+                SpecialistManualPaymentReviewStatus.NEEDS_ATTENTION, SpecialistManualPaymentReviewStatus.SETTLING),
+                LocalDateTime.now().minusMinutes(15), PageRequest.of(0, BATCH_SIZE))) {
             try {
-                if (!notifications.supersedeOnConfirmedBankPayment(id)) {
-                    settlement.settle(id);
-                }
+                settlement.creditNow(id);
             } catch (RuntimeException failure) {
-                log.warn("Specialist payment review settlement failed: reviewId={}", id, failure);
+                log.warn("Manager reported payment needs reconciliation: reviewId={}", id, failure);
             }
         }
-        // Recover a process killed after claiming a row but before recording its result.
-        for (Long id : reviews.findRetryableIds(
-                SpecialistManualPaymentReviewStatus.SETTLING,
-                LocalDateTime.now().minusMinutes(15), PageRequest.of(0, BATCH_SIZE))) {
+        for (Long id : reviews.findCreditedDueIds(List.of(
+                SpecialistManualPaymentReviewStatus.PENDING_DELIVERY, SpecialistManualPaymentReviewStatus.WAITING,
+                SpecialistManualPaymentReviewStatus.NEEDS_ATTENTION, SpecialistManualPaymentReviewStatus.SETTLING),
+                LocalDateTime.now(), PageRequest.of(0, BATCH_SIZE))) {
             try {
                 settlement.settle(id);
             } catch (RuntimeException failure) {
-                log.warn("Specialist payment review recovery failed: reviewId={}", id, failure);
+                log.warn("Manager payment finalisation failed: reviewId={}", id, failure);
             }
         }
     }

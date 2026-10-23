@@ -1,0 +1,32 @@
+@if (presentation(); as state) {
+  <section class="payment-review" [class.attention]="state.tone === 'attention'" aria-label="Ручная оплата">
+    <header><strong>{{ state.title }}</strong>
+      <button type="button" (click)="load()" [disabled]="loading() || saving()">Обновить</button>
+    </header>
+    <p>{{ state.detail }}</p>
+    @if (review()?.status === 'PENDING_DELIVERY') {
+      <p>Уведомление получателю пока не доставлено.</p>
+    }
+    @if (canDispute() && !editing()) {
+      <button type="button" (click)="openDispute()" [disabled]="loading() || saving()">Сообщили, что перевод не поступил</button>
+    }
+    @if (editing()) {
+      <form (ngSubmit)="submitDispute()">
+        <p>Зафиксируйте реальное обращение специалиста или получателя. Отметка оплаты не отменяется автоматически; менеджеру потребуется сверка.</p>
+        <label><span>Что сообщил специалист или получатель</span>
+          <textarea name="disputeNote" [ngModel]="note()" (ngModelChange)="note.set($event)" rows="3" minlength="10" maxlength="500" required [disabled]="saving()"></textarea>
+        </label>
+        <label class="checkbox"><input type="checkbox" name="recipientReportedMissing" [ngModel]="checked()" (ngModelChange)="checked.set($event)" [disabled]="saving()">
+          <span>Специалист или получатель сообщил мне, что этот перевод не поступил</span>
+        </label>
+        <div class="actions">
+          <button type="button" (click)="editing.set(false)" [disabled]="saving()">Отмена</button>
+          <button type="submit" [disabled]="saving() || !checked() || note().trim().length < 10">{{ saving() ? 'Сохраняем…' : 'Зафиксировать возражение' }}</button>
+        </div>
+      </form>
+    }
+  </section>
+}
+@if (error(); as message) {
+  <div class="payment-review attention" role="alert"><p>{{ message }}</p><button type="button" (click)="load()" [disabled]="loading() || saving()">Обновить состояние</button></div>
+}

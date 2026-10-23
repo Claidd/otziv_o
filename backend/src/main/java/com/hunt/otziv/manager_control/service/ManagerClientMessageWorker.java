@@ -39,6 +39,13 @@ public class ManagerClientMessageWorker {
         }
     }
 
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public void reconcileExisting(String operationId) {
+        if (TransactionSynchronizationManager.isActualTransactionActive())
+            throw new IllegalStateException("Receipt lookup must not join a business transaction");
+        queue.claimReceipt(operationId).ifPresent(this::process);
+    }
+
     private void process(ManagerClientMessageQueue.Claim claim) {
         ManagerClientMessageQueue.Command command;
         try { command = queue.snapshot(claim.operationId()); }
@@ -67,7 +74,13 @@ public class ManagerClientMessageWorker {
                 result = "CONTROL".equals(command.kind()) ? control.dispatchQueued(command) : reply.dispatchQueued(command);
             } catch (RuntimeException uncertain) { holdUnknown(claim, command, "sender_exception"); return; }
         } else {
-            try { result = delivery.recordedOutcome(claim.operationId()); }
+            try {
+                result = delivery.recordedOutcome(claim.operationId());
+                if (!"SENT".equals(claim.previousState()) && (result == null || !result.sent())) {
+                    var recovered = delivery.recoverRecordedOutcomeFromChat(claim.operationId(), queue.createdAt(claim.operationId()));
+                    if (recovered != null) result = recovered;
+                }
+            }
             catch (RuntimeException unavailable) {
                 if ("SENT".equals(claim.previousState())) finish(claim, "SENT", "finalization_required", 300);
                 else holdUnknown(claim, command, "receipt_unavailable");
@@ -81,7 +94,7 @@ public class ManagerClientMessageWorker {
             finish(claim, "SENT", "finalization_required", 300);
             return;
         }
-        boolean knownUnsent = ClientMessageDelivery.isKnownUnsent(result);
+        boolean knownUnsent = claim.mayDispatch() && ClientMessageDelivery.isKnownUnsent(result);
         int attempts = claim.attempts() + (claim.mayDispatch() ? 1 : 0);
         String state = confirmed ? "SENT" : knownUnsent ? (attempts >= 5 ? "FAILED" : "RETRYABLE") : "UNKNOWN";
         String code = confirmed ? null : result == null ? "unconfirmed_result" : result.errorCode();

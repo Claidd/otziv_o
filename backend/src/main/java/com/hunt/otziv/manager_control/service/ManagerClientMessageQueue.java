@@ -143,6 +143,26 @@ public class ManagerClientMessageQueue implements com.hunt.otziv.client_messages
         return Optional.of(claim);
     }
 
+    /** Explicit receipt check never claims a command that is eligible for dispatch. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public Optional<Claim> claimReceipt(String operationId) {
+        var rows = jdbc.query("""
+                SELECT operation_id,card_id,command_kind,state,attempts FROM manager_client_message_queue
+                WHERE operation_id=? AND (state IN ('UNKNOWN','SENDING') OR (state='SENT' AND error_code='finalization_required'))
+                  AND (lease_until IS NULL OR lease_until<CURRENT_TIMESTAMP(6)) FOR UPDATE
+                """, (rs, row) -> new Claim(rs.getString(1),rs.getLong(2),rs.getString(3),rs.getString(4),rs.getInt(5),UUID.randomUUID().toString()), operationId);
+        if (rows.isEmpty()) return Optional.empty();
+        var claim = rows.getFirst();
+        jdbc.update("UPDATE manager_client_message_queue SET claim_token=?,lease_until=TIMESTAMPADD(MINUTE,5,CURRENT_TIMESTAMP(6)) WHERE operation_id=?",
+                claim.token(), operationId);
+        return Optional.of(claim);
+    }
+
+    LocalDateTime createdAt(String operationId) {
+        return jdbc.query("SELECT created_at FROM manager_client_message_queue WHERE operation_id=?",
+                (rs, row) -> rs.getTimestamp(1).toLocalDateTime(), operationId).stream().findFirst().orElse(null);
+    }
+
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean owns(Claim claim) {
         return jdbc.query("SELECT claim_token FROM manager_client_message_queue WHERE operation_id=? FOR UPDATE",

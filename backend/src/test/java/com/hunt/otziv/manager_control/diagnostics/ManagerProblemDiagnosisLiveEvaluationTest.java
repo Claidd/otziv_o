@@ -78,9 +78,11 @@ class ManagerProblemDiagnosisLiveEvaluationTest {
         var worker = new ManagerProblemDiagnosisWorker(diagnostics, mock(ManagerProblemEvidenceCollector.class), store,
                 new ManagerProblemDiagnosisValidator(mapper), model, settings, mapper, metrics);
         var invoice = job(1, List.of(
+                new Fact("card:9000:entity_type", "card", "entity_type", "COMMON_INVOICE"),
                 new Fact("invoice:9001:status", "invoice", "status", "COLLECTING"),
                 new Fact("invoice:9001:orderCount", "invoice", "orderCount", "2"),
                 new Fact("invoice:9001:readyCount", "invoice", "readyCount", "1"),
+                new Fact("invoice:9001:archivedActiveCount", "invoice", "archivedActiveCount", "0"),
                 new Fact("invoice:9001:orderIds", "invoice", "orderIds", "90011,90012"),
                 new Fact("order:90011:ready", "invoice_order", "ready", "true"),
                 new Fact("order:90012:ready", "invoice_order", "ready", "false")));
@@ -91,12 +93,13 @@ class ManagerProblemDiagnosisLiveEvaluationTest {
                 new Fact("automation:9002:consecutive_failures", "automation", "consecutive_failures", "3"),
                 new Fact("automation:9002:last_error_message", "automation", "last_error_message", "Внешняя отправка началась, подтверждение доставки не получено")));
         var largeInvoice = job(3, largeSyntheticInvoice());
-        assertThat(largeInvoice.facts()).hasSize(432);
+        assertThat(largeInvoice.facts()).hasSize(433); // Original 432 source facts + production aggregate money display.
         var historicalChat = job(4, historicalUnavailableChat());
         var historicalReview = job(5, historicalReviewForCurrentlyPaidOrder());
-        var fixtures = List.of(invoice, uncertainDelivery, largeInvoice, historicalChat, historicalReview);
-        when(store.claim(anyBoolean(), anyLong())).thenReturn(invoice, uncertainDelivery, largeInvoice,
-                historicalChat, historicalReview);
+        boolean invoiceOnly = "1".equals(System.getenv("RUN_MANAGER_DIAG_INVOICE_ONLY"));
+        var fixtures = invoiceOnly ? List.of(invoice, largeInvoice) : List.of(invoice, uncertainDelivery, largeInvoice, historicalChat, historicalReview);
+        var pending = new java.util.ArrayDeque<>(fixtures);
+        when(store.claim(anyBoolean(), anyLong())).thenAnswer(ignored -> pending.removeFirst());
         List<Map<String, Object>> results = new ArrayList<>();
         doAnswer(call -> {
             ManagerProblemDiagnosisStore.Stored source = call.getArgument(0);
@@ -112,6 +115,9 @@ class ManagerProblemDiagnosisLiveEvaluationTest {
             result.put("actions", diagnosis.actions());
             result.put("verification", diagnosis.verification());
             result.put("missingEvidence", diagnosis.missingEvidence());
+            Diagnosis view = ManagerProblemBusinessDiagnosis.withClosurePolicy(source.facts(), diagnosis);
+            result.put("readSideActions", view.actions());
+            result.put("readSideVerification", view.verification());
             result.put("humanReviewRubric", humanReviewRubric(source.caseId()));
             result.put("model", call.getArgument(2));
             result.put("inputTokens", call.getArgument(3));
@@ -132,6 +138,8 @@ class ManagerProblemDiagnosisLiveEvaluationTest {
         report.put("evaluatedAt", Instant.now().toString());
         report.put("configuredModel", properties.getDeepseek().getModel());
         report.put("promptVersion", PROMPT_VERSION);
+        report.put("fixtureRevision", "typed-invoice-and-production-derived-facts-v2");
+        report.put("invoiceOnly", invoiceOnly);
         report.put("maxOutputTokens", maxOutputTokens);
         report.put("durationMs", (System.nanoTime() - started) / 1_000_000);
         report.put("inputTokens", metrics.counter("manager.problem.diagnostics.tokens", "direction", "input").count());
@@ -141,7 +149,7 @@ class ManagerProblemDiagnosisLiveEvaluationTest {
         Path destination = Path.of("target", "manager-diagnosis-evaluation", "report.json");
         Files.createDirectories(destination.getParent());
         mapper.writerWithDefaultPrettyPrinter().writeValue(destination.toFile(), report);
-        assertThat(results).as("All five live synthetic diagnoses must complete; see %s", destination).hasSize(fixtures.size());
+        assertThat(results).as("All selected live synthetic diagnoses must complete; see %s", destination).hasSize(fixtures.size());
         assertThat(results).allSatisfy(result -> assertThat(result.get("validated")).as(result.get("case").toString()).isEqualTo(true));
         verify(store, never()).retry(any(), anyString());
         var output = org.mockito.ArgumentCaptor.forClass(Diagnosis.class);
@@ -154,19 +162,24 @@ class ManagerProblemDiagnosisLiveEvaluationTest {
                 assertThat(diagnosis.actions()).allSatisfy(action -> assertThat((action.text() + " " + action.verification()).toLowerCase(java.util.Locale.ROOT))
                         .doesNotContain("отгруз", "перевозчик", "посылк", "трек-номер")));
         assertThat(output.getAllValues().getFirst().confirmedFacts()).isNotEmpty();
-        assertThat(output.getAllValues().get(1).actions()).extracting(Action::code).containsExactly("CHECK_DELIVERY", "ESCALATE");
-        assertThat(output.getAllValues().get(1).actions().getFirst().text()).contains("повторная отправка запрещена");
-        Diagnosis largeDiagnosis = output.getAllValues().get(2);
+        if (!invoiceOnly) {
+            assertThat(output.getAllValues().get(1).actions()).extracting(Action::code).containsExactly("CHECK_DELIVERY", "ESCALATE");
+            assertThat(output.getAllValues().get(1).actions().getFirst().text()).contains("повторная отправка запрещена");
+        }
+        int largeIndex = invoiceOnly ? 1 : 2;
+        Diagnosis largeDiagnosis = output.getAllValues().get(largeIndex);
         assertThat(largeDiagnosis.confirmedFacts()).hasSizeBetween(1, 10);
         assertThat(largeDiagnosis.summary()).hasSizeLessThanOrEqualTo(400);
         assertThat(largeDiagnosis.missingEvidence()).isNotEmpty();
         assertThat(largeDiagnosis.verification()).isNotEmpty();
         var largeCalls = providerCalls.stream().filter(call -> caseName(3).equals(call.get("case"))).toList();
         assertThat(largeCalls).hasSizeBetween(1, 2);
-        assertThat(((Number) results.get(2).get("outputTokens")).intValue())
+        assertThat(((Number) results.get(largeIndex).get("outputTokens")).intValue())
                 .as("Every large-case call obeys its own budget; reported cost includes a bounded schema retry")
                 .isEqualTo(largeCalls.stream().mapToInt(call -> ((Number) call.get("outputTokens")).intValue()).sum())
                 .isBetween(1, maxOutputTokens * largeCalls.size());
+
+        if (invoiceOnly) return;
 
         Diagnosis chatDiagnosis = output.getAllValues().get(3);
         assertThat(ManagerProblemBusinessDiagnosis.readable(chatDiagnosis)).as("The historical chat result must be usable without a readability fallback").isTrue();
@@ -321,7 +334,10 @@ class ManagerProblemDiagnosisLiveEvaluationTest {
     }
 
     private static ManagerProblemDiagnosisStore.Stored job(long id, List<Fact> facts) {
-        return new ManagerProblemDiagnosisStore.Stored(id, 1, 1, 2, "RUNNING", LocalDateTime.now(), facts,
+        var derived = new ArrayList<>(facts);
+        ManagerProblemEvidenceCollector.appendInvoiceMonetaryDisplay(derived);
+        ManagerProblemEvidenceCollector.appendInvoiceArchiveChronology(derived);
+        return new ManagerProblemDiagnosisStore.Stored(id, 1, 1, 2, "RUNNING", LocalDateTime.now(), List.copyOf(derived),
                 null, null, PROMPT_VERSION, "synthetic-lease-" + id, 1);
     }
 }

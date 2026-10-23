@@ -44,6 +44,7 @@ import { AuthService } from '../core/auth.service';
 import { RouteEpochGuard, RouteEpochTicket } from '../core/route-epoch.guard';
 import { PageWriteTracker } from '../core/page-write-tracker';
 import { MobileConfirmService } from '../shared/mobile-confirm.service';
+import { ManualPaymentReviewComponent } from '../shared/manual-payment-review.component';
 import { MobileBottomPagerComponent } from '../shared/mobile-bottom-pager.component';
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
 import { MobileMediaService } from '../shared/mobile-media.service';
@@ -82,7 +83,7 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
   changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-order-details-mobile',
   providers: [PageWriteTracker],
-  imports: [FormsModule, IonContent, IonModal, IonRefresher, IonRefresherContent, MobileBottomPagerComponent, MobileHeaderComponent, MobileRemindersComponent, MobileReviewCardShellComponent],
+  imports: [FormsModule, IonContent, IonModal, IonRefresher, IonRefresherContent, MobileBottomPagerComponent, MobileHeaderComponent, MobileRemindersComponent, MobileReviewCardShellComponent, ManualPaymentReviewComponent],
   template: `
     <div class="ion-page">
       <app-mobile-header title="Детали заказа" />
@@ -111,6 +112,7 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
           }
 
           @if (details(); as details) {
+            <app-manual-payment-review [orderId]="details.orderId" [refreshKey]="details" />
             <section
               #reviewStrip
               class="review-mobile-strip"

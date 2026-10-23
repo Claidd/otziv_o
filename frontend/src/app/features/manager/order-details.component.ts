@@ -22,6 +22,7 @@ import {
   WorkerCredentialPreparation
 } from '../../core/manager.api';
 import { PaymentsApi } from '../../core/payments.api';
+import { ManualPaymentReviewComponent } from '../../shared/manual-payment-review.component';
 import { OrderPaymentLinkState } from './order-payment-link-state';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { apiErrorMessage } from '../../shared/api-error-message';
@@ -110,6 +111,7 @@ function formatDateInputValue(date: Date): string {
     DecimalPipe,
     DeepResearchReportViewComponent,
     FormsModule,
+    ManualPaymentReviewComponent,
     LoadErrorCardComponent,
     MobileBottomPagerComponent,
     RouterLink

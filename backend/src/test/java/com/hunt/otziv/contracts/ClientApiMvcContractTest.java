@@ -13,6 +13,9 @@ import com.hunt.otziv.manager.dto.api.ManagerBoardResponse;
 import com.hunt.otziv.manager.service.ManagerBoardService;
 import com.hunt.otziv.payments.config.TbankPaymentProperties;
 import com.hunt.otziv.payments.controller.PublicPaymentController;
+import com.hunt.otziv.payments.controller.ManagerManualPaymentReviewController;
+import com.hunt.otziv.payments.dto.ManualPaymentReviewView;
+import com.hunt.otziv.payments.service.SpecialistManualPaymentReviewService;
 import com.hunt.otziv.payments.dto.PublicPaymentInitResponse;
 import com.hunt.otziv.payments.service.PaymentLinkService;
 import com.hunt.otziv.payments.service.PaymentProfileService;
@@ -33,17 +36,20 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 class ClientApiMvcContractTest {
     final PaymentLinkService payments = mock(PaymentLinkService.class);
     final ManagerBoardService boards = mock(ManagerBoardService.class);
+    final SpecialistManualPaymentReviewService reviews = mock(SpecialistManualPaymentReviewService.class);
+    Map<String, Object> exported;
     final JacksonJsonHttpMessageConverter converter = new JacksonJsonHttpMessageConverter();
     ClientApiContractModel contract;
     MockMvc mvc;
 
     @BeforeEach void setup() throws Exception {
         Path root = Path.of(System.getProperty("client.contract.root", "..")).toAbsolutePath().normalize();
-        contract = new ClientApiContractModel(converter.getMapper(), root); contract.export();
+        contract = new ClientApiContractModel(converter.getMapper(), root); exported = contract.export();
         var ip = mock(WebhookClientIpResolver.class); when(ip.resolve(any())).thenReturn("127.0.0.1");
         mvc = MockMvcBuilders.standaloneSetup(
                 new PublicPaymentController(payments, new TbankPaymentProperties(), mock(TbankRuntimeSettingsService.class), mock(PaymentProfileService.class), ip),
-                new ApiManagerBoardController(boards, new PerformanceMetrics(new SimpleMeterRegistry())))
+                new ApiManagerBoardController(boards, new PerformanceMetrics(new SimpleMeterRegistry())),
+                new ManagerManualPaymentReviewController(reviews))
                 .setMessageConverters(converter).setControllerAdvice(new ApiExceptionHandler()).build();
     }
 
@@ -83,6 +89,32 @@ class ClientApiMvcContractTest {
     @Test void retiredPublicCapabilityReallyReturns404WithNoResponsePayload() throws Exception {
         mvc.perform(get("/api/payments/public/tbank-status")).andExpect(status().isNotFound()).andExpect(content().string(""));
         verifyNoInteractions(payments);
+    }
+
+    @Test @SuppressWarnings("unchecked")
+    void manualReviewReadSerializesAbsentAndPresentAgainstItsNullableWireContract() throws Exception {
+        var view = new ManualPaymentReviewView(101L,7L,"WAITING",java.time.LocalDateTime.now().plusHours(24),
+                java.time.LocalDateTime.now(),"MANAGER_REPORTED",true);
+        when(reviews.readForOrder(eq(7L),isNull())).thenReturn(null).thenReturn(view);
+        Map<String,Object> paths=(Map<String,Object>)exported.get("paths");
+        Map<String,Object> route=(Map<String,Object>)paths.get("/api/orders/{orderId}/manual-payment-review");
+        Map<String,Object> operation=(Map<String,Object>)route.get("get");
+        Map<String,Object> responses=(Map<String,Object>)operation.get("responses");
+        Map<String,Object> success=(Map<String,Object>)responses.get("200");
+        Map<String,Object> content=(Map<String,Object>)success.get("content");
+        Map<String,Object> jsonContent=(Map<String,Object>)content.get("application/json");
+        Map<String,Object> schema=(Map<String,Object>)jsonContent.get("schema");
+        for(int index=0;index<2;index++){
+            String json=mvc.perform(get("/api/orders/7/manual-payment-review"))
+                    .andExpect(status().isOk()).andExpect(header().string("Cache-Control","no-store"))
+                    .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                    .andReturn().getResponse().getContentAsString();
+            Object actual=converter.getMapper().readValue(json,Object.class);
+            ClientApiJacksonFixtureTest.validate(contract,actual,schema,"manual-review GET");
+            if(index==0)assertThat(actual).isNull();
+            else assertThat((Map<String,Object>)actual).containsEntry("status","WAITING").containsEntry("disputeAllowed",true);
+        }
+        verify(reviews,times(2)).readForOrder(7L,null);
     }
 
     private void validate(String json, String schema) {
