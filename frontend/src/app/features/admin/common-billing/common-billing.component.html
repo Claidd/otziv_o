@@ -224,7 +224,7 @@
             <strong>{{ formatKopecks(invoice?.paidKopecks) }}</strong>
           </div>
           <div>
-            <small>Осталось</small>
+            <small>{{ invoice?.status === 'ARCHIVED' ? 'Разница по архивному счёту' : 'Осталось' }}</small>
             <strong>{{ formatKopecks(invoice?.remainingKopecks) }}</strong>
           </div>
           <div>
@@ -232,6 +232,10 @@
             <strong>{{ invoice?.readyOrders }}/{{ invoice?.totalOrders }}</strong>
           </div>
         </section>
+
+        @if (invoice?.status === 'ARCHIVED') {
+          <p class="invoice-action-sequence-hint">Сохранено для истории, без требования оплаты.</p>
+        }
 
         @if (invoice?.invoicePaymentMode === 'OWNER_PAPER_INVOICE') {
           <section class="invoice-problem" aria-label="Режим бумажного счёта">
