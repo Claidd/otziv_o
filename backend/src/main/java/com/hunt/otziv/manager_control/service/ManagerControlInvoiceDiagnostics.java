@@ -159,7 +159,17 @@ public class ManagerControlInvoiceDiagnostics {
         if (invoice == null) {
             return false;
         }
-        if (hasText(invoice.getLastError()) || hasText(invoice.getPaymentSuccessNotificationError())) {
+        List<CommonInvoiceOrder> invoiceItems = null;
+        if (hasText(invoice.getLastError())) {
+            if (!commonInvoiceTechnicalTailRepairable(invoice)) {
+                return true;
+            }
+            invoiceItems = commonInvoiceOrderRepository.findByInvoiceIdWithOrders(invoice.getId());
+            if (invoiceItems.stream().anyMatch(item -> !item.isPaid())) {
+                return true;
+            }
+        }
+        if (hasText(invoice.getPaymentSuccessNotificationError())) {
             return true;
         }
         CommonInvoiceStatus status = invoice.getStatus();
@@ -173,7 +183,9 @@ public class ManagerControlInvoiceDiagnostics {
         if (isPaperInvoiceDeliveryOverdue(invoice, now)) {
             return true;
         }
-        List<CommonInvoiceOrder> invoiceItems = commonInvoiceOrderRepository.findByInvoiceIdWithOrders(invoice.getId());
+        if (invoiceItems == null) {
+            invoiceItems = commonInvoiceOrderRepository.findByInvoiceIdWithOrders(invoice.getId());
+        }
         if (status == CommonInvoiceStatus.COLLECTING
                 && commonInvoicePublicationBlockerService.hasOverdueBlockers(invoiceItems, now)) {
             return true;
@@ -287,11 +299,27 @@ public class ManagerControlInvoiceDiagnostics {
             List<CommonInvoiceOrder> items,
             List<CommonInvoiceOrder> publicationBlockers
     ) {
+        if (commonInvoiceRequiresCompositionReview(invoice, items)) {
+            long archivedUnpaid = archivedUnpaidPositions(items).size();
+            return "В составе частично оплаченного счета остались архивные неоплаченные заказы: "
+                    + archivedUnpaid + ". Учтено оплаты " + rubles(invoice.getPaidKopecks())
+                    + " из " + rubles(invoice.getAmountKopecks())
+                    + "; по сохраненному составу остаток "
+                    + rubles(Math.max(0, invoice.getAmountKopecks() - invoice.getPaidKopecks()))
+                    + (invoice.getAccount() != null && !invoice.getAccount().isEnabled()
+                    ? ". Общий счет компании выключен" : "")
+                    + ". Откройте «Счет» и сверьте состав и остаток с ответственным. "
+                    + "До сверки повторное напоминание заблокировано; оплата и архивные заказы автоматически не меняются.";
+        }
         String lastError = safe(invoice.getLastError());
+        String notificationError = safe(invoice.getPaymentSuccessNotificationError());
+        if (!notificationError.isBlank() && commonInvoiceTechnicalTailRepairable(invoice)
+                && (items == null || items.stream().noneMatch(item -> !item.isPaid()))) {
+            return commonInvoicePaymentNotificationReason(invoice, notificationError);
+        }
         if (!lastError.isBlank()) {
             return commonInvoiceLastErrorReason(invoice, lastError, items);
         }
-        String notificationError = safe(invoice.getPaymentSuccessNotificationError());
         if (!notificationError.isBlank()) {
             return commonInvoicePaymentNotificationReason(invoice, notificationError);
         }
@@ -516,6 +544,21 @@ public class ManagerControlInvoiceDiagnostics {
                 || error.startsWith("empty:")
                 || error.startsWith("merged_into:")
                 || error.startsWith("manual_fix:"));
+    }
+
+    boolean commonInvoiceRequiresCompositionReview(CommonInvoice invoice, List<CommonInvoiceOrder> items) {
+        return invoice != null
+                && invoice.getStatus() == CommonInvoiceStatus.PARTIALLY_PAID
+                && !archivedUnpaidPositions(items).isEmpty();
+    }
+
+    private List<CommonInvoiceOrder> archivedUnpaidPositions(List<CommonInvoiceOrder> items) {
+        return (items == null ? List.<CommonInvoiceOrder>of() : items).stream()
+                .filter(Objects::nonNull)
+                .filter(CommonInvoiceOrder::isActiveMembership)
+                .filter(item -> !item.isPaid())
+                .filter(item -> "Архив".equals(orderStatusTitle(item.getOrder())))
+                .toList();
     }
 
     boolean commonInvoiceWhatsappGroupTailRepairable(CommonInvoice invoice) {

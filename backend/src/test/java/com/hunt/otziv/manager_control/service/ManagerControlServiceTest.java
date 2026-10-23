@@ -132,6 +132,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -1445,6 +1446,34 @@ class ManagerControlServiceTest {
     }
 
     @Test
+    void partialInvoiceWithArchivedUnpaidOrdersCannotSendReminderThroughRepair() {
+        CommonInvoice invoice = new CommonInvoice();
+        invoice.setId(175L);
+        invoice.setStatus(CommonInvoiceStatus.PARTIALLY_PAID);
+        invoice.setAmountKopecks(450000L);
+        invoice.setPaidKopecks(150000L);
+        Order archived = new Order();
+        archived.setId(25645L);
+        archived.setStatus(OrderStatus.builder().title("Архив").build());
+        var position = new com.hunt.otziv.common_billing.model.CommonInvoiceOrder();
+        position.setOrder(archived);
+        position.setActiveMembership(true);
+        position.setPaid(false);
+        when(commonInvoiceRepository.findByIdWithAccount(175L)).thenReturn(Optional.of(invoice));
+        when(commonInvoiceOrderRepository.findByInvoiceIdWithOrders(175L)).thenReturn(List.of(position));
+
+        ResponseStatusException failure = assertThrows(ResponseStatusException.class,
+                () -> invoiceRepairWorkflow.repair(175L));
+
+        assertEquals(409, failure.getStatusCode().value());
+        assertTrue(failure.getReason().contains("архивных заказов"));
+        verifyNoInteractions(commonBillingService);
+        assertEquals(450000L, invoice.getAmountKopecks());
+        assertEquals(150000L, invoice.getPaidKopecks());
+        assertEquals(CommonInvoiceStatus.PARTIALLY_PAID, invoice.getStatus());
+    }
+
+    @Test
     void repairEmptyCollectingInvoiceDisablesTechnicalTail() {
         ManagerDailyControl control = control();
         ManagerDailyControlItem parent = actionParent(control);
@@ -2477,6 +2506,92 @@ class ManagerControlServiceTest {
         assertNull(resolved.getActionType());
         assertNull(resolved.getResolvedAt());
         verify(dailyControlConcreteItemRepository).save(resolved);
+    }
+
+    @Test
+    void newProblemCannotBeCoveredByClosedCardWhenSectionCountStaysTheSame() {
+        ManagerDailyControl control = control();
+        Manager manager = new Manager();
+        manager.setId(3L);
+        control.setManager(manager);
+        ManagerDailyControlItem parent = actionParent(control);
+        parent.setItemKey("problem:COMMON_INVOICES");
+        parent.setReasonCode("COMMON_INVOICES");
+        parent.setLabel("Общие счета");
+        parent.setCount(1);
+        parent.setStatus(ManagerDailyControlItemStatus.RESOLVED);
+        parent.setResolvedAt(LocalDateTime.now());
+        ManagerDailyControlConcreteItem closed = concrete(control, parent, "COMMON_INVOICE");
+        closed.setEntityId(321L);
+        closed.setStatus(ManagerDailyControlItemStatus.RESOLVED);
+        when(dailyControlRepository.findByControlDateAndManager(any(), eq(manager)))
+                .thenReturn(Optional.of(control));
+        when(dailyControlRepository.findByIdForUpdate(control.getId())).thenReturn(Optional.of(control));
+        when(dailyControlItemRepository.findByControl(control)).thenReturn(List.of(parent));
+        when(dailyControlConcreteItemRepository.findByParentItem(parent)).thenReturn(List.of(closed));
+        when(dailyControlItemRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+        ManagerControlDailySnapshotWorkflow snapshot = (ManagerControlDailySnapshotWorkflow)
+                ReflectionTestUtils.getField(service, "dailySnapshot");
+
+        snapshot.syncDailyControl(manager, LocalDate.now(), List.of(
+                new com.hunt.otziv.manager_control.dto.ManagerControlProblemResponse(
+                        "COMMON_INVOICES", "Общие счета", 1L, "CRITICAL", "ACTION",
+                        "receipt_long", "/admin/common-billing")), List.of(), List.of());
+
+        assertEquals(ManagerDailyControlItemStatus.OPEN, parent.getStatus());
+        assertNull(parent.getResolvedAt());
+        assertEquals(ManagerDailyControlItemStatus.RESOLVED, closed.getStatus());
+        ManagerControlDayLifecycle lifecycle = (ManagerControlDayLifecycle)
+                ReflectionTestUtils.getField(service, "dayLifecycle");
+        assertTrue(lifecycle.isActiveControlItem(parent));
+    }
+
+    @Test
+    void pendingFollowUpRemainsHandledWhenAllCurrentProblemsHaveLiveCards() {
+        ManagerDailyControl control = control();
+        ManagerDailyControlItem parent = actionParent(control);
+        parent.setCount(1);
+        parent.setStatus(ManagerDailyControlItemStatus.ACTION_TAKEN);
+        ManagerDailyControlConcreteItem current = concrete(control, parent, "COMMON_INVOICE");
+        current.setStatus(ManagerDailyControlItemStatus.ACTION_TAKEN);
+        current.setFollowUpAt(LocalDateTime.now().plusDays(1));
+        when(dailyControlConcreteItemRepository.findByParentItem(parent)).thenReturn(List.of(current));
+        ManagerControlDailySnapshotWorkflow snapshot = (ManagerControlDailySnapshotWorkflow)
+                ReflectionTestUtils.getField(service, "dailySnapshot");
+
+        assertFalse(snapshot.hasUnfinishedConcreteBreakdown(parent, 1));
+        assertEquals(ManagerDailyControlItemStatus.ACTION_TAKEN, current.getStatus());
+    }
+
+    @Test
+    void newlyCreatedInvoiceCardReopensItsClosedSection() {
+        ManagerDailyControl control = control();
+        ManagerDailyControlItem parent = actionParent(control);
+        parent.setReasonCode("COMMON_INVOICES");
+        parent.setStatus(ManagerDailyControlItemStatus.RESOLVED);
+        var persisted = new java.util.ArrayList<ManagerDailyControlConcreteItem>();
+        when(dailyControlConcreteItemRepository.findByParentItemForUpdate(parent)).thenReturn(List.of());
+        when(dailyControlConcreteItemRepository.findByParentItem(parent)).thenReturn(persisted);
+        when(dailyControlConcreteItemRepository.save(any())).thenAnswer(call -> {
+            ManagerDailyControlConcreteItem row = call.getArgument(0);
+            row.setId(9001L);
+            persisted.add(row);
+            return row;
+        });
+        var source = new ManagerControlConcreteItemResponse(null, "COMMON_INVOICE", 339L,
+                "Новый общий счёт", "", "Требует внимания", 1L, "Новая ошибка оплаты",
+                "/admin/common-billing?invoiceId=339", null, null, null, null,
+                "OPEN", null, null, null, null, null);
+        ManagerControlConcreteSnapshotWorkflow snapshot = (ManagerControlConcreteSnapshotWorkflow)
+                ReflectionTestUtils.getField(service, "concreteSnapshot");
+
+        var result = snapshot.syncConcreteExamples(parent, List.of(source));
+
+        assertEquals(1, result.size());
+        assertEquals(339L, result.getFirst().entityId());
+        assertEquals("OPEN", result.getFirst().itemStatus());
+        assertEquals(ManagerDailyControlItemStatus.OPEN, parent.getStatus());
+        verify(dailyControlItemRepository).save(parent);
     }
 
     @Test

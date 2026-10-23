@@ -35,6 +35,14 @@ public class ManagerControlInvoiceRepairWorkflow {
     public Outcome repair(Long invoiceId) {
         CommonInvoice invoice = commonInvoiceRepository.findByIdWithAccount(invoiceId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"));
+        if (invoice.getStatus() == CommonInvoiceStatus.PARTIALLY_PAID
+                && invoiceDiagnostics.commonInvoiceRequiresCompositionReview(invoice,
+                commonInvoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId))) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "В общем счёте остались неоплаченные позиции из архивных заказов. "
+                            + "Сначала сверьте состав счёта и остаток с администратором. "
+                            + "Повторное напоминание клиенту не отправлено.");
+        }
         if (invoice.getStatus() == CommonInvoiceStatus.COLLECTING
                 && commonInvoicePublicationBlockerService.hasOverdueBlockers(
                 commonInvoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId),

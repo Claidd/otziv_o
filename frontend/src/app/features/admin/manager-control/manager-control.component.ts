@@ -1,7 +1,7 @@
 import { firstValueFrom } from 'rxjs';
 import { CardDeliveryTracker, managerCardDelivery, deliveryOperationMessage, type DeliveryOperation } from '@otziv/client-common/delivery-operations';
 import { DatePipe, NgTemplateOutlet } from '@angular/common';
-import { Component, DestroyRef, Input, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, ElementRef, Injector, Input, OnInit, afterNextRender, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -182,7 +182,10 @@ export class ManagerControlComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly injector = inject(Injector);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly routePersonalControl = this.route.snapshot.data['personalControl'] === true;
+  private pendingDetailFocus = false;
   private detailRequestSeq = 0;
   private autoSyncingDetailManagerIds = new Set<number>();
   private telegramBindingPollTimers = new Map<number, number>();
@@ -299,6 +302,7 @@ export class ManagerControlComponent implements OnInit {
       const rawManagerId = params.get('managerId');
       const managerId = rawManagerId ? Number(rawManagerId) : null;
       if (managerId && Number.isFinite(managerId)) {
+        this.pendingDetailFocus = this.route.snapshot.fragment === 'manager-control-problem-COMMON_INVOICES';
         this.detailPageManagerId.set(managerId);
         this.selectedManagerId.set(managerId);
         this.loadDetails(managerId);
@@ -872,6 +876,19 @@ export class ManagerControlComponent implements OnInit {
     );
   }
 
+  actionProblemTargetUrl(manager: ManagerControlManager, problem: ManagerControlProblem): string {
+    if (problem.code !== 'COMMON_INVOICES' || problem.group !== 'ACTION') return problem.targetUrl;
+    const anchor = '#manager-control-problem-COMMON_INVOICES';
+    return this.isPersonalControl() ? anchor : `/admin/manager-control/${manager.managerId}${anchor}`;
+  }
+
+  openActionProblem(event: MouseEvent, manager: ManagerControlManager, problem: ManagerControlProblem): void {
+    if (problem.code !== 'COMMON_INVOICES' || problem.group !== 'ACTION'
+      || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    this.openDetails(manager, true);
+  }
+
   overdueBreakdown(manager: ManagerControlManager): string {
     return manager.overdueStatuses
       .filter((overdue) => overdue.count > 0)
@@ -1133,14 +1150,16 @@ export class ManagerControlComponent implements OnInit {
     this.selectedManagerId.set(manager.managerId);
   }
 
-  openDetails(manager: ManagerControlManager): void {
+  openDetails(manager: ManagerControlManager, focusCommonInvoices = false): void {
     this.selectManager(manager);
+    this.pendingDetailFocus = focusCommonInvoices;
     if (this.isPersonalControl()) {
       this.detailPageManagerId.set(manager.managerId);
       this.loadDetails(manager.managerId);
       return;
     }
-    void this.router.navigate(['/admin/manager-control', manager.managerId]);
+    void this.router.navigate(['/admin/manager-control', manager.managerId], focusCommonInvoices
+      ? { fragment: 'manager-control-problem-COMMON_INVOICES' } : undefined);
   }
 
   private loadDetails(managerId: number): void {
@@ -1243,6 +1262,15 @@ export class ManagerControlComponent implements OnInit {
         example.comment ?? ''
       ])).filter(([id]) => Number(id) > 0)
     ));
+    if (this.pendingDetailFocus) {
+      afterNextRender(() => {
+        if (!this.pendingDetailFocus || this.detailLoading() || this.detail()?.managerId !== detail.managerId) return;
+        this.pendingDetailFocus = false;
+        const target = this.host.nativeElement.querySelector<HTMLElement>('#manager-control-problem-COMMON_INVOICES');
+        target?.focus({ preventScroll: true });
+        target?.scrollIntoView?.({ block: 'start' });
+      }, { injector: this.injector });
+    }
   }
 
   closeDetails(): void {
@@ -1295,6 +1323,7 @@ export class ManagerControlComponent implements OnInit {
   }
 
   private clearDetails(): void {
+    this.pendingDetailFocus = false;
     this.detail.set(null);
     this.detailError.set(null);
     this.detailLoading.set(false);

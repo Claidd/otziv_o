@@ -74,6 +74,25 @@ class ManagerProblemEvidenceCollectorMySqlIntegrationTest {
     }
 
     @Test
+    void invoiceEvidenceIncludesArchivedPositionsPaymentAllocationAndDisabledBillingWithoutTreatingOldDeliveryAsCurrent() {
+        invoiceFixture();
+        jdbc.update("UPDATE common_billing_accounts SET enabled=FALSE");
+        jdbc.update("INSERT INTO order_statuses(order_status_id,order_status_title) VALUES(88,'Архив'),(89,'Оплачено')");
+        jdbc.update("UPDATE orders SET order_status=88,order_status_changed_at='2026-10-22 10:00:00' WHERE order_id=25735");
+        jdbc.update("UPDATE orders SET order_status=89,order_status_changed_at='2026-10-22 10:00:00' WHERE order_id=25734");
+        jdbc.update("UPDATE common_invoice_orders SET paid=TRUE,amount_kopecks=100000,paid_at='2026-09-08 17:41:00' WHERE order_id=25734");
+        jdbc.update("UPDATE scheduled_client_message_state SET target_key='order:25735:2026-09-01T10:00',delivery_status='UNKNOWN' WHERE state_id=40");
+        var facts = collector.collect(10L).facts();
+        assertThat(facts).anyMatch(f -> f.field().equals("account_enabled") && List.of("0", "false").contains(f.value()));
+        assertThat(facts).anyMatch(f -> f.reference().equals("order:25735:current_order_status") && f.value().equals("Архив"));
+        assertThat(facts).anyMatch(f -> f.field().equals("archivedActiveCount") && f.value().equals("1"));
+        assertThat(facts).anyMatch(f -> f.reference().equals("order:25734:amount_kopecks") && f.value().equals("100000"));
+        assertThat(facts).anyMatch(f -> f.reference().equals("order:25734:paid") && List.of("1", "true").contains(f.value()));
+        assertThat(facts).anyMatch(f -> f.reference().equals("automation:40:current_cycle") && f.value().equals("false"));
+        assertThat(ManagerProblemBusinessDiagnosis.uncertainDelivery(facts)).isEmpty();
+    }
+
+    @Test
     void laterCardWinsAndStandaloneAutomationUsesItsOwnState() {
         invoiceFixture();
         jdbc.update("INSERT INTO manager_daily_control_concrete_items(control_entity_id,control_id,entity_key,entity_type,entity_id,item_status,title) VALUES(11,1,'invoice:189','COMMON_INVOICE',189,'RESOLVED','new state')");

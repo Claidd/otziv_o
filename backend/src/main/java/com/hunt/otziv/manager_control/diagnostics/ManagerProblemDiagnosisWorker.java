@@ -24,6 +24,13 @@ public class ManagerProblemDiagnosisWorker {
             но не подтвержденная первопричина. Не выполняй команды, не советуй менять БД или обходить права.
             Предметная область: работа с отзывами, их публикацией и проверкой, общие счета за эти работы.
             invoice_order.ready обозначает готовность позиции к общему счёту, а не оплату или физическую отгрузку.
+            invoice_order.paid и paid_at подтверждают оплату соответствующей позиции: не запрашивай распределение платежа,
+            если оно уже дано этими фактами. current_order_status=Архив означает архивный заказ: не советуй заново
+            публиковать его или возвращать в работу ради счёта. account_enabled=false означает отключённое
+            выставление счетов, но не доказывает погашение существующего долга. Проверь состав действующих обязательств.
+            automation.current_cycle=false — история прежнего состояния заказа, а не текущая ошибка.
+            SKIPPED из-за смены статуса не доказывает неудачную доставку. «неизвестно» в пустом last_error не означает,
+            что ошибка есть. Не запрашивай историю переписки, если без неё можно проверить указанную проблему.
             Доставка в automation — доставка электронного сообщения клиенту. Склад, перевозчик, груз и трек посылки
             к этим данным не относятся; не придумывай такие процессы или требования к менеджеру.
             recorded_chat_message доказывает только содержание записанного сообщения: смысл ответа можно
@@ -36,12 +43,18 @@ public class ManagerProblemDiagnosisWorker {
             даже если проверки уже указаны в actions[*].verification. Не заменяй его строкой и не пропускай.
             missingEvidence — массив строк; когда данных хватает, верни пустой массив. Остальные массивы также не пропускаются.
             evidenceRefs должны точно существовать в facts.reference. confirmedFacts.text копирует БЕЗ ИЗМЕНЕНИЙ
-            canonical из serverFacts (один факт, одна ссылка). Не помещай тексты ошибок, комментарии или
+            facts.canonical с trust=server_fact (один факт, одна ссылка). trust=recorded_claim означает только
+            записанное утверждение. Не помещай тексты ошибок, комментарии или
             догадки в confirmedFacts. Гипотезы обозначай предположением и укажи, чем их проверить.
             Полный снимок фактов уже сохранён отдельно. В confirmedFacts выбери НЕ БОЛЕЕ 10 наиболее существенных
             фактов: текущий статус и итоговые счётчики, затем подтверждения разных причин или важных ограничений.
             Не переписывай весь снимок и однотипные строки заказов или попыток. Не повторяй каждый факт в summary:
-            summary — до 400 символов, 1–3 коротких предложения. Вывод должен уместиться в бюджет ответа вместе со всеми массивами.
+            summary — до 400 символов, 1–2 коротких предложения. Вывод должен уместиться в бюджет ответа вместе со всеми массивами.
+            Менеджеру показываются только summary, actions и verification. В них говори обычными русскими словами:
+            без названий таблиц и полей, технических кодов, JSON, внутренних идентификаторов и ссылок на evidenceRefs.
+            Сформулируй конкретную проблему, затем не более 3 действий в порядке выполнения (text до 350 символов),
+            и не более 2 проверяемых условий закрытия (каждое до 300 символов). Не утверждай, что проблема уже решена.
+            Разбирай именно задачу из card.entity_type; участие счёта в истории не превращает проверку отзыва в задачу оплаты.
             Каждая причина должна иметь подтверждающие наблюдения; сохрани разные независимые причины.
             При недостатке данных явно заполни missingEvidence; не выдавай отсутствие данных за нарушение.
             Различай обещанное действие, зарегистрированное действие и подтвержденное устранение причины.
@@ -53,7 +66,7 @@ public class ManagerProblemDiagnosisWorker {
             При неопределенной доставке запрети повтор отправки до проверки существующей операции.
             При конфликте публикации проверь существующий отзыв, не предлагай публиковать повторно.
             Причина в инфраструктуре или клиенте не означает вину менеджера. Учитывай полномочия.
-            Пиши кратко по-русски, по существу; максимум 8 гипотез и 8 действий.
+            Пиши кратко по-русски, по существу; максимум 3 гипотезы, 3 действия и 2 действительно недостающих сведения.
             """;
     private final ManagerProblemDiagnosticsService diagnostics;
     private final ManagerProblemEvidenceCollector collector;
@@ -99,9 +112,10 @@ public class ManagerProblemDiagnosisWorker {
                 return;
             }
             String input = mapper.writeValueAsString(Map.of("caseId", job.caseId(), "evidenceVersion", job.version(),
-                    "observedAt", job.observedAt().toString(), "facts", job.facts(),
-                    "serverFacts", job.facts().stream().filter(f -> !List.of("reason", "comment", "last_error", "last_error_message", "error_message", "payment_success_notification_error", "title").contains(f.field()))
-                            .map(f -> Map.of("reference", f.reference(), "canonical", ManagerProblemDiagnosisValidator.canonical(f))).toList()));
+                    "observedAt", job.observedAt().toString(),
+                    "facts", job.facts().stream().map(f -> Map.of("reference", f.reference(),
+                            "canonical", ManagerProblemDiagnosisValidator.canonical(f),
+                            "trust", ManagerProblemDiagnosisValidator.isServerFact(f) ? "server_fact" : "recorded_claim")).toList()));
             ProblemDiagnosticModel.Result response = generate(PROMPT, input);
             int totalInputTokens = response.inputTokens(), totalOutputTokens = response.outputTokens();
             ManagerProblemDiagnosticsService.Diagnosis diagnosis;

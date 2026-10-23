@@ -19,7 +19,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 @RequiredArgsConstructor
 @Slf4j
 public class ManagerProblemDiagnosticsService {
-    public static final String PROMPT_VERSION = "manager-problem-evidence-v2";
+    public static final String PROMPT_VERSION = "manager-problem-evidence-v3";
     private static final Set<String> UNTRUSTED_FIELDS = Set.of("reason", "comment", "last_error", "last_error_message", "error_message", "payment_success_notification_error", "title");
     private final ManagerProblemEvidenceCollector collector;
     private final ManagerProblemDiagnosisStore store;
@@ -101,7 +101,7 @@ public class ManagerProblemDiagnosticsService {
                 }
             }
             if (value.diagnosis() != null) {
-                try { advice.append("Рекомендация ИИ caseId=").append(value.caseId()).append(": ").append(mapper.writeValueAsString(value.diagnosis())).append('\n'); }
+                try { advice.append(ManagerProblemBusinessDiagnosis.MODEL.equals(value.model()) ? "Предварительная сверка по данным системы caseId=" : "Рекомендация ИИ caseId=").append(value.caseId()).append(": ").append(mapper.writeValueAsString(value.diagnosis())).append('\n'); }
                 catch (Exception e) { /* Facts are sufficient when optional advice cannot be rendered. */ }
             }
         }
@@ -168,8 +168,11 @@ public class ManagerProblemDiagnosticsService {
         if (saved == null) return null;
         String mode = mode();
         boolean visible = "ENFORCE".equals(mode) || "PILOT".equals(mode) && settings.pilotManagerIds().contains(saved.managerId());
+        boolean fallback = visible && (!ManagerProblemBusinessDiagnosis.readable(saved.diagnosis())
+                || !ManagerProblemBusinessDiagnosis.uncertainDelivery(saved.facts()).isEmpty());
+        Diagnosis diagnosis = fallback ? ManagerProblemBusinessDiagnosis.fallback(saved.facts()) : saved.diagnosis();
         return new DiagnosticView(saved.caseId(), saved.version(), saved.episode(), saved.status(), saved.observedAt(), saved.facts(),
-                visible ? saved.diagnosis() : null, saved.model(), saved.promptVersion(), mode);
+                visible ? diagnosis : null, fallback ? ManagerProblemBusinessDiagnosis.MODEL : saved.model(), saved.promptVersion(), mode);
     }
 
     public record RefreshRequested(Long sourceTaskId) { }

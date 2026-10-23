@@ -124,6 +124,45 @@ class ManagerProblemDiagnosisStoreMySqlIntegrationTest {
         assertThat(store.read(initial.caseId(), 1).diagnosis()).isNotNull();
     }
 
+    @Test
+    void upgradedPromptQueuesUnchangedFactsOnceWithoutOverwritingThePreviousAnalysis() {
+        var first = store.capture(evidence("COLLECTING", false));
+        store.complete(store.claim(), diagnosis(), "deepseek-flash", 1, 2);
+        jdbc.update("UPDATE manager_problem_evidence_versions SET prompt_version='manager-problem-evidence-v2'");
+        var upgraded = store.capture(evidence("COLLECTING", false));
+        assertThat(upgraded.version()).isEqualTo(2);
+        assertThat(upgraded.status()).isEqualTo("QUEUED");
+        assertThat(upgraded.promptVersion()).isEqualTo(PROMPT_VERSION);
+        assertThat(upgraded.facts()).isEqualTo(first.facts());
+        assertThat(store.read(first.caseId(), 1).diagnosis()).isNotNull();
+        assertThat(store.capture(evidence("COLLECTING", false)).version()).isEqualTo(2);
+    }
+
+    @Test
+    void expiredWorkerCannotPublishEvenBeforeAnotherWorkerReclaimsItsLease() {
+        store.capture(evidence("COLLECTING", false));
+        var expired = store.claim();
+        jdbc.update("UPDATE manager_problem_evidence_versions SET lease_until=?", LocalDateTime.now().minusMinutes(1));
+        assertThat(store.complete(expired, diagnosis(), "deepseek-flash", 1, 1)).isFalse();
+        assertThat(store.read(expired.caseId(), expired.version()).diagnosis()).isNull();
+    }
+
+    @Test
+    void unavailableModelBacksOffButCanRecoverWithoutChangingTheEvidence() {
+        var first = store.capture(evidence("COLLECTING", false));
+        store.claim();
+        jdbc.update("UPDATE manager_problem_evidence_versions SET attempt_count=5");
+        var running = store.read(first.caseId(), 1);
+        store.retry(running, "provider unavailable");
+        assertThat(store.read(first.caseId(), 1).status()).isEqualTo("UNAVAILABLE");
+        assertThat(store.claim()).isNull();
+        jdbc.update("UPDATE manager_problem_evidence_versions SET next_attempt_at=?", LocalDateTime.now().minusSeconds(1));
+        var recovered = store.claim();
+        assertThat(recovered.attempts()).isEqualTo(6);
+        assertThat(store.complete(recovered, diagnosis(), "deepseek-flash", 1, 2)).isTrue();
+        assertThat(store.read(first.caseId(), 1).status()).isEqualTo("READY");
+    }
+
     private static ManagerProblemEvidenceCollector.Evidence evidence(String status, boolean closed) {
         return new ManagerProblemEvidenceCollector.Evidence("2:COMMON_INVOICE:189", 2, 999, closed,
                 List.of(new Fact("invoice:189:status", "invoice", "status", status)), LocalDateTime.now());
