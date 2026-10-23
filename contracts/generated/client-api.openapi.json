@@ -27192,7 +27192,7 @@
     "sha256" : "28f7dfb73d90d3fca83eb5b5d988fe7d0833afb39a152e1f232377a4f73117ba"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/manager_control/diagnostics/ManagerProblemDiagnosticsService.java",
-    "sha256" : "b7f7256acf1b66c09468931267d01d48a9de8dc5c98aea14e3afa2ff14dee1e9"
+    "sha256" : "846a35030aa6ae44ea73f6c105e3c26ac391ebf44cbf1ba9f6eb6a2396d66d6d"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/manager_control/dto/ManagerClientReplyResolutionRequest.java",
     "sha256" : "9ecbb6e10bd95f6c0b3981c68549a56fa5350f5d8c9a4cbe501e3be401e0926d"

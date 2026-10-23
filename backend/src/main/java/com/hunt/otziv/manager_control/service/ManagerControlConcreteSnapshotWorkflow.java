@@ -109,7 +109,8 @@ public class ManagerControlConcreteSnapshotWorkflow {
                 dailyControlConcreteItemRepository.save(item);
             }
             ManagerControlConcreteItemResponse fresh = freshByKey.get(item.getEntityKey());
-            return concretePresenter.concreteItemResponse(item, fresh == null ? null : fresh.contactText(), fresh == null ? null : fresh.specialistName());
+            return concretePresenter.concreteItemResponse(item, fresh == null ? null : fresh.contactText(),
+                    fresh == null ? null : fresh.specialistName(), currentDisplayReason(item, fresh));
         }).toList();
         if (freshExamples.isEmpty()) {
             return visibleStored;
@@ -117,6 +118,18 @@ public class ManagerControlConcreteSnapshotWorkflow {
         List<ManagerControlConcreteItemResponse> merged = new ArrayList<>(visibleStored);
         freshExamples.stream().filter(example -> !storedByKey.containsKey(concreteEntityKey(example))).forEach(merged::add);
         return merged;
+    }
+
+    private String currentDisplayReason(ManagerDailyControlConcreteItem item, ManagerControlConcreteItemResponse fresh) {
+        if (fresh != null) return fresh.reason();
+        if (Set.of("COMMON_INVOICE", "COMMON_INVOICE_AUTOMATION", "AUTOMATION_FAILURE").contains(safe(item.getEntityType()))
+                && safe(item.getReason()).matches("(?is).*(?:\\b(?:jdbc|sql|http|conflict)\\b|[a-z][a-z0-9]*_[a-z0-9_]+"
+                    + "|[a-z0-9_$]+\\.[a-z0-9_$.]+|exception).*")) {
+            return "Сохраненное замечание требует сверки: актуальные данные источника недоступны. "
+                    + "Откройте источник или передайте проверку администратору. "
+                    + "Не повторяйте отправку до подтверждения ее результата.";
+        }
+        return null;
     }
 
     boolean isClosedClientChatUnansweredConcrete(ManagerDailyControlConcreteItem item) {

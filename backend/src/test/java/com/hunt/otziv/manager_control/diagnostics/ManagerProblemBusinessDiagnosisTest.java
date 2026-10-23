@@ -9,6 +9,37 @@ import static org.assertj.core.api.Assertions.*;
 import static com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosticsService.*;
 
 class ManagerProblemBusinessDiagnosisTest {
+    @ParameterizedTest
+    @ValueSource(strings = {"COMMON_INVOICE", "COMMON_INVOICE_AUTOMATION"})
+    void currentInvoiceSendMarkerOverridesAdviceDespiteSuccessfulAutomationFromAnOldCycle(String type) {
+        var marker = f("invoice", "last_error", "message_send_in_progress");
+        var facts = List.of(f("card", "entity_type", type), f("invoice", "status", "REMINDER"), marker,
+                f("invoice", "paid_kopecks", "0"), f("automation", "state_status", "DONE"),
+                f("automation", "current_cycle", "false"), f("automation", "consecutive_failures", "0"));
+        // The view uses this gate even when the saved model prose is otherwise readable.
+        assertThat(ManagerProblemBusinessDiagnosis.uncertainDelivery(facts)).containsExactly(marker);
+        Diagnosis result = ManagerProblemBusinessDiagnosis.fallback(facts);
+        assertThat(result.summary()).contains("существующей отправки", "не подтверждён");
+        assertThat(result.confirmedFacts()).isEmpty();
+        assertThat(result.hypotheses()).isEmpty();
+        assertThat(result.actions()).extracting(Action::code).containsExactly("CHECK_DELIVERY", "ESCALATE");
+        assertThat(result.actions().getFirst().text()).contains("квитанцию", "историей чата", "не повторяйте", "не создавайте новый счёт");
+        assertThat(result.actions()).allSatisfy(action -> assertThat(action.evidenceRefs()).containsExactly(marker.reference()));
+        assertThat(result.verification().getFirst()).contains("проверяемой записью", "причина замечания по счёту устранена", "сама по себе замечание не закрывает");
+        assertThat(ManagerProblemBusinessDiagnosis.readable(result)).isTrue();
+        assertThat(facts).contains(f("invoice", "status", "REMINDER"), f("invoice", "paid_kopecks", "0"), marker);
+    }
+
+    @Test
+    void invoiceSendSafetyOverrideRequiresExactSourceFactAndCommonInvoiceScope() {
+        assertThat(ManagerProblemBusinessDiagnosis.uncertainDelivery(List.of(f("card", "entity_type", "COMMON_INVOICE"),
+                f("card", "reason", "message_send_in_progress"), f("invoice", "last_error", "other_error")))).isEmpty();
+        assertThat(ManagerProblemBusinessDiagnosis.uncertainDelivery(List.of(f("card", "entity_type", "COMMON_INVOICE"),
+                f("invoice", "last_error", "previous message_send_in_progress resolved")))).isEmpty();
+        assertThat(ManagerProblemBusinessDiagnosis.uncertainDelivery(List.of(f("card", "entity_type", "ORDER"),
+                f("invoice", "last_error", "message_send_in_progress")))).isEmpty();
+    }
+
     @Test
     void paymentPreparationFailureHasConcreteGuidanceWithoutTechnicalDetailsOrClaimingDelivery() {
         var facts = List.of(f("card", "entity_type", "AUTOMATION_FAILURE"),

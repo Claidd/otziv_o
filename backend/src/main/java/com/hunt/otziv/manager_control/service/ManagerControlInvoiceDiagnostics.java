@@ -388,6 +388,21 @@ public class ManagerControlInvoiceDiagnostics {
             List<CommonInvoiceOrder> items
     ) {
         String error = safe(rawError).toLowerCase(Locale.ROOT);
+        if (error.startsWith("message_send_stale") || error.startsWith("message_send_in_progress")
+                || error.startsWith("message_send_unknown")) {
+            return "Результат отправки сообщения по счету не подтвержден. Откройте «Счет» и сверьте существующую "
+                    + "отправку с сообщением в чате; если результат недоступен, передайте проверку администратору. "
+                    + "Не отправляйте повторно до подтверждения результата. Замечание закрывается после подтверждения "
+                    + "результата существующей отправки и устранения причины замечания по счету.";
+        }
+        if (error.contains("текст") && error.contains("уже опубликован ранее")) {
+            long ready = (items == null ? List.<CommonInvoiceOrder>of() : items).stream()
+                    .filter(Objects::nonNull).filter(CommonInvoiceOrder::isReady).count();
+            String progress = items == null || items.isEmpty() ? "" : " Готово позиций: " + ready + " из " + items.size() + ".";
+            return "Для одной позиции счета зафиксирован конфликт публикации: текст отзыва уже использован."
+                    + progress + " Откройте «Счет» и исходный отзыв, сверьте его публикацию и согласуйте корректный текст. "
+                    + "Повторная публикация без проверки недопустима; замечание закрывается после устранения конфликта в исходном отзыве.";
+        }
         if (error.startsWith("manual_fix:") && error.contains("moved_to_invoice_")) {
             String targetInvoice = valueAfter(error, "moved_to_invoice_");
             return "Заказ уже перенесен в другой общий счет"
@@ -413,11 +428,9 @@ public class ManagerControlInvoiceDiagnostics {
             return "Автоматическая отправка клиентских сообщений выключена. Рекомендация: включите моментальные сообщения или обработайте счет вручную.";
         }
         if (commonInvoiceMessageSendRepairable(invoice)) {
-            return "Сообщение общего счета не отправлено в клиентский чат: " + limit(rawError, 160)
-                    + ". Рекомендация: проверьте привязку чата и нажмите «Починить», чтобы повторить отправку.";
-        }
-        if (error.startsWith("message_send_stale") || error.startsWith("message_send_in_progress")) {
-            return "Отправка сообщения по счету зависла. Рекомендация: откройте «Счет» и повторите отправку вручную.";
+            return "Сервис сообщений не подтвердил отправку общего счета. Откройте «Счет», проверьте привязку чата "
+                    + "и результат существующей операции. До подтверждения отсутствия доставки не отправляйте повторно; "
+                    + "если результат недоступен, передайте проверку администратору.";
         }
         if (error.startsWith("payment_init")) {
             if (commonInvoiceUnsentTlsInitRepairable(invoice)) {
@@ -443,8 +456,8 @@ public class ManagerControlInvoiceDiagnostics {
             return "Платеж закрыт, но следующие заказы не создались. Рекомендация: нажмите «Починить», чтобы повторить создание следующих заказов.";
         }
         if (error.startsWith("review_approval_failed:")) {
-            String problem = errorField(rawError, "problem");
-            String solution = errorField(rawError, "solution");
+            String problem = businessErrorDetail(errorField(rawError, "problem"));
+            String solution = businessErrorDetail(errorField(rawError, "solution"));
             return "Массовое одобрение остановлено без частичных изменений. Проблема: "
                     + (problem.isBlank() ? "не удалось назначить даты публикации" : problem)
                     + ". Решение: "
@@ -454,8 +467,9 @@ public class ManagerControlInvoiceDiagnostics {
         if (commonInvoiceTechnicalTailRepairable(invoice)) {
             return "У общего счета остался технический хвост. Рекомендация: нажмите «Починить», чтобы скрыть старую карточку из контроля.";
         }
-        return "Ошибка общего счета: " + limit(rawError, 160)
-                + ". Рекомендация: откройте «Счет» и проверьте причину вручную.";
+        return "Обработка общего счета остановилась; точная причина требует проверки. Откройте «Счет», "
+                + "сверьте состояние его позиций и последней операции с администратором. Не повторяйте финансовое "
+                + "действие или отправку, пока не проверен результат предыдущей попытки.";
     }
 
     private String commonInvoicePaymentNotificationReason(CommonInvoice invoice, String rawError) {
@@ -466,8 +480,9 @@ public class ManagerControlInvoiceDiagnostics {
         if (error.startsWith("whatsapp_group_missing") || error.contains("groupid")) {
             return commonInvoiceWhatsappGroupMissingReason(invoice, true);
         }
-        return "Ошибка уведомления об оплате: " + limit(rawError, 160)
-                + ". Рекомендация: проверьте сообщение клиенту или нажмите «Починить», чтобы закрыть ошибку уведомления.";
+        return "Результат уведомления об оплате не подтвержден. Проверьте существующее сообщение в чате и запись "
+                + "о доставке в «Счете»; если результат недоступен, передайте проверку администратору. "
+                + "Не отправляйте повторно до сверки; сама ошибка уведомления не означает отсутствие оплаты.";
     }
 
     private String commonInvoiceWhatsappGroupMissingReason(CommonInvoice invoice, boolean paymentNotification) {
@@ -482,7 +497,7 @@ public class ManagerControlInvoiceDiagnostics {
         if (hasText(primaryCompany == null ? null : primaryCompany.getGroupId())) {
             return prefix + ": у компании"
                     + (primaryName.isBlank() ? "" : " «" + primaryName + "»")
-                    + " сейчас уже есть groupId, но в общем счете осталась старая ошибка WhatsApp. "
+                    + " сейчас уже привязана WhatsApp-группа, но в общем счете осталась старая ошибка связи. "
                     + "Рекомендация: повторите отправку из «Счета» или нажмите «Починить», если сообщение уже отправлено вручную или больше не нужно.";
         }
 
@@ -490,14 +505,14 @@ public class ManagerControlInvoiceDiagnostics {
             String linkedName = safe(linkedCompanyWithGroup.getTitle());
             return prefix + ": у главной компании общего счета"
                     + (primaryName.isBlank() ? "" : " «" + primaryName + "»")
-                    + " нет groupId. У связанной компании"
+                    + " не привязана WhatsApp-группа. У связанной компании"
                     + (linkedName.isBlank() ? "" : " «" + linkedName + "»")
-                    + " groupId есть, но общий счет отправляется через главную компанию. "
+                    + " группа привязана, но общий счет отправляется через главную компанию. "
                     + "Рекомендация: привяжите WhatsApp-группу главной компании к боту или смените главную компанию счета"
                     + (paymentNotification ? ", либо нажмите «Починить», если уведомление уже не нужно." : ".");
         }
 
-        return prefix + ": у WhatsApp-группы главной компании общего счета не задан groupId. "
+        return prefix + ": WhatsApp-группа главной компании общего счета не привязана к боту. "
                 + "Рекомендация: откройте «Счет», затем заказ/компанию и привяжите WhatsApp-группу к боту"
                 + (paymentNotification ? ", либо нажмите «Починить», если уведомление уже не нужно." : ".");
     }
@@ -644,6 +659,14 @@ public class ManagerControlInvoiceDiagnostics {
         start += marker.length();
         int end = source.indexOf(';', start);
         return safe(end < 0 ? source.substring(start) : source.substring(start, end));
+    }
+
+    /** Keep known business explanations, never expose a provider/SQL exception as manager instructions. */
+    private String businessErrorDetail(String value) {
+        String text = safe(value);
+        if (!text.matches("(?s).*[А-Яа-яЁё].*") || text.matches("(?is).*(?:\\b(?:http|jdbc|sql|select|insert|update|delete|conflict)\\b"
+                + "|[a-z][a-z0-9]*_[a-z0-9_]+|[a-z0-9_$]+\\.[a-z0-9_$.]+|exception|https?://|[{}]).*")) return "";
+        return limit(text, 180);
     }
 
     private String valueAfter(String value, String marker) {

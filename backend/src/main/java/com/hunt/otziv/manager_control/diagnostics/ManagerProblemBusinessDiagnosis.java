@@ -15,6 +15,14 @@ final class ManagerProblemBusinessDiagnosis {
 
     private ManagerProblemBusinessDiagnosis() { }
 
+    /** Closing an unanswered chat requires a source result, even when older model advice accepts a handoff. */
+    static Diagnosis withClosurePolicy(List<Fact> facts, Diagnosis diagnosis) {
+        if (diagnosis == null || !"CLIENT_CHAT_UNANSWERED".equals(value(facts, "card", "entity_type"))) return diagnosis;
+        return new Diagnosis(diagnosis.summary(), diagnosis.confirmedFacts(), diagnosis.hypotheses(), diagnosis.missingEvidence(), diagnosis.actions(),
+                List.of("В исходной переписке после последнего сообщения клиента записан проверенный ответ по существу либо штатно подтверждено, что ответ не требуется, с зафиксированной причиной.",
+                        "Передача обращения, назначение ответственного, взятие в работу и обещание ответить сами по себе не подтверждают устранение причины и не разрешают закрыть замечание."));
+    }
+
     static boolean readable(Diagnosis value) {
         return value != null && readable(value.summary(), 400) && !value.actions().isEmpty() && value.actions().size() <= 3
                 && !value.verification().isEmpty() && value.verification().size() <= 2
@@ -27,8 +35,13 @@ final class ManagerProblemBusinessDiagnosis {
     }
 
     static List<Fact> uncertainDelivery(List<Fact> facts) {
+        boolean commonInvoice = value(facts, "card", "entity_type").startsWith("COMMON_INVOICE");
         return facts.stream().filter(f -> {
             if (!Set.of("automation", "manager_delivery", "invoice").contains(f.subject())) return false;
+            // This source marker proves only that an existing send has no settled result.
+            // Old DONE automation records cannot establish delivery or a root cause for it.
+            if (commonInvoice && "invoice".equals(f.subject()) && "last_error".equals(f.field())
+                    && "message_send_in_progress".equals(f.value())) return true;
             String prefix = f.reference().substring(0, f.reference().lastIndexOf(':') + 1);
             if (facts.stream().anyMatch(scope -> scope.reference().equals(prefix + "current_cycle") && "false".equals(scope.value()))) return false;
             String value = f.value().toUpperCase(Locale.ROOT);
@@ -79,6 +92,16 @@ final class ManagerProblemBusinessDiagnosis {
     }
 
     static Diagnosis uncertain(Fact fact) {
+        if ("invoice".equals(fact.subject()) && "last_error".equals(fact.field())
+                && "message_send_in_progress".equals(fact.value())) {
+            return new Diagnosis("Результат существующей отправки сообщения по общему счёту не подтверждён. Нужна сверка перед любыми повторами.",
+                    List.of(), List.of(), List.of("Нужно подтверждение результата существующей отправки по счёту."),
+                    List.of(new Action("CHECK_DELIVERY", "Сверьте квитанцию и журнал существующей отправки с историей чата. До подтверждения результата не повторяйте сообщение и не создавайте новый счёт.",
+                                    "Менеджер", "В журнале существующей отправки сохранён проверяемый результат сверки.", List.of(fact.reference())),
+                            new Action("ESCALATE", "Если результат остаётся неясным, передайте существующую отправку администратору для сверки. Старые завершённые задачи автоматики не подтверждают её результат.",
+                                    "Администратор", "Результат сверки подтверждён квитанцией или записью в журнале существующей отправки.", List.of(fact.reference()))),
+                    List.of("Результат существующей отправки подтверждён проверяемой записью, а причина замечания по счёту устранена. Передача администратору сама по себе замечание не закрывает."));
+        }
         return new Diagnosis("Результат предыдущей отправки клиенту не подтверждён. Повторное сообщение может оказаться дубликатом.",
                 List.of(), List.of(), List.of("Нужно подтверждение результата существующей отправки."),
                 List.of(new Action("CHECK_DELIVERY", "Откройте историю чата и проверьте результат существующей отправки. До подтверждения результата повторная отправка запрещена.",

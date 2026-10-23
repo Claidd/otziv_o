@@ -43,6 +43,20 @@ class ManagerControlConcretePresenterTest {
         assertThat(response.clientMessageSendBlockedReason()).isNull();
     }
 
+    @Test
+    void freshExplanationStillIncludesAuthoritativeDeliveryFenceWithoutChangingStoredReason() {
+        var card = card();
+        String fresh = "Не удалось подготовить счёт; откройте платёж для сверки.";
+        String blocked = "Исход отправки не подтверждён. Не отправляйте повторно.";
+        when(deliveryState.sendBlockedReason(card)).thenReturn(blocked);
+
+        var response = presenter().concreteItemResponse(card, "Текст", "Специалист", fresh);
+
+        assertThat(response.reason()).contains(fresh, blocked).doesNotContain(FACTS, OLD_ADVICE);
+        assertThat(response.clientMessageSendBlockedReason()).isEqualTo(blocked);
+        assertThat(card.getReason()).isEqualTo(FACTS + " " + OLD_ADVICE);
+    }
+
     private ManagerControlConcretePresenter presenter() {
         var sla = mock(ManagerControlSlaPolicy.class);
         when(sla.decorateConcreteSla(any(), any())).thenAnswer(call -> call.getArgument(1));
