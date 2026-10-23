@@ -162,7 +162,8 @@ class ManagerReportReviewQualityServiceTest {
         verify(provider).generate(request.capture());
         assertThat(request.getValue().thinkingEnabled()).isTrue();
         assertThat(request.getValue().maxTokens()).isEqualTo(6000);
-        assertThat(request.getValue().timeout()).isEqualTo(java.time.Duration.ofSeconds(90));
+        assertThat(request.getValue().timeout()).isPositive().isLessThanOrEqualTo(java.time.Duration.ofSeconds(90));
+        assertThat(request.getValue().reasoningEffort()).isEqualTo("low");
         assertThat(request.getValue().jsonObject()).isTrue();
     }
 
@@ -639,6 +640,202 @@ class ManagerReportReviewQualityServiceTest {
 
     private ManagerReportReviewQualityService.ReviewQuestion sourceQuestion() {
         return new ManagerReportReviewQualityService.ReviewQuestion("Что произошло?", List.of("объяснение"), List.of(42L));
+    }
+
+    @Test
+    void retriesEmptyAndLengthResponsesOnceWithinSharedDeadlineWithoutChangingEvidence() throws Exception {
+        for (String error : List.of("", "DeepSeek вернул пустой текст, finish_reason=length.")) {
+            String answer = "Проверю историю чата и зафиксирую результат в карточке.";
+            AiProvider provider = provider("");
+            when(settings.getBoolean("manager.report-review.answer-assessment-thinking", true)).thenReturn(true);
+            when(provider.generate(any())).thenReturn(new AiResponse("", "deepseek", 500, 6000, error),
+                    new AiResponse(assessment("SATISFIED", answer, "E1", "PROMISE", "PLAN", "Конкретное действие"), "deepseek", 500, 500));
+            var result = service.assessAnswer("Старая отправка без подтверждения.", question(), answer, false);
+            assertThat(result.accepted()).isTrue();
+            ArgumentCaptor<AiRequest> requests = ArgumentCaptor.forClass(AiRequest.class);
+            verify(provider, times(2)).generate(requests.capture());
+            assertThat(requests.getAllValues()).extracting(AiRequest::maxTokens).containsExactly(6000, 12000);
+            assertThat(requests.getAllValues()).allSatisfy(r -> {
+                assertThat(r.thinkingEnabled()).isTrue();
+                assertThat(r.reasoningEffort()).isEqualTo("low");
+                assertThat(r.timeout()).isPositive().isLessThanOrEqualTo(java.time.Duration.ofSeconds(90));
+            });
+            ObjectMapper mapper = new ObjectMapper();
+            var first = mapper.readTree(requests.getAllValues().getFirst().userPrompt());
+            var retry = mapper.readTree(requests.getAllValues().getLast().userPrompt());
+            for (String field : List.of("managerAnswer", "evidence", "authoritativeFacts", "evaluationTime", "expectedPoints")) {
+                assertThat(retry.path(field)).isEqualTo(first.path(field));
+            }
+            assertThat(retry.path("protocolError").asText()).isEqualTo(error.isBlank() ? "EMPTY_OUTPUT" : "OUTPUT_LIMIT");
+        }
+    }
+
+    @Test
+    void exhaustedOutputLimitHasSafeCategoryAndCannotAcceptPartialJson() {
+        AiProvider provider = provider("");
+        when(provider.generate(any())).thenReturn(new AiResponse("{\"accepted\":true}", "deepseek", 100, 6000,
+                "Secret-provider-body finish_reason=length"));
+        var result = service.assessAnswer("Доставка UNKNOWN.", question(), "Сверю существующую отправку.", false);
+        verify(provider, times(2)).generate(any());
+        assertThat(result.decision()).isEqualTo(ManagerReportReviewQualityService.Decision.UNAVAILABLE);
+        assertThat(result.reason()).contains("OUTPUT_LIMIT").doesNotContain("Secret-provider-body");
+        assertThat(result.safeManagerFeedback()).doesNotContain("OUTPUT_LIMIT");
+    }
+
+    @Test
+    void protocolFailureRetriesOnceAndPreservesFailClosedBehaviour() {
+        AiProvider provider = provider("{\"contextStatus\":\"SUFFICIENT\",\"criteria\":[],\"claims\":[]}");
+        var result = service.assessAnswer("Доставка UNKNOWN.", question(), "Сверю существующую отправку.", false);
+        verify(provider, times(2)).generate(any());
+        assertThat(result.decision()).isEqualTo(ManagerReportReviewQualityService.Decision.UNAVAILABLE);
+        assertThat(result.reason()).contains("PROTOCOL_VALIDATION");
+    }
+
+    @Test
+    void invalidEvidenceDoesNotConsumeModelRequestsAndIsCategorized() {
+        AiProvider provider = provider("{}");
+        var result = service.assessAnswer("СЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:\n{\"id\":", question(),
+                "Сверю существующую отправку.", false);
+        verify(provider, org.mockito.Mockito.never()).generate(any());
+        assertThat(result.reason()).contains("EVIDENCE_INVALID");
+    }
+
+    @Test
+    void questionOutputLimitUsesExistingBoundedRetryAndDoesNotFreezeFallback() {
+        AiProvider provider = provider("");
+        when(provider.generate(any())).thenReturn(new AiResponse("", "deepseek", 100, 8000, "finish_reason=length"),
+                new AiResponse("{\"questions\":[]}", "deepseek", 100, 20));
+        assertThat(service.generateQuestions("Проверить текущие задачи.", 3).aiVerified()).isTrue();
+        verify(provider, times(2)).generate(any());
+    }
+
+    @Test
+    void existingPremiseCriteriaTriggerCorrectionInsteadOfDemandingParrotedConditions() throws Exception {
+        AiProvider provider = provider(incidentAssessment(true, "PLAN"));
+        when(provider.generate(any())).thenReturn(new AiResponse(incidentAssessment(true, "PLAN"), "deepseek", 100, 100),
+                new AiResponse(incidentAssessment(false, "PLAN"), "deepseek", 100, 100));
+        var result = service.assessAnswer(ManagerReportReviewIncidentFixture.evidence(), ManagerReportReviewIncidentFixture.question(),
+                ManagerReportReviewIncidentFixture.ANSWER, false);
+        assertThat(result.accepted()).isTrue();
+        ArgumentCaptor<AiRequest> requests = ArgumentCaptor.forClass(AiRequest.class);
+        verify(provider, times(2)).generate(requests.capture());
+        var input = new ObjectMapper().readTree(requests.getAllValues().getFirst().userPrompt());
+        assertThat(input.path("conditionCriterionIndexes")).hasSize(3);
+        assertThat(input.path("conditionCriterionIndexes").toString()).contains("0", "1", "2");
+        assertThat(new ObjectMapper().readTree(requests.getAllValues().getLast().userPrompt()).path("protocolError").asText())
+                .isEqualTo("RUBRIC_CONTEXT");
+    }
+
+    @Test
+    void repeatedPremiseOmissionNeverBecomesAutomaticAcceptanceOrManagerRejection() throws Exception {
+        AiProvider provider = provider(incidentAssessment(true, "PLAN"));
+        var result = service.assessAnswer(ManagerReportReviewIncidentFixture.evidence(), ManagerReportReviewIncidentFixture.question(),
+                ManagerReportReviewIncidentFixture.ANSWER, false);
+        verify(provider, times(2)).generate(any());
+        assertThat(result.decision()).isEqualTo(ManagerReportReviewQualityService.Decision.UNAVAILABLE);
+        assertThat(result.reason()).contains("RUBRIC_CONTEXT");
+    }
+
+    @Test
+    void requestedActionIsNotDowngradedToContextEvenWhenRepeatedVerbatimInQuestion() {
+        String answer = "Посмотрю карточку.";
+        AiProvider provider = provider(assessment("MISSING", answer, "E1", "PROMISE", "PLAN", "Не указан способ сверки"));
+        var action = new ManagerReportReviewQualityService.ReviewQuestion("Как проверить историю чата?", List.of("проверить историю чата"));
+        var result = service.assessAnswer("Есть неподтверждённая отправка.", action, answer, false);
+        assertThat(result.decision()).isEqualTo(ManagerReportReviewQualityService.Decision.NEEDS_CLARIFICATION);
+        verify(provider).generate(any());
+    }
+
+    @Test
+    void infinitiveOrActionNounCriterionRemainsMandatoryAlongsideSatisfiedCriterion() throws Exception {
+        for (String action : List.of("ответить клиенту", "сопоставить записи", "проверка истории чата")) {
+            String answer = "Проверю карточку.";
+            var root = new ObjectMapper().readTree(assessment("MISSING", answer, "E1", "PROMISE", "PLAN", "Нет конкретного действия"));
+            var criteria = (com.fasterxml.jackson.databind.node.ArrayNode) root.path("criteria");
+            var satisfied = criteria.get(0).deepCopy();
+            ((com.fasterxml.jackson.databind.node.ObjectNode) satisfied).put("criterionIndex", 1).put("status", "SATISFIED");
+            criteria.add(satisfied);
+            AiProvider provider = provider(root.toString());
+            var question = new ManagerReportReviewQualityService.ReviewQuestion("Как " + action + "? Что ещё вы сделаете?",
+                    List.of(action, "дополнительное действие"));
+            var result = service.assessAnswer("Клиент ждёт ответ.", question, answer, false);
+            assertThat(result.decision()).as(action).isEqualTo(ManagerReportReviewQualityService.Decision.NEEDS_CLARIFICATION);
+            verify(provider).generate(any());
+        }
+    }
+
+    @Test
+    void vaguePromiseWithMissingActionNeedsClarificationInsteadOfPausingForExternalEvidence() throws Exception {
+        String answer = "Разберусь с ситуацией и постараюсь помочь.";
+        var root = new ObjectMapper().readTree(assessment("SATISFIED", answer, "E1", "PROMISE", "UNVERIFIABLE", "Нет конкретного плана"));
+        var missing = root.path("criteria").get(0).deepCopy();
+        ((com.fasterxml.jackson.databind.node.ObjectNode) missing).put("criterionIndex", 1).put("status", "MISSING").put("answerQuote", "");
+        ((com.fasterxml.jackson.databind.node.ArrayNode) root.path("criteria")).add(missing);
+        provider(root.toString());
+        var question = new ManagerReportReviewQualityService.ReviewQuestion("Как будете действовать?",
+                List.of("привязка к случаю", "конкретное действие"));
+        var result = service.assessAnswer("Есть неподтверждённая отправка.", question, answer, false);
+        assertThat(result.decision()).isEqualTo(ManagerReportReviewQualityService.Decision.NEEDS_CLARIFICATION);
+        assertThat(result.pending()).isFalse();
+        assertThat(result.missingPoints()).contains("promise:unclear");
+        assertThat(result.safeManagerFeedback()).contains("конкретное действие");
+    }
+
+    @Test
+    void vaguePromiseCannotBeAcceptedEvenIfModelMarksEveryCriterionSatisfied() {
+        String answer = "Разберусь с ситуацией и постараюсь помочь.";
+        provider(assessment("SATISFIED", answer, "E1", "PROMISE", "UNVERIFIABLE", "Нет конкретного плана"));
+        var result = service.assessAnswer("Есть неподтверждённая отправка.", question(), answer, false);
+        assertThat(result.decision()).isEqualTo(ManagerReportReviewQualityService.Decision.NEEDS_CLARIFICATION);
+        assertThat(result.accepted()).isFalse();
+    }
+
+    @Test
+    void currentConcretePlanCanClarifyPreviousVaguePromise() throws Exception {
+        String previous = "Разберусь с ситуацией и постараюсь помочь.";
+        String answer = "Сверю результат существующей отправки в чате и зафиксирую его в карточке.";
+        var root = new ObjectMapper().readTree(assessment("SATISFIED", answer, "E1", "PROMISE", "PLAN", "Конкретный план"));
+        ((com.fasterxml.jackson.databind.node.ObjectNode) root.path("criteria").get(0)).put("answerAttempt", 1);
+        ((com.fasterxml.jackson.databind.node.ObjectNode) root.path("claims").get(0)).put("answerAttempt", 1);
+        var earlier = root.path("claims").get(0).deepCopy();
+        ((com.fasterxml.jackson.databind.node.ObjectNode) earlier).put("answerAttempt", 0).put("answerQuote", previous)
+                .put("status", "UNVERIFIABLE").put("reason", "В прежней попытке не было конкретного плана");
+        ((com.fasterxml.jackson.databind.node.ArrayNode) root.path("claims")).add(earlier);
+        provider(root.toString());
+        var result = service.assessAnswer("Есть неподтверждённая отправка.", question(), answer, false, List.of(previous), false);
+        assertThat(result.accepted()).isTrue();
+        assertThat(result.missingPoints()).doesNotContain("promise:unclear");
+    }
+
+    @Test
+    void unknownCompletedActionOrCriterionStillWaitsForEvidenceAlongsideVaguePromise() throws Exception {
+        String answer = "Я уже отправила сообщение. Остальное постараюсь решить.";
+        var root = new ObjectMapper().readTree(assessment("SATISFIED", answer, "E1", "PROMISE", "UNVERIFIABLE", "Неясное обещание"));
+        var completed = root.path("claims").get(0).deepCopy();
+        ((com.fasterxml.jackson.databind.node.ObjectNode) completed).put("kind", "COMPLETED_ACTION");
+        ((com.fasterxml.jackson.databind.node.ArrayNode) root.path("claims")).add(completed);
+        provider(root.toString());
+        assertThat(service.assessAnswer("Доставка UNKNOWN.", question(), answer, false).decision())
+                .isEqualTo(ManagerReportReviewQualityService.Decision.NEEDS_CONTEXT);
+        ((com.fasterxml.jackson.databind.node.ArrayNode) root.path("claims")).remove(1);
+        ((com.fasterxml.jackson.databind.node.ObjectNode) root.path("criteria").get(0)).put("status", "UNVERIFIABLE");
+        provider(root.toString());
+        assertThat(service.assessAnswer("Доставка UNKNOWN.", question(), answer, false).decision())
+                .isEqualTo(ManagerReportReviewQualityService.Decision.NEEDS_CONTEXT);
+    }
+
+    private String incidentAssessment(boolean missingConditions, String claimStatus) throws Exception {
+        List<java.util.Map<String, Object>> criteria = new java.util.ArrayList<>();
+        for (int index = 0; index < 5; index++) {
+            boolean missing = missingConditions && index < 3;
+            criteria.add(java.util.Map.of("criterionIndex", index, "status", missing ? "MISSING" : "SATISFIED",
+                    "answerAttempt", 0, "answerQuote", missing ? "" : ManagerReportReviewIncidentFixture.ANSWER,
+                    "evidenceRefs", List.of("E1"), "reason", missing ? "Не повторены условия" : "Ответ относится к данным заказам"));
+        }
+        return new ObjectMapper().writeValueAsString(java.util.Map.of("contextStatus", "SUFFICIENT", "summary", "Проверка конкретного плана",
+                "criteria", criteria, "claims", List.of(java.util.Map.of("kind", "PROMISE", "status", claimStatus,
+                        "answerAttempt", 0, "answerQuote", ManagerReportReviewIncidentFixture.ANSWER,
+                        "evidenceRefs", List.of("E1"), "reason", "Обещание сверки, не утверждение о выполнении")), "commitments", List.of()));
     }
 
     private String invoiceEvidence(String status, int count) {

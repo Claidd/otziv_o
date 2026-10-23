@@ -17,6 +17,9 @@ import com.hunt.otziv.notification_media.service.NotificationMediaDeliveryServic
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.SimpleTransactionStatus;
 import org.junit.jupiter.api.Test;
 
 class ManagerReportReviewReminderJobTest {
@@ -45,8 +48,10 @@ class ManagerReportReviewReminderJobTest {
         review.setDeliveredAt(LocalDateTime.now().minusHours(4));
         review.setDeadlineStartedAt(LocalDateTime.now().minusHours(4));
         review.setStatus(ManagerReportReviewStatus.PLAN_PENDING);
-        when(repository.findPendingForReminder(anyList(), any(LocalDateTime.class)))
-                .thenReturn(List.of(review));
+        when(repository.findPendingIdsForReminder(anyList(), any(LocalDateTime.class)))
+                .thenReturn(List.of(review.getId()));
+        when(repository.findForUpdateById(review.getId())).thenReturn(Optional.of(review));
+        when(repository.restrictIfDue(any(), any(), any())).thenReturn(1);
         when(notificationMediaDeliveryService.send(
                 any(String.class),
                 any(Long.class),
@@ -65,13 +70,14 @@ class ManagerReportReviewReminderJobTest {
                 accessPolicy,
                 qualityService,
                 aiAvailabilityService,
-                mock(ManagerReportReviewRolloutPolicy.class)
+                mock(ManagerReportReviewRolloutPolicy.class), transactions()
         );
         job.remind();
 
-        assertThat(review.getRestrictedAt()).isNotNull();
+        assertThat(review.getRestrictedAt()).isNull(); // No managed session mutation/dirty flush.
         assertThat(review.getReminderThreeSentAt()).isNull();
-        verify(repository).save(review);
+        verify(repository).restrictIfDue(org.mockito.ArgumentMatchers.eq(41L), any(), any());
+        verify(repository, never()).save(any());
         verify(eventRepository).save(any());
         verify(accessPolicy).invalidate(17L);
     }
@@ -99,8 +105,9 @@ class ManagerReportReviewReminderJobTest {
         review.setRecipientChatId(700L);
         review.setDeadlineStartedAt(LocalDateTime.now().minusHours(4));
         review.setStatus(ManagerReportReviewStatus.QUESTION_PENDING);
-        when(repository.findPendingForReminder(anyList(), any(LocalDateTime.class)))
-                .thenReturn(List.of(review));
+        when(repository.findPendingIdsForReminder(anyList(), any(LocalDateTime.class)))
+                .thenReturn(List.of(review.getId()));
+        when(repository.findForUpdateById(review.getId())).thenReturn(Optional.of(review));
 
         ManagerReportReviewReminderJob job = new ManagerReportReviewReminderJob(
                 repository,
@@ -111,7 +118,7 @@ class ManagerReportReviewReminderJobTest {
                 accessPolicy,
                 qualityService,
                 aiAvailabilityService,
-                mock(ManagerReportReviewRolloutPolicy.class)
+                mock(ManagerReportReviewRolloutPolicy.class), transactions()
         );
         job.remind();
 
@@ -123,5 +130,11 @@ class ManagerReportReviewReminderJobTest {
         );
         verify(repository, never()).save(review);
         assertThat(review.getRestrictedAt()).isNull();
+    }
+
+    private PlatformTransactionManager transactions() {
+        var transactions = mock(PlatformTransactionManager.class);
+        when(transactions.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
+        return transactions;
     }
 }

@@ -87,6 +87,9 @@ class ManagerReportReviewTelegramServiceTest {
         lenient().when(appSettingService.getInt("manager.report-review.minimum-read-seconds", 60)).thenReturn(60);
         lenient().when(taskContextService.refresh(any(String.class), org.mockito.ArgumentMatchers.nullable(Long.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
+        lenient().when(taskContextService.refreshSources(any(String.class), any(),
+                        org.mockito.ArgumentMatchers.nullable(Long.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(issueService.isPending(any(ManagerReportReviewSession.class), anyInt()))
                 .thenReturn(true);
         lenient().when(sessionRepository.save(any(ManagerReportReviewSession.class)))
@@ -514,7 +517,7 @@ class ManagerReportReviewTelegramServiceTest {
         );
         verify(telegramService).sendMessageWithInlineKeyboard(
                 eq(700L),
-                org.mockito.ArgumentMatchers.contains("Проверка ожидает данных"),
+                org.mockito.ArgumentMatchers.contains("Не удалось подготовить вопросы"),
                 eq("HTML"),
                 any()
         );
@@ -552,7 +555,7 @@ class ManagerReportReviewTelegramServiceTest {
         assertThat(review.getCompletedAt()).isNull();
         verify(telegramService).sendMessageWithInlineKeyboard(
                 eq(700L),
-                org.mockito.ArgumentMatchers.contains("Проверка ожидает данных"),
+                org.mockito.ArgumentMatchers.contains("Не удалось подготовить вопросы"),
                 eq("HTML"),
                 any()
         );

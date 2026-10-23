@@ -47,6 +47,7 @@ public class ManagerReportReviewTelegramService {
     private static final String STUDY = "study";
     private static final String CONFIRM = "confirm";
     private static final String ANSWER = "answer";
+    private static final String RECHECK_CURRENT_PREFIX = "recheck-current-";
     private static final String DISPUTE = "dispute";
     private static final String DISPUTE_ISSUE_PREFIX = "dispute-issue-";
     private static final String OWNER_MANAGER_RIGHT = "owner-right";
@@ -81,6 +82,8 @@ public class ManagerReportReviewTelegramService {
     private final ManagerReportReviewTaskContextService taskContextService;
     private final ManagerReportReviewCommitmentService commitmentService;
     private final ManagerReportReviewRolloutPolicy rolloutPolicy;
+    private final ManagerReportReviewEvidenceSnapshotService evidenceSnapshots =
+            new ManagerReportReviewEvidenceSnapshotService(new com.fasterxml.jackson.databind.ObjectMapper());
 
     public boolean enabled() {
         return appSettingService.getBoolean("manager.report-review.enabled", true);
@@ -435,6 +438,9 @@ public class ManagerReportReviewTelegramService {
             promptAnswer(review);
             return Optional.of("Напишите ответ на вопрос");
         }
+        if (command.action().startsWith(RECHECK_CURRENT_PREFIX)) {
+            return Optional.of(recheckCurrentEvidence(review, actor, command.action()));
+        }
         if (START.equals(command.action())) {
             return Optional.of(continueFlow(review, actor));
         }
@@ -700,6 +706,9 @@ public class ManagerReportReviewTelegramService {
                         sendPlanPrompt(review, "Время отправки прежнего плана не сохранено. Напишите новый план; прежний останется в истории.");
                         return "Для проверки нужен новый план действий";
                     }
+                    if (savedAnswerEvidence(review, -1, submittedAt, savedPlan.getLast()).isBlank()) {
+                        return offerCurrentEvidenceRecheck(review, -1, savedPlan.getLast());
+                    }
                     handleActionPlan(review, actor, savedPlan.getLast(), submittedAt);
                     return "Сохранённый план повторно проверен";
                 }
@@ -717,6 +726,10 @@ public class ManagerReportReviewTelegramService {
                     if (submittedAt == null) {
                         promptAnswer(review);
                         return "Время прежнего ответа не сохранено. Ответьте заново; прежний ответ останется в истории";
+                    }
+                    if (savedAnswerEvidence(review, review.getCurrentQuestionIndex(), submittedAt,
+                            saved.getLast()).isBlank()) {
+                        return offerCurrentEvidenceRecheck(review, review.getCurrentQuestionIndex(), saved.getLast());
                     }
                     handleQuestionAnswer(review, actor, saved.getLast(), submittedAt);
                     return "Сохранённый ответ повторно проверен по данным на момент его отправки";
@@ -744,20 +757,23 @@ public class ManagerReportReviewTelegramService {
 
     private void saveAnswerEvidence(ManagerReportReviewSession review, User actor, int questionIndex,
                                     java.time.ZonedDateTime answeredAt, String answer, String context) {
-        event(review, "ANSWER_EVIDENCE_SNAPSHOT", actor.getId(), actorRole(review), "evidence-v2",
-                answerEvidenceHeader(questionIndex, answeredAt, answer) + context);
+        event(review, "ANSWER_EVIDENCE_SNAPSHOT", actor.getId(), actorRole(review), "evidence-v3",
+                answerEvidenceHeader(questionIndex, answeredAt, answer) + evidenceSnapshots.encode(context));
     }
 
     private String savedAnswerEvidence(ManagerReportReviewSession review, int questionIndex,
                                        java.time.ZonedDateTime answeredAt, String answer) {
         String header = answerEvidenceHeader(questionIndex, answeredAt, answer);
+        String legacyHeader = header.replace("ANSWER_EVIDENCE_V3", "ANSWER_EVIDENCE_V2");
         // A retry must judge the original reply against its original evidence. Current task
         // state is still checked separately by withdrawCompletedTaskQuestions and commitments.
         return eventRepository.findByReview_IdOrderByCreatedAtAsc(review.getId()).stream()
                 .filter(item -> "ANSWER_EVIDENCE_SNAPSHOT".equals(item.getEventType()))
                 .map(ManagerReportReviewEvent::getPayloadText)
-                .filter(payload -> payload != null && payload.startsWith(header))
+                .filter(payload -> payload != null && (payload.startsWith(header) || payload.startsWith(legacyHeader)))
                 .map(payload -> payload.substring(header.length()))
+                .map(evidenceSnapshots::restore)
+                .flatMap(Optional::stream)
                 .findFirst().orElse("");
     }
 
@@ -769,8 +785,52 @@ public class ManagerReportReviewTelegramService {
         } catch (java.security.NoSuchAlgorithmException impossible) {
             throw new IllegalStateException("SHA-256 unavailable", impossible);
         }
-        return "ANSWER_EVIDENCE_V2 questionIndex=" + questionIndex + " submittedAt=" + answeredAt.toInstant()
+        return "ANSWER_EVIDENCE_V3 questionIndex=" + questionIndex + " submittedAt=" + answeredAt.toInstant()
                 + " answerSha256=" + fingerprint + "\n";
+    }
+
+    private String offerCurrentEvidenceRecheck(ManagerReportReviewSession review, int questionIndex, String answer) {
+        String action = currentEvidenceAction(questionIndex, answer,
+                qualityService.latestAnswerRecordedAt(review.getAnswersJson(), questionIndex));
+        telegramService.sendMessageWithInlineKeyboard(review.getRecipientChatId(),
+                "⏸ <b>Нужна новая проверка сохранённого ответа</b>\n\n"
+                        + "Прежние данные проверки сохранились не полностью. Ответ и прогресс сохранены, срок остаётся на паузе. "
+                        + "Если ваш ответ по-прежнему верен, нажмите «Проверить по текущим данным». "
+                        + "Система заново сверит его с состоянием заказов сейчас. Переписывать текст не нужно; "
+                        + "если ситуация изменилась, выберите «Ответить заново».",
+                "HTML", List.of(
+                        List.of(button("Проверить по текущим данным", action, review.getId())),
+                        List.of(button("✍️ Ответить заново", ANSWER, review.getId()))));
+        return "Ответ сохранён. Выберите проверку по текущим данным или новый ответ";
+    }
+
+    private String currentEvidenceAction(int questionIndex, String answer, java.time.ZonedDateTime recordedAt) {
+        return RECHECK_CURRENT_PREFIX + questionIndex + "-" + java.util.UUID.nameUUIDFromBytes(
+                (clean(answer) + "\n" + recordedAt).getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString().substring(0, 8);
+    }
+
+    private String recheckCurrentEvidence(ManagerReportReviewSession review, User actor, String action) {
+        boolean plan = review.getStatus() == ManagerReportReviewStatus.PLAN_PENDING;
+        if ((!plan && review.getStatus() != ManagerReportReviewStatus.QUESTION_PENDING)
+                || review.getAiUnavailableStartedAt() == null) {
+            return "Этот ответ уже проверен. Продолжите текущий вопрос";
+        }
+        int questionIndex = plan ? -1 : review.getCurrentQuestionIndex();
+        List<String> saved = qualityService.previousAcceptedContext(review.getAnswersJson(), questionIndex);
+        var originalTime = qualityService.latestAnswerRecordedAt(review.getAnswersJson(), questionIndex);
+        if (saved.isEmpty() || originalTime == null
+                || !currentEvidenceAction(questionIndex, saved.getLast(), originalTime).equals(action)) {
+            return "Ответ или вопрос изменился. Нажмите «Продолжить проверку» в актуальной карточке";
+        }
+        event(review, "ANSWER_RECHECK_CURRENT_REQUESTED", actor.getId(), actorRole(review), "telegram",
+                "questionIndex=" + questionIndex + "; originalSubmittedAt=" + originalTime
+                        + "; менеджер подтвердил повторную проверку сохранённого ответа по текущим данным");
+        if (plan) handleActionPlan(review, actor, saved.getLast());
+        else handleQuestionAnswer(review, actor, saved.getLast());
+        if (review.getAiUnavailableStartedAt() != null) {
+            return "Ответ сохранён. Проверка пока не завершена, срок остаётся на паузе";
+        }
+        return "Сохранённый ответ проверен по текущим данным; результат отправлен в чат";
     }
 
     private boolean handleQuestionAnswer(
@@ -953,6 +1013,8 @@ public class ManagerReportReviewTelegramService {
                 new ManagerReportReviewQualityService.ReviewAnswer(-1, planQuestion.question(), clean(messageText),
                         assessment.accepted(), assessment.score(), assessment.reason(), assessment.provider(), assessment,
                         answeredAt.toString())));
+        review.setAnswerQuality(assessment.decision().name());
+        review.setAnswerQualityReason(limit(assessment.reason(), 1000));
         sessionRepository.save(review);
         if (shadow) {
             review.setActionPlan(limit(clean(messageText), 2000));
@@ -1578,9 +1640,7 @@ public class ManagerReportReviewTelegramService {
         String original = clean(review.getQuestionsContext());
         if (original.isBlank()) original = clean(review.getReportSnapshot());
         // Keep the original snapshot for the time the manager acted; refresh the relevant sources.
-        String sourceMarkers = question.sourceTaskIds().stream()
-                .map(id -> "sourceTaskId=" + id).collect(java.util.stream.Collectors.joining("\n"));
-        String fresh = taskContextService.refresh(sourceMarkers.isBlank() ? original : sourceMarkers, review.managerId());
+        String fresh = taskContextService.refreshSources(original, question.sourceTaskIds(), review.managerId());
         if (question.sourceTaskIds().isEmpty() && question.question().startsWith("Специалист ")) {
             var goals = workerProgressService.missedPreviousDayGoals(review.managerId(), review.getSummaryDate());
             if (goals != null && !goals.isEmpty()) {
@@ -1595,19 +1655,22 @@ public class ManagerReportReviewTelegramService {
                 fresh += goalFacts;
             }
         }
-        return "СНИМОК НА МОМЕНТ ПОДГОТОВКИ ВОПРОСОВ (исторический контекст):\n"
-                + original.replace("СЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:", "Факты прежнего снимка:")
-                + "\n\nСВЕЖАЯ ПРОВЕРКА ИСТОЧНИКОВ:\n" + fresh;
+        return evidenceSnapshots.compose(original, fresh, question.sourceTaskIds());
     }
 
     private void sendAiUnavailable(ManagerReportReviewSession review) {
         boolean canAnswerAgain = review.getStatus() == ManagerReportReviewStatus.QUESTION_PENDING
                 || review.getStatus() == ManagerReportReviewStatus.PLAN_PENDING;
+        boolean preparingQuestions = QUESTIONS_PENDING_AI.equals(review.getQuestionsSource());
         telegramService.sendMessageWithInlineKeyboard(
                 review.getRecipientChatId(),
-                "⏸ <b>Проверка ожидает данных</b>\n\n"
-                        + "Ваш прогресс сохранён. Трёхчасовой срок приостановлен и доступ "
-                        + "не будет ограничен из-за недоступной проверки или неполных фактов. "
+                (preparingQuestions ? "⏸ <b>Не удалось подготовить вопросы</b>\n\n"
+                        : "UNAVAILABLE".equals(review.getAnswerQuality())
+                        ? "⏸ <b>Не удалось завершить проверку ответа</b>\n\n"
+                            + "Это техническая остановка проверки; ответ не оценён как неправильный. "
+                        : "⏸ <b>Для проверки нужны дополнительные данные</b>\n\n")
+                        + (preparingQuestions ? "Ваш прогресс сохранён. " : "Ваш ответ и прогресс сохранены. ")
+                        + "Трёхчасовой срок приостановлен, доступ не будет ограничен. "
                         + "Нажмите «Продолжить проверку» позже"
                         + (canAnswerAgain ? " или «Ответить заново», чтобы отправить новую попытку по текущим данным." : "."),
                 "HTML",
@@ -1816,7 +1879,9 @@ public class ManagerReportReviewTelegramService {
         event.setActorUserId(actorUserId);
         event.setActorRole(actorRole);
         event.setSource(limit(clean(source), 32));
-        event.setPayloadText(limit(clean(payload), "ANSWER_EVIDENCE_SNAPSHOT".equals(eventType) ? 200_000 : 12_000));
+        // Evidence is a checksummed JSON envelope in LONGTEXT. Trimming or cutting it breaks
+        // original-evidence retries, especially when the fresh facts follow historical context.
+        event.setPayloadText("ANSWER_EVIDENCE_SNAPSHOT".equals(eventType) ? payload : limit(clean(payload), 12_000));
         eventRepository.save(event);
     }
 

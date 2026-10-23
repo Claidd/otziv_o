@@ -23,14 +23,10 @@ public class ManagerReportReviewCheckInService {
         if (user == null || user.getId() == null) {
             return ManagerReportReviewAccessPolicy.AccessState.allowed();
         }
-        ManagerReportReviewSession review = sessionRepository
-                .findFirstByManagerUserIdAndTestModeFalseAndCompletedAtIsNullOrderByCreatedAtDesc(
-                        user.getId()
-                )
-                .orElse(null);
-        if (review != null && review.getDeadlineStartedAt() == null) {
-            review.setDeadlineStartedAt(LocalDateTime.now());
-            sessionRepository.save(review);
+        Long reviewId = sessionRepository.findLatestIncompleteId(user.getId()).orElse(null);
+        if (reviewId != null && sessionRepository.startDeadlineIfAbsent(reviewId, LocalDateTime.now()) == 1) {
+            // A reference is sufficient for the event; no stale answer snapshot is loaded or saved.
+            ManagerReportReviewSession review = sessionRepository.getReferenceById(reviewId);
             ManagerReportReviewEvent event = new ManagerReportReviewEvent();
             event.setReview(review);
             event.setEventType("DEADLINE_STARTED");

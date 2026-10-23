@@ -39,25 +39,27 @@ class ManagerReportReviewCheckInServiceTest {
     void startsDeadlineOnlyOnFirstCabinetCheckIn() {
         ManagerReportReviewSession review = new ManagerReportReviewSession();
         review.setId(41L);
-        when(sessionRepository.findFirstByManagerUserIdAndTestModeFalseAndCompletedAtIsNullOrderByCreatedAtDesc(17L))
-                .thenReturn(Optional.of(review));
+        when(sessionRepository.findLatestIncompleteId(17L)).thenReturn(Optional.of(41L));
+        when(sessionRepository.startDeadlineIfAbsent(org.mockito.ArgumentMatchers.eq(41L), any()))
+                .thenReturn(1, 0);
+        when(sessionRepository.getReferenceById(41L)).thenReturn(review);
 
         service.checkIn(manager);
 
-        assertThat(review.getDeadlineStartedAt()).isNotNull();
-        verify(sessionRepository).save(review);
+        assertThat(review.getDeadlineStartedAt()).isNull(); // Metadata SQL must not dirty a stale managed session.
+        verify(sessionRepository, never()).save(any());
         verify(eventRepository).save(any(ManagerReportReviewEvent.class));
 
         service.checkIn(manager);
 
-        verify(sessionRepository).save(review);
+        verify(sessionRepository, never()).save(any());
         verify(eventRepository).save(any(ManagerReportReviewEvent.class));
         verify(accessPolicy, times(2)).invalidate(17L);
     }
 
     @Test
     void doesNotCreateDeadlineWhenThereIsNoPendingReport() {
-        when(sessionRepository.findFirstByManagerUserIdAndTestModeFalseAndCompletedAtIsNullOrderByCreatedAtDesc(17L))
+        when(sessionRepository.findLatestIncompleteId(17L))
                 .thenReturn(Optional.empty());
 
         service.checkIn(manager);

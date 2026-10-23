@@ -137,6 +137,37 @@ class ManagerReportReviewTaskContextServiceTest {
         org.mockito.Mockito.verifyNoInteractions(diagnostics, unansweredRepository);
     }
 
+    @Test
+    void refreshSourcesReadsOnlyExplicitQuestionIdsWithoutHistoricalPrefix() {
+        var source = source(3545L, ManagerDailyControlItemStatus.OPEN);
+        when(concreteRepository.findAllById(java.util.Set.of(3545L))).thenReturn(List.of(source));
+        when(diagnostics.contextForAudit(java.util.Set.of(3545L))).thenReturn("СЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:\ncomplete-facts");
+
+        String context = service.refreshSources("sourceTaskId=999\n" + "old-context".repeat(60_000), List.of(3545L), 9L);
+
+        assertThat(context).contains("sourceTaskId=3545", "complete-facts").doesNotContain("sourceTaskId=999", "old-context");
+        org.mockito.Mockito.verify(concreteRepository).findAllById(java.util.Set.of(3545L));
+    }
+
+    @Test
+    void unboundPlanRefreshesReferencedSourcesButNeverRepeatsHistoricalText() {
+        var source = source(3545L, ManagerDailyControlItemStatus.OPEN);
+        when(concreteRepository.findAllById(java.util.Set.of(3545L, 42L))).thenReturn(List.of(source));
+        when(diagnostics.contextForAudit(java.util.Set.of(3545L))).thenReturn("complete-facts");
+
+        String context = service.refreshSources("sourceTaskId=3545\nsourceTaskId=42\nold-context", List.of(), 9L);
+
+        assertThat(context).contains("sourceTaskId=3545", "sourceTaskId=42; evidenceStatus=UNAVAILABLE", "complete-facts")
+                .doesNotContain("old-context");
+    }
+
+    @Test
+    void refreshSourcesCannotUseUnscopedHistoryAsCurrentEvidence() {
+        String context = service.refreshSources("СЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:\nold-history", List.of(), 9L);
+        assertThat(context).contains("не подтверждено").doesNotContain("old-history", "СЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:");
+        org.mockito.Mockito.verifyNoInteractions(concreteRepository, diagnostics, unansweredRepository);
+    }
+
     private ManagerDailyControlConcreteItem source(
             Long id,
             ManagerDailyControlItemStatus status

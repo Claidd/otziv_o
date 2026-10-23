@@ -21,6 +21,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 @Entity
+@org.hibernate.annotations.DynamicUpdate
 @Getter
 @Setter
 @Table(

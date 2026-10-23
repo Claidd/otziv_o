@@ -9,6 +9,7 @@ import com.hunt.otziv.manager_control.model.ManagerDailyControlItemStatus;
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlConcreteItemRepository;
 import com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosticsService;
 import java.util.LinkedHashSet;
+import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -30,6 +31,18 @@ public class ManagerReportReviewTaskContextService {
     private final ManagerDailyControlConcreteItemRepository concreteItemRepository;
     private final ClientChatUnansweredItemRepository unansweredRepository;
     private final ManagerProblemDiagnosticsService diagnosticsService;
+
+    /** Read only the question's sources; never append the complete historical report to fresh evidence. */
+    @Transactional
+    public String refreshSources(String historical, Collection<Long> requestedIds, Long managerId) {
+        Set<Long> ids = new LinkedHashSet<>();
+        if (requestedIds != null) requestedIds.stream().filter(java.util.Objects::nonNull)
+                .filter(id -> id > 0).forEach(ids::add);
+        if (ids.isEmpty()) ids.addAll(sourceIds(historical == null ? "" : historical));
+        if (ids.isEmpty()) return "Актуальные источники задач не привязаны; их состояние не подтверждено.";
+        return refresh(ids.stream().map(id -> "sourceTaskId=" + id)
+                .collect(java.util.stream.Collectors.joining("\n")), managerId);
+    }
 
     @Transactional
     public String refresh(String context, Long managerId) {
