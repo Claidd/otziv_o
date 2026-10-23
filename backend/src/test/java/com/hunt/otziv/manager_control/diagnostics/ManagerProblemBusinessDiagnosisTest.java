@@ -11,6 +11,51 @@ import static com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosti
 class ManagerProblemBusinessDiagnosisTest {
     @ParameterizedTest
     @ValueSource(strings = {"COMMON_INVOICE", "COMMON_INVOICE_AUTOMATION"})
+    void currentInvoiceConflictDoesNotExplainEveryUnreadyPosition(String type) {
+        var facts = List.of(f("card", "entity_type", type), f("invoice", "status", "NEEDS_ATTENTION"),
+                f("invoice", "last_error", "409 CONFLICT: Текст отзыва уже опубликован ранее"),
+                f("invoice", "orderCount", "7"), f("invoice", "readyCount", "4"),
+                f("automation", "state_status", "DONE"), f("automation", "current_cycle", "false"));
+
+        assertThat(ManagerProblemBusinessDiagnosis.hasCurrentInvoicePublicationConflict(facts)).isTrue();
+        Diagnosis result = ManagerProblemBusinessDiagnosis.fallback(facts);
+
+        assertThat(result.summary()).contains("4 из 7", "В журнале счёта", "одного отзыва", "причины не подтверждены");
+        assertThat(result.confirmedFacts()).isEmpty();
+        assertThat(result.hypotheses()).isEmpty();
+        assertThat(result.actions()).hasSize(2);
+        assertThat(result.actions().getFirst().text()).contains("текущей ошибке", "не публикуйте отзыв повторно");
+        assertThat(result.actions().getFirst().evidenceRefs()).containsExactly("invoice:1:last_error");
+        assertThat(result.actions().getLast().text()).contains("по отдельности", "Не переносите причину");
+        assertThat(result.actions().getLast().evidenceRefs()).containsExactly("invoice:1:orderCount", "invoice:1:readyCount");
+        assertThat(result.verification().getFirst()).contains("подтверждена готовность", "устранены причины", "Одного ответа ответственного");
+        assertThat(ManagerProblemBusinessDiagnosis.readable(result)).isTrue();
+    }
+
+    @Test
+    void historicalErrorsCardTextAndLinkedInvoiceOnOtherCardDoNotTriggerPublicationFallback() {
+        String conflict = "Текст отзыва уже опубликован ранее";
+        var historical = List.of(f("card", "entity_type", "COMMON_INVOICE"), f("invoice", "last_error", "неизвестно"),
+                f("card", "reason", conflict), f("automation", "last_error_message", conflict), f("automation", "current_cycle", "false"));
+        assertThat(ManagerProblemBusinessDiagnosis.hasCurrentInvoicePublicationConflict(historical)).isFalse();
+        assertThat(ManagerProblemBusinessDiagnosis.fallback(historical).summary()).doesNotContain("конфликт публикации");
+        assertThat(ManagerProblemBusinessDiagnosis.hasCurrentInvoicePublicationConflict(List.of(f("card", "entity_type", "ORDER"),
+                f("invoice", "last_error", conflict)))).isFalse();
+        assertThat(ManagerProblemBusinessDiagnosis.hasCurrentInvoicePublicationConflict(List.of(f("card", "entity_type", "COMMON_INVOICE"),
+                f("invoice", "last_error", "Текст отзыва ещё не опубликован")))).isFalse();
+    }
+
+    @Test
+    void uncertainCurrentDeliveryTakesPriorityOverInvoicePublicationConflict() {
+        var facts = List.of(f("card", "entity_type", "COMMON_INVOICE"), f("invoice", "last_error", "Текст отзыва уже опубликован ранее"),
+                f("automation", "delivery_status", "UNKNOWN"), f("automation", "current_cycle", "true"));
+        Diagnosis result = ManagerProblemBusinessDiagnosis.fallback(facts);
+        assertThat(result.summary()).contains("Результат предыдущей отправки", "не подтверждён").doesNotContain("конфликт публикации");
+        assertThat(result.actions()).extracting(Action::code).containsExactly("CHECK_DELIVERY", "ESCALATE");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"COMMON_INVOICE", "COMMON_INVOICE_AUTOMATION"})
     void currentInvoiceSendMarkerOverridesAdviceDespiteSuccessfulAutomationFromAnOldCycle(String type) {
         var marker = f("invoice", "last_error", "message_send_in_progress");
         var facts = List.of(f("card", "entity_type", type), f("invoice", "status", "REMINDER"), marker,

@@ -118,6 +118,35 @@ class ManagerProblemDiagnosticsServiceTest {
         assertThat(result.model()).isEqualTo("server-rules");
     }
 
+    @Test
+    void currentInvoiceConflictReplacesOvergeneralizedModelAdviceWithAttributedReadOnlyGuidance() throws Exception {
+        when(settings.mode()).thenReturn("ENFORCE");
+        var facts = List.of(new Fact("card:10:entity_type", "card", "entity_type", "COMMON_INVOICE"),
+                new Fact("invoice:297:last_error", "invoice", "last_error", "Текст отзыва уже опубликован ранее"),
+                new Fact("invoice:297:orderCount", "invoice", "orderCount", "7"),
+                new Fact("invoice:297:readyCount", "invoice", "readyCount", "4"));
+        var original = new Diagnosis("Три заказа задержаны из-за конфликта публикации.", List.of(), List.of(), List.of("Нужно сверить отзывы."),
+                List.of(new Action("CHECK_SOURCE", "Проверьте публикации.", "Менеджер", "Все позиции готовы.", List.of("invoice:297:last_error"))), List.of("Все позиции готовы."));
+        assertThat(ManagerProblemBusinessDiagnosis.readable(original)).isTrue();
+        String storedJson = new ObjectMapper().writeValueAsString(original);
+        var saved = new ManagerProblemDiagnosisStore.Stored(300, 7, 1, 2, "NEEDS_CONTEXT", LocalDateTime.now(), facts, original,
+                "deepseek-flash", PROMPT_VERSION, null, 1);
+        when(store.latestForSource(10L)).thenReturn(saved);
+
+        DiagnosticView result = service.latest(10L);
+
+        assertThat(result.model()).isEqualTo("server-rules");
+        assertThat(result.status()).isEqualTo("NEEDS_CONTEXT");
+        assertThat(result.version()).isEqualTo(7);
+        assertThat(result.facts()).isSameAs(facts);
+        assertThat(result.diagnosis().summary()).contains("4 из 7", "одного отзыва", "причины не подтверждены").doesNotContain("Три заказа задержаны из-за");
+        assertThat(new ObjectMapper().writeValueAsString(saved.diagnosis())).isEqualTo(storedJson);
+        assertThat(saved.model()).isEqualTo("deepseek-flash");
+        verify(store).latestForSource(10L);
+        verifyNoMoreInteractions(store);
+        verifyNoInteractions(collector, events);
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"READY", "NEEDS_CONTEXT"})
     void oldChatModelAdviceKeepsAuthorshipAndActionsButHandoffCannotSatisfyClosure(String status) throws Exception {

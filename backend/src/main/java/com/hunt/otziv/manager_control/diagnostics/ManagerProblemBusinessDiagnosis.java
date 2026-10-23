@@ -56,6 +56,8 @@ final class ManagerProblemBusinessDiagnosis {
     static Diagnosis fallback(List<Fact> facts) {
         List<Fact> uncertain = uncertainDelivery(facts);
         if (!uncertain.isEmpty()) return uncertain(uncertain.getFirst());
+        Fact publicationConflict = currentInvoicePublicationConflict(facts);
+        if (publicationConflict != null) return invoicePublicationConflict(facts, publicationConflict);
         String type = value(facts, "card", "entity_type");
         if (type.startsWith("COMMON_INVOICE") || type.isBlank() && has(facts, "invoice", "status")) return invoice(facts);
         if ("AUTOMATION_FAILURE".equals(type)) {
@@ -89,6 +91,35 @@ final class ManagerProblemBusinessDiagnosis {
         return guidance("Причина замечания пока не подтверждена полностью: требуется сверка исходной задачи.", facts,
                 "Откройте связанную задачу и проверьте её текущее состояние и результат последних действий. Если данных недостаточно, уточните их у ответственного и зафиксируйте срок проверки.",
                 "Исходная задача подтверждает устранение причины; одного комментария или обещания недостаточно.");
+    }
+
+    static boolean hasCurrentInvoicePublicationConflict(List<Fact> facts) {
+        return currentInvoicePublicationConflict(facts) != null;
+    }
+
+    private static Fact currentInvoicePublicationConflict(List<Fact> facts) {
+        if (!Set.of("COMMON_INVOICE", "COMMON_INVOICE_AUTOMATION").contains(value(facts, "card", "entity_type"))) return null;
+        return facts.stream().filter(f -> "invoice".equals(f.subject()) && "last_error".equals(f.field()))
+                .filter(f -> {
+                    String error = f.value().toLowerCase(Locale.ROOT);
+                    return error.contains("текст") && error.contains("уже опубликован ранее");
+                }).findFirst().orElse(null);
+    }
+
+    private static Diagnosis invoicePublicationConflict(List<Fact> facts, Fact conflict) {
+        long total = number(facts, "invoice", "orderCount"), ready = number(facts, "invoice", "readyCount");
+        String summary = total >= 0 && ready >= 0 && ready <= total
+                ? "К общему счёту готовы " + ready + " из " + total + " позиций. " : "Готовность всех позиций общего счёта нужно сверить. ";
+        summary += "В журнале счёта зафиксирован конфликт публикации одного отзыва. По остальным неготовым позициям нужна отдельная проверка: их причины не подтверждены.";
+        List<String> readinessRefs = facts.stream().filter(f -> "invoice".equals(f.subject()) && Set.of("orderCount", "readyCount").contains(f.field()))
+                .map(Fact::reference).toList();
+        return new Diagnosis(summary, List.of(), List.of(),
+                List.of("Нужно подтвердить текущее состояние отзыва, указанного в ошибке счёта.", "Причины задержки остальных неготовых позиций не подтверждены отдельно."),
+                List.of(new Action("CHECK_SOURCE", "Откройте отзыв, указанный в текущей ошибке счёта, и связанный заказ. Сверьте фактическую публикацию и статус; не публикуйте отзыв повторно только ради снятия ошибки.",
+                                "Менеджер", "В исходном отзыве и заказе подтверждены фактическое состояние публикации и результат устранения конфликта.", List.of(conflict.reference())),
+                        new Action("CHECK_SOURCE", "Проверьте остальные позиции по отдельности: какие из них не готовы, почему задержаны и какое действие требуется. Не переносите причину конфликта одного отзыва на остальные позиции.",
+                                "Менеджер", "По каждой неготовой позиции причина задержки и результат её устранения подтверждены в соответствующем заказе.", readinessRefs.isEmpty() ? List.of(conflict.reference()) : readinessRefs)),
+                List.of("В счёте и связанных заказах подтверждена готовность действующих позиций и устранены причины задержек. Одного ответа ответственного или повторной публикации недостаточно."));
     }
 
     static Diagnosis uncertain(Fact fact) {
