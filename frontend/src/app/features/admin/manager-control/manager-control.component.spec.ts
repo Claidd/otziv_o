@@ -1,4 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { TestBed } from '@angular/core/testing';
+import { ActivatedRoute, Router } from '@angular/router';
+import { of, Subject } from 'rxjs';
+import { AuthService } from '../../../core/auth.service';
+import { ManagerApi } from '../../../core/manager.api';
+import { ManagerControlApi } from '../../../core/manager-control.api';
+import { ToastService } from '../../../shared/toast.service';
 import {
   automationWaitingSlotDate,
   isAutomationWaitingForSlotReason,
@@ -9,6 +16,52 @@ import {
   shouldHideClientChatUnansweredAfterAction,
   telegramGroupLinkCommand
 } from './manager-control.component';
+
+describe('persistent repair result', () => {
+  it('keeps the actual 409 reason after a refreshed card and clears it for a new successful check', () => {
+    const card = { controlEntityId: 8788, type: 'ORDER', title: 'Fixture', itemStatus: 'OPEN',
+      reason: 'Исход предыдущей отправки ещё не подтверждён', delivery: null } as any;
+    const detail = (example = card) => ({ managerId: 2, dailyControlId: 1,
+      items: [{ itemId: 1, examples: [example] }] }) as any;
+    const first = new Subject<any>(), second = new Subject<any>();
+    const repair = vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second);
+    const send = vi.fn();
+    const toast = { warning: vi.fn(), error: vi.fn(), success: vi.fn() };
+    TestBed.configureTestingModule({ providers: [
+      { provide: ManagerControlApi, useValue: { repairConcreteItem: repair, sendClientMessage: send,
+        today: () => of({ managers: [] }) } },
+      { provide: ManagerApi, useValue: {} }, { provide: ToastService, useValue: toast },
+      { provide: AuthService, useValue: { hasAnyRealmRole: () => false } },
+      { provide: ActivatedRoute, useValue: { snapshot: { data: {} }, paramMap: new Subject() } },
+      { provide: Router, useValue: {} }
+    ] });
+    TestBed.overrideComponent(ManagerControlComponent, { set: { template: '', imports: [] } });
+    const fixture = TestBed.createComponent(ManagerControlComponent), page = fixture.componentInstance;
+    page.detail.set(detail());
+    page.repairConcreteItem(card);
+    const reason = 'Существующая отправка проверена, но квитанция не найдена. Новое сообщение не отправлялось.';
+    first.error({ status: 409, error: { message: reason } });
+    expect(page.concreteRepairResult(card)).toEqual({ message: reason, deliveryCheck: true });
+    expect(toast.warning).toHaveBeenCalledWith('Проверка отправки', reason);
+    expect(toast.success).not.toHaveBeenCalled();
+
+    const refreshed = { ...card, updatedAt: '2026-10-23T21:00:00' };
+    (page as any).applyDetail(detail(refreshed));
+    expect(page.concreteRepairResult(refreshed)?.message).toBe(reason);
+    expect(page.concreteRepairResult({ ...refreshed, controlEntityId: 8789 })).toBeNull();
+    expect(page.concreteRepairResult({ ...refreshed, itemStatus: 'RESOLVED' })).toBeNull();
+    expect(repair).toHaveBeenCalledTimes(1);
+    expect(send).not.toHaveBeenCalled();
+
+    page.repairConcreteItem(refreshed);
+    expect(page.concreteRepairResult(refreshed)).toBeNull();
+    second.next({ ...refreshed, itemStatus: 'ACTION_TAKEN', comment: 'Квитанция подтверждена. Ожидаем ответ клиента.' });
+    expect(page.concreteRepairResult(refreshed)).toBeNull();
+    expect(toast.success).toHaveBeenCalledWith('Результат отправки проверен', 'Квитанция подтверждена. Ожидаем ответ клиента.');
+    expect(send).not.toHaveBeenCalled();
+    fixture.destroy();
+  });
+});
 
 describe('isExplicitlyRepairableCommonInvoiceReason', () => {
   it('keeps repair available for a TLS failure declared safe by the backend', () => {

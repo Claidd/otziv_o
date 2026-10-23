@@ -1466,6 +1466,16 @@
                             </div>
                           }
 
+                          @if (concreteRepairResult(example); as result) {
+                            <div class="detail-example-text" role="status">
+                              <strong>Результат проверки</strong>
+                              <em class="manager-action-note">{{ result.message }}</em>
+                              <small>{{ result.deliveryCheck
+                                ? 'Сверьте исходную отправку в чате. Не отправляйте сообщение повторно.'
+                                : 'Выполните указанную проверку, затем обновите карточку.' }}</small>
+                            </div>
+                          }
+
                           @if (isUnansweredClientMessage(example)) {
                             <div class="review-followup order-open-action">
                               @if (chatUrl(example)) {

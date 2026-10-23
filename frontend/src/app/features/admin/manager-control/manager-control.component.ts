@@ -201,6 +201,17 @@ export class ManagerControlComponent implements OnInit {
   readonly updatingItemIds = signal<Set<number>>(new Set());
   private readonly deliveryTracker = new CardDeliveryTracker();
   readonly deliveries = signal<Record<number, DeliveryOperation>>({});
+  readonly concreteRepairResults = signal<Record<number, { message: string; deliveryCheck: boolean }>>({});
+  concreteRepairResult(card: ManagerControlConcreteItem): { message: string; deliveryCheck: boolean } | null {
+    return card.itemStatus === 'RESOLVED' ? null : this.concreteRepairResults()[card.controlEntityId ?? 0] ?? null;
+  }
+  private clearConcreteRepairResult(itemId: number): void {
+    this.concreteRepairResults.update(results => {
+      const next = { ...results };
+      delete next[itemId];
+      return next;
+    });
+  }
   deliveryMessage(card: ManagerControlConcreteItem): string | null {
     return this.clientMessageSendBlockedReason(card)
       || deliveryOperationMessage(this.deliveries()[card.controlEntityId ?? 0] ?? managerCardDelivery(card));
@@ -1252,6 +1263,11 @@ export class ManagerControlComponent implements OnInit {
   private applyDetail(detail: ManagerControlManagerDetail): void {
     this.deliveryTracker.cancelAll();
     this.deliveries.set({});
+    const visibleIds = new Set(detail.items.flatMap(item => item.examples)
+      .filter(card => card.itemStatus !== 'RESOLVED').map(card => card.controlEntityId));
+    this.concreteRepairResults.update(results => Object.fromEntries(
+      Object.entries(results).filter(([id]) => visibleIds.has(Number(id)))
+    ));
     this.detail.set(detail);
     for (const item of detail.items) for (const card of item.examples) this.observeDelivery(card);
     this.detailComments.set(Object.fromEntries(
@@ -1330,6 +1346,7 @@ export class ManagerControlComponent implements OnInit {
     this.detailLoading.set(false);
     this.detailComments.set({});
     this.detailConcreteComments.set({});
+    this.concreteRepairResults.set({});
     this.preparedContactItemIds.set(new Set());
     this.updatingControl.set(false);
   }
@@ -1610,6 +1627,7 @@ export class ManagerControlComponent implements OnInit {
     if (this.isConcreteUpdating(itemId)) {
       return;
     }
+    this.clearConcreteRepairResult(itemId);
     this.updatingConcreteItemIds.update((ids) => new Set(ids).add(itemId));
     this.api.repairConcreteItem(itemId).subscribe({
       next: (updated) => this.completeConcreteRepair(example, updated,
@@ -1620,6 +1638,11 @@ export class ManagerControlComponent implements OnInit {
         if (this.isManualChatBindingRepairMessage(message)) {
           this.showManualChatBindingRepairToast(message, example);
           return;
+        }
+        if (err?.status === 409) {
+          this.concreteRepairResults.update(results => ({ ...results,
+            [itemId]: { message, deliveryCheck: this.isDeliveryReconciliation(example) }
+          }));
         }
         if (this.isDeliveryReconciliation(example)) this.toast.warning('Проверка отправки', message);
         else this.toast.error('Не удалось починить', message);
@@ -1673,6 +1696,7 @@ export class ManagerControlComponent implements OnInit {
     title = 'Карточка починена'
   ): void {
     if (example.controlEntityId) {
+      this.clearConcreteRepairResult(example.controlEntityId);
       this.stopTelegramBindingPoll(example.controlEntityId);
     }
     const merged = this.patchDetailConcreteItem(example, updated);
