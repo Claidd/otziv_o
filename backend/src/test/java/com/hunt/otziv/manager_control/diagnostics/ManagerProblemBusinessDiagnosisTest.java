@@ -10,6 +10,25 @@ import static com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosti
 
 class ManagerProblemBusinessDiagnosisTest {
     @Test
+    void paymentPreparationFailureHasConcreteGuidanceWithoutTechnicalDetailsOrClaimingDelivery() {
+        var facts = List.of(f("card", "entity_type", "AUTOMATION_FAILURE"),
+                f("automation", "last_error_code", "payment_instruction_failed"),
+                f("automation", "last_error_message", "JDBC select order_id; Lock wait timeout exceeded"));
+        Diagnosis result = ManagerProblemBusinessDiagnosis.fallback(facts);
+        assertThat(result.summary()).contains("Подготовка счёта", "нельзя считать счёт отправленным");
+        assertThat(result.actions().getFirst().code()).isEqualTo("ESCALATE");
+        assertThat(result.actions().getFirst().text()).contains("Не создавайте второй счёт", "не отправляйте сообщение вручную");
+        assertThat(ManagerProblemBusinessDiagnosis.readable(result)).isTrue();
+
+        var uncertain = new ArrayList<>(facts);
+        uncertain.add(f("automation", "delivery_status", "UNKNOWN"));
+        assertThat(ManagerProblemBusinessDiagnosis.fallback(uncertain).actions().getFirst().code()).isEqualTo("CHECK_DELIVERY");
+        var historical = new ArrayList<>(facts);
+        historical.add(f("automation", "current_cycle", "false"));
+        assertThat(ManagerProblemBusinessDiagnosis.fallback(historical).summary()).doesNotContain("Подготовка счёта завершилась ошибкой");
+    }
+
+    @Test
     void partiallyPaidInvoiceExplainsArchivedMembershipWithoutDemandingRepublishingOrAnotherInvoice() {
         var facts = List.of(f("card", "entity_type", "COMMON_INVOICE_AUTOMATION"), f("invoice", "status", "PARTIALLY_PAID"),
                 f("invoice", "amount_kopecks", "450000"), f("invoice", "paid_kopecks", "150000"),

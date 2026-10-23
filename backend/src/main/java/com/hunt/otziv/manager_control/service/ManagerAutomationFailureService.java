@@ -88,9 +88,6 @@ public class ManagerAutomationFailureService {
                 return;
             }
             resolveIssue(manager, state, now).ifPresent(issue -> {
-                if (transientWait && !issue.reason().contains("telegram_group_missing")) {
-                    return;
-                }
                 unique.merge(issue.deduplicationKey(), issue, this::moreImportant);
             });
         });
@@ -163,28 +160,33 @@ public class ManagerAutomationFailureService {
         boolean paymentInstructionFailure = "payment_instruction_failed".equalsIgnoreCase(errorCode);
         boolean existingPaymentConflict = paymentInstructionFailure && isExistingPaymentConflict(errorMessage);
         boolean telegramGroupMissing = isTelegramGroupMissing(company);
+        if (policy.isTransientWait(state) && !telegramGroupMissing) return Optional.empty();
         List<String> reasonParts = new ArrayList<>();
-        if (existingPaymentConflict) {
+        if (policy.requiresDeliveryReceipt(state)) {
+            reasonParts.add("Результат предыдущей отправки клиенту не подтверждён. Повторное сообщение может оказаться дубликатом");
+        } else if (existingPaymentConflict) {
             reasonParts.add("Почему в замечаниях: действующая платежная ссылка уже существует, но автоматика "
                     + "не смогла повторно использовать ее для напоминания; новое сообщение клиенту не отправилось");
         } else if (paymentInstructionFailure) {
-            reasonParts.add("Почему в замечаниях: автоматика не смогла подготовить или отправить счет клиенту");
+            reasonParts.add("Система не смогла подготовить счёт для отправки клиенту. Требуется проверка подготовки оплаты");
         } else {
             reasonParts.add("Почему в замечаниях: задача клиентской автоматизации завершилась ошибкой");
         }
         if (telegramGroupMissing) {
-            reasonParts.add("telegram_group_missing");
-            reasonParts.add("Для Telegram-группы не задан chatId");
-        } else {
-            if (!errorCode.isBlank()) {
-                reasonParts.add(errorCode);
-            }
-            if (!errorMessage.isBlank() && !errorMessage.equalsIgnoreCase(errorCode)) {
-                reasonParts.add(errorMessage);
-            }
+            reasonParts.add("Группа Telegram не привязана к компании");
+        } else if (!paymentInstructionFailure && !policy.requiresDeliveryReceipt(state)) {
+            reasonParts.add(switch (errorCode.toLowerCase(java.util.Locale.ROOT)) {
+                case "whatsapp_group_missing", "missing_group_id" -> "Группа WhatsApp не привязана к компании; проверьте чат в карточке компании";
+                case "max_group_missing" -> "Группа MAX не привязана к компании; проверьте чат в карточке компании";
+                case "whatsapp_client_missing", "unknown_client", "missing_client" -> "Канал связи с клиентом недоступен; передайте проверку подключения администратору";
+                case "empty_client_url", "chat_platform_unknown" -> "Не удалось определить чат клиента; проверьте ссылку в карточке компании";
+                case "message_empty", "missing_message" -> "Не подготовлен текст сообщения; проверьте исходную задачу";
+                case "company_missing" -> "Данные компании недоступны; передайте проверку администратору";
+                default -> "Проверьте состояние связанной задачи; подробности сбоя сохранены для администратора";
+            });
         }
         if (ClientMessageStateSafety.MANUAL_DELIVERY_HANDOFF_PENDING.equals(errorCode)) {
-            reasonParts.add("Отправка не подтверждена и автоматический повтор запрещён. "
+            reasonParts.add("Ручная проверка продолжается. Отправка не подтверждена и автоматический повтор запрещён. "
                     + "Администратор передал случай на ручную связь с клиентом; подтвердите результат в чате и завершите заказ вручную.");
         }
         reasonParts.add("неудачных попыток подряд: " + state.getConsecutiveFailures());
@@ -196,7 +198,7 @@ public class ManagerAutomationFailureService {
                     + "если бот уже в группе, отправьте в ней одноразовую команду. "
                     + "После подтверждения задача повторится автоматически");
         } else if (ClientMessageStateSafety.MANUAL_DELIVERY_HANDOFF_PENDING.equals(errorCode)) {
-            reasonParts.add("Ручная проверка продолжается. Эта карточка остаётся открытой до завершения общения с клиентом");
+            reasonParts.add("Эта карточка остаётся открытой до завершения общения с клиентом");
         } else if (policy.isLegacyPreparationFailure(state)) {
             reasonParts.add("Нажмите «Починить»: система проверит цикл заказа и журнал операций. "
                     + "Задача вернется в очередь только при подтверждении, что отправка еще не начиналась");

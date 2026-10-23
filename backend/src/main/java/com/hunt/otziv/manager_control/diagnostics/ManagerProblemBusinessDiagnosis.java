@@ -45,6 +45,19 @@ final class ManagerProblemBusinessDiagnosis {
         if (!uncertain.isEmpty()) return uncertain(uncertain.getFirst());
         String type = value(facts, "card", "entity_type");
         if (type.startsWith("COMMON_INVOICE") || type.isBlank() && has(facts, "invoice", "status")) return invoice(facts);
+        if ("AUTOMATION_FAILURE".equals(type)) {
+            Fact preparationFailure = facts.stream().filter(f -> "automation".equals(f.subject())
+                    && "last_error_code".equals(f.field()) && "payment_instruction_failed".equals(f.value())
+                    && facts.stream().noneMatch(scope -> scope.reference().equals(f.reference().replace("last_error_code", "current_cycle"))
+                        && "false".equals(scope.value()))).findFirst().orElse(null);
+            if (preparationFailure != null) {
+                String verification = "Подготовка существующего счёта завершена, результат отправки подтверждён и ошибка больше не повторяется.";
+                return new Diagnosis("Подготовка счёта завершилась ошибкой. По этой попытке нельзя считать счёт отправленным.",
+                        List.of(), List.of(), List.of("Нужно подтвердить результат подготовки и существующей отправки."),
+                        List.of(new Action("ESCALATE", "Передайте администратору проверку подготовки оплаты в связанном заказе. Не создавайте второй счёт и не отправляйте сообщение вручную до сверки существующей попытки.",
+                                "Администратор", verification, List.of(preparationFailure.reference()))), List.of(verification));
+            }
+        }
         if (type.startsWith("CLIENT_CHAT") || type.isBlank() && has(facts, "client_chat", "status")) {
             return guidance("По переписке нужно проверить, получил ли клиент ответ на свой вопрос.", facts,
                     "Сопоставьте последнее сообщение клиента с ответом в чате. Проверьте, дан ли ответ по существу и подтверждены ли обещанные действия.",

@@ -89,6 +89,7 @@ class ManagerControlClientSendMySqlIntegrationTest {
     private ManagerControlClientSendWorkflow workflow;
     private ManagerClientMessageQueue queue;
     private ManagerClientMessageWorker worker;
+    private com.hunt.otziv.u_users.api.DeferredUserAuthority actors;
     private ClientChatMessageSender sender;
     private ManagerControlOrderDeliveryState deliveryState;
     private ManagerControlRepairContactCarry repairCarry;
@@ -211,7 +212,7 @@ class ManagerControlClientSendMySqlIntegrationTest {
         var presenter = new ManagerControlConcretePresenter(mock(com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosticsService.class), mock(com.hunt.otziv.manager_daily_summary.service.ManagerReportReviewCommitmentService.class), mock(WorkerRiskIncidentRepository.class), lookup,
                 mock(ManagerControlInvoiceDiagnostics.class), mock(ScheduledClientMessageStateRepository.class),
                 mock(CompanyRepository.class), new ManagerControlSlaPolicy(mock(AppSettingService.class)), deliveryState);
-        var actors = mock(com.hunt.otziv.u_users.api.DeferredUserAuthority.class);
+        actors = mock(com.hunt.otziv.u_users.api.DeferredUserAuthority.class);
         var deferredActor = new com.hunt.otziv.u_users.api.DeferredUserAuthority.Actor(1L, "fixture-manager", 0, java.util.Set.of("ROLE_MANAGER"));
         when(actors.capture(AUTH)).thenReturn(deferredActor); when(actors.revalidate(deferredActor)).thenReturn(AUTH);
         when(sender.deliverWithOperationId(any(), any(), any(), any(), any(), anyString())).thenAnswer(call -> {
@@ -545,6 +546,134 @@ class ManagerControlClientSendMySqlIntegrationTest {
         jdbc.update("UPDATE manager_client_message_queue SET state=?,error_code=?,created_at=?,updated_at=?,next_attempt_at=TIMESTAMPADD(DAY,1,CURRENT_TIMESTAMP(6)) WHERE operation_id=?",
                 state, code, createdAt, updatedAt, id);
         return id;
+    }
+
+    private void completedSourceCycle(boolean legacy) throws Exception {
+        failAudit.set(true); enqueue(); worker.drain(); failAudit.set(false);
+        if (legacy) {
+            var command = queue.snapshot(operation.get());
+            var json = new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules();
+            var frozen = (com.fasterxml.jackson.databind.node.ObjectNode) json.readTree(command.preparedJson());
+            frozen.remove(java.util.List.of("sourceGeneration", "sourceStatusChangedAt"));
+            var changed = new ManagerClientMessageQueue.Command(command.operationId(), command.cardId(), command.kind(), frozen.toString(), command.actor());
+            var properties = new com.hunt.otziv.security.credentials.CredentialEncryptionProperties();
+            properties.setActiveKeyId("test"); properties.setActiveKeyBase64(java.util.Base64.getEncoder().encodeToString(new byte[32]));
+            var cipher = new com.hunt.otziv.security.credentials.CredentialCipher(properties);
+            jdbc.update("UPDATE manager_client_message_queue SET envelope_ciphertext=? WHERE operation_id=?", cipher.encrypt(queue.encode(changed)), operation.get());
+        }
+        LocalDateTime now = jdbc.queryForObject("SELECT CURRENT_TIMESTAMP(6)", Timestamp.class).toLocalDateTime();
+        jdbc.update("UPDATE manager_client_message_queue SET created_at=?,updated_at=?,next_attempt_at=CURRENT_TIMESTAMP(6) WHERE operation_id=?",
+                now.minusHours(3), now.minusHours(3).plusSeconds(10), operation.get());
+        generation.incrementAndGet(); cycle.set(now.minusHours(2)); currentOrderStatus.set("Публикация");
+        jdbc.update("UPDATE mc_send_card SET status='RESOLVED',comment='source automatically completed',resolved=?,automatic=TRUE,touched=NULL,follow_up=NULL WHERE id=1", cycle.get().plusMinutes(1));
+        when(sender.recordedOutcome(operation.get())).thenReturn(ClientMessageSendResult.sent("WhatsApp", "fixture-provider-message"));
+    }
+
+    private java.util.Map<String, Object> businessRows() {
+        return java.util.Map.of("card", jdbc.queryForMap("SELECT * FROM mc_send_card WHERE id=1"),
+                "parent", jdbc.queryForMap("SELECT * FROM mc_send_parent WHERE id=2"),
+                "control", jdbc.queryForMap("SELECT * FROM mc_send_control WHERE id=3"),
+                "source", jdbc.queryForMap("SELECT * FROM mc_send_source WHERE id=77"),
+                "events", jdbc.queryForList("SELECT * FROM mc_send_events ORDER BY id"));
+    }
+
+    @ParameterizedTest @ValueSource(booleans = {false, true})
+    void confirmedDeliveryRetiresAfterAutomaticSourceClosureWithoutBusinessEffects(boolean legacy) throws Exception {
+        completedSourceCycle(legacy);
+        var before = businessRows();
+        var clock = jdbc.queryForMap("SELECT created_at,updated_at,next_attempt_at,attempts FROM manager_client_message_queue WHERE operation_id=?", operation.get());
+        worker.drain();
+        assertThat(deliveryState().status()).isEqualTo("SENT");
+        assertThat(deliveryState().errorCode()).isEqualTo("source_cycle_completed");
+        assertThat(businessRows()).isEqualTo(before);
+        assertThat(jdbc.queryForMap("SELECT created_at,updated_at,next_attempt_at,attempts FROM manager_client_message_queue WHERE operation_id=?", operation.get())).isEqualTo(clock);
+        assertThat(queue.claim()).isEmpty();
+        worker.drain();
+        assertThat(businessRows()).isEqualTo(before);
+        assertThat(sends.get()).isEqualTo(1);
+        verifyNoInteractions(orderService);
+        verify(payments, never()).releaseKnownUnsent(any(), any());
+    }
+
+    @Test
+    void retiringOldConfirmedCyclePreservesNewCurrentUnknownFence() throws Exception {
+        completedSourceCycle(false);
+        var original = queue.snapshot(operation.get());
+        var json = new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules();
+        var frozen = (com.fasterxml.jackson.databind.node.ObjectNode) json.readTree(original.preparedJson());
+        String unknownId = UUID.randomUUID().toString();
+        frozen.put("deliveryToken", unknownId); frozen.put("orderStatus", currentOrderStatus.get());
+        frozen.put("sourceGeneration", generation.get()); frozen.put("sourceStatusChangedAt", cycle.get().toString());
+        var unknown = new ManagerClientMessageQueue.Command(unknownId, original.cardId(), original.kind(), frozen.toString(), original.actor());
+        new TransactionTemplate(transactions).execute(status -> { queue.enqueue(unknown); return null; });
+        jdbc.update("UPDATE manager_client_message_queue SET state='UNKNOWN',error_code='operation_unknown',next_attempt_at=TIMESTAMPADD(DAY,1,CURRENT_TIMESTAMP(6)) WHERE operation_id=?", unknownId);
+        var unknownBefore = jdbc.queryForMap("SELECT * FROM manager_client_message_queue WHERE operation_id=?", unknownId);
+        var businessBefore = businessRows();
+        assertThat(deliveryState.pending(readCard(false))).isTrue();
+        worker.drain();
+        assertThat(deliveryState().errorCode()).isEqualTo("source_cycle_completed");
+        assertThat(jdbc.queryForMap("SELECT * FROM manager_client_message_queue WHERE operation_id=?", unknownId)).isEqualTo(unknownBefore);
+        assertThat(deliveryState.pending(readCard(false))).isTrue();
+        assertThat(businessRows()).isEqualTo(businessBefore);
+        assertThat(sends.get()).isEqualTo(1);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"open", "manual_resolution", "missing_resolution", "early_resolution", "same_status", "same_generation",
+            "regressed_generation", "same_cycle_time", "legacy_cycle_tie", "missing_cycle_stamp", "source_binding", "owner_binding", "receipt", "revoked_actor"})
+    void completedCycleRetirementRejectsMissingProofOrChangedAuthority(String change) throws Exception {
+        completedSourceCycle(change.equals("legacy_cycle_tie"));
+        if (change.equals("open")) jdbc.update("UPDATE mc_send_card SET status='OPEN'");
+        if (change.equals("manual_resolution")) jdbc.update("UPDATE mc_send_card SET automatic=FALSE");
+        if (change.equals("missing_resolution")) jdbc.update("UPDATE mc_send_card SET resolved=NULL");
+        if (change.equals("early_resolution")) jdbc.update("UPDATE mc_send_card SET resolved=?", cycle.get().minusMinutes(1));
+        if (change.equals("same_status")) currentOrderStatus.set("Не оплачено");
+        if (change.equals("same_generation")) generation.set(0);
+        if (change.equals("regressed_generation")) generation.set(-1);
+        if (change.equals("same_cycle_time")) cycle.set(LocalDateTime.of(2026, 7, 14, 0, 0));
+        if (change.equals("legacy_cycle_tie")) cycle.set(jdbc.queryForObject("SELECT created_at FROM manager_client_message_queue WHERE operation_id=?", Timestamp.class, operation.get()).toLocalDateTime());
+        if (change.equals("missing_cycle_stamp")) {
+            var command = queue.snapshot(operation.get());
+            var json = new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules();
+            var frozen = (com.fasterxml.jackson.databind.node.ObjectNode) json.readTree(command.preparedJson());
+            frozen.remove("sourceStatusChangedAt");
+            var properties = new com.hunt.otziv.security.credentials.CredentialEncryptionProperties();
+            properties.setActiveKeyId("test"); properties.setActiveKeyBase64(java.util.Base64.getEncoder().encodeToString(new byte[32]));
+            var cipher = new com.hunt.otziv.security.credentials.CredentialCipher(properties);
+            var changed = new ManagerClientMessageQueue.Command(command.operationId(), command.cardId(), command.kind(), frozen.toString(), command.actor());
+            jdbc.update("UPDATE manager_client_message_queue SET envelope_ciphertext=? WHERE operation_id=?", cipher.encrypt(queue.encode(changed)), operation.get());
+        }
+        if (change.equals("source_binding") || change.equals("owner_binding")) doAnswer(call -> {
+            assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isTrue();
+            var card = readCard(true);
+            if (change.equals("source_binding")) card.setEntityId(88L);
+            else { var manager = manager(); manager.setId(9L); card.getControl().setManager(manager); }
+            return Optional.of(card);
+        }).when(cards).findByIdForUpdate(1L);
+        if (change.equals("receipt")) when(sender.recordedOutcome(operation.get())).thenReturn(ClientMessageSendResult.failed("operation_unknown", "unconfirmed"));
+        if (change.equals("revoked_actor")) when(actors.revalidate(any())).thenThrow(new IllegalStateException("fixture authority revoked"));
+        var before = businessRows();
+        worker.drain();
+        assertThat(deliveryState().status()).isEqualTo("SENT");
+        assertThat(deliveryState().errorCode()).isEqualTo("finalization_required");
+        assertThat(businessRows()).isEqualTo(before);
+        assertThat(sends.get()).isEqualTo(1);
+    }
+
+    @ParameterizedTest @ValueSource(strings = {"expired", "replaced"})
+    void completedCycleRetirementRequiresALiveOwnedClaim(String change) throws Exception {
+        completedSourceCycle(false);
+        var claim = queue.claim().orElseThrow();
+        if (change.equals("expired")) jdbc.update("UPDATE manager_client_message_queue SET lease_until=DATE_SUB(CURRENT_TIMESTAMP(6),INTERVAL 1 SECOND) WHERE operation_id=?", operation.get());
+        else jdbc.update("UPDATE manager_client_message_queue SET claim_token='new-worker' WHERE operation_id=?", operation.get());
+        var before = businessRows();
+        Runnable complete = () -> workflow.completeQueued(claim, queue.snapshot(operation.get()), ClientMessageSendResult.sent("WhatsApp", "fixture-provider-message"), AUTH, "SENT", null, 0);
+        if (change.equals("expired")) assertThatThrownBy(complete::run).isInstanceOf(IllegalStateException.class);
+        else complete.run();
+        assertThat(deliveryState().status()).isEqualTo("SENT");
+        assertThat(deliveryState().errorCode()).isEqualTo("finalization_required");
+        assertThat(businessRows()).isEqualTo(before);
+        assertThat(sends.get()).isEqualTo(1);
     }
 
     private String supersededContact(int successorAgeDays) throws Exception {

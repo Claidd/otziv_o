@@ -162,11 +162,21 @@ public class ManagerClientMessageQueue implements com.hunt.otziv.client_messages
     /** Retire bookkeeping only. Preserve proof, original timestamps, and every business/card field. */
     @Transactional(propagation = Propagation.MANDATORY)
     void settleSuperseded(Claim claim) {
+        settleConfirmed(claim, "superseded_by_confirmed_contact");
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    void settleCompletedCycle(Claim claim) {
+        settleConfirmed(claim, "source_cycle_completed");
+    }
+
+    private void settleConfirmed(Claim claim, String code) {
         int changed = jdbc.update("""
                 UPDATE manager_client_message_queue
-                SET error_code='superseded_by_confirmed_contact',claim_token=NULL,lease_until=NULL
+                SET error_code=?,claim_token=NULL,lease_until=NULL
                 WHERE operation_id=? AND claim_token=? AND state='SENT' AND error_code='finalization_required'
-                """, claim.operationId(), claim.token());
+                  AND lease_until>CURRENT_TIMESTAMP(6)
+                """, code, claim.operationId(), claim.token());
         if (changed != 1) throw new IllegalStateException("Confirmed settlement claim changed");
     }
 

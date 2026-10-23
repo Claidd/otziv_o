@@ -116,7 +116,8 @@ public class ManagerControlClientSendWorkflow {
             if (!queue.owns(claim)) return null;
             if ("SENT".equals(claim.previousState()) && "SENT".equals(state) && code == null
                     && result != null && result.sent() && result.messageId() != null && !result.messageId().isBlank()
-                    && settleSupersededConfirmedContact(claim, prepared, authentication)) return null;
+                    && (settleCompletedSourceCycle(claim, prepared, authentication)
+                        || settleSupersededConfirmedContact(claim, prepared, authentication))) return null;
             if ("SENT".equals(claim.previousState()) && !"finalization_required".equals(code))
                 restoreConfirmedFence(prepared, authentication);
             lockedPreparedClientMessage(prepared);
@@ -388,6 +389,39 @@ public class ManagerControlClientSendWorkflow {
         if (ownFence) return;
         card.setComment(CLIENT_MESSAGE_DELIVERY_PREPARED_PREFIX + prepared.deliveryToken());
         dailyControlConcreteItemRepository.save(card);
+    }
+
+    /** A confirmed old delivery needs no business finalization after its source was automatically closed. */
+    private boolean settleCompletedSourceCycle(ManagerClientMessageQueue.Claim claim, PreparedClientMessage prepared,
+                                               Authentication authentication) {
+        var card = dailyControlConcreteItemRepository.findByIdForUpdate(prepared.concreteItemId()).orElseThrow();
+        if (card.getStatus() != ManagerDailyControlItemStatus.RESOLVED || !card.isAutomaticResolution()
+                || card.getResolvedAt() == null || !"ORDER".equals(card.getEntityType())
+                || !Objects.equals(card.getEntityId(), prepared.orderId())) return false;
+        accessPolicy.requireControlAccess(card.getControl(), authentication, authentication);
+        var order = orderRepository.findByIdForCounterUpdate(prepared.orderId()).orElseThrow();
+        accessPolicy.requireCurrentOrderAccess(order.getId(), authentication);
+        if (!Objects.equals(card.getControl().managerId(), prepared.orderManagerId())
+                || !Objects.equals(prepared.orderManagerId(), order.getManager() == null ? null : order.getManager().getId())
+                || Objects.equals(prepared.orderStatus(), clientMessageText.orderStatusTitle(order))
+                || !Objects.equals(prepared.company(), ManagerControlMessageCompany.capture(order.getCompany()))
+                || !Objects.equals(prepared.managerClientId(), order.getManager() == null ? null : order.getManager().getClientId())
+                || !Objects.equals(prepared.groupId(), order.getCompany() == null ? null : order.getCompany().getGroupId())) return false;
+        var recorded = queue.controlHistoryForSettlement(order.getId()).stream()
+                .filter(row -> row.delivery().operationId().equals(prepared.deliveryToken()))
+                .filter(row -> row.cardId() == prepared.concreteItemId() && row.source().equals(prepared))
+                .findFirst().orElse(null);
+        if (recorded == null || !"SENT".equals(recorded.delivery().status())
+                || !"finalization_required".equals(recorded.delivery().errorCode())) return false;
+        LocalDateTime currentCycle = cycleAt(order);
+        // Neither a changed label nor a generation mismatch proves chronological progress.
+        // Legacy snapshots have no generation: the persisted creation clock is their lower bound.
+        if (!currentCycle.isAfter(recorded.createdAt()) || card.getResolvedAt().isBefore(currentCycle)
+                || (prepared.sourceStatusChangedAt() != null && !currentCycle.isAfter(prepared.sourceStatusChangedAt()))
+                || (prepared.sourceGeneration() != null && (prepared.sourceStatusChangedAt() == null
+                    || order.getClientMessageGeneration() <= prepared.sourceGeneration()))) return false;
+        queue.settleCompletedCycle(claim);
+        return true;
     }
 
     /** Worker reached this branch only after the frozen operation's exact positive receipt lookup. */

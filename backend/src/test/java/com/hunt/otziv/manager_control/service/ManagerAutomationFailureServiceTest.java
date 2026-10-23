@@ -1,6 +1,7 @@
 package com.hunt.otziv.manager_control.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -27,6 +28,8 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
@@ -73,6 +76,7 @@ class ManagerAutomationFailureServiceTest {
         Company company = Company.builder().id(20L).title("Калибр").manager(manager).urlChat("https://chat.example").build();
         Order order = Order.builder().id(24129L).manager(manager).company(company).build();
         ScheduledClientMessageState state = state(11L, 24129L, ClientMessageScenario.PAYMENT_REMINDER, 1);
+        state.setLastErrorMessage("JDBC exception executing SQL [Lock wait timeout exceeded] select order_id from orders");
         when(stateRepository.findManagerControlCandidateIds(eq(7L), any(Pageable.class))).thenReturn(List.of(11L));
         when(stateRepository.findAllById(List.of(11L))).thenReturn(List.of(state));
         when(orderRepository.findByIdForOrderDto(24129L)).thenReturn(Optional.of(order));
@@ -83,11 +87,16 @@ class ManagerAutomationFailureServiceTest {
         assertEquals(1, issues.size());
         assertEquals(ManagerAutomationFailureService.ENTITY_AUTOMATION_FAILURE, issues.getFirst().entityType());
         assertEquals(11L, issues.getFirst().entityId());
-        assertTrue(issues.getFirst().reason().contains("payment_instruction_failed"));
+        assertTrue(issues.getFirst().reason().contains("не смогла подготовить счёт"));
+        assertFalse(issues.getFirst().reason().contains("payment_instruction_failed"));
+        assertFalse(issues.getFirst().reason().contains("JDBC"));
+        assertFalse(issues.getFirst().reason().contains("select"));
+        assertTrue(state.getLastErrorMessage().contains("JDBC"));
     }
 
-    @Test
-    void exposesMissingTelegramBindingEvenWhenLastAttemptWasRateLimited() {
+    @ParameterizedTest
+    @ValueSource(strings = {"rate_limited", "manual_delivery_handoff_pending"})
+    void exposesMissingTelegramBindingWithoutLosingManualDeliveryBlock(String errorCode) {
         Manager manager = Manager.builder().id(7L).build();
         Company company = Company.builder()
                 .id(20L)
@@ -104,7 +113,7 @@ class ManagerAutomationFailureServiceTest {
                 .targetKey("archive-company:20")
                 .companyId(20L)
                 .status(ScheduledMessageStateStatus.ACTIVE)
-                .lastErrorCode("rate_limited")
+                .lastErrorCode(errorCode)
                 .lastErrorMessage("Следующий слот отправки")
                 .consecutiveFailures(4)
                 .lastAttemptAt(now.minusHours(2))
@@ -120,9 +129,13 @@ class ManagerAutomationFailureServiceTest {
 
         assertEquals(1, issues.size());
         String reason = issues.getFirst().reason();
-        assertTrue(reason.contains("telegram_group_missing"));
-        assertTrue(reason.contains("Для Telegram-группы не задан chatId"));
+        assertTrue(reason.contains("Группа Telegram не привязана к компании"));
+        assertFalse(reason.contains("chatId"));
         assertTrue(reason.contains("Привязать Telegram"));
+        if (errorCode.equals("manual_delivery_handoff_pending")) {
+            assertTrue(reason.contains("Ручная проверка продолжается"));
+            assertTrue(reason.contains("автоматический повтор запрещён"));
+        }
     }
 
     @Test
