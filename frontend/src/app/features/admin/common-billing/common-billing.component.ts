@@ -1653,6 +1653,8 @@ export class CommonBillingComponent implements OnDestroy {
         return 'Бан';
       case 'DISABLED':
         return 'Отключен';
+      case 'ARCHIVED':
+        return 'Архив';
       default:
         return 'Нет счета';
     }

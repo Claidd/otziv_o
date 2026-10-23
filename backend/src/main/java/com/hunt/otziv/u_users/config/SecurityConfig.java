@@ -268,6 +268,10 @@ public class SecurityConfig {
         auth.requestMatchers(HttpMethod.DELETE, "/api/manager/orders/*").hasAnyRole("ADMIN", "OWNER", "MANAGER");
         auth.requestMatchers(HttpMethod.DELETE, "/api/manager/orders/*/reviews/*").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER");
         auth.requestMatchers(HttpMethod.DELETE, "/api/manager/orders/*/recovery-tasks/*").hasAnyRole("ADMIN", "OWNER", "MANAGER");
+        auth.requestMatchers(HttpMethod.GET, "/api/orders/*/manual-payment-review")
+                .hasAnyRole("ADMIN", "OWNER", "MANAGER");
+        auth.requestMatchers(HttpMethod.POST, "/api/orders/*/manual-payment-review/dispute")
+                .hasAnyRole("ADMIN", "OWNER", "MANAGER");
         auth.requestMatchers("/api/manager/**").hasAnyRole("ADMIN", "OWNER", "MANAGER");
         auth.requestMatchers("/api/worker/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER");
         auth.requestMatchers("/api/performer/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "PERFORMER");
