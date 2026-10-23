@@ -16,6 +16,8 @@ import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.web.server.ResponseStatusException;
 
 class ManagerControlManualDeliveryRepairTest {
@@ -57,7 +59,8 @@ class ManagerControlManualDeliveryRepairTest {
     @Test void absenceOfProofRetainsTheCardAndDoesNotPretendTheOrderWasResolved() {
         when(delivery.history(source)).thenReturn(List.of(row));
         assertThatThrownBy(() -> repair.repair(10, 77, 2L)).isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("результат пока не подтверждён");
+                .hasMessageContaining("Исходная отправка пока не подтверждена")
+                .hasMessageContaining("продолжит сверку автоматически");
         verify(worker).reconcileExisting("saved-operation");
         verify(cards, never()).save(any());
         verify(delivery, never()).restoreConfirmedContact(any());
@@ -67,6 +70,24 @@ class ManagerControlManualDeliveryRepairTest {
     @Test void changedOwnerCannotInspectOrReconcileThePreviousManagersOperation() {
         assertThatThrownBy(() -> repair.repair(10, 77, 3L)).isInstanceOf(ResponseStatusException.class);
         verifyNoInteractions(worker, delivery, cards);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"context_changed", "finalization_required"})
+    void failedSourceFenceDoesNotPromiseAnAutomaticRetry(String errorCode) {
+        var failed = new ManagerClientMessageQueue.RecordedControl(
+                new DeliveryOperation("saved-operation", "FAILED", 1, errorCode), 9,
+                source.cycleAt(), source.cycleAt(), null);
+        // Judge the fresh state after the receipt lookup, not the initial snapshot.
+        when(delivery.history(source)).thenReturn(List.of(row), List.of(failed));
+        assertThatThrownBy(() -> repair.repair(10, 77, 2L)).isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Автоматическая сверка остановлена")
+                .hasMessageContaining("Повторное сообщение заблокировано")
+                .hasMessageNotContaining("продолжит сверку автоматически");
+        verify(worker).reconcileExisting("saved-operation");
+        verify(cards, never()).save(any());
+        verify(delivery, never()).restoreConfirmedContact(any());
+        verifyNoInteractions(presenter, lifecycle);
     }
 
     @Test void newCycleDuringReceiptLookupCannotReceiveTheOldContactOrDeadline() {

@@ -7442,6 +7442,44 @@ class CommonBillingServiceTest {
     }
 
     @Test
+    void uncertainInvoiceReceiptReadCannotRearmDispatchOnAnAdmissionError() {
+        CommonInvoice invoice = liveMessageInvoice();
+        when(messageSender.deliverWithOperationId(any(), any(), any(), any(), any(), anyString()))
+                .thenReturn(ClientMessageSendResult.failed("operation_unknown", "timeout"));
+        service.sendManualReminder(10L);
+        drainMessages();
+        String id = invoice.getPaymentMessageOperationId();
+        when(messageSender.recordedOutcome(id)).thenReturn(ClientMessageSendResult.failed("gateway_not_ready", "unavailable"));
+        for (int i = 0; i < 2; i++) {
+            queuedClaims.add(new CommonInvoiceMessageQueue.Claim(id, 10L, "UNKNOWN", 1, "receipt-" + i));
+            drainMessages();
+            assertEquals("UNKNOWN", queuedStates.get(id));
+        }
+        assertFalse(invoice.isPaymentMessageConfirmed());
+        assertEquals(id, invoice.getPaymentMessageOperationId());
+        verify(messageSender, times(1)).deliverWithOperationId(any(), any(), any(), any(), any(), eq(id));
+    }
+
+    @Test
+    void uncertainInvoiceRecoversFromChatHistoryWithoutAnotherSend() {
+        CommonInvoice invoice = liveMessageInvoice();
+        when(messageSender.deliverWithOperationId(any(), any(), any(), any(), any(), anyString()))
+                .thenReturn(ClientMessageSendResult.failed("operation_unknown", "timeout"));
+        service.sendManualReminder(10L);
+        drainMessages();
+        String id = invoice.getPaymentMessageOperationId();
+        LocalDateTime preparedAt = LocalDateTime.now().minusHours(5);
+        when(messageQueue.preparedAt(id)).thenReturn(preparedAt);
+        when(messageSender.recordedOutcome(id)).thenReturn(ClientMessageSendResult.failed("operation_unknown", "unknown"));
+        when(messageSender.recoverRecordedOutcomeFromChat(id, preparedAt)).thenReturn(ClientMessageSendResult.sent("WhatsApp", "history-receipt"));
+        queuedClaims.add(new CommonInvoiceMessageQueue.Claim(id, 10L, "UNKNOWN", 1, "history-claim"));
+        drainMessages();
+        assertTrue(invoice.isPaymentMessageConfirmed());
+        assertEquals("SENT", queuedStates.get(id));
+        verify(messageSender, times(1)).deliverWithOperationId(any(), any(), any(), any(), any(), eq(id));
+    }
+
+    @Test
     void confirmedReminderAllowsNewOccurrenceButConfirmedInvoiceReplayDoesNotSendAgain() {
         CommonInvoice invoice = liveMessageInvoice();
         when(messageSender.deliverWithOperationId(any(), any(), any(), any(), any(), anyString()))

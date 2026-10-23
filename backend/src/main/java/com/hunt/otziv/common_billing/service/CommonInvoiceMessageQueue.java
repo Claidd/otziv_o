@@ -92,6 +92,30 @@ public class CommonInvoiceMessageQueue implements com.hunt.otziv.client_messages
                 (rs, row) -> rs.getString(1), claim.operationId()).stream().anyMatch(claim.token()::equals);
     }
 
+    /** A repair click can inspect only this invoice's existing uncertain command, never dispatch it. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public Optional<Claim> claimRecovery(long invoiceId, String operationId) {
+        List<Claim> rows = jdbc.query("""
+                SELECT operation_id,invoice_id,state,attempts FROM common_invoice_message_queue
+                WHERE invoice_id=? AND operation_id=? AND state IN ('SENDING','UNKNOWN')
+                  AND (lease_until IS NULL OR lease_until<CURRENT_TIMESTAMP(6))
+                FOR UPDATE SKIP LOCKED
+                """, (rs, row) -> new Claim(rs.getString(1), rs.getLong(2), rs.getString(3),
+                rs.getInt(4), UUID.randomUUID().toString()), invoiceId, operationId);
+        if (rows.isEmpty()) return Optional.empty();
+        Claim claim = rows.getFirst();
+        jdbc.update("""
+                UPDATE common_invoice_message_queue SET state='SENDING',claim_token=?,
+                    lease_until=TIMESTAMPADD(MINUTE,5,CURRENT_TIMESTAMP(6)) WHERE operation_id=?
+                """, claim.token(), claim.operationId());
+        return Optional.of(claim);
+    }
+
+    java.time.LocalDateTime preparedAt(String operationId) {
+        return jdbc.query("SELECT created_at FROM common_invoice_message_queue WHERE operation_id=?",
+                (rs, row) -> rs.getTimestamp(1).toLocalDateTime(), operationId).stream().findFirst().orElse(null);
+    }
+
     @Transactional(propagation = Propagation.MANDATORY)
     public void finish(Claim claim, String state, String errorCode, int delaySeconds) {
         jdbc.update("""

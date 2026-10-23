@@ -163,7 +163,9 @@ public class ManagerAutomationFailureService {
         if (policy.isTransientWait(state) && !telegramGroupMissing) return Optional.empty();
         List<String> reasonParts = new ArrayList<>();
         if (policy.requiresDeliveryReceipt(state)) {
-            reasonParts.add("Результат предыдущей отправки клиенту не подтверждён. Повторное сообщение может оказаться дубликатом");
+            reasonParts.add("Результат предыдущей отправки клиенту не подтверждён. Нажмите «Проверить отправку»: "
+                    + "система сверит существующую отправку с историей нужного чата и восстановит подтверждение при надёжном совпадении. "
+                    + "Повторное сообщение для проверки не отправляется");
         } else if (existingPaymentConflict) {
             reasonParts.add("Почему в замечаниях: действующая платежная ссылка уже существует, но автоматика "
                     + "не смогла повторно использовать ее для напоминания; новое сообщение клиенту не отправилось");
@@ -186,8 +188,9 @@ public class ManagerAutomationFailureService {
             });
         }
         if (ClientMessageStateSafety.MANUAL_DELIVERY_HANDOFF_PENDING.equals(errorCode)) {
-            reasonParts.add("Ручная проверка продолжается. Отправка не подтверждена и автоматический повтор запрещён. "
-                    + "Администратор передал случай на ручную связь с клиентом; подтвердите результат в чате и завершите заказ вручную.");
+            reasonParts.add("Отправка не подтверждена и автоматический повтор запрещён. "
+                    + "Кнопка «Проверить отправку» сверит существующее сообщение без нового контакта с клиентом. "
+                    + "Карточка изменится только по подтверждённому результату.");
         }
         reasonParts.add("неудачных попыток подряд: " + state.getConsecutiveFailures());
         if (state.getNextAttemptAt() != null) {

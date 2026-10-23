@@ -31,6 +31,7 @@ const { RemoteSessionFence } = require("./remote-session-fence");
 const { OperationLedger, OperationLedgerError } = require("./operation-ledger");
 const { createOutboundHandler } = require("./outbound-routes");
 const { createOperationReconciliationHandler } = require("./operation-reconciliation");
+const { createOperationHistoryReconciliationHandler } = require("./operation-history-reconciliation");
 const { serializedId, installMessageIdentityCompatibility } = require("./message-identity");
 const { installPuppeteerCompatibility } = require("./puppeteer-compatibility");
 const { chromiumLaunchArgs } = require("./chromium-launch");
@@ -1112,6 +1113,16 @@ app.post("/send-file", asyncRoute(createDocumentOutboundHandler({
 app.post("/operations/:operationId/reconcile", asyncRoute(createOperationReconciliationHandler({
   ledger: operationLedger, clientId: CLIENT_ID,
   canRead: () => ready && authenticated && client && !shuttingDown,
+  getMessage: id => client.getMessageById(id),
+  onReconciled: id => deliveryIdempotencyStore.mark(generatedOutboundKey(id), Date.now() + WHATSAPP_OUTBOUND_DURABLE_TTL_MS),
+})));
+app.post("/operations/:operationId/reconcile-history", asyncRoute(createOperationHistoryReconciliationHandler({
+  ledger: operationLedger, clientId: CLIENT_ID,
+  canRead: () => ready && authenticated && client && !shuttingDown,
+  normalizeGroup: normalizeGroupId, normalizePhone, maximumChars: WHATSAPP_MAX_MESSAGE_CHARS,
+  // Fetch history by the known immutable ID without refreshing all group metadata.
+  getChat: id => new (require("whatsapp-web.js").Chat)(client, { id: { _serialized: id }, isGroup: id.endsWith("@g.us") }),
+  getDirectMappings: id => client.getContactLidAndPhone([id]),
   getMessage: id => client.getMessageById(id),
   onReconciled: id => deliveryIdempotencyStore.mark(generatedOutboundKey(id), Date.now() + WHATSAPP_OUTBOUND_DURABLE_TTL_MS),
 })));

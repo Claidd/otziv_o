@@ -39,7 +39,7 @@ public class ManagerControlOrderDeliveryState {
         if (scheduledRecent(current, true)) throw conflict(RECENT_SCHEDULED_CONTACT);
     }
 
-    private static final String SCHEDULED_CONTACT_BLOCKED = "Исход автоматической отправки этого заказа не подтверждён. Проверьте существующую операцию через «Починить» или передайте администратору. Не отправляйте повторное сообщение вручную.";
+    private static final String SCHEDULED_CONTACT_BLOCKED = "Исход автоматической отправки этого заказа не подтверждён. Нажмите «Проверить отправку»: система сверит существующее сообщение и восстановит подтверждение при надёжном совпадении. Повторное сообщение заблокировано.";
     private static final String RECENT_SCHEDULED_CONTACT = "Автоматическая отправка клиенту уже подтверждена в течение последних двух дней. Дождитесь срока повторной проверки; повторное сообщение сейчас не требуется.";
 
     String sendBlockedReason(ManagerDailyControlConcreteItem card) {

@@ -35,6 +35,17 @@ public class ManagerControlInvoiceRepairWorkflow {
     public Outcome repair(Long invoiceId) {
         CommonInvoice invoice = commonInvoiceRepository.findByIdWithAccount(invoiceId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"));
+        String deliveryError = safe(invoice.getLastError()).toLowerCase(Locale.ROOT);
+        if (deliveryError.startsWith("message_send_in_progress") || deliveryError.startsWith("message_send_stale")
+                || deliveryError.startsWith("message_send_unknown") || deliveryError.startsWith("payment_route_changed_message_in_progress")) {
+            var recovery = commonBillingService.recoverPendingMessageReceipt(invoiceId);
+            if (recovery == null || !recovery.confirmed()) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, recovery == null
+                        ? "Не удалось проверить исходную отправку счёта. Повторное сообщение не отправлялось."
+                        : recovery.message());
+            }
+            return new Outcome(recovery.message(), "Восстановлено подтверждение исходной отправки общего счёта");
+        }
         if (invoice.getStatus() == CommonInvoiceStatus.PARTIALLY_PAID
                 && invoiceDiagnostics.commonInvoiceRequiresCompositionReview(invoice,
                 commonInvoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId))) {

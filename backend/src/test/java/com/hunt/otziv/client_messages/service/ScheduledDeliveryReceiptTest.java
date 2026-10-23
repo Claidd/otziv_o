@@ -9,10 +9,8 @@ import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.whatsapp.api.WhatsAppBusinessOperations;
 import com.hunt.otziv.whatsapp.dto.WhatsAppOperationEnvelope;
 import com.hunt.otziv.whatsapp.dto.WhatsAppOperationStatus;
-import com.hunt.otziv.whatsapp.dto.WhatsAppReconciledMessage;
 import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -76,75 +74,50 @@ class ScheduledDeliveryReceiptTest {
 
     @Test void unknownOperationCanBeConfirmedOnlyByGatewayValidatedChatReceipt() {
         frozen();
-        var candidate = new WhatsAppReconciledMessage("client", "12345678@g.us", "Client", null,
-                null, "provider-42", 1788883200L, true, true, "1200 руб.");
-        when(whatsapp.getOperationStatus("client", "operation:1"))
-                .thenReturn(new WhatsAppOperationStatus("operation:1", "UNKNOWN", null, null));
-        when(whatsapp.reconcileGroupMessagesForReceipt(eq("client"), anyList())).thenReturn(List.of(candidate));
-        when(whatsapp.reconcileOperation("client", "operation:1", "provider-42"))
-                .thenReturn(new WhatsAppOperationStatus("operation:1", "SUCCEEDED", "provider-42",
-                        WhatsAppOperationEnvelope.groupHash("client", "12345678@g.us", "1200 руб.")));
-
-        assertThat(sender.recoverRecordedOutcomeFromChat("operation:1", LocalDateTime.of(2026, 9, 8, 10, 0)))
+        when(whatsapp.recoverOperationFromHistory("client", "operation:1", "send-group", "12345678@g.us", "1200 руб."))
+                .thenReturn(ClientMessageSendResult.sent("WhatsApp", "provider-42"));
+        assertThat(sender.recoverRecordedOutcomeFromChat("operation:1", null))
                 .isEqualTo(ClientMessageSendResult.sent("WhatsApp", "provider-42"));
-        verify(whatsapp).reconcileOperation("client", "operation:1", "provider-42");
+        verify(whatsapp).recoverOperationFromHistory("client", "operation:1", "send-group", "12345678@g.us", "1200 руб.");
+        verify(whatsapp, never()).reconcileGroupMessagesForReceipt(any(), any());
         verify(whatsapp, never()).sendMessageToGroup(any(), any(), any(), any());
     }
 
-    @Test void unknownOperationStaysBlockedWithoutExactOutgoingEvidence() {
+    @ParameterizedTest @ValueSource(strings = {"whatsapp_history_checked_no_receipt", "whatsapp_history_incomplete",
+            "whatsapp_history_evidence_ambiguous", "whatsapp_history_evidence_unresolved", "whatsapp_history_unavailable"})
+    void unresolvedHistoryNeverAuthorizesReplay(String code) {
         frozen();
-        when(whatsapp.getOperationStatus("client", "operation:1"))
-                .thenReturn(new WhatsAppOperationStatus("operation:1", "UNKNOWN", null, null));
-        when(whatsapp.reconcileGroupMessagesForReceipt(eq("client"), anyList())).thenReturn(List.of(
-                new WhatsAppReconciledMessage("client", "12345678@g.us", "Client", null, null,
-                        "provider-42", 1788883200L, false, false, "1200 руб."),
-                new WhatsAppReconciledMessage("client", "12345678@g.us", "Client", null, null,
-                        "provider-43", 1788883201L, true, false, "9999 руб.")));
-
-        assertThat(sender.recoverRecordedOutcomeFromChat("operation:1", LocalDateTime.of(2026, 9, 8, 10, 0))
-                .errorCode()).isEqualTo("whatsapp_history_checked_no_receipt");
-        verify(whatsapp, never()).reconcileOperation(any(), any(), any());
+        when(whatsapp.recoverOperationFromHistory(any(), any(), any(), any(), any()))
+                .thenReturn(ClientMessageSendResult.failed(code, "waiting"));
+        var result = sender.recoverRecordedOutcomeFromChat("operation:1", LocalDateTime.of(2026, 9, 8, 10, 0));
+        assertThat(result.errorCode()).isEqualTo(code);
+        assertThat(ClientChatMessageSender.isKnownUnsent(result)).isFalse();
         verify(whatsapp, never()).sendMessageToGroup(any(), any(), any(), any());
+        verify(whatsapp, never()).sendMessage(any(), any(), any(), any());
     }
 
-    @Test void matchingMessageWithoutGatewayProofBlocksManualHandoff() {
-        frozen();
-        when(whatsapp.getOperationStatus("client", "operation:1"))
-                .thenReturn(new WhatsAppOperationStatus("operation:1", "UNKNOWN", null, null));
-        when(whatsapp.reconcileGroupMessagesForReceipt(eq("client"), anyList())).thenReturn(List.of(
-                new WhatsAppReconciledMessage("client", "12345678@g.us", "Client", null, null,
-                        "provider-42", 1788883200L, true, true, "1200 руб.")));
-        when(whatsapp.reconcileOperation("client", "operation:1", "provider-42"))
-                .thenThrow(new IllegalStateException("provider rejected evidence"));
-
-        assertThat(sender.recoverRecordedOutcomeFromChat("operation:1", LocalDateTime.of(2026, 9, 8, 10, 0))
-                .errorCode()).isEqualTo("whatsapp_history_evidence_rejected");
-        verify(whatsapp, never()).sendMessageToGroup(any(), any(), any(), any());
+    @Test void directChatUsesItsFrozenPhoneAndNeverCurrentCompanyRoute() {
+        when(operations.findFrozen("operation:1")).thenReturn(Optional.of(new WhatsAppBusinessOperations.FrozenMessage(
+                "operation:1", "client", "send", "79991234567", "1200 руб.")));
+        when(whatsapp.recoverOperationFromHistory("client", "operation:1", "send", "79991234567", "1200 руб."))
+                .thenReturn(ClientMessageSendResult.sent("WhatsApp", "direct-42"));
+        assertThat(sender.recoverRecordedOutcomeFromChat("operation:1", null).messageId()).isEqualTo("direct-42");
+        verify(whatsapp, never()).sendMessage(any(), any(), any(), any());
     }
 
-    @Test void unavailableHistoryIsDistinctFromNoReceiptAndNeverAuthorizesReplay() {
+    @Test void unavailableHistoryNeverBecomesKnownUnsent() {
         frozen();
-        when(whatsapp.getOperationStatus("client", "operation:1"))
-                .thenReturn(new WhatsAppOperationStatus("operation:1", "UNKNOWN", null, null));
-        when(whatsapp.reconcileGroupMessagesForReceipt(eq("client"), anyList()))
-                .thenThrow(new IllegalStateException("gateway 503"));
-
-        assertThat(sender.recoverRecordedOutcomeFromChat("operation:1", LocalDateTime.of(2026, 9, 8, 10, 0))
-                .errorCode()).isEqualTo("whatsapp_history_unavailable");
-        verify(whatsapp, never()).reconcileOperation(any(), any(), any());
-        verify(whatsapp, never()).sendMessageToGroup(any(), any(), any(), any());
+        when(whatsapp.recoverOperationFromHistory(any(), any(), any(), any(), any()))
+                .thenThrow(new IllegalStateException("disconnected"));
+        var result = sender.recoverRecordedOutcomeFromChat("operation:1", null);
+        assertThat(result.errorCode()).isEqualTo("whatsapp_history_unavailable");
+        assertThat(ClientChatMessageSender.isKnownUnsent(result)).isFalse();
     }
 
-    @Test void multipleIdenticalOutgoingMessagesAreNotAssignedArbitrarilyToAnOperation() {
-        frozen();
-        when(whatsapp.reconcileGroupMessagesForReceipt(eq("client"), anyList())).thenReturn(List.of(
-                new WhatsAppReconciledMessage("client", "12345678@g.us", null, null, null,
-                        "provider-42", 1788883200L, true, true, "1200 руб."),
-                new WhatsAppReconciledMessage("client", "12345678@g.us", null, null, null,
-                        "provider-43", 1788883201L, true, true, "1200 руб.")));
-        assertThat(sender.recoverRecordedOutcomeFromChat("operation:1", LocalDateTime.of(2026, 9, 8, 10, 0)).errorCode())
-                .isEqualTo("whatsapp_history_evidence_ambiguous");
-        verify(whatsapp, never()).reconcileOperation(any(), any(), any());
-        verify(whatsapp, never()).sendMessageToGroup(any(), any(), any(), any());
+    @Test void telegramUnknownFenceCannotBeReinterpretedUsingWhatsAppHistory() {
+        when(fences.lookup("operation:1")).thenReturn(Optional.of(new ClientMessageOperationFence.Snapshot(
+                "operation:1", "TELEGRAM", "UNKNOWN", "destination", "envelope", "token", null)));
+        assertThat(sender.recoverRecordedOutcomeFromChat("operation:1", null).sent()).isFalse();
+        verifyNoInteractions(whatsapp, telegram, max, operations);
     }
 }

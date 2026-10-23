@@ -101,7 +101,7 @@ class ManagerProblemBusinessDiagnosisTest {
                 f("automation", "delivery_status", "UNKNOWN"), f("automation", "current_cycle", "true"));
         Diagnosis result = ManagerProblemBusinessDiagnosis.fallback(facts);
         assertThat(result.summary()).contains("Результат предыдущей отправки", "не подтверждён").doesNotContain("конфликт публикации");
-        assertThat(result.actions()).extracting(Action::code).containsExactly("CHECK_DELIVERY", "ESCALATE");
+        assertThat(result.actions()).extracting(Action::code).containsExactly("CHECK_DELIVERY");
     }
 
     @ParameterizedTest
@@ -117,10 +117,10 @@ class ManagerProblemBusinessDiagnosisTest {
         assertThat(result.summary()).contains("существующей отправки", "не подтверждён");
         assertThat(result.confirmedFacts()).isEmpty();
         assertThat(result.hypotheses()).isEmpty();
-        assertThat(result.actions()).extracting(Action::code).containsExactly("CHECK_DELIVERY", "ESCALATE");
-        assertThat(result.actions().getFirst().text()).contains("квитанцию", "историей чата", "не повторяйте", "не создавайте новый счёт");
+        assertThat(result.actions()).extracting(Action::code).containsExactly("CHECK_DELIVERY");
+        assertThat(result.actions().getFirst().text()).contains("Нажмите «Проверить отправку»", "квитанцией", "историей нужного чата", "Новое сообщение или счёт для проверки не создаются");
         assertThat(result.actions()).allSatisfy(action -> assertThat(action.evidenceRefs()).containsExactly(marker.reference()));
-        assertThat(result.verification().getFirst()).contains("проверяемой записью", "причина замечания по счёту устранена", "сама по себе замечание не закрывает");
+        assertThat(result.verification().getFirst()).contains("проверяемой записью", "причина замечания по счёту устранена", "сам по себе замечание не закрывает");
         assertThat(ManagerProblemBusinessDiagnosis.readable(result)).isTrue();
         assertThat(facts).contains(f("invoice", "status", "REMINDER"), f("invoice", "paid_kopecks", "0"), marker);
     }
@@ -187,8 +187,13 @@ class ManagerProblemBusinessDiagnosisTest {
     void uncertainCurrentDeliveryOverridesAllOtherRecommendations(String state) {
         Diagnosis result = ManagerProblemBusinessDiagnosis.fallback(List.of(f("invoice", "status", "PAID"),
                 f("automation", "delivery_status", state)));
-        assertThat(result.actions()).extracting(Action::code).containsExactly("CHECK_DELIVERY", "ESCALATE");
+        assertThat(result.actions()).extracting(Action::code).containsExactly("CHECK_DELIVERY");
         assertThat(result.summary()).contains("не подтверждён");
+        assertThat(result.actions()).allSatisfy(action -> {
+            assertThat(action.text()).contains("Нажмите «Проверить отправку»", "Система сверит").doesNotContain("Откройте историю", "администратору", "вручную");
+            assertThat(action.owner()).isEqualTo("Система");
+            assertThat(action.verification()).contains("Отсутствие сообщения", "не доказывает");
+        });
         assertThat(result.verification().getFirst()).contains("сами по себе замечание не закрывают");
     }
 

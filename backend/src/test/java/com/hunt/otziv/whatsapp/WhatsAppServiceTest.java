@@ -29,6 +29,76 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class WhatsAppServiceTest {
 
+    private String historyStatus(String state, String extra) {
+        String hash = com.hunt.otziv.whatsapp.dto.WhatsAppOperationEnvelope.groupHash("fixture", "12345678@g.us", "saved");
+        return "{\"operationId\":\"saved\",\"receiptBindingVersion\":1,\"historyReconciliationVersion\":1,\"envelopeHash\":\""
+                + hash + "\",\"state\":\"" + state + "\"" + extra + "}";
+    }
+
+    private void historyClient() {
+        var config = new WhatsAppProperties.ClientConfig(); config.setId("fixture"); config.setUrl("http://fixture:3000");
+        when(properties.getClients()).thenReturn(List.of(config));
+    }
+
+    @Test void automaticHistoryUsesOnlyFrozenOperationRouteAndAcceptsExactProof() {
+        historyClient();
+        when(restTemplate.getForObject("http://fixture:3000/operations/saved", String.class))
+                .thenReturn(historyStatus("UNKNOWN", ""));
+        when(restTemplate.postForEntity(eq("http://fixture:3000/operations/saved/reconcile-history"), any(), eq(String.class)))
+                .thenAnswer(call -> {
+                    org.springframework.http.HttpEntity<?> request = call.getArgument(1);
+                    var body = new com.fasterxml.jackson.databind.ObjectMapper().readTree(request.getBody().toString());
+                    assertEquals("send-group", body.path("kind").asText());
+                    assertEquals("12345678@g.us", body.path("destination").asText());
+                    assertEquals("saved", body.path("message").asText());
+                    return ResponseEntity.ok(historyStatus("SUCCEEDED", ",\"messageId\":\"proof\""));
+                });
+        var result = service.recoverOperationFromHistory("fixture", "saved", "send-group", "12345678@g.us", "saved");
+        assertTrue(result.sent()); assertEquals("proof", result.messageId());
+        org.mockito.Mockito.verify(restTemplate, org.mockito.Mockito.never()).postForEntity(eq("http://fixture:3000/send-group"), any(), eq(String.class));
+    }
+
+    @Test void oldGatewayDoesNotReceiveAutomaticHistoryRequest() {
+        historyClient();
+        when(restTemplate.getForObject("http://fixture:3000/operations/saved", String.class))
+                .thenReturn(historyStatus("UNKNOWN", "").replace("\"historyReconciliationVersion\":1,", ""));
+        assertEquals("whatsapp_history_unavailable",
+                service.recoverOperationFromHistory("fixture", "saved", "send-group", "12345678@g.us", "saved").errorCode());
+        org.mockito.Mockito.verify(restTemplate, org.mockito.Mockito.never()).postForEntity(anyString(), any(), eq(String.class));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({"history_incomplete,whatsapp_history_incomplete",
+            "history_ambiguous,whatsapp_history_evidence_ambiguous", "history_no_receipt,whatsapp_history_checked_no_receipt"})
+    void automatedHistoryUncertaintyCannotBeTreatedAsKnownUnsent(String reason, String expected) {
+        historyClient();
+        when(restTemplate.getForObject("http://fixture:3000/operations/saved", String.class)).thenReturn(historyStatus("UNKNOWN", ""));
+        when(restTemplate.postForEntity(anyString(), any(), eq(String.class)))
+                .thenReturn(ResponseEntity.ok(historyStatus("UNKNOWN", ",\"recoveryCode\":\"" + reason + "\"")));
+        var result = service.recoverOperationFromHistory("fixture", "saved", "send-group", "12345678@g.us", "saved");
+        assertEquals(expected, result.errorCode());
+        assertFalse(com.hunt.otziv.client_messages.api.ClientMessageDelivery.isKnownUnsent(result));
+    }
+
+    @Test void changedProofOrMissingMessageNeverConfirmsHistory() {
+        historyClient();
+        when(restTemplate.getForObject("http://fixture:3000/operations/saved", String.class)).thenReturn(historyStatus("UNKNOWN", ""));
+        when(restTemplate.postForEntity(anyString(), any(), eq(String.class)))
+                .thenReturn(ResponseEntity.ok(historyStatus("SUCCEEDED", ",\"messageId\":\"proof\"").replace("\"operationId\":\"saved\"", "\"operationId\":\"other\"")),
+                        ResponseEntity.ok(historyStatus("SUCCEEDED", "")));
+        for (int i = 0; i < 2; i++)
+            assertEquals("whatsapp_history_unavailable", service.recoverOperationFromHistory("fixture", "saved", "send-group", "12345678@g.us", "saved").errorCode());
+    }
+
+    @Test void missingGatewayOperationDoesNotCreateOneOrSend() {
+        historyClient();
+        when(restTemplate.getForObject("http://fixture:3000/operations/saved", String.class))
+                .thenThrow(new org.springframework.web.client.HttpClientErrorException(HttpStatus.NOT_FOUND));
+        var result = service.recoverOperationFromHistory("fixture", "saved", "send-group", "12345678@g.us", "saved");
+        assertEquals("whatsapp_history_evidence_unresolved", result.errorCode());
+        org.mockito.Mockito.verify(restTemplate, org.mockito.Mockito.never()).postForEntity(anyString(), any(), eq(String.class));
+    }
+
     @Test void oldGatewayCannotReceiveHistoryBindingMutationDuringRollout() {
         WhatsAppProperties.ClientConfig config = new WhatsAppProperties.ClientConfig();
         config.setId("fixture"); config.setUrl("http://fixture:3000");

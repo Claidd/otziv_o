@@ -74,6 +74,7 @@ const RELEASE_SETS = Object.freeze({
   'c27-phpmyadmin': { component: 'phpmyadmin', path: 'infrastructure/runtime-security/reviewed-images-c27-phpmyadmin.json', context: 'infrastructure/runtime-security/builds/c27-phpmyadmin', dockerfile: 'infrastructure/runtime-security/builds/c27-phpmyadmin/Dockerfile' },
   'c31-phpmyadmin': { component: 'phpmyadmin', path: 'infrastructure/runtime-security/reviewed-images-c31-phpmyadmin.json', context: 'infrastructure/runtime-security/builds/c31-phpmyadmin', dockerfile: 'infrastructure/runtime-security/builds/c31-phpmyadmin/Dockerfile' },
   'c32-phpmyadmin': { component: 'phpmyadmin', path: 'infrastructure/runtime-security/reviewed-images-c32-phpmyadmin.json', context: 'infrastructure/runtime-security/builds/c32-phpmyadmin', dockerfile: 'infrastructure/runtime-security/builds/c32-phpmyadmin/Dockerfile' },
+  'c39-phpmyadmin': { component: 'phpmyadmin', path: 'infrastructure/runtime-security/reviewed-images-c39-phpmyadmin.json', context: 'infrastructure/runtime-security/builds/c39-phpmyadmin', dockerfile: 'infrastructure/runtime-security/builds/c39-phpmyadmin/Dockerfile' },
   // C36 rebuilds currently activated Go services with Go 1.27.3. Historical
   // default lookup stays stable until each new candidate has proof and activation.
   'c36-dozzle': { component: 'dozzle', path: 'infrastructure/runtime-security/reviewed-images-c36-dozzle.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c36-dozzle/Dockerfile' },

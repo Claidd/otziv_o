@@ -90,7 +90,7 @@ class ManagerControlAutomationRepairWorkflowTest {
 
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.ValueSource(strings = {"state_transaction_outcome_uncertain", "manual_delivery_handoff_pending"})
-    void checkedHistoryWithoutReceiptRequiresManualHandoffWithoutRetry(String errorCode) {
+    void checkedHistoryWithoutReceiptContinuesInternallyWithoutRetryOrManagerHandoff(String errorCode) {
         var stateRepository = mock(ScheduledClientMessageStateRepository.class);
         var scheduledMessages = mock(ScheduledClientMessageService.class);
         var failures = mock(ManagerAutomationFailureService.class);
@@ -128,13 +128,9 @@ class ManagerControlAutomationRepairWorkflowTest {
                 () -> workflow.repairAutomationFailureConcreteItem(item, control, () -> "admin"));
 
         assertEquals(HttpStatus.CONFLICT, failure.getStatusCode());
-        if (ClientMessageStateSafety.MANUAL_DELIVERY_HANDOFF_PENDING.equals(errorCode)) {
-            assertTrue(failure.getReason().contains("Ручная проверка сохраняется"));
-            assertTrue(failure.getReason().contains("новое сообщение не отправлялось"));
-        } else {
-            assertTrue(failure.getReason().contains("Передать вручную"));
-            assertTrue(failure.getReason().contains("автоматический повтор заблокирован"));
-        }
+        assertTrue(failure.getReason().contains("продолжит сверку автоматически"));
+        assertTrue(failure.getReason().contains("Новое сообщение не отправлялось"));
+        org.junit.jupiter.api.Assertions.assertFalse(failure.getReason().contains("Передать вручную"));
         verify(scheduledMessages, never()).retryNow(anyLong());
         verifyNoInteractions(repairOutcome);
     }

@@ -57,6 +57,7 @@ on:
           - c27-phpmyadmin
           - c31-phpmyadmin
           - c32-phpmyadmin
+          - c39-phpmyadmin
           - c29-dozzle
           - c29-prometheus
           - c29-loki

@@ -85,7 +85,15 @@ type ManagerPerformanceRow = {
 
 export function isExplicitlyRepairableCommonInvoiceReason(reason: string | null | undefined): boolean {
   const normalized = (reason ?? '').trim().toLowerCase();
-  return normalized.includes('нажмите «починить»') || normalized.includes('нажмите "починить"');
+  return normalized.includes('нажмите «починить»') || normalized.includes('нажмите "починить"')
+    || normalized.includes('нажмите «проверить отправку»');
+}
+
+export function isDeliveryReconciliationCard(example: ManagerControlConcreteItem): boolean {
+  if (!['ORDER', 'WORKER_ORDER_NEW', 'AUTOMATION_FAILURE', 'COMMON_INVOICE_AUTOMATION', 'COMMON_INVOICE'].includes(example.type)) return false;
+  if (example.delivery?.status === 'UNKNOWN' || example.delivery?.errorCode === 'finalization_required') return true;
+  const reason = [example.reason, example.clientMessageSendBlockedReason].filter(Boolean).join(' ');
+  return /state_transaction_outcome_uncertain|manual_delivery_handoff_pending|message_send_(?:in_progress|stale|unknown)|«проверить отправку»|ручная проверка продолжается|исход (?:автоматической |предыдущей )?отправки (?:этого заказа )?(?:ещё )?не подтвержд|результат предыдущей отправки клиенту не подтвержд|результат отправки сообщения по сч[её]ту не подтвержд/i.test(reason);
 }
 
 export function shouldHideClientChatUnansweredAfterAction(
@@ -203,7 +211,10 @@ export class ManagerControlComponent implements OnInit {
   readonly deliveries = signal<Record<number, DeliveryOperation>>({});
   readonly concreteRepairResults = signal<Record<number, { message: string; deliveryCheck: boolean }>>({});
   concreteRepairResult(card: ManagerControlConcreteItem): { message: string; deliveryCheck: boolean } | null {
-    return card.itemStatus === 'RESOLVED' ? null : this.concreteRepairResults()[card.controlEntityId ?? 0] ?? null;
+    const result = this.concreteRepairResults()[card.controlEntityId ?? 0];
+    const operation = this.deliveries()[card.controlEntityId ?? 0] ?? managerCardDelivery(card);
+    if (card.itemStatus === 'RESOLVED' || result?.deliveryCheck && operation?.status === 'SENT' && !operation.errorCode) return null;
+    return result ?? null;
   }
   private clearConcreteRepairResult(itemId: number): void {
     this.concreteRepairResults.update(results => {
@@ -1634,17 +1645,20 @@ export class ManagerControlComponent implements OnInit {
         this.isDeliveryReconciliation(example) ? 'Результат отправки проверен' : 'Карточка починена'),
       error: (err) => {
         this.setConcreteUpdating(itemId, false);
-        const message = apiErrorMessage(err, 'Автоматическая починка не сработала');
+        const deliveryCheck = this.isDeliveryReconciliation(example);
+        const message = apiErrorMessage(err, deliveryCheck
+          ? 'Сейчас не удалось получить результат проверки. Доставка не подтверждена; повторное сообщение заблокировано.'
+          : 'Не удалось получить результат автоматической проверки.');
         if (this.isManualChatBindingRepairMessage(message)) {
           this.showManualChatBindingRepairToast(message, example);
           return;
         }
-        if (err?.status === 409) {
+        if (err?.status === 409 || deliveryCheck) {
           this.concreteRepairResults.update(results => ({ ...results,
-            [itemId]: { message, deliveryCheck: this.isDeliveryReconciliation(example) }
+            [itemId]: { message, deliveryCheck }
           }));
         }
-        if (this.isDeliveryReconciliation(example)) this.toast.warning('Проверка отправки', message);
+        if (deliveryCheck) this.toast.warning('Результат проверки', message);
         else this.toast.error('Не удалось починить', message);
         this.load({ silent: true });
       }
@@ -1652,12 +1666,11 @@ export class ManagerControlComponent implements OnInit {
   }
 
   isDeliveryReconciliation(example: ManagerControlConcreteItem): boolean {
-    if (!['ORDER', 'WORKER_ORDER_NEW', 'AUTOMATION_FAILURE', 'COMMON_INVOICE_AUTOMATION'].includes(example.type)) return false;
-    if (example.delivery?.status === 'UNKNOWN' || example.delivery?.errorCode === 'finalization_required') return true;
-    return /state_transaction_outcome_uncertain|manual_delivery_handoff_pending|ручная проверка продолжается|исход (?:предыдущей )?отправки (?:ещё )?не подтвержд|результат предыдущей отправки клиенту не подтвержд/i.test(example.reason ?? '');
+    return isDeliveryReconciliationCard(example);
   }
 
   repairActionLabel(example: ManagerControlConcreteItem): string {
+    if (this.isConcreteUpdating(example.controlEntityId)) return 'Проверяем…';
     return this.isDeliveryReconciliation(example) ? 'Проверить отправку' : 'Починить';
   }
 
@@ -1700,7 +1713,26 @@ export class ManagerControlComponent implements OnInit {
       this.stopTelegramBindingPoll(example.controlEntityId);
     }
     const merged = this.patchDetailConcreteItem(example, updated);
-    this.toast.success(title, merged.comment || 'Проблема устранена автоматически');
+    const deliveryCheck = this.isDeliveryReconciliation(example);
+    const operation = managerCardDelivery(merged);
+    const receiptConfirmed = operation?.status === 'SENT' && !operation.errorCode;
+    const deliveryUncertain = !!operation && (operation.status !== 'SENT' || !!operation.errorCode);
+    const comment = /^client_(?:message|reply)_delivery_/.test(merged.comment ?? '') ? null : merged.comment?.trim();
+    const completed = !deliveryUncertain && (receiptConfirmed
+      || merged.itemStatus === 'RESOLVED' || merged.itemStatus === 'ACTION_TAKEN');
+    if (deliveryCheck && !completed) {
+      const message = comment
+        || this.deliveryMessage(merged)
+        || 'Результат отправки пока не подтверждён. Карточка остаётся открытой; повторное сообщение заблокировано.';
+      if (merged.controlEntityId) this.concreteRepairResults.update(results => ({ ...results,
+        [merged.controlEntityId!]: { message, deliveryCheck: true }
+      }));
+      this.toast.warning('Проверка ещё не завершена', message);
+      this.load({ silent: true });
+      return;
+    }
+    this.toast.success(deliveryCheck && receiptConfirmed ? 'Отправка подтверждена' : title,
+      comment || (deliveryCheck ? 'Состояние карточки обновлено по результату проверки.' : 'Проблема устранена автоматически'));
     if (this.shouldHideConcreteItemAfterAction(merged)) {
       this.removeConcreteItemFromDetail(merged);
     }
@@ -2129,8 +2161,7 @@ export class ManagerControlComponent implements OnInit {
 
   canRepairAutomationIssue(example: ManagerControlConcreteItem): boolean {
     const reason = (example.reason ?? '').toLowerCase();
-    if ((example.type === 'ORDER' || example.type === 'WORKER_ORDER_NEW')
-      && (example.delivery?.status === 'UNKNOWN' || example.delivery?.errorCode === 'finalization_required')) return true;
+    if (isDeliveryReconciliationCard(example)) return true;
     if (this.isAutomationWaitingForSlot(example)) {
       return false;
     }
@@ -2318,7 +2349,7 @@ export class ManagerControlComponent implements OnInit {
       })}`;
     }
     if (this.canRepairAutomationIssue(example)) {
-      return 'сначала починка, если не помогла — ручная отправка';
+      return 'система проверит причину и обновит карточку по подтверждённому результату';
     }
     return 'отправит и скроет до повторной проверки';
   }

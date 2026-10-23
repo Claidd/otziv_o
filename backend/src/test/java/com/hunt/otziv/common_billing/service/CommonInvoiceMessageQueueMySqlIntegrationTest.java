@@ -120,6 +120,24 @@ class CommonInvoiceMessageQueueMySqlIntegrationTest {
         assertThat(queue.snapshot(claim.operationId())).isEqualTo(draft("original"));
     }
 
+    @Test void repairClaimIsBoundToInvoiceNeverDispatchesAndCannotStealALiveLease() {
+        tx.executeWithoutResult(status -> queue.enqueue(draft("original")));
+        String id = draft("original").operationId();
+        assertThat(queue.claimRecovery(10L, id)).isEmpty(); // A fresh queued command belongs to the normal worker.
+        var first = queue.claim().orElseThrow();
+        assertThat(queue.claimRecovery(10L, id)).isEmpty();
+        tx.executeWithoutResult(status -> queue.finish(first, "UNKNOWN", "operation_unknown", 300));
+        assertThat(queue.claimRecovery(11L, id)).isEmpty();
+        var repair = queue.claimRecovery(10L, id).orElseThrow();
+        assertThat(repair.mayDispatch()).isFalse();
+        assertThat(queue.status(id).attempts()).isEqualTo(1);
+        assertThat(queue.claimRecovery(10L, id)).isEmpty();
+        assertThat(queue.preparedAt(id)).isNotNull();
+        tx.executeWithoutResult(status -> queue.finish(repair, "SENT", null, 300));
+        assertThat(queue.claimRecovery(10L, id)).isEmpty();
+        assertThat(queue.snapshot(id)).isEqualTo(draft("original"));
+    }
+
     @Test void healthReportsExpiredClaimsAndExcludesConfirmedHistory() {
         assertThat(queue.deliveryQueueHealth()).isEmpty();
         tx.executeWithoutResult(status -> queue.enqueue(draft("original")));

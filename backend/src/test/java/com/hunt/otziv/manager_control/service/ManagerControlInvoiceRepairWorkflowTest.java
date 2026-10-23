@@ -88,6 +88,34 @@ class ManagerControlInvoiceRepairWorkflowTest {
         verify(billing, never()).sendInvoice(88L, true);
     }
 
+    @Test
+    void uncertainReminderChecksExistingReceiptWithoutCreatingAnotherReminder() {
+        CommonInvoice invoice = invoice(CommonInvoiceStatus.REMINDER);
+        invoice.setLastError("message_send_in_progress");
+        when(invoices.findByIdWithAccount(88L)).thenReturn(Optional.of(invoice));
+        when(billing.recoverPendingMessageReceipt(88L)).thenReturn(
+                new com.hunt.otziv.common_billing.service.CommonInvoiceDeliveryService.MessageRecovery(
+                        true, false, "Отправка подтверждена"));
+        assertEquals("Отправка подтверждена", proxiedWorkflow().repair(88L).comment());
+        verify(billing, never()).sendManualReminder(org.mockito.ArgumentMatchers.anyLong());
+        verify(billing, never()).sendInvoice(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyBoolean());
+    }
+
+    @Test
+    void pendingReceiptKeepsCardOpenAndDoesNotPretendRepairSucceeded() {
+        CommonInvoice invoice = invoice(CommonInvoiceStatus.REMINDER);
+        invoice.setLastError("message_send_in_progress");
+        when(invoices.findByIdWithAccount(88L)).thenReturn(Optional.of(invoice));
+        when(billing.recoverPendingMessageReceipt(88L)).thenReturn(
+                new com.hunt.otziv.common_billing.service.CommonInvoiceDeliveryService.MessageRecovery(
+                        false, true, "Система продолжит проверку автоматически"));
+        var error = assertThrows(ResponseStatusException.class, () -> proxiedWorkflow().repair(88L));
+        assertEquals(409, error.getStatusCode().value());
+        assertTrue(error.getReason().contains("автоматически"));
+        verify(billing, never()).sendManualReminder(org.mockito.ArgumentMatchers.anyLong());
+        verify(billing, never()).sendInvoice(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyBoolean());
+    }
+
     private ManagerControlInvoiceRepairWorkflow proxiedWorkflow() {
         ManagerControlInvoiceRepairWorkflow target = new ManagerControlInvoiceRepairWorkflow(
                 invoices, orders, blockers, billing, diagnostics);

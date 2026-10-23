@@ -227,6 +227,10 @@ public class CommonBillingService {
         return invoiceDelivery.sendInvoice(invoiceId, manual);
     }
 
+    public CommonInvoiceDeliveryService.MessageRecovery recoverPendingMessageReceipt(Long invoiceId) {
+        return invoiceDelivery.recoverPendingMessageReceipt(invoiceId);
+    }
+
     private void sendInvoiceMessage(Long invoiceId, boolean manual, boolean paymentRouteChanged, boolean checkVisibility) {
         invoiceDelivery.sendInvoiceMessage(invoiceId, manual, paymentRouteChanged, checkVisibility);
     }

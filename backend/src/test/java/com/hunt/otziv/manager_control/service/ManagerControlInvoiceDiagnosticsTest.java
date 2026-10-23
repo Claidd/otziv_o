@@ -110,9 +110,9 @@ class ManagerControlInvoiceDiagnosticsTest {
         invoice.setId(115L);
         String originalError = invoice.getLastError();
 
-        assertThat(reason(invoice, List.of())).contains("не подтвержден", "существующую отправку", "администратору",
-                "Не отправляйте повторно", "после подтверждения результата существующей отправки")
-                .doesNotContain("повторите отправку", "Нажмите «Починить»", "message_send_", "provider");
+        assertThat(reason(invoice, List.of())).contains("не подтвержден", "существующую отправку", "Нажмите «Проверить отправку»",
+                "Новое сообщение для проверки не отправляется", "после подтверждения результата существующей отправки")
+                .doesNotContain("повторите отправку", "вручную", "администратору", "message_send_", "provider", "проверка запущена");
         assertThat(invoice.getLastError()).isEqualTo(originalError);
         assertThat(invoice.getStatus()).isEqualTo(CommonInvoiceStatus.NEEDS_ATTENTION);
         verifyNoInteractions(invoices, positions);

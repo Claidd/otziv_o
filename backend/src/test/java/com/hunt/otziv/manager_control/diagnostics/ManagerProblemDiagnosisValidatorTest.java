@@ -42,8 +42,8 @@ class ManagerProblemDiagnosisValidatorTest {
     void uncertainDeliveryForcesReceiptCheckAndNoDuplicate() {
         Fact delivery = new Fact("automation:3:delivery_status", "automation", "delivery_status", "UNCERTAIN");
         Diagnosis result = validator.validate(diagnosis("invoice.status=COLLECTING", "invoice:189:status", "CONTACT_RESPONSIBLE"), List.of(status, delivery));
-        assertThat(result.actions()).extracting(Action::code).containsExactly("CHECK_DELIVERY", "ESCALATE");
-        assertThat(result.actions().getFirst().text()).contains("повторная отправка запрещена");
+        assertThat(result.actions()).extracting(Action::code).containsExactly("CHECK_DELIVERY");
+        assertThat(result.actions().getFirst().text()).contains("Повторное сообщение для проверки не отправляется");
     }
 
     @Test
@@ -55,7 +55,7 @@ class ManagerProblemDiagnosisValidatorTest {
         var result = validator.validate(unsafe, List.of(status, delivery));
         assertThat(result.summary()).contains("не подтверждён").doesNotContain("Отправьте заново");
         assertThat(result.verification()).noneMatch(text -> text.contains("повторной отправки"));
-        assertThat(result.actions()).extracting(Action::code).containsExactly("CHECK_DELIVERY", "ESCALATE");
+        assertThat(result.actions()).extracting(Action::code).containsExactly("CHECK_DELIVERY");
         assertThat(result.actions()).noneMatch(action -> action.text().contains("«Починить»"));
     }
 
