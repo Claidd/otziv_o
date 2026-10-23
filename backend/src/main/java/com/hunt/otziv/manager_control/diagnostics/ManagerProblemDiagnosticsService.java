@@ -169,7 +169,8 @@ public class ManagerProblemDiagnosticsService {
         String mode = mode();
         boolean visible = "ENFORCE".equals(mode) || "PILOT".equals(mode) && settings.pilotManagerIds().contains(saved.managerId());
         boolean fallback = visible && (!ManagerProblemBusinessDiagnosis.readable(saved.diagnosis())
-                || !ManagerProblemBusinessDiagnosis.uncertainDelivery(saved.facts()).isEmpty());
+                || !ManagerProblemBusinessDiagnosis.uncertainDelivery(saved.facts()).isEmpty()
+                || ManagerProblemBusinessDiagnosis.hasCurrentInvoicePublicationConflict(saved.facts()));
         Diagnosis diagnosis = fallback ? ManagerProblemBusinessDiagnosis.fallback(saved.facts()) : saved.diagnosis();
         diagnosis = ManagerProblemBusinessDiagnosis.withClosurePolicy(saved.facts(), diagnosis);
         return new DiagnosticView(saved.caseId(), saved.version(), saved.episode(), saved.status(), saved.observedAt(), saved.facts(),
