@@ -176,7 +176,7 @@ class ScheduledDeliveryTransactionMySqlIntegrationTest {
         var prepared = prepare();
         var restarted = newService();
         var receiptSender = ScheduledDeliveryProtocolTest.dependency(restarted, "messageSender", ClientChatMessageSender.class);
-        when(receiptSender.recordedOutcome(prepared.operationId())).thenReturn(ClientMessageOperationFence.unknown(),
+        when(receiptSender.recoverRecordedOutcomeFromChat(prepared.operationId(), preparedAt)).thenReturn(ClientMessageOperationFence.unknown(),
                 ClientMessageSendResult.sent("Telegram", "42"));
         ReflectionTestUtils.invokeMethod(restarted, "recoverOrdinaryDeliveries", preparedAt.plusMinutes(6));
         var unknown = states.findById(stateId).orElseThrow();
@@ -186,7 +186,7 @@ class ScheduledDeliveryTransactionMySqlIntegrationTest {
         ReflectionTestUtils.invokeMethod(restarted, "recoverOrdinaryDeliveries", preparedAt.plusMinutes(12));
         ReflectionTestUtils.invokeMethod(restarted, "recoverOrdinaryDeliveries", preparedAt.plusMinutes(18));
         assertThat(states.findById(stateId).orElseThrow().getSentCount()).isEqualTo(1);
-        verify(receiptSender, times(2)).recordedOutcome(prepared.operationId());
+        verify(receiptSender, times(2)).recoverRecordedOutcomeFromChat(prepared.operationId(), preparedAt);
         verify(receiptSender, never()).deliverWithOperationId(any(), any(), any(), any(), any(), any());
         verifyNoInteractions(sender);
     }
@@ -200,7 +200,7 @@ class ScheduledDeliveryTransactionMySqlIntegrationTest {
         });
         assertThat(states.findRecoverablePreparedIds(preparedAt.plusMinutes(6), PageRequest.of(0, 20))).contains(stateId);
         assertThat(states.countReservedDeliveriesSince(preparedAt.toLocalDate().atStartOfDay())).isEqualTo(1);
-        when(sender.recordedOutcome(prepared.operationId())).thenReturn(ClientMessageSendResult.sent("WhatsApp", "confirmed-id"));
+        when(sender.recoverRecordedOutcomeFromChat(prepared.operationId(), preparedAt)).thenReturn(ClientMessageSendResult.sent("WhatsApp", "confirmed-id"));
         ReflectionTestUtils.invokeMethod(service, "recoverOrdinaryDeliveries", preparedAt.plusMinutes(6));
         ReflectionTestUtils.invokeMethod(service, "recoverOrdinaryDeliveries", preparedAt.plusMinutes(12));
         var confirmed = states.findById(stateId).orElseThrow();
@@ -211,7 +211,7 @@ class ScheduledDeliveryTransactionMySqlIntegrationTest {
         assertThat(confirmed.getNextAttemptAt()).isNull();
         assertThat(confirmed.getDeliveryEnvelope()).contains(prepared.operationId());
         assertThat(states.countReservedDeliveriesSince(preparedAt.toLocalDate().atStartOfDay())).isZero();
-        verify(sender, times(1)).recordedOutcome(prepared.operationId());
+        verify(sender, times(1)).recoverRecordedOutcomeFromChat(prepared.operationId(), preparedAt);
         verifyNoMoreInteractions(sender);
     }
 

@@ -216,31 +216,54 @@ class ManagerControlClientReplyMySqlIntegrationTest {
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM manager_client_reply_operations", Integer.class)).isEqualTo(1);
     }
 
-    @Test void lateKnownUnsentReceiptRearmsTheSameFrozenOperationBeforeRetry() {
+    @Test void lateKnownUnsentReceiptKeepsUnknownAndCannotDispatchTheFrozenOperationAgain() {
         unknown(); String original = token.get(); restartWorkflow();
-        when(sender.recordedOutcome(original)).thenReturn(ClientMessageSendResult.failed("gateway_not_ready", "not admitted"));
-        jdbc.update("UPDATE manager_client_message_queue SET next_attempt_at=CURRENT_TIMESTAMP(6)");
-        worker.drain();
-        assertThat(state()).isEqualTo("PREPARED");
-        assertThat(queue.status(1L, original).status()).isEqualTo("RETRYABLE");
-        assertThat(sends.get()).isEqualTo(1);
+        var originalOperation = jdbc.queryForMap("SELECT * FROM manager_client_reply_operations WHERE operation_token=?", original);
+        var originalSource = jdbc.queryForMap("SELECT * FROM mc_reply_source WHERE id=77");
+        var originalCard = jdbc.queryForMap("SELECT * FROM mc_reply_card WHERE id=1");
+        var lateFailure = ClientMessageSendResult.failed("gateway_not_ready", "not admitted");
+        when(sender.recordedOutcome(original)).thenReturn(lateFailure);
+        when(sender.recoverRecordedOutcomeFromChat(eq(original), any())).thenReturn(lateFailure);
+        // Even if a new dispatch would succeed, a later negative receipt cannot authorise it.
         sendResult.set(ClientMessageSendResult.sent("WhatsApp", "fixture-provider-message"));
-        jdbc.update("UPDATE manager_client_message_queue SET next_attempt_at=CURRENT_TIMESTAMP(6)");
-        worker.drain();
-        assertThat(state()).isEqualTo("SUCCEEDED");
+        for (int check = 0; check < 2; check++) {
+            jdbc.update("UPDATE manager_client_message_queue SET next_attempt_at=CURRENT_TIMESTAMP(6)");
+            worker.drain();
+            assertThat(state()).isEqualTo("UNKNOWN");
+            assertThat(queue.status(1L, original).status()).isEqualTo("UNKNOWN");
+            assertThat(sends.get()).isEqualTo(1);
+        }
+        assertThatThrownBy(() -> workflow.reply(1L, new ManagerControlClientReplyRequest(MESSAGE), PRINCIPAL, AUTH))
+                .isInstanceOf(ResponseStatusException.class);
         assertThat(token.get()).isEqualTo(original);
-        assertThat(sends.get()).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM manager_client_reply_operations", Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForMap("SELECT * FROM manager_client_reply_operations WHERE operation_token=?", original)).isEqualTo(originalOperation);
+        assertThat(jdbc.queryForMap("SELECT * FROM mc_reply_source WHERE id=77")).isEqualTo(originalSource);
+        assertThat(jdbc.queryForMap("SELECT * FROM mc_reply_card WHERE id=1")).isEqualTo(originalCard);
+        verify(sender, times(2)).recordedOutcome(original);
+        verify(sender, times(2)).recoverRecordedOutcomeFromChat(eq(original), any());
     }
 
-    @Test void lateKnownUnsentReceiptCannotRearmAChangedSource() {
-        unknown(); newInbound();
-        when(sender.recordedOutcome(token.get())).thenReturn(ClientMessageSendResult.failed("gateway_not_ready", "not admitted"));
+    @Test void lateKnownUnsentReceiptKeepsUnknownAndDoesNotModifyAChangedSource() {
+        unknown(); String original = token.get(); newInbound();
+        var currentSource = jdbc.queryForMap("SELECT * FROM mc_reply_source WHERE id=77");
+        var currentCard = jdbc.queryForMap("SELECT * FROM mc_reply_card WHERE id=1");
+        var originalOperation = jdbc.queryForMap("SELECT * FROM manager_client_reply_operations WHERE operation_token=?", original);
+        var lateFailure = ClientMessageSendResult.failed("gateway_not_ready", "not admitted");
+        when(sender.recordedOutcome(original)).thenReturn(lateFailure);
+        when(sender.recoverRecordedOutcomeFromChat(eq(original), any())).thenReturn(lateFailure);
         jdbc.update("UPDATE manager_client_message_queue SET next_attempt_at=CURRENT_TIMESTAMP(6)");
         worker.drain();
-        assertThat(queue.status(1L, token.get()).status()).isEqualTo("FAILED");
-        assertThat(queue.status(1L, token.get()).errorCode()).isEqualTo("finalization_required");
+        assertThat(queue.status(1L, original).status()).isEqualTo("UNKNOWN");
         assertThat(state()).isEqualTo("UNKNOWN"); assertThat(sourceStatus()).isEqualTo("OPEN");
-        assertThat(sends.get()).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT message_id FROM mc_reply_source WHERE id=77", Long.class)).isEqualTo(701L);
+        assertThat(jdbc.queryForMap("SELECT * FROM mc_reply_source WHERE id=77")).isEqualTo(currentSource);
+        assertThat(jdbc.queryForMap("SELECT * FROM mc_reply_card WHERE id=1")).isEqualTo(currentCard);
+        assertThat(jdbc.queryForMap("SELECT * FROM manager_client_reply_operations WHERE operation_token=?", original)).isEqualTo(originalOperation);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM manager_client_reply_operations", Integer.class)).isEqualTo(1);
+        assertThat(token.get()).isEqualTo(original); assertThat(sends.get()).isEqualTo(1);
+        verify(sender).recordedOutcome(original);
+        verify(sender).recoverRecordedOutcomeFromChat(eq(original), any());
     }
 
     @Test void stalePreparationBecomesUnknownAndDoesNotAuthorizeAnotherSend() {
