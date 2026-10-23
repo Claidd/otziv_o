@@ -58,6 +58,7 @@ class ManagerReportReviewEvidenceFlowTest {
     private ManagerReportReviewSession review;
     private ManagerReportReviewQualityService.ReviewQuestion question;
     private User user;
+    private List<ManagerReportReviewEvent> savedEvents;
 
     @BeforeEach
     void setUp() {
@@ -93,6 +94,26 @@ class ManagerReportReviewEvidenceFlowTest {
         review.setQuestionSentAt(LocalDateTime.now());
         review.setReportSnapshot("Короткий отчёт без подробных данных");
         review.setQuestionsContext("История вопроса и комментарий менеджера.\nСЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:\nстарое состояние");
+        savedEvents = new java.util.ArrayList<>();
+        when(events.save(any())).thenAnswer(invocation -> {
+            ManagerReportReviewEvent event = invocation.getArgument(0);
+            savedEvents.add(event);
+            return event;
+        });
+        when(events.findByReview_IdOrderByCreatedAtAsc(41L)).thenAnswer(invocation -> List.copyOf(savedEvents));
+        when(sessions.findTimingForUpdate(41L)).thenAnswer(invocation -> {
+            var timing = mock(ManagerReportReviewSessionRepository.Timing.class);
+            when(timing.getId()).thenReturn(41L);
+            when(timing.getStatus()).thenReturn(review.getStatus().name());
+            when(timing.getCompletedAt()).thenReturn(review.getCompletedAt());
+            when(timing.getDeadlineStartedAt()).thenReturn(review.getDeadlineStartedAt());
+            when(timing.getAiUnavailableStartedAt()).thenReturn(review.getAiUnavailableStartedAt());
+            when(timing.getAiUnavailableSeconds()).thenReturn(review.getAiUnavailableSeconds());
+            return Optional.of(timing);
+        });
+        when(sessions.pauseIfActive(eq(41L), any())).thenReturn(1);
+        when(sessions.resumeIfPaused(eq(41L), any(), org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.nullable(LocalDateTime.class), any())).thenReturn(1);
         question = new ManagerReportReviewQualityService.ReviewQuestion("Что произошло со счётом и что вы сделаете?",
                 List.of("объяснение и действие"), List.of(42L));
         review.setQuestionsJson(quality.questionsJson(List.of(question)));
@@ -109,7 +130,7 @@ class ManagerReportReviewEvidenceFlowTest {
         issue.setStatus(ManagerReportReviewIssueStatus.PENDING);
         when(issues.nextPending(review, 0)).thenReturn(Optional.of(issue));
         when(issues.answeredCount(review)).thenReturn(1L);
-        when(context.refresh("sourceTaskId=42", 9L)).thenReturn("СЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:\n"
+        when(context.refreshSources(anyString(), eq(List.of(42L)), eq(9L))).thenReturn("СЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:\n"
                 + "{\"id\":\"invoice:189:status\",\"source\":\"invoice\",\"field\":\"status\","
                 + "\"value\":\"COLLECTING\",\"sourceTaskId\":42}");
         when(telegram.sendMessageWithInlineKeyboardMessageId(eq(700L), anyString(), eq("HTML"), any()))
@@ -125,7 +146,7 @@ class ManagerReportReviewEvidenceFlowTest {
 
         ArgumentCaptor<String> evidence = ArgumentCaptor.forClass(String.class);
         verify(quality).assessAnswer(evidence.capture(), eq(question), anyString(), eq(false), eq(List.of()), eq(false));
-        verify(context).refresh("sourceTaskId=42", 9L);
+        verify(context).refreshSources(anyString(), eq(List.of(42L)), eq(9L));
         assertThat(evidence.getValue()).contains("История вопроса", "Факты прежнего снимка:", "COLLECTING")
                 .doesNotContain("Короткий отчёт без подробных данных");
         assertThat(evidence.getValue().split("СЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:", -1)).hasSize(2);
@@ -257,6 +278,7 @@ class ManagerReportReviewEvidenceFlowTest {
         assertThat(saved.path("answer").asText()).isEqualTo(rawPlan);
         assertThat(saved.path("accepted").asBoolean()).isFalse();
         assertThat(saved.path("assessment").path("decision").asText()).isEqualTo("NEEDS_CONTEXT");
+        assertThat(review.getAnswerQuality()).isEqualTo("NEEDS_CONTEXT");
         assertThat(review.getAiUnavailableStartedAt()).isNotNull();
         assertThat(review.getStatus()).isEqualTo(ManagerReportReviewStatus.PLAN_PENDING);
         var originalTime = quality.latestAnswerRecordedAt(review.getAnswersJson(), -1);
@@ -276,19 +298,12 @@ class ManagerReportReviewEvidenceFlowTest {
 
     @Test
     void retryUsesOriginalEvidenceSnapshotEvenWhenInvoiceHasSinceBeenPaid() {
-        List<ManagerReportReviewEvent> savedEvents = new java.util.ArrayList<>();
-        when(events.save(any())).thenAnswer(invocation -> {
-            ManagerReportReviewEvent event = invocation.getArgument(0);
-            savedEvents.add(event);
-            return event;
-        });
-        when(events.findByReview_IdOrderByCreatedAtAsc(41L)).thenAnswer(invocation -> savedEvents);
         String answer = "Счёт находится в сборе.";
         assessWith(assessment(ManagerReportReviewQualityService.Decision.NEEDS_CONTEXT, "Проверка ожидает"));
         assertThat(service.handleTextMessage(700L, user, answer, 777)).isTrue();
         var submittedAt = quality.latestAnswerRecordedAt(review.getAnswersJson(), 0);
         assertThat(submittedAt.getZone().getId()).isEqualTo("Asia/Irkutsk");
-        when(context.refresh("sourceTaskId=42", 9L)).thenReturn("СЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:\n"
+        when(context.refreshSources(anyString(), eq(List.of(42L)), eq(9L))).thenReturn("СЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:\n"
                 + "{\"id\":\"invoice:189:status\",\"source\":\"invoice\",\"field\":\"status\",\"value\":\"PAID\",\"sourceTaskId\":42}");
         doReturn(assessment(ManagerReportReviewQualityService.Decision.ACCEPTED, "Верно на момент ответа"))
                 .when(quality).assessAnswer(anyString(), eq(question), eq(answer), eq(false), any(), eq(false), eq(submittedAt));
@@ -299,9 +314,98 @@ class ManagerReportReviewEvidenceFlowTest {
         ArgumentCaptor<String> originalEvidence = ArgumentCaptor.forClass(String.class);
         verify(quality).assessAnswer(originalEvidence.capture(), eq(question), eq(answer), eq(false), any(), eq(false), eq(submittedAt));
         assertThat(originalEvidence.getValue()).contains("COLLECTING").doesNotContain("PAID");
-        verify(context).refresh("sourceTaskId=42", 9L);
+        verify(context).refreshSources(anyString(), eq(List.of(42L)), eq(9L));
         assertThat(review.getStatus()).isEqualTo(ManagerReportReviewStatus.COMPLETED);
         assertThat(quality.latestAnswerRecordedAt(review.getAnswersJson(), 0)).isEqualTo(submittedAt);
+    }
+
+    @Test
+    void largeFreshEvidenceIsSavedIntactAndRetryReceivesExactlyTheOriginalContext() {
+        review.setQuestionsContext("Нерелевантная длинная история. ".repeat(25_000));
+        String fresh = "СЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:\n"
+                + "{\"id\":\"invoice:189:history\",\"sourceTaskId\":42,\"value\":\""
+                + "Архив📎 ".repeat(30_000) + "\"}\n";
+        when(context.refreshSources(anyString(), eq(List.of(42L)), eq(9L))).thenReturn(fresh);
+        assessWith(assessment(ManagerReportReviewQualityService.Decision.NEEDS_CONTEXT, "Проверка ожидает"));
+        String answer = "Сверю историю операции.";
+
+        service.handleTextMessage(700L, user, answer, 777);
+
+        ArgumentCaptor<String> initialContext = ArgumentCaptor.forClass(String.class);
+        verify(quality).assessAnswer(initialContext.capture(), eq(question), eq(answer), eq(false), any(), eq(false));
+        assertThat(initialContext.getValue()).endsWith(fresh).doesNotContain("Нерелевантная длинная история.");
+        ManagerReportReviewEvent snapshot = savedEvents.stream()
+                .filter(event -> event.getEventType().equals("ANSWER_EVIDENCE_SNAPSHOT")).findFirst().orElseThrow();
+        assertThat(snapshot.getPayloadText().length()).isGreaterThan(200_000);
+        String envelope = snapshot.getPayloadText().substring(snapshot.getPayloadText().indexOf('\n') + 1);
+        assertThat(new ManagerReportReviewEvidenceSnapshotService(mapper).restore(envelope))
+                .contains(initialContext.getValue());
+        var submittedAt = quality.latestAnswerRecordedAt(review.getAnswersJson(), 0);
+        doReturn(assessment(ManagerReportReviewQualityService.Decision.NEEDS_CONTEXT, "Ещё ожидает"))
+                .when(quality).assessAnswer(eq(initialContext.getValue()), eq(question), eq(answer), eq(false), any(), eq(false), eq(submittedAt));
+
+        String result = ReflectionTestUtils.invokeMethod(service, "continueFlow", review, user);
+
+        assertThat(result).contains("по данным на момент его отправки");
+        verify(quality).assessAnswer(eq(initialContext.getValue()), eq(question), eq(answer), eq(false), any(), eq(false), eq(submittedAt));
+        verify(context).refreshSources(anyString(), eq(List.of(42L)), eq(9L));
+        assertThat(review.getCompletedAt()).isNull();
+    }
+
+    @Test
+    void brokenLegacyEvidenceRequiresExplicitCurrentDataConfirmationAndPreservesPriorAttempt() throws Exception {
+        String answer = "Сверю историю операции и не отправлю повторно.";
+        assessWith(assessment(ManagerReportReviewQualityService.Decision.UNAVAILABLE, "Техническая ошибка"));
+        service.handleTextMessage(700L, user, answer, 777);
+        var originalTime = quality.latestAnswerRecordedAt(review.getAnswersJson(), 0);
+        var pause = review.getAiUnavailableStartedAt();
+        savedEvents.stream().filter(event -> event.getEventType().equals("ANSWER_EVIDENCE_SNAPSHOT"))
+                .forEach(event -> event.setPayloadText(event.getPayloadText().substring(0, event.getPayloadText().indexOf('\n') + 1)
+                        .replace("ANSWER_EVIDENCE_V3", "ANSWER_EVIDENCE_V2") + "обрезанная старая история…"));
+
+        String result = ReflectionTestUtils.invokeMethod(service, "continueFlow", review, user);
+
+        assertThat(result).contains("по текущим данным");
+        assertThat(mapper.readTree(review.getAnswersJson())).hasSize(1);
+        assertThat(review.getAiUnavailableStartedAt()).isEqualTo(pause);
+        verify(quality, never()).assessAnswer(anyString(), any(), anyString(), eq(false), any(), eq(false), any());
+        String action = ReflectionTestUtils.invokeMethod(service, "currentEvidenceAction", 0, answer, originalTime);
+        assertThat(service.handle(callback("recheck-current-1-obsolete", 700L, 700L)).orElseThrow()).contains("изменился");
+        when(context.refreshSources(anyString(), eq(List.of(42L)), eq(9L))).thenReturn("СЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:\nCURRENT_DATA");
+        assessWith(assessment(ManagerReportReviewQualityService.Decision.ACCEPTED, "План соответствует текущим фактам"));
+
+        assertThat(service.handle(callback(action, 700L, 700L)).orElseThrow()).contains("по текущим данным");
+
+        var attempts = mapper.readTree(review.getAnswersJson());
+        assertThat(attempts).hasSize(2);
+        assertThat(attempts.get(0).path("recordedAt").asText()).isEqualTo(originalTime.toString());
+        assertThat(attempts.get(1).path("recordedAt").asText()).isNotEqualTo(originalTime.toString());
+        assertThat(attempts.get(1).path("answer").asText()).isEqualTo(answer);
+        assertThat(savedEvents).extracting(ManagerReportReviewEvent::getEventType)
+                .contains("ANSWER_RECHECK_CURRENT_REQUESTED", "AI_VERIFICATION_RESUMED");
+        verify(quality).assessAnswer(org.mockito.ArgumentMatchers.contains("CURRENT_DATA"), eq(question), eq(answer), eq(false), any(), eq(false));
+        assertThat(review.getStatus()).isEqualTo(ManagerReportReviewStatus.COMPLETED);
+    }
+
+    @Test
+    void repeatedCurrentEvidenceCallbackCannotCreateAnotherAttemptAfterUnavailableResult() throws Exception {
+        String answer = "Сверю существующую операцию, повторно не отправляю.";
+        assessWith(assessment(ManagerReportReviewQualityService.Decision.UNAVAILABLE, "Техническая ошибка"));
+        service.handleTextMessage(700L, user, answer, 777);
+        var originalTime = quality.latestAnswerRecordedAt(review.getAnswersJson(), 0);
+        var pause = review.getAiUnavailableStartedAt();
+        String action = ReflectionTestUtils.invokeMethod(service, "currentEvidenceAction", 0, answer, originalTime);
+        org.mockito.Mockito.clearInvocations(quality);
+
+        assertThat(service.handle(callback(action, 700L, 700L)).orElseThrow()).contains("не завершена");
+        assertThat(service.handle(callback(action, 700L, 700L)).orElseThrow()).contains("изменился");
+
+        assertThat(mapper.readTree(review.getAnswersJson())).hasSize(2);
+        assertThat(review.getAiUnavailableStartedAt()).isEqualTo(pause);
+        assertThat(review.getCurrentQuestionIndex()).isZero();
+        verify(quality).assessAnswer(anyString(), eq(question), eq(answer), eq(false), any(), eq(false));
+        assertThat(savedEvents.stream().filter(event -> event.getEventType().equals("ANSWER_RECHECK_CURRENT_REQUESTED")))
+                .hasSize(1);
     }
 
     @Test
@@ -322,7 +426,7 @@ class ManagerReportReviewEvidenceFlowTest {
         assertThat(review.getCompletedAt()).isNull();
         when(sessions.findFirstByManagerUserIdAndRecipientChatIdAndReplyPromptMessageId(17L, 700L, 601))
                 .thenReturn(Optional.of(review));
-        when(context.refresh("sourceTaskId=42", 9L)).thenReturn("СЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:\nPAID");
+        when(context.refreshSources(anyString(), eq(List.of(42L)), eq(9L))).thenReturn("СЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:\nPAID");
         assessWith(assessment(ManagerReportReviewQualityService.Decision.ACCEPTED, "Новая попытка верна"));
 
         assertThat(service.handleTextMessage(700L, user, "Теперь счёт оплачен.", 601)).isTrue();
@@ -366,7 +470,7 @@ class ManagerReportReviewEvidenceFlowTest {
         assertThat(service.handleTextMessage(-100900L, user, "Новый план.", 615)).isTrue();
 
         verify(quality).assessAnswer(anyString(), any(), eq("Новый план."), eq(true));
-        verify(context).refresh(review.getQuestionsContext(), 9L);
+        verify(context).refreshSources(review.getQuestionsContext(), List.of(), 9L);
     }
 
     @Test

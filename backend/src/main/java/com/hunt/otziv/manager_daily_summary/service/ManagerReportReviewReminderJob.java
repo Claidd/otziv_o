@@ -17,6 +17,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 @RequiredArgsConstructor
@@ -40,12 +43,13 @@ public class ManagerReportReviewReminderJob {
     private final ManagerReportReviewQualityService qualityService;
     private final ManagerReportReviewAiAvailabilityService aiAvailabilityService;
     private final ManagerReportReviewRolloutPolicy rolloutPolicy;
+    private final PlatformTransactionManager transactionManager;
 
     @Scheduled(
             cron = "${manager.report-review.reminder-cron:0 */10 * * * *}",
             zone = "${manager.summary.zone:Asia/Irkutsk}"
     )
-    @Transactional
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void remind() {
         if (!appSettingService.getBoolean("manager.report-review.enabled", true)) return;
         int firstMinutes = boundedMinutes("manager.report-review.reminder-one-minutes", 60);
@@ -54,13 +58,23 @@ public class ManagerReportReviewReminderJob {
                 boundedMinutes("manager.report-review.reminder-three-minutes", 180)
         );
         LocalDateTime now = LocalDateTime.now();
-        List<ManagerReportReviewSession> pending =
-                repository.findPendingForReminder(PENDING, now.minusMinutes(firstMinutes));
-        for (ManagerReportReviewSession review : pending) {
-            if (rolloutPolicy.isShadowFor(review)) continue;
-            if (review.getDeadlineStartedAt() == null || review.getRecipientChatId() == null) continue;
+        // Do not carry a managed session/answers snapshot across another audit transaction.
+        List<Long> pending = repository.findPendingIdsForReminder(PENDING, now.minusMinutes(firstMinutes));
+        TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+        for (Long reviewId : pending) {
+            transaction.executeWithoutResult(ignored -> remindOne(reviewId, firstMinutes, thirdMinutes));
+        }
+    }
+
+    private void remindOne(Long reviewId, int firstMinutes, int thirdMinutes) {
+            ManagerReportReviewSession review = repository.findForUpdateById(reviewId).orElse(null);
+            if (review == null || review.isTestMode() || review.getCompletedAt() != null
+                    || !PENDING.contains(review.getStatus())) return;
+            LocalDateTime now = LocalDateTime.now();
+            if (rolloutPolicy.isShadowFor(review)) return;
+            if (review.getDeadlineStartedAt() == null || review.getRecipientChatId() == null) return;
             if (review.getAiUnavailableStartedAt() != null) {
-                continue;
+                return;
             }
             if (!qualityService.aiAvailable()) {
                 aiAvailabilityService.pause(
@@ -69,30 +83,23 @@ public class ManagerReportReviewReminderJob {
                         "reminder-job",
                         "DeepSeek недоступен при проверке срока"
                 );
-                continue;
+                return;
             }
             long ageMinutes = Duration.between(review.getDeadlineStartedAt(), now).toMinutes();
             if (ageMinutes >= thirdMinutes) {
-                boolean changed = false;
-                if (review.getRestrictedAt() == null) {
-                    review.setRestrictedAt(now);
-                    changed = true;
+                if (repository.restrictIfDue(reviewId, now, now.minusMinutes(thirdMinutes)) == 1) {
                     event(review, "RESTRICTION_APPLIED",
                             "Разбор не завершён за " + thirdMinutes + " мин.");
                     accessPolicy.invalidate(review.getManagerUserId());
                 }
                 if (review.getReminderThreeSentAt() == null && send(review, true)) {
-                    review.setReminderThreeSentAt(now);
-                    changed = true;
+                    repository.markReminderSentIfDue(reviewId, now, now.minusMinutes(thirdMinutes), true);
                 }
-                if (changed) repository.save(review);
             } else if (ageMinutes >= firstMinutes && review.getReminderOneSentAt() == null) {
                 if (send(review, false)) {
-                    review.setReminderOneSentAt(now);
-                    repository.save(review);
+                    repository.markReminderSentIfDue(reviewId, now, now.minusMinutes(firstMinutes), false);
                 }
             }
-        }
     }
 
     private boolean send(ManagerReportReviewSession review, boolean repeated) {

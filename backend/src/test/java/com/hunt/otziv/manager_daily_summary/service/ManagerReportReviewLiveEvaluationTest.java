@@ -34,6 +34,81 @@ class ManagerReportReviewLiveEvaluationTest {
     private final ObjectMapper mapper = new ObjectMapper();
 
     @Test
+    @EnabledIfEnvironmentVariable(named = "RUN_MANAGER_AUDIT_INCIDENT_EVAL", matches = "1")
+    void anonymizedCurrentQuestionPlanAndTwoNegativeControls() throws Exception {
+        ReputationAiProperties properties = new ReputationAiProperties();
+        String key = System.getenv("DEEPSEEK_API_KEY");
+        assertThat(key).isNotBlank();
+        properties.getDeepseek().setApiKey(key);
+        String model = System.getenv("DEEPSEEK_MODEL");
+        if (model != null && !model.isBlank()) properties.getDeepseek().setModel(model);
+        DeepSeekProvider real = new DeepSeekProvider(properties, mapper);
+        List<Map<String, Object>> calls = new ArrayList<>();
+        AiProvider measured = new AiProvider() {
+            @Override public String providerName() { return real.providerName(); }
+            @Override public boolean isAvailable() { return real.isAvailable(); }
+            @Override public AiResponse generate(AiRequest request) {
+                assertThat(calls.size()).as("At most two calls per case, three authorized cases").isLessThan(6);
+                long started = System.nanoTime();
+                AiResponse response = real.generate(request);
+                calls.add(Map.of("response", response.text(), "error", response.errorMessage(),
+                        "inputTokens", response.inputTokens(), "outputTokens", response.outputTokens(),
+                        "durationMs", (System.nanoTime() - started) / 1_000_000,
+                        "maxTokens", request.maxTokens(), "reasoningEffort", request.reasoningEffort(),
+                        "thinking", request.thinkingEnabled(), "timeoutMs", request.timeout().toMillis()));
+                return response;
+            }
+        };
+        AiProviderRouter router = mock(AiProviderRouter.class);
+        when(router.activeProvider()).thenReturn(measured);
+        when(router.activeProviderAvailable()).thenReturn(true);
+        when(router.activeProviderName()).thenReturn("deepseek");
+        AppSettingService settings = mock(AppSettingService.class);
+        when(settings.getInt(anyString(), anyInt())).thenAnswer(call -> call.getArgument(1));
+        when(settings.getBoolean(anyString(), anyBoolean())).thenAnswer(call -> call.getArgument(1));
+        var service = new ManagerReportReviewQualityService(router, mapper, settings);
+        List<Map<String, Object>> results = new ArrayList<>();
+        List<String> answers = List.of(ManagerReportReviewIncidentFixture.ANSWER,
+                "По этим заказам разберусь с ситуацией и постараюсь помочь, всё будет хорошо.",
+                "Я уже проверила эти три заказа: старая отправка по каждому доставлена, клиент получил шаблоны. "
+                        + "Зафиксировала успешную доставку в карточках и закрыла вопрос, повторно не отправляла.");
+        List<String> ids = List.of("current-three-orders-plan", "generic-non-answer", "false-completed-unknown");
+        String filter = System.getenv("MANAGER_AUDIT_INCIDENT_CASES");
+        List<String> selected = filter == null || filter.isBlank() ? ids : List.of(filter.split(","));
+        assertThat(selected).isNotEmpty().allSatisfy(id -> assertThat(ids).contains(id));
+        String evidence = ManagerReportReviewIncidentFixture.evidence();
+        for (int index = 0; index < answers.size(); index++) {
+            if (!selected.contains(ids.get(index))) continue;
+            int before = calls.size();
+            var assessment = service.assessAnswer(evidence, ManagerReportReviewIncidentFixture.question(), answers.get(index), false);
+            boolean premisesUnderstood = assessment.criteria().stream().filter(c -> c.criterionIndex() < 3).count() == 3
+                    && assessment.criteria().stream().filter(c -> c.criterionIndex() < 3)
+                    .allMatch(c -> c.status() == ManagerReportReviewQualityService.CriterionStatus.SATISFIED);
+            boolean actionOnlyClarification = assessment.decision() == ManagerReportReviewQualityService.Decision.NEEDS_CLARIFICATION
+                    && assessment.criteria().stream().anyMatch(c -> c.criterionIndex() >= 3
+                    && c.status() == ManagerReportReviewQualityService.CriterionStatus.MISSING)
+                    && assessment.criteria().stream().noneMatch(c -> c.status() == ManagerReportReviewQualityService.CriterionStatus.CONTRADICTED)
+                    && assessment.claims().stream().noneMatch(c -> c.status() == ManagerReportReviewQualityService.ClaimStatus.CONTRADICTED);
+            boolean matches = index == 0 ? premisesUnderstood && (assessment.accepted() || actionOnlyClarification)
+                    : index == 1 ? assessment.decision() == ManagerReportReviewQualityService.Decision.NEEDS_CLARIFICATION
+                    : !assessment.accepted() && assessment.decision() != ManagerReportReviewQualityService.Decision.UNAVAILABLE
+                    && assessment.criteria().stream().noneMatch(c -> c.status() == ManagerReportReviewQualityService.CriterionStatus.CONTRADICTED)
+                    && assessment.claims().stream().noneMatch(c -> c.status() == ManagerReportReviewQualityService.ClaimStatus.CONTRADICTED);
+            results.add(Map.of("id", ids.get(index), "answer", answers.get(index), "assessment", assessment,
+                    "matches", matches, "providerCalls", List.copyOf(calls.subList(before, calls.size()))));
+            Path report = Path.of("target", "manager-audit-evaluation", "incident-q1-report.json");
+            Files.createDirectories(report.getParent());
+            mapper.writerWithDefaultPrettyPrinter().writeValue(report.toFile(), Map.of(
+                    "schema", "manager-audit-incident-evaluation-v1", "evaluatedAt", Instant.now().toString(),
+                    "model", properties.getDeepseek().getModel(), "anonymized", true,
+                    "question", ManagerReportReviewIncidentFixture.question(), "results", results));
+            System.out.println("audit-incident-eval " + ids.get(index) + " " + assessment.decision());
+        }
+        assertThat(results).hasSize(selected.size());
+        assertThat(results).allSatisfy(result -> assertThat(result.get("matches")).as(result.get("id").toString()).isEqualTo(true));
+    }
+
+    @Test
     void fixtureHasPositiveNegativeUnknownAndAdversarialLabels() throws Exception {
         JsonNode cases = corpus();
         var ids = new HashSet<String>();
