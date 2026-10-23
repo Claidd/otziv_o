@@ -1,7 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router } from '@angular/router';
-import { of, Subject } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { AuthService } from '../../../core/auth.service';
 import { ManagerApi } from '../../../core/manager.api';
 import { ManagerControlApi } from '../../../core/manager-control.api';
@@ -145,6 +145,156 @@ describe('automatic delivery check outcomes', () => {
     expect(page.concreteRepairResult(card)?.message).toContain('заблокирована');
     expect(toast.success).not.toHaveBeenCalled();
     fixture.destroy();
+  });
+});
+
+describe('coalesced background repair result reads', () => {
+  beforeEach(() => { vi.useFakeTimers(); vi.spyOn(document, 'hidden', 'get').mockReturnValue(false); });
+  afterEach(() => { TestBed.resetTestingModule(); vi.restoreAllMocks(); vi.useRealTimers(); });
+
+  function setup() {
+    const cards = [
+      { controlEntityId: 41, entityId: 115, type: 'COMMON_INVOICE', title: 'Invoice', itemStatus: 'OPEN', reason: 'message_send_in_progress' },
+      { controlEntityId: 42, entityId: 75, type: 'AUTOMATION_FAILURE', title: 'Scheduled', itemStatus: 'OPEN', reason: 'state_transaction_outcome_uncertain' }
+    ] as any[];
+    const detail = (examples = cards) => ({ managerId: 2, dailyControlId: 19, controlDate: '2026-10-24',
+      items: [{ itemId: 1, count: examples.length, hiddenExampleCount: 0, examples }] }) as any;
+    const api = { managerDetails: vi.fn().mockImplementation(() => of(detail())),
+      repairConcreteItem: vi.fn().mockImplementation(() => throwError(() => ({ status: 409,
+        error: { message: 'Подтверждение пока не найдено. Система продолжит сверку автоматически.' } }))),
+      sendClientMessage: vi.fn(), syncManagerDetails: vi.fn(), actionConcreteItem: vi.fn(),
+      deliveryOperation: vi.fn().mockReturnValue(new Subject()), today: () => of({ managers: [] }) };
+    const toast = { warning: vi.fn(), error: vi.fn(), success: vi.fn() };
+    TestBed.configureTestingModule({ providers: [
+      { provide: ManagerControlApi, useValue: api }, { provide: ManagerApi, useValue: {} },
+      { provide: ToastService, useValue: toast }, { provide: AuthService, useValue: { hasAnyRealmRole: () => false } },
+      { provide: ActivatedRoute, useValue: { snapshot: { data: {} }, paramMap: new Subject() } },
+      { provide: Router, useValue: {} }
+    ] });
+    TestBed.overrideComponent(ManagerControlComponent, { set: { template: '', imports: [] } });
+    const fixture = TestBed.createComponent(ManagerControlComponent), page = fixture.componentInstance;
+    page.detail.set(detail());
+    return { cards, detail, api, toast, fixture, page };
+  }
+
+  it('updates a card when background recovery resolves it five minutes later, without another mutation', async () => {
+    const { page, cards, detail, api, toast } = setup();
+    const started = Date.now();
+    api.managerDetails.mockImplementation(() => of(detail(Date.now() - started < 300_000
+      ? cards : [{ ...cards[0], itemStatus: 'RESOLVED' }, cards[1]])));
+    page.repairConcreteItem(cards[0]);
+    await vi.advanceTimersByTimeAsync(270_000);
+    expect(page.detail()!.items[0].examples).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(page.detail()!.items[0].examples.map(card => card.controlEntityId)).toEqual([42]);
+    expect(page.concreteRepairResult(cards[0])).toBeNull();
+    expect(api.managerDetails).toHaveBeenCalledTimes(10);
+    await vi.advanceTimersByTimeAsync(90_000);
+    expect(api.managerDetails).toHaveBeenCalledTimes(10);
+    expect(api.repairConcreteItem).toHaveBeenCalledTimes(1);
+    expect(api.sendClientMessage).not.toHaveBeenCalled();
+    expect(api.syncManagerDetails).not.toHaveBeenCalled();
+    expect(api.actionConcreteItem).not.toHaveBeenCalled();
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it('coalesces two cards into one non-overlapping GET and preserves every form draft', async () => {
+    const { page, cards, detail, api } = setup();
+    const pending = new Subject<any>();
+    api.managerDetails.mockReturnValue(pending);
+    page.detailComments.set({ 1: 'Unsaved section comment' });
+    page.detailConcreteComments.set({ 41: 'Unsaved invoice comment', 42: 'Unsaved scheduled comment' });
+    page.unansweredReplyDrafts.set({ 99: 'Unsaved client reply' });
+    page.preparedContactItemIds.set(new Set([99]));
+    page.repairConcreteItem(cards[0]); page.repairConcreteItem(cards[1]);
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(api.managerDetails).toHaveBeenCalledExactlyOnceWith(2);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(api.managerDetails).toHaveBeenCalledTimes(1);
+    pending.next(detail([{ ...cards[0], comment: 'Changed server comment' },
+      { ...cards[1], itemStatus: 'ACTION_TAKEN', reason: 'Ожидаем ответ клиента', comment: 'Отправка подтверждена' }]));
+    expect(page.detail()!.items[0].examples[1].itemStatus).toBe('ACTION_TAKEN');
+    expect(page.detailComments()).toEqual({ 1: 'Unsaved section comment' });
+    expect(page.detailConcreteComments()).toEqual({ 41: 'Unsaved invoice comment', 42: 'Unsaved scheduled comment' });
+    expect(page.unansweredReplyDrafts()).toEqual({ 99: 'Unsaved client reply' });
+    expect([...page.preparedContactItemIds()]).toEqual([99]);
+    expect(api.repairConcreteItem).toHaveBeenCalledTimes(2);
+    expect(page.concreteRepairResult(cards[1])).toBeNull();
+  });
+
+  it('ignores a late response after navigation closes the details', async () => {
+    const { page, cards, api, detail } = setup();
+    const pending = new Subject<any>();
+    api.managerDetails.mockReturnValue(pending);
+    page.repairConcreteItem(cards[0]);
+    await vi.advanceTimersByTimeAsync(30_000);
+    page.personalControl = true;
+    page.closeDetails();
+    page.detail.set({ ...detail(), managerId: 3, dailyControlId: 20 });
+    pending.next(detail([{ ...cards[0], itemStatus: 'RESOLVED' }]));
+    await vi.advanceTimersByTimeAsync(90_000);
+    expect(page.detail()!.managerId).toBe(3);
+    expect(page.detail()!.items[0].examples).toHaveLength(2);
+    expect(api.managerDetails).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not overwrite a more recent card action with an in-flight read', async () => {
+    const { page, cards, api, detail } = setup();
+    const pending = new Subject<any>();
+    api.managerDetails.mockReturnValue(pending);
+    page.repairConcreteItem(cards[0]);
+    await vi.advanceTimersByTimeAsync(30_000);
+    const newer = { ...cards[0], itemStatus: 'DEFERRED', comment: 'New acknowledged action' };
+    (page as any).patchDetailConcreteItem(cards[0], newer);
+    pending.next(detail([{ ...cards[0], itemStatus: 'RESOLVED' }, cards[1]]));
+    expect(page.detail()!.items[0].examples[0]).toMatchObject(newer);
+  });
+
+  it('keeps UNKNOWN visible even if the server marks follow-up, and stops reads after ten minutes', async () => {
+    const { page, cards, api, detail, toast } = setup();
+    const unknown = { ...cards[0], itemStatus: 'ACTION_TAKEN', followUpAt: '2026-10-25T12:00:00',
+      delivery: { operationId: 'existing-op', status: 'UNKNOWN', attempts: 1, errorCode: null } };
+    api.managerDetails.mockImplementation(() => of(detail([unknown, cards[1]])));
+    page.repairConcreteItem(cards[0]);
+    await vi.advanceTimersByTimeAsync(600_000);
+    const reads = api.managerDetails.mock.calls.length;
+    expect(reads).toBeGreaterThan(0); expect(reads).toBeLessThanOrEqual(20);
+    await vi.advanceTimersByTimeAsync(90_000);
+    expect(api.managerDetails).toHaveBeenCalledTimes(reads);
+    expect(page.detail()!.items[0].examples).toHaveLength(2);
+    expect(page.deliveryBlocked(unknown)).toBe(true);
+    expect(page.concreteRepairResult(unknown)?.message).toContain('продолжит сверку');
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(api.deliveryOperation).not.toHaveBeenCalled();
+    expect(api.repairConcreteItem).toHaveBeenCalledTimes(1);
+  });
+
+  it('observes an open UNKNOWN 200 repair result and retries failed reads without another repair', async () => {
+    const { page, cards, api, detail } = setup();
+    api.repairConcreteItem.mockReturnValue(of({ ...cards[0], comment: 'Ожидаем квитанцию' }));
+    api.managerDetails.mockReturnValueOnce(throwError(() => ({ status: 503 })))
+      .mockReturnValueOnce(of(detail([cards[1]])));
+    page.repairConcreteItem(cards[0]);
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(page.detail()!.items[0].examples).toHaveLength(2);
+    expect(page.concreteRepairResult(cards[0])?.message).toBe('Ожидаем квитанцию');
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(page.detail()!.items[0].examples.map(card => card.controlEntityId)).toEqual([42]);
+    expect(api.repairConcreteItem).toHaveBeenCalledTimes(1);
+  });
+
+  it('pauses reads for a hidden tab and rejects a response for a different control date', async () => {
+    const { page, cards, api, detail } = setup();
+    const hidden = vi.spyOn(document, 'hidden', 'get').mockReturnValue(true);
+    page.repairConcreteItem(cards[0]);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(api.managerDetails).not.toHaveBeenCalled();
+    hidden.mockReturnValue(false);
+    api.managerDetails.mockReturnValue(of({ ...detail([]), controlDate: '2026-10-25', dailyControlId: 99 }));
+    await vi.advanceTimersByTimeAsync(90_000);
+    expect(api.managerDetails).toHaveBeenCalledTimes(1);
+    expect(page.detail()!.controlDate).toBe('2026-10-24');
+    expect(page.detail()!.items[0].examples).toHaveLength(2);
   });
 });
 
