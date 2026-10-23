@@ -22,6 +22,7 @@ import com.hunt.otziv.payments.model.PaymentLinkStatus;
 import com.hunt.otziv.payments.model.PaymentMethod;
 import com.hunt.otziv.payments.model.PaymentProfile;
 import com.hunt.otziv.payments.model.PaymentReceiptStatus;
+import com.hunt.otziv.payments.model.SpecialistManualPaymentReview;
 import com.hunt.otziv.payments.model.SpecialistManualPaymentReviewStatus;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import java.math.BigDecimal;
@@ -226,6 +227,68 @@ public class ManualCardPaymentWorkflow {
         });
     }
 
+    /** A historical credit marker alone is not proof of the current payment cycle.
+     * This path only reads locked evidence: it never reapplies accounting or notifications. */
+    void requireCreditedReviewReplay(SpecialistManualPaymentReview review, Authentication authentication) {
+        transactionExecutor.required(() -> {
+            Order order = orderRepository.findByIdForCounterUpdate(review.getOrderId())
+                    .orElseThrow(this::changedCreditedReview);
+            managerAccessService.requireOrderAccess(review.getOrderId(), authentication);
+            List<PaymentLink> links = paymentLinkRepository.findByOrderIdForUpdate(review.getOrderId());
+            PaymentLink source = links.stream().filter(link -> Objects.equals(link.getId(), review.getPaymentLinkId()))
+                    .findFirst().orElseThrow(this::changedCreditedReview);
+            if (!orderPaymentIntegrityService.hasSettledPaymentEvidence(order)
+                    || orderPaymentIntegrityService.isDuplicatePaymentCycle(order)
+                    || amountPolicy.amountKopecks(amountPolicy.payableSum(order)) != review.getAmountKopecks()
+                    || !matchesCreditedReview(source, review)) throw changedCreditedReview();
+            PaymentLink receipt = source;
+            if (!isConfirmedManualReviewReceipt(source, review)) {
+                if (!isCompletedManualCardPayment(source)) throw changedCreditedReview();
+                List<PaymentLink> evidence = links.stream()
+                        .filter(link -> Objects.equals(link.getContractorEvidenceOriginalLinkId(), source.getId())).toList();
+                if (evidence.size() != 1 || !isConfirmedManualReviewReceipt(evidence.getFirst(), review))
+                    throw changedCreditedReview();
+                receipt = evidence.getFirst();
+            }
+            Long receiptId = receipt.getId();
+            if (links.stream().filter(link -> !Objects.equals(link.getId(), source.getId())
+                            && !Objects.equals(link.getId(), receiptId)).anyMatch(this::isCompetingManualCardPaymentRoute))
+                throw changedCreditedReview();
+            return null;
+        });
+    }
+
+    private boolean isConfirmedManualReviewReceipt(PaymentLink link, SpecialistManualPaymentReview review) {
+        return matchesCreditedReview(link, review) && link.getStatus() == PaymentLinkStatus.CONFIRMED
+                && (link.getPaymentMethod() == PaymentMethod.MANUAL_MOBILE_BANK
+                    || link.getPaymentMethod() == PaymentMethod.MANUAL_EXTERNAL_LINK)
+                && Objects.equals(link.getConfirmedAmountKopecks(), review.getAmountKopecks())
+                && link.getManualConfirmedAt() != null && link.getPaidAt() != null;
+    }
+
+    private boolean matchesCreditedReview(PaymentLink link, SpecialistManualPaymentReview review) {
+        String frozenKey = link.getManualActualCashDestinationKind() == ContractorCashDestinationKind.MANUAL_PAYMENT_TASK
+                ? ManualPaymentTaskLedgerService.candidateKey(link.getManualActualTaskId(), link.getManualActualTaskGeneration())
+                : link.getManualActualRecipientType() == ContractorRecipientType.OWNER
+                    ? "OWNER" : "PROFILE:" + link.getManualActualRecipientProfileId();
+        return Objects.equals(link.getOrderId(), review.getOrderId())
+                && link.getAmountKopecks() == review.getAmountKopecks()
+                && link.getManualActualRecipientFrozenAt() != null
+                && link.getManualActualRecipientType() != null
+                && link.getManualActualRecipientType().name().equals(review.getRecipientType())
+                && Objects.equals(link.getManualActualRecipientProfileId(), review.getRecipientProfileId())
+                && Objects.equals(link.getManualActualRecipientUserId(), review.getRecipientUserId())
+                && Objects.equals(frozenKey, review.getRecipientKey())
+                && Objects.equals(normalize(link.getManualActualReason()), normalize(review.getReason()))
+                && Objects.equals(normalize(link.getManualActualReceiptUrl()), normalize(review.getReceiptUrl()))
+                && link.getReturnRecoveryProcessedAt() == null && link.getReturnRecoveryPaymentCheckId() == null;
+    }
+
+    private ResponseStatusException changedCreditedReview() {
+        return new ResponseStatusException(HttpStatus.CONFLICT,
+                "Текущая оплата, сумма или получатель заказа изменились; обновите заказ и проведите сверку исходного платежа");
+    }
+
     private void requireCurrentManualCardRouteAmount(Order order, PaymentLink link) {
         if (isCompletedManualCardPayment(link)) {
             return;
@@ -275,22 +338,38 @@ public class ManualCardPaymentWorkflow {
             Long receivedAmountKopecks, String note, String receiptUrl, String actor,
             Authentication authentication, ManualCardPaymentContext context,
             Long recipientProfileId, String recipientKey) {
+        return confirmRecipientReviewPayment(reviewId, linkId, receivedAmountKopecks, note, receiptUrl,
+                actor, authentication, context, "SPECIALIST", recipientProfileId, recipientKey);
+    }
+
+    AdminPaymentLinkResponse confirmRecipientReviewPayment(Long reviewId, Long linkId,
+            Long receivedAmountKopecks, String note, String receiptUrl, String actor,
+            Authentication authentication, ManualCardPaymentContext context,
+            String recipientType, Long recipientProfileId, String recipientKey) {
         return confirmPaidByManualCardTransferInternal(linkId, receivedAmountKopecks, note,
-                receiptUrl, actor, authentication, context, ContractorRecipientType.SPECIALIST, recipientProfileId,
+                receiptUrl, actor, authentication, context, ContractorRecipientType.valueOf(recipientType), recipientProfileId,
                 recipientKey, false, reviewId);
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
     void prepareSpecialistReviewRecipient(Long orderId, PaymentLink link, Long recipientProfileId,
                                           String recipientKey, String reason, String receiptUrl, String actor) {
+        prepareReviewRecipient(orderId, link, "SPECIALIST", recipientProfileId,
+                recipientKey, reason, receiptUrl, actor);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    void prepareReviewRecipient(Long orderId, PaymentLink link, String recipientTypeName,
+            Long recipientProfileId, String recipientKey, String reason, String receiptUrl, String actor) {
+        ContractorRecipientType recipientType = ContractorRecipientType.valueOf(recipientTypeName);
         Order order = orderRepository.findByIdForCounterUpdate(orderId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден"));
         requireManualCardPaymentLocalEligibility(order, link, orderId);
-        freezeActualRecipientIntentIfRequired(order, link, ContractorRecipientType.SPECIALIST,
+        freezeActualRecipientIntentIfRequired(order, link, recipientType,
                 recipientProfileId, recipientKey, reason, receiptUrl, actor);
-        if (link.getManualActualRecipientType() != ContractorRecipientType.SPECIALIST
+        if (link.getManualActualRecipientType() != recipientType
                 || !Objects.equals(link.getManualActualRecipientProfileId(), recipientProfileId)
-                || link.getManualActualRecipientUserId() == null) {
+                || (recipientType != ContractorRecipientType.OWNER && link.getManualActualRecipientUserId() == null)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Получатель оплаты не совпал со специалистом");
         }
     }
@@ -406,9 +485,9 @@ public class ManualCardPaymentWorkflow {
                 : context.mode() == ManualCardPaymentMode.MANAGER_REPORTED
                     ? SpecialistManualPaymentReviewStatus.SETTLING
                     : SpecialistManualPaymentReviewStatus.ADMIN_SETTLING;
-        specialistReviewGuard.requireManualPaymentAllowed(orderId, link, amountKopecks,
-                recipientType == ContractorRecipientType.SPECIALIST, profileId, recipientKey,
-                link != null && link.getManualActualRecipientType() == ContractorRecipientType.SPECIALIST,
+        specialistReviewGuard.requireRecipientReviewAllowed(orderId, link, amountKopecks,
+                recipientType == null ? null : recipientType.name(), profileId, recipientKey,
+                link == null || link.getManualActualRecipientType() == null ? null : link.getManualActualRecipientType().name(),
                 specialistReviewId, expected);
     }
 
@@ -680,13 +759,14 @@ public class ManualCardPaymentWorkflow {
         boolean historicalPreCutoverManualCard = isHistoricalPreCutoverManualCardSettlement(link, requestedRecipientKey);
         if (link.getManualActualRecipientFrozenAt() != null) {
             actualPaymentAttributionService.recordPaymentLinkFinalAttribution(order, link, manualEvidence);
-            notifyManualPaymentRecipientAfterCommit(manualEvidence);
+            if (specialistReviewId == null) notifyManualPaymentRecipientAfterCommit(manualEvidence);
             boolean toTask = link.getManualActualCashDestinationKind() == com.hunt.otziv.contractor_payments.model.ContractorCashDestinationKind.MANUAL_PAYMENT_TASK;
             String selectedKey = toTask ? ManualPaymentTaskLedgerService.candidateKey(link.getManualActualTaskId(), link.getManualActualTaskGeneration()) : link.getManualActualRecipientType() == ContractorRecipientType.OWNER ? "OWNER" : "PROFILE:" + link.getManualActualRecipientProfileId();
             taskReceiptIntegrationService.settle(link, selectedKey, toTask ? manualEvidence.getAmountKopecks() : 0L, "TASK:SETTLE:PAYMENT_LINK:" + link.getId(), link.getManualActualActor(), link.getManualActualReason());
         } else if (!historicalPreCutoverManualCard && actualPaymentAttributionService.actualRecipientAccountingEnabled()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Режим учёта изменился после закрытия банковской сессии; повторите операцию с выбором получателя");
         }
+        specialistReviewGuard.recordCredit(specialistReviewId, link.getId(), now);
         log.warn("Order paid by manual card transfer after bank-route reconciliation: orderId={}, linkId={}, actor={}", plan.orderId(), plan.linkId(), actor);
         return toAdminResponse(link);
     }
@@ -738,12 +818,13 @@ public class ManualCardPaymentWorkflow {
         if (!historicalPreCutoverManualCard) {
             settleTaskReceipt(link);
             actualPaymentAttributionService.recordPaymentLinkFinalAttribution(order, link, link);
-            notifyManualPaymentRecipientAfterCommit(link);
+            if (specialistReviewId == null) notifyManualPaymentRecipientAfterCommit(link);
             manualPaymentTaskService.completeIfConfirmedTargetReached(link.getManualPaymentTask());
         }
         if (updated)
             cancelBadReviewAutoBanAfterCommit(order, "Ручная оплата подтверждена");
         syncCommonInvoiceOrderPayment(link, "Ручная оплата заказа");
+        specialistReviewGuard.recordCredit(specialistReviewId, link.getId(), now);
         return toAdminResponse(link);
     }
 

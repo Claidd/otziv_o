@@ -93,7 +93,7 @@ test('manual-card dialog preserves the exact pending/completed backend outcome i
   assert.doesNotMatch(submit, /modalController\.dismiss\(\w+,\s*['"]completed['"]\)/);
 });
 
-test('shared flow gives pending approval warning and reserves paid success for completed results', () => {
+test('shared flow delegates exact backend pending/completed outcomes to the common presentation policy', () => {
   const confirm = requiredMethod(
     flowSource,
     /async confirm\([\s\S]*?\r?\n  \}\r?\n\}/,
@@ -101,11 +101,10 @@ test('shared flow gives pending approval warning and reserves paid success for c
   );
 
   assert.match(confirm, /result\.role\s*!==?\s*['"]submitted['"]/);
-  assert.match(confirm, /\.result\.message/);
-  assert.match(confirm, /mobileManualCardPaymentIsCompleted\(result\.data\.result\)/);
-  assert.match(confirm, /Оплата отмечена\. Получатель/);
-  assert.match(confirm, /Запрос отправлен владельцу|До подтверждения заказ не считается оплаченным/);
-  assert.match(confirm, /color:\s*\w+\s*\?\s*['"]success['"]\s*:\s*['"]warning['"]/);
+  assert.match(confirm, /manualPaymentResultNotice\(result\.data\.result\)/);
+  assert.match(confirm, /notice\.title/);
+  assert.match(confirm, /notice\.detail/);
+  assert.match(confirm, /color:\s*notice\.tone/);
 });
 
 test('manager does not patch an order paid while owner approval is pending', () => {
@@ -155,13 +154,9 @@ test('T-Bank journal does not treat owner approval pending as a completed manual
   );
 });
 
-test('owner selection explicitly warns about pending Telegram approval and changes the action copy', () => {
-  assert.match(
-    dialogSource,
-    /readonly\s+ownerSelected\s*=\s*computed\(\(\)\s*=>\s*this\.selectedRecipient\(\)\?\.recipientType\s*===\s*['"]OWNER['"]\)/
-  );
-  assert.match(dialogTemplate, /@if\s*\(ownerSelected\(\)\)/);
-  assert.match(dialogTemplate, /запрос[^<]*Telegram/i);
-  assert.match(dialogTemplate, /До[^<]*подтверждения[^<]*заказ не считается оплаченным/i);
-  assert.match(dialogTemplate, /ownerSelected\(\)\s*\?\s*['"]Отправить владельцу['"]/);
+test('new marks explain immediate payment and the recipient objection period for every recipient', () => {
+  assert.match(dialogTemplate, /После успешной отметки заказ сразу считается оплаченным/);
+  assert.match(dialogTemplate, /в течение 24 часов сообщить менеджеру/);
+  assert.match(dialogTemplate, /Отметить оплату/);
+  assert.doesNotMatch(dialogTemplate, /заказ не считается оплаченным|Отправить владельцу/);
 });

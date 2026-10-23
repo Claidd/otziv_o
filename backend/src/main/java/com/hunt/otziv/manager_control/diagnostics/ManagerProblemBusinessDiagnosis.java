@@ -15,12 +15,39 @@ final class ManagerProblemBusinessDiagnosis {
 
     private ManagerProblemBusinessDiagnosis() { }
 
-    /** Closing an unanswered chat requires a source result, even when older model advice accepts a handoff. */
+    /** Closing a problem requires a source result, even when older model advice accepts a handoff or another deadline. */
     static Diagnosis withClosurePolicy(List<Fact> facts, Diagnosis diagnosis) {
-        if (diagnosis == null || !"CLIENT_CHAT_UNANSWERED".equals(value(facts, "card", "entity_type"))) return diagnosis;
-        return new Diagnosis(diagnosis.summary(), diagnosis.confirmedFacts(), diagnosis.hypotheses(), diagnosis.missingEvidence(), diagnosis.actions(),
-                List.of("В исходной переписке после последнего сообщения клиента записан проверенный ответ по существу либо штатно подтверждено, что ответ не требуется, с зафиксированной причиной.",
-                        "Передача обращения, назначение ответственного, взятие в работу и обещание ответить сами по себе не подтверждают устранение причины и не разрешают закрыть замечание."));
+        if (diagnosis == null) return null;
+        String type = value(facts, "card", "entity_type");
+        List<String> verification;
+        List<Action> actions = diagnosis.actions();
+        if (ordinaryInvoiceReadiness(facts)) {
+            verification = List.of("Все необходимые позиции подтверждённо готовы либо их ненужность или исключение обоснованы в исходных заказах и счёте, а причина замечания устранена. Либо источник штатно подтверждает, что сама причина отсутствует или больше не актуальна.",
+                    "Согласованный срок, внешняя зависимость или передача ответственному разрешают лишь отложить проверку. Они не закрывают замечание, даже если названы результатом отдельного действия.");
+            actions = actions.stream().map(action -> new Action(action.code(), action.text(), action.owner(),
+                    "WAIT_FOR_DEPENDENCY".equals(action.code())
+                            ? "Зафиксированы зависимость и срок следующей проверки; замечание отложено и остаётся открытым до подтверждения результата в источнике."
+                            : "Результат шага подтверждён записью исходного заказа или счёта. Срок или сообщение сотрудника не заменяют готовность позиции; при сохраняющейся причине замечание остаётся открытым.",
+                    action.evidenceRefs())).toList();
+        } else if ("CLIENT_CHAT_UNANSWERED".equals(type)) {
+            verification = List.of("В исходной переписке после последнего сообщения клиента записан проверенный ответ по существу либо штатно подтверждено, что ответ не требуется, с зафиксированной причиной.",
+                    "Передача обращения, назначение ответственного, взятие в работу и обещание ответить сами по себе не подтверждают устранение причины и не разрешают закрыть замечание.");
+        } else if ("AUTOMATION_FAILURE".equals(type) && currentPaymentPreparationFailure(facts) != null) {
+            verification = List.of("Исходный заказ и счёт подтверждают успешную подготовку существующего счёта и проверенный результат его отправки либо штатно зафиксированную ненужность этих действий с причиной.",
+                    "Передача администратору, назначение срока следующей проверки и повторная неудачная попытка сами по себе не устраняют причину и не разрешают закрыть замечание.");
+        } else return diagnosis;
+        return new Diagnosis(diagnosis.summary(), diagnosis.confirmedFacts(), diagnosis.hypotheses(), diagnosis.missingEvidence(), actions,
+                verification);
+    }
+
+    /** Readiness is not payment, archival reconciliation or an uncertain delivery. Unknown counts are not zero. */
+    static boolean ordinaryInvoiceReadiness(List<Fact> facts) {
+        if (!Set.of("COMMON_INVOICE", "COMMON_INVOICE_AUTOMATION").contains(value(facts, "card", "entity_type"))
+                || !"COLLECTING".equals(value(facts, "invoice", "status"))
+                || !uncertainDelivery(facts).isEmpty() || hasHistoricalInvoiceArchive(facts)
+                || number(facts, "invoice", "archivedActiveCount") != 0) return false;
+        long total = number(facts, "invoice", "orderCount"), ready = number(facts, "invoice", "readyCount");
+        return total > 0 && ready >= 0 && ready < total;
     }
 
     static boolean readable(Diagnosis value) {
@@ -56,15 +83,13 @@ final class ManagerProblemBusinessDiagnosis {
     static Diagnosis fallback(List<Fact> facts) {
         List<Fact> uncertain = uncertainDelivery(facts);
         if (!uncertain.isEmpty()) return uncertain(uncertain.getFirst());
+        if (hasHistoricalInvoiceArchive(facts)) return historicalInvoiceArchive(facts);
         Fact publicationConflict = currentInvoicePublicationConflict(facts);
         if (publicationConflict != null) return invoicePublicationConflict(facts, publicationConflict);
         String type = value(facts, "card", "entity_type");
         if (type.startsWith("COMMON_INVOICE") || type.isBlank() && has(facts, "invoice", "status")) return invoice(facts);
         if ("AUTOMATION_FAILURE".equals(type)) {
-            Fact preparationFailure = facts.stream().filter(f -> "automation".equals(f.subject())
-                    && "last_error_code".equals(f.field()) && "payment_instruction_failed".equals(f.value())
-                    && facts.stream().noneMatch(scope -> scope.reference().equals(f.reference().replace("last_error_code", "current_cycle"))
-                        && "false".equals(scope.value()))).findFirst().orElse(null);
+            Fact preparationFailure = currentPaymentPreparationFailure(facts);
             if (preparationFailure != null) {
                 String verification = "Подготовка существующего счёта завершена, результат отправки подтверждён и ошибка больше не повторяется.";
                 return new Diagnosis("Подготовка счёта завершилась ошибкой. По этой попытке нельзя считать счёт отправленным.",
@@ -91,6 +116,51 @@ final class ManagerProblemBusinessDiagnosis {
         return guidance("Причина замечания пока не подтверждена полностью: требуется сверка исходной задачи.", facts,
                 "Откройте связанную задачу и проверьте её текущее состояние и результат последних действий. Если данных недостаточно, уточните их у ответственного и зафиксируйте срок проверки.",
                 "Исходная задача подтверждает устранение причины; одного комментария или обещания недостаточно.");
+    }
+
+    private static Fact currentPaymentPreparationFailure(List<Fact> facts) {
+        return facts.stream().filter(f -> "automation".equals(f.subject())
+                && "last_error_code".equals(f.field()) && "payment_instruction_failed".equals(f.value())
+                && facts.stream().noneMatch(scope -> scope.reference().equals(f.reference().replace("last_error_code", "current_cycle"))
+                    && "false".equals(scope.value()))).findFirst().orElse(null);
+    }
+
+    static boolean hasHistoricalInvoiceArchive(List<Fact> facts) {
+        if (!Set.of("COMMON_INVOICE", "COMMON_INVOICE_AUTOMATION").contains(value(facts, "card", "entity_type"))
+                || !"MANUAL_ARCHIVE".equals(value(facts, "invoice", "close_reason"))) return false;
+        String closedAt = value(facts, "invoice", "closed_at");
+        try {
+            java.time.LocalDateTime.parse(closedAt.replace(' ', 'T'));
+        } catch (java.time.format.DateTimeParseException ignored) {
+            return false;
+        }
+        String status = value(facts, "invoice", "status");
+        // NEEDS_ATTENTION can legitimately follow a late payment or reversal; do not hide that incident as a revival.
+        return Set.of("COLLECTING", "READY", "INVOICED", "REMINDER", "PARTIALLY_PAID").contains(status)
+                || "ARCHIVED".equals(status) && number(facts, "invoice", "paid_kopecks") > 0;
+    }
+
+    private static Diagnosis historicalInvoiceArchive(List<Fact> facts) {
+        boolean archived = "ARCHIVED".equals(value(facts, "invoice", "status"));
+        String summary = archived ? "Счёт находится в историческом архиве; учтённая оплата сохранена. "
+                : "У счёта сохранено прежнее ручное архивирование, но текущий статус снова открыт. ";
+        long amount = number(facts, "invoice", "amount_kopecks"), paid = number(facts, "invoice", "paid_kopecks");
+        if (amount > 0 && paid >= 0 && paid <= amount) {
+            summary += "В составе учтено " + rubles(paid) + " ₽ из " + rubles(amount) + " ₽. ";
+            if (paid < amount) summary += "Расчётный остаток " + rubles(amount - paid) + " ₽ не подтверждает действующий долг. ";
+        }
+        summary += "Нужно сверить историю и основания обязательств.";
+        List<String> refs = facts.stream().filter(f -> "invoice".equals(f.subject())
+                && Set.of("status", "closed_at", "close_reason", "amount_kopecks", "paid_kopecks").contains(f.field()))
+                .map(Fact::reference).toList();
+        return new Diagnosis(summary, List.of(), List.of(),
+                List.of("Нужны подтверждённые основания действующих обязательств по прежнему архивному составу.",
+                        "Возврат отдельного заказа и последующая оплата сами по себе не подтверждают восстановление всего счёта."),
+                List.of(new Action("CHECK_SOURCE", "Сопоставьте архивирование счёта, возвраты отдельных заказов и подтверждённую оплату с журналом и платёжным источником. Не требуйте расчётный остаток как установленный долг без проверки оснований.",
+                                "Менеджер", "История счёта и заказов сопоставлена с сохранёнными подтверждениями оплаты и основаниями обязательств.", refs),
+                        new Action("ESCALATE", "Передайте администратору расхождение архивного счёта и состава работ. Сохраните учтённую оплату; не списывайте остаток, не возвращайте заказы и не отправляйте новый счёт автоматически.",
+                                "Администратор", "В источнике отражено проверенное состояние счёта; подтверждённая оплата и её история сохранены.", refs)),
+                List.of("Состояние счёта, состав и действующие обязательства подтверждены исходными записями, причина замечания устранена. Сам архив или ответ сотрудника не подтверждает отмену долга либо оплату."));
     }
 
     static boolean hasCurrentInvoicePublicationConflict(List<Fact> facts) {

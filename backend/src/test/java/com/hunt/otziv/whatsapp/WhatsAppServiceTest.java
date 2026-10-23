@@ -29,6 +29,30 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class WhatsAppServiceTest {
 
+    @Test void oldGatewayCannotReceiveHistoryBindingMutationDuringRollout() {
+        WhatsAppProperties.ClientConfig config = new WhatsAppProperties.ClientConfig();
+        config.setId("fixture"); config.setUrl("http://fixture:3000");
+        when(properties.getClients()).thenReturn(List.of(config));
+        when(restTemplate.getForObject("http://fixture:3000/operations/saved", String.class))
+                .thenReturn("{\"operationId\":\"saved\",\"state\":\"UNKNOWN\"}");
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                () -> service.reconcileOperation("fixture", "saved", "candidate"));
+        org.mockito.Mockito.verify(restTemplate, org.mockito.Mockito.never()).postForEntity(anyString(), any(), eq(String.class));
+    }
+
+    @Test void missingBindingVersionInReconciliationResponseCannotBecomeDeliveryProof() {
+        WhatsAppProperties.ClientConfig config = new WhatsAppProperties.ClientConfig();
+        config.setId("fixture"); config.setUrl("http://fixture:3000");
+        when(properties.getClients()).thenReturn(List.of(config));
+        when(restTemplate.getForObject("http://fixture:3000/operations/saved", String.class))
+                .thenReturn("{\"receiptBindingVersion\":1,\"operationId\":\"saved\",\"state\":\"UNKNOWN\"}");
+        when(restTemplate.postForEntity(eq("http://fixture:3000/operations/saved/reconcile"), any(), eq(String.class)))
+                .thenReturn(ResponseEntity.ok("{\"operationId\":\"saved\",\"state\":\"SUCCEEDED\",\"messageId\":\"candidate\",\"envelopeHash\":\"" + "a".repeat(64) + "\"}"));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                () -> service.reconcileOperation("fixture", "saved", "candidate"));
+        org.mockito.Mockito.verify(restTemplate, org.mockito.Mockito.never()).postForEntity(eq("http://fixture:3000/send-group"), any(), eq(String.class));
+    }
+
     @Test
     void groupSendPreservesEnvelopeIdentityAcrossUtf8HttpEncoding() throws Exception {
         WhatsAppProperties.ClientConfig config = new WhatsAppProperties.ClientConfig();
@@ -75,7 +99,7 @@ class WhatsAppServiceTest {
         config.setId("fixture"); config.setUrl("http://fixture:3000");
         when(properties.getClients()).thenReturn(List.of(config));
         when(restTemplate.getForObject("http://fixture:3000/operations/durable-operation", String.class))
-                .thenReturn("{\"operationId\":\"durable-operation\",\"state\":\"SUCCEEDED\",\"messageId\":\"verified-message\"}");
+                .thenReturn("{\"receiptBindingVersion\":1,\"operationId\":\"durable-operation\",\"state\":\"SUCCEEDED\",\"messageId\":\"verified-message\"}");
         var status = service.getOperationStatus("fixture", "durable-operation");
         assertEquals("verified-message", status.messageId());
         org.junit.jupiter.api.Assertions.assertNull(status.envelopeHash());
@@ -89,7 +113,7 @@ class WhatsAppServiceTest {
         when(properties.getClients()).thenReturn(List.of(config));
         String hash = com.hunt.otziv.whatsapp.dto.WhatsAppOperationEnvelope.groupHash("fixture", "12345678@g.us", "fixture");
         when(restTemplate.getForObject("http://fixture:3000/operations/durable-operation", String.class))
-                .thenReturn("{\"operationId\":\"durable-operation\",\"state\":\"SUCCEEDED\",\"messageId\":\"verified-message\",\"envelopeHash\":\"" + hash + "\"}");
+                .thenReturn("{\"receiptBindingVersion\":1,\"operationId\":\"durable-operation\",\"state\":\"SUCCEEDED\",\"messageId\":\"verified-message\",\"envelopeHash\":\"" + hash + "\"}");
         assertEquals(hash, service.getOperationStatus("fixture", "durable-operation").envelopeHash());
         org.mockito.Mockito.verify(restTemplate, org.mockito.Mockito.never()).postForEntity(anyString(), any(), eq(String.class));
     }
@@ -102,9 +126,11 @@ class WhatsAppServiceTest {
         String hash = com.hunt.otziv.whatsapp.dto.WhatsAppOperationEnvelope.groupHash(
                 "fixture", "12345678@g.us", "fixture");
         when(restTemplate.postForEntity(eq("http://fixture:3000/operations/durable-operation/reconcile"),
-                any(), eq(String.class))).thenReturn(ResponseEntity.ok("{\"operationId\":\"durable-operation\","
+                any(), eq(String.class))).thenReturn(ResponseEntity.ok("{\"receiptBindingVersion\":1,\"operationId\":\"durable-operation\","
                 + "\"state\":\"SUCCEEDED\",\"messageId\":\"verified-message\",\"envelopeHash\":\"" + hash + "\"}"));
 
+        when(restTemplate.getForObject("http://fixture:3000/operations/durable-operation", String.class))
+                .thenReturn("{\"receiptBindingVersion\":1,\"operationId\":\"durable-operation\",\"state\":\"UNKNOWN\"}");
         var receipt = service.reconcileOperation("fixture", "durable-operation", "verified-message");
         assertEquals("SUCCEEDED", receipt.state());
         assertEquals(hash, receipt.envelopeHash());
@@ -136,7 +162,7 @@ class WhatsAppServiceTest {
         config.setId("fixture"); config.setUrl("http://fixture:3000");
         when(properties.getClients()).thenReturn(List.of(config));
         when(restTemplate.getForObject("http://fixture:3000/operations/durable-operation", String.class))
-                .thenReturn("{\"operationId\":\"durable-operation\",\"state\":\"SUCCEEDED\",\"messageId\":\"verified-message\",\"envelopeHash\":" + value + "}");
+                .thenReturn("{\"receiptBindingVersion\":1,\"operationId\":\"durable-operation\",\"state\":\"SUCCEEDED\",\"messageId\":\"verified-message\",\"envelopeHash\":" + value + "}");
         org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
                 () -> service.getOperationStatus("fixture", "durable-operation"));
     }
@@ -147,7 +173,7 @@ class WhatsAppServiceTest {
         config.setId("fixture"); config.setUrl("http://fixture:3000");
         when(properties.getClients()).thenReturn(List.of(config));
         when(restTemplate.getForObject("http://fixture:3000/operations/durable-operation", String.class))
-                .thenReturn("{\"operationId\":\"durable-operation\",\"state\":\"SUCCEEDED\",\"messageId\":123}");
+                .thenReturn("{\"receiptBindingVersion\":1,\"operationId\":\"durable-operation\",\"state\":\"SUCCEEDED\",\"messageId\":123}");
         org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
                 () -> service.getOperationStatus("fixture", "durable-operation"));
     }

@@ -1,0 +1,10 @@
+:host { display: block; }
+.payment-review { margin: .6rem 0; padding: .85rem; border: 1px solid #bbd5d0; border-radius: .75rem; background: #f1faf7; color: #243c37; font-size: .88rem; line-height: 1.45; }
+.payment-review.attention { border-color: #dcad79; background: #fff7eb; color: #65451f; }
+header, .actions { display: flex; align-items: center; justify-content: space-between; gap: .6rem; flex-wrap: wrap; }
+p { margin: .5rem 0; }
+label { display: flex; flex-direction: column; gap: .3rem; margin: .65rem 0; }
+.checkbox { flex-direction: row; align-items: flex-start; }
+textarea { box-sizing: border-box; width: 100%; font: inherit; padding: .5rem; border: 1px solid #a8bdb7; border-radius: .45rem; }
+button { font: inherit; cursor: pointer; padding: .35rem .55rem; border: 1px solid currentColor; border-radius: .4rem; background: transparent; color: inherit; }
+button:disabled { opacity: .55; cursor: default; }

@@ -127,6 +127,8 @@ export interface SpecialistPaymentReview {
   deadlineAt: string;
   lastError: string | null;
   retryNotificationAllowed: boolean;
+  creditedAt?: string | null;
+  confirmationBasis?: string | null;
 }
 
 export interface SpecialistPaymentAbsentRequest {

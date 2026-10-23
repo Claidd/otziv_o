@@ -12074,6 +12074,134 @@
         "x-automatic-retry" : false
       }
     },
+    "/api/orders/{orderId}/manual-payment-review" : {
+      "get" : {
+        "operationId" : "ManagerManualPaymentReviewController_read",
+        "x-java-handler" : "com.hunt.otziv.payments.controller.ManagerManualPaymentReviewController#read",
+        "parameters" : [ {
+          "name" : "orderId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer"
+          }
+        } ],
+        "x-preauthorize" : "hasAnyRole('MANAGER', 'ADMIN', 'OWNER')",
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Declared controller response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "anyOf" : [ {
+                    "$ref" : "#/components/schemas/ManualPaymentReviewViewOutput"
+                  }, {
+                    "type" : "null"
+                  } ]
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Validation or domain rejection",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication rejected; a write is not automatically retried"
+          },
+          "403" : {
+            "description" : "Server denied access; authority is not inferred from client state"
+          },
+          "409" : {
+            "description" : "Conflict; read current state before an explicit user retry",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          }
+        },
+        "x-automatic-retry" : false
+      }
+    },
+    "/api/orders/{orderId}/manual-payment-review/dispute" : {
+      "post" : {
+        "operationId" : "ManagerManualPaymentReviewController_dispute",
+        "x-java-handler" : "com.hunt.otziv.payments.controller.ManagerManualPaymentReviewController#dispute",
+        "requestBody" : {
+          "required" : true,
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ManualPaymentDisputeRequestInput"
+              }
+            }
+          }
+        },
+        "parameters" : [ {
+          "name" : "orderId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer"
+          }
+        } ],
+        "x-preauthorize" : "hasAnyRole('MANAGER', 'ADMIN', 'OWNER')",
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Declared controller response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ManualPaymentReviewViewOutput"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Validation or domain rejection",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication rejected; a write is not automatically retried"
+          },
+          "403" : {
+            "description" : "Server denied access; authority is not inferred from client state"
+          },
+          "409" : {
+            "description" : "Conflict; read current state before an explicit user retry",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiExceptionHandlerApiErrorResponseOutput"
+                }
+              }
+            }
+          }
+        },
+        "x-automatic-retry" : false
+      }
+    },
     "/api/payments/public/group/{token}" : {
       "get" : {
         "operationId" : "PublicCommonInvoiceController_commonInvoice",
@@ -20127,6 +20255,13 @@
         "x-java-type" : "com.hunt.otziv.payments.dto.ManagerManualCardPaymentResultResponse",
         "type" : "object",
         "properties" : {
+          "manualPaymentReview" : {
+            "anyOf" : [ {
+              "$ref" : "#/components/schemas/ManualPaymentReviewViewOutput"
+            }, {
+              "type" : "null"
+            } ]
+          },
           "message" : {
             "anyOf" : [ {
               "type" : "string"
@@ -20156,7 +20291,7 @@
             } ]
           }
         },
-        "required" : [ "message", "orderId", "paymentLinkId", "status" ],
+        "required" : [ "manualPaymentReview", "message", "orderId", "paymentLinkId", "status" ],
         "additionalProperties" : true
       },
       "ManagerManualPaymentSettingsResponseOutput" : {
@@ -21928,6 +22063,35 @@
         "required" : [ ],
         "additionalProperties" : true
       },
+      "ManualPaymentDisputeRequestInput" : {
+        "x-java-type" : "com.hunt.otziv.payments.dto.ManualPaymentDisputeRequest",
+        "type" : "object",
+        "properties" : {
+          "expectedReviewId" : {
+            "anyOf" : [ {
+              "type" : "integer"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "note" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "recipientReportedMissing" : {
+            "anyOf" : [ {
+              "type" : "boolean"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        },
+        "required" : [ ],
+        "additionalProperties" : true
+      },
       "ManualPaymentRecipientMonthlySummaryItemOutput" : {
         "x-java-type" : "com.hunt.otziv.payments.dto.ManualPaymentRecipientMonthlySummaryItem",
         "type" : "object",
@@ -22123,6 +22287,61 @@
           }
         },
         "required" : [ "from", "items", "month", "toExclusive", "totalAmount", "totalAmountKopecks", "totalPayments", "totalRecipients" ],
+        "additionalProperties" : true
+      },
+      "ManualPaymentReviewViewOutput" : {
+        "x-java-type" : "com.hunt.otziv.payments.dto.ManualPaymentReviewView",
+        "type" : "object",
+        "properties" : {
+          "confirmationBasis" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "creditedAt" : {
+            "anyOf" : [ {
+              "type" : "string",
+              "x-date-time-kind" : "local"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "deadlineAt" : {
+            "anyOf" : [ {
+              "type" : "string",
+              "x-date-time-kind" : "local"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "disputeAllowed" : {
+            "type" : "boolean"
+          },
+          "id" : {
+            "anyOf" : [ {
+              "type" : "integer"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "orderId" : {
+            "anyOf" : [ {
+              "type" : "integer"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "status" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        },
+        "required" : [ "confirmationBasis", "creditedAt", "deadlineAt", "disputeAllowed", "id", "orderId", "status" ],
         "additionalProperties" : true
       },
       "ManualPaymentSourceOutput" : {
@@ -25758,6 +25977,21 @@
             "type" : "integer",
             "x-money-unit" : "kopecks"
           },
+          "confirmationBasis" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "creditedAt" : {
+            "anyOf" : [ {
+              "type" : "string",
+              "x-date-time-kind" : "local"
+            }, {
+              "type" : "null"
+            } ]
+          },
           "deadlineAt" : {
             "anyOf" : [ {
               "type" : "string",
@@ -25828,7 +26062,7 @@
             } ]
           }
         },
-        "required" : [ "amountKopecks", "deadlineAt", "id", "lastError", "notifiedAt", "orderId", "paymentLinkId", "recipientUserId", "requestedAt", "retryNotificationAllowed", "status" ],
+        "required" : [ "amountKopecks", "confirmationBasis", "creditedAt", "deadlineAt", "id", "lastError", "notifiedAt", "orderId", "paymentLinkId", "recipientUserId", "requestedAt", "retryNotificationAllowed", "status" ],
         "additionalProperties" : true
       },
       "SpecialistManualPaymentReviewStatusOutput" : {
@@ -27192,7 +27426,7 @@
     "sha256" : "28f7dfb73d90d3fca83eb5b5d988fe7d0833afb39a152e1f232377a4f73117ba"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/manager_control/diagnostics/ManagerProblemDiagnosticsService.java",
-    "sha256" : "f9a93203ec5b3f850f0be6916c6d7bb5147acb0e937db49bbdba20c05d192066"
+    "sha256" : "cb255dcb9b0ed7929af7585c95b052a0a5b8e99802b4e04bcd3bfd26e4fc308e"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/manager_control/dto/ManagerClientReplyResolutionRequest.java",
     "sha256" : "9ecbb6e10bd95f6c0b3981c68549a56fa5350f5d8c9a4cbe501e3be401e0926d"
@@ -27302,6 +27536,9 @@
     "path" : "backend/src/main/java/com/hunt/otziv/payments/controller/AdminPaymentController.java",
     "sha256" : "80f5b40ba52a4722d1682a447fc8cb87923318ddbfaf09f6dacf2a1de10acba5"
   }, {
+    "path" : "backend/src/main/java/com/hunt/otziv/payments/controller/ManagerManualPaymentReviewController.java",
+    "sha256" : "fadbd555a5dd40273ad8ee02957b3161204834558dff96da67b6f4444f852189"
+  }, {
     "path" : "backend/src/main/java/com/hunt/otziv/payments/controller/ManagerPaymentController.java",
     "sha256" : "3ba2d32e8add2f699019c8cab9e380be1ef1dceb88b33b9249b803a1a2d927ee"
   }, {
@@ -27336,7 +27573,7 @@
     "sha256" : "bc5ce9f84eeb20619cd6bd14c99313f6cf010867f2e680f6d6d5ea299183b70a"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/payments/dto/ManagerManualCardPaymentResultResponse.java",
-    "sha256" : "b74956f6a4ba6bc28c8d1b461ec8370c685f79db88aaeffdfb7d00fa1d92199d"
+    "sha256" : "c87fce0cd5ebf1e32cf5df7fbfb3781ab55cab91cf7ecb0bb42c4ee90e19275c"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/payments/dto/ManagerManualPaymentSettingsResponse.java",
     "sha256" : "0acf4cf65817f05a43107de9d7e6aa08b830258af6e9dcd55b28d3bdd2d4c3b0"
@@ -27350,11 +27587,17 @@
     "path" : "backend/src/main/java/com/hunt/otziv/payments/dto/ManagerPaymentProfileResponse.java",
     "sha256" : "ddf5ddc558c2902ebffa72eca8ffa24ae8acae358612d3d09704a6fefc57189e"
   }, {
+    "path" : "backend/src/main/java/com/hunt/otziv/payments/dto/ManualPaymentDisputeRequest.java",
+    "sha256" : "5617a31ab398c17b2d0ef43bcd490532c3a3ee692b3d3cfdc8740e419f4d990c"
+  }, {
     "path" : "backend/src/main/java/com/hunt/otziv/payments/dto/ManualPaymentRecipientMonthlySummaryItem.java",
     "sha256" : "5ec151f6572fac453ceb7ffccdc077286392a0f2f967b2e0b254b62cd93cfedc"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/payments/dto/ManualPaymentRecipientMonthlySummaryResponse.java",
     "sha256" : "43194567bbed23907e29bbaeb7823561fb1806d5052684622342871374e59b9d"
+  }, {
+    "path" : "backend/src/main/java/com/hunt/otziv/payments/dto/ManualPaymentReviewView.java",
+    "sha256" : "d6720b28c25238d8267664960115056b5dea1280f94c3b9749bd7280c76511f3"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/payments/dto/ManualPaymentTaskAccountingTargetOption.java",
     "sha256" : "a7a3535ad0b37f664294b853484db6f548f23ec6de0fa6823441343bbcff4e11"
@@ -27414,7 +27657,7 @@
     "sha256" : "2a7ca923a4e14942f0ced48dcf7ae93c0424d997ed7a068f91ef8bb6d4ba4dcb"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/payments/dto/SpecialistManualPaymentReviewResponse.java",
-    "sha256" : "0cf9752da3fdd39891b1e8703c578a2e51d0bbdcb3b4c744cce24c4ab48806cd"
+    "sha256" : "b1cce4558c02883f7babeecbdb3e6db0902c1344bd78fa70afd61bea53fbd4fc"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/payments/dto/SpecialistPaymentAbsentRequest.java",
     "sha256" : "d182daf6ff12c59d227c2fdf9e9519a6b7792c5951c7ef79ab976d86f3bd5cf5"
@@ -27537,7 +27780,7 @@
     "sha256" : "ec632e21d38c13762c66e4a42ee20e6cd042b058049eaf136f806eacb479b39d"
   }, {
     "path" : "contracts/client-api.config.json",
-    "sha256" : "bc043cff10eb05ac35ea7557917986fd10b9f2ca4f9f11f7a7e6949f5f51dee4"
+    "sha256" : "3429f5ddec4f9f7624b4eaccc96731d142780d71058d2f9ca917c6f8dbaa2882"
   } ],
   "x-source-fingerprint-normalization" : "UTF-8 text with CRLF normalized to LF",
   "x-schema-java-types" : {
@@ -27682,8 +27925,10 @@
     "ManualCardPaymentContextResponseOutput" : "com.hunt.otziv.contractor_payments.dto.ManualCardPaymentContextResponse",
     "ManualCardPaymentRecipientResponseOutput" : "com.hunt.otziv.contractor_payments.dto.ManualCardPaymentRecipientResponse",
     "ManualPaymentConfirmationRequestInput" : "com.hunt.otziv.common_billing.dto.ManualPaymentConfirmationRequest",
+    "ManualPaymentDisputeRequestInput" : "com.hunt.otziv.payments.dto.ManualPaymentDisputeRequest",
     "ManualPaymentRecipientMonthlySummaryItemOutput" : "com.hunt.otziv.payments.dto.ManualPaymentRecipientMonthlySummaryItem",
     "ManualPaymentRecipientMonthlySummaryResponseOutput" : "com.hunt.otziv.payments.dto.ManualPaymentRecipientMonthlySummaryResponse",
+    "ManualPaymentReviewViewOutput" : "com.hunt.otziv.payments.dto.ManualPaymentReviewView",
     "ManualPaymentSourceOutput" : "com.hunt.otziv.payments.model.ManualPaymentSource",
     "ManualPaymentTaskAccountingTargetKindOutput" : "com.hunt.otziv.payments.model.ManualPaymentTaskAccountingTargetKind",
     "ManualPaymentTaskAccountingTargetOptionOutput" : "com.hunt.otziv.payments.dto.ManualPaymentTaskAccountingTargetOption",

@@ -166,6 +166,16 @@ public class PaymentIssueReminderService implements PaymentIssueCompletionOperat
         );
     }
 
+    /** Completes a resolved diagnostic warning while preserving its historical card. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public int completeOrderIssue(Long orderId, String sourceType, Long sourceId) {
+        if (orderId == null || orderId <= 0 || sourceId == null || sourceId <= 0) {
+            throw new IllegalArgumentException("Источник и заказ завершаемого замечания обязательны");
+        }
+        return personalReminderService.completeOpenSystemRemindersBySourceAndOrder(
+                sourceType(sourceType), sourceId, orderId);
+    }
+
     @Transactional(propagation = Propagation.MANDATORY)
     public void resolveOrderIssueInCurrentTransaction(String sourceType, Long sourceId) {
         if (sourceId == null || sourceId <= 0) {

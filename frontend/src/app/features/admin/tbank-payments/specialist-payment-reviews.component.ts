@@ -1,10 +1,10 @@
 import { Component, EventEmitter, OnDestroy, Output, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { manualPaymentReviewPresentation } from '@otziv/client-common/billing-payments';
 import { Subscription } from 'rxjs';
 import {
   PaymentsApi,
-  type SpecialistPaymentReview,
-  type SpecialistPaymentReviewStatus
+  type SpecialistPaymentReview
 } from '../../../core/payments.api';
 import { apiErrorDetail } from '../../../shared/api-error-message';
 
@@ -52,24 +52,14 @@ export class SpecialistPaymentReviewsComponent implements OnDestroy {
         this.loading.set(false);
       },
       error: error => {
-        this.error.set(apiErrorDetail(error, 'Не удалось загрузить проверки переводов специалистам.'));
+        this.error.set(apiErrorDetail(error, 'Не удалось загрузить ручные оплаты на контроле.'));
         this.loading.set(false);
       }
     });
   }
 
-  statusLabel(status: SpecialistPaymentReviewStatus): string {
-    const labels: Record<SpecialistPaymentReviewStatus, string> = {
-      PENDING_DELIVERY: 'Уведомление не доставлено',
-      WAITING: 'Ожидаем возражения специалиста',
-      SETTLING: 'Идёт зачисление',
-      ADMIN_SETTLING: 'Идёт ручная сверка',
-      DISPUTED: 'Специалист оспорил перевод',
-      CONFIRMED: 'Зачислено',
-      NEEDS_ATTENTION: 'Требуется проверка',
-      SUPERSEDED: 'Закрыто без поступления'
-    };
-    return labels[status] ?? status;
+  statusLabel(review: SpecialistPaymentReview): string {
+    return manualPaymentReviewPresentation(review).title;
   }
 
   canRetry(review: SpecialistPaymentReview): boolean {
@@ -123,8 +113,8 @@ export class SpecialistPaymentReviewsComponent implements OnDestroy {
       }
     }
     const confirmation = editing.action === 'received'
-      ? `Выписка специалиста подтверждает поступление ${this.formatMoney(review.amountKopecks)} по заказу №${review.orderId}? После сохранения заказ будет зачислен.`
-      : `По выписке специалиста перевод ${this.formatMoney(review.amountKopecks)} по заказу №${review.orderId} не поступил? Запрос будет закрыт без зачисления.`;
+      ? `Выписка получателя подтверждает поступление ${this.formatMoney(review.amountKopecks)} по заказу №${review.orderId}? Будет сохранён результат сверки.`
+      : `По выписке получателя перевод ${this.formatMoney(review.amountKopecks)} по заказу №${review.orderId} не поступил? ${review.creditedAt ? 'Будет зарегистрировано возражение. Отметка оплаты не отменяется автоматически.' : 'Проверка будет закрыта без зачисления.'}`;
     if (!window.confirm(confirmation)) return;
     this.formError.set(null);
     const request = editing.action === 'received'

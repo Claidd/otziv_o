@@ -130,6 +130,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -6272,10 +6275,11 @@ class CommonBillingServiceTest {
         assertTrue(Boolean.TRUE.equals(completedClosed));
     }
 
-    @Test
-    void reversalOfDurableStandaloneSourceQuarantinesInvoiceWithoutClearingPaidEvidence() {
+    @ParameterizedTest
+    @EnumSource(value = CommonInvoiceStatus.class, names = {"PAID", "ARCHIVED"})
+    void reversalOfDurableStandaloneSourceQuarantinesInvoiceWithoutClearingPaidEvidence(CommonInvoiceStatus status) {
         CommonInvoice invoice = invoice(account());
-        invoice.setStatus(CommonInvoiceStatus.PAID);
+        invoice.setStatus(status);
         invoice.setNextReminderAt(LocalDateTime.now().plusDays(1));
         Order order = order(201L);
         CommonInvoiceOrder item = item(invoice, order);
@@ -8005,6 +8009,7 @@ class CommonBillingServiceTest {
         ref.setInvoice(invoice);
         ref.setProvider(PaymentProfile.PROVIDER_TOCHKA);
         ref.setStatus("CONFIRMED");
+        ref.setReason("late_tochka_payment_after_terminal_invoice:webhook");
         ref.setAmountKopecks(100_000L);
 
         when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
@@ -10879,6 +10884,263 @@ class CommonBillingServiceTest {
         verify(invoiceOrderRepository, never()).saveAll(any());
         verify(invoiceRepository, never()).save(any(CommonInvoice.class));
         verifyNoInteractions(taskReceiptIntegrationService);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void archivedInvoiceDoesNotReviveWhenStandalonePaymentIsConfirmed(boolean alreadyRecorded) {
+        CommonInvoice invoice = archivedInvoiceWithHistory();
+        Order order = order(101L);
+        order.setStatus(status("Оплачено"));
+        CommonInvoiceOrder item = item(invoice, order);
+        item.setAmountKopecks(150_000L);
+        PaymentLink link = confirmedStandaloneBankPayment(501L, order, 150_000L);
+        if (alreadyRecorded) {
+            item.setPaid(true);
+            item.setPaidAt(link.getPaidAt());
+            item.setSourcePaymentLinkId(link.getId());
+            item.setPaymentMethod("TBANK");
+        }
+        when(paymentLinkRepository.findByOrderIdForUpdate(101L)).thenReturn(List.of(link));
+        when(invoiceOrderRepository.findByOrderIdWithInvoice(101L)).thenReturn(Optional.of(item));
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+
+        assertFalse(service.applyConfirmedOrderPayment(101L, link.getPaidAt(), "Подтверждён отдельный платёж"));
+        assertFalse(service.applyConfirmedOrderPayment(101L, link.getPaidAt(), "Повтор подтверждения"));
+
+        assertArchivedInvoiceHistory(invoice);
+        assertEquals(alreadyRecorded, item.isPaid());
+        assertEquals(alreadyRecorded ? 501L : null, item.getSourcePaymentLinkId());
+        assertEquals(alreadyRecorded ? link.getPaidAt() : null, item.getPaidAt());
+        assertEquals("Оплачено", order.getStatus().getTitle());
+        assertEquals(PaymentLinkStatus.CONFIRMED, link.getStatus());
+        assertEquals(150_000L, link.getConfirmedAmountKopecks());
+        verify(invoiceOrderRepository, never()).findByInvoiceIdWithOrders(anyLong());
+        verify(invoiceRepository, never()).save(any());
+        verify(invoiceOrderRepository, never()).saveAll(any());
+        verifyNoInteractions(orderTransactionService, messageSender, nextOrderRequestService);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"refresh", "recalculate", "prepayment"})
+    void archivedInvoiceAmountsAndPrepaymentsKeepTheFinancialSnapshot(String operation) {
+        CommonInvoice invoice = archivedInvoiceWithHistory();
+        CommonInvoiceOrder paid = item(invoice, order(101L));
+        paid.setAmountKopecks(150_000L);
+        paid.setPaid(true);
+        paid.setSourcePaymentLinkId(501L);
+        CommonInvoiceOrder unpaid = item(invoice, order(102L));
+        unpaid.setAmountKopecks(300_000L);
+        unpaid.setReady(false);
+        List<CommonInvoiceOrder> items = List.of(paid, unpaid);
+        CommonInvoiceSettlementService settlement =
+                (CommonInvoiceSettlementService) ReflectionTestUtils.getField(service, "settlementService");
+        lenient().when(paymentRefRepository.sumAmountKopecksByInvoiceIdAndStatus(10L, "PREPAID"))
+                .thenReturn(450_000L);
+
+        switch (operation) {
+            case "refresh" -> settlement.refreshInvoiceAmounts(invoice, items,
+                    Map.of(102L, BigDecimal.valueOf(7000)), Map.of(102L, false));
+            case "recalculate" -> settlement.recalculateInvoice(invoice, items);
+            case "prepayment" -> assertFalse(settlement.applyCommonInvoicePrepaymentIfReady(invoice, items));
+            default -> throw new AssertionError(operation);
+        }
+
+        assertArchivedInvoiceHistory(invoice);
+        assertEquals(300_000L, unpaid.getAmountKopecks());
+        assertFalse(unpaid.isReady());
+        assertFalse(unpaid.isPaid());
+        assertEquals(501L, paid.getSourcePaymentLinkId());
+        verify(invoiceRepository, never()).save(any());
+        verify(invoiceOrderRepository, never()).saveAll(any());
+        verifyNoInteractions(paymentRefRepository, orderTransactionService, messageSender,
+                paymentIssueReminderService, badReviewTaskService);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"pay", "detach"})
+    void archivedInvoicePositionsCannotBeChanged(String command) {
+        CommonInvoice invoice = archivedInvoiceWithHistory();
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+
+        ResponseStatusException rejected = assertThrows(ResponseStatusException.class, () -> {
+            if (command.equals("pay")) service.markOrderPaid(10L, 101L);
+            else service.detachOrder(10L, 101L);
+        });
+
+        assertEquals(HttpStatus.CONFLICT, rejected.getStatusCode());
+        assertTrue(rejected.getReason().contains("Закрытый общий счет"));
+        assertArchivedInvoiceHistory(invoice);
+        verify(invoiceRepository, never()).save(any());
+        verify(invoiceOrderRepository, never()).save(any());
+        verify(invoiceOrderRepository, never()).delete(any());
+        verifyNoInteractions(orderTransactionService, orderStatusTransitionService, messageSender);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"invoice", "position", "order"})
+    void archivedInvoiceWithAnyConfirmedPaymentCannotRestoreOrders(String evidence) {
+        CommonInvoice invoice = archivedInvoiceWithHistory();
+        if (!evidence.equals("invoice")) invoice.setPaidKopecks(0);
+        Order order = order(101L);
+        order.setStatus(status(evidence.equals("order") ? "Оплачено" : "Архив"));
+        CommonInvoiceOrder item = item(invoice, order);
+        item.setPaid(evidence.equals("position"));
+        item.setArchiveSourceOrderStatusTitle("На проверке");
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
+
+        ResponseStatusException rejected = assertThrows(ResponseStatusException.class,
+                () -> service.restoreLiveArchivedInvoice(10L, () -> "manager"));
+
+        assertEquals(HttpStatus.CONFLICT, rejected.getStatusCode());
+        assertTrue(rejected.getReason().contains("с подтвержденной оплатой"));
+        assertEquals(CommonInvoiceStatus.ARCHIVED, invoice.getStatus());
+        assertEquals("token", invoice.getToken());
+        assertEquals("MANUAL_ARCHIVE", invoice.getCloseReason());
+        assertEquals(evidence.equals("order") ? "Оплачено" : "Архив", order.getStatus().getTitle());
+        verify(invoiceRepository, never()).save(any());
+        verifyNoInteractions(orderStatusTransitionService, orderTransactionService, messageSender);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = PaymentLinkStatus.class, names = {"CREATED", "INITIATED", "CONFIRMED"})
+    void archivedPublicPaymentTokenCannotSynchronizeOrCancelStandaloneRoutes(PaymentLinkStatus linkStatus) {
+        CommonInvoice invoice = archivedInvoiceWithHistory();
+        Order order = order(101L);
+        CommonInvoiceOrder item = item(invoice, order);
+        PaymentLink link = confirmedStandaloneBankPayment(501L, order, 150_000L);
+        link.setStatus(linkStatus);
+        when(invoiceOrderRepository.findOrderIdsByInvoiceToken("token")).thenReturn(List.of(101L));
+        when(orderAggregateMutationLockService.lock(101L)).thenReturn(order);
+        when(paymentLinkRepository.findByOrderIdForUpdate(101L)).thenReturn(List.of(link));
+        when(invoiceRepository.findByTokenWithAccountForUpdate("token")).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findMembershipByInvoiceIdForRead(10L)).thenReturn(List.of(item));
+
+        ResponseStatusException rejected = assertThrows(ResponseStatusException.class,
+                () -> ReflectionTestUtils.invokeMethod(service, "preparePaymentInit", "token", "client@example.com"));
+
+        assertEquals(HttpStatus.CONFLICT, rejected.getStatusCode());
+        assertEquals("Архивный общий счет недоступен для оплаты", rejected.getReason());
+        assertArchivedInvoiceHistory(invoice);
+        assertEquals(linkStatus, link.getStatus());
+        assertFalse(item.isPaid());
+        verify(invoiceOrderRepository, never()).findByInvoiceIdWithOrders(anyLong());
+        verify(invoiceRepository, never()).save(any());
+        verify(paymentLinkRepository, never()).saveAll(any());
+        verifyNoInteractions(tbankClient, tochkaClient, taskReceiptIntegrationService, messageSender);
+    }
+
+    @Test
+    void lateCurrentTbankConfirmationForArchivedInvoicePreservesReceiptForReconciliation() throws Exception {
+        CommonInvoice invoice = archivedInvoiceWithHistory();
+        invoice.setTbankOrderId("old-order");
+        invoice.setTbankPaymentId("old-payment");
+        invoice.setTbankTerminalKey("terminal");
+        invoice.setTbankPaymentAmountKopecks(100_000L);
+        CommonInvoicePaymentRef ref = paymentRef(44L, invoice, "CURRENT",
+                "old-order", "old-payment", "terminal", 100_000L);
+        paymentRefStore.put(ref.getId(), ref);
+        Map<String, String> payload = confirmedWebhookPayload();
+        PaymentProfile profile = paymentProfile();
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(paymentProfileService.findByTerminalKey("terminal")).thenReturn(Optional.of(profile));
+        when(paymentProfileService.toRuntimeForTerminal(profile, "terminal")).thenReturn(runtimeProfile());
+        when(tokenSigner.matches(payload, "password", "token")).thenReturn(true);
+
+        assertTrue(service.handleTbankWebhook(payload));
+        String firstAttentionReason = invoice.getLastError();
+        assertNull(invoice.getTbankOrderId());
+        assertNull(invoice.getTbankPaymentId());
+
+        assertTrue(service.handleTbankWebhook(payload));
+
+        assertEquals(firstAttentionReason, invoice.getLastError());
+        assertEquals("confirmed_after_terminal_status", ref.getReason());
+        verify(invoiceOrderRepository, never()).findByInvoiceIdWithOrders(anyLong());
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+        assertEquals("CONFIRMED", ref.getStatus());
+        assertEquals("CONFIRMED", ref.getProviderStatus());
+        assertEquals(100_000L, ref.getAmountKopecks());
+        assertEquals(150_000L, invoice.getPaidKopecks());
+        assertEquals(450_000L, invoice.getAmountKopecks());
+        assertEquals("MANUAL_ARCHIVE", invoice.getCloseReason());
+        assertNull(invoice.getNextReminderAt());
+        assertTrue(invoice.getLastError().startsWith("late_tbank_payment:"));
+        verifyNoInteractions(orderTransactionService, messageSender);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = CommonInvoiceStatus.class, names = {"ARCHIVED", "UNPAID", "BAN", "DISABLED"})
+    void repeatedLateTochkaConfirmationForTerminalInvoiceRequiresExplicitReconciliation(
+            CommonInvoiceStatus terminalStatus) {
+        CommonInvoice invoice = archivedInvoiceWithHistory();
+        invoice.setStatus(terminalStatus);
+        PaymentProfile entityProfile = tochkaEntityProfile();
+        TochkaPaymentProfile runtime = tochkaRuntimeProfile();
+        CommonInvoicePaymentRef ref = tochkaCancelPendingRef(invoice);
+        ref.setStatus("CURRENT");
+        ref.setReason("tochka_payment_created:init");
+        paymentRefStore.put(ref.getId(), ref);
+        TochkaAcquiringInternetPaymentWebhook webhook = new TochkaAcquiringInternetPaymentWebhook(
+                "CUST00001", BigDecimal.valueOf(1000), "sbp", "tochka-operation-10",
+                "transaction-10", "Репутационные услуги", null, "123456789012345",
+                "acquiringInternetPayment", null, null, "APPROVED", "ci-10-refund",
+                null, null, null);
+        when(paymentRefRepository.findByProviderAndProviderOrderId(
+                PaymentProfile.PROVIDER_TOCHKA, "ci-10-refund")).thenReturn(Optional.of(ref));
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(paymentProfileService.lockByIdForRouting(2L)).thenReturn(entityProfile);
+        when(paymentProfileService.isTochkaProvider(entityProfile)).thenReturn(true);
+        when(tochkaPaymentProfileResolver.resolveForExistingPayment(entityProfile)).thenReturn(runtime);
+        when(tochkaPaymentOperationMapper.map(any(PaymentOperation.class), any(), eq(false))).thenReturn(
+                new MappedPayment(PaymentLinkStatus.CONFIRMED, PaymentMethod.SBP_QR, "APPROVED", "sbp"));
+
+        assertTrue(service.handleTochkaWebhook(webhook));
+        String firstAttentionReason = invoice.getLastError();
+        assertTrue(firstAttentionReason.startsWith("late_payment_tochka:"));
+
+        assertTrue(service.handleTochkaWebhook(webhook));
+
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+        assertEquals(firstAttentionReason, invoice.getLastError());
+        assertEquals("CONFIRMED", ref.getStatus());
+        assertEquals("APPROVED", ref.getProviderStatus());
+        assertEquals("late_tochka_payment_after_terminal_invoice:webhook", ref.getReason());
+        assertEquals(100_000L, ref.getAmountKopecks());
+        assertEquals(450_000L, invoice.getAmountKopecks());
+        assertEquals(150_000L, invoice.getPaidKopecks());
+        assertEquals("MANUAL_ARCHIVE", invoice.getCloseReason());
+        assertEquals(LocalDateTime.of(2026, 7, 30, 21, 31, 26), invoice.getClosedAt());
+        assertNull(invoice.getNextReminderAt());
+        verify(invoiceOrderRepository, never()).findByInvoiceIdWithOrders(anyLong());
+        verifyNoInteractions(orderTransactionService, messageSender);
+    }
+
+
+    private CommonInvoice archivedInvoiceWithHistory() {
+        CommonInvoice invoice = invoice(account());
+        invoice.getAccount().setEnabled(false);
+        invoice.setStatus(CommonInvoiceStatus.ARCHIVED);
+        invoice.setAmountKopecks(450_000L);
+        invoice.setPaidKopecks(150_000L);
+        invoice.setPreviousStatus("COLLECTING");
+        invoice.setClosedAt(LocalDateTime.of(2026, 7, 30, 21, 31, 26));
+        invoice.setClosedBy("manager");
+        invoice.setCloseReason("MANUAL_ARCHIVE");
+        return invoice;
+    }
+
+    private void assertArchivedInvoiceHistory(CommonInvoice invoice) {
+        assertEquals(CommonInvoiceStatus.ARCHIVED, invoice.getStatus());
+        assertEquals(450_000L, invoice.getAmountKopecks());
+        assertEquals(150_000L, invoice.getPaidKopecks());
+        assertEquals("COLLECTING", invoice.getPreviousStatus());
+        assertEquals(LocalDateTime.of(2026, 7, 30, 21, 31, 26), invoice.getClosedAt());
+        assertEquals("manager", invoice.getClosedBy());
+        assertEquals("MANUAL_ARCHIVE", invoice.getCloseReason());
+        assertNull(invoice.getNextReminderAt());
+        assertNull(invoice.getLastError());
     }
 
     private CommonBillingAccount account() {

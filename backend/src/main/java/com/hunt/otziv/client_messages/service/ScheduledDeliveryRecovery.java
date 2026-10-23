@@ -29,7 +29,7 @@ public class ScheduledDeliveryRecovery {
         }
         for (Long stateId : states.findRecoverablePreparedIds(cutoff, PageRequest.of(0, 20))) {
             try {
-                String envelope = transactions.callInNewTransaction(() -> {
+                RecoverySnapshot snapshot = transactions.callInNewTransaction(() -> {
                     var state = states.findByIdForUpdate(stateId).orElse(null);
                     if (state == null || state.getDeliveryEnvelope() == null || state.getDeliveryEnvelope().isBlank()
                             || !("PREPARED".equals(state.getDeliveryStatus()) || "UNKNOWN".equals(state.getDeliveryStatus()))) return null;
@@ -40,21 +40,24 @@ public class ScheduledDeliveryRecovery {
                     // Rotate even corrupt/old snapshots, preventing starvation in bounded batches.
                     state.setDeliveryRecoveryCheckedAt(now);
                     if (state.getStatus() == ScheduledMessageStateStatus.ACTIVE) {
-                        state.setLastErrorCode(ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN);
+                        if (!ClientMessageStateSafety.MANUAL_DELIVERY_HANDOFF_PENDING.equals(state.getLastErrorCode()))
+                            state.setLastErrorCode(ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN);
                         state.setNextAttemptAt(null);
                         state.setLockedUntil(null);
                     }
                     states.save(state);
-                    return state.getDeliveryEnvelope();
+                    return new RecoverySnapshot(state.getDeliveryEnvelope(), state.getDeliveryPreparedAt());
                 });
-                if (envelope == null) continue;
-                ClientMessageSendResult receipt = delivery.recordedOutcome(operationId.apply(envelope));
-                if (receipt != null && (receipt.sent() || ClientMessageDelivery.isKnownUnsent(receipt))) {
-                    finalizeReceipt.accept(envelope, receipt);
+                if (snapshot == null) continue;
+                ClientMessageSendResult receipt = delivery.recoverRecordedOutcomeFromChat(
+                        operationId.apply(snapshot.envelope()), snapshot.preparedAt());
+                if (receipt != null && receipt.sent()) {
+                    finalizeReceipt.accept(snapshot.envelope(), receipt);
                 }
             } catch (RuntimeException failure) {
                 log.warn("Scheduled delivery recovery held for review: stateId={}, errorType={}", stateId, failure.getClass().getSimpleName());
             }
         }
     }
+    private record RecoverySnapshot(String envelope, LocalDateTime preparedAt) { }
 }

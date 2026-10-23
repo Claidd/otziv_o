@@ -1,6 +1,7 @@
 package com.hunt.otziv.manager_control.diagnostics;
 
 import com.hunt.otziv.client_chat_control.model.ClientChatMessage;
+import com.hunt.otziv.business_audit.model.BusinessAuditEvent;
 import com.hunt.otziv.client_chat_control.model.ClientChatUnansweredItem;
 import com.hunt.otziv.client_messages.model.ScheduledClientMessageAttempt;
 import com.hunt.otziv.client_messages.model.ScheduledClientMessageState;
@@ -48,7 +49,7 @@ class ManagerProblemEvidenceCollectorMySqlIntegrationTest {
         for (Class<?> type : List.of(ManagerDailyControl.class, ManagerDailyControlConcreteItem.class, CommonInvoice.class,
                 CommonInvoiceOrder.class, ScheduledClientMessageState.class, ScheduledClientMessageAttempt.class,
                 ClientChatMessage.class, ClientChatUnansweredItem.class, CommonBillingAccount.class, Company.class, Order.class,
-                OrderStatus.class)) createFromEntityMapping(type);
+                OrderStatus.class, BusinessAuditEvent.class)) createFromEntityMapping(type);
         jdbc.execute("DROP TABLE IF EXISTS manager_client_message_queue");
         new org.springframework.jdbc.datasource.init.ResourceDatabasePopulator(new org.springframework.core.io.ClassPathResource(
                 "db/migration/V1_10_313__manager_client_message_queue.sql")).execute(jdbc.getDataSource());
@@ -90,6 +91,84 @@ class ManagerProblemEvidenceCollectorMySqlIntegrationTest {
         assertThat(facts).anyMatch(f -> f.reference().equals("order:25734:paid") && List.of("1", "true").contains(f.value()));
         assertThat(facts).anyMatch(f -> f.reference().equals("automation:40:current_cycle") && f.value().equals("false"));
         assertThat(ManagerProblemBusinessDiagnosis.uncertainDelivery(facts)).isEmpty();
+    }
+
+    @Test
+    void invoiceArchiveHistorySeparatesOrderRestorationFromPaymentAndPreservesClosureEvidence() {
+        invoiceFixture();
+        jdbc.update("UPDATE common_invoices SET status='PARTIALLY_PAID',closed_at='2026-07-30 21:31:26',close_reason='MANUAL_ARCHIVE',previous_status='COLLECTING' WHERE invoice_id=189");
+        jdbc.update("UPDATE common_invoice_orders SET archive_source_order_status_title='На проверке',paid=TRUE,paid_at='2026-09-08 17:41:11',payment_method='TBANK',source_payment_link_id=987654 WHERE order_id=25734");
+        jdbc.update("INSERT INTO order_statuses(order_status_id,order_status_title) VALUES(88,'Оплачено')");
+        jdbc.update("UPDATE orders SET order_status=88,order_status_changed_at='2026-09-08 17:41:11' WHERE order_id=25734");
+        audit(1, "2026-07-30 21:31:26", 25734, "На проверке", "Архив");
+        audit(2, "2026-07-30 22:06:16", 25734, "Архив", "На проверке");
+        audit(3, "2026-09-08 17:41:11", 25734, "Выставлен счет", "Оплачено");
+        audit(4, "2026-07-20 12:00:00", 25734, "На проверке", "Архив"); // before this invoice
+        audit(5, "2026-09-08 17:41:11", 99999, "На проверке", "Архив"); // unrelated order
+        jdbc.update("""
+                INSERT INTO business_audit_events(event_id,created_at,actor,source,action,entity_type,entity_id,old_value,new_value,details)
+                VALUES(6,'2026-10-23 12:00:00','private-actor','admin_repair','common_invoice_archive_restored','common_invoice','189','PARTIALLY_PAID','ARCHIVED','private-details'),
+                      (7,'2026-10-23 12:00:00','private-actor','admin_repair','common_invoice_archive_restored','common_invoice','999','PARTIALLY_PAID','ARCHIVED','private-details')
+                """);
+
+        var facts = collector.collect(10L).facts();
+
+        assertThat(facts).anyMatch(f -> f.reference().equals("invoice:189:close_reason") && f.value().equals("MANUAL_ARCHIVE"));
+        assertThat(facts).anyMatch(f -> f.reference().equals("invoice:189:closed_at")
+                && LocalDateTime.parse(f.value().replace(' ', 'T')).equals(LocalDateTime.of(2026, 7, 30, 21, 31, 26)));
+        assertThat(facts).anyMatch(f -> f.reference().equals("invoice:189:previous_status") && f.value().equals("COLLECTING"));
+        assertThat(facts).anyMatch(f -> f.reference().equals("order:25734:current_status_changed_at") && f.value().startsWith("2026-09-08"));
+        assertThat(facts).anyMatch(f -> f.reference().equals("order:25734:archive_source_order_status_title") && f.value().equals("На проверке"));
+        assertThat(facts).anyMatch(f -> f.reference().equals("order:25734:payment_method") && f.value().equals("TBANK"));
+        assertThat(facts).anyMatch(f -> f.reference().equals("order:25734:has_source_payment_link") && List.of("true", "1").contains(f.value()));
+        assertThat(facts).anyMatch(f -> f.reference().equals("orderHistory:2:previous_status") && f.value().equals("Архив"));
+        assertThat(facts).anyMatch(f -> f.reference().equals("orderHistory:2:next_status") && f.value().equals("На проверке"));
+        assertThat(facts).anyMatch(f -> f.reference().equals("orderHistory:3:next_status") && f.value().equals("Оплачено"));
+        assertThat(facts).anyMatch(f -> f.reference().equals("invoiceHistory:6:action") && f.value().equals("common_invoice_archive_restored"));
+        assertThat(facts).noneMatch(f -> f.reference().startsWith("orderHistory:4:") || f.reference().startsWith("orderHistory:5:") || f.reference().startsWith("invoiceHistory:7:"));
+        assertThat(facts.toString()).doesNotContain("private-actor", "private-details", "987654");
+        assertThat(facts).anyMatch(f -> f.field().equals("invoice_history_scope") && f.value().contains("не доказывает восстановление счёта"));
+        assertThat(facts).noneMatch(f -> f.field().equals("invoice_history_truncated"));
+        assertThat(facts).anyMatch(f -> f.field().equals("open_status_with_historical_archive") && f.value().equals("true"));
+        assertThat(facts).anyMatch(f -> f.field().equals("historical_archive_and_current_status")
+                && f.value().contains("2026-07-30T21:31:26") && f.value().contains("PARTIALLY_PAID") && f.value().contains("разные моменты времени"));
+        assertThat(facts).anyMatch(f -> f.reference().equals("order:25734:payment_after_invoice_archive")
+                && f.value().contains("2026-09-08T17:41:11") && f.value().contains("оплата позже архива: true") && f.value().contains("не установлена"));
+
+        jdbc.update("UPDATE common_billing_accounts SET manager_id=99");
+        jdbc.update("UPDATE orders SET order_manager=99");
+        assertThat(collector.collect(10L).facts()).noneMatch(f -> f.subject().endsWith("status_history")
+                || f.subject().equals("invoice_chronology") || f.field().equals("closed_at"));
+    }
+
+    @Test
+    void chronologyDistinguishesEarlierPaymentsAndLegitimateAttentionFromOpenStatusContradiction() {
+        invoiceFixture();
+        jdbc.update("UPDATE common_invoices SET status='NEEDS_ATTENTION',closed_at='2026-07-30 21:31:26',close_reason='MANUAL_ARCHIVE' WHERE invoice_id=189");
+        jdbc.update("UPDATE common_invoice_orders SET paid=TRUE,paid_at='2026-07-29 17:41:11' WHERE order_id=25734");
+        var facts = collector.collect(10L).facts();
+        assertThat(facts).anyMatch(f -> f.field().equals("open_status_with_historical_archive") && f.value().equals("false"));
+        assertThat(facts).anyMatch(f -> f.field().equals("payment_after_invoice_archive") && f.value().contains("оплата позже архива: false"));
+        jdbc.update("UPDATE common_invoice_orders SET paid_at=NULL WHERE order_id=25734");
+        assertThat(collector.collect(10L).facts()).noneMatch(f -> f.field().equals("payment_after_invoice_archive"));
+        jdbc.update("UPDATE common_invoices SET closed_at=NULL WHERE invoice_id=189");
+        assertThat(collector.collect(10L).facts()).noneMatch(f -> f.subject().equals("invoice_chronology"));
+    }
+
+    @Test
+    void archiveHistoryHasOneCombinedBoundAndCannotClaimAbsenceOfOlderEvents() {
+        invoiceFixture();
+        for (int i = 1; i <= 42; i++) audit(i, "2026-08-01 12:00:00", 25734, "На проверке", "Архив");
+        jdbc.update("INSERT INTO business_audit_events(event_id,created_at,source,action,entity_type,entity_id,old_value,new_value) VALUES(43,'2026-10-23 12:00:00','admin_repair','common_invoice_archive_restored','common_invoice','189','PARTIALLY_PAID','ARCHIVED')");
+        var facts = collector.collect(10L).facts();
+        assertThat(facts.stream().filter(f -> f.subject().endsWith("status_history") && f.field().equals("event_id"))).hasSize(40);
+        assertThat(facts).anyMatch(f -> f.reference().equals("invoiceHistory:43:event_id"));
+        assertThat(facts).noneMatch(f -> f.reference().equals("orderHistory:3:event_id"));
+        assertThat(facts).anyMatch(f -> f.field().equals("invoice_history_truncated"));
+        jdbc.update("UPDATE common_invoices SET created_at=NULL WHERE invoice_id=189");
+        var unknownScope = collector.collect(10L).facts();
+        assertThat(unknownScope).anyMatch(f -> f.field().equals("invoice_history_scope_unknown"));
+        assertThat(unknownScope).noneMatch(f -> f.subject().endsWith("status_history"));
     }
 
     @Test
@@ -287,11 +366,18 @@ class ManagerProblemEvidenceCollectorMySqlIntegrationTest {
     private void invoiceFixture() {
         jdbc.update("INSERT INTO manager_daily_control_concrete_items(control_entity_id,control_id,entity_key,entity_type,entity_id,item_status,title) VALUES(10,1,'invoice:189','COMMON_INVOICE_AUTOMATION',189,'DEFERRED','invoice')");
         jdbc.update("INSERT INTO common_billing_accounts(account_id,manager_id) VALUES(1,2)");
-        jdbc.update("INSERT INTO common_invoices(invoice_id,account_id,status,amount_kopecks,paid_kopecks,last_error,updated_at) VALUES(189,1,'COLLECTING',300000,100000,'api_key=neverExportMe https://private-bank.test/payment',NOW())");
+        jdbc.update("INSERT INTO common_invoices(invoice_id,account_id,status,amount_kopecks,paid_kopecks,last_error,created_at,updated_at) VALUES(189,1,'COLLECTING',300000,100000,'api_key=neverExportMe https://private-bank.test/payment','2026-07-27 15:09:47',NOW())");
         jdbc.update("INSERT INTO orders(order_id,order_manager) VALUES(25734,2),(25735,2),(99,2)");
         jdbc.update("INSERT INTO common_invoice_orders(invoice_order_id,invoice_id,order_id,ready,paid,active_membership) VALUES(1,189,25734,TRUE,FALSE,TRUE),(2,189,25735,FALSE,FALSE,TRUE),(3,189,99,FALSE,FALSE,FALSE)");
         jdbc.update("INSERT INTO scheduled_client_message_state(state_id,order_id,scenario,state_status,last_error_code,consecutive_failures) VALUES(40,25735,'REVIEW_CHECK','ACTIVE','delivery_uncertain',3),(41,25734,'PAYMENT_REMINDER','ACTIVE','payment_instruction_failed',2)");
         for (int i = 1; i <= 8; i++) jdbc.update("INSERT INTO scheduled_client_message_attempts(attempt_id,state_id,attempt_status,error_code,error_message,attempted_at) VALUES(?,40,'FAILED','delivery_uncertain','api_key=neverExportMe',NOW())", i);
+    }
+
+    private void audit(long id, String createdAt, long orderId, String before, String after) {
+        jdbc.update("""
+                INSERT INTO business_audit_events(event_id,created_at,actor,source,action,entity_type,entity_id,order_id,old_value,new_value,details)
+                VALUES(?,?,'private-actor','manager_board','order_status_changed','order',?,?,?,?, 'private-details')
+                """, id, createdAt, Long.toString(orderId), orderId, before, after);
     }
 
     private void createFromEntityMapping(Class<?> entity) {

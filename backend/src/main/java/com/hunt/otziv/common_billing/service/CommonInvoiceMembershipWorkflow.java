@@ -775,7 +775,7 @@ public class CommonInvoiceMembershipWorkflow implements com.hunt.otziv.common_bi
         if (invoice == null) {
             return;
         }
-        if (invoice.getStatus() == CommonInvoiceStatus.PAID || invoice.getStatus() == CommonInvoiceStatus.UNPAID || invoice.getStatus() == CommonInvoiceStatus.BAN || invoice.getStatus() == CommonInvoiceStatus.DISABLED) {
+        if (invoice.getStatus() == CommonInvoiceStatus.PAID || invoice.getStatus() == CommonInvoiceStatus.UNPAID || invoice.getStatus() == CommonInvoiceStatus.BAN || invoice.getStatus() == CommonInvoiceStatus.DISABLED || invoice.getStatus() == CommonInvoiceStatus.ARCHIVED) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Закрытый общий счет нельзя менять");
         }
     }

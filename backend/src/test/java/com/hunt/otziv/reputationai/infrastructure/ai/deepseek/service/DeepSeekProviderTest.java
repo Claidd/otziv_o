@@ -79,6 +79,27 @@ class DeepSeekProviderTest {
     }
 
     @Test
+    void explicitLowThinkingEffortOverridesGlobalHighWithoutChangingTokenBudget() throws Exception {
+        AtomicReference<String> requestBody = new AtomicReference<>();
+        HttpServer server = completionServer(requestBody, new AtomicReference<>(),
+                "{\"choices\":[{\"finish_reason\":\"stop\",\"message\":{\"content\":\"{}\"}}]}");
+        server.start();
+        try {
+            AiResponse response = provider(server).generate(new AiRequest(
+                    "manager-problem-diagnosis", "Return JSON", "Evidence", 0.1, true,
+                    8000, Duration.ofSeconds(45), true, "low"));
+            JsonNode sent = objectMapper.readTree(requestBody.get());
+            assertThat(response.errorMessage()).isBlank();
+            assertThat(sent.path("thinking").path("type").asText()).isEqualTo("enabled");
+            assertThat(sent.path("reasoning_effort").asText()).isEqualTo("low");
+            assertThat(sent.path("max_tokens").asInt()).isEqualTo(8000);
+            assertThat(sent.has("temperature")).isFalse();
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
     void returnsApiErrorMessage() throws Exception {
         HttpServer server = completionServer(new AtomicReference<>(), new AtomicReference<>(), """
                 {"error":{"message":"Insufficient Balance"}}
@@ -107,7 +128,7 @@ class DeepSeekProviderTest {
         try {
             AiResponse response = provider(server).generate(new AiRequest(
                     "worker-risk-explanation-quality", "Return JSON", "Explanation", 0.1, true,
-                    2048, Duration.ofSeconds(5), false));
+                    2048, Duration.ofSeconds(5), false, "low"));
             JsonNode sent = objectMapper.readTree(requestBody.get());
             assertThat(response.errorMessage()).isBlank();
             assertThat(sent.path("thinking").path("type").asText()).isEqualTo("disabled");

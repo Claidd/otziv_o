@@ -17,6 +17,11 @@ public interface ClientMessageDelivery {
     /** Receipt-only lookup. Missing evidence never authorizes another provider call. */
     ClientMessageSendResult recordedOutcome(String operationId);
 
+    /** Existing operation only; provider history may establish a receipt, never permission to resend. */
+    default ClientMessageSendResult recoverRecordedOutcomeFromChat(String operationId, java.time.LocalDateTime preparedAt) {
+        return recordedOutcome(operationId);
+    }
+
     /** Fresh current company preference, without changing an already frozen destination. */
     boolean publicationProgressEnabled(Long companyId);
 

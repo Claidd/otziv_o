@@ -4,6 +4,7 @@ import com.hunt.otziv.client_messages.api.ManualPaymentAutomationControl;
 import com.hunt.otziv.contractor_payments.api.PaymentReviewTargetAuthorization;
 import com.hunt.otziv.manager.api.PaymentReviewOrderAccess;
 import com.hunt.otziv.payments.dto.ManagerManualCardPaymentResultResponse;
+import com.hunt.otziv.payments.dto.ManualPaymentReviewView;
 import com.hunt.otziv.payments.dto.SpecialistManualPaymentReviewResponse;
 import com.hunt.otziv.payments.model.PaymentLink;
 import com.hunt.otziv.payments.model.PaymentLinkStatus;
@@ -30,7 +31,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-/** A manager's report is not an accounting receipt until the specialist's review window ends. */
+/** Records manager-reported receipts and their independent 24-hour dispute window. */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -77,6 +78,18 @@ public class SpecialistManualPaymentReviewService {
             String actor,
             Authentication authentication
     ) {
+        return requestRecipient(orderId, linkId, amountKopecks, "SPECIALIST",
+                specialistProfileId, recipientKey, reason, receiptUrl, actor, authentication);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public SpecialistManualPaymentReview requestRecipient(Long orderId, Long linkId, long amountKopecks,
+            String recipientType, Long specialistProfileId, String recipientKey,
+            String reason, String receiptUrl, String actor, Authentication authentication) {
+        if (recipientType == null || !java.util.Set.of("SPECIALIST","MANAGER","OWNER").contains(recipientType)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Неизвестный тип получателя");
+        }
+        targetAccess.requireCanManagePaymentLink(linkId);
         orderPaymentIntegrity.lockSpecialistReviewOrderEvidence(orderId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден"));
         managerAccess.requireOrderAccess(orderId, authentication);
@@ -88,12 +101,11 @@ public class SpecialistManualPaymentReviewService {
         }
         SpecialistManualPaymentReview existing = reviews.lockByPaymentLinkId(linkId).orElse(null);
         if (existing != null) {
-            if (existing.getStatus() == SpecialistManualPaymentReviewStatus.CONFIRMED) {
-                return existing;
-            }
-            if (existing.getStatus() == SpecialistManualPaymentReviewStatus.PENDING_DELIVERY
+            if (existing.getCreditedAt() != null || existing.getStatus() == SpecialistManualPaymentReviewStatus.CONFIRMED
+                    || existing.getStatus() == SpecialistManualPaymentReviewStatus.PENDING_DELIVERY
                     || existing.getStatus() == SpecialistManualPaymentReviewStatus.WAITING) {
-                if (!Objects.equals(existing.getRecipientProfileId(), specialistProfileId)
+                if (!Objects.equals(existing.getRecipientType(), recipientType)
+                        || !Objects.equals(existing.getRecipientProfileId(), specialistProfileId)
                         || !Objects.equals(existing.getRecipientKey(), recipientKey)
                         || existing.getAmountKopecks() != amountKopecks) {
                     throw new ResponseStatusException(HttpStatus.CONFLICT,
@@ -105,14 +117,16 @@ public class SpecialistManualPaymentReviewService {
                     "Платёж специалисту уже оспорен или требует отдельной сверки");
         }
         reviewGuard.requireNoPendingReview(orderId);
-        manualPayments.prepareSpecialistReviewRecipient(orderId, link, specialistProfileId,
+        manualPayments.prepareReviewRecipient(orderId, link, recipientType, specialistProfileId,
                 recipientKey, reason, receiptUrl, actor);
+        targetAccess.requireCanManageUser(link.getManualActualRecipientUserId());
         Long managerId = users.activeUserIdByUsername(authentication.getName())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Менеджер не найден"));
         SpecialistManualPaymentReview review = new SpecialistManualPaymentReview();
         review.setOrderId(orderId);
         review.setPaymentLinkId(linkId);
         review.setAmountKopecks(amountKopecks);
+        review.setRecipientType(recipientType);
         review.setRecipientProfileId(specialistProfileId);
         review.setRecipientUserId(link.getManualActualRecipientUserId());
         review.setRecipientKey(recipientKey);
@@ -127,7 +141,7 @@ public class SpecialistManualPaymentReviewService {
         // No further invoice reminders while the reported receipt is checked.
         // The bank session itself remains subject to provider reconciliation.
         invoiceMessages.closePaymentAutomationForManualSettlement(orderId,
-                "Менеджер сообщил о переводе специалисту; ожидание 24-часовой сверки");
+                "Менеджер сообщил о переводе; выполняется учёт оплаты");
         links.save(link);
         return reviews.saveAndFlush(review);
     }
@@ -179,6 +193,10 @@ public class SpecialistManualPaymentReviewService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платёжный источник не найден"));
         SpecialistManualPaymentReview review = reviews.lockById(reviewId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Запрос не найден"));
+        if (review.getCreditedAt() != null) {
+            // Receipt existence does not prove recipient verification or end the dispute window.
+            return SpecialistManualPaymentReviewResponse.from(review);
+        }
         if (review.getStatus() == SpecialistManualPaymentReviewStatus.CONFIRMED
                 || review.getStatus() == SpecialistManualPaymentReviewStatus.SUPERSEDED) {
             return SpecialistManualPaymentReviewResponse.from(review);
@@ -277,7 +295,7 @@ public class SpecialistManualPaymentReviewService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Подтвердите проверку выписки специалиста, отсутствие перевода и укажите заметку");
         }
-        SpecialistManualPaymentReview snapshot = reviews.findById(reviewId)
+        SpecialistManualPaymentReviewRepository.ReviewBinding snapshot = reviews.findBindingById(reviewId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Запрос не найден"));
         targetAccess.requireCanManagePaymentLink(snapshot.getPaymentLinkId());
         targetAccess.requireCanManageUser(snapshot.getRecipientUserId());
@@ -287,6 +305,12 @@ public class SpecialistManualPaymentReviewService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платёжный источник не найден"));
         SpecialistManualPaymentReview review = reviews.lockById(reviewId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Запрос не найден"));
+        if (review.getCreditedAt() != null && OPEN.contains(review.getStatus())
+                && review.getStatus() != SpecialistManualPaymentReviewStatus.ADMIN_SETTLING
+                && review.getStatus() != SpecialistManualPaymentReviewStatus.SETTLING) {
+            recordDispute(review, authentication.getName(), cleanNote);
+            return SpecialistManualPaymentReviewResponse.from(review);
+        }
         if (!OPEN.contains(review.getStatus())
                 || review.getStatus() == SpecialistManualPaymentReviewStatus.SETTLING
                 || review.getStatus() == SpecialistManualPaymentReviewStatus.ADMIN_SETTLING
@@ -331,7 +355,7 @@ public class SpecialistManualPaymentReviewService {
         return SpecialistManualPaymentReviewResponse.from(review);
     }
 
-    /** The manager's committed report starts the clock; delivery is an additional settlement gate. */
+    /** Delivery is observable but never delays an already authorised receipt. */
     public void deliver(Long reviewId) {
         if (supersedeOnConfirmedBankPayment(reviewId)) {
             return;
@@ -343,8 +367,8 @@ public class SpecialistManualPaymentReviewService {
         String message = "💳 Менеджер сообщил о переводе на ваши реквизиты.\n"
                 + "Заказ №" + claim.orderId() + ", сумма "
                 + BigDecimal.valueOf(claim.amountKopecks(), 2).stripTrailingZeros().toPlainString()
-                + " ₽. Проверьте поступление. Если деньги не пришли, нажмите «Оспорить» в течение 24 часов"
-                + " от отметки менеджера. Если уведомление задержится, оплату проверят вручную.";
+                + " ₽. Оплата учтена по отметке менеджера. Если деньги не пришли, сообщите менеджеру"
+                + " или нажмите «Оспорить» в течение 24 часов от отметки. Без спора подтверждение станет окончательным.";
         boolean accepted;
         try {
             accepted = telegram.sendPaymentReviewNoticeOnce(claim.chatId(), message,
@@ -359,7 +383,8 @@ public class SpecialistManualPaymentReviewService {
 
     private DeliveryClaim claimDelivery(Long reviewId) {
         SpecialistManualPaymentReview review = reviews.lockById(reviewId).orElse(null);
-        if (review == null || review.getStatus() != SpecialistManualPaymentReviewStatus.PENDING_DELIVERY) {
+        if (review == null || review.getCreditedAt() == null
+                || review.getStatus() != SpecialistManualPaymentReviewStatus.PENDING_DELIVERY) {
             return null;
         }
         // MySQL stores last_attempt_at as DATETIME(6). Keep the claim token at
@@ -371,7 +396,7 @@ public class SpecialistManualPaymentReviewService {
             reviews.save(review);
             issues.notifyOrderIssueAfterCommit(review.getOrderId(), DELIVERY_ISSUE, review.getId(),
                     "Не доставлено сообщение специалисту по заказу №" + review.getOrderId(),
-                    review.getLastError() + ". Автоматическое зачисление заблокировано.");
+                    review.getLastError() + ". Свяжитесь с получателем и при возражении зарегистрируйте спор; учтённая оплата не отменяется.");
             return null;
         }
         if (review.getRequestedAt() == null
@@ -391,9 +416,10 @@ public class SpecialistManualPaymentReviewService {
                 return null;
             }
         }
-        Long chatId = users.activePersonalTelegramChatId(review.getRecipientUserId()).orElse(null);
+        Long chatId = review.getRecipientUserId() == null ? null
+                : users.activePersonalTelegramChatId(review.getRecipientUserId()).orElse(null);
         if (chatId == null) {
-            notificationFailure(review, "У специалиста нет активного личного Telegram-чата");
+            notificationFailure(review, "У получателя нет активного личного Telegram-чата");
             return null;
         }
         review.setAttemptCount(review.getAttemptCount() + 1);
@@ -419,7 +445,7 @@ public class SpecialistManualPaymentReviewService {
             reviews.save(review);
             issues.notifyOrderIssueAfterCommit(review.getOrderId(), DELIVERY_ISSUE, review.getId(),
                     "Не доставлено сообщение специалисту по заказу №" + review.getOrderId(),
-                    review.getLastError() + ". Отсчёт идёт с отметки менеджера; зачисления пока не будет.");
+                    review.getLastError() + ". Свяжитесь с получателем; уже учтённая оплата сохраняется.");
             return null;
         }
         LocalDateTime deliveredAt = LocalDateTime.now();
@@ -451,7 +477,7 @@ public class SpecialistManualPaymentReviewService {
         reviews.save(review);
         issues.notifyOrderIssueAfterCommit(review.getOrderId(), DELIVERY_ISSUE, review.getId(),
                 "Не доставлено сообщение специалисту по заказу №" + review.getOrderId(),
-                reason + ". Отсчёт 24 часов идёт с отметки менеджера, но без подтверждённой отправки оплата не будет зачтена автоматически.");
+                reason + ". Свяжитесь с получателем. Отсчёт 24 часов идёт с отметки менеджера; уже учтённая оплата сохраняется.");
     }
 
     @Transactional
@@ -467,30 +493,90 @@ public class SpecialistManualPaymentReviewService {
         if (review.getStatus() == SpecialistManualPaymentReviewStatus.DISPUTED) {
             return "Поступление уже оспорено; владельцы и администраторы уведомлены";
         }
-        LocalDateTime now = LocalDateTime.now();
-        if (review.getStatus() != SpecialistManualPaymentReviewStatus.WAITING
-                || review.getDeadlineAt() == null || !now.isBefore(review.getDeadlineAt())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Окно спора закрыто или платёж уже перешёл к сверке");
+        if (!ManualPaymentReviewView.from(review).disputeAllowed()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Окно спора закрыто или операция ещё выполняется");
         }
-        review.setStatus(SpecialistManualPaymentReviewStatus.DISPUTED);
-        review.setDisputedAt(now);
-        reviews.save(review);
-        issues.notifyOrderIssueAfterCommit(review.getOrderId(), DISPUTE_ISSUE, review.getId(),
-                "Специалист оспорил оплату заказа №" + review.getOrderId(),
-                "Специалист сообщил, что перевод "
-                        + BigDecimal.valueOf(review.getAmountKopecks(), 2).toPlainString()
-                        + " ₽ не поступил. Автоматическое зачисление заблокировано; проверьте выписку и источник №"
-                        + review.getPaymentLinkId() + ".");
-        return "Спор сохранён. Оплата автоматически не будет зачтена";
+        recordDispute(review, "recipient", "Получатель оспорил поступление через личное уведомление");
+        return "Спор сохранён. Окончательное подтверждение остановлено; менеджер проведёт сверку";
     }
 
-    public ManagerManualCardPaymentResultResponse result(SpecialistManualPaymentReview review) {
-        if (review.getStatus() == SpecialistManualPaymentReviewStatus.CONFIRMED) {
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public ManagerManualCardPaymentResultResponse replayCredited(Long orderId, String type,
+            Long profileId, String key, String reason, String receiptUrl, Authentication authentication) {
+        managerAccess.requireOrderAccess(orderId, authentication);
+        SpecialistManualPaymentReview review = reviews.findFirstByOrderIdOrderByIdDesc(orderId).orElse(null);
+        if (review == null || review.getCreditedAt() == null) return null;
+        targetAccess.requireCanManagePaymentLink(review.getPaymentLinkId());
+        targetAccess.requireCanManageUser(review.getRecipientUserId());
+        if (!Objects.equals(review.getOrderId(),orderId)
+                || !Objects.equals(review.getReason(), reason)
+                || !Objects.equals(review.getReceiptUrl() == null ? "" : review.getReceiptUrl(), receiptUrl == null ? "" : receiptUrl)
+                || (type != null && !Objects.equals(type, review.getRecipientType()))
+                || (profileId != null && !Objects.equals(profileId,review.getRecipientProfileId()))
+                || key == null || !Objects.equals(key.trim(), review.getRecipientKey())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Оплата уже учтена с другим исходным выбором; обновите заказ и проведите сверку");
+        }
+        manualPayments.requireCreditedReviewReplay(review, authentication);
+        return ManagerManualCardPaymentResultResponse.credited(orderId,review.getPaymentLinkId(),ManualPaymentReviewView.from(review));
+    }
+
+    @Transactional(readOnly = true)
+    public ManualPaymentReviewView readForOrder(Long orderId, Authentication authentication) {
+        managerAccess.requireOrderAccess(orderId, authentication);
+        return reviews.findFirstByOrderIdOrderByIdDesc(orderId).map(ManualPaymentReviewView::from).orElse(null);
+    }
+
+    @Transactional
+    public ManualPaymentReviewView disputeForOrder(Long orderId, Long expectedReviewId,
+            boolean recipientReportedMissing, String note, Authentication authentication) {
+        String clean = note == null ? "" : note.trim();
+        if (!recipientReportedMissing || expectedReviewId == null || expectedReviewId <= 0
+                || clean.length() < 10 || clean.length() > 500) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Подтвердите обращение специалиста или получателя и укажите причину спора");
+        }
+        orderPaymentIntegrity.lockSpecialistReviewOrderEvidence(orderId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден"));
+        managerAccess.requireOrderAccess(orderId, authentication);
+        Long currentId = reviews.findLatestIdByOrderId(orderId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Отметка оплаты не найдена"));
+        if (!Objects.equals(currentId, expectedReviewId)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Отметка оплаты изменилась; обновите заказ");
+        }
+        SpecialistManualPaymentReview review = reviews.lockById(expectedReviewId).orElseThrow();
+        if (!Objects.equals(review.getOrderId(),orderId)) throw new ResponseStatusException(HttpStatus.CONFLICT,"Привязка оплаты изменилась");
+        if (review.getStatus() == SpecialistManualPaymentReviewStatus.DISPUTED) return ManualPaymentReviewView.from(review);
+        if (!ManualPaymentReviewView.from(review).disputeAllowed()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Окно спора закрыто или операция ещё выполняется");
+        }
+        recordDispute(review, authentication.getName(), clean);
+        return ManualPaymentReviewView.from(review);
+    }
+
+    private void recordDispute(SpecialistManualPaymentReview review, String actor, String note) {
+        review.setStatus(SpecialistManualPaymentReviewStatus.DISPUTED);
+        review.setDisputedAt(LocalDateTime.now());
+        review.setResolvedBy(actor);
+        review.setResolutionKind("RECIPIENT_DISPUTE");
+        review.setResolutionNote(note);
+        reviews.saveAndFlush(review);
+        issues.notifyOrderIssueAfterCommit(review.getOrderId(), DISPUTE_ISSUE, review.getId(),
+                "Специалист или получатель оспорил оплату заказа №" + review.getOrderId(),
+                "Окончательное подтверждение остановлено. Сверьте фактическое поступление по исходному платежу №"
+                        + review.getPaymentLinkId() + ". Учтённые деньги автоматически не отменяются; возврат не подменяет исправление ошибочной отметки.");
+    }
+
+    public ManagerManualCardPaymentResultResponse result(SpecialistManualPaymentReview snapshot) {
+        SpecialistManualPaymentReview review = reviews.findById(snapshot.getId()).orElse(snapshot);
+        if (review.getCreditedAt() != null) {
+            return ManagerManualCardPaymentResultResponse.credited(review.getOrderId(), review.getPaymentLinkId(),
+                    ManualPaymentReviewView.from(review));
+        }
+        if (review.getStatus() == SpecialistManualPaymentReviewStatus.CONFIRMED
+                || (review.getStatus() == SpecialistManualPaymentReviewStatus.SUPERSEDED
+                    && "BANK_PROVIDER_CONFIRMED".equals(review.getResolutionKind()))) {
             return ManagerManualCardPaymentResultResponse.completed(review.getOrderId(), review.getPaymentLinkId());
         }
-        return ManagerManualCardPaymentResultResponse.specialistReviewPending(
-                review.getOrderId(), review.getPaymentLinkId());
+        return ManagerManualCardPaymentResultResponse.specialistReviewPending(review.getOrderId(), review.getPaymentLinkId());
     }
 
     private record DeliveryClaim(Long reviewId, Long orderId, long amountKopecks,

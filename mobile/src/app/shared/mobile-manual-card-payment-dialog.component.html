@@ -75,9 +75,9 @@
         </p>
       }
 
-      @if (ownerSelected()) {
+      @if (!context.recipientSelectionFrozen && selectedRecipient()?.key !== 'LEGACY_PRE_CUTOVER_MANUAL_CARD') {
         <p class="notice recipient-change" role="status">
-          При выборе владельца нажатие отправит владельцу запрос в Telegram. До его подтверждения текущий платёжный источник не закрывается и заказ не считается оплаченным.
+            После успешной отметки заказ сразу считается оплаченным. Специалист или получатель могут в течение 24 часов сообщить менеджеру, что перевод не поступил. Если возражений нет, система подтвердит оплату без возражений. Доставка уведомления отображается отдельно.
         </p>
       }
 
@@ -139,7 +139,7 @@
         @if (saving()) {
           <ion-spinner name="crescent" />
         } @else {
-          {{ context.recipientSelectionFrozen ? 'Повторить подтверждение' : ownerSelected() ? 'Отправить владельцу' : 'Подтвердить оплату' }}
+          {{ context.recipientSelectionFrozen ? 'Повторить подтверждение' : 'Отметить оплату' }}
         }
       </ion-button>
     </div>

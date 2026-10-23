@@ -27,6 +27,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @ExtendWith(MockitoExtension.class)
 class PaymentIssueReminderServiceTest {
@@ -147,6 +148,18 @@ class PaymentIssueReminderServiceTest {
 
         verify(personalReminderService).deleteSystemRemindersBySource(
                 "PAYMENT_ROUTE_CHANGE_DELIVERY", 7_262L);
+        verifyNoMoreInteractions(personalReminderService);
+    }
+
+    @Test
+    void resolvedReserveWarningCompletesExistingCardsWithoutDeletingHistory() {
+        when(personalReminderService.completeOpenSystemRemindersBySourceAndOrder(
+                "CONTRACTOR_RESERVE_OVERRUN", 16L, 26649L)).thenReturn(2);
+
+        assertEquals(2, service.completeOrderIssue(26649L, "CONTRACTOR_RESERVE_OVERRUN", 16L));
+
+        verify(personalReminderService).completeOpenSystemRemindersBySourceAndOrder(
+                "CONTRACTOR_RESERVE_OVERRUN", 16L, 26649L);
         verifyNoMoreInteractions(personalReminderService);
     }
 

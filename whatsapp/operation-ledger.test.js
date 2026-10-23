@@ -35,7 +35,7 @@ test("concurrent retries and another ledger instance cannot issue a second send"
   const other = new OperationLedger(ledger.directory);
   assert.equal((await other.execute("operation-1", envelope, assert.fail)).state, "UNKNOWN");
   provider.resolve("message-1"); await first;
-  assert.deepEqual(await other.execute("operation-1", envelope, assert.fail), { state: "SUCCEEDED", messageId: "message-1", envelopeHash: envelopeHash(envelope), replayed: true });
+  assert.deepEqual(await other.execute("operation-1", envelope, assert.fail), { receiptBindingVersion: 1, state: "SUCCEEDED", messageId: "message-1", envelopeHash: envelopeHash(envelope), replayed: true });
   assert.equal(calls, 1);
 });
 

@@ -182,6 +182,8 @@ public class WhatsAppServiceImpl implements WhatsAppService {
         try {
             String body = restTemplate.getForObject(baseUrl(clientId) + "/operations/" + operationId, String.class);
             JsonNode node = MAPPER.readTree(body == null ? "{}" : body);
+            if (node.path("receiptBindingVersion").asInt(0) != 1)
+                throw new IllegalStateException("Receipt binding verification unavailable; keep operation unknown");
             String state = node.path("state").asText();
             if (!List.of("RUNNING", "UNKNOWN", "SUCCEEDED").contains(state)
                     || !operationId.equals(node.path("operationId").asText())) {
@@ -216,11 +218,16 @@ public class WhatsAppServiceImpl implements WhatsAppService {
             throw new IllegalArgumentException("Invalid operation evidence");
         }
         try {
+            // During rolling deployment an old gateway must never receive a history-binding mutation.
+            var current = getOperationStatus(clientId, operationId);
+            if ("NOT_FOUND".equals(current.state()))
+                throw new IllegalStateException("Saved operation is unavailable for receipt binding");
             String url = baseUrl(clientId) + "/operations/" + operationId + "/reconcile";
             HttpEntity<String> request = jsonEntity(Map.of("messageId", messageId));
             ResponseEntity<String> response = restTemplate.postForEntity(url, request, String.class);
             JsonNode receipt = MAPPER.readTree(response.getBody() == null ? "{}" : response.getBody());
-            if (!operationId.equals(receipt.path("operationId").asText())
+            if (receipt.path("receiptBindingVersion").asInt(0) != 1
+                    || !operationId.equals(receipt.path("operationId").asText())
                     || !"SUCCEEDED".equals(receipt.path("state").asText())
                     || !messageId.equals(receipt.path("messageId").asText())
                     || !receipt.path("envelopeHash").isTextual()

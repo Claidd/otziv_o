@@ -1,4 +1,5 @@
 import { DOCUMENT, DatePipe, DecimalPipe } from '@angular/common';
+import { manualPaymentResultNotice } from '@otziv/client-common/billing-payments';
 import { Component, ElementRef, HostListener, OnDestroy, ViewChild, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -1085,24 +1086,15 @@ export class TbankPaymentsComponent implements OnDestroy {
 
   completeJournalManualCardPayment(result: ManagerManualCardPaymentCompleted): void {
     this.journalManualCardPaymentOrder.set(null);
-    if (result.result.status === 'SPECIALIST_REVIEW_PENDING') {
-      this.toastService.warning('Ожидается проверка специалиста', result.result.message);
-      this.specialistReviews?.load();
+    const notice = manualPaymentResultNotice(result.result);
+    const detail = `Получатель: ${manualPaymentRecipientLabel(result.recipient)}. ${notice.detail}`;
+    if (notice.tone === 'success') this.toastService.success(notice.title, detail);
+    else this.toastService.warning(notice.title, detail);
+    this.specialistReviews?.load();
+    if (result.result.status !== 'COMPLETED') {
       this.loadPaymentLinks();
       return;
     }
-    if (result.result.status === 'OWNER_APPROVAL_PENDING') {
-      this.toastService.warning(
-        'Ожидается подтверждение владельца',
-        result.result.message
-      );
-      this.loadPaymentLinks();
-      return;
-    }
-    this.toastService.success(
-      'Ручная оплата подтверждена',
-      `Получатель: ${manualPaymentRecipientLabel(result.recipient)}`
-    );
     this.loadPaymentLinks();
     this.loadProfilesOnly(true);
     this.loadManualTasks();

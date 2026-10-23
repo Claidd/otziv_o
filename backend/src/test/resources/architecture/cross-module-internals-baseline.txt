@@ -483,7 +483,6 @@ com.hunt.otziv.client_messages.service.ScheduledClientMessageService -> com.hunt
 com.hunt.otziv.client_messages.service.ScheduledClientMessageService -> com.hunt.otziv.p_products.status.service.OrderStatusNotificationService
 com.hunt.otziv.client_messages.service.ScheduledClientMessageService -> com.hunt.otziv.p_products.status.service.OrderStatusTransitionService
 com.hunt.otziv.client_messages.service.ScheduledClientMessageService -> com.hunt.otziv.payments.dto.ManagerPaymentLinkResponse
-com.hunt.otziv.client_messages.service.ScheduledClientMessageService -> com.hunt.otziv.payments.model.PaymentLinkStatus
 com.hunt.otziv.client_messages.service.ScheduledClientMessageService -> com.hunt.otziv.payments.service.BankPaymentInstructionSource
 com.hunt.otziv.client_messages.service.ScheduledClientMessageService -> com.hunt.otziv.payments.service.OrderPaymentIntegrityService
 com.hunt.otziv.client_messages.service.ScheduledClientMessageService -> com.hunt.otziv.payments.service.PaymentIssueReminderService

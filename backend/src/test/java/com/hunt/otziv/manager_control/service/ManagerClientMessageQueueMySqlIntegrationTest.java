@@ -116,4 +116,24 @@ class ManagerClientMessageQueueMySqlIntegrationTest {
         tx.executeWithoutResult(status -> queue.finish(claim, "SENT", null, 0));
         assertThat(queue.deliveryQueueHealth()).isEmpty();
     }
+
+    @Test void explicitReceiptClaimNeverDispatchesOrSpendsAttemptsAndIsExclusive() {
+        tx.executeWithoutResult(status -> queue.enqueue(draft("original")));
+        assertThat(queue.claimReceipt("manager-command:test")).isEmpty(); // queued is not a receipt check
+        jdbc.update("UPDATE manager_client_message_queue SET state='RETRYABLE'");
+        assertThat(queue.claimReceipt("manager-command:test")).isEmpty();
+        jdbc.update("UPDATE manager_client_message_queue SET state='UNKNOWN',attempts=1,next_attempt_at=TIMESTAMPADD(DAY,1,CURRENT_TIMESTAMP(6))");
+        var first = queue.claimReceipt("manager-command:test").orElseThrow();
+        assertThat(first.mayDispatch()).isFalse();
+        assertThat(queue.claimReceipt("manager-command:test")).isEmpty();
+        assertThat(queue.status(10L, first.operationId()).attempts()).isEqualTo(1);
+        jdbc.update("UPDATE manager_client_message_queue SET lease_until=TIMESTAMPADD(SECOND,-1,CURRENT_TIMESTAMP(6))");
+        var next = queue.claimReceipt("manager-command:test").orElseThrow();
+        tx.executeWithoutResult(status -> {
+            assertThat(queue.owns(first)).isFalse();
+            assertThat(queue.owns(next)).isTrue();
+            queue.finish(first, "SENT", null, 0);
+        });
+        assertThat(queue.status(10L, next.operationId()).status()).isEqualTo("UNKNOWN");
+    }
 }

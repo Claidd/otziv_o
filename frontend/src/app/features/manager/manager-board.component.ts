@@ -1,4 +1,4 @@
-import { commonInvoiceDeliveryWarning, deliveryOperationMessage } from '@otziv/client-common/billing-payments';
+import { commonInvoiceDeliveryWarning, deliveryOperationMessage, manualPaymentResultNotice } from '@otziv/client-common/billing-payments';
 import { Component, HostListener, OnDestroy, computed, effect, inject, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -1076,23 +1076,10 @@ export class ManagerBoardComponent implements OnDestroy {
   completeManualCardPayment(result: ManagerManualCardPaymentCompleted): void {
     const order = this.manualCardPaymentOrder();
     this.manualCardPaymentOrder.set(null);
-    if (result.result.status === 'SPECIALIST_REVIEW_PENDING') {
-      this.toastService.warning('Ожидается проверка специалиста', result.result.message);
-      this.loadBoard();
-      return;
-    }
-    if (result.result.status === 'OWNER_APPROVAL_PENDING') {
-      this.toastService.warning(
-        'Ожидается подтверждение владельца',
-        result.result.message
-      );
-      this.loadBoard();
-      return;
-    }
-    this.toastService.success(
-      'Оплата отмечена',
-      `${order?.companyTitle || `Заказ #${result.context.orderId}`}: получатель — ${this.manualCardPaymentRecipientLabel(result)}`
-    );
+    const notice = manualPaymentResultNotice(result.result);
+    const detail = `${order?.companyTitle || `Заказ #${result.context.orderId}`}: получатель — ${this.manualCardPaymentRecipientLabel(result)}. ${notice.detail}`;
+    if (notice.tone === 'success') this.toastService.success(notice.title, detail);
+    else this.toastService.warning(notice.title, detail);
     this.loadBoard();
   }
 

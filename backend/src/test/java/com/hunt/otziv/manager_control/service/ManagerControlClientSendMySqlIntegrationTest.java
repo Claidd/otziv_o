@@ -828,18 +828,39 @@ class ManagerControlClientSendMySqlIntegrationTest {
         assertThat(state()).isEqualTo("ACTION_TAKEN");
     }
 
-    @Test void knownUnsentReceiptAfterUnknownRetriesTheOriginalOperation() {
+    @Test void knownUnsentReceiptAfterUnknownPreservesFrozenOperationWithoutAnotherSend() {
         result.set(ClientMessageSendResult.failed("operation_unknown", "fixture"));
         enqueue(); worker.drain();
         String original = operation.get();
-        when(sender.recordedOutcome(original)).thenReturn(ClientMessageSendResult.failed("gateway_not_ready", "not admitted"));
-        due(); worker.drain();
-        assertThat(sends.get()).isEqualTo(1);
+        var originalCommand = queue.snapshot(original);
+        var originalCard = jdbc.queryForMap("SELECT * FROM mc_send_card WHERE id=1");
+        var originalSource = jdbc.queryForMap("SELECT * FROM mc_send_source WHERE id=77");
+        var originalContext = context();
+        var originalEvents = jdbc.queryForObject("SELECT COUNT(*) FROM mc_send_events", Integer.class);
+        var lateFailure = ClientMessageSendResult.failed("gateway_not_ready", "not admitted");
+        when(sender.recordedOutcome(original)).thenReturn(lateFailure);
+        when(sender.recoverRecordedOutcomeFromChat(eq(original), any())).thenReturn(lateFailure);
+        // A hypothetical successful retry is never dispatched from UNKNOWN.
         result.set(ClientMessageSendResult.sent("WhatsApp", "fixture-provider-message"));
-        due(); worker.drain();
+        for (int check = 0; check < 2; check++) {
+            due(); worker.drain();
+            assertThat(deliveryState().status()).isEqualTo("UNKNOWN");
+            assertThat(sends.get()).isEqualTo(1);
+        }
+        assertThatThrownBy(() -> workflow.sendClientMessage(1L, PRINCIPAL, AUTH))
+                .isInstanceOf(ResponseStatusException.class);
         assertThat(operation.get()).isEqualTo(original);
-        assertThat(sends.get()).isEqualTo(2);
-        assertThat(deliveryState().status()).isEqualTo("SENT");
+        assertThat(queue.snapshot(original)).isEqualTo(originalCommand);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM manager_client_message_queue", Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForMap("SELECT * FROM mc_send_card WHERE id=1")).isEqualTo(originalCard);
+        assertThat(jdbc.queryForMap("SELECT * FROM mc_send_source WHERE id=77")).isEqualTo(originalSource);
+        assertThat(context()).isEqualTo(originalContext);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM mc_send_events", Integer.class)).isEqualTo(originalEvents);
+        assertThat(comment()).isEqualTo("client_message_delivery_unknown:" + original);
+        assertThat(sourceReleased()).isFalse();
+        verify(payments, never()).releaseKnownUnsent(any(), any());
+        verify(sender, times(2)).recordedOutcome(original);
+        verify(sender, times(2)).recoverRecordedOutcomeFromChat(eq(original), any());
     }
 
     @Test

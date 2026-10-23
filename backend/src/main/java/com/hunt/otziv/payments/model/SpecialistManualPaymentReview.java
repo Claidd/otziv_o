@@ -33,10 +33,10 @@ public class SpecialistManualPaymentReview {
     @Column(name = "amount_kopecks", nullable = false)
     private long amountKopecks;
 
-    @Column(name = "recipient_profile_id", nullable = false)
+    @Column(name = "recipient_profile_id")
     private Long recipientProfileId;
 
-    @Column(name = "recipient_user_id", nullable = false)
+    @Column(name = "recipient_user_id")
     private Long recipientUserId;
 
     @Column(name = "recipient_key", nullable = false, length = 160)
@@ -70,6 +70,15 @@ public class SpecialistManualPaymentReview {
 
     @Column(name = "disputed_at")
     private LocalDateTime disputedAt;
+
+    @Column(name = "recipient_type", nullable = false, length = 32)
+    private String recipientType = "SPECIALIST";
+
+    @Column(name = "credit_claimed_at")
+    private LocalDateTime creditClaimedAt;
+
+    @Column(name = "credited_at")
+    private LocalDateTime creditedAt;
 
     @Column(name = "settled_at")
     private LocalDateTime settledAt;

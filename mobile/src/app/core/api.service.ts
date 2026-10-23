@@ -1137,6 +1137,7 @@ export interface ManagerManualCardPaymentResult {
   orderId: number;
   paymentLinkId: number;
   message: string;
+  manualPaymentReview?: import('@otziv/client-common/billing-payments').ManualPaymentReviewView | null;
 }
 
 export interface CommonManualPaymentAttributionModeResponse {

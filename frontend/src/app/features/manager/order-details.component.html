@@ -19,6 +19,7 @@
     }
 
     @if (details(); as details) {
+      <app-manual-payment-review [orderId]="details.orderId" [refreshKey]="details" />
       <div class="review-carousel">
         @if (sendToCheckBlockReason(); as blockReason) {
           <p

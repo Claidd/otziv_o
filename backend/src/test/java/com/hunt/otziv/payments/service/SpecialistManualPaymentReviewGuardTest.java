@@ -83,6 +83,33 @@ class SpecialistManualPaymentReviewGuardTest {
                 27L, "profile:27", true, null, null));
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(ContractorRecipientType.class)
+    void everyRecipientRequiresExactFrozenTypeKeyAndProfile(ContractorRecipientType type) {
+        var guard=new SpecialistManualPaymentReviewGuard(reviews);
+        var r=review(SpecialistManualPaymentReviewStatus.SETTLING);r.setRecipientType(type.name());
+        var link=link();link.setManualActualRecipientType(type);
+        if(type==ContractorRecipientType.OWNER){r.setRecipientProfileId(null);r.setRecipientUserId(null);r.setRecipientKey("OWNER");link.setManualActualRecipientProfileId(null);link.setManualActualRecipientUserId(null);}
+        when(reviews.lockUnresolvedByOrderId(eq(7L),anyCollection())).thenReturn(List.of(r));
+        assertDoesNotThrow(()->guard.requireRecipientReviewAllowed(7L,link,140000L,type.name(),r.getRecipientProfileId(),r.getRecipientKey(),type.name(),101L,r.getStatus()));
+        assertThrows(ResponseStatusException.class,()->guard.requireRecipientReviewAllowed(7L,link,140000L,type.name(),r.getRecipientProfileId(),"different",type.name(),101L,r.getStatus()));
+        assertThrows(ResponseStatusException.class,()->guard.requireRecipientReviewAllowed(7L,link,140001L,type.name(),r.getRecipientProfileId(),r.getRecipientKey(),type.name(),101L,r.getStatus()));
+    }
+
+    @Test void creditMarkerCannotAttachToAnotherSourceOrDisputedClaim() {
+        var guard=new SpecialistManualPaymentReviewGuard(reviews);var r=review(SpecialistManualPaymentReviewStatus.SETTLING);
+        when(reviews.lockById(101L)).thenReturn(java.util.Optional.of(r));
+        var now=java.time.LocalDateTime.now();
+        assertThrows(ResponseStatusException.class,()->guard.recordCredit(101L,72L,now));
+        r.setStatus(SpecialistManualPaymentReviewStatus.DISPUTED);
+        assertThrows(ResponseStatusException.class,()->guard.recordCredit(101L,71L,now));
+        org.junit.jupiter.api.Assertions.assertNull(r.getCreditedAt());
+        r.setStatus(SpecialistManualPaymentReviewStatus.SETTLING);guard.recordCredit(101L,71L,now);
+        guard.recordCredit(101L,71L,now.plusHours(1));
+        org.junit.jupiter.api.Assertions.assertEquals(now,r.getCreditedAt());
+        org.mockito.Mockito.verify(reviews).saveAndFlush(r);
+    }
+
     private PaymentLink link() {
         Order order = new Order(); order.setId(7L);
         PaymentLink link = new PaymentLink(); link.setId(71L); link.setOrder(order);

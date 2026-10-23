@@ -83,6 +83,45 @@ class ScheduledDeliveryProtocolTest {
                 message, copy, 14, null, null, null, null, NOW);
     }
 
+    @Test void badReviewRecoveryRequiresItsFrozenReceiptAndNeverQueuesANewInvoice() {
+        prepareBadReviewRecovery();
+        when(sender.recoverRecordedOutcomeFromChat(anyString(), eq(NOW)))
+                .thenReturn(ClientMessageSendResult.sent("WhatsApp", "unique-proof"));
+        var result = service.recoverUncertainBadReviewInvoiceDelivery(71L, false);
+        assertThat(result).isPresent();
+        assertThat(result.orElseThrow().retryScheduled()).isFalse();
+        assertThat(state.getDeliveryStatus()).isEqualTo("SENT");
+        assertThat(state.getStatus()).isEqualTo(ScheduledMessageStateStatus.DONE);
+        assertThat(state.getSentCount()).isEqualTo(1);
+        assertThat(state.getNextAttemptAt()).isNull();
+        assertThat(service.recoverUncertainBadReviewInvoiceDelivery(71L, true)).isEmpty();
+        verify(sender).recoverRecordedOutcomeFromChat(
+                com.hunt.otziv.whatsapp.service.WhatsAppOperationKey.of("bad-review-invoice-v1", 71L, "frozen-token"), NOW);
+        verify(sender, never()).deliverWithOperationId(any(), any(), any(), any(), any(), any());
+        verifyNoInteractions(dependency(service, "paymentLinkService", com.hunt.otziv.payments.service.PaymentLinkService.class));
+    }
+
+    @Test void badReviewTextBooleanAndMissingReceiptLeaveUnknownWithoutFinancialReconciliation() {
+        prepareBadReviewRecovery();
+        when(sender.recoverRecordedOutcomeFromChat(anyString(), eq(NOW)))
+                .thenReturn(ClientMessageSendResult.failed("operation_unknown", "unknown"));
+        assertThat(service.recoverUncertainBadReviewInvoiceDelivery(71L, true)).isEmpty();
+        assertThat(state.getDeliveryStatus()).isEqualTo("UNKNOWN");
+        assertThat(state.getSentCount()).isZero();
+        assertThat(state.getNextAttemptAt()).isNull();
+        verify(states, never()).save(any());
+        verifyNoInteractions(dependency(service, "paymentLinkService", com.hunt.otziv.payments.service.PaymentLinkService.class));
+    }
+
+    private void prepareBadReviewRecovery() {
+        state.setScenario(ClientMessageScenario.BAD_REVIEW_INVOICE);
+        state.setOrderId(5L); state.setTargetKey("bad-review-invoice:order:5");
+        state.setDeliveryStatus("UNKNOWN"); state.setDeliveryToken("frozen-token");
+        state.setDeliveryPreparedAt(NOW); state.setLastErrorCode(ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN);
+        state.setDeliveryEnvelope("{\"stateId\":71,\"orderId\":5,\"deliveryToken\":\"frozen-token\",\"message\":\"invoice fixture\"}");
+        when(states.findById(71L)).thenReturn(Optional.of(state));
+    }
+
     @Test void knownUnsentRetryKeepsTheExactRecipientMoneyCopyAndOperation() {
         var first = prepare("К оплате: 1200 руб.", "+79991112233");
         when(sender.deliverWithOperationId(any(), any(), any(), any(), any(), any()))
@@ -192,7 +231,7 @@ class ScheduledDeliveryProtocolTest {
     @Test void missingReceiptAfterCrashHoldsUnknownWithoutSendingAndRotatesRecovery() {
         var prepared = prepare("message", null);
         when(states.findRecoverablePreparedIds(any(), any())).thenReturn(List.of(71L));
-        when(sender.recordedOutcome(prepared.operationId())).thenReturn(ClientMessageOperationFence.unknown());
+        when(sender.recoverRecordedOutcomeFromChat(prepared.operationId(), NOW)).thenReturn(ClientMessageOperationFence.unknown());
         ReflectionTestUtils.invokeMethod(service, "recoverOrdinaryDeliveries", NOW.plusMinutes(6));
         assertThat(state.getDeliveryStatus()).isEqualTo("UNKNOWN");
         assertThat(state.getNextAttemptAt()).isNull();
@@ -205,12 +244,12 @@ class ScheduledDeliveryProtocolTest {
     @Test void confirmedReceiptAfterRestartFinalizesOnceWithoutSending() {
         var prepared = prepare("message", null);
         when(states.findRecoverablePreparedIds(any(), any())).thenReturn(List.of(71L));
-        when(sender.recordedOutcome(prepared.operationId())).thenReturn(ClientMessageSendResult.sent("Telegram", "42"));
+        when(sender.recoverRecordedOutcomeFromChat(prepared.operationId(), NOW)).thenReturn(ClientMessageSendResult.sent("Telegram", "42"));
         ReflectionTestUtils.invokeMethod(service, "recoverOrdinaryDeliveries", NOW.plusMinutes(6));
         ReflectionTestUtils.invokeMethod(service, "recoverOrdinaryDeliveries", NOW.plusMinutes(12));
         assertThat(state.getSentCount()).isEqualTo(1);
         assertThat(state.getDeliveryEnvelope()).isNull();
-        verify(sender, times(1)).recordedOutcome(prepared.operationId());
+        verify(sender, times(1)).recoverRecordedOutcomeFromChat(prepared.operationId(), NOW);
         verify(sender, never()).deliverWithOperationId(any(), any(), any(), any(), any(), any());
     }
 
@@ -296,6 +335,51 @@ class ScheduledDeliveryProtocolTest {
         verifyNoInteractions(dependency(service, "jdbcTemplate", org.springframework.jdbc.core.JdbcTemplate.class));
     }
 
+    @Test void backgroundReceiptCheckPreservesManualHandoffWhenProofIsMissing() {
+        var prepared = prepare("message", null);
+        state.setDeliveryStatus("UNKNOWN");
+        state.setLastErrorCode(ClientMessageStateSafety.MANUAL_DELIVERY_HANDOFF_PENDING);
+        state.setLastErrorMessage("handoff audit note");
+        when(states.findRecoverablePreparedIds(any(), any())).thenReturn(List.of(71L));
+        when(sender.recoverRecordedOutcomeFromChat(prepared.operationId(), NOW))
+                .thenReturn(ClientMessageSendResult.failed("whatsapp_history_checked_no_receipt", "no proof"));
+        ReflectionTestUtils.invokeMethod(service, "recoverOrdinaryDeliveries", NOW.plusMinutes(6));
+        assertThat(state.getLastErrorCode()).isEqualTo(ClientMessageStateSafety.MANUAL_DELIVERY_HANDOFF_PENDING);
+        assertThat(state.getLastErrorMessage()).isEqualTo("handoff audit note");
+        assertThat(state.getDeliveryStatus()).isEqualTo("UNKNOWN");
+        assertThat(state.getNextAttemptAt()).isNull();
+        assertThat(state.getSentCount()).isZero();
+        verify(sender, never()).deliverWithOperationId(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test void handedOffOperationCanAcceptALateExactReceiptWithoutSending() {
+        var prepared = prepare("message", null);
+        state.setDeliveryStatus("UNKNOWN");
+        state.setLastErrorCode(ClientMessageStateSafety.MANUAL_DELIVERY_HANDOFF_PENDING);
+        when(states.findById(71L)).thenReturn(Optional.of(state));
+        when(sender.recoverRecordedOutcomeFromChat(prepared.operationId(), NOW))
+                .thenReturn(ClientMessageSendResult.sent("WhatsApp", "late-proof"));
+        assertThat(service.recoverUncertainOrdinaryDelivery(71L))
+                .isEqualTo(ScheduledClientMessageService.OrdinaryDeliveryRecoveryResult.SENT_CONFIRMED);
+        assertThat(state.getSentCount()).isEqualTo(1);
+        assertThat(state.getDeliveryEnvelope()).isNull();
+        verify(sender, never()).deliverWithOperationId(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test void receiptCheckCannotRearmAnUnknownOperationFromAnAdmissionError() {
+        var prepared = prepare("message", null);
+        state.setDeliveryStatus("UNKNOWN");
+        state.setLastErrorCode(ClientMessageStateSafety.MANUAL_DELIVERY_HANDOFF_PENDING);
+        when(states.findById(71L)).thenReturn(Optional.of(state));
+        when(sender.recoverRecordedOutcomeFromChat(prepared.operationId(), NOW))
+                .thenReturn(ClientMessageSendResult.failed("gateway_not_ready", "not proof of this old attempt"));
+        assertThat(service.recoverUncertainOrdinaryDelivery(71L))
+                .isEqualTo(ScheduledClientMessageService.OrdinaryDeliveryRecoveryResult.UNRESOLVED);
+        assertThat(state.getDeliveryStatus()).isEqualTo("UNKNOWN");
+        assertThat(state.getLastErrorCode()).isEqualTo(ClientMessageStateSafety.MANUAL_DELIVERY_HANDOFF_PENDING);
+        assertThat(state.getNextAttemptAt()).isNull();
+    }
+
     @Test void lateReceiptForClosedTaskIsRecordedOnceWithoutBusinessEffectsOrResend() {
         state.setScenario(ClientMessageScenario.REVIEW_RECOVERY_NOTICE);
         var prepared = ReflectionTestUtils.<ScheduledClientMessageService.PreparedScheduledDelivery>invokeMethod(service,
@@ -305,7 +389,7 @@ class ScheduledDeliveryProtocolTest {
         state.setLastErrorCode("canceled_by_user");
         String envelope = state.getDeliveryEnvelope();
         when(states.findRecoverablePreparedIds(any(), any())).thenReturn(List.of(71L));
-        when(sender.recordedOutcome(prepared.operationId())).thenAnswer(inv -> {
+        when(sender.recoverRecordedOutcomeFromChat(prepared.operationId(), NOW)).thenAnswer(inv -> {
             assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
             return ClientMessageSendResult.sent("WhatsApp", "confirmed-id");
         });
@@ -317,7 +401,7 @@ class ScheduledDeliveryProtocolTest {
         assertThat(state.getNextAttemptAt()).isNull();
         assertThat(state.getDeliveryEnvelope()).isEqualTo(envelope);
         assertThat(state.getSentCount()).isEqualTo(1);
-        verify(sender, times(1)).recordedOutcome(prepared.operationId());
+        verify(sender, times(1)).recoverRecordedOutcomeFromChat(prepared.operationId(), NOW);
         verifyNoMoreInteractions(sender);
         verifyNoInteractions(dependency(service, "reviewRecoveryTaskService", ReviewRecoveryTaskService.class));
         verifyNoInteractions(dependency(service, "whatsAppAuthAlertService", com.hunt.otziv.whatsapp.service.WhatsAppAuthAlertService.class));
@@ -328,7 +412,7 @@ class ScheduledDeliveryProtocolTest {
         state.setStatus(ScheduledMessageStateStatus.DONE);
         state.setLastErrorCode("canceled_by_user");
         when(states.findRecoverablePreparedIds(any(), any())).thenReturn(List.of(71L));
-        when(sender.recordedOutcome(prepared.operationId())).thenReturn(ClientMessageOperationFence.unknown(),
+        when(sender.recoverRecordedOutcomeFromChat(prepared.operationId(), NOW)).thenReturn(ClientMessageOperationFence.unknown(),
                 ClientMessageSendResult.failed("gateway_not_ready", "before dispatch"));
         ReflectionTestUtils.invokeMethod(service, "recoverOrdinaryDeliveries", NOW.plusMinutes(6));
         ReflectionTestUtils.invokeMethod(service, "recoverOrdinaryDeliveries", NOW.plusMinutes(12));
@@ -337,7 +421,7 @@ class ScheduledDeliveryProtocolTest {
         assertThat(state.getLastErrorCode()).isEqualTo("canceled_by_user");
         assertThat(state.getSentCount()).isZero();
         assertThat(state.getNextAttemptAt()).isNull();
-        verify(sender, times(2)).recordedOutcome(prepared.operationId());
+        verify(sender, times(2)).recoverRecordedOutcomeFromChat(prepared.operationId(), NOW);
         verifyNoMoreInteractions(sender);
     }
 

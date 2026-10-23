@@ -102,9 +102,9 @@
           </p>
         }
 
-        @if (ownerSelected()) {
+        @if (!paymentContext.recipientSelectionFrozen && selectedRecipient()?.key !== 'LEGACY_PRE_CUTOVER_MANUAL_CARD') {
           <p class="manual-payment-warning recipient-change" role="status">
-            При выборе владельца нажатие всегда отправляет владельцу запрос в Telegram. До его подтверждения текущий платёжный источник не закрывается и заказ не считается оплаченным.
+            После успешной отметки заказ сразу считается оплаченным. Специалист или получатель могут в течение 24 часов сообщить менеджеру, что перевод не поступил. Если возражений нет, система подтвердит оплату без возражений. Доставка уведомления отображается отдельно.
           </p>
         }
 
@@ -152,7 +152,7 @@
         <footer>
           <button type="button" class="secondary" (click)="close()" [disabled]="saving()">Отмена</button>
           <button type="submit" [disabled]="saving() || manualPaymentForm.invalid || !selectedRecipient()">
-            {{ saving() ? 'Подтверждаем…' : paymentContext.recipientSelectionFrozen ? 'Повторить подтверждение' : 'Подтвердить оплату' }}
+            {{ saving() ? 'Сохраняем…' : paymentContext.recipientSelectionFrozen ? 'Повторить подтверждение' : 'Отметить оплату' }}
           </button>
         </footer>
       </form>

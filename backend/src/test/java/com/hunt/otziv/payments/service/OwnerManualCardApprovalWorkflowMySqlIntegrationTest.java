@@ -265,6 +265,7 @@ class OwnerManualCardApprovalWorkflowMySqlIntegrationTest {
                     links, orders, mock(ManagerAccessService.class), mock(ManualCardPaymentReviewNotificationService.class),
                     approvals, mock(SpecialistManualPaymentReviewService.class),
                     mock(SpecialistManualPaymentReviewGuard.class),
+                    mock(SpecialistManualPaymentReviewSettlementService.class),
                     proxied(new PaymentLinkTransactionExecutor(), transactions)), transactions);
             clearInvocations(payments);
         }

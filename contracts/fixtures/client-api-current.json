@@ -2499,7 +2499,16 @@
       "status" : "contract-example",
       "orderId" : 2,
       "paymentLinkId" : 2,
-      "message" : "contract-example"
+      "message" : "contract-example",
+      "manualPaymentReview" : {
+        "id" : 2,
+        "orderId" : 2,
+        "status" : "contract-example",
+        "deadlineAt" : "2026-09-07T08:00:00",
+        "creditedAt" : "2026-09-07T08:00:00",
+        "confirmationBasis" : "contract-example",
+        "disputeAllowed" : false
+      }
     },
     "ManagerManualPaymentSettingsResponseOutput" : {
       "profileId" : 2,
@@ -3061,6 +3070,15 @@
         "firstConfirmedAt" : "2026-09-07T08:00:00",
         "lastConfirmedAt" : "2026-09-07T08:00:00"
       } ]
+    },
+    "ManualPaymentReviewViewOutput" : {
+      "id" : 2,
+      "orderId" : 2,
+      "status" : "contract-example",
+      "deadlineAt" : "2026-09-07T08:00:00",
+      "creditedAt" : "2026-09-07T08:00:00",
+      "confirmationBasis" : "contract-example",
+      "disputeAllowed" : false
     },
     "ManualPaymentSourceOutput" : "PROFILE_MONTHLY_LIMIT",
     "ManualPaymentTaskAccountingTargetKindOutput" : "UNRESOLVED",
@@ -3969,7 +3987,9 @@
       "notifiedAt" : "2026-09-07T08:00:00",
       "deadlineAt" : "2026-09-07T08:00:00",
       "lastError" : "contract-example",
-      "retryNotificationAllowed" : false
+      "retryNotificationAllowed" : false,
+      "creditedAt" : "2026-09-07T08:00:00",
+      "confirmationBasis" : "contract-example"
     },
     "SpecialistManualPaymentReviewStatusOutput" : "PENDING_DELIVERY",
     "TbankClientPaymentModeResponseOutput" : {
@@ -4319,6 +4339,11 @@
     "ManualPaymentConfirmationRequestInput" : {
       "comment" : "contract-example",
       "receiptUrl" : "contract-example"
+    },
+    "ManualPaymentDisputeRequestInput" : {
+      "expectedReviewId" : 2,
+      "note" : "contract-example",
+      "recipientReportedMissing" : false
     },
     "OrderNoteUpdateRequestInput" : {
       "orderComments" : "contract-example"

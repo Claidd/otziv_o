@@ -56,7 +56,8 @@ public class ManagerProblemEvidenceCollector {
         if (invoice && entityId != null) {
             List<Map<String, Object>> invoices = jdbc.queryForList("""
                     SELECT v.invoice_id, v.status, v.amount_kopecks, v.paid_kopecks, v.last_error,
-                           v.sent_at, v.next_reminder_at, v.payment_success_notification_error, v.updated_at, a.enabled AS account_enabled
+                           v.sent_at, v.next_reminder_at, v.payment_success_notification_error, v.updated_at, a.enabled AS account_enabled,
+                           v.created_at, v.closed_at, v.close_reason, v.previous_status
                     FROM common_invoices v JOIN common_billing_accounts a ON a.account_id=v.account_id
                     LEFT JOIN companies company ON company.company_id=a.invoice_company_id
                     WHERE v.invoice_id=? AND (a.manager_id=? OR company.company_manager=? OR EXISTS (
@@ -68,16 +69,23 @@ public class ManagerProblemEvidenceCollector {
                 return new Evidence(managerId + ":" + family + ":" + entityId, managerId, currentSourceId, false, List.copyOf(facts), observedAt);
             }
             invoices.forEach(row -> addRow(facts, "invoice:" + entityId, "invoice", row,
-                    "invoice_id", "status", "amount_kopecks", "paid_kopecks", "last_error", "sent_at", "next_reminder_at", "payment_success_notification_error", "account_enabled"));
+                    "invoice_id", "status", "amount_kopecks", "paid_kopecks", "last_error", "sent_at", "next_reminder_at", "payment_success_notification_error", "account_enabled",
+                    "created_at", "closed_at", "close_reason", "previous_status"));
             List<Map<String, Object>> orders = jdbc.queryForList("""
                     SELECT io.order_id, io.ready, io.paid, io.amount_kopecks, io.active_membership, io.publication_blocker_since, io.paid_at, io.updated_at,
-                           s.order_status_title AS current_order_status
+                           s.order_status_title AS current_order_status, o.order_status_changed_at AS current_status_changed_at,
+                           io.archive_source_order_status_title, io.payment_method,
+                           (io.source_payment_link_id IS NOT NULL) AS has_source_payment_link
                     FROM common_invoice_orders io LEFT JOIN orders o ON o.order_id=io.order_id
                     LEFT JOIN order_statuses s ON s.order_status_id=o.order_status
                     WHERE io.invoice_id=? ORDER BY io.order_id LIMIT 101
                     """, entityId);
             orders.stream().limit(100).forEach(row -> addRow(facts, "order:" + number(row, "order_id"), "invoice_order", row,
-                    "order_id", "ready", "paid", "amount_kopecks", "active_membership", "publication_blocker_since", "paid_at", "current_order_status"));
+                    "order_id", "ready", "paid", "amount_kopecks", "active_membership", "publication_blocker_since", "paid_at", "current_order_status",
+                    "current_status_changed_at", "archive_source_order_status_title", "payment_method", "has_source_payment_link"));
+            collectInvoiceHistory(facts, entityId, invoices.getFirst().get("created_at"));
+            appendInvoiceMonetaryDisplay(facts);
+            appendInvoiceArchiveChronology(facts);
             Map<String, Object> counts = jdbc.queryForMap("""
                     SELECT COUNT(*) AS orderCount, COALESCE(SUM(io.ready),0) AS readyCount,
                            COALESCE(SUM(s.order_status_title='Архив'),0) AS archivedActiveCount
@@ -180,6 +188,106 @@ public class ManagerProblemEvidenceCollector {
 
     public List<Long> scan(long afterId, int limit) {
         return scan(afterId, limit, false);
+    }
+
+    /** Derived only from the already ownership-scoped source fields, never from comments or causal guesses. */
+    static void appendInvoiceArchiveChronology(List<Fact> facts) {
+        if (facts.stream().noneMatch(f -> "card".equals(f.subject()) && "entity_type".equals(f.field())
+                && List.of("COMMON_INVOICE", "COMMON_INVOICE_AUTOMATION").contains(f.value()))) return;
+        Fact closure = facts.stream().filter(f -> "invoice".equals(f.subject()) && "closed_at".equals(f.field())).findFirst().orElse(null);
+        if (closure == null) return;
+        String prefix = closure.reference().substring(0, closure.reference().lastIndexOf(':'));
+        Map<String, String> values = facts.stream().collect(java.util.stream.Collectors.toMap(Fact::reference, Fact::value, (a, b) -> a));
+        LocalDateTime closedAt = factTime(closure.value());
+        if (closedAt == null || !"MANUAL_ARCHIVE".equals(values.get(prefix + ":close_reason"))) return;
+        String status = values.get(prefix + ":status");
+        if (status == null || "неизвестно".equals(status)) return;
+        facts.add(new Fact(prefix + ":archive_chronology", "invoice_chronology", "historical_archive_and_current_status",
+                "Историческое закрытие в архив: " + closedAt + "; причина MANUAL_ARCHIVE; текущий статус: " + status
+                        + ". Это разные моменты времени, а не статус и сумма оплаты в момент архивирования."));
+        boolean openStatus = List.of("COLLECTING", "READY", "INVOICED", "REMINDER", "PARTIALLY_PAID").contains(status);
+        facts.add(new Fact(prefix + ":open_status_with_historical_archive", "invoice_chronology", "open_status_with_historical_archive", Boolean.toString(openStatus)));
+        for (Fact paidAtFact : List.copyOf(facts)) {
+            if (!"invoice_order".equals(paidAtFact.subject()) || !"paid_at".equals(paidAtFact.field())) continue;
+            String orderPrefix = paidAtFact.reference().substring(0, paidAtFact.reference().lastIndexOf(':'));
+            if (!List.of("1", "true").contains(values.getOrDefault(orderPrefix + ":paid", ""))) continue;
+            LocalDateTime paidAt = factTime(paidAtFact.value());
+            if (paidAt == null) continue;
+            facts.add(new Fact(orderPrefix + ":payment_after_invoice_archive", "invoice_chronology", "payment_after_invoice_archive",
+                    "Оплата позиции " + orderPrefix + " записана " + paidAt + "; исторический архив счёта " + closedAt
+                            + "; оплата позже архива: " + paidAt.isAfter(closedAt)
+                            + ". Причина последующего изменения статуса счёта этими датами не установлена."));
+        }
+    }
+
+    private static LocalDateTime factTime(String value) {
+        try { return LocalDateTime.parse(value.replace(' ', 'T')); }
+        catch (RuntimeException ignored) { return null; }
+    }
+
+    /** One aggregate display per owned invoice, independent of archive history and with no floating-point rounding. */
+    static void appendInvoiceMonetaryDisplay(List<Fact> facts) {
+        if (facts.stream().noneMatch(f -> "card".equals(f.subject()) && "entity_type".equals(f.field())
+                && List.of("COMMON_INVOICE", "COMMON_INVOICE_AUTOMATION").contains(f.value()))) return;
+        Fact amountFact = facts.stream().filter(f -> "invoice".equals(f.subject()) && "amount_kopecks".equals(f.field())).findFirst().orElse(null);
+        if (amountFact == null) return;
+        String prefix = amountFact.reference().substring(0, amountFact.reference().lastIndexOf(':'));
+        String paidValue = facts.stream().filter(f -> "invoice".equals(f.subject()) && f.reference().equals(prefix + ":paid_kopecks"))
+                .map(Fact::value).findFirst().orElse(null);
+        java.math.BigDecimal amount = integralKopecks(amountFact.value());
+        java.math.BigDecimal paid = integralKopecks(paidValue);
+        if (amount == null || paid == null) return;
+        facts.add(new Fact(prefix + ":money_display", "invoice_money", "money_display",
+                "Учтённая оплата: " + rubles(paid) + "; сумма счёта: " + rubles(amount)
+                        + "; арифметическая разница: " + rubles(amount.subtract(paid))
+                        + ". Суммы переведены из копеек делением на 100. Сама разница не подтверждает действующий долг."));
+    }
+
+    private static java.math.BigDecimal integralKopecks(String value) {
+        return value != null && value.matches("[0-9]{1,19}") ? new java.math.BigDecimal(value) : null;
+    }
+
+    private static String rubles(java.math.BigDecimal kopecks) {
+        return kopecks.movePointLeft(2).stripTrailingZeros().toPlainString().replace('.', ',') + " ₽";
+    }
+
+    /** Read only after invoice ownership is established; never export audit actors, free-form details or payment references. */
+    private void collectInvoiceHistory(List<Fact> facts, long invoiceId, Object createdAt) {
+        if (createdAt == null) {
+            facts.add(new Fact("invoice:" + invoiceId + ":history_scope", "history_coverage", "invoice_history_scope_unknown",
+                    "Дата создания счёта неизвестна; историю заказов нельзя уверенно отнести к этому счёту"));
+            return;
+        }
+        List<Map<String, Object>> history = jdbc.queryForList("""
+                SELECT * FROM (
+                    (SELECT e.event_id, e.created_at, e.order_id, e.source, e.action, e.entity_type,
+                            e.old_value AS previous_status, e.new_value AS next_status
+                     FROM common_invoice_orders io JOIN business_audit_events e ON e.order_id=io.order_id
+                     WHERE io.invoice_id=? AND e.created_at>=? AND e.action='order_status_changed' AND e.entity_type='order'
+                       AND (e.old_value='Архив' OR e.new_value IN ('Архив','Оплачено'))
+                     ORDER BY e.event_id DESC LIMIT 41)
+                    UNION ALL
+                    (SELECT e.event_id, e.created_at, e.order_id, e.source, e.action, e.entity_type,
+                            e.old_value AS previous_status, e.new_value AS next_status
+                     FROM business_audit_events e
+                     WHERE e.entity_type='common_invoice' AND e.entity_id=? AND e.created_at>=?
+                       AND e.action='common_invoice_archive_restored'
+                     ORDER BY e.event_id DESC LIMIT 41)
+                ) history ORDER BY event_id DESC LIMIT 41
+                """, invoiceId, createdAt, Long.toString(invoiceId), createdAt);
+        history.stream().limit(40).forEach(row -> {
+            boolean invoiceEvent = "common_invoice".equals(string(row, "entity_type"));
+            String subject = invoiceEvent ? "invoice_status_history" : "order_status_history";
+            String reference = (invoiceEvent ? "invoiceHistory:" : "orderHistory:") + number(row, "event_id");
+            addRow(facts, reference, subject, row, "event_id", "created_at", "source", "action", "previous_status", "next_status");
+            if (!invoiceEvent) addRow(facts, reference, subject, row, "order_id");
+        });
+        facts.add(new Fact("invoice:" + invoiceId + ":history_scope", "evidence_scope", "invoice_history_scope",
+                "История содержит записанные переходы связанных заказов в/из архива и в оплату, а также восстановление исторического архива счёта после его создания. "
+                        + "Возврат отдельного заказа не доказывает восстановление счёта; архив не подтверждает отмену обязательств или оплату. "
+                        + "Наличие ссылки оплаты само по себе не доказывает платёж; его нужно сопоставить с отметками оплаты и временем."));
+        if (history.size() > 40) facts.add(new Fact("invoice:" + invoiceId + ":history_truncated", "history_coverage", "invoice_history_truncated",
+                "Показаны только 40 последних переходов; отсутствие более раннего архивирования, восстановления или оплаты этим срезом не подтверждается"));
     }
 
     public List<Long> scanCurrent(long afterId, int limit) {

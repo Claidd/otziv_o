@@ -1179,7 +1179,7 @@
                                   title="Сначала попробовать автоматическую починку"
                                 >
                                   <span class="material-icons-sharp">build</span>
-                                  Починить
+                                  {{ repairActionLabel(example) }}
                                 </button>
                               }
                               @if (canContactOrder(example)) {
@@ -1305,7 +1305,7 @@
                                   title="Сначала попробовать автоматическую починку"
                                 >
                                   <span class="material-icons-sharp">build</span>
-                                  Починить
+                                  {{ repairActionLabel(example) }}
                                 </button>
                               }
                               @if (canShowWorkerClientAction(example)) {
@@ -1360,7 +1360,7 @@
                                   title="Починить ошибку общего счета"
                                 >
                                   <span class="material-icons-sharp">build</span>
-                                  Починить
+                                  {{ repairActionLabel(example) }}
                                 </button>
                               }
                               @if (isUncertainDeliveryForHandoff(example)) {
@@ -1384,12 +1384,12 @@
                                   class="review-action repair-action"
                                   (click)="repairConcreteItem(example)"
                                   [disabled]="isConcreteUpdating(example.controlEntityId)"
-                                  [title]="isTelegramBindingFailure(example)
+                                  [title]="isDeliveryReconciliation(example) ? 'Проверить существующую квитанцию и историю без повторной отправки' : isTelegramBindingFailure(example)
                                     ? 'Привязать нужную Telegram-группу без повторной ошибочной отправки'
                                     : 'Повторно запустить задачу и проверить, исчезла ли ошибка'"
                                 >
                                   <span class="material-icons-sharp">{{ isTelegramBindingFailure(example) ? 'link' : 'build' }}</span>
-                                  {{ isTelegramBindingFailure(example) ? 'Привязать Telegram' : 'Починить' }}
+                                  {{ isDeliveryReconciliation(example) ? 'Проверить отправку' : isTelegramBindingFailure(example) ? 'Привязать Telegram' : 'Починить' }}
                                 </button>
                               }
                               @if (isUncertainDeliveryForHandoff(example)) {

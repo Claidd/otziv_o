@@ -247,6 +247,9 @@ class PaymentLinkServiceTest {
     private SpecialistManualPaymentReviewService specialistManualPaymentReviewService;
 
     @Mock
+    private com.hunt.otziv.payments.service.SpecialistManualPaymentReviewSettlementService reviewSettlement;
+
+    @Mock
     private OwnerManualCardPaymentApprovalRepository ownerManualCardPaymentApprovalRepository;
 
     @Mock
@@ -5862,7 +5865,7 @@ class PaymentLinkServiceTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    void managerOwnerSelectionCreatesApprovalWithoutReadingOrCancelingTbank(boolean explicitType) throws Exception {
+    void managerOwnerSelectionUsesImmediateReviewWithCanonicalRecipient(boolean explicitType) throws Exception {
         PaymentLinkService service = service(properties());
         Order order = order(25270L, "Старые реквизиты владельца", BigDecimal.valueOf(1000));
         order.getManager().setAuditTelegramGroupChatId(-10025270L);
@@ -5872,30 +5875,10 @@ class PaymentLinkServiceTest {
         when(paymentLinkRepository.findByOrderIdForUpdate(25270L)).thenReturn(List.of(link));
         when(paymentLinkRepository.findByIdWithOrder(5370L)).thenReturn(Optional.of(link));
         when(paymentLinkRepository.findByIdForUpdate(5370L)).thenReturn(Optional.of(link));
-        when(actualPaymentAttributionService.actualRecipientAccountingEnabled()).thenReturn(true);
         stubManualCardRecipients(order, link, new ManualCardPaymentRecipientResponse(
                 ContractorRecipientType.OWNER, null, null, "Владелец", 100_000L, 0L, true));
-        doAnswer(invocation -> {
-            PaymentLink frozen = invocation.getArgument(1);
-            frozen.setManualActualRecipientType(ContractorRecipientType.OWNER);
-            frozen.setManualActualRecipientProfileId(null);
-            frozen.setManualActualCashDestinationKind(ContractorCashDestinationKind.OWNER);
-            frozen.setManualActualReason(invocation.getArgument(5));
-            frozen.setManualActualReceiptUrl(invocation.getArgument(6));
-            frozen.setManualActualActor(invocation.getArgument(7));
-            frozen.setManualActualRecipientFrozenAt(LocalDateTime.now());
-            return null;
-        }).when(actualPaymentAttributionService).freezePaymentLinkRecipientIntent(
-                any(), any(), any(), any(), any(), anyString(), any(), anyString()
-        );
-        when(ownerManualCardPaymentApprovalRepository.findByPaymentLinkIdForUpdate(5370L))
-                .thenReturn(Optional.empty());
-        when(ownerManualCardPaymentApprovalRepository.saveAndFlush(any(OwnerManualCardPaymentApproval.class)))
-                .thenAnswer(invocation -> {
-                    OwnerManualCardPaymentApproval approval = invocation.getArgument(0);
-                    approval.setId(91L);
-                    return approval;
-                });
+        stubImmediateReview(order, link, ContractorRecipientType.OWNER, null, "OWNER",
+                "Проверить перевод на старый Альфа-Банк владельца");
 
         var result = service.submitManagerManualCardPaymentForOrder(
                 25270L,
@@ -5908,19 +5891,15 @@ class PaymentLinkServiceTest {
                 authentication
         );
 
-        assertEquals("OWNER_APPROVAL_PENDING", result.status());
-        assertEquals(PaymentLinkStatus.INITIATED, link.getStatus());
-        assertNull(link.getBankCancelNonce());
-        verify(tbankClient, never()).getState(any(TbankPaymentProfile.class), anyString());
-        verify(tbankClient, never()).cancel(any(TbankPaymentProfile.class), any(TbankCancelCommand.class));
-        verify(orderTransactionService, never()).handlePaymentStatus(any(Order.class));
-        ArgumentCaptor<ManualCardPaymentReviewNotificationService.OwnerApprovalRequest> request =
-                ArgumentCaptor.forClass(ManualCardPaymentReviewNotificationService.OwnerApprovalRequest.class);
-        verify(manualCardPaymentReviewNotificationService).notifyOwnerApprovalAfterCommit(request.capture());
-        assertEquals(91L, request.getValue().approvalId());
-        assertFalse(request.getValue().callbackToken().isBlank());
-        assertEquals(25270L, request.getValue().managerId());
-        assertEquals(-10025270L, request.getValue().managerGroupChatId());
+        assertEquals("COMPLETED", result.status());
+        InOrder flow = inOrder(specialistManualPaymentReviewService, reviewSettlement);
+        flow.verify(specialistManualPaymentReviewService).requestRecipient(
+                25270L, 5370L, 100_000L, "OWNER", null, "OWNER",
+                "Проверить перевод на старый Альфа-Банк владельца", "", "manager@example.ru", authentication);
+        flow.verify(reviewSettlement).creditNow(9_370L);
+        flow.verify(specialistManualPaymentReviewService).deliver(9_370L);
+        verify(ownerManualCardPaymentApprovalRepository, never()).saveAndFlush(any());
+        verifyNoInteractions(manualCardPaymentReviewNotificationService);
     }
 
     @Test
@@ -5931,7 +5910,7 @@ class PaymentLinkServiceTest {
         order.getCompany().setManager(order.getManager());
         PaymentLink link = initiatedBankLink(5378L, order, 100_000L);
         java.util.concurrent.atomic.AtomicReference<OwnerManualCardPaymentApproval> approvalRef =
-                new java.util.concurrent.atomic.AtomicReference<>();
+                new java.util.concurrent.atomic.AtomicReference<>(legacyOwnerApproval(95L, order, link, "Сверить поступление", "OWNER"));
         when(orderRepository.findByIdForCounterUpdate(order.getId())).thenReturn(Optional.of(order));
         when(paymentLinkRepository.findByOrderIdForUpdate(order.getId())).thenReturn(List.of(link));
         when(paymentLinkRepository.findByIdWithOrder(link.getId())).thenReturn(Optional.of(link));
@@ -5981,7 +5960,10 @@ class PaymentLinkServiceTest {
         assertNotEquals(firstToken, secondToken);
         assertEquals(0, approvalRef.get().getAttemptCount());
         assertNull(approvalRef.get().getLastAttemptAt());
-        verify(paymentLinkRepository, times(1)).save(link);
+        assertEquals(95L, approvalRef.get().getId());
+        assertEquals("OWNER", approvalRef.get().getRecipientKey());
+        assertEquals(PaymentLinkStatus.INITIATED, link.getStatus());
+        verify(paymentLinkRepository, never()).save(link);
 
         User owner = new User();
         owner.setId(8L);
@@ -6076,9 +6058,9 @@ class PaymentLinkServiceTest {
         }).when(actualPaymentAttributionService).freezePaymentLinkRecipientIntent(
                 any(), any(), any(), any(), any(), anyString(), any(), anyString());
         java.util.concurrent.atomic.AtomicReference<OwnerManualCardPaymentApproval> approvalRef =
-                new java.util.concurrent.atomic.AtomicReference<>();
+                new java.util.concurrent.atomic.AtomicReference<>(legacyOwnerApproval(96L, order, link, "Проверить перевод Марии", "TASK:64:3"));
         when(ownerManualCardPaymentApprovalRepository.findByPaymentLinkIdForUpdate(5376L))
-                .thenReturn(Optional.empty());
+                .thenAnswer(invocation -> Optional.of(approvalRef.get()));
         when(ownerManualCardPaymentApprovalRepository.saveAndFlush(any(OwnerManualCardPaymentApproval.class)))
                 .thenAnswer(invocation -> {
                     OwnerManualCardPaymentApproval approval = invocation.getArgument(0);
@@ -6177,9 +6159,9 @@ class PaymentLinkServiceTest {
         }).when(actualPaymentAttributionService).freezePaymentLinkRecipientIntent(
                 any(), any(), any(), any(), any(), anyString(), any(), anyString());
         java.util.concurrent.atomic.AtomicReference<OwnerManualCardPaymentApproval> approvalRef =
-                new java.util.concurrent.atomic.AtomicReference<>();
+                new java.util.concurrent.atomic.AtomicReference<>(legacyOwnerApproval(9665L, order, link, "Перевод получен владельцем", "OWNER"));
         when(ownerManualCardPaymentApprovalRepository.findByPaymentLinkIdForUpdate(link.getId()))
-                .thenReturn(Optional.empty());
+                .thenAnswer(invocation -> Optional.of(approvalRef.get()));
         when(ownerManualCardPaymentApprovalRepository.saveAndFlush(any(OwnerManualCardPaymentApproval.class)))
                 .thenAnswer(invocation -> {
                     OwnerManualCardPaymentApproval approval = invocation.getArgument(0);
@@ -6249,22 +6231,8 @@ class PaymentLinkServiceTest {
         when(paymentLinkRepository.findByOrderIdForUpdate(25277L)).thenReturn(List.of(link));
         when(paymentLinkRepository.findByIdWithOrder(5377L)).thenReturn(Optional.of(link));
         when(paymentLinkRepository.findByIdForUpdate(5377L)).thenReturn(Optional.of(link));
-        when(actualPaymentAttributionService.actualRecipientAccountingEnabled()).thenReturn(true);
-        doAnswer(invocation -> {
-            PaymentLink frozen = invocation.getArgument(1);
-            frozen.setManualActualRecipientType(ContractorRecipientType.OWNER);
-            frozen.setManualActualRecipientProfileId(null);
-            frozen.setManualActualCashDestinationKind(ContractorCashDestinationKind.OWNER);
-            frozen.setManualActualReason(invocation.getArgument(5));
-            frozen.setManualActualActor(invocation.getArgument(7));
-            frozen.setManualActualRecipientFrozenAt(LocalDateTime.now());
-            return null;
-        }).when(actualPaymentAttributionService).freezePaymentLinkRecipientIntent(
-                any(), any(), any(), any(), any(), anyString(), any(), anyString());
-        when(ownerManualCardPaymentApprovalRepository.findByPaymentLinkIdForUpdate(5377L))
-                .thenReturn(Optional.empty());
-        when(ownerManualCardPaymentApprovalRepository.saveAndFlush(any(OwnerManualCardPaymentApproval.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+        stubImmediateReview(order, link, ContractorRecipientType.OWNER, null, "OWNER",
+                "Поступило по бумажному счёту");
 
         ManualCardPaymentContextResponse context = service.manualCardPaymentContextForOrder(
                 25277L, authentication);
@@ -6275,9 +6243,12 @@ class PaymentLinkServiceTest {
                 ContractorRecipientType.OWNER, null, context.candidates().getFirst().key(),
                 "manager@example.ru", authentication);
 
-        assertEquals("OWNER_APPROVAL_PENDING", pending.status());
-        verify(ownerManualCardPaymentApprovalRepository).saveAndFlush(
-                argThat(approval -> "OWNER".equals(approval.getRecipientKey())));
+        assertEquals("COMPLETED", pending.status());
+        verify(reviewSettlement).creditNow(9_370L);
+        verify(specialistManualPaymentReviewService).requestRecipient(
+                25277L, 5377L, 100_000L, "OWNER", null, "OWNER",
+                "Поступило по бумажному счёту", "", "manager@example.ru", authentication);
+        verify(ownerManualCardPaymentApprovalRepository, never()).saveAndFlush(any());
         verify(orderTransactionService, never()).handlePaymentStatus(order);
         verifyNoInteractions(tbankClient);
     }
@@ -6319,7 +6290,7 @@ class PaymentLinkServiceTest {
         order.getCompany().setManager(order.getManager());
         PaymentLink link = initiatedBankLink(5371L, order, 100_000L);
         java.util.concurrent.atomic.AtomicReference<OwnerManualCardPaymentApproval> approvalRef =
-                new java.util.concurrent.atomic.AtomicReference<>();
+                new java.util.concurrent.atomic.AtomicReference<>(legacyOwnerApproval(92L, order, link, "Поступило владельцу", "OWNER"));
         when(orderRepository.findByIdForCounterUpdate(25271L)).thenReturn(Optional.of(order));
         when(paymentLinkRepository.findByOrderIdForUpdate(25271L)).thenReturn(List.of(link));
         when(paymentLinkRepository.findByIdWithOrder(5371L)).thenReturn(Optional.of(link));
@@ -6343,7 +6314,7 @@ class PaymentLinkServiceTest {
                 any(), any(), any(), any(), any(), anyString(), any(), anyString()
         );
         when(ownerManualCardPaymentApprovalRepository.findByPaymentLinkIdForUpdate(5371L))
-                .thenReturn(Optional.empty());
+                .thenAnswer(invocation -> Optional.of(approvalRef.get()));
         when(ownerManualCardPaymentApprovalRepository.saveAndFlush(any(OwnerManualCardPaymentApproval.class)))
                 .thenAnswer(invocation -> {
                     OwnerManualCardPaymentApproval approval = invocation.getArgument(0);
@@ -6438,7 +6409,7 @@ class PaymentLinkServiceTest {
     }
 
     @Test
-    void managerOwnerSelectionOnSpecialistRequisitesStillRequiresOwnerApproval() throws Exception {
+    void managerOwnerSelectionOnSpecialistRequisitesUsesActualOwnerReview() throws Exception {
         PaymentLinkService service = service(properties());
         Order order = order(25273L, "Клиент оплатил старые реквизиты владельца", BigDecimal.valueOf(1000));
         PaymentLink link = contractorManualLink(
@@ -6447,29 +6418,10 @@ class PaymentLinkServiceTest {
         when(paymentLinkRepository.findByOrderIdForUpdate(25273L)).thenReturn(List.of(link));
         when(paymentLinkRepository.findByIdWithOrder(5373L)).thenReturn(Optional.of(link));
         when(paymentLinkRepository.findByIdForUpdate(5373L)).thenReturn(Optional.of(link));
-        when(actualPaymentAttributionService.actualRecipientAccountingEnabled()).thenReturn(true);
         stubManualCardRecipients(order, link, new ManualCardPaymentRecipientResponse(
                 ContractorRecipientType.OWNER, null, null, "Владелец", 100_000L, 0L, false));
-        doAnswer(invocation -> {
-            PaymentLink frozen = invocation.getArgument(1);
-            frozen.setManualActualRecipientType(ContractorRecipientType.OWNER);
-            frozen.setManualActualRecipientProfileId(null);
-            frozen.setManualActualCashDestinationKind(ContractorCashDestinationKind.OWNER);
-            frozen.setManualActualReason(invocation.getArgument(5));
-            frozen.setManualActualActor(invocation.getArgument(7));
-            frozen.setManualActualRecipientFrozenAt(LocalDateTime.now());
-            return null;
-        }).when(actualPaymentAttributionService).freezePaymentLinkRecipientIntent(
-                any(), any(), any(), any(), any(), anyString(), any(), anyString()
-        );
-        when(ownerManualCardPaymentApprovalRepository.findByPaymentLinkIdForUpdate(5373L))
-                .thenReturn(Optional.empty());
-        when(ownerManualCardPaymentApprovalRepository.saveAndFlush(any(OwnerManualCardPaymentApproval.class)))
-                .thenAnswer(invocation -> {
-                    OwnerManualCardPaymentApproval approval = invocation.getArgument(0);
-                    approval.setId(93L);
-                    return approval;
-                });
+        stubImmediateReview(order, link, ContractorRecipientType.OWNER, null, "OWNER",
+                "Поступило на старый Альфа-Банк владельца");
 
         var result = service.submitManagerManualCardPaymentForOrder(
                 25273L, "Поступило на старый Альфа-Банк владельца", null,
@@ -6477,9 +6429,10 @@ class PaymentLinkServiceTest {
                 "manager@example.ru", authentication
         );
 
-        assertEquals("OWNER_APPROVAL_PENDING", result.status());
+        assertEquals("COMPLETED", result.status());
         assertEquals(PaymentLinkStatus.MANUAL_REPORTED, link.getStatus());
-        verify(manualCardPaymentReviewNotificationService).notifyOwnerApprovalAfterCommit(any());
+        verify(reviewSettlement).creditNow(9_370L);
+        verifyNoInteractions(manualCardPaymentReviewNotificationService);
         verify(tbankClient, never()).getState(any(TbankPaymentProfile.class), anyString());
         verify(tbankClient, never()).cancel(any(TbankPaymentProfile.class), any(TbankCancelCommand.class));
         verify(orderTransactionService, never()).handlePaymentStatus(any(Order.class));
@@ -6494,7 +6447,7 @@ class PaymentLinkServiceTest {
         PaymentLink link = contractorManualLink(
                 5374L, order, 100_000L, PaymentLinkStatus.MANUAL_REPORTED, 803L);
         java.util.concurrent.atomic.AtomicReference<OwnerManualCardPaymentApproval> approvalRef =
-                new java.util.concurrent.atomic.AtomicReference<>();
+                new java.util.concurrent.atomic.AtomicReference<>(legacyOwnerApproval(94L, order, link, "Поступило на старый счет владельца", "OWNER"));
         when(orderRepository.findByIdForCounterUpdate(25274L)).thenReturn(Optional.of(order));
         when(paymentLinkRepository.findByOrderIdForUpdate(25274L)).thenReturn(List.of(link));
         when(paymentLinkRepository.findByIdWithOrder(5374L)).thenReturn(Optional.of(link));
@@ -6517,7 +6470,7 @@ class PaymentLinkServiceTest {
                 any(), any(), any(), any(), any(), anyString(), any(), anyString()
         );
         when(ownerManualCardPaymentApprovalRepository.findByPaymentLinkIdForUpdate(5374L))
-                .thenReturn(Optional.empty());
+                .thenAnswer(invocation -> Optional.of(approvalRef.get()));
         when(ownerManualCardPaymentApprovalRepository.saveAndFlush(any(OwnerManualCardPaymentApproval.class)))
                 .thenAnswer(invocation -> {
                     OwnerManualCardPaymentApproval approval = invocation.getArgument(0);
@@ -6561,7 +6514,7 @@ class PaymentLinkServiceTest {
     }
 
     @Test
-    void managerCanConfirmOriginalRecipientAfterUnusedReplacementIsCanceledExactlyOnce() throws Exception {
+    void manualPostingConfirmsOriginalRecipientAfterUnusedReplacementIsCanceledExactlyOnce() throws Exception {
         PaymentLinkService service = service(properties());
         Order order = order(24539L, "Ранее выданные реквизиты менеджера", BigDecimal.valueOf(4000));
         PaymentLink original = contractorManualLink(7148L, order, 400_000L, PaymentLinkStatus.EXPIRED, 891L);
@@ -6599,10 +6552,10 @@ class PaymentLinkServiceTest {
 
         assertSame(expected, service.manualCardPaymentContextForOrder(24539L, authentication));
         for (int attempt = 0; attempt < 2; attempt++) {
-            var result = service.submitManagerManualCardPaymentForOrder(
+            var result = service.reportPaidByManualCardTransferForOrder(
                     24539L, "Поступление на исходные реквизиты проверено", null,
                     ContractorRecipientType.MANAGER, 32L, "PROFILE:32", "manager@example.ru", authentication);
-            assertEquals("COMPLETED", result.status());
+            assertEquals(PaymentLinkStatus.CONFIRMED, original.getStatus());
         }
 
         assertEquals(PaymentLinkStatus.CONFIRMED, original.getStatus());
@@ -6616,7 +6569,7 @@ class PaymentLinkServiceTest {
     }
 
     @Test
-    void managerSpecialistRequisitesCreateReviewWithoutPrematurePayment() throws Exception {
+    void managerSpecialistRequisitesCreditBeforeNotification() throws Exception {
         PaymentLinkService service = service(properties());
         Order order = order(25272L, "Реквизиты специалиста", BigDecimal.valueOf(1000));
         PaymentLink link = contractorManualLink(
@@ -6631,12 +6584,12 @@ class PaymentLinkServiceTest {
         review.setId(9_372L);
         review.setOrderId(order.getId());
         review.setPaymentLinkId(link.getId());
-        when(specialistManualPaymentReviewService.request(
-                25272L, 5372L, 100_000L, 25L, "PROFILE:25",
+        when(specialistManualPaymentReviewService.requestRecipient(
+                25272L, 5372L, 100_000L, "SPECIALIST", 25L, "PROFILE:25",
                 "Специалист подтвердил поступление", "", "manager@example.ru", authentication))
                 .thenReturn(review);
         when(specialistManualPaymentReviewService.result(review))
-                .thenReturn(ManagerManualCardPaymentResultResponse.specialistReviewPending(25272L, 5372L));
+                .thenReturn(ManagerManualCardPaymentResultResponse.completed(25272L, 5372L));
 
         var result = service.submitManagerManualCardPaymentForOrder(
                 25272L, "Специалист подтвердил поступление", null,
@@ -6644,11 +6597,13 @@ class PaymentLinkServiceTest {
                 "manager@example.ru", authentication
         );
 
-        assertEquals("SPECIALIST_REVIEW_PENDING", result.status());
+        assertEquals("COMPLETED", result.status());
         assertEquals(25272L, result.orderId());
         assertEquals(5372L, result.paymentLinkId());
         assertEquals(PaymentLinkStatus.MANUAL_REPORTED, link.getStatus());
-        verify(specialistManualPaymentReviewService).deliver(9_372L);
+        InOrder flow = inOrder(reviewSettlement, specialistManualPaymentReviewService);
+        flow.verify(reviewSettlement).creditNow(9_372L);
+        flow.verify(specialistManualPaymentReviewService).deliver(9_372L);
         verifyNoInteractions(ownerManualCardPaymentApprovalRepository);
         verify(tbankClient, never()).getState(any(TbankPaymentProfile.class), anyString());
         verify(tbankClient, never()).cancel(any(TbankPaymentProfile.class), any(TbankCancelCommand.class));
@@ -10030,6 +9985,37 @@ class PaymentLinkServiceTest {
         return payload;
     }
 
+    private OwnerManualCardPaymentApproval legacyOwnerApproval(Long id, Order order, PaymentLink link,
+                                                                  String reason, String recipientKey) {
+        OwnerManualCardPaymentApproval approval = new OwnerManualCardPaymentApproval();
+        approval.setId(id);
+        approval.setOrderId(order.getId());
+        approval.setPaymentLinkId(link.getId());
+        approval.setAmountKopecks(link.getAmountKopecks());
+        approval.setRecipientType(ContractorRecipientType.OWNER);
+        approval.setRecipientKey(recipientKey);
+        approval.setReason(reason);
+        approval.setReceiptUrl("");
+        approval.setRequestedBy("manager@example.ru");
+        approval.setRequestedAt(LocalDateTime.now().minusDays(1));
+        approval.setCallbackTokenHash("legacy-issued-button");
+        approval.setStatus(OwnerManualCardPaymentApprovalStatus.PENDING);
+        return approval;
+    }
+
+    private void stubImmediateReview(Order order, PaymentLink link, ContractorRecipientType type,
+                                     Long profileId, String recipientKey, String reason) {
+        SpecialistManualPaymentReview review = new SpecialistManualPaymentReview();
+        review.setId(9_370L);
+        review.setOrderId(order.getId());
+        review.setPaymentLinkId(link.getId());
+        when(specialistManualPaymentReviewService.requestRecipient(order.getId(), link.getId(),
+                link.getAmountKopecks(), type.name(), profileId, recipientKey, reason, "",
+                "manager@example.ru", authentication)).thenReturn(review);
+        when(specialistManualPaymentReviewService.result(review)).thenReturn(
+                ManagerManualCardPaymentResultResponse.completed(order.getId(), link.getId()));
+    }
+
     private PaymentLinkService service(TbankPaymentProperties properties) {
         return service(properties, new TbankTokenSigner());
     }
@@ -10123,7 +10109,7 @@ class PaymentLinkServiceTest {
                 ownerManualCardPaymentApprovalRepository,
                 specialistManualPaymentReviewService,
                 org.mockito.Mockito.mock(com.hunt.otziv.payments.service.SpecialistManualPaymentReviewGuard.class),
-                transactionExecutor);
+                reviewSettlement, transactionExecutor);
         var bankPaymentReconciliation = new com.hunt.otziv.payments.service.BankPaymentReconciliationWorkflow(
                 settlement, lifecycle, initializationState, observationApplication, cancellation, presenter, routes,
                 observations, paymentLinkRepository, orderRepository, paymentProfileService,

@@ -63,7 +63,7 @@ public class ClientChatMessageSender implements com.hunt.otziv.client_messages.a
     }
 
     /** Manual receipt recovery only: the gateway validates the candidate's own ACK and frozen envelope. */
-    public ClientMessageSendResult recoverRecordedOutcomeFromChat(String operationId, LocalDateTime preparedAt) {
+    @Override public ClientMessageSendResult recoverRecordedOutcomeFromChat(String operationId, LocalDateTime preparedAt) {
         ClientMessageSendResult current = recordedOutcome(operationId);
         if (current.sent() || isKnownUnsent(current) || preparedAt == null) return current;
         try {
@@ -82,13 +82,16 @@ public class ClientChatMessageSender implements com.hunt.otziv.client_messages.a
                 return ClientMessageSendResult.failed("whatsapp_history_unavailable",
                         "История WhatsApp недоступна для сверки отправки");
             }
+            var matches = candidates.stream().filter(candidate -> candidate != null && Boolean.TRUE.equals(candidate.fromMe())
+                    && frozen.destination().equals(candidate.groupId())
+                    && candidate.messageId() != null && !candidate.messageId().isBlank() && candidate.message() != null
+                    && frozen.message().trim().equals(candidate.message().trim()))
+                    .collect(java.util.stream.Collectors.toMap(com.hunt.otziv.whatsapp.dto.WhatsAppReconciledMessage::messageId,
+                            candidate -> candidate, (first, duplicate) -> first)).values();
+            if (matches.size() > 1) return ClientMessageSendResult.failed("whatsapp_history_evidence_ambiguous",
+                    "Найдено несколько одинаковых сообщений; нельзя однозначно подтвердить сохранённую операцию");
             boolean matchingCandidateRejected = false;
-            for (var candidate : candidates) {
-                if (candidate == null || !Boolean.TRUE.equals(candidate.fromMe())
-                        || !frozen.destination().equals(candidate.groupId())
-                        || candidate.messageId() == null || candidate.messageId().isBlank()
-                        || candidate.message() == null
-                        || !frozen.message().trim().equals(candidate.message().trim())) continue;
+            for (var candidate : matches) {
                 matchingCandidateRejected = true;
                 try {
                     var receipt = whatsAppService.reconcileOperation(

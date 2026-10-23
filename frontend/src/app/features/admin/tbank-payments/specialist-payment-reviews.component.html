@@ -1,9 +1,9 @@
-<section class="specialist-reviews" aria-label="Проверка переводов специалистам">
+<section class="specialist-reviews" aria-label="Ручные оплаты и возражения получателей">
   <header>
     <div>
       <p class="eyebrow">РУЧНЫЕ ПЕРЕВОДЫ</p>
-      <h2>Ожидают специалиста <span>{{ reviews().length }}</span></h2>
-      <p>Специалист может возразить в течение 24 часов после отметки менеджера. Зачисление требует доставленного уведомления.</p>
+      <h2>Ручные оплаты на контроле <span>{{ reviews().length }}</span></h2>
+      <p>После успешной отметки заказ оплачен. Специалист или получатель могут сообщить менеджеру о непоступлении в течение 24 часов. Без возражений оплата подтверждается автоматически; уведомление учитывается отдельно.</p>
     </div>
     <button type="button" class="refresh" (click)="load()" [disabled]="loading() || busyId() !== null">
       Обновить
@@ -16,7 +16,7 @@
   @if (loading() && !reviews().length) {
     <p class="review-empty">Загружаем запросы сверки…</p>
   } @else if (!reviews().length) {
-    <p class="review-empty">Открытых переводов специалистам нет.</p>
+    <p class="review-empty">Ручных оплат на контроле нет.</p>
   } @else {
     <div class="review-grid">
       @for (review of reviews(); track review.id) {
@@ -26,13 +26,14 @@
               <strong>Заказ №{{ review.orderId }}</strong>
               <small>Платёж №{{ review.paymentLinkId }} · получатель №{{ review.recipientUserId }}</small>
             </div>
-            <span class="review-status">{{ statusLabel(review.status) }}</span>
+            <span class="review-status">{{ statusLabel(review) }}</span>
           </div>
           <dl>
             <div><dt>Сумма</dt><dd>{{ formatMoney(review.amountKopecks) }}</dd></div>
             <div><dt>Менеджер отметил</dt><dd>{{ formatDate(review.requestedAt) }}</dd></div>
-            <div><dt>Срок проверки</dt><dd>{{ formatDate(review.deadlineAt) }}</dd></div>
-            <div><dt>Уведомление</dt><dd>{{ formatDate(review.notifiedAt) }}</dd></div>
+            <div><dt>Можно оспорить до</dt><dd>{{ formatDate(review.deadlineAt) }}</dd></div>
+            <div><dt>Оплата отмечена</dt><dd>{{ formatDate(review.creditedAt ?? null) }}</dd></div>
+            <div><dt>Уведомление доставлено</dt><dd>{{ formatDate(review.notifiedAt) }}</dd></div>
           </dl>
           @if (review.lastError) {
             <p class="review-error" role="alert">{{ review.lastError }}</p>
@@ -45,7 +46,7 @@
               <button type="button" (click)="open(review, 'received')" [disabled]="busyId() !== null">Деньги поступили</button>
             }
             @if (canMarkAbsent(review)) {
-              <button type="button" (click)="open(review, 'absent')" [disabled]="busyId() !== null">Платежа нет</button>
+              <button type="button" (click)="open(review, 'absent')" [disabled]="busyId() !== null">Зарегистрировать отсутствие платежа</button>
             }
             @if (review.status === 'SETTLING' || review.status === 'ADMIN_SETTLING' || review.status === 'NEEDS_ATTENTION') {
               <button type="button" (click)="reconcile(review)" [disabled]="busyId() !== null">Сверить состояние</button>

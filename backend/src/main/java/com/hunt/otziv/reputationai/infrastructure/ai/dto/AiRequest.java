@@ -1,6 +1,8 @@
 package com.hunt.otziv.reputationai.infrastructure.ai.dto;
 
 import java.time.Duration;
+import java.util.Locale;
+import java.util.Set;
 
 public record AiRequest(
         String task,
@@ -10,8 +12,22 @@ public record AiRequest(
         Boolean jsonObject,
         Integer maxTokens,
         Duration timeout,
-        Boolean thinkingEnabled
+        Boolean thinkingEnabled,
+        String reasoningEffort
 ) {
+    public AiRequest(
+            String task,
+            String systemPrompt,
+            String userPrompt,
+            Double temperature,
+            Boolean jsonObject,
+            Integer maxTokens,
+            Duration timeout,
+            Boolean thinkingEnabled
+    ) {
+        this(task, systemPrompt, userPrompt, temperature, jsonObject, maxTokens, timeout, thinkingEnabled, null);
+    }
+
     public AiRequest(
             String task,
             String systemPrompt,
@@ -41,5 +57,11 @@ public record AiRequest(
         maxTokens = maxTokens == null ? null : Math.max(1, maxTokens);
         timeout = timeout == null ? null : timeout;
         thinkingEnabled = thinkingEnabled == null ? null : thinkingEnabled;
+        if (reasoningEffort != null) {
+            reasoningEffort = reasoningEffort.trim().toLowerCase(Locale.ROOT);
+            if (!Set.of("low", "high", "max").contains(reasoningEffort)) {
+                throw new IllegalArgumentException("reasoningEffort must be low, high or max");
+            }
+        }
     }
 }

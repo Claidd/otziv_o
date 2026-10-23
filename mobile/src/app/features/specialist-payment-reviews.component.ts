@@ -1,10 +1,10 @@
 import { Component, EventEmitter, OnDestroy, Output, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { manualPaymentReviewPresentation } from '@otziv/client-common/billing-payments';
 import { firstValueFrom, Subscription } from 'rxjs';
 import {
   PaymentAdministrationApi,
-  type SpecialistPaymentReview,
-  type SpecialistPaymentReviewStatus
+  type SpecialistPaymentReview
 } from '../core/payment-administration.api';
 import { MobileConfirmService } from '../shared/mobile-confirm.service';
 
@@ -53,24 +53,14 @@ export class SpecialistPaymentReviewsComponent implements OnDestroy {
         this.loading.set(false);
       },
       error: error => {
-        this.error.set(this.errorMessage(error, 'Не удалось загрузить проверки переводов специалистам.'));
+        this.error.set(this.errorMessage(error, 'Не удалось загрузить ручные оплаты на контроле.'));
         this.loading.set(false);
       }
     });
   }
 
-  statusLabel(status: SpecialistPaymentReviewStatus): string {
-    const labels: Record<SpecialistPaymentReviewStatus, string> = {
-      PENDING_DELIVERY: 'Уведомление не доставлено',
-      WAITING: 'Ожидаем возражения',
-      SETTLING: 'Идёт зачисление',
-      ADMIN_SETTLING: 'Идёт ручная сверка',
-      DISPUTED: 'Специалист оспорил',
-      CONFIRMED: 'Зачислено',
-      NEEDS_ATTENTION: 'Нужна проверка',
-      SUPERSEDED: 'Закрыто без поступления'
-    };
-    return labels[status] ?? status;
+  statusLabel(review: SpecialistPaymentReview): string {
+    return manualPaymentReviewPresentation(review).title;
   }
 
   canRetry(review: SpecialistPaymentReview): boolean {
@@ -124,10 +114,10 @@ export class SpecialistPaymentReviewsComponent implements OnDestroy {
       }
     }
     const confirmed = await this.confirm.confirm({
-      title: editing.action === 'received' ? 'Подтвердить поступление' : 'Платежа нет',
+      title: editing.action === 'received' ? 'Подтвердить поступление' : 'Зарегистрировать отсутствие платежа',
       message: editing.action === 'received'
-        ? `Выписка специалиста подтверждает ${this.money(review.amountKopecks)} по заказу №${review.orderId}? После сохранения заказ будет зачислен.`
-        : `По выписке специалиста перевод ${this.money(review.amountKopecks)} по заказу №${review.orderId} не поступил? Запрос будет закрыт без зачисления.`,
+        ? `Выписка получателя подтверждает ${this.money(review.amountKopecks)} по заказу №${review.orderId}? Будет сохранён результат сверки.`
+        : `По выписке получателя перевод ${this.money(review.amountKopecks)} по заказу №${review.orderId} не поступил? ${review.creditedAt ? 'Будет зарегистрировано возражение. Отметка оплаты не отменяется автоматически.' : 'Проверка будет закрыта без зачисления.'}`,
       confirmText: 'Сохранить сверку',
       danger: editing.action === 'absent'
     });

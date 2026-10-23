@@ -11,6 +11,7 @@ const ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/u;
 const HASH = /^[a-f0-9]{64}$/u;
 const RECORD_FILE = /^[a-f0-9]{64}\.json$/u;
 const MAX_RECORD_BYTES = 4096;
+const MAX_RECEIPT_WINDOW_MS = 5 * 60 * 1000;
 
 class OperationLedgerError extends Error {
   constructor(code, statusCode = 503) { super(code); this.code = code; this.statusCode = statusCode; }
@@ -43,6 +44,8 @@ class OperationLedger {
     this.directory = path.resolve(directory); this.now = now; this.io = io;
     this.maxRecords = Math.max(1, Math.min(Math.floor(Number(maxRecords)) || 100_000, 1_000_000));
     this.index = new OperationLedgerIndex(); this.inFlight = new Set(); this.maintenance = 0;
+    // Rebuilt from the same durable records. A receipt can identify only one operation.
+    this.messageOwners = new Map(); this.envelopeRecords = new Map();
     this.healthy = true; this.closing = false; this.persistenceFailures = 0; this.readFailures = 0;
     this.admissionRejected = 0; this.closeWaiters = [];
     io.mkdirSync(this.directory, { recursive: true, mode: 0o700 });
@@ -73,7 +76,17 @@ class OperationLedger {
   }
   filename(key) { return path.join(this.directory, `${key}.json`); }
   observe(record) {
-    if (record) this.index.set(record.key, record.state === "RUNNING" && !this.inFlight.has(record.key) ? "UNKNOWN" : record.state, record.startedAt);
+    if (record) {
+      this.index.set(record.key, record.state === "RUNNING" && !this.inFlight.has(record.key) ? "UNKNOWN" : record.state, record.startedAt);
+      let records = this.envelopeRecords.get(record.envelopeHash);
+      if (!records) this.envelopeRecords.set(record.envelopeHash, records = new Map());
+      records.set(record.key, record);
+      if (record.state === "SUCCEEDED") {
+        let owners = this.messageOwners.get(record.messageId);
+        if (!owners) this.messageOwners.set(record.messageId, owners = new Set());
+        owners.add(record.key);
+      }
+    }
     return record;
   }
   read(key) {
@@ -93,7 +106,9 @@ class OperationLedger {
     }
   }
   snapshot(record) {
-    return { state: record.state === "RUNNING" && !this.inFlight.has(record.key) ? "UNKNOWN" : record.state,
+    if (record.state === "SUCCEEDED" && [...(this.messageOwners.get(record.messageId) || [])].some(key => key !== record.key))
+      throw new OperationLedgerError("operation_evidence_already_bound", 409);
+    return { receiptBindingVersion: 1, state: record.state === "RUNNING" && !this.inFlight.has(record.key) ? "UNKNOWN" : record.state,
       messageId: record.state === "SUCCEEDED" ? record.messageId : null, envelopeHash: record.envelopeHash };
   }
   missing() {
@@ -128,7 +143,7 @@ class OperationLedger {
     const record = { version: 1, key, envelopeHash: hash, state, startedAt };
     try {
       exclusive(this.io, this.filename(key), record); syncDirectory(this.io, this.directory);
-      this.index.set(key, state, startedAt); return record;
+      this.observe(record); return record;
     } catch (error) {
       if (error.code === "EEXIST") return null;
       // Even a torn/unflushed claim reserves its identity; new work stops.
@@ -174,7 +189,7 @@ class OperationLedger {
     }
   }
   // Positive provider evidence can resolve UNKNOWN; there is no mark-unsent API.
-  async reconcile(id, envelope, messageId, verify) {
+  async reconcile(id, envelope, messageId, verify, { sentAt } = {}) {
     const record = this.read(this.key(id)); if (!record) this.missing();
     this.assertEnvelope(record, envelopeHash(envelope));
     if (this.inFlight.has(record.key)) throw new OperationLedgerError("operation_running", 409);
@@ -184,9 +199,35 @@ class OperationLedger {
     this.maintenance++;
     try {
       if (!validMessageId(messageId) || !await verify(messageId, envelope)) throw new OperationLedgerError("operation_evidence_mismatch", 409);
-      const resolved = { ...record, state: "SUCCEEDED", messageId, completedAt: this.now() };
+      // Verification may await I/O. Re-read and bind synchronously afterwards so
+      // concurrent reconciliations cannot attach one provider message twice.
+      const current = this.read(record.key);
+      if (current.state === "SUCCEEDED") {
+        if (current.messageId !== messageId) throw new OperationLedgerError("operation_evidence_mismatch", 409);
+        return { ...this.snapshot(current), replayed: true };
+      }
+      const owners = this.messageOwners.get(messageId);
+      if (owners && [...owners].some(key => key !== current.key))
+        throw new OperationLedgerError("operation_evidence_already_bound", 409);
+      if (sentAt !== undefined) this.assertReceiptWindow(current, sentAt);
+      const resolved = { ...current, state: "SUCCEEDED", messageId, reconciledAt: this.now() };
       this.replace(resolved); return { ...this.snapshot(resolved), replayed: true };
     } finally { this.maintenance--; this.finishDrain(); }
+  }
+  assertReceiptWindow(record, sentAt) {
+    if (!Number.isSafeInteger(record.completedAt) || record.completedAt < record.startedAt)
+      throw new OperationLedgerError("operation_evidence_window_unavailable", 409);
+    const end = Math.min(record.completedAt, record.startedAt + MAX_RECEIPT_WINDOW_MS);
+    if (!Number.isFinite(sentAt) || sentAt < record.startedAt - 2000 || sentAt > end + 2000)
+      throw new OperationLedgerError("operation_evidence_mismatch", 409);
+    for (const other of this.envelopeRecords.get(record.envelopeHash)?.values() || []) {
+      if (other.key === record.key || other.state === "SUCCEEDED") continue;
+      const otherEnd = Number.isSafeInteger(other.completedAt) && other.completedAt >= other.startedAt
+        ? Math.min(other.completedAt, other.startedAt + MAX_RECEIPT_WINDOW_MS)
+        : Number.POSITIVE_INFINITY; // An unfinished competing dispatch cannot be excluded by its age.
+      if (sentAt >= other.startedAt - 2000 && sentAt <= otherEnd + 2000)
+        throw new OperationLedgerError("operation_evidence_ambiguous", 409);
+    }
   }
   async reconcileRecovery(manifest, verifyCoverage) {
     this.assertWritable();

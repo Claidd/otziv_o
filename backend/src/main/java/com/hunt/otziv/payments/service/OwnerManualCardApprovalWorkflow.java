@@ -74,6 +74,8 @@ public class OwnerManualCardApprovalWorkflow {
 
     private final SpecialistManualPaymentReviewGuard specialistReviewGuard;
 
+    private final SpecialistManualPaymentReviewSettlementService reviewSettlement;
+
     private final PaymentLinkTransactionExecutor transactionExecutor;
 
     private final SecureRandom secureRandom = new SecureRandom();
@@ -100,6 +102,9 @@ public class OwnerManualCardApprovalWorkflow {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ссылка на чек не должна превышать 1024 символа");
         }
         String cleanActor = normalize(actor);
+        ManagerManualCardPaymentResultResponse replay = specialistReviewService.replayCredited(orderId,
+                recipientType == null ? null : recipientType.name(), recipientProfileId, recipientKey, cleanReason, cleanReceiptUrl, authentication);
+        if (replay != null) return replay;
         OrderManualCardRoute route = selectManualCardPaymentRouteForOrder(orderId, authentication);
         PaymentLink snapshot = paymentLinkRepository.findByIdWithOrder(route.linkId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежная ссылка не найдена"));
         if (!isCompletedManualCardPayment(snapshot)) {
@@ -108,23 +113,25 @@ public class OwnerManualCardApprovalWorkflow {
             // canonical selection, rather than by an untrusted recipientType.
             ManualCardRoutePolicy.SelectedManagerRecipient selected = manualCardPayments.resolveManagerRecipientForOrder(
                     orderId, recipientType, recipientProfileId, recipientKey, authentication);
-            if (selected.recipientType() != ContractorRecipientType.SPECIALIST) {
-                specialistReviewGuard.requireNoPendingReview(orderId);
-            }
             if (selected.recipientType() == ContractorRecipientType.OWNER) {
-                return requestOwnerManualCardPaymentApproval(orderId, route, cleanReason, cleanReceiptUrl,
-                        selected.recipientType(), selected.recipientProfileId(), selected.recipientKey(), cleanActor, authentication);
+                // Previously issued owner approvals retain their original authorisation workflow.
+                var legacy = transactionExecutor.required(() ->
+                        ownerManualCardPaymentApprovalRepository.findByPaymentLinkIdForUpdate(route.linkId()).orElse(null));
+                if (legacy != null) {
+                    return requestOwnerManualCardPaymentApproval(orderId, route, cleanReason, cleanReceiptUrl,
+                            selected.recipientType(), selected.recipientProfileId(), selected.recipientKey(), cleanActor, authentication);
+                }
             }
-            if (selected.recipientType() == ContractorRecipientType.SPECIALIST) {
-                var review = transactionExecutor.required(() -> specialistReviewService.request(
-                        orderId, route.linkId(), route.amountKopecks(),
+            if (selected.recipientType() != null) {
+                var review = transactionExecutor.required(() -> specialistReviewService.requestRecipient(
+                        orderId, route.linkId(), route.amountKopecks(), selected.recipientType().name(),
                         selected.recipientProfileId(), selected.recipientKey(), cleanReason,
                         cleanReceiptUrl, cleanActor, authentication));
+                reviewSettlement.creditNow(review.getId());
                 try {
                     specialistReviewService.deliver(review.getId());
                 } catch (RuntimeException notificationFailure) {
-                    log.warn("Specialist payment review notification deferred: reviewId={}",
-                            review.getId(), notificationFailure);
+                    log.warn("Recipient payment review notification deferred: reviewId={}", review.getId(), notificationFailure);
                 }
                 return specialistReviewService.result(review);
             }

@@ -16,7 +16,8 @@ public class DeepSeekProblemDiagnosticModel implements ProblemDiagnosticModel {
     @Override public boolean available() { return deepSeek.isAvailable(); }
     @Override public Result analyze(Input input) {
         AiResponse response = deepSeek.generate(new AiRequest("manager-problem-diagnosis", input.systemPrompt(), input.evidenceJson(),
-                0.1, true, input.maxOutputTokens(), input.timeout(), input.thinkingEnabled()));
+                // Keep thinking enabled while reserving the bounded output budget for the diagnosis JSON.
+                0.1, true, input.maxOutputTokens(), input.timeout(), input.thinkingEnabled(), "low"));
         return new Result(response.text(), properties.getDeepseek().getModel(), response.inputTokens(), response.outputTokens(), response.errorMessage());
     }
 }
