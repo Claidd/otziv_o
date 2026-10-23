@@ -92,7 +92,7 @@ services:
       - internal_net
 
   phpmyadmin:
-    image: ghcr.io/claidd/otziv-security@sha256:82afc14c5009b78c8bb1f4a011199654277edf5d4ff0fa2061851bbb3ca1a6c9
+    image: ghcr.io/claidd/otziv-security@sha256:858c57795d143518e553c54ab2d76d10650fb3a235c7dd686f5e0383eb72f973
     profiles: ["db-admin"]
     restart: unless-stopped
     logging: *default-logging
