@@ -2015,10 +2015,36 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
             ScheduledClientMessageState snapshot = stateRepository.findById(stateId).orElse(null);
             if (snapshot != null && snapshot.getOrderId() != null) paymentLinkService.reconcileActiveLinkForOrder(snapshot.getOrderId());
         }
-        PreparedScheduledDelivery prepared = transactionRunner.callInPreparationTransaction(
-                () -> processClaimedState(stateId, nowStorage, claimedUntil, false));
+        PreparedScheduledDelivery prepared;
+        try {
+            prepared = transactionRunner.callInPreparationTransaction(
+                    () -> processClaimedState(stateId, nowStorage, claimedUntil, false));
+        } catch (PaymentInstructionException failure) {
+            // No provider call has occurred. The joined payment preparation has
+            // rolled back, including any newly reserved route/link and envelope.
+            transactionRunner.runInNewTransaction(() -> recordUnsentPaymentPreparationFailure(
+                    stateId, claimedUntil, messageTime.databaseTimestamp(messageTime.nowStorage()), failure));
+            return;
+        }
         if (prepared == null) return;
         dispatchScheduledDelivery(prepared, nowStorage);
+    }
+
+    private void recordUnsentPaymentPreparationFailure(Long stateId, LocalDateTime claimedUntil,
+            LocalDateTime nowStorage, PaymentInstructionException failure) {
+        Long orderId = stateRepository.findOrderIdByStateId(stateId).orElse(null);
+        if (orderId != null) orderDeliveryContext.lock(orderId);
+        ScheduledClientMessageState state = stateRepository.findByIdForUpdate(stateId).orElse(null);
+        if (state == null || state.getStatus() != ScheduledMessageStateStatus.ACTIVE
+                || !Objects.equals(orderId, state.getOrderId())
+                || !ClientMessageStateSafety.isTransactionInProgress(state)
+                || !"CLAIMED".equals(state.getDeliveryStatus())
+                || !claimedUntil.equals(messageTime.databaseTimestamp(state.getLockedUntil()))
+                || !claimedUntil.isAfter(nowStorage)) return;
+        stateRepository.lockDispatchBudget();
+        // Retain a previously frozen, definitely-unsent operation verbatim.
+        state.setDeliveryStatus(hasText(state.getDeliveryEnvelope()) ? "RETRYABLE" : null);
+        registerFailure(state, nowStorage, "payment_instruction_failed", failure.getMessage(), null, 0);
     }
 
     void dispatchScheduledDelivery(PreparedScheduledDelivery prepared, LocalDateTime nowStorage) {
@@ -2506,8 +2532,10 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
             paymentMessage = reviewCheck
                     ? new PaymentMessageWithTransfer(reviewCheckReminderText(order), null)
                     : paymentReminderText(order);
-        } catch (PaymentInstructionException e) {
-            registerFailure(state, nowStorage, "payment_instruction_failed", e.getMessage(), null, 0);
+        } catch (PaperInvoicePendingException pending) {
+            // Successful preparation intentionally awaits the owner's issued mark.
+            // Commit that source so the owner can confirm it, without an envelope/send.
+            registerFailure(state, nowStorage, "payment_instruction_failed", pending.getMessage(), null, 0);
             return null;
         }
         return prepareMessage(state, company, manager(order), paymentMessage.message(), nowStorage,
@@ -2579,13 +2607,9 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
 
         OrderPaymentMessageBuilder.PreparedPaymentMessage paymentMessage;
         try {
-            paymentMessage = orderPaymentMessageBuilder.publishedOrderPaymentMessageWithTransfer(order);
-        } catch (ResponseStatusException e) {
-            registerFailure(state, nowStorage, "payment_instruction_failed", readableException(e), null, 0);
-            return null;
+            paymentMessage = orderPaymentMessageBuilder.publishedOrderPaymentMessageInCurrentTransaction(order);
         } catch (Exception e) {
-            registerFailure(state, nowStorage, "payment_instruction_failed", readableException(e), null, 0);
-            return null;
+            throw new PaymentInstructionException(readableException(e), e);
         }
 
         if (!liveSendingEnabled()) {
@@ -3424,10 +3448,7 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
             ManagerPaymentLinkResponse link = createBankPaymentLink(order);
             if ("OWNER_PAPER_INVOICE".equals(link.paymentMethod())
                     && "CREATED".equals(link.status())) {
-                throw new PaymentInstructionException(
-                        "Бумажный счёт ещё не отмечен как отправленный клиенту",
-                        null
-                );
+                throw new PaperInvoicePendingException();
             }
             paymentLink = link.url();
             tbankPaymentCopyText = link.copyText();
@@ -3494,7 +3515,7 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
 
     private ManagerPaymentLinkResponse createBankPaymentLink(Order order) {
         try {
-            return paymentLinkService.createForOrderInNewTransaction(order.getId());
+            return paymentLinkService.createForOrderInCurrentTransaction(order.getId());
         } catch (Exception e) {
             throw new PaymentInstructionException("Не удалось подготовить банковскую ссылку для заказа #"
                     + order.getId() + ": " + readableException(e), e);
@@ -4208,6 +4229,12 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
     private static class PaymentInstructionException extends RuntimeException {
         private PaymentInstructionException(String message, Throwable cause) {
             super(message, cause);
+        }
+    }
+
+    private static final class PaperInvoicePendingException extends RuntimeException {
+        private PaperInvoicePendingException() {
+            super("Бумажный счёт ещё не отмечен как отправленный клиенту");
         }
     }
 }

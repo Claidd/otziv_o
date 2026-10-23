@@ -86,6 +86,23 @@ class OrderPaymentMessageBuilderTest {
     }
 
     @Test
+    void scheduledPreparationUsesTheExistingTransactionAndPreservesTransferNumber() {
+        when(appSettingService.getString(AppSettingService.CLIENT_MESSAGES_PAYMENT_INSTRUCTION_SOURCE, "MANAGER_TEXT"))
+                .thenReturn("BANK_LINK");
+        when(paymentLinkServiceProvider.getObject()).thenReturn(paymentLinkService);
+        when(paymentLinkService.createForOrderInCurrentTransaction(10L)).thenReturn(new ManagerPaymentLinkResponse(
+                "token", "", 10L, BigDecimal.valueOf(1500), 150000, "CREATED", "MANUAL_MOBILE_BANK",
+                LocalDateTime.now().plusDays(90), "instruction", "frozen message", "2202208238396676"));
+
+        var prepared = service().publishedOrderPaymentMessageInCurrentTransaction(order());
+
+        assertEquals("frozen message", prepared.message());
+        assertEquals("2202208238396676", prepared.telegramCopyTransferNumber());
+        verify(paymentLinkService).createForOrderInCurrentTransaction(10L);
+        org.mockito.Mockito.verify(paymentLinkService, org.mockito.Mockito.never()).createForOrderInNewTransaction(10L);
+    }
+
+    @Test
     void routedMobileBankSourcePropagatesFrozenTransferNumberStructurally() {
         Order order = order();
         when(appSettingService.getString(AppSettingService.CLIENT_MESSAGES_PAYMENT_INSTRUCTION_SOURCE, "MANAGER_TEXT"))

@@ -635,7 +635,7 @@ class ScheduledClientMessageServiceTest {
                 AppSettingService.CLIENT_MESSAGES_PAYMENT_INSTRUCTION_SOURCE,
                 ScheduledClientMessageService.DEFAULT_PAYMENT_INSTRUCTION_SOURCE
         )).thenReturn(paymentSource);
-        when(paymentLinkService.createForOrderInNewTransaction(15L)).thenReturn(new ManagerPaymentLinkResponse(
+        when(paymentLinkService.createForOrderInCurrentTransaction(15L)).thenReturn(new ManagerPaymentLinkResponse(
                 "token", "", 15L, BigDecimal.valueOf(1300), 130000, "CREATED", "MANUAL_MOBILE_BANK",
                 LocalDateTime.now().plusDays(90),
                 "Перевод по номеру телефона: 89001234567",
@@ -1024,7 +1024,7 @@ class ScheduledClientMessageServiceTest {
         order.setStatusChangedAt(changedAt);
 
         when(orderRepository.findByIdForMutation(10L)).thenReturn(java.util.Optional.of(order));
-        when(orderPaymentMessageBuilder.publishedOrderPaymentMessageWithTransfer(order)).thenReturn(
+        when(orderPaymentMessageBuilder.publishedOrderPaymentMessageInCurrentTransaction(order)).thenReturn(
                 new OrderPaymentMessageBuilder.PreparedPaymentMessage("финальный счет", "2202208238396676")
         );
         when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(true);
@@ -1087,7 +1087,7 @@ class ScheduledClientMessageServiceTest {
         assertEquals(ScheduledMessageAttemptStatus.SKIPPED, attemptCaptor.getValue().getStatus());
         assertEquals("common_billing_linked", attemptCaptor.getValue().getErrorCode());
         verify(stateRepository, org.mockito.Mockito.atLeastOnce()).save(state);
-        verify(orderPaymentMessageBuilder, never()).publishedOrderPaymentMessageWithTransfer(any());
+        verify(orderPaymentMessageBuilder, never()).publishedOrderPaymentMessageInCurrentTransaction(any());
         verify(orderStatusNotificationService, never()).sendMessageToClientChat(
                 any(),
                 any(),

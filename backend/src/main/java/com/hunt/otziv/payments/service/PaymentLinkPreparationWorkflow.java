@@ -156,6 +156,16 @@ public class PaymentLinkPreparationWorkflow {
         }));
     }
 
+    /**
+     * The caller already owns the order mutex. Keep the route and message envelope
+     * atomic; a failure must roll back that entire preparation, not retry inside it.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public ManagerPaymentLinkResponse createForOrderInCurrentTransaction(Long orderId) {
+        requirePaymentLinksEnabled();
+        return prepareForOrder(orderId, null, false).response();
+    }
+
     static <T> T retryDeadlockedPreparation(Long orderId, Supplier<T> transactionAttempt) {
         for (int attempt = 1; ; attempt++) {
             try {
