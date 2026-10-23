@@ -8,6 +8,8 @@ import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.context.ApplicationEventPublisher;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -79,6 +81,41 @@ class ManagerProblemDiagnosticsServiceTest {
     void optionalDiagnosticFailureDoesNotBreakCardPresentation() {
         when(store.latestForSource(10L)).thenThrow(new IllegalStateException("corrupt snapshot"));
         assertThat(service.latest(10L)).isNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"QUEUED", "RUNNING", "RETRY", "UNAVAILABLE", "NEEDS_CONTEXT"})
+    void unfinishedAnalysisProvidesUsefulHonestGuidanceWithoutChangingQueueState(String state) {
+        when(settings.mode()).thenReturn("ENFORCE");
+        var facts = List.of(new Fact("invoice:189:status", "invoice", "status", "COLLECTING"),
+                new Fact("invoice:189:orderCount", "invoice", "orderCount", "3"),
+                new Fact("invoice:189:readyCount", "invoice", "readyCount", "1"));
+        when(store.latestForSource(10L)).thenReturn(new ManagerProblemDiagnosisStore.Stored(1, 2, 1, 2, state,
+                LocalDateTime.now(), facts, null, null, PROMPT_VERSION, null, 2));
+        DiagnosticView view = service.latest(10L);
+        assertThat(view.status()).isEqualTo(state);
+        assertThat(view.model()).isEqualTo("server-rules");
+        assertThat(view.diagnosis().summary()).contains("1 из 3");
+        assertThat(view.diagnosis().actions()).hasSize(1);
+        assertThat(view.diagnosis().verification()).hasSize(1);
+        assertThat(view.facts()).isEqualTo(facts);
+        verifyNoInteractions(collector, events);
+        verify(store, never()).capture(any());
+    }
+
+    @Test
+    void currentTechnicalDiagnosisGetsBusinessPresentationWhileItsStoredEvidenceRemainsUntouched() {
+        when(settings.mode()).thenReturn("ENFORCE");
+        var facts = List.of(new Fact("invoice:189:status", "invoice", "status", "COLLECTING"));
+        var original = new Diagnosis("Проверить invoice_order.ready и follow_up_at", List.of(), List.of(), List.of(),
+                List.of(new Action("CHECK_SOURCE", "Сверить данные", "Менеджер", "Проверить результат", List.of("invoice:189:status"))), List.of("Проверить результат"));
+        when(store.latestForSource(10L)).thenReturn(new ManagerProblemDiagnosisStore.Stored(1, 2, 1, 2, "NEEDS_CONTEXT",
+                LocalDateTime.now(), facts, original, "deepseek-flash", "manager-problem-evidence-v2", null, 1));
+        var result = service.latest(10L);
+        assertThat(result.diagnosis().summary()).contains("Общий счёт").doesNotContain("invoice_order", "follow_up_at");
+        assertThat(original.summary()).contains("invoice_order.ready");
+        assertThat(result.status()).isEqualTo("NEEDS_CONTEXT");
+        assertThat(result.model()).isEqualTo("server-rules");
     }
 
     @Test

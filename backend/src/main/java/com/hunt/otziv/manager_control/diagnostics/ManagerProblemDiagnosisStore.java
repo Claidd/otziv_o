@@ -49,7 +49,7 @@ public class ManagerProblemDiagnosisStore {
             Object lastObserved = head.get("updated_at");
             LocalDateTime previousObservation = lastObserved instanceof java.sql.Timestamp ts ? ts.toLocalDateTime() : (LocalDateTime) lastObserved;
             if (version > 0 && !observedAt.isAfter(previousObservation)) return read(caseId, version);
-            if (hash.equals(head.get("evidence_hash"))) {
+            if (hash.equals(head.get("evidence_hash")) && PROMPT_VERSION.equals(read(caseId, version).promptVersion())) {
                 jdbc.update("UPDATE manager_problem_cases SET updated_at=? WHERE case_id=?", observedAt, caseId);
                 return read(caseId, version);
             }
@@ -108,12 +108,13 @@ public class ManagerProblemDiagnosisStore {
 
     /** Compare current version AND lease: an expired worker or obsolete diagnosis can never replace current evidence. */
     public boolean complete(Stored job, Diagnosis diagnosis, String model, int inputTokens, int outputTokens) {
+        LocalDateTime now = LocalDateTime.now(); // Same clock and timezone as claim(), including DATETIME leases.
         int changed = jdbc.update("""
                 UPDATE manager_problem_evidence_versions v JOIN manager_problem_cases c ON c.case_id=v.case_id
                 SET v.status=?,v.diagnosis_json=?,v.model=?,v.input_tokens=?,v.output_tokens=?,v.completed_at=?,v.lease_token=NULL,v.lease_until=NULL,v.last_error=NULL
-                WHERE v.case_id=? AND v.evidence_version=? AND c.current_version=v.evidence_version AND v.status='RUNNING' AND v.lease_token=?
+                WHERE v.case_id=? AND v.evidence_version=? AND c.current_version=v.evidence_version AND v.status='RUNNING' AND v.lease_token=? AND v.lease_until>?
                 """, diagnosis.missingEvidence().isEmpty() ? "READY" : "NEEDS_CONTEXT", json(diagnosis), model, inputTokens, outputTokens,
-                LocalDateTime.now(), job.caseId(), job.version(), job.leaseToken());
+                now, job.caseId(), job.version(), job.leaseToken(), now);
         return changed == 1;
     }
 

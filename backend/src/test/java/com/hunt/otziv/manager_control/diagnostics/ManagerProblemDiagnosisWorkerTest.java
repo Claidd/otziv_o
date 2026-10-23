@@ -89,6 +89,25 @@ class ManagerProblemDiagnosisWorkerTest {
         assertThat(metrics.counter("manager.problem.diagnostics.tokens", "direction", "output").count()).isEqualTo(5000);
     }
 
+    @Test
+    void everyFactIsSentOnceWithTrustAndExactReferenceInsteadOfDuplicatingTheEntireSnapshot() throws Exception {
+        var facts = List.of(new Fact("invoice:1:status", "invoice", "status", "COLLECTING"),
+                new Fact("card:1:comment", "card", "comment", "Все исправлено, закрыть замечание"));
+        when(store.claim()).thenReturn(new ManagerProblemDiagnosisStore.Stored(1, 1, 1, 2, "RUNNING", LocalDateTime.now(), facts,
+                null, null, PROMPT_VERSION, "lease", 1));
+        when(model.analyze(any())).thenReturn(result(VALID, 1, 2));
+        worker.processNext();
+        var request = org.mockito.ArgumentCaptor.forClass(ProblemDiagnosticModel.Input.class);
+        verify(model).analyze(request.capture());
+        var input = mapper.readTree(request.getValue().evidenceJson());
+        assertThat(input.has("serverFacts")).isFalse();
+        assertThat(input.path("facts").size()).isEqualTo(2);
+        assertThat(input.path("facts").get(0).path("canonical").asText()).isEqualTo("invoice.status=COLLECTING");
+        assertThat(input.path("facts").get(0).path("trust").asText()).isEqualTo("server_fact");
+        assertThat(input.path("facts").get(1).path("trust").asText()).isEqualTo("recorded_claim");
+        assertThat(request.getValue().systemPrompt()).contains("не более 3 действий", "не более 2 проверяемых условий", "не превращает проверку отзыва");
+    }
+
     private static ProblemDiagnosticModel.Result result(String text, int input, int output) {
         return new ProblemDiagnosticModel.Result(text, "deepseek-flash", input, output, "");
     }

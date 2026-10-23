@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { Component, computed, input } from '@angular/core';
+import { Component, computed, input, signal } from '@angular/core';
 import { ManagerProblemDiagnosticView } from '../../../core/manager-control.api';
 
 type EvidenceFact = ManagerProblemDiagnosticView['facts'][number];
@@ -55,27 +55,47 @@ const INVOICE_STATUS_LABELS: Record<string, string> = {
 })
 export class ManagerProblemDiagnosisComponent {
   readonly view = input.required<ManagerProblemDiagnosticView>();
+  readonly showTechnical = input(false);
+  readonly technicalExpanded = signal(false);
   private readonly factsByReference = computed(() => new Map(this.view().facts.map(fact => [fact.reference, fact])));
   readonly analysis = computed(() => {
     const view = this.view();
-    return ['READY', 'NEEDS_CONTEXT'].includes(view.status)
+    return (view.model === 'server-rules' || ['READY', 'NEEDS_CONTEXT'].includes(view.status))
       && !['OFF', 'SHADOW'].includes(view.rolloutMode ?? '') ? view.diagnosis : null;
   });
   readonly statusText = computed(() => {
     const view = this.view();
     if (view.rolloutMode === 'SHADOW' || view.rolloutMode === 'OFF') {
-      return 'Для разбора доступны подтверждённые данные ниже.';
+      return 'Разбор пока не включён. Следуйте указаниям в замечании.';
+    }
+    if (view.model === 'server-rules' && this.analysis()) {
+      return 'Предварительный разбор по данным системы';
     }
     switch (view.status) {
       case 'QUEUED':
       case 'RUNNING': return 'Собранные данные анализируются. Результат появится после обновления карточки.';
       case 'RETRY': return 'Анализ временно недоступен. Система повторит проверку.';
-      case 'UNAVAILABLE': return 'Анализ недоступен. Проверьте исходные данные или передайте вопрос ответственному.';
+      case 'UNAVAILABLE': return 'Анализ недоступен. Следуйте указаниям в замечании или обратитесь к руководителю.';
       case 'NEEDS_CONTEXT': return 'Для подтверждения причины нужны дополнительные данные.';
       case 'READY': return 'Разбор подготовлен по состоянию на указанное время.';
-      default: return 'Состояние разбора уточняется. Используйте подтверждённые данные ниже.';
+      default: return 'Состояние разбора уточняется. Следуйте указаниям в замечании.';
     }
   });
+  readonly extendedAnalysisStatus = computed(() => {
+    if (this.view().model !== 'server-rules' || !this.analysis()) return null;
+    switch (this.view().status) {
+      case 'QUEUED':
+      case 'RUNNING': return 'Расширенный анализ готовится.';
+      case 'RETRY': return 'Расширенный анализ временно недоступен; система повторит проверку.';
+      case 'UNAVAILABLE': return 'Расширенный анализ недоступен.';
+      case 'NEEDS_CONTEXT': return 'Для уточнения причины нужны дополнительные данные.';
+      default: return null;
+    }
+  });
+
+  toggleTechnical(event: Event): void {
+    this.technicalExpanded.set((event.target as HTMLDetailsElement).open);
+  }
 
   confirmedText(finding: { text: string; evidenceRefs: string[] }): string {
     const facts = finding.evidenceRefs.map(reference => this.factsByReference().get(reference));

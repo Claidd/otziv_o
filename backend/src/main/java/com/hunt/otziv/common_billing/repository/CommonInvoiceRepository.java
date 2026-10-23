@@ -456,7 +456,22 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
                 )
               )
             )
-            OR COALESCE(invoice.lastError, '') <> ''
+            OR (
+              TRIM(COALESCE(invoice.lastError, '')) <> ''
+              AND NOT (
+                invoice.status = com.hunt.otziv.common_billing.model.CommonInvoiceStatus.DISABLED
+                AND (
+                  LOWER(TRIM(invoice.lastError)) LIKE 'disabled:%'
+                  OR LOWER(TRIM(invoice.lastError)) LIKE 'empty:%'
+                  OR LOCATE('merged_into:', LOWER(TRIM(invoice.lastError))) = 1
+                  OR LOCATE('manual_fix:', LOWER(TRIM(invoice.lastError))) = 1
+                )
+                AND NOT EXISTS (
+                  SELECT unpaidTail.id FROM CommonInvoiceOrder unpaidTail
+                  WHERE unpaidTail.invoice = invoice AND unpaidTail.paid = false
+                )
+              )
+            )
             OR COALESCE(invoice.paymentSuccessNotificationError, '') <> ''
             OR (
               invoice.status = :collectingStatus
@@ -533,7 +548,22 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
                 )
               )
             )
-            OR COALESCE(invoice.lastError, '') <> ''
+            OR (
+              TRIM(COALESCE(invoice.lastError, '')) <> ''
+              AND NOT (
+                invoice.status = com.hunt.otziv.common_billing.model.CommonInvoiceStatus.DISABLED
+                AND (
+                  LOWER(TRIM(invoice.lastError)) LIKE 'disabled:%'
+                  OR LOWER(TRIM(invoice.lastError)) LIKE 'empty:%'
+                  OR LOCATE('merged_into:', LOWER(TRIM(invoice.lastError))) = 1
+                  OR LOCATE('manual_fix:', LOWER(TRIM(invoice.lastError))) = 1
+                )
+                AND NOT EXISTS (
+                  SELECT unpaidTail.id FROM CommonInvoiceOrder unpaidTail
+                  WHERE unpaidTail.invoice = invoice AND unpaidTail.paid = false
+                )
+              )
+            )
             OR COALESCE(invoice.paymentSuccessNotificationError, '') <> ''
             OR (
               invoice.status = :collectingStatus

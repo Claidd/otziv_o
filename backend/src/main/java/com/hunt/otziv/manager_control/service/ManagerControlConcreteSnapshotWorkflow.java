@@ -194,7 +194,7 @@ public class ManagerControlConcreteSnapshotWorkflow {
             existing.put(key, saved);
             synced.add(concretePresenter.concreteItemResponse(saved, example.contactText(), example.specialistName()));
         }
-        if (reopenedUnanswered) {
+        if (reopenedUnanswered || synced.stream().anyMatch(example -> "OPEN".equals(example.itemStatus()))) {
             cardLifecycle.reopenParentItemIfConcreteOpen(parentItem);
         }
         return synced;

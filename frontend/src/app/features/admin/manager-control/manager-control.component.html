@@ -564,7 +564,8 @@
                   <div class="chip-list">
                     @for (problem of actionProblems(manager); track trackProblem($index, problem)) {
                       <a
-                        [href]="problem.targetUrl"
+                        [href]="actionProblemTargetUrl(manager, problem)"
+                        (click)="openActionProblem($event, manager, problem)"
                         class="control-chip critical {{ countToneClass(problem.count) }} {{ itemActionClass(problem.actionType) }} {{ slaCardClass(problem) }}"
                         [class.handled]="problem.itemStatus && problem.itemStatus !== 'OPEN'"
                         [class.has-sla]="problem.targetDeadlineAt && (!problem.itemStatus || problem.itemStatus === 'OPEN')"
@@ -702,7 +703,8 @@
                 <div class="chip-list">
                   @for (problem of actionProblems(manager); track trackProblem($index, problem)) {
                     <a
-                      [href]="problem.targetUrl"
+                      [href]="actionProblemTargetUrl(manager, problem)"
+                      (click)="openActionProblem($event, manager, problem)"
                       class="control-chip critical {{ countToneClass(problem.count) }} {{ itemActionClass(problem.actionType) }} {{ slaCardClass(problem) }}"
                       [class.handled]="problem.itemStatus && problem.itemStatus !== 'OPEN'"
                       [class.has-sla]="problem.targetDeadlineAt && (!problem.itemStatus || problem.itemStatus === 'OPEN')"
@@ -977,7 +979,8 @@
         } @else if (detail()) {
           <div class="detail-list">
             @for (item of visibleDetailItems(); track trackDetailItem($index, item)) {
-              <article class="detail-item {{ detailCountToneClass(detailItemVisibleCount(item)) }}" [class.critical]="item.severity === 'CRITICAL'" [class.workload]="item.group === 'WORKLOAD'" [class.handled]="item.itemStatus !== 'OPEN'">
+              <article class="detail-item {{ detailCountToneClass(detailItemVisibleCount(item)) }}" [class.critical]="item.severity === 'CRITICAL'" [class.workload]="item.group === 'WORKLOAD'" [class.handled]="item.itemStatus !== 'OPEN'"
+                [attr.id]="item.reasonCode === 'COMMON_INVOICES' ? 'manager-control-problem-COMMON_INVOICES' : null" tabindex="-1">
                 <div class="detail-item-main">
                   <div>
                     <h3>{{ item.label }}</h3>
@@ -1124,7 +1127,7 @@
                           </a>
 
                           @if (example.diagnosis; as diagnosis) {
-                            <app-manager-problem-diagnosis [view]="diagnosis" />
+                            <app-manager-problem-diagnosis [view]="diagnosis" [showTechnical]="canManageDailySummary()" />
                           }
                           @if (example.auditCommitments?.length) {
                             <app-manager-review-commitments [commitments]="example.auditCommitments || []" />

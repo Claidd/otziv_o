@@ -418,7 +418,13 @@ public class ManagerControlDailySnapshotWorkflow {
             return false;
         }
         List<ManagerDailyControlConcreteItem> concreteItems = dailyControlConcreteItemRepository.findByParentItem(item);
-        return concreteItems.size() < expectedCount || concreteItems.stream().anyMatch(concrete -> concrete.getStatus() == ManagerDailyControlItemStatus.OPEN);
+        // Closed cards describe past problems. They cannot cover a new problem merely
+        // because the section's total happens to be unchanged (one invoice replaced another).
+        long currentCards = concreteItems.stream()
+                .filter(concrete -> concrete.getStatus() != ManagerDailyControlItemStatus.RESOLVED)
+                .count();
+        return currentCards < expectedCount || concreteItems.stream()
+                .anyMatch(concrete -> concrete.getStatus() == ManagerDailyControlItemStatus.OPEN);
     }
 
     ManagerControlProblemResponse decorate(ManagerControlProblemResponse response, ManagerDailyControlItem item) {

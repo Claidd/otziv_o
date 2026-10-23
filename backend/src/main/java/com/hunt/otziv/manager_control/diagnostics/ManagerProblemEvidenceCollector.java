@@ -56,7 +56,7 @@ public class ManagerProblemEvidenceCollector {
         if (invoice && entityId != null) {
             List<Map<String, Object>> invoices = jdbc.queryForList("""
                     SELECT v.invoice_id, v.status, v.amount_kopecks, v.paid_kopecks, v.last_error,
-                           v.sent_at, v.next_reminder_at, v.payment_success_notification_error, v.updated_at
+                           v.sent_at, v.next_reminder_at, v.payment_success_notification_error, v.updated_at, a.enabled AS account_enabled
                     FROM common_invoices v JOIN common_billing_accounts a ON a.account_id=v.account_id
                     LEFT JOIN companies company ON company.company_id=a.invoice_company_id
                     WHERE v.invoice_id=? AND (a.manager_id=? OR company.company_manager=? OR EXISTS (
@@ -68,19 +68,26 @@ public class ManagerProblemEvidenceCollector {
                 return new Evidence(managerId + ":" + family + ":" + entityId, managerId, currentSourceId, false, List.copyOf(facts), observedAt);
             }
             invoices.forEach(row -> addRow(facts, "invoice:" + entityId, "invoice", row,
-                    "invoice_id", "status", "amount_kopecks", "paid_kopecks", "last_error", "sent_at", "next_reminder_at", "payment_success_notification_error"));
+                    "invoice_id", "status", "amount_kopecks", "paid_kopecks", "last_error", "sent_at", "next_reminder_at", "payment_success_notification_error", "account_enabled"));
             List<Map<String, Object>> orders = jdbc.queryForList("""
-                    SELECT order_id, ready, paid, active_membership, publication_blocker_since, paid_at, updated_at
-                    FROM common_invoice_orders WHERE invoice_id=? ORDER BY order_id LIMIT 101
+                    SELECT io.order_id, io.ready, io.paid, io.amount_kopecks, io.active_membership, io.publication_blocker_since, io.paid_at, io.updated_at,
+                           s.order_status_title AS current_order_status
+                    FROM common_invoice_orders io LEFT JOIN orders o ON o.order_id=io.order_id
+                    LEFT JOIN order_statuses s ON s.order_status_id=o.order_status
+                    WHERE io.invoice_id=? ORDER BY io.order_id LIMIT 101
                     """, entityId);
             orders.stream().limit(100).forEach(row -> addRow(facts, "order:" + number(row, "order_id"), "invoice_order", row,
-                    "order_id", "ready", "paid", "active_membership", "publication_blocker_since", "paid_at"));
+                    "order_id", "ready", "paid", "amount_kopecks", "active_membership", "publication_blocker_since", "paid_at", "current_order_status"));
             Map<String, Object> counts = jdbc.queryForMap("""
-                    SELECT COUNT(*) AS orderCount, COALESCE(SUM(ready),0) AS readyCount
-                    FROM common_invoice_orders WHERE invoice_id=? AND active_membership=TRUE
+                    SELECT COUNT(*) AS orderCount, COALESCE(SUM(io.ready),0) AS readyCount,
+                           COALESCE(SUM(s.order_status_title='Архив'),0) AS archivedActiveCount
+                    FROM common_invoice_orders io LEFT JOIN orders o ON o.order_id=io.order_id
+                    LEFT JOIN order_statuses s ON s.order_status_id=o.order_status
+                    WHERE io.invoice_id=? AND io.active_membership=TRUE
                     """, entityId);
             facts.add(new Fact("invoice:" + entityId + ":orderCount", "invoice", "orderCount", counts.get("orderCount").toString()));
             facts.add(new Fact("invoice:" + entityId + ":readyCount", "invoice", "readyCount", counts.get("readyCount").toString()));
+            facts.add(new Fact("invoice:" + entityId + ":archivedActiveCount", "invoice", "archivedActiveCount", counts.get("archivedActiveCount").toString()));
             if (orders.size() <= 100) {
                 String ids = orders.stream().filter(row -> Boolean.TRUE.equals(row.get("active_membership")) || "1".equals(String.valueOf(row.get("active_membership"))))
                         .map(row -> Long.toString(number(row, "order_id"))).collect(java.util.stream.Collectors.joining(","));
@@ -138,13 +145,25 @@ public class ManagerProblemEvidenceCollector {
         }
         for (Long stateId : stateIds) {
             jdbc.queryForList("""
-                    SELECT state_id, scenario, order_id, state_status, last_error_code, last_error_message,
-                           consecutive_failures, next_attempt_at, last_attempt_at, last_success_at,
-                           delivery_status, delivery_recovery_checked_at, updated_at
-                    FROM scheduled_client_message_state WHERE state_id=?
-                    """, stateId).forEach(row -> addRow(facts, "automation:" + stateId, "automation", row,
+                    SELECT s.state_id, s.scenario, s.order_id, s.state_status, s.last_error_code, s.last_error_message,
+                           s.consecutive_failures, s.next_attempt_at, s.last_attempt_at, s.last_success_at,
+                           s.delivery_status, s.delivery_recovery_checked_at, s.updated_at, s.target_key,
+                           COALESCE(o.order_status_changed_at,TIMESTAMP(o.order_changed),TIMESTAMP(o.order_created)) AS cycle_started_at,
+                           COALESCE(o.order_waiting_for_client_changed_at,o.order_status_changed_at,
+                               TIMESTAMP(o.order_changed),TIMESTAMP(o.order_created)) AS waiting_cycle_started_at
+                    FROM scheduled_client_message_state s LEFT JOIN orders o ON o.order_id=s.order_id WHERE s.state_id=?
+                    """, stateId).forEach(row -> {
+                addRow(facts, "automation:" + stateId, "automation", row,
                     "state_id", "scenario", "order_id", "state_status", "last_error_code", "last_error_message",
-                    "consecutive_failures", "next_attempt_at", "last_attempt_at", "last_success_at", "delivery_status", "delivery_recovery_checked_at"));
+                    "consecutive_failures", "next_attempt_at", "last_attempt_at", "last_success_at", "delivery_status", "delivery_recovery_checked_at");
+                LocalDateTime cycle = timestamp(row.get("cycle_started_at")), waiting = timestamp(row.get("waiting_cycle_started_at"));
+                String target = string(row, "target_key"), id = string(row, "order_id");
+                boolean orderTarget = target.startsWith("order:" + id + ":") || target.startsWith("payment-return:" + id + ":") || target.startsWith("client-text:" + id + ":");
+                String current = cycle == null || waiting == null || !orderTarget ? "неизвестно"
+                        : Boolean.toString(List.of("order:" + id + ":" + cycle.withNano(0),
+                                "payment-return:" + id + ":" + cycle.withNano(0), "client-text:" + id + ":" + waiting.withNano(0)).contains(target));
+                facts.add(new Fact("automation:" + stateId + ":current_cycle", "automation", "current_cycle", current));
+            });
             List<Map<String, Object>> attempts = jdbc.queryForList("""
                     SELECT attempt_id, attempt_status, error_code, error_message, attempted_at
                     FROM scheduled_client_message_attempts WHERE state_id=? ORDER BY attempt_id DESC LIMIT 6

@@ -1,0 +1,136 @@
+package com.hunt.otziv.manager_control.diagnostics;
+
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+import java.util.regex.Pattern;
+
+import static com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosticsService.*;
+
+/** Read-only, evidence-bound guidance. Never changes a card, sends a message or proves resolution. */
+final class ManagerProblemBusinessDiagnosis {
+    static final String MODEL = "server-rules";
+    private static final Pattern TECHNICAL = Pattern.compile(
+            "(?i)(?:[a-z][a-z0-9]*_[a-z0-9_]+|\\b(?:invoice|automation|card|order|coverage)\\.[a-z]|\\b(?:invoice|order|card|automation|attempt|message|chat|case|sourceTask):[0-9]+|[{}]|\\b(?:caseId|operationId|sourceTaskId|UNKNOWN|PREPARED|QUEUED|COLLECTING|READY|UNAVAILABLE|SKIPPED)\\b|[0-9a-f]{8}-[0-9a-f-]{27,})");
+
+    private ManagerProblemBusinessDiagnosis() { }
+
+    static boolean readable(Diagnosis value) {
+        return value != null && readable(value.summary(), 400) && !value.actions().isEmpty() && value.actions().size() <= 3
+                && !value.verification().isEmpty() && value.verification().size() <= 2
+                && value.actions().stream().allMatch(a -> readable(a.text(), 350) && readable(a.owner(), 100) && readable(a.verification(), 250))
+                && value.verification().stream().allMatch(v -> readable(v, 300));
+    }
+
+    private static boolean readable(String text, int length) {
+        return text != null && !text.isBlank() && text.length() <= length && !TECHNICAL.matcher(text).find();
+    }
+
+    static List<Fact> uncertainDelivery(List<Fact> facts) {
+        return facts.stream().filter(f -> {
+            if (!Set.of("automation", "manager_delivery", "invoice").contains(f.subject())) return false;
+            String prefix = f.reference().substring(0, f.reference().lastIndexOf(':') + 1);
+            if (facts.stream().anyMatch(scope -> scope.reference().equals(prefix + "current_cycle") && "false".equals(scope.value()))) return false;
+            String value = f.value().toUpperCase(Locale.ROOT);
+            if (Set.of("delivery_status", "state").contains(f.field()))
+                return Set.of("UNKNOWN", "UNCERTAIN", "PENDING", "PREPARED", "SENDING").contains(value);
+            return Set.of("last_error_code", "error_code").contains(f.field())
+                    && (value.contains("DELIVERY_UNCERTAIN") || value.contains("OUTCOME_UNCERTAIN")
+                    || value.contains("MANUAL_DELIVERY_HANDOFF") || value.equals("LEGACY_OPERATION_UNVERIFIED"));
+        }).toList();
+    }
+
+    static Diagnosis fallback(List<Fact> facts) {
+        List<Fact> uncertain = uncertainDelivery(facts);
+        if (!uncertain.isEmpty()) return uncertain(uncertain.getFirst());
+        String type = value(facts, "card", "entity_type");
+        if (type.startsWith("COMMON_INVOICE") || type.isBlank() && has(facts, "invoice", "status")) return invoice(facts);
+        if (type.startsWith("CLIENT_CHAT") || type.isBlank() && has(facts, "client_chat", "status")) {
+            return guidance("По переписке нужно проверить, получил ли клиент ответ на свой вопрос.", facts,
+                    "Сопоставьте последнее сообщение клиента с ответом в чате. Проверьте, дан ли ответ по существу и подтверждены ли обещанные действия.",
+                    "В переписке есть ответ на вопрос клиента, а заявленные действия подтверждены в системе.");
+        }
+        if ("На проверке".equals(value(facts, "order", "status"))) {
+            return guidance("Заказ остаётся на проверке у клиента. Доставка напоминания сама по себе не подтверждает, что проверка закончена.", facts,
+                    "Откройте заказ и существующую переписку: проверьте, получен ли результат проверки клиента и какие замечания ещё требуют выполнения.",
+                    "Результат проверки клиента отражён в заказе, замечания выполнены и причина контроля больше не действует.");
+        }
+        if ("Архив".equals(value(facts, "order", "status"))) {
+            return guidance("Заказ находится в архиве. Нужно сверить, относится ли замечание к ещё не выполненной работе.", facts,
+                    "Проверьте основание архивирования и оставшиеся обязательства. При расхождении передайте проверку администратору; не создавайте повторную публикацию или счёт.",
+                    "Подтверждено, что причина замечания устранена или больше не относится к действующим обязательствам.");
+        }
+        return guidance("Причина замечания пока не подтверждена полностью: требуется сверка исходной задачи.", facts,
+                "Откройте связанную задачу и проверьте её текущее состояние и результат последних действий. Если данных недостаточно, уточните их у ответственного и зафиксируйте срок проверки.",
+                "Исходная задача подтверждает устранение причины; одного комментария или обещания недостаточно.");
+    }
+
+    static Diagnosis uncertain(Fact fact) {
+        return new Diagnosis("Результат предыдущей отправки клиенту не подтверждён. Повторное сообщение может оказаться дубликатом.",
+                List.of(), List.of(), List.of("Нужно подтверждение результата существующей отправки."),
+                List.of(new Action("CHECK_DELIVERY", "Откройте историю чата и проверьте результат существующей отправки. До подтверждения результата повторная отправка запрещена.",
+                                "Менеджер", "Сохранено подтверждение результата существующей отправки.", List.of(fact.reference())),
+                        new Action("ESCALATE", "Если результат установить не удалось, передайте существующую отправку администратору для сверки. Не создавайте новое сообщение или платёж.",
+                                "Администратор", "Ответственный принял проверку и зафиксировал её результат.", List.of(fact.reference()))),
+                List.of("Результат существующей отправки подтверждён, а причина самого замечания устранена. Передача администратору и отправка сообщения сами по себе замечание не закрывают."));
+    }
+
+    private static Diagnosis invoice(List<Fact> facts) {
+        String status = value(facts, "invoice", "status");
+        long total = number(facts, "invoice", "orderCount"), ready = number(facts, "invoice", "readyCount");
+        long archived = number(facts, "invoice", "archivedActiveCount");
+        boolean disabled = Set.of("false", "0").contains(value(facts, "invoice", "account_enabled"));
+        String summary;
+        String action;
+        String verification;
+        if ("PARTIALLY_PAID".equals(status)) {
+            summary = "По общему счёту подтверждена только часть оплаты.";
+            long amount = number(facts, "invoice", "amount_kopecks"), paid = number(facts, "invoice", "paid_kopecks");
+            if (amount > 0 && paid >= 0 && paid < amount) summary = "По общему счёту оплачено " + rubles(paid) + " ₽ из " + rubles(amount) + " ₽. Остаток " + rubles(amount - paid) + " ₽ требует сверки.";
+            action = "Сверьте подтверждённые платежи и неоплаченную часть работ в существующем счёте. Не создавайте новый счёт взамен без проверки состава и начислений.";
+            verification = "Состав работ и начисления сверены, неоплаченная часть урегулирована и это отражено в существующем счёте.";
+        } else if (Set.of("PAID", "ARCHIVED", "DISABLED").contains(status)) {
+            summary = switch (status) {
+                case "PAID" -> "По данным системы счёт оплачен. Нужно сверить, осталась ли причина замечания.";
+                case "ARCHIVED" -> "Счёт находится в архиве. Само архивирование не подтверждает урегулирование оставшихся обязательств.";
+                default -> "Счёт отключён. Это само по себе не подтверждает урегулирование оставшихся обязательств.";
+            };
+            action = "Проверьте итоговый статус счёта, связанные работы и оставшиеся ошибки. При расхождении карточки с источником передайте сверку администратору.";
+            verification = "Источник подтверждает итог счёта и отсутствие той причины, по которой создано замечание.";
+        } else if ("COLLECTING".equals(status)) {
+            summary = total >= 0 && ready >= 0 && ready <= total
+                    ? "Общий счёт ещё собирается: готовы " + ready + " из " + total + " действующих позиций."
+                    : "Общий счёт ещё собирается; готовность всех позиций не подтверждена.";
+            action = "Проверьте неготовые позиции в составе счёта: выполнена ли работа и подтверждена ли её готовность. Уточните оставшиеся действия и срок у ответственного специалиста.";
+            if (total > 0 && ready == total) action = "Все действующие позиции готовы. Сверьте состояние существующего счёта и причину задержки его подготовки с администратором; не создавайте дубликат.";
+            else if (total == 0) action = "Уточните действующий состав работ и необходимость этого счёта. Не возвращайте архивные заказы в работу только ради наполнения счёта.";
+            verification = "Готовность действующих позиций подтверждена, состав счёта корректен и причина задержки устранена.";
+        } else {
+            summary = "Общий счёт требует проверки текущей оплаты и состояния связанных работ.";
+            action = "Откройте существующий счёт, сверьте платежи и состояние работ. При расхождении данных передайте проверку администратору, сохранив существующий счёт.";
+            verification = "Причина замечания устранена и подтверждена текущими данными счёта и связанных работ.";
+        }
+        if (archived > 0) {
+            summary += " В составе остаются архивные заказы.";
+            action = "Сверьте архивные заказы в составе счёта и основания начислений с администратором. Не возвращайте их в работу и не публикуйте повторно только ради готовности счёта.";
+        }
+        if (disabled) summary += " Автоматическое формирование этого общего счёта отключено.";
+        return guidance(summary, facts, action, verification);
+    }
+
+    private static Diagnosis guidance(String summary, List<Fact> facts, String action, String verification) {
+        List<String> refs = facts.stream().filter(f -> !Set.of("reason", "comment", "title", "last_error", "last_error_message").contains(f.field()))
+                .map(Fact::reference).limit(3).toList();
+        return new Diagnosis(summary, List.of(), List.of(), List.of("Предварительный разбор по данным системы; точную причину подтвердите при сверке."),
+                List.of(new Action("CHECK_SOURCE", action, "Менеджер", verification, refs)), List.of(verification));
+    }
+
+    private static boolean has(List<Fact> facts, String subject, String field) { return !value(facts, subject, field).isBlank(); }
+    private static String value(List<Fact> facts, String subject, String field) {
+        return facts.stream().filter(f -> subject.equals(f.subject()) && field.equals(f.field())).map(Fact::value).findFirst().orElse("");
+    }
+    private static long number(List<Fact> facts, String subject, String field) {
+        try { return Long.parseLong(value(facts, subject, field)); } catch (NumberFormatException ignored) { return -1; }
+    }
+    private static String rubles(long kopecks) { return java.math.BigDecimal.valueOf(kopecks, 2).stripTrailingZeros().toPlainString().replace('.', ','); }
+}

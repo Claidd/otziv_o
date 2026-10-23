@@ -47,6 +47,19 @@ class ManagerProblemDiagnosisValidatorTest {
     }
 
     @Test
+    void manualUnknownOverridesUnsafeSummaryAndClosureAdviceNotJustActionCodes() {
+        var delivery = new Fact("manager_delivery:operation:state", "manager_delivery", "state", "UNKNOWN");
+        String unsafe = diagnosis("invoice.status=COLLECTING", "invoice:189:status", "CHECK_SOURCE")
+                .replace("Нужно уточнить состояние", "Отправьте заново и закройте замечание")
+                .replace("Проверить актуальный статус", "После повторной отправки закрыть");
+        var result = validator.validate(unsafe, List.of(status, delivery));
+        assertThat(result.summary()).contains("не подтверждён").doesNotContain("Отправьте заново");
+        assertThat(result.verification()).noneMatch(text -> text.contains("повторной отправки"));
+        assertThat(result.actions()).extracting(Action::code).containsExactly("CHECK_DELIVERY", "ESCALATE");
+        assertThat(result.actions()).noneMatch(action -> action.text().contains("«Починить»"));
+    }
+
+    @Test
     void missingSourceCoverageCannotBeHiddenByModel() {
         Fact missing = new Fact("source:coverage", "coverage", "live_context", "недоступен");
         Diagnosis result = validator.validate(diagnosis("invoice.status=COLLECTING", "invoice:189:status", "CHECK_SOURCE"), List.of(status, missing));

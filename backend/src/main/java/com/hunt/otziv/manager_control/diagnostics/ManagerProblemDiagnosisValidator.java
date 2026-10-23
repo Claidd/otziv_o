@@ -52,15 +52,10 @@ public class ManagerProblemDiagnosisValidator {
                 missing.add("Срез источника или истории ограничен. По нему нельзя исключить другие ошибки или более ранние действия; при необходимости проверьте полный журнал.");
             }
             // Uncertain delivery must never suggest retrying a send or creating another payment.
-            List<Fact> uncertain = facts.stream().filter(f ->
-                    f.value().toLowerCase(java.util.Locale.ROOT).contains("delivery_uncertain")
-                    || f.value().toLowerCase(java.util.Locale.ROOT).contains("manual_delivery_handoff")
-                    || f.field().equals("delivery_status") && Set.of("UNKNOWN", "UNCERTAIN", "PENDING", "SENDING").contains(f.value())).toList();
+            List<Fact> uncertain = ManagerProblemBusinessDiagnosis.uncertainDelivery(facts);
             if (!uncertain.isEmpty()) {
-                actions = new ArrayList<>(List.of(new Action("CHECK_DELIVERY", "Сверить подтверждение доставки в журнале операций. До выяснения результата повторная отправка запрещена.",
-                        "Менеджер совместно с администратором", "Сохранено подтверждение доставки либо результат ручной проверки существующей операции", List.of(uncertain.getFirst().reference())),
-                        new Action("ESCALATE", "Передать администратору существующую операцию для проверки, сохранив запрет дублирования отправки и платежа.", "Администратор",
-                                "Зафиксирован исход существующей операции", List.of(uncertain.getFirst().reference()))));
+                Diagnosis safe = ManagerProblemBusinessDiagnosis.uncertain(uncertain.getFirst());
+                return new Diagnosis(safe.summary(), List.copyOf(confirmed), List.copyOf(hypotheses), List.copyOf(missing), safe.actions(), safe.verification());
             }
             return new Diagnosis(summary, List.copyOf(confirmed), List.copyOf(hypotheses), List.copyOf(missing), List.copyOf(actions), strings(root.path("verification")));
         } catch (IllegalArgumentException e) { throw e; }
@@ -68,6 +63,7 @@ public class ManagerProblemDiagnosisValidator {
     }
 
     public static String canonical(Fact fact) { return fact.subject() + "." + fact.field() + "=" + fact.value(); }
+    static boolean isServerFact(Fact fact) { return !CLAIM_FIELDS.contains(fact.field()); }
     private static String requiredCanonicalText(JsonNode node) {
         JsonNode value = node.path("text");
         if (!value.isTextual() || value.asText().isBlank() || value.asText().length() > 4096) {
