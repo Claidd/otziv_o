@@ -53,6 +53,17 @@ public class ManagerProblemDiagnosisStore {
                 jdbc.update("UPDATE manager_problem_cases SET updated_at=? WHERE case_id=?", observedAt, caseId);
                 return read(caseId, version);
             }
+            // Preserve queue age while observations change (for example, receipt-check timestamps).
+            // A changed snapshot also must not bypass a provider/schema retry's existing backoff.
+            LocalDateTime nextAttemptAt = now;
+            if (version > 0) {
+                List<LocalDateTime> pending = jdbc.queryForList("""
+                        SELECT next_attempt_at FROM manager_problem_evidence_versions
+                        WHERE case_id=? AND evidence_version=? AND status IN ('QUEUED','RETRY','UNAVAILABLE')
+                          AND next_attempt_at IS NOT NULL
+                        """, LocalDateTime.class, caseId, version);
+                if (!pending.isEmpty()) nextAttemptAt = pending.getFirst();
+            }
             if ((Boolean.TRUE.equals(head.get("closed")) || "1".equals(String.valueOf(head.get("closed")))) && !evidence.closed()) episode++;
             jdbc.update("""
                     UPDATE manager_problem_evidence_versions SET status='SUPERSEDED',lease_token=NULL,lease_until=NULL
@@ -62,7 +73,7 @@ public class ManagerProblemDiagnosisStore {
             jdbc.update("""
                     INSERT INTO manager_problem_evidence_versions(case_id,evidence_version,episode,observed_at,evidence_json,status,prompt_version,next_attempt_at)
                     VALUES(?,?,?,?,?,'QUEUED',?,?)
-                    """, caseId, version, episode, observedAt, json, PROMPT_VERSION, now);
+                    """, caseId, version, episode, observedAt, json, PROMPT_VERSION, nextAttemptAt);
             jdbc.update("""
                     UPDATE manager_problem_cases SET source_task_id=?,current_version=?,episode=?,closed=?,evidence_hash=?,updated_at=? WHERE case_id=?
                     """, evidence.sourceTaskId(), version, episode, evidence.closed(), hash, observedAt, caseId);
@@ -83,18 +94,15 @@ public class ManagerProblemDiagnosisStore {
     }
 
     public Stored claim() {
+        return claim(false, 0);
+    }
+
+    /** Four current-board slots followed by one historical slot are selected by the worker. */
+    public Stored claim(boolean preferCurrent, long afterManagerId) {
         return transactions().execute(ignored -> {
             LocalDateTime now = LocalDateTime.now();
-            List<Map<String, Object>> candidates = jdbc.queryForList("""
-                    SELECT c.case_id,c.current_version AS evidence_version FROM manager_problem_cases c
-                    WHERE EXISTS (SELECT 1 FROM manager_problem_evidence_versions v
-                      WHERE v.case_id=c.case_id AND v.evidence_version=c.current_version
-                        AND ((v.status IN ('QUEUED','RETRY','UNAVAILABLE') AND v.next_attempt_at<=?)
-                          OR (v.status='RUNNING' AND v.lease_until<?)))
-                    ORDER BY (SELECT current_job.next_attempt_at FROM manager_problem_evidence_versions current_job
-                              WHERE current_job.case_id=c.case_id AND current_job.evidence_version=c.current_version),c.case_id
-                    LIMIT 1 FOR UPDATE SKIP LOCKED
-                    """, now, now);
+            List<Map<String, Object>> candidates = candidates(now, preferCurrent, afterManagerId);
+            if (candidates.isEmpty()) candidates = candidates(now, !preferCurrent, afterManagerId);
             if (candidates.isEmpty()) return null;
             long id = num(candidates.getFirst(), "case_id"), version = num(candidates.getFirst(), "evidence_version");
             String lease = UUID.randomUUID().toString();
@@ -104,6 +112,30 @@ public class ManagerProblemDiagnosisStore {
                     """, lease, now.plusMinutes(3), id, version);
             return read(id, version);
         });
+    }
+
+    private List<Map<String, Object>> candidates(LocalDateTime now, boolean current, long afterManagerId) {
+        return jdbc.queryForList("""
+                    SELECT c.case_id,c.current_version AS evidence_version FROM manager_problem_cases c
+                    WHERE c.closed=FALSE
+                      AND NOT EXISTS (SELECT 1 FROM manager_daily_control_concrete_items resolved_source
+                                      WHERE resolved_source.control_entity_id=c.source_task_id AND resolved_source.item_status='RESOLVED')
+                      AND EXISTS (SELECT 1 FROM manager_problem_evidence_versions v
+                      WHERE v.case_id=c.case_id AND v.evidence_version=c.current_version
+                        AND ((v.status IN ('QUEUED','RETRY','UNAVAILABLE') AND v.next_attempt_at<=?)
+                          OR (v.status='RUNNING' AND v.lease_until<?)))
+                      AND (EXISTS (SELECT 1 FROM manager_daily_control_concrete_items i
+                            JOIN manager_daily_controls d ON d.daily_control_id=i.control_id
+                            WHERE i.control_entity_id=c.source_task_id AND d.manager_id=c.manager_id
+                              AND i.item_status='OPEN' AND c.closed=FALSE
+                              AND d.control_date=(SELECT MAX(latest.control_date) FROM manager_daily_controls latest
+                                                  WHERE latest.manager_id=c.manager_id)))=?
+                    ORDER BY CASE WHEN ? THEN CASE WHEN c.manager_id>? THEN 0 ELSE 1 END ELSE 0 END,
+                             CASE WHEN ? THEN c.manager_id ELSE 0 END,
+                             (SELECT current_job.next_attempt_at FROM manager_problem_evidence_versions current_job
+                              WHERE current_job.case_id=c.case_id AND current_job.evidence_version=c.current_version),c.case_id
+                    LIMIT 1 FOR UPDATE SKIP LOCKED
+                    """, now, now, current, current, afterManagerId, current);
     }
 
     /** Compare current version AND lease: an expired worker or obsolete diagnosis can never replace current evidence. */

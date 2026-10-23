@@ -4,6 +4,7 @@ import {
   isAutomationWaitingForSlotReason,
   isTelegramBindingAutomationIssue,
   isExplicitlyRepairableCommonInvoiceReason,
+  ManagerControlComponent,
   needsManagerControlDetailSync,
   shouldHideClientChatUnansweredAfterAction,
   telegramGroupLinkCommand
@@ -41,6 +42,19 @@ describe('shouldHideClientChatUnansweredAfterAction', () => {
 });
 
 describe('Telegram automation binding', () => {
+  it('keeps the binding action for the manager-friendly description', () => {
+    expect(isTelegramBindingAutomationIssue({
+      type: 'AUTOMATION_FAILURE', reason: 'Группа Telegram не привязана к компании'
+    })).toBe(true);
+  });
+
+  it('keeps repair blocked while a delivery is being checked manually', () => {
+    const canRepair = ManagerControlComponent.prototype.canRepairAutomationIssue;
+    expect(canRepair.call({} as ManagerControlComponent, {
+      type: 'AUTOMATION_FAILURE', reason: 'Группа Telegram не привязана к компании · Ручная проверка продолжается. Эта карточка остаётся открытой.'
+    } as any)).toBe(false);
+  });
+
   it('recognizes a missing Telegram chatId as a binding action', () => {
     expect(isTelegramBindingAutomationIssue({
       type: 'AUTOMATION_FAILURE',

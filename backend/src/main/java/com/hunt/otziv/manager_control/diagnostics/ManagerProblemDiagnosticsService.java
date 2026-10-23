@@ -19,7 +19,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 @RequiredArgsConstructor
 @Slf4j
 public class ManagerProblemDiagnosticsService {
-    public static final String PROMPT_VERSION = "manager-problem-evidence-v3";
+    public static final String PROMPT_VERSION = "manager-problem-evidence-v4";
     private static final Set<String> UNTRUSTED_FIELDS = Set.of("reason", "comment", "last_error", "last_error_message", "error_message", "payment_success_notification_error", "title");
     private final ManagerProblemEvidenceCollector collector;
     private final ManagerProblemDiagnosisStore store;

@@ -124,6 +124,26 @@ class ManagerProblemEvidenceCollectorMySqlIntegrationTest {
     }
 
     @Test
+    void currentScanPrioritizesLatestOpenBoardsAndEvidenceRetainsHistoricalCardDate() {
+        jdbc.update("UPDATE manager_daily_controls SET control_date='2026-07-16' WHERE daily_control_id=1");
+        jdbc.update("INSERT INTO manager_daily_controls(daily_control_id,manager_id,control_date) VALUES(2,2,'2026-10-23'),(3,3,'2026-10-23')");
+        jdbc.update("""
+                INSERT INTO manager_daily_control_concrete_items(control_entity_id,control_id,entity_key,entity_type,entity_id,item_status) VALUES
+                  (10,1,'invoice:10','COMMON_INVOICE',10,'OPEN'),
+                  (20,2,'invoice:20','COMMON_INVOICE',20,'OPEN'),
+                  (21,2,'invoice:21','COMMON_INVOICE',21,'DEFERRED'),
+                  (22,2,'invoice:22','COMMON_INVOICE',22,'RESOLVED'),
+                  (30,3,'invoice:30','COMMON_INVOICE',30,'OPEN')
+                """);
+        assertThat(collector.scanCurrent(0, 1)).containsExactly(20L);
+        assertThat(collector.scanCurrent(20, 20)).containsExactly(30L);
+        assertThat(collector.scanCurrent(30, 20)).isEmpty();
+        assertThat(collector.scan(0, 20)).containsExactly(10L, 20L, 21L, 30L);
+        assertThat(collector.collect(10L).facts()).anyMatch(f -> f.subject().equals("card")
+                && f.field().equals("control_date") && f.value().equals("2026-07-16"));
+    }
+
+    @Test
     void reassignedInvoiceAndAutomationDoNotLeakNewOwnersLogsThroughOldCard() {
         invoiceFixture();
         jdbc.update("UPDATE common_billing_accounts SET manager_id=99");
@@ -219,6 +239,38 @@ class ManagerProblemEvidenceCollectorMySqlIntegrationTest {
         var facts = collector.collect(10L).facts();
         assertThat(facts).anyMatch(f -> f.reference().equals("order:9970:cycle_coverage"));
         assertThat(facts).noneMatch(f -> f.subject().equals("automation"));
+    }
+
+    @Test
+    void repeatedReceiptChecksDoNotCreatePaidWorkButActualDeliveryAndAttemptsInvalidateEvidence() {
+        orderFixture();
+        jdbc.update("""
+                INSERT INTO manager_client_message_queue(operation_id,card_id,command_kind,envelope_ciphertext,state,error_code,created_at)
+                VALUES('receipt-check',11,'CONTROL','enc:private','UNKNOWN','operation_unknown','2026-10-22 11:00:00')
+                """);
+        jdbc.execute("DROP TABLE IF EXISTS manager_problem_evidence_versions");
+        jdbc.execute("DROP TABLE IF EXISTS manager_problem_cases");
+        new org.springframework.jdbc.datasource.init.ResourceDatabasePopulator(new org.springframework.core.io.ClassPathResource(
+                "db/migration/V1_10_337__manager_problem_diagnostics.sql")).execute(jdbc.getDataSource());
+        var store = new ManagerProblemDiagnosisStore(jdbc, new com.fasterxml.jackson.databind.ObjectMapper(),
+                new org.springframework.jdbc.datasource.DataSourceTransactionManager(jdbc.getDataSource()));
+        var initial = store.capture(collector.collect(11L));
+        jdbc.update("UPDATE scheduled_client_message_state SET delivery_recovery_checked_at='2026-10-23 12:00:00' WHERE state_id=40");
+        jdbc.update("UPDATE manager_client_message_queue SET updated_at='2026-10-23 12:00:00' WHERE operation_id='receipt-check'");
+        var checked = store.capture(collector.collect(11L));
+        assertThat(checked.version()).isEqualTo(initial.version());
+        assertThat(checked.facts()).isEqualTo(initial.facts());
+        assertThat(checked.facts()).noneMatch(f -> f.field().equals("delivery_recovery_checked_at")
+                || f.subject().equals("manager_delivery") && f.field().equals("updated_at"));
+
+        jdbc.update("UPDATE scheduled_client_message_state SET delivery_status='SENT',last_error_code=NULL,last_success_at='2026-10-23 12:01:00' WHERE state_id=40");
+        jdbc.update("UPDATE manager_client_message_queue SET state='SENT',error_code=NULL WHERE operation_id='receipt-check'");
+        var sent = store.capture(collector.collect(11L));
+        assertThat(sent.version()).isEqualTo(initial.version() + 1);
+        assertThat(sent.facts()).anyMatch(f -> f.reference().equals("automation:40:delivery_status") && f.value().equals("SENT"));
+        jdbc.update("INSERT INTO scheduled_client_message_attempts(attempt_id,state_id,attempt_status,attempted_at) VALUES(100,40,'SENT','2026-10-23 12:01:00')");
+        assertThat(store.capture(collector.collect(11L)).version()).isEqualTo(sent.version() + 1);
+        assertThat(store.read(initial.caseId(), initial.version()).facts()).isEqualTo(initial.facts());
     }
 
     private void orderFixture() {

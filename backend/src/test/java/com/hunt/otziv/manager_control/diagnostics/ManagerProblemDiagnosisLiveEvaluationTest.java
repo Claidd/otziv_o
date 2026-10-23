@@ -27,6 +27,20 @@ import static com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosti
 /** Opt-in paid synthetic evaluation through the production worker, prompt, adapter and validator. No production data/DB. */
 class ManagerProblemDiagnosisLiveEvaluationTest {
     @Test
+    void historicalClaimGatePreservesDottedDatesAndRejectsUnqualifiedCurrentClaims() {
+        assertThatCode(() -> assertHistoricalClaimsAreQualified(
+                "Карточка заведена 17.07 из-за того, что клиент 12 дней не проверял шаблоны; напоминание отмечено отправленным. "
+                        + "Сейчас заказ оплачен и не ожидает клиента."))
+                .doesNotThrowAnyException();
+        assertThatThrownBy(() -> assertHistoricalClaimsAreQualified(
+                "Клиент написал 33 минуты назад и остался без ответа; исходная переписка недоступна."))
+                .isInstanceOf(AssertionError.class);
+        assertThatThrownBy(() -> assertHistoricalClaimsAreQualified(
+                "Клиент не проверил шаблоны, задача остаётся в контроле. Оплата заказа не заменяет проверку шаблонов."))
+                .isInstanceOf(AssertionError.class);
+    }
+
+    @Test
     @EnabledIfEnvironmentVariable(named = "RUN_MANAGER_AUDIT_LIVE_EVAL", matches = "1")
     void currentModelProducesValidEvidenceBoundDiagnosesAndPreservesDeliverySafety() throws Exception {
         String apiKey = System.getenv("DEEPSEEK_API_KEY");
@@ -78,7 +92,11 @@ class ManagerProblemDiagnosisLiveEvaluationTest {
                 new Fact("automation:9002:last_error_message", "automation", "last_error_message", "Внешняя отправка началась, подтверждение доставки не получено")));
         var largeInvoice = job(3, largeSyntheticInvoice());
         assertThat(largeInvoice.facts()).hasSize(432);
-        when(store.claim()).thenReturn(invoice, uncertainDelivery, largeInvoice);
+        var historicalChat = job(4, historicalUnavailableChat());
+        var historicalReview = job(5, historicalReviewForCurrentlyPaidOrder());
+        var fixtures = List.of(invoice, uncertainDelivery, largeInvoice, historicalChat, historicalReview);
+        when(store.claim(anyBoolean(), anyLong())).thenReturn(invoice, uncertainDelivery, largeInvoice,
+                historicalChat, historicalReview);
         List<Map<String, Object>> results = new ArrayList<>();
         doAnswer(call -> {
             ManagerProblemDiagnosisStore.Stored source = call.getArgument(0);
@@ -88,9 +106,13 @@ class ManagerProblemDiagnosisLiveEvaluationTest {
             result.put("validated", true);
             result.put("inputFactCount", source.facts().size());
             result.put("summaryLength", diagnosis.summary().length());
+            result.put("summary", diagnosis.summary());
             result.put("confirmedFacts", diagnosis.confirmedFacts());
+            result.put("hypotheses", diagnosis.hypotheses());
             result.put("actions", diagnosis.actions());
+            result.put("verification", diagnosis.verification());
             result.put("missingEvidence", diagnosis.missingEvidence());
+            result.put("humanReviewRubric", humanReviewRubric(source.caseId()));
             result.put("model", call.getArgument(2));
             result.put("inputTokens", call.getArgument(3));
             result.put("outputTokens", call.getArgument(4));
@@ -104,9 +126,7 @@ class ManagerProblemDiagnosisLiveEvaluationTest {
             return null;
         }).when(store).retry(any(), anyString());
         long started = System.nanoTime();
-        worker.processNext();
-        worker.processNext();
-        worker.processNext();
+        fixtures.forEach(ignored -> worker.processNext());
         Map<String, Object> report = new LinkedHashMap<>();
         report.put("schema", "manager-diagnosis-live-evaluation-v1");
         report.put("evaluatedAt", Instant.now().toString());
@@ -121,11 +141,11 @@ class ManagerProblemDiagnosisLiveEvaluationTest {
         Path destination = Path.of("target", "manager-diagnosis-evaluation", "report.json");
         Files.createDirectories(destination.getParent());
         mapper.writerWithDefaultPrettyPrinter().writeValue(destination.toFile(), report);
-        assertThat(results).as("All three live synthetic diagnoses must complete; see %s", destination).hasSize(3);
+        assertThat(results).as("All five live synthetic diagnoses must complete; see %s", destination).hasSize(fixtures.size());
         assertThat(results).allSatisfy(result -> assertThat(result.get("validated")).as(result.get("case").toString()).isEqualTo(true));
         verify(store, never()).retry(any(), anyString());
         var output = org.mockito.ArgumentCaptor.forClass(Diagnosis.class);
-        verify(store, times(3)).complete(any(), output.capture(), anyString(), anyInt(), anyInt());
+        verify(store, times(fixtures.size())).complete(any(), output.capture(), anyString(), anyInt(), anyInt());
         assertThat(providerCalls).allSatisfy(call -> {
             assertThat(call.get("validCompletion")).as("Complete provider response: %s", call).isEqualTo(true);
             assertThat(((Number) call.get("outputTokens")).intValue()).isBetween(1, ((Number) call.get("maxOutputTokens")).intValue());
@@ -136,17 +156,33 @@ class ManagerProblemDiagnosisLiveEvaluationTest {
         assertThat(output.getAllValues().getFirst().confirmedFacts()).isNotEmpty();
         assertThat(output.getAllValues().get(1).actions()).extracting(Action::code).containsExactly("CHECK_DELIVERY", "ESCALATE");
         assertThat(output.getAllValues().get(1).actions().getFirst().text()).contains("повторная отправка запрещена");
-        Diagnosis largeDiagnosis = output.getAllValues().getLast();
+        Diagnosis largeDiagnosis = output.getAllValues().get(2);
         assertThat(largeDiagnosis.confirmedFacts()).hasSizeBetween(1, 10);
         assertThat(largeDiagnosis.summary()).hasSizeLessThanOrEqualTo(400);
         assertThat(largeDiagnosis.missingEvidence()).isNotEmpty();
         assertThat(largeDiagnosis.verification()).isNotEmpty();
         var largeCalls = providerCalls.stream().filter(call -> caseName(3).equals(call.get("case"))).toList();
         assertThat(largeCalls).hasSizeBetween(1, 2);
-        assertThat(((Number) results.getLast().get("outputTokens")).intValue())
+        assertThat(((Number) results.get(2).get("outputTokens")).intValue())
                 .as("Every large-case call obeys its own budget; reported cost includes a bounded schema retry")
                 .isEqualTo(largeCalls.stream().mapToInt(call -> ((Number) call.get("outputTokens")).intValue()).sum())
                 .isBetween(1, maxOutputTokens * largeCalls.size());
+
+        Diagnosis chatDiagnosis = output.getAllValues().get(3);
+        assertThat(ManagerProblemBusinessDiagnosis.readable(chatDiagnosis)).as("The historical chat result must be usable without a readability fallback").isTrue();
+        assertThat(groundedReferences(chatDiagnosis)).containsAnyOf("card:9400:control_date", "chat:9401:availability");
+        assertThat(chatDiagnosis.missingEvidence()).as("Unavailable conversation cannot prove an unanswered current message").isNotEmpty();
+        assertThat(mentionsAny(normalize(chatDiagnosis.summary()), "истор", "стар", "преж", "июл", "актуаль", "недоступ", "не подтверж", "неизвест"))
+                .as("The summary must disclose historical or unavailable current context: %s", chatDiagnosis.summary()).isTrue();
+        assertHistoricalClaimsAreQualified(chatDiagnosis);
+
+        Diagnosis paidDiagnosis = output.getAllValues().get(4);
+        assertThat(ManagerProblemBusinessDiagnosis.readable(paidDiagnosis)).as("The current paid-order result must be usable without a readability fallback").isTrue();
+        assertThat(groundedReferences(paidDiagnosis)).as("Current authoritative order state must ground the diagnosis")
+                .contains("order:9501:status");
+        assertThat(mentionsAny(normalize(paidDiagnosis.summary()), "оплач", "оплат", "платеж подтверж"))
+                .as("The summary must account for the current payment state: %s", paidDiagnosis.summary()).isTrue();
+        assertHistoricalClaimsAreQualified(paidDiagnosis);
     }
 
     private static String caseName(long id) {
@@ -154,8 +190,83 @@ class ManagerProblemDiagnosisLiveEvaluationTest {
             case 1 -> "invoice_publication_pending";
             case 2 -> "uncertain_delivery";
             case 3 -> "large_invoice_with_bounded_history";
+            case 4 -> "historical_relative_age_with_unavailable_chat";
+            case 5 -> "historical_review_reason_with_current_paid_order";
             default -> throw new IllegalArgumentException("Unknown synthetic case");
         };
+    }
+
+    private static List<String> humanReviewRubric(long id) {
+        return switch ((int) id) {
+            case 4 -> List.of("The July note does not establish that the client wrote 33 minutes before this analysis.",
+                    "Unavailable chat means the current question, reply and problem are unconfirmed; no invented current deadline.");
+            case 5 -> List.of("Current paid status and no client waiting take precedence over the July review reminder.",
+                    "Do not assert that templates remain unchecked; reconcile the old remark with current source facts without a new send or payment.");
+            default -> List.of("Review the synthetic summary, advice and verification against the supplied facts; schema validity alone does not prove semantic correctness.");
+        };
+    }
+
+    /** Flexible regression checks, not an exact expected answer; the full synthetic output is retained for human review. */
+    private static void assertHistoricalClaimsAreQualified(Diagnosis diagnosis) {
+        assertHistoricalClaimsAreQualified(diagnosis.summary());
+    }
+
+    private static void assertHistoricalClaimsAreQualified(String summary) {
+        var sentences = java.text.BreakIterator.getSentenceInstance(java.util.Locale.forLanguageTag("ru"));
+        sentences.setText(summary);
+        for (int start = sentences.first(), end = sentences.next(); end != java.text.BreakIterator.DONE;
+                start = end, end = sentences.next()) {
+            String sentence = summary.substring(start, end);
+            String text = normalize(sentence);
+            boolean relativeAge = text.contains("33") && text.contains("минут");
+            boolean stillWaitingForReview = text.contains("шаблон")
+                    && mentionsAny(text, "не провер", "непровер", "ожида", "ждет");
+            if (relativeAge || stillWaitingForReview) {
+                assertThat(mentionsAny(text, "карточк", "запис", "указ", "отмеч", "истор", "стар", "преж", "июл",
+                        "ранее", "тогда", "не подтверж", "неизвест", "нельзя", "не означает", "не доказывает"))
+                        .as("A historical allegation must be attributed or explicitly unconfirmed, not asserted as current: %s", sentence)
+                        .isTrue();
+            }
+        }
+    }
+
+    private static List<String> groundedReferences(Diagnosis diagnosis) {
+        List<String> references = new ArrayList<>();
+        diagnosis.confirmedFacts().forEach(finding -> references.addAll(finding.evidenceRefs()));
+        diagnosis.actions().forEach(action -> references.addAll(action.evidenceRefs()));
+        return references;
+    }
+
+    private static String normalize(String text) {
+        return text.toLowerCase(java.util.Locale.ROOT).replace('ё', 'е');
+    }
+
+    private static boolean mentionsAny(String text, String... concepts) {
+        return java.util.Arrays.stream(concepts).anyMatch(text::contains);
+    }
+
+    private static List<Fact> historicalUnavailableChat() {
+        List<Fact> facts = new ArrayList<>();
+        row(facts, "card:9400", "card", "control_date", "2026-07-16", "entity_type", "CLIENT_CHAT_UNANSWERED",
+                "entity_id", "9401", "item_status", "OPEN", "title", "Синтетическая переписка",
+                "reason", "Клиент написал 33 минуты назад и остался без ответа.",
+                "last_manual_touch_at", "неизвестно", "follow_up_at", "неизвестно");
+        facts.add(new Fact("chat:9401:availability", "coverage", "availability", "Исходная переписка недоступна"));
+        return List.copyOf(facts);
+    }
+
+    private static List<Fact> historicalReviewForCurrentlyPaidOrder() {
+        List<Fact> facts = new ArrayList<>();
+        row(facts, "card:9500", "card", "control_date", "2026-07-17", "entity_type", "ORDER",
+                "entity_id", "9501", "item_status", "ACTION_TAKEN", "title", "Синтетический заказ",
+                "reason", "Клиент не проверил шаблоны 12 дней.", "comment", "Напоминание было отмечено как отправленное.",
+                "last_manual_touch_at", "2026-07-17T10:00:00", "follow_up_at", "2026-07-19T10:00:00");
+        row(facts, "order:9501", "order", "order_id", "9501", "status", "Оплачено",
+                "order_waiting_for_client", "false", "client_message_generation", "1",
+                "cycle_started_at", "2026-08-22T10:00:00", "waiting_cycle_started_at", "2026-08-22T10:00:00");
+        facts.add(new Fact("order:9501:resolution_coverage", "coverage", "business_resolution",
+                "Доставка напоминания не подтверждает проверку клиентом, оплату или завершение заказа; результат проверяется отдельно"));
+        return List.copyOf(facts);
     }
 
     /** 432 synthetic fields mirror a seven-position invoice, 14 states and bounded attempt history. */

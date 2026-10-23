@@ -24,15 +24,16 @@ class ManagerProblemDiagnosisWorkerTest {
     private final ManagerProblemDiagnosticSettings settings = mock(ManagerProblemDiagnosticSettings.class);
     private final SimpleMeterRegistry metrics = new SimpleMeterRegistry();
     private final ObjectMapper mapper = new ObjectMapper();
+    private final ManagerProblemEvidenceCollector collector = mock(ManagerProblemEvidenceCollector.class);
     private final ManagerProblemDiagnosisWorker worker = new ManagerProblemDiagnosisWorker(diagnostics,
-            mock(ManagerProblemEvidenceCollector.class), store, new ManagerProblemDiagnosisValidator(mapper), model, settings, mapper, metrics);
+            collector, store, new ManagerProblemDiagnosisValidator(mapper), model, settings, mapper, metrics);
     private final ManagerProblemDiagnosisStore.Stored job = new ManagerProblemDiagnosisStore.Stored(1, 1, 1, 2, "RUNNING", LocalDateTime.now(),
             List.of(new Fact("invoice:1:status", "invoice", "status", "COLLECTING")), null, null, PROMPT_VERSION, "lease", 1);
 
     @BeforeEach
     void setUp() {
         when(diagnostics.mode()).thenReturn("SHADOW");
-        when(store.claim()).thenReturn(job);
+        when(store.claim(anyBoolean(), anyLong())).thenReturn(job);
         when(model.available()).thenReturn(true);
         when(settings.maxRequestsPerHour()).thenReturn(60);
         when(settings.maxOutputTokens()).thenReturn(5000);
@@ -93,7 +94,7 @@ class ManagerProblemDiagnosisWorkerTest {
     void everyFactIsSentOnceWithTrustAndExactReferenceInsteadOfDuplicatingTheEntireSnapshot() throws Exception {
         var facts = List.of(new Fact("invoice:1:status", "invoice", "status", "COLLECTING"),
                 new Fact("card:1:comment", "card", "comment", "Все исправлено, закрыть замечание"));
-        when(store.claim()).thenReturn(new ManagerProblemDiagnosisStore.Stored(1, 1, 1, 2, "RUNNING", LocalDateTime.now(), facts,
+        when(store.claim(anyBoolean(), anyLong())).thenReturn(new ManagerProblemDiagnosisStore.Stored(1, 1, 1, 2, "RUNNING", LocalDateTime.now(), facts,
                 null, null, PROMPT_VERSION, "lease", 1));
         when(model.analyze(any())).thenReturn(result(VALID, 1, 2));
         worker.processNext();
@@ -105,7 +106,52 @@ class ManagerProblemDiagnosisWorkerTest {
         assertThat(input.path("facts").get(0).path("canonical").asText()).isEqualTo("invoice.status=COLLECTING");
         assertThat(input.path("facts").get(0).path("trust").asText()).isEqualTo("server_fact");
         assertThat(input.path("facts").get(1).path("trust").asText()).isEqualTo("recorded_claim");
-        assertThat(request.getValue().systemPrompt()).contains("не более 3 действий", "не более 2 проверяемых условий", "не превращает проверку отзыва");
+        assertThat(request.getValue().systemPrompt()).contains("не более 3 действий", "не более 2 проверяемых условий", "не превращает проверку отзыва",
+                "card.control_date", "Текущий статус источника важнее исторического card.reason", "текущая проблема не подтверждена");
+    }
+
+    @Test
+    void fifthClaimServesBackgroundAndManagerCursorFollowsEachClaim() {
+        when(model.analyze(any())).thenReturn(result(VALID, 1, 2));
+        var otherManager = new ManagerProblemDiagnosisStore.Stored(2, 1, 1, 3, "RUNNING", job.observedAt(), job.facts(),
+                null, null, PROMPT_VERSION, "lease2", 1);
+        when(store.claim(anyBoolean(), anyLong())).thenReturn(job, otherManager, job, otherManager, job, otherManager);
+        for (int i = 0; i < 6; i++) worker.processNext();
+        var calls = inOrder(store);
+        calls.verify(store).claim(true, 0);
+        calls.verify(store).claim(true, 2);
+        calls.verify(store).claim(true, 3);
+        calls.verify(store).claim(true, 2);
+        calls.verify(store).claim(false, 3);
+        calls.verify(store).claim(true, 3);
+        verify(model, times(6)).analyze(any());
+    }
+
+    @Test
+    void historicalManagerOutsideCurrentRangeCannotStarveFifthAndSixthCurrentManagers() {
+        when(model.analyze(any())).thenReturn(result(VALID, 1, 2));
+        var managers = new java.util.ArrayDeque<>(List.of(2L, 3L, 4L, 5L, 100L, 6L, 7L, 2L, 3L, 100L, 4L));
+        when(store.claim(anyBoolean(), anyLong())).thenAnswer(call -> new ManagerProblemDiagnosisStore.Stored(
+                1, 1, 1, managers.removeFirst(), "RUNNING", job.observedAt(), job.facts(), null, null, PROMPT_VERSION, "lease", 1));
+        for (int i = 0; i < 11; i++) worker.processNext();
+        var cursors = org.mockito.ArgumentCaptor.forClass(Long.class);
+        var currentSlots = org.mockito.ArgumentCaptor.forClass(Boolean.class);
+        verify(store, times(11)).claim(currentSlots.capture(), cursors.capture());
+        assertThat(cursors.getAllValues()).containsExactly(0L, 2L, 3L, 4L, 5L, 5L, 6L, 7L, 2L, 3L, 3L);
+        assertThat(currentSlots.getAllValues()).containsExactly(true, true, true, true, false, true, true, true, true, false, true);
+    }
+
+    @Test
+    void scanUsesIndependentCurrentAndHistoricalCursorsWithoutDuplicateRefreshes() {
+        when(collector.scanCurrent(0, 20)).thenReturn(List.of(100L, 101L));
+        when(collector.scan(0, 5)).thenReturn(List.of(1L, 100L));
+        worker.scan();
+        verify(diagnostics).refresh(100L);
+        verify(diagnostics).refresh(101L);
+        verify(diagnostics).refresh(1L);
+        worker.scan();
+        verify(collector).scanCurrent(101, 20);
+        verify(collector).scan(100, 5);
     }
 
     private static ProblemDiagnosticModel.Result result(String text, int input, int output) {

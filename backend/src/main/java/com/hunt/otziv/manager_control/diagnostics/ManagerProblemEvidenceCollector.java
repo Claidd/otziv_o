@@ -22,7 +22,7 @@ public class ManagerProblemEvidenceCollector {
     public Evidence collect(Long sourceTaskId) {
         LocalDateTime observedAt = LocalDateTime.now();
         List<Map<String, Object>> sources = jdbc.queryForList("""
-                SELECT i.control_entity_id, c.manager_id, i.entity_key, i.entity_type, i.entity_id,
+                SELECT i.control_entity_id, c.manager_id, c.control_date, i.entity_key, i.entity_type, i.entity_id,
                        i.title, i.reason, i.item_status, i.comment, i.follow_up_at,
                        i.last_manual_touch_at, i.resolved_at, i.updated_at, i.resolved_episode_count
                 FROM manager_daily_control_concrete_items i
@@ -38,7 +38,7 @@ public class ManagerProblemEvidenceCollector {
         boolean invoice = type.startsWith("COMMON_INVOICE");
         String family = invoice ? "COMMON_INVOICE" : type.startsWith("CLIENT_CHAT") ? "CLIENT_CHAT" : type;
         List<Map<String, Object>> latest = entityId == null ? List.of() : jdbc.queryForList("""
-                SELECT i.control_entity_id, c.manager_id, i.entity_key, i.entity_type, i.entity_id,
+                SELECT i.control_entity_id, c.manager_id, c.control_date, i.entity_key, i.entity_type, i.entity_id,
                        i.title, i.reason, i.item_status, i.comment, i.follow_up_at,
                        i.last_manual_touch_at, i.resolved_at, i.updated_at, i.resolved_episode_count
                 FROM manager_daily_control_concrete_items i
@@ -51,7 +51,7 @@ public class ManagerProblemEvidenceCollector {
         long currentSourceId = number(source, "control_entity_id");
         List<Fact> facts = new ArrayList<>();
         addRow(facts, "card:" + currentSourceId, "card", source,
-                "title", "entity_type", "entity_id", "item_status", "reason", "comment", "follow_up_at", "last_manual_touch_at", "resolved_at");
+                "control_date", "title", "entity_type", "entity_id", "item_status", "reason", "comment", "follow_up_at", "last_manual_touch_at", "resolved_at");
         List<Long> stateIds = new ArrayList<>();
         if (invoice && entityId != null) {
             List<Map<String, Object>> invoices = jdbc.queryForList("""
@@ -143,11 +143,13 @@ public class ManagerProblemEvidenceCollector {
         } else {
             facts.add(new Fact("source:coverage", "coverage", "live_context", "Контекст источника ограничен карточкой; причину и выполнение действий необходимо подтвердить дополнительно"));
         }
+        // Poll/check timestamps alone do not establish a new delivery result. Keep them in source logs,
+        // not model evidence; actual delivery status, errors, attempts and success times remain versioned.
         for (Long stateId : stateIds) {
             jdbc.queryForList("""
                     SELECT s.state_id, s.scenario, s.order_id, s.state_status, s.last_error_code, s.last_error_message,
                            s.consecutive_failures, s.next_attempt_at, s.last_attempt_at, s.last_success_at,
-                           s.delivery_status, s.delivery_recovery_checked_at, s.updated_at, s.target_key,
+                           s.delivery_status, s.target_key,
                            COALESCE(o.order_status_changed_at,TIMESTAMP(o.order_changed),TIMESTAMP(o.order_created)) AS cycle_started_at,
                            COALESCE(o.order_waiting_for_client_changed_at,o.order_status_changed_at,
                                TIMESTAMP(o.order_changed),TIMESTAMP(o.order_created)) AS waiting_cycle_started_at
@@ -155,7 +157,7 @@ public class ManagerProblemEvidenceCollector {
                     """, stateId).forEach(row -> {
                 addRow(facts, "automation:" + stateId, "automation", row,
                     "state_id", "scenario", "order_id", "state_status", "last_error_code", "last_error_message",
-                    "consecutive_failures", "next_attempt_at", "last_attempt_at", "last_success_at", "delivery_status", "delivery_recovery_checked_at");
+                    "consecutive_failures", "next_attempt_at", "last_attempt_at", "last_success_at", "delivery_status");
                 LocalDateTime cycle = timestamp(row.get("cycle_started_at")), waiting = timestamp(row.get("waiting_cycle_started_at"));
                 String target = string(row, "target_key"), id = string(row, "order_id");
                 boolean orderTarget = target.startsWith("order:" + id + ":") || target.startsWith("payment-return:" + id + ":") || target.startsWith("client-text:" + id + ":");
@@ -177,6 +179,14 @@ public class ManagerProblemEvidenceCollector {
     }
 
     public List<Long> scan(long afterId, int limit) {
+        return scan(afterId, limit, false);
+    }
+
+    public List<Long> scanCurrent(long afterId, int limit) {
+        return scan(afterId, limit, true);
+    }
+
+    private List<Long> scan(long afterId, int limit, boolean currentOnly) {
         return jdbc.queryForList("""
                 SELECT latest.source_id
                 FROM (
@@ -189,9 +199,12 @@ public class ManagerProblemEvidenceCollector {
                         COALESCE(CAST(i.entity_id AS CHAR),i.entity_key)
                 ) latest
                 JOIN manager_daily_control_concrete_items current_item ON current_item.control_entity_id=latest.source_id
+                JOIN manager_daily_controls current_control ON current_control.daily_control_id=current_item.control_id
                 WHERE latest.source_id>? AND current_item.item_status<>'RESOLVED'
+                  AND (?=FALSE OR (current_item.item_status='OPEN' AND current_control.control_date=(
+                      SELECT MAX(d.control_date) FROM manager_daily_controls d WHERE d.manager_id=current_control.manager_id)))
                 ORDER BY latest.source_id LIMIT ?
-                """, Long.class, afterId, limit);
+                """, Long.class, afterId, currentOnly, limit);
     }
 
     private List<Long> collectOrder(List<Fact> facts, long orderId, long managerId) {
@@ -233,7 +246,7 @@ public class ManagerProblemEvidenceCollector {
         } else facts.add(new Fact("order:" + orderId + ":cycle_coverage", "coverage", "availability",
                 "Время текущего цикла заказа отсутствует; история автоматизации не приписывается текущему циклу"));
         List<Map<String, Object>> deliveries = jdbc.queryForList("""
-                SELECT q.operation_id,q.card_id,q.state,q.attempts,q.error_code,q.created_at,q.updated_at
+                SELECT q.operation_id,q.card_id,q.state,q.attempts,q.error_code,q.created_at
                 FROM manager_client_message_queue q
                 JOIN manager_daily_control_concrete_items i ON i.control_entity_id=q.card_id
                 JOIN manager_daily_controls c ON c.daily_control_id=i.control_id
@@ -241,7 +254,7 @@ public class ManagerProblemEvidenceCollector {
                 ORDER BY q.created_at DESC,q.operation_id DESC LIMIT 6
                 """, orderId, managerId);
         deliveries.stream().limit(5).forEach(row -> addRow(facts, "manager_delivery:" + string(row, "operation_id"),
-                "manager_delivery", row, "card_id", "state", "attempts", "error_code", "created_at", "updated_at"));
+                "manager_delivery", row, "card_id", "state", "attempts", "error_code", "created_at"));
         if (!deliveries.isEmpty()) facts.add(new Fact("order:" + orderId + ":manual_delivery_coverage", "history_coverage",
                 "manual_delivery_cycle_unverified", "Показана история ручных отправок по дневным карточкам заказа этого менеджера. "
                 + "Принадлежность операции текущему циклу и устранение проблемы не подтверждаются одними статусом и временем отправки."));

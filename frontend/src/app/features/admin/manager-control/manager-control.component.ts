@@ -99,7 +99,8 @@ export function isTelegramBindingAutomationIssue(
 ): boolean {
   const reason = (example.reason ?? '').toLowerCase();
   return example.type === 'AUTOMATION_FAILURE'
-    && (reason.includes('telegram_group_missing') || reason.includes('для telegram-группы не задан chatid'));
+    && (reason.includes('telegram_group_missing') || reason.includes('для telegram-группы не задан chatid')
+      || reason.includes('группа telegram не привязана к компании'));
 }
 
 export function telegramGroupLinkCommand(inviteUrl: string): string {
@@ -2092,7 +2093,7 @@ export class ManagerControlComponent implements OnInit {
 
   canRepairAutomationIssue(example: ManagerControlConcreteItem): boolean {
     const reason = (example.reason ?? '').toLowerCase();
-    if (reason.includes('manual_delivery_handoff_pending')) {
+    if (reason.includes('manual_delivery_handoff_pending') || reason.includes('ручная проверка продолжается')) {
       return false;
     }
     if (this.isAutomationWaitingForSlot(example)) {

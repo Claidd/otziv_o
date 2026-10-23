@@ -31,6 +31,10 @@ public class ManagerProblemDiagnosisWorker {
             automation.current_cycle=false — история прежнего состояния заказа, а не текущая ошибка.
             SKIPPED из-за смены статуса не доказывает неудачную доставку. «неизвестно» в пустом last_error не означает,
             что ошибка есть. Не запрашивай историю переписки, если без неё можно проверить указанную проблему.
+            card.control_date — дата исходного замечания; observedAt — время чтения данных, а не возникновения проблемы.
+            Текущий статус источника важнее исторического card.reason. Относительные сроки вроде «33 минуты назад»
+            в старом замечании не являются текущими сроками. Если заказ уже оплачен, завершён или вышел из ожидания,
+            не утверждай, что прежняя проблема сохраняется. Если источник недоступен, текущая проблема не подтверждена.
             Доставка в automation — доставка электронного сообщения клиенту. Склад, перевозчик, груз и трек посылки
             к этим данным не относятся; не придумывай такие процессы или требования к менеджеру.
             recorded_chat_message доказывает только содержание записанного сообщения: смысл ответа можно
@@ -59,6 +63,8 @@ public class ManagerProblemDiagnosisWorker {
             При недостатке данных явно заполни missingEvidence; не выдавай отсутствие данных за нарушение.
             Различай обещанное действие, зарегистрированное действие и подтвержденное устранение причины.
             Нельзя закрывать карточку по обещанию или результату аудита.
+            Слова менеджера или сотрудника о выполнении сами по себе не подтверждают устранение проблемы.
+            Условия закрытия требуют проверяемой записи или результата в исходном заказе, счёте либо переписке.
             Допустимые code: CHECK_SOURCE (сверить исходное состояние), CHECK_DELIVERY (найти подтверждение доставки),
             CONTACT_RESPONSIBLE (уточнить у ответственного), ESCALATE (передать ответственному администратору),
             WAIT_FOR_DEPENDENCY (зафиксировать зависимость и срок повторной проверки).
@@ -77,6 +83,9 @@ public class ManagerProblemDiagnosisWorker {
     private final ObjectMapper mapper;
     private final MeterRegistry metrics;
     private long scanCursor;
+    private long currentScanCursor;
+    private long lastCurrentManagerId;
+    private int claimedSlots;
     private LocalDateTime budgetHour = LocalDateTime.now();
     private int requestsThisHour;
 
@@ -85,13 +94,14 @@ public class ManagerProblemDiagnosisWorker {
     public void scan() {
         if ("OFF".equals(diagnostics.mode())) return;
         try {
-            List<Long> ids = collector.scan(scanCursor, 25);
-            if (ids.isEmpty()) { scanCursor = 0; return; }
-            for (Long id : ids) {
+            List<Long> current = collector.scanCurrent(currentScanCursor, 20);
+            currentScanCursor = current.isEmpty() ? 0 : current.getLast();
+            List<Long> background = collector.scan(scanCursor, 5);
+            scanCursor = background.isEmpty() ? 0 : background.getLast();
+            java.util.stream.Stream.concat(current.stream(), background.stream()).distinct().forEach(id -> {
                 try { diagnostics.refresh(id); }
                 catch (RuntimeException e) { log.warn("Problem snapshot scan deferred sourceTaskId={} reason={}", id, e.getClass().getSimpleName()); }
-                scanCursor = id;
-            }
+            });
         } catch (RuntimeException e) { log.warn("Problem scan unavailable: {}", e.getClass().getSimpleName()); }
     }
 
@@ -101,9 +111,13 @@ public class ManagerProblemDiagnosisWorker {
         if (LocalDateTime.now().isAfter(budgetHour.plusHours(1))) { budgetHour = LocalDateTime.now(); requestsThisHour = 0; }
         if (requestsThisHour >= Math.max(1, settings.maxRequestsPerHour())) return;
         ManagerProblemDiagnosisStore.Stored job;
-        try { job = store.claim(); }
+        boolean currentSlot = claimedSlots % 5 != 4;
+        try { job = store.claim(currentSlot, lastCurrentManagerId); }
         catch (RuntimeException e) { log.warn("Problem diagnosis queue unavailable: {}", e.getClass().getSimpleName()); return; }
         if (job == null) return;
+        claimedSlots = (claimedSlots + 1) % 5;
+        // A historical manager must not reset current-board rotation every fifth slot.
+        if (currentSlot) lastCurrentManagerId = job.managerId();
         Timer.Sample timer = Timer.start(metrics);
         try {
             if (!model.available()) {

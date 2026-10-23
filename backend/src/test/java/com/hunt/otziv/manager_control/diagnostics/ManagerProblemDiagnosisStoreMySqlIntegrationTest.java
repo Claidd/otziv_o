@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ClassPathResource;
@@ -31,6 +32,10 @@ class ManagerProblemDiagnosisStoreMySqlIntegrationTest {
         jdbc = new JdbcTemplate(data);
         jdbc.execute("DROP TABLE IF EXISTS manager_problem_evidence_versions");
         jdbc.execute("DROP TABLE IF EXISTS manager_problem_cases");
+        jdbc.execute("DROP TABLE IF EXISTS manager_daily_control_concrete_items");
+        jdbc.execute("DROP TABLE IF EXISTS manager_daily_controls");
+        jdbc.execute("CREATE TABLE manager_daily_controls(daily_control_id BIGINT PRIMARY KEY,manager_id BIGINT,control_date DATE)");
+        jdbc.execute("CREATE TABLE manager_daily_control_concrete_items(control_entity_id BIGINT PRIMARY KEY,control_id BIGINT,item_status VARCHAR(30))");
         new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_337__manager_problem_diagnostics.sql")).execute(data);
         store = new ManagerProblemDiagnosisStore(jdbc, new ObjectMapper(), new DataSourceTransactionManager(data));
     }
@@ -161,6 +166,95 @@ class ManagerProblemDiagnosisStoreMySqlIntegrationTest {
         assertThat(recovered.attempts()).isEqualTo(6);
         assertThat(store.complete(recovered, diagnosis(), "deepseek-flash", 1, 2)).isTrue();
         assertThat(store.read(first.caseId(), 1).status()).isEqualTo("READY");
+    }
+
+    @Test
+    void currentOpenInvoicePrecedesOlderBackfillAndManagersTakeTurns() {
+        var historical = queue(2, 10, LocalDate.of(2026, 7, 16), "OPEN");
+        var current2 = queue(2, 20, LocalDate.of(2026, 10, 23), "OPEN");
+        var current2b = queue(2, 21, LocalDate.of(2026, 10, 23), "OPEN");
+        var current3 = queue(3, 30, LocalDate.of(2026, 10, 23), "OPEN");
+        var deferred = queue(3, 31, LocalDate.of(2026, 10, 23), "DEFERRED");
+
+        var first = store.claim(true, 0);
+        assertThat(first.caseId()).isEqualTo(current2.caseId());
+        var second = store.claim(true, first.managerId());
+        assertThat(second.caseId()).isEqualTo(current3.caseId());
+        assertThat(store.claim(true, second.managerId()).caseId()).isEqualTo(current2b.caseId());
+        // The background slot serves the oldest historical work, not a deferred/current preference.
+        assertThat(store.claim(false, 2).caseId()).isEqualTo(historical.caseId());
+        assertThat(store.claim(false, 2).caseId()).isEqualTo(deferred.caseId());
+    }
+
+    @Test
+    void priorityDoesNotBypassRetryDueTimeOrAnalyzeClosedCases() {
+        var closed = store.capture(new ManagerProblemEvidenceCollector.Evidence("closed", 2, 1, true,
+                evidence("PAID", true).facts(), LocalDateTime.now()));
+        var old = queue(2, 10, LocalDate.of(2026, 7, 16), "OPEN");
+        var current = queue(2, 20, LocalDate.of(2026, 10, 23), "OPEN");
+        jdbc.update("UPDATE manager_problem_evidence_versions SET status='RETRY',next_attempt_at=? WHERE case_id=?",
+                LocalDateTime.now().plusHours(1), current.caseId());
+        assertThat(store.claim(true, 0).caseId()).isEqualTo(old.caseId());
+        assertThat(store.claim(true, 0)).isNull();
+        assertThat(store.read(closed.caseId(), 1).status()).isEqualTo("QUEUED");
+    }
+
+    @Test
+    void closedSourceCannotConsumeBackgroundBudgetWhenAfterCommitRefreshWasUnavailable() {
+        var historical = queue(2, 10, LocalDate.of(2026, 7, 16), "OPEN");
+        queue(2, 20, LocalDate.of(2026, 10, 23), "OPEN");
+        jdbc.update("UPDATE manager_daily_control_concrete_items SET item_status='RESOLVED' WHERE control_entity_id=10");
+        assertThat(store.claim(false, 0).caseId()).isNotEqualTo(historical.caseId());
+        assertThat(store.claim(false, 0)).isNull();
+        assertThat(store.read(historical.caseId(), 1).facts()).isNotEmpty();
+        assertThat(jdbc.queryForObject("SELECT closed FROM manager_problem_cases WHERE case_id=?", Boolean.class, historical.caseId())).isFalse();
+    }
+
+    @Test
+    void receiptChecksKeepImmutableSnapshotsAndOriginalQueueAge() {
+        var firstEvidence = receiptEvidence("2026-10-23T09:00:00");
+        var first = store.capture(firstEvidence);
+        LocalDateTime originalDue = LocalDateTime.now().minusHours(2).withNano(0);
+        jdbc.update("UPDATE manager_problem_evidence_versions SET next_attempt_at=? WHERE case_id=?", originalDue, first.caseId());
+        var competing = queue(3, 30, LocalDate.of(2026, 7, 16), "DEFERRED");
+        var next = store.capture(receiptEvidence("2026-10-23T09:16:00"));
+        var latest = store.capture(receiptEvidence("2026-10-23T09:32:00"));
+
+        assertThat(latest.version()).isEqualTo(3);
+        assertThat(store.read(first.caseId(), 1).facts()).isEqualTo(firstEvidence.facts());
+        assertThat(store.read(first.caseId(), 1).status()).isEqualTo("SUPERSEDED");
+        assertThat(store.read(next.caseId(), 2).status()).isEqualTo("SUPERSEDED");
+        assertThat(jdbc.queryForObject("SELECT next_attempt_at FROM manager_problem_evidence_versions WHERE case_id=? AND evidence_version=3",
+                LocalDateTime.class, first.caseId())).isEqualTo(originalDue);
+        assertThat(store.claim(false, 0).version()).isEqualTo(3);
+        assertThat(store.claim(false, 0).caseId()).isEqualTo(competing.caseId());
+    }
+
+    @Test
+    void changedFactsPreserveRetryBackoff() {
+        var first = store.capture(evidence("COLLECTING", false));
+        var running = store.claim();
+        store.retry(running, "provider unavailable");
+        LocalDateTime due = jdbc.queryForObject("SELECT next_attempt_at FROM manager_problem_evidence_versions WHERE case_id=?", LocalDateTime.class, first.caseId());
+        var changed = store.capture(evidence("NEEDS_ATTENTION", false));
+        assertThat(changed.version()).isEqualTo(2);
+        assertThat(changed.facts()).isEqualTo(evidence("NEEDS_ATTENTION", false).facts());
+        assertThat(jdbc.queryForObject("SELECT next_attempt_at FROM manager_problem_evidence_versions WHERE case_id=? AND evidence_version=2",
+                LocalDateTime.class, first.caseId())).isEqualTo(due);
+        assertThat(store.claim(true, 0)).isNull();
+    }
+
+    private ManagerProblemDiagnosisStore.Stored queue(long manager, long source, LocalDate day, String status) {
+        jdbc.update("INSERT INTO manager_daily_controls VALUES(?,?,?)", source, manager, day);
+        jdbc.update("INSERT INTO manager_daily_control_concrete_items VALUES(?,?,?)", source, source, status);
+        return store.capture(new ManagerProblemEvidenceCollector.Evidence(manager + ":COMMON_INVOICE:" + source, manager, source, false,
+                List.of(new Fact("invoice:" + source + ":status", "invoice", "status", "COLLECTING")), LocalDateTime.now()));
+    }
+
+    private static ManagerProblemEvidenceCollector.Evidence receiptEvidence(String checkedAt) {
+        return new ManagerProblemEvidenceCollector.Evidence("2:AUTOMATION_FAILURE:3938", 2, 999, false,
+                List.of(new Fact("automation:3938:delivery_status", "automation", "delivery_status", "UNKNOWN"),
+                        new Fact("automation:3938:delivery_recovery_checked_at", "automation", "delivery_recovery_checked_at", checkedAt)), LocalDateTime.now());
     }
 
     private static ManagerProblemEvidenceCollector.Evidence evidence(String status, boolean closed) {
