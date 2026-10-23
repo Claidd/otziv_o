@@ -135,7 +135,8 @@ public class DeepSeekProvider implements AiProvider {
                 : request.thinkingEnabled();
         body.put("thinking", Map.of("type", thinkingEnabled ? "enabled" : "disabled"));
         if (thinkingEnabled) {
-            body.put("reasoning_effort", deepSeek.getReasoningEffort());
+            body.put("reasoning_effort", request.reasoningEffort() == null
+                    ? deepSeek.getReasoningEffort() : request.reasoningEffort());
         } else {
             body.put("temperature", request.temperature());
         }

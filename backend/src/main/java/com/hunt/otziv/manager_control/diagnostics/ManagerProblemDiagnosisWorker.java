@@ -130,7 +130,8 @@ public class ManagerProblemDiagnosisWorker {
                     "facts", job.facts().stream().map(f -> Map.of("reference", f.reference(),
                             "canonical", ManagerProblemDiagnosisValidator.canonical(f),
                             "trust", ManagerProblemDiagnosisValidator.isServerFact(f) ? "server_fact" : "recorded_claim")).toList()));
-            ProblemDiagnosticModel.Result response = generate(PROMPT, input);
+            String prompt = promptFor(job.facts());
+            ProblemDiagnosticModel.Result response = generate(prompt, input);
             int totalInputTokens = response.inputTokens(), totalOutputTokens = response.outputTokens();
             ManagerProblemDiagnosticsService.Diagnosis diagnosis;
             try {
@@ -139,7 +140,7 @@ public class ManagerProblemDiagnosisWorker {
                 // One bounded regeneration inside the same lease. Never publish an incomplete answer or
                 // relax reference/fact validation. Every call consumes the same hourly budget and metrics.
                 metrics.counter("manager.problem.diagnostics.schema_retries").increment();
-                response = generate(PROMPT + "\nПредыдущий ответ отклонен строгой проверкой: "
+                response = generate(prompt + "\nПредыдущий ответ отклонен строгой проверкой: "
                         + DiagnosticRedactor.redact(invalidSchema.getMessage())
                         + ". Сформируй заново ПОЛНЫЙ JSON по исходным фактам со всеми шестью ключами."
                         + " Не ссылайся на прежний ответ; не возвращай патч или отдельное поле.\n", input);
@@ -169,6 +170,47 @@ public class ManagerProblemDiagnosisWorker {
             throw new IllegalStateException(modelFailure(response));
         }
         return response;
+    }
+
+    static String promptFor(List<ManagerProblemDiagnosticsService.Fact> facts) {
+        String prompt = PROMPT;
+        if (facts.stream().anyMatch(f -> "invoice_money".equals(f.subject()) && "money_display".equals(f.field()))) {
+            prompt += """
+
+                    Все *_kopecks заданы в копейках. В summary, actions и verification показывай суммы в рублях со знаком ₽,
+                    используя invoice_money.money_display: деление на 100, без округления и без потери копеек.
+                    Не показывай копейки как рубли. Арифметическая разница сама по себе не подтверждает действующий долг.
+                    """;
+        }
+        if (facts.stream().noneMatch(f -> "invoice_chronology".equals(f.subject())
+                && "historical_archive_and_current_status".equals(f.field()))) return prompt;
+        return prompt + """
+
+                В этом снимке есть проверяемая хронология архивного счёта. Приоритет неопределённой доставки и запрет
+                повторной отправки сохраняются; для разбора архива начни с хронологии, а не с прежнего card.reason.
+                Историческое closed_at/MANUAL_ARCHIVE и текущий status описывают разные моменты: не называй текущую
+                сумму оплаты оплатой на дату архива. Когда paid_at позже closed_at, прямо различай ранний архив и позднюю оплату.
+                Если open_status_with_historical_archive=true, основная проблема — несогласованность нынешнего открытого статуса
+                с сохранённым историческим архивом. Ошибочное повторное открытие допустимо только как гипотеза для проверки журнала;
+                конкретный callback или виновник не доказаны. Восстановление отдельных заказов не доказывает восстановление счёта.
+                NEEDS_ATTENTION может быть законной сверкой позднего платежа или возврата и само по себе не означает ошибку открытия.
+                invoice_order.paid/paid_at уже подтверждают распределённую оплату позиции: не создавай повторную задачу
+                сопоставления этого платежа. Архив или поздняя оплата сами по себе не дают оснований проверять/делать возврат.
+                Задача о возврате допустима только при отдельном положительном системном факте о возврате/отмене платежа;
+                если такого факта нет, не добавляй возврат ни в действия, ни в недостающие сведения, ни в условия закрытия.
+                Оплату, её подтверждение и историю необходимо сохранить. Разница amount-paid — арифметика старого состава,
+                а не подтверждённый действующий долг. Не требуй оплатить/списать/перенести её как установленное обязательство.
+                Не требуй доделывать архивные заказы или возвращать их в работу без отдельно подтверждённых действующих оснований.
+                Только при open_status_with_historical_archive=true путь исправления таков: сверить журнал закрытия/восстановления
+                и оплаты; если законное восстановление счёта
+                не подтверждено, администратор штатно исправляет ошибочно открытый статус, восстанавливая подтверждённый архив
+                с сохранением учтённой оплаты. Это условная рекомендация после сверки, а не выполненное действие или SQL-команда.
+                Если флаг false и текущий статус ARCHIVED, не требуй снова восстанавливать архив: проверь и сохрани существующую
+                запись закрытия и оплату. Для NEEDS_ATTENTION требуется штатная сверка платежа/возврата, а не восстановление архива.
+                Каждая actions.verification и корневая verification требуют проверенного актуального состояния исходного счёта
+                и сохранённого подтверждения оплаты; запись исправления нужна лишь при установленном несоответствии.
+                Передача, письменное обещание, назначенная дата или вопрос о долге не закрывают проблему.
+                """;
     }
 
     /** Retain bounded diagnostic metadata without persisting provider response bodies or quoted input. */

@@ -289,7 +289,7 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
             return false;
         }
         CommonInvoice invoice = lockedInvoiceAfterOrderPrelude(invoiceId).orElse(itemInvoice);
-        if (invoice.getStatus() == CommonInvoiceStatus.PAID || invoice.getStatus() == CommonInvoiceStatus.UNPAID || invoice.getStatus() == CommonInvoiceStatus.BAN || invoice.getStatus() == CommonInvoiceStatus.DISABLED || invoice.getStatus() == CommonInvoiceStatus.NEEDS_ATTENTION) {
+        if (invoice.getStatus() == CommonInvoiceStatus.PAID || invoice.getStatus() == CommonInvoiceStatus.UNPAID || invoice.getStatus() == CommonInvoiceStatus.BAN || invoice.getStatus() == CommonInvoiceStatus.DISABLED || invoice.getStatus() == CommonInvoiceStatus.ARCHIVED || invoice.getStatus() == CommonInvoiceStatus.NEEDS_ATTENTION) {
             return false;
         }
         List<CommonInvoiceOrder> items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId);
@@ -646,6 +646,12 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
         if (PAYMENT_REF_APPLIED.equals(previousStatus) || PAYMENT_REF_PREPAID.equals(previousStatus)) {
             return;
         }
+        if (PAYMENT_REF_CONFIRMED.equals(previousStatus)
+                && normalize(ref.getReason()).startsWith("late_tochka_payment_after_terminal_invoice:")) {
+            // Repeated provider confirmation cannot authorize allocation of a quarantined
+            // late receipt. Only the explicit applyLatePayment workflow may consume it.
+            return;
+        }
         if (Set.of(PAYMENT_REF_CANCEL_PENDING, PAYMENT_REF_CANCELING, PAYMENT_REF_CANCEL_FAILED, PAYMENT_REF_CANCEL_FAILED_FINAL).contains(previousStatus) || isTochkaRefundSubmissionClaimed(ref.getReason())) {
             // Preserve the cancellation lifecycle so reconciliation can claim exactly one Refund.
             // Financial confirmation remains frozen in providerStatus/reason and is never applied
@@ -784,7 +790,7 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
                 invoiceRepository.save(invoice);
                 return true;
             }
-            if (invoice.getStatus() == CommonInvoiceStatus.UNPAID || invoice.getStatus() == CommonInvoiceStatus.BAN || invoice.getStatus() == CommonInvoiceStatus.DISABLED) {
+            if (invoice.getStatus() == CommonInvoiceStatus.UNPAID || invoice.getStatus() == CommonInvoiceStatus.BAN || invoice.getStatus() == CommonInvoiceStatus.DISABLED || invoice.getStatus() == CommonInvoiceStatus.ARCHIVED) {
                 recordCurrentPaymentRef(invoice, PAYMENT_REF_CONFIRMED, "confirmed_after_terminal_status");
                 invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
                 invoice.setNextReminderAt(null);
@@ -1405,6 +1411,9 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
     }
 
     boolean applyCommonInvoicePrepaymentIfReady(CommonInvoice invoice, List<CommonInvoiceOrder> items) {
+        if (invoice != null && invoice.getStatus() == CommonInvoiceStatus.ARCHIVED) {
+            return false;
+        }
         long prepaid = confirmedCommonInvoicePrepaymentKopecks(invoice);
         if (prepaid <= 0 || !allOrdersReady(items)) {
             return false;
@@ -1707,6 +1716,9 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
     }
 
     private void recalculateInvoice(CommonInvoice invoice, List<CommonInvoiceOrder> items, BoardPaymentState prepared) {
+        if (invoice.getStatus() == CommonInvoiceStatus.ARCHIVED) {
+            return;
+        }
         boolean preserveRecordedAttentionPayment = invoice.getStatus() == CommonInvoiceStatus.NEEDS_ATTENTION && !hasAttentionError(invoice, "late_tbank_payment") && invoice.getAmountKopecks() > 0 && invoice.getPaidKopecks() >= invoice.getAmountKopecks();
         long recordedPaid = invoice.getPaidKopecks();
         boolean preserveExactContractorPayment = hasExactContractorSourceEvidence(invoice)
@@ -1774,6 +1786,11 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
     void refreshInvoiceAmounts(CommonInvoice invoice, List<CommonInvoiceOrder> items,
                                Map<Long, BigDecimal> preparedAmounts, Map<Long, Boolean> preparedRecovery,
                                BoardPaymentState preparedPayment) {
+        // Archive keeps the recorded composition and payments. An independent
+        // order payment must not turn that history into a new invoice balance.
+        if (invoice != null && invoice.getStatus() == CommonInvoiceStatus.ARCHIVED) {
+            return;
+        }
         java.util.function.Predicate<CommonInvoiceOrder> recovery = item -> {
             Order order = item == null ? null : item.getOrder();
             Boolean active = order == null ? null : preparedRecovery.get(order.getId());

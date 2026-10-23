@@ -185,6 +185,11 @@ public class CommonInvoiceArchiveWorkflow {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Из live можно восстановить только общий счет, закрытый вручную");
         }
         List<CommonInvoiceOrder> items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId);
+        if (invoice.getPaidKopecks() > 0 || items.stream().anyMatch(item -> item.isPaid()
+                || "Оплачено".equals(OrderManualArchivePolicy.statusTitle(item.getOrder())))) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Архивный общий счет с подтвержденной оплатой нельзя восстановить в работу; нужна сверка оплаты");
+        }
         for (CommonInvoiceOrder item : items) {
             Order order = item.getOrder();
             String targetStatus = normalize(item.getArchiveSourceOrderStatusTitle());

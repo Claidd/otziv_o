@@ -10,6 +10,7 @@ import com.hunt.otziv.bad_reviews.service.BadReviewTaskService;
 import com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler;
 import com.hunt.otziv.common_billing.api.CommonInvoicePaymentOperations;
 import com.hunt.otziv.p_products.model.Order;
+import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.service.OrderTransactionService;
 import com.hunt.otziv.payments.model.PaymentLink;
@@ -23,6 +24,8 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.aop.framework.ProxyFactory;
 import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.transaction.TransactionDefinition;
@@ -206,6 +209,50 @@ class PaymentLinkSettlementServiceTransactionTest {
         assertThat(f.link.getStatus()).isEqualTo(PaymentLinkStatus.REFUNDED);
         verify(f.common).applyStandalonePaymentReversal(7L, 71L, PaymentLinkStatus.REFUNDED);
         verifyNoInteractions(f.ledger, f.checks);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void skippedArchivedInvoiceCallbackKeepsStandaloneCreditAndItsTransaction(boolean deferredPrepayment) throws Exception {
+        Fixture f = new Fixture();
+        when(f.common.isOrderInActiveCommonInvoice(7L)).thenReturn(false);
+        when(f.common.applyConfirmedOrderPayment(eq(7L), any(), anyString())).thenReturn(false);
+        when(f.ledger.handlePaymentStatus(f.order)).thenAnswer(call -> {
+            assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isTrue();
+            assertThat(PaymentCheckSourceContext.currentPaymentLinkId()).isEqualTo(71L);
+            var paid = new OrderStatus();
+            paid.setTitle("Оплачено");
+            f.order.setStatus(paid);
+            return true;
+        });
+        if (deferredPrepayment) {
+            when(f.recovery.hasActiveRecoveryTasks(7L)).thenReturn(true);
+            f.tx.executeWithoutResult(status -> f.settlement.applyBankStatus(f.link, "CONFIRMED", true, "0"));
+            assertThat(f.link.getLastError()).isEqualTo(PaymentLinkSettlementService.PREPAID_WAITING_ORDER_COMPLETION);
+            when(f.recovery.hasActiveRecoveryTasks(7L)).thenReturn(false);
+        }
+
+        f.tx.executeWithoutResult(status -> {
+            if (deferredPrepayment) {
+                assertThat(f.settlement.applyConfirmedPrepaymentIfReady(f.order)).isTrue();
+                assertThat(f.settlement.applyConfirmedPrepaymentIfReady(f.order)).isFalse();
+            } else {
+                f.settlement.applyBankStatus(f.link, "CONFIRMED", true, "0");
+                f.settlement.applyBankStatus(f.link, "CONFIRMED", true, "0");
+            }
+        });
+
+        assertThat(f.link.getStatus()).isEqualTo(PaymentLinkStatus.CONFIRMED);
+        assertThat(f.link.getConfirmedAmountKopecks()).isEqualTo(100_00L);
+        assertThat(f.link.getPaidAt()).isNotNull();
+        assertThat(f.link.getLastError()).isNull();
+        assertThat(f.order.getStatus().getTitle()).isEqualTo("Оплачено");
+        assertThat(f.manager.commits).isEqualTo(deferredPrepayment ? 2 : 1);
+        assertThat(f.manager.rollbacks).isZero();
+        verify(f.ledger).handlePaymentStatus(f.order);
+        verify(f.checks).assertActiveCheckBoundToPaymentLink(7L, 71L);
+        verify(f.common).applyConfirmedOrderPayment(eq(7L), any(), anyString());
+        verifyNoInteractions(f.outbox);
     }
 
     private static class Fixture {

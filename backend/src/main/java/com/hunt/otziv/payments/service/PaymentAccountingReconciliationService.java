@@ -10,6 +10,7 @@ import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -101,11 +102,13 @@ public class PaymentAccountingReconciliationService {
     }
 
     int reconcileReserveOverruns() {
-        List<ReserveOverrun> overruns = jdbcTemplate.query(RESERVE_OVERRUN_SQL, (rs, rowNum) -> {
+        List<ReserveOverrun> capacities = jdbcTemplate.query(RESERVE_CAPACITY_SQL, (rs, rowNum) -> {
             long sampleOrderId = rs.getLong("sample_order_id");
             boolean sampleOrderMissing = rs.wasNull();
             return new ReserveOverrun(
                     rs.getLong("profile_id"),
+                    rs.getString("profile_name"),
+                    rs.getString("contractor_role"),
                     sampleOrderMissing ? null : sampleOrderId,
                     rs.getLong("accrued_kopecks"),
                     rs.getLong("paid_kopecks"),
@@ -113,9 +116,26 @@ public class PaymentAccountingReconciliationService {
                     rs.getLong("overrun_kopecks")
             );
         });
-        if (overruns == null) {
+        if (capacities == null) {
             return 0;
         }
+        // Absence of a profile is not proof of resolution. Complete only sources
+        // whose current capacity was successfully calculated without an excess.
+        Set<Long> resolvedProfiles = capacities.stream()
+                .filter(capacity -> capacity.overrunKopecks() == 0)
+                .map(ReserveOverrun::profileId).collect(Collectors.toSet());
+        if (!resolvedProfiles.isEmpty()) {
+            List<ReserveReminderSource> reminders = jdbcTemplate.query(OPEN_RESERVE_REMINDERS_SQL,
+                    (rs, rowNum) -> new ReserveReminderSource(
+                            rs.getLong("source_id"), rs.getLong("source_order_id")));
+            if (reminders != null) {
+                reminders.stream().filter(reminder -> resolvedProfiles.contains(reminder.profileId()))
+                        .forEach(reminder -> paymentIssueReminderService.completeOrderIssue(
+                                reminder.orderId(), RESERVE_OVERRUN_REMINDER_SOURCE, reminder.profileId()));
+            }
+        }
+        List<ReserveOverrun> overruns = capacities.stream()
+                .filter(capacity -> capacity.overrunKopecks() > 0).toList();
         overruns.stream()
                 .filter(overrun -> overrun.sampleOrderId() != null)
                 .forEach(this::flagReserveOverrun);
@@ -176,17 +196,32 @@ public class PaymentAccountingReconciliationService {
     }
 
     private void flagReserveOverrun(ReserveOverrun overrun) {
+        String name = overrun.profileName() == null ? "" : overrun.profileName().trim();
+        if (name.length() > 80) {
+            name = name.substring(0, 80);
+        }
+        String person = name.isBlank() ? "Профиль №" + overrun.profileId()
+                : ("SPECIALIST".equals(overrun.contractorRole()) ? "Специалист " : "Сотрудник ")
+                        + name + " (профиль №" + overrun.profileId() + ")";
+        String explanation = overrun.paidKopecks() <= overrun.accruedKopecks()
+                ? "Полученное начисления не превышает: превышение возникнет, только если придут все ожидаемые переводы. "
+                : "Подтверждённые поступления уже превышают начисления на "
+                        + rubles(overrun.paidKopecks() - overrun.accruedKopecks())
+                        + " ₽; проверьте начисления и подтверждения по первичным данным. ";
         paymentIssueReminderService.notifyOrderIssue(
                 overrun.sampleOrderId(),
                 RESERVE_OVERRUN_REMINDER_SOURCE,
                 overrun.profileId(),
-                "Резерв реквизитов выше заработка",
-                "Профиль №" + overrun.profileId()
-                        + ": начислено " + rubles(overrun.accruedKopecks()) + " ₽"
-                        + ", уже подтверждено " + rubles(overrun.paidKopecks()) + " ₽"
-                        + ", ожидает по ранее выданным реквизитам " + rubles(overrun.outstandingKopecks()) + " ₽"
-                        + ", превышение " + rubles(overrun.overrunKopecks()) + " ₽. "
-                        + "Старые реквизиты заморожены, новые сверх лимита не выдаются; нужна ручная сверка поступлений."
+                "Ожидаемые переводы: проверьте остаток",
+                person + ". Начислено: " + rubles(overrun.accruedKopecks()) + " ₽; "
+                        + "подтверждённые поступления: " + rubles(overrun.paidKopecks()) + " ₽; "
+                        + "ожидаемые переводы: " + rubles(overrun.outstandingKopecks()) + " ₽. "
+                        + "Превышение с учётом ожидаемых переводов: " + rubles(overrun.overrunKopecks()) + " ₽. "
+                        + explanation
+                        + "Верно подтверждённые поступления менять не нужно. "
+                        + "Сверьте ожидаемые переводы и отметьте подтверждённые поступления или отмены. "
+                        + "Новые реквизиты выдаются в пределах свободного остатка. "
+                        + "Предупреждение завершится на следующей штатной сверке, когда превышение исчезнет."
         );
     }
 
@@ -269,6 +304,8 @@ public class PaymentAccountingReconciliationService {
 
     record ReserveOverrun(
             long profileId,
+            String profileName,
+            String contractorRole,
             Long sampleOrderId,
             long accruedKopecks,
             long paidKopecks,
@@ -349,10 +386,21 @@ public class PaymentAccountingReconciliationService {
             ORDER BY facts.order_id
             """;
 
-    private static final String RESERVE_OVERRUN_SQL = """
+    record ReserveReminderSource(long profileId, long orderId) {}
+
+    private static final String OPEN_RESERVE_REMINDERS_SQL = """
+            SELECT DISTINCT source_id, source_order_id
+            FROM personal_reminders
+            WHERE source_type = 'CONTRACTOR_RESERVE_OVERRUN' AND completed_at IS NULL
+              AND source_id > 0 AND source_order_id > 0
+            """;
+
+    private static final String RESERVE_CAPACITY_SQL = """
             SELECT capacity.*
             FROM (
                 SELECT profile.id AS profile_id,
+                       profile_user.fio AS profile_name,
+                       profile.contractor_role,
                        profile.opening_balance_kopecks + COALESCE(ledger.accrued_kopecks, 0)
                            + COALESCE(adjustments.signed_kopecks, 0) AS accrued_kopecks,
                        GREATEST(0, COALESCE(exposure.confirmed_kopecks, 0)
@@ -368,6 +416,7 @@ public class PaymentAccountingReconciliationService {
                        ) AS overrun_kopecks,
                        exposure.sample_order_id
                 FROM contractor_payment_profiles profile
+                LEFT JOIN users profile_user ON profile_user.id = profile.user_id
                 LEFT JOIN (
                     SELECT profile_id,
                            SUM(CASE WHEN active = 1 THEN amount_kopecks ELSE 0 END) AS accrued_kopecks
@@ -399,7 +448,6 @@ public class PaymentAccountingReconciliationService {
                     GROUP BY recipient_profile_id
                 ) exposure ON exposure.recipient_profile_id = profile.id
             ) capacity
-            WHERE capacity.overrun_kopecks > 0
             ORDER BY capacity.profile_id
             """;
 }

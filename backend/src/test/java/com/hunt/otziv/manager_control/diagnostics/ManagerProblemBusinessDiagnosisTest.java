@@ -10,6 +10,56 @@ import static com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosti
 
 class ManagerProblemBusinessDiagnosisTest {
     @ParameterizedTest
+    @ValueSource(strings = {"PARTIALLY_PAID", "ARCHIVED"})
+    void historicalInvoiceArchivePreservesPaymentWithoutDeclaringOldCompositionAConfirmedDebt(String status) {
+        var facts = historicalArchiveFacts(status);
+
+        assertThat(ManagerProblemBusinessDiagnosis.hasHistoricalInvoiceArchive(facts)).isTrue();
+        Diagnosis result = ManagerProblemBusinessDiagnosis.fallback(facts);
+
+        assertThat(result.summary()).contains("1500 ₽ из 4500 ₽", "Расчётный остаток 3000 ₽ не подтверждает действующий долг");
+        assertThat(result.summary()).contains(status.equals("ARCHIVED") ? "историческом архиве" : "текущий статус снова открыт");
+        assertThat(result.actions()).extracting(Action::code).containsExactly("CHECK_SOURCE", "ESCALATE");
+        assertThat(result.actions().getFirst().text()).contains("журналом", "платёжным источником", "без проверки оснований");
+        assertThat(result.actions().getLast().text()).contains("Сохраните учтённую оплату", "не списывайте", "не отправляйте новый счёт");
+        assertThat(result.missingEvidence()).anyMatch(text -> text.contains("не подтверждают восстановление всего счёта"));
+        assertThat(result.verification().getFirst()).contains("исходными записями", "не подтверждает отмену долга либо оплату");
+        assertThat(ManagerProblemBusinessDiagnosis.readable(result)).isTrue();
+    }
+
+    @Test
+    void archiveInferenceNeedsCurrentScopedClosureAndDoesNotOverrideUncertainDelivery() {
+        var facts = historicalArchiveFacts("PARTIALLY_PAID");
+        for (String field : List.of("closed_at", "close_reason")) {
+            var missing = facts.stream().filter(f -> !f.field().equals(field)).toList();
+            assertThat(ManagerProblemBusinessDiagnosis.hasHistoricalInvoiceArchive(missing)).isFalse();
+        }
+        var oldOnly = List.of(f("card", "entity_type", "COMMON_INVOICE"), f("card", "reason", "MANUAL_ARCHIVE 2026-07-30"),
+                f("invoice", "status", "PARTIALLY_PAID"), f("order_status_history", "next_status", "Архив"));
+        assertThat(ManagerProblemBusinessDiagnosis.hasHistoricalInvoiceArchive(oldOnly)).isFalse();
+        var otherType = new ArrayList<>(facts.stream().filter(f -> !f.subject().equals("card")).toList());
+        otherType.add(f("card", "entity_type", "ORDER"));
+        assertThat(ManagerProblemBusinessDiagnosis.hasHistoricalInvoiceArchive(otherType)).isFalse();
+        var unknownDate = new ArrayList<>(facts.stream().filter(f -> !f.field().equals("closed_at")).toList());
+        unknownDate.add(f("invoice", "closed_at", "неизвестно"));
+        assertThat(ManagerProblemBusinessDiagnosis.hasHistoricalInvoiceArchive(unknownDate)).isFalse();
+        assertThat(ManagerProblemBusinessDiagnosis.hasHistoricalInvoiceArchive(historicalArchiveFacts("NEEDS_ATTENTION"))).isFalse();
+        assertThat(ManagerProblemBusinessDiagnosis.hasHistoricalInvoiceArchive(historicalArchiveFacts("PAID"))).isFalse();
+
+        var uncertain = new ArrayList<>(facts);
+        uncertain.add(f("automation", "delivery_status", "UNKNOWN"));
+        assertThat(ManagerProblemBusinessDiagnosis.fallback(uncertain).actions().getFirst().code()).isEqualTo("CHECK_DELIVERY");
+        uncertain.add(f("automation", "current_cycle", "false"));
+        assertThat(ManagerProblemBusinessDiagnosis.fallback(uncertain).summary()).contains("Расчётный остаток");
+    }
+
+    private static List<Fact> historicalArchiveFacts(String status) {
+        return List.of(f("card", "entity_type", "COMMON_INVOICE_AUTOMATION"), f("invoice", "status", status),
+                f("invoice", "closed_at", "2026-07-30 21:31:26.321616"), f("invoice", "close_reason", "MANUAL_ARCHIVE"),
+                f("invoice", "previous_status", "COLLECTING"), f("invoice", "amount_kopecks", "450000"), f("invoice", "paid_kopecks", "150000"));
+    }
+
+    @ParameterizedTest
     @ValueSource(strings = {"COMMON_INVOICE", "COMMON_INVOICE_AUTOMATION"})
     void currentInvoiceConflictDoesNotExplainEveryUnreadyPosition(String type) {
         var facts = List.of(f("card", "entity_type", type), f("invoice", "status", "NEEDS_ATTENTION"),

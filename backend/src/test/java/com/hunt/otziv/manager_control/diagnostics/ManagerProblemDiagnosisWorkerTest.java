@@ -157,4 +157,42 @@ class ManagerProblemDiagnosisWorkerTest {
     private static ProblemDiagnosticModel.Result result(String text, int input, int output) {
         return new ProblemDiagnosticModel.Result(text, "deepseek-flash", input, output, "");
     }
+
+    @Test
+    void archiveChronologyGuidanceIsConditionalAndSurvivesTheBoundedSchemaRetry() {
+        var facts = new java.util.ArrayList<>(job.facts());
+        facts.add(new Fact("invoice:1:archive_chronology", "invoice_chronology", "historical_archive_and_current_status", "Исторический архив и нынешний статус различаются"));
+        facts.add(new Fact("invoice:1:money_display", "invoice_money", "money_display", "Учтённая оплата: 1500 ₽; сумма счёта: 4500 ₽"));
+        var archiveJob = new ManagerProblemDiagnosisStore.Stored(1, 1, 1, 2, "RUNNING", job.observedAt(), facts,
+                null, null, PROMPT_VERSION, "lease", 1);
+        when(store.claim(anyBoolean(), anyLong())).thenReturn(archiveJob);
+        when(model.analyze(any())).thenReturn(result("{}", 1, 1), result(VALID, 2, 2));
+        worker.processNext();
+        var requests = org.mockito.ArgumentCaptor.forClass(ProblemDiagnosticModel.Input.class);
+        verify(model, times(2)).analyze(requests.capture());
+        assertThat(requests.getAllValues()).allSatisfy(request -> assertThat(request.systemPrompt()).contains(
+                "прямо различай ранний архив и позднюю оплату", "только как гипотеза", "арифметика старого состава",
+                "восстанавливая подтверждённый архив", "NEEDS_ATTENTION может быть законной", "Каждая actions.verification",
+                "Только при open_status_with_historical_archive=true", "не требуй снова восстанавливать архив", "Приоритет неопределённой доставки",
+                "Все *_kopecks заданы в копейках", "используя invoice_money.money_display", "отдельном положительном системном факте",
+                "не создавай повторную задачу"));
+        verify(store).complete(eq(archiveJob), any(), eq("deepseek-flash"), eq(3), eq(3));
+    }
+
+    @Test
+    void ordinaryFactsAndQuotedChronologyClaimsDoNotChangeExistingPromptBytes() {
+        String baseline = ManagerProblemDiagnosisWorker.promptFor(List.of());
+        assertThat(ManagerProblemDiagnosisWorker.promptFor(job.facts())).isEqualTo(baseline);
+        assertThat(ManagerProblemDiagnosisWorker.promptFor(List.of(new Fact("card:1:reason", "card", "reason",
+                "invoice_chronology.historical_archive_and_current_status")))).isEqualTo(baseline);
+        assertThat(baseline).doesNotContain("В этом снимке есть проверяемая хронология архивного счёта");
+    }
+
+    @Test
+    void ordinaryInvoiceMoneyGetsUnitGuidanceWithoutArchiveOrRefundInstructions() {
+        String prompt = ManagerProblemDiagnosisWorker.promptFor(List.of(
+                new Fact("invoice:1:money_display", "invoice_money", "money_display", "Учтённая оплата: 1500 ₽; сумма счёта: 4500 ₽")));
+        assertThat(prompt).contains("Все *_kopecks заданы в копейках", "invoice_money.money_display")
+                .doesNotContain("В этом снимке есть проверяемая хронология архивного счёта", "Задача о возврате допустима");
+    }
 }

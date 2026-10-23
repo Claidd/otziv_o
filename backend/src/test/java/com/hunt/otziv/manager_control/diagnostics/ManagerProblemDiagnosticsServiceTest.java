@@ -149,6 +149,38 @@ class ManagerProblemDiagnosticsServiceTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"READY", "NEEDS_CONTEXT"})
+    void historicalArchiveOverridesUnsupportedDebtClaimWithoutRewritingTheStoredAiResult(String status) throws Exception {
+        when(settings.mode()).thenReturn("ENFORCE");
+        var facts = List.of(new Fact("card:10:entity_type", "card", "entity_type", "COMMON_INVOICE"),
+                new Fact("invoice:175:status", "invoice", "status", "PARTIALLY_PAID"),
+                new Fact("invoice:175:closed_at", "invoice", "closed_at", "2026-07-30 21:31:26.321616"),
+                new Fact("invoice:175:close_reason", "invoice", "close_reason", "MANUAL_ARCHIVE"),
+                new Fact("invoice:175:amount_kopecks", "invoice", "amount_kopecks", "450000"),
+                new Fact("invoice:175:paid_kopecks", "invoice", "paid_kopecks", "150000"));
+        var original = new Diagnosis("Клиент должен доплатить 3000 рублей по общему счёту.", List.of(), List.of(), List.of(),
+                List.of(new Action("CHECK_SOURCE", "Проверьте оставшуюся оплату.", "Менеджер", "Остаток оплачен.", List.of("invoice:175:status"))), List.of("Остаток оплачен."));
+        assertThat(ManagerProblemBusinessDiagnosis.readable(original)).isTrue();
+        String storedJson = new ObjectMapper().writeValueAsString(original);
+        var saved = new ManagerProblemDiagnosisStore.Stored(299, 5, 1, 2, status, LocalDateTime.now(), facts, original,
+                "deepseek-flash", PROMPT_VERSION, null, 1);
+        when(store.latestForSource(10L)).thenReturn(saved);
+
+        DiagnosticView result = service.latest(10L);
+
+        assertThat(result.model()).isEqualTo("server-rules");
+        assertThat(result.status()).isEqualTo(status);
+        assertThat(result.version()).isEqualTo(5);
+        assertThat(result.facts()).isSameAs(facts);
+        assertThat(result.diagnosis().summary()).contains("прежнее ручное архивирование", "не подтверждает действующий долг");
+        assertThat(new ObjectMapper().writeValueAsString(saved.diagnosis())).isEqualTo(storedJson);
+        assertThat(saved.model()).isEqualTo("deepseek-flash");
+        verify(store).latestForSource(10L);
+        verifyNoMoreInteractions(store);
+        verifyNoInteractions(collector, events);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"READY", "NEEDS_CONTEXT"})
     void oldChatModelAdviceKeepsAuthorshipAndActionsButHandoffCannotSatisfyClosure(String status) throws Exception {
         when(settings.mode()).thenReturn("ENFORCE");
         var facts = chatFacts();
@@ -219,6 +251,54 @@ class ManagerProblemDiagnosticsServiceTest {
 
         assertThat(result.diagnosis()).isSameAs(original);
         assertThat(result.model()).isEqualTo("deepseek-flash");
+        verify(store).latestForSource(10L);
+        verifyNoMoreInteractions(store);
+        verifyNoInteractions(collector, events);
+    }
+
+    @Test
+    void oldPaymentFailureDoesNotRewriteClosureForTheCurrentCycle() {
+        when(settings.mode()).thenReturn("ENFORCE");
+        var original = modelAdviceWithHandoffClosure();
+        var facts = List.of(new Fact("card:10:entity_type", "card", "entity_type", "AUTOMATION_FAILURE"),
+                new Fact("automation:41:last_error_code", "automation", "last_error_code", "payment_instruction_failed"),
+                new Fact("automation:41:current_cycle", "automation", "current_cycle", "false"));
+        when(store.latestForSource(10L)).thenReturn(new ManagerProblemDiagnosisStore.Stored(1, 2, 1, 2, "READY", LocalDateTime.now(),
+                facts, original, "deepseek-flash", PROMPT_VERSION, null, 1));
+        DiagnosticView result = service.latest(10L);
+        assertThat(result.diagnosis()).isSameAs(original);
+        assertThat(result.model()).isEqualTo("deepseek-flash");
+        verify(store).latestForSource(10L);
+        verifyNoMoreInteractions(store);
+        verifyNoInteractions(collector, events);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"READY", "NEEDS_CONTEXT"})
+    void paymentPreparationFailureCannotCloseOnHandoffDeadlineOrAnotherFailure(String status) throws Exception {
+        when(settings.mode()).thenReturn("ENFORCE");
+        var facts = List.of(new Fact("card:10:entity_type", "card", "entity_type", "AUTOMATION_FAILURE"),
+                new Fact("automation:41:last_error_code", "automation", "last_error_code", "payment_instruction_failed"),
+                new Fact("automation:41:current_cycle", "automation", "current_cycle", "true"));
+        var original = new Diagnosis("Не удалось подготовить счёт по заказу.", List.of(), List.of(), List.of(),
+                List.of(new Action("ESCALATE", "Передайте проверку администратору.", "Менеджер", "Результат сверки записан в счёте.", List.of("automation:41:last_error_code"))),
+                List.of("Либо повторная попытка не удалась и случай передан администратору, либо назначен срок следующей проверки."));
+        assertThat(ManagerProblemBusinessDiagnosis.readable(original)).isTrue();
+        String storedJson = new ObjectMapper().writeValueAsString(original);
+        var saved = new ManagerProblemDiagnosisStore.Stored(1, 2, 1, 2, status, LocalDateTime.now(), facts,
+                original, "deepseek-flash", PROMPT_VERSION, null, 1);
+        when(store.latestForSource(10L)).thenReturn(saved);
+
+        DiagnosticView result = service.latest(10L);
+
+        assertThat(result.model()).isEqualTo("deepseek-flash");
+        assertThat(result.status()).isEqualTo(status);
+        assertThat(result.diagnosis().summary()).isEqualTo(original.summary());
+        assertThat(result.diagnosis().actions()).isSameAs(original.actions());
+        assertThat(result.diagnosis().verification().getFirst()).contains("успешную подготовку", "проверенный результат", "штатно зафиксированную ненужность", "с причиной");
+        assertThat(result.diagnosis().verification().getLast()).contains("Передача", "срока", "повторная неудачная", "не разрешают закрыть");
+        assertThat(ManagerProblemBusinessDiagnosis.readable(result.diagnosis())).isTrue();
+        assertThat(new ObjectMapper().writeValueAsString(saved.diagnosis())).isEqualTo(storedJson);
         verify(store).latestForSource(10L);
         verifyNoMoreInteractions(store);
         verifyNoInteractions(collector, events);

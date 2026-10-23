@@ -254,6 +254,9 @@ public class CommonInvoiceInitializationService {
     PreparedCommonPaymentInit preparePaymentInit(String token, String cleanEmail) {
         LockedInvoicePaymentPrelude paymentPrelude = lockedInvoiceByTokenAfterStandalonePaymentPrelude(token);
         CommonInvoice invoice = paymentPrelude.invoice();
+        if (invoice.getStatus() == CommonInvoiceStatus.ARCHIVED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Архивный общий счет недоступен для оплаты");
+        }
         ensureNoOperationInProgress(invoice);
         List<CommonInvoiceOrder> items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoice.getId());
         try {
