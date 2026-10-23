@@ -118,6 +118,83 @@ class ManagerProblemDiagnosticsServiceTest {
         assertThat(result.model()).isEqualTo("server-rules");
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"READY", "NEEDS_CONTEXT"})
+    void oldChatModelAdviceKeepsAuthorshipAndActionsButHandoffCannotSatisfyClosure(String status) throws Exception {
+        when(settings.mode()).thenReturn("ENFORCE");
+        var facts = chatFacts();
+        var original = modelAdviceWithHandoffClosure();
+        String storedJson = new ObjectMapper().writeValueAsString(original);
+        var saved = new ManagerProblemDiagnosisStore.Stored(1, 2, 1, 2, status, LocalDateTime.now(), facts,
+                original, "deepseek-flash", "manager-problem-evidence-v3", null, 1);
+        when(store.latestForSource(10L)).thenReturn(saved);
+
+        DiagnosticView result = service.latest(10L);
+
+        assertThat(result.model()).isEqualTo("deepseek-flash");
+        assertThat(result.promptVersion()).isEqualTo("manager-problem-evidence-v3");
+        assertThat(result.status()).isEqualTo(status);
+        assertThat(result.version()).isEqualTo(2);
+        assertThat(result.facts()).isSameAs(facts);
+        assertThat(result.diagnosis().summary()).isEqualTo(original.summary());
+        assertThat(result.diagnosis().actions()).isSameAs(original.actions());
+        assertThat(result.diagnosis().confirmedFacts()).isSameAs(original.confirmedFacts());
+        assertThat(result.diagnosis().hypotheses()).isSameAs(original.hypotheses());
+        assertThat(result.diagnosis().missingEvidence()).isSameAs(original.missingEvidence());
+        assertThat(result.diagnosis().verification()).hasSize(2);
+        assertThat(result.diagnosis().verification().getFirst()).contains("после последнего сообщения", "ответ по существу", "штатно подтверждено", "с зафиксированной причиной");
+        assertThat(result.diagnosis().verification().getLast()).contains("Передача", "взятие в работу", "обещание", "не разрешают закрыть");
+        assertThat(ManagerProblemBusinessDiagnosis.readable(result.diagnosis())).isTrue();
+        assertThat(new ObjectMapper().writeValueAsString(saved.diagnosis())).isEqualTo(storedJson);
+        verify(store).latestForSource(10L);
+        verifyNoMoreInteractions(store);
+        verifyNoInteractions(collector, events);
+    }
+
+    @Test
+    void auditAdviceUsesTheSameChatClosurePolicyWithoutPresentingItAsAnObservedFact() throws Exception {
+        when(settings.mode()).thenReturn("ENFORCE");
+        var facts = chatFacts();
+        var original = modelAdviceWithHandoffClosure();
+        var evidence = new ManagerProblemEvidenceCollector.Evidence("2:CLIENT_CHAT_UNANSWERED:189", 2, 10, false, facts, LocalDateTime.now());
+        when(collector.collect(10L)).thenReturn(evidence);
+        when(store.capture(evidence)).thenReturn(new ManagerProblemDiagnosisStore.Stored(1, 2, 1, 2, "READY", LocalDateTime.now(),
+                facts, original, "deepseek-flash", "manager-problem-evidence-v3", null, 1));
+
+        String context = service.contextForAudit(List.of(10L));
+
+        String advice = context.lines().filter(line -> line.startsWith("Рекомендация ИИ caseId=")).findFirst().orElseThrow();
+        var json = new ObjectMapper().readTree(advice.substring(advice.indexOf(": ") + 2));
+        assertThat(json.path("verification").get(0).asText()).contains("ответ по существу", "штатно подтверждено");
+        assertThat(json.path("verification").get(1).asText()).contains("не разрешают закрыть");
+        assertThat(json.path("summary").asText()).isEqualTo(original.summary());
+        assertThat(json.path("actions")).isEqualTo(new ObjectMapper().valueToTree(original.actions()));
+        String authoritative = context.substring(context.lastIndexOf("СЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:"));
+        assertThat(authoritative).contains("\"value\":\"OPEN\"").doesNotContain("ответ по существу", "не разрешают закрыть");
+        assertThat(original.verification()).containsExactly("Карточку можно закрыть сразу после передачи обращения.");
+        verify(collector).collect(10L);
+        verify(store).capture(evidence);
+        verifyNoMoreInteractions(collector, store);
+        verifyNoInteractions(events);
+    }
+
+    @Test
+    void nonChatDiagnosisRetainsItsClosurePolicyAndReadingDoesNotWriteAnything() {
+        when(settings.mode()).thenReturn("ENFORCE");
+        var facts = List.of(new Fact("card:10:entity_type", "card", "entity_type", "ORDER"));
+        var original = modelAdviceWithHandoffClosure();
+        when(store.latestForSource(10L)).thenReturn(new ManagerProblemDiagnosisStore.Stored(1, 2, 1, 2, "READY", LocalDateTime.now(),
+                facts, original, "deepseek-flash", PROMPT_VERSION, null, 1));
+
+        DiagnosticView result = service.latest(10L);
+
+        assertThat(result.diagnosis()).isSameAs(original);
+        assertThat(result.model()).isEqualTo("deepseek-flash");
+        verify(store).latestForSource(10L);
+        verifyNoMoreInteractions(store);
+        verifyNoInteractions(collector, events);
+    }
+
     @Test
     void staleResolvedCardCannotHideLiveInvoiceFailure() {
         when(collector.collect(10L)).thenReturn(new ManagerProblemEvidenceCollector.Evidence("2:COMMON_INVOICE:189", 2, 10, true,
@@ -131,5 +208,17 @@ class ManagerProblemDiagnosticsServiceTest {
         when(collector.collect(10L)).thenReturn(evidence);
         when(store.capture(evidence)).thenReturn(new ManagerProblemDiagnosisStore.Stored(1, 1, 1, 2, "READY", LocalDateTime.now(), facts,
                 new Diagnosis("Совет модели", List.of(), List.of(), List.of(), List.of(), List.of()), "deepseek-flash", PROMPT_VERSION, null, 1));
+    }
+
+    private List<Fact> chatFacts() {
+        return List.of(new Fact("card:10:entity_type", "card", "entity_type", "CLIENT_CHAT_UNANSWERED"),
+                new Fact("chat:189:status", "client_chat", "status", "OPEN"));
+    }
+
+    private Diagnosis modelAdviceWithHandoffClosure() {
+        return new Diagnosis("Обращение открыто, ответ в доступных данных не найден.",
+                List.of(new Finding("Обращение открыто.", List.of("chat:189:status"))), List.of(), List.of("Нужно сверить полную переписку."),
+                List.of(new Action("ESCALATE", "Передайте обращение ответственному и проверьте ответ.", "Менеджер", "Исполнитель назначен.", List.of("chat:189:status"))),
+                List.of("Карточку можно закрыть сразу после передачи обращения."));
     }
 }

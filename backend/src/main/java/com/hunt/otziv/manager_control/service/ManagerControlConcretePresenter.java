@@ -48,8 +48,19 @@ public class ManagerControlConcretePresenter {
             String contactText,
             String specialistNameOverride
     ) {
+        return concreteItemResponse(item, contactText, specialistNameOverride, null);
+    }
+
+    /** Read projection only: the fresh explanation must never dirty the persisted action/history. */
+    ManagerControlConcreteItemResponse concreteItemResponse(
+            ManagerDailyControlConcreteItem item,
+            String contactText,
+            String specialistNameOverride,
+            String currentReason
+    ) {
+        String displayReason = currentReason == null ? item.getReason() : currentReason;
         if (workerTaskLookup.isWorkerRiskConcrete(item)) {
-            return riskConcreteItemResponse(item, contactText, specialistNameOverride);
+            return riskConcreteItemResponse(item, contactText, specialistNameOverride, displayReason);
         }
         String specialistName = safe(specialistNameOverride).isBlank()
                 ? specialistNameForConcreteItem(item)
@@ -67,7 +78,7 @@ public class ManagerControlConcretePresenter {
                 item.getSubtitle(),
                 item.getStatusLabel(),
                 item.getAgeDays(),
-                contactDisplayReason(item.getReason(), sendBlockedReason),
+                contactDisplayReason(displayReason, sendBlockedReason),
                 targetUrl,
                 item.getOrderDetailsId(),
                 item.getChatUrl(),
@@ -130,7 +141,8 @@ public class ManagerControlConcretePresenter {
     ManagerControlConcreteItemResponse riskConcreteItemResponse(
             ManagerDailyControlConcreteItem item,
             String contactText,
-            String specialistNameOverride
+            String specialistNameOverride,
+            String displayReason
     ) {
         WorkerRiskIncident incident = item.getEntityId() == null
                 ? null
@@ -188,7 +200,7 @@ public class ManagerControlConcretePresenter {
                 item.getSubtitle(),
                 item.getStatusLabel(),
                 item.getAgeDays(),
-                item.getReason(),
+                displayReason,
                 item.getTargetUrl(),
                 item.getOrderDetailsId(),
                 item.getChatUrl(),

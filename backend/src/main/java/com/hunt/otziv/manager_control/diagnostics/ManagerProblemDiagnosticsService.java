@@ -171,6 +171,7 @@ public class ManagerProblemDiagnosticsService {
         boolean fallback = visible && (!ManagerProblemBusinessDiagnosis.readable(saved.diagnosis())
                 || !ManagerProblemBusinessDiagnosis.uncertainDelivery(saved.facts()).isEmpty());
         Diagnosis diagnosis = fallback ? ManagerProblemBusinessDiagnosis.fallback(saved.facts()) : saved.diagnosis();
+        diagnosis = ManagerProblemBusinessDiagnosis.withClosurePolicy(saved.facts(), diagnosis);
         return new DiagnosticView(saved.caseId(), saved.version(), saved.episode(), saved.status(), saved.observedAt(), saved.facts(),
                 visible ? diagnosis : null, fallback ? ManagerProblemBusinessDiagnosis.MODEL : saved.model(), saved.promptVersion(), mode);
     }

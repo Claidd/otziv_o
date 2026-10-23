@@ -54,8 +54,8 @@ class ManagerControlInvoiceDiagnosticsTest {
         given(invoice, List.of());
         assertThatThrownBy(() -> diagnostics.requireResolved(invoice.getId()))
                 .isInstanceOf(ResponseStatusException.class);
-        assertThat(reason(invoice, List.of())).contains("Ошибка уведомления об оплате", "delivery_failed")
-                .doesNotContain("Общий счет отключен");
+        assertThat(reason(invoice, List.of())).contains("Результат уведомления об оплате не подтвержден", "Не отправляйте повторно")
+                .doesNotContain("Общий счет отключен", "delivery_failed");
     }
 
     @Test
@@ -101,6 +101,63 @@ class ManagerControlInvoiceDiagnosticsTest {
         assertThat(diagnostics.commonInvoiceRequiresCompositionReview(invoice, List.of(archived))).isTrue();
         invoice.setStatus(CommonInvoiceStatus.PAID);
         assertThat(diagnostics.commonInvoiceRequiresCompositionReview(invoice, List.of(archived))).isFalse();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"message_send_in_progress", "message_send_stale: previous attempt", "message_send_unknown: provider timeout"})
+    void invoice115UncertainDeliveryRequiresExistingOperationCheckAndNeverManualResend(String error) {
+        var invoice = invoice(CommonInvoiceStatus.NEEDS_ATTENTION, error);
+        invoice.setId(115L);
+        String originalError = invoice.getLastError();
+
+        assertThat(reason(invoice, List.of())).contains("не подтвержден", "существующую отправку", "администратору",
+                "Не отправляйте повторно", "после подтверждения результата существующей отправки")
+                .doesNotContain("повторите отправку", "Нажмите «Починить»", "message_send_", "provider");
+        assertThat(invoice.getLastError()).isEqualTo(originalError);
+        assertThat(invoice.getStatus()).isEqualTo(CommonInvoiceStatus.NEEDS_ATTENTION);
+        verifyNoInteractions(invoices, positions);
+    }
+
+    @Test
+    void invoice297ExplainsOnePublicationConflictWithoutLeakingItsTechnicalWrapper() {
+        var invoice = invoice(CommonInvoiceStatus.COLLECTING,
+                "409 CONFLICT: Нельзя отправить заказ в публикацию: текст отзыва уже опубликован ранее. "
+                        + "Review 200221; JDBC select review_text from reviews; java.lang.IllegalStateException");
+        invoice.setId(297L);
+        var items = java.util.stream.IntStream.range(0, 7).mapToObj(index -> {
+            var item = position(index < 4 ? "Опубликовано" : "Публикация", false, true);
+            item.setReady(index < 4);
+            return item;
+        }).toList();
+
+        assertThat(reason(invoice, items)).contains("Для одной позиции", "Готово позиций: 4 из 7", "исходный отзыв",
+                "Повторная публикация без проверки недопустима", "после устранения конфликта")
+                .doesNotContain("409", "CONFLICT", "JDBC", "select", "IllegalStateException", "200221", "Починить");
+        assertThat(invoice.getLastError()).contains("409 CONFLICT");
+        verifyNoInteractions(invoices, positions);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"409 CONFLICT provider stack", "JDBC SQL select invoice_id from invoices",
+            "telegram_exception: java.lang.IllegalStateException secret-provider-details", "max_not_sent: HTTP 503 upstream"})
+    void technicalInvoiceErrorsRemainOnlyInStoredEvidence(String error) {
+        var invoice = invoice(CommonInvoiceStatus.NEEDS_ATTENTION, error);
+        String explanation = reason(invoice, List.of());
+
+        assertThat(explanation).contains("Счет").doesNotContain("409", "CONFLICT", "JDBC", "SQL", "select",
+                "telegram_exception", "max_not_sent", "HTTP", "secret-provider-details", "IllegalStateException");
+        assertThat(invoice.getLastError()).isEqualTo(error);
+        verifyNoInteractions(invoices, positions);
+    }
+
+    @Test
+    void structuredApprovalFailureKeepsBusinessDetailButDropsTechnicalFields() {
+        var invoice = invoice(CommonInvoiceStatus.NEEDS_ATTENTION,
+                "review_approval_failed: problem=JDBC select invoice_order where ready=false; solution=HTTP 409 CONFLICT");
+        assertThat(reason(invoice, List.of())).contains("не удалось назначить даты публикации", "проверьте заказы общего счета")
+                .doesNotContain("JDBC", "select", "invoice_order", "HTTP", "409");
+        invoice.setLastError("review_approval_failed: problem=не хватает дат публикации; solution=проверьте график специалиста");
+        assertThat(reason(invoice, List.of())).contains("не хватает дат публикации", "проверьте график специалиста");
     }
 
     private void given(CommonInvoice invoice, List<CommonInvoiceOrder> items) {
