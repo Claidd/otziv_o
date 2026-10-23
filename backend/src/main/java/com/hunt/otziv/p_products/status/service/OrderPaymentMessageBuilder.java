@@ -29,8 +29,17 @@ public class OrderPaymentMessageBuilder {
     }
 
     public PreparedPaymentMessage publishedOrderPaymentMessageWithTransfer(Order order) {
+        return publishedOrderPaymentMessageWithTransfer(order, false);
+    }
+
+    /** Scheduled preparation already owns the order lock and commits the frozen message. */
+    public PreparedPaymentMessage publishedOrderPaymentMessageInCurrentTransaction(Order order) {
+        return publishedOrderPaymentMessageWithTransfer(order, true);
+    }
+
+    private PreparedPaymentMessage publishedOrderPaymentMessageWithTransfer(Order order, boolean currentTransaction) {
         if (usesBankPaymentInstructionSource()) {
-            ManagerPaymentLinkResponse link = paymentLink(order);
+            ManagerPaymentLinkResponse link = paymentLink(order, currentTransaction);
             return new PreparedPaymentMessage(link.copyText(), link.telegramCopyTransferNumber());
         }
         String heading = orderHeading(order);
@@ -65,8 +74,14 @@ public class OrderPaymentMessageBuilder {
     }
 
     private ManagerPaymentLinkResponse paymentLink(Order order) {
+        return paymentLink(order, false);
+    }
+
+    private ManagerPaymentLinkResponse paymentLink(Order order, boolean currentTransaction) {
         try {
-            return paymentLinkServiceProvider.getObject().createForOrderInNewTransaction(order.getId());
+            PaymentLinkService payments = paymentLinkServiceProvider.getObject();
+            return currentTransaction ? payments.createForOrderInCurrentTransaction(order.getId())
+                    : payments.createForOrderInNewTransaction(order.getId());
         } catch (Exception e) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,

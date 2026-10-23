@@ -87,6 +87,12 @@ public class PaymentLinkService implements com.hunt.otziv.payments.api.Standalon
         return preparationWorkflow.createForOrderInNewTransaction(orderId);
     }
 
+    /** DB-only preparation owned by an existing order/message reservation transaction. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public ManagerPaymentLinkResponse createForOrderInCurrentTransaction(Long orderId) {
+        return preparationWorkflow.createForOrderInCurrentTransaction(orderId);
+    }
+
     /**
      * Manager-facing entry point. The current order row is locked before the
      * object-scope check, so a concurrent reassignment cannot invalidate the
