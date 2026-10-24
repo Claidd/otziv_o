@@ -119,6 +119,8 @@ public class ManagerControlConcretePresenter {
         // Older clients render only reason; never keep the obsolete resend advice alongside a delivery fence.
         String currentReason = safe(reason).replace(
                 "Если починка недоступна или не помогла, скопируйте текст, откройте чат, отправьте ссылку на проверку и нажмите «Отправлено».",
+                "").replace(
+                "Проверьте результат предыдущей отправки перед новым контактом. Если исход не подтверждён, не отправляйте сообщение повторно; передайте существующую операцию администратору для сверки.",
                 "").trim();
         return currentReason.isBlank() ? sendBlockedReason : currentReason + "\n" + sendBlockedReason;
     }
