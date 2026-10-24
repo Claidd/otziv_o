@@ -90,7 +90,9 @@ def plan(root, env, changed, full=False):
     hashes=dict(line.split() for line in command(prefix+['config','--hash','*']).splitlines())
     ids=command(prefix+['ps','--all','--quiet']).split()
     actual=json.loads(command(['docker','inspect',*ids])) if ids else []
-    force=full or any(name.startswith('infrastructure/scripts/prod/') for name in changed)
+    # Delivery helpers do not run inside containers. Runtime configuration,
+    # changed bind mounts and seccomp policies are checked per service below.
+    force=bool(full)
     result={}
     for service in desired:
         rows=[c for c in actual if (c['Config'].get('Labels') or {}).get('com.docker.compose.service')==service

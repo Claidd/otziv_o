@@ -9,12 +9,13 @@ from pathlib import Path
 import re
 import tempfile
 import subprocess
+import sys
 import tarfile
 
 from ci_artifacts import Client, extract_files, validate_artifact
 from ci_image_bundle import SERVICES, canonical, verify_bundle
 from deployment_capacity import freeze_image, validate_plan
-from release_ci import require
+from release_ci import GateError, require
 from release_registry import upload_ci_image
 
 SCHEMA = 'otziv-ci-release-v1'
@@ -172,7 +173,60 @@ def download_receipts(client, output, revision, run_id, attempt):
     return len(selected)
 
 
-def capacity_plan(value, references=None, worker=False):
+def validate_reused_references(value, reused, worker=False):
+    """Only an exact current CI digest may keep a previous loopback reference."""
+    require(isinstance(reused, dict), 'Invalid installed image reuse proof')
+    rows = {row['component']: row for row in value['images']
+            if row['service'] and (row['service'] != 'external-review-worker' or worker)}
+    require(set(reused) <= set(rows), 'Unexpected reused image component')
+    for component, reference in reused.items():
+        require(isinstance(reference, str), 'Invalid reused image reference')
+        match = re.fullmatch(r'127\.0\.0\.1:([1-9][0-9]*)/otziv-prepared/ci-'
+                             + re.escape(component) + r'@(sha256:[a-f0-9]{64})', reference)
+        require(match and 1024 <= int(match[1]) <= 65535
+                and match[2] == rows[component]['manifestDigest'],
+                'Reused image differs from exact CI manifest')
+    return dict(reused)
+
+
+def reused_references(value, preflight, worker=False):
+    """Retain a component only when every expected service uses the exact CI image."""
+    require(preflight.get('schema') == 'otziv-server-preflight-v1'
+            and preflight.get('ready') is True and isinstance(preflight.get('images'), list),
+            'Healthy production inventory required for image reuse')
+    result = {}
+    for row in value['images']:
+        service = row['service']
+        if not service or (service == 'external-review-worker' and not worker):
+            continue
+        names = {'whatsapp_lika', 'whatsapp_vika'} if service == 'whatsapp' else {service}
+        candidates = [item for item in preflight['images'] if item.get('service') in names]
+        if len(candidates) != len(names) or {item['service'] for item in candidates} != names:
+            continue
+        if any(item.get('healthy') is not True or item.get('configId') != row['configId']
+               for item in candidates):
+            continue
+        references = {item.get('reference') for item in candidates}
+        if len(references) != 1:
+            continue
+        candidate = {row['component']: references.pop()}
+        try:
+            result.update(validate_reused_references(value, candidate, worker))
+        except (GateError, ValueError, TypeError):
+            # Legacy tags, other repositories or different manifests require transfer.
+            continue
+    return result
+
+
+def transport_references(value, port, reused=None, worker=False):
+    require(type(port) is int and 1024 <= port <= 65535, 'Invalid transport port')
+    refs = {row['component']: f"127.0.0.1:{port}/otziv-prepared/ci-{row['component']}@{row['manifestDigest']}"
+            for row in value['images']}
+    refs.update(validate_reused_references(value, reused or {}, worker))
+    return refs
+
+
+def capacity_plan(value, references=None, worker=False, reused=None):
     validate_release(value, value['revision'])
     plan = copy.deepcopy(value['runtimeCapacity'])
     for row in value['images']:
@@ -182,6 +236,11 @@ def capacity_plan(value, references=None, worker=False):
         ref = references[row['component']] if references is not None else image_reference(row)
         plan['images'].append({'reference': ref, 'configId': row['configId'], 'layers': row['layers']})
         plan['releaseImages'][service] = ref
+    if reused:
+        reused = validate_reused_references(value, reused, worker)
+        require(references is not None and all(references.get(key) == ref for key, ref in reused.items()),
+                'Reused image not included in the release plan')
+        plan['reusedImages'] = sorted(reused.values())
     validate_plan(plan, value['revision'])
     return plan
 
@@ -309,14 +368,19 @@ def fetch_image(client, value, row, output, cache_root=None):
     return output / row['archive']
 
 
-def import_release(client, value, record, directory, worker=False, cache_root=None):
-    references = {}
+def import_release(client, value, record, directory, worker=False, cache_root=None, reused=None):
+    validate_release(value, value['revision'])
+    reused = validate_reused_references(value, reused or {}, worker)
+    references = dict(reused)
     for row in value['images']:
         if not row['service'] or (row['service'] == 'external-review-worker' and not worker):
             continue
+        if row['component'] in reused:
+            print('Reusing exact CI image already installed on VPS: ' + row['component'], file=sys.stderr)
+            continue
         archive = fetch_image(client, value, row, Path(directory) / row['component'], cache_root)
         references[row['component']] = upload_ci_image(record, archive, row)
-    return capacity_plan(value, references, worker)
+    return capacity_plan(value, references, worker, reused)
 
 
 def load_backend(inputs, revision, run_id, attempt):
@@ -359,6 +423,7 @@ def main():
     parser.add_argument('--manifest', type=Path)
     parser.add_argument('--worker', action='store_true')
     parser.add_argument('--cache-root', type=Path)
+    parser.add_argument('--preflight', type=Path)
     parser.add_argument('--test-reuse', type=Path)
     args = parser.parse_args()
     if args.command == 'receipt':
@@ -377,7 +442,13 @@ def main():
         fetch_manifest(Client(args.repo), read(args.input), args.output)
         return
     elif args.command == 'import':
-        value = import_release(Client(args.repo), read(args.input), read(args.registry), args.output.parent / 'images', args.worker, args.cache_root)
+        release = read(args.input)
+        registry = read(args.registry)
+        reused = reused_references(release, read(args.preflight), args.worker) if args.preflight else {}
+        registry['reusedImages'] = reused
+        write(args.registry, registry)
+        value = import_release(Client(args.repo), release, registry, args.output.parent / 'images',
+                               args.worker, args.cache_root, reused)
     elif args.command == 'load-backend':
         value = load_backend(args.input, args.revision, args.run_id, args.attempt)
     else:
@@ -393,9 +464,10 @@ def main():
         else:
             owned(registry)
             require(registry['state'] == 'readonly', 'Prepared registry must reject writes')
-            refs = {row['component']: f"127.0.0.1:{registry['port']}/otziv-prepared/ci-{row['component']}@{row['manifestDigest']}"
-                    for row in release['images']}
-            require(value == capacity_plan(release, refs, args.worker), 'Prepared images differ from CI release')
+            reused = validate_reused_references(release, registry.get('reusedImages', {}), args.worker)
+            refs = transport_references(release, registry['port'], reused, args.worker)
+            require(value == capacity_plan(release, refs, args.worker, reused),
+                    'Prepared images differ from CI release')
     write(args.output, value)
 
 

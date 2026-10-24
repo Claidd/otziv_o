@@ -3247,9 +3247,9 @@ assert_compose_service_image nginx "`$web_image"
 if [ "`$deploy_external_review_worker" = "1" ]; then
   require_compose_service external-review-worker external-review
   assert_compose_service_image external-review-worker "`$external_review_worker_image" external-review
-  compose --profile external-review pull app nginx external-review-worker
+  compose --profile external-review pull --policy missing app nginx external-review-worker
 else
-  compose pull app nginx
+  compose pull --policy missing app nginx
 fi
 if ! docker ps --format '{{.Names}}' | grep -Fxq my-mysql; then
   echo "MySQL stopped after the verified pre-deploy backup; refusing to start Flyway." >&2
@@ -3262,7 +3262,7 @@ if [ "`$current_flyway_sha" != "`$expected_flyway_fingerprint" ]; then
 fi
 bash infrastructure/scripts/prod/validate-flyway-migrations.sh "`$app_image" my-mysql
 if [ "`$deploy_whatsapp_changed" = "1" ]; then
-  compose pull whatsapp_lika whatsapp_vika
+  compose pull --policy missing whatsapp_lika whatsapp_vika
 else
   echo "Reusing the already installed WhatsApp image because sources are unchanged."
 fi
