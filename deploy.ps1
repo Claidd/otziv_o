@@ -210,7 +210,7 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Could not prepare private image transport.' }
         $registryStarted = $true
         $registry = ($created -join '') | ConvertFrom-Json
-        & python -B $artifactHelper import --repo $repoRoot --input $manifest --registry $record --output $capacity --cache-root (Join-Path $LocalWorkRoot 'releases')
+        & python -B $artifactHelper import --repo $repoRoot --input $manifest --registry $record --output $capacity --preflight (Join-Path $directory 'early-preflight.json') --cache-root (Join-Path $LocalWorkRoot 'releases')
         if ($LASTEXITCODE -ne 0) { throw 'CI image verification or private transport failed; production was not changed.' }
         # ProcessStartInfo keeps arguments separate, including paths containing spaces.
         $start = [Diagnostics.ProcessStartInfo]::new()
@@ -245,7 +245,7 @@ try {
         EnvFile = $EnvFile; RemoteEnvFile = '.env'; SkipEnvUpload = $true
         PreparedDeploySnapshot = $true; DeploySnapshotRevision = $ci.revision
         DeploySnapshotBaseRevision = $ci.revision; DeployProtectedMainRevision = $ci.revision
-        PrivateRegistryControlFile = $record; RebuildWhatsApp = $true; RequireMainCi = $true; SkipBuildPush = $true
+        PrivateRegistryControlFile = $record; RequireMainCi = $true; SkipBuildPush = $true
         CiReleaseManifest = $manifest; CiCapacityPlan = $capacity; FullRollout = $FullRollout
         CoordinatedMysqlRefresh = $CoordinatedMysqlRefresh; CoordinatedSslRefresh = $CoordinatedSslRefresh
         PreDeployBackupDirectory = (Join-Path $directory 'database-backup')

@@ -6,7 +6,7 @@ import re
 import shlex
 import subprocess
 
-from ci_release import capacity_plan, read, write
+from ci_release import capacity_plan, read, reused_references, write
 from release_ci import require
 from remote_release_transport import staging_required_bytes
 
@@ -35,7 +35,7 @@ for item in containers:
     if state['Status'] != 'running' or state.get('Health', {}).get('Status', 'healthy') != 'healthy':
         raise RuntimeError('Production service is not healthy: ' + labels.get('com.docker.compose.service', 'unknown'))
     images.append({'service': labels['com.docker.compose.service'], 'configId': item['Image'],
-                   'reference': item['Config']['Image']})
+                   'reference': item['Config']['Image'], 'healthy': True})
 if not images or not any(i['service'] == 'mysql' for i in images):
     raise RuntimeError('Production Compose inventory is missing')
 result = {'schema': 'otziv-server-preflight-v1', 'images': images, 'ready': True}
@@ -100,7 +100,7 @@ def direct_transport_decision(release, preflight):
         amount = filesystem.get('requiredBytes')
         require(type(amount) is int and amount >= 0, 'Invalid deployment capacity reserve')
         reserve += amount
-    required = staging_required_bytes(release, reserve)
+    required = staging_required_bytes(release, reserve, reused=preflight.get('reusedImages', {}))
     return {'result': 'PASS' if available > required else 'FAIL',
             'availableBytes': available, 'requiredBytes': required}
 
@@ -115,6 +115,7 @@ def main():
     value = read(args.manifest)
     size = value['bundleBytes'] + (args.apk.stat().st_size if args.apk else 0)
     result = probe_args(args, plan=capacity_plan(value), bundle_bytes=size)
+    result['reusedImages'] = reused_references(value, result)
     result['directTransport'] = direct_transport_decision(value, result)
     write(args.output, result)
     print('Server readiness and early capacity preflight: PASS; Direct staging: '

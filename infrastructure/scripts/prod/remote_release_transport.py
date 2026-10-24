@@ -18,7 +18,8 @@ import urllib.request
 import uuid
 
 from ci_artifacts import Client, NoFollow, storage_url, validate_artifact
-from ci_release import capacity_plan, import_release, read, validate_release, write
+from ci_release import (capacity_plan, import_release, read, reused_references,
+                        transport_references, validate_release, validate_reused_references, write)
 from release_ci import require
 import release_registry
 
@@ -85,12 +86,14 @@ class SignedArtifacts:
         return output
 
 
-def staging_required_bytes(release, release_reserve_bytes, worker=False):
+def staging_required_bytes(release, release_reserve_bytes, worker=False, reused=None):
     """Use the same Direct staging budget before and during remote transport."""
     require(type(release_reserve_bytes) is int and release_reserve_bytes >= 0,
             'Invalid release capacity reserve')
     release = validate_release(release, release['revision'])
+    reused = validate_reused_references(release, reused or {}, worker)
     archives = sum(row['archiveBytes'] for row in release['images'] if row['service']
+                   and row['component'] not in reused
                    and (row['service'] != 'external-review-worker' or worker))
     return archives * 3 + 1024**3 + release_reserve_bytes
 
@@ -102,10 +105,12 @@ def remote(packet, directory):
         release = validate_release(packet['release'], packet['release']['revision'])
         # Stage contains ZIP + OCI + registry blobs. The deployment capacity
         # reserve also covers image unpacking and the mandatory DB backup.
-        needed = staging_required_bytes(release, packet['releaseReserveBytes'], packet.get('worker', False))
+        reused = validate_reused_references(release, packet.get('reusedImages', {}), packet.get('worker', False))
+        needed = staging_required_bytes(release, packet['releaseReserveBytes'], packet.get('worker', False), reused)
         require(shutil.disk_usage(directory).free > needed, 'Insufficient artifact staging capacity')
         registry = release_registry.create(record_path, PORT, packet['owner'])
-        plan = import_release(SignedArtifacts(packet['links']), release, registry, directory/'images', packet.get('worker', False))
+        plan = import_release(SignedArtifacts(packet['links']), release, registry, directory/'images',
+                              packet.get('worker', False), reused=reused)
         registry = release_registry.seal(record_path)
         write(directory/'capacity.json', plan)
         write(directory/'release.json', release)
@@ -170,8 +175,9 @@ def validate_remote_plan(record, release, plan, worker=False):
     status = invoke(record, 'status')
     registry = status['registry']
     require(registry['owner'] == record['owner'] and registry['port'] == PORT and registry['state'] == 'readonly', 'Remote transport identity changed')
-    refs = {row['component']: f"127.0.0.1:{PORT}/otziv-prepared/ci-{row['component']}@{row['manifestDigest']}" for row in release['images']}
-    expected = capacity_plan(release, refs, worker)
+    reused = validate_reused_references(release, record.get('reusedImages', {}), worker)
+    refs = transport_references(release, PORT, reused, worker)
+    expected = capacity_plan(release, refs, worker, reused)
     require(plan == expected and status['capacity'] == expected, 'Remote images differ from verified CI')
     return plan
 
@@ -196,17 +202,21 @@ def main():
         early = read(args.preflight)
         require(early.get('ready') is True and early['capacity']['result']=='PASS', 'Server preflight required')
         record = {field: getattr(args,field) for field in ['host','user','port','key','known_hosts','path']}
-        record.update(owner=uuid.uuid4().hex, transport='vps-artifact', state='creating', revision=value['revision'])
+        reused = reused_references(value, early, args.worker)
+        record.update(owner=uuid.uuid4().hex, transport='vps-artifact', state='creating',
+                      revision=value['revision'], reusedImages=reused)
         write(args.record, record)
         client = Client(Path.cwd()); links=[]
         for row in value['images']:
-            if not row['service'] or (row['service']=='external-review-worker' and not args.worker): continue
+            if (not row['service'] or row['component'] in reused
+                    or (row['service']=='external-review-worker' and not args.worker)): continue
             item = client.get(f"/actions/artifacts/{row['artifact']['id']}")
             validate_artifact(item,value['runId'],value['revision'],row['artifact']['name'])
             require(item['digest']==row['artifact']['digest'],'Artifact was substituted')
             links.append({'metadata':item,'url':client.download_url(item)})
         reserve = sum(fs['requiredBytes'] for fs in early['capacity']['filesystems'])
-        result = invoke(record,'prepare',release=value,links=links,worker=args.worker,releaseReserveBytes=reserve)
+        result = invoke(record,'prepare',release=value,links=links,worker=args.worker,
+                        releaseReserveBytes=reserve,reusedImages=reused)
         record.update(state='readonly',namespace=result['registry']['namespace'])
         write(args.record,record);write(args.output,result['capacity'])
         print('Verified CI images downloaded directly on VPS; transport sealed read-only.')

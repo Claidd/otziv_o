@@ -97,7 +97,30 @@ def validate_plan(plan, revision):
     for ref in plan.get("releaseImages", {}).values():
         if ref not in seen:
             raise ValueError("Release image missing from capacity inventory")
+    reused = plan.get("reusedImages", [])
+    if (not isinstance(reused, list) or any(not isinstance(ref, str) for ref in reused)
+            or len(set(reused)) != len(reused)
+            or not set(reused) <= set(plan.get("releaseImages", {}).values())):
+        raise ValueError("Invalid installed image reuse inventory")
     return images
+
+
+def verify_reused_images(plan):
+    """Recheck live image identity before backup and again under the rollout lock."""
+    reused = set(plan.get("reusedImages", []))
+    for item in plan["images"]:
+        reference = item["reference"]
+        if reference not in reused:
+            continue
+        installed = json.loads(run(["docker", "image", "inspect", reference]))
+        if len(installed) != 1:
+            raise ValueError("Reused release image is missing or ambiguous")
+        image = installed[0]
+        if (image.get("Id") != item["configId"]
+                or image.get("Os") != "linux" or image.get("Architecture") != "amd64"
+                or image.get("RootFS", {}).get("Layers") != [layer["diffId"] for layer in item["layers"]]
+                or reference not in image.get("RepoDigests", [])):
+            raise ValueError("Installed image no longer matches verified reuse proof")
 
 
 def budget(plan, revision, present, filesystem, deploy_path, docker_path, bundle_bytes, database_bytes, before_backup, existing_chains=frozenset()):
@@ -142,6 +165,7 @@ def check(plan, revision, deploy_path, bundle, before_backup, *, bundle_bytes=No
     if info.get("Driver") != "overlay2":
         raise ValueError("Capacity preflight requires the reviewed overlay2 storage driver")
     images = validate_plan(plan, revision)
+    verify_reused_images(plan)
     config_ids = {item["reference"]: item["configId"] for item in images}
     existing_chains = set()
     image_ids = sorted(set(run(['docker', 'image', 'ls', '--all', '--quiet', '--no-trunc']).split()))

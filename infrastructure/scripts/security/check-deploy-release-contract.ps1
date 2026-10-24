@@ -397,7 +397,7 @@ Assert-Match $deploy '"infrastructure\\scripts\\prod\\rollout-docker-observer\.s
 Assert-Match $deploy '\. infrastructure/scripts/prod/rollout-docker-observer\.sh\r?\nrollout_docker_observer' 'Deploy must execute the checked-in observer rollout owner.'
 Assert-Order $deploy 'wait_service_healthy app 1200' 'rollout_docker_observer' 'Observer rollout must follow the healthy replacement backend.'
 Assert-Order $deploy 'rollout_docker_observer' '--remove-orphans --no-deps dozzle alloy' 'Consumer log-flow proof must precede orphan cleanup.'
-Assert-Order $observerRollout 'compose pull docker-observer' 'recreate_service_with_retry docker-observer' 'Each deploy must pull the reviewed observer digest before recreation.'
+Assert-Order $observerRollout 'compose pull --policy missing docker-observer' 'recreate_service_with_retry docker-observer' 'Each deploy must obtain the reviewed observer digest or reuse its verified installed copy before recreation.'
 Assert-Order $observerRollout 'wait_service_healthy docker-observer 120' 'recreate_service_with_retry dozzle' 'The proxy must be ready before its consumers.'
 Assert-Order $observerRollout 'verify_observer_logflow dozzle' 'recreate_service_with_retry alloy' 'Consumer rollout must be sequential with actual Dozzle stream proof.'
 Assert-Order $observerRollout 'wait_service_healthy alloy 120' 'verify_observer_logflow alloy' 'Alloy rollout must verify actual Loki ingestion.'
@@ -463,7 +463,7 @@ $workerPushCount = [regex]::Matches($deploy, 'Invoke-External[^\r\n]+@\("push", 
 if ($workerPushCount -ne 1) {
     throw "Production deploy must contain exactly one guarded worker push call; found $workerPushCount."
 }
-$workerPullCount = [regex]::Matches($deploy, '(?m)^\s*compose --profile external-review pull app nginx external-review-worker\s*$').Count
+$workerPullCount = [regex]::Matches($deploy, '(?m)^\s*compose --profile external-review pull --policy missing app nginx external-review-worker\s*$').Count
 if ($workerPullCount -ne 1) {
     throw "Production deploy must contain exactly one guarded worker pull call; found $workerPullCount."
 }
