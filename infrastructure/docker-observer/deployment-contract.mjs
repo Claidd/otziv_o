@@ -15,7 +15,7 @@ wait_service_healthy() { record "ready:$*"; }
 verify_observer_logflow() { record "flow:$*"; }
 rollout_docker_observer
 `;
-const expected = ['compose:pull docker-observer', 'recreate:docker-observer', 'ready:docker-observer 120',
+const expected = ['compose:pull --policy missing docker-observer', 'recreate:docker-observer', 'ready:docker-observer 120',
   'recreate:dozzle', 'ready:dozzle 120', 'flow:dozzle', 'recreate:alloy', 'ready:alloy 120', 'flow:alloy'];
 for (const failure of ['', expected[0], expected[2], expected[5], expected[8]]) {
   // Run the real sourced shell owner with recording deployment ports. No daemon
