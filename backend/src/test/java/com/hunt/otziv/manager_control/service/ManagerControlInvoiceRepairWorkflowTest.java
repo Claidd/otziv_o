@@ -1,5 +1,6 @@
 package com.hunt.otziv.manager_control.service;
 
+import com.hunt.otziv.common_billing.api.CommonInvoiceMessageRecovery;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceDetailsResponse;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceSummaryResponse;
 import com.hunt.otziv.common_billing.model.CommonInvoice;
@@ -94,7 +95,7 @@ class ManagerControlInvoiceRepairWorkflowTest {
         invoice.setLastError("message_send_in_progress");
         when(invoices.findByIdWithAccount(88L)).thenReturn(Optional.of(invoice));
         when(billing.recoverPendingMessageReceipt(88L)).thenReturn(
-                new com.hunt.otziv.common_billing.service.CommonInvoiceDeliveryService.MessageRecovery(
+                new CommonInvoiceMessageRecovery(
                         true, false, "Отправка подтверждена"));
         assertEquals("Отправка подтверждена", proxiedWorkflow().repair(88L).comment());
         verify(billing, never()).sendManualReminder(org.mockito.ArgumentMatchers.anyLong());
@@ -107,7 +108,7 @@ class ManagerControlInvoiceRepairWorkflowTest {
         invoice.setLastError("message_send_in_progress");
         when(invoices.findByIdWithAccount(88L)).thenReturn(Optional.of(invoice));
         when(billing.recoverPendingMessageReceipt(88L)).thenReturn(
-                new com.hunt.otziv.common_billing.service.CommonInvoiceDeliveryService.MessageRecovery(
+                new CommonInvoiceMessageRecovery(
                         false, true, "Система продолжит проверку автоматически"));
         var error = assertThrows(ResponseStatusException.class, () -> proxiedWorkflow().repair(88L));
         assertEquals(409, error.getStatusCode().value());

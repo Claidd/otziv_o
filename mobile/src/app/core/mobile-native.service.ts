@@ -33,6 +33,7 @@ export class MobileNativeService {
   private readonly listenerHandles: PluginListenerHandle[] = [];
   private viewportHeightBeforeKeyboard = typeof window === 'undefined' ? 0 : window.innerHeight;
   private lastKeyboardInfo: KeyboardInfo | null = null;
+  private keyboardRecheckTimer: number | null = null;
   private telemetryPromise: Promise<void> | null = null;
 
   readonly isNative = Capacitor.isNativePlatform();
@@ -254,6 +255,10 @@ export class MobileNativeService {
   }
 
   private setKeyboardState(visible: boolean, info?: KeyboardInfo, scheduleRecheck = true): void {
+    if (this.keyboardRecheckTimer !== null) {
+      window.clearTimeout(this.keyboardRecheckTimer);
+      this.keyboardRecheckTimer = null;
+    }
     this.zone.run(() => {
       const height = visible ? Math.max(0, info?.keyboardHeight ?? 0) : 0;
       if (visible) {
@@ -273,7 +278,12 @@ export class MobileNativeService {
     });
 
     if (visible && scheduleRecheck) {
-      window.setTimeout(() => this.setKeyboardState(true, this.lastKeyboardInfo ?? info, false), 80);
+      this.keyboardRecheckTimer = window.setTimeout(() => {
+        this.keyboardRecheckTimer = null;
+        if (this.keyboardVisible()) {
+          this.setKeyboardState(true, this.lastKeyboardInfo ?? undefined, false);
+        }
+      }, 80);
     }
   }
 
