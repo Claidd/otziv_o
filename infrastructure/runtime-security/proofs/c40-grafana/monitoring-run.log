@@ -1,0 +1,13 @@
+PASS source_real_readiness
+PASS source_existing_compose_http_health_command_works
+PASS stopped_source_volume_backed_up_before_upgrade
+PASS candidate_real_readiness
+PASS candidate_existing_compose_http_health_command_works
+PASS candidate_reads_original_persisted_data
+PASS restart_real_readiness
+PASS restart_existing_compose_http_health_command_works
+PASS candidate_restart_preserves_original_and_new_data
+PASS rollback_real_readiness
+PASS rollback_existing_compose_http_health_command_works
+PASS rollback_uses_backup_and_reads_only_preupgrade_data
+{"result":"PASS","component":"grafana","checks":12,"cleanup":"PASS"}

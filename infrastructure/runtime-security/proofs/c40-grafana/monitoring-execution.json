@@ -1,0 +1,16 @@
+{
+  "result": "PASS",
+  "productionAccess": false,
+  "reference": "ghcr.io/claidd/otziv-security@sha256:db6100e472c78215c923e1472fbfe0b4109a1303505aa959b190a3cae2bccc37",
+  "runnerImage": "sha256:45d15b748c97cd3a8c92ff44748519acfc0229be44218108ae41f130ee3e2123",
+  "stagedSources": {
+    "infrastructure/runtime-security/monitoring-upgrade.mjs": "b3789f6c1d79127195e9970053f303585aecf8135c4d7f351cd4ccadb9c7306d",
+    "infrastructure/runtime-security/monitoring-source.mjs": "97617dae2af4eb14118c5bfde5d46f07d4624bebc07a445c4e21e7ace41a4397",
+    "infrastructure/runtime-security/monitoring-scenarios.mjs": "a7f08ac97e7a38dcce9ae0d6c94b4edac05054d4eb4f2859d8f2638c8d012e85",
+    "infrastructure/runtime-security/monitoring-fixture-http.cjs": "c0192e2395f33f02165603e4ccc7f515fc965483b0c8a5feeae1a4fd0275ea7d",
+    "infrastructure/runtime-security/upstream-images.mjs": "b476aeef8dc11bdb91d43b6e846f7ac0216578f9cf831c422261b7b97ca066c6",
+    "infrastructure/runtime-security/reviewed-images.json": "d48bdb7d6d869cde5d6f1a7b089491765e3eeaf46e0b0b6bb51b7719b38d3ef2",
+    "infrastructure/docker-observer/consumer-fixture.cjs": "cad707c7a4aa7edcee92ae09247830be77e9d434240e9981536b0d7a28f2e880"
+  },
+  "reasonForFixtureStaging": "Docker Desktop cannot bind the E workspace volume; source bytes unchanged"
+}

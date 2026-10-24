@@ -612,12 +612,12 @@ try {
         }
     }
     foreach ($parent in @('@angular/build', 'jsdom')) {
-        if ($frontendOverrides[$parent]['undici'] -ne '7.29.1') {
-            $violations.Add("Frontend dependency override $parent -> undici must remain pinned to 7.29.1.")
+        if ($frontendOverrides[$parent]['undici'] -ne '7.30.1') {
+            $violations.Add("Frontend dependency override $parent -> undici must remain pinned to 7.30.1.")
         }
     }
-    if ($frontendOverrides['node-gyp']['undici'] -ne '6.28.1') {
-        $violations.Add('Frontend dependency override node-gyp -> undici must remain pinned to 6.28.1.')
+    if ($frontendOverrides['node-gyp']['undici'] -ne '6.29.1') {
+        $violations.Add('Frontend dependency override node-gyp -> undici must remain pinned to 6.29.1.')
     }
 }
 catch {

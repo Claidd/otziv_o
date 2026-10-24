@@ -92,7 +92,7 @@ services:
       - internal_net
 
   phpmyadmin:
-    image: ghcr.io/claidd/otziv-security@sha256:858c57795d143518e553c54ab2d76d10650fb3a235c7dd686f5e0383eb72f973
+    image: ghcr.io/claidd/otziv-security@sha256:ef39d5374b37296d840c1a4355fc9ecc3e44c55a4ddf958334bf74d8f8bf0599
     profiles: ["db-admin"]
     restart: unless-stopped
     logging: *default-logging
@@ -845,7 +845,7 @@ services:
       - internal_net
 
   grafana:
-    image: ghcr.io/claidd/otziv-security@sha256:64b884ccb67f556a18f439ecf8e486414d48d406711a521016cd8186e5a5721a
+    image: ghcr.io/claidd/otziv-security@sha256:db6100e472c78215c923e1472fbfe0b4109a1303505aa959b190a3cae2bccc37
     profiles: ["observability"]
     restart: unless-stopped
     logging: *default-logging

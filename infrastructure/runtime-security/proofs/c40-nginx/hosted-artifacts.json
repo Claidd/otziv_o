@@ -1,0 +1,42 @@
+[
+  {
+    "id": 12557956824,
+    "node_id": "MDg6QXJ0aWZhY3QxMjU1Nzk1NjgyNA==",
+    "name": "reviewed-publication-nginx-attempt-1",
+    "size_in_bytes": 126257,
+    "url": "https://api.github.com/repos/Claidd/otziv_o/actions/artifacts/12557956824",
+    "archive_download_url": "https://api.github.com/repos/Claidd/otziv_o/actions/artifacts/12557956824/zip",
+    "expired": false,
+    "digest": "sha256:1b3b649bfc231cf2ed16cda24d7e17cac9bcb253b4030c38a8ee9b81c273980a",
+    "created_at": "2026-10-24T10:54:34Z",
+    "updated_at": "2026-10-24T10:54:34Z",
+    "expires_at": "2026-11-07T10:54:33Z",
+    "workflow_run": {
+      "id": 40087678368,
+      "repository_id": 650754525,
+      "head_repository_id": 650754525,
+      "head_branch": "codex/one-button-repair-20261023",
+      "head_sha": "9e156dfc5d67ce63f786d4a2754cb0d7427c849d"
+    }
+  },
+  {
+    "id": 12557193413,
+    "node_id": "MDg6QXJ0aWZhY3QxMjU1NzE5MzQxMw==",
+    "name": "anonymous-download-nginx-attempt-1",
+    "size_in_bytes": 98456,
+    "url": "https://api.github.com/repos/Claidd/otziv_o/actions/artifacts/12557193413",
+    "archive_download_url": "https://api.github.com/repos/Claidd/otziv_o/actions/artifacts/12557193413/zip",
+    "expired": false,
+    "digest": "sha256:c74e154fe7096f66a25a6023741c9478f3ed5b01c67756b7182bc42c252273cd",
+    "created_at": "2026-10-24T10:55:25Z",
+    "updated_at": "2026-10-24T10:55:25Z",
+    "expires_at": "2026-11-07T10:55:24Z",
+    "workflow_run": {
+      "id": 40087678368,
+      "repository_id": 650754525,
+      "head_repository_id": 650754525,
+      "head_branch": "codex/one-button-repair-20261023",
+      "head_sha": "9e156dfc5d67ce63f786d4a2754cb0d7427c849d"
+    }
+  }
+]

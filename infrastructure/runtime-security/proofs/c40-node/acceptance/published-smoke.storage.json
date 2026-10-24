@@ -1,0 +1,11 @@
+{
+  "schema": "otziv-compressed-evidence-v1",
+  "logicalPath": "infrastructure/runtime-security/proofs/c40-node/acceptance/published-smoke.json",
+  "storedPath": "infrastructure/runtime-security/proofs/c40-node/acceptance/published-smoke.json.gz",
+  "uncompressedSha256": "18f2e12ff4386b3d5122f7fa0b4741e4bb4f59dfcdcb7ab665dbbb5c770a7981",
+  "uncompressedBytes": 73422,
+  "compressedSha256": "3896bd441113d17e2adc06173e16d6585bbb8e27b89408155686f1caa935b0e8",
+  "compressedBytes": 26098,
+  "originalBytesPreserved": true,
+  "reason": "Source-file SHA256 inventory produced generic-api-key false positives. This is a byte-preserving storage change; no scanner exceptions or evidence edits."
+}

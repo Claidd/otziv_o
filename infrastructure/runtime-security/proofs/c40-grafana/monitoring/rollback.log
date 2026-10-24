@@ -1,0 +1,65 @@
+logger=settings t=2026-10-24T11:06:14.699071779Z level=info msg="Starting Grafana" version=10.3.1 commit=00a22ff8b28550d593ec369ba3da1b25780f0a4a branch=HEAD compiled=2024-01-22T18:40:42Z
+logger=settings t=2026-10-24T11:06:14.69926653Z level=info msg="Config loaded from" file=/usr/share/grafana/conf/defaults.ini
+logger=settings t=2026-10-24T11:06:14.699286262Z level=info msg="Config loaded from" file=/etc/grafana/grafana.ini
+logger=settings t=2026-10-24T11:06:14.699289291Z level=info msg="Config overridden from command line" arg="default.paths.data=/var/lib/grafana"
+logger=settings t=2026-10-24T11:06:14.699291003Z level=info msg="Config overridden from command line" arg="default.paths.logs=/var/log/grafana"
+logger=settings t=2026-10-24T11:06:14.699292442Z level=info msg="Config overridden from command line" arg="default.paths.plugins=/var/lib/grafana/plugins"
+logger=settings t=2026-10-24T11:06:14.69929387Z level=info msg="Config overridden from command line" arg="default.paths.provisioning=/etc/grafana/provisioning"
+logger=settings t=2026-10-24T11:06:14.699295423Z level=info msg="Config overridden from command line" arg="default.log.mode=console"
+logger=settings t=2026-10-24T11:06:14.699297116Z level=info msg="Config overridden from Environment variable" var="GF_PATHS_DATA=/var/lib/grafana"
+logger=settings t=2026-10-24T11:06:14.699298836Z level=info msg="Config overridden from Environment variable" var="GF_PATHS_LOGS=/var/log/grafana"
+logger=settings t=2026-10-24T11:06:14.699300192Z level=info msg="Config overridden from Environment variable" var="GF_PATHS_PLUGINS=/var/lib/grafana/plugins"
+logger=settings t=2026-10-24T11:06:14.699301552Z level=info msg="Config overridden from Environment variable" var="GF_PATHS_PROVISIONING=/etc/grafana/provisioning"
+logger=settings t=2026-10-24T11:06:14.699302945Z level=info msg="Config overridden from Environment variable" var="GF_SERVER_ROOT_URL=http://grafana:3000/grafana/"
+logger=settings t=2026-10-24T11:06:14.699304315Z level=info msg="Config overridden from Environment variable" var="GF_SERVER_SERVE_FROM_SUB_PATH=true"
+logger=settings t=2026-10-24T11:06:14.69930566Z level=info msg="Config overridden from Environment variable" var="GF_ANALYTICS_REPORTING_ENABLED=false"
+logger=settings t=2026-10-24T11:06:14.699307043Z level=info msg="Config overridden from Environment variable" var="GF_ANALYTICS_CHECK_FOR_UPDATES=false"
+logger=settings t=2026-10-24T11:06:14.699308393Z level=info msg="Config overridden from Environment variable" var="GF_SECURITY_ADMIN_USER=admin"
+logger=settings t=2026-10-24T11:06:14.699310042Z level=info msg="Config overridden from Environment variable" var="GF_SECURITY_ADMIN_PASSWORD=*********"
+logger=settings t=2026-10-24T11:06:14.69931143Z level=info msg="Config overridden from Environment variable" var="GF_SECURITY_SECRET_KEY=*********"
+logger=settings t=2026-10-24T11:06:14.699312989Z level=info msg="Config overridden from Environment variable" var="GF_USERS_ALLOW_SIGN_UP=false"
+logger=settings t=2026-10-24T11:06:14.699314515Z level=info msg="Config overridden from Environment variable" var="GF_AUTH_ANONYMOUS_ENABLED=false"
+logger=settings t=2026-10-24T11:06:14.699316554Z level=info msg="Config overridden from Environment variable" var="GF_METRICS_ENABLED=true"
+logger=settings t=2026-10-24T11:06:14.699318067Z level=info msg=Target target=[all]
+logger=settings t=2026-10-24T11:06:14.699322851Z level=info msg="Path Home" path=/usr/share/grafana
+logger=settings t=2026-10-24T11:06:14.699324285Z level=info msg="Path Data" path=/var/lib/grafana
+logger=settings t=2026-10-24T11:06:14.699327638Z level=info msg="Path Logs" path=/var/log/grafana
+logger=settings t=2026-10-24T11:06:14.699328882Z level=info msg="Path Plugins" path=/var/lib/grafana/plugins
+logger=settings t=2026-10-24T11:06:14.699330217Z level=info msg="Path Provisioning" path=/etc/grafana/provisioning
+logger=settings t=2026-10-24T11:06:14.699331624Z level=info msg="App mode production"
+logger=sqlstore t=2026-10-24T11:06:14.699534163Z level=info msg="Connecting to DB" dbtype=sqlite3
+logger=migrator t=2026-10-24T11:06:14.702232056Z level=info msg="Starting DB migrations"
+logger=migrator t=2026-10-24T11:06:14.711620154Z level=info msg="migrations completed" performed=0 skipped=526 duration=398.017µs
+logger=secrets t=2026-10-24T11:06:14.712991976Z level=info msg="Envelope encryption state" enabled=true currentprovider=secretKey.v1
+logger=plugin.store t=2026-10-24T11:06:14.721266876Z level=info msg="Loading plugins..."
+logger=local.finder t=2026-10-24T11:06:14.745428163Z level=warn msg="Skipping finding plugins as directory does not exist" path=/usr/share/grafana/plugins-bundled
+logger=plugin.store t=2026-10-24T11:06:14.745510602Z level=info msg="Plugins loaded" count=55 duration=24.244909ms
+logger=query_data t=2026-10-24T11:06:14.748053502Z level=info msg="Query Service initialization"
+logger=live.push_http t=2026-10-24T11:06:14.755015926Z level=info msg="Live Push Gateway initialization"
+logger=ngalert.migration t=2026-10-24T11:06:14.759443462Z level=info msg=Starting
+logger=ngalert.migration CurrentType=UnifiedAlerting DesiredType=UnifiedAlerting CleanOnDowngrade=false CleanOnUpgrade=false t=2026-10-24T11:06:14.759868079Z level=info msg="Migration already complete"
+logger=infra.usagestats.collector t=2026-10-24T11:06:14.771749734Z level=info msg="registering usage stat providers" usageStatsProvidersLen=2
+logger=settings t=2026-10-24T11:06:14.78433849Z level=info msg="Config overridden from Environment variable" var="GF_SECURITY_SECRET_KEY=*********"
+logger=settings t=2026-10-24T11:06:14.78853969Z level=info msg="Config overridden from Environment variable" var="GF_SECURITY_SECRET_KEY=*********"
+logger=settings t=2026-10-24T11:06:14.800369874Z level=info msg="Config overridden from Environment variable" var="GF_SECURITY_SECRET_KEY=*********"
+logger=settings t=2026-10-24T11:06:14.8101281Z level=info msg="Config overridden from Environment variable" var="GF_SECURITY_SECRET_KEY=*********"
+logger=provisioning.plugins t=2026-10-24T11:06:14.818241754Z level=error msg="Failed to read plugin provisioning files from directory" path=/etc/grafana/provisioning/plugins error="open /etc/grafana/provisioning/plugins: no such file or directory"
+logger=provisioning.notifiers t=2026-10-24T11:06:14.818695773Z level=error msg="Can't read alert notification provisioning files from directory" path=/etc/grafana/provisioning/notifiers error="open /etc/grafana/provisioning/notifiers: no such file or directory"
+logger=provisioning.alerting t=2026-10-24T11:06:14.818888929Z level=error msg="can't read alerting provisioning files from directory" path=/etc/grafana/provisioning/alerting error="open /etc/grafana/provisioning/alerting: no such file or directory"
+logger=provisioning.alerting t=2026-10-24T11:06:14.818910589Z level=info msg="starting to provision alerting"
+logger=provisioning.alerting t=2026-10-24T11:06:14.81891799Z level=info msg="finished to provision alerting"
+logger=grafanaStorageLogger t=2026-10-24T11:06:14.82045352Z level=info msg="Storage starting"
+logger=ngalert.state.manager t=2026-10-24T11:06:14.820493529Z level=info msg="Warming state cache for startup"
+logger=ngalert.multiorg.alertmanager t=2026-10-24T11:06:14.820549702Z level=info msg="Starting MultiOrg Alertmanager"
+logger=ngalert.state.manager t=2026-10-24T11:06:14.82063203Z level=info msg="State cache has been initialized" states=0 duration=137.901µs
+logger=ngalert.scheduler t=2026-10-24T11:06:14.820658781Z level=info msg="Starting scheduler" tickInterval=10s
+logger=ticker t=2026-10-24T11:06:14.820682588Z level=info msg=starting first_tick=2026-10-24T11:06:20Z
+logger=http.server t=2026-10-24T11:06:14.821703105Z level=info msg="HTTP Server Listen" address=[::]:3000 protocol=http subUrl=/grafana socket=
+logger=grafana-apiserver t=2026-10-24T11:06:14.822388857Z level=info msg="Authentication is disabled"
+logger=grafana-apiserver t=2026-10-24T11:06:14.823852711Z level=info msg="Adding GroupVersion playlist.grafana.app v0alpha1 to ResourceManager"
+logger=plugin.signature.key_retriever t=2026-10-24T11:06:14.831550575Z level=error msg="Error downloading plugin manifest keys" error="Get \"https://grafana.com/api/plugins/ci/keys\": dial tcp: lookup grafana.com on 127.0.0.11:53: server misbehaving"
+logger=context userId=1 orgId=1 uname=admin t=2026-10-24T11:06:16.78251774Z level=error msg="Dashboard not found" error="Dashboard not found" remote_addr=172.21.0.2 traceID=
+logger=context userId=1 orgId=1 uname=admin t=2026-10-24T11:06:16.782649835Z level=info msg="Request Completed" method=GET path=/api/dashboards/uid/fixture-after status=404 remote_addr=172.21.0.2 time_ms=4 duration=4.951488ms size=46 referer= handler=/api/dashboards/uid/:uid
+logger=server t=2026-10-24T11:06:17.053547916Z level=info msg="Shutdown started" reason="System signal: terminated"
+logger=ticker t=2026-10-24T11:06:17.053621976Z level=info msg=stopped last_tick=2026-10-24T11:06:10Z
+logger=tracing t=2026-10-24T11:06:17.053642578Z level=info msg="Closing tracing"

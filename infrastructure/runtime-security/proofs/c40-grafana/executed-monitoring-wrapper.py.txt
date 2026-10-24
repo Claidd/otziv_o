@@ -1,0 +1,40 @@
+"""Run the unchanged monitoring harness from a Docker-shareable temporary fixture."""
+import hashlib
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import tempfile
+
+ROOT=Path(__file__).resolve().parents[2]
+OUT=Path(__file__).parent/'grafana'
+assert not (OUT/'monitoring').exists()
+publication=json.loads((OUT/'publication/publication.json').read_text())
+files=['infrastructure/runtime-security/'+name for name in
+ ['monitoring-upgrade.mjs','monitoring-source.mjs','monitoring-scenarios.mjs','monitoring-fixture-http.cjs','upstream-images.mjs','reviewed-images.json']]
+files+=['infrastructure/docker-observer/consumer-fixture.cjs']
+hashes={}
+with tempfile.TemporaryDirectory(prefix='otziv-c40-monitor-') as temporary:
+    stage=Path(temporary)
+    for relative in files:
+        source,target=ROOT/relative,stage/relative
+        target.parent.mkdir(parents=True,exist_ok=True)
+        shutil.copyfile(source,target)
+        assert source.read_bytes()==target.read_bytes()
+        hashes[relative]=hashlib.sha256(target.read_bytes()).hexdigest()
+    for name in ['prometheus','grafana','loki','tempo','alloy']:
+        shutil.copytree(ROOT/'infrastructure'/name,stage/'infrastructure'/name)
+    runner=subprocess.check_output(['docker','image','inspect','--format','{{.Id}}','otziv-c40-node-candidate'],text=True).strip()
+    result=subprocess.run(['node',str(stage/'infrastructure/runtime-security/monitoring-upgrade.mjs'),
+                          'grafana',publication['reference'],str(stage/'output')],
+                          env={**os.environ,'OTZIV_MONITORING_PROOF_NODE_IMAGE':runner},
+                          capture_output=True,timeout=1200)
+    (OUT/'monitoring-run.log').write_bytes(result.stdout+result.stderr)
+    if (stage/'output').exists(): shutil.copytree(stage/'output',OUT/'monitoring')
+    record={'result':'PASS' if result.returncode==0 else 'FAIL','productionAccess':False,
+            'reference':publication['reference'],'runnerImage':runner,'stagedSources':hashes,
+            'reasonForFixtureStaging':'Docker Desktop cannot bind the E workspace volume; source bytes unchanged'}
+    (OUT/'monitoring-execution.json').write_text(json.dumps(record,indent=2)+'\n',encoding='utf-8',newline='\n')
+    print(json.dumps(record))
+    if result.returncode: raise SystemExit(result.returncode)

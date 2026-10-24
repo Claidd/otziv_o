@@ -41,6 +41,8 @@ const EVIDENCE_FILE = /^registry-(?:index|amd64-(?:manifest|config)|attestation-
 // that resemble credentials. Retain their exact bytes compressed and verify them
 // before any publication or registry checks consume them.
 const COMPRESSED_PROOFS = new Map([
+  ['infrastructure/runtime-security/proofs/c40-node/acceptance/published-smoke.json',
+    '18f2e12ff4386b3d5122f7fa0b4741e4bb4f59dfcdcb7ab665dbbb5c770a7981'],
   ['infrastructure/runtime-security/proofs/c29-alloy/anonymous/registry-attestation-0-payload-0.json',
     '7e66512278b6b71b139d00f0678400ff3f972fc6901d9f61e824ab0f921944e5'],
   ['infrastructure/runtime-security/proofs/c29-alloy/publication/registry-attestation-0-payload-0.json',
@@ -415,7 +417,7 @@ export async function validateActivation(image, entry, manifestBytes, read) {
   if (selected.manifestSet === 'c30-grafana') {
     await validateGrafanaC30ActivationScan(publication.value, entry.publication.path, read);
   }
-  if (selected.manifestSet === 'c36-grafana') {
+  if (['c36-grafana', 'c40-grafana'].includes(selected.manifestSet)) {
     await validateGrafanaC36ActivationScan(publication.value, entry.publication.path, read);
   }
   if (requiresKeycloakDependencyProof(publicationImage)) {

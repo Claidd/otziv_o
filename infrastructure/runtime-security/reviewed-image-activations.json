@@ -60,21 +60,21 @@
     },
     {
       "component": "grafana",
-      "reference": "ghcr.io/claidd/otziv-security@sha256:64b884ccb67f556a18f439ecf8e486414d48d406711a521016cd8186e5a5721a",
-      "commit": "0c56e0bb1ed6cc3310924144db3bf465970a82d1",
-      "run": "39599098981",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:db6100e472c78215c923e1472fbfe0b4109a1303505aa959b190a3cae2bccc37",
+      "commit": "9e156dfc5d67ce63f786d4a2754cb0d7427c849d",
+      "run": "40087690787",
       "attempt": "1",
       "manifest": {
-        "path": "infrastructure/runtime-security/reviewed-images-c36-grafana.json",
-        "sha256": "560776a4fd3a3b0a36521b51822cddec1fd131c7ee955f578601e92080cba348"
+        "path": "infrastructure/runtime-security/reviewed-images-c40-grafana.json",
+        "sha256": "0d304da67fc8d14c088d585bdbabdef91d740515d70c3f0b3119adf1ed35af6e"
       },
       "publication": {
-        "path": "infrastructure/runtime-security/proofs/c36-grafana/publication/publication.json",
-        "sha256": "5908d97c4496022afb54b634cfd357c7c62abd40bbb72872ffd459ee87d28f04"
+        "path": "infrastructure/runtime-security/proofs/c40-grafana/publication/publication.json",
+        "sha256": "339cfc517511ce654c49ecd8aebd3327fac0f1fb3ef638148edfce54fef6252c"
       },
       "anonymous": {
-        "path": "infrastructure/runtime-security/proofs/c36-grafana/anonymous/anonymous-download.json",
-        "sha256": "46206293c7d9d27bdd3891a50c82b846a9c98a4282834ea914a9b74c950a4491"
+        "path": "infrastructure/runtime-security/proofs/c40-grafana/anonymous/anonymous-download.json",
+        "sha256": "1910598889aacf41e79c7e56f05584107b923a722865b4014037a0dd1a00aec9"
       }
     },
     {
@@ -186,59 +186,59 @@
     },
     {
       "component": "nginx",
-      "reference": "ghcr.io/claidd/otziv-security@sha256:8921dafa2cda60de1348d76b629b23af5aac5ef7cdfa870a39531ac049bce3dd",
-      "commit": "cbe5fd8727f2c482562143f5bbd5714a0ccc6ccf",
-      "run": "39858937164",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:f0f0b92345c2ddf67da923de76951d34d354957de9efda532c926b61ba84842d",
+      "commit": "9e156dfc5d67ce63f786d4a2754cb0d7427c849d",
+      "run": "40087678368",
       "attempt": "1",
       "manifest": {
-        "path": "infrastructure/runtime-security/reviewed-images-c38-nginx.json",
-        "sha256": "9e27b1ca675a9da7269ff7954b146847b33a8169799dec72e786c6809725f96c"
+        "path": "infrastructure/runtime-security/reviewed-images-c40-nginx.json",
+        "sha256": "dd826aad255757b6f34619671803d54be5315a393fb9deca15d46fd0aca728c0"
       },
       "publication": {
-        "path": "infrastructure/runtime-security/proofs/c38-nginx/publication/publication.json",
-        "sha256": "cdd5c97288e31a065dda5b51a3ea7de4ce54e058006b22e9f94da22f8139a41c"
+        "path": "infrastructure/runtime-security/proofs/c40-nginx/publication/publication.json",
+        "sha256": "2b1ce1d7ebdac38855302a638139562a515d8fa2d3127ca79c665670cf04d9be"
       },
       "anonymous": {
-        "path": "infrastructure/runtime-security/proofs/c38-nginx/anonymous/anonymous-download.json",
-        "sha256": "59fb510eb03e9263733995a26d12941b056554ac35998053f30ae49b8279965b"
+        "path": "infrastructure/runtime-security/proofs/c40-nginx/anonymous/anonymous-download.json",
+        "sha256": "0588941f061480911230088035ab7dfe807027ccfabf5a578b665b9be7dde44a"
       }
     },
     {
       "component": "node",
-      "reference": "ghcr.io/claidd/otziv-security@sha256:f4c38162a10001267b4667afc890a7a9438b5a27cb456c77c87cdcc5aa8d39f6",
-      "commit": "392e2b86335114fddb63c1bf2601891013896f1f",
-      "run": "36711240938",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:2413062667dd0f55fbb0e2784160d009cc2befe19c5c85bf5faebcd47c11833f",
+      "commit": "9e156dfc5d67ce63f786d4a2754cb0d7427c849d",
+      "run": "40087697314",
       "attempt": "1",
       "manifest": {
-        "path": "infrastructure/runtime-security/reviewed-images-c23-node.json",
-        "sha256": "f127e5f55fb670a972d8fe6c19dbc8fb977114d2acaf50fbd2e8882b175c9056"
+        "path": "infrastructure/runtime-security/reviewed-images-c40-node.json",
+        "sha256": "a3f690c4e33d9ed65c6cfe84380b6c8e387eef51692cc916f0cb449695116423"
       },
       "publication": {
-        "path": "infrastructure/runtime-security/proofs/c23-node/publication/publication.json",
-        "sha256": "d16e4d8c795566819bb7dc32cb25856ec28015116490eaf769835add4c178a7c"
+        "path": "infrastructure/runtime-security/proofs/c40-node/publication/publication.json",
+        "sha256": "c708ec04540f1dd33880cdfa9f1d3989b48226085a8c7bc04da949d407d72cfb"
       },
       "anonymous": {
-        "path": "infrastructure/runtime-security/proofs/c23-node/anonymous/anonymous-download.json",
-        "sha256": "8ed72670941b96277dfdef3696d0d80e5ce20122739fa5d5a3ae72fed9db197a"
+        "path": "infrastructure/runtime-security/proofs/c40-node/anonymous/anonymous-download.json",
+        "sha256": "ddb6ff49e7ea266b0d8a21f7a6b8329724cd2935c9b669e012b445e5e19cd438"
       }
     },
     {
       "component": "phpmyadmin",
-      "reference": "ghcr.io/claidd/otziv-security@sha256:858c57795d143518e553c54ab2d76d10650fb3a235c7dd686f5e0383eb72f973",
-      "commit": "fae42fd6c415d87d1552613aafc47182493a3161",
-      "run": "39996685562",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:ef39d5374b37296d840c1a4355fc9ecc3e44c55a4ddf958334bf74d8f8bf0599",
+      "commit": "9e156dfc5d67ce63f786d4a2754cb0d7427c849d",
+      "run": "40087684332",
       "attempt": "1",
       "manifest": {
-        "path": "infrastructure/runtime-security/reviewed-images-c39-phpmyadmin.json",
-        "sha256": "8d82733b1979ae33edf2e70b55fb549676a63f6f1e4945b7b257168bbee6a26d"
+        "path": "infrastructure/runtime-security/reviewed-images-c40-phpmyadmin.json",
+        "sha256": "88f5f5b88aeecb63d463df94e4d0fce9ded75dbce6956a685c80b439ce3748fe"
       },
       "publication": {
-        "path": "infrastructure/runtime-security/proofs/c39-phpmyadmin/publication/publication.json",
-        "sha256": "c18edc4f30a37698cc8966949f58ce7857d5ba56d2a9a0ec67467c913e67a75d"
+        "path": "infrastructure/runtime-security/proofs/c40-phpmyadmin/publication/publication.json",
+        "sha256": "9cf78df5967da55120d9b66e862631832433da1695c01aed933cb5d08371e758"
       },
       "anonymous": {
-        "path": "infrastructure/runtime-security/proofs/c39-phpmyadmin/anonymous/anonymous-download.json",
-        "sha256": "3456bf131eceead07c1bce5e756176ab21432f2644b4108fb1cfa58e1ce31d70"
+        "path": "infrastructure/runtime-security/proofs/c40-phpmyadmin/anonymous/anonymous-download.json",
+        "sha256": "4d57a6073419a926b454619a4efe540a2af9b039d7ef8a50be9097339ef3e309"
       }
     },
     {
