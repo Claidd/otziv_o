@@ -138,6 +138,24 @@ class CommonInvoiceMessageQueueMySqlIntegrationTest {
         assertThat(queue.snapshot(id)).isEqualTo(draft("original"));
     }
 
+    @Test void authorizedSupersessionPreservesHistoryAndFencesOldClaims() {
+        tx.executeWithoutResult(status -> queue.enqueue(draft("original")));
+        var old = queue.claim().orElseThrow();
+        // The approved restart takes the invoice/queue lock and fences the old worker.
+        jdbc.update("UPDATE common_invoice_message_queue SET state='SUPERSEDED',claim_token=NULL,lease_until=NULL");
+        assertThat(queue.unresolved(10L)).isEmpty();
+        assertThat(queue.claim()).isEmpty();
+        assertThat(queue.claimRecovery(10L, old.operationId())).isEmpty();
+        tx.executeWithoutResult(status -> {
+            assertThat(queue.owns(old)).isFalse();
+            queue.finish(old, "SENT", null, 0);
+            queue.retryKnownUnsent(old.operationId());
+        });
+        assertThat(queue.status(old.operationId()).status()).isEqualTo("SUPERSEDED");
+        assertThat(queue.snapshot(old.operationId())).isEqualTo(draft("original"));
+        assertThat(queue.deliveryQueueHealth()).isEmpty();
+    }
+
     @Test void healthReportsExpiredClaimsAndExcludesConfirmedHistory() {
         assertThat(queue.deliveryQueueHealth()).isEmpty();
         tx.executeWithoutResult(status -> queue.enqueue(draft("original")));

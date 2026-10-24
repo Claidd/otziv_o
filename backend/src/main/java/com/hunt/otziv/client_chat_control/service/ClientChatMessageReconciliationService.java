@@ -34,6 +34,20 @@ public class ClientChatMessageReconciliationService {
     private final ClientChatMessageTrackerService trackerService;
     private final WhatsAppService whatsAppService;
 
+    /** Strict, read-only transport lookup. Any message delays a reminder, including staff and bot messages. */
+    public LocalDateTime latestReminderContact(String clientId, String chatId, LocalDateTime since) {
+        if (!hasText(clientId) || !hasText(chatId) || since == null)
+            throw new IllegalArgumentException("Reminder chat identity is missing");
+        return whatsAppService.reconcileGroupMessagesForReceipt(clientId,
+                List.of(new WhatsAppChatMessageCursor(chatId, since.atZone(ZoneId.systemDefault()).toEpochSecond())))
+                .stream().filter(message -> message != null && chatId.equals(message.groupId()))
+                .map(message -> {
+                    if (message.timestamp() == null || message.timestamp() <= 0)
+                        throw new IllegalStateException("Reminder history timestamp is missing");
+                    return messageAt(message.timestamp());
+                }).max(Comparator.naturalOrder()).orElse(since);
+    }
+
     public ClientChatReconciliationResult reconcileOpenWhatsAppMessages(Manager manager) {
         if (manager == null || manager.getId() == null || !hasText(manager.getClientId())) {
             return new ClientChatReconciliationResult(0, 0, 0, 0, 0);

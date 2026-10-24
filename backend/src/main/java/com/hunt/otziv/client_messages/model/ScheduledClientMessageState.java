@@ -83,6 +83,9 @@ public class ScheduledClientMessageState {
     @Column(name = "sent_count", nullable = false)
     private int sentCount = 0;
 
+    @Column(name = "dispatch_generation", nullable = false)
+    private long dispatchGeneration;
+
     @Column(name = "locked_until")
     private LocalDateTime lockedUntil;
 

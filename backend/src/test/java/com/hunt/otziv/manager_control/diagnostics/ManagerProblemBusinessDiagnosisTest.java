@@ -190,11 +190,11 @@ class ManagerProblemBusinessDiagnosisTest {
         assertThat(result.actions()).extracting(Action::code).containsExactly("CHECK_DELIVERY");
         assertThat(result.summary()).contains("не подтверждён");
         assertThat(result.actions()).allSatisfy(action -> {
-            assertThat(action.text()).contains("Нажмите «Проверить отправку»", "Система сверит").doesNotContain("Откройте историю", "администратору", "вручную");
+            assertThat(action.text()).contains("Нажмите «Проверить и починить»", "Система проверит историю WhatsApp", "восстановит очередь").doesNotContain("Откройте историю", "администратору", "вручную");
             assertThat(action.owner()).isEqualTo("Система");
             assertThat(action.verification()).contains("Отсутствие сообщения", "не доказывает");
         });
-        assertThat(result.verification().getFirst()).contains("сами по себе замечание не закрывают");
+        assertThat(result.verification().getFirst()).contains("только по их фактическому результату");
     }
 
     @Test

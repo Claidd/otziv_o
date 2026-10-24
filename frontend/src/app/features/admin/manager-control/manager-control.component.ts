@@ -1693,7 +1693,7 @@ export class ManagerControlComponent implements OnInit {
 
   repairActionLabel(example: ManagerControlConcreteItem): string {
     if (this.isConcreteUpdating(example.controlEntityId)) return 'Проверяем…';
-    return this.isDeliveryReconciliation(example) ? 'Проверить отправку' : 'Починить';
+    return this.isDeliveryReconciliation(example) ? 'Проверить и починить' : 'Починить';
   }
 
   isUncertainDeliveryForHandoff(example: ManagerControlConcreteItem): boolean {

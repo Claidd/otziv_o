@@ -438,6 +438,113 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
         UNRESOLVED, HISTORY_UNAVAILABLE, HISTORY_CHECKED_NO_RECEIPT, SENT_CONFIRMED, UNSENT_CONFIRMED
     }
 
+    public record ReminderRestartCheck(PreparedScheduledDelivery delivery, String envelope,
+            com.hunt.otziv.p_products.api.OrderDeliveryControlContext.Snapshot order,
+            LocalDateTime preparedAt, LocalDateTime checkedAt) { }
+
+    public record PendingReminderRestart(com.hunt.otziv.p_products.api.OrderDeliveryControlContext.Snapshot order,
+                                         LocalDateTime nextAt) { }
+
+    @Transactional(readOnly = true)
+    public Optional<PendingReminderRestart> pendingReminderRestart(long stateId, Long managerId) {
+        var state = stateRepository.findById(stateId).orElse(null);
+        if (state == null || state.getDispatchGeneration() <= 0 || state.getStatus() != ScheduledMessageStateStatus.ACTIVE
+                || state.getDeliveryStatus() != null || state.getNextAttemptAt() == null || state.getLastErrorCode() != null)
+            return Optional.empty();
+        var source = orderDeliveryContext.read(state.getOrderId()).orElse(null);
+        if (source == null || !Objects.equals(source.managerId(), managerId)
+                || !Objects.equals(state.getTargetKey(), "order:" + source.orderId() + ":" + source.cycleAt().withNano(0)))
+            return Optional.empty();
+        Integer count = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM client_reminder_restart_audit WHERE subject_type='SCHEDULED'
+                  AND subject_id=? AND new_generation=?
+                """, Integer.class, stateId, state.getDispatchGeneration());
+        return count != null && count == 1 ? Optional.of(new PendingReminderRestart(source, state.getNextAttemptAt())) : Optional.empty();
+    }
+
+    /** Explicit repair of a periodic reminder. Status transitions and invoices never use this path. */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public Optional<ReminderRestartCheck> checkStaleReminderRestart(long stateId, Long managerId) {
+        var state = stateRepository.findById(stateId).orElse(null);
+        LocalDateTime now = messageTime.nowStorage();
+        if (!stalePeriodicReminder(state, now)) return Optional.empty();
+        var order = orderDeliveryContext.read(state.getOrderId()).orElse(null);
+        if (order == null || !Objects.equals(managerId, order.managerId())) return Optional.empty();
+        var prepared = decodeScheduledDelivery(state);
+        if (prepared.orderAction() != null || prepared.recoveryBatchId() != null
+                || !Objects.equals(prepared.stateId(), state.getId()) || prepared.scenario() != state.getScenario()
+                || !Objects.equals(prepared.token(), state.getDeliveryToken())
+                || !Objects.equals(prepared.targetKey(), state.getTargetKey()) || !hasText(prepared.operationId())
+                || !Objects.equals(prepared.orderId(), order.orderId())
+                || prepared.orderGeneration() != order.generation()
+                || !Objects.equals(prepared.orderStatus(), order.status())) return Optional.empty();
+        String envelope = state.getDeliveryEnvelope();
+        var preparedAt = state.getDeliveryPreparedAt();
+        var receipt = messageSender.recoverRecordedOutcomeFromChat(prepared.operationId(), preparedAt);
+        // Leave positive receipt finalization to the existing workflow, which also records the contact on its card.
+        if (receipt == null || receipt.sent() || !"whatsapp_history_checked_no_receipt".equals(receipt.errorCode()))
+            return Optional.empty();
+        return Optional.of(new ReminderRestartCheck(prepared, envelope, order, preparedAt, messageTime.nowStorage()));
+    }
+
+    private boolean stalePeriodicReminder(ScheduledClientMessageState state, LocalDateTime now) {
+        return state != null && state.getStatus() == ScheduledMessageStateStatus.ACTIVE
+                && Set.of(ClientMessageScenario.REVIEW_CHECK_REMINDER, ClientMessageScenario.PAYMENT_REMINDER).contains(state.getScenario())
+                && "UNKNOWN".equals(state.getDeliveryStatus()) && hasText(state.getDeliveryEnvelope())
+                && state.getDeliveryPreparedAt() != null && !state.getDeliveryPreparedAt().isAfter(now.minusDays(2))
+                && (state.getLockedUntil() == null || state.getLockedUntil().isBefore(now))
+                && (ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN.equals(state.getLastErrorCode())
+                    || ClientMessageStateSafety.MANUAL_DELIVERY_HANDOFF_PENDING.equals(state.getLastErrorCode()));
+    }
+
+    /** Caller holds card/order locks. Atomic with retiring old manual reminder commands. No transport call. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public LocalDateTime restartStaleReminder(ReminderRestartCheck check, LocalDateTime lastContact, String actor) {
+        var current = orderDeliveryContext.lock(check.order().orderId()).orElseThrow();
+        LocalDateTime now = messageTime.nowStorage();
+        if (!Objects.equals(current, check.order()) || check.checkedAt().isBefore(now.minusMinutes(5)))
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Заказ изменился во время проверки. Обновите карточку.");
+        Order order = orderRepository.findByIdForMutation(current.orderId()).orElseThrow();
+        var state = stateRepository.findByIdForUpdate(check.delivery().stateId()).orElseThrow();
+        if (!stalePeriodicReminder(state, now) || !Objects.equals(state.getDeliveryEnvelope(), check.envelope())
+                || !Objects.equals(state.getDeliveryToken(), check.delivery().token())
+                || !Objects.equals(state.getTargetKey(), check.delivery().targetKey())
+                || !isCurrentOrderCycle(state, order) || order.isComplete() || order.getPayDay() != null
+                || !Objects.equals(check.delivery().clientId(), manager(order).getClientId())
+                || order.getCompany() == null || !Objects.equals(check.delivery().groupId(), order.getCompany().getGroupId())
+                || !(state.getScenario() == ClientMessageScenario.REVIEW_CHECK_REMINDER ? STATUS_IN_CHECK.equals(statusTitle(order))
+                    : Set.of(STATUS_TO_PAY, STATUS_REMINDER).contains(statusTitle(order))))
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Текущий этап заказа или отправка изменились. Обновите карточку.");
+        int days = Math.max(2, state.getScenario() == ClientMessageScenario.REVIEW_CHECK_REMINDER
+                ? reviewCheckIntervalDays() : paymentReminderIntervalDays());
+        LocalDateTime contact = check.preparedAt();
+        if (lastContact != null && lastContact.isAfter(contact)) contact = lastContact;
+        if (state.getLastSuccessAt() != null && state.getLastSuccessAt().isAfter(contact)) contact = state.getLastSuccessAt();
+        LocalDateTime desired = contact.plusDays(days);
+        if (desired.isBefore(now.plusMinutes(1))) desired = now.plusMinutes(1);
+        LocalDateTime next = scheduleAtStorage(desired);
+        long generation = Math.addExact(state.getDispatchGeneration(), 1);
+        jdbcTemplate.update("""
+                INSERT INTO client_reminder_restart_audit
+                  (request_key,subject_type,subject_id,old_operation_id,actor,reason,previous_snapshot,new_generation,next_attempt_at)
+                SELECT ?, 'SCHEDULED', state_id, ?, ?, 'periodic_reminder_restarted_after_history_check',
+                  JSON_OBJECT('deliveryStatus',delivery_status,'envelope',delivery_envelope,'token',delivery_token,
+                    'preparedAt',delivery_prepared_at,'errorCode',last_error_code,'sentCount',sent_count,
+                    'lastSuccessAt',last_success_at,'generation',dispatch_generation), ?, ?
+                FROM scheduled_client_message_state WHERE state_id=?
+                """, "repair:" + check.delivery().operationId(), check.delivery().operationId(), actor,
+                generation, next, state.getId());
+        clearDeliveryPreparation(state);
+        state.setDispatchGeneration(generation);
+        state.setConsecutiveFailures(0);
+        state.setLastErrorCode(null);
+        state.setLastErrorMessage(null);
+        state.setLockedUntil(null);
+        state.setNextAttemptAt(next);
+        stateRepository.save(state);
+        return next;
+    }
+
     public record UncertainDeliveryPreview(Long stateId, String operationId, String message,
                                            LocalDateTime preparedAt) { }
 
@@ -2009,8 +2116,7 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
                 throw new IllegalStateException("Saved scheduled delivery belongs to another business occurrence");
             }
         } else {
-            String operation = orderAction == null ? WhatsAppOperationKey.of(
-                    "scheduled-client-message-v1", state.getId(), state.getScenario(), state.getSentCount()) : orderAction.operationId();
+            String operation = orderAction == null ? ScheduledDeliveryOperationKey.of(state) : orderAction.operationId();
             prepared = new PreparedScheduledDelivery(state.getId(), state.getScenario(), state.getTargetKey(), state.getOrderId(),
                     UUID.randomUUID().toString(), operation, companyTarget(company), manager == null ? null : manager.getClientId(),
                     company.getGroupId(), message, copy, nextIntervalDays, successEffect, recoveryBatchId,

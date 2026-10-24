@@ -163,6 +163,29 @@ public class ManagerClientMessageQueue implements com.hunt.otziv.client_messages
                 (rs, row) -> rs.getTimestamp(1).toLocalDateTime(), operationId).stream().findFirst().orElse(null);
     }
 
+    /** A new periodic reminder supersedes the command, never its unknown delivery outcome. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    void supersedeStaleReminder(RecordedControl row, String actor, LocalDateTime nextAt) {
+        String operation = row.delivery().operationId();
+        int audited = jdbc.update("""
+                INSERT INTO client_reminder_restart_audit
+                  (request_key,subject_type,subject_id,old_operation_id,actor,reason,previous_snapshot,next_attempt_at)
+                SELECT ?, 'MANUAL', card_id, operation_id, ?, 'periodic_reminder_restarted_after_history_check',
+                  JSON_OBJECT('state',state,'error',error_code,'attempts',attempts,'createdAt',created_at,
+                    'updatedAt',updated_at,'envelopeCiphertext',envelope_ciphertext), ?
+                FROM manager_client_message_queue WHERE operation_id=? AND state='UNKNOWN'
+                  AND error_code='whatsapp_history_checked_no_receipt'
+                  AND created_at<=DATE_SUB(CURRENT_TIMESTAMP(6),INTERVAL 2 DAY)
+                  AND (lease_until IS NULL OR lease_until<CURRENT_TIMESTAMP(6))
+                """, "manual-restart:" + operation, actor, nextAt, operation);
+        if (audited != 1) throw new IllegalStateException("Manual reminder changed during reconciliation");
+        int changed = jdbc.update("""
+                UPDATE manager_client_message_queue SET state='SUPERSEDED',error_code='unknown_old_reminder_superseded',
+                  claim_token=NULL,lease_until=NULL WHERE operation_id=? AND state='UNKNOWN'
+                """, operation);
+        if (changed != 1) throw new IllegalStateException("Manual reminder restart lost ownership");
+    }
+
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean owns(Claim claim) {
         return jdbc.query("SELECT claim_token FROM manager_client_message_queue WHERE operation_id=? FOR UPDATE",

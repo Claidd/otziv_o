@@ -1035,7 +1035,7 @@ function canStartOutbound() {
 }
 
 async function observedSendMessage(destination, message) {
-  try { return await client.sendMessage(destination, message); }
+  try { return await require("./provider-send").sendProviderMessage(client, destination, message); }
   catch (error) {
     if (/timeout|timed out/iu.test(String(error?.message || ""))) taskLimiter.control().timeout();
     throw error;
@@ -1086,7 +1086,7 @@ app.get("/operations/:operationId", asyncRoute(async (req, res) => {
 async function sendDocument(destination, file) {
     const outboundToken = outboundRegistry.begin(destination, file.caption);
     try {
-      const sent = await client.sendMessage(destination,
+      const sent = await require("./provider-send").sendProviderMessage(client, destination,
         new MessageMedia(file.contentType, file.data, file.filename, file.size),
         { caption: file.caption, sendMediaAsDocument: true });
       const id = serializedId(sent?.id) || null;

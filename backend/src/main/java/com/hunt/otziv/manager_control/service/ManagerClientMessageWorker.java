@@ -40,10 +40,12 @@ public class ManagerClientMessageWorker {
     }
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    public void reconcileExisting(String operationId) {
+    public boolean reconcileExisting(String operationId) {
         if (TransactionSynchronizationManager.isActualTransactionActive())
             throw new IllegalStateException("Receipt lookup must not join a business transaction");
-        queue.claimReceipt(operationId).ifPresent(this::process);
+        var claim = queue.claimReceipt(operationId);
+        claim.ifPresent(this::process);
+        return claim.isPresent();
     }
 
     private void process(ManagerClientMessageQueue.Claim claim) {

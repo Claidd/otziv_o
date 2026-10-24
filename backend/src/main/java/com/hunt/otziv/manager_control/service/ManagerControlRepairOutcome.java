@@ -52,8 +52,22 @@ public class ManagerControlRepairOutcome {
         return finish(locked, locked.getControl(), comment, principal, eventComment, true);
     }
 
+    ManagerControlConcreteItemResponse recordReminderScheduled(ManagerDailyControlConcreteItem card, String note,
+            Principal principal, LocalDateTime next) {
+        // The automation fault is repaired, but the order still awaits the customer's action.
+        boolean waiting = "ORDER".equals(card.getEntityType());
+        return finish(card, card.getControl(), note, principal, "Восстановлен следующий срок напоминания", waiting,
+                waiting ? next.plusHours(2) : null);
+    }
+
     private ManagerControlConcreteItemResponse finish(ManagerDailyControlConcreteItem concreteItem, ManagerDailyControl control,
             String comment, Principal principal, String eventComment, boolean awaitingClient) {
+        return finish(concreteItem, control, comment, principal, eventComment, awaitingClient,
+                awaitingClient ? LocalDateTime.now().plusDays(MANUAL_FOLLOW_UP_DAYS) : null);
+    }
+
+    private ManagerControlConcreteItemResponse finish(ManagerDailyControlConcreteItem concreteItem, ManagerDailyControl control,
+            String comment, Principal principal, String eventComment, boolean awaitingClient, LocalDateTime followUp) {
         LocalDateTime now = LocalDateTime.now();
         var status = awaitingClient ? ManagerDailyControlItemStatus.ACTION_TAKEN : ManagerDailyControlItemStatus.RESOLVED;
         var action = awaitingClient ? ManagerDailyControlActionType.ACTION_TAKEN : ManagerDailyControlActionType.RESOLVED;
@@ -63,7 +77,7 @@ public class ManagerControlRepairOutcome {
         concreteItem.setComment(limit(comment, 1000));
         concreteItem.setResolvedAt(awaitingClient ? null : now);
         concreteItem.setAutomaticResolution(false);
-        concreteItem.setFollowUpAt(awaitingClient ? now.plusDays(MANUAL_FOLLOW_UP_DAYS) : null);
+        concreteItem.setFollowUpAt(followUp);
         concreteItem.setLastManualTouchAt(now);
         ManagerDailyControlConcreteItem savedConcreteItem = dailyControlConcreteItemRepository.save(concreteItem);
         cardLifecycle.updateParentItemFromConcreteItems(savedConcreteItem.getParentItem());
