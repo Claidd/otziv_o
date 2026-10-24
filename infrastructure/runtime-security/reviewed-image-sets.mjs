@@ -9,6 +9,10 @@ const BASELINE_PATH = 'infrastructure/runtime-security/reviewed-images.json';
 const C12_PATH = 'infrastructure/runtime-security/reviewed-images-c12-phpmyadmin.json';
 const C12_CONTEXT = 'infrastructure/runtime-security/builds/phpmyadmin-alpine';
 const RELEASE_SETS = Object.freeze({
+  'c40-nginx': { component: 'nginx', path: 'infrastructure/runtime-security/reviewed-images-c40-nginx.json', context: 'infrastructure/runtime-security/builds/c40-nginx', dockerfile: 'infrastructure/runtime-security/builds/c40-nginx/Dockerfile' },
+  'c40-phpmyadmin': { component: 'phpmyadmin', path: 'infrastructure/runtime-security/reviewed-images-c40-phpmyadmin.json', context: 'infrastructure/runtime-security/builds/c40-phpmyadmin', dockerfile: 'infrastructure/runtime-security/builds/c40-phpmyadmin/Dockerfile' },
+  'c40-grafana': { component: 'grafana', path: 'infrastructure/runtime-security/reviewed-images-c40-grafana.json', context: 'infrastructure/runtime-security/builds/c40-grafana', dockerfile: 'infrastructure/runtime-security/builds/c40-grafana/Dockerfile' },
+  'c40-node': { component: 'node', path: 'infrastructure/runtime-security/reviewed-images-c40-node.json', context: 'infrastructure/runtime-security/builds/c40-node', dockerfile: 'infrastructure/runtime-security/builds/c40-node/Dockerfile' },
   'c34-certbot': { component: 'certbot', path: 'infrastructure/runtime-security/reviewed-images-c34-certbot.json', context: 'infrastructure/runtime-security/builds/c34-certbot', dockerfile: 'infrastructure/runtime-security/builds/c34-certbot/Dockerfile' },
   'c25-certbot': { component: 'certbot', path: 'infrastructure/runtime-security/reviewed-images-c25-certbot.json', context: 'infrastructure/runtime-security/builds/c25-certbot', dockerfile: 'infrastructure/runtime-security/builds/c25-certbot/Dockerfile' },
 

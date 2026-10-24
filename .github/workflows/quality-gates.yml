@@ -58,6 +58,10 @@ on:
           - c31-phpmyadmin
           - c32-phpmyadmin
           - c39-phpmyadmin
+          - c40-nginx
+          - c40-phpmyadmin
+          - c40-grafana
+          - c40-node
           - c29-dozzle
           - c29-prometheus
           - c29-loki

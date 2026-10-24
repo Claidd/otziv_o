@@ -12,13 +12,13 @@
   },
   "dependencies": {
     "express": "^4.19.2",
-    "puppeteer": "25.10.0",
+    "puppeteer": "25.13.0",
     "qrcode": "^1.5.4",
     "qrcode-terminal": "^0.12.0",
     "whatsapp-web.js": "1.34.7"
   },
   "overrides": {
-    "body-parser": "1.20.6",
+    "body-parser": "1.20.9",
     "brace-expansion": "2.1.7",
     "ip-address": "10.7.4",
     "js-yaml": "4.3.1",

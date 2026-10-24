@@ -1,12 +1,12 @@
 {
   "enabled": true,
-  "versionCode": 82,
-  "versionName": "1.0.82",
+  "versionCode": 83,
+  "versionName": "1.0.83",
   "minSupportedVersionCode": 0,
   "required": false,
-  "notes": "Исправлена обработка появления и скрытия клавиатуры: экран больше не возвращает устаревшие отступы после быстрого переключения.",
-  "fileSize": 4399132,
-  "sha256": "1AC3C8DDE7538DE55AA57FDD6A31F0CF685DB08FFF343ECDCEDCB302C056A0BF",
-  "publishedAt": "2026-10-24T10:21:50Z",
-  "downloadUrl": "/android-new/otziv-v1.0.82.apk"
+  "notes": "Исправлена обработка появления и скрытия клавиатуры: экран больше не возвращает устаревшие отступы после быстрого переключения. Обновлены библиотеки приложения.",
+  "fileSize": 4399128,
+  "sha256": "ADF07174ADC771573A00A385E9300C22A0C7180447243332FDB514B6BE37BA01",
+  "publishedAt": "2026-10-24T10:44:26Z",
+  "downloadUrl": "/android-new/otziv-v1.0.83.apk"
 }

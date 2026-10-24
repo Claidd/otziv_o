@@ -1,0 +1,33 @@
+{
+  "schema": "otziv-c40-node-provenance-v1",
+  "officialBase": {
+    "release": "24.22.1",
+    "npm": "11.19.1",
+    "alpine": "3.24",
+    "indexDigest": "sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53",
+    "linuxAmd64Manifest": "sha256:1200d815de24f8dcca745fbf7651d166034a35adbcad8860a8538ffff44f1420",
+    "configDigest": "sha256:fecf2188af16d8979528abb79909513c78971103c52f677d69584e93c3a0ffcf",
+    "sources": [
+      "https://nodejs.org/en/blog/vulnerability/october-2026-security-releases",
+      "https://github.com/nodejs/docker-node/blob/main/24/alpine3.24/Dockerfile",
+      "https://github.com/nodejs/node/blob/v24.22.1/deps/npm/package.json"
+    ]
+  },
+  "patchScope": "Official registry tarballs only. Keep Node24/npm11 and validate package engines, dependency requirements, and every installed consumer range. No manifest/package version rewriting.",
+  "undici": {
+    "release": "6.29.1",
+    "source": "https://github.com/nodejs/undici/releases/tag/v6.29.1",
+    "gitHead": "8c57f6c68c95465338ae97bfc991cb1513d2f76e"
+  },
+  "httpCacheSemantics": {
+    "release": "4.3.0",
+    "gitHead": "b1d4bd682fbab0252985de45219f4e7497c0067c",
+    "source": "https://registry.npmjs.org/http-cache-semantics/4.3.0",
+    "advisory": "https://github.com/advisories/GHSA-ch52-4w7c-c8xp",
+    "limitation": "Official 4.3.0 is outside the currently reported <=4.2.0 advisory range. Its source change is not a max-stale security fix. The disputed advisory reports no patched version; do not claim otherwise or suppress the finding. npm make-fetch-happen uses a private shared:false cache. Fresh unchanged scanner output remains required."
+  },
+  "unchangedNewBasePackages": {
+    "ip-address": "10.5.0",
+    "tar": "7.5.22"
+  }
+}
