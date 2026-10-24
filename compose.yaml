@@ -57,7 +57,7 @@ services:
       internal_net:
 
   nginx:
-    image: ghcr.io/claidd/otziv-security@sha256:8921dafa2cda60de1348d76b629b23af5aac5ef7cdfa870a39531ac049bce3dd
+    image: ghcr.io/claidd/otziv-security@sha256:f0f0b92345c2ddf67da923de76951d34d354957de9efda532c926b61ba84842d
     ports:
       - '127.0.0.1:80:80'
       - '127.0.0.1:443:443'
@@ -216,7 +216,7 @@ services:
       internal_net:
 
   frontend:
-    image: ghcr.io/claidd/otziv-security@sha256:f4c38162a10001267b4667afc890a7a9438b5a27cb456c77c87cdcc5aa8d39f6
+    image: ghcr.io/claidd/otziv-security@sha256:2413062667dd0f55fbb0e2784160d009cc2befe19c5c85bf5faebcd47c11833f
     working_dir: /app
     command: sh -c "npm ci && npm run ng -- serve --host 0.0.0.0 --port 4200 --proxy-config proxy.docker.conf.json"
     ports:
@@ -233,7 +233,7 @@ services:
       internal_net:
 
   phpmyadmin:
-    image: ghcr.io/claidd/otziv-security@sha256:82afc14c5009b78c8bb1f4a011199654277edf5d4ff0fa2061851bbb3ca1a6c9
+    image: ghcr.io/claidd/otziv-security@sha256:ef39d5374b37296d840c1a4355fc9ecc3e44c55a4ddf958334bf74d8f8bf0599
     profiles: ["db-admin"]
     ports:
       - "127.0.0.1:6571:80"
@@ -393,7 +393,7 @@ services:
       - internal_net
 
   grafana:
-    image: ghcr.io/claidd/otziv-security@sha256:64b884ccb67f556a18f439ecf8e486414d48d406711a521016cd8186e5a5721a
+    image: ghcr.io/claidd/otziv-security@sha256:db6100e472c78215c923e1472fbfe0b4109a1303505aa959b190a3cae2bccc37
     profiles: ["observability"]
     container_name: otziv-grafana
     ports:

@@ -31,6 +31,9 @@ public class CommonInvoiceMessageWorker {
                 if (!claim.mayDispatch()) {
                     // A restarted or timed-out claim can only consult an existing receipt.
                     result = delivery.recordedOutcome(claim.operationId());
+                    if (result == null || (!result.sent() && !ClientMessageDelivery.isKnownUnsent(result))) {
+                        result = delivery.recoverRecordedOutcomeFromChat(claim.operationId(), queue.preparedAt(claim.operationId()));
+                    }
                 } else if (!invoices.messageDeliveryEnabled()) {
                     paused = true;
                     result = ClientMessageSendResult.failed("live_disabled", "Delivery paused");

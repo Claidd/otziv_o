@@ -5,7 +5,8 @@ const { serializedId } = require("./message-identity");
 // This route accepts only a reference to evidence. Content, recipient and ACK
 // are read independently from the authenticated provider session, never trusted
 // from the request. There is deliberately no retry/mark-unsent operation.
-function createOperationReconciliationHandler({ ledger, clientId, getMessage, canRead, onReconciled = async () => {} }) {
+function createOperationReconciliationHandler({ ledger, clientId, getMessage, canRead,
+  resolveDestination = async destination => destination, onReconciled = async () => {} }) {
   return async (req, res) => {
     const id = req.params.operationId;
     const messageId = req.body?.messageId;
@@ -16,7 +17,8 @@ function createOperationReconciliationHandler({ ledger, clientId, getMessage, ca
     if (!canRead()) throw new OperationLedgerError("gateway_not_ready");
     const record = ledger.read(ledger.key(id));
     const message = await getMessage(messageId);
-    const destination = serializedId(message?.id?.remote) || serializedId(message?.to);
+    const actualDestination = serializedId(message?.id?.remote) || serializedId(message?.to);
+    const destination = await resolveDestination(actualDestination);
     const sentAt = Number(message?.timestamp) * 1000;
     if (!message?.fromMe || serializedId(message.id) !== messageId || Number(message.ack) < 1
         || !Number.isFinite(Number(message.ack)) || !Number.isFinite(sentAt)

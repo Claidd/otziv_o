@@ -1,12 +1,12 @@
 {
   "enabled": true,
-  "versionCode": 81,
-  "versionName": "1.0.81",
+  "versionCode": 83,
+  "versionName": "1.0.83",
   "minSupportedVersionCode": 0,
   "required": false,
-  "notes": "Исправлены проверки ответов и безопасный разбор неясных отправок, отображение текста отзыва и работа с ручными переводами специалистам.",
-  "fileSize": 4393012,
-  "sha256": "107CB3A3764289E4514BB5C28532D4D428D23C9834DDCEA9BE88C2C5A7FFFEA4",
-  "publishedAt": "2026-10-21T13:20:32Z",
-  "downloadUrl": "/android-new/otziv-v1.0.81.apk"
+  "notes": "Исправлена обработка появления и скрытия клавиатуры: экран больше не возвращает устаревшие отступы после быстрого переключения. Обновлены библиотеки приложения.",
+  "fileSize": 4399128,
+  "sha256": "ADF07174ADC771573A00A385E9300C22A0C7180447243332FDB514B6BE37BA01",
+  "publishedAt": "2026-10-24T10:44:26Z",
+  "downloadUrl": "/android-new/otziv-v1.0.83.apk"
 }

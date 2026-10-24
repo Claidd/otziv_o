@@ -79,22 +79,15 @@ public class ManagerControlAutomationRepairWorkflow {
             var receipt = scheduledClientMessageService.recoverUncertainOrdinaryDelivery(issue.stateId());
             if (receipt == ScheduledClientMessageService.OrdinaryDeliveryRecoveryResult.HISTORY_UNAVAILABLE) {
                 throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
-                        "История WhatsApp сейчас недоступна. Отправка остаётся заблокированной, чтобы не создать дубль. "
-                        + "Повторите «Починить» после восстановления соединения с WhatsApp.");
+                        "Сверка временно недоступна. Система продолжит проверять сохранённую отправку после восстановления WhatsApp. Повторное сообщение заблокировано.");
             }
             if (receipt == ScheduledClientMessageService.OrdinaryDeliveryRecoveryResult.HISTORY_CHECKED_NO_RECEIPT) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
-                        ClientMessageStateSafety.MANUAL_DELIVERY_HANDOFF_PENDING.equals(uncertainState.getLastErrorCode())
-                        ? "Существующая отправка проверена повторно, но квитанция не найдена. Ручная проверка сохраняется; новое сообщение не отправлялось. Отсутствие записи в истории не доказывает, что сообщение не доставлено."
-                        : "История WhatsApp проверена, но квитанция прежней отправки не найдена. "
-                        + "Сообщение всё ещё могло дойти до клиента. Нажмите «Передать вручную», "
-                        + "чтобы зафиксировать проверку чата и связаться с клиентом; автоматический повтор заблокирован.");
+                        "История проверена, но исходная отправка пока не подтверждена. Система продолжит сверку автоматически. Новое сообщение не отправлялось и повтор заблокирован; отсутствие записи не доказывает недоставку.");
             }
             if (receipt == ScheduledClientMessageService.OrdinaryDeliveryRecoveryResult.UNRESOLVED) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
-                        "Исход предыдущей отправки пока не подтверждён. Система проверила сохранённую операцию и историю чата, "
-                        + "но достоверной квитанции нет. Проверьте сообщение в клиентском чате; автоматический повтор "
-                        + "заблокирован, чтобы не отправить его дважды. После восстановления истории нажмите «Починить» ещё раз.");
+                        "Исходная отправка пока не подтверждена. Система сохранит блокировку повтора и продолжит сверку существующей операции. Без однозначной квитанции замечание остаётся открытым.");
             }
             if (receipt == ScheduledClientMessageService.OrdinaryDeliveryRecoveryResult.SENT_CONFIRMED) {
                 if (managerAutomationFailureService.findIssue(manager, concreteItem.getEntityType(), concreteItem.getEntityId()).isPresent()) {
@@ -173,12 +166,12 @@ public class ManagerControlAutomationRepairWorkflow {
                             principal, "Подтверждена существующая отправка заказа", current.getTargetKey());
                 if (receipt == ScheduledClientMessageService.OrdinaryDeliveryRecoveryResult.HISTORY_UNAVAILABLE)
                     throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
-                            "История WhatsApp недоступна. Новая отправка заблокирована; повторите сверку после восстановления соединения.");
+                            "Сверка временно недоступна. Система продолжит проверять сохранённую отправку после восстановления WhatsApp. Повторное сообщение заблокировано.");
                 if (receipt == ScheduledClientMessageService.OrdinaryDeliveryRecoveryResult.UNSENT_CONFIRMED)
                     throw new ResponseStatusException(HttpStatus.CONFLICT,
                             "Подтверждено, что прежнее сообщение не отправлено. Исход сохранён; очередь повторно проверит эту же операцию.");
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
-                        "Исход предыдущей отправки ещё не подтверждён. Новое сообщение не отправлялось: дождитесь завершения операции или проверьте чат и карточку ошибки автоматизации для ручной сверки.");
+                        "Исходная отправка пока не подтверждена. Система продолжит сверку автоматически; повторное сообщение заблокировано. Замечание останется открытым до проверяемого результата.");
             }
         }
         Optional<ClientMessageScenario> scenario = scheduledClientMessageService.ensureOrderAutomationForOrder(order);

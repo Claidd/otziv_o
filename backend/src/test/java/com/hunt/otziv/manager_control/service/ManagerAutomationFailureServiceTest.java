@@ -133,8 +133,10 @@ class ManagerAutomationFailureServiceTest {
         assertFalse(reason.contains("chatId"));
         assertTrue(reason.contains("Привязать Telegram"));
         if (errorCode.equals("manual_delivery_handoff_pending")) {
-            assertTrue(reason.contains("Ручная проверка продолжается"));
+            assertTrue(reason.contains("Кнопка «Проверить отправку»"));
             assertTrue(reason.contains("автоматический повтор запрещён"));
+            assertFalse(reason.contains("завершите заказ вручную"));
+            assertFalse(reason.contains("подтвердите результат в чате"));
         }
     }
 

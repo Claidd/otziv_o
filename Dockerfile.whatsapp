@@ -1,9 +1,10 @@
-FROM node:22-trixie-slim@sha256:7b8a0c89c54499bee567618f96578e1a12a800f062fbdbfd1fb6a443fa6f6284
+FROM node:22.23.4-trixie-slim@sha256:8eb619e402eaede1748a3c8173bffab391592812e85136452f781741c7242ddf
 
 # Identical browser layer in both images; provenance: runtime-security/proofs/chrome153.
 RUN printf 'Acquire::Retries "1"; Acquire::http::Timeout "20"; Acquire::https::Timeout "20"; Acquire::ForceIPv4 "true";\n' > /etc/apt/apt.conf.d/80-bounded-network && \
     test "$(dpkg --print-architecture)" = amd64 && \
-    apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends curl ca-certificates fonts-liberation fonts-dejavu openssl libexpat1 && \
+    apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends curl ca-certificates fonts-liberation fonts-dejavu openssl libexpat1 libbrotli1=1.1.0-2+deb13u1 && \
+    test "$(dpkg-query -W -f='${Version}' libbrotli1)" = '1.1.0-2+deb13u1' && \
     dpkg --compare-versions "$(dpkg-query -W -f='${Version}' curl)" ge '8.14.1-2+deb13u7' && \
     dpkg --compare-versions "$(dpkg-query -W -f='${Version}' libcurl4t64)" ge '8.14.1-2+deb13u7' && \
     dpkg --compare-versions "$(dpkg-query -W -f='${Version}' libexpat1)" ge '2.9.0-1~deb13u1' && \

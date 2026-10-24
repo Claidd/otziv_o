@@ -7,6 +7,8 @@ import com.hunt.otziv.manager_control.model.ManagerDailyControlConcreteItem;
 import com.hunt.otziv.manager_daily_summary.service.ManagerReportReviewCommitmentService;
 import com.hunt.otziv.worker_activity.repository.WorkerRiskIncidentRepository;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -16,26 +18,31 @@ import static org.mockito.Mockito.when;
 class ManagerControlConcretePresenterTest {
     private static final String FACTS = "Клиент не проверил шаблоны 108 дн. Исход отправки не подтверждён.";
     private static final String OLD_ADVICE = "Если починка недоступна или не помогла, скопируйте текст, откройте чат, отправьте ссылку на проверку и нажмите «Отправлено».";
+    private static final String OLD_HANDOFF_ADVICE = "Проверьте результат предыдущей отправки перед новым контактом. Если исход не подтверждён, не отправляйте сообщение повторно; передайте существующую операцию администратору для сверки.";
     private final ManagerControlOrderDeliveryState deliveryState = mock(ManagerControlOrderDeliveryState.class);
 
-    @Test
-    void blockedContactIsExplainedToOlderClientsWithoutChangingStoredProblemFacts() {
+    @ParameterizedTest
+    @ValueSource(strings = {OLD_ADVICE, OLD_HANDOFF_ADVICE})
+    void blockedContactIsExplainedToOlderClientsWithoutChangingStoredProblemFacts(String oldAdvice) {
         var card = card();
+        card.setReason(FACTS + " " + oldAdvice);
         String blocked = "Исход автоматической отправки не подтверждён. Не отправляйте повторное сообщение вручную.";
         when(deliveryState.sendBlockedReason(card)).thenReturn(blocked);
 
         var response = presenter().concreteItemResponse(card, "Текст сообщения", "Специалист");
 
-        assertThat(response.reason()).contains(FACTS, blocked).doesNotContain(OLD_ADVICE, "скопируйте текст");
+        assertThat(response.reason()).contains(FACTS, blocked).doesNotContain(OLD_ADVICE, OLD_HANDOFF_ADVICE, "скопируйте текст");
         assertThat(response.clientMessageSendBlockedReason()).isEqualTo(blocked);
         assertThat(response.ageDays()).isEqualTo(108L);
         assertThat(response.status()).isEqualTo("На проверке");
-        assertThat(card.getReason()).isEqualTo(FACTS + " " + OLD_ADVICE);
+        assertThat(card.getReason()).isEqualTo(FACTS + " " + oldAdvice);
     }
 
-    @Test
-    void unblockedContactKeepsTheExistingProblemPresentation() {
+    @ParameterizedTest
+    @ValueSource(strings = {OLD_ADVICE, OLD_HANDOFF_ADVICE})
+    void unblockedContactKeepsTheExistingProblemPresentation(String oldAdvice) {
         var card = card();
+        card.setReason(FACTS + " " + oldAdvice);
 
         var response = presenter().concreteItemResponse(card, "Текст сообщения", "Специалист");
 

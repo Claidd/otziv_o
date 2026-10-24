@@ -1,0 +1,51 @@
+{
+  "schema": "otziv-reviewed-public-proof-hashes-v1",
+  "rule": "sourcegraph-access-token",
+  "scannerVersion": "8.30.1",
+  "ciFindings": 182,
+  "files": [
+    {
+      "path": "infrastructure/runtime-security/proofs/c40-grafana/anonymous/registry-attestation-0-payload-0.json",
+      "sha256": "85b4b3d1e130fec79e5bb613ad57bc67e01a1078c3bcc2af9f846dfcef0a37dd",
+      "findings": 47,
+      "verifiedJsonContexts": [
+        "$.predicate.packages[].packageVerificationCode.packageVerificationCodeValue"
+      ],
+      "publicValueCount": 1
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c40-grafana/publication/registry-attestation-0-payload-0.json",
+      "sha256": "85b4b3d1e130fec79e5bb613ad57bc67e01a1078c3bcc2af9f846dfcef0a37dd",
+      "findings": 47,
+      "verifiedJsonContexts": [
+        "$.predicate.packages[].packageVerificationCode.packageVerificationCodeValue"
+      ],
+      "publicValueCount": 1
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c40-grafana/publication/vulnerabilities.json",
+      "sha256": "41a65a6bd326b0a915f0c52ad5f2d32a5018e7fd00a80ef3a2d9602391ff9292",
+      "findings": 46,
+      "verifiedJsonContexts": [
+        "$.Metadata.ImageConfig.config.Labels.com.otziv.publication.revision",
+        "$.Metadata.ImageConfig.config.Labels.org.opencontainers.image.revision",
+        "$.Metadata.ImageConfig.history[].created_by",
+        "$.Results[].Packages[].Digest",
+        "$.Results[].Vulnerabilities[].References[]"
+      ],
+      "publicValueCount": 42
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c40-grafana/publication/vulnerabilities.sbom.cdx.json",
+      "sha256": "047d91b9b952580e7d78b2b15e0c43a6455c19bca1f897e1ea4dd5f5955a2d44",
+      "findings": 42,
+      "verifiedJsonContexts": [
+        "$.components[].hashes[].content",
+        "$.metadata.component.properties[].value",
+        "$.vulnerabilities[].advisories[].url"
+      ],
+      "publicValueCount": 42
+    }
+  ],
+  "sourceCommitPrefix": "c0ce24bf"
+}

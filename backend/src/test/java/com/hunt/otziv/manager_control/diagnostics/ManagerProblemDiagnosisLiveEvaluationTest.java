@@ -163,8 +163,8 @@ class ManagerProblemDiagnosisLiveEvaluationTest {
                         .doesNotContain("отгруз", "перевозчик", "посылк", "трек-номер")));
         assertThat(output.getAllValues().getFirst().confirmedFacts()).isNotEmpty();
         if (!invoiceOnly) {
-            assertThat(output.getAllValues().get(1).actions()).extracting(Action::code).containsExactly("CHECK_DELIVERY", "ESCALATE");
-            assertThat(output.getAllValues().get(1).actions().getFirst().text()).contains("повторная отправка запрещена");
+            assertThat(output.getAllValues().get(1).actions()).extracting(Action::code).containsExactly("CHECK_DELIVERY");
+            assertThat(output.getAllValues().get(1).actions().getFirst().text()).contains("Повторное сообщение для проверки не отправляется");
         }
         int largeIndex = invoiceOnly ? 1 : 2;
         Diagnosis largeDiagnosis = output.getAllValues().get(largeIndex);

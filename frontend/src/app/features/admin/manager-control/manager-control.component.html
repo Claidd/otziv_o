@@ -1363,15 +1363,6 @@
                                   {{ repairActionLabel(example) }}
                                 </button>
                               }
-                              @if (isUncertainDeliveryForHandoff(example)) {
-                                <button type="button" class="review-action secondary-action"
-                                  (click)="handoffUncertainDelivery(example)"
-                                  [disabled]="isConcreteUpdating(example.controlEntityId)"
-                                  title="Проверить чат и передать случай человеку без повторной отправки">
-                                  <span class="material-icons-sharp">support_agent</span>
-                                  Передать вручную
-                                </button>
-                              }
                               <small>сначала карточка в заказах, затем правая панель счета</small>
                             </div>
                           }
@@ -1389,16 +1380,8 @@
                                     : 'Повторно запустить задачу и проверить, исчезла ли ошибка'"
                                 >
                                   <span class="material-icons-sharp">{{ isTelegramBindingFailure(example) ? 'link' : 'build' }}</span>
-                                  {{ isDeliveryReconciliation(example) ? 'Проверить отправку' : isTelegramBindingFailure(example) ? 'Привязать Telegram' : 'Починить' }}
-                                </button>
-                              }
-                              @if (isUncertainDeliveryForHandoff(example)) {
-                                <button type="button" class="review-action secondary-action"
-                                  (click)="handoffUncertainDelivery(example)"
-                                  [disabled]="isConcreteUpdating(example.controlEntityId)"
-                                  title="Проверить чат и передать случай человеку без повторной отправки">
-                                  <span class="material-icons-sharp">support_agent</span>
-                                  Передать вручную
+                                  {{ isTelegramBindingFailure(example) && !isDeliveryReconciliation(example) && !isConcreteUpdating(example.controlEntityId)
+                                    ? 'Привязать Telegram' : repairActionLabel(example) }}
                                 </button>
                               }
                               @if (isTelegramBindingFailure(example)) {
@@ -1471,8 +1454,8 @@
                               <strong>Результат проверки</strong>
                               <em class="manager-action-note">{{ result.message }}</em>
                               <small>{{ result.deliveryCheck
-                                ? 'Сверьте исходную отправку в чате. Не отправляйте сообщение повторно.'
-                                : 'Выполните указанную проверку, затем обновите карточку.' }}</small>
+                                ? 'Повторное сообщение заблокировано. Карточка изменится только по подтверждённому результату.'
+                                : 'Карточка остаётся на контроле до устранения причины.' }}</small>
                             </div>
                           }
 

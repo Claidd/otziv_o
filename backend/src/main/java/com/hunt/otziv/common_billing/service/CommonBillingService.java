@@ -20,6 +20,7 @@ import static com.hunt.otziv.common_billing.service.CommonInvoiceCancellationSer
 import static com.hunt.otziv.common_billing.service.CommonInvoicePresenter.*;
 import static com.hunt.otziv.common_billing.service.CommonInvoiceSettlementService.*;
 import com.hunt.otziv.client_messages.dto.ClientMessageSendResult;
+import com.hunt.otziv.common_billing.api.CommonInvoiceMessageRecovery;
 import com.hunt.otziv.common_billing.dto.CommonBillingAccountRequest;
 import com.hunt.otziv.common_billing.dto.CommonBillingAccountResponse;
 import com.hunt.otziv.common_billing.dto.CommonManualPaymentAttributionRequest;
@@ -225,6 +226,10 @@ public class CommonBillingService {
 
     public CommonInvoiceDetailsResponse sendInvoice(Long invoiceId, boolean manual) {
         return invoiceDelivery.sendInvoice(invoiceId, manual);
+    }
+
+    public CommonInvoiceMessageRecovery recoverPendingMessageReceipt(Long invoiceId) {
+        return invoiceDelivery.recoverPendingMessageReceipt(invoiceId);
     }
 
     private void sendInvoiceMessage(Long invoiceId, boolean manual, boolean paymentRouteChanged, boolean checkVisibility) {

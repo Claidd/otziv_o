@@ -280,7 +280,8 @@ class ManagerControlClientSendMySqlIntegrationTest {
         scheduledReservation(deliveryStatus, code);
         assertThatThrownBy(() -> workflow.sendClientMessage(1L, PRINCIPAL, AUTH)).isInstanceOf(ResponseStatusException.class);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM manager_client_message_queue", Integer.class)).isZero();
-        assertThat(deliveryState.sendBlockedReason(readCard(false))).contains("Не отправляйте повторное сообщение");
+        assertThat(deliveryState.sendBlockedReason(readCard(false)))
+                .contains("Проверить отправку", "Повторное сообщение заблокировано");
         assertThat(state()).isEqualTo("OPEN");
         assertThat(comment()).isEqualTo("original");
         assertThat(sends.get()).isZero();

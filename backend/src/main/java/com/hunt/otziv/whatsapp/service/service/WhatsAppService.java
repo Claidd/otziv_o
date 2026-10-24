@@ -31,6 +31,12 @@ public interface WhatsAppService {
             String clientId, String operationId, String messageId) {
         throw new UnsupportedOperationException("WhatsApp operation reconciliation is unavailable");
     }
+    /** Bounded provider history read for an existing frozen operation; never sends or rearms. */
+    default com.hunt.otziv.client_messages.dto.ClientMessageSendResult recoverOperationFromHistory(
+            String clientId, String operationId, String kind, String destination, String message) {
+        return com.hunt.otziv.client_messages.dto.ClientMessageSendResult.failed(
+                "whatsapp_history_unavailable", "Автоматическая сверка истории пока недоступна");
+    }
     List<WhatsAppGroupInfo> listGroups(String clientId);
     default List<WhatsAppGroupInfo> listGroups(String clientId, boolean forceRefresh) {
         return listGroups(clientId);

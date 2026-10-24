@@ -39,8 +39,12 @@ public class ManagerControlManualDeliveryRepair {
                     || !Objects.equals(card.getControl().managerId(), managerId) || !Objects.equals(card.getEntityId(), orderId)
                     || !java.util.List.of("ORDER", "WORKER_ORDER_NEW").contains(card.getEntityType()))
                 throw conflict("Источник изменился во время сверки; результат операции сохранён отдельно.");
-            if (delivery.history(current).stream().anyMatch(row -> ManagerControlOrderDeliveryState.blocks(row.delivery())))
-                throw conflict("Существующая ручная отправка проверена, но её результат пока не подтверждён. Повторного сообщения не было. Нужна однозначная квитанция исходной операции.");
+            var remaining = delivery.history(current).stream()
+                    .filter(row -> ManagerControlOrderDeliveryState.blocks(row.delivery())).toList();
+            if (remaining.stream().anyMatch(row -> "FAILED".equals(row.delivery().status())))
+                throw conflict("Автоматическая сверка остановлена: данные исходной отправки требуют технического восстановления. Повторное сообщение заблокировано; замечание остаётся открытым.");
+            if (!remaining.isEmpty())
+                throw conflict("Исходная отправка пока не подтверждена. Система продолжит сверку автоматически; повторное сообщение заблокировано. Замечание останется открытым до проверяемого результата.");
             if (delivery.restoreConfirmedContact(card)) {
                 cards.save(card);
                 lifecycle.updateParentItemFromConcreteItems(card.getParentItem());

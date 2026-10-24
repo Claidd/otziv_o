@@ -1,0 +1,70 @@
+"""Compare exact published C40 payload/config/packages with its pinned parent."""
+import hashlib
+import json
+from pathlib import Path
+import re
+import subprocess
+import sys
+
+ROOT = Path(__file__).resolve().parents[2]
+component = sys.argv[1]
+PATHS = {
+ 'nginx': '/etc/nginx /usr/share/nginx /usr/sbin/nginx /usr/lib/nginx /docker-entrypoint.sh /docker-entrypoint.d',
+ 'phpmyadmin': '/var/www/html /etc/phpmyadmin /etc/php83 /etc/apache2 /usr/local/etc /usr/lib/php83 /usr/bin/php83 /usr/local/share/otziv /docker-entrypoint.sh /usr/local/bin/apache2-foreground /usr/local/bin/php /usr/local/bin/apachectl /usr/local/bin/apache2ctl',
+ 'grafana': '/usr/share/grafana /etc/grafana /usr/share/otziv-build /run.sh /.grafana-version',
+}
+assert component in PATHS
+folder = Path(__file__).parent / component
+assert not (folder / 'published-payload.json').exists()
+publication = json.loads((folder / 'publication/publication.json').read_text())
+manifest = json.loads((ROOT / f'infrastructure/runtime-security/reviewed-images-c40-{component}.json').read_text())
+before_ref, after_ref = manifest['images'][0]['candidateBaseRef'], publication['reference']
+def docker(*args):
+    return subprocess.check_output(['docker', *args], timeout=300)
+endpoint = docker('context', 'inspect', '--format', '{{.Endpoints.docker.Host}}').decode().strip()
+assert re.fullmatch(r'(?:unix|npipe)://[^\r\n]+', endpoint)
+before, after = json.loads(docker('image', 'inspect', '--platform', 'linux/amd64', before_ref, after_ref))
+config_bytes = (folder / 'publication/registry-amd64-config.json').read_bytes()
+manifest_bytes = (folder / 'publication/registry-amd64-manifest.json').read_bytes()
+config, image_manifest = json.loads(config_bytes), json.loads(manifest_bytes)
+assert 'sha256:' + hashlib.sha256(config_bytes).hexdigest() == publication['imageId'] == image_manifest['config']['digest']
+manifest_digest = 'sha256:' + hashlib.sha256(manifest_bytes).hexdigest()
+assert after['Id'] in (manifest_digest, publication['imageId']) and after_ref in after['RepoDigests']
+if after['Id'] == manifest_digest:
+    assert after['Descriptor']['digest'] == manifest_digest and after['Descriptor']['platform'] == {'architecture':'amd64','os':'linux'}
+assert after['Config'] == config['config'] and after['RootFS']['Layers'] == config['rootfs']['diff_ids']
+assert before_ref in before['RepoDigests']
+assert after['Os'] == before['Os'] == 'linux' and after['Architecture'] == before['Architecture'] == 'amd64'
+assert after['Config']['Labels']['com.otziv.publication.revision'] == publication['commit']
+keys = ['User','Entrypoint','Cmd','WorkingDir','ExposedPorts','Volumes','Healthcheck','StopSignal','Env']
+for key in keys:
+    assert before['Config'].get(key) == after['Config'].get(key), 'config_changed:' + key
+allowed_labels = {'com.otziv.publication.source','com.otziv.publication.revision','com.otziv.reviewed-component','com.otziv.security.brotli-refresh'}
+assert {k:v for k,v in before['Config']['Labels'].items() if k not in allowed_labels} == {k:v for k,v in after['Config']['Labels'].items() if k not in allowed_labels}
+roots = PATHS[component]
+def snapshot(reference, command):
+    return docker('run', '--rm', '--pull=never', '--network', 'none', '--read-only', '--user', '0:0',
+                  '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges:true', '--memory', '256m',
+                  '--pids-limit', '128', '--entrypoint', 'sh', reference, '-c', 'set -eu; set -o pipefail; ' + command)
+payload_command = (f"find {roots} -exec stat -c '%a|%u|%g|%F|%N' '{{}}' ';' | LC_ALL=C sort; "
+                   f"find {roots} -type f -exec sha256sum '{{}}' ';' | LC_ALL=C sort")
+package_command = "apk --no-network info -v | LC_ALL=C sort | grep -Ev '^brotli-libs-[0-9]'"
+record = {'schema':'otziv-c40-published-payload-v1','result':'IN_PROGRESS','component':component,
+ 'parentReference':before_ref,'reference':after_ref,'imageId':publication['imageId'], 'localManifestOrConfigId':after['Id'], 'parentLocalId':before['Id'],
+ 'commit':publication['commit'],'run':publication['run'],'attempt':publication['attempt'],
+ 'productionAccess':False,'network':'none','publishedPorts':False,'configFieldsPreserved':keys}
+for category, command in [('payload',payload_command),('other-packages',package_command)]:
+    left,right = snapshot(before_ref,command),snapshot(after_ref,command)
+    (folder / (category+'-before.txt')).write_bytes(left)
+    (folder / (category+'-after.txt')).write_bytes(right)
+    assert left == right, category + '_changed'
+    record[category+'Sha256'] = hashlib.sha256(right).hexdigest()
+record['brotliBefore'] = snapshot(before_ref,'apk --no-network info -v -e brotli-libs').decode().strip()
+record['brotliAfter'] = snapshot(after_ref,'apk --no-network info -v -e brotli-libs').decode().strip()
+assert record['brotliBefore']=='brotli-libs-1.2.0-r1' and record['brotliAfter']=='brotli-libs-1.2.1-r0'
+if component == 'phpmyadmin':
+    assert snapshot(before_ref,'php -m | LC_ALL=C sort') == snapshot(after_ref,'php -m | LC_ALL=C sort')
+    record['phpModulesPreserved']=True
+record['result']='PASS'
+(folder / 'published-payload.json').write_text(json.dumps(record,indent=2)+'\n',encoding='utf-8',newline='\n')
+print(json.dumps(record))

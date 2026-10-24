@@ -1057,6 +1057,7 @@ $deployBundlePaths = @(
     "whatsapp\message-webhook.js",
     "whatsapp\message-identity.js",
     "whatsapp\operation-reconciliation.js",
+    "whatsapp\operation-history-reconciliation.js",
     "whatsapp\inbound-inbox.js",
     "whatsapp\inbound-history.js",
     "whatsapp\raw-chat-reconciliation.js",

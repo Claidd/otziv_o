@@ -242,6 +242,58 @@ public class WhatsAppServiceImpl implements WhatsAppService {
     }
 
     @Override
+    public com.hunt.otziv.client_messages.dto.ClientMessageSendResult recoverOperationFromHistory(
+            String clientId, String operationId, String kind, String destination, String message) {
+        if (operationId == null || !operationId.matches("[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
+                || !List.of("send-group", "send").contains(kind))
+            throw new IllegalArgumentException("Invalid saved operation");
+        String expected = "send-group".equals(kind)
+                ? com.hunt.otziv.whatsapp.dto.WhatsAppOperationEnvelope.groupHash(clientId, destination, message)
+                : com.hunt.otziv.whatsapp.dto.WhatsAppOperationEnvelope.phoneHash(clientId, destination, message);
+        try {
+            String url = baseUrl(clientId) + "/operations/" + operationId;
+            JsonNode existing = MAPPER.readTree(restTemplate.getForObject(url, String.class));
+            if (existing.path("receiptBindingVersion").asInt(0) != 1
+                    || existing.path("historyReconciliationVersion").asInt(0) != 1
+                    || !operationId.equals(existing.path("operationId").asText())
+                    || !expected.equals(existing.path("envelopeHash").asText()))
+                throw new IllegalStateException("Saved operation history capability unavailable");
+            ResponseEntity<String> response = restTemplate.postForEntity(url + "/reconcile-history",
+                    jsonEntity(Map.of("kind", kind, "destination", destination, "message", message)), String.class);
+            JsonNode receipt = MAPPER.readTree(response.getBody() == null ? "{}" : response.getBody());
+            if (receipt.path("receiptBindingVersion").asInt(0) != 1
+                    || receipt.path("historyReconciliationVersion").asInt(0) != 1
+                    || !operationId.equals(receipt.path("operationId").asText())
+                    || !expected.equals(receipt.path("envelopeHash").asText()))
+                throw new IllegalStateException("Invalid saved operation history receipt");
+            String id = receipt.path("messageId").asText("");
+            if ("SUCCEEDED".equals(receipt.path("state").asText()) && receipt.path("messageId").isTextual()
+                    && !id.isBlank() && id.length() <= 512)
+                return com.hunt.otziv.client_messages.dto.ClientMessageSendResult.sent("WhatsApp", id);
+            if (!List.of("UNKNOWN", "RUNNING").contains(receipt.path("state").asText()))
+                throw new IllegalStateException("Invalid saved operation history outcome");
+            String code = switch (receipt.path("recoveryCode").asText()) {
+                case "history_no_receipt" -> "whatsapp_history_checked_no_receipt";
+                case "history_ambiguous" -> "whatsapp_history_evidence_ambiguous";
+                case "history_incomplete" -> "whatsapp_history_incomplete";
+                default -> "operation_unknown";
+            };
+            return com.hunt.otziv.client_messages.dto.ClientMessageSendResult.failed(code,
+                    "Система проверяет сохранённую отправку; однозначного подтверждения пока нет");
+        } catch (RestClientResponseException error) {
+            int status = error.getStatusCode().value();
+            if (status == 404 || status == 409)
+                return com.hunt.otziv.client_messages.dto.ClientMessageSendResult.failed(
+                        "whatsapp_history_evidence_unresolved", "Подтверждение исходной операции пока недоступно");
+            return com.hunt.otziv.client_messages.dto.ClientMessageSendResult.failed(
+                    "whatsapp_history_unavailable", "Автоматическая сверка истории временно недоступна");
+        } catch (JsonProcessingException | ResourceAccessException | IllegalStateException unavailable) {
+            return com.hunt.otziv.client_messages.dto.ClientMessageSendResult.failed(
+                    "whatsapp_history_unavailable", "Автоматическая сверка истории временно недоступна");
+        }
+    }
+
+    @Override
     public String sendMessageToGroup(String clientId, String groupId, String message) {
         return rejectLegacy("send-group");
     }

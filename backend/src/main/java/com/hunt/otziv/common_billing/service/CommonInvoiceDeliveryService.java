@@ -9,6 +9,7 @@ import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.client_messages.dto.ClientMessageSendResult;
 import com.hunt.otziv.client_messages.dto.TelegramTransferCopyButton;
 import com.hunt.otziv.client_messages.service.ClientChatMessageSender;
+import com.hunt.otziv.common_billing.api.CommonInvoiceMessageRecovery;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceDetailsResponse;
 import com.hunt.otziv.common_billing.model.CommonInvoice;
 import com.hunt.otziv.common_billing.model.CommonInvoiceOrder;
@@ -96,6 +97,50 @@ public class CommonInvoiceDeliveryService {
 
     public CommonInvoiceDetailsResponse sendInvoice(Long invoiceId, boolean manual) {
         return sendInvoice(invoiceId, manual, false);
+    }
+
+    /** Existing-operation repair. All network reads run outside invoice/order locks. */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
+    public CommonInvoiceMessageRecovery recoverPendingMessageReceipt(Long invoiceId) {
+        String operationId = writeTransaction(() -> {
+            var invoice = lockedInvoiceAfterStandalonePaymentPrelude(invoiceId).invoice();
+            ensureCommonInvoiceVisibleForCurrentUser(invoice);
+            return invoice.getPaymentMessageOperationId();
+        });
+        if (operationId == null || operationId.isBlank() || messageQueue.status(operationId) == null) {
+            return new CommonInvoiceMessageRecovery(false, false,
+                    "Данные исходной отправки счёта недоступны. Повторное сообщение заблокировано.");
+        }
+        var claim = messageQueue.claimRecovery(invoiceId, operationId);
+        if (claim.isPresent()) {
+            var prepared = messageQueue.snapshot(operationId);
+            ClientMessageSendResult result;
+            try { result = recoverPreparedMessageReceipt(operationId); }
+            catch (RuntimeException unavailable) {
+                log.warn("Common invoice receipt history unavailable: invoiceId={}, errorType={}",
+                        invoiceId, unavailable.getClass().getSimpleName());
+                result = ClientMessageSendResult.failed("receipt_history_unavailable", "Receipt history unavailable");
+            }
+            finishQueuedMessage(claim.orElseThrow(), prepared, result, false);
+        }
+        return writeTransaction(() -> {
+            var invoice = lockedInvoiceAfterStandalonePaymentPrelude(invoiceId).invoice();
+            var operation = messageQueue.status(operationId);
+            boolean confirmed = java.util.Objects.equals(invoice.getPaymentMessageOperationId(), operationId)
+                    && invoice.isPaymentMessageConfirmed() && normalize(invoice.getLastError()).isBlank()
+                    && operation != null && "SENT".equals(operation.status());
+            boolean pending = operation != null && Set.of("QUEUED", "RETRYABLE", "SENDING", "UNKNOWN").contains(operation.status());
+            return new CommonInvoiceMessageRecovery(confirmed, pending, confirmed
+                    ? "Отправка счёта подтверждена по WhatsApp. Повторного сообщения не было."
+                    : pending ? "Система сверяет исходную отправку счёта с историей WhatsApp и продолжит проверку автоматически. Повторное сообщение заблокировано."
+                    : "Отправка проверена, но в счёте осталось расхождение. Повторное сообщение не отправлялось.");
+        });
+    }
+
+    ClientMessageSendResult recoverPreparedMessageReceipt(String operationId) {
+        var receipt = messageSender.recordedOutcome(operationId);
+        if (receipt != null && (receipt.sent() || com.hunt.otziv.client_messages.api.ClientMessageDelivery.isKnownUnsent(receipt))) return receipt;
+        return messageSender.recoverRecordedOutcomeFromChat(operationId, messageQueue.preparedAt(operationId));
     }
 
     CommonInvoiceDetailsResponse sendInvoice(Long invoiceId, boolean manual, boolean paymentRouteChanged) {
@@ -400,7 +445,7 @@ public class CommonInvoiceDeliveryService {
                 code = "context_changed";
             } else if (pausedBeforeDispatch) {
                 state = "RETRYABLE";
-            } else if (com.hunt.otziv.client_messages.api.ClientMessageDelivery.isKnownUnsent(result)) {
+            } else if (claim.mayDispatch() && com.hunt.otziv.client_messages.api.ClientMessageDelivery.isKnownUnsent(result)) {
                 state = claim.previousAttempts() + (claim.mayDispatch() ? 1 : 0) < 5 ? "RETRYABLE" : "FAILED";
                 if ("FAILED".equals(state) && invoice != null && java.util.Objects.equals(invoice.getPaymentMessageOperationId(), prepared.operationId())) {
                     invoice.setLastError("delivery_failed: сообщение не отправлено; можно повторить сохранённую операцию");

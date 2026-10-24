@@ -1,0 +1,149 @@
+{
+  "schema": "otziv-monitoring-upgrade-v1",
+  "component": "grafana",
+  "production": false,
+  "startedAt": "2026-10-24T11:05:34.961Z",
+  "source": "grafana/grafana@sha256:7567a7c70a3c1d75aeeedc968d1304174a16651e55a60d1fb132a05e1e63a054",
+  "candidate": "ghcr.io/claidd/otziv-security@sha256:db6100e472c78215c923e1472fbfe0b4109a1303505aa959b190a3cae2bccc37",
+  "sourcePolicy": "REVIEWED_IMMUTABLE_HISTORICAL_BASELINE",
+  "sourceManifestSha256": "d48bdb7d6d869cde5d6f1a7b089491765e3eeaf46e0b0b6bb51b7719b38d3ef2",
+  "dataScope": "SYNTHETIC_SEEDED_PERSISTENT_VOLUME",
+  "productionHistoricalData": "NOT_TESTED",
+  "checks": [
+    {
+      "name": "source_real_readiness",
+      "passed": true
+    },
+    {
+      "name": "source_existing_compose_http_health_command_works",
+      "passed": true
+    },
+    {
+      "name": "stopped_source_volume_backed_up_before_upgrade",
+      "passed": true
+    },
+    {
+      "name": "candidate_real_readiness",
+      "passed": true
+    },
+    {
+      "name": "candidate_existing_compose_http_health_command_works",
+      "passed": true
+    },
+    {
+      "name": "candidate_reads_original_persisted_data",
+      "passed": true
+    },
+    {
+      "name": "restart_real_readiness",
+      "passed": true
+    },
+    {
+      "name": "restart_existing_compose_http_health_command_works",
+      "passed": true
+    },
+    {
+      "name": "candidate_restart_preserves_original_and_new_data",
+      "passed": true
+    },
+    {
+      "name": "rollback_real_readiness",
+      "passed": true
+    },
+    {
+      "name": "rollback_existing_compose_http_health_command_works",
+      "passed": true
+    },
+    {
+      "name": "rollback_uses_backup_and_reads_only_preupgrade_data",
+      "passed": true
+    }
+  ],
+  "incompatibilities": [],
+  "configurationHashes": {
+    "alloy/config.alloy": "5f42d8586da504955bf5f04a7f1fbbcc87924f7571064fb1607efec5942cf7cf",
+    "grafana/dashboard-queries.test.mjs": "16275a26e3f853ba36636f88a4563388bd4beed75510c2bdacb08477e2530b7c",
+    "grafana/dashboards/otziv-backend-performance.json": "5a1de0d188f5228dc0c649190289d6013ccdb08addcf90ff5078388f7014a70a",
+    "grafana/dashboards/postgres-overview.json": "c0a4c1bd5ced50f301b0a60eeb536b7c206f4894be48cfec6a9e77c8ea1a6f1a",
+    "grafana/provisioning/dashboards/dashboards.yml": "1793cdc7f0bf77666131accf470d9dd47fd6bc0e6075e73008b5a7b52d364626",
+    "grafana/provisioning/datasources/datasources.yaml": "9b4647815db13c43b827b6f0466591b6f1ddaffc1ab9ddbce1fc1adcd5414daa",
+    "grafana/README.md": "765eb967fe5fc2b16c3f93df9d950779700239b8654be1487d2ad78b31e9eb01",
+    "loki/loki-config.yaml": "97a8f2f703461664c32141986e94b0f7040bfd5a3473838361ddeddaa5be9b7c",
+    "prometheus/delivery-rules.yml": "ab8f6b540939ce0667010f465b87b77cd2f400b204b6df771b2a71cff1b9ba96",
+    "prometheus/prometheus-local.yml": "e03a9680473037bf903502759bc9d0d2deba358a02afe8fe4ee7eedb452d6e90",
+    "prometheus/prometheus.yml": "654364a5aa4e5cf606966b22a30c260e225dbb6d8a990fec7fc3f9712499cf5d",
+    "tempo/tempo.yaml": "3b1b35ccfe52ab2824bea077e9b9f4cdc4ca32dea75f246984cb2588c822012f"
+  },
+  "harnessSha256": {
+    "monitoring-upgrade.mjs": "b3789f6c1d79127195e9970053f303585aecf8135c4d7f351cd4ccadb9c7306d",
+    "monitoring-source.mjs": "97617dae2af4eb14118c5bfde5d46f07d4624bebc07a445c4e21e7ace41a4397",
+    "monitoring-scenarios.mjs": "a7f08ac97e7a38dcce9ae0d6c94b4edac05054d4eb4f2859d8f2638c8d012e85",
+    "monitoring-fixture-http.cjs": "c0192e2395f33f02165603e4ccc7f515fc965483b0c8a5feeae1a4fd0275ea7d",
+    "../docker-observer/consumer-fixture.cjs": "cad707c7a4aa7edcee92ae09247830be77e9d434240e9981536b0d7a28f2e880"
+  },
+  "sourceImageId": "sha256:7567a7c70a3c1d75aeeedc968d1304174a16651e55a60d1fb132a05e1e63a054",
+  "candidateImageId": "sha256:db6100e472c78215c923e1472fbfe0b4109a1303505aa959b190a3cae2bccc37",
+  "failedDockerOperation": "exec",
+  "diagnostic": "node:internal/modules/run_main:107\n    triggerUncaughtException(\n    ^\n\n[TypeError: fetch failed] {\n  [cause]: Error: connect ECONNREFUSED 172.21.0.3:3000\n      at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2083:16) {\n    errno: -111,\n    code: 'ECONNREFUSED',\n    syscall: 'connect',\n    address: '172.21.0.3',\n    port: 3000\n  }\n}\n\nNode.js v24.22.1\n",
+  "healthCommands": {
+    "source": [
+      "sh",
+      "-c",
+      "wget -q -O /dev/null http://127.0.0.1:3000/api/health"
+    ],
+    "candidate": [
+      "sh",
+      "-c",
+      "wget -q -O /dev/null http://127.0.0.1:3000/api/health"
+    ],
+    "restart": [
+      "sh",
+      "-c",
+      "wget -q -O /dev/null http://127.0.0.1:3000/api/health"
+    ],
+    "rollback": [
+      "sh",
+      "-c",
+      "wget -q -O /dev/null http://127.0.0.1:3000/api/health"
+    ]
+  },
+  "shutdowns": {
+    "source": {
+      "exitCode": 0,
+      "oomKilled": false
+    },
+    "candidate": {
+      "exitCode": 0,
+      "oomKilled": false
+    },
+    "restart": {
+      "exitCode": 0,
+      "oomKilled": false
+    },
+    "rollback": {
+      "exitCode": 0,
+      "oomKilled": false
+    }
+  },
+  "sourceVolumeManifest": [
+    {
+      "path": "alerting/1/__default__.tmpl",
+      "size": 2530,
+      "mode": 33188,
+      "uid": 472,
+      "gid": 0,
+      "sha256": "d0d66aa376aeddd420c9c3b8a4edee55af6a3e43880bd250087b3ee35083563a"
+    },
+    {
+      "path": "grafana.db",
+      "size": 1110016,
+      "mode": 33184,
+      "uid": 472,
+      "gid": 0,
+      "sha256": "57cf98e625dfa8418cee0dfa92b6985a930959a5ff8f241caaeec2771a4cbf2e"
+    }
+  ],
+  "result": "PASS",
+  "cleanup": "PASS",
+  "finishedAt": "2026-10-24T11:06:21.053Z"
+}

@@ -1,4 +1,4 @@
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, finalize, Subscription, take, timeout } from 'rxjs';
 import { CardDeliveryTracker, managerCardDelivery, deliveryOperationMessage, type DeliveryOperation } from '@otziv/client-common/delivery-operations';
 import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { Component, DestroyRef, ElementRef, Injector, Input, OnInit, afterNextRender, computed, inject, signal } from '@angular/core';
@@ -67,6 +67,15 @@ const ORDER_LIST_STATUSES = new Set([
 
 const TELEGRAM_BINDING_POLL_INTERVAL_MS = 3000;
 const TELEGRAM_BINDING_POLL_TIMEOUT_MS = 15 * 60 * 1000;
+const REPAIR_RESULT_POLL_INTERVAL_MS = 30_000;
+const REPAIR_RESULT_POLL_TIMEOUT_MS = 10 * 60 * 1000;
+
+type RepairResultWatch = {
+  managerId: number;
+  controlId: number | null | undefined;
+  controlDate: string;
+  cards: Map<number, { expiresAt: number }>;
+};
 
 type ManagerPerformanceFactor = {
   key: string;
@@ -85,7 +94,15 @@ type ManagerPerformanceRow = {
 
 export function isExplicitlyRepairableCommonInvoiceReason(reason: string | null | undefined): boolean {
   const normalized = (reason ?? '').trim().toLowerCase();
-  return normalized.includes('нажмите «починить»') || normalized.includes('нажмите "починить"');
+  return normalized.includes('нажмите «починить»') || normalized.includes('нажмите "починить"')
+    || normalized.includes('нажмите «проверить отправку»');
+}
+
+export function isDeliveryReconciliationCard(example: ManagerControlConcreteItem): boolean {
+  if (!['ORDER', 'WORKER_ORDER_NEW', 'AUTOMATION_FAILURE', 'COMMON_INVOICE_AUTOMATION', 'COMMON_INVOICE'].includes(example.type)) return false;
+  if (example.delivery?.status === 'UNKNOWN' || example.delivery?.errorCode === 'finalization_required') return true;
+  const reason = [example.reason, example.clientMessageSendBlockedReason].filter(Boolean).join(' ');
+  return /state_transaction_outcome_uncertain|manual_delivery_handoff_pending|message_send_(?:in_progress|stale|unknown)|«проверить отправку»|ручная проверка продолжается|исход (?:автоматической |предыдущей )?отправки (?:этого заказа )?(?:ещё )?не подтвержд|результат предыдущей отправки клиенту не подтвержд|результат отправки сообщения по сч[её]ту не подтвержд/i.test(reason);
 }
 
 export function shouldHideClientChatUnansweredAfterAction(
@@ -190,6 +207,9 @@ export class ManagerControlComponent implements OnInit {
   private detailRequestSeq = 0;
   private autoSyncingDetailManagerIds = new Set<number>();
   private telegramBindingPollTimers = new Map<number, number>();
+  private repairResultWatch: RepairResultWatch | null = null;
+  private repairResultTimer: number | null = null;
+  private repairResultRead: Subscription | null = null;
 
   @Input() embedded = false;
   @Input() personalControl = false;
@@ -203,7 +223,10 @@ export class ManagerControlComponent implements OnInit {
   readonly deliveries = signal<Record<number, DeliveryOperation>>({});
   readonly concreteRepairResults = signal<Record<number, { message: string; deliveryCheck: boolean }>>({});
   concreteRepairResult(card: ManagerControlConcreteItem): { message: string; deliveryCheck: boolean } | null {
-    return card.itemStatus === 'RESOLVED' ? null : this.concreteRepairResults()[card.controlEntityId ?? 0] ?? null;
+    const result = this.concreteRepairResults()[card.controlEntityId ?? 0];
+    const operation = this.deliveries()[card.controlEntityId ?? 0] ?? managerCardDelivery(card);
+    if (card.itemStatus === 'RESOLVED' || result?.deliveryCheck && operation?.status === 'SENT' && !operation.errorCode) return null;
+    return result ?? null;
   }
   private clearConcreteRepairResult(itemId: number): void {
     this.concreteRepairResults.update(results => {
@@ -237,6 +260,11 @@ export class ManagerControlComponent implements OnInit {
       return next;
     });
     if (!operation) return;
+    // A repair watch reads the whole card, including scheduled/invoice recovery without a manual receipt DTO.
+    if (this.repairResultWatch?.cards.has(id)) {
+      this.deliveries.update(values => ({ ...values, [id]: operation }));
+      return;
+    }
     this.deliveryTracker.track(id, operation, () => firstValueFrom(this.api.deliveryOperation(id, operation.operationId)),
       value => {
         const previous = this.deliveries()[id];
@@ -305,6 +333,7 @@ export class ManagerControlComponent implements OnInit {
     const clockTimer = window.setInterval(() => this.clock.set(Date.now()), 1000);
     this.destroyRef.onDestroy(() => {
       window.clearInterval(clockTimer);
+      this.stopRepairResultWatch();
       this.deliveryTracker.cancelAll();
       for (const timer of this.telegramBindingPollTimers.values()) {
         window.clearTimeout(timer);
@@ -1175,6 +1204,7 @@ export class ManagerControlComponent implements OnInit {
   }
 
   private loadDetails(managerId: number): void {
+    this.stopRepairResultWatch();
     const requestId = ++this.detailRequestSeq;
     this.detail.set(null);
     this.detailError.set(null);
@@ -1204,6 +1234,7 @@ export class ManagerControlComponent implements OnInit {
   }
 
   private syncDetails(managerId: number): void {
+    this.stopRepairResultWatch();
     const requestId = ++this.detailRequestSeq;
     this.detailError.set(null);
     this.detailLoading.set(true);
@@ -1340,6 +1371,7 @@ export class ManagerControlComponent implements OnInit {
   }
 
   private clearDetails(): void {
+    this.stopRepairResultWatch();
     this.pendingDetailFocus = false;
     this.detail.set(null);
     this.detailError.set(null);
@@ -1634,30 +1666,33 @@ export class ManagerControlComponent implements OnInit {
         this.isDeliveryReconciliation(example) ? 'Результат отправки проверен' : 'Карточка починена'),
       error: (err) => {
         this.setConcreteUpdating(itemId, false);
-        const message = apiErrorMessage(err, 'Автоматическая починка не сработала');
+        const deliveryCheck = this.isDeliveryReconciliation(example);
+        const message = apiErrorMessage(err, deliveryCheck
+          ? 'Сейчас не удалось получить результат проверки. Доставка не подтверждена; повторное сообщение заблокировано.'
+          : 'Не удалось получить результат автоматической проверки.');
         if (this.isManualChatBindingRepairMessage(message)) {
           this.showManualChatBindingRepairToast(message, example);
           return;
         }
-        if (err?.status === 409) {
+        if (err?.status === 409 || deliveryCheck) {
           this.concreteRepairResults.update(results => ({ ...results,
-            [itemId]: { message, deliveryCheck: this.isDeliveryReconciliation(example) }
+            [itemId]: { message, deliveryCheck }
           }));
         }
-        if (this.isDeliveryReconciliation(example)) this.toast.warning('Проверка отправки', message);
+        if (deliveryCheck) this.toast.warning('Результат проверки', message);
         else this.toast.error('Не удалось починить', message);
+        if (deliveryCheck) this.watchRepairResult(example);
         this.load({ silent: true });
       }
     });
   }
 
   isDeliveryReconciliation(example: ManagerControlConcreteItem): boolean {
-    if (!['ORDER', 'WORKER_ORDER_NEW', 'AUTOMATION_FAILURE', 'COMMON_INVOICE_AUTOMATION'].includes(example.type)) return false;
-    if (example.delivery?.status === 'UNKNOWN' || example.delivery?.errorCode === 'finalization_required') return true;
-    return /state_transaction_outcome_uncertain|manual_delivery_handoff_pending|ручная проверка продолжается|исход (?:предыдущей )?отправки (?:ещё )?не подтвержд|результат предыдущей отправки клиенту не подтвержд/i.test(example.reason ?? '');
+    return isDeliveryReconciliationCard(example);
   }
 
   repairActionLabel(example: ManagerControlConcreteItem): string {
+    if (this.isConcreteUpdating(example.controlEntityId)) return 'Проверяем…';
     return this.isDeliveryReconciliation(example) ? 'Проверить отправку' : 'Починить';
   }
 
@@ -1700,11 +1735,135 @@ export class ManagerControlComponent implements OnInit {
       this.stopTelegramBindingPoll(example.controlEntityId);
     }
     const merged = this.patchDetailConcreteItem(example, updated);
-    this.toast.success(title, merged.comment || 'Проблема устранена автоматически');
+    const deliveryCheck = this.isDeliveryReconciliation(example);
+    const operation = managerCardDelivery(merged);
+    const receiptConfirmed = operation?.status === 'SENT' && !operation.errorCode;
+    const deliveryUncertain = !!operation && (operation.status !== 'SENT' || !!operation.errorCode);
+    const comment = /^client_(?:message|reply)_delivery_/.test(merged.comment ?? '') ? null : merged.comment?.trim();
+    const completed = !deliveryUncertain && (receiptConfirmed
+      || merged.itemStatus === 'RESOLVED' || merged.itemStatus === 'ACTION_TAKEN');
+    if (deliveryCheck && !completed) {
+      const message = comment
+        || this.deliveryMessage(merged)
+        || 'Результат отправки пока не подтверждён. Карточка остаётся открытой; повторное сообщение заблокировано.';
+      if (merged.controlEntityId) this.concreteRepairResults.update(results => ({ ...results,
+        [merged.controlEntityId!]: { message, deliveryCheck: true }
+      }));
+      this.toast.warning('Проверка ещё не завершена', message);
+      this.watchRepairResult(merged);
+      this.load({ silent: true });
+      return;
+    }
+    this.toast.success(deliveryCheck && receiptConfirmed ? 'Отправка подтверждена' : title,
+      comment || (deliveryCheck ? 'Состояние карточки обновлено по результату проверки.' : 'Проблема устранена автоматически'));
     if (this.shouldHideConcreteItemAfterAction(merged)) {
       this.removeConcreteItemFromDetail(merged);
     }
     this.load({ silent: true });
+  }
+
+  private watchRepairResult(card: ManagerControlConcreteItem): void {
+    const detail = this.detail(), id = card.controlEntityId;
+    if (!detail || !id || !detail.items.some(item => item.examples.some(current =>
+      current.controlEntityId === id && current.type === card.type && current.entityId === card.entityId))) return;
+    if (!this.isRepairResultBoard(this.repairResultWatch, detail)) this.stopRepairResultWatch();
+    this.repairResultWatch ??= { managerId: detail.managerId, controlId: detail.dailyControlId,
+      controlDate: detail.controlDate, cards: new Map() };
+    this.repairResultWatch.cards.set(id, { expiresAt: Date.now() + REPAIR_RESULT_POLL_TIMEOUT_MS });
+    this.deliveryTracker.cancel(id);
+    this.scheduleRepairResultRead();
+  }
+
+  private isRepairResultBoard(watch: RepairResultWatch | null, detail: ManagerControlManagerDetail | null): boolean {
+    return !!watch && !!detail && watch.managerId === detail.managerId
+      && watch.controlId === detail.dailyControlId && watch.controlDate === detail.controlDate;
+  }
+
+  private stopRepairResultWatch(): void {
+    this.repairResultWatch = null;
+    if (this.repairResultTimer !== null) window.clearTimeout(this.repairResultTimer);
+    this.repairResultTimer = null;
+    const read = this.repairResultRead;
+    this.repairResultRead = null;
+    read?.unsubscribe();
+  }
+
+  private scheduleRepairResultRead(): void {
+    const watch = this.repairResultWatch;
+    if (!watch || this.destroyRef.destroyed) return;
+    for (const [id, card] of watch.cards) if (card.expiresAt <= Date.now()) watch.cards.delete(id);
+    if (!watch.cards.size || !this.isRepairResultBoard(watch, this.detail())) {
+      this.stopRepairResultWatch();
+      return;
+    }
+    if (this.repairResultTimer !== null || this.repairResultRead) return;
+    this.repairResultTimer = window.setTimeout(() => {
+      this.repairResultTimer = null;
+      this.readRepairResults(watch);
+    }, REPAIR_RESULT_POLL_INTERVAL_MS);
+  }
+
+  private readRepairResults(watch: RepairResultWatch): void {
+    if (this.repairResultWatch !== watch || !this.isRepairResultBoard(watch, this.detail())) {
+      this.stopRepairResultWatch();
+      return;
+    }
+    for (const [id, card] of watch.cards) if (card.expiresAt <= Date.now()) watch.cards.delete(id);
+    if (!watch.cards.size) { this.stopRepairResultWatch(); return; }
+    if (document.hidden || this.updatingControl() || this.detailLoading()) {
+      this.scheduleRepairResultRead();
+      return;
+    }
+    const requested = new Map(this.detail()!.items.flatMap(item => item.examples)
+      .filter(card => !!card.controlEntityId && watch.cards.has(card.controlEntityId!) && !this.isConcreteUpdating(card.controlEntityId))
+      .map(card => [card.controlEntityId!, { card, watchEntry: watch.cards.get(card.controlEntityId!) }]));
+    if (!requested.size) { this.scheduleRepairResultRead(); return; }
+    // One GET for all watched cards. Never repeat repair/send/sync, and never reset form drafts.
+    const read = new Subscription();
+    this.repairResultRead = read;
+    read.add(this.api.managerDetails(watch.managerId).pipe(take(1), timeout(15_000), finalize(() => {
+      if (this.repairResultRead === read) this.repairResultRead = null;
+      if (this.repairResultWatch === watch) this.scheduleRepairResultRead();
+    })).subscribe({
+      next: fresh => {
+        if (this.repairResultWatch !== watch || !this.isRepairResultBoard(watch, this.detail())) return;
+        if (!this.isRepairResultBoard(watch, fresh)) { this.stopRepairResultWatch(); return; }
+        const freshCards = new Map(fresh.items.flatMap(item => item.examples).map(card => [card.controlEntityId, card]));
+        this.detail.update(current => !current ? current : { ...current, items: current.items.map(item => {
+          const examples = item.examples.flatMap(card => {
+            const id = card.controlEntityId, sent = id ? requested.get(id) : null;
+            if (!id || !sent || sent.card !== card || sent.watchEntry !== watch.cards.get(id) || this.isConcreteUpdating(id)) return [card];
+            const updated = freshCards.get(id);
+            if (updated && (updated.type !== card.type || updated.entityId !== card.entityId)) {
+              watch.cards.delete(id);
+              return [card];
+            }
+            const operation = updated ? managerCardDelivery(updated) : null;
+            this.deliveries.update(values => {
+              const next = { ...values };
+              if (operation) next[id] = operation; else delete next[id];
+              return next;
+            });
+            const confirmed = operation?.status === 'SENT' && !operation.errorCode;
+            const handled = updated?.itemStatus === 'ACTION_TAKEN' && !operation && !this.isDeliveryReconciliation(updated);
+            if (!updated || updated.itemStatus === 'RESOLVED' || confirmed || handled) {
+              watch.cards.delete(id);
+              this.clearConcreteRepairResult(id);
+            }
+            // Disappearance proves only a changed current list, never a delivery receipt.
+            return !updated || updated.itemStatus === 'RESOLVED'
+              || (confirmed || handled) && this.shouldHideConcreteItemAfterAction(updated) ? [] : [updated];
+          });
+          const removed = item.examples.length - examples.length;
+          return { ...item, examples, count: Math.max(0, item.count - removed),
+            hiddenExampleCount: Math.max(0, (item.hiddenExampleCount ?? 0) - removed) };
+        }) });
+      },
+      error: err => {
+        if (this.repairResultWatch === watch && [401, 403, 404].includes(err?.status)) this.stopRepairResultWatch();
+        // A failed read leaves the acknowledged card/result intact; it cannot imply delivery failure.
+      }
+    }));
   }
 
   private setConcreteUpdating(itemId: number, updating: boolean): void {
@@ -2129,8 +2288,7 @@ export class ManagerControlComponent implements OnInit {
 
   canRepairAutomationIssue(example: ManagerControlConcreteItem): boolean {
     const reason = (example.reason ?? '').toLowerCase();
-    if ((example.type === 'ORDER' || example.type === 'WORKER_ORDER_NEW')
-      && (example.delivery?.status === 'UNKNOWN' || example.delivery?.errorCode === 'finalization_required')) return true;
+    if (isDeliveryReconciliationCard(example)) return true;
     if (this.isAutomationWaitingForSlot(example)) {
       return false;
     }
@@ -2318,7 +2476,7 @@ export class ManagerControlComponent implements OnInit {
       })}`;
     }
     if (this.canRepairAutomationIssue(example)) {
-      return 'сначала починка, если не помогла — ручная отправка';
+      return 'система проверит причину и обновит карточку по подтверждённому результату';
     }
     return 'отправит и скроет до повторной проверки';
   }

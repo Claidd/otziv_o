@@ -1,0 +1,21 @@
+{
+  "result": "PASS",
+  "revision": "9e156dfc5d67ce63f786d4a2754cb0d7427c849d",
+  "run": 40087690787,
+  "attempt": 1,
+  "reference": "ghcr.io/claidd/otziv-security@sha256:db6100e472c78215c923e1472fbfe0b4109a1303505aa959b190a3cae2bccc37",
+  "artifacts": [
+    {
+      "artifactId": 12557678129,
+      "name": "reviewed-publication-grafana-attempt-1",
+      "digest": "sha256:d86ce1fab9427902e1230e192843312194fe948c6b3f047954ddb59fc3593796",
+      "bytes": 293239
+    },
+    {
+      "artifactId": 12558006315,
+      "name": "anonymous-download-grafana-attempt-1",
+      "digest": "sha256:d4ff33de0a803b1744eee6bd038dd2bea7a27a2a1a4759234ef38a49faca2e86",
+      "bytes": 190678
+    }
+  ]
+}

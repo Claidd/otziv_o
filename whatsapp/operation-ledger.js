@@ -108,7 +108,7 @@ class OperationLedger {
   snapshot(record) {
     if (record.state === "SUCCEEDED" && [...(this.messageOwners.get(record.messageId) || [])].some(key => key !== record.key))
       throw new OperationLedgerError("operation_evidence_already_bound", 409);
-    return { receiptBindingVersion: 1, state: record.state === "RUNNING" && !this.inFlight.has(record.key) ? "UNKNOWN" : record.state,
+    return { receiptBindingVersion: 1, historyReconciliationVersion: 1, state: record.state === "RUNNING" && !this.inFlight.has(record.key) ? "UNKNOWN" : record.state,
       messageId: record.state === "SUCCEEDED" ? record.messageId : null, envelopeHash: record.envelopeHash };
   }
   missing() {
@@ -214,11 +214,15 @@ class OperationLedger {
       this.replace(resolved); return { ...this.snapshot(resolved), replayed: true };
     } finally { this.maintenance--; this.finishDrain(); }
   }
-  assertReceiptWindow(record, sentAt) {
+  receiptWindow(record) {
     if (!Number.isSafeInteger(record.completedAt) || record.completedAt < record.startedAt)
       throw new OperationLedgerError("operation_evidence_window_unavailable", 409);
     const end = Math.min(record.completedAt, record.startedAt + MAX_RECEIPT_WINDOW_MS);
-    if (!Number.isFinite(sentAt) || sentAt < record.startedAt - 2000 || sentAt > end + 2000)
+    return { from: record.startedAt - 2000, until: end + 2000 };
+  }
+  assertReceiptWindow(record, sentAt) {
+    const window = this.receiptWindow(record);
+    if (!Number.isFinite(sentAt) || sentAt < window.from || sentAt > window.until)
       throw new OperationLedgerError("operation_evidence_mismatch", 409);
     for (const other of this.envelopeRecords.get(record.envelopeHash)?.values() || []) {
       if (other.key === record.key || other.state === "SUCCEEDED") continue;
