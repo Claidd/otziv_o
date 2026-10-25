@@ -34,6 +34,10 @@ public class CommonInvoiceOrder {
     @Column(name = "active_membership", nullable = false)
     private boolean activeMembership = true;
 
+    /** Retained historical position excluded from an active invoice after the seven-reminder archive policy. */
+    @Column(name = "silence_archived_at")
+    private LocalDateTime silenceArchivedAt;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "order_id", nullable = false)
     private Order order;

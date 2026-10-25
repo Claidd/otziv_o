@@ -82,7 +82,8 @@ import org.springframework.web.server.ResponseStatusException;
 @Slf4j
 @RequiredArgsConstructor
 public class ScheduledClientMessageService implements PaymentDeadlineNoticeSource, UncertainClientMessageDelivery,
-        com.hunt.otziv.client_messages.api.PeriodicReminderRestart {
+        com.hunt.otziv.client_messages.api.PeriodicReminderRestart,
+        com.hunt.otziv.client_messages.api.ReviewReminderClosure {
 
     private static final ObjectMapper DELIVERY_JSON = new ObjectMapper();
 
@@ -194,6 +195,9 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
     private final ScheduledDeliveryRecovery deliveryRecovery;
     private final SchedulerLeaseService schedulerLeaseService;
     private final ClientMessageTime messageTime;
+    private final com.hunt.otziv.client_chat_control.api.ReminderContactHistory archiveChatHistory;
+    private final com.hunt.otziv.u_users.api.AutomationNoticeRecipients archiveNoticeRecipients;
+    private final ReviewArchiveNotifications archiveNotifications;
     private final org.springframework.context.ApplicationEventPublisher applicationEvents;
     private final com.hunt.otziv.client_messages.api.OrderManualContactReservation manualContactReservation;
     private final com.hunt.otziv.p_products.api.OrderDeliveryControlContext orderDeliveryContext;
@@ -543,6 +547,105 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
 
     public record UncertainDeliveryPreview(Long stateId, String operationId, String message,
                                            LocalDateTime preparedAt) { }
+
+    @Override @Transactional(readOnly = true)
+    public List<Long> archiveCandidates(long afterId, int limit) {
+        return stateRepository.findSilenceArchiveCandidates(afterId, PageRequest.of(0, Math.max(1, Math.min(50,limit))));
+    }
+
+    record ArchiveCheck(long stateId, String targetKey, int sentCount, LocalDateTime lastSuccess,
+            com.hunt.otziv.p_products.api.OrderDeliveryControlContext.Snapshot order,
+            ClientMessageDelivery.Target company, String clientId, String groupId) { }
+
+    @Override @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public Decision archiveAfterReminders(long stateId) {
+        var requested = stateRepository.findById(stateId).orElse(null);
+        if (requested == null || requested.getScenario() != ClientMessageScenario.REVIEW_CHECK_REMINDER)
+            return new Decision(false,null);
+        if (!appSettingService.getBooleanFreshFailClosed(AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_AUTO_ARCHIVE_ENABLED,true))
+            return new Decision(false,"Автоархив выключен настройкой.");
+        ArchiveCheck check = transactionRunner.callInNewTransaction(() -> archiveCheck(stateId));
+        if (check == null) return new Decision(false,"Автоархив ожидает семи подтверждённых напоминаний и окончания срока для ответа; также проверяется текущий этап заказа.");
+        // Transport calls precede the write transaction. Missing/partial history never means client silence.
+        if (archiveChatHistory.hasReplyBlockingArchive(check.clientId(),check.groupId(),check.lastSuccess()))
+            return new Decision(false,"Автоархив приостановлен: в WhatsApp есть ответ клиента, который нужно разобрать.");
+        boolean changed = transactionRunner.callInPreparationTransaction(() -> commitReviewArchive(check));
+        return new Decision(changed,changed ? "Заказ архивирован; предложение и уведомления записаны в очередь."
+                : "Автоархив остановлен: изменились заказ, оплата, отправка или данные ответа клиента.");
+    }
+
+    private boolean silenceThresholdReached(ScheduledClientMessageState state, LocalDateTime now) {
+        return state != null && state.getScenario() == ClientMessageScenario.REVIEW_CHECK_REMINDER
+                && state.getStatus() == ScheduledMessageStateStatus.ACTIVE && state.getSentCount() >= 7
+                && state.getDeliveryStatus() == null && !hasText(state.getDeliveryEnvelope())
+                && state.getLastSuccessAt() != null
+                && !state.getLastSuccessAt().plusDays(Math.max(2,reviewCheckIntervalDays())).isAfter(now)
+                && (state.getLockedUntil() == null || !state.getLockedUntil().isAfter(now));
+    }
+
+    private ArchiveCheck archiveCheck(long stateId) {
+        var state = stateRepository.findById(stateId).orElse(null);
+        if (!silenceThresholdReached(state,messageTime.nowStorage())) return null;
+        var source = orderDeliveryContext.read(state.getOrderId()).orElse(null);
+        Order order = orderRepository.findById(state.getOrderId()).orElse(null);
+        if (source == null || order == null || !STATUS_IN_CHECK.equals(statusTitle(order))
+                || !isCurrentOrderCycle(state,order) || order.isComplete() || order.getPayDay() != null
+                || order.getCounter() > 0 || order.getCompany() == null || manager(order) == null) return null;
+        Company company = order.getCompany();
+        return new ArchiveCheck(stateId,state.getTargetKey(),state.getSentCount(),state.getLastSuccessAt(),source,
+                companyTarget(company),manager(order).getClientId(),company.getGroupId());
+    }
+
+    private boolean commitReviewArchive(ArchiveCheck check) {
+        var current = orderDeliveryContext.lock(check.order().orderId()).orElse(null);
+        if (!Objects.equals(current,check.order()) || manualContactReservation.blocksScheduledContact(check.order().orderId())) return false;
+        var state = stateRepository.findByIdForUpdate(check.stateId()).orElse(null);
+        if (!silenceThresholdReached(state,messageTime.nowStorage()) || !Objects.equals(state.getTargetKey(),check.targetKey())
+                || state.getSentCount() != check.sentCount() || !Objects.equals(state.getLastSuccessAt(),check.lastSuccess())) return false;
+        Order order = orderRepository.findByIdForMutation(current.orderId()).orElseThrow();
+        if (!STATUS_IN_CHECK.equals(statusTitle(order)) || !isCurrentOrderCycle(state,order) || order.isComplete()
+                || order.getPayDay() != null || order.getCounter() > 0 || orderPaymentIntegrityService.hasSettledPaymentEvidence(order)
+                || !Objects.equals(check.clientId(),manager(order).getClientId())
+                || !Objects.equals(check.groupId(),order.getCompany().getGroupId())
+                || archiveChatHistory.hasOpenReply(check.groupId()) || postponeForReviewRecoveryIfNeeded(state,order,messageTime.nowStorage())) return false;
+        var billing = commonBillingServiceProvider.getObject();
+        var membership = billing.archiveReviewMembershipAfterReminders(order.getId());
+        try {
+            if (!orderStatusTransitionService.changeStatusForOrder(order.getId(),STATUS_ARCHIVE))
+                throw new IllegalStateException("Order archive was not applied");
+        } catch (Exception failure) { throw new IllegalStateException("Не удалось перевести заказ в архив",failure); }
+        Company company = order.getCompany();
+        LocalDateTime offerAt = null;
+        String offerStatus;
+        if (!appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_ARCHIVE_REORDER_ENABLED,true)) {
+            offerStatus = "Предложение нового заказа пока не поставлено: архивная рассылка выключена.";
+        } else if (!archiveCompanyStatus().equals(companyStatusTitle(company)) || archiveCandidateRepository.hasArchiveReorderBlocker(
+                company.getId(),listSetting(AppSettingService.CLIENT_MESSAGES_ARCHIVE_INACTIVE_ORDER_STATUSES,DEFAULT_ARCHIVE_INACTIVE_ORDER_STATUSES),
+                listSetting(AppSettingService.CLIENT_MESSAGES_OPEN_NEXT_ORDER_REQUEST_STATUSES,DEFAULT_OPEN_NEXT_ORDER_REQUEST_STATUSES))) {
+            offerStatus = "Предложение нового заказа отложено: у компании есть активный заказ или заявка либо компания ещё не на стопе.";
+        } else {
+            String key = archiveCompanyTargetKey(company.getId(),companyStatusChangedAt(company));
+            offerAt = archiveReorderAttemptAt(companyStatusChangedAt(company).plusMonths(archiveReorderMonths()),key);
+            ensureState(ClientMessageScenario.ARCHIVE_REORDER_OFFER,ClientMessageTargetType.ARCHIVE_COMPANY,key,
+                    company.getId(),null,null,offerAt);
+            offerStatus = "Предложение нового заказа поставлено в очередь на " + messageTime.toIrkutskTime(offerAt)
+                    .format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")) + " (Иркутск).";
+        }
+        archiveNotifications.recordArchive(state.getId(),order.getId(),check.targetKey(),check.sentCount(),
+                Map.of("order",check.order(),"lastReminder",check.lastSuccess(),"membership",membership),offerAt,offerStatus);
+        String clientText = company.getTitle() + "\n\nЗдравствуйте! Согласование текстов заказа №" + order.getId()
+                + " после семи напоминаний не получено. Мы остановили работу и перенесли заказ в архив. "
+                + "Если захотите вернуться к заказу или обсудить новый, напишите нам в этот чат.";
+        archiveNotifications.enqueue(state.getId(),"client",new ReviewArchiveNotifications.Envelope(
+                check.company(),check.clientId(),check.groupId(),clientText,null));
+        String staffText = "Заказ №" + order.getId() + " — " + company.getTitle()
+                + "\nПереведён в архив после " + check.sentCount() + " подтверждённых напоминаний без согласования.\n"
+                + offerStatus + "\nУведомление клиенту поставлено в очередь. Оплата не изменялась.";
+        for (Long chat : archiveNoticeRecipients.archiveRecipients(current.managerId()))
+            archiveNotifications.enqueue(state.getId(),"staff:" + chat,new ReviewArchiveNotifications.Envelope(null,null,null,staffText,chat));
+        markDone(state,messageTime.nowStorage(),null,null);
+        return true;
+    }
 
     @Override
     @Transactional(readOnly = true)
@@ -1249,15 +1352,7 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
                     intervalDays
             );
         }
-        if (appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_AUTO_ARCHIVE_ENABLED, true)) {
-            int autoArchiveDays = reviewCheckAutoArchiveDays();
-            reviewCheckAutoArchiveCandidates = ensureOrderStates(
-                    ClientMessageScenario.REVIEW_CHECK_AUTO_ARCHIVE,
-                    listSetting(AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_STATUSES, DEFAULT_REVIEW_CHECK_STATUSES),
-                    nowStorage,
-                    autoArchiveDays
-            );
-        }
+        // Seven confirmed reminders now govern archival; legacy 30-day jobs are retired on their next run.
 
         paymentInvoiceCandidates = ensurePaymentInvoiceStates(nowStorage);
 
@@ -2513,9 +2608,9 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
             markDone(state, nowStorage, "order_status_changed", "Заказ уже перешел в новый цикл статуса");
             return null;
         }
-        if (reviewCheck && state.getSentCount() >= 7 && isManagedByActiveCommonInvoice(order)) {
-            // Approval runs independently of the message budget, including for old backlog.
-            // Do not send an eighth reminder while that workflow validates the order.
+        if (reviewCheck && state.getSentCount() >= 7) {
+            // Archive policy runs independently of the message budget for ordinary and common-invoice orders.
+            // No eighth reminder while waiting for the response window or a blocking reply to be resolved.
             postpone(state, nextNoSendAttemptAt(nowStorage), null, null);
             return null;
         }
@@ -2620,53 +2715,8 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
     }
 
     private void autoArchiveStaleReviewCheck(ScheduledClientMessageState state, LocalDateTime nowStorage) {
-        Order order = orderRepository.findByIdForMutation(state.getOrderId()).orElse(null);
-        if (order == null) {
-            disable(state, nowStorage, "order_missing", "Заказ для автоархива проверки не найден");
-            return;
-        }
-        if (postponeForReviewRecoveryIfNeeded(state, order, nowStorage)) {
-            return;
-        }
-
-        String status = statusTitle(order);
-        if (!listSetting(AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_STATUSES, DEFAULT_REVIEW_CHECK_STATUSES).contains(status)) {
-            markDone(state, nowStorage, "order_status_changed", "Заказ уже не в статусе проверки отзывов");
-            return;
-        }
-        if (!isCurrentOrderCycle(state, order)) {
-            markDone(state, nowStorage, "order_status_changed", "Заказ уже перешел в новый цикл статуса");
-            return;
-        }
-        if (isManagedByActiveCommonInvoice(order)) {
-            String holdMessage = "Отдельный автоархив отложен: заказ входит в активный общий счет";
-            recordAttempt(
-                    state,
-                    ScheduledMessageAttemptStatus.SKIPPED,
-                    "system",
-                    "common_billing_linked",
-                    holdMessage,
-                    holdMessage,
-                    0
-            );
-            postpone(state, nextNoSendAttemptAt(nowStorage), null, null);
-            return;
-        }
-
-        String message = "Заказ #" + order.getId() + " автоматически переведен в Архив: клиент не подтвердил тексты за "
-                + reviewCheckAutoArchiveDays() + " дн.";
-        try {
-            boolean changed = orderStatusTransitionService.changeStatusForOrder(order.getId(), "Архив");
-            if (changed) {
-                recordAttempt(state, ScheduledMessageAttemptStatus.SENT, "system", null, null, message, 0);
-                markDone(state, nowStorage, null, null);
-                log.info("Review check auto-archived orderId={} stateId={}", order.getId(), state.getId());
-                return;
-            }
-            registerFailure(state, nowStorage, "status_change_failed", "Статус заказа не изменен", message, 0);
-        } catch (Exception e) {
-            registerFailure(state, nowStorage, "review_check_auto_archive_exception", readableException(e), message, 0);
-        }
+        // Retire the former day-only decision. ReviewReminderClosure rechecks receipts, reply window and history.
+        markDone(state, nowStorage, "archive_policy_replaced", "Автоархив выполняется после семи подтверждённых напоминаний и проверки ответов клиента");
     }
 
     private void scheduleBadReviewAutoBanIfReady(Order order) {

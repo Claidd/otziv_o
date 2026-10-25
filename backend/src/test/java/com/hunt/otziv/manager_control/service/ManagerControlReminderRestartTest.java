@@ -24,8 +24,9 @@ class ManagerControlReminderRestartTest {
     final OrderDeliveryControlContext orders = mock(OrderDeliveryControlContext.class);
     final ManagerDailyControlConcreteItemRepository cards = mock(ManagerDailyControlConcreteItemRepository.class);
     final ManagerControlRepairOutcome outcome = mock(ManagerControlRepairOutcome.class);
+    final com.hunt.otziv.client_messages.api.ReviewReminderClosure closure = mock(com.hunt.otziv.client_messages.api.ReviewReminderClosure.class);
     final ManagerControlReminderRestart repair = new ManagerControlReminderRestart(scheduled, history, queue, worker,
-            orders, new ManagerControlTransactionRunner(), cards, outcome);
+            orders, new ManagerControlTransactionRunner(), cards, outcome, closure);
     final LocalDateTime now = LocalDateTime.now();
     final OrderDeliveryControlContext.Snapshot source = new OrderDeliveryControlContext.Snapshot(77L, 2L, "На проверке", 2,
             now.minusDays(20), false, null);

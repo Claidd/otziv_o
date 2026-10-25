@@ -434,6 +434,46 @@ public class CommonInvoiceMembershipWorkflow implements com.hunt.otziv.common_bi
         return invoiceAfterOrderPrelude(invoiceId);
     }
 
+    /** Internal server policy. The caller archives the locked order in the same transaction.
+     * Membership stays in history; only current composition changes. Payment evidence aborts the operation. */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public Map<String, Object> archiveReviewMembershipAfterReminders(Long orderId) {
+        var original = invoiceOrderRepository.findByOrder_IdAndActiveMembershipTrue(orderId);
+        if (original.isEmpty()) return Map.of();
+        Long invoiceId = original.get().getInvoice().getId();
+        var invoice = lockedInvoiceAfterOrderPrelude(invoiceId).orElseThrow();
+        var item = invoiceOrderRepository.findByOrder_IdAndActiveMembershipTrue(orderId).orElseThrow();
+        if (!invoiceId.equals(item.getInvoice().getId()) || !"На проверке".equals(statusTitle(item.getOrder()))
+                || item.getOrder().isComplete() || item.getOrder().getPayDay() != null
+                || invoice.getPaidKopecks() != 0 || invoice.getSentAt() != null || invoice.getClientReportedAt() != null)
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Общий счёт уже изменён или содержит оплату; автоархив остановлен");
+        ensureNoOperationInProgress(invoice);
+        ensureDeletionDetachHasNoPaymentState(invoice, item);
+        var snapshot = Map.<String,Object>of("invoiceId",invoiceId,"membershipId",item.getId(),
+                "orderId",orderId,"amountKopecks",item.getAmountKopecks(),"invoiceAmountKopecks",invoice.getAmountKopecks(),
+                "invoiceStatus",invoice.getStatus().name(),"originalStatus",normalize(item.getOriginalOrderStatusTitle()));
+        item.setArchiveSourceOrderStatusTitle("На проверке");
+        item.setSilenceArchivedAt(LocalDateTime.now());
+        item.setActiveMembership(false);
+        invoiceOrderRepository.save(item);
+        entityManager.flush();
+        var remaining = invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId);
+        if (remaining.isEmpty()) {
+            invoice.setPreviousStatus(invoice.getStatus().name());
+            invoice.setStatus(CommonInvoiceStatus.ARCHIVED);
+            invoice.setClosedAt(LocalDateTime.now());
+            invoice.setClosedBy("system:seven_review_reminders");
+            invoice.setCloseReason("Заказы архивированы после семи подтверждённых напоминаний без согласования");
+            invoice.setNextReminderAt(null);
+            invoice.setLastError(null);
+            invoiceRepository.save(invoice);
+        } else {
+            recalculateInvoice(invoice, remaining);
+            publicationBlockerService.reconcileInvoice(invoiceId);
+        }
+        return snapshot;
+    }
+
     /**
      * Narrow compatibility path for deleting an untouched order created by the
      * next-order automation after cancellation of its source payment. This is

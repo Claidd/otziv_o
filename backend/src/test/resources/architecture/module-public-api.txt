@@ -27,6 +27,7 @@ com.hunt.otziv.manager.api.PaymentReviewOrderAccess
 com.hunt.otziv.t_telegrambot.api.SpecialistPaymentReviewNotice
 # A01 / ADR-008: scalar projections, source-authorized reminders and best-effort text notifications.
 com.hunt.otziv.u_users.api.WorkerRiskReviewerDirectory
+com.hunt.otziv.u_users.api.AutomationNoticeRecipients
 com.hunt.otziv.personal_reminders.api.SystemReminderCommands
 com.hunt.otziv.bad_reviews.api.PaidBadReviewReminders
 com.hunt.otziv.t_telegrambot.api.TelegramNotifications

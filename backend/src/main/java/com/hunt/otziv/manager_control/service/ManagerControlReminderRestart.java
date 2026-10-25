@@ -22,6 +22,7 @@ import org.springframework.web.server.ResponseStatusException;
 /** The repair button resumes the periodic business task, preserving every unknown original operation. */
 @Service
 @RequiredArgsConstructor
+@lombok.extern.slf4j.Slf4j
 public class ManagerControlReminderRestart {
     private final PeriodicReminderRestart scheduled;
     private final ReminderContactHistory history;
@@ -31,9 +32,38 @@ public class ManagerControlReminderRestart {
     private final ManagerControlTransactionRunner transactions;
     private final ManagerDailyControlConcreteItemRepository cards;
     private final ManagerControlRepairOutcome outcome;
+    private final com.hunt.otziv.client_messages.api.ReviewReminderClosure closure;
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public Optional<ManagerControlConcreteItemResponse> repair(long cardId, long stateId, Long managerId, Principal actor) {
+        var result = repairReminder(cardId,stateId,managerId,actor);
+        if (result.isEmpty()) return result;
+        com.hunt.otziv.client_messages.api.ReviewReminderClosure.Decision decision;
+        try { decision = closure.archiveAfterReminders(stateId); }
+        catch (RuntimeException unavailable) {
+            log.warn("Reminder restored but archive check failed: stateId={}",stateId,unavailable);
+            decision = new com.hunt.otziv.client_messages.api.ReviewReminderClosure.Decision(false,
+                    unavailable instanceof ResponseStatusException conflict && conflict.getReason() != null
+                        ? conflict.getReason()
+                        : "Очередь восстановлена, но автоархив пока не выполнен: проверка истории или готовности заказа недоступна. Повторная отправка старого сообщения не запущена.");
+        }
+        if (decision == null || decision.reason() == null || decision.reason().isBlank()) return result;
+        if (!decision.archived()) {
+            String reason = decision.reason();
+            return Optional.of(transactions.contactReservation(() -> {
+                var card = cards.findByIdForUpdate(cardId).orElseThrow();
+                return outcome.appendArchiveDecision(card,reason);
+            }));
+        }
+        return Optional.of(transactions.contactReservation(() -> {
+            var card = cards.findByIdForUpdate(cardId).orElseThrow();
+            return outcome.resolveRepairedConcreteItem(card,card.getControl(),
+                    "Заказ переведён в архив после семи подтверждённых напоминаний. Уведомления клиенту и ответственным сохранены в очереди; срок предложения нового заказа записан в истории.",
+                    actor,"Автоматический архив после проверки истории");
+        }));
+    }
+
+    private Optional<ManagerControlConcreteItemResponse> repairReminder(long cardId, long stateId, Long managerId, Principal actor) {
         var inspected = scheduled.checkStaleReminderRestart(stateId, managerId);
         if (inspected.isEmpty()) return alreadyScheduled(cardId, stateId, managerId, actor);
         var check = inspected.get();
@@ -107,11 +137,11 @@ public class ManagerControlReminderRestart {
     }
 
     private String note(LocalDateTime next) {
-        return "Очередь напоминаний восстановлена. Следующая проверка и допустимая отправка — "
+        return "Очередь напоминаний восстановлена. Следующая автоматическая проверка — "
                 + next.atZone(java.time.ZoneId.systemDefault()).withZoneSameInstant(java.time.ZoneId.of("Asia/Irkutsk"))
                     .format(DateTimeFormatter.ofPattern("dd.MM HH:mm"))
                 + " (Иркутск). История WhatsApp проверена; старая неподтверждённая операция сохранена без повтора. "
-                + "Завершение заказа и оплата не менялись.";
+                + "Дальнейшее действие определяется этапом заказа и числом подтверждённых напоминаний. Оплата не менялась.";
     }
 
     private ResponseStatusException conflict() {

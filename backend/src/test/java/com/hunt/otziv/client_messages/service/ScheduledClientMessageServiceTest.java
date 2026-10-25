@@ -1773,55 +1773,20 @@ class ScheduledClientMessageServiceTest {
     }
 
     @Test
-    void autoArchiveStaleReviewCheckIsPostponedWhileCommonInvoiceIsActive() throws Exception {
-        LocalDateTime changedAt = LocalDateTime.of(2026, 4, 20, 10, 0);
-        LocalDateTime now = LocalDateTime.of(2026, 5, 25, 12, 0);
-        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
-                .id(92L)
+    void legacyDayOnlyArchiveIsRetiredWithoutChangingOrderOrSending() throws Exception {
+        var state = ScheduledClientMessageState.builder().id(92L)
                 .scenario(ClientMessageScenario.REVIEW_CHECK_AUTO_ARCHIVE)
-                .targetType(ClientMessageTargetType.ORDER)
-                .targetKey("order:13:2026-04-20T10:00")
-                .companyId(23L)
-                .orderId(13L)
-                .status(ScheduledMessageStateStatus.ACTIVE)
-                .lockedUntil(now.plusMinutes(5))
-                .build();
-        Order order = new Order();
-        order.setId(13L);
-        order.setStatus(OrderStatus.builder().title("На проверке").build());
-        order.setStatusChangedAt(changedAt);
-
-        when(orderRepository.findByIdForMutation(13L)).thenReturn(Optional.of(order));
-        when(appSettingService.getString(
-                AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_STATUSES,
-                ScheduledClientMessageService.DEFAULT_REVIEW_CHECK_STATUSES
-        )).thenReturn(ScheduledClientMessageService.DEFAULT_REVIEW_CHECK_STATUSES);
-        when(commonBillingServiceProvider.getIfAvailable()).thenReturn(commonBillingService);
-        when(commonBillingService.isOrderInActiveCommonInvoice(13L)).thenReturn(true);
-        when(appSettingService.getString(
-                AppSettingService.CLIENT_MESSAGES_BUSINESS_WINDOWS,
-                ClientMessageSlotPlanner.DEFAULT_WINDOWS_SPEC
-        )).thenReturn(ClientMessageSlotPlanner.DEFAULT_WINDOWS_SPEC);
-        when(slotPlanner.nextAllowedAt(any(LocalDateTime.class), anyString()))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-
-        ReflectionTestUtils.invokeMethod(service, "autoArchiveStaleReviewCheck", state, now);
-
-        assertEquals(ScheduledMessageStateStatus.ACTIVE, state.getStatus());
-        assertNotNull(state.getNextAttemptAt());
-        assertNull(state.getLastErrorCode());
-        assertNull(state.getLockedUntil());
-        ArgumentCaptor<ScheduledClientMessageAttempt> attemptCaptor =
-                ArgumentCaptor.forClass(ScheduledClientMessageAttempt.class);
-        verify(attemptRepository).save(attemptCaptor.capture());
-        assertEquals(ScheduledMessageAttemptStatus.SKIPPED, attemptCaptor.getValue().getStatus());
-        assertEquals("common_billing_linked", attemptCaptor.getValue().getErrorCode());
+                .status(ScheduledMessageStateStatus.ACTIVE).build();
+        ReflectionTestUtils.invokeMethod(service, "autoArchiveStaleReviewCheck", state, LocalDateTime.now());
+        assertEquals(ScheduledMessageStateStatus.DONE, state.getStatus());
+        verify(attemptRepository).save(org.mockito.ArgumentMatchers.argThat(attempt -> "archive_policy_replaced".equals(attempt.getErrorCode())));
+        assertNull(state.getNextAttemptAt());
         verify(orderStatusTransitionService, never()).changeStatusForOrder(any(), anyString());
-        verify(stateRepository).save(state);
+        verifyNoInteractions(messageSender);
     }
 
     @Test
-    void seventhDeliveredReviewReminderStopsFurtherMessagesForCommonInvoiceOrder() {
+    void seventhDeliveredReviewReminderStopsFurtherMessagesForOrdinaryOrder() {
         LocalDateTime changedAt = LocalDateTime.of(2026, 5, 20, 10, 0);
         LocalDateTime now = LocalDateTime.of(2026, 5, 25, 12, 0);
         ScheduledClientMessageState state = ScheduledClientMessageState.builder()
@@ -1838,8 +1803,6 @@ class ScheduledClientMessageServiceTest {
         order.setStatus(OrderStatus.builder().title("На проверке").build());
         order.setStatusChangedAt(changedAt);
         when(orderRepository.findByIdForMutation(13L)).thenReturn(Optional.of(order));
-        when(commonBillingServiceProvider.getIfAvailable()).thenReturn(commonBillingService);
-        when(commonBillingService.isOrderInActiveCommonInvoice(13L)).thenReturn(true);
         when(appSettingService.getString(
                 AppSettingService.CLIENT_MESSAGES_BUSINESS_WINDOWS,
                 ClientMessageSlotPlanner.DEFAULT_WINDOWS_SPEC
@@ -1855,47 +1818,6 @@ class ScheduledClientMessageServiceTest {
         assertNotNull(state.getNextAttemptAt());
         verify(stateRepository).save(state);
         verifyNoInteractions(messageSender);
-    }
-
-    @Test
-    void autoArchiveStaleReviewCheckChangesOrderStatusAndCompletesState() throws Exception {
-        LocalDateTime changedAt = LocalDateTime.of(2026, 4, 20, 10, 0);
-        LocalDateTime now = LocalDateTime.of(2026, 5, 25, 12, 0);
-        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
-                .id(93L)
-                .scenario(ClientMessageScenario.REVIEW_CHECK_AUTO_ARCHIVE)
-                .targetType(ClientMessageTargetType.ORDER)
-                .targetKey("order:13:2026-04-20T10:00")
-                .companyId(23L)
-                .orderId(13L)
-                .status(ScheduledMessageStateStatus.ACTIVE)
-                .build();
-        Order order = new Order();
-        order.setId(13L);
-        order.setStatus(OrderStatus.builder().title("На проверке").build());
-        order.setStatusChangedAt(changedAt);
-
-        when(orderRepository.findByIdForMutation(13L)).thenReturn(java.util.Optional.of(order));
-        when(appSettingService.getString(
-                AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_STATUSES,
-                ScheduledClientMessageService.DEFAULT_REVIEW_CHECK_STATUSES
-        )).thenReturn(ScheduledClientMessageService.DEFAULT_REVIEW_CHECK_STATUSES);
-        when(appSettingService.getInt(
-                AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_AUTO_ARCHIVE_DAYS,
-                ScheduledClientMessageService.DEFAULT_REVIEW_CHECK_AUTO_ARCHIVE_DAYS
-        )).thenReturn(30);
-        when(orderStatusTransitionService.changeStatusForOrder(13L, "Архив")).thenReturn(true);
-
-        ReflectionTestUtils.invokeMethod(service, "autoArchiveStaleReviewCheck", state, now);
-
-        ArgumentCaptor<ScheduledClientMessageAttempt> attemptCaptor = ArgumentCaptor.forClass(ScheduledClientMessageAttempt.class);
-        verify(attemptRepository).save(attemptCaptor.capture());
-        assertEquals(ScheduledMessageAttemptStatus.SENT, attemptCaptor.getValue().getStatus());
-        assertEquals(ClientMessageScenario.REVIEW_CHECK_AUTO_ARCHIVE, attemptCaptor.getValue().getScenario());
-        assertEquals("system", attemptCaptor.getValue().getChannel());
-        assertEquals(ScheduledMessageStateStatus.DONE, state.getStatus());
-        assertNull(state.getNextAttemptAt());
-        verify(stateRepository, org.mockito.Mockito.atLeastOnce()).save(state);
     }
 
     @Test

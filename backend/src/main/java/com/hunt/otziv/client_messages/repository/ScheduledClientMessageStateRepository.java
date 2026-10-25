@@ -19,6 +19,15 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface ScheduledClientMessageStateRepository extends CrudRepository<ScheduledClientMessageState, Long> {
 
+    @Query("""
+        SELECT s.id FROM ScheduledClientMessageState s
+        WHERE s.scenario = com.hunt.otziv.client_messages.model.ClientMessageScenario.REVIEW_CHECK_REMINDER
+          AND s.status = com.hunt.otziv.client_messages.model.ScheduledMessageStateStatus.ACTIVE
+          AND s.sentCount >= 7 AND s.deliveryStatus IS NULL AND s.id > :afterId
+        ORDER BY s.id
+    """)
+    List<Long> findSilenceArchiveCandidates(@Param("afterId") long afterId, Pageable pageable);
+
     interface ReviewApprovalCandidate {
         Long getStateId();
         Long getInvoiceId();

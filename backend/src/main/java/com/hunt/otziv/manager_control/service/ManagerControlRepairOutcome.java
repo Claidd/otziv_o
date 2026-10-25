@@ -60,6 +60,11 @@ public class ManagerControlRepairOutcome {
                 waiting ? next.plusHours(2) : null);
     }
 
+    ManagerControlConcreteItemResponse appendArchiveDecision(ManagerDailyControlConcreteItem card, String reason) {
+        card.setComment(limit((card.getComment() == null ? "" : card.getComment() + " ") + reason,1000));
+        return concretePresenter.concreteItemResponse(dailyControlConcreteItemRepository.save(card));
+    }
+
     private ManagerControlConcreteItemResponse finish(ManagerDailyControlConcreteItem concreteItem, ManagerDailyControl control,
             String comment, Principal principal, String eventComment, boolean awaitingClient) {
         return finish(concreteItem, control, comment, principal, eventComment, awaitingClient,
