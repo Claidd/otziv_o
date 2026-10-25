@@ -486,6 +486,40 @@ class ScheduledDeliveryProtocolTest {
         assertThat(state.getStatus()).isEqualTo(ScheduledMessageStateStatus.DONE);
     }
 
+    @Test void lateInvoiceReceiptCannotChangePaidOrderOrSendAnotherInvoice() {
+        state.setOrderId(5L);
+        state.setScenario(ClientMessageScenario.PAYMENT_INVOICE_RETRY);
+        var order = Order.builder().id(5L).clientMessageGeneration(10)
+                .status(OrderStatus.builder().title("Оплачено").build()).build();
+        when(dependency(service, "orderRepository", OrderRepository.class).findByIdForMutation(5L)).thenReturn(Optional.of(order));
+        var action = new OrderStatusNotificationService.PreparedAction(5L, "Опубликовано", "Выставлен счет", 9,
+                "action:Опубликовано:Выставлен счет", "retired-invoice-occurrence", null, "client", "group", "1400 руб.",
+                null, null, null, List.of());
+        var prepared = ReflectionTestUtils.<ScheduledClientMessageService.PreparedScheduledDelivery>invokeMethod(service,
+                "persistScheduledDelivery", state, company, manager, action.message(), null, null,
+                null, null, order, action, NOW);
+        state.setStatus(ScheduledMessageStateStatus.DONE);
+        state.setDeliveryStatus("UNKNOWN");
+        state.setLastErrorCode(null);
+        String envelope = state.getDeliveryEnvelope();
+        when(states.findRecoverablePreparedIds(any(), any())).thenReturn(List.of(71L));
+        when(sender.recoverRecordedOutcomeFromChat(prepared.operationId(), NOW))
+                .thenReturn(ClientMessageSendResult.sent("WhatsApp", "confirmed-invoice-id"));
+
+        ReflectionTestUtils.invokeMethod(service, "recoverOrdinaryDeliveries", NOW.plusMinutes(6));
+        ReflectionTestUtils.invokeMethod(service, "recoverOrdinaryDeliveries", NOW.plusMinutes(12));
+
+        assertThat(state.getStatus()).isEqualTo(ScheduledMessageStateStatus.DONE);
+        assertThat(state.getDeliveryStatus()).isEqualTo("SENT");
+        assertThat(state.getDeliveryEnvelope()).isEqualTo(envelope);
+        assertThat(state.getSentCount()).isEqualTo(1);
+        assertThat(state.getNextAttemptAt()).isNull();
+        assertThat(order.getStatus().getTitle()).isEqualTo("Оплачено");
+        verify(sender).recoverRecordedOutcomeFromChat(prepared.operationId(), NOW);
+        verifyNoMoreInteractions(sender);
+        verifyNoInteractions(dependency(service, "orderStatusNotificationService", OrderStatusNotificationService.class));
+    }
+
     @Test void actionRetriesUseTheirFrozenOccurrenceAndFinalizeOrderActionOnlyAfterSuccess() {
         state.setOrderId(5L);
         state.setScenario(ClientMessageScenario.PAYMENT_INVOICE_RETRY);

@@ -54,7 +54,7 @@ public class ManagerProblemDiagnosisValidator {
             // Uncertain delivery must never suggest retrying a send or creating another payment.
             List<Fact> uncertain = ManagerProblemBusinessDiagnosis.uncertainDelivery(facts);
             if (!uncertain.isEmpty()) {
-                Diagnosis safe = ManagerProblemBusinessDiagnosis.uncertain(uncertain.getFirst());
+                Diagnosis safe = ManagerProblemBusinessDiagnosis.uncertain(facts, uncertain.getFirst());
                 return new Diagnosis(safe.summary(), List.copyOf(confirmed), List.copyOf(hypotheses), List.copyOf(missing), safe.actions(), safe.verification());
             }
             return new Diagnosis(summary, List.copyOf(confirmed), List.copyOf(hypotheses), List.copyOf(missing), List.copyOf(actions), strings(root.path("verification")));

@@ -127,4 +127,100 @@ class ReminderRestartTest {
         verify(stateRepository, never()).save(any());
         verifyNoInteractions(jdbcTemplate);
     }
+
+    @Test void cancelledManualReservationResumesExistingReminderWithoutLosingThreeConfirmedContacts() {
+        reservedReminder();
+        var lastSuccess = state.getLastSuccessAt();
+        var checked = service.checkManualReservationReminder(30, 2L).orElseThrow();
+        LocalDateTime recentContact = LocalDateTime.now().minusHours(2);
+
+        LocalDateTime next = service.resumeAfterCancelledManualContact(checked, recentContact);
+
+        assertThat(next).isAfterOrEqualTo(recentContact.plusDays(2).withNano(0));
+        assertThat(slotPlanner.isAllowedNow(messageTime.toIrkutskTime(next))).isTrue();
+        assertThat(state.getSentCount()).isEqualTo(3);
+        assertThat(state.getLastSuccessAt()).isEqualTo(lastSuccess);
+        assertThat(state.getDispatchGeneration()).isZero();
+        assertThat(state.getDeliveryToken()).isNull();
+        assertThat(state.getDeliveryEnvelope()).isNull();
+        assertThat(state.getLastErrorCode()).isNull();
+        assertThat(state.getNextAttemptAt()).isEqualTo(next);
+        assertThat(order.getPayDay()).isNull();
+        assertThat(order.isComplete()).isFalse();
+        assertThat(service.checkManualReservationReminder(30, 2L)).isEmpty();
+        assertThatThrownBy(() -> service.resumeAfterCancelledManualContact(checked, recentContact));
+        verifyNoInteractions(messageSender, jdbcTemplate);
+    }
+
+    @Test void cancelledReservationDeadlineUsesLastConfirmedReminderWhenItIsNewerThanChat() {
+        reservedReminder();
+        state.setLastSuccessAt(LocalDateTime.now().minusHours(1));
+        var checked = service.checkManualReservationReminder(30, 2L).orElseThrow();
+        LocalDateTime next = service.resumeAfterCancelledManualContact(checked, LocalDateTime.now().minusDays(2));
+        assertThat(next).isAfterOrEqualTo(state.getLastSuccessAt().plusDays(2).withNano(0));
+        assertThat(state.getSentCount()).isEqualTo(3);
+        verifyNoInteractions(messageSender);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"invoice", "prepared", "unknown", "token", "envelope", "message", "channel",
+            "task", "prepared-at", "lease", "paid", "complete", "cycle", "other-error", "manager"})
+    void reservationInspectionRejectsEveryExistingDeliveryOrChangedSource(String change) {
+        reservedReminder();
+        switch (change) {
+            case "invoice" -> state.setScenario(ClientMessageScenario.PAYMENT_INVOICE_RETRY);
+            case "prepared" -> state.setDeliveryStatus("PREPARED");
+            case "unknown" -> state.setDeliveryStatus("UNKNOWN");
+            case "token" -> state.setDeliveryToken("token");
+            case "envelope" -> state.setDeliveryEnvelope("envelope");
+            case "message" -> state.setDeliveryMessage("message");
+            case "channel" -> state.setDeliveryChannel("WhatsApp");
+            case "task" -> state.setDeliveryTaskId(5L);
+            case "prepared-at" -> state.setDeliveryPreparedAt(LocalDateTime.now());
+            case "lease" -> state.setLockedUntil(LocalDateTime.now().plusMinutes(5));
+            case "paid" -> order.setPayDay(java.time.LocalDate.now());
+            case "complete" -> order.setComplete(true);
+            case "cycle" -> order.setStatusChangedAt(LocalDateTime.now());
+            case "other-error" -> state.setLastErrorCode("state_transaction_outcome_uncertain");
+            case "manager" -> { }
+        }
+        assertThat(service.checkManualReservationReminder(30, "manager".equals(change) ? 3L : 2L)).isEmpty();
+        verify(stateRepository, never()).save(any());
+        verifyNoInteractions(messageSender, jdbcTemplate);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"paid", "cycle", "envelope", "lease", "count", "success", "generation", "channel", "stale-check"})
+    void reservationResumeRevalidatesEverySourceAfterHistoryLookup(String change) {
+        reservedReminder();
+        var inspected = service.checkManualReservationReminder(30, 2L).orElseThrow();
+        switch (change) {
+            case "paid" -> order.setPayDay(java.time.LocalDate.now());
+            case "cycle" -> order.setStatusChangedAt(LocalDateTime.now());
+            case "envelope" -> state.setDeliveryEnvelope("new preparation");
+            case "lease" -> state.setLockedUntil(LocalDateTime.now().plusMinutes(5));
+            case "count" -> state.setSentCount(4);
+            case "success" -> state.setLastSuccessAt(LocalDateTime.now());
+            case "generation" -> state.setDispatchGeneration(1);
+            case "channel" -> order.getCompany().setGroupId("different-chat");
+            case "stale-check" -> inspected = new com.hunt.otziv.client_messages.api.PeriodicReminderRestart.ReservedReminderCheck(
+                    inspected.stateId(), inspected.targetKey(), inspected.scenario(), source, inspected.clientId(), inspected.groupId(),
+                    inspected.dispatchGeneration(), inspected.sentCount(), inspected.lastSuccessAt(), LocalDateTime.now().minusMinutes(10));
+        }
+        var checked = inspected;
+        assertThatThrownBy(() -> service.resumeAfterCancelledManualContact(checked, LocalDateTime.now()));
+        assertThat(state.getLastErrorCode()).isEqualTo("manual_contact_reserved");
+        verify(stateRepository, never()).save(any());
+        verifyNoInteractions(messageSender, jdbcTemplate);
+    }
+
+    private void reservedReminder() {
+        state.setDeliveryStatus(null);
+        state.setDeliveryToken(null);
+        state.setDeliveryEnvelope(null);
+        state.setDeliveryPreparedAt(null);
+        state.setLastErrorCode("manual_contact_reserved");
+        state.setSentCount(3);
+        when(orderRepository.findByIdForOrderDto(77L)).thenReturn(Optional.of(order));
+    }
 }

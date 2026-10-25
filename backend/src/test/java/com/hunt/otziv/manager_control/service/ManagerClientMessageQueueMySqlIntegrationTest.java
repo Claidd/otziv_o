@@ -1,6 +1,7 @@
 package com.hunt.otziv.manager_control.service;
 
 import static org.assertj.core.api.Assertions.*;
+import static org.mockito.Mockito.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hunt.otziv.client_messages.api.ClientMessageDelivery;
 import com.hunt.otziv.security.credentials.CredentialCipher;
@@ -10,6 +11,14 @@ import java.nio.file.Path;
 import java.util.Base64;
 import java.util.UUID;
 import java.util.concurrent.*;
+import java.time.LocalDateTime;
+import java.util.Optional;
+import com.hunt.otziv.client_messages.api.PeriodicReminderRestart;
+import com.hunt.otziv.client_messages.model.*;
+import com.hunt.otziv.client_messages.repository.ScheduledClientMessageStateRepository;
+import com.hunt.otziv.client_messages.service.ScheduledClientMessageService;
+import com.hunt.otziv.p_products.api.OrderDeliveryControlContext;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.junit.jupiter.api.*;
 import org.springframework.aop.framework.ProxyFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -138,6 +147,65 @@ class ManagerClientMessageQueueMySqlIntegrationTest {
         var claim = queue.claim().orElseThrow();
         tx.executeWithoutResult(status -> queue.finish(claim, "SENT", null, 0));
         assertThat(queue.deliveryQueueHealth()).isEmpty();
+    }
+
+    @Test void cancelledReservationAuditAndReminderResumeRollbackTogetherAndPreserveRepeatDeadline() throws Exception {
+        jdbc.execute("DROP TABLE IF EXISTS client_reminder_restart_audit");
+        String migration = Files.readString(Path.of("src/main/resources/db/migration/V1_10_341__authorized_reminder_restart.sql"));
+        jdbc.execute(migration.substring(migration.indexOf("CREATE TABLE")));
+        jdbc.execute("DROP TABLE IF EXISTS reminder_resume_fixture");
+        jdbc.execute("CREATE TABLE reminder_resume_fixture (id BIGINT PRIMARY KEY,next_at DATETIME(6),error_code VARCHAR(100),sent_count INT) ENGINE=InnoDB");
+        LocalDateTime before = LocalDateTime.now().plusMinutes(5).withNano(0);
+        LocalDateTime next = LocalDateTime.now().plusDays(2).withNano(0);
+        jdbc.update("INSERT INTO reminder_resume_fixture VALUES (30,?,'manual_contact_reserved',3)", before);
+        var source = new OrderDeliveryControlContext.Snapshot(77L, 2L, "На проверке", 1,
+                LocalDateTime.now().minusDays(20).withNano(0), false, null);
+        String target = "order:77:" + source.cycleAt();
+        var check = new PeriodicReminderRestart.ReservedReminderCheck(30L, target, "REVIEW_CHECK_REMINDER", source,
+                "fixture-client", "fixture-chat", 0, 3, LocalDateTime.now().minusDays(3), LocalDateTime.now());
+        tx.executeWithoutResult(status -> queue.enqueue(draft("original")));
+        var claim = queue.claim().orElseThrow();
+        tx.executeWithoutResult(status -> queue.finish(claim, "FAILED", "context_changed", 0));
+        jdbc.update("UPDATE manager_client_message_queue SET created_at=DATE_SUB(CURRENT_TIMESTAMP(6),INTERVAL 3 DAY)");
+        var row = new ManagerClientMessageQueue.RecordedControl(queue.status(10, claim.operationId()), 10,
+                LocalDateTime.now().minusDays(3), LocalDateTime.now(), null);
+
+        assertThatThrownBy(() -> tx.executeWithoutResult(status -> {
+            jdbc.update("UPDATE reminder_resume_fixture SET next_at=?,error_code=NULL WHERE id=30", next);
+            queue.supersedeCancelledReservation(row, "owner", next, check);
+            throw new IllegalStateException("card update failed");
+        })).isInstanceOf(IllegalStateException.class);
+        assertThat(queue.status(10, claim.operationId()).status()).isEqualTo("FAILED");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM client_reminder_restart_audit", Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT next_at FROM reminder_resume_fixture", LocalDateTime.class)).isEqualTo(before);
+
+        tx.executeWithoutResult(status -> {
+            jdbc.update("UPDATE reminder_resume_fixture SET next_at=?,error_code=NULL WHERE id=30", next);
+            queue.supersedeCancelledReservation(row, "owner", next, check);
+        });
+        assertThat(queue.status(10, claim.operationId()).status()).isEqualTo("SUPERSEDED");
+        assertThat(queue.snapshot(claim.operationId())).isEqualTo(draft("original"));
+        assertThat(queue.claim()).isEmpty();
+        assertThat(jdbc.queryForObject("SELECT old_operation_id FROM client_reminder_restart_audit", String.class)).isEqualTo(claim.operationId());
+        assertThat(jdbc.queryForObject("SELECT sent_count FROM reminder_resume_fixture", Integer.class)).isEqualTo(3);
+
+        var states = mock(ScheduledClientMessageStateRepository.class);
+        when(states.findById(30L)).thenAnswer(call -> Optional.of(jdbc.queryForObject("SELECT * FROM reminder_resume_fixture", (rs,n) ->
+                ScheduledClientMessageState.builder().id(30L).orderId(77L).targetKey(target)
+                        .scenario(ClientMessageScenario.REVIEW_CHECK_REMINDER).status(ScheduledMessageStateStatus.ACTIVE)
+                        .sentCount(rs.getInt("sent_count")).nextAttemptAt(rs.getTimestamp("next_at").toLocalDateTime())
+                        .lastErrorCode(rs.getString("error_code")).build())));
+        var orders = mock(OrderDeliveryControlContext.class);
+        when(orders.read(77L)).thenReturn(Optional.of(source));
+        var scheduled = mock(ScheduledClientMessageService.class, CALLS_REAL_METHODS);
+        ReflectionTestUtils.setField(scheduled, "stateRepository", states);
+        ReflectionTestUtils.setField(scheduled, "orderDeliveryContext", orders);
+        ReflectionTestUtils.setField(scheduled, "jdbcTemplate", jdbc);
+        assertThat(scheduled.pendingReminderRestart(30, 2L)).contains(new PeriodicReminderRestart.PendingReminderRestart(source, next));
+        assertThat(scheduled.pendingReminderRestart(30, 2L)).contains(new PeriodicReminderRestart.PendingReminderRestart(source, next));
+        jdbc.update("UPDATE reminder_resume_fixture SET next_at=?", next.plusHours(1));
+        assertThat(scheduled.pendingReminderRestart(30, 2L)).isEmpty();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM client_reminder_restart_audit", Integer.class)).isEqualTo(1);
     }
 
     @Test void explicitReceiptClaimNeverDispatchesOrSpendsAttemptsAndIsExclusive() {

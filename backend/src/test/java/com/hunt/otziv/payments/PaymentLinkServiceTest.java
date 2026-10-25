@@ -554,6 +554,51 @@ class PaymentLinkServiceTest {
         assertEquals("Получатель и специалист: Петров П.П.", context.currentRecipient());
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void paymentRouteContextShowsPendingInvoiceBlockBeforeReplacingOrConfiguringRoute(boolean existingLink) {
+        PaymentLinkService service = service(properties());
+        Order order = order(24_817L, "ООО Сохраненный счет", BigDecimal.valueOf(2_000));
+        PaymentLink current = payableLink(order, "frozen-current", 200_000L);
+        current.setId(7_267L);
+        current.setPaymentMethod(PaymentMethod.MANUAL_MOBILE_BANK);
+        current.setStatus(PaymentLinkStatus.WAITING_MANUAL_PAYMENT);
+        when(orderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByOrderIdInForRead(java.util.Set.of(order.getId())))
+                .thenReturn(existingLink ? List.of(current) : List.of());
+        when(paymentInvoiceRetryScheduler.paymentRouteReplacementBlockReason(order.getId()))
+                .thenReturn(Optional.of("Сохранено сообщение с прежними реквизитами"));
+
+        PaymentRouteChangeContextResponse context =
+                service.paymentRouteChangeContextAuthorized(order.getId(), authentication);
+
+        assertFalse(context.canChange());
+        assertEquals("Сохранено сообщение с прежними реквизитами", context.blockReason());
+    }
+
+    @Test
+    void paymentRouteChangeLocksMessageFenceBeforeReleasingOrCreatingAnyRoute() {
+        PaymentLinkService service = service(properties());
+        Order order = order(24_818L, "ООО Нельзя отправить прежние реквизиты", BigDecimal.valueOf(2_000));
+        when(orderRepository.findByIdForCounterUpdate(order.getId())).thenReturn(Optional.of(order));
+        doThrow(new ResponseStatusException(HttpStatus.CONFLICT, "Сохранено сообщение с прежними реквизитами"))
+                .when(paymentInvoiceRetryScheduler).assertPaymentRouteReplaceable(order.getId());
+
+        ResponseStatusException conflict = assertThrows(ResponseStatusException.class, () ->
+                service.replacePaymentRouteAuthorized(order.getId(), 7_268L,
+                        PaymentRouteChangeTarget.EMPLOYEE_REQUISITES, true, null, authentication));
+
+        assertEquals(HttpStatus.CONFLICT, conflict.getStatusCode());
+        InOrder lockOrder = inOrder(orderRepository, paymentInvoiceRetryScheduler);
+        lockOrder.verify(orderRepository).findByIdForCounterUpdate(order.getId());
+        lockOrder.verify(paymentInvoiceRetryScheduler).assertPaymentRouteReplaceable(order.getId());
+        verify(paymentLinkRepository, never()).findByOrderIdForUpdate(anyLong());
+        verify(paymentLinkRepository, never()).save(any());
+        verify(paymentLinkRepository, never()).saveAndFlush(any());
+        verify(orderRepository, never()).save(any());
+        verifyNoInteractions(taskReceiptIntegrationService, contractorPaymentLiveRoutingService);
+    }
+
     @Test
     void paymentRouteContextFailsClosedForInactiveAssignedManager() {
         PaymentLinkService service = service(properties());
@@ -5864,6 +5909,132 @@ class PaymentLinkServiceTest {
     }
 
     @ParameterizedTest
+    @CsvSource({
+            "EXPIRED, INITIATED",
+            "EXPIRED, CONFIRMED",
+            "WAITING_MANUAL_PAYMENT, INITIATED",
+            "WAITING_MANUAL_PAYMENT, CONFIRMED",
+            "MANUAL_REPORTED, INITIATED",
+            "MANUAL_REPORTED, CONFIRMED"
+    })
+    void manualCardLinkConfirmationRejectsCompetingBankRouteBeforeAccounting(
+            PaymentLinkStatus manualStatus, PaymentLinkStatus bankStatus) throws Exception {
+        PaymentLinkService service = service(properties());
+        Order order = order(25074L, "Прямая сверка старых реквизитов", BigDecimal.valueOf(1000));
+        PaymentLink manual = payableLink(order, "direct-manual-conflict", 100_000L);
+        manual.setId(5275L);
+        manual.setPaymentMethod(PaymentMethod.MANUAL_MOBILE_BANK);
+        manual.setStatus(manualStatus);
+        PaymentLink bank = initiatedBankLink(5276L, order, 100_000L);
+        bank.setStatus(bankStatus);
+        when(orderRepository.findByIdForCounterUpdate(order.getId())).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByOrderIdForUpdate(order.getId())).thenReturn(List.of(manual, bank));
+        when(paymentLinkRepository.findByIdWithOrder(manual.getId())).thenReturn(Optional.of(manual));
+        when(paymentLinkRepository.findByIdForUpdate(manual.getId())).thenReturn(Optional.of(manual));
+        when(actualPaymentAttributionService.actualRecipientAccountingEnabled()).thenReturn(true);
+
+        ResponseStatusException conflict = assertThrows(ResponseStatusException.class, () ->
+                service.confirmPaidByManualCardTransfer(manual.getId(), true, true, 100_000L,
+                        "Выписка проверена", null, ContractorRecipientType.OWNER, null, "OWNER",
+                        "owner", authentication));
+
+        assertEquals(HttpStatus.CONFLICT, conflict.getStatusCode());
+        assertTrue(conflict.getReason().contains("другой активный или подтвержденный способ оплаты"));
+        assertEquals(manualStatus, manual.getStatus());
+        assertEquals(bankStatus, bank.getStatus());
+        assertNull(manual.getConfirmedAmountKopecks());
+        assertNull(manual.getManualActualRecipientFrozenAt());
+        verify(orderTransactionService, never()).handlePaymentStatus(any(Order.class));
+        verify(actualPaymentAttributionService, never()).freezePaymentLinkRecipientIntent(
+                any(), any(), any(), any(), any(), anyString(), any(), anyString());
+        verify(actualPaymentAttributionService, never()).recordPaymentLinkFinalAttribution(any(), any(), any());
+        verifyNoInteractions(tbankClient, tochkaClient, taskReceiptIntegrationService);
+    }
+
+    @Test
+    void manualCardLinkConfirmationRechecksRouteCreatedAfterPreflight() throws Exception {
+        PaymentLinkService service = service(properties());
+        Order order = order(25075L, "Новый маршрут до зачисления", BigDecimal.valueOf(1000));
+        PaymentLink manual = payableLink(order, "direct-manual-late-conflict", 100_000L);
+        manual.setId(5277L);
+        manual.setPaymentMethod(PaymentMethod.MANUAL_MOBILE_BANK);
+        manual.setStatus(PaymentLinkStatus.EXPIRED);
+        PaymentLink bank = initiatedBankLink(5278L, order, 100_000L);
+        when(orderRepository.findByIdForCounterUpdate(order.getId())).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByOrderIdForUpdate(order.getId()))
+                .thenReturn(List.of(manual), List.of(manual, bank));
+        when(paymentLinkRepository.findByIdWithOrder(manual.getId())).thenReturn(Optional.of(manual));
+        when(paymentLinkRepository.findByIdForUpdate(manual.getId())).thenReturn(Optional.of(manual));
+
+        ResponseStatusException conflict = assertThrows(ResponseStatusException.class, () ->
+                service.confirmPaidByManualCardTransfer(manual.getId(), true, true, 100_000L,
+                        "Выписка проверена", null, "owner", authentication));
+
+        assertEquals(HttpStatus.CONFLICT, conflict.getStatusCode());
+        assertTrue(conflict.getReason().contains("другой активный или подтвержденный способ оплаты"));
+        verify(paymentLinkRepository, times(2)).findByOrderIdForUpdate(order.getId());
+        assertEquals(PaymentLinkStatus.EXPIRED, manual.getStatus());
+        assertNull(manual.getPaidAt());
+        verify(orderTransactionService, never()).handlePaymentStatus(any(Order.class));
+        verify(actualPaymentAttributionService, never()).recordPaymentLinkFinalAttribution(any(), any(), any());
+        verifyNoInteractions(tbankClient, tochkaClient, taskReceiptIntegrationService);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = PaymentLinkStatus.class, names = {"EXPIRED", "WAITING_MANUAL_PAYMENT", "MANUAL_REPORTED"})
+    void manualCardLinkConfirmationSettlesOnceAndReplaysOriginalReceipt(PaymentLinkStatus initialStatus) throws Exception {
+        PaymentLinkService service = service(properties());
+        Order order = order(25076L, "Ручная оплата и повтор подтверждения", BigDecimal.valueOf(1000));
+        PaymentLink manual = payableLink(order, "direct-manual-replay", 100_000L);
+        manual.setId(5279L);
+        manual.setPaymentMethod(PaymentMethod.MANUAL_MOBILE_BANK);
+        manual.setStatus(initialStatus);
+        when(orderRepository.findByIdForCounterUpdate(order.getId())).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByOrderIdForUpdate(order.getId())).thenReturn(List.of(manual));
+        when(paymentLinkRepository.findByIdWithOrder(manual.getId())).thenReturn(Optional.of(manual));
+        when(paymentLinkRepository.findByIdForUpdate(manual.getId())).thenReturn(Optional.of(manual));
+        when(actualPaymentAttributionService.actualRecipientAccountingEnabled()).thenReturn(true);
+        doAnswer(invocation -> {
+            manual.setManualActualRecipientFrozenAt(LocalDateTime.now());
+            manual.setManualActualRecipientType(ContractorRecipientType.OWNER);
+            return null;
+        }).when(actualPaymentAttributionService).freezePaymentLinkRecipientIntent(
+                order, manual, "OWNER", ContractorRecipientType.OWNER, null, "Выписка проверена", "", "owner");
+        when(orderTransactionService.handlePaymentStatus(order)).thenReturn(true);
+        when(orderPaymentIntegrityService.hasSettledPaymentEvidence(order)).thenReturn(false, true);
+
+        service.confirmPaidByManualCardTransfer(manual.getId(), true, true, 100_000L,
+                "Выписка проверена", null, ContractorRecipientType.OWNER, null, "OWNER", "owner", authentication);
+
+        assertEquals(PaymentLinkStatus.CONFIRMED, manual.getStatus());
+        assertEquals(100_000L, manual.getConfirmedAmountKopecks());
+        assertNotNull(manual.getPaidAt());
+        InOrder accounting = inOrder(orderRepository, paymentLinkRepository, actualPaymentAttributionService,
+                orderTransactionService);
+        accounting.verify(orderRepository, atLeastOnce()).findByIdForCounterUpdate(order.getId());
+        accounting.verify(paymentLinkRepository, atLeastOnce()).findByOrderIdForUpdate(order.getId());
+        accounting.verify(actualPaymentAttributionService).freezePaymentLinkRecipientIntent(
+                order, manual, "OWNER", ContractorRecipientType.OWNER, null, "Выписка проверена", "", "owner");
+        accounting.verify(orderTransactionService).handlePaymentStatus(order);
+
+        // An already credited receipt remains an idempotent replay even if the
+        // current route set or the order's paid marker has changed since then.
+        PaymentLink laterBank = initiatedBankLink(5280L, order, 100_000L);
+        when(paymentLinkRepository.findByOrderIdForUpdate(order.getId())).thenReturn(List.of(manual, laterBank));
+        service.confirmPaidByManualCardTransfer(manual.getId(), true, true, 100_000L,
+                "Выписка проверена", null, ContractorRecipientType.OWNER, null, "OWNER", "owner", authentication);
+
+        verify(actualPaymentAttributionService).requireCompletedPaymentReplay(
+                manual, 100_000L, "OWNER", ContractorRecipientType.OWNER, null, "Выписка проверена", "");
+        verify(orderPaymentIntegrityService, times(1)).hasSettledPaymentEvidence(order);
+        verify(orderTransactionService, times(1)).handlePaymentStatus(order);
+        verify(actualPaymentAttributionService, times(1)).recordPaymentLinkFinalAttribution(order, manual, manual);
+        verify(actualPaymentAttributionService, times(1)).freezePaymentLinkRecipientIntent(
+                order, manual, "OWNER", ContractorRecipientType.OWNER, null, "Выписка проверена", "", "owner");
+        verifyNoInteractions(tbankClient, tochkaClient, taskReceiptIntegrationService);
+    }
+
+    @ParameterizedTest
     @ValueSource(booleans = {true, false})
     void managerOwnerSelectionUsesImmediateReviewWithCanonicalRecipient(boolean explicitType) throws Exception {
         PaymentLinkService service = service(properties());
@@ -10126,7 +10297,8 @@ class PaymentLinkServiceTest {
         var paymentRouteReplacement = new com.hunt.otziv.payments.service.PaymentRouteReplacementWorkflow(
                 amounts, lifecycle, preparation, presenter, routes, observations, paymentLinkRepository,
                 orderRepository, paymentProfileService, taskReceiptIntegrationService, orderPaymentIntegrityService,
-                managerAccessService, contractorPaymentLiveRoutingService, actualPaymentAttributionService);
+                managerAccessService, contractorPaymentLiveRoutingService, actualPaymentAttributionService,
+                paymentInvoiceRetryScheduler);
         var paymentAdminBoard = new com.hunt.otziv.payments.service.PaymentLinkAdminBoardWorkflow(
                 preparation, presenter, paymentLinkRepository, paymentLinkArchiveService,
                 contractorPaymentTargetAccessPolicy);

@@ -146,13 +146,8 @@
   overflow: hidden;
   padding: 1.25rem;
   color: #fff;
-  background: linear-gradient(135deg, #21b969 0%, #7bd895 100%);
-  box-shadow: 0 1.35rem 3rem rgba(24, 169, 99, 0.22);
-}
-
-.payment-result-widget--fail .result-hero {
-  background: linear-gradient(135deg, #ef4b5f 0%, #f69a5a 100%);
-  box-shadow: 0 1.35rem 3rem rgba(239, 75, 95, 0.2);
+  background: linear-gradient(135deg, #526a88 0%, #738da9 100%);
+  box-shadow: 0 1.35rem 3rem rgba(57, 78, 105, 0.18);
 }
 
 .result-hero-icon {
@@ -184,15 +179,11 @@
   align-items: center;
   border-radius: 999px;
   padding: 0 0.65rem;
-  color: #137443;
+  color: #354b66;
   background: rgba(255, 255, 255, 0.86);
   font-size: 0.72rem;
   font-weight: 950;
   line-height: 1;
-}
-
-.payment-result-widget--fail .result-kicker {
-  color: #9e2b3c;
 }
 
 .result-hero h1 {
@@ -217,16 +208,10 @@
   grid-template-columns: 2.55rem minmax(0, 1fr);
   gap: 0.8rem;
   align-items: center;
-  border: 1px solid #dcefe3;
-  border-left: 5px solid #32c56f;
+  border: 1px solid #dce4ef;
+  border-left: 5px solid #738da9;
   padding: 0.92rem 1rem;
-  background: #fbfffc;
-}
-
-.payment-result-widget--fail .next-step-card {
-  border-color: #f4d2d8;
-  border-left-color: #ef4b5f;
-  background: #fffafb;
+  background: #fbfcff;
 }
 
 .next-step-card > .material-icons-sharp {
@@ -235,14 +220,9 @@
   height: 2.55rem;
   place-items: center;
   border-radius: 0.62rem;
-  color: #13824d;
-  background: #e6f9ed;
+  color: #526a88;
+  background: #edf2f8;
   font-size: 1.45rem;
-}
-
-.payment-result-widget--fail .next-step-card > .material-icons-sharp {
-  color: #a73443;
-  background: #fff0f3;
 }
 
 .next-step-card strong {
@@ -300,7 +280,7 @@
 }
 
 .bank-card > header .material-icons-sharp {
-  color: #57be79;
+  color: #738da9;
   font-size: 0.9rem;
 }
 
@@ -322,13 +302,8 @@
 }
 
 .result-summary .summary-status {
-  border-color: #ccefd8;
-  background: #f4fff7;
-}
-
-.payment-result-widget--fail .result-summary .summary-status {
-  border-color: #ffd6dd;
-  background: #fff7f9;
+  border-color: #dce4ef;
+  background: #f5f8fc;
 }
 
 .result-summary small {
@@ -347,12 +322,8 @@
 }
 
 .summary-status strong {
-  color: #12814c;
+  color: #526a88;
   font-size: 0.86rem;
-}
-
-.payment-result-widget--fail .summary-status strong {
-  color: #a73443;
 }
 
 .result-actions {
@@ -376,11 +347,7 @@
 
 .primary-result-button {
   color: #fff;
-  background: #32c56f;
-}
-
-.payment-result-widget--fail .primary-result-button {
-  background: #ef4b5f;
+  background: #526a88;
 }
 
 .secondary-result-button {

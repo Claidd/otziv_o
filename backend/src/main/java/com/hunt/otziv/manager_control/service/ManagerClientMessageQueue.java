@@ -166,19 +166,39 @@ public class ManagerClientMessageQueue implements com.hunt.otziv.client_messages
     /** A new periodic reminder supersedes the command, never its unknown delivery outcome. */
     @Transactional(propagation = Propagation.MANDATORY)
     void supersedeStaleReminder(RecordedControl row, String actor, LocalDateTime nextAt) {
+        supersedeStaleReminder(row, actor, nextAt, null);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    void supersedeCancelledReservation(RecordedControl row, String actor, LocalDateTime nextAt,
+            com.hunt.otziv.client_messages.api.PeriodicReminderRestart.ReservedReminderCheck reminder) {
+        if (reminder == null || reminder.stateId() <= 0 || reminder.targetKey() == null
+                || !"FAILED".equals(row.delivery().status()) || !"context_changed".equals(row.delivery().errorCode()))
+            throw new IllegalArgumentException("A cancelled manual command and its current reminder are required");
+        supersedeStaleReminder(row, actor, nextAt, reminder);
+    }
+
+    private void supersedeStaleReminder(RecordedControl row, String actor, LocalDateTime nextAt,
+            com.hunt.otziv.client_messages.api.PeriodicReminderRestart.ReservedReminderCheck reminder) {
         String operation = row.delivery().operationId();
         int audited = jdbc.update("""
                 INSERT INTO client_reminder_restart_audit
                   (request_key,subject_type,subject_id,old_operation_id,actor,reason,previous_snapshot,next_attempt_at)
-                SELECT ?, 'MANUAL', card_id, operation_id, ?, 'periodic_reminder_restarted_after_history_check',
+                SELECT ?, 'MANUAL', card_id, operation_id, ?, ?,
                   JSON_OBJECT('state',state,'error',error_code,'attempts',attempts,'createdAt',created_at,
-                    'updatedAt',updated_at,'envelopeCiphertext',envelope_ciphertext), ?
+                    'updatedAt',updated_at,'envelopeCiphertext',envelope_ciphertext,
+                    'scheduledStateId',?,'scheduledTargetKey',?,'orderGeneration',?,'dispatchGeneration',?), ?
                 FROM manager_client_message_queue WHERE operation_id=?
                   AND ((state='UNKNOWN' AND error_code='whatsapp_history_checked_no_receipt')
                     OR (state='FAILED' AND error_code='context_changed'))
+                  AND (? OR (state='FAILED' AND error_code='context_changed'))
                   AND created_at<=DATE_SUB(CURRENT_TIMESTAMP(6),INTERVAL 2 DAY)
                   AND (lease_until IS NULL OR lease_until<CURRENT_TIMESTAMP(6))
-                """, "manual-restart:" + operation, actor, nextAt, operation);
+                """, "manual-restart:" + operation, actor,
+                reminder == null ? "periodic_reminder_restarted_after_history_check" : "periodic_reminder_resumed_after_cancelled_manual",
+                reminder == null ? null : reminder.stateId(), reminder == null ? null : reminder.targetKey(),
+                reminder == null ? null : reminder.order().generation(), reminder == null ? null : reminder.dispatchGeneration(),
+                nextAt, operation, reminder == null);
         if (audited != 1) throw new IllegalStateException("Manual reminder changed during reconciliation");
         int changed = jdbc.update("""
                 UPDATE manager_client_message_queue SET state='SUPERSEDED',error_code='old_reminder_superseded',

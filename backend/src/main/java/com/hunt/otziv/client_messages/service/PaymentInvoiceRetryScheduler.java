@@ -188,24 +188,45 @@ public class PaymentInvoiceRetryScheduler implements ManualPaymentAutomationCont
 
     /**
      * Closing an old reminder is safe when recording a verified incoming payment:
-     * it cannot create or replace a payment route. Keep its unresolved delivery
-     * evidence so receipt recovery can record a late result without another send.
-     * The payment and closure must commit (or roll back) together.
+     * it cannot create or replace a payment route. An already completed invoice
+     * task likewise must not block settlement just because its old receipt is
+     * unknown. Keep unresolved delivery evidence so recovery can record a late
+     * result without another send. Payment and closure commit (or roll back) together.
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public int closePaymentAutomationForManualSettlement(Long orderId, String reason) {
         if (orderId == null || orderId <= 0) return 0;
         List<ScheduledClientMessageState> states = stateRepository.findByOrderIdInForUpdate(List.of(orderId));
         LocalDateTime now = LocalDateTime.now(clock);
-        // Validate the entire set before changing any state. Invoice sends retain
-        // the strict fence; only a completed, uncertain reminder attempt qualifies.
+        // Validate the entire set before changing any state. Active invoice sends
+        // retain the strict fence; retired invoice evidence remains untouched.
         for (ScheduledClientMessageState state : states) {
             if (PAYMENT_AUTOMATION_SCENARIOS.contains(state.getScenario())
-                    && !isUncertainSettledReminder(state, now)) {
+                    && !isUncertainSettledReminder(state, now)
+                    && !isCompletedUncertainInvoice(state, now)) {
                 requireSafeStateMutation(state, "manual_payment_settlement");
             }
         }
         return closePaymentStates(states, reason);
+    }
+
+    private boolean isCompletedUncertainInvoice(ScheduledClientMessageState state, LocalDateTime now) {
+        // markDone clears the error but deliberately retains the delivery snapshot.
+        // A late receipt for DONE only records delivery; it cannot run the invoice's
+        // business action or return the task to the queue. Do not apply this exception
+        // to preparation, legacy uncertainty, or any still-active invoice task.
+        String errorCode = state.getLastErrorCode();
+        return state.getScenario() == ClientMessageScenario.PAYMENT_INVOICE_RETRY
+                && state.getStatus() == ScheduledMessageStateStatus.DONE
+                && ClientMessageStateSafety.DELIVERY_OUTCOME_UNKNOWN.equals(state.getDeliveryStatus())
+                && (errorCode == null || errorCode.isBlank()
+                    || ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN.equals(errorCode))
+                && state.getNextAttemptAt() == null
+                && state.getDeliveryPreparedAt() != null
+                && state.getDeliveryPreparedAt().isBefore(now.minusMinutes(5))
+                && (state.getLockedUntil() == null || state.getLockedUntil().isBefore(now))
+                && state.getDeliveryToken() != null && !state.getDeliveryToken().isBlank()
+                && state.getDeliveryEnvelope() != null && !state.getDeliveryEnvelope().isBlank();
     }
 
     private boolean isUncertainSettledReminder(ScheduledClientMessageState state, LocalDateTime now) {
@@ -264,6 +285,47 @@ public class PaymentInvoiceRetryScheduler implements ManualPaymentAutomationCont
             return;
         }
         lockedMutablePaymentAutomationStates(orderId, "payment_mutation_preflight");
+    }
+
+    /**
+     * A proven-unsent retry still owns its original immutable payment details.
+     * Replacing the route would allow those old details to be sent afterwards.
+     * Unlike recording an incoming payment, replacement cannot allow DONE+UNKNOWN.
+     */
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void assertPaymentRouteReplaceable(Long orderId) {
+        if (orderId == null || orderId <= 0) return;
+        List<ScheduledClientMessageState> states = stateRepository.findByOrderIdInForUpdate(List.of(orderId));
+        if (states.stream().anyMatch(this::blocksPaymentRouteReplacement)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, paymentRouteReplacementBlockedMessage());
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<String> paymentRouteReplacementBlockReason(Long orderId) {
+        if (orderId == null || orderId <= 0) return Optional.empty();
+        return stateRepository.findByOrderIdIn(List.of(orderId)).stream()
+                .anyMatch(this::blocksPaymentRouteReplacement)
+                ? Optional.of(paymentRouteReplacementBlockedMessage()) : Optional.empty();
+    }
+
+    private boolean blocksPaymentRouteReplacement(ScheduledClientMessageState state) {
+        if (state == null || !PAYMENT_AUTOMATION_SCENARIOS.contains(state.getScenario())) return false;
+        // A confirmed historical delivery has no remaining send to race with.
+        if (state.getStatus() == ScheduledMessageStateStatus.DONE
+                && "SENT".equals(state.getDeliveryStatus())) return false;
+        if (ClientMessageStateSafety.blocksAutomaticRearm(state)) return true;
+        boolean canRetry = state.getStatus() == ScheduledMessageStateStatus.ACTIVE
+                || state.getStatus() == ScheduledMessageStateStatus.PAUSED;
+        return canRetry && !"SENT".equals(state.getDeliveryStatus())
+                && state.getDeliveryEnvelope() != null && !state.getDeliveryEnvelope().isBlank();
+    }
+
+    private String paymentRouteReplacementBlockedMessage() {
+        return "Сохранено сообщение с прежними реквизитами: его отправка ожидается или результат не подтвержден. "
+                + "Сначала завершите сверку сообщения, затем меняйте способ оплаты.";
     }
 
     private List<ScheduledClientMessageState> lockedMutablePaymentAutomationStates(

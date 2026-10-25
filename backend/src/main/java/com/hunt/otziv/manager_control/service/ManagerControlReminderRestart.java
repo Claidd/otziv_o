@@ -65,7 +65,11 @@ public class ManagerControlReminderRestart {
 
     private Optional<ManagerControlConcreteItemResponse> repairReminder(long cardId, long stateId, Long managerId, Principal actor) {
         var inspected = scheduled.checkStaleReminderRestart(stateId, managerId);
-        if (inspected.isEmpty()) return alreadyScheduled(cardId, stateId, managerId, actor);
+        if (inspected.isEmpty()) {
+            var reserved = scheduled.checkManualReservationReminder(stateId, managerId);
+            if (reserved.isPresent()) return repairCancelledManualReservation(cardId, reserved.get(), managerId, actor);
+            return alreadyScheduled(cardId, stateId, managerId, actor);
+        }
         var check = inspected.get();
         var source = check.order();
         var checkedManual = new HashSet<String>();
@@ -121,6 +125,51 @@ public class ManagerControlReminderRestart {
         }));
     }
 
+    private Optional<ManagerControlConcreteItemResponse> repairCancelledManualReservation(long cardId,
+            PeriodicReminderRestart.ReservedReminderCheck check, Long managerId, Principal actor) {
+        var source = check.order();
+        var cancelled = queue.controlHistory(source.orderId()).stream()
+                .filter(row -> ManagerControlOrderDeliveryState.sameCycle(row, source))
+                .filter(row -> ManagerControlOrderDeliveryState.blocks(row.delivery())).toList();
+        if (cancelled.isEmpty() || cancelled.stream().anyMatch(row -> !cancelledBeforeDispatch(row)
+                || row.createdAt().isAfter(LocalDateTime.now().minusDays(2)))) return Optional.empty();
+        LocalDateTime latestContact;
+        try {
+            latestContact = history.latestReminderContact(check.clientId(), check.groupId(), LocalDateTime.now().minusDays(2));
+        } catch (RuntimeException unavailable) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "Не удалось прочитать последние сообщения WhatsApp. Очередь сохранена; попробуйте «Проверить и починить» после восстановления связи.");
+        }
+        if (latestContact == null) throw conflict();
+        LocalDateTime checkedContact = latestContact;
+        return Optional.of(transactions.contactReservation(() -> {
+            var card = cards.findByIdForUpdate(cardId).orElseThrow();
+            var current = orders.lock(source.orderId()).orElseThrow();
+            if (!Objects.equals(source, current) || card.getControl() == null
+                    || !Objects.equals(card.getControl().managerId(), managerId)
+                    || !("ORDER".equals(card.getEntityType()) && Objects.equals(card.getEntityId(), source.orderId())
+                        || "AUTOMATION_FAILURE".equals(card.getEntityType()) && Objects.equals(card.getEntityId(), check.stateId())))
+                throw conflict();
+            var rows = queue.controlHistoryForSettlement(source.orderId()).stream()
+                    .filter(row -> ManagerControlOrderDeliveryState.sameCycle(row, current)).toList();
+            var pending = rows.stream().filter(row -> ManagerControlOrderDeliveryState.blocks(row.delivery())).toList();
+            if (pending.size() != cancelled.size() || !pending.containsAll(cancelled)) throw conflict();
+            LocalDateTime latest = checkedContact;
+            for (var row : rows) {
+                if (pending.contains(row) && (!cancelledBeforeDispatch(row)
+                        || !Objects.equals(row.source().managerClientId(), check.clientId())
+                        || !Objects.equals(row.source().groupId(), check.groupId()))) throw conflict();
+                if ((pending.contains(row) || "SENT".equals(row.delivery().status()) && row.delivery().errorCode() == null)
+                        && row.updatedAt().isAfter(latest)) latest = row.updatedAt();
+            }
+            String actorName = actor == null ? "" : actor.getName();
+            if (actorName.isBlank()) throw conflict();
+            LocalDateTime next = scheduled.resumeAfterCancelledManualContact(check, latest);
+            for (var row : pending) queue.supersedeCancelledReservation(row, actorName, next, check);
+            return outcome.recordReminderScheduled(card, note(next, true), actor, next);
+        }));
+    }
+
     private Optional<ManagerControlConcreteItemResponse> alreadyScheduled(long cardId, long stateId, Long managerId, Principal actor) {
         var existing = scheduled.pendingReminderRestart(stateId, managerId);
         if (existing.isEmpty()) return Optional.empty();
@@ -141,10 +190,16 @@ public class ManagerControlReminderRestart {
     }
 
     private String note(LocalDateTime next) {
+        return note(next, false);
+    }
+
+    private String note(LocalDateTime next, boolean cancelledBeforeSend) {
         return "Очередь напоминаний восстановлена. Следующая автоматическая проверка — "
                 + next.atZone(java.time.ZoneId.systemDefault()).withZoneSameInstant(java.time.ZoneId.of("Asia/Irkutsk"))
                     .format(DateTimeFormatter.ofPattern("dd.MM HH:mm"))
-                + " (Иркутск). История WhatsApp проверена; старая неподтверждённая операция сохранена без повтора. "
+                + (cancelledBeforeSend
+                    ? " (Иркутск). История WhatsApp проверена; отменённая до отправки ручная команда сохранена в истории и больше не блокирует очередь. "
+                    : " (Иркутск). История WhatsApp проверена; старая неподтверждённая операция сохранена без повтора. ")
                 + "Дальнейшее действие определяется этапом заказа и числом подтверждённых напоминаний. Оплата не менялась.";
     }
 

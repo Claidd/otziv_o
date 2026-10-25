@@ -86,6 +86,7 @@ describe('automatic delivery check outcomes', () => {
 
   it.each([409, 503])('keeps the server result for %s without a second POST or a success claim', status => {
     const { card, response, api, toast, fixture, page } = setup();
+    expect(page.repairActionLabel(card)).toBe('Проверить отправку');
     page.repairConcreteItem(card);
     page.repairConcreteItem(card);
     expect(page.repairActionLabel(card)).toBe('Проверяем…');
@@ -95,6 +96,7 @@ describe('automatic delivery check outcomes', () => {
     response.error({ status, error: { message } });
     expect(page.concreteRepairResult(card)).toEqual({ message, deliveryCheck: true });
     expect(page.isConcreteUpdating(card.controlEntityId)).toBe(false);
+    expect(page.repairActionLabel(card)).toBe('Проверить отправку');
     expect(toast.success).not.toHaveBeenCalled();
     expect(api.repairConcreteItem).toHaveBeenCalledTimes(1);
     expect(api.sendClientMessage).not.toHaveBeenCalled();

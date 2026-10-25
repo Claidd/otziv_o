@@ -861,37 +861,25 @@ class OrderStatusTransitionServiceTest {
     }
 
     @Test
-    void publicStatusWithGroupSendsPaymentMessageToGroup() throws Exception {
+    void publicStatusWithGroupCommitsAnInvoiceIntentWithoutPreparingOrSendingPayment() throws Exception {
         OrderStatusTransitionService service = service();
         Order order = orderWithCompanyManagerAndDetail(6L, "Публикация", "Компания", "group");
         order.setSum(BigDecimal.valueOf(1500));
 
         enableImmediateMessages();
         when(orderRepository.findByIdForMutation(6L)).thenReturn(Optional.of(order));
-        when(orderPaymentMessageBuilder.publishedOrderPaymentMessageWithTransfer(order))
-                .thenReturn(new OrderPaymentMessageBuilder.PreparedPaymentMessage(
-                        "Компания. Филиал\n\nОплата К оплате: 1500 руб.",
-                        "2202208238396676"
-                ));
-        when(orderStatusNotificationService.sendMessageToGroup(
-                eq("Опубликовано"),
-                same(order),
-                eq("client"),
-                eq("group"),
-                contains("К оплате: 1500"),
-                eq("Выставлен счет"),
-                eq("2202208238396676")
-        )).thenReturn(true);
+        when(orderStatusService.getOrderStatusByTitle("Опубликовано")).thenReturn(status("Опубликовано"));
 
         assertTrue(service.changeStatusForOrder(6L, "Опубликовано"));
 
         verify(orderBotLifecycleService).assignBotsIfNeeded(order);
         verify(orderCompanyStatusService).autoManageCompanyStatus(order, "Опубликовано");
-        verify(orderStatusNotificationService).sendMessageToGroup(
-                eq("Опубликовано"), same(order), eq("client"), eq("group"),
-                contains("К оплате: 1500"), eq("Выставлен счет"), eq("2202208238396676")
-        );
-        verify(orderRepository, never()).save(order);
+        assertEquals("Опубликовано", order.getStatus().getTitle());
+        verify(orderRepository).save(order);
+        verify(paymentInvoiceRetryScheduler).scheduleInitialInvoice(order);
+        verify(orderPaymentMessageBuilder, never()).publishedOrderPaymentMessageWithTransfer(order);
+        verify(orderPaymentMessageBuilder, never()).publishedOrderPaymentMessageInCurrentTransaction(order);
+        verifyNoInteractions(orderStatusNotificationService);
         verify(paymentInvoiceRetryScheduler, never()).scheduleRetry(order);
     }
 
@@ -935,32 +923,21 @@ class OrderStatusTransitionServiceTest {
     }
 
     @Test
-    void publicStatusKeepsManualTransitionSuccessfulWhenClientMessageFails() throws Exception {
+    void publicStatusDoesNotReportSuccessWhenItsInvoiceIntentCannotBeSaved() throws Exception {
         OrderStatusTransitionService service = service();
         Order order = orderWithCompanyManagerAndDetail(61L, "Публикация", "Компания", "group");
 
         enableImmediateMessages();
         when(orderRepository.findByIdForMutation(61L)).thenReturn(Optional.of(order));
-        when(orderPaymentMessageBuilder.publishedOrderPaymentMessageWithTransfer(order))
-                .thenReturn(new OrderPaymentMessageBuilder.PreparedPaymentMessage(
-                        "Компания. Филиал\n\nОплата К оплате: 1500 руб.", null
-                ));
-        when(orderStatusNotificationService.sendMessageToGroup(
-                eq("Опубликовано"),
-                same(order),
-                eq("client"),
-                eq("group"),
-                contains("К оплате: 1500"),
-                eq("Выставлен счет"),
-                isNull()
-        )).thenReturn(false);
+        when(orderStatusService.getOrderStatusByTitle("Опубликовано")).thenReturn(status("Опубликовано"));
+        doThrow(new IllegalStateException("queue unavailable"))
+                .when(paymentInvoiceRetryScheduler).scheduleInitialInvoice(order);
 
-        assertTrue(service.changeStatusForOrder(61L, "Опубликовано"));
+        assertThrows(RuntimeException.class, () -> service.changeStatusForOrder(61L, "Опубликовано"));
 
-        verify(orderBotLifecycleService).assignBotsIfNeeded(order);
-        verify(orderCompanyStatusService).autoManageCompanyStatus(order, "Опубликовано");
-        verify(paymentInvoiceRetryScheduler).scheduleRetry(order);
-        verify(mobilePushBusinessNotificationService).notifyManagerOrderPublished(order);
+        verifyNoInteractions(orderStatusNotificationService, mobilePushBusinessNotificationService);
+        verify(orderPaymentMessageBuilder, never()).publishedOrderPaymentMessageWithTransfer(order);
+        verify(paymentInvoiceRetryScheduler, never()).scheduleRetry(order);
     }
 
     @Test

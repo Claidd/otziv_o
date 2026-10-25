@@ -14,6 +14,10 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.service.OrderDeliveryControlContextService;
+import com.hunt.otziv.p_products.service.OrderStatusService;
+import com.hunt.otziv.p_products.review.service.OrderAggregateMutationLockService;
+import com.hunt.otziv.p_products.status.service.OrderStatusTransitionService;
+import com.hunt.otziv.mobile_push.service.MobilePushBusinessNotificationService;
 import com.hunt.otziv.p_products.status.service.OrderPaymentMessageBuilder;
 import com.hunt.otziv.p_products.status.service.OrderStatusNotificationService;
 import com.hunt.otziv.payments.config.TbankPaymentProperties;
@@ -232,6 +236,91 @@ class ScheduledPaymentPreparationMySqlIntegrationTest {
             assertThat(sql.getSQLState()).isIn("HY000", "40001");
         }));
         assertThat(paymentCount()).isZero(); assertThat(sends).hasValue(0);
+    }
+
+    @Test
+    void manualPublicationCommitsOneInvoiceIntentBeforeWorkerCreatesItsPaymentSource() throws Exception {
+        var transition = manualPublicationFixture();
+        assertTimeout(Duration.ofSeconds(12), () -> assertThat(transition.changeStatusForOrder(orderId, "Опубликовано")).isTrue());
+        assertThat(paymentCount()).isZero(); assertThat(sends).hasValue(0);
+        assertThat(currentOrderStatus()).isEqualTo("Опубликовано");
+        stateId = jdbc.queryForObject("SELECT state_id FROM scheduled_client_message_state WHERE order_id=?", Long.class, orderId);
+        assertThat(state().getStatus()).isEqualTo(ScheduledMessageStateStatus.ACTIVE);
+        assertThat(state().getDeliveryEnvelope()).isNull();
+        assertThat(transition.changeStatusForOrder(orderId, "Опубликовано")).isTrue();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM scheduled_client_message_state WHERE order_id=?", Integer.class, orderId)).isEqualTo(1);
+
+        claimManualInvoice();
+        assertTimeout(Duration.ofSeconds(12), this::process);
+
+        assertThat(paymentCount()).isEqualTo(1); assertThat(sends).hasValue(1);
+        PaymentLink payment = tx.execute(status -> links.findByOrderIdForUpdate(orderId).getFirst());
+        assertThat(payment.getAmountKopecks()).isEqualTo(120000L);
+        assertThat(payment.getPaymentProfileCode()).isNotBlank();
+        assertThat(state().getDeliveryStatus()).isEqualTo("UNKNOWN");
+        assertThat(currentOrderStatus()).isEqualTo("Опубликовано");
+        process(); // A stale claim cannot issue another invoice or allocate another payment source.
+        assertThat(paymentCount()).isEqualTo(1); assertThat(sends).hasValue(1);
+    }
+
+    @Test
+    void manualPublicationRollbackRemovesItsInvoiceIntentBeforeAnyPaymentOrSend() {
+        var transition = manualPublicationFixture();
+        doThrow(new IllegalStateException("synthetic publication notification failure"))
+                .when(dependency(MobilePushBusinessNotificationService.class)).notifyManagerOrderPublished(any());
+
+        assertThatThrownBy(() -> transition.changeStatusForOrder(orderId, "Опубликовано"))
+                .isInstanceOf(RuntimeException.class);
+
+        assertThat(currentOrderStatus()).isEqualTo("Публикация");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM scheduled_client_message_state WHERE order_id=?", Integer.class, orderId)).isZero();
+        assertThat(paymentCount()).isZero(); assertThat(sends).hasValue(0);
+    }
+
+    @Test
+    void workerPreparationFailurePreservesManualPublicationAndRollsBackPartialPayment() throws Exception {
+        var transition = manualPublicationFixture();
+        assertThat(transition.changeStatusForOrder(orderId, "Опубликовано")).isTrue();
+        stateId = jdbc.queryForObject("SELECT state_id FROM scheduled_client_message_state WHERE order_id=?", Long.class, orderId);
+        claimManualInvoice();
+        failRendering.set(true);
+
+        process();
+
+        assertThat(currentOrderStatus()).isEqualTo("Опубликовано");
+        assertThat(paymentCount()).isZero(); assertThat(sends).hasValue(0);
+        assertThat(state().getLastErrorCode()).isEqualTo("payment_instruction_failed");
+        assertThat(state().getDeliveryEnvelope()).isNull();
+        assertThat(state().getNextAttemptAt()).isNotNull();
+    }
+
+    private OrderStatusTransitionService manualPublicationFixture() {
+        fixture(ClientMessageScenario.PAYMENT_INVOICE_RETRY);
+        OrderStatus published = tx.execute(status -> {
+            em.remove(em.find(ScheduledClientMessageState.class, stateId));
+            Order order = em.find(Order.class, orderId);
+            OrderStatus previous = order.getStatus();
+            org.hibernate.Hibernate.initialize(previous);
+            OrderStatus publishing = new OrderStatus(); publishing.setTitle("Публикация"); em.persist(publishing);
+            order.setStatus(publishing);
+            return previous;
+        });
+        when(dependency(OrderStatusService.class).getOrderStatusByTitle("Опубликовано")).thenReturn(published);
+        dependencies.put(OrderAggregateMutationLockService.class, advised(construct(OrderAggregateMutationLockService.class)));
+        dependencies.put(PaymentInvoiceRetryScheduler.class, advised(construct(PaymentInvoiceRetryScheduler.class)));
+        return advised(construct(OrderStatusTransitionService.class));
+    }
+
+    private void claimManualInvoice() {
+        tx.executeWithoutResult(status -> {
+            var queued = em.find(ScheduledClientMessageState.class, stateId, LockModeType.PESSIMISTIC_WRITE);
+            queued.setDeliveryStatus("CLAIMED"); queued.setLastErrorCode(ClientMessageStateSafety.TRANSACTION_IN_PROGRESS);
+            queued.setLockedUntil(lease);
+        });
+    }
+
+    private String currentOrderStatus() {
+        return tx.execute(status -> em.find(Order.class, orderId).getStatus().getTitle());
     }
 
     @ParameterizedTest
