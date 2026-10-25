@@ -105,13 +105,16 @@ class ManagerClientMessageQueueMySqlIntegrationTest {
         assertThat(queue.snapshot(claim.operationId())).isEqualTo(draft("original"));
     }
 
-    @Test void supersededUnknownReminderKeepsCiphertextAndRevokesEveryOldClaim() throws Exception {
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings={"UNKNOWN", "FAILED"})
+    void supersededReminderKeepsCiphertextAndRevokesEveryOldClaim(String previousState) throws Exception {
         jdbc.execute("DROP TABLE IF EXISTS client_reminder_restart_audit");
         String migration = Files.readString(Path.of("src/main/resources/db/migration/V1_10_341__authorized_reminder_restart.sql"));
         jdbc.execute(migration.substring(migration.indexOf("CREATE TABLE")));
         tx.executeWithoutResult(status -> queue.enqueue(draft("original")));
         var oldClaim = queue.claim().orElseThrow();
-        tx.executeWithoutResult(status -> queue.finish(oldClaim, "UNKNOWN", "whatsapp_history_checked_no_receipt", 0));
+        tx.executeWithoutResult(status -> queue.finish(oldClaim, previousState,
+                "FAILED".equals(previousState) ? "context_changed" : "whatsapp_history_checked_no_receipt", 0));
         jdbc.update("UPDATE manager_client_message_queue SET created_at=DATE_SUB(CURRENT_TIMESTAMP(6),INTERVAL 3 DAY)");
         var row = new ManagerClientMessageQueue.RecordedControl(queue.status(10, oldClaim.operationId()), 10,
                 java.time.LocalDateTime.now().minusDays(3), java.time.LocalDateTime.now(), null);

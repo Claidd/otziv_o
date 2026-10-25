@@ -625,11 +625,11 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
             offerStatus = "Предложение нового заказа отложено: у компании есть активный заказ или заявка либо компания ещё не на стопе.";
         } else {
             String key = archiveCompanyTargetKey(company.getId(),companyStatusChangedAt(company));
-            offerAt = archiveReorderAttemptAt(companyStatusChangedAt(company).plusMonths(archiveReorderMonths()),key);
-            ensureState(ClientMessageScenario.ARCHIVE_REORDER_OFFER,ClientMessageTargetType.ARCHIVE_COMPANY,key,
-                    company.getId(),null,null,offerAt);
-            offerStatus = "Предложение нового заказа поставлено в очередь на " + messageTime.toIrkutskTime(offerAt)
-                    .format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")) + " (Иркутск).";
+            offerAt = scheduleOfferAfterReviewArchive(company,key,messageTime.nowStorage());
+            offerStatus = offerAt == null
+                    ? "Предложение нового заказа отложено: сначала система проверит ранее созданную архивную рассылку. Повтор не создаётся."
+                    : "Предложение нового заказа поставлено в очередь на " + messageTime.toIrkutskTime(offerAt)
+                        .format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")) + " (Иркутск).";
         }
         archiveNotifications.recordArchive(state.getId(),order.getId(),check.targetKey(),check.sentCount(),
                 Map.of("order",check.order(),"lastReminder",check.lastSuccess(),"membership",membership),offerAt,offerStatus);
@@ -645,6 +645,27 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
             archiveNotifications.enqueue(state.getId(),"staff:" + chat,new ReviewArchiveNotifications.Envelope(null,null,null,staffText,chat));
         markDone(state,messageTime.nowStorage(),null,null);
         return true;
+    }
+
+    private LocalDateTime scheduleOfferAfterReviewArchive(Company company, String key, LocalDateTime archivedAt) {
+        var existing = stateRepository.findByScenarioAndTargetKeyForUpdate(ClientMessageScenario.ARCHIVE_REORDER_OFFER,key);
+        LocalDateTime due = archiveReorderAttemptAt(archivedAt.plusMonths(archiveReorderMonths()),key);
+        if (existing.isPresent()) {
+            var offer = existing.get();
+            if (ClientMessageStateSafety.blocksAutomaticRearm(offer) || offer.getDeliveryStatus() != null
+                    || hasText(offer.getDeliveryEnvelope())
+                    || offer.getLockedUntil() != null && offer.getLockedUntil().isAfter(archivedAt)) return null;
+            applyStateSeed(existing,new StateSeed(ClientMessageScenario.ARCHIVE_REORDER_OFFER,
+                    ClientMessageTargetType.ARCHIVE_COMPANY,key,company.getId(),null,null,due));
+            if (offer.getStatus() != ScheduledMessageStateStatus.ACTIVE) return null;
+            if (offer.getNextAttemptAt() != null && offer.getNextAttemptAt().isAfter(due)) due = offer.getNextAttemptAt();
+            offer.setNextAttemptAt(due);
+            stateRepository.save(offer);
+        } else {
+            applyStateSeed(existing,new StateSeed(ClientMessageScenario.ARCHIVE_REORDER_OFFER,
+                    ClientMessageTargetType.ARCHIVE_COMPANY,key,company.getId(),null,null,due));
+        }
+        return due;
     }
 
     @Override

@@ -81,6 +81,24 @@ class ManagerControlReminderRestartTest {
         verifyNoInteractions(outcome);
     }
 
+    @Test void cancelledBeforeProviderCallDoesNotPermanentlyBlockAuthorizedRepair() {
+        var cancelled = pending("FAILED", "context_changed");
+        when(queue.controlHistory(77)).thenReturn(List.of(cancelled));
+        when(queue.controlHistoryForSettlement(77)).thenReturn(List.of(cancelled));
+        assertThat(repair.repair(10,30,2L,() -> "owner")).contains(response);
+        verifyNoInteractions(worker);
+        verify(queue).supersedeStaleReminder(cancelled,"owner",due);
+        verify(history).latestReminderContact(eq("fixture-client"),eq("fixture-chat"),any());
+    }
+
+    @Test void failedFinalizationIsNeverMistakenForCancellationBeforeDispatch() {
+        var failed = pending("FAILED", "finalization_required");
+        when(queue.controlHistory(77)).thenReturn(List.of(failed));
+        assertThat(repair.repair(10,30,2L,() -> "owner")).isEmpty();
+        verify(scheduled,never()).restartStaleReminder(any(),any(),anyString());
+        verify(queue,never()).supersedeStaleReminder(any(),anyString(),any());
+    }
+
     @Test void changedCycleAndNewPendingCommandAreRejected() {
         var pending = pending("UNKNOWN", "whatsapp_history_checked_no_receipt");
         when(queue.controlHistoryForSettlement(77)).thenReturn(List.of(pending));

@@ -115,4 +115,29 @@ class ReviewArchiveNotificationsMySqlTest {
         verify(telegram,times(1)).sendTextOnce(10L,"archived");
         assertThat(jdbc.queryForObject("SELECT state FROM review_archive_notifications",String.class)).isEqualTo("UNKNOWN");
     }
+
+    @Test void historicalDateCorrectionPreservesDeliveryAndOnlyNotifiesStaffOnce() {
+        jdbc.execute("DROP TABLE IF EXISTS client_reminder_restart_audit");
+        jdbc.execute("DROP TABLE IF EXISTS scheduled_client_message_state");
+        jdbc.execute("CREATE TABLE scheduled_client_message_state(state_id BIGINT PRIMARY KEY,company_id BIGINT,scenario VARCHAR(80),state_status VARCHAR(20),next_attempt_at DATETIME(6),sent_count INT,delivery_status VARCHAR(20),delivery_envelope TEXT,locked_until DATETIME(6))");
+        try {
+            String migration=Files.readString(Path.of("src/main/resources/db/migration/V1_10_341__authorized_reminder_restart.sql"));
+            jdbc.execute(migration.substring(migration.indexOf("CREATE TABLE")));
+        } catch(java.io.IOException failure) { throw new AssertionError(failure); }
+        jdbc.update("INSERT INTO scheduled_client_message_state(state_id,company_id) VALUES(30,20)");
+        jdbc.update("INSERT INTO scheduled_client_message_state(state_id,company_id,scenario,state_status,next_attempt_at,sent_count) VALUES(31,20,'ARCHIVE_REORDER_OFFER','ACTIVE',TIMESTAMPADD(MONTH,3,NOW()),1)");
+        tx.executeWithoutResult(s->{
+            queue.recordArchive(30,77,"cycle",7,Map.of(),java.time.LocalDateTime.now().minusYears(1),"old date");
+            queue.enqueue(30,"staff:10",new ReviewArchiveNotifications.Envelope(null,null,null,"old notice",10L));
+            queue.enqueue(30,"client",draft("archived"));
+        });
+        jdbc.update("UPDATE review_archive_notifications SET state='SENT',attempts=1");
+        queue.correctHistoricalOfferDates();queue.correctHistoricalOfferDates();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM client_reminder_restart_audit",Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM review_archive_notifications WHERE state='READY' AND channel='STAFF'",Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM review_archive_notifications WHERE state='SENT'",Integer.class)).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT sent_count FROM scheduled_client_message_state WHERE state_id=31",Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT offer_status FROM review_silence_archives",String.class)).contains("уже отправлено","повтор сейчас не отправляется");
+        verifyNoInteractions(delivery,telegram);
+    }
 }

@@ -72,9 +72,12 @@ public class ManagerControlReminderRestart {
         for (var row : queue.controlHistory(source.orderId()).stream()
                 .filter(row -> ManagerControlOrderDeliveryState.sameCycle(row, source))
                 .filter(row -> ManagerControlOrderDeliveryState.blocks(row.delivery())).toList()) {
-            if (!"UNKNOWN".equals(row.delivery().status()) || row.createdAt().isAfter(LocalDateTime.now().minusDays(2)))
+            if (row.createdAt().isAfter(LocalDateTime.now().minusDays(2)))
                 return Optional.empty();
-            if (!worker.reconcileExisting(row.delivery().operationId())) return Optional.empty();
+            if (!cancelledBeforeDispatch(row)) {
+                if (!"UNKNOWN".equals(row.delivery().status()) || !worker.reconcileExisting(row.delivery().operationId()))
+                    return Optional.empty();
+            }
             checkedManual.add(row.delivery().operationId());
         }
         LocalDateTime contact;
@@ -98,8 +101,9 @@ public class ManagerControlReminderRestart {
                     .filter(row -> ManagerControlOrderDeliveryState.sameCycle(row, current)).toList();
             var pending = rows.stream().filter(row -> ManagerControlOrderDeliveryState.blocks(row.delivery())).toList();
             for (var row : pending) {
-                if (!checkedManual.contains(row.delivery().operationId()) || !"UNKNOWN".equals(row.delivery().status())
-                        || !"whatsapp_history_checked_no_receipt".equals(row.delivery().errorCode())
+                if (!checkedManual.contains(row.delivery().operationId())
+                        || !(cancelledBeforeDispatch(row) || "UNKNOWN".equals(row.delivery().status())
+                            && "whatsapp_history_checked_no_receipt".equals(row.delivery().errorCode()))
                         || !Objects.equals(row.source().managerClientId(), check.delivery().clientId())
                         || !Objects.equals(row.source().groupId(), check.delivery().groupId())) throw conflict();
             }
@@ -142,6 +146,12 @@ public class ManagerControlReminderRestart {
                     .format(DateTimeFormatter.ofPattern("dd.MM HH:mm"))
                 + " (Иркутск). История WhatsApp проверена; старая неподтверждённая операция сохранена без повтора. "
                 + "Дальнейшее действие определяется этапом заказа и числом подтверждённых напоминаний. Оплата не менялась.";
+    }
+
+    // The worker sets this pair only before a provider call. The current actor/source are
+    // checked again by the repair, and the cancelled command is audited, never resent.
+    private boolean cancelledBeforeDispatch(ManagerClientMessageQueue.RecordedControl row) {
+        return "FAILED".equals(row.delivery().status()) && "context_changed".equals(row.delivery().errorCode());
     }
 
     private ResponseStatusException conflict() {
