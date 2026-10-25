@@ -128,4 +128,27 @@ class ReviewSilenceArchiveTest {
         verify(archiveNotifications).recordArchive(eq(30L),eq(77L),anyString(),eq(7),any(),isNull(),contains("отложено"));
         verify(stateRepository,never()).findByScenarioAndTargetKeyForUpdate(eq(ClientMessageScenario.ARCHIVE_REORDER_OFFER),anyString());
     }
+
+    @Test void alreadyStoppedCompanyStartsOfferDelayFromThisArchive() {
+        company.setStatusChangedAt(now.minusYears(2));
+        var oldOffer = ScheduledClientMessageState.builder().id(99L)
+                .status(ScheduledMessageStateStatus.ACTIVE).nextAttemptAt(now.minusYears(1)).sentCount(3).build();
+        when(stateRepository.findByScenarioAndTargetKeyForUpdate(eq(ClientMessageScenario.ARCHIVE_REORDER_OFFER),anyString()))
+                .thenReturn(Optional.of(oldOffer));
+        assertThat(service.archiveAfterReminders(30).archived()).isTrue();
+        assertThat(oldOffer.getNextAttemptAt()).isAfter(now.plusMonths(2));
+        assertThat(oldOffer.getSentCount()).isEqualTo(3);
+        verify(archiveNotifications).recordArchive(eq(30L),eq(77L),anyString(),eq(7),any(),eq(oldOffer.getNextAttemptAt()),contains("поставлено в очередь"));
+    }
+
+    @Test void uncertainExistingOfferIsPreservedAndNotReportedAsNewlyQueued() {
+        var oldOffer = ScheduledClientMessageState.builder().id(99L).status(ScheduledMessageStateStatus.ACTIVE)
+                .deliveryStatus("UNKNOWN").deliveryEnvelope("frozen").nextAttemptAt(now.minusDays(1)).build();
+        when(stateRepository.findByScenarioAndTargetKeyForUpdate(eq(ClientMessageScenario.ARCHIVE_REORDER_OFFER),anyString()))
+                .thenReturn(Optional.of(oldOffer));
+        assertThat(service.archiveAfterReminders(30).archived()).isTrue();
+        assertThat(oldOffer.getDeliveryEnvelope()).isEqualTo("frozen");
+        assertThat(oldOffer.getNextAttemptAt()).isEqualTo(now.minusDays(1));
+        verify(archiveNotifications).recordArchive(eq(30L),eq(77L),anyString(),eq(7),any(),isNull(),contains("отложено"));
+    }
 }

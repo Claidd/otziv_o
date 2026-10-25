@@ -58,6 +58,54 @@ public class ReviewArchiveNotifications {
         catch (Exception failure) { throw new IllegalStateException("Cannot freeze archive notification", failure); }
     }
 
+    /** Correct the historical date shown by the initial rollout, without rearming any delivery. */
+    @Scheduled(fixedDelayString = "PT5M", initialDelayString = "PT90S")
+    public void correctHistoricalOfferDates() {
+        for (Long id : jdbc.query("SELECT state_id FROM review_silence_archives WHERE offer_next_at<created_at LIMIT 20",
+                (rs,row) -> rs.getLong(1))) {
+            try { transactions.runInNewTransaction(() -> correctHistoricalOfferDate(id)); }
+            catch (RuntimeException failure) { log.warn("Archive offer date correction pending: stateId={}",id,failure); }
+        }
+    }
+
+    private void correctHistoricalOfferDate(long id) {
+        record Correction(long orderId, LocalDateTime previous, LocalDateTime due, int sent) { }
+        var rows = jdbc.query("""
+            SELECT a.order_id,a.offer_next_at,q.next_attempt_at,q.sent_count FROM review_silence_archives a
+            JOIN scheduled_client_message_state s ON s.state_id=a.state_id
+            JOIN scheduled_client_message_state q ON q.state_id=(SELECT MAX(o.state_id)
+                FROM scheduled_client_message_state o WHERE o.company_id=s.company_id
+                  AND o.scenario='ARCHIVE_REORDER_OFFER' AND o.state_status='ACTIVE')
+            WHERE a.state_id=? AND a.offer_next_at<a.created_at AND q.next_attempt_at>CURRENT_TIMESTAMP(6)
+              AND q.delivery_status IS NULL AND q.delivery_envelope IS NULL
+              AND (q.locked_until IS NULL OR q.locked_until<CURRENT_TIMESTAMP(6)) FOR UPDATE
+            """, (rs,row) -> new Correction(rs.getLong(1),rs.getTimestamp(2).toLocalDateTime(),
+                rs.getTimestamp(3).toLocalDateTime(),rs.getInt(4)),id);
+        if (rows.isEmpty()) return;
+        var row=rows.getFirst();
+        String text="Уточнение по заказу №"+row.orderId()+": в уведомлении об архивировании была указана старая дата компании. "
+                + (row.sent()>0 ? "Предложение нового заказа уже отправлено; повтор сейчас не отправляется. " : "Предложение ещё не отправлено. ")
+                + "Следующее предложение в очереди на "+row.due().atZone(java.time.ZoneId.systemDefault())
+                    .withZoneSameInstant(java.time.ZoneId.of("Asia/Irkutsk")).format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"))
+                + " (Иркутск). Оплата и история заказа сохранены.";
+        jdbc.update("""
+            INSERT INTO client_reminder_restart_audit(request_key,subject_type,subject_id,old_operation_id,
+              actor,reason,previous_snapshot,next_attempt_at)
+            SELECT 'archive-offer-date-correction','ARCHIVE_OFFER',state_id,CONCAT('archive-offer-date:',state_id),
+              'system','Correct historical offer date; delivery unchanged',
+              JSON_OBJECT('offer_next_at',offer_next_at,'offer_status',offer_status),? FROM review_silence_archives WHERE state_id=?
+            """,row.due(),id);
+        jdbc.update("UPDATE review_silence_archives SET offer_next_at=?,offer_status=? WHERE state_id=?",row.due(),text,id);
+        for (String encrypted : jdbc.query("SELECT envelope FROM review_archive_notifications WHERE source_state_id=? AND channel='STAFF'",
+                (rs,n) -> rs.getString(1),id)) {
+            try {
+                var old=json.readValue(cipher.decrypt(encrypted),Envelope.class);
+                if(old.staffChatId()==null) throw new IllegalStateException("Missing staff recipient");
+                enqueue(id,"schedule-correction:staff:"+old.staffChatId(),new Envelope(null,null,null,text,old.staffChatId()));
+            } catch(java.io.IOException failure) { throw new IllegalStateException("Cannot read archive recipient",failure); }
+        }
+    }
+
     @Scheduled(fixedDelayString = "${client-messages.archive-notice-delay:PT15S}", initialDelayString = "PT30S")
     public void drain() {
         jdbc.update("""
