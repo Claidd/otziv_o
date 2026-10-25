@@ -46,7 +46,7 @@ public class CommonInvoiceMessageQueue implements com.hunt.otziv.client_messages
     }
 
     Optional<PreparedCommonInvoiceMessage> unresolved(long invoiceId) {
-        return jdbc.query("SELECT operation_id FROM common_invoice_message_queue WHERE invoice_id=? AND state<>'SENT' ORDER BY created_at LIMIT 1",
+        return jdbc.query("SELECT operation_id FROM common_invoice_message_queue WHERE invoice_id=? AND state NOT IN ('SENT','SUPERSEDED') ORDER BY created_at LIMIT 1",
                 (rs, row) -> rs.getString(1), invoiceId).stream().findFirst().map(this::snapshot);
     }
 

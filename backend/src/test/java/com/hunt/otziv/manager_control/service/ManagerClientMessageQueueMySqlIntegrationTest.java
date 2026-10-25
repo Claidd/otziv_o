@@ -105,6 +105,26 @@ class ManagerClientMessageQueueMySqlIntegrationTest {
         assertThat(queue.snapshot(claim.operationId())).isEqualTo(draft("original"));
     }
 
+    @Test void supersededUnknownReminderKeepsCiphertextAndRevokesEveryOldClaim() throws Exception {
+        jdbc.execute("DROP TABLE IF EXISTS client_reminder_restart_audit");
+        String migration = Files.readString(Path.of("src/main/resources/db/migration/V1_10_341__authorized_reminder_restart.sql"));
+        jdbc.execute(migration.substring(migration.indexOf("CREATE TABLE")));
+        tx.executeWithoutResult(status -> queue.enqueue(draft("original")));
+        var oldClaim = queue.claim().orElseThrow();
+        tx.executeWithoutResult(status -> queue.finish(oldClaim, "UNKNOWN", "whatsapp_history_checked_no_receipt", 0));
+        jdbc.update("UPDATE manager_client_message_queue SET created_at=DATE_SUB(CURRENT_TIMESTAMP(6),INTERVAL 3 DAY)");
+        var row = new ManagerClientMessageQueue.RecordedControl(queue.status(10, oldClaim.operationId()), 10,
+                java.time.LocalDateTime.now().minusDays(3), java.time.LocalDateTime.now(), null);
+        tx.executeWithoutResult(status -> queue.supersedeStaleReminder(row, "owner", java.time.LocalDateTime.now().plusDays(2)));
+        tx.executeWithoutResult(status -> queue.finish(oldClaim, "SENT", null, 0));
+        assertThat(queue.status(10, oldClaim.operationId()).status()).isEqualTo("SUPERSEDED");
+        assertThat(queue.snapshot(oldClaim.operationId())).isEqualTo(draft("original"));
+        assertThat(queue.claim()).isEmpty();
+        assertThat(queue.claimReceipt(oldClaim.operationId())).isEmpty();
+        assertThat(queue.blockingForCard(10)).isNull();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM client_reminder_restart_audit", Integer.class)).isEqualTo(1);
+    }
+
     @Test void healthReadsOnlyTheOwnersUnfinishedJobs() {
         assertThat(queue.deliveryQueueHealth()).isEmpty();
         tx.executeWithoutResult(status -> queue.enqueue(draft("original")));

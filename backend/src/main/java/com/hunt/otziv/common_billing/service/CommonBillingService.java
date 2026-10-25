@@ -97,6 +97,12 @@ public class CommonBillingService {
 
     private final CommonInvoiceMembershipWorkflow invoiceMembershipWorkflow;
 
+    /** Financially guarded server command, under the caller's current-order transaction. */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public java.util.Map<String,Object> archiveReviewMembershipAfterReminders(Long orderId) {
+        return invoiceMembershipWorkflow.archiveReviewMembershipAfterReminders(orderId);
+    }
+
     private final CommonInvoicePaymentRouteWorkflow invoiceRouteWorkflow;
 
     private final CommonInvoiceManualPaymentWorkflow manualPaymentWorkflow;

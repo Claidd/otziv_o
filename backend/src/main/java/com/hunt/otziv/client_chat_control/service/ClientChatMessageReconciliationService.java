@@ -27,12 +27,46 @@ import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
-public class ClientChatMessageReconciliationService {
+public class ClientChatMessageReconciliationService implements com.hunt.otziv.client_chat_control.api.ReminderContactHistory {
 
     private final ClientChatUnansweredItemRepository unansweredRepository;
     private final ClientChatMessageRepository messageRepository;
     private final ClientChatMessageTrackerService trackerService;
     private final WhatsAppService whatsAppService;
+
+    /** Strict, read-only transport lookup. Any message delays a reminder, including staff and bot messages. */
+    public LocalDateTime latestReminderContact(String clientId, String chatId, LocalDateTime since) {
+        if (!hasText(clientId) || !hasText(chatId) || since == null)
+            throw new IllegalArgumentException("Reminder chat identity is missing");
+        return whatsAppService.reconcileGroupMessagesForReceipt(clientId,
+                List.of(new WhatsAppChatMessageCursor(chatId, since.atZone(ZoneId.systemDefault()).toEpochSecond())))
+                .stream().filter(message -> message != null && chatId.equals(message.groupId()))
+                .map(message -> {
+                    if (message.timestamp() == null || message.timestamp() <= 0)
+                        throw new IllegalStateException("Reminder history timestamp is missing");
+                    return messageAt(message.timestamp());
+                }).max(Comparator.naturalOrder()).orElse(since);
+    }
+
+    /** A fresh answer or a previously unresolved client reply prevents automatic archival. */
+    public boolean hasReplyBlockingArchive(String clientId, String chatId, LocalDateTime since) {
+        if (!hasText(clientId) || !hasText(chatId) || since == null)
+            throw new IllegalArgumentException("Archive chat identity is missing");
+        if (hasOpenReply(chatId)) return true;
+        return whatsAppService.reconcileGroupMessagesForReceipt(clientId,
+                List.of(new WhatsAppChatMessageCursor(chatId, since.atZone(ZoneId.systemDefault()).toEpochSecond())))
+                .stream().filter(message -> message != null && chatId.equals(message.groupId()))
+                .anyMatch(message -> {
+                    if (message.timestamp() == null || message.timestamp() <= 0)
+                        throw new IllegalStateException("Archive history timestamp is missing");
+                    return !Boolean.TRUE.equals(message.fromMe()) && !Boolean.TRUE.equals(message.systemGenerated());
+                });
+    }
+
+    public boolean hasOpenReply(String chatId) {
+        return !unansweredRepository.findByPlatformAndChatIdAndStatus(ClientChatPlatform.WHATSAPP,
+                chatId, ClientChatUnansweredStatus.OPEN).isEmpty();
+    }
 
     public ClientChatReconciliationResult reconcileOpenWhatsAppMessages(Manager manager) {
         if (manager == null || manager.getId() == null || !hasText(manager.getClientId())) {

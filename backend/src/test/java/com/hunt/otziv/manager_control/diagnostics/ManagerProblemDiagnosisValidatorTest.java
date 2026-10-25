@@ -43,7 +43,7 @@ class ManagerProblemDiagnosisValidatorTest {
         Fact delivery = new Fact("automation:3:delivery_status", "automation", "delivery_status", "UNCERTAIN");
         Diagnosis result = validator.validate(diagnosis("invoice.status=COLLECTING", "invoice:189:status", "CONTACT_RESPONSIBLE"), List.of(status, delivery));
         assertThat(result.actions()).extracting(Action::code).containsExactly("CHECK_DELIVERY");
-        assertThat(result.actions().getFirst().text()).contains("Повторное сообщение для проверки не отправляется");
+        assertThat(result.actions().getFirst().text()).contains("Проверить и починить", "историю WhatsApp", "Повтор старой операции не запускается");
     }
 
     @Test

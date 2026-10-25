@@ -1035,6 +1035,7 @@ $deployBundlePaths = @(
     "whatsapp\package-lock.json",
     "whatsapp\index.js",
     "whatsapp\chromium-launch.js",
+    "whatsapp\provider-send.js",
     "whatsapp\chromium-smoke.js",
     "whatsapp\compatibility-smoke.js",
     "whatsapp\internal-auth.js",

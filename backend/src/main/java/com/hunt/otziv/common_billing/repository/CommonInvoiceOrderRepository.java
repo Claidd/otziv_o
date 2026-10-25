@@ -98,6 +98,8 @@ public interface CommonInvoiceOrderRepository extends CrudRepository<CommonInvoi
         LEFT JOIN FETCH order.worker worker
         LEFT JOIN FETCH worker.user
         WHERE item.invoice.id = :invoiceId
+          AND (item.silenceArchivedAt IS NULL OR item.activeMembership = TRUE
+            OR item.invoice.status = com.hunt.otziv.common_billing.model.CommonInvoiceStatus.ARCHIVED)
         ORDER BY item.id ASC
     """)
     List<CommonInvoiceOrder> findByInvoiceIdWithOrders(@Param("invoiceId") Long invoiceId);
@@ -114,6 +116,8 @@ public interface CommonInvoiceOrderRepository extends CrudRepository<CommonInvoi
         LEFT JOIN FETCH order.worker worker
         LEFT JOIN FETCH worker.user
         WHERE item.invoice.id IN :invoiceIds
+          AND (item.silenceArchivedAt IS NULL OR item.activeMembership = TRUE
+            OR item.invoice.status = com.hunt.otziv.common_billing.model.CommonInvoiceStatus.ARCHIVED)
         ORDER BY item.invoice.id ASC, item.id ASC
     """)
     List<CommonInvoiceOrder> findByInvoiceIdsWithOrders(@Param("invoiceIds") Collection<Long> invoiceIds);

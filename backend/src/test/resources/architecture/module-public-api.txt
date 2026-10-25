@@ -27,6 +27,7 @@ com.hunt.otziv.manager.api.PaymentReviewOrderAccess
 com.hunt.otziv.t_telegrambot.api.SpecialistPaymentReviewNotice
 # A01 / ADR-008: scalar projections, source-authorized reminders and best-effort text notifications.
 com.hunt.otziv.u_users.api.WorkerRiskReviewerDirectory
+com.hunt.otziv.u_users.api.AutomationNoticeRecipients
 com.hunt.otziv.personal_reminders.api.SystemReminderCommands
 com.hunt.otziv.bad_reviews.api.PaidBadReviewReminders
 com.hunt.otziv.t_telegrambot.api.TelegramNotifications
@@ -66,6 +67,8 @@ com.hunt.otziv.client_chat_control.dto.PreparedNoResponseReview
 com.hunt.otziv.client_chat_control.dto.ClientChatPerformanceSample
 # ADR-021: read-only evidence classification for manager reply metrics; no chat mutation.
 com.hunt.otziv.client_chat_control.api.ClientChatReplyEvidence
+# Reminder restart contract: authorized frozen chat, strict read-only provider history; no send/card mutation.
+com.hunt.otziv.client_chat_control.api.ReminderContactHistory
 # ADR-021: finalized scalar worker goal results, scoped to assigned worker IDs.
 com.hunt.otziv.worker_performance.api.FinalWorkerDayResults
 

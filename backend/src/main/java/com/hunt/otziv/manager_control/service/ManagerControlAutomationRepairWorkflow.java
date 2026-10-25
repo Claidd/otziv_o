@@ -59,6 +59,8 @@ public class ManagerControlAutomationRepairWorkflow {
 
     private final ManagerControlManualDeliveryRepair manualDeliveryRepair;
 
+    private final ManagerControlReminderRestart reminderRestart;
+
     ManagerControlConcreteItemResponse repairAutomationFailureConcreteItem(ManagerDailyControlConcreteItem concreteItem, ManagerDailyControl control, Principal principal) {
         Manager manager = control.getManager();
         Optional<ManagerAutomationFailureService.AutomationFailureIssue> currentIssue = managerAutomationFailureService.findIssue(manager, concreteItem.getEntityType(), concreteItem.getEntityId());
@@ -66,6 +68,8 @@ public class ManagerControlAutomationRepairWorkflow {
             return resolveRepairedConcreteItem(concreteItem, control, "Ошибка автоматизации уже устранена, карточка перепроверена", principal, "Перепроверена устраненная ошибка автоматизации");
         }
         ManagerAutomationFailureService.AutomationFailureIssue issue = currentIssue.get();
+        var restarted = reminderRestart.repair(concreteItem.getId(), issue.stateId(), control.managerId(), principal);
+        if (restarted.isPresent()) return restarted.get();
         Optional<ScheduledClientMessageService.RecoveredBadReviewDeliveryResult> recovered = recoverUncertainBadReviewDelivery(issue, manager);
         if (recovered.isPresent()) {
             ScheduledClientMessageService.RecoveredBadReviewDeliveryResult result = recovered.get();
@@ -153,6 +157,14 @@ public class ManagerControlAutomationRepairWorkflow {
     }
 
     ManagerControlConcreteItemResponse repairOrderAutomationConcreteItem(ManagerDailyControlConcreteItem concreteItem, ManagerDailyControl control, Order order, Principal principal) {
+        var restartScenario = scheduledClientMessageService.orderAutomationScenario(order);
+        if (restartScenario.isPresent()) {
+            var candidate = currentOrderAutomationState(order, restartScenario.get(), scheduledStatesByOrderId(List.of(order)));
+            if (candidate != null) {
+                var restarted = reminderRestart.repair(concreteItem.getId(), candidate.getId(), control.managerId(), principal);
+                if (restarted.isPresent()) return restarted.get();
+            }
+        }
         var manual = manualDeliveryRepair.repair(concreteItem.getId(), order.getId(), control.managerId());
         if (manual.isPresent()) return manual.get();
         Optional<ClientMessageScenario> currentScenario = scheduledClientMessageService.orderAutomationScenario(order);

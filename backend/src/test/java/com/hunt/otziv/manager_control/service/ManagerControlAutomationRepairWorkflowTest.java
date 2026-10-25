@@ -39,7 +39,7 @@ class ManagerControlAutomationRepairWorkflowTest {
         var workflow = new ManagerControlAutomationRepairWorkflow(mock(ManagerControlChatRepairWorkflow.class), outcome,
                 mock(ManagerControlProblemExamples.class), diagnostics, messages, states,
                 mock(ClientChatMessageReconciliationService.class), mock(ManagerAutomationFailureService.class),
-                new com.hunt.otziv.client_messages.service.CurrentOrderDeliveryUncertaintyService(states, mock(org.springframework.jdbc.core.JdbcTemplate.class)), mock(ManagerControlManualDeliveryRepair.class));
+                new com.hunt.otziv.client_messages.service.CurrentOrderDeliveryUncertaintyService(states, mock(org.springframework.jdbc.core.JdbcTemplate.class)), mock(ManagerControlManualDeliveryRepair.class), mock(ManagerControlReminderRestart.class));
         var order = new com.hunt.otziv.p_products.model.Order(); order.setId(77L);
         order.setStatusChangedAt(LocalDateTime.of(2026, 7, 14, 0, 0));
         var state = ScheduledClientMessageState.builder().id(3938L).orderId(77L)
@@ -49,7 +49,7 @@ class ManagerControlAutomationRepairWorkflowTest {
         when(states.findByOrderIdIn(java.util.List.of(77L))).thenReturn(java.util.List.of(state));
         when(states.findById(3938L)).thenReturn(Optional.of(state));
         when(messages.recoverUncertainOrdinaryDelivery(3938L)).thenReturn(receipt);
-        var card = new ManagerDailyControlConcreteItem(); card.setId(1L); card.setEntityType("ORDER"); card.setEntityId(77L);
+        var card = new ManagerDailyControlConcreteItem(); card.setId(1L); card.setId(1L); card.setEntityType("ORDER"); card.setEntityId(77L);
         var control = new ManagerDailyControl();
         if (receipt == ScheduledClientMessageService.OrdinaryDeliveryRecoveryResult.SENT_CONFIRMED)
             workflow.repairOrderAutomationConcreteItem(card, control, order, () -> "manager");
@@ -72,7 +72,7 @@ class ManagerControlAutomationRepairWorkflowTest {
         var outcome = new ManagerControlRepairOutcome(mock(ManagerControlProblemExamples.class), mock(ManagerControlAccessPolicy.class),
                 lifecycle, mock(ManagerControlConcretePresenter.class), mock(com.hunt.otziv.manager_control.repository.ManagerDailyControlRepository.class), cards,
                 mock(ManagerControlOrderDeliveryState.class));
-        var card = new ManagerDailyControlConcreteItem(); card.setId(1L); card.setEntityType("ORDER"); card.setControl(new ManagerDailyControl());
+        var card = new ManagerDailyControlConcreteItem(); card.setId(1L); card.setId(1L); card.setEntityType("ORDER"); card.setControl(new ManagerDailyControl());
         when(cards.findByIdForUpdate(1L)).thenReturn(Optional.of(card));
         card.setStatus(com.hunt.otziv.manager_control.model.ManagerDailyControlItemStatus.OPEN);
         var parent = new com.hunt.otziv.manager_control.model.ManagerDailyControlItem();
@@ -99,13 +99,13 @@ class ManagerControlAutomationRepairWorkflowTest {
                 mock(ManagerControlChatRepairWorkflow.class), repairOutcome,
                 mock(ManagerControlProblemExamples.class), mock(ManagerControlOrderAutomationDiagnostics.class),
                 scheduledMessages, stateRepository, mock(ClientChatMessageReconciliationService.class), failures,
-                new com.hunt.otziv.client_messages.service.CurrentOrderDeliveryUncertaintyService(stateRepository, mock(org.springframework.jdbc.core.JdbcTemplate.class)), mock(ManagerControlManualDeliveryRepair.class));
+                new com.hunt.otziv.client_messages.service.CurrentOrderDeliveryUncertaintyService(stateRepository, mock(org.springframework.jdbc.core.JdbcTemplate.class)), mock(ManagerControlManualDeliveryRepair.class), mock(ManagerControlReminderRestart.class));
 
         var manager = new Manager();
         manager.setId(3L);
         var control = new ManagerDailyControl();
         control.setManager(manager);
-        var item = new ManagerDailyControlConcreteItem();
+        var item = new ManagerDailyControlConcreteItem(); item.setId(1L);
         item.setEntityType(ManagerAutomationFailureService.ENTITY_AUTOMATION_FAILURE);
         item.setEntityId(501L);
         var issue = new ManagerAutomationFailureService.AutomationFailureIssue(
@@ -144,10 +144,10 @@ class ManagerControlAutomationRepairWorkflowTest {
         var workflow = new ManagerControlAutomationRepairWorkflow(chat, outcome, mock(ManagerControlProblemExamples.class),
                 mock(ManagerControlOrderAutomationDiagnostics.class), messages, states,
                 mock(ClientChatMessageReconciliationService.class), failures,
-                mock(com.hunt.otziv.client_messages.api.CurrentOrderDeliveryUncertainty.class), mock(ManagerControlManualDeliveryRepair.class));
+                mock(com.hunt.otziv.client_messages.api.CurrentOrderDeliveryUncertainty.class), mock(ManagerControlManualDeliveryRepair.class), mock(ManagerControlReminderRestart.class));
         var manager = new Manager(); manager.setId(2L);
         var control = new ManagerDailyControl(); control.setManager(manager);
-        var card = new ManagerDailyControlConcreteItem(); card.setEntityType("AUTOMATION_FAILURE"); card.setEntityId(501L);
+        var card = new ManagerDailyControlConcreteItem(); card.setId(1L); card.setEntityType("AUTOMATION_FAILURE"); card.setEntityId(501L);
         var issue = new ManagerAutomationFailureService.AutomationFailureIssue("AUTOMATION_FAILURE:501", "AUTOMATION_FAILURE",
                 501L, 501L, null, "Company", "Reminder", "Failure", "handoff", "/orders", null,
                 ClientMessageScenario.REVIEW_CHECK_REMINDER, 1, LocalDateTime.now(), LocalDateTime.now(), null);
