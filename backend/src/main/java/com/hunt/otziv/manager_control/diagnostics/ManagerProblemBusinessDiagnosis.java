@@ -82,7 +82,7 @@ final class ManagerProblemBusinessDiagnosis {
 
     static Diagnosis fallback(List<Fact> facts) {
         List<Fact> uncertain = uncertainDelivery(facts);
-        if (!uncertain.isEmpty()) return uncertain(uncertain.getFirst());
+        if (!uncertain.isEmpty()) return uncertain(facts, uncertain.getFirst());
         if (hasHistoricalInvoiceArchive(facts)) return historicalInvoiceArchive(facts);
         Fact publicationConflict = currentInvoicePublicationConflict(facts);
         if (publicationConflict != null) return invoicePublicationConflict(facts, publicationConflict);
@@ -192,7 +192,7 @@ final class ManagerProblemBusinessDiagnosis {
                 List.of("В счёте и связанных заказах подтверждена готовность действующих позиций и устранены причины задержек. Одного ответа ответственного или повторной публикации недостаточно."));
     }
 
-    static Diagnosis uncertain(Fact fact) {
+    static Diagnosis uncertain(List<Fact> facts, Fact fact) {
         if ("invoice".equals(fact.subject()) && "last_error".equals(fact.field())
                 && "message_send_in_progress".equals(fact.value())) {
             return new Diagnosis("Результат существующей отправки сообщения по общему счёту не подтверждён. Нужна сверка перед любыми повторами.",
@@ -201,11 +201,27 @@ final class ManagerProblemBusinessDiagnosis {
                                     "Система", "В журнале существующей отправки сохранён проверяемый результат сверки. Отсутствие сообщения в доступной истории не доказывает, что отправки не было.", List.of(fact.reference()))),
                     List.of("Результат существующей отправки подтверждён проверяемой записью, а причина замечания по счёту устранена. Запуск проверки сам по себе замечание не закрывает."));
         }
+        boolean periodicReminder = isCurrentPeriodicReminder(facts, fact);
+        String action = periodicReminder
+                ? "Нажмите «Проверить отправку». Система проверит историю WhatsApp. Для устаревшего планового напоминания она проверит возможность восстановить очередь и покажет следующий срок. Повтор старой операции не запускается."
+                : "Нажмите «Проверить отправку». Система сверит существующую отправку с квитанцией и историей нужного чата. Если подтверждение не найдено, замечание останется открытым для дальнейшей сверки. Новое сообщение не создаётся.";
+        String verification = periodicReminder
+                ? "Подтверждена отправка либо восстановлена очередь плановых напоминаний с указанным сроком. Оплату и проверку отзывов система закрывает только по их фактическому результату."
+                : "Результат существующей отправки подтверждён проверяемой записью, а причина замечания устранена. Запуск проверки сам по себе замечание не закрывает.";
         return new Diagnosis("Результат предыдущей отправки клиенту не подтверждён. Повторное сообщение может оказаться дубликатом.",
                 List.of(), List.of(), List.of("Нужно подтверждение результата существующей отправки."),
-                List.of(new Action("CHECK_DELIVERY", "Нажмите «Проверить и починить». Система проверит историю WhatsApp. Если старое плановое напоминание уже устарело, восстановит очередь и покажет следующий срок с учётом последних сообщений. Повтор старой операции не запускается.",
+                List.of(new Action("CHECK_DELIVERY", action,
                                 "Система", "Сохранено подтверждение результата именно существующей отправки. Отсутствие сообщения в доступной истории не доказывает, что отправки не было.", List.of(fact.reference()))),
-                List.of("Подтверждена отправка либо восстановлена очередь плановых напоминаний с указанным сроком. Оплату и проверку отзывов система закрывает только по их фактическому результату."));
+                List.of(verification));
+    }
+
+    private static boolean isCurrentPeriodicReminder(List<Fact> facts, Fact uncertain) {
+        if (!"automation".equals(uncertain.subject())) return false;
+        String prefix = uncertain.reference().substring(0, uncertain.reference().lastIndexOf(':') + 1);
+        return facts.stream().anyMatch(f -> f.reference().equals(prefix + "scenario")
+                    && Set.of("REVIEW_CHECK_REMINDER", "PAYMENT_REMINDER").contains(f.value()))
+                && facts.stream().anyMatch(f -> f.reference().equals(prefix + "state_status") && "ACTIVE".equals(f.value()))
+                && facts.stream().anyMatch(f -> f.reference().equals(prefix + "current_cycle") && "true".equals(f.value()));
     }
 
     private static Diagnosis invoice(List<Fact> facts) {

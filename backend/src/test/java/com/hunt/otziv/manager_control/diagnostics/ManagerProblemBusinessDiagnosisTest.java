@@ -190,11 +190,51 @@ class ManagerProblemBusinessDiagnosisTest {
         assertThat(result.actions()).extracting(Action::code).containsExactly("CHECK_DELIVERY");
         assertThat(result.summary()).contains("не подтверждён");
         assertThat(result.actions()).allSatisfy(action -> {
-            assertThat(action.text()).contains("Нажмите «Проверить и починить»", "Система проверит историю WhatsApp", "восстановит очередь").doesNotContain("Откройте историю", "администратору", "вручную");
+            assertThat(action.text()).contains("Нажмите «Проверить отправку»", "существующую отправку", "замечание останется открытым")
+                    .doesNotContain("восстановить очередь", "восстановит очередь", "Откройте историю", "администратору", "вручную");
             assertThat(action.owner()).isEqualTo("Система");
             assertThat(action.verification()).contains("Отсутствие сообщения", "не доказывает");
         });
-        assertThat(result.verification().getFirst()).contains("только по их фактическому результату");
+        assertThat(result.verification().getFirst()).contains("Запуск проверки сам по себе замечание не закрывает");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"REVIEW_CHECK_REMINDER", "PAYMENT_REMINDER"})
+    void currentPeriodicReminderCanOfferConditionalQueueRestoration(String scenario) {
+        Diagnosis result = ManagerProblemBusinessDiagnosis.fallback(List.of(f("automation", "delivery_status", "UNKNOWN"),
+                f("automation", "scenario", scenario), f("automation", "state_status", "ACTIVE"), f("automation", "current_cycle", "true")));
+
+        assertThat(result.actions().getFirst().text()).contains("Проверить отправку", "проверит возможность восстановить очередь", "Повтор старой операции не запускается");
+        assertThat(result.verification().getFirst()).contains("восстановлена очередь плановых напоминаний", "только по их фактическому результату");
+        assertThat(ManagerProblemBusinessDiagnosis.readable(result)).isTrue();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"PAYMENT_INVOICE_RETRY", "BAD_REVIEW_INVOICE", "ARCHIVE_REORDER_OFFER", "CLIENT_TEXT_REMINDER"})
+    void nonPeriodicDeliveryNeverPromisesReminderQueueRestoration(String scenario) {
+        Diagnosis result = ManagerProblemBusinessDiagnosis.fallback(List.of(f("automation", "delivery_status", "UNKNOWN"),
+                f("automation", "scenario", scenario), f("automation", "state_status", "ACTIVE"), f("automation", "current_cycle", "true")));
+
+        assertThat(result.actions().getFirst().text()).contains("Проверить отправку", "замечание останется открытым", "Новое сообщение не создаётся")
+                .doesNotContain("очередь");
+        assertThat(result.verification().getFirst()).doesNotContain("очередь");
+        assertThat(ManagerProblemBusinessDiagnosis.readable(result)).isTrue();
+    }
+
+    @Test
+    void anotherAutomationOrAnUnprovenCurrentCycleCannotPromiseQueueRestoration() {
+        var uncertain = f("automation", "delivery_status", "UNKNOWN");
+        Diagnosis otherTask = ManagerProblemBusinessDiagnosis.fallback(List.of(uncertain,
+                new Fact("automation:2:scenario", "automation", "scenario", "REVIEW_CHECK_REMINDER"),
+                f("automation", "state_status", "ACTIVE"), f("automation", "current_cycle", "true")));
+        assertThat(otherTask.actions().getFirst().text()).doesNotContain("очередь");
+        Diagnosis noCycle = ManagerProblemBusinessDiagnosis.fallback(List.of(uncertain,
+                f("automation", "scenario", "REVIEW_CHECK_REMINDER"), f("automation", "state_status", "ACTIVE")));
+        assertThat(noCycle.actions().getFirst().text()).doesNotContain("очередь");
+        Diagnosis closedTask = ManagerProblemBusinessDiagnosis.fallback(List.of(uncertain,
+                f("automation", "scenario", "REVIEW_CHECK_REMINDER"), f("automation", "state_status", "DONE"),
+                f("automation", "current_cycle", "true")));
+        assertThat(closedTask.actions().getFirst().text()).doesNotContain("очередь");
     }
 
     @Test

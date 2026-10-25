@@ -446,7 +446,8 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
     @Transactional(readOnly = true)
     public Optional<PendingReminderRestart> pendingReminderRestart(long stateId, Long managerId) {
         var state = stateRepository.findById(stateId).orElse(null);
-        if (state == null || state.getDispatchGeneration() <= 0 || state.getStatus() != ScheduledMessageStateStatus.ACTIVE
+        if (state == null || state.getStatus() != ScheduledMessageStateStatus.ACTIVE
+                || !Set.of(ClientMessageScenario.REVIEW_CHECK_REMINDER, ClientMessageScenario.PAYMENT_REMINDER).contains(state.getScenario())
                 || state.getDeliveryStatus() != null || state.getNextAttemptAt() == null || state.getLastErrorCode() != null)
             return Optional.empty();
         var source = orderDeliveryContext.read(state.getOrderId()).orElse(null);
@@ -454,10 +455,17 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
                 || !Objects.equals(state.getTargetKey(), "order:" + source.orderId() + ":" + source.cycleAt().withNano(0)))
             return Optional.empty();
         Integer count = jdbcTemplate.queryForObject("""
-                SELECT COUNT(*) FROM client_reminder_restart_audit WHERE subject_type='SCHEDULED'
-                  AND subject_id=? AND new_generation=?
-                """, Integer.class, stateId, state.getDispatchGeneration());
-        return count != null && count == 1 ? Optional.of(new PendingReminderRestart(source, state.getNextAttemptAt())) : Optional.empty();
+                SELECT COUNT(*) FROM client_reminder_restart_audit
+                WHERE (subject_type='SCHEDULED' AND subject_id=? AND new_generation=? AND new_generation>0)
+                   OR (subject_type='MANUAL' AND reason='periodic_reminder_resumed_after_cancelled_manual'
+                     AND JSON_UNQUOTE(JSON_EXTRACT(previous_snapshot,'$.scheduledStateId'))=?
+                     AND JSON_UNQUOTE(JSON_EXTRACT(previous_snapshot,'$.scheduledTargetKey'))=?
+                     AND JSON_UNQUOTE(JSON_EXTRACT(previous_snapshot,'$.orderGeneration'))=?
+                     AND JSON_UNQUOTE(JSON_EXTRACT(previous_snapshot,'$.dispatchGeneration'))=?
+                     AND next_attempt_at=?)
+                """, Integer.class, stateId, state.getDispatchGeneration(), Long.toString(stateId), state.getTargetKey(),
+                Long.toString(source.generation()), Long.toString(state.getDispatchGeneration()), state.getNextAttemptAt());
+        return count != null && count > 0 ? Optional.of(new PendingReminderRestart(source, state.getNextAttemptAt())) : Optional.empty();
     }
 
     /** Explicit repair of a periodic reminder. Status transitions and invoices never use this path. */
@@ -495,6 +503,80 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
                 && (state.getLockedUntil() == null || state.getLockedUntil().isBefore(now))
                 && (ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN.equals(state.getLastErrorCode())
                     || ClientMessageStateSafety.MANUAL_DELIVERY_HANDOFF_PENDING.equals(state.getLastErrorCode()));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<ReservedReminderCheck> checkManualReservationReminder(long stateId, Long managerId) {
+        var state = stateRepository.findById(stateId).orElse(null);
+        LocalDateTime now = messageTime.nowStorage();
+        if (!reservedPeriodicReminder(state, now)) return Optional.empty();
+        var source = orderDeliveryContext.read(state.getOrderId()).orElse(null);
+        if (source == null || !Objects.equals(source.managerId(), managerId)) return Optional.empty();
+        var order = orderRepository.findByIdForOrderDto(source.orderId()).orElse(null);
+        if (!reservedReminderOrderMatches(state, order) || manager(order) == null
+                || !hasText(manager(order).getClientId()) || order.getCompany() == null
+                || !hasText(order.getCompany().getGroupId())
+                || !Objects.equals(state.getTargetKey(), "order:" + source.orderId() + ":" + source.cycleAt().withNano(0)))
+            return Optional.empty();
+        return Optional.of(new ReservedReminderCheck(stateId, state.getTargetKey(), state.getScenario().name(), source,
+                manager(order).getClientId(), order.getCompany().getGroupId(), state.getDispatchGeneration(),
+                state.getSentCount(), state.getLastSuccessAt(), now));
+    }
+
+    private boolean reservedPeriodicReminder(ScheduledClientMessageState state, LocalDateTime now) {
+        return state != null && state.getStatus() == ScheduledMessageStateStatus.ACTIVE
+                && Set.of(ClientMessageScenario.REVIEW_CHECK_REMINDER, ClientMessageScenario.PAYMENT_REMINDER).contains(state.getScenario())
+                && "manual_contact_reserved".equals(state.getLastErrorCode())
+                && (state.getLockedUntil() == null || state.getLockedUntil().isBefore(now))
+                && state.getDeliveryStatus() == null && state.getDeliveryToken() == null
+                && state.getDeliveryEnvelope() == null && state.getDeliveryMessage() == null
+                && state.getDeliveryChannel() == null && state.getDeliveryTaskId() == null
+                && state.getDeliveryPreparedAt() == null;
+    }
+
+    private boolean reservedReminderOrderMatches(ScheduledClientMessageState state, Order order) {
+        return order != null && !order.isComplete() && order.getPayDay() == null && isCurrentOrderCycle(state, order)
+                && (state.getScenario() == ClientMessageScenario.REVIEW_CHECK_REMINDER ? STATUS_IN_CHECK.equals(statusTitle(order))
+                    : Set.of(STATUS_TO_PAY, STATUS_REMINDER).contains(statusTitle(order)));
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public LocalDateTime resumeAfterCancelledManualContact(ReservedReminderCheck check, LocalDateTime lastContact) {
+        var current = orderDeliveryContext.lock(check.order().orderId()).orElseThrow();
+        LocalDateTime now = messageTime.nowStorage();
+        Order order = orderRepository.findByIdForMutation(current.orderId()).orElseThrow();
+        var state = stateRepository.findByIdForUpdate(check.stateId()).orElseThrow();
+        if (!Objects.equals(current, check.order()) || check.checkedAt().isBefore(now.minusMinutes(5))
+                || !reservedPeriodicReminder(state, now) || !reservedReminderOrderMatches(state, order)
+                || !Objects.equals(state.getOrderId(), current.orderId())
+                || !Objects.equals(state.getTargetKey(), check.targetKey())
+                || !Objects.equals(state.getScenario().name(), check.scenario())
+                || state.getDispatchGeneration() != check.dispatchGeneration() || state.getSentCount() != check.sentCount()
+                || !Objects.equals(state.getLastSuccessAt(), check.lastSuccessAt())
+                || manager(order) == null || !Objects.equals(manager(order).getClientId(), check.clientId())
+                || order.getCompany() == null || !Objects.equals(order.getCompany().getGroupId(), check.groupId())
+                || lastContact == null)
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Во время сверки изменился заказ или отправка. Обновите карточку: повторное сообщение не создано.");
+        int days = Math.max(2, state.getScenario() == ClientMessageScenario.REVIEW_CHECK_REMINDER
+                ? reviewCheckIntervalDays() : paymentReminderIntervalDays());
+        LocalDateTime contact = state.getLastSuccessAt() != null && state.getLastSuccessAt().isAfter(lastContact)
+                ? state.getLastSuccessAt() : lastContact;
+        LocalDateTime desired = contact.plusDays(days);
+        if (desired.isBefore(now.plusMinutes(1))) desired = now.plusMinutes(1);
+        LocalDateTime next = scheduleAtStorage(desired);
+        // There is no scheduled delivery to replace. Keep its generation, confirmed
+        // contacts and payment data; the caller audits the cancelled manual command
+        // and retires it in this same transaction before either change can commit.
+        state.setLastErrorCode(null);
+        state.setLastErrorMessage(null);
+        state.setConsecutiveFailures(0);
+        state.setLockedUntil(null);
+        state.setNextAttemptAt(next);
+        stateRepository.save(state);
+        return next;
     }
 
     /** Caller holds card/order locks. Atomic with retiring old manual reminder commands. No transport call. */

@@ -44,15 +44,17 @@ class ManualSettlementReminderMySqlIntegrationTest {
         jdbc.execute("DROP TABLE IF EXISTS payment");
         jdbc.execute("CREATE TABLE payment (id BIGINT PRIMARY KEY, confirmed BIGINT NOT NULL) ENGINE=InnoDB");
         jdbc.execute("CREATE TABLE reminder (id BIGINT PRIMARY KEY, status VARCHAR(20), delivery VARCHAR(20), "
-                + "error_code VARCHAR(100), envelope TEXT, delivery_token VARCHAR(64), prepared_at DATETIME) ENGINE=InnoDB");
+                + "error_code VARCHAR(100), envelope TEXT, delivery_token VARCHAR(64), prepared_at DATETIME, "
+                + "scenario VARCHAR(60)) ENGINE=InnoDB");
         jdbc.update("INSERT INTO payment VALUES (26375, 0)");
         jdbc.update("INSERT INTO reminder VALUES (2094420, 'ACTIVE', 'UNKNOWN', "
-                + "'state_transaction_outcome_uncertain', 'original-envelope', 'original-token', ?)",
+                + "'state_transaction_outcome_uncertain', 'original-envelope', 'original-token', ?, 'PAYMENT_REMINDER')",
                 LocalDateTime.now().minusDays(5));
         var repository = mock(ScheduledClientMessageStateRepository.class);
         when(repository.findByOrderIdInForUpdate(List.of(26375L))).thenAnswer(call -> jdbc.query(
-                "SELECT * FROM reminder WHERE id=2094420 FOR UPDATE", (row, index) -> ScheduledClientMessageState.builder()
-                        .id(row.getLong("id")).orderId(26375L).scenario(ClientMessageScenario.PAYMENT_REMINDER)
+                "SELECT * FROM reminder ORDER BY id FOR UPDATE", (row, index) -> ScheduledClientMessageState.builder()
+                        .id(row.getLong("id")).orderId(26375L)
+                        .scenario(ClientMessageScenario.valueOf(row.getString("scenario")))
                         .status(ScheduledMessageStateStatus.valueOf(row.getString("status")))
                         .deliveryStatus(row.getString("delivery")).lastErrorCode(row.getString("error_code"))
                         .deliveryEnvelope(row.getString("envelope")).deliveryToken(row.getString("delivery_token"))
@@ -95,6 +97,34 @@ class ManualSettlementReminderMySqlIntegrationTest {
         assertThat(jdbc.queryForObject("SELECT error_code FROM reminder", String.class)).isEqualTo("state_transaction_outcome_uncertain");
         tx.executeWithoutResult(status -> assertThat(
                 scheduler.closePaymentAutomationForManualSettlement(26375L, "Repeated confirmation")).isZero());
+    }
+
+    @Test
+    void closedUncertainInvoiceDoesNotBlockSettlementOrLoseEvidenceOnRollbackAndRetry() {
+        jdbc.update("INSERT INTO reminder VALUES (2190996, 'DONE', 'UNKNOWN', NULL, "
+                + "'invoice-envelope', 'invoice-token', ?, 'PAYMENT_INVOICE_RETRY')",
+                LocalDateTime.now().minusDays(4));
+        var originalInvoice = jdbc.queryForMap("SELECT * FROM reminder WHERE id=2190996");
+
+        assertThatThrownBy(() -> tx.executeWithoutResult(status -> {
+            assertThat(scheduler.closePaymentAutomationForManualSettlement(26375L, "Verified transfer")).isEqualTo(1);
+            jdbc.update("UPDATE payment SET confirmed=140000 WHERE id=26375");
+            throw new IllegalStateException("accounting write failed");
+        })).isInstanceOf(IllegalStateException.class).hasMessage("accounting write failed");
+        assertThat(jdbc.queryForObject("SELECT status FROM reminder WHERE id=2094420", String.class)).isEqualTo("ACTIVE");
+        assertThat(jdbc.queryForObject("SELECT confirmed FROM payment", Long.class)).isZero();
+        assertThat(jdbc.queryForMap("SELECT * FROM reminder WHERE id=2190996")).isEqualTo(originalInvoice);
+
+        tx.executeWithoutResult(status -> {
+            assertThat(scheduler.closePaymentAutomationForManualSettlement(26375L, "Verified transfer")).isEqualTo(1);
+            jdbc.update("UPDATE payment SET confirmed=140000 WHERE id=26375");
+        });
+        assertThat(jdbc.queryForObject("SELECT status FROM reminder WHERE id=2094420", String.class)).isEqualTo("DONE");
+        assertThat(jdbc.queryForObject("SELECT confirmed FROM payment", Long.class)).isEqualTo(140000L);
+        assertThat(jdbc.queryForMap("SELECT * FROM reminder WHERE id=2190996")).isEqualTo(originalInvoice);
+        tx.executeWithoutResult(status -> assertThat(
+                scheduler.closePaymentAutomationForManualSettlement(26375L, "Repeated confirmation")).isZero());
+        assertThat(jdbc.queryForMap("SELECT * FROM reminder WHERE id=2190996")).isEqualTo(originalInvoice);
     }
 
     @Test

@@ -43,7 +43,32 @@ class ManagerProblemDiagnosisValidatorTest {
         Fact delivery = new Fact("automation:3:delivery_status", "automation", "delivery_status", "UNCERTAIN");
         Diagnosis result = validator.validate(diagnosis("invoice.status=COLLECTING", "invoice:189:status", "CONTACT_RESPONSIBLE"), List.of(status, delivery));
         assertThat(result.actions()).extracting(Action::code).containsExactly("CHECK_DELIVERY");
-        assertThat(result.actions().getFirst().text()).contains("Проверить и починить", "историю WhatsApp", "Повтор старой операции не запускается");
+        assertThat(result.actions().getFirst().text()).contains("Проверить отправку", "историей нужного чата", "Новое сообщение не создаётся")
+                .doesNotContain("очередь");
+    }
+
+    @Test
+    void uncertainInvoiceCannotInheritQueueRestorationAdviceFromAnotherAutomation() {
+        var facts = List.of(status,
+                new Fact("automation:3:delivery_status", "automation", "delivery_status", "UNKNOWN"),
+                new Fact("automation:3:scenario", "automation", "scenario", "PAYMENT_INVOICE_RETRY"),
+                new Fact("automation:3:state_status", "automation", "state_status", "ACTIVE"),
+                new Fact("automation:3:current_cycle", "automation", "current_cycle", "true"),
+                new Fact("automation:4:scenario", "automation", "scenario", "REVIEW_CHECK_REMINDER"));
+        Diagnosis result = validator.validate(diagnosis("invoice.status=COLLECTING", "invoice:189:status", "CONTACT_RESPONSIBLE"), facts);
+        assertThat(result.actions().getFirst().text()).contains("замечание останется открытым").doesNotContain("очередь");
+        assertThat(result.verification().getFirst()).doesNotContain("очередь");
+    }
+
+    @Test
+    void uncertainCurrentPeriodicReminderPreservesConditionalRestorationAdvice() {
+        var facts = List.of(status,
+                new Fact("automation:3:delivery_status", "automation", "delivery_status", "UNKNOWN"),
+                new Fact("automation:3:scenario", "automation", "scenario", "REVIEW_CHECK_REMINDER"),
+                new Fact("automation:3:state_status", "automation", "state_status", "ACTIVE"),
+                new Fact("automation:3:current_cycle", "automation", "current_cycle", "true"));
+        Diagnosis result = validator.validate(diagnosis("invoice.status=COLLECTING", "invoice:189:status", "CONTACT_RESPONSIBLE"), facts);
+        assertThat(result.actions().getFirst().text()).contains("проверит возможность восстановить очередь");
     }
 
     @Test
