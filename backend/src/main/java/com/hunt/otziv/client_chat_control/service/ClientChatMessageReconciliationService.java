@@ -27,7 +27,7 @@ import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
-public class ClientChatMessageReconciliationService {
+public class ClientChatMessageReconciliationService implements com.hunt.otziv.client_chat_control.api.ReminderContactHistory {
 
     private final ClientChatUnansweredItemRepository unansweredRepository;
     private final ClientChatMessageRepository messageRepository;

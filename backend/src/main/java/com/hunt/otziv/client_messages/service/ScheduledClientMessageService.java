@@ -81,7 +81,8 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class ScheduledClientMessageService implements PaymentDeadlineNoticeSource, UncertainClientMessageDelivery {
+public class ScheduledClientMessageService implements PaymentDeadlineNoticeSource, UncertainClientMessageDelivery,
+        com.hunt.otziv.client_messages.api.PeriodicReminderRestart {
 
     private static final ObjectMapper DELIVERY_JSON = new ObjectMapper();
 
@@ -438,13 +439,6 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
         UNRESOLVED, HISTORY_UNAVAILABLE, HISTORY_CHECKED_NO_RECEIPT, SENT_CONFIRMED, UNSENT_CONFIRMED
     }
 
-    public record ReminderRestartCheck(PreparedScheduledDelivery delivery, String envelope,
-            com.hunt.otziv.p_products.api.OrderDeliveryControlContext.Snapshot order,
-            LocalDateTime preparedAt, LocalDateTime checkedAt) { }
-
-    public record PendingReminderRestart(com.hunt.otziv.p_products.api.OrderDeliveryControlContext.Snapshot order,
-                                         LocalDateTime nextAt) { }
-
     @Transactional(readOnly = true)
     public Optional<PendingReminderRestart> pendingReminderRestart(long stateId, Long managerId) {
         var state = stateRepository.findById(stateId).orElse(null);
@@ -484,7 +478,9 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
         // Leave positive receipt finalization to the existing workflow, which also records the contact on its card.
         if (receipt == null || receipt.sent() || !"whatsapp_history_checked_no_receipt".equals(receipt.errorCode()))
             return Optional.empty();
-        return Optional.of(new ReminderRestartCheck(prepared, envelope, order, preparedAt, messageTime.nowStorage()));
+        var reference = new DeliveryReference(prepared.stateId(), prepared.token(), prepared.targetKey(),
+                prepared.operationId(), prepared.clientId(), prepared.groupId());
+        return Optional.of(new ReminderRestartCheck(reference, envelope, order, preparedAt, messageTime.nowStorage()));
     }
 
     private boolean stalePeriodicReminder(ScheduledClientMessageState state, LocalDateTime now) {

@@ -57,7 +57,8 @@ class ReminderRestartTest {
                 .status(ScheduledMessageStateStatus.ACTIVE).targetKey(target).sentCount(11).lastSuccessAt(now.minusDays(5))
                 .deliveryStatus("UNKNOWN").deliveryToken("token").deliveryEnvelope(envelope).deliveryPreparedAt(now.minusDays(3))
                 .lastErrorCode(ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN).build();
-        check = new ScheduledClientMessageService.ReminderRestartCheck(prepared, envelope, source, state.getDeliveryPreparedAt(), now);
+        check = new ScheduledClientMessageService.ReminderRestartCheck(new com.hunt.otziv.client_messages.api.PeriodicReminderRestart.DeliveryReference(
+                prepared.stateId(), prepared.token(), prepared.targetKey(), prepared.operationId(), prepared.clientId(), prepared.groupId()), envelope, source, state.getDeliveryPreparedAt(), now);
         when(stateRepository.findById(30L)).thenReturn(Optional.of(state));
         when(stateRepository.findByIdForUpdate(30L)).thenReturn(Optional.of(state));
         when(orderRepository.findByIdForMutation(77L)).thenReturn(Optional.of(order));

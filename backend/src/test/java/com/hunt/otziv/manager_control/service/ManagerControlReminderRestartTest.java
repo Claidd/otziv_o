@@ -3,9 +3,9 @@ package com.hunt.otziv.manager_control.service;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import static org.mockito.ArgumentMatchers.*;
-import com.hunt.otziv.client_chat_control.service.ClientChatMessageReconciliationService;
+import com.hunt.otziv.client_chat_control.api.ReminderContactHistory;
 import com.hunt.otziv.client_messages.api.DeliveryOperation;
-import com.hunt.otziv.client_messages.service.ScheduledClientMessageService;
+import com.hunt.otziv.client_messages.api.PeriodicReminderRestart;
 import com.hunt.otziv.manager_control.dto.ManagerControlConcreteItemResponse;
 import com.hunt.otziv.manager_control.model.*;
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlConcreteItemRepository;
@@ -17,8 +17,8 @@ import java.util.Optional;
 import org.junit.jupiter.api.*;
 
 class ManagerControlReminderRestartTest {
-    final ScheduledClientMessageService scheduled = mock(ScheduledClientMessageService.class);
-    final ClientChatMessageReconciliationService history = mock(ClientChatMessageReconciliationService.class);
+    final PeriodicReminderRestart scheduled = mock(PeriodicReminderRestart.class);
+    final ReminderContactHistory history = mock(ReminderContactHistory.class);
     final ManagerClientMessageQueue queue = mock(ManagerClientMessageQueue.class);
     final ManagerClientMessageWorker worker = mock(ManagerClientMessageWorker.class);
     final OrderDeliveryControlContext orders = mock(OrderDeliveryControlContext.class);
@@ -29,10 +29,9 @@ class ManagerControlReminderRestartTest {
     final LocalDateTime now = LocalDateTime.now();
     final OrderDeliveryControlContext.Snapshot source = new OrderDeliveryControlContext.Snapshot(77L, 2L, "На проверке", 2,
             now.minusDays(20), false, null);
-    final ScheduledClientMessageService.PreparedScheduledDelivery frozen = new ScheduledClientMessageService.PreparedScheduledDelivery(
-            30L, com.hunt.otziv.client_messages.model.ClientMessageScenario.REVIEW_CHECK_REMINDER, "order:77:" + source.cycleAt().withNano(0),
-            77L, "token", "old-operation", null, "fixture-client", "fixture-chat", "text", null, 2, null, null, 2, "На проверке", null, List.of());
-    final ScheduledClientMessageService.ReminderRestartCheck checked = new ScheduledClientMessageService.ReminderRestartCheck(
+    final PeriodicReminderRestart.DeliveryReference frozen = new PeriodicReminderRestart.DeliveryReference(
+            30L, "token", "order:77:" + source.cycleAt().withNano(0), "old-operation", "fixture-client", "fixture-chat");
+    final PeriodicReminderRestart.ReminderRestartCheck checked = new PeriodicReminderRestart.ReminderRestartCheck(
             frozen, "saved-envelope", source, now.minusDays(3), now);
     final ManagerDailyControlConcreteItem card = new ManagerDailyControlConcreteItem();
     final ManagerControlConcreteItemResponse response = mock(ManagerControlConcreteItemResponse.class);
@@ -72,7 +71,6 @@ class ManagerControlReminderRestartTest {
         sequence.verify(scheduled).restartStaleReminder(checked, now, "owner");
         sequence.verify(queue).supersedeStaleReminder(pending, "owner", due);
         sequence.verify(outcome).recordReminderScheduled(eq(card), contains("Очередь напоминаний восстановлена"), any(), eq(due));
-        verify(scheduled, never()).retryNow(anyLong());
     }
 
     @Test void unavailableHistoryCannotRetireAnOperationOrCloseCard() {
@@ -94,7 +92,7 @@ class ManagerControlReminderRestartTest {
 
     @Test void repeatedClickReturnsExistingDeadlineWithoutNewGenerationOrDispatch() {
         when(scheduled.checkStaleReminderRestart(30, 2L)).thenReturn(Optional.empty());
-        when(scheduled.pendingReminderRestart(30, 2L)).thenReturn(Optional.of(new ScheduledClientMessageService.PendingReminderRestart(source, due)));
+        when(scheduled.pendingReminderRestart(30, 2L)).thenReturn(Optional.of(new PeriodicReminderRestart.PendingReminderRestart(source, due)));
         assertThat(repair.repair(10, 30, 2L, () -> "owner")).contains(response);
         verifyNoInteractions(worker, history);
         verify(scheduled, never()).restartStaleReminder(any(), any(), anyString());

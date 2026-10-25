@@ -1,7 +1,7 @@
 package com.hunt.otziv.manager_control.service;
 
-import com.hunt.otziv.client_chat_control.service.ClientChatMessageReconciliationService;
-import com.hunt.otziv.client_messages.service.ScheduledClientMessageService;
+import com.hunt.otziv.client_chat_control.api.ReminderContactHistory;
+import com.hunt.otziv.client_messages.api.PeriodicReminderRestart;
 import com.hunt.otziv.manager_control.dto.ManagerControlConcreteItemResponse;
 import com.hunt.otziv.manager_control.model.*;
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlConcreteItemRepository;
@@ -23,8 +23,8 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 @RequiredArgsConstructor
 public class ManagerControlReminderRestart {
-    private final ScheduledClientMessageService scheduled;
-    private final ClientChatMessageReconciliationService history;
+    private final PeriodicReminderRestart scheduled;
+    private final ReminderContactHistory history;
     private final ManagerClientMessageQueue queue;
     private final ManagerClientMessageWorker worker;
     private final OrderDeliveryControlContext orders;
@@ -108,7 +108,8 @@ public class ManagerControlReminderRestart {
 
     private String note(LocalDateTime next) {
         return "Очередь напоминаний восстановлена. Следующая проверка и допустимая отправка — "
-                + next.format(DateTimeFormatter.ofPattern("dd.MM HH:mm"))
+                + next.atZone(java.time.ZoneId.systemDefault()).withZoneSameInstant(java.time.ZoneId.of("Asia/Irkutsk"))
+                    .format(DateTimeFormatter.ofPattern("dd.MM HH:mm"))
                 + " (Иркутск). История WhatsApp проверена; старая неподтверждённая операция сохранена без повтора. "
                 + "Завершение заказа и оплата не менялись.";
     }
