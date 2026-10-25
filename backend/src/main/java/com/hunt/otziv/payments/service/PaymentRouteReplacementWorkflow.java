@@ -1,5 +1,6 @@
 package com.hunt.otziv.payments.service;
 
+import com.hunt.otziv.client_messages.api.ManualPaymentAutomationControl;
 import com.hunt.otziv.contractor_payments.dto.ContractorPaymentRequisitesSnapshot;
 import com.hunt.otziv.contractor_payments.model.ContractorPaymentAllocation;
 import com.hunt.otziv.contractor_payments.service.ContractorActualPaymentAttributionService;
@@ -66,6 +67,8 @@ public class PaymentRouteReplacementWorkflow {
 
     private final ContractorActualPaymentAttributionService actualPaymentAttributionService;
 
+    private final ManualPaymentAutomationControl paymentAutomation;
+
     @Transactional(readOnly = true)
     public PaymentRouteChangeContextResponse paymentRouteChangeContextAuthorized(Long orderId, Authentication authentication) {
         Order order = orderRepository.findById(orderId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден"));
@@ -73,11 +76,13 @@ public class PaymentRouteReplacementWorkflow {
         List<PaymentLink> links = paymentLinkRepository.findByOrderIdInForRead(Set.of(orderId));
         PaymentLink current = currentRouteChangeLink(links).orElse(null);
         Long expectedTargetPaymentProfileId = targetPaymentProfileId(order);
+        String automationBlockReason = paymentAutomation.paymentRouteReplacementBlockReason(orderId).orElse(null);
         if (current == null) {
             InvoicePaymentMode configuredMode = invoicePaymentMode(order);
-            return new PaymentRouteChangeContextResponse(null, configuredPaymentModeLabel(configuredMode), configuredPaymentModeRecipient(configuredMode), "NOT_CREATED", true, "", configuredMode.name(), false, expectedTargetPaymentProfileId);
+            return new PaymentRouteChangeContextResponse(null, configuredPaymentModeLabel(configuredMode), configuredPaymentModeRecipient(configuredMode), "NOT_CREATED", automationBlockReason == null, automationBlockReason == null ? "" : automationBlockReason, configuredMode.name(), false, expectedTargetPaymentProfileId);
         }
         String blockReason = routeChangeBlockReason(current);
+        if (blockReason == null) blockReason = automationBlockReason;
         String currentRoute = isPaperInvoice(current) ? "Бумажный счёт владельца" : isManualPayment(current) ? "Оплата по реквизитам" : isTochkaPaymentLink(current) ? "Эквайринг · Точка Банк" : "Эквайринг · T‑Bank";
         String currentRecipient = isPaperInvoice(current) ? "Владелец" : isManualPayment(current) ? manualRouteRecipientContext(current, order) : normalize(current.getPaymentProfileName());
         if (currentRecipient.isBlank()) {
@@ -102,6 +107,9 @@ public class PaymentRouteReplacementWorkflow {
         managerAccessService.requireOrderAccess(orderId, authentication);
         ensureOrderNotCoveredByActiveCommonInvoice(orderId);
         orderPaymentIntegrityService.assertPaymentCycleAllowed(order);
+        // Match scheduler preparation lock order: Order -> message states -> links.
+        // The check also fences known-unsent retries that retain old requisites.
+        paymentAutomation.assertPaymentRouteReplaceable(orderId);
         LocalDateTime now = LocalDateTime.now();
         List<PaymentLink> links = paymentLinkRepository.findByOrderIdForUpdate(orderId);
         PaymentLink current = currentRouteChangeLink(links).orElse(null);

@@ -1090,8 +1090,6 @@ public class OrderStatusTransitionService {
 
             orderBotLifecycleService.assignBotsIfNeeded(order);
             orderCompanyStatusService.autoManageCompanyStatus(order, STATUS_PUBLIC);
-            String clientId = order.getManager() != null ? order.getManager().getClientId() : null;
-            String groupId = order.getCompany() != null ? order.getCompany().getGroupId() : null;
 
             if (orderPaymentMessageBuilder.shouldSkipPublishedPayment(order)) {
                 order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_PUBLIC));
@@ -1118,25 +1116,15 @@ public class OrderStatusTransitionService {
                 return true;
             }
 
-            OrderPaymentMessageBuilder.PreparedPaymentMessage paymentMessage = preparePublishedPaymentMessage(order);
-            if (paymentMessage == null) {
-                mobilePushBusinessNotificationService.notifyManagerOrderPublished(order);
-                return true;
-            }
-
-            boolean sent = orderStatusNotificationService.sendMessageToGroup(
-                    STATUS_PUBLIC,
-                    order,
-                    clientId,
-                    groupId,
-                    paymentMessage.message(),
-                    STATUS_TO_PAY,
-                    paymentMessage.telegramCopyTransferNumber()
-            );
-            if (!sent) {
-                paymentInvoiceRetryScheduler.scheduleRetry(order);
-                log.warn("⚠️ Заказ ID {} оставлен в статусе 'Опубликовано': счет клиенту не отправлен", order.getId());
-            }
+            // The manual transition owns the order lock. Preparing a payment in
+            // REQUIRES_NEW would wait for that same lock; sending a joined payment
+            // here could expose a link whose transaction subsequently rolls back.
+            // Use the same durable invoice path as ordinary publication completion:
+            // commit the order and intent, then commit the link/envelope before I/O.
+            order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_PUBLIC));
+            orderRepository.save(order);
+            paymentInvoiceRetryScheduler.scheduleInitialInvoice(order);
+            log.info("Финальный счет после ручной публикации поставлен в очередь, orderId={}", order.getId());
             mobilePushBusinessNotificationService.notifyManagerOrderPublished(order);
             return true;
 
@@ -1146,19 +1134,6 @@ public class OrderStatusTransitionService {
         } catch (Exception e) {
             log.error("=== ОШИБКА ПРИ ПЕРЕВОДЕ ЗАКАЗА В СТАТУС 'ПУБЛИКАЦИЯ' ===", e);
             throw new RuntimeException("Ошибка при переводе заказа в статус 'Публикация'", e);
-        }
-    }
-
-    private OrderPaymentMessageBuilder.PreparedPaymentMessage preparePublishedPaymentMessage(Order order) {
-        try {
-            return orderPaymentMessageBuilder.publishedOrderPaymentMessageWithTransfer(order);
-        } catch (RuntimeException e) {
-            order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_PUBLIC));
-            orderRepository.save(order);
-            paymentInvoiceRetryScheduler.scheduleRetry(order);
-            log.warn("Заказ ID {} переведен в 'Опубликовано', но счет клиенту не подготовлен. Статус не откатывается.",
-                    order.getId(), e);
-            return null;
         }
     }
 

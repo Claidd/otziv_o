@@ -664,7 +664,8 @@ public class ManualCardPaymentWorkflow {
     }
 
     /**
-     * Repeated under Order + target link + every order-link lock immediately before remote Cancel.
+     * Repeated under Order + target link + every order-link lock immediately before
+     * remote Cancel or direct manual settlement.
      */
     @Transactional(propagation = Propagation.MANDATORY, noRollbackFor = Exception.class)
     void requireManualCardPaymentLocalEligibility(Order order, PaymentLink link, Long orderId) {
@@ -792,10 +793,12 @@ public class ManualCardPaymentWorkflow {
         }
         validateManualConfirmable(link);
         validateAmountCurrentForManualConfirm(link);
+        // A link-id confirmation bypasses order-level route selection, and a
+        // competing route may also appear after preflight. Recheck the complete
+        // locked route set before freezing the recipient or crediting anything.
+        // Completed replays above only verify the original receipt.
+        requireManualCardPaymentLocalEligibility(order, link, orderId);
         freezeActualRecipientIntentIfRequired(order, link, requestedType, requestedProfileId, requestedRecipientKey, context.reason(), receiptUrl, actor.isBlank() ? "system" : actor);
-        if (orderPaymentIntegrityService.hasSettledPaymentEvidence(order)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Заказ уже имеет признаки оплаты. Повторное зачисление заблокировано.");
-        }
         boolean updated = false;
         try {
             if (canApplyOrderPaymentNow(order)) {

@@ -287,6 +287,47 @@ public class PaymentInvoiceRetryScheduler implements ManualPaymentAutomationCont
         lockedMutablePaymentAutomationStates(orderId, "payment_mutation_preflight");
     }
 
+    /**
+     * A proven-unsent retry still owns its original immutable payment details.
+     * Replacing the route would allow those old details to be sent afterwards.
+     * Unlike recording an incoming payment, replacement cannot allow DONE+UNKNOWN.
+     */
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void assertPaymentRouteReplaceable(Long orderId) {
+        if (orderId == null || orderId <= 0) return;
+        List<ScheduledClientMessageState> states = stateRepository.findByOrderIdInForUpdate(List.of(orderId));
+        if (states.stream().anyMatch(this::blocksPaymentRouteReplacement)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, paymentRouteReplacementBlockedMessage());
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<String> paymentRouteReplacementBlockReason(Long orderId) {
+        if (orderId == null || orderId <= 0) return Optional.empty();
+        return stateRepository.findByOrderIdIn(List.of(orderId)).stream()
+                .anyMatch(this::blocksPaymentRouteReplacement)
+                ? Optional.of(paymentRouteReplacementBlockedMessage()) : Optional.empty();
+    }
+
+    private boolean blocksPaymentRouteReplacement(ScheduledClientMessageState state) {
+        if (state == null || !PAYMENT_AUTOMATION_SCENARIOS.contains(state.getScenario())) return false;
+        // A confirmed historical delivery has no remaining send to race with.
+        if (state.getStatus() == ScheduledMessageStateStatus.DONE
+                && "SENT".equals(state.getDeliveryStatus())) return false;
+        if (ClientMessageStateSafety.blocksAutomaticRearm(state)) return true;
+        boolean canRetry = state.getStatus() == ScheduledMessageStateStatus.ACTIVE
+                || state.getStatus() == ScheduledMessageStateStatus.PAUSED;
+        return canRetry && !"SENT".equals(state.getDeliveryStatus())
+                && state.getDeliveryEnvelope() != null && !state.getDeliveryEnvelope().isBlank();
+    }
+
+    private String paymentRouteReplacementBlockedMessage() {
+        return "Сохранено сообщение с прежними реквизитами: его отправка ожидается или результат не подтвержден. "
+                + "Сначала завершите сверку сообщения, затем меняйте способ оплаты.";
+    }
+
     private List<ScheduledClientMessageState> lockedMutablePaymentAutomationStates(
             Long orderId,
             String operation

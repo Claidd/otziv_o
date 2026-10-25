@@ -1,10 +1,10 @@
-<app-admin-layout [title]="title()" [active]="'pay'" [rightPanelMode]="'custom'">
+<app-admin-layout [title]="title" [active]="'pay'" [rightPanelMode]="'custom'">
   <section class="pay-result-shell">
-    <section class="payment-result-widget" [class.payment-result-widget--success]="isSuccess()" [class.payment-result-widget--fail]="!isSuccess()" aria-label="Результат оплаты">
+    <section class="payment-result-widget" aria-label="Проверка результата оплаты">
       <header class="payment-head">
         <div>
           <span class="merchant-name">Компания О!</span>
-          <strong>{{ title() }}</strong>
+          <strong>{{ title }}</strong>
           <small>{{ serviceName }}</small>
         </div>
         <span class="brand-mark" aria-hidden="true">О!</span>
@@ -12,39 +12,39 @@
 
       <article class="result-hero" aria-live="polite">
         <span class="result-hero-icon" aria-hidden="true">
-          <span class="material-icons-sharp">{{ icon() }}</span>
+          <span class="material-icons-sharp">info</span>
         </span>
         <div>
-          <span class="result-kicker">{{ statusLabel() }}</span>
-          <h1>{{ heroTitle() }}</h1>
-          <p>{{ heroText() }}</p>
+          <span class="result-kicker">{{ statusLabel }}</span>
+          <h1>{{ heroTitle }}</h1>
+          <p>{{ heroText }}</p>
         </div>
       </article>
 
       <article class="next-step-card">
-        <span class="material-icons-sharp" aria-hidden="true">{{ isSuccess() ? 'verified' : 'support_agent' }}</span>
+        <span class="material-icons-sharp" aria-hidden="true">schedule</span>
         <div>
-          <strong>{{ nextStepTitle() }}</strong>
-          <p>{{ lead() }}</p>
+          <strong>{{ nextStepTitle }}</strong>
+          <p>{{ lead }}</p>
         </div>
       </article>
 
       <article class="bank-card">
         <header>
           <div>
-            <h2>Детали операции</h2>
-            <p>Информация для сверки платежа и чека</p>
+            <h2>Информация об оплате</h2>
+            <p>Результат платежа уточняется по исходной ссылке на счёт</p>
           </div>
           <span>
-            <span class="material-icons-sharp" aria-hidden="true">lock</span>
-            банк
+            <span class="material-icons-sharp" aria-hidden="true">info</span>
+            проверка
           </span>
         </header>
 
         <div class="result-summary" aria-label="Данные платежа">
           <div class="summary-status">
             <small>Статус</small>
-            <strong>{{ statusLabel() }}</strong>
+            <strong>{{ statusLabel }}</strong>
           </div>
           <div>
             <small>Услуга</small>
@@ -61,9 +61,9 @@
         </div>
 
         <div class="result-actions">
-          <a class="primary-result-button" [routerLink]="actionLink()">
-            <span class="material-icons-sharp" aria-hidden="true">{{ isSuccess() ? 'home' : 'payments' }}</span>
-            {{ actionLabel() }}
+          <a class="primary-result-button" routerLink="/">
+            <span class="material-icons-sharp" aria-hidden="true">home</span>
+            На главную
           </a>
           <a class="secondary-result-button" routerLink="/contacts">
             <span class="material-icons-sharp" aria-hidden="true">contacts</span>

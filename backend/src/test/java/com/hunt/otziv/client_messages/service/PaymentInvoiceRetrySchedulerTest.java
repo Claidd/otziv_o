@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -21,6 +22,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -160,6 +162,73 @@ class PaymentInvoiceRetrySchedulerTest {
         assertEquals(409, error.getStatusCode().value());
         assertEquals(ScheduledMessageStateStatus.ACTIVE, prepared.getStatus());
         verify(stateRepository, never()).save(any());
+    }
+
+    @ParameterizedTest
+    @CsvSource({"ACTIVE, PREPARED", "DONE, PREPARED", "ACTIVE, UNKNOWN", "DONE, UNKNOWN",
+            "ACTIVE, RETRYABLE", "PAUSED, RETRYABLE", "ACTIVE, CLAIMED"})
+    void routeReplacementCannotLeaveOldPaymentInstructionsPending(
+            ScheduledMessageStateStatus status, String deliveryStatus) {
+        PaymentInvoiceRetryScheduler scheduler = scheduler();
+        ScheduledClientMessageState invoice = state(ClientMessageScenario.PAYMENT_INVOICE_RETRY, status);
+        invoice.setDeliveryStatus(deliveryStatus);
+        invoice.setDeliveryEnvelope("original-invoice-envelope");
+        invoice.setDeliveryToken("original-operation-token");
+        invoice.setDeliveryMessage("original-payment-instruction");
+        invoice.setLastErrorCode("CLAIMED".equals(deliveryStatus)
+                ? ClientMessageStateSafety.TRANSACTION_IN_PROGRESS : null);
+        when(stateRepository.findByOrderIdInForUpdate(List.of(25047L))).thenReturn(List.of(invoice));
+        when(stateRepository.findByOrderIdIn(List.of(25047L))).thenReturn(List.of(invoice));
+
+        ResponseStatusException conflict = assertThrows(ResponseStatusException.class,
+                () -> scheduler.assertPaymentRouteReplaceable(25047L));
+
+        assertEquals(409, conflict.getStatusCode().value());
+        assertEquals(Optional.of(conflict.getReason()), scheduler.paymentRouteReplacementBlockReason(25047L));
+        assertEquals(status, invoice.getStatus());
+        assertEquals(deliveryStatus, invoice.getDeliveryStatus());
+        assertEquals("original-invoice-envelope", invoice.getDeliveryEnvelope());
+        assertEquals("original-operation-token", invoice.getDeliveryToken());
+        verify(stateRepository, never()).save(any());
+        verify(stateRepository, never()).saveAll(any());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"unprepared", "completed", "completed-unsent", "completed-sent", "active-sent", "unrelated"})
+    void routeReplacementAllowsTerminalHistoryAndMessagesWithoutFrozenPaymentDetails(String condition) {
+        PaymentInvoiceRetryScheduler scheduler = scheduler();
+        ScheduledClientMessageState invoice = state(ClientMessageScenario.PAYMENT_INVOICE_RETRY,
+                ScheduledMessageStateStatus.DONE);
+        invoice.setDeliveryEnvelope("historical-invoice-envelope");
+        invoice.setLastErrorCode(null);
+        switch (condition) {
+            case "unprepared" -> {
+                invoice.setStatus(ScheduledMessageStateStatus.ACTIVE);
+                invoice.setDeliveryEnvelope(null);
+            }
+            case "completed" -> invoice.setDeliveryStatus(null);
+            case "completed-unsent" -> invoice.setDeliveryStatus("RETRYABLE");
+            case "completed-sent" -> {
+                invoice.setDeliveryStatus("SENT");
+                invoice.setLastErrorCode(ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN);
+            }
+            case "active-sent" -> {
+                invoice.setStatus(ScheduledMessageStateStatus.ACTIVE);
+                invoice.setDeliveryStatus("SENT");
+            }
+            case "unrelated" -> {
+                invoice.setScenario(ClientMessageScenario.REVIEW_CHECK_DELIVERY_RETRY);
+                invoice.setDeliveryStatus("PREPARED");
+            }
+            default -> throw new IllegalArgumentException(condition);
+        }
+        when(stateRepository.findByOrderIdInForUpdate(List.of(25047L))).thenReturn(List.of(invoice));
+        when(stateRepository.findByOrderIdIn(List.of(25047L))).thenReturn(List.of(invoice));
+
+        assertDoesNotThrow(() -> scheduler.assertPaymentRouteReplaceable(25047L));
+        assertEquals(Optional.empty(), scheduler.paymentRouteReplacementBlockReason(25047L));
+        verify(stateRepository, never()).save(any());
+        verify(stateRepository, never()).saveAll(any());
     }
 
     @Test
