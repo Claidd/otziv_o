@@ -62,6 +62,9 @@ on:
           - c40-phpmyadmin
           - c40-grafana
           - c40-node
+          - c41-nginx
+          - c41-phpmyadmin
+          - c41-grafana
           - c29-dozzle
           - c29-prometheus
           - c29-loki
@@ -299,7 +302,9 @@ jobs:
         shell: pwsh
         run: ./infrastructure/scripts/security/check-infrastructure-contract.ps1
       - name: Verify exact public evidence secret-scan exceptions and negative controls
-        run: python3 -B infrastructure/scripts/security/test_c40_gitleaks_evidence.py -v
+        run: |
+          python3 -B infrastructure/scripts/security/test_c40_gitleaks_evidence.py -v
+          python3 -B infrastructure/scripts/security/test_c41_gitleaks_evidence.py -v
       - name: Exercise production release lineage guards
         shell: pwsh
         run: ./infrastructure/scripts/security/check-deploy-release-contract.ps1

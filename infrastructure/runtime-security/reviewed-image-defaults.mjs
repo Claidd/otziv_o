@@ -417,7 +417,7 @@ export async function validateActivation(image, entry, manifestBytes, read) {
   if (selected.manifestSet === 'c30-grafana') {
     await validateGrafanaC30ActivationScan(publication.value, entry.publication.path, read);
   }
-  if (['c36-grafana', 'c40-grafana'].includes(selected.manifestSet)) {
+  if (['c36-grafana', 'c40-grafana', 'c41-grafana'].includes(selected.manifestSet)) {
     await validateGrafanaC36ActivationScan(publication.value, entry.publication.path, read);
   }
   if (requiresKeycloakDependencyProof(publicationImage)) {

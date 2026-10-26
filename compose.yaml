@@ -57,7 +57,7 @@ services:
       internal_net:
 
   nginx:
-    image: ghcr.io/claidd/otziv-security@sha256:f0f0b92345c2ddf67da923de76951d34d354957de9efda532c926b61ba84842d
+    image: ghcr.io/claidd/otziv-security@sha256:b30ef32504546374c995f4c675c1a8f16f2feff0dc560c1f3df4725bdb0f4864
     ports:
       - '127.0.0.1:80:80'
       - '127.0.0.1:443:443'
@@ -233,7 +233,7 @@ services:
       internal_net:
 
   phpmyadmin:
-    image: ghcr.io/claidd/otziv-security@sha256:ef39d5374b37296d840c1a4355fc9ecc3e44c55a4ddf958334bf74d8f8bf0599
+    image: ghcr.io/claidd/otziv-security@sha256:919ceaa723a3490d75ce1f264b2a852127cb2e7e6aa64c04aa7199a1761d5c47
     profiles: ["db-admin"]
     ports:
       - "127.0.0.1:6571:80"
@@ -393,7 +393,7 @@ services:
       - internal_net
 
   grafana:
-    image: ghcr.io/claidd/otziv-security@sha256:db6100e472c78215c923e1472fbfe0b4109a1303505aa959b190a3cae2bccc37
+    image: ghcr.io/claidd/otziv-security@sha256:fee75a266b5d85e4668da86f4089624f3764dd5df4a6e798f167913cfc5ccfc6
     profiles: ["observability"]
     container_name: otziv-grafana
     ports:

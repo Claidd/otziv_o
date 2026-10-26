@@ -30,6 +30,8 @@ import java.util.Optional;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -267,6 +269,50 @@ class WorkloadTransferWorkflowServiceTest {
         assertThat(result.staged()).isEqualTo(2);
         assertThat(result.skippedByPolicy()).isZero();
     }
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void releasedQuotaDoesNotRepeatRejectedGraphButAllowsChangedPackage(boolean changedGraph)
+            throws Exception {
+        WorkloadLiveSettingsResponse settings = settings();
+        when(liveSettingsService.current()).thenReturn(settings);
+        when(liveSettingsService.applicationAllowed(settings)).thenReturn(true);
+        when(liveSettingsService.managerAllowed(eq(settings), anyLong())).thenReturn(true);
+        var candidates = List.of(
+                candidate(101L, 11L, 1001L, 201L, 1, 5),
+                candidate(101L, 11L, 1001L, 202L, 2, 5),
+                candidate(101L, 11L, 1002L, 203L, 1, 5),
+                candidate(101L, 11L, 1002L, 204L, 2, 5)
+        );
+        when(repository.findRecommendationCandidates(anyInt())).thenReturn(candidates);
+        var firstGraph = graph(1001L, 11L, 101L);
+        when(graphQueryService.findActiveGraphs(any(), any())).thenReturn(Map.of(
+                101L, List.of(firstGraph, graph(1002L, 11L, 101L))
+        ));
+        var blocked = org.mockito.Mockito.mock(
+                WorkloadTransferWorkflowRepository.BlockedGraphProjection.class
+        );
+        when(blocked.getSourceWorkerId()).thenReturn(101L);
+        when(blocked.getCompanyId()).thenReturn(1001L);
+        when(blocked.getGraphFingerprint()).thenReturn(changedGraph ? "previous-graph"
+                : new WorkloadTransferGraphSnapshotService(objectMapper).snapshot(firstGraph).fingerprint());
+        when(repository.findBlockedGraphsSince(any())).thenReturn(List.of(blocked));
+        when(repository.insertWorkflowsBulk(anyString(), eq("CANARY"), eq(true),
+                anyLong(), anyLong(), any(LocalDate.class), any(LocalDateTime.class)))
+                .thenReturn(1);
+
+        var result = service.stageEligibleRecommendations();
+
+        assertThat(result.staged()).isEqualTo(1);
+        assertThat(result.skippedByPolicy()).isEqualTo(1);
+        ArgumentCaptor<String> payload = ArgumentCaptor.forClass(String.class);
+        verify(repository).insertWorkflowsBulk(payload.capture(), eq("CANARY"), eq(true),
+                anyLong(), anyLong(), any(LocalDate.class), any(LocalDateTime.class));
+        var rows = objectMapper.readTree(payload.getValue());
+        assertThat(rows.size()).isEqualTo(1);
+        assertThat(rows.get(0).get("companyId").asLong()).isEqualTo(changedGraph ? 1001L : 1002L);
+        verify(graphQueryService, times(1)).findActiveGraphs(any(), any());
+    }
+
     private RecommendationCandidateProjection candidate(
             long sourceWorkerId,
             long managerId,

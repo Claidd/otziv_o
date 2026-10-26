@@ -1,0 +1,45 @@
+
+
+Core
+PDO
+Phar
+Reflection
+SPL
+SimpleXML
+Zend OPcache
+Zend OPcache
+[PHP Modules]
+[Zend Modules]
+bcmath
+bz2
+ctype
+curl
+date
+dom
+fileinfo
+filter
+gd
+hash
+iconv
+json
+libxml
+mbstring
+mysqli
+mysqlnd
+openssl
+pcre
+pdo_sqlite
+posix
+random
+readline
+session
+sodium
+sqlite3
+standard
+tokenizer
+uploadprogress
+xml
+xmlreader
+xmlwriter
+zip
+zlib

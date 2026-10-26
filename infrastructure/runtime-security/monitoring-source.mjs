@@ -30,6 +30,7 @@ export function isPublishedMonitoringOverlayManifest(component, selected) {
     selected === `infrastructure/runtime-security/reviewed-images-c36-${component}.json` ||
     (component === 'grafana' && selected === 'infrastructure/runtime-security/reviewed-images-c30-grafana.json') ||
     (component === 'grafana' && selected === 'infrastructure/runtime-security/reviewed-images-c40-grafana.json') ||
+    (component === 'grafana' && selected === 'infrastructure/runtime-security/reviewed-images-c41-grafana.json') ||
     (component === 'alloy' && selected === 'infrastructure/runtime-security/reviewed-images-c23-alloy.json');
 }
 

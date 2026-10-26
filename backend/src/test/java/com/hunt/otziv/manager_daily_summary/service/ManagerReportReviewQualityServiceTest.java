@@ -336,6 +336,101 @@ class ManagerReportReviewQualityServiceTest {
     }
 
     @Test
+    void retriesAssessSavedCurrentAnswerOnceWithoutRewritingHistory() throws Exception {
+        String answer = "Статус COLLECTING.";
+        for (int copies : List.of(1, 20)) {
+            String history = "[]";
+            for (int index = 0; index < copies; index++) {
+                history = service.appendAnswer(history, new ManagerReportReviewQualityService.ReviewAnswer(
+                        0, "Вопрос", answer, false, 0, "Проверка временно недоступна", "deepseek"));
+            }
+            List<String> previous = service.previousAcceptedContext(history, 0);
+            AiProvider provider = provider(assessment("SATISFIED", answer, "E1", "FACT", "SUPPORTED", "Верно"));
+
+            var result = service.assessAnswer(invoiceEvidence("COLLECTING", 2), sourceQuestion(), answer,
+                    false, previous, false);
+
+            assertThat(result.accepted()).isTrue();
+            assertThat(result.claims().getFirst().answerAttempt()).isZero();
+            ArgumentCaptor<AiRequest> request = ArgumentCaptor.forClass(AiRequest.class);
+            verify(provider).generate(request.capture());
+            var input = new ObjectMapper().readTree(request.getValue().userPrompt());
+            assertThat(input.path("previousAttempts")).isEmpty();
+            assertThat(input.path("managerAnswer").asText()).isEqualTo(answer);
+            assertThat(previous).hasSize(copies).containsOnly(answer);
+            assertThat(service.previousAcceptedContext(history, 0)).isEqualTo(previous);
+        }
+    }
+
+    @Test
+    void repeatedCurrentCorrectionRetainsDistinctPriorAnswerAndRetraction() throws Exception {
+        String previous = "Ошибка оплаты, статус Напоминание";
+        String answer = "Статус COLLECTING; про ошибку оплаты я написала неверно.";
+        var json = (com.fasterxml.jackson.databind.node.ObjectNode) new ObjectMapper().readTree(
+                assessment("SATISFIED", "Статус COLLECTING", "E1", "FACT", "SUPPORTED", "Поправка верна")
+                        .replace("\"answerAttempt\":0", "\"answerAttempt\":1"));
+        ((com.fasterxml.jackson.databind.node.ArrayNode) json.path("claims")).addObject()
+                .put("kind", "RETRACTION").put("status", "UNVERIFIABLE").put("temporal", "HISTORICAL")
+                .put("answerAttempt", 1).put("answerQuote", "про ошибку оплаты я написала неверно")
+                .putArray("evidenceRefs");
+        AiProvider provider = provider(json.toString());
+
+        var result = service.assessAnswer(invoiceEvidence("COLLECTING", 2), sourceQuestion(), answer,
+                false, List.of(previous, answer, answer), false);
+
+        assertThat(result.accepted()).isTrue();
+        assertThat(result.claims()).anyMatch(claim -> claim.kind() == ManagerReportReviewQualityService.ClaimKind.RETRACTION);
+        assertThat(result.claims()).allMatch(claim -> claim.answerAttempt() == 1);
+        ArgumentCaptor<AiRequest> request = ArgumentCaptor.forClass(AiRequest.class);
+        verify(provider).generate(request.capture());
+        assertThat(new ObjectMapper().readTree(request.getValue().userPrompt()).path("previousAttempts"))
+                .isEqualTo(new ObjectMapper().valueToTree(List.of(previous)));
+    }
+
+    @Test
+    void canonicalAttemptsPreserveNonTrailingRepeatsAndNearlyMatchingCorrections() throws Exception {
+        String answer = "Статус COLLECTING.";
+        List<String> retained = List.of(answer, "Исправляю: пока неизвестно", answer + " ",
+                "СТАТУС COLLECTING.", "Статус COLLECTING!");
+        var previous = new java.util.ArrayList<>(retained);
+        previous.add(answer);
+        previous.add(answer);
+        List<String> original = List.copyOf(previous);
+        AiProvider provider = provider(assessment("SATISFIED", answer, "E1", "FACT", "SUPPORTED", "Верно")
+                .replace("\"answerAttempt\":0", "\"answerAttempt\":5"));
+
+        var result = service.assessAnswer(invoiceEvidence("COLLECTING", 2), sourceQuestion(), answer,
+                false, previous, false);
+
+        assertThat(result.accepted()).isTrue();
+        assertThat(result.claims().getFirst().answerAttempt()).isEqualTo(5);
+        ArgumentCaptor<AiRequest> request = ArgumentCaptor.forClass(AiRequest.class);
+        verify(provider).generate(request.capture());
+        assertThat(new ObjectMapper().readTree(request.getValue().userPrompt()).path("previousAttempts"))
+                .isEqualTo(new ObjectMapper().valueToTree(retained));
+        assertThat(previous).isEqualTo(original);
+    }
+
+    @Test
+    void canonicalAttemptIndexesStillRejectClaimsOnlyAboutEarlierAnswer() throws Exception {
+        String answer = "Статус COLLECTING.";
+        List<String> retained = List.of(answer, "Исправляю: пока неизвестно");
+        AiProvider provider = provider(assessment("SATISFIED", answer, "E1", "FACT", "SUPPORTED", "Верно"));
+
+        var result = service.assessAnswer(invoiceEvidence("COLLECTING", 2), sourceQuestion(), answer,
+                false, List.of(retained.get(0), retained.get(1), answer, answer), false);
+
+        assertThat(result.decision()).isEqualTo(ManagerReportReviewQualityService.Decision.UNAVAILABLE);
+        assertThat(result.reason()).contains("CURRENT_ANSWER_REQUIRED");
+        ArgumentCaptor<AiRequest> requests = ArgumentCaptor.forClass(AiRequest.class);
+        verify(provider, times(2)).generate(requests.capture());
+        for (AiRequest request : requests.getAllValues()) {
+            assertThat(new ObjectMapper().readTree(request.userPrompt()).path("previousAttempts"))
+                    .isEqualTo(new ObjectMapper().valueToTree(retained));
+        }
+    }
+
+    @Test
     void promisesCannotMasqueradeAsCompletedActions() {
         String answer = "Я исправлю счёт.";
         provider(assessment("SATISFIED", answer, "E1", "PROMISE", "SUPPORTED", "Сделано"));
@@ -640,6 +735,121 @@ class ManagerReportReviewQualityServiceTest {
 
     private ManagerReportReviewQualityService.ReviewQuestion sourceQuestion() {
         return new ManagerReportReviewQualityService.ReviewQuestion("Что произошло?", List.of("объяснение"), List.of(42L));
+    }
+
+    @Test
+    void largeEvidenceIsSentOnceWithCompleteStableReferencesAndSixCompactCriteria() throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        String answer = ManagerReportReviewLargeEvidenceFixture.ANSWER;
+        String report = ManagerReportReviewLargeEvidenceFixture.evidence();
+        var response = mapper.readTree(assessment("SATISFIED", answer, "E1", "PROMISE", "PLAN", "Действие обосновано"));
+        var criteria = (com.fasterxml.jackson.databind.node.ArrayNode) response.path("criteria");
+        for (int index = 1; index < 6; index++) {
+            var copy = (com.fasterxml.jackson.databind.node.ObjectNode) criteria.get(0).deepCopy();
+            criteria.add(copy.put("criterionIndex", index));
+        }
+        AiProvider provider = provider(response.toString());
+        var result = service.assessAnswer(report, ManagerReportReviewLargeEvidenceFixture.question(), answer, false);
+        assertThat(result.accepted()).isTrue();
+        assertThat(result.criteria()).hasSize(6);
+        assertThat(result.claims()).hasSize(1);
+        ArgumentCaptor<AiRequest> requests = ArgumentCaptor.forClass(AiRequest.class);
+        verify(provider).generate(requests.capture());
+        AiRequest request = requests.getValue();
+        var input = mapper.readTree(request.userPrompt());
+        var evidence = input.path("evidence");
+        assertThat(evidence).hasSize(142);
+        assertThat(input.path("authoritativeFacts")).hasSize(142);
+        String boundary = "СЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:";
+        assertThat(input.path("report").asText()).isEqualTo(report.substring(0, report.indexOf(boundary) + boundary.length()));
+        String[] originalFacts = report.substring(report.indexOf(boundary) + boundary.length()).strip().split("\n");
+        var previousTypedFacts = mapper.createArrayNode();
+        for (int index = 0; index < originalFacts.length; index++) {
+            assertThat(evidence.get(index).path("ref").asText()).isEqualTo("E" + (index + 1));
+            assertThat(evidence.get(index).path("text").asText()).isEqualTo(originalFacts[index]);
+            var original = mapper.readTree(originalFacts[index]);
+            var pointer = input.path("authoritativeFacts").get(index);
+            assertThat(pointer.size()).isEqualTo(2);
+            assertThat(pointer.path("id")).isEqualTo(original.path("id"));
+            assertThat(pointer.path("evidenceRef")).isEqualTo(evidence.get(index).path("ref"));
+            var oldFact = original.deepCopy();
+            ((com.fasterxml.jackson.databind.node.ObjectNode) oldFact).put("evidenceRef", "E" + (index + 1));
+            previousTypedFacts.add(oldFact);
+        }
+        var previousInput = (com.fasterxml.jackson.databind.node.ObjectNode) input.deepCopy();
+        previousInput.put("report", report).set("authoritativeFacts", previousTypedFacts);
+        assertThat(request.userPrompt().length()).isLessThan((int) (previousInput.toString().length() * 0.60));
+        assertThat(request.maxTokens()).isEqualTo(6000);
+        assertThat(response.toString().length()).isLessThan(4000);
+        assertThat(request.systemPrompt()).contains("не каждую", "Не пропускай противоречащие источники");
+    }
+
+    @Test
+    void quotedMarkerAndEmptyHistoricalPrefixDoNotDropOrReassignEvidence() throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        String answer = "Проверю переписку и зафиксирую результат.";
+        AiProvider provider = provider(assessment("SATISFIED", answer, "E1", "PROMISE", "PLAN", "Проверка"));
+        String record = mapper.writeValueAsString(java.util.Map.of("id", "chat:42", "source", "recorded_chat_message",
+                "field", "recorded_text", "value", "Цитата:\nСЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:\nне является границей",
+                "sourceTaskId", 42));
+        String report = "СЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:\n" + record;
+        assertThat(service.assessAnswer(report, sourceQuestion(), answer, false).accepted()).isTrue();
+        ArgumentCaptor<AiRequest> request = ArgumentCaptor.forClass(AiRequest.class);
+        verify(provider).generate(request.capture());
+        var input = mapper.readTree(request.getValue().userPrompt());
+        assertThat(input.path("evidence")).hasSize(1);
+        assertThat(input.path("evidence").get(0).path("text").asText()).isEqualTo(record);
+        assertThat(input.path("report").asText()).isEqualTo("СЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:");
+    }
+
+    @Test
+    void protocolRetryGetsExactSafeCodeWithoutPreviousModelBodyAndRetainsAllOriginalEvidence() throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        String answer = "Employee-private-text: проверю переписку.";
+        String valid = assessment("SATISFIED", answer, "E1", "PROMISE", "PLAN", "Ответ обоснован");
+        var invalid = mapper.readTree(valid);
+        ((com.fasterxml.jackson.databind.node.ObjectNode) invalid.path("criteria").get(0))
+                .put("answerQuote", "MODEL_PRIVATE_INVENTED_QUOTE").put("reason", "MODEL_PRIVATE_REASON");
+        AiProvider provider = provider(invalid.toString());
+        when(provider.generate(any())).thenReturn(new AiResponse(invalid.toString(), "deepseek", 100, 100),
+                new AiResponse(valid, "deepseek", 100, 100));
+        var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(ManagerReportReviewQualityService.class);
+        var captured = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+        captured.start();
+        logger.addAppender(captured);
+        try {
+            assertThat(service.assessAnswer("Клиент ждёт сверку.", question(), answer, false).accepted()).isTrue();
+        } finally {
+            logger.detachAppender(captured);
+            captured.stop();
+        }
+        assertThat(captured.list).hasSize(1);
+        assertThat(captured.list.getFirst().getFormattedMessage()).contains("protocolViolation=ANSWER_QUOTE_MISMATCH")
+                .doesNotContain("Employee-private-text", "MODEL_PRIVATE", answer);
+        ArgumentCaptor<AiRequest> requests = ArgumentCaptor.forClass(AiRequest.class);
+        verify(provider, times(2)).generate(requests.capture());
+        var first = mapper.readTree(requests.getAllValues().getFirst().userPrompt());
+        var retry = (com.fasterxml.jackson.databind.node.ObjectNode) mapper.readTree(requests.getAllValues().getLast().userPrompt());
+        assertThat(retry.remove("protocolError").asText()).isEqualTo("PROTOCOL_VALIDATION");
+        assertThat(retry.remove("protocolViolation").asText()).isEqualTo("ANSWER_QUOTE_MISMATCH");
+        assertThat(retry).isEqualTo(first);
+        assertThat(requests.getAllValues().getLast().userPrompt()).doesNotContain("invalidPriorAssessment", "MODEL_PRIVATE");
+    }
+
+    @Test
+    void invalidModelEnumNeverLeaksItsValueIntoDiagnosticsOrRetry() throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        String answer = "Проверю переписку.";
+        var invalid = mapper.readTree(assessment("SATISFIED", answer, "E1", "PROMISE", "PLAN", "Обосновано"));
+        ((com.fasterxml.jackson.databind.node.ObjectNode) invalid.path("claims").get(0)).put("kind", "MODEL_PRIVATE_BAD_KIND");
+        AiProvider provider = provider(invalid.toString());
+        var result = service.assessAnswer("Клиент ждёт сверку.", question(), answer, false);
+        assertThat(result.decision()).isEqualTo(ManagerReportReviewQualityService.Decision.UNAVAILABLE);
+        assertThat(result.reason()).contains("PROTOCOL_VALIDATION:CLAIM_KIND").doesNotContain("MODEL_PRIVATE");
+        assertThat(result.safeManagerFeedback()).doesNotContain("CLAIM_KIND", "PROTOCOL_VALIDATION");
+        ArgumentCaptor<AiRequest> requests = ArgumentCaptor.forClass(AiRequest.class);
+        verify(provider, times(2)).generate(requests.capture());
+        assertThat(requests.getAllValues().getLast().userPrompt()).contains("CLAIM_KIND").doesNotContain("MODEL_PRIVATE");
     }
 
     @Test

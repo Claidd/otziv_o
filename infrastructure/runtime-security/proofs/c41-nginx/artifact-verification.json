@@ -1,0 +1,23 @@
+{
+  "result": "PASS",
+  "revision": "632ea46485e75174dbdac0d3b88e100231705212",
+  "run": 40278070720,
+  "attempt": 1,
+  "reference": "ghcr.io/claidd/otziv-security@sha256:b30ef32504546374c995f4c675c1a8f16f2feff0dc560c1f3df4725bdb0f4864",
+  "artifacts": [
+    {
+      "artifactId": 12630434716,
+      "name": "reviewed-publication-nginx-attempt-1",
+      "digest": "sha256:fa82a352624b94ab5cfb2a95f7e7c5a657243edd4cc65f1737cec675246394b2",
+      "bytes": 127142,
+      "fileCount": 13
+    },
+    {
+      "artifactId": 12630194760,
+      "name": "anonymous-download-nginx-attempt-1",
+      "digest": "sha256:428e791f66943cd381234e6b4c2177c2cd0ded5525b9b9fbd2783c923a89c504",
+      "bytes": 99173,
+      "fileCount": 13
+    }
+  ]
+}

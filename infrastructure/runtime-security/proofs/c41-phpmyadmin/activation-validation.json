@@ -1,0 +1,11 @@
+{
+  "result": "PASS",
+  "component": "phpmyadmin",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:919ceaa723a3490d75ce1f264b2a852127cb2e7e6aa64c04aa7199a1761d5c47",
+  "imageId": "sha256:66fc694987c5b0b57c6af7eab5c0c7976822cd59faa6f00faf734c3e761e103b",
+  "commit": "632ea46485e75174dbdac0d3b88e100231705212",
+  "run": "40278078637",
+  "attempt": "1",
+  "validatedBy": "validateActivation: complete publication and anonymous OCI/SLSA chain; raw scan, adjudication and triage hashes with recomputed security summary",
+  "productionActivated": false
+}

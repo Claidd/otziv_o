@@ -1,0 +1,23 @@
+{
+  "result": "PASS",
+  "revision": "632ea46485e75174dbdac0d3b88e100231705212",
+  "run": 40278078637,
+  "attempt": 1,
+  "reference": "ghcr.io/claidd/otziv-security@sha256:919ceaa723a3490d75ce1f264b2a852127cb2e7e6aa64c04aa7199a1761d5c47",
+  "artifacts": [
+    {
+      "artifactId": 12630684278,
+      "name": "reviewed-publication-phpmyadmin-attempt-1",
+      "digest": "sha256:2254d0abeade71c9fbf87b136a27e91a7f8d310bb800277ceaacd7afc66b5015",
+      "bytes": 165014,
+      "fileCount": 13
+    },
+    {
+      "artifactId": 12630898603,
+      "name": "anonymous-download-phpmyadmin-attempt-1",
+      "digest": "sha256:137a2ab9256258bbf40925f8cbb905f3a3e788e76968bd874b3575729bf6bd74",
+      "bytes": 114968,
+      "fileCount": 13
+    }
+  ]
+}

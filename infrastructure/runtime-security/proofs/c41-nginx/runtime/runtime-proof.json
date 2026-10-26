@@ -1,0 +1,58 @@
+{
+  "schema": "otziv-c41-http-smoke-v1",
+  "result": "PASS",
+  "component": "nginx",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:b30ef32504546374c995f4c675c1a8f16f2feff0dc560c1f3df4725bdb0f4864",
+  "inspectedImageId": "sha256:1e0558db14fa703b93732ff1f6c0229afdad00fc3f32e7b8ffb0faff89b07b72",
+  "productionAccess": false,
+  "localCandidateOnly": false,
+  "network": "none",
+  "publishedPorts": false,
+  "executedScriptSha256": "7e1a5e6cbafc0cbe0902dce2605ddced8d0452d80ba687bb65dfc279cfd664d1",
+  "publicationSha256": "51039e3c5196318b953b864016a74ad969130601adbe33aed290234abbbf8ec6",
+  "imageConfigId": "sha256:83865ee7b6f435e8c36f8b86c421f110f86262400fd3bde73c7167a18bda73de",
+  "commit": "632ea46485e75174dbdac0d3b88e100231705212",
+  "run": "40278070720",
+  "attempt": "1",
+  "payload": {
+    "parentReference": "ghcr.io/claidd/otziv-security@sha256:f0f0b92345c2ddf67da923de76951d34d354957de9efda532c926b61ba84842d",
+    "parentLocalId": "sha256:5fe199c2a721adeddfddcc2d45aff810a86749e68f30ba740ff9fb1a02c1f4f5",
+    "candidateLocalId": "sha256:1e0558db14fa703b93732ff1f6c0229afdad00fc3f32e7b8ffb0faff89b07b72",
+    "configFieldsPreserved": [
+      "User",
+      "Entrypoint",
+      "Cmd",
+      "WorkingDir",
+      "ExposedPorts",
+      "Volumes",
+      "Healthcheck",
+      "StopSignal",
+      "Env"
+    ],
+    "network": "none",
+    "readOnly": true,
+    "productionAccess": false,
+    "payloadSha256": "9856ee6dd2d112f8f6d7007f24f35d07d1a20f445e77168ef087a184c1d87b57",
+    "other-packagesSha256": "8caa51ebecb8cf91de2d562390a4642de1a18af2ab363226a7fe21821ff8a06d",
+    "curl": {
+      "before": "curl-8.22.0-r0",
+      "after": "curl-8.23.0-r0"
+    },
+    "libcurl": {
+      "before": "libcurl-8.22.0-r0",
+      "after": "libcurl-8.23.0-r0"
+    },
+    "result": "PASS"
+  },
+  "http": {
+    "status": 200,
+    "regexNamedCapture": true,
+    "curlClient": true,
+    "bodySha256": "ca64814f3d2c9fa8bd72d9f6b9477ed2b61e9b52bd4b66213c00c2991b4d9e36"
+  },
+  "pcre2Package": "pcre2-10.49-r0",
+  "brotliPackage": "brotli-libs-1.2.1-r0",
+  "curlPackage": "curl-8.23.0-r0",
+  "libcurlPackage": "libcurl-8.23.0-r0",
+  "ownedContainersRemaining": 0
+}

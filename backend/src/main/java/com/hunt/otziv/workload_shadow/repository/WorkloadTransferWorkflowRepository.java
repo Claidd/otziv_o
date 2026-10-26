@@ -146,6 +146,16 @@ public interface WorkloadTransferWorkflowRepository
                         'STAFFING_REQUIRED',
                         'EMERGENCY_APPLIED'
                   )
+                  AND (
+                      workflow.status NOT IN (
+                          'BLOCKED_RECOMMENDATION_STALE', 'BLOCKED_GRAPH_CHANGED'
+                      )
+                      OR workflow.active = TRUE
+                      OR EXISTS (
+                          SELECT 1 FROM workload_transfer_executions execution
+                          WHERE execution.workflow_id = workflow.workload_transfer_workflow_id
+                      )
+                  )
                 GROUP BY workflow.manager_id
 
                 UNION ALL
@@ -182,6 +192,16 @@ public interface WorkloadTransferWorkflowRepository
                         'STAFFING_REQUIRED',
                         'EMERGENCY_APPLIED'
                   )
+                  AND (
+                      workflow.status NOT IN (
+                          'BLOCKED_RECOMMENDATION_STALE', 'BLOCKED_GRAPH_CHANGED'
+                      )
+                      OR workflow.active = TRUE
+                      OR EXISTS (
+                          SELECT 1 FROM workload_transfer_executions execution
+                          WHERE execution.workflow_id = workflow.workload_transfer_workflow_id
+                      )
+                  )
                 GROUP BY workflow.source_worker_id
 
                 UNION ALL
@@ -202,6 +222,24 @@ public interface WorkloadTransferWorkflowRepository
     List<SourceWorkerReservationProjection> reservedBySourceWorkerSince(
             @Param("dayStart") LocalDateTime dayStart
     );
+
+    @Query(value = """
+            SELECT DISTINCT source_worker_id AS sourceWorkerId,
+                   company_id AS companyId,
+                   graph_fingerprint AS graphFingerprint
+            FROM workload_transfer_workflows
+            WHERE created_at >= :dayStart
+              AND status IN ('BLOCKED_RECOMMENDATION_STALE', 'BLOCKED_GRAPH_CHANGED')
+            """, nativeQuery = true)
+    List<BlockedGraphProjection> findBlockedGraphsSince(
+            @Param("dayStart") LocalDateTime dayStart
+    );
+
+    interface BlockedGraphProjection {
+        Long getSourceWorkerId();
+        Long getCompanyId();
+        String getGraphFingerprint();
+    }
 
     @Query(value = """
             SELECT COUNT(*)
