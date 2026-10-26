@@ -92,7 +92,20 @@ public class WorkerAssignmentMutationGuardService {
         boolean owned = TransactionSynchronizationManager.isActualTransactionActive()
                 ? repository.lockOwnedReview(reviewId, authentication.getName()).isPresent()
                 : repository.countOwnedReview(reviewId, authentication.getName()) == 1L;
+        if (!owned && ownsPublishedReview(reviewId, authentication)) {
+            // Explain this terminal state only to its current review owner. The
+            // ordinary mutation query still excludes every published review.
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Отзыв уже опубликован. Специалист не может изменять опубликованный отзыв; "
+                            + "обратитесь к менеджеру для исправления.");
+        }
         assertOwned(owned ? 1L : 0L, authentication);
+    }
+
+    private boolean ownsPublishedReview(long reviewId, Authentication authentication) {
+        return TransactionSynchronizationManager.isActualTransactionActive()
+                ? repository.lockOwnedPublishedReview(reviewId, authentication.getName()).isPresent()
+                : repository.countOwnedPublishedReview(reviewId, authentication.getName()) == 1L;
     }
 
     public void assertBadTask(long taskId) {

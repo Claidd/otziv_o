@@ -1778,3 +1778,28 @@
     margin: 0.5rem 0 0;
   }
 }
+
+.review-edit-restriction {
+  margin: 0.5rem 0;
+  padding: 0.6rem;
+  border-radius: 0.6rem;
+  background: #fff8d8;
+  color: #6d5100;
+  font-size: 0.85rem;
+  line-height: 1.4;
+
+  button {
+    display: block;
+    margin-top: 0.4rem;
+    padding: 0.4rem 0.6rem;
+    color: inherit;
+    border: 1px solid currentColor;
+    border-radius: 0.4rem;
+    background: transparent;
+    cursor: pointer;
+  }
+}
+
+.mobile-review-text-modal__field--restricted {
+  grid-template-rows: auto auto minmax(0, 1fr);
+}

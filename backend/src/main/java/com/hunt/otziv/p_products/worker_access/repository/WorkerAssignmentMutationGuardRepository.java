@@ -126,6 +126,49 @@ public interface WorkerAssignmentMutationGuardRepository
             @Param("username") String username
     );
 
+    /** Diagnostic only: never grants mutation access to an already published review. */
+    @Query(value = """
+            SELECT COUNT(*)
+            FROM reviews review
+            JOIN order_details detail
+              ON detail.order_detail_id = review.review_order_details
+            JOIN orders orders
+              ON orders.order_id = detail.order_detail_order
+            JOIN workers review_worker
+              ON review_worker.worker_id = review.review_worker
+            JOIN users user
+              ON user.id = review_worker.user_id
+            WHERE review.review_id = :reviewId
+              AND user.username = :username
+              AND COALESCE(review.review_publish, 0) = 1
+            """, nativeQuery = true)
+    long countOwnedPublishedReview(
+            @Param("reviewId") long reviewId,
+            @Param("username") String username
+    );
+
+    /** Current diagnostic read after the same canonical parent lock as lockOwnedReview. */
+    @Query(value = """
+            SELECT review.review_id
+            FROM reviews review
+            JOIN order_details detail
+              ON detail.order_detail_id = review.review_order_details
+            JOIN orders orders
+              ON orders.order_id = detail.order_detail_order
+            JOIN workers review_worker
+              ON review_worker.worker_id = review.review_worker
+            JOIN users user
+              ON user.id = review_worker.user_id
+            WHERE review.review_id = :reviewId
+              AND user.username = :username
+              AND COALESCE(review.review_publish, 0) = 1
+            FOR UPDATE OF orders, review, detail
+            """, nativeQuery = true)
+    Optional<Long> lockOwnedPublishedReview(
+            @Param("reviewId") long reviewId,
+            @Param("username") String username
+    );
+
     @Query(value = """
             SELECT COUNT(*)
             FROM bad_review_tasks task

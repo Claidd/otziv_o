@@ -61,24 +61,46 @@ class ManagerProblemBusinessDiagnosisTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"COMMON_INVOICE", "COMMON_INVOICE_AUTOMATION"})
-    void currentInvoiceConflictDoesNotExplainEveryUnreadyPosition(String type) {
+    void storedInvoiceConflictDoesNotProveTheCurrentTextOrExplainEveryUnreadyPosition(String type) {
         var facts = List.of(f("card", "entity_type", type), f("invoice", "status", "NEEDS_ATTENTION"),
-                f("invoice", "last_error", "409 CONFLICT: Текст отзыва уже опубликован ранее"),
+                f("invoice", "last_error", "409 CONFLICT: Текст отзыва уже опубликован ранее; отзыв #200221"),
                 f("invoice", "orderCount", "7"), f("invoice", "readyCount", "4"),
                 f("automation", "state_status", "DONE"), f("automation", "current_cycle", "false"));
 
         assertThat(ManagerProblemBusinessDiagnosis.hasCurrentInvoicePublicationConflict(facts)).isTrue();
         Diagnosis result = ManagerProblemBusinessDiagnosis.fallback(facts);
 
-        assertThat(result.summary()).contains("4 из 7", "В журнале счёта", "одного отзыва", "причины не подтверждены");
+        assertThat(result.summary()).contains("По сохранённому снимку", "4 из 7", "При предыдущей попытке", "отзыв #200221",
+                "не подтверждает конфликт в текущем тексте");
         assertThat(result.confirmedFacts()).isEmpty();
         assertThat(result.hypotheses()).isEmpty();
         assertThat(result.actions()).hasSize(2);
-        assertThat(result.actions().getFirst().text()).contains("текущей ошибке", "не публикуйте отзыв повторно");
+        assertThat(result.actions().getFirst().text()).contains("сохранённой ошибки", "согласование клиента", "не означает одобрение");
         assertThat(result.actions().getFirst().evidenceRefs()).containsExactly("invoice:1:last_error");
-        assertThat(result.actions().getLast().text()).contains("по отдельности", "Не переносите причину");
+        assertThat(result.actions().getLast().text()).contains("по отдельности", "не объясняет задержку остальных");
         assertThat(result.actions().getLast().evidenceRefs()).containsExactly("invoice:1:orderCount", "invoice:1:readyCount");
         assertThat(result.verification().getFirst()).contains("подтверждена готовность", "устранены причины", "Одного ответа ответственного");
+        assertThat(ManagerProblemBusinessDiagnosis.readable(result)).isTrue();
+    }
+
+    @Test
+    void publicationHistoryGuidanceListsOnlyKnownActiveUnreadyPositionsFromTheSnapshot() {
+        var facts = new java.util.ArrayList<>(List.of(f("card", "entity_type", "COMMON_INVOICE"),
+                f("invoice", "last_error", "Текст отзыва уже опубликован ранее; order=200226"),
+                f("invoice", "orderCount", "7"), f("invoice", "readyCount", "4")));
+        for (long orderId : List.of(27390L, 27391L, 27394L, 888L, 999L)) {
+            String prefix = "order:" + orderId + ":";
+            facts.add(new Fact(prefix + "order_id", "invoice_order", "order_id", Long.toString(orderId)));
+            facts.add(new Fact(prefix + "ready", "invoice_order", "ready", orderId == 999L ? "true" : "false"));
+            facts.add(new Fact(prefix + "active_membership", "invoice_order", "active_membership", orderId == 888L ? "false" : "true"));
+            facts.add(new Fact(prefix + "current_order_status", "invoice_order", "current_order_status", "На проверке"));
+        }
+
+        Diagnosis result = ManagerProblemBusinessDiagnosis.fallback(facts);
+
+        assertThat(result.actions().getLast().text()).contains("По снимку не готовы", "#27390 «На проверке»", "#27391 «На проверке»", "#27394 «На проверке»")
+                .doesNotContain("#888", "#999", "#200226");
+        assertThat(result.summary()).doesNotContain("отзыв #200226", "конфликт устранён");
         assertThat(ManagerProblemBusinessDiagnosis.readable(result)).isTrue();
     }
 
