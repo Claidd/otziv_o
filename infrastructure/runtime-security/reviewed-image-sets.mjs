@@ -9,6 +9,9 @@ const BASELINE_PATH = 'infrastructure/runtime-security/reviewed-images.json';
 const C12_PATH = 'infrastructure/runtime-security/reviewed-images-c12-phpmyadmin.json';
 const C12_CONTEXT = 'infrastructure/runtime-security/builds/phpmyadmin-alpine';
 const RELEASE_SETS = Object.freeze({
+  'c41-nginx': { component: 'nginx', path: 'infrastructure/runtime-security/reviewed-images-c41-nginx.json', context: 'infrastructure/runtime-security/builds/c41-nginx', dockerfile: 'infrastructure/runtime-security/builds/c41-nginx/Dockerfile' },
+  'c41-phpmyadmin': { component: 'phpmyadmin', path: 'infrastructure/runtime-security/reviewed-images-c41-phpmyadmin.json', context: 'infrastructure/runtime-security/builds/c41-phpmyadmin', dockerfile: 'infrastructure/runtime-security/builds/c41-phpmyadmin/Dockerfile' },
+  'c41-grafana': { component: 'grafana', path: 'infrastructure/runtime-security/reviewed-images-c41-grafana.json', context: 'infrastructure/runtime-security/builds/c41-grafana', dockerfile: 'infrastructure/runtime-security/builds/c41-grafana/Dockerfile' },
   'c40-nginx': { component: 'nginx', path: 'infrastructure/runtime-security/reviewed-images-c40-nginx.json', context: 'infrastructure/runtime-security/builds/c40-nginx', dockerfile: 'infrastructure/runtime-security/builds/c40-nginx/Dockerfile' },
   'c40-phpmyadmin': { component: 'phpmyadmin', path: 'infrastructure/runtime-security/reviewed-images-c40-phpmyadmin.json', context: 'infrastructure/runtime-security/builds/c40-phpmyadmin', dockerfile: 'infrastructure/runtime-security/builds/c40-phpmyadmin/Dockerfile' },
   'c40-grafana': { component: 'grafana', path: 'infrastructure/runtime-security/reviewed-images-c40-grafana.json', context: 'infrastructure/runtime-security/builds/c40-grafana', dockerfile: 'infrastructure/runtime-security/builds/c40-grafana/Dockerfile' },

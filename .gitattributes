@@ -126,3 +126,8 @@ infrastructure/artifact-recovery/** text eol=lf
 # C38 activation binds the publication manifest and normalized build recipe.
 infrastructure/runtime-security/reviewed-images-c38-nginx.json text eol=lf
 infrastructure/runtime-security/builds/c38-nginx/** text eol=lf
+
+# C41 publication and runtime proofs bind the exact committed source bytes.
+infrastructure/runtime-security/reviewed-images-c41-*.json text eol=lf
+infrastructure/runtime-security/builds/c41-*/** text eol=lf
+infrastructure/runtime-security/c41-runtime-proof.py text eol=lf

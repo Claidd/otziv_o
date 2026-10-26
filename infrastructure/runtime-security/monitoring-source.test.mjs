@@ -49,3 +49,10 @@ test('C40 Brotli refresh verifies the published Grafana image without selecting 
  for(const component of ['prometheus','loki','tempo','alloy'])assert.equal(isPublishedMonitoringOverlayManifest(component,path),false);
  assert.equal(isPublishedMonitoringOverlayManifest('grafana','infrastructure/runtime-security/reviewed-images-c40-tempo.json'),false);
 });
+
+test('C41 curl refresh keeps Grafana on the exact published image verification path',()=>{
+ const path='infrastructure/runtime-security/reviewed-images-c41-grafana.json';
+ assert.equal(isPublishedMonitoringOverlayManifest('grafana',path),true);
+ for(const component of ['prometheus','loki','tempo','alloy'])assert.equal(isPublishedMonitoringOverlayManifest(component,path),false);
+ assert.equal(isPublishedMonitoringOverlayManifest('grafana','infrastructure/runtime-security/reviewed-images-c41-tempo.json'),false);
+});
