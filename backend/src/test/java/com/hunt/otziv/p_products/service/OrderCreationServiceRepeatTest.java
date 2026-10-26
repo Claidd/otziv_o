@@ -103,10 +103,12 @@ class OrderCreationServiceRepeatTest {
         OrderCreationServiceImpl service = service();
         OrderDTO repeatOrder = service.convertToOrderDTOToRepeat(source);
 
-        service.createRepeatedOrderWithReviews(source, repeatOrder);
+        Order createdOrder = service.createRepeatedOrderWithReviews(source, repeatOrder);
 
         Review createdReview = createdReviews.getFirst();
         OrderDetails createdDetail = createdReview.getOrderDetails();
+        assertSame(createdOrder, createdDetail.getOrder());
+        verifyNoInteractions(nextOrderRequestService);
         assertSame(actualReviewProduct, createdReview.getProduct());
         assertEquals(new BigDecimal("250.00"), createdReview.getPrice());
         assertSame(actualReviewProduct, createdDetail.getProduct());
