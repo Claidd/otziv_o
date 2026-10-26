@@ -347,6 +347,59 @@ class WorkerCellularAccessServiceTest {
     }
 
     @Test
+    void configuredOctoberCarrierRangesAllowFalseNegativesWithoutAdmittingNeighboursOrVpn() throws Exception {
+        java.util.Properties configuration = new java.util.Properties();
+        try (var source = getClass().getResourceAsStream("/application.properties")) {
+            configuration.load(source);
+        }
+        String configured = configuration.getProperty("otziv.worker.cellular-access.allowed-cidrs");
+        WorkerCellularAccessProperties properties = properties(WorkerCellularAccessProperties.Mode.ENFORCE);
+        properties.setAllowedCidrs(List.of(configured.substring(configured.indexOf(':') + 1, configured.length() - 1).split(",")));
+        WorkerIpIntelligenceClient client = mock(WorkerIpIntelligenceClient.class);
+        when(client.lookup(anyString())).thenReturn(
+                new WorkerIpIntelligenceClient.IpIntelligence(true, false, false, "MTS PJSC", "ipquery")
+        );
+        WorkerNetworkViolationService violations = mock(WorkerNetworkViolationService.class);
+        WorkerCellularAccessService service = new WorkerCellularAccessService(properties, client, violations);
+        authenticate("ROLE_WORKER");
+
+        for (String prefix : List.of("91.78.234.", "188.162.5.", "188.162.12.")) {
+            for (String suffix : List.of("1", "254")) {
+                request(prefix + suffix, MOBILE_USER_AGENT);
+                for (String section : WorkerCellularAccessService.PROTECTED_SECTIONS) {
+                    assertDoesNotThrow(() -> service.enforceSection(section));
+                }
+            }
+        }
+        verifyNoInteractions(violations);
+
+        for (String address : List.of("91.78.233.254", "91.78.235.1", "188.162.4.254",
+                "188.162.6.1", "188.162.11.254", "188.162.13.1")) {
+            request(address, MOBILE_USER_AGENT);
+            assertEquals(403, assertThrows(ResponseStatusException.class,
+                    () -> service.enforceSection("nagul")).getStatusCode().value());
+        }
+
+        for (String address : List.of("91.78.234.42", "188.162.5.42", "188.162.12.42")) {
+            MockHttpServletRequest nativeRequest = request(address, MOBILE_USER_AGENT);
+            nativeTelemetry(nativeRequest, "wifi", "false");
+            ResponseStatusException wifi = assertThrows(ResponseStatusException.class,
+                    () -> service.enforceSection("nagul"));
+            assertEquals(403, wifi.getStatusCode().value());
+            org.junit.jupiter.api.Assertions.assertTrue(wifi.getReason().contains("мобильная сеть не подтверждена"));
+
+            when(client.lookup(address)).thenReturn(
+                    new WorkerIpIntelligenceClient.IpIntelligence(true, false, true, "MTS PJSC", "ipquery")
+            );
+            request(address, MOBILE_USER_AGENT);
+            ResponseStatusException denied = assertThrows(ResponseStatusException.class,
+                    () -> service.enforceSection("nagul"));
+            assertEquals(403, denied.getStatusCode().value());
+            org.junit.jupiter.api.Assertions.assertTrue(denied.getReason().contains("VPN"));
+        }
+    }
+
+    @Test
     void verifiedMtsMobileBroadbandRangesOverrideFalseFixedNetworkClassificationButNotVpnRisk() {
         WorkerCellularAccessProperties properties = properties(WorkerCellularAccessProperties.Mode.ENFORCE);
         properties.setAllowedCidrs(List.of(
