@@ -1,6 +1,8 @@
 package com.hunt.otziv.p_products.worker_access.service;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -13,9 +15,12 @@ import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.server.ResponseStatusException;
@@ -54,6 +59,83 @@ class WorkerAssignmentMutationGuardServiceTest {
         ordered.verify(repository).findCurrentOrderIdByReviewId(17L);
         ordered.verify(repository).lockOwnedReview(17L, "worker");
         verify(repository, never()).countOwnedReview(17L, "worker");
+        verify(repository, never()).lockOwnedPublishedReview(17L, "worker");
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void currentOwnerOfPublishedReviewGetsSpecificConflictWithoutGainingMutationAccess(boolean transactional) {
+        authenticateWorker("worker");
+        TransactionSynchronizationManager.setActualTransactionActive(transactional);
+        when(repository.findOrderIdByReviewId(17L)).thenReturn(Optional.of(11L));
+        if (transactional) {
+            when(repository.findCurrentOrderIdByReviewId(17L)).thenReturn(Optional.of(11L));
+            when(repository.lockOwnedPublishedReview(17L, "worker")).thenReturn(Optional.of(17L));
+        } else {
+            when(repository.countOwnedPublishedReview(17L, "worker")).thenReturn(1L);
+        }
+
+        ResponseStatusException conflict = assertThrows(ResponseStatusException.class,
+                () -> service().assertReview(17L));
+
+        assertThat(conflict.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(conflict.getReason()).contains("Отзыв уже опубликован", "обратитесь к менеджеру")
+                .doesNotContain("Обновите страницу");
+        var ordered = org.mockito.Mockito.inOrder(repository, orderAggregateMutationLockService);
+        ordered.verify(repository).findOrderIdByReviewId(17L);
+        if (transactional) {
+            ordered.verify(orderAggregateMutationLockService).lock(11L);
+            ordered.verify(repository).findCurrentOrderIdByReviewId(17L);
+            ordered.verify(repository).lockOwnedReview(17L, "worker");
+            ordered.verify(repository).lockOwnedPublishedReview(17L, "worker");
+            verify(repository, never()).countOwnedPublishedReview(17L, "worker");
+        } else {
+            ordered.verify(repository).countOwnedReview(17L, "worker");
+            ordered.verify(repository).countOwnedPublishedReview(17L, "worker");
+            verify(repository, never()).lockOwnedPublishedReview(17L, "worker");
+            verifyNoInteractions(orderAggregateMutationLockService);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void foreignOrOtherwiseNonmutableReviewKeepsGenericConflictWithoutRevealingPublication(boolean transactional) {
+        authenticateWorker("other-worker");
+        TransactionSynchronizationManager.setActualTransactionActive(transactional);
+        when(repository.findOrderIdByReviewId(17L)).thenReturn(Optional.of(11L));
+        if (transactional) {
+            when(repository.findCurrentOrderIdByReviewId(17L)).thenReturn(Optional.of(11L));
+        }
+
+        ResponseStatusException conflict = assertThrows(ResponseStatusException.class,
+                () -> service().assertReview(17L));
+
+        assertThat(conflict.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(conflict.getReason()).contains("назначение или состояние объекта изменилось")
+                .doesNotContain("Отзыв уже опубликован");
+        if (transactional) verify(repository).lockOwnedPublishedReview(17L, "other-worker");
+        else verify(repository).countOwnedPublishedReview(17L, "other-worker");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"ROLE_ADMIN", "ROLE_OWNER", "ROLE_MANAGER"})
+    void privilegedReviewAccessDoesNotUseWorkerPublicationRestriction(String role) {
+        var authentication = authenticate("actor", role);
+        TransactionSynchronizationManager.setActualTransactionActive(true);
+        when(repository.findOrderIdByReviewId(17L)).thenReturn(Optional.of(11L));
+        when(repository.findCurrentOrderIdByReviewId(17L)).thenReturn(Optional.of(11L));
+        if (!"ROLE_ADMIN".equals(role)) {
+            when(repository.findCurrentManagerIdByOrderId(11L)).thenReturn(Optional.of(9L));
+            when(managerAccessService.canAccessCurrentOrderManager(9L, authentication)).thenReturn(true);
+        }
+
+        service().assertReview(17L);
+
+        verify(orderAggregateMutationLockService).lock(11L);
+        verify(repository, never()).lockOwnedReview(17L, "actor");
+        verify(repository, never()).countOwnedReview(17L, "actor");
+        verify(repository, never()).lockOwnedPublishedReview(17L, "actor");
+        verify(repository, never()).countOwnedPublishedReview(17L, "actor");
     }
 
     @Test

@@ -148,6 +148,7 @@ export class OrderDetailsComponent {
   private readonly reviewPublishCredentialStorageKey = 'otziv-order-details-worker-all-publish-prep:v1';
   private readonly reviewPublishCredentialMaxAgeMs = 60 * 60 * 1000;
   private readonly reviewFieldDraftToastIds = new Map<string, number>();
+  private readonly unavailableReviewTextIds = signal<ReadonlySet<number>>(new Set());
   private readonly detailsRouteRequest = new LatestRouteRequest<OrderDetailsPayload>();
   private readonly companyReportRouteRequest = new LatestRouteRequest<CompanyDeepReportState>();
   private restoredReviewFieldsToastId: number | null = null;
@@ -371,6 +372,7 @@ export class OrderDetailsComponent {
           return;
         }
         this.details.set(details);
+        this.unavailableReviewTextIds.set(new Set());
         this.restoreOrderDetailsSessionDraft(details);
         if (!this.applyReviewDeepLink()) {
           this.activeReviewSlide.set(0);
@@ -557,6 +559,12 @@ export class OrderDetailsComponent {
       return;
     }
 
+    const blockReason = this.reviewFieldEditBlockReason(review, field);
+    if (blockReason) {
+      this.toastService.info('Редактирование недоступно', blockReason);
+      return;
+    }
+
     const key = this.reviewFieldKey(review, field);
     if (this.editingReviewFieldKey() === key) {
       return;
@@ -695,6 +703,7 @@ export class OrderDetailsComponent {
     this.copied.set(null);
     this.editingReviewFieldKey.set(null);
     this.reviewFieldDrafts.set({});
+    this.unavailableReviewTextIds.set(new Set());
     this.savedReviewFieldKey.set(null);
     this.expandedReviewTextIds.set({});
     this.mobilePreviewReviewTextId.set(null);
@@ -863,7 +872,39 @@ export class OrderDetailsComponent {
 
     this.savedReviewFieldKey.set(null);
     this.editingReviewFieldKey.set(null);
-    this.clearReviewFieldDraft(review, field);
+    if (!this.reviewFieldEditBlockReason(review, field)) {
+      this.clearReviewFieldDraft(review, field);
+    }
+  }
+
+  reviewFieldEditBlockReason(review: OrderReviewItem, field: ReviewEditableField): string | null {
+    const currentReview = this.reviews().find((item) => item.id === review.id) ?? review;
+    if (field !== 'text' || !this.isOnlyWorkerRole()) {
+      return null;
+    }
+    if (this.unavailableReviewTextIds().has(review.id)) {
+      return 'Отзыв больше недоступен в этом заказе. Черновик остался в браузере; '
+        + 'скопируйте его перед обновлением страницы и передайте менеджеру.';
+    }
+    if (!currentReview.publish) {
+      return null;
+    }
+
+    return 'Отзыв уже опубликован. Сотрудник не может изменить его текст; обратитесь к менеджеру.'
+      + (this.isReviewFieldChanged(currentReview, field)
+        ? ' Ваш черновик остался в браузере — скопируйте его и передайте менеджеру.'
+        : '');
+  }
+
+  async copyReviewTextDraft(review: OrderReviewItem): Promise<boolean> {
+    const routeVisit = this.captureActiveOrderRoute();
+    return !!routeVisit && this.copyText(
+      this.reviewFieldValue(review, 'text'),
+      `draft-text-${review.id}`,
+      'Черновик текста скопирован',
+      undefined,
+      () => this.isActiveOrderRoute(routeVisit)
+    );
   }
 
   saveReviewField(review: OrderReviewItem, field: ReviewEditableField): void {
@@ -873,7 +914,7 @@ export class OrderDetailsComponent {
       return;
     }
 
-    const blockReason = this.reviewFieldSaveBlockReason();
+    const blockReason = this.reviewFieldEditBlockReason(review, field) ?? this.reviewFieldSaveBlockReason();
     if (blockReason) {
       this.toastService.error(field === 'text' ? 'Текст не сохранен' : 'Ответ не сохранен', blockReason);
       return;
@@ -937,8 +978,48 @@ export class OrderDetailsComponent {
 
         const message = this.reviewFieldSaveFailureMessage(err, field);
         this.mutationKey.set(null);
+        if (field === 'text' && this.httpStatus(err) === 409 && this.isOnlyWorkerRole()) {
+          this.refreshReviewAfterSaveConflict(review, routeVisit, message);
+          return;
+        }
         this.error.set(message);
         this.toastService.error(field === 'text' ? 'Текст не сохранен' : 'Ответ не сохранен', message);
+      }
+    });
+  }
+
+  private refreshReviewAfterSaveConflict(review: OrderReviewItem, routeVisit: OrderRouteVisit, failure: string): void {
+    const fallback = `${failure} Черновик остался в браузере; повторная отправка не выполнялась.`;
+    this.error.set(fallback);
+    this.loading.set(true);
+    this.detailsRouteRequest.start(this.managerApi.getOrderDetails(routeVisit.orderId), {
+      next: (details) => {
+        if (!this.isActiveOrderRoute(routeVisit)) {
+          return;
+        }
+        if (!details.reviews.some((item) => item.id === review.id)) {
+          // Keep the original editor and its persisted draft if the review
+          // disappeared; never attach the rejected text to another review.
+          this.unavailableReviewTextIds.update((ids) => new Set([...ids, review.id]));
+          this.loading.set(false);
+          const message = this.reviewFieldEditBlockReason(review, 'text') ?? fallback;
+          this.error.set(message);
+          this.toastService.error('Текст не сохранен', message);
+          return;
+        }
+        this.details.set(details);
+        this.writeOrderDetailsSessionDraft();
+        this.loading.set(false);
+        const message = this.reviewFieldEditBlockReason(review, 'text') ?? fallback;
+        this.error.set(message);
+        this.toastService.error('Текст не сохранен', message);
+      },
+      error: () => {
+        if (!this.isActiveOrderRoute(routeVisit)) {
+          return;
+        }
+        this.loading.set(false);
+        this.toastService.error('Текст не сохранен', fallback);
       }
     });
   }
@@ -3562,9 +3643,13 @@ export class OrderDetailsComponent {
     this.sideNoteDrafts.set(this.filterSideNoteDrafts(details, sessionDraft?.sideNotes));
 
     if (Object.keys(reviewFieldDrafts).length > 0) {
+      const hasPublishedDraft = details.reviews.some((review) =>
+        !!this.reviewFieldEditBlockReason(review, 'text') && `${review.id}-text` in reviewFieldDrafts);
       this.restoredReviewFieldsToastId = this.toastService.warning(
         'Восстановлен черновик',
-        'Это текст из памяти браузера. Нажмите дискетку на карточке, чтобы записать его в БД'
+        hasPublishedDraft
+          ? 'Черновик остался в браузере. Правку уже опубликованного отзыва передайте менеджеру.'
+          : 'Это текст из памяти браузера. Нажмите дискетку на карточке, чтобы записать его в БД'
       );
     }
   }

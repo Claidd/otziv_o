@@ -119,21 +119,41 @@ class ManagerControlInvoiceDiagnosticsTest {
     }
 
     @Test
-    void invoice297ExplainsOnePublicationConflictWithoutLeakingItsTechnicalWrapper() {
-        var invoice = invoice(CommonInvoiceStatus.COLLECTING,
+    void invoice297SeparatesThePreviousTextErrorFromCurrentUnreadyPositions() {
+        var invoice = invoice(CommonInvoiceStatus.NEEDS_ATTENTION,
                 "409 CONFLICT: Нельзя отправить заказ в публикацию: текст отзыва уже опубликован ранее. "
-                        + "Review 200221; JDBC select review_text from reviews; java.lang.IllegalStateException");
+                        + "Проблемные карточки: №1 (отзыв #200221); JDBC select review_text from reviews; java.lang.IllegalStateException");
         invoice.setId(297L);
+        String recordedError = invoice.getLastError();
         var items = java.util.stream.IntStream.range(0, 7).mapToObj(index -> {
-            var item = position(index < 4 ? "Опубликовано" : "Публикация", false, true);
+            var item = position(index < 4 ? "Опубликовано" : "На проверке", false, true);
+            item.getOrder().setId(index < 4 ? 27386L + index : List.of(27390L, 27391L, 27394L).get(index - 4));
             item.setReady(index < 4);
             return item;
         }).toList();
 
-        assertThat(reason(invoice, items)).contains("Для одной позиции", "Готово позиций: 4 из 7", "исходный отзыв",
-                "Повторная публикация без проверки недопустима", "после устранения конфликта")
-                .doesNotContain("409", "CONFLICT", "JDBC", "select", "IllegalStateException", "200221", "Починить");
-        assertThat(invoice.getLastError()).contains("409 CONFLICT");
+        assertThat(reason(invoice, items)).contains("При предыдущей попытке", "отзыв #200221", "Сейчас готовы 4 из 7",
+                "Она не подтверждает конфликт в текущем тексте", "#27390 «На проверке»", "#27391 «На проверке»", "#27394 «На проверке»",
+                "согласование клиента", "не означает одобрение")
+                .doesNotContain("409", "CONFLICT", "JDBC", "select", "IllegalStateException", "Починить", "текст отзыва уже использован");
+        assertThat(reason(invoice, items).length()).isLessThanOrEqualTo(500);
+        assertThat(invoice.getLastError()).isEqualTo(recordedError);
+        assertThat(invoice.getStatus()).isEqualTo(CommonInvoiceStatus.NEEDS_ATTENTION);
+        assertThat(items.stream().filter(CommonInvoiceOrder::isReady).count()).isEqualTo(4);
+        verifyNoInteractions(invoices, positions);
+    }
+
+    @Test
+    void historicalTextErrorDoesNotInventAReviewOrCountFormerMembershipAsCurrentWork() {
+        var invoice = invoice(CommonInvoiceStatus.NEEDS_ATTENTION,
+                "Текст отзыва уже опубликован ранее; order=200226; HTTP 409");
+        var current = position("На проверке", false, true); current.getOrder().setId(27391L);
+        var former = position("Архив", false, false); former.getOrder().setId(888L); former.setReady(true);
+
+        assertThat(reason(invoice, List.of(current, former))).contains("При предыдущей попытке", "Сейчас готовы 0 из 1", "#27391 «На проверке»")
+                .doesNotContain("#200226", "#888", "HTTP", "409", "конфликт устранен");
+        assertThat(reason(invoice, List.of())).contains("Готовность текущих позиций нужно сверить")
+                .doesNotContain("готовы 0", "отзыв #");
         verifyNoInteractions(invoices, positions);
     }
 

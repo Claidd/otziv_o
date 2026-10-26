@@ -33,6 +33,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /** Reads invoice control problems and explains the permitted recovery actions. */
@@ -47,6 +48,8 @@ public class ManagerControlInvoiceDiagnostics {
     private final AppSettingService appSettingService;
 
     private static final int COMMON_INVOICE_STALE_DAYS = 3;
+    private static final Pattern HISTORICAL_REVIEW_ID = Pattern.compile(
+            "(?iu)(?:отзыв\\s*#|\\breview\\s+#?)\\s*([1-9][0-9]{0,18})(?![0-9])");
 
     private static final int PAPER_INVOICE_DELIVERY_SLA_HOURS = 24;
 
@@ -396,12 +399,26 @@ public class ManagerControlInvoiceDiagnostics {
                     + "результата существующей отправки и устранения причины замечания по счету.";
         }
         if (error.contains("текст") && error.contains("уже опубликован ранее")) {
-            long ready = (items == null ? List.<CommonInvoiceOrder>of() : items).stream()
-                    .filter(Objects::nonNull).filter(CommonInvoiceOrder::isReady).count();
-            String progress = items == null || items.isEmpty() ? "" : " Готово позиций: " + ready + " из " + items.size() + ".";
-            return "Для одной позиции счета зафиксирован конфликт публикации: текст отзыва уже использован."
-                    + progress + " Откройте «Счет» и исходный отзыв, сверьте его публикацию и согласуйте корректный текст. "
-                    + "Повторная публикация без проверки недопустима; замечание закрывается после устранения конфликта в исходном отзыве.";
+            // last_error is evidence of an earlier attempt, not a validation of today's review text.
+            List<CommonInvoiceOrder> current = (items == null ? List.<CommonInvoiceOrder>of() : items).stream()
+                    .filter(Objects::nonNull).filter(CommonInvoiceOrder::isActiveMembership).toList();
+            List<CommonInvoiceOrder> unready = current.stream().filter(item -> !item.isReady()).toList();
+            var reviewId = HISTORICAL_REVIEW_ID.matcher(rawError);
+            String source = reviewId.find() ? " (отзыв #" + reviewId.group(1) + ")" : "";
+            String progress = current.isEmpty() ? " Готовность текущих позиций нужно сверить."
+                    : " Сейчас готовы " + (current.size() - unready.size()) + " из " + current.size() + " позиций.";
+            String waiting = unready.stream().limit(3).map(item -> {
+                Order order = item.getOrder();
+                String status = orderStatusTitle(order);
+                return "#" + (order == null || order.getId() == null ? "?" : order.getId())
+                        + " «" + (status.isBlank() ? "без статуса" : status) + "»";
+            }).collect(Collectors.joining(", "));
+            if (!waiting.isBlank()) progress += " Не готовы: " + waiting
+                    + (unready.size() > 3 ? " и ещё " + (unready.size() - 3) : "") + ".";
+            return limit("При предыдущей попытке одобрения сохранена ошибка повторного текста" + source
+                    + ". Она не подтверждает конфликт в текущем тексте." + progress
+                    + " Сверьте сохраненный текст и согласование клиента в исходных заказах. "
+                    + "Исправление текста само по себе не означает одобрение или готовность к счету.", 500);
         }
         if (error.startsWith("manual_fix:") && error.contains("moved_to_invoice_")) {
             String targetInvoice = valueAfter(error, "moved_to_invoice_");

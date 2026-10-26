@@ -10,6 +10,8 @@ import static com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosti
 /** Read-only, evidence-bound guidance. Never changes a card, sends a message or proves resolution. */
 final class ManagerProblemBusinessDiagnosis {
     static final String MODEL = "server-rules";
+    private static final Pattern HISTORICAL_REVIEW_ID = Pattern.compile(
+            "(?iu)(?:отзыв\\s*#|\\breview\\s+#?)\\s*([1-9][0-9]{0,18})(?![0-9])");
     private static final Pattern TECHNICAL = Pattern.compile(
             "(?i)(?:[a-z][a-z0-9]*_[a-z0-9_]+|\\b(?:invoice|automation|card|order|coverage)\\.[a-z]|\\b(?:invoice|order|card|automation|attempt|message|chat|case|sourceTask):[0-9]+|[{}]|\\b(?:caseId|operationId|sourceTaskId|UNKNOWN|PREPARED|QUEUED|COLLECTING|READY|UNAVAILABLE|SKIPPED)\\b|[0-9a-f]{8}-[0-9a-f-]{27,})");
 
@@ -164,6 +166,7 @@ final class ManagerProblemBusinessDiagnosis {
     }
 
     static boolean hasCurrentInvoicePublicationConflict(List<Fact> facts) {
+        // Current invoice.last_error can describe an old attempt; it does not prove a current text conflict.
         return currentInvoicePublicationConflict(facts) != null;
     }
 
@@ -179,17 +182,40 @@ final class ManagerProblemBusinessDiagnosis {
     private static Diagnosis invoicePublicationConflict(List<Fact> facts, Fact conflict) {
         long total = number(facts, "invoice", "orderCount"), ready = number(facts, "invoice", "readyCount");
         String summary = total >= 0 && ready >= 0 && ready <= total
-                ? "К общему счёту готовы " + ready + " из " + total + " позиций. " : "Готовность всех позиций общего счёта нужно сверить. ";
-        summary += "В журнале счёта зафиксирован конфликт публикации одного отзыва. По остальным неготовым позициям нужна отдельная проверка: их причины не подтверждены.";
+                ? "По сохранённому снимку готовы " + ready + " из " + total + " позиций. " : "Готовность всех позиций общего счёта нужно сверить. ";
+        var reviewId = HISTORICAL_REVIEW_ID.matcher(conflict.value());
+        summary += "При предыдущей попытке одобрения сохранена ошибка повторного текста"
+                + (reviewId.find() ? " (отзыв #" + reviewId.group(1) + ")" : "")
+                + ". Она не подтверждает конфликт в текущем тексте.";
         List<String> readinessRefs = facts.stream().filter(f -> "invoice".equals(f.subject()) && Set.of("orderCount", "readyCount").contains(f.field()))
                 .map(Fact::reference).toList();
+        String unready = unreadyInvoicePositions(facts);
         return new Diagnosis(summary, List.of(), List.of(),
-                List.of("Нужно подтвердить текущее состояние отзыва, указанного в ошибке счёта.", "Причины задержки остальных неготовых позиций не подтверждены отдельно."),
-                List.of(new Action("CHECK_SOURCE", "Откройте отзыв, указанный в текущей ошибке счёта, и связанный заказ. Сверьте фактическую публикацию и статус; не публикуйте отзыв повторно только ради снятия ошибки.",
-                                "Менеджер", "В исходном отзыве и заказе подтверждены фактическое состояние публикации и результат устранения конфликта.", List.of(conflict.reference())),
-                        new Action("CHECK_SOURCE", "Проверьте остальные позиции по отдельности: какие из них не готовы, почему задержаны и какое действие требуется. Не переносите причину конфликта одного отзыва на остальные позиции.",
+                List.of("Нужно сверить актуальность сохранённой ошибки по текущему тексту отзыва.", "Причины задержки неготовых позиций и согласование клиента нужно проверить в исходных заказах."),
+                List.of(new Action("CHECK_SOURCE", "Откройте отзыв из сохранённой ошибки и связанный заказ. Сверьте текущий текст и согласование клиента. Сохранение текста не означает одобрение публикации.",
+                                "Менеджер", "В исходном заказе подтверждены текущий текст, решение клиента и актуальность прежней ошибки.", List.of(conflict.reference())),
+                        new Action("CHECK_SOURCE", (unready.isBlank() ? "" : "По снимку не готовы: " + unready + ". ")
+                                + "Проверьте неготовые позиции по отдельности и согласование клиента. Прежняя ошибка одного отзыва не объясняет задержку остальных.",
                                 "Менеджер", "По каждой неготовой позиции причина задержки и результат её устранения подтверждены в соответствующем заказе.", readinessRefs.isEmpty() ? List.of(conflict.reference()) : readinessRefs)),
                 List.of("В счёте и связанных заказах подтверждена готовность действующих позиций и устранены причины задержек. Одного ответа ответственного или повторной публикации недостаточно."));
+    }
+
+    private static String unreadyInvoicePositions(List<Fact> facts) {
+        List<String> positions = facts.stream().filter(f -> "invoice_order".equals(f.subject()) && "ready".equals(f.field())
+                        && Set.of("false", "0").contains(f.value()))
+                .map(f -> f.reference().substring(0, f.reference().lastIndexOf(':') + 1))
+                .filter(prefix -> Set.of("true", "1").contains(positionValue(facts, prefix, "active_membership")))
+                .filter(prefix -> positionValue(facts, prefix, "order_id").matches("[1-9][0-9]{0,18}"))
+                .map(prefix -> "#" + positionValue(facts, prefix, "order_id") + " «"
+                        + (positionValue(facts, prefix, "current_order_status").isBlank() ? "без статуса"
+                        : positionValue(facts, prefix, "current_order_status")) + "»")
+                .toList();
+        return String.join(", ", positions.stream().limit(3).toList())
+                + (positions.size() > 3 ? " и ещё " + (positions.size() - 3) : "");
+    }
+
+    private static String positionValue(List<Fact> facts, String prefix, String field) {
+        return facts.stream().filter(f -> f.reference().equals(prefix + field)).map(Fact::value).findFirst().orElse("");
     }
 
     static Diagnosis uncertain(List<Fact> facts, Fact fact) {

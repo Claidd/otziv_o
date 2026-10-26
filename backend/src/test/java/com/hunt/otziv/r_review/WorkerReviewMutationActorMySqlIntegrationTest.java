@@ -115,6 +115,9 @@ class WorkerReviewMutationActorMySqlIntegrationTest {
         when(ownership.lockOwnedReview(anyLong(), anyString())).thenAnswer(i -> jdbc.query(
                 "SELECT id FROM review_actor_rows WHERE id=? AND owner=? AND published=false FOR UPDATE",
                 (rs, n) -> rs.getLong(1), i.getArgument(0), i.getArgument(1)).stream().findFirst());
+        when(ownership.lockOwnedPublishedReview(anyLong(), anyString())).thenAnswer(i -> jdbc.query(
+                "SELECT id FROM review_actor_rows WHERE id=? AND owner=? AND published=true FOR UPDATE",
+                (rs, n) -> rs.getLong(1), i.getArgument(0), i.getArgument(1)).stream().findFirst());
         var guard = new WorkerAssignmentMutationGuardService(ownership, mock(ManagerAccessService.class), locks);
         var details = mock(OrderDetailsService.class);
         doAnswer(i -> {
@@ -157,6 +160,22 @@ class WorkerReviewMutationActorMySqlIntegrationTest {
         assertThat(edits.updateReviewNote(1L, 10L, "note", auth("worker", "ROLE_WORKER"))).isTrue();
         assertThat(jdbc.queryForMap("SELECT body,answer,note FROM review_actor_rows WHERE id=10"))
                 .containsEntry("body", "updated").containsEntry("answer", "answer").containsEntry("note", "note");
+    }
+
+    @Test void publishedTextRemainsUnchangedAndOnlyItsCurrentOwnerGetsPublicationExplanation() {
+        jdbc.update("UPDATE review_actor_rows SET published=true WHERE id=10");
+
+        assertThatThrownBy(() -> edits.updateReviewText(1L, 10L, "changed", auth("worker", "ROLE_WORKER")))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Отзыв уже опубликован");
+        assertThatThrownBy(() -> edits.updateReviewText(1L, 10L, "changed", auth("other", "ROLE_WORKER")))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("назначение или состояние объекта изменилось")
+                .hasMessageNotContaining("Отзыв уже опубликован");
+
+        assertThat(jdbc.queryForMap("SELECT body,published FROM review_actor_rows WHERE id=10"))
+                .containsEntry("body", "Original review text").containsEntry("published", true);
+        verify(reviews, never()).save(any());
     }
 
     @Test void explicitNagulKeepsUsernameBoundToAuthorizedActor() {
