@@ -300,6 +300,12 @@ class WorkloadShadowTransferSimulationBulkTest {
         assertTrue(message.contains("• Альфия Л. — рейтинг 90"));
         assertTrue(message.contains("Результат: 4 дня ниже 100%"));
         assertTrue(message.contains("\n\nОчередь кандидатов:\n"));
+        assertTrue(message.startsWith("РАСЧЁТНАЯ РЕКОМЕНДАЦИЯ\n"));
+        assertTrue(message.contains("а не подтверждение передачи"));
+        assertTrue(message.contains("рабочего окна, дневных лимитов и повторной проверки нагрузки"));
+        assertTrue(message.contains("Результат передачи сообщается отдельно"));
+        assertFalse(message.contains("НАБЛЮДЕНИЕ"));
+        assertFalse(message.contains("Назначения не изменены"));
         assertFalse(message.contains("специалиста #"));
         assertFalse(message.contains("#2 ("));
     }

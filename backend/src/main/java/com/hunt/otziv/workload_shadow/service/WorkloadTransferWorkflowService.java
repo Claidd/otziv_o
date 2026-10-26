@@ -74,8 +74,18 @@ public class WorkloadTransferWorkflowService {
             return new StageResult(true, 0, groups.size(), 0, "Достигнут общий дневной лимит");
         }
 
-        List<RecommendationGroup> selected = new ArrayList<>();
+        Set<Long> sourceWorkerIds = new LinkedHashSet<>();
+        groups.values().forEach(value -> sourceWorkerIds.add(value.sourceWorkerId()));
+        Map<Long, List<WorkloadTransferCompanyGraph>> graphs =
+                graphQueryService.findActiveGraphs(sourceWorkerIds, now.toLocalDate());
+        Set<BlockedGraph> blockedGraphs = new java.util.HashSet<>();
+        repository.findBlockedGraphsSince(dayStart).forEach(row -> blockedGraphs.add(
+                new BlockedGraph(row.getSourceWorkerId(), row.getCompanyId(), row.getGraphFingerprint())
+        ));
+        Map<RecommendationGroup, WorkloadTransferGraphSnapshotService.Snapshot> selected =
+                new LinkedHashMap<>();
         int skippedByPolicy = 0;
+        int graphRejected = 0;
         for (RecommendationGroup group : groups.values()) {
             if (selected.size() >= globalRoom) {
                 skippedByPolicy++;
@@ -107,7 +117,26 @@ public class WorkloadTransferWorkflowService {
                 skippedByPolicy++;
                 continue;
             }
-            selected.add(group);
+            WorkloadTransferCompanyGraph graph = graph(
+                    graphs.get(group.sourceWorkerId()), group.companyId()
+            );
+            if (graph == null
+                    || WorkloadTransferGraphDiagnostics.from(graph).errorCount() > 0
+                    || WorkloadTransferPlan.from(graph).empty()) {
+                graphRejected++;
+                continue;
+            }
+            WorkloadTransferGraphSnapshotService.Snapshot snapshot =
+                    graphSnapshotService.snapshot(graph);
+            // Releasing a pre-execution reservation must not re-offer the same
+            // rejected package every tick. A changed graph can be checked again.
+            if (blockedGraphs.contains(new BlockedGraph(
+                    group.sourceWorkerId(), group.companyId(), snapshot.fingerprint()
+            ))) {
+                skippedByPolicy++;
+                continue;
+            }
+            selected.put(group, snapshot);
             reservedByManager.put(group.managerId(), managerReserved + 1);
             reservedBySourceWorker.put(group.sourceWorkerId(), sourceReserved + 1);
         }
@@ -116,38 +145,19 @@ public class WorkloadTransferWorkflowService {
                     true,
                     0,
                     skippedByPolicy,
-                    0,
+                    graphRejected,
                     "Рекомендации остановлены лимитами или предохранителями"
             );
         }
 
-        Set<Long> sourceWorkerIds = new LinkedHashSet<>();
-        selected.forEach(value -> sourceWorkerIds.add(value.sourceWorkerId()));
-        Map<Long, List<WorkloadTransferCompanyGraph>> graphs =
-                graphQueryService.findActiveGraphs(sourceWorkerIds, now.toLocalDate());
         long appliedExecutions = repository.countAppliedExecutions();
         boolean ownerConfirmationRequired =
                 appliedExecutions < settings.firstLiveOwnerConfirmations();
         List<WorkflowInsert> workflowInserts = new ArrayList<>();
         List<CandidateInsert> candidateInserts = new ArrayList<>();
-        int graphRejected = 0;
-        for (RecommendationGroup group : selected) {
-            WorkloadTransferCompanyGraph graph = graph(
-                    graphs.get(group.sourceWorkerId()),
-                    group.companyId()
-            );
-            if (graph == null) {
-                graphRejected++;
-                continue;
-            }
-            WorkloadTransferGraphDiagnostics diagnostics =
-                    WorkloadTransferGraphDiagnostics.from(graph);
-            if (diagnostics.errorCount() > 0 || WorkloadTransferPlan.from(graph).empty()) {
-                graphRejected++;
-                continue;
-            }
-            WorkloadTransferGraphSnapshotService.Snapshot snapshot =
-                    graphSnapshotService.snapshot(graph);
+        for (var entry : selected.entrySet()) {
+            RecommendationGroup group = entry.getKey();
+            WorkloadTransferGraphSnapshotService.Snapshot snapshot = entry.getValue();
             String workflowKey = UUID.randomUUID().toString();
             workflowInserts.add(new WorkflowInsert(
                     workflowKey,
@@ -219,6 +229,8 @@ public class WorkloadTransferWorkflowService {
                 "Боевые workflow созданы только из повторно проверенных графов"
         );
     }
+
+    private record BlockedGraph(Long sourceWorkerId, Long companyId, String fingerprint) {}
 
     private Map<Long, RecommendationGroup> group(
             List<RecommendationCandidateProjection> rows

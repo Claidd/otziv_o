@@ -34,6 +34,67 @@ class ManagerReportReviewLiveEvaluationTest {
     private final ObjectMapper mapper = new ObjectMapper();
 
     @Test
+    @EnabledIfEnvironmentVariable(named = "RUN_MANAGER_AUDIT_LARGE_EVAL", matches = "1")
+    void large142FactCaseAndTwoNegativeControlsUseAtMostSixLiveCalls() throws Exception {
+        ReputationAiProperties properties = new ReputationAiProperties();
+        String key = System.getenv("DEEPSEEK_API_KEY");
+        assertThat(key).isNotBlank();
+        properties.getDeepseek().setApiKey(key);
+        String model = System.getenv("DEEPSEEK_MODEL");
+        assertThat(model).as("Use the explicitly verified production model").isNotBlank();
+        properties.getDeepseek().setModel(model);
+        DeepSeekProvider real = new DeepSeekProvider(properties, mapper);
+        List<Map<String, Object>> calls = new ArrayList<>();
+        AiProvider measured = new AiProvider() {
+            @Override public String providerName() { return real.providerName(); }
+            @Override public boolean isAvailable() { return real.isAvailable(); }
+            @Override public AiResponse generate(AiRequest request) {
+                assertThat(calls.size()).as("Three cases, at most two attempts each").isLessThan(6);
+                long started = System.nanoTime();
+                AiResponse response = real.generate(request);
+                calls.add(Map.of("inputTokens", response.inputTokens(), "outputTokens", response.outputTokens(),
+                        "durationMs", (System.nanoTime() - started) / 1_000_000,
+                        "maxTokens", request.maxTokens(), "inputCharacters", request.userPrompt().length(),
+                        "thinking", request.thinkingEnabled(), "providerError", !response.errorMessage().isBlank()));
+                return response;
+            }
+        };
+        AiProviderRouter router = mock(AiProviderRouter.class);
+        when(router.activeProvider()).thenReturn(measured);
+        when(router.activeProviderAvailable()).thenReturn(true);
+        when(router.activeProviderName()).thenReturn("deepseek");
+        AppSettingService settings = mock(AppSettingService.class);
+        when(settings.getInt(anyString(), anyInt())).thenAnswer(call -> call.getArgument(1));
+        when(settings.getBoolean(anyString(), anyBoolean())).thenAnswer(call -> call.getArgument(1));
+        var service = new ManagerReportReviewQualityService(router, mapper, settings);
+        var answers = List.of(ManagerReportReviewLargeEvidenceFixture.ANSWER,
+                ManagerReportReviewLargeEvidenceFixture.FALSE_ANSWER, ManagerReportReviewLargeEvidenceFixture.VAGUE_ANSWER);
+        var ids = List.of("complete-six-criteria", "false-confirmed-payment", "vague-non-answer");
+        String evidence = ManagerReportReviewLargeEvidenceFixture.evidence();
+        List<Map<String, Object>> results = new ArrayList<>();
+        for (int index = 0; index < answers.size(); index++) {
+            int before = calls.size();
+            var assessment = service.assessAnswer(evidence, ManagerReportReviewLargeEvidenceFixture.question(), answers.get(index), false);
+            var expected = index == 0 ? ManagerReportReviewQualityService.Decision.ACCEPTED
+                    : ManagerReportReviewQualityService.Decision.NEEDS_CLARIFICATION;
+            results.add(Map.of("id", ids.get(index), "expected", expected.name(), "actual", assessment.decision().name(),
+                    "matches", expected == assessment.decision(), "criterionCount", assessment.criteria().size(),
+                    "claimCount", assessment.claims().size(), "providerCalls", List.copyOf(calls.subList(before, calls.size()))));
+            Path report = Path.of("target", "manager-audit-evaluation", "large-evidence-report.json");
+            Files.createDirectories(report.getParent());
+            mapper.writerWithDefaultPrettyPrinter().writeValue(report.toFile(), Map.of(
+                    "schema", "manager-audit-large-evidence-evaluation-v1", "model", model,
+                    "synthetic", true, "factCount", 142, "criterionCount", 6, "evaluatedAt", Instant.now().toString(),
+                    "results", results));
+            System.out.println("audit-large-eval " + ids.get(index) + " " + assessment.decision());
+        }
+        assertThat(results).hasSize(3).allSatisfy(result ->
+                assertThat(result.get("matches")).as(result.get("id").toString()).isEqualTo(true));
+        assertThat(results.getFirst().get("criterionCount")).isEqualTo(6);
+        assertThat((Integer) results.getFirst().get("claimCount")).isBetween(1, 12);
+    }
+
+    @Test
     @EnabledIfEnvironmentVariable(named = "RUN_MANAGER_AUDIT_INCIDENT_EVAL", matches = "1")
     void anonymizedCurrentQuestionPlanAndTwoNegativeControls() throws Exception {
         ReputationAiProperties properties = new ReputationAiProperties();
