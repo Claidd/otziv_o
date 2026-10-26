@@ -147,7 +147,7 @@ def main():
         assert publication['dockerfileSha256'] == recipe['dockerfileSha256'], 'publication_recipe_mismatch'
         reference = publication['reference']
         assert re.fullmatch(r'ghcr.io/claidd/otziv-security@sha256:[a-f0-9]{64}', reference)
-    inspected = json.loads(docker('image', 'inspect', reference).stdout)[0]
+    inspected = json.loads(docker('image', 'inspect', '--platform', 'linux/amd64', reference).stdout)[0]
     assert inspected['Os'] == 'linux' and inspected['Architecture'] == 'amd64'
     if publication:
         assert reference in inspected['RepoDigests']

@@ -1,0 +1,13 @@
+{
+  "result": "PASS",
+  "component": "grafana",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:fee75a266b5d85e4668da86f4089624f3764dd5df4a6e798f167913cfc5ccfc6",
+  "imageId": "sha256:46b3ee425162158e6771c55d3ec90aa7be4420ab71d77ba111f8947915a990db",
+  "commit": "632ea46485e75174dbdac0d3b88e100231705212",
+  "run": "40278086723",
+  "attempt": "1",
+  "validatedBy": "validateActivation: complete publication and anonymous OCI/SLSA chain, validateGrafanaC36ActivationScan exact binary/source proof and recomputed raw scan security summary; triage raw hash and image ID",
+  "binarySha256": "8b8981ecfb6dd1123831116f6428c531d33f43d7cda839677a6335f73895b32e",
+  "retainedC36Decisions": 2,
+  "productionActivated": false
+}

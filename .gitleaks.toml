@@ -1,5 +1,19 @@
 title = "otziv gitleaks config"
 
+# C41 raw CycloneDX advisory URLs: three public upstream GitHub commits.
+# The regression test binds these values to the exact evidence bytes and JSON lines.
+[[allowlists]]
+description = "C41 Grafana reviewed public CycloneDX advisory commits"
+targetRules = ["sourcegraph-access-token"]
+condition = "AND"
+regexTarget = "secret"
+paths = ['''(^|/)infrastructure/runtime\-security/proofs/c41\-grafana/publication/vulnerabilities\.sbom\.cdx\.json$''']
+regexes = [
+  '''^650eb1985a0776789c8564122990f588a742356f$''',
+  '''^bb8ca663db34a0980c9758b40d918fda3b4dbec3$''',
+  '''^ab28105c4a0197da24f8bfc414bc116055249e1e$''',
+]
+
 [extend]
 useDefault = true
 

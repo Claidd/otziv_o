@@ -1,0 +1,42 @@
+[
+  {
+    "id": 12631056408,
+    "node_id": "MDg6QXJ0aWZhY3QxMjYzMTA1NjQwOA==",
+    "name": "reviewed-publication-grafana-attempt-1",
+    "size_in_bytes": 287401,
+    "url": "https://api.github.com/repos/Claidd/otziv_o/actions/artifacts/12631056408",
+    "archive_download_url": "https://api.github.com/repos/Claidd/otziv_o/actions/artifacts/12631056408/zip",
+    "expired": false,
+    "digest": "sha256:3d59ade1046895402c4356799dcd12f3261daa95ee7ddc0704fe3066b3c8343c",
+    "created_at": "2026-10-26T06:13:16Z",
+    "updated_at": "2026-10-26T06:13:16Z",
+    "expires_at": "2026-11-09T06:13:15Z",
+    "workflow_run": {
+      "id": 40278086723,
+      "repository_id": 650754525,
+      "head_repository_id": 650754525,
+      "head_branch": "codex/review-text-save-runtime-20261026",
+      "head_sha": "632ea46485e75174dbdac0d3b88e100231705212"
+    }
+  },
+  {
+    "id": 12630779766,
+    "node_id": "MDg6QXJ0aWZhY3QxMjYzMDc3OTc2Ng==",
+    "name": "anonymous-download-grafana-attempt-1",
+    "size_in_bytes": 191256,
+    "url": "https://api.github.com/repos/Claidd/otziv_o/actions/artifacts/12630779766",
+    "archive_download_url": "https://api.github.com/repos/Claidd/otziv_o/actions/artifacts/12630779766/zip",
+    "expired": false,
+    "digest": "sha256:09562e8f046d77b1abd65834b931d9d4caa4e1fdd77f983cb0548c1245dca8a3",
+    "created_at": "2026-10-26T06:14:06Z",
+    "updated_at": "2026-10-26T06:14:06Z",
+    "expires_at": "2026-11-09T06:14:05Z",
+    "workflow_run": {
+      "id": 40278086723,
+      "repository_id": 650754525,
+      "head_repository_id": 650754525,
+      "head_branch": "codex/review-text-save-runtime-20261026",
+      "head_sha": "632ea46485e75174dbdac0d3b88e100231705212"
+    }
+  }
+]

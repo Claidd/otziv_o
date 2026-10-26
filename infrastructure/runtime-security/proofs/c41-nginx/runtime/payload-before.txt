@@ -1,0 +1,62 @@
+644|0|0|regular file|/etc/nginx/conf.d/default.conf
+644|0|0|regular file|/etc/nginx/fastcgi.conf
+644|0|0|regular file|/etc/nginx/fastcgi_params
+644|0|0|regular file|/etc/nginx/mime.types
+644|0|0|regular file|/etc/nginx/nginx.conf
+644|0|0|regular file|/etc/nginx/scgi_params
+644|0|0|regular file|/etc/nginx/uwsgi_params
+644|0|0|regular file|/usr/share/nginx/html/50x.html
+644|0|0|regular file|/usr/share/nginx/html/index.html
+755|0|0|directory|/docker-entrypoint.d
+755|0|0|directory|/etc/nginx
+755|0|0|directory|/etc/nginx/conf.d
+755|0|0|directory|/usr/lib/nginx
+755|0|0|directory|/usr/lib/nginx/modules
+755|0|0|directory|/usr/share/nginx
+755|0|0|directory|/usr/share/nginx/html
+755|0|0|regular file|/docker-entrypoint.d/10-listen-on-ipv6-by-default.sh
+755|0|0|regular file|/docker-entrypoint.d/15-local-resolvers.envsh
+755|0|0|regular file|/docker-entrypoint.d/20-envsubst-on-templates.sh
+755|0|0|regular file|/docker-entrypoint.d/30-tune-worker-processes.sh
+755|0|0|regular file|/docker-entrypoint.sh
+755|0|0|regular file|/usr/lib/nginx/modules/ngx_http_acme_module-debug.so
+755|0|0|regular file|/usr/lib/nginx/modules/ngx_http_acme_module.so
+755|0|0|regular file|/usr/lib/nginx/modules/ngx_http_geoip_module-debug.so
+755|0|0|regular file|/usr/lib/nginx/modules/ngx_http_geoip_module.so
+755|0|0|regular file|/usr/lib/nginx/modules/ngx_http_js_module-debug.so
+755|0|0|regular file|/usr/lib/nginx/modules/ngx_http_js_module.so
+755|0|0|regular file|/usr/lib/nginx/modules/ngx_http_xslt_filter_module-debug.so
+755|0|0|regular file|/usr/lib/nginx/modules/ngx_http_xslt_filter_module.so
+755|0|0|regular file|/usr/lib/nginx/modules/ngx_stream_geoip_module-debug.so
+755|0|0|regular file|/usr/lib/nginx/modules/ngx_stream_geoip_module.so
+755|0|0|regular file|/usr/lib/nginx/modules/ngx_stream_js_module-debug.so
+755|0|0|regular file|/usr/lib/nginx/modules/ngx_stream_js_module.so
+755|0|0|regular file|/usr/sbin/nginx
+777|0|0|symbolic link|'/etc/nginx/modules' -> '/usr/lib/nginx/modules'
+00d6d14424342d6a3439f4d7af190bfc33b96f40221946b174a6c7385ee3b98c  /docker-entrypoint.d/20-envsubst-on-templates.sh
+015cb581c2eb84b1a1ac9b575521d5881f791f632bfa62f34b26ba97d70c0d4f  /etc/nginx/uwsgi_params
+07e9494a5cb14e2648ca1c0ae75fce490bd344297a203ef499f26620c25ad633  /usr/lib/nginx/modules/ngx_http_js_module.so
+1f068aa49da8df46bfd5a917debf110af9b115370739e3be34af83ebf583fbce  /docker-entrypoint.d/30-tune-worker-processes.sh
+201cd1bf3d32e7f5fd8aa22c6de5370852fe03fb654ee22d345dd82f16a246a0  /usr/share/nginx/html/index.html
+288fd670e349cfb78b376760b3c876d428b750ee83ddd724fe5664b1d432d29d  /usr/lib/nginx/modules/ngx_http_acme_module-debug.so
+2e765aaaf1f1f523aa7b8e6be515deca5ec6ee5af1b3ec71167900045de308f2  /usr/lib/nginx/modules/ngx_stream_js_module.so
+329a1e89cc898599338874f679e22711c4c2d69f65f98b64a72d8b708e69ee44  /docker-entrypoint.d/15-local-resolvers.envsh
+3372fd90162da30d09f62c245e9c6bfd620fb0bb5b48ab54b16e804c2b9e8aae  /docker-entrypoint.sh
+42c5c37afdc9b67af99088d3410e9198569ff9a2b96ff055578f52f4d1edf7d6  /usr/lib/nginx/modules/ngx_http_xslt_filter_module-debug.so
+475f00d997414a23274843e55fae81fef1facb09889a8462aa7b9af8204fdad7  /usr/lib/nginx/modules/ngx_http_geoip_module.so
+48801b39b849818cd0a79221fa1e2b60aa198453368fdd46071d4b9883f5777c  /etc/nginx/conf.d/default.conf
+4dee6b0c7c8278f6a9b827261c25d3215c9ea8955e41ff7fe3eabdd5297edce7  /etc/nginx/nginx.conf
+51276057e76eee0f795169dfb5cec6b42d8b80a43054e42283821d979db206b0  /usr/lib/nginx/modules/ngx_http_js_module-debug.so
+6af73d816765f1a163eff548e120e9cfad5053776ca7c67d0966cdfaafc652dc  /docker-entrypoint.d/10-listen-on-ipv6-by-default.sh
+6f95d1d7d75e3c072907d845622a69d23110d1266c16ff122b3109b8b21f3ae9  /etc/nginx/mime.types
+7e3bbaf8a37648525012eb030e0cd560b0ed69bf7ea6fe016242fc9726b728a9  /usr/lib/nginx/modules/ngx_stream_geoip_module-debug.so
+876766b4e80133fd490603e073d3567425b88794828a9292104244c9e40875ed  /usr/share/nginx/html/50x.html
+97f9898b94114a136bd87e1eb7759aa2a15d5007154b670c447ee710e629f54b  /usr/sbin/nginx
+b2c3d480a58f61f3a7dc61850b461e892e36f236317765a4f2f6d558c928fa57  /etc/nginx/fastcgi.conf
+d21a73908d588d84cdc41e11378eb9b82ec094599c7af4ead0a1f72c17fa2676  /usr/lib/nginx/modules/ngx_stream_geoip_module.so
+d589794497ce758a18fcbfbefeb2a18619cb1a8144f45f0d9c871eea7b3c5cee  /usr/lib/nginx/modules/ngx_stream_js_module-debug.so
+ee6ab6413391fb3a86240241a4c68a1c62274e2c04924f92a9bf88ff1b0a4152  /usr/lib/nginx/modules/ngx_http_geoip_module-debug.so
+f1a5824a624753014d8916c35e97fd997d0f61cc060c85cc80d60282d431a098  /usr/lib/nginx/modules/ngx_http_xslt_filter_module.so
+f27b2027c571ccafcfb0fbb3f54d7aeee11a984e3a0f5a1fdf14629030fc9011  /etc/nginx/scgi_params
+f37852d0113de30fa6bfc3d9b180ef99383c06739530dd482a8538503afd5a58  /etc/nginx/fastcgi_params
+f4158dce5fed24737bc7bdcb7d64579fb546bdd05bd1b75c2a3edf161b2bdc4b  /usr/lib/nginx/modules/ngx_http_acme_module.so

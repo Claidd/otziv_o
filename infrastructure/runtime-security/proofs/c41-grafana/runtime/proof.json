@@ -1,0 +1,112 @@
+{
+  "schema": "otziv-c41-grafana-published-runtime-proof-v1",
+  "result": "PASS",
+  "production": false,
+  "network": "none",
+  "portsPublished": false,
+  "hostVolumes": false,
+  "checks": [
+    "both_exact_registry_images_bound_to_config_and_rootfs",
+    "runtime_configuration_and_unrelated_labels_preserved",
+    "payload_unchanged",
+    "other-packages_unchanged",
+    "curl_exact_security_transition",
+    "libcurl_exact_security_transition",
+    "image_user_472",
+    "actual_grafana_health_via_updated_curl",
+    "grafana_version_unchanged",
+    "curl_and_libcurl_version_8_23",
+    "exact_c36_binary",
+    "graceful_shutdown"
+  ],
+  "commit": "632ea46485e75174dbdac0d3b88e100231705212",
+  "run": "40278086723",
+  "attempt": "1",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:fee75a266b5d85e4668da86f4089624f3764dd5df4a6e798f167913cfc5ccfc6",
+  "parentReference": "ghcr.io/claidd/otziv-security@sha256:db6100e472c78215c923e1472fbfe0b4109a1303505aa959b190a3cae2bccc37",
+  "publicationSha256": "cb808fe5a3004dc71b49ed8642f47f4e87f005c480217926e7454899ed84b9d4",
+  "anonymousSha256": "b1d9cbfafd8e8cb3a6d683f6fd550ddb314eedd04377ab5e307c5472a18adc72",
+  "manifestSha256": "1df1ef78dc4076344c059084656fa44625096788c60d6298315508da2278adc4",
+  "executedScriptSha256": "35a7bcc2441f1a8e04bc1331373eeb1b9bed66a38b6ae6751de53c593a617ea6",
+  "candidateBinding": {
+    "indexDigest": "sha256:fee75a266b5d85e4668da86f4089624f3764dd5df4a6e798f167913cfc5ccfc6",
+    "manifestDigest": "sha256:6bc2625a993662e9ae52e9d200ee3a21892415a54f8e855fdf0c1d97ca433885",
+    "configDigest": "sha256:46b3ee425162158e6771c55d3ec90aa7be4420ab71d77ba111f8947915a990db",
+    "inspectedPlatformImageId": "sha256:6bc2625a993662e9ae52e9d200ee3a21892415a54f8e855fdf0c1d97ca433885",
+    "configAndRootfsMatch": true
+  },
+  "parentBinding": {
+    "indexDigest": "sha256:db6100e472c78215c923e1472fbfe0b4109a1303505aa959b190a3cae2bccc37",
+    "manifestDigest": "sha256:8ae3232298bc034b4537ffe537b685408818d1849780c9649a43107f96638784",
+    "configDigest": "sha256:bc6ca3bb480d86cc5f0aa4e608aedf349dd7bd8f1c9475f318d39820b9cf8bef",
+    "inspectedPlatformImageId": "sha256:8ae3232298bc034b4537ffe537b685408818d1849780c9649a43107f96638784",
+    "configAndRootfsMatch": true
+  },
+  "preservedConfigurationFields": [
+    "User",
+    "Entrypoint",
+    "Cmd",
+    "WorkingDir",
+    "ExposedPorts",
+    "Volumes",
+    "Healthcheck",
+    "StopSignal",
+    "Env"
+  ],
+  "snapshots": {
+    "payload": {
+      "before": {
+        "file": "payload-before.txt.gz",
+        "sha256": "4298e0ac2ff18c2ffba432aa9e1261f525cf25a10281a339c364e019684c5286",
+        "bytes": 615953,
+        "uncompressedSha256": "b861d9f3a229704b5755f7bc5723283f19a0ab5c0aaf60e9ab90104c9212ff1e",
+        "uncompressedBytes": 2991897
+      },
+      "after": {
+        "file": "payload-after.txt.gz",
+        "sha256": "4298e0ac2ff18c2ffba432aa9e1261f525cf25a10281a339c364e019684c5286",
+        "bytes": 615953,
+        "uncompressedSha256": "b861d9f3a229704b5755f7bc5723283f19a0ab5c0aaf60e9ab90104c9212ff1e",
+        "uncompressedBytes": 2991897
+      }
+    },
+    "other-packages": {
+      "before": {
+        "file": "other-packages-before.txt.gz",
+        "sha256": "cc5953ff132cf42edcf804dfe6783a8ee6464066c9135fcf97638c9c170a4c4d",
+        "bytes": 342,
+        "uncompressedSha256": "bd422ffe1aa63406a9e62bbebabef6adf16e1c54920d8a3bcc67d1407f53316d",
+        "uncompressedBytes": 658
+      },
+      "after": {
+        "file": "other-packages-after.txt.gz",
+        "sha256": "cc5953ff132cf42edcf804dfe6783a8ee6464066c9135fcf97638c9c170a4c4d",
+        "bytes": 342,
+        "uncompressedSha256": "bd422ffe1aa63406a9e62bbebabef6adf16e1c54920d8a3bcc67d1407f53316d",
+        "uncompressedBytes": 658
+      }
+    }
+  },
+  "updatedPackages": {
+    "curl": {
+      "before": "curl-8.21.0-r0",
+      "after": "curl-8.23.0-r0"
+    },
+    "libcurl": {
+      "before": "libcurl-8.21.0-r0",
+      "after": "libcurl-8.23.0-r0"
+    }
+  },
+  "health": {
+    "database": "ok",
+    "version": "12.4.10+otziv.4",
+    "commit": "81407c71e96e8351b4600164c1b4d30c8baf41d6"
+  },
+  "curlVersion": "curl 8.23.0 (x86_64-alpine-linux-musl) libcurl/8.23.0 OpenSSL/3.5.9 zlib/1.3.2 brotli/1.2.1 zstd/1.5.7 c-ares/1.34.8 libidn2/2.3.8 libpsl/0.21.5 nghttp2/1.69.0",
+  "binarySha256": "8b8981ecfb6dd1123831116f6428c531d33f43d7cda839677a6335f73895b32e",
+  "shutdown": {
+    "exitCode": 0,
+    "oomKilled": false
+  },
+  "cleanup": "PASS"
+}
