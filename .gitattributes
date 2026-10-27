@@ -131,3 +131,9 @@ infrastructure/runtime-security/builds/c38-nginx/** text eol=lf
 infrastructure/runtime-security/reviewed-images-c41-*.json text eol=lf
 infrastructure/runtime-security/builds/c41-*/** text eol=lf
 infrastructure/runtime-security/c41-runtime-proof.py text eol=lf
+
+# C42 evidence binds these exact manifest, recipe and executed rehearsal bytes.
+infrastructure/runtime-security/reviewed-images-c42-mysql.json text eol=lf
+infrastructure/runtime-security/builds/c42-mysql/** text eol=lf
+infrastructure/runtime-security/mysql-c42-rehearsal.py text eol=lf
+infrastructure/runtime-security/proofs/c42-mysql/publication/vulnerabilities.scanner.log -whitespace

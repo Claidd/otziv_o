@@ -58,7 +58,7 @@ test('C30 Grafana uses a separate versioned publication manifest and build recip
   });
 });
 
-test('C42 MySQL publication preserves historical coverage without activating a database change', async () => {
+test('C42 MySQL publication preserves historical coverage and binds the exact C37 parent', async () => {
   const loaded = await readReviewedImageSet(root, 'c42-mysql');
   const [image] = validateManifest(loaded.manifest);
   const previous = baseline.images.find(item => item.component === 'mysql');
@@ -69,8 +69,8 @@ test('C42 MySQL publication preserves historical coverage without activating a d
   assert.equal(image.candidateBaseRef, parent);
   const recipe = await readFile(new URL('../../' + image.dockerfile, import.meta.url), 'utf8');
   assert.equal(hash(recipe.replaceAll('\r\n', '\n')), image.dockerfileSha256);
-  const activations = JSON.parse(await readFile(new URL('./reviewed-image-activations.json', import.meta.url)));
-  assert.equal(activations.images.find(item => item.component === 'mysql').reference, parent);
+  const acceptance = JSON.parse(await readFile(new URL('./proofs/c42-mysql/parent-activation.json', import.meta.url)));
+  assert.equal(acceptance.reference, parent);
 });
 
 for (const [name, mutate] of Object.entries({

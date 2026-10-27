@@ -76,7 +76,7 @@ Useful options:
   -MobileApkPath <path>          Publish this signed release APK. By default uses the highest code from mobile/builds.
   -SkipMobileApkUpload           Do not include a mobile APK in this deployment.
   -PreDeployBackupDirectory      Local directory for the mandatory encrypted pre-migration DB backup.
-  -CoordinatedMysqlRefresh       Reviewed C30-to-C37 MySQL cutover after the protected backup.
+  -CoordinatedMysqlRefresh       Exact reviewed MySQL OS-package cutover after the protected backup.
   -CoordinatedSslRefresh         Reviewed C23-to-C36 PostgreSQL cutover after protected backups.
   -NoBuildCache                  Build images without Docker cache.
   -AllowDirtyWorktree            Emergency only: bypass the clean automatic snapshot.
@@ -1090,6 +1090,8 @@ $deployBundlePaths = @(
     "infrastructure\scripts\prod\otziv-prod-up.sh",
     "infrastructure\scripts\prod\database_image_guard.py",
     "infrastructure\scripts\prod\coordinated_mysql_refresh.py",
+    "infrastructure\scripts\prod\coordinated_mysql_brotli_refresh.py",
+    "infrastructure\scripts\prod\coordinated_mysql_cutover.py",
     "infrastructure\scripts\prod\coordinated_ssl_refresh.py",
     "infrastructure\scripts\prod\deployment_capacity.py",
     "infrastructure\scripts\prod\whatsapp_deploy_state.py",
@@ -3159,11 +3161,11 @@ chmod +x infrastructure/scripts/prod/apply-keycloak-prod-settings.sh || true
 chmod +x infrastructure/scripts/prod/validate-flyway-migrations.sh || true
 chmod +x infrastructure/scripts/prod/create-pre-deploy-db-backup.sh || true
 chmod +x infrastructure/scripts/prod/register-max-webhook.sh || true
-# The separate, explicit C30-to-C37 MySQL cutover runs first under the same
+# The exact reviewed MySQL OS-package cutover runs first under the same
 # protected lock and after the verified encrypted main DB backup. Its own
-# evidence, same-volume checks, and rollback gate the PostgreSQL transition.
+# evidence, same-volume checks and rollback remain mandatory.
 if [ "`$coordinated_mysql_enabled" = "1" ]; then
-  python3 infrastructure/scripts/prod/coordinated_mysql_refresh.py \
+  python3 infrastructure/scripts/prod/coordinated_mysql_cutover.py \
     --root "`$remote_path" --env-file "`$remote_path/`$env_file" \
     --lock-token "`$deploy_lock_token" --main-revision $coordinatedMainRevisionQuoted \
     --explicit-reviewed-mysql-cutover
