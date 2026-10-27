@@ -1061,7 +1061,7 @@ public class ManagerReportReviewQualityService {
         int timeout = settingInt("manager.report-review." + stage + "-timeout-seconds", 90, 5, 240);
         long remainingMillis = (deadline - System.nanoTime()) / 1_000_000;
         if (remainingMillis < 1000) throw new VerificationFailure(FailureCategory.PROVIDER_TIMEOUT, null);
-        boolean thinking = appSettingService.getBoolean("manager.report-review." + stage + "-thinking", true);
+        boolean thinking = appSettingService.getBoolean("manager.report-review." + stage + "-thinking", !assessment);
         AiResponse response = providerRouter.activeProvider().generate(new AiRequest(
                 task,
                 prompt,

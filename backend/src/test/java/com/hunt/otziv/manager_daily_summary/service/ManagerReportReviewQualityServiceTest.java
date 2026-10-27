@@ -153,7 +153,7 @@ class ManagerReportReviewQualityServiceTest {
     void acceptsSemanticAnswerWithEvidenceAndUsesIndependentStageBudgets() {
         String answer = "Клиенту не ответили, сообщу срок после проверки заказа.";
         AiProvider provider = provider(assessment("SATISFIED", answer, "E1", "PROMISE", "PLAN", "Действие обосновано"));
-        when(settings.getBoolean("manager.report-review.answer-assessment-thinking", true)).thenReturn(true);
+        when(settings.getBoolean("manager.report-review.answer-assessment-thinking", false)).thenReturn(true);
         var result = service.assessAnswer("Клиент спросил о сроке, ответа нет.", question(), answer, false);
 
         assertThat(result.accepted()).isTrue();
@@ -1095,6 +1095,22 @@ class ManagerReportReviewQualityServiceTest {
         String specific = "В похожих ситуациях я проверяю данные. Вчера я отправила заказ #26720.";
         provider(assessment("SATISFIED", specific, "E1", "FACT", "UNVERIFIABLE", "Нужен журнал конкретного действия"));
         assertThat(service.assessAnswer("Отправка не подтверждена.", question(), specific, false).accepted()).isFalse();
+    }
+
+    @Test
+    void structuredAnswerVerificationDefaultsToDirectJsonWithoutHiddenReasoningBudget() {
+        String answer = "Сверю исходную операцию и зафиксирую результат.";
+        AiProvider provider = provider(assessment("SATISFIED", answer, "E1", "PROMISE", "PLAN", "Действие соответствует случаю"));
+        when(settings.getBoolean(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyBoolean()))
+                .thenAnswer(call -> call.getArgument(1));
+
+        assertThat(service.assessAnswer("Исходная операция доступна.", question(), answer, false).accepted()).isTrue();
+
+        ArgumentCaptor<AiRequest> request = ArgumentCaptor.forClass(AiRequest.class);
+        verify(provider).generate(request.capture());
+        assertThat(request.getValue().thinkingEnabled()).isFalse();
+        assertThat(request.getValue().reasoningEffort()).isNull();
+        assertThat(request.getValue().jsonObject()).isTrue();
     }
 
     private String incidentAssessment(boolean missingConditions, String claimStatus) throws Exception {
