@@ -161,7 +161,7 @@ class ManagerReportReviewQualityServiceTest {
         ArgumentCaptor<AiRequest> request = ArgumentCaptor.forClass(AiRequest.class);
         verify(provider).generate(request.capture());
         assertThat(request.getValue().thinkingEnabled()).isTrue();
-        assertThat(request.getValue().maxTokens()).isEqualTo(6000);
+        assertThat(request.getValue().maxTokens()).isEqualTo(8000);
         assertThat(request.getValue().timeout()).isPositive().isLessThanOrEqualTo(java.time.Duration.ofSeconds(90));
         assertThat(request.getValue().reasoningEffort()).isEqualTo("low");
         assertThat(request.getValue().jsonObject()).isTrue();
@@ -779,7 +779,7 @@ class ManagerReportReviewQualityServiceTest {
         var previousInput = (com.fasterxml.jackson.databind.node.ObjectNode) input.deepCopy();
         previousInput.put("report", report).set("authoritativeFacts", previousTypedFacts);
         assertThat(request.userPrompt().length()).isLessThan((int) (previousInput.toString().length() * 0.60));
-        assertThat(request.maxTokens()).isEqualTo(6000);
+        assertThat(request.maxTokens()).isEqualTo(8000);
         assertThat(response.toString().length()).isLessThan(4000);
         assertThat(request.systemPrompt()).contains("не каждую", "Не пропускай противоречащие источники");
     }
@@ -864,7 +864,7 @@ class ManagerReportReviewQualityServiceTest {
             assertThat(result.accepted()).isTrue();
             ArgumentCaptor<AiRequest> requests = ArgumentCaptor.forClass(AiRequest.class);
             verify(provider, times(2)).generate(requests.capture());
-            assertThat(requests.getAllValues()).extracting(AiRequest::maxTokens).containsExactly(6000, 12000);
+            assertThat(requests.getAllValues()).extracting(AiRequest::maxTokens).containsExactly(8000, 12000);
             assertThat(requests.getAllValues()).allSatisfy(r -> {
                 assertThat(r.thinkingEnabled()).isTrue();
                 assertThat(r.reasoningEffort()).isEqualTo("low");
@@ -1031,6 +1031,32 @@ class ManagerReportReviewQualityServiceTest {
         ((com.fasterxml.jackson.databind.node.ObjectNode) root.path("criteria").get(0)).put("status", "UNVERIFIABLE");
         provider(root.toString());
         assertThat(service.assessAnswer("Доставка UNKNOWN.", question(), answer, false).decision())
+                .isEqualTo(ManagerReportReviewQualityService.Decision.NEEDS_CONTEXT);
+    }
+
+    @Test
+    void appraisalOfOwnCommentWithMissingDeadlineNeedsClarificationRatherThanDataPause() throws Exception {
+        String answer = "Моего комментария недостаточно, поскольку нет результата проверки и конкретного дальнейшего действия.";
+        var root = new ObjectMapper().readTree(assessment("SATISFIED", answer, "E1", "FACT", "UNVERIFIABLE", "Нужен срок"));
+        ((com.fasterxml.jackson.databind.node.ObjectNode) root).put("contextStatus", "INSUFFICIENT");
+        var missing = root.path("criteria").get(0).deepCopy();
+        ((com.fasterxml.jackson.databind.node.ObjectNode) missing).put("criterionIndex", 1).put("status", "MISSING").put("answerQuote", "");
+        ((com.fasterxml.jackson.databind.node.ArrayNode) root.path("criteria")).add(missing);
+        provider(root.toString());
+
+        var result = service.assessAnswer("Исходный счёт доступен.", new ManagerReportReviewQualityService.ReviewQuestion(
+                "Что исправите и когда проверите?", List.of("вывод о комментарии", "срок проверки")), answer, false);
+
+        assertThat(result.decision()).isEqualTo(ManagerReportReviewQualityService.Decision.NEEDS_CLARIFICATION);
+        assertThat(result.claims().getFirst().kind()).isEqualTo(ManagerReportReviewQualityService.ClaimKind.HYPOTHESIS);
+        assertThat(result.pending()).isFalse();
+    }
+
+    @Test
+    void selfAppraisalCannotHideAnUnsupportedExternalFact() {
+        String answer = "Моего комментария недостаточно, поскольку платёж уже поступил.";
+        provider(assessment("SATISFIED", answer, "E1", "FACT", "UNVERIFIABLE", "Платёж неизвестен"));
+        assertThat(service.assessAnswer("Результат платежа неизвестен.", question(), answer, false).decision())
                 .isEqualTo(ManagerReportReviewQualityService.Decision.NEEDS_CONTEXT);
     }
 

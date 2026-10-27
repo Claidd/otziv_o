@@ -139,6 +139,10 @@ public class ManagerReportReviewQualityService {
             критерием. Не требуй невозможных прав или неописанных процедур. Предположение помечай
             HYPOTHESIS/UNVERIFIABLE и не выдавай за установленную причину. Открыто названная
             неопределённость с обоснованным планом проверки может удовлетворить критерию плана.
+            Оценка полноты собственного комментария («моего комментария недостаточно») — личный
+            вывод HYPOTHESIS/UNVERIFIABLE, а не внешний факт о выполненной работе. Она не требует
+            журнала событий и не означает contextStatus=INSUFFICIENT. Цитируй отдельно короткую оценку;
+            конкретные утверждения о платеже, доставке или выполнении проверяй отдельными FACT.
             Неконкретное обещание «разберусь/постараюсь» означает MISSING по действию, а не нехватку
             внешних данных. Отсутствие конкретного плана у менеджера не является основанием для
             contextStatus=INSUFFICIENT. PROMISE/UNVERIFIABLE означает необходимость уточнить
@@ -370,7 +374,7 @@ public class ManagerReportReviewQualityService {
             facts.put("previousAttempts", attempts.subList(0, attempts.size() - 1));
             facts.put("managerAnswer", value);
             facts.put("evaluationTime", answeredAt.toString());
-            int tokenBudget = settingInt("manager.report-review.answer-assessment-max-tokens", 6000, 2000, 16000);
+            int tokenBudget = settingInt("manager.report-review.answer-assessment-max-tokens", 8000, 2000, 16000);
             long deadline = requestDeadline("answer-assessment");
             for (int attempt = 1; attempt <= 2; attempt++) {
                 AiResponse response = null;
@@ -482,6 +486,10 @@ public class ManagerReportReviewQualityService {
             if (checksKnownContradiction) status = ClaimStatus.CONTRADICTED;
             else if (checksUnknownOutcome) status = ClaimStatus.UNVERIFIABLE;
             if (kind == ClaimKind.RETRACTION) require(checks.isEmpty(), ProtocolViolation.RETRACTION_FACT_CHECKS);
+            // A narrowly scoped judgement of the author's wording is not an external event.
+            // Do not let it turn actionable missing criteria into an indefinite data pause.
+            if (kind == ClaimKind.FACT && status == ClaimStatus.UNVERIFIABLE && checks.isEmpty()
+                    && selfAssessmentOnly(quote)) kind = ClaimKind.HYPOTHESIS;
             // Known structured fields are checked again independently of the model's verdict/value extraction.
             if (temporal.equals("CURRENT") && kind == ClaimKind.FACT
                     && contradictsInvoiceFields(quote, typedFacts)) status = ClaimStatus.CONTRADICTED;
@@ -550,10 +558,12 @@ public class ManagerReportReviewQualityService {
                 && c.kind() == ClaimKind.PROMISE && c.status() == ClaimStatus.UNVERIFIABLE);
         boolean missing = criteria.stream().anyMatch(c -> c.status() == CriterionStatus.MISSING) || untrackedPromise || unclearPromise;
         boolean staleEvidence = staleCurrentFacts(typedFacts, evaluationTime);
-        boolean uncertain = "INSUFFICIENT".equals(contextStatus)
-                || criteria.stream().anyMatch(c -> c.status() == CriterionStatus.UNVERIFIABLE)
+        boolean uncertain = criteria.stream().anyMatch(c -> c.status() == CriterionStatus.UNVERIFIABLE)
                 || claims.stream().anyMatch(c -> c.status() == ClaimStatus.UNVERIFIABLE
                         && c.kind() != ClaimKind.HYPOTHESIS && c.kind() != ClaimKind.RETRACTION && c.kind() != ClaimKind.PROMISE);
+        // INSUFFICIENT must identify what cannot be verified. Never silently accept such a response.
+        require(!"INSUFFICIENT".equals(contextStatus) || uncertain || missing || contradicted,
+                ProtocolViolation.CONTEXT_UNCERTAINTY_REQUIRED);
         // An unrelated unverifiable claim cannot erase a contradiction supported by fresh evidence.
         Decision decision = staleEvidence ? Decision.NEEDS_CONTEXT
                 : contradicted ? Decision.NEEDS_CLARIFICATION
@@ -918,6 +928,37 @@ public class ManagerReportReviewQualityService {
         }
     }
 
+    /** A technical retry is an updated assessment of one submission, not a new employee reply. */
+    public String recordAssessment(String json, ReviewAnswer answer, boolean retry) {
+        if (!retry) return appendAnswer(json, answer);
+        try {
+            List<ReviewAnswer> answers = new ArrayList<>(objectMapper.readValue(json,
+                    objectMapper.getTypeFactory().constructCollectionType(List.class, ReviewAnswer.class)));
+            for (int index = answers.size() - 1; index >= 0; index--) {
+                ReviewAnswer prior = answers.get(index);
+                if (prior.questionIndex() == answer.questionIndex()
+                        && java.util.Objects.equals(prior.answer(), answer.answer())
+                        && java.util.Objects.equals(prior.recordedAt(), answer.recordedAt())) {
+                    answers.set(index, answer);
+                    return objectMapper.writeValueAsString(answers);
+                }
+            }
+            throw new IllegalStateException("Original answer identity not found");
+        } catch (Exception invalid) {
+            throw new IllegalStateException("Cannot update saved answer assessment", invalid);
+        }
+    }
+
+    private boolean selfAssessmentOnly(String quote) {
+        String text = normalize(quote);
+        // The entire quote must be a wording appraisal. An added payment/status/action assertion
+        // cannot hide behind the opening admission; it still requires external verification.
+        return text.matches("(?:мой|моего) (?:ответ|ответа|комментарий|комментария) (?:был |было )?"
+                + "(?:недостаточно|недостаточен|неполный|неполон|слишком общий|слишком общим)"
+                + "(?: поскольку нет (?:результата проверки|конкретного дальнейшего действия|срока|плана)"
+                + "(?: и (?:результата проверки|конкретного дальнейшего действия|срока|плана))*)?");
+    }
+
     public List<String> previousAcceptedContext(String json, int questionIndex) {
         try {
             if (json == null || json.isBlank()) return List.of();
@@ -1001,7 +1042,7 @@ public class ManagerReportReviewQualityService {
     // Closed vocabulary only. Never derive a diagnostic/retry message from model values,
     // parser exception text, employee answers, provider bodies or evidence content.
     private enum ProtocolViolation {
-        OBJECT_REQUIRED, CONTEXT_STATUS_REQUIRED, CRITERIA_COVERAGE, CLAIMS_REQUIRED,
+        OBJECT_REQUIRED, CONTEXT_STATUS_REQUIRED, CONTEXT_UNCERTAINTY_REQUIRED, CRITERIA_COVERAGE, CLAIMS_REQUIRED,
         CRITERION_INDEX, CRITERION_STATUS, CRITERION_EVIDENCE_REQUIRED, CLAIM_KIND, CLAIM_STATUS,
         PLAN_REQUIRES_PROMISE, PROMISE_CANNOT_PROVE_COMPLETION, HYPOTHESIS_CANNOT_PROVE_FACT,
         CLAIM_EVIDENCE_REQUIRED, TEMPORAL_SCOPE, RETRACTION_PRIOR_ANSWER_REQUIRED,

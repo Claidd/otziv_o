@@ -112,5 +112,8 @@ class ManagerReportReviewSavedAnswerReplayTest {
         System.out.println("audit-saved-replay decision=" + result.decision() + " calls=" + usage.size());
         assertThat(usage).as("Saved answer reached the real provider").hasSizeBetween(1, 2);
         assertThat(result.decision().name()).as("Original answer passes technical verification").isNotEqualTo("UNAVAILABLE");
+        if (input.hasNonNull("expectedDecision"))
+            assertThat(result.decision().name()).as("Saved incident leaves its incorrect data pause")
+                    .isEqualTo(input.path("expectedDecision").asText());
     }
 }

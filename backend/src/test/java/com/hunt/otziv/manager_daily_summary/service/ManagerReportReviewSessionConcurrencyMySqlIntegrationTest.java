@@ -220,6 +220,61 @@ class ManagerReportReviewSessionConcurrencyMySqlIntegrationTest {
         assertThat(current().getAnswersJson()).isEqualTo("[\"old\"]");
     }
 
+    @Test
+    void recoveryClaimIsExclusiveDurableAndDoesNotChangeAnswersOrDeadline() {
+        availability.pause(current(), now.minusMinutes(2), "test", "timeout");
+        assertThat(sessions.findRecoveryCandidates(now, now.minusMinutes(1))).containsExactly(id);
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var a = executor.submit(() -> tx.execute(ignored -> sessions.claimRecovery(
+                    id, now, now.minusMinutes(1), now.plusMinutes(10))));
+            var b = executor.submit(() -> tx.execute(ignored -> sessions.claimRecovery(
+                    id, now, now.minusMinutes(1), now.plusMinutes(10))));
+            try { assertThat(java.util.List.of(a.get(10, TimeUnit.SECONDS), b.get(10, TimeUnit.SECONDS)))
+                    .containsExactlyInAnyOrder(1, 0); }
+            catch (Exception failure) { throw new AssertionError(failure); }
+        }
+        assertThat(current().getRecoveryAttempts()).isEqualTo(1);
+        assertThat(current().getRecoveryNextAttemptAt()).isEqualTo(now.plusMinutes(10));
+        assertThat(current().getAnswersJson()).isEqualTo("[\"old\"]");
+        assertThat(current().getDeadlineStartedAt()).isEqualTo(now.minusHours(4));
+        assertThat(sessions.findRecoveryCandidates(now, now.minusMinutes(1))).isEmpty();
+        assertThat(sessions.findRecoveryCandidates(now.plusMinutes(11), now)).containsExactly(id);
+        availability.resume(current(), now, "test");
+        assertThat(current().getRecoveryAttempts()).isZero();
+        assertThat(current().getRecoveryNextAttemptAt()).isNull();
+    }
+
+    @Test
+    void failedRecoveryRetainsCommittedLeaseAndDoesNotRetryOnEverySchedulerTick() {
+        availability.pause(current(), now.minusMinutes(2), "test", "timeout");
+        var reviews = mock(ManagerReportReviewTelegramService.class);
+        doThrow(new IllegalStateException("synthetic provider transaction failure"))
+                .when(reviews).recoverAutomatically(id);
+        var settings = mock(AppSettingService.class);
+        when(settings.getBoolean("manager.report-review.enabled", true)).thenReturn(true);
+
+        new ManagerReportReviewRecoveryJob(sessions, reviews, settings, transactions).recover();
+        new ManagerReportReviewRecoveryJob(sessions, reviews, settings, transactions).recover();
+
+        verify(reviews).recoverAutomatically(id);
+        assertThat(current().getRecoveryAttempts()).isEqualTo(1);
+        assertThat(current().getRecoveryNextAttemptAt()).isAfter(now.plusMinutes(9));
+        assertThat(current().getAiUnavailableStartedAt()).isNotNull();
+        assertThat(current().getRestrictedAt()).isNull();
+        assertThat(current().getAnswersJson()).isEqualTo("[\"old\"]");
+    }
+
+    @Test
+    void lateRecoveryClaimCannotReopenACompletedOrTestAudit() {
+        availability.pause(current(), now.minusMinutes(2), "test", "timeout");
+        jdbc.update("UPDATE manager_report_review_sessions SET test_mode=1 WHERE review_id=?", id);
+        assertThat(sessions.findRecoveryCandidates(now, now.minusMinutes(1))).isEmpty();
+        assertThat(tx.<Integer>execute(ignored -> sessions.claimRecovery(id, now, now.minusMinutes(1), now.plusMinutes(10)))).isZero();
+        jdbc.update("UPDATE manager_report_review_sessions SET test_mode=0,status='COMPLETED',completed_at=? WHERE review_id=?", now, id);
+        assertThat(sessions.findRecoveryCandidates(now, now.minusMinutes(1))).isEmpty();
+        assertThat(tx.<Integer>execute(ignored -> sessions.claimRecovery(id, now, now.minusMinutes(1), now.plusMinutes(10)))).isZero();
+    }
+
     private ManagerReportReviewReminderJob reminder(NotificationMediaDeliveryService delivery) {
         var settings = mock(AppSettingService.class);
         when(settings.getBoolean("manager.report-review.enabled", true)).thenReturn(true);
