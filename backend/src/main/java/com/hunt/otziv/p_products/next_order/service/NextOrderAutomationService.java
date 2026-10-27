@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -34,8 +35,11 @@ public class NextOrderAutomationService {
     private final NextOrderRequestRepository requestRepository;
     private final NextOrderRequestService requestService;
     private final OrderCreationService creationService;
+    private final NextOrderWorkerRoutingService workerRoutingService;
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    // After waiting for the company lock, active-order/child reads must see a
+    // predecessor request's commit rather than an earlier MySQL RR snapshot.
+    @Transactional(propagation = Propagation.REQUIRES_NEW, isolation = Isolation.READ_COMMITTED)
     public void createNextOrder(Long requestId) {
         // Scheduler/startup recovery may race the original AFTER_COMMIT event.
         // Serialize the whole idempotent decision on the durable request row.
@@ -58,11 +62,12 @@ public class NextOrderAutomationService {
 
         Long companyId = sourceOrder.getCompany() != null ? sourceOrder.getCompany().getId() : null;
         Long filialId = sourceOrder.getFilial() != null ? sourceOrder.getFilial().getId() : null;
-        Long workerId = sourceOrder.getWorker() != null ? sourceOrder.getWorker().getId() : null;
+        Long sourceWorkerId = sourceOrder.getWorker() == null ? null : sourceOrder.getWorker().getId();
+        long workerId = workerRoutingService.resolveWorkerId(companyId, sourceWorkerId, sourceOrder.notificationManagerId());
         Set<Long> filialIds = requestService.orderFilialIds(sourceOrder);
         List<Order> existingActiveOrders = requestService.findActiveOrdersForFilials(companyId, filialIds, filialId, workerId);
         Optional<Order> matchingActiveOrder = existingActiveOrders.stream()
-                .filter(activeOrder -> hasSameReviewTerms(sourceOrder, activeOrder))
+                .filter(activeOrder -> hasSameReviewTerms(sourceOrder, activeOrder, workerId))
                 .findFirst();
         if (matchingActiveOrder.isPresent()) {
             Order activeOrder = matchingActiveOrder.get();
@@ -92,19 +97,26 @@ public class NextOrderAutomationService {
 
         requestService.markAttemptStarted(requestId);
 
-        OrderDTO repeatOrder = creationService.convertToOrderDTOToRepeat(sourceOrder);
-        boolean created = creationService.createRepeatedOrderWithReviews(sourceOrder, repeatOrder);
-        if (!created) {
-            throw new IllegalStateException("createRepeatedOrderWithReviews вернул false для заявки " + requestId);
+        OrderDTO repeatOrder = creationService.convertToOrderDTOToRepeat(sourceOrder, workerId);
+        Order created = creationService.createRepeatedOrderWithReviews(sourceOrder, repeatOrder);
+        if (created == null || created.getId() == null) {
+            throw new IllegalStateException("Автоповтор не вернул созданный заказ для заявки " + requestId);
         }
-
+        // Bind this exact locked request, even when its historical source worker
+        // differs from the current recipient. A generic worker lookup could
+        // close another request and leave this one without its created order.
+        request.setCreatedOrder(created);
+        request.setErrorMessage(null);
+        requestRepository.save(request);
+        workerRoutingService.auditReroute(requestId, sourceOrder.getId(), created.getId(),
+                sourceWorkerId, created.getWorker().getId());
         requestService.markCreatedIfOpen(requestId);
     }
 
-    private boolean hasSameReviewTerms(Order sourceOrder, Order activeOrder) {
+    private boolean hasSameReviewTerms(Order sourceOrder, Order activeOrder, long workerId) {
         List<Review> sourceReviews = reviews(sourceOrder);
         List<Review> activeReviews = reviews(activeOrder);
-        if (!hasSameOrderRouting(sourceOrder, activeOrder)
+        if (!hasSameOrderRouting(sourceOrder, activeOrder, workerId)
                 || sourceReviews.isEmpty()
                 || sourceReviews.size() != activeReviews.size()
                 || !hasConsistentAggregates(activeOrder)) {
@@ -120,16 +132,15 @@ public class NextOrderAutomationService {
         return canonicalTerms(sourceTerms).equals(canonicalTerms(activeTerms));
     }
 
-    private boolean hasSameOrderRouting(Order sourceOrder, Order activeOrder) {
+    private boolean hasSameOrderRouting(Order sourceOrder, Order activeOrder, long workerId) {
         if (sourceOrder == null || activeOrder == null) {
             return false;
         }
         Long sourceFilialId = sourceOrder.getFilial() == null ? null : sourceOrder.getFilial().getId();
         Long activeFilialId = activeOrder.getFilial() == null ? null : activeOrder.getFilial().getId();
-        Long sourceWorkerId = sourceOrder.getWorker() == null ? null : sourceOrder.getWorker().getId();
         Long activeWorkerId = activeOrder.getWorker() == null ? null : activeOrder.getWorker().getId();
         return Objects.equals(sourceFilialId, activeFilialId)
-                && Objects.equals(sourceWorkerId, activeWorkerId);
+                && Objects.equals(workerId, activeWorkerId);
     }
 
     private boolean hasConsistentAggregates(Order order) {

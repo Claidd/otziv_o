@@ -78,12 +78,12 @@ public class OrderCreationServiceImpl implements OrderCreationService {
         Product product = productService.findById(productId);
         BigDecimal total = requiredPrice(product, "продукта " + productId)
                 .multiply(BigDecimal.valueOf(orderDTO.getAmount()));
-        return createNewOrderWithReviews(companyId, orderDTO, product, total, List.of());
+        return createNewOrderWithReviews(companyId, orderDTO, product, total, List.of()) != null;
     }
 
     @Override
     @Transactional
-    public boolean createRepeatedOrderWithReviews(Order sourceOrder, OrderDTO orderDTO) {
+    public Order createRepeatedOrderWithReviews(Order sourceOrder, OrderDTO orderDTO) {
         RepeatOrderTerms repeatTerms = repeatOrderTerms(sourceOrder);
         if (orderDTO.getAmount() != repeatTerms.reviews().size()) {
             log.warn(
@@ -107,7 +107,7 @@ public class OrderCreationServiceImpl implements OrderCreationService {
         );
     }
 
-    private boolean createNewOrderWithReviews(Long companyId,
+    private Order createNewOrderWithReviews(Long companyId,
                                               OrderDTO orderDTO,
                                               Product summaryProduct,
                                               BigDecimal total,
@@ -143,12 +143,14 @@ public class OrderCreationServiceImpl implements OrderCreationService {
             updateCompanyCounter(order, companyId);
             log.info("7. Обновили счётчики компании");
             commonBillingService.attachOrderIfNeeded(order);
-            nextOrderRequestService.completeOpenRequestForCreatedOrder(order);
+            if (repeatReviewTerms.isEmpty()) {
+                nextOrderRequestService.completeOpenRequestForCreatedOrder(order);
+            }
 
             eventPublisher.publishEvent(new OrderCreatedEvent(order.getId()));
             log.info("8. Уведомление работнику по заказу {} запланировано после коммита", order.getId());
 
-            return true;
+            return order;
         } catch (Exception e) {
             log.error("Ошибка при создании нового заказа с отзывами", e);
             throw new RuntimeException("Ошибка при создании нового заказа с отзывами", e);
@@ -925,6 +927,13 @@ public class OrderCreationServiceImpl implements OrderCreationService {
                 .clientTextExpected(clientTextExpected)
                 .build();
     } // Конвертер DTO для создания нового заказа после завершения предыдущего
+
+    @Override
+    public OrderDTO convertToOrderDTOToRepeat(Order order, long workerId) {
+        OrderDTO repeat = convertToOrderDTOToRepeat(order);
+        repeat.setWorker(convertToWorkerDTO(workerService.getWorkerById(workerId)));
+        return repeat;
+    }
 
     private List<Long> reviewFilialIds(Order order) {
         return orderedReviews(order).stream()

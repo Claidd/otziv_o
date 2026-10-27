@@ -75,7 +75,10 @@ class OrderCreationServiceRepeatTest {
         OrderStatus newStatus = new OrderStatus();
         newStatus.setTitle("Новый");
 
-        when(workerService.getWorkerById(worker.getId())).thenReturn(worker);
+        Worker recipient = new Worker();
+        recipient.setId(16L);
+        recipient.setUser(worker.getUser());
+        when(workerService.getWorkerById(16L)).thenReturn(recipient);
         when(companyService.getCompaniesById(company.getId())).thenReturn(company);
         when(managerService.getManagerById(manager.getId())).thenReturn(manager);
         when(filialService.getFilial(filial.getId())).thenReturn(filial);
@@ -101,12 +104,16 @@ class OrderCreationServiceRepeatTest {
                 });
 
         OrderCreationServiceImpl service = service();
-        OrderDTO repeatOrder = service.convertToOrderDTOToRepeat(source);
+        OrderDTO repeatOrder = service.convertToOrderDTOToRepeat(source, 16L);
 
-        service.createRepeatedOrderWithReviews(source, repeatOrder);
+        Order createdOrder = service.createRepeatedOrderWithReviews(source, repeatOrder);
 
         Review createdReview = createdReviews.getFirst();
         OrderDetails createdDetail = createdReview.getOrderDetails();
+        assertSame(createdOrder, createdDetail.getOrder());
+        assertSame(recipient, createdOrder.getWorker());
+        assertSame(worker, source.getWorker());
+        verifyNoInteractions(nextOrderRequestService);
         assertSame(actualReviewProduct, createdReview.getProduct());
         assertEquals(new BigDecimal("250.00"), createdReview.getPrice());
         assertSame(actualReviewProduct, createdDetail.getProduct());

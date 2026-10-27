@@ -25,6 +25,8 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -42,6 +44,9 @@ class NextOrderAutomationServiceTest {
 
     @Mock
     private OrderCreationService creationService;
+
+    @Mock
+    private NextOrderWorkerRoutingService workerRoutingService;
 
     @Test
     void createdRequestIsIdempotentUnderLockedRecoveryReplay() {
@@ -168,29 +173,83 @@ class NextOrderAutomationServiceTest {
         NextOrderRequest request = request(50L, sourceOrder);
         OrderDTO repeatOrder = new OrderDTO();
         stubRequestAndActiveOrders(request, activeOrder);
-        when(creationService.convertToOrderDTOToRepeat(sourceOrder)).thenReturn(repeatOrder);
-        when(creationService.createRepeatedOrderWithReviews(sourceOrder, repeatOrder)).thenReturn(true);
+        when(creationService.convertToOrderDTOToRepeat(sourceOrder, 70L)).thenReturn(repeatOrder);
+        Order created = order(60L, review(401L, 2L, "250"));
+        when(creationService.createRepeatedOrderWithReviews(sourceOrder, repeatOrder)).thenReturn(created);
 
         service().createNextOrder(50L);
 
-        assertNull(request.getCreatedOrder());
-        verify(requestRepository, never()).save(any(NextOrderRequest.class));
+        assertSame(created, request.getCreatedOrder());
+        verify(requestRepository).save(request);
         verify(requestService).markAttemptStarted(50L);
-        verify(creationService).convertToOrderDTOToRepeat(sourceOrder);
+        verify(creationService).convertToOrderDTOToRepeat(sourceOrder, 70L);
         verify(creationService).createRepeatedOrderWithReviews(sourceOrder, repeatOrder);
         verify(requestService).markCreatedIfOpen(50L);
     }
 
+    @Test
+    void historicalSourceCreatesAndBindsOrderToCurrentTransferRecipient() {
+        Order source = order(30L, review(101L, 2L, "250"));
+        NextOrderRequest request = request(50L, source);
+        Order created = order(60L, review(201L, 2L, "250"));
+        created.getWorker().setId(80L);
+        OrderDTO dto = new OrderDTO();
+        stubRequestAndActiveOrders(request);
+        when(workerRoutingService.resolveWorkerId(10L, 70L, null)).thenReturn(80L);
+        when(requestService.findActiveOrdersForFilials(10L, Set.of(20L), 20L, 80L)).thenReturn(List.of());
+        when(creationService.convertToOrderDTOToRepeat(source, 80L)).thenReturn(dto);
+        when(creationService.createRepeatedOrderWithReviews(source, dto)).thenReturn(created);
+
+        service().createNextOrder(50L);
+
+        verify(creationService).convertToOrderDTOToRepeat(source, 80L);
+        assertEquals(70L, source.getWorker().getId());
+        assertSame(created, request.getCreatedOrder());
+        verify(requestRepository).save(request);
+        verify(workerRoutingService).auditReroute(50L, 30L, 60L, 70L, 80L);
+        verify(requestService).markCreatedIfOpen(50L);
+    }
+
+    @Test
+    void reusesMatchingOrderOfCurrentRecipientInsteadOfDuplicatingHistoricalOrder() {
+        Order source = order(30L, review(101L, 2L, "250"));
+        Order active = order(40L, review(201L, 2L, "250"));
+        active.getWorker().setId(80L);
+        NextOrderRequest request = request(50L, source);
+        when(requestRepository.findByIdForUpdate(50L)).thenReturn(Optional.of(request));
+        when(workerRoutingService.resolveWorkerId(10L, 70L, null)).thenReturn(80L);
+        when(requestService.orderFilialIds(source)).thenReturn(Set.of(20L));
+        when(requestService.findActiveOrdersForFilials(10L, Set.of(20L), 20L, 80L)).thenReturn(List.of(active));
+
+        service().createNextOrder(50L);
+
+        assertSame(active, request.getCreatedOrder());
+        verifyNoInteractions(creationService);
+        verify(requestService).markCreatedIfOpen(50L);
+    }
+
+    @Test
+    void missingRecipientStopsBeforeCreationOrRequestCompletion() {
+        Order source = order(30L, review(101L, 2L, "250"));
+        when(requestRepository.findByIdForUpdate(50L)).thenReturn(Optional.of(request(50L, source)));
+        when(workerRoutingService.resolveWorkerId(10L, 70L, null)).thenThrow(new IllegalStateException("No recipient"));
+
+        assertThrows(IllegalStateException.class, () -> service().createNextOrder(50L));
+        verifyNoInteractions(creationService, requestService);
+        verify(requestRepository, never()).save(any());
+    }
+
     private void stubRequestAndActiveOrders(NextOrderRequest request, Order... activeOrders) {
         Order sourceOrder = request.getSourceOrder();
+        when(workerRoutingService.resolveWorkerId(10L, 70L, null)).thenReturn(70L);
         when(requestRepository.findByIdForUpdate(request.getId())).thenReturn(Optional.of(request));
         when(requestService.orderFilialIds(sourceOrder)).thenReturn(Set.of(20L));
-        when(requestService.findActiveOrdersForFilials(10L, Set.of(20L), 20L, 70L))
+        org.mockito.Mockito.lenient().when(requestService.findActiveOrdersForFilials(10L, Set.of(20L), 20L, 70L))
                 .thenReturn(List.of(activeOrders));
     }
 
     private NextOrderAutomationService service() {
-        return new NextOrderAutomationService(requestRepository, requestService, creationService);
+        return new NextOrderAutomationService(requestRepository, requestService, creationService, workerRoutingService);
     }
 
     private NextOrderRequest request(Long id, Order sourceOrder) {
