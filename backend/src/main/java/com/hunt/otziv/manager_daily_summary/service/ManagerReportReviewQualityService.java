@@ -143,6 +143,10 @@ public class ManagerReportReviewQualityService {
             вывод HYPOTHESIS/UNVERIFIABLE, а не внешний факт о выполненной работе. Она не требует
             журнала событий и не означает contextStatus=INSUFFICIENT. Цитируй отдельно короткую оценку;
             конкретные утверждения о платеже, доставке или выполнении проверяй отдельными FACT.
+            «В похожих ситуациях я проверяю исходные данные» описывает общий подход к будущим
+            случаям: HYPOTHESIS/UNVERIFIABLE как личный принцип, не факт выполнения конкретной задачи.
+            Такая формулировка не требует истории привычек и не означает нехватку исходных данных.
+            Конкретные «уже проверил заказ #...» и ссылки на прошлые действия остаются FACT/COMPLETED_ACTION.
             Неконкретное обещание «разберусь/постараюсь» означает MISSING по действию, а не нехватку
             внешних данных. Отсутствие конкретного плана у менеджера не является основанием для
             contextStatus=INSUFFICIENT. PROMISE/UNVERIFIABLE означает необходимость уточнить
@@ -497,7 +501,7 @@ public class ManagerReportReviewQualityService {
             // A narrowly scoped judgement of the author's wording is not an external event.
             // Do not let it turn actionable missing criteria into an indefinite data pause.
             if (kind == ClaimKind.FACT && status == ClaimStatus.UNVERIFIABLE && checks.isEmpty()
-                    && selfAssessmentOnly(quote)) kind = ClaimKind.HYPOTHESIS;
+                    && (selfAssessmentOnly(quote) || generalApproachOnly(quote))) kind = ClaimKind.HYPOTHESIS;
             if ((kind == ClaimKind.COMPLETED_ACTION || kind == ClaimKind.FACT && !recordedMessageClaim(quote))
                     && !checksKnownContradiction && recordedMessagesOnly(refs, evidence)) status = ClaimStatus.UNVERIFIABLE;
             // Known structured fields are checked again independently of the model's verdict/value extraction.
@@ -993,8 +997,18 @@ public class ManagerReportReviewQualityService {
     }
 
     private boolean recordedMessageClaim(String quote) {
-        return normalize(quote).matches("(?:(?:в|на) (?:общем )?(?:карточке|счете|системе|журнале|экране) )?"
+        return normalize(quote).matches("(?:(?:а )?также |и |при этом )?"
+                + "(?:(?:в|на) (?:общем )?(?:карточке|счете|системе|журнале|экране) )?"
                 + "(?:был[ао]? )?(?:сохранен[аоы]?|записан[аоы]?|зафиксирован[аоы]?|указан[аоы]?) .+");
+    }
+
+    private boolean generalApproachOnly(String quote) {
+        String text = normalize(quote);
+        return text.matches("в (?:похожих|подобных|таких|аналогичных) ситуациях я "
+                + "(?:проверяю|сверяю|уточняю|сопоставляю|фиксирую|анализирую) .+")
+                && !text.matches(".*[0-9].*")
+                && !text.matches(".*\\b(?:уже|вчера|сегодня|позавчера|проверил[аи]?|сверил[аи]?|отправил[аи]?"
+                        + "|оплатил[аи]?|получил[аи]?|исправил[аи]?|закрыл[аи]?|выполнил[аи]?)\\b.*");
     }
 
     public List<String> previousAcceptedContext(String json, int questionIndex) {

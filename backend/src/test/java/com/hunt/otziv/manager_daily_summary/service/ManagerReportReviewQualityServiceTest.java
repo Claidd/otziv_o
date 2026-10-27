@@ -1078,8 +1078,23 @@ class ManagerReportReviewQualityServiceTest {
                 .contains("ЗАПИСАННОЕ СИСТЕМНОЕ СООБЩЕНИЕ", note, "не текущую истинность")
                 .doesNotContain("НЕ БРАТЬ ИЗ ИСТОРИИ");
         assertThat(input.path("authoritativeFacts")).hasSize(2);
+        String linked = "а также сохранена прежняя ошибка о повторе текста отзыва №200221";
+        provider(assessment("SATISFIED", linked, "E3", "FACT", "SUPPORTED", "Запись присутствует"));
+        assertThat(service.assessAnswer(report, sourceQuestion(), linked, false).accepted()).isTrue();
         provider(assessment("SATISFIED", "Счёт полностью оплачен.", "E3", "FACT", "SUPPORTED", "Текст ошибки не доказывает оплату"));
         assertThat(service.assessAnswer(report, sourceQuestion(), "Счёт полностью оплачен.", false).accepted()).isFalse();
+    }
+
+    @Test
+    void generalApproachDoesNotRequireAnAuditTrailOfPersonalHabits() {
+        String answer = "В похожих ситуациях я проверяю исходные данные, связанные задачи и результат исправлений.";
+        provider(assessment("SATISFIED", answer, "E1", "FACT", "UNVERIFIABLE", "Общий подход"));
+        var result = service.assessAnswer("Заказ требует сверки.", question(), answer, false);
+        assertThat(result.accepted()).isTrue();
+        assertThat(result.claims().getFirst().kind()).isEqualTo(ManagerReportReviewQualityService.ClaimKind.HYPOTHESIS);
+        String specific = "В похожих ситуациях я проверяю данные. Вчера я отправила заказ #26720.";
+        provider(assessment("SATISFIED", specific, "E1", "FACT", "UNVERIFIABLE", "Нужен журнал конкретного действия"));
+        assertThat(service.assessAnswer("Отправка не подтверждена.", question(), specific, false).accepted()).isFalse();
     }
 
     private String incidentAssessment(boolean missingConditions, String claimStatus) throws Exception {
