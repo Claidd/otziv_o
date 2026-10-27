@@ -1,3 +1,5 @@
+param([ValidateSet('c37-mysql', 'c42-mysql')][string]$Set = 'c42-mysql')
+
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 . (Join-Path $PSScriptRoot '../prod/DeploySnapshot.ps1')
@@ -5,7 +7,7 @@ Set-StrictMode -Version Latest
 $repository = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../..'))
 $tempRoot = Join-Path $repository '.codex-tmp'
 New-Item -ItemType Directory -Path $tempRoot -Force | Out-Null
-$fixture = Join-Path $tempRoot ('mysql-c37-bundle-test-' + [Guid]::NewGuid().ToString('N'))
+$fixture = Join-Path $tempRoot ('mysql-reviewed-bundle-test-' + [Guid]::NewGuid().ToString('N'))
 
 function Fixture-Git([string[]]$Arguments) {
     $output = @(& git -C $fixture @Arguments 2>&1)
@@ -14,26 +16,43 @@ function Fixture-Git([string[]]$Arguments) {
 }
 
 try {
-    $evidence = @(Get-OtzivCoordinatedMysqlBundlePaths -Repository $repository)
-    if ($evidence.Count -ne 7) { throw 'C37 deployment evidence inventory changed.' }
+    $activationPath = 'infrastructure/runtime-security/reviewed-image-activations.json'
+    if ($Set -eq 'c37-mysql') {
+        $entry = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repository 'infrastructure/runtime-security/proofs/c42-mysql/parent-activation.json') | ConvertFrom-Json
+    } else {
+        $activation = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repository $activationPath) | ConvertFrom-Json
+        $entry = @($activation.images | Where-Object { $_.component -eq 'mysql' })[0]
+    }
+    $scriptPath = if ($Set -eq 'c37-mysql') { 'infrastructure/runtime-security/mysql-c37-rehearsal.py' } else { 'infrastructure/runtime-security/mysql-c42-rehearsal.py' }
+    $evidence = @($activationPath, $entry.manifest.path, $entry.publication.path, $entry.anonymous.path,
+        $entry.databaseTransition.path, $scriptPath, ('infrastructure/runtime-security/proofs/' + $Set + '/parent-activation.json'))
+    if ($evidence.Count -ne 7) { throw 'Reviewed MySQL deployment evidence inventory changed.' }
     foreach ($path in $evidence) {
         $destination = Join-Path $fixture $path
         New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
         Copy-Item -LiteralPath (Join-Path $repository $path) -Destination $destination
     }
-    $helper = 'infrastructure/scripts/prod/coordinated_mysql_refresh.py'
-    $helperDestination = Join-Path $fixture $helper
-    New-Item -ItemType Directory -Path (Split-Path -Parent $helperDestination) -Force | Out-Null
-    Copy-Item -LiteralPath (Join-Path $repository $helper) -Destination $helperDestination
+    # The C37 fixture is historical and deliberately separate from the current C42 default.
+    $fixtureActivation = @{ schema = 'otziv-reviewed-image-activations-v1'; images = @($entry) }
+    [IO.File]::WriteAllText((Join-Path $fixture $activationPath), ($fixtureActivation | ConvertTo-Json -Depth 20))
+    $null = Get-OtzivCoordinatedMysqlBundlePaths -Repository $fixture
+    $helpers = @('infrastructure/scripts/prod/coordinated_mysql_refresh.py',
+        'infrastructure/scripts/prod/coordinated_mysql_brotli_refresh.py',
+        'infrastructure/scripts/prod/coordinated_mysql_cutover.py')
+    foreach ($helper in $helpers) {
+        $helperDestination = Join-Path $fixture $helper
+        New-Item -ItemType Directory -Path (Split-Path -Parent $helperDestination) -Force | Out-Null
+        Copy-Item -LiteralPath (Join-Path $repository $helper) -Destination $helperDestination
+    }
     [IO.File]::WriteAllText((Join-Path $fixture 'docker-compose.yaml'), 'name: otziv-prod')
-    [IO.File]::WriteAllText((Join-Path $fixture 'infrastructure/scripts/prod/deploy-prod.ps1'),
-        '$deployBundlePaths = @("docker-compose.yaml", "infrastructure/scripts/prod/coordinated_mysql_refresh.py")')
+    $inventory = '$deployBundlePaths = @("docker-compose.yaml", "' + ($helpers -join '", "') + '")'
+    [IO.File]::WriteAllText((Join-Path $fixture 'infrastructure/scripts/prod/deploy-prod.ps1'), $inventory)
     Fixture-Git @('init', '-q') | Out-Null
     Fixture-Git @('config', 'core.autocrlf', 'false') | Out-Null
-    Fixture-Git @('config', 'user.name', 'C37 bundle test') | Out-Null
+    Fixture-Git @('config', 'user.name', 'Reviewed MySQL bundle test') | Out-Null
     Fixture-Git @('config', 'user.email', 'test@example.invalid') | Out-Null
     Fixture-Git @('add', '-A') | Out-Null
-    Fixture-Git @('commit', '-qm', 'C37 fixture') | Out-Null
+    Fixture-Git @('commit', '-qm', 'Reviewed MySQL fixture') | Out-Null
     $revision = Fixture-Git @('rev-parse', 'HEAD')
     $output = Join-Path $fixture 'prepared'
     New-Item -ItemType Directory -Path $output | Out-Null
@@ -56,25 +75,25 @@ try {
     foreach ($path in $evidence) {
         if ($path -notin $prepared.paths -or
             -not (Test-Path -LiteralPath (Join-Path $output ('verified-source/' + $path)))) {
-            throw "C37 evidence missing from prepared archive: $path"
+            throw "Reviewed MySQL evidence missing from prepared archive: $path"
         }
     }
-    $rehearsal = Join-Path $fixture 'infrastructure/runtime-security/proofs/c37-mysql/rehearsal.json'
+    $rehearsal = Join-Path $fixture ('infrastructure/runtime-security/proofs/' + $Set + '/rehearsal.json')
     [IO.File]::AppendAllText($rehearsal, 'tampered')
     $rejected = $false
     try { $null = Get-OtzivDeployBundlePaths -Repository $fixture -CoordinatedMysqlRefresh }
     catch {
-        if ($_.Exception.Message -ne 'Accepted MySQL C37 evidence changed.') { throw }
+        if ($_.Exception.Message -ne 'Accepted MySQL cutover evidence changed.') { throw }
         $rejected = $true
     }
-    if (-not $rejected) { throw 'Tampered C37 rehearsal was accepted.' }
-    Write-Output 'C37 committed archive includes exactly bound proof, and rejects altered rehearsal.'
+    if (-not $rejected) { throw 'Tampered Reviewed MySQL rehearsal was accepted.' }
+    Write-Output "$Set committed archive includes exactly bound proof, and rejects altered rehearsal."
 } finally {
     $resolved = [IO.Path]::GetFullPath($fixture)
     $allowed = [IO.Path]::GetFullPath($tempRoot).TrimEnd([char[]]@('/', '\')) + [IO.Path]::DirectorySeparatorChar
     if (-not $resolved.StartsWith($allowed, [StringComparison]::OrdinalIgnoreCase) -or
-        [IO.Path]::GetFileName($resolved) -notmatch '^mysql-c37-bundle-test-[a-f0-9]{32}$') {
-        throw 'Unexpected C37 test fixture path.'
+        [IO.Path]::GetFileName($resolved) -notmatch '^mysql-reviewed-bundle-test-[a-f0-9]{32}$') {
+        throw 'Unexpected Reviewed MySQL test fixture path.'
     }
     if (Test-Path -LiteralPath $resolved) { Remove-Item -LiteralPath $resolved -Recurse -Force }
 }

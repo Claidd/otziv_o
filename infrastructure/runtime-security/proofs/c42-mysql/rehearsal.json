@@ -1,0 +1,171 @@
+{
+  "schema": "otziv-mysql-same-engine-refresh-v1",
+  "source": "ghcr.io/claidd/otziv-security@sha256:eda70c6cb0a835e788a5ec96539610e9ef6a574ffc4129c9c5717acd647e159a",
+  "candidate": "ghcr.io/claidd/otziv-security@sha256:d8b2c5d02611016eee74b77caede5c57a16cd8a1f379bf5c74d322bfd1b5f75d",
+  "preliminary": false,
+  "production": false,
+  "sourceWrites": false,
+  "publishedPorts": 0,
+  "network": "none",
+  "sourceDumpSha256": "83ac24f1b06c6807c0d7c1175a314f456575364acf5906a1bf6a00768d4b113b",
+  "executedSourceSha256": "8e64f3fbc782a78f7499d0793ab9a1dec4e4be1d10e362601411e0f49082b233",
+  "startedAt": "2026-10-27T11:19:18.180187+00:00",
+  "checks": [
+    {
+      "name": "engine_version_source",
+      "passed": true
+    },
+    {
+      "name": "engine_version_candidate",
+      "passed": true
+    },
+    {
+      "name": "server_binary_unchanged",
+      "passed": true
+    },
+    {
+      "name": "brotli_source_vulnerable",
+      "passed": true
+    },
+    {
+      "name": "brotli_fixed",
+      "passed": true
+    },
+    {
+      "name": "openssl_preserved",
+      "passed": true
+    },
+    {
+      "name": "libevent_fixed",
+      "passed": true
+    },
+    {
+      "name": "curl_libraries_fixed",
+      "passed": true
+    },
+    {
+      "name": "libxml2_fixed",
+      "passed": true
+    },
+    {
+      "name": "pcre2_preserved",
+      "passed": true
+    },
+    {
+      "name": "only_brotli_changed",
+      "passed": true
+    },
+    {
+      "name": "native_uid_no_network_source",
+      "passed": true
+    },
+    {
+      "name": "restored_nonempty_production_schema",
+      "passed": true
+    },
+    {
+      "name": "clean_stop_source",
+      "passed": true
+    },
+    {
+      "name": "native_uid_no_network_candidate",
+      "passed": true
+    },
+    {
+      "name": "all_tables_schema_history_accounts_and_settings_exact",
+      "passed": true
+    },
+    {
+      "name": "existing_account_login",
+      "passed": true
+    },
+    {
+      "name": "clean_stop_candidate",
+      "passed": true
+    },
+    {
+      "name": "native_uid_no_network_restart",
+      "passed": true
+    },
+    {
+      "name": "restart_preserves_new_writes",
+      "passed": true
+    },
+    {
+      "name": "clean_stop_restart",
+      "passed": true
+    },
+    {
+      "name": "native_uid_no_network_rollback",
+      "passed": true
+    },
+    {
+      "name": "same_volume_rollback_preserves_all_new_writes",
+      "passed": true
+    },
+    {
+      "name": "clean_stop_rollback",
+      "passed": true
+    },
+    {
+      "name": "native_uid_no_network_restored",
+      "passed": true
+    },
+    {
+      "name": "fresh_restore_preserves_all_data_and_schema",
+      "passed": true
+    }
+  ],
+  "sourceLocalId": "sha256:eda70c6cb0a835e788a5ec96539610e9ef6a574ffc4129c9c5717acd647e159a",
+  "sourceMysqldSha256": "1a928190ad8166bc329b01d4adfba328f4d52083f81569f46c8435710c5e36eb",
+  "sourceOpenSSL": "openssl-libs-3.5.8-2.0.1.el9_8.x86_64",
+  "sourceLibbrotli": "libbrotli-1.0.9-9.el9_7.x86_64",
+  "sourceLibxml2": "libxml2-2.9.13-14.el9_8.5.x86_64",
+  "sourcePcre2": "pcre2-10.40-7.0.1.el9_8.x86_64",
+  "sourcePcre2Syntax": "pcre2-syntax-10.40-7.0.1.el9_8.noarch",
+  "sourceLibevent": "libevent-2.1.13-1.el9_8.x86_64",
+  "sourceCurl": [
+    "curl-7.76.1-40.el9_8.7.x86_64",
+    "libcurl-7.76.1-40.el9_8.7.x86_64"
+  ],
+  "sourceOtherPackagesSha256": "26316a06d577133efaccbf57ed7ce431625dfc2196b4f617079a52403321847f",
+  "candidateLocalId": "sha256:d8b2c5d02611016eee74b77caede5c57a16cd8a1f379bf5c74d322bfd1b5f75d",
+  "candidateMysqldSha256": "1a928190ad8166bc329b01d4adfba328f4d52083f81569f46c8435710c5e36eb",
+  "candidateOpenSSL": "openssl-libs-3.5.8-2.0.1.el9_8.x86_64",
+  "candidateLibbrotli": "libbrotli-1.0.9-10.0.1.el9_8.x86_64",
+  "candidateLibxml2": "libxml2-2.9.13-14.el9_8.5.x86_64",
+  "candidatePcre2": "pcre2-10.40-7.0.1.el9_8.x86_64",
+  "candidatePcre2Syntax": "pcre2-syntax-10.40-7.0.1.el9_8.noarch",
+  "candidateLibevent": "libevent-2.1.13-1.el9_8.x86_64",
+  "candidateCurl": [
+    "curl-7.76.1-40.el9_8.7.x86_64",
+    "libcurl-7.76.1-40.el9_8.7.x86_64"
+  ],
+  "candidateOtherPackagesSha256": "26316a06d577133efaccbf57ed7ce431625dfc2196b4f617079a52403321847f",
+  "before": {
+    "tableCount": 350,
+    "rows": 1341968,
+    "countsSha256": "4a211fc5c81a5b645c75d1faaa70bddf943314a6c671dfac17ba8428763ddce0",
+    "checksumsSha256": "6ca18ebc7cef6eb6e70944db9ec3cda2add955502b21eded698b2b92d9c4acd1",
+    "historySha256": "783c8fe1e24019d2ddbc18d7a3a676dc23477dbef3a2ad6778119b07a932de67",
+    "schemaSha256": "6d47e2b32574b4e4d41a8e3eae49426b452eaf70544cac607035865b992b8dc2",
+    "accountsSha256": "d82dd17db07e6e57d630928a805441a3810902404a438d672e8efaf63172e9de",
+    "settingsSha256": "a0570a9a98542227edcb793e338aa272aab3b5d218f42cdd12efab9c9f5b3b72"
+  },
+  "after": {
+    "tableCount": 350,
+    "rows": 1341968,
+    "countsSha256": "4a211fc5c81a5b645c75d1faaa70bddf943314a6c671dfac17ba8428763ddce0",
+    "checksumsSha256": "6ca18ebc7cef6eb6e70944db9ec3cda2add955502b21eded698b2b92d9c4acd1",
+    "historySha256": "783c8fe1e24019d2ddbc18d7a3a676dc23477dbef3a2ad6778119b07a932de67",
+    "schemaSha256": "6d47e2b32574b4e4d41a8e3eae49426b452eaf70544cac607035865b992b8dc2",
+    "accountsSha256": "d82dd17db07e6e57d630928a805441a3810902404a438d672e8efaf63172e9de",
+    "settingsSha256": "a0570a9a98542227edcb793e338aa272aab3b5d218f42cdd12efab9c9f5b3b72"
+  },
+  "result": "PASS",
+  "ownedResourcesRemaining": {
+    "containers": 0,
+    "volumes": 0
+  },
+  "completedAt": "2026-10-27T11:32:05.269985+00:00"
+}

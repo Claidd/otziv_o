@@ -37,11 +37,16 @@ REVIEWED_MYSQL_REFERENCE = "ghcr.io/claidd/otziv-security@" + REVIEWED_MYSQL_IND
 REVIEWED_MYSQL_C37_CONFIG = "sha256:dcde12d588294e67f7de3a037ec69fd00d0e50c0c4b5d81dc3400545abe298dc"
 REVIEWED_MYSQL_C37_INDEX = "sha256:eda70c6cb0a835e788a5ec96539610e9ef6a574ffc4129c9c5717acd647e159a"
 REVIEWED_MYSQL_C37_REFERENCE = "ghcr.io/claidd/otziv-security@" + REVIEWED_MYSQL_C37_INDEX
+REVIEWED_MYSQL_C42_CONFIG = "sha256:b8b1aab82af45b783263e514e2f9746959de78d3a963245cf386720a32b8564f"
+REVIEWED_MYSQL_C42_INDEX = "sha256:d8b2c5d02611016eee74b77caede5c57a16cd8a1f379bf5c74d322bfd1b5f75d"
+REVIEWED_MYSQL_C42_REFERENCE = "ghcr.io/claidd/otziv-security@" + REVIEWED_MYSQL_C42_INDEX
 REVIEWED_MYSQL_NATIVE_IDS = {
     REVIEWED_MYSQL_CONFIG: REVIEWED_MYSQL_REFERENCE,
     REVIEWED_MYSQL_INDEX: REVIEWED_MYSQL_REFERENCE,
     REVIEWED_MYSQL_C37_CONFIG: REVIEWED_MYSQL_C37_REFERENCE,
     REVIEWED_MYSQL_C37_INDEX: REVIEWED_MYSQL_C37_REFERENCE,
+    REVIEWED_MYSQL_C42_CONFIG: REVIEWED_MYSQL_C42_REFERENCE,
+    REVIEWED_MYSQL_C42_INDEX: REVIEWED_MYSQL_C42_REFERENCE,
 }
 NATIVE_MYSQL_OPTIONS = {
     "user": "999", "character-set-server": "utf8mb4", "collation-server": "utf8mb4_unicode_ci",
@@ -243,7 +248,7 @@ def checked_override(config, docker):
         if native_mysql:
             require(target_image.get("Os") == "linux" and target_image.get("Architecture") == "amd64",
                     "Reviewed MySQL platform changed")
-            if target_id in {REVIEWED_MYSQL_INDEX, REVIEWED_MYSQL_C37_INDEX}:
+            if target_id in {REVIEWED_MYSQL_INDEX, REVIEWED_MYSQL_C37_INDEX, REVIEWED_MYSQL_C42_INDEX}:
                 require(REVIEWED_MYSQL_NATIVE_IDS[target_id] in target_image.get("RepoDigests", []),
                         "Reviewed MySQL immutable index binding missing")
         checked_launch(service, target_image.get("Config"), service_name, data_path, native_mysql=native_mysql)

@@ -1,0 +1,23 @@
+{
+  "component": "mysql",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:eda70c6cb0a835e788a5ec96539610e9ef6a574ffc4129c9c5717acd647e159a",
+  "commit": "668edbbb97c234df3904b238f4c36f1dec1e593c",
+  "run": "39687134435",
+  "attempt": "1",
+  "manifest": {
+    "path": "infrastructure/runtime-security/reviewed-images-c37-mysql.json",
+    "sha256": "6f669bb7ac4c95611b4ead71855529a78efb202753940069de1d8733758e8555"
+  },
+  "publication": {
+    "path": "infrastructure/runtime-security/proofs/c37-mysql/publication/publication.json",
+    "sha256": "2a4a73dc7e0176abbaf1c98cf593b1f4a634fdbb59050cabc4d3ce39a7aedfe8"
+  },
+  "anonymous": {
+    "path": "infrastructure/runtime-security/proofs/c37-mysql/anonymous/anonymous-download.json",
+    "sha256": "8ff4b7ade4fdb35bab8ad285e4007610c239da0a09a6440ce83c09f101a2576d"
+  },
+  "databaseTransition": {
+    "path": "infrastructure/runtime-security/proofs/c37-mysql/rehearsal.json",
+    "sha256": "2058c0cfa4c127d62f2c3d700300a3ecbe5ca6758ceaaf006fbf1bed43264571"
+  }
+}

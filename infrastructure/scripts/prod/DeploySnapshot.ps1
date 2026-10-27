@@ -556,29 +556,48 @@ function Get-OtzivCoordinatedMysqlBundlePaths {
         if ($relative -notmatch '^infrastructure/runtime-security/(?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+$' -or
             '..' -in $relative.Split('/') -or '.' -in $relative.Split('/') -or
             $Sha256 -cnotmatch '^[a-f0-9]{64}$') {
-            throw 'MySQL C37 evidence path or digest is invalid.'
+            throw 'MySQL cutover evidence path or digest is invalid.'
         }
         $file = Join-Path $Repository $relative
         if (-not (Test-Path -LiteralPath $file -PathType Leaf) -or
             (Get-Item -LiteralPath $file).LinkType -or
             (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant() -cne $Sha256) {
-            throw 'Accepted MySQL C37 evidence changed.'
+            throw 'Accepted MySQL cutover evidence changed.'
         }
         return $file
     }
-    $prefix = 'infrastructure/runtime-security/proofs/c37-mysql/'
-    $reference = 'ghcr.io/claidd/otziv-security@sha256:eda70c6cb0a835e788a5ec96539610e9ef6a574ffc4129c9c5717acd647e159a'
-    $config = 'sha256:dcde12d588294e67f7de3a037ec69fd00d0e50c0c4b5d81dc3400545abe298dc'
-    $rehearsalHash = '2058c0cfa4c127d62f2c3d700300a3ecbe5ca6758ceaaf006fbf1bed43264571'
     $activationPath = 'infrastructure/runtime-security/reviewed-image-activations.json'
     $activation = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $Repository $activationPath) | ConvertFrom-Json
     $entries = @($activation.images | Where-Object { $_.component -eq 'mysql' })
-    if ($entries.Count -ne 1 -or $entries[0].reference -cne $reference) {
-        throw 'Only the accepted C37 MySQL image permits this cutover.'
+    $policies = @{
+        'ghcr.io/claidd/otziv-security@sha256:eda70c6cb0a835e788a5ec96539610e9ef6a574ffc4129c9c5717acd647e159a' = @{
+            set = 'c37-mysql'
+            config = 'sha256:dcde12d588294e67f7de3a037ec69fd00d0e50c0c4b5d81dc3400545abe298dc'
+            rehearsal = '2058c0cfa4c127d62f2c3d700300a3ecbe5ca6758ceaaf006fbf1bed43264571'
+            script = 'infrastructure/runtime-security/mysql-c37-rehearsal.py'
+            parentHash = 'fb89c3279005d18b01f24d565cf75094216a484ed246f52fc5662ae795930a53'
+            source = 'ghcr.io/claidd/otziv-security@sha256:28521a2c331136328abde7b504ae0ded617c74caa8a4a2554f1f0494d4df9009'
+        }
+        'ghcr.io/claidd/otziv-security@sha256:d8b2c5d02611016eee74b77caede5c57a16cd8a1f379bf5c74d322bfd1b5f75d' = @{
+            set = 'c42-mysql'
+            config = 'sha256:b8b1aab82af45b783263e514e2f9746959de78d3a963245cf386720a32b8564f'
+            rehearsal = '6b91b594468f820309b0971d1a3854cd8d421c3a83724ba928822d4c0763ece8'
+            script = 'infrastructure/runtime-security/mysql-c42-rehearsal.py'
+            parentHash = 'e6df75d221fa66b055f19598b5b03855e23396e7f908e09a502f293edb8d493e'
+            source = 'ghcr.io/claidd/otziv-security@sha256:eda70c6cb0a835e788a5ec96539610e9ef6a574ffc4129c9c5717acd647e159a'
+        }
+    }
+    if ($entries.Count -ne 1 -or -not $policies.ContainsKey([string]$entries[0].reference)) {
+        throw 'Only an exact accepted MySQL target permits this cutover.'
     }
     $entry = $entries[0]
+    $reference = [string]$entry.reference
+    $policy = $policies[$reference]
+    $prefix = 'infrastructure/runtime-security/proofs/' + $policy.set + '/'
+    $config = $policy.config
+    $rehearsalHash = $policy.rehearsal
     $expectedPaths = @{
-        manifest = 'infrastructure/runtime-security/reviewed-images-c37-mysql.json'
+        manifest = 'infrastructure/runtime-security/reviewed-images-' + $policy.set + '.json'
         publication = $prefix + 'publication/publication.json'
         anonymous = $prefix + 'anonymous/anonymous-download.json'
         databaseTransition = $prefix + 'rehearsal.json'
@@ -587,13 +606,13 @@ function Get-OtzivCoordinatedMysqlBundlePaths {
     foreach ($key in @('manifest', 'publication', 'anonymous', 'databaseTransition')) {
         $bound = $entry.$key
         if ($null -eq $bound -or $bound.path -cne $expectedPaths[$key]) {
-            throw "Accepted MySQL C37 $key evidence is missing."
+            throw "Accepted MySQL cutover $key evidence is missing."
         }
         $null = Read-OtzivBoundMysqlEvidence $bound.path $bound.sha256
         $paths += $bound.path
     }
     if ($entry.databaseTransition.sha256 -cne $rehearsalHash) {
-        throw 'Accepted MySQL C37 rehearsal digest changed.'
+        throw 'Accepted MySQL cutover rehearsal digest changed.'
     }
     $rehearsal = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $Repository $entry.databaseTransition.path) | ConvertFrom-Json
     $publication = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $Repository $entry.publication.path) | ConvertFrom-Json
@@ -605,17 +624,17 @@ function Get-OtzivCoordinatedMysqlBundlePaths {
         $publication.security.result -cne 'PASS' -or
         $anonymous.reference -cne $reference -or $anonymous.imageId -cne $config -or
         $anonymous.result -cne 'PASS') {
-        throw 'Accepted MySQL C37 publication, download or rehearsal failed.'
+        throw 'Accepted MySQL cutover publication, download or rehearsal failed.'
     }
-    $scriptPath = 'infrastructure/runtime-security/mysql-c37-rehearsal.py'
+    $scriptPath = $policy.script
     $null = Read-OtzivBoundMysqlEvidence $scriptPath $rehearsal.executedSourceSha256
     $paths += $scriptPath
     $parentPath = $prefix + 'parent-activation.json'
-    $null = Read-OtzivBoundMysqlEvidence $parentPath 'fb89c3279005d18b01f24d565cf75094216a484ed246f52fc5662ae795930a53'
+    $null = Read-OtzivBoundMysqlEvidence $parentPath $policy.parentHash
     $parent = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $Repository $parentPath) | ConvertFrom-Json
     if ($parent.component -cne 'mysql' -or
-        $parent.reference -cne 'ghcr.io/claidd/otziv-security@sha256:28521a2c331136328abde7b504ae0ded617c74caa8a4a2554f1f0494d4df9009') {
-        throw 'MySQL C37 source activation changed.'
+        $parent.reference -cne $policy.source) {
+        throw 'MySQL cutover source activation changed.'
     }
     $paths += $parentPath
     return @($paths | Select-Object -Unique)
@@ -710,7 +729,7 @@ function New-OtzivPreparedDeployArchive {
         $expectedMysqlEvidence = @(Get-OtzivCoordinatedMysqlBundlePaths -Repository $Repository)
         $stagedMysqlEvidence = @(Get-OtzivCoordinatedMysqlBundlePaths -Repository $stage)
         if (@(Compare-Object -ReferenceObject $expectedMysqlEvidence -DifferenceObject $stagedMysqlEvidence).Count -gt 0) {
-            throw 'Staged MySQL C37 evidence changed the accepted deployment inventory.'
+            throw 'Staged MySQL cutover evidence changed the accepted deployment inventory.'
         }
     }
     if ($external.Count -gt 0) {
