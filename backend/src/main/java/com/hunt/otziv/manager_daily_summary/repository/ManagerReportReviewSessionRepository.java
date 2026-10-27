@@ -47,7 +47,7 @@ public interface ManagerReportReviewSessionRepository extends JpaRepository<Mana
     @Query(value = """
             UPDATE manager_report_review_sessions
                SET ai_unavailable_started_at = NULL, ai_unavailable_seconds = :seconds,
-                   recovery_attempts = 0, recovery_next_attempt_at = NULL,
+                   recovery_attempts = 0, recovery_next_attempt_at = NULL, recovery_awaiting_context = false,
                    deadline_started_at = :deadline, updated_at = :now
              WHERE review_id = :reviewId AND completed_at IS NULL AND status <> 'COMPLETED'
                AND ai_unavailable_started_at = :expectedPause
@@ -60,6 +60,7 @@ public interface ManagerReportReviewSessionRepository extends JpaRepository<Mana
     @Query(value = """
             SELECT review_id FROM manager_report_review_sessions
              WHERE test_mode = false AND completed_at IS NULL
+               AND recovery_awaiting_context = false
                AND status IN ('QUESTION_PENDING', 'PLAN_PENDING')
                AND ai_unavailable_started_at <= :cutoff
                AND (recovery_next_attempt_at IS NULL OR recovery_next_attempt_at <= :now)
@@ -73,6 +74,7 @@ public interface ManagerReportReviewSessionRepository extends JpaRepository<Mana
             UPDATE manager_report_review_sessions
                SET recovery_attempts = recovery_attempts + 1, recovery_next_attempt_at = :leaseUntil
              WHERE review_id = :reviewId AND test_mode = false AND completed_at IS NULL
+               AND recovery_awaiting_context = false
                AND status IN ('QUESTION_PENDING', 'PLAN_PENDING')
                AND ai_unavailable_started_at <= :cutoff
                AND (recovery_next_attempt_at IS NULL OR recovery_next_attempt_at <= :now)

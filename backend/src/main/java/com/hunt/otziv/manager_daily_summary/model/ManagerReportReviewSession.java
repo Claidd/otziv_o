@@ -155,6 +155,9 @@ public class ManagerReportReviewSession {
     @Column(name = "recovery_next_attempt_at")
     private LocalDateTime recoveryNextAttemptAt;
 
+    @Column(name = "recovery_awaiting_context", nullable = false)
+    private boolean recoveryAwaitingContext;
+
     @Column(name = "completed_at")
     private LocalDateTime completedAt;
 

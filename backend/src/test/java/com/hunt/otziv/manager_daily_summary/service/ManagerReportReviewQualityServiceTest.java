@@ -1060,6 +1060,28 @@ class ManagerReportReviewQualityServiceTest {
                 .isEqualTo(ManagerReportReviewQualityService.Decision.NEEDS_CONTEXT);
     }
 
+    @Test
+    void originalRecordedErrorCanProveTheRecordButNotTheCurrentInvoiceState() throws Exception {
+        String note = "invoice:189:last_error | invoice.last_error=Прежняя ошибка про отзыв #200221";
+        String report = "История: invoice:999:last_error | invoice.last_error=НЕ БРАТЬ ИЗ ИСТОРИИ\n"
+                + "\nСВЕЖАЯ ПРОВЕРКА ИСТОЧНИКОВ:\n" + note + "\n" + note + "\n" + invoiceEvidence("COLLECTING", 2);
+        String answer = "В счёте сохранена прежняя ошибка про отзыв #200221.";
+        AiProvider provider = provider(assessment("SATISFIED", answer, "E3", "FACT", "SUPPORTED", "Запись присутствует"));
+
+        assertThat(service.assessAnswer(report, sourceQuestion(), answer, false).accepted()).isTrue();
+
+        ArgumentCaptor<AiRequest> request = ArgumentCaptor.forClass(AiRequest.class);
+        verify(provider).generate(request.capture());
+        var input = new ObjectMapper().readTree(request.getValue().userPrompt());
+        assertThat(input.path("evidence")).hasSize(3);
+        assertThat(input.path("evidence").get(2).path("text").asText())
+                .contains("ЗАПИСАННОЕ СИСТЕМНОЕ СООБЩЕНИЕ", note, "не текущую истинность")
+                .doesNotContain("НЕ БРАТЬ ИЗ ИСТОРИИ");
+        assertThat(input.path("authoritativeFacts")).hasSize(2);
+        provider(assessment("SATISFIED", "Счёт полностью оплачен.", "E3", "FACT", "SUPPORTED", "Текст ошибки не доказывает оплату"));
+        assertThat(service.assessAnswer(report, sourceQuestion(), "Счёт полностью оплачен.", false).accepted()).isFalse();
+    }
+
     private String incidentAssessment(boolean missingConditions, String claimStatus) throws Exception {
         List<java.util.Map<String, Object>> criteria = new java.util.ArrayList<>();
         for (int index = 0; index < 5; index++) {

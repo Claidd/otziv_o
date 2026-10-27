@@ -1,6 +1,5 @@
 package com.hunt.otziv.manager_daily_summary.service;
 
-import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.manager_daily_summary.repository.ManagerReportReviewSessionRepository;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
@@ -19,20 +18,20 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class ManagerReportReviewRecoveryJob {
     private final ManagerReportReviewSessionRepository repository;
     private final ManagerReportReviewTelegramService reviews;
-    private final AppSettingService settings;
     private final PlatformTransactionManager transactionManager;
 
     @Scheduled(fixedDelay = 60_000L, initialDelay = 60_000L)
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void recover() {
-        if (!settings.getBoolean("manager.report-review.enabled", true)) return;
+        if (!reviews.enabled()) return;
         LocalDateTime now = LocalDateTime.now();
         var transaction = new TransactionTemplate(transactionManager);
         for (Long id : repository.findRecoveryCandidates(now, now.minusMinutes(1))) {
             try {
+                LocalDateTime claimTime = LocalDateTime.now();
                 // The ten-minute lease exceeds the bounded four-minute provider deadline.
                 Integer claimed = transaction.execute(ignored -> repository.claimRecovery(
-                        id, now, now.minusMinutes(1), now.plusMinutes(10)));
+                        id, claimTime, claimTime.minusMinutes(1), claimTime.plusMinutes(10)));
                 if (Integer.valueOf(1).equals(claimed)) reviews.recoverAutomatically(id);
             } catch (RuntimeException failure) {
                 // No employee answer, evidence or provider body in operational logs.

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
@@ -643,6 +644,37 @@ class ManagerReportReviewEvidenceFlowTest {
         assertThat(mapper.readTree(review.getAnswersJson())).hasSize(3);
         verify(issues).markAnswered(review, 0);
         verify(issues).markAnswered(review, 1);
+    }
+
+    @Test
+    void missingExternalProofAutomaticallyAsksForContextOnceWithoutRestrictingOrRepeatedPaidPolling() throws Exception {
+        String answer = "В карточке сохранена ошибка. Проверю результат.";
+        assessWith(assessment(ManagerReportReviewQualityService.Decision.UNAVAILABLE, "Таймаут"));
+        service.handleTextMessage(700L, user, answer, 777);
+        var originalTime = quality.latestAnswerRecordedAt(review.getAnswersJson(), 0);
+        var pause = review.getAiUnavailableStartedAt();
+        doReturn(true).when(quality).aiAvailable();
+        doReturn(assessment(ManagerReportReviewQualityService.Decision.NEEDS_CONTEXT, "Не хватает записи"))
+                .when(quality).assessAnswer(anyString(), eq(question), eq(answer), eq(false), any(), eq(false), eq(originalTime));
+        org.mockito.Mockito.clearInvocations(telegram);
+
+        service.recoverAutomatically(41L);
+        service.recoverAutomatically(41L);
+
+        assertThat(review.isRecoveryAwaitingContext()).isTrue();
+        assertThat(review.getAiUnavailableStartedAt()).isEqualTo(pause);
+        assertThat(review.getRecoveryNextAttemptAt()).isNull();
+        assertThat(review.getRestrictedAt()).isNull();
+        assertThat(mapper.readTree(review.getAnswersJson())).hasSize(1);
+        verify(quality).assessAnswer(anyString(), eq(question), eq(answer), eq(false), any(), eq(false), eq(originalTime));
+        verify(telegram).sendMessageWithInlineKeyboardMessageId(eq(700L), contains("Уточните"), eq("HTML"), any());
+
+        assessWith(assessment(ManagerReportReviewQualityService.Decision.ACCEPTED, "Источник уточнён"));
+        review.setReplyPromptMessageId(777);
+        service.handleTextMessage(700L, user, "Это цитата старой ошибки; её актуальность проверю по исходной записи.", 777);
+        assertThat(review.isRecoveryAwaitingContext()).isFalse();
+        assertThat(review.getAiUnavailableStartedAt()).isNull();
+        assertThat(review.getStatus()).isEqualTo(ManagerReportReviewStatus.COMPLETED);
     }
 
     private String legacyAnswer(int questionIndex) {

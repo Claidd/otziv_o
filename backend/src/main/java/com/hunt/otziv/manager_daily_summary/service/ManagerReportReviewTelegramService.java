@@ -699,6 +699,7 @@ public class ManagerReportReviewTelegramService {
     public void recoverAutomatically(Long reviewId) {
         ManagerReportReviewSession review = sessionRepository.findForUpdateById(reviewId).orElse(null);
         if (review == null || review.isTestMode() || review.getCompletedAt() != null
+                || review.isRecoveryAwaitingContext()
                 || review.getAiUnavailableStartedAt() == null
                 || (review.getStatus() != ManagerReportReviewStatus.QUESTION_PENDING
                     && review.getStatus() != ManagerReportReviewStatus.PLAN_PENDING)) return;
@@ -706,12 +707,13 @@ public class ManagerReportReviewTelegramService {
             event(review, "AUTO_RECOVERY_STARTED", null, "SYSTEM", "recovery-job",
                     "attempt=" + review.getRecoveryAttempts() + "; questionIndex=" + review.getCurrentQuestionIndex());
             continueFlow(review, review.getManager().getUser(), true);
-            event(review, review.getAiUnavailableStartedAt() == null ? "AUTO_RECOVERY_SUCCEEDED" : "AUTO_RECOVERY_DEFERRED",
+            event(review, review.getAiUnavailableStartedAt() == null ? "AUTO_RECOVERY_SUCCEEDED"
+                            : review.isRecoveryAwaitingContext() ? "AUTO_RECOVERY_CONTEXT_WAIT" : "AUTO_RECOVERY_DEFERRED",
                     null, "SYSTEM", "recovery-job", "status=" + review.getStatus() + "; quality=" + review.getAnswerQuality());
         }
         if (review.getAiUnavailableStartedAt() != null) {
             long minutes = Math.min(30, 1L << Math.min(5, Math.max(0, review.getRecoveryAttempts() - 1)));
-            review.setRecoveryNextAttemptAt(LocalDateTime.now().plusMinutes(minutes));
+            review.setRecoveryNextAttemptAt(review.isRecoveryAwaitingContext() ? null : LocalDateTime.now().plusMinutes(minutes));
         }
         sessionRepository.save(review);
     }
@@ -903,6 +905,7 @@ public class ManagerReportReviewTelegramService {
 
     private boolean handleQuestionAnswer(ManagerReportReviewSession review, User actor, String messageText,
                                          java.time.ZonedDateTime submittedAt, boolean automatic) {
+        review.setRecoveryAwaitingContext(false);
         List<ManagerReportReviewQualityService.ReviewQuestion> questions =
                 questions(review);
         if (questions.isEmpty()) {
@@ -976,6 +979,8 @@ public class ManagerReportReviewTelegramService {
             event(review, "ANSWER_CHECK_DEFERRED", actor.getId(), actorRole(review), assessment.provider(),
                     "Ответ сохранён до восстановления автоматической проверки");
             if (!automatic) sendAiUnavailable(review);
+            else if (assessment.decision() == ManagerReportReviewQualityService.Decision.NEEDS_CONTEXT)
+                requestMissingAnswerContext(review, index, answeredAt, messageText);
             return true;
         }
         aiAvailabilityService.resume(review, LocalDateTime.now(), "telegram-answer");
@@ -1052,6 +1057,7 @@ public class ManagerReportReviewTelegramService {
 
     private boolean handleActionPlan(ManagerReportReviewSession review, User actor, String messageText,
                                      java.time.ZonedDateTime submittedAt, boolean automatic) {
+        review.setRecoveryAwaitingContext(false);
         ManagerReportReviewQualityService.ReviewQuestion planQuestion =
                 new ManagerReportReviewQualityService.ReviewQuestion(
                         "Что конкретно вы измените в следующую смену и как проверите результат?",
@@ -1097,6 +1103,8 @@ public class ManagerReportReviewTelegramService {
                     assessment.reason()
             );
             if (!automatic) sendAiUnavailable(review);
+            else if (assessment.decision() == ManagerReportReviewQualityService.Decision.NEEDS_CONTEXT)
+                requestMissingAnswerContext(review, -1, answeredAt, messageText);
             return true;
         }
         aiAvailabilityService.resume(review, LocalDateTime.now(), "telegram-plan");
@@ -1705,6 +1713,33 @@ public class ManagerReportReviewTelegramService {
                 + "\n• какой принцип работы здесь важен;"
                 + "\n• как вы самостоятельно поступите в похожей ситуации."
                 + "\n\nГотовой формулировки нет — ответьте своими словами.";
+    }
+
+    private void requestMissingAnswerContext(ManagerReportReviewSession review, int questionIndex,
+                                             java.time.ZonedDateTime answeredAt, String answer) {
+        String identity = answerEvidenceHeader(questionIndex, answeredAt, answer);
+        boolean requested = eventRepository.findByReview_IdOrderByCreatedAtAsc(review.getId()).stream()
+                .anyMatch(event -> "AUTO_RECOVERY_CONTEXT_REQUESTED".equals(event.getEventType())
+                        && event.getPayloadText() != null && event.getPayloadText().startsWith(identity));
+        if (requested) {
+            review.setRecoveryAwaitingContext(true);
+            return;
+        }
+        String prompt = "Ответ сохранён и повторно проверен автоматически. Для одного из утверждений пока нет "
+                + "подтверждения в исходных данных. Уточните, на какую запись или проверенное действие вы опираетесь; "
+                + "если это предположение или цитата прежней ошибки, обозначьте это. "
+                + "Остальные части ответа сохранены. Срок остаётся на паузе, проверка продолжится автоматически.";
+        boolean delivered;
+        if (questionIndex == -1) {
+            sendPlanPrompt(review, prompt);
+            delivered = review.getReplyPromptMessageId() != null;
+        } else {
+            delivered = sendQuestion(review, questions(review), prompt);
+        }
+        if (delivered) {
+            review.setRecoveryAwaitingContext(true);
+            event(review, "AUTO_RECOVERY_CONTEXT_REQUESTED", null, "SYSTEM", "recovery-job", identity);
+        }
     }
 
     private boolean assessmentUnavailable(ManagerReportReviewQualityService.Assessment assessment) {

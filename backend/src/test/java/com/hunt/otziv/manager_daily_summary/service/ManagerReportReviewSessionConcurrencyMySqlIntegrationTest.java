@@ -250,11 +250,10 @@ class ManagerReportReviewSessionConcurrencyMySqlIntegrationTest {
         var reviews = mock(ManagerReportReviewTelegramService.class);
         doThrow(new IllegalStateException("synthetic provider transaction failure"))
                 .when(reviews).recoverAutomatically(id);
-        var settings = mock(AppSettingService.class);
-        when(settings.getBoolean("manager.report-review.enabled", true)).thenReturn(true);
+        when(reviews.enabled()).thenReturn(true);
 
-        new ManagerReportReviewRecoveryJob(sessions, reviews, settings, transactions).recover();
-        new ManagerReportReviewRecoveryJob(sessions, reviews, settings, transactions).recover();
+        new ManagerReportReviewRecoveryJob(sessions, reviews, transactions).recover();
+        new ManagerReportReviewRecoveryJob(sessions, reviews, transactions).recover();
 
         verify(reviews).recoverAutomatically(id);
         assertThat(current().getRecoveryAttempts()).isEqualTo(1);
@@ -273,6 +272,18 @@ class ManagerReportReviewSessionConcurrencyMySqlIntegrationTest {
         jdbc.update("UPDATE manager_report_review_sessions SET test_mode=0,status='COMPLETED',completed_at=? WHERE review_id=?", now, id);
         assertThat(sessions.findRecoveryCandidates(now, now.minusMinutes(1))).isEmpty();
         assertThat(tx.<Integer>execute(ignored -> sessions.claimRecovery(id, now, now.minusMinutes(1), now.plusMinutes(10)))).isZero();
+    }
+
+    @Test
+    void deliveredContextQuestionWaitsForNewAnswerWithoutRepeatedClaimsAndRemainsUnrestricted() {
+        availability.pause(current(), now.minusMinutes(2), "test", "missing source");
+        jdbc.update("UPDATE manager_report_review_sessions SET recovery_awaiting_context=1 WHERE review_id=?", id);
+        assertThat(sessions.findRecoveryCandidates(now, now.minusMinutes(1))).isEmpty();
+        assertThat(tx.<Integer>execute(ignored -> sessions.claimRecovery(id, now, now.minusMinutes(1), now.plusMinutes(10)))).isZero();
+        reminder(mock(NotificationMediaDeliveryService.class)).remind();
+        assertThat(current().getRestrictedAt()).isNull();
+        availability.resume(current(), now, "new-answer");
+        assertThat(current().isRecoveryAwaitingContext()).isFalse();
     }
 
     private ManagerReportReviewReminderJob reminder(NotificationMediaDeliveryService delivery) {
