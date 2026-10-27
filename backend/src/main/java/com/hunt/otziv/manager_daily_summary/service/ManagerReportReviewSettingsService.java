@@ -227,9 +227,9 @@ public class ManagerReportReviewSettingsService {
                 settings.getBoolean("manager-control.diagnostics.thinking-enabled", true),
                 settings.getString(PREFIX + "evidence-mode", "SHADOW"),
                 readIds(PREFIX + "evidence-pilot-manager-ids"),
-                settings.getInt(PREFIX + "answer-assessment-max-tokens", 6000),
+                settings.getInt(PREFIX + "answer-assessment-max-tokens", 8000),
                 settings.getInt(PREFIX + "answer-assessment-timeout-seconds", 90),
-                settings.getBoolean(PREFIX + "answer-assessment-thinking", true),
+                settings.getBoolean(PREFIX + "answer-assessment-thinking", false),
                 settings.getInt(PREFIX + "question-generation-timeout-seconds", 90),
                 settings.getBoolean(PREFIX + "question-generation-thinking", true),
                 settings.getInt(PREFIX + "evidence-max-age-minutes", 15));

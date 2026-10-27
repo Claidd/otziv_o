@@ -149,6 +149,15 @@ public class ManagerReportReviewSession {
     @Column(name = "ai_unavailable_seconds", nullable = false)
     private long aiUnavailableSeconds;
 
+    @Column(name = "recovery_attempts", nullable = false)
+    private int recoveryAttempts;
+
+    @Column(name = "recovery_next_attempt_at")
+    private LocalDateTime recoveryNextAttemptAt;
+
+    @Column(name = "recovery_awaiting_context", nullable = false)
+    private boolean recoveryAwaitingContext;
+
     @Column(name = "completed_at")
     private LocalDateTime completedAt;
 

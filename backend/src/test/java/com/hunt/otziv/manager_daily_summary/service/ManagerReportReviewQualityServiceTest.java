@@ -153,7 +153,7 @@ class ManagerReportReviewQualityServiceTest {
     void acceptsSemanticAnswerWithEvidenceAndUsesIndependentStageBudgets() {
         String answer = "Клиенту не ответили, сообщу срок после проверки заказа.";
         AiProvider provider = provider(assessment("SATISFIED", answer, "E1", "PROMISE", "PLAN", "Действие обосновано"));
-        when(settings.getBoolean("manager.report-review.answer-assessment-thinking", true)).thenReturn(true);
+        when(settings.getBoolean("manager.report-review.answer-assessment-thinking", false)).thenReturn(true);
         var result = service.assessAnswer("Клиент спросил о сроке, ответа нет.", question(), answer, false);
 
         assertThat(result.accepted()).isTrue();
@@ -161,7 +161,7 @@ class ManagerReportReviewQualityServiceTest {
         ArgumentCaptor<AiRequest> request = ArgumentCaptor.forClass(AiRequest.class);
         verify(provider).generate(request.capture());
         assertThat(request.getValue().thinkingEnabled()).isTrue();
-        assertThat(request.getValue().maxTokens()).isEqualTo(6000);
+        assertThat(request.getValue().maxTokens()).isEqualTo(8000);
         assertThat(request.getValue().timeout()).isPositive().isLessThanOrEqualTo(java.time.Duration.ofSeconds(90));
         assertThat(request.getValue().reasoningEffort()).isEqualTo("low");
         assertThat(request.getValue().jsonObject()).isTrue();
@@ -779,7 +779,7 @@ class ManagerReportReviewQualityServiceTest {
         var previousInput = (com.fasterxml.jackson.databind.node.ObjectNode) input.deepCopy();
         previousInput.put("report", report).set("authoritativeFacts", previousTypedFacts);
         assertThat(request.userPrompt().length()).isLessThan((int) (previousInput.toString().length() * 0.60));
-        assertThat(request.maxTokens()).isEqualTo(6000);
+        assertThat(request.maxTokens()).isEqualTo(8000);
         assertThat(response.toString().length()).isLessThan(4000);
         assertThat(request.systemPrompt()).contains("не каждую", "Не пропускай противоречащие источники");
     }
@@ -857,14 +857,14 @@ class ManagerReportReviewQualityServiceTest {
         for (String error : List.of("", "DeepSeek вернул пустой текст, finish_reason=length.")) {
             String answer = "Проверю историю чата и зафиксирую результат в карточке.";
             AiProvider provider = provider("");
-            when(settings.getBoolean("manager.report-review.answer-assessment-thinking", true)).thenReturn(true);
+            when(settings.getBoolean("manager.report-review.answer-assessment-thinking", false)).thenReturn(true);
             when(provider.generate(any())).thenReturn(new AiResponse("", "deepseek", 500, 6000, error),
                     new AiResponse(assessment("SATISFIED", answer, "E1", "PROMISE", "PLAN", "Конкретное действие"), "deepseek", 500, 500));
             var result = service.assessAnswer("Старая отправка без подтверждения.", question(), answer, false);
             assertThat(result.accepted()).isTrue();
             ArgumentCaptor<AiRequest> requests = ArgumentCaptor.forClass(AiRequest.class);
             verify(provider, times(2)).generate(requests.capture());
-            assertThat(requests.getAllValues()).extracting(AiRequest::maxTokens).containsExactly(6000, 12000);
+            assertThat(requests.getAllValues()).extracting(AiRequest::maxTokens).containsExactly(8000, 12000);
             assertThat(requests.getAllValues()).allSatisfy(r -> {
                 assertThat(r.thinkingEnabled()).isTrue();
                 assertThat(r.reasoningEffort()).isEqualTo("low");
@@ -1032,6 +1032,85 @@ class ManagerReportReviewQualityServiceTest {
         provider(root.toString());
         assertThat(service.assessAnswer("Доставка UNKNOWN.", question(), answer, false).decision())
                 .isEqualTo(ManagerReportReviewQualityService.Decision.NEEDS_CONTEXT);
+    }
+
+    @Test
+    void appraisalOfOwnCommentWithMissingDeadlineNeedsClarificationRatherThanDataPause() throws Exception {
+        String answer = "Моего комментария недостаточно, поскольку нет результата проверки и конкретного дальнейшего действия.";
+        var root = new ObjectMapper().readTree(assessment("SATISFIED", answer, "E1", "FACT", "UNVERIFIABLE", "Нужен срок"));
+        ((com.fasterxml.jackson.databind.node.ObjectNode) root).put("contextStatus", "INSUFFICIENT");
+        var missing = root.path("criteria").get(0).deepCopy();
+        ((com.fasterxml.jackson.databind.node.ObjectNode) missing).put("criterionIndex", 1).put("status", "MISSING").put("answerQuote", "");
+        ((com.fasterxml.jackson.databind.node.ArrayNode) root.path("criteria")).add(missing);
+        provider(root.toString());
+
+        var result = service.assessAnswer("Исходный счёт доступен.", new ManagerReportReviewQualityService.ReviewQuestion(
+                "Что исправите и когда проверите?", List.of("вывод о комментарии", "срок проверки")), answer, false);
+
+        assertThat(result.decision()).isEqualTo(ManagerReportReviewQualityService.Decision.NEEDS_CLARIFICATION);
+        assertThat(result.claims().getFirst().kind()).isEqualTo(ManagerReportReviewQualityService.ClaimKind.HYPOTHESIS);
+        assertThat(result.pending()).isFalse();
+    }
+
+    @Test
+    void selfAppraisalCannotHideAnUnsupportedExternalFact() {
+        String answer = "Моего комментария недостаточно, поскольку платёж уже поступил.";
+        provider(assessment("SATISFIED", answer, "E1", "FACT", "UNVERIFIABLE", "Платёж неизвестен"));
+        assertThat(service.assessAnswer("Результат платежа неизвестен.", question(), answer, false).decision())
+                .isEqualTo(ManagerReportReviewQualityService.Decision.NEEDS_CONTEXT);
+    }
+
+    @Test
+    void originalRecordedErrorCanProveTheRecordButNotTheCurrentInvoiceState() throws Exception {
+        String note = "invoice:189:last_error | invoice.last_error=Прежняя ошибка про отзыв #200221";
+        String report = "История: invoice:999:last_error | invoice.last_error=НЕ БРАТЬ ИЗ ИСТОРИИ\n"
+                + "\nСВЕЖАЯ ПРОВЕРКА ИСТОЧНИКОВ:\n" + note + "\n" + note + "\n" + invoiceEvidence("COLLECTING", 2);
+        String answer = "В счёте сохранена прежняя ошибка про отзыв #200221.";
+        AiProvider provider = provider(assessment("SATISFIED", answer, "E3", "FACT", "SUPPORTED", "Запись присутствует"));
+
+        assertThat(service.assessAnswer(report, sourceQuestion(), answer, false).accepted()).isTrue();
+
+        ArgumentCaptor<AiRequest> request = ArgumentCaptor.forClass(AiRequest.class);
+        verify(provider).generate(request.capture());
+        var input = new ObjectMapper().readTree(request.getValue().userPrompt());
+        assertThat(input.path("evidence")).hasSize(3);
+        assertThat(input.path("evidence").get(2).path("text").asText())
+                .contains("ЗАПИСАННОЕ СИСТЕМНОЕ СООБЩЕНИЕ", note, "не текущую истинность")
+                .doesNotContain("НЕ БРАТЬ ИЗ ИСТОРИИ");
+        assertThat(input.path("authoritativeFacts")).hasSize(2);
+        String linked = "а также сохранена прежняя ошибка о повторе текста отзыва №200221";
+        provider(assessment("SATISFIED", linked, "E3", "FACT", "SUPPORTED", "Запись присутствует"));
+        assertThat(service.assessAnswer(report, sourceQuestion(), linked, false).accepted()).isTrue();
+        provider(assessment("SATISFIED", "Счёт полностью оплачен.", "E3", "FACT", "SUPPORTED", "Текст ошибки не доказывает оплату"));
+        assertThat(service.assessAnswer(report, sourceQuestion(), "Счёт полностью оплачен.", false).accepted()).isFalse();
+    }
+
+    @Test
+    void generalApproachDoesNotRequireAnAuditTrailOfPersonalHabits() {
+        String answer = "В похожих ситуациях я проверяю исходные данные, связанные задачи и результат исправлений.";
+        provider(assessment("SATISFIED", answer, "E1", "FACT", "UNVERIFIABLE", "Общий подход"));
+        var result = service.assessAnswer("Заказ требует сверки.", question(), answer, false);
+        assertThat(result.accepted()).isTrue();
+        assertThat(result.claims().getFirst().kind()).isEqualTo(ManagerReportReviewQualityService.ClaimKind.HYPOTHESIS);
+        String specific = "В похожих ситуациях я проверяю данные. Вчера я отправила заказ #26720.";
+        provider(assessment("SATISFIED", specific, "E1", "FACT", "UNVERIFIABLE", "Нужен журнал конкретного действия"));
+        assertThat(service.assessAnswer("Отправка не подтверждена.", question(), specific, false).accepted()).isFalse();
+    }
+
+    @Test
+    void structuredAnswerVerificationDefaultsToDirectJsonWithoutHiddenReasoningBudget() {
+        String answer = "Сверю исходную операцию и зафиксирую результат.";
+        AiProvider provider = provider(assessment("SATISFIED", answer, "E1", "PROMISE", "PLAN", "Действие соответствует случаю"));
+        when(settings.getBoolean(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyBoolean()))
+                .thenAnswer(call -> call.getArgument(1));
+
+        assertThat(service.assessAnswer("Исходная операция доступна.", question(), answer, false).accepted()).isTrue();
+
+        ArgumentCaptor<AiRequest> request = ArgumentCaptor.forClass(AiRequest.class);
+        verify(provider).generate(request.capture());
+        assertThat(request.getValue().thinkingEnabled()).isFalse();
+        assertThat(request.getValue().reasoningEffort()).isNull();
+        assertThat(request.getValue().jsonObject()).isTrue();
     }
 
     private String incidentAssessment(boolean missingConditions, String claimStatus) throws Exception {

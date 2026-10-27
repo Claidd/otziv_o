@@ -65,6 +65,9 @@ public class ManagerReportReviewAiAvailabilityService {
         review.setAiUnavailableSeconds(totalSeconds);
         review.setDeadlineStartedAt(deadline);
         review.setAiUnavailableStartedAt(null);
+        review.setRecoveryAttempts(0);
+        review.setRecoveryNextAttemptAt(null);
+        review.setRecoveryAwaitingContext(false);
         event(review, "AI_VERIFICATION_RESUMED", source,
                 "Автоматическая проверка восстановлена; срок продлён на " + seconds + " сек.");
         accessPolicy.invalidate(review.getManagerUserId());

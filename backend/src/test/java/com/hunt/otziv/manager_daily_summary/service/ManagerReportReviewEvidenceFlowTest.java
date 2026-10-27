@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
@@ -292,7 +293,7 @@ class ManagerReportReviewEvidenceFlowTest {
         assertThat(continued).contains("повторно проверен");
         verify(quality).assessAnswer(anyString(), any(), eq(rawPlan), eq(true), eq(List.of()), eq(false), eq(originalTime));
         assertThat(quality.latestAnswerRecordedAt(review.getAnswersJson(), -1)).isEqualTo(originalTime);
-        assertThat(mapper.readTree(review.getAnswersJson())).hasSize(2);
+        assertThat(mapper.readTree(review.getAnswersJson())).hasSize(1);
         assertThat(review.getCompletedAt()).isNull();
     }
 
@@ -517,6 +518,163 @@ class ManagerReportReviewEvidenceFlowTest {
         verify(quality, never()).assessAnswer(anyString(), any(), anyString(), org.mockito.ArgumentMatchers.anyBoolean());
         verify(quality, never()).assessAnswer(anyString(), any(), anyString(), org.mockito.ArgumentMatchers.anyBoolean(), any(), org.mockito.ArgumentMatchers.anyBoolean());
         verify(quality, never()).assessAnswer(anyString(), any(), anyString(), org.mockito.ArgumentMatchers.anyBoolean(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any());
+    }
+
+    @Test
+    void automaticallyRetriesOriginalAnswerAndCompletesWithoutManagerCallbackOrDuplicateAttempt() throws Exception {
+        String answer = "Сверю результат и зафиксирую его в карточке.";
+        assessWith(assessment(ManagerReportReviewQualityService.Decision.UNAVAILABLE, "Таймаут"));
+        service.handleTextMessage(700L, user, answer, 777);
+        var originalTime = quality.latestAnswerRecordedAt(review.getAnswersJson(), 0);
+        review.setRecoveryAttempts(1);
+        doReturn(true).when(quality).aiAvailable();
+        doReturn(assessment(ManagerReportReviewQualityService.Decision.ACCEPTED, "Проверен исходный ответ"))
+                .when(quality).assessAnswer(anyString(), eq(question), eq(answer), eq(false), any(), eq(false), eq(originalTime));
+
+        service.recoverAutomatically(41L);
+        service.recoverAutomatically(41L); // A stale queue entry must not apply the result twice.
+
+        assertThat(review.getStatus()).isEqualTo(ManagerReportReviewStatus.COMPLETED);
+        assertThat(review.getAiUnavailableStartedAt()).isNull();
+        assertThat(review.getRecoveryNextAttemptAt()).isNull();
+        assertThat(mapper.readTree(review.getAnswersJson())).hasSize(1);
+        assertThat(quality.latestAnswerRecordedAt(review.getAnswersJson(), 0)).isEqualTo(originalTime);
+        verify(issues).markAnswered(review, 0);
+        verify(commitments).record(review, 0, question, List.of());
+        assertThat(savedEvents).anyMatch(event -> "AUTO_RECOVERY_SUCCEEDED".equals(event.getEventType()));
+    }
+
+    @Test
+    void automaticRetryStillUnavailableKeepsDeadlinePausedAndDoesNotFloodChat() throws Exception {
+        String answer = "Сверю историю и зафиксирую результат.";
+        assessWith(assessment(ManagerReportReviewQualityService.Decision.UNAVAILABLE, "Таймаут"));
+        service.handleTextMessage(700L, user, answer, 777);
+        var originalTime = quality.latestAnswerRecordedAt(review.getAnswersJson(), 0);
+        var pause = review.getAiUnavailableStartedAt();
+        review.setRecoveryAttempts(3);
+        doReturn(true).when(quality).aiAvailable();
+        doReturn(assessment(ManagerReportReviewQualityService.Decision.UNAVAILABLE, "Таймаут"))
+                .when(quality).assessAnswer(anyString(), eq(question), eq(answer), eq(false), any(), eq(false), eq(originalTime));
+        org.mockito.Mockito.clearInvocations(telegram);
+
+        service.recoverAutomatically(41L);
+
+        assertThat(review.getAiUnavailableStartedAt()).isEqualTo(pause);
+        assertThat(review.getRecoveryNextAttemptAt()).isAfter(LocalDateTime.now().plusMinutes(3));
+        assertThat(mapper.readTree(review.getAnswersJson())).hasSize(1);
+        verify(telegram, never()).sendMessageWithInlineKeyboard(org.mockito.ArgumentMatchers.anyLong(), anyString(), any(), any());
+        verify(issues, never()).markAnswered(any(), anyInt());
+    }
+
+    @Test
+    void automaticRecoveryRegeneratesQuestionsAndRetriesFailedQuestionDelivery() {
+        review.setAiUnavailableStartedAt(LocalDateTime.now().minusHours(2));
+        review.setQuestionsJson("[]");
+        review.setQuestionsSource("PENDING_AI");
+        doReturn(true).when(quality).aiAvailable();
+        when(context.refresh(anyString(), eq(9L))).thenReturn("Источники вопроса");
+        doReturn(new ManagerReportReviewQualityService.QuestionGeneration(List.of(question), true, ""))
+                .when(quality).generateQuestions(anyString(), anyInt());
+        when(telegram.sendMessageWithInlineKeyboardMessageId(eq(700L), anyString(), eq("HTML"), any()))
+                .thenReturn(Optional.empty(), Optional.of(998));
+
+        service.recoverAutomatically(41L);
+
+        assertThat(review.getQuestionsSource()).isEqualTo("AI");
+        assertThat(review.getAiUnavailableStartedAt()).isNotNull();
+        assertThat(review.getRecoveryNextAttemptAt()).isNotNull();
+        service.recoverAutomatically(41L);
+        assertThat(review.getQuestionMessageId()).isEqualTo(998);
+        assertThat(review.getAiUnavailableStartedAt()).isNull();
+        verify(quality).generateQuestions(anyString(), anyInt());
+    }
+
+    @Test
+    void automaticRecoveryRestoresConversationWhenLegacySnapshotIsBrokenWithoutJudgingPastAgainstToday() {
+        String answer = "Счёт находится в сборе.";
+        assessWith(assessment(ManagerReportReviewQualityService.Decision.UNAVAILABLE, "Таймаут"));
+        service.handleTextMessage(700L, user, answer, 777);
+        savedEvents.removeIf(event -> "ANSWER_EVIDENCE_SNAPSHOT".equals(event.getEventType()));
+        doReturn(true).when(quality).aiAvailable();
+
+        service.recoverAutomatically(41L);
+
+        assertThat(review.getAiUnavailableStartedAt()).isNull();
+        assertThat(review.getStatus()).isEqualTo(ManagerReportReviewStatus.QUESTION_PENDING);
+        assertThat(savedEvents).anyMatch(event -> "AUTO_RECOVERY_EVIDENCE_MISSING".equals(event.getEventType()));
+        verify(quality, never()).assessAnswer(anyString(), any(), anyString(), eq(false), any(), eq(false), any());
+        verify(issues, never()).markAnswered(any(), anyInt());
+    }
+
+    @Test
+    void auditContinuesThroughClarificationAndNextQuestionToCompletionAfterAutomaticRecovery() throws Exception {
+        var second = new ManagerReportReviewQualityService.ReviewQuestion("Как проверите результат?",
+                List.of("проверка результата"), List.of(42L));
+        review.setQuestionsJson(quality.questionsJson(List.of(question, second)));
+        var secondIssue = new ManagerReportReviewIssue();
+        secondIssue.setQuestionIndex(1);
+        when(issues.nextPending(review, 1)).thenReturn(Optional.of(secondIssue));
+        when(issues.isPending(review, 1)).thenReturn(true);
+        assessWith(assessment(ManagerReportReviewQualityService.Decision.UNAVAILABLE, "Таймаут"));
+        service.handleTextMessage(700L, user, "Сверю историю.", 777);
+        var submittedAt = quality.latestAnswerRecordedAt(review.getAnswersJson(), 0);
+        doReturn(true).when(quality).aiAvailable();
+        doReturn(assessment(ManagerReportReviewQualityService.Decision.NEEDS_CLARIFICATION, "Уточните действие"))
+                .when(quality).assessAnswer(anyString(), eq(question), anyString(), eq(false), any(), eq(false), eq(submittedAt));
+
+        service.recoverAutomatically(41L);
+
+        assertThat(review.getAiUnavailableStartedAt()).isNull();
+        assertThat(review.getCurrentQuestionIndex()).isZero();
+        assessWith(assessment(ManagerReportReviewQualityService.Decision.ACCEPTED, "Конкретный ответ"));
+        doReturn(assessment(ManagerReportReviewQualityService.Decision.ACCEPTED, "Проверка названа"))
+                .when(quality).assessAnswer(anyString(), eq(second), anyString(), eq(false), any(), eq(false));
+        when(telegram.sendForceReplyMessageId(eq(700L), anyString())).thenReturn(Optional.of(901));
+        when(sessions.findFirstByManagerUserIdAndRecipientChatIdAndReplyPromptMessageId(17L, 700L, 901))
+                .thenReturn(Optional.of(review));
+        service.handle(callback("answer", 700L, 700L));
+        service.handleTextMessage(700L, user, "Сверю исходную операцию и запишу её результат в карточке.", 901);
+        assertThat(review.getCurrentQuestionIndex()).isEqualTo(1);
+        assertThat(review.getCompletedAt()).isNull();
+        service.handle(callback("answer", 700L, 700L));
+        service.handleTextMessage(700L, user, "Проверю отметку результата в исходной операции.", 901);
+
+        assertThat(review.getStatus()).isEqualTo(ManagerReportReviewStatus.COMPLETED);
+        assertThat(review.getCompletedAt()).isNotNull();
+        assertThat(mapper.readTree(review.getAnswersJson())).hasSize(3);
+        verify(issues).markAnswered(review, 0);
+        verify(issues).markAnswered(review, 1);
+    }
+
+    @Test
+    void missingExternalProofAutomaticallyAsksForContextOnceWithoutRestrictingOrRepeatedPaidPolling() throws Exception {
+        String answer = "В карточке сохранена ошибка. Проверю результат.";
+        assessWith(assessment(ManagerReportReviewQualityService.Decision.UNAVAILABLE, "Таймаут"));
+        service.handleTextMessage(700L, user, answer, 777);
+        var originalTime = quality.latestAnswerRecordedAt(review.getAnswersJson(), 0);
+        var pause = review.getAiUnavailableStartedAt();
+        doReturn(true).when(quality).aiAvailable();
+        doReturn(assessment(ManagerReportReviewQualityService.Decision.NEEDS_CONTEXT, "Не хватает записи"))
+                .when(quality).assessAnswer(anyString(), eq(question), eq(answer), eq(false), any(), eq(false), eq(originalTime));
+        org.mockito.Mockito.clearInvocations(telegram);
+
+        service.recoverAutomatically(41L);
+        service.recoverAutomatically(41L);
+
+        assertThat(review.isRecoveryAwaitingContext()).isTrue();
+        assertThat(review.getAiUnavailableStartedAt()).isEqualTo(pause);
+        assertThat(review.getRecoveryNextAttemptAt()).isNull();
+        assertThat(review.getRestrictedAt()).isNull();
+        assertThat(mapper.readTree(review.getAnswersJson())).hasSize(1);
+        verify(quality).assessAnswer(anyString(), eq(question), eq(answer), eq(false), any(), eq(false), eq(originalTime));
+        verify(telegram).sendMessageWithInlineKeyboardMessageId(eq(700L), contains("Уточните"), eq("HTML"), any());
+
+        assessWith(assessment(ManagerReportReviewQualityService.Decision.ACCEPTED, "Источник уточнён"));
+        review.setReplyPromptMessageId(777);
+        service.handleTextMessage(700L, user, "Это цитата старой ошибки; её актуальность проверю по исходной записи.", 777);
+        assertThat(review.isRecoveryAwaitingContext()).isFalse();
+        assertThat(review.getAiUnavailableStartedAt()).isNull();
+        assertThat(review.getStatus()).isEqualTo(ManagerReportReviewStatus.COMPLETED);
     }
 
     private String legacyAnswer(int questionIndex) {

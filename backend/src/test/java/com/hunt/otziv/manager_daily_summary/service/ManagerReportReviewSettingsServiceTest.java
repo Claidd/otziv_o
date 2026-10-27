@@ -60,6 +60,24 @@ class ManagerReportReviewSettingsServiceTest {
     }
 
     @Test
+    void settingsDefaultsMatchDirectAnswerVerificationAndPreserveExplicitOverrides() {
+        when(settings.getInt(anyString(), anyInt())).thenAnswer(call -> call.getArgument(1));
+        when(settings.getBoolean(anyString(), anyBoolean())).thenAnswer(call -> call.getArgument(1));
+        when(settings.getString(anyString(), anyString())).thenAnswer(call -> call.getArgument(1));
+
+        var defaults = service.settings().evidence();
+        assertThat(defaults.answerMaxTokens()).isEqualTo(8000);
+        assertThat(defaults.answerThinkingEnabled()).isFalse();
+        assertThat(defaults.questionThinkingEnabled()).isTrue();
+
+        when(settings.getInt("manager.report-review.answer-assessment-max-tokens", 8000)).thenReturn(7000);
+        when(settings.getBoolean("manager.report-review.answer-assessment-thinking", false)).thenReturn(true);
+        var configured = service.settings().evidence();
+        assertThat(configured.answerMaxTokens()).isEqualTo(7000);
+        assertThat(configured.answerThinkingEnabled()).isTrue();
+    }
+
+    @Test
     void disablingManagerStopsAndClosesCurrentAudit() {
         User user = User.builder()
                 .id(17L)

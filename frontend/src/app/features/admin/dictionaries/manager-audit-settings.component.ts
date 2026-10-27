@@ -13,8 +13,8 @@ import { ToastService } from '../../../shared/toast.service';
 export const DEFAULT_MANAGER_EVIDENCE_SETTINGS: ManagerReportReviewEvidenceSettings = {
   diagnosisMode: 'SHADOW', diagnosisPilotManagerIds: [], diagnosisMaxRequestsPerHour: 60,
   diagnosisMaxOutputTokens: 8000, diagnosisTimeoutSeconds: 45, diagnosisThinkingEnabled: true,
-  answerMode: 'SHADOW', answerPilotManagerIds: [], answerMaxTokens: 6000, answerTimeoutSeconds: 90,
-  answerThinkingEnabled: true, questionTimeoutSeconds: 90, questionThinkingEnabled: true,
+  answerMode: 'SHADOW', answerPilotManagerIds: [], answerMaxTokens: 8000, answerTimeoutSeconds: 90,
+  answerThinkingEnabled: false, questionTimeoutSeconds: 90, questionThinkingEnabled: true,
   evidenceMaxAgeMinutes: 15
 };
 
@@ -71,9 +71,9 @@ export class ManagerAuditSettingsComponent {
       diagnosisThinkingEnabled: [true],
       answerMode: ['SHADOW' as ManagerReportReviewEvidenceSettings['answerMode'], Validators.required],
       answerPilotManagerIds: this.fb.nonNullable.control<number[]>([]),
-      answerMaxTokens: [6000, [Validators.required, Validators.min(2000), Validators.max(16000)]],
+      answerMaxTokens: [8000, [Validators.required, Validators.min(2000), Validators.max(16000)]],
       answerTimeoutSeconds: [90, [Validators.required, Validators.min(5), Validators.max(240)]],
-      answerThinkingEnabled: [true],
+      answerThinkingEnabled: [false],
       questionTimeoutSeconds: [90, [Validators.required, Validators.min(5), Validators.max(240)]],
       questionThinkingEnabled: [true],
       evidenceMaxAgeMinutes: [15, [Validators.required, Validators.min(1), Validators.max(120)]]
