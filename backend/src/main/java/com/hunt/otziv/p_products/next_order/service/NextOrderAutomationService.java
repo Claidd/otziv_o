@@ -7,7 +7,6 @@ import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.service.OrderCreationService;
 import com.hunt.otziv.r_review.model.Review;
-import com.hunt.otziv.u_users.dto.WorkerDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -63,7 +62,8 @@ public class NextOrderAutomationService {
 
         Long companyId = sourceOrder.getCompany() != null ? sourceOrder.getCompany().getId() : null;
         Long filialId = sourceOrder.getFilial() != null ? sourceOrder.getFilial().getId() : null;
-        long workerId = workerRoutingService.resolveWorkerId(sourceOrder);
+        Long sourceWorkerId = sourceOrder.getWorker() == null ? null : sourceOrder.getWorker().getId();
+        long workerId = workerRoutingService.resolveWorkerId(companyId, sourceWorkerId, sourceOrder.notificationManagerId());
         Set<Long> filialIds = requestService.orderFilialIds(sourceOrder);
         List<Order> existingActiveOrders = requestService.findActiveOrdersForFilials(companyId, filialIds, filialId, workerId);
         Optional<Order> matchingActiveOrder = existingActiveOrders.stream()
@@ -97,8 +97,7 @@ public class NextOrderAutomationService {
 
         requestService.markAttemptStarted(requestId);
 
-        OrderDTO repeatOrder = creationService.convertToOrderDTOToRepeat(sourceOrder);
-        repeatOrder.setWorker(WorkerDTO.builder().workerId(workerId).build());
+        OrderDTO repeatOrder = creationService.convertToOrderDTOToRepeat(sourceOrder, workerId);
         Order created = creationService.createRepeatedOrderWithReviews(sourceOrder, repeatOrder);
         if (created == null || created.getId() == null) {
             throw new IllegalStateException("Автоповтор не вернул созданный заказ для заявки " + requestId);
@@ -109,7 +108,8 @@ public class NextOrderAutomationService {
         request.setCreatedOrder(created);
         request.setErrorMessage(null);
         requestRepository.save(request);
-        workerRoutingService.auditReroute(requestId, sourceOrder, created);
+        workerRoutingService.auditReroute(requestId, sourceOrder.getId(), created.getId(),
+                sourceWorkerId, created.getWorker().getId());
         requestService.markCreatedIfOpen(requestId);
     }
 

@@ -1,6 +1,5 @@
 package com.hunt.otziv.p_products.next_order.service;
 
-import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.next_order.repository.NextOrderWorkerRoutingRepository;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -16,21 +15,18 @@ public class NextOrderWorkerRoutingService {
     private final NextOrderWorkerRoutingRepository repository;
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public long resolveWorkerId(Order source) {
-        if (source == null || source.getCompany() == null || source.getCompany().getId() == null
-                || source.getWorker() == null || source.getWorker().getId() == null) {
+    public long resolveWorkerId(Long companyId, Long sourceWorkerId, Long sourceManagerId) {
+        if (companyId == null || sourceWorkerId == null) {
             throw new IllegalStateException("Не определены компания или специалист исходного заказа");
         }
-        long companyId = source.getCompany().getId();
         Long managerId = repository.lockCompanyManager(companyId);
-        if (managerId == null || source.getManager() == null
-                || !Objects.equals(managerId, source.getManager().getId())) {
+        if (managerId == null || !Objects.equals(managerId, sourceManagerId)) {
             throw new IllegalStateException("Менеджер исходного заказа не совпадает с менеджером компании");
         }
         var memberships = new HashMap<Long, NextOrderWorkerRoutingRepository.Membership>();
         repository.lockMemberships(companyId, managerId)
                 .forEach(member -> memberships.put(member.workerId(), member));
-        long workerId = source.getWorker().getId();
+        long workerId = sourceWorkerId;
         // Preserve intentional shared ownership. A removed membership needs
         // the latest successful transfers of this exact company, never an
         // arbitrary recipient chosen from the company's other specialists.
@@ -59,10 +55,10 @@ public class NextOrderWorkerRoutingService {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public void auditReroute(long requestId, Order source, Order created) {
-        if (!Objects.equals(source.getWorker().getId(), created.getWorker().getId())) {
-            repository.auditReroute(requestId, source.getId(), created.getId(),
-                    source.getWorker().getId(), created.getWorker().getId());
+    public void auditReroute(long requestId, long sourceOrderId, long createdOrderId,
+            long sourceWorkerId, long targetWorkerId) {
+        if (sourceWorkerId != targetWorkerId) {
+            repository.auditReroute(requestId, sourceOrderId, createdOrderId, sourceWorkerId, targetWorkerId);
         }
     }
 }

@@ -7,4 +7,5 @@ public interface OrderCreationService {
     boolean createNewOrderWithReviews(Long companyId, Long productId, OrderDTO orderDTO);
     Order createRepeatedOrderWithReviews(Order sourceOrder, OrderDTO orderDTO);
     OrderDTO convertToOrderDTOToRepeat(Order order);
+    OrderDTO convertToOrderDTOToRepeat(Order order, long workerId);
 }

@@ -928,6 +928,13 @@ public class OrderCreationServiceImpl implements OrderCreationService {
                 .build();
     } // Конвертер DTO для создания нового заказа после завершения предыдущего
 
+    @Override
+    public OrderDTO convertToOrderDTOToRepeat(Order order, long workerId) {
+        OrderDTO repeat = convertToOrderDTOToRepeat(order);
+        repeat.setWorker(convertToWorkerDTO(workerService.getWorkerById(workerId)));
+        return repeat;
+    }
+
     private List<Long> reviewFilialIds(Order order) {
         return orderedReviews(order).stream()
                 .map(review -> review.getFilial() != null ? review.getFilial().getId() : null)

@@ -33,14 +33,14 @@ class NextOrderWorkerRoutingServiceTest {
 
     @Test void keepsSourceForIntentionallySharedCompany() {
         when(repository.lockMemberships(748L, 2L)).thenReturn(List.of(member(6L), member(13L)));
-        assertEquals(13L, service.resolveWorkerId(source));
+        assertEquals(13L, service.resolveWorkerId(748L, 13L, source.notificationManagerId()));
         verify(repository, never()).lockAppliedTransfers(anyLong());
     }
 
     @Test void routesRemovedSourceToConfirmedRecipient() {
         when(repository.lockMemberships(748L, 2L)).thenReturn(List.of(member(6L), member(7L)));
         when(repository.lockAppliedTransfers(748L)).thenReturn(List.of(new Transfer(13L, 6L)));
-        assertEquals(6L, service.resolveWorkerId(source));
+        assertEquals(6L, service.resolveWorkerId(748L, 13L, source.notificationManagerId()));
         assertEquals(13L, source.getWorker().getId());
     }
 
@@ -48,19 +48,19 @@ class NextOrderWorkerRoutingServiceTest {
         when(repository.lockMemberships(748L, 2L)).thenReturn(List.of(member(7L)));
         when(repository.lockAppliedTransfers(748L)).thenReturn(List.of(
                 new Transfer(6L, 7L), new Transfer(13L, 6L), new Transfer(13L, 9L)));
-        assertEquals(7L, service.resolveWorkerId(source));
+        assertEquals(7L, service.resolveWorkerId(748L, 13L, source.notificationManagerId()));
     }
 
     @Test void neverGuessesFromSoleCurrentMemberWithoutTransferEvidence() {
         when(repository.lockMemberships(748L, 2L)).thenReturn(List.of(member(6L)));
         when(repository.lockAppliedTransfers(748L)).thenReturn(List.of());
-        assertThrows(IllegalStateException.class, () -> service.resolveWorkerId(source));
+        assertThrows(IllegalStateException.class, () -> service.resolveWorkerId(748L, 13L, source.notificationManagerId()));
     }
 
     @Test void cycleCannotAssignAnUnlinkedSpecialist() {
         when(repository.lockMemberships(748L, 2L)).thenReturn(List.of(member(7L)));
         when(repository.lockAppliedTransfers(748L)).thenReturn(List.of(new Transfer(13L, 6L), new Transfer(6L, 13L)));
-        assertThrows(IllegalStateException.class, () -> service.resolveWorkerId(source));
+        assertThrows(IllegalStateException.class, () -> service.resolveWorkerId(748L, 13L, source.notificationManagerId()));
     }
 
     @Test void inactiveRecipientCannotReceiveOrder() {
@@ -73,14 +73,14 @@ class NextOrderWorkerRoutingServiceTest {
 
     @Test void changedCompanyManagerStopsHistoricalOrder() {
         when(repository.lockCompanyManager(748L)).thenReturn(3L);
-        assertThrows(IllegalStateException.class, () -> service.resolveWorkerId(source));
+        assertThrows(IllegalStateException.class, () -> service.resolveWorkerId(748L, 13L, source.notificationManagerId()));
         verify(repository, never()).lockMemberships(anyLong(), anyLong());
     }
 
     private void invalidMember(Membership membership) {
         when(repository.lockMemberships(748L, 2L)).thenReturn(List.of(membership));
         when(repository.lockAppliedTransfers(748L)).thenReturn(List.of(new Transfer(13L, 6L)));
-        assertThrows(IllegalStateException.class, () -> service.resolveWorkerId(source));
+        assertThrows(IllegalStateException.class, () -> service.resolveWorkerId(748L, 13L, source.notificationManagerId()));
     }
 
     private Membership member(long id) { return new Membership(id, true, true); }

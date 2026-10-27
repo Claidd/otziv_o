@@ -81,11 +81,11 @@ class NextOrderWorkerRoutingMySqlIntegrationTest {
     }
 
     @Test void successfulHistoryAndCurrentMembershipRouteHistoricalWorker() {
-        assertThatThrownBy(() -> service.resolveWorkerId(source())).isInstanceOf(IllegalTransactionStateException.class);
-        long resolved = tx.execute(status -> service.resolveWorkerId(source()));
+        assertThatThrownBy(() -> service.resolveWorkerId(748L, 13L, 2L)).isInstanceOf(IllegalTransactionStateException.class);
+        long resolved = tx.execute(status -> service.resolveWorkerId(748L, 13L, 2L));
         assertThat(resolved).isEqualTo(6L);
         jdbc.update("UPDATE workload_transfer_executions SET status='ROLLED_BACK'");
-        assertThatThrownBy(() -> tx.execute(status -> service.resolveWorkerId(source())))
+        assertThatThrownBy(() -> tx.execute(status -> service.resolveWorkerId(748L, 13L, 2L)))
                 .isInstanceOf(IllegalStateException.class);
     }
 
@@ -101,16 +101,16 @@ class NextOrderWorkerRoutingMySqlIntegrationTest {
                     jdbc.update("INSERT INTO workload_transfer_executions VALUES(8,748,13,6,'APPLIED',NOW(6))");
                 })).get(10, TimeUnit.SECONDS);
             } catch (Exception error) { throw new IllegalStateException(error); }
-            assertThat(service.resolveWorkerId(source())).isEqualTo(6L);
+            assertThat(service.resolveWorkerId(748L, 13L, 2L)).isEqualTo(6L);
         });
     }
 
     @Test void rejectsInactiveAndCrossManagerRecipients() {
         jdbc.update("UPDATE users SET active=0 WHERE id=17");
-        assertThatThrownBy(() -> tx.execute(status -> service.resolveWorkerId(source()))).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> tx.execute(status -> service.resolveWorkerId(748L, 13L, 2L))).isInstanceOf(IllegalStateException.class);
         jdbc.update("UPDATE users SET active=1 WHERE id=17");
         jdbc.update("INSERT INTO managers_users VALUES(17,3)");
-        assertThatThrownBy(() -> tx.execute(status -> service.resolveWorkerId(source()))).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> tx.execute(status -> service.resolveWorkerId(748L, 13L, 2L))).isInstanceOf(IllegalStateException.class);
     }
 
     @Test void concurrentHistoricalRequestsReuseOrderCommittedWhileWaitingForCompanyLock() throws Exception {
@@ -134,7 +134,7 @@ class NextOrderWorkerRoutingMySqlIntegrationTest {
         when(requestService.orderFilialIds(any())).thenReturn(java.util.Set.of());
         when(requestService.findActiveOrdersForFilials(any(), any(), any(), any())).thenAnswer(call ->
                 number("SELECT COUNT(*) FROM orders WHERE order_id=27728") == 0 ? java.util.List.of() : java.util.List.of(created));
-        when(creation.convertToOrderDTOToRepeat(any())).thenReturn(new com.hunt.otziv.p_products.dto.OrderDTO());
+        when(creation.convertToOrderDTOToRepeat(any(), anyLong())).thenReturn(new com.hunt.otziv.p_products.dto.OrderDTO());
         when(creation.createRepeatedOrderWithReviews(any(), any())).thenAnswer(call -> {
             jdbc.update("INSERT INTO orders VALUES(27728,748,6,2,0,NULL,0,1,0)"); return created;
         });
