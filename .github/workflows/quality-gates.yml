@@ -37,6 +37,7 @@ on:
           - c22-mysql
           - c30-mysql
           - c37-mysql
+          - c42-mysql
           - c22-keycloak
           - c22-mc
           - c22-phpmyadmin
@@ -92,6 +93,11 @@ permissions:
   contents: read
   actions: read
   pull-requests: read
+
+env:
+  # Adoptium SemVer for the tested JDK 25.0.4.1+1. setup-java's cached
+  # output can truncate its fourth component to the nonexistent 25.0.4+1.
+  BACKEND_TEST_JAVA_VERSION: "25.0.4+101.0.LTS"
 
 concurrency:
   group: quality-gates-${{ github.event.pull_request.number || github.ref }}-${{ inputs.publish-reviewed-images && 'publication' || 'verification' }}-${{ inputs.publish-reviewed-images && inputs.reviewed-image-set || 'baseline' }}
@@ -410,15 +416,13 @@ jobs:
     timeout-minutes: 10
     outputs:
       reused: ${{ steps.reuse.outputs.reused }}
-      java_version: ${{ steps.java.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
         if: needs.changes.outputs.backend == 'true'
-        id: java
         with:
           distribution: temurin
-          java-version: "25"
+          java-version: ${{ env.BACKEND_TEST_JAVA_VERSION }}
           show-download-progress: true
           cache: maven
           cache-jdk: false
@@ -466,7 +470,7 @@ jobs:
         if: ${{ needs.changes.outputs.backend == 'true' }}
         with:
           distribution: temurin
-          java-version: ${{ needs.backend-reuse.outputs.java_version }}
+          java-version: ${{ env.BACKEND_TEST_JAVA_VERSION }}
           show-download-progress: true
           cache: maven
           cache-jdk: false

@@ -41,13 +41,15 @@ class WorkflowTest(unittest.TestCase):
         scan = next(p for p in parts if 'scan.mjs java ' in p)
         self.assertNotIn('reused', scan)
         java = next(p for p in parts if 'uses: actions/setup-java@' in p)
-        self.assertIn('needs.backend-reuse.outputs.java_version', java)
+        self.assertIn('java-version: ${{ env.BACKEND_TEST_JAVA_VERSION }}', java)
         preparation = ''.join(job('backend-reuse'))
-        # JEP 322 strings such as 26.0.2.1+1 are not setup-java input SemVer.
-        # Use the action's own normalized concrete version, while attesting the
-        # original release file and JDK bytes independently.
-        self.assertIn('java_version: ${{ steps.java.outputs.version }}', preparation)
-        self.assertIn('id: java', preparation)
+        # setup-java's cached version output loses the patch component. Both
+        # stages must resolve the same explicit Adoptium SemVer independently;
+        # installed release/module bytes still decide whether reuse is safe.
+        self.assertIn('java-version: ${{ env.BACKEND_TEST_JAVA_VERSION }}', preparation)
+        self.assertNotIn('steps.java.outputs.version', preparation)
+        workflow = WORKFLOW.read_text(encoding='utf-8')
+        self.assertIn('BACKEND_TEST_JAVA_VERSION: "25.0.4+101.0.LTS"', workflow)
         self.assertIn('show-download-progress: true', preparation)
         aggregate = job('backend')
         self.assertTrue(any('PREPARATION' in p and 'RESULT' in p for p in aggregate))
