@@ -347,6 +347,66 @@ class WorkerCellularAccessServiceTest {
     }
 
     @Test
+    void toriaCanUseOnlyConfirmedTmobRangesOnMobileWithoutRiskOrNativeWifi() {
+        WorkerCellularAccessProperties properties = properties(WorkerCellularAccessProperties.Mode.ENFORCE);
+        WorkerIpIntelligenceClient client = mock(WorkerIpIntelligenceClient.class);
+        when(client.lookup(anyString())).thenReturn(
+                new WorkerIpIntelligenceClient.IpIntelligence(true, false, false, "T-MOB LLC", "ipquery"));
+        WorkerNetworkViolationService violations = mock(WorkerNetworkViolationService.class);
+        WorkerCellularAccessService service = new WorkerCellularAccessService(properties, client, violations);
+
+        authenticateUser("toria", "ROLE_WORKER");
+        for (String address : List.of("178.130.142.1", "178.130.142.254", "178.130.143.1", "178.130.143.254")) {
+            request(address, MOBILE_USER_AGENT);
+            for (String section : WorkerCellularAccessService.PROTECTED_SECTIONS) {
+                assertDoesNotThrow(() -> service.enforceSection(section));
+            }
+        }
+        verifyNoInteractions(violations);
+
+        for (String username : List.of("worker", "vika", "VikVik", "alena", "maks")) {
+            authenticateUser(username, "ROLE_WORKER");
+            request("178.130.143.42", MOBILE_USER_AGENT);
+            assertEquals(403, assertThrows(ResponseStatusException.class,
+                    () -> service.enforceSection("publish")).getStatusCode().value());
+        }
+
+        authenticateUser("toria", "ROLE_WORKER");
+        for (String address : List.of("178.130.141.254", "178.130.144.1", "188.168.153.42")) {
+            request(address, MOBILE_USER_AGENT);
+            assertThrows(ResponseStatusException.class, () -> service.enforceSection("publish"));
+        }
+        request("178.130.142.42", DESKTOP_USER_AGENT);
+        assertThrows(ResponseStatusException.class, () -> service.enforceSection("publish"));
+
+        for (String address : List.of("178.130.142.42", "178.130.143.42")) {
+            MockHttpServletRequest wifi = request(address, MOBILE_USER_AGENT);
+            nativeTelemetry(wifi, "wifi", "false");
+            assertThrows(ResponseStatusException.class, () -> service.enforceSection("publish"));
+            when(client.lookup(address)).thenReturn(
+                    new WorkerIpIntelligenceClient.IpIntelligence(true, false, true, "T-MOB LLC", "ipquery"));
+            request(address, MOBILE_USER_AGENT);
+            ResponseStatusException denied = assertThrows(ResponseStatusException.class,
+                    () -> service.enforceSection("publish"));
+            org.junit.jupiter.api.Assertions.assertTrue(denied.getReason().contains("VPN"));
+        }
+
+        for (String organization : List.of("Another provider", "MTS PJSC", "T2 Mobile LLC")) {
+            when(client.lookup("178.130.142.43")).thenReturn(
+                    new WorkerIpIntelligenceClient.IpIntelligence(true, false, false, organization, "ipquery"));
+            request("178.130.142.43", MOBILE_USER_AGENT);
+            assertThrows(ResponseStatusException.class, () -> service.enforceSection("publish"));
+        }
+        when(client.lookup("178.130.142.44")).thenReturn(
+                new WorkerIpIntelligenceClient.IpIntelligence(false, false, false, "T-MOB LLC", "unavailable"));
+        request("178.130.142.44", MOBILE_USER_AGENT);
+        assertDoesNotThrow(() -> service.enforceSection("publish"));
+        verify(violations).recordViolation(eq("toria"), eq("publish"),
+                eq(WorkerCellularAccessProperties.Mode.ENFORCE), eq("UNKNOWN_NETWORK"),
+                eq("T-MOB LLC"), eq("178.130.142.0/24"), eq("client=web-or-legacy"), eq(false));
+    }
+
+    @Test
     void configuredOctoberCarrierRangesAllowFalseNegativesWithoutAdmittingNeighboursOrVpn() throws Exception {
         java.util.Properties configuration = new java.util.Properties();
         try (var source = getClass().getResourceAsStream("/application.properties")) {

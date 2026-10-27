@@ -37,6 +37,10 @@ public class WorkerCellularAccessService {
     // Keep this exception account-scoped; the neighboring ranges are globally verified separately.
     private static final IpCidrMatcher ALENA_VERIFIED_MEGAFON_RANGE =
             new IpCidrMatcher(List.of("178.177.229.0/24"));
+    // Victoria's confirmed T-Mobile SIM used these two ranges on 2026-10-26/27.
+    // ipquery reports fixed access; keep the override limited to her account.
+    private static final IpCidrMatcher TORIA_VERIFIED_TMOB_RANGES =
+            new IpCidrMatcher(List.of("178.130.142.0/24", "178.130.143.0/24"));
 
     private final WorkerCellularAccessProperties properties;
     private final IpCidrMatcher cidrMatcher;
@@ -112,8 +116,13 @@ public class WorkerCellularAccessService {
                 && intelligence.known()
                 && "PJSC MegaFon".equals(intelligence.organization())
                 && ALENA_VERIFIED_MEGAFON_RANGE.matches(clientIp);
+        boolean accountScopedTmobMatch = "toria".equalsIgnoreCase(authentication.getName())
+                && mobileDevice
+                && intelligence.known()
+                && "T-MOB LLC".equals(intelligence.organization())
+                && TORIA_VERIFIED_TMOB_RANGES.matches(clientIp);
         boolean serverCellularNetwork = !intelligence.risky()
-                && (cidrMatch || intelligence.mobile() || accountScopedMegafonMatch);
+                && (cidrMatch || intelligence.mobile() || accountScopedMegafonMatch || accountScopedTmobMatch);
         String reason = accessReason(mobileDevice, serverCellularNetwork, telemetry, intelligence);
         boolean allowed = REASON_ALLOWED.equals(reason);
         boolean wouldDeny = !allowed && shouldEnforce(reason, telemetry, policy);
@@ -131,7 +140,7 @@ public class WorkerCellularAccessService {
 
         log.info(
                 "Worker cellular access: user={}, scope={}, mode={}, result={}, reason={}, mobileDevice={}, cidrMatch={}, accountScopedMegafonMatch={}, "
-                        + "intelKnown={}, intelMobile={}, intelRisky={}, intelOrg={}, clientTelemetry={}, ipPrefix={}",
+                        + "accountScopedTmobMatch={}, intelKnown={}, intelMobile={}, intelRisky={}, intelOrg={}, clientTelemetry={}, ipPrefix={}",
                 authentication.getName(),
                 normalizeScope(scope),
                 mode,
@@ -140,6 +149,7 @@ public class WorkerCellularAccessService {
                 mobileDevice,
                 cidrMatch,
                 accountScopedMegafonMatch,
+                accountScopedTmobMatch,
                 intelligence.known(),
                 intelligence.mobile(),
                 intelligence.risky(),
