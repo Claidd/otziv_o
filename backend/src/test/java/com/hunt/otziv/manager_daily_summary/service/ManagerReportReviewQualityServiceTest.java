@@ -857,7 +857,7 @@ class ManagerReportReviewQualityServiceTest {
         for (String error : List.of("", "DeepSeek вернул пустой текст, finish_reason=length.")) {
             String answer = "Проверю историю чата и зафиксирую результат в карточке.";
             AiProvider provider = provider("");
-            when(settings.getBoolean("manager.report-review.answer-assessment-thinking", true)).thenReturn(true);
+            when(settings.getBoolean("manager.report-review.answer-assessment-thinking", false)).thenReturn(true);
             when(provider.generate(any())).thenReturn(new AiResponse("", "deepseek", 500, 6000, error),
                     new AiResponse(assessment("SATISFIED", answer, "E1", "PROMISE", "PLAN", "Конкретное действие"), "deepseek", 500, 500));
             var result = service.assessAnswer("Старая отправка без подтверждения.", question(), answer, false);
