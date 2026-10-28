@@ -9,6 +9,11 @@ const BASELINE_PATH = 'infrastructure/runtime-security/reviewed-images.json';
 const C12_PATH = 'infrastructure/runtime-security/reviewed-images-c12-phpmyadmin.json';
 const C12_CONTEXT = 'infrastructure/runtime-security/builds/phpmyadmin-alpine';
 const RELEASE_SETS = Object.freeze({
+  'c43-keycloak': { component: 'keycloak', path: 'infrastructure/runtime-security/reviewed-images-c43-keycloak.json', context: 'infrastructure/runtime-security/builds/c43-keycloak', dockerfile: 'infrastructure/runtime-security/builds/c43-keycloak/Dockerfile' },
+  'c43-tempo': { component: 'tempo', path: 'infrastructure/runtime-security/reviewed-images-c43-tempo.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c43-tempo/Dockerfile' },
+  'c43-loki': { component: 'loki', path: 'infrastructure/runtime-security/reviewed-images-c43-loki.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c43-loki/Dockerfile' },
+  'c43-alloy': { component: 'alloy', path: 'infrastructure/runtime-security/reviewed-images-c43-alloy.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c43-alloy/Dockerfile' },
+  'c43-grafana': { component: 'grafana', path: 'infrastructure/runtime-security/reviewed-images-c43-grafana.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c43-grafana/Dockerfile' },
   'c42-mysql': { component: 'mysql', path: 'infrastructure/runtime-security/reviewed-images-c42-mysql.json', context: 'infrastructure/runtime-security/builds/c42-mysql', dockerfile: 'infrastructure/runtime-security/builds/c42-mysql/Dockerfile' },
   'c41-nginx': { component: 'nginx', path: 'infrastructure/runtime-security/reviewed-images-c41-nginx.json', context: 'infrastructure/runtime-security/builds/c41-nginx', dockerfile: 'infrastructure/runtime-security/builds/c41-nginx/Dockerfile' },
   'c41-phpmyadmin': { component: 'phpmyadmin', path: 'infrastructure/runtime-security/reviewed-images-c41-phpmyadmin.json', context: 'infrastructure/runtime-security/builds/c41-phpmyadmin', dockerfile: 'infrastructure/runtime-security/builds/c41-phpmyadmin/Dockerfile' },

@@ -85,6 +85,11 @@ on:
           - c36-mc
           - c36-minio
           - c36-postgres
+          - c43-tempo
+          - c43-loki
+          - c43-alloy
+          - c43-grafana
+          - c43-keycloak
   pull_request:
   push:
     branches: [main]

@@ -9,6 +9,7 @@ import { adjudicateGrafanaImage } from './grafana-tempo-adjudication.mjs';
 import { adjudicateAlloyImage, adjudicatePostgresImage } from './ssl-refresh.mjs';
 import { adjudicateAlloyC29Image, C29_ALLOY_PROOF_LABEL } from './alloy-c29-adjudication.mjs';
 import { adjudicateAlloyC36Image, C36_ALLOY_PROOF_LABEL } from './alloy-c36-adjudication.mjs';
+import { adjudicateAlloyC43Image, C43_ALLOY_PROOF_LABEL } from './alloy-c43-adjudication.mjs';
 import { adjudicatePostgresGosu } from './postgres-gosu-adjudication.mjs';
 import { adjudicatePostgresC36Image } from './postgres-c36-adjudication.mjs';
 import { combinedScanSummary } from './scan-verdict.mjs';
@@ -100,8 +101,10 @@ export async function scan(kind, source, output, { timeoutMinutes = 20 } = {}) {
     // unresolved vendor findings remain explicit release risks, never implicit exemptions.
     const adjudication = kind === 'image' ? await adjudicateGrafanaImage(report, reportBytes, immutableImageId, scratch) : null;
     const alloyProofLabel = report.Metadata?.ImageConfig?.config?.Labels?.['com.otziv.security.proof'];
-    const alloy = kind === 'image' ? await (alloyProofLabel === C36_ALLOY_PROOF_LABEL
-      ? adjudicateAlloyC36Image(report, reportBytes, immutableImageId, scratch)
+    const alloy = kind === 'image' ? await (alloyProofLabel === C43_ALLOY_PROOF_LABEL
+      ? adjudicateAlloyC43Image(report, reportBytes, immutableImageId, scratch)
+      : alloyProofLabel === C36_ALLOY_PROOF_LABEL
+        ? adjudicateAlloyC36Image(report, reportBytes, immutableImageId, scratch)
       : alloyProofLabel === C29_ALLOY_PROOF_LABEL
         ? adjudicateAlloyC29Image(report, reportBytes, immutableImageId, scratch)
         : adjudicateAlloyImage(report, reportBytes, immutableImageId, scratch)) : null;

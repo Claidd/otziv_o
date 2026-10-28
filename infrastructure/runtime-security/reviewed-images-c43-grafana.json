@@ -1,0 +1,36 @@
+{
+  "schema": "otziv-reviewed-images-v1",
+  "repository": "ghcr.io/claidd/otziv-security",
+  "publicationSet": "c43-grafana",
+  "baselineManifestSha256": "d48bdb7d6d869cde5d6f1a7b089491765e3eeaf46e0b0b6bb51b7719b38d3ef2",
+  "images": [
+    {
+      "component": "grafana",
+      "platform": "linux/amd64",
+      "sourceBeforeRef": "grafana/grafana@sha256:7567a7c70a3c1d75aeeedc968d1304174a16651e55a60d1fb132a05e1e63a054",
+      "defaultReferencesBefore": [
+        {
+          "path": "compose.yaml",
+          "line": 370,
+          "service": "grafana"
+        },
+        {
+          "path": "compose.prod-local.yaml",
+          "line": 819,
+          "service": "grafana"
+        },
+        {
+          "path": "docker-compose.yaml",
+          "line": 986,
+          "service": "grafana"
+        }
+      ],
+      "buildArgs": {},
+      "candidateBaseRef": "ghcr.io/claidd/otziv-security@sha256:fee75a266b5d85e4668da86f4089624f3764dd5df4a6e798f167913cfc5ccfc6",
+      "context": "infrastructure/runtime-security",
+      "dockerfile": "infrastructure/runtime-security/builds/c43-grafana/Dockerfile",
+      "dockerfileSha256": "cb1b651f3af227d61f0143050369e56d5c4e00686c74f21b2287bee6925c17e8",
+      "version": "12.4.10+otziv.5"
+    }
+  ]
+}
