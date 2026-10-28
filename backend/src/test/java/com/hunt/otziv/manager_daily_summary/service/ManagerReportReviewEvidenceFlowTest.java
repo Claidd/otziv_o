@@ -609,15 +609,20 @@ class ManagerReportReviewEvidenceFlowTest {
         verify(issues, never()).markAnswered(any(), anyInt());
     }
 
-    @Test
-    void systemReceiptQuestionIsWithdrawnAndNextBusinessQuestionArrivesWithoutManagerCallback() {
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    void systemReceiptQuestionIsWithdrawnAndNextBusinessQuestionArrivesWithoutManagerCallback(boolean paused) {
         var business = new ManagerReportReviewQualityService.ReviewQuestion("Как разберёте неготовые позиции счёта?",
                 List.of("сверить исходные заказы"), List.of(55L));
         review.setQuestionsJson(quality.questionsJson(List.of(question, business)));
         review.setAnswersJson("[{\"questionIndex\":0,\"answer\":\"Открою карточку.\"}]");
         String original = review.getAnswersJson();
-        review.setAiUnavailableStartedAt(LocalDateTime.now().minusMinutes(2));
-        review.setRecoveryAwaitingContext(true);
+        review.setAiUnavailableStartedAt(paused ? LocalDateTime.now().minusMinutes(2) : null);
+        review.setRecoveryAwaitingContext(paused);
+        review.setDeadlineStartedAt(LocalDateTime.now().minusHours(8));
+        review.setRestrictedAt(LocalDateTime.now().minusHours(5));
+        review.setReminderOneSentAt(LocalDateTime.now().minusHours(7));
+        review.setReminderThreeSentAt(LocalDateTime.now().minusHours(5));
         var next = new ManagerReportReviewIssue();
         next.setQuestionIndex(1);
         when(context.systemOwnsSource(42L, 9L)).thenReturn(true);
@@ -628,7 +633,9 @@ class ManagerReportReviewEvidenceFlowTest {
         when(issues.nextPending(review, 1)).thenReturn(Optional.of(next));
         when(issues.isPending(review, 1)).thenReturn(true);
 
+        LocalDateTime beforeRefresh = LocalDateTime.now();
         service.refreshSystemSourceQuestion(41L);
+        LocalDateTime businessDeadlineStart = review.getDeadlineStartedAt();
         service.refreshSystemSourceQuestion(41L);
 
         assertThat(review.getCurrentQuestionIndex()).isEqualTo(1);
@@ -636,6 +643,13 @@ class ManagerReportReviewEvidenceFlowTest {
         assertThat(review.getCompletedAt()).isNull();
         assertThat(review.getAiUnavailableStartedAt()).isNull();
         assertThat(review.isRecoveryAwaitingContext()).isFalse();
+        assertThat(businessDeadlineStart).isBetween(beforeRefresh, LocalDateTime.now());
+        assertThat(review.getDeadlineStartedAt()).isEqualTo(businessDeadlineStart);
+        assertThat(review.getRestrictedAt()).isNull();
+        assertThat(review.getRestrictionReleasedAt()).isNull();
+        assertThat(review.getReminderOneSentAt()).isNull();
+        assertThat(review.getReminderThreeSentAt()).isNull();
+        assertThat(savedEvents).filteredOn(event -> "SYSTEM_SOURCE_DEADLINE_RESTARTED".equals(event.getEventType())).hasSize(1);
         assertThat(savedEvents).filteredOn(event -> "SYSTEM_SOURCE_QUESTION_WITHDRAWN".equals(event.getEventType())).hasSize(1);
         verify(quality, never()).assessAnswer(anyString(), any(), anyString(), anyBoolean(), any(), anyBoolean());
         verify(issues, never()).markAnswered(any(), anyInt());

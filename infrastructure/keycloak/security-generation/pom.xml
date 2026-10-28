@@ -14,6 +14,12 @@
   </properties>
   <dependencyManagement>
     <dependencies>
+      <!-- Compilation/audit graph only; provider dependencies remain provided. -->
+      <dependency>
+        <groupId>com.google.guava</groupId>
+        <artifactId>guava</artifactId>
+        <version>33.7.2-jre</version>
+      </dependency>
       <dependency>
         <groupId>io.netty</groupId>
         <artifactId>netty-bom</artifactId>
@@ -299,6 +305,13 @@
           <groupId>com.hunt.build</groupId>
           <artifactId>dependency-check-effective-maven-plugin</artifactId>
           <version>1.0.0</version>
+          <dependencies>
+            <dependency>
+              <groupId>com.google.guava</groupId>
+              <artifactId>guava</artifactId>
+              <version>33.7.2-jre</version>
+            </dependency>
+          </dependencies>
         </plugin>
       </plugins>
     </pluginManagement>

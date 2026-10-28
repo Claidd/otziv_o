@@ -709,7 +709,25 @@ public class ManagerReportReviewTelegramService {
         if (issueService.isPending(review, index)) return;
         event(review, "SYSTEM_SOURCE_QUESTION_WITHDRAWN", null, "SYSTEM", "recovery-job",
                 "questionIndex=" + index + "; сверка доставки выполняется системой, ответ менеджера не требуется");
-        aiAvailabilityService.resume(review, LocalDateTime.now(), "source-refresh");
+        LocalDateTime now = LocalDateTime.now();
+        aiAvailabilityService.resume(review, now, "source-refresh");
+        // A withdrawn system question cannot consume the employee's business-answer window.
+        // Clear the old restriction episode; its immutable events remain in the audit history.
+        if (review.getDeadlineStartedAt() != null) {
+            event(review, "SYSTEM_SOURCE_DEADLINE_RESTARTED", null, "SYSTEM", "recovery-job",
+                    "previousDeadlineStartedAt=" + review.getDeadlineStartedAt()
+                            + "; restrictedAt=" + review.getRestrictedAt()
+                            + "; срок начат заново после снятия технического вопроса");
+            review.setDeadlineStartedAt(now);
+            review.setReminderOneSentAt(null);
+            review.setReminderThreeSentAt(null);
+            review.setRestrictedAt(null);
+            review.setRestrictionReleasedAt(null);
+        }
+        review.setRecoveryAttempts(0);
+        review.setRecoveryNextAttemptAt(null);
+        review.setRecoveryAwaitingContext(false);
+        accessPolicy.invalidate(review.getManagerUserId());
         continueFlow(review, review.getManager().getUser(), true);
     }
 

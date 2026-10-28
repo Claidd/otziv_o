@@ -117,7 +117,10 @@
     },
     {
       "coordinate": "com.hunt.build:dependency-check-effective-maven-plugin",
-      "version": "1.0.0"
+      "version": "1.0.0",
+      "dependencies": {
+        "com.google.guava:guava": "33.7.2-jre"
+      }
     }
   ]
 }
