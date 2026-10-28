@@ -2,14 +2,17 @@ package com.hunt.otziv.manager_daily_summary.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -604,6 +607,58 @@ class ManagerReportReviewEvidenceFlowTest {
         assertThat(savedEvents).anyMatch(event -> "AUTO_RECOVERY_EVIDENCE_MISSING".equals(event.getEventType()));
         verify(quality, never()).assessAnswer(anyString(), any(), anyString(), eq(false), any(), eq(false), any());
         verify(issues, never()).markAnswered(any(), anyInt());
+    }
+
+    @Test
+    void systemReceiptQuestionIsWithdrawnAndNextBusinessQuestionArrivesWithoutManagerCallback() {
+        var business = new ManagerReportReviewQualityService.ReviewQuestion("Как разберёте неготовые позиции счёта?",
+                List.of("сверить исходные заказы"), List.of(55L));
+        review.setQuestionsJson(quality.questionsJson(List.of(question, business)));
+        review.setAnswersJson("[{\"questionIndex\":0,\"answer\":\"Открою карточку.\"}]");
+        String original = review.getAnswersJson();
+        review.setAiUnavailableStartedAt(LocalDateTime.now().minusMinutes(2));
+        review.setRecoveryAwaitingContext(true);
+        var next = new ManagerReportReviewIssue();
+        next.setQuestionIndex(1);
+        when(context.systemOwnsSource(42L, 9L)).thenReturn(true);
+        var pending = new java.util.concurrent.atomic.AtomicBoolean(true);
+        when(issues.isPending(review, 0)).thenAnswer(ignored -> pending.get());
+        doAnswer(ignored -> { pending.set(false); return 1; }).when(issues).withdrawResolvedSourceIssues(eq(review), any());
+        when(issues.nextPending(review, 0)).thenReturn(Optional.of(next));
+        when(issues.nextPending(review, 1)).thenReturn(Optional.of(next));
+        when(issues.isPending(review, 1)).thenReturn(true);
+
+        service.refreshSystemSourceQuestion(41L);
+        service.refreshSystemSourceQuestion(41L);
+
+        assertThat(review.getCurrentQuestionIndex()).isEqualTo(1);
+        assertThat(review.getAnswersJson()).isEqualTo(original);
+        assertThat(review.getCompletedAt()).isNull();
+        assertThat(review.getAiUnavailableStartedAt()).isNull();
+        assertThat(review.isRecoveryAwaitingContext()).isFalse();
+        assertThat(savedEvents).filteredOn(event -> "SYSTEM_SOURCE_QUESTION_WITHDRAWN".equals(event.getEventType())).hasSize(1);
+        verify(quality, never()).assessAnswer(anyString(), any(), anyString(), anyBoolean(), any(), anyBoolean());
+        verify(issues, never()).markAnswered(any(), anyInt());
+        verify(telegram, times(1)).sendMessageWithInlineKeyboardMessageId(eq(700L), contains(business.question()), eq("HTML"), any());
+    }
+
+    @Test
+    void generatedAuditExcludesSystemOnlySourcesWhileKeepingInvoiceAndMixedQuestions() {
+        var invoice = new ManagerReportReviewQualityService.ReviewQuestion("Что сделаете по счёту?", List.of("проверить позиции"), List.of(55L));
+        var mixed = new ManagerReportReviewQualityService.ReviewQuestion("Что зависит от вас?", List.of("своё действие"), List.of(42L, 55L));
+        review.setQuestionsJson("[]");
+        review.setQuestionsSource("PENDING_AI");
+        review.setAiUnavailableStartedAt(LocalDateTime.now().minusMinutes(2));
+        when(context.systemOwnsSource(42L, 9L)).thenReturn(true);
+        when(context.refresh(anyString(), eq(9L))).thenReturn("Источники вопросов");
+        doReturn(true).when(quality).aiAvailable();
+        doReturn(new ManagerReportReviewQualityService.QuestionGeneration(List.of(question, invoice, mixed), true, ""))
+                .when(quality).generateQuestions(anyString(), anyInt());
+
+        service.recoverAutomatically(41L);
+
+        assertThat(quality.readQuestions(review.getQuestionsJson())).containsExactly(invoice, mixed);
+        assertThat(review.getCompletedAt()).isNull();
     }
 
     @Test

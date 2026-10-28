@@ -211,6 +211,7 @@ class ManagerControlServiceTest {
     @Mock
     private CommonBillingService commonBillingService;
     private ManagerControlInvoiceDiagnostics invoiceDiagnostics;
+    private ManagerControlDailySnapshotWorkflow dailySnapshotWorkflow;
     private ManagerControlInvoiceRepairWorkflow invoiceRepairWorkflow;
     @Mock
     private OrderPublicationApprovalService publicationApprovalService;
@@ -286,6 +287,7 @@ class ManagerControlServiceTest {
     var concreteSnapshot = new ManagerControlConcreteSnapshotWorkflow(mock(com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosticsService.class), problemExamples, cardLifecycle, slaPolicy, concretePresenter, dailyControlConcreteItemRepository, mock(ManagerControlOrderDeliveryState.class));
     var dayLifecycle = new ManagerControlDayLifecycle(problemExamples, accessPolicy, cardLifecycle, qualityQueries, dailyControlRepository, dailyControlItemRepository, dailyControlConcreteItemRepository);
     var dailySnapshot = new ManagerControlDailySnapshotWorkflow(dayLifecycle, problemExamples, cardLifecycle, slaPolicy, workerTaskLookup, workerExplanationQueries, orderAutomationDiagnostics, orderService, clientChatMessageTrackerService, badReviewTaskService, reviewRecoveryTaskService, reviewService, reviewRepository, orderRepository, companyRepository, invoiceDiagnostics, managerAutomationFailureService, riskIncidentRepository, dailyControlRepository, dailyControlItemRepository, dailyControlConcreteItemRepository, managerActionBalanceService, managerOperationalMetricsService, leadsRepository);
+    dailySnapshotWorkflow = dailySnapshot;
     var boardWorkflow = new ManagerControlBoardWorkflow(dailySnapshot, dayLifecycle, concreteSnapshot, problemExamples, accessPolicy, cardLifecycle, workerExplanationQueries, qualityQueries, managerRepository, managerPermissionService, scheduledClientMessageService, dailyControlRepository, dailyControlItemRepository, managerPerformanceService, org.mockito.Mockito.mock(ManagerControlReadSnapshots.class), org.mockito.Mockito.mock(com.hunt.otziv.u_users.api.CabinetCacheScope.class));
     var dayActions = new ManagerControlDayActions(boardWorkflow, dayLifecycle, problemExamples, accessPolicy, cardLifecycle, dailyControlRepository, dailyControlItemRepository);
     var reminderWorkflow = new ManagerControlReminderWorkflow(dailySnapshot, dayLifecycle, problemExamples, accessPolicy, cardLifecycle, clientMessageText, managerRepository, userRepository, personalReminderService, telegramService, dailyControlRepository, dailyControlItemRepository);
@@ -323,6 +325,38 @@ class ManagerControlServiceTest {
     ReflectionTestUtils.setField(service, "maxGroupLinkService", maxGroupLinkService);
 }
 
+
+    @Test
+    void deliveryReconciliationIsVisibleAsSystemWorkWithoutManagerCriticalAction() {
+        Manager manager = Manager.builder().id(7L).user(User.builder().id(13L).username("manager").active(true).build()).build();
+        var issue = mock(ManagerAutomationFailureService.AutomationFailureIssue.class);
+        when(managerAutomationFailureService.issues(manager, 10_000)).thenReturn(List.of(issue));
+        when(managerAutomationFailureService.systemOwnsIssue(issue)).thenReturn(true);
+
+        var system = dailySnapshotWorkflow.managerControl(manager, LocalDate.now(), null, false, false);
+        var card = system.problems().stream().filter(p -> "AUTOMATION_FAILURES".equals(p.code())).findFirst().orElseThrow();
+        assertEquals("WORKLOAD", card.group());
+        assertEquals("INFO", card.severity());
+        assertEquals(1, card.count());
+        assertEquals(0, system.criticalCount());
+        assertEquals(1, system.workloadCount());
+        assertEquals("GREEN", system.status());
+        var inputs = dailySnapshotWorkflow.controlItemInputs(system.problems(), List.of());
+        assertEquals(1, inputs.size());
+        assertEquals(ManagerDailyControlGroup.WORKLOAD, inputs.getFirst().group());
+        var pendingReceipt = new ManagerDailyControlItem();
+        pendingReceipt.setGroup(ManagerDailyControlGroup.WORKLOAD);
+        pendingReceipt.setReasonCode("AUTOMATION_FAILURES");
+        pendingReceipt.setStatus(ManagerDailyControlItemStatus.OPEN);
+        assertEquals(List.of(pendingReceipt), dailySnapshotWorkflow.activeControlItems(List.of(pendingReceipt)));
+        assertEquals(ManagerDailyControlItemStatus.OPEN, pendingReceipt.getStatus());
+
+        when(managerAutomationFailureService.systemOwnsIssue(issue)).thenReturn(false);
+        var managerAction = dailySnapshotWorkflow.managerControl(manager, LocalDate.now(), null, false, false);
+        assertEquals(1, managerAction.criticalCount());
+        assertEquals("ACTION", managerAction.problems().stream().filter(p -> "AUTOMATION_FAILURES".equals(p.code())).findFirst().orElseThrow().group());
+        assertEquals("RED", managerAction.status());
+    }
 
     @Test
     void managerCannotReadAnotherManagersHistoryOrExplanationReport() {

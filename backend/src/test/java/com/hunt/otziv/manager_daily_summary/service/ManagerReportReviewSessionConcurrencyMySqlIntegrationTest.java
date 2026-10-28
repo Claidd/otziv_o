@@ -275,6 +275,18 @@ class ManagerReportReviewSessionConcurrencyMySqlIntegrationTest {
     }
 
     @Test
+    void sourceRefreshFindsWaitingContextAndNormalPendingAuditsButNeverTestOrCompletedOnes() {
+        assertThat(sessions.findSourceRefreshCandidates(0)).containsExactly(id);
+        assertThat(sessions.findSourceRefreshCandidates(id)).isEmpty();
+        jdbc.update("UPDATE manager_report_review_sessions SET recovery_awaiting_context=1 WHERE review_id=?", id);
+        assertThat(sessions.findSourceRefreshCandidates(0)).containsExactly(id);
+        jdbc.update("UPDATE manager_report_review_sessions SET test_mode=1 WHERE review_id=?", id);
+        assertThat(sessions.findSourceRefreshCandidates(0)).isEmpty();
+        jdbc.update("UPDATE manager_report_review_sessions SET test_mode=0,status='COMPLETED',completed_at=? WHERE review_id=?", now, id);
+        assertThat(sessions.findSourceRefreshCandidates(0)).isEmpty();
+    }
+
+    @Test
     void deliveredContextQuestionWaitsForNewAnswerWithoutRepeatedClaimsAndRemainsUnrestricted() {
         availability.pause(current(), now.minusMinutes(2), "test", "missing source");
         jdbc.update("UPDATE manager_report_review_sessions SET recovery_awaiting_context=1 WHERE review_id=?", id);

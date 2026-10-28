@@ -71,6 +71,26 @@ class ManagerAutomationFailureServiceTest {
     }
 
     @Test
+    @org.mockito.junit.jupiter.MockitoSettings(strictness = org.mockito.quality.Strictness.LENIENT)
+    void onlyStandaloneUncertainDeliveryIsSystemWorkWhileInvoiceObligationsRemainActionable() {
+        var issue = org.mockito.Mockito.mock(ManagerAutomationFailureService.AutomationFailureIssue.class);
+        when(issue.entityType()).thenReturn(ManagerAutomationFailureService.ENTITY_AUTOMATION_FAILURE);
+        when(issue.stateId()).thenReturn(11L);
+        when(issue.commonInvoiceId()).thenReturn(null);
+        var state = state(11L, 100L, ClientMessageScenario.PAYMENT_REMINDER, 0);
+        state.setDeliveryStatus("UNKNOWN");
+        state.setLastErrorCode("state_transaction_outcome_uncertain");
+        when(stateRepository.findById(11L)).thenReturn(Optional.of(state));
+        assertTrue(service.systemOwnsIssue(issue));
+        when(issue.commonInvoiceId()).thenReturn(115L);
+        assertFalse(service.systemOwnsIssue(issue));
+        when(issue.commonInvoiceId()).thenReturn(null);
+        state.setDeliveryStatus(null);
+        state.setLastErrorCode("payment_instruction_failed");
+        assertFalse(service.systemOwnsIssue(issue));
+    }
+
+    @Test
     void exposesPaymentFailureForOwningManager() {
         Manager manager = Manager.builder().id(7L).build();
         Company company = Company.builder().id(20L).title("Калибр").manager(manager).urlChat("https://chat.example").build();

@@ -96,6 +96,10 @@ public class ManagerReportReviewQualityService {
             Не требуй дословного совпадения с критерием, отдельного повторения компании или чисел,
             если связь однозначна. Длина, скорость, опечатки, стиль и копирование сами по себе
             ничего не доказывают. Общая отписка без ответа на вопрос означает MISSING.
+            Название кнопки, раздела или технической команды не является паролем для зачёта.
+            Конкретная проверка той же отправки по истории и журналу с фиксацией результата
+            смыслово равнозначна запуску проверки в карточке. Не требуй буквального названия
+            кнопки «Проверить отправку», если менеджер описал это действие своими словами.
             conditionCriterionIndexes — старые описательные критерии, уже полностью данные
             в условии вопроса. Это привязка ответа к случаю, НЕ задание пересказать условие.
             Для них проверь, что ответ относится к этому случаю и не противоречит ему; цитируй
@@ -106,6 +110,10 @@ public class ManagerReportReviewQualityService {
             На будущий вопрос «что сверите/сделаете» конкретный план достаточен. Не требуй уже
             выполненной работы, срока или эскалации, если вопрос и содержательные критерии их
             не требуют. Общего «разберусь» недостаточно: нужны объект проверки и действие.
+            «Открою карточку», «проверю историю», «сверю статус» — будущие намерения PROMISE/PLAN.
+            Никогда не помечай такую цитату COMPLETED_ACTION и не запрашивай доказательство
+            того, что обещанное действие уже выполнено. Слова из условия вопроса не добавляют
+            в цитату менеджера утверждение о выполнении.
             На вопрос о уже выполненном действии обещание будущего действия не отвечает: не выводи
             из обещания косвенное признание невыполнения. Нужен факт действия или прямое признание,
             что действие ещё не выполнено. Один PROMISE не подтверждает такой критерий.
@@ -497,6 +505,13 @@ public class ManagerReportReviewQualityService {
             }
             if (checksKnownContradiction) status = ClaimStatus.CONTRADICTED;
             else if (checksUnknownOutcome) status = ClaimStatus.UNVERIFIABLE;
+            // A narrowly quoted future intention cannot be evidence of a completed action.
+            // Keep mixed factual statements and all structured fact checks subject to verification.
+            if ((kind == ClaimKind.COMPLETED_ACTION || kind == ClaimKind.FACT)
+                    && status == ClaimStatus.UNVERIFIABLE && checks.isEmpty() && futureIntentionOnly(quote)) {
+                kind = ClaimKind.PROMISE;
+                status = ClaimStatus.PLAN;
+            }
             if (kind == ClaimKind.RETRACTION) require(checks.isEmpty(), ProtocolViolation.RETRACTION_FACT_CHECKS);
             // A narrowly scoped judgement of the author's wording is not an external event.
             // Do not let it turn actionable missing criteria into an indefinite data pause.
@@ -671,6 +686,13 @@ public class ManagerReportReviewQualityService {
 
     private boolean containsFutureAction(String answer) {
         return normalize(answer).matches("(?U).*\\b(проверю|сверю|уточню|напишу|отправлю|передам|открою|исправлю|попрошу|сделаю|буду)\\b.*");
+    }
+
+    private boolean futureIntentionOnly(String quote) {
+        String value = normalize(quote);
+        return value.matches("(?U)(?:я )?(?:открою|проверю|сверю|уточню|зафиксирую|попрошу|передам|исправлю|напишу)\\b[^.!?;,:\\n]*[.!?]?")
+                && !value.matches("(?U).*\\b(?:уже|вчера|ранее|оплачен\\p{L}*|доставлен\\p{L}*|отправлен\\p{L}*|"
+                + "выполнен\\p{L}*|подтвержден\\p{L}*|проверил\\p{L}*|получил\\p{L}*|сделал\\p{L}*)\\b.*");
     }
 
     private FeedbackTopic feedbackTopic(String expectedPoint) {

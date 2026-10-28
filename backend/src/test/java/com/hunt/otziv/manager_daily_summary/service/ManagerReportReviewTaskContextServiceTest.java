@@ -80,6 +80,19 @@ class ManagerReportReviewTaskContextServiceTest {
     }
 
     @Test
+    void onlyAnOwnedAutomationSourceCanBeExcludedAsSystemWork() {
+        var item = source(3545L, ManagerDailyControlItemStatus.OPEN);
+        item.setEntityType("AUTOMATION_FAILURE");
+        when(concreteRepository.findById(3545L)).thenReturn(Optional.of(item));
+        when(diagnostics.systemOwnsDeliveryReconciliation(3545L)).thenReturn(true);
+        assertThat(service.systemOwnsSource(3545L, 9L)).isTrue();
+        assertThat(service.systemOwnsSource(3545L, 10L)).isFalse();
+        item.setEntityType("COMMON_INVOICE");
+        assertThat(service.systemOwnsSource(3545L, 9L)).isFalse();
+        assertThat(service.systemOwnsSource(999L, 9L)).isFalse();
+    }
+
+    @Test
     void deferredCardDoesNotWithdrawAuditQuestion() {
         ManagerDailyControlConcreteItem source = source(3545L, ManagerDailyControlItemStatus.DEFERRED);
         when(concreteRepository.findById(3545L)).thenReturn(Optional.of(source));

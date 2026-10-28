@@ -179,6 +179,8 @@ public class ManagerControlDailySnapshotWorkflow {
         List<ManagerAutomationFailureService.AutomationFailureIssue> automationFailures = managerAutomationFailureService.issues(manager, 10_000);
         Set<Long> automationInvoiceIds = automationFailures.stream().map(ManagerAutomationFailureService.AutomationFailureIssue::commonInvoiceId).filter(Objects::nonNull).collect(Collectors.toSet());
         long automationFailureCount = automationFailures.size();
+        boolean onlySystemReconciliation = !automationFailures.isEmpty()
+                && automationFailures.stream().allMatch(managerAutomationFailureService::systemOwnsIssue);
         long commonInvoiceActionCount = invoiceDiagnostics.countActions(manager, automationInvoiceIds);
         long publicationDateIssueCount = reviewRepository.countPublicationDateIssuesByManager(manager);
         long chatBindingIssueCount = companyRepository.countChatBindingIssuesByManager(manager);
@@ -192,7 +194,9 @@ public class ManagerControlDailySnapshotWorkflow {
         addProblem(problems, "OVERDUE_ORDERS", "Просроченные заказы", overdueOrders, "CRITICAL", "ACTION", "schedule", ordersUrl(manager, null));
         addProblem(problems, "OPEN_RISKS", "Риски", openRisks, "CRITICAL", "ACTION", "warning", "/worker/risk");
         addProblem(problems, "REQUIRES_ATTENTION", "Требует внимания", requiresAttention, "CRITICAL", "ACTION", "error", ordersUrl(manager, "Требует внимания"));
-        addProblem(problems, "AUTOMATION_FAILURES", "Ошибки счетов и сообщений", automationFailureCount, "CRITICAL", "ACTION", "sync_problem", "/admin/manager-control/" + manager.getId());
+        addProblem(problems, "AUTOMATION_FAILURES", onlySystemReconciliation ? "Доставка: проверяет система" : "Ошибки счетов и сообщений",
+                automationFailureCount, onlySystemReconciliation ? "INFO" : "CRITICAL",
+                onlySystemReconciliation ? "WORKLOAD" : "ACTION", "sync_problem", "/admin/manager-control/" + manager.getId());
         addProblem(problems, "COMMON_INVOICES", "Общие счета", commonInvoiceActionCount, "CRITICAL", "ACTION", "receipt_long", "/admin/common-billing");
         addProblem(problems, "PAYMENT_INTEGRITY", "Повторная оплата", paymentIntegrityIssueCount, "CRITICAL", "ACTION", "payments", ordersUrl(manager, null));
         addProblem(problems, "PUBLICATION_DATE_ISSUES", "Публикация без даты", publicationDateIssueCount, "CRITICAL", "ACTION", "event_busy", ordersUrl(manager, "Публикация"));
@@ -205,9 +209,9 @@ public class ManagerControlDailySnapshotWorkflow {
         addProblem(problems, "LEADS_WORKLOAD", "Лиды в работе", leadsInWork, "INFO", "WORKLOAD", "groups", "/leads");
         addProblem(problems, "WORKER_WORKLOAD", "Нагрузка специалистов", workerWorkloadCount, "INFO", "WORKLOAD", "engineering", firstWorkerSectionUrl(workerCounts.sections(), "WORKLOAD", "new"));
         List<ManagerControlSectionResponse> sections = workerCounts.sections();
-        long criticalCount = overdueOrders + openRisks + requiresAttention + automationFailureCount + commonInvoiceActionCount + paymentIntegrityIssueCount + publicationDateIssueCount + chatBindingIssueCount + telegramChatIssueCount + unansweredClientMessages + suspiciousClientClosures + workerActionCount;
+        long criticalCount = overdueOrders + openRisks + requiresAttention + (onlySystemReconciliation ? 0 : automationFailureCount) + commonInvoiceActionCount + paymentIntegrityIssueCount + publicationDateIssueCount + chatBindingIssueCount + telegramChatIssueCount + unansweredClientMessages + suspiciousClientClosures + workerActionCount;
         long warningCount = leadActionCount;
-        long workloadCount = orderAttention + workerWorkloadCount + leadsInWork;
+        long workloadCount = orderAttention + workerWorkloadCount + leadsInWork + (onlySystemReconciliation ? automationFailureCount : 0);
         DailyControlSyncResult controlSync = persist ? syncDailyControl(manager, today, problems, sections, overdueStatuses) : readDailyControl(manager, today);
         problems = problems.stream().map(problem -> decorate(problem, controlSync.itemsByKey().get(problemKey(problem.code())))).toList();
         sections = sections.stream().map(section -> decorate(section, controlSync.itemsByKey().get(workerSectionKey(section.code())))).toList();
@@ -388,7 +392,8 @@ public class ManagerControlDailySnapshotWorkflow {
             if (problem.count() <= 0) {
                 continue;
             }
-            if (parseGroup(problem.group()) == ManagerDailyControlGroup.WORKLOAD) {
+            if (parseGroup(problem.group()) == ManagerDailyControlGroup.WORKLOAD
+                    && !"AUTOMATION_FAILURES".equals(problem.code())) {
                 continue;
             }
             inputs.add(new ControlItemInput(problemKey(problem.code()), ManagerDailyControlItemType.PROBLEM, null, null, null, problem.code(), problem.label(), problem.targetUrl(), problem.count(), parseSeverity(problem.severity()), parseGroup(problem.group())));
