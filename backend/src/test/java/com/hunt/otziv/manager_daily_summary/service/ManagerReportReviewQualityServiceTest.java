@@ -831,15 +831,31 @@ class ManagerReportReviewQualityServiceTest {
     }
 
     @Test
-    void mismatchedQuoteCannotBeReassignedToAnotherHistoricalAnswer() throws Exception {
+    void ambiguousQuoteCannotBeReassignedToAnotherHistoricalAnswer() throws Exception {
         String previous = "Сверю историю отправки.";
         var root = new ObjectMapper().readTree(assessment("SATISFIED", previous, "E1", "PROMISE", "PLAN", "Прежнее действие"));
-        ((com.fasterxml.jackson.databind.node.ObjectNode) root.path("criteria").get(0)).put("answerAttempt", 1);
+        ((com.fasterxml.jackson.databind.node.ObjectNode) root.path("criteria").get(0)).put("answerAttempt", 0);
         provider(root.toString());
         var result = service.assessAnswer("Отправка требует сверки.", question(), "Уточню получателя сообщения.", false,
-                List.of(previous, "Проверю карточку компании."), false);
+                List.of("Проверю карточку компании.", previous, previous), false);
         assertThat(result.decision()).isEqualTo(ManagerReportReviewQualityService.Decision.UNAVAILABLE);
         assertThat(result.reason()).contains("ANSWER_QUOTE_MISMATCH");
+    }
+
+    @Test
+    void uniqueHistoricalQuoteKeepsItsRealAttemptWhenModelMiscountsSimilarSupplements() throws Exception {
+        String previous="Просмотрю историю отправки, статус доставки и подтверждение от получателя.";
+        String current="Зафиксирую итог сверки.";
+        var mapper=new ObjectMapper();var root=mapper.readTree(assessment("SATISFIED",previous,"E1","PROMISE","PLAN","Есть конкретная проверка"));
+        var claim=(com.fasterxml.jackson.databind.node.ObjectNode) root.path("claims").get(0).deepCopy();
+        claim.put("answerAttempt",3).put("answerQuote",current);
+        ((com.fasterxml.jackson.databind.node.ArrayNode) root.path("claims")).add(claim);
+        provider(root.toString());
+        var result=service.assessAnswer("Исходная отправка доступна.",question(),current,false,
+                List.of("Открою карточку.",previous,"Уточню результат."),false);
+        assertThat(result.accepted()).isTrue();
+        assertThat(result.criteria().getFirst().answerAttempt()).isEqualTo(1);
+        assertThat(result.claims().getLast().answerAttempt()).isEqualTo(3);
     }
 
     @Test
@@ -1215,6 +1231,144 @@ class ManagerReportReviewQualityServiceTest {
         assertThat(request.getValue().thinkingEnabled()).isFalse();
         assertThat(request.getValue().reasoningEffort()).isNull();
         assertThat(request.getValue().jsonObject()).isTrue();
+    }
+
+    @Test
+    void supplementRetainsPreviouslySatisfiedCriterionWithFreshEvidenceAndOriginalQuote() throws Exception {
+        var question = new ManagerReportReviewQualityService.ReviewQuestion("Как проверите отправку?",
+                List.of("конкретное действие", "способ проверки результата"));
+        String first = "Проверю историю существующей отправки.";
+        String supplement = "Результат сверю по статусу исходной операции.";
+        String history = partialHistory(question, first);
+        var previous = service.previousAcceptedContext(history, 0);
+        String missing = cumulativeResponse(false, first, supplement);
+        String complete = cumulativeResponse(true, first, supplement);
+        AiProvider provider = provider(missing);
+        when(provider.generate(any())).thenReturn(new AiResponse(missing,"deepseek",100,100),
+                new AiResponse(complete,"deepseek",100,100));
+
+        var result = service.assessAnswer("История исходной отправки доступна.", question, supplement, false, previous, false);
+
+        assertThat(result.accepted()).isTrue();
+        assertThat(result.criteria().getFirst().answerQuote()).isEqualTo(first);
+        assertThat(result.criteria().getFirst().answerAttempt()).isZero();
+        ArgumentCaptor<AiRequest> calls = ArgumentCaptor.forClass(AiRequest.class);
+        verify(provider,times(2)).generate(calls.capture());
+        var request = new ObjectMapper().readTree(calls.getAllValues().getFirst().userPrompt());
+        assertThat(request.path("previouslySatisfiedCriteria").size()).isEqualTo(1);
+        assertThat(request.path("previouslySatisfiedCriteria").get(0).path("answerQuote").asText()).isEqualTo(first);
+        assertThat(calls.getAllValues().getLast().userPrompt()).contains("CUMULATIVE_CRITERION_OMITTED");
+        assertThat(service.previousAcceptedContext(history,0)).containsExactly(first);
+    }
+
+    @Test
+    void repeatedLossOfPartialCreditIsTechnicalFailureInsteadOfAnEmployeeRejection() throws Exception {
+        var question = new ManagerReportReviewQualityService.ReviewQuestion("Как проверите отправку?",
+                List.of("конкретное действие", "способ проверки результата"));
+        String first = "Проверю историю существующей отправки.";
+        String supplement = "Результат сверю по статусу исходной операции.";
+        provider(cumulativeResponse(false,first,supplement));
+        var result = service.assessAnswer("История доступна.",question,supplement,false,
+                service.previousAcceptedContext(partialHistory(question,first),0),false);
+        assertThat(result.decision()).isEqualTo(ManagerReportReviewQualityService.Decision.UNAVAILABLE);
+        assertThat(result.reason()).contains("CUMULATIVE_CRITERION_OMITTED");
+        assertThat(result.safeManagerFeedback()).doesNotContain("неправильный", "CUMULATIVE");
+    }
+
+    @Test
+    void historyFromDifferentQuestionCannotPinAChangedRubric() throws Exception {
+        var old = new ManagerReportReviewQualityService.ReviewQuestion("Другой вопрос",List.of("действие"));
+        String answer = "Проверю переписку.";
+        provider(assessment("MISSING",answer,"E1","PROMISE","PLAN","Нет ответа на новый вопрос"));
+        var result = service.assessAnswer("Источник доступен.",question(),answer,false,
+                service.previousAcceptedContext(partialHistory(old,"Открою журнал."),0),false);
+        assertThat(result.decision()).isEqualTo(ManagerReportReviewQualityService.Decision.NEEDS_CLARIFICATION);
+    }
+
+    @Test
+    void futureSuccessConditionIsNotAClaimThatDeliveryAlreadySucceeded() {
+        String answer="Я пойму, что выбранное действие помогло, когда в каждой карточке будет подтвержден результат ранее выполненной отправки, появится подтверждение доставки";
+        provider(assessment("SATISFIED",answer,"E1","FACT","UNVERIFIABLE","Условие будущего результата"));
+        var result=service.assessAnswer("Исходная доставка UNKNOWN.",question(),answer,false);
+        assertThat(result.accepted()).isTrue();
+        assertThat(result.claims().getFirst().kind()).isEqualTo(ManagerReportReviewQualityService.ClaimKind.HYPOTHESIS);
+        provider(assessment("SATISFIED",answer+" Деньги уже пришли.","E1","FACT","UNVERIFIABLE","Смешанное утверждение"));
+        assertThat(service.assessAnswer("Оплата не подтверждена.",question(),answer+" Деньги уже пришли.",false).accepted()).isFalse();
+    }
+
+    @Test
+    void historicalDeliveryRubricAcceptsEquivalentActionWithoutHiddenButtonOrOperationIdWords() throws Exception {
+        String answer="Открою историю существующей отправки и сверю подтверждение результата без нового сообщения.";
+        var question=new ManagerReportReviewQualityService.ReviewQuestion("Как проверите отправку?",List.of(
+                "Проверить автоматизацию через кнопку со значком ключа",
+                "Сверить сохранённый operation ID с историей чата без новой отправки"));
+        var mapper=new ObjectMapper();var response=mapper.readTree(assessment("SATISFIED",answer,"E1","PROMISE","PLAN","Проверка"));
+        var second=response.path("criteria").get(0).deepCopy();
+        ((com.fasterxml.jackson.databind.node.ObjectNode) second).put("criterionIndex",1);
+        ((com.fasterxml.jackson.databind.node.ArrayNode) response.path("criteria")).add(second);
+        AiProvider provider=provider(response.toString());
+        assertThat(service.assessAnswer("Исходная отправка доступна.",question,answer,false).accepted()).isTrue();
+        var request=ArgumentCaptor.forClass(AiRequest.class);verify(provider).generate(request.capture());
+        var rubric=mapper.readTree(request.getValue().userPrompt()).path("expectedPoints");
+        assertThat(rubric.get(0).asText()).doesNotContain("кнопку");
+        assertThat(rubric.get(1).asText()).contains("внутренний ID читает система");
+        assertThat(question.expectedPoints().getFirst()).contains("кнопку");
+    }
+
+    @Test
+    void nextStepWithoutAnExplicitDeadlineDoesNotInventARequiredCommitment() {
+        String answer="Проверю историю существующей отправки и зафиксирую результат.";
+        var question=new ManagerReportReviewQualityService.ReviewQuestion("Что сделаете?",
+                List.of("Зафиксировать подтверждённый результат или обоснованный следующий шаг"),List.of(42L));
+        provider(assessment("SATISFIED",answer,"E1","PROMISE","PLAN","План достаточен"));
+        assertThat(service.assessAnswer(invoiceEvidence("COLLECTING",2),question,answer,false).accepted()).isTrue();
+        var timed=new ManagerReportReviewQualityService.ReviewQuestion("Когда проверите?",
+                List.of("план и срок проверки"),List.of(42L));
+        provider(assessment("SATISFIED",answer,"E1","PROMISE","PLAN","Срока нет"));
+        assertThat(service.assessAnswer(invoiceEvidence("COLLECTING",2),timed,answer,false).missingPoints()).contains("commitment:missing");
+    }
+
+    @Test
+    void explicitRetractionCanRemovePriorCreditAndItDoesNotReappearOnLaterSupplements() throws Exception {
+        var question=new ManagerReportReviewQualityService.ReviewQuestion("Как проверите?",List.of("действие"));
+        String first="Проверю историю.";String retract="Я отзываю предыдущий ответ.";
+        var mapper=new ObjectMapper();var response=(com.fasterxml.jackson.databind.node.ObjectNode) mapper.readTree(
+                assessment("MISSING",retract,"E1","RETRACTION","UNVERIFIABLE","Ответ отозван"));
+        ((com.fasterxml.jackson.databind.node.ObjectNode) response.path("claims").get(0)).put("answerAttempt",1);
+        provider(response.toString());
+        String history=partialHistory(question,first);
+        var removed=service.assessAnswer("Источник доступен.",question,retract,false,service.previousAcceptedContext(history,0),false);
+        assertThat(removed.decision()).isEqualTo(ManagerReportReviewQualityService.Decision.NEEDS_CLARIFICATION);
+        history=service.appendAnswer(history,new ManagerReportReviewQualityService.ReviewAnswer(0,question.question(),retract,
+                false,0,removed.reason(),"deepseek",removed,null));
+        String supplement="Уточню другой способ.";
+        provider(assessment("MISSING",supplement,"E1","PROMISE","PLAN","Пока нет ответа"));
+        assertThat(service.assessAnswer("Источник доступен.",question,supplement,false,
+                service.previousAcceptedContext(history,0),false).decision()).isEqualTo(ManagerReportReviewQualityService.Decision.NEEDS_CLARIFICATION);
+    }
+
+    private String partialHistory(ManagerReportReviewQualityService.ReviewQuestion question, String answer) {
+        var criterion = new ManagerReportReviewQualityService.CriterionAssessment(0,
+                ManagerReportReviewQualityService.CriterionStatus.SATISFIED,0,answer,List.of("E1"),"Зачтено",
+                ManagerReportReviewQualityService.FeedbackTopic.ACTION);
+        var partial = new ManagerReportReviewQualityService.Assessment(false,50,"Нужно дополнить проверку","","deepseek",
+                List.of("criterion:1:MISSING"),false,"",ManagerReportReviewQualityService.Decision.NEEDS_CLARIFICATION,
+                List.of(criterion),List.of(),List.of());
+        return service.appendAnswer(null,new ManagerReportReviewQualityService.ReviewAnswer(0,question.question(),answer,
+                false,50,partial.reason(),"deepseek",partial,null));
+    }
+
+    private String cumulativeResponse(boolean retains, String oldQuote, String supplement) throws Exception {
+        var mapper = new ObjectMapper();
+        var root = mapper.readTree(assessment("SATISFIED",supplement,"E1","PROMISE","PLAN","Проверка ответа целиком"));
+        var criteria = (com.fasterxml.jackson.databind.node.ArrayNode) root.path("criteria");
+        var current = criteria.get(0).deepCopy();
+        ((com.fasterxml.jackson.databind.node.ObjectNode) current).put("criterionIndex",1).put("answerAttempt",1);
+        var old = (com.fasterxml.jackson.databind.node.ObjectNode) criteria.get(0);
+        old.put("status",retains ? "SATISFIED":"MISSING").put("answerQuote",retains ? oldQuote:"").put("answerAttempt",0);
+        criteria.add(current);
+        ((com.fasterxml.jackson.databind.node.ObjectNode) root.path("claims").get(0)).put("answerAttempt",1);
+        return root.toString();
     }
 
     private String incidentAssessment(boolean missingConditions, String claimStatus) throws Exception {

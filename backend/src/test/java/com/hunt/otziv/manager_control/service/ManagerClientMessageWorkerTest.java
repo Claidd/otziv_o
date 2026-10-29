@@ -28,7 +28,7 @@ class ManagerClientMessageWorkerTest {
     private final ManagerClientMessageQueue.Command command = new ManagerClientMessageQueue.Command("op", 7L, "CONTROL", "snapshot",
             new DeferredUserAuthority.Actor(3L, "fixture", 1, Set.of("ROLE_MANAGER")));
     private final ManagerClientMessageWorker worker = new ManagerClientMessageWorker(queue, control, reply, delivery, actors, policy,
-            new ManagerControlTransactionRunner());
+            new ManagerControlTransactionRunner(), mock(ManagerControlObsoleteContactSettlement.class));
 
     @BeforeEach void setup() {
         when(queue.snapshot("op")).thenReturn(command);

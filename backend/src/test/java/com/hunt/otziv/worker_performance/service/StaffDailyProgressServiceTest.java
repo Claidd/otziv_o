@@ -806,7 +806,9 @@ class StaffDailyProgressServiceTest {
         NamedParameterJdbcTemplate localJdbc = mock(NamedParameterJdbcTemplate.class);
         AppSettingService settings = mock(AppSettingService.class);
         when(settings.getBoolean(AppSettingService.WORKER_PROGRESS_ENABLED, true)).thenReturn(true);
-        when(localJdbc.queryForList(anyString(), any(MapSqlParameterSource.class))).thenReturn(List.of());
+        when(localJdbc.queryForList(anyString(), any(MapSqlParameterSource.class))).thenAnswer(call ->
+                ((String) call.getArgument(0)).contains("AS work_item_key FROM orders")
+                        ? List.of(Map.of("work_item_key", "order:903")) : List.of());
         StaffDailyProgressService localService = new StaffDailyProgressService(
                 localJdbc,
                 settings,

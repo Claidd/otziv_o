@@ -224,7 +224,7 @@ class ManagerControlClientSendMySqlIntegrationTest {
         workflow = proxy(new ManagerControlClientSendWorkflow(proxy(new ManagerControlTransactionRunner()), cards,
                 controls, orders, orderService, sender, queue, actors, payments, access, lifecycle, texts, presenter, deliveryState));
         worker = proxy(new ManagerClientMessageWorker(queue, workflow, mock(ManagerControlClientReplyWorkflow.class), sender,
-                actors, () -> true, proxy(new ManagerControlTransactionRunner())));
+                actors, () -> true, proxy(new ManagerControlTransactionRunner()), mock(ManagerControlObsoleteContactSettlement.class)));
         assertThat(AopUtils.isAopProxy(workflow)).isTrue();
     }
 

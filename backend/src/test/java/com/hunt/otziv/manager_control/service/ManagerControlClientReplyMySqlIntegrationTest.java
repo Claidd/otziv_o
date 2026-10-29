@@ -455,7 +455,7 @@ class ManagerControlClientReplyMySqlIntegrationTest {
     private void restartWorkflow() { workflow = proxy(new ManagerControlClientReplyWorkflow(proxy(new ManagerControlTransactionRunner()), cards,
             controls, sources, operations, sender, queue, actors, whatsapp, tracker, access, lifecycle, presenter));
         worker = proxy(new ManagerClientMessageWorker(queue, mock(ManagerControlClientSendWorkflow.class), workflow, sender,
-                actors, () -> true, proxy(new ManagerControlTransactionRunner())));
+                actors, () -> true, proxy(new ManagerControlTransactionRunner()), mock(ManagerControlObsoleteContactSettlement.class)));
     }
     private String state() { return jdbc.queryForObject("SELECT state FROM manager_client_reply_operations WHERE operation_token=?", String.class, token.get()); }
     private String sourceStatus() { return jdbc.queryForObject("SELECT status FROM mc_reply_source", String.class); }

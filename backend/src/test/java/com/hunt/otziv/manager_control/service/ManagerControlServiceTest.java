@@ -315,7 +315,7 @@ class ManagerControlServiceTest {
 
     ReflectionTestUtils.setField(service, "problemExamples", problemExamples);
     deliveryWorker = new ManagerClientMessageWorker(deliveryQueue, clientSendWorkflow, clientReplyWorkflow, clientChatMessageSender,
-            deliveryActors, () -> true, managerControlTransactionRunner);
+            deliveryActors, () -> true, managerControlTransactionRunner, mock(ManagerControlObsoleteContactSettlement.class));
     ReflectionTestUtils.setField(service, "clientSendWorkflow", clientSendWorkflow);
     ReflectionTestUtils.setField(service, "clientReplyWorkflow", clientReplyWorkflow);
     ReflectionTestUtils.setField(service, "clientConversationWorkflow", clientConversationWorkflow);

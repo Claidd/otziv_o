@@ -1742,18 +1742,22 @@ public class StaffDailyProgressService {
         if (workerIds == null || workerIds.isEmpty()) {
             return;
         }
+        // Lifecycle upserts hold FK locks on workers. An UPDATE JOIN also locks
+        // orders, reversing the order -> worker locks used by task actions.
+        // Read source identities without locking, then mutate only our own keys.
+        // A concurrent change of the wait flag is reconciled on the next pass.
+        var keys = jdbc.queryForList("""
+                SELECT CONCAT('order:', order_id) AS work_item_key FROM orders
+                WHERE order_worker IN (:workerIds) AND order_waiting_for_client = TRUE
+                ORDER BY order_id
+                """, new MapSqlParameterSource("workerIds", workerIds)).stream()
+                .map(row -> String.valueOf(row.get("work_item_key"))).toList();
+        if (keys.isEmpty()) return;
         jdbc.update("""
-                UPDATE worker_work_item_lifecycle lifecycle
-                JOIN orders orders_waiting
-                  ON lifecycle.item_type = 'order'
-                 AND lifecycle.item_id = orders_waiting.order_id
-                SET lifecycle.active = 0,
-                    lifecycle.overdue = 0,
-                    lifecycle.excluded = 1,
-                    lifecycle.exclusion_reason = 'waiting_for_client'
-                WHERE orders_waiting.order_worker IN (:workerIds)
-                  AND orders_waiting.order_waiting_for_client = TRUE
-                """, new MapSqlParameterSource("workerIds", workerIds));
+                UPDATE worker_work_item_lifecycle
+                SET active = 0, overdue = 0, excluded = 1, exclusion_reason = 'waiting_for_client'
+                WHERE work_item_key IN (:keys)
+                """, new MapSqlParameterSource("keys", keys));
     }
 
     private MapSqlParameterSource lifecycleParams(

@@ -120,7 +120,8 @@ public class PaymentSuccessNotificationDeliveryService {
             return false;
         }
 
-        if (result != null && result.sent()) {
+        if (result != null && result.sent() && result.messageId() != null
+                && !result.messageId().isBlank() && result.messageId().length() <= 512) {
             final boolean finalized;
             try {
                 finalized = claimService.markSucceeded(claim);
