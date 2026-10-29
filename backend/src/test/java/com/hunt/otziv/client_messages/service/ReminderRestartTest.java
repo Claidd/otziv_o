@@ -234,7 +234,7 @@ class ReminderRestartTest {
         assertThat(state.getNextAttemptAt()).isEqualTo(next);
         assertThat(order.getPayDay()).isNull(); assertThat(order.isComplete()).isFalse();
         verify(jdbcTemplate).update(contains("INSERT INTO client_reminder_restart_audit"), eq("repair:old-operation"),
-                eq("old-operation"), eq("owner"), eq("periodic_next_cycle_scheduled_unknown_preserved"), eq(1L), eq(next), eq(30L));
+                eq("old-operation"), eq("owner"), eq("periodic_next_cycle_scheduled_unknown_preserved"), eq(2L), eq(1L), eq(next), eq(30L));
         verify(messageSender).recordedOutcome("old-operation");
         verify(messageSender).hasSettledUncertainOperation("old-operation");
         verifyNoMoreInteractions(messageSender);
@@ -295,6 +295,36 @@ class ReminderRestartTest {
         assertThat(state.getDispatchGeneration()).isZero();
         verifyNoInteractions(jdbcTemplate);
         verify(stateRepository, never()).save(any());
+    }
+
+    @Test void olderFrozenLineageCanOnlyResumeAnIndependentFutureOccurrenceInTheSameCycle() {
+        state.setDeliveryChannel("MAX");
+        order.setClientMessageGeneration(3);
+        source = new OrderDeliveryControlContext.Snapshot(77L, 2L, "На проверке", 3, order.getStatusChangedAt(), false, null);
+        when(orderDeliveryContext.read(77L)).thenReturn(Optional.of(source));
+        when(orderDeliveryContext.lock(77L)).thenReturn(Optional.of(source));
+        when(messageSender.recordedOutcome("old-operation")).thenReturn(ClientMessageSendResult.failed("operation_unknown", "unknown"));
+        when(messageSender.hasSettledUncertainOperation("old-operation")).thenReturn(true);
+        assertThat(service.checkStaleReminderRestart(30, 2L)).isEmpty();
+        var deferred = service.checkDeferredReminderRestart(30, 2L).orElseThrow();
+        assertThat(deferred.source().order().generation()).isEqualTo(3);
+        var next = service.restartDeferredReminder(deferred, null, "owner");
+        assertThat(next).isAfterOrEqualTo(LocalDateTime.now().plusDays(2).withNano(0));
+        assertThat(state.getDispatchGeneration()).isEqualTo(1);
+        assertThat(order.getClientMessageGeneration()).isEqualTo(3);
+        assertThat(state.getSentCount()).isEqualTo(11);
+        verify(messageSender, never()).recoverRecordedOutcomeFromChat(anyString(), any());
+    }
+
+    @ParameterizedTest @ValueSource(strings = {"older-current-lineage", "different-cycle"})
+    void aNewerFrozenLineageOrAnotherCycleCannotBeAdoptedAsAFutureReminder(String change) {
+        state.setDeliveryChannel("MAX");
+        var altered = new OrderDeliveryControlContext.Snapshot(77L, 2L, "На проверке",
+                "older-current-lineage".equals(change) ? 1 : 2,
+                "different-cycle".equals(change) ? LocalDateTime.now() : order.getStatusChangedAt(), false, null);
+        when(orderDeliveryContext.read(77L)).thenReturn(Optional.of(altered));
+        assertThat(service.checkDeferredReminderRestart(30, 2L)).isEmpty();
+        verifyNoInteractions(messageSender, jdbcTemplate);
     }
 
     private void reservedReminder() {

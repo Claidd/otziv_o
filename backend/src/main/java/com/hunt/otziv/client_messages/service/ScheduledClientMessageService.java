@@ -534,8 +534,11 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
                 || !Objects.equals(prepared.token(), state.getDeliveryToken())
                 || !Objects.equals(prepared.targetKey(), state.getTargetKey()) || !hasText(prepared.operationId())
                 || !Objects.equals(prepared.orderId(), order.orderId())
-                || prepared.orderGeneration() != order.generation()
+                || prepared.orderGeneration() > order.generation()
+                || !Objects.equals(state.getTargetKey(), "order:" + order.orderId() + ":" + order.cycleAt().withNano(0))
                 || !Objects.equals(prepared.orderStatus(), order.status())) return Optional.empty();
+        // An older lineage may fence the old send, but cannot prevent an independent future occurrence
+        // in this same order/status cycle. The current lineage is frozen in the check and locked again on write.
         var receipt = messageSender.recordedOutcome(prepared.operationId());
         // Positive receipts and known failures retain their ordinary finalization/retry path.
         if (receipt == null || receipt.sent() || ClientMessageDelivery.isKnownUnsent(receipt)
@@ -695,11 +698,12 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
                 SELECT ?, 'SCHEDULED', state_id, ?, ?, ?,
                   JSON_OBJECT('deliveryStatus',delivery_status,'envelope',delivery_envelope,'token',delivery_token,
                     'preparedAt',delivery_prepared_at,'errorCode',last_error_code,'sentCount',sent_count,
-                    'lastSuccessAt',last_success_at,'generation',dispatch_generation,'channel',delivery_channel), ?, ?
+                    'lastSuccessAt',last_success_at,'generation',dispatch_generation,'channel',delivery_channel,
+                    'currentOrderGeneration',?), ?, ?
                 FROM scheduled_client_message_state WHERE state_id=?
                 """, "repair:" + check.delivery().operationId(), check.delivery().operationId(), actor,
                 deferred ? "periodic_next_cycle_scheduled_unknown_preserved" : "periodic_reminder_restarted_after_history_check",
-                generation, next, state.getId());
+                current.generation(), generation, next, state.getId());
         clearDeliveryPreparation(state);
         state.setDispatchGeneration(generation);
         state.setConsecutiveFailures(0);

@@ -66,11 +66,11 @@ class DeferredReminderRestartMySqlIntegrationTest {
                 """);
         String migration = Files.readString(Path.of("src/main/resources/db/migration/V1_10_341__authorized_reminder_restart.sql"));
         jdbc.execute(migration.substring(migration.indexOf("CREATE TABLE")));
-        var order = new Order(); order.setId(77L); order.setStatusChangedAt(cycle); order.setClientMessageGeneration(2);
+        var order = new Order(); order.setId(77L); order.setStatusChangedAt(cycle); order.setClientMessageGeneration(3);
         var manager = new Manager(); manager.setId(2L); manager.setClientId("fixture-client"); order.setManager(manager);
         var company = new Company(); company.setId(7L); company.setGroupId("fixture-chat"); order.setCompany(company);
         var status = new OrderStatus(); status.setTitle("На проверке"); order.setStatus(status); order.setStatusChangedAt(cycle);
-        var source = new OrderDeliveryControlContext.Snapshot(77L, 2L, "На проверке", 2, cycle, false, null);
+        var source = new OrderDeliveryControlContext.Snapshot(77L, 2L, "На проверке", 3, cycle, false, null);
         var prepared = new ScheduledClientMessageService.PreparedScheduledDelivery(30L, ClientMessageScenario.REVIEW_CHECK_REMINDER,
                 target, 77L, "token", "old-operation", null, "fixture-client", "fixture-chat", "text", null, 2,
                 null, null, 2, "На проверке", null, List.of());
@@ -130,6 +130,7 @@ class DeferredReminderRestartMySqlIntegrationTest {
         assertThatThrownBy(() -> tx.execute(s -> service.restartDeferredReminder(checked, null, "owner")));
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM client_reminder_restart_audit", Integer.class)).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT JSON_UNQUOTE(JSON_EXTRACT(previous_snapshot,'$.deliveryStatus')) FROM client_reminder_restart_audit", String.class)).isEqualTo("UNKNOWN");
+        assertThat(jdbc.queryForObject("SELECT JSON_EXTRACT(previous_snapshot,'$.currentOrderGeneration') FROM client_reminder_restart_audit", Integer.class)).isEqualTo(3);
         assertThat(jdbc.queryForObject("SELECT JSON_UNQUOTE(JSON_EXTRACT(previous_snapshot,'$.envelope')) FROM client_reminder_restart_audit", String.class)).isEqualTo(checked.source().envelope());
         assertThat(read(false).getNextAttemptAt()).isEqualTo(next);
         verify(sender, never()).deliverWithOperationId(any(), anyString(), anyString(), anyString(), any(), anyString());
