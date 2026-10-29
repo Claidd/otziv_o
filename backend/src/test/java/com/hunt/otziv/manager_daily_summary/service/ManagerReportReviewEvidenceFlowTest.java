@@ -610,8 +610,8 @@ class ManagerReportReviewEvidenceFlowTest {
     }
 
     @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
-    void systemReceiptQuestionIsWithdrawnAndNextBusinessQuestionArrivesWithoutManagerCallback(boolean paused) {
+    @org.junit.jupiter.params.provider.CsvSource({"false,false","true,false","false,true","true,true"})
+    void systemReceiptQuestionIsWithdrawnAndNextBusinessQuestionArrivesWithoutManagerCallback(boolean paused, boolean resolved) {
         var business = new ManagerReportReviewQualityService.ReviewQuestion("Как разберёте неготовые позиции счёта?",
                 List.of("сверить исходные заказы"), List.of(55L));
         review.setQuestionsJson(quality.questionsJson(List.of(question, business)));
@@ -625,7 +625,8 @@ class ManagerReportReviewEvidenceFlowTest {
         review.setReminderThreeSentAt(LocalDateTime.now().minusHours(5));
         var next = new ManagerReportReviewIssue();
         next.setQuestionIndex(1);
-        when(context.systemOwnsSource(42L, 9L)).thenReturn(true);
+        when(context.systemOwnsSource(42L, 9L)).thenReturn(!resolved);
+        when(context.resolvedSatisfactorily(42L)).thenReturn(resolved);
         var pending = new java.util.concurrent.atomic.AtomicBoolean(true);
         when(issues.isPending(review, 0)).thenAnswer(ignored -> pending.get());
         doAnswer(ignored -> { pending.set(false); return 1; }).when(issues).withdrawResolvedSourceIssues(eq(review), any());

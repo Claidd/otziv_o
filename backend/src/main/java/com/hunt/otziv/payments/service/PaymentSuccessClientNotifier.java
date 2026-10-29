@@ -52,8 +52,14 @@ public class PaymentSuccessClientNotifier {
         if (link.getId() == null) {
             return ClientMessageSendResult.failed("payment_link_missing", "Платёжная операция ещё не сохранена");
         }
-        return messageSender.sendWithOperationId(company, clientId, groupId,
+        var result = messageSender.sendWithOperationId(company, clientId, groupId,
                 buildMessage(link, order, company), null, "payment-success:" + link.getId());
+        if (result != null && result.sent() && result.messageId() != null && !result.messageId().isBlank()) return result;
+        if (ClientChatMessageSender.isKnownUnsent(result)) return result;
+        // A retry must also search the original frozen operation's history.
+        // UNKNOWN never authorizes a replacement ID, route or second message.
+        var recovered = messageSender.recoverRecordedOutcomeFromChat("payment-success:" + link.getId(), link.getPaidAt());
+        return recovered == null ? ClientMessageSendResult.failed("operation_unknown", "Результат уведомления об оплате пока не подтверждён") : recovered;
     }
 
     private String buildMessage(PaymentLink link, Order order, Company company) {

@@ -704,11 +704,12 @@ public class ManagerReportReviewTelegramService {
         int index = review.getCurrentQuestionIndex();
         if (index < 0 || index >= questions.size() || !issueService.isPending(review, index)) return;
         var sources = questions.get(index).sourceTaskIds();
-        if (sources.isEmpty() || !sources.stream().allMatch(id -> taskContextService.systemOwnsSource(id, review.managerId()))) return;
+        if (sources.isEmpty() || !sources.stream().allMatch(id -> taskContextService.resolvedSatisfactorily(id)
+                || taskContextService.systemOwnsSource(id, review.managerId()))) return;
         issueService.withdrawResolvedSourceIssues(review, questions);
         if (issueService.isPending(review, index)) return;
         event(review, "SYSTEM_SOURCE_QUESTION_WITHDRAWN", null, "SYSTEM", "recovery-job",
-                "questionIndex=" + index + "; сверка доставки выполняется системой, ответ менеджера не требуется");
+                "questionIndex=" + index + "; связанные задачи закрыты или находятся в системной сверке, ответ менеджера не требуется");
         LocalDateTime now = LocalDateTime.now();
         aiAvailabilityService.resume(review, now, "source-refresh");
         // A withdrawn system question cannot consume the employee's business-answer window.

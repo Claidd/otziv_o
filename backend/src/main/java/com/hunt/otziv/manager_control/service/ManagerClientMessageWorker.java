@@ -26,6 +26,7 @@ public class ManagerClientMessageWorker {
     private final DeferredUserAuthority actors;
     private final OutboundMessagePolicy policy;
     private final ManagerControlTransactionRunner transactions;
+    private final ManagerControlObsoleteContactSettlement obsoleteContacts;
 
     @Scheduled(fixedDelay = 5000, scheduler = "managerClientMessageScheduler")
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -76,6 +77,10 @@ public class ManagerClientMessageWorker {
                 result = "CONTROL".equals(command.kind()) ? control.dispatchQueued(command) : reply.dispatchQueued(command);
             } catch (RuntimeException uncertain) { holdUnknown(claim, command, "sender_exception"); return; }
         } else {
+            try { if (obsoleteContacts.retire(claim, command)) return; }
+            catch (RuntimeException held) {
+                log.warn("Obsolete manager contact retained: errorType={}", held.getClass().getSimpleName());
+            }
             try {
                 result = delivery.recordedOutcome(claim.operationId());
                 if (!"SENT".equals(claim.previousState()) && (result == null || !result.sent())) {

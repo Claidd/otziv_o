@@ -52,7 +52,7 @@ class PaymentSuccessNotificationDeliveryServiceTest {
         PaymentSuccessNotificationRetryClaimService.Claim claim = claim();
         when(claimService.tryClaim(LINK_ID)).thenReturn(Optional.of(claim));
         when(paymentLinkRepository.findByIdWithOrder(LINK_ID)).thenReturn(Optional.of(link));
-        when(notifier.notifySuccess(link)).thenReturn(ClientMessageSendResult.sent("Telegram"));
+        when(notifier.notifySuccess(link)).thenReturn(ClientMessageSendResult.sent("Telegram", "provider-receipt"));
         when(claimService.markSucceeded(claim)).thenReturn(true);
 
         assertThat(service.tryDeliver(LINK_ID)).isTrue();
@@ -90,7 +90,7 @@ class PaymentSuccessNotificationDeliveryServiceTest {
         PaymentSuccessNotificationRetryClaimService.Claim claim = claim();
         when(claimService.tryClaim(LINK_ID)).thenReturn(Optional.of(claim));
         when(paymentLinkRepository.findByIdWithOrder(LINK_ID)).thenReturn(Optional.of(link));
-        when(notifier.notifySuccess(link)).thenReturn(ClientMessageSendResult.sent("MAX"));
+        when(notifier.notifySuccess(link)).thenReturn(ClientMessageSendResult.sent("MAX", "provider-receipt"));
         when(claimService.markSucceeded(claim)).thenReturn(false);
 
         assertThat(service.tryDeliver(LINK_ID)).isFalse();
@@ -98,6 +98,18 @@ class PaymentSuccessNotificationDeliveryServiceTest {
         verify(claimService).markSucceeded(claim);
         verify(claimService, never()).markFailed(claim, "notification_delivery_failed");
         assertThat(link.getPaymentSuccessNotifiedAt()).isNull();
+    }
+
+    @Test
+    void transportSuccessWithoutAReceiptCannotMarkTheClientNotified() {
+        var claim = claim(); var link = link();
+        when(claimService.tryClaim(LINK_ID)).thenReturn(Optional.of(claim));
+        when(paymentLinkRepository.findByIdWithOrder(LINK_ID)).thenReturn(Optional.of(link));
+        when(notifier.notifySuccess(link)).thenReturn(ClientMessageSendResult.sent("WhatsApp"));
+        assertThat(service.tryDeliver(LINK_ID)).isFalse();
+        verify(claimService,never()).markSucceeded(claim);
+        assertThat(link.getPaymentSuccessNotifiedAt()).isNull();
+        assertThat(link.isPaymentSuccessNotificationRetryEligible()).isTrue();
     }
 
     @Test

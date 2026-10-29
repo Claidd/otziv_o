@@ -227,6 +227,30 @@ public class ManagerClientMessageQueue implements com.hunt.otziv.client_messages
 
     /** Retire bookkeeping only. Preserve proof, original timestamps, and every business/card field. */
     @Transactional(propagation = Propagation.MANDATORY)
+    boolean retireObsoleteUnknown(Claim claim, com.hunt.otziv.p_products.api.OrderDeliveryControlContext.Snapshot source) {
+        if (claim.mayDispatch() || !List.of("UNKNOWN", "SENDING").contains(claim.previousState())) return false;
+        int saved = jdbc.update("""
+                INSERT INTO manager_client_message_retirements(operation_id,card_id,reason,previous_snapshot,current_source_snapshot)
+                SELECT operation_id,card_id,'source_cycle_changed_unknown_preserved',
+                  JSON_OBJECT('state','UNKNOWN','error',error_code,'attempts',attempts,'createdAt',created_at,
+                    'lastCheckedAt',updated_at,'envelopeCiphertext',envelope_ciphertext),
+                  JSON_OBJECT('orderId',?,'managerId',?,'status',?,'generation',?,'cycleAt',?)
+                FROM manager_client_message_queue WHERE operation_id=? AND claim_token=?
+                  AND command_kind='CONTROL' AND state IN ('UNKNOWN','SENDING')
+                  AND lease_until>CURRENT_TIMESTAMP(6) AND created_at<=DATE_SUB(CURRENT_TIMESTAMP(6),INTERVAL 2 DAY)
+                """, source.orderId(),source.managerId(),source.status(),source.generation(),source.cycleAt().toString(),
+                claim.operationId(),claim.token());
+        if (saved == 0) return false;
+        int changed = jdbc.update("""
+                UPDATE manager_client_message_queue SET state='SUPERSEDED',error_code='source_cycle_changed_unknown_preserved',
+                  claim_token=NULL,lease_until=NULL WHERE operation_id=? AND claim_token=? AND state IN ('UNKNOWN','SENDING')
+                """, claim.operationId(),claim.token());
+        if (changed != 1) throw new IllegalStateException("Obsolete contact claim changed");
+        return true;
+    }
+
+    /** Retire bookkeeping only. Preserve proof, original timestamps, and every business/card field. */
+    @Transactional(propagation = Propagation.MANDATORY)
     void settleSuperseded(Claim claim) {
         settleConfirmed(claim, "superseded_by_confirmed_contact");
     }
