@@ -151,3 +151,13 @@ infrastructure/runtime-security/proofs/c43-keycloak/inspection/inspection.json w
 infrastructure/runtime-security/adjudications/grafana-tempo-c43/** -text
 infrastructure/runtime-security/reviewed-images-c44-grafana.json text eol=lf
 infrastructure/runtime-security/builds/c44-grafana/** text eol=lf
+
+infrastructure/runtime-security/builds/c45-keycloak/Dockerfile text eol=lf
+infrastructure/runtime-security/reviewed-images-c45-keycloak.json text eol=lf
+
+infrastructure/runtime-security/c45-brotli-package.json text eol=lf
+infrastructure/runtime-security/brotli-c45-inspection.py -text
+infrastructure/runtime-security/brotli-c45-rehearsal.py -text
+
+infrastructure/runtime-security/c45-parent-keycloak.json text eol=lf
+infrastructure/runtime-security/proofs/c45-keycloak/** -text

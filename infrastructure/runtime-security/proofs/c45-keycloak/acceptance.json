@@ -1,0 +1,26 @@
+{
+  "schema": "otziv-keycloak-brotli-c45-acceptance-v1",
+  "result": "PASS",
+  "component": "keycloak",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:6c6f398170954330c03dc2c16db1b96c5ebf2cb29546fe59542b6dcc7b60ee5e",
+  "imageConfigId": "sha256:ba4b2b070f6b58a0f74725860b143e722372a556002e28079654ce2be44048b3",
+  "parentReference": "ghcr.io/claidd/otziv-security@sha256:6df30e829eec786f9f7b51f56a5e0c10451e96b4ff086157129c649df80632f1",
+  "parentConfigId": "sha256:8ff19b507872c8b27b444184c93bae61a2835ed889b410324e7436923d57c240",
+  "commit": "0e45d5b4d5628e72b1f4e4d97f35618cc29f78f5",
+  "run": "40803539182",
+  "attempt": "1",
+  "package": {
+    "name": "libbrotli1",
+    "version": "1.0.9-2ubuntu0.1",
+    "sha256": "908295e77a65219a62114c3c79690a3c99712274d1317c3ba47ffa2f8ea52ca5"
+  },
+  "files": {
+    "infrastructure/runtime-security/proofs/c45-keycloak/inspection/inspection.json": "0ec827a847bd3e4ae3baa214b8db3a6ecca7d1dd38a54bf3e82266b5acf513d6",
+    "infrastructure/runtime-security/proofs/c45-keycloak/inspection/runtime.json.gz": "f628a9b94f5a7d1c324e88ec55d1a6087ccc963462a13ae8a947d5575880bf6a",
+    "infrastructure/runtime-security/proofs/c45-keycloak/rehearsal/capture.json": "8aa6ffd2594240867d23e5a5e5d5eb0bf3f0b3509d0f9abd39cab58f34901c90",
+    "infrastructure/runtime-security/proofs/c45-keycloak/rehearsal/replay.json": "1141ef04980bd8156608ee44066d753e5b8542914514382cad306f3a8fed1a00",
+    "infrastructure/runtime-security/proofs/c45-keycloak/executed-inspection.py.txt": "115429ceb9f9fba524f49ec0daeeb00174ad59eeaf1ac353cfefda4348a5d514",
+    "infrastructure/runtime-security/proofs/c45-keycloak/executed-runtime-inventory.py.txt": "4969ebbd33456ba2fa10e377d2ff6877dca7651334c33536ca03362f83af1e1d",
+    "infrastructure/runtime-security/proofs/c45-keycloak/executed-rehearsal.py.txt": "c22dad16fe3b9983a449f911c78b284a57b1d874709443e102e665e30d122327"
+  }
+}

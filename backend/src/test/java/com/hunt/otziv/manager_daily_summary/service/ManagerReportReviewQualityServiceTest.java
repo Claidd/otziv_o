@@ -803,6 +803,82 @@ class ManagerReportReviewQualityServiceTest {
     }
 
     @Test
+    void repeatedCurrentAnswerQuoteRecoversFromMiscountedAttemptWithoutAnotherProviderCall() throws Exception {
+        String answer = "Сверю результат существующей отправки в чате и зафиксирую его в карточке.";
+        var root = new ObjectMapper().readTree(assessment("SATISFIED", answer, "E1", "PROMISE", "PLAN", "Есть проверяемое действие"));
+        ((com.fasterxml.jackson.databind.node.ObjectNode) root.path("criteria").get(0)).put("answerAttempt", 7);
+        ((com.fasterxml.jackson.databind.node.ObjectNode) root.path("claims").get(0)).put("answerAttempt", 7);
+        AiProvider provider = provider(root.toString());
+        var result = service.assessAnswer("Отправка требует сверки.", question(), answer, false,
+                List.of("Попытка 0", "Попытка 1", "Попытка 2", "Попытка 3", "Попытка 4", "Попытка 5",
+                        answer, "Уточняю прежний ответ."), false);
+        assertThat(result.accepted()).isTrue();
+        assertThat(result.criteria().getFirst().answerAttempt()).isEqualTo(8);
+        assertThat(result.claims().getFirst().answerAttempt()).isEqualTo(8);
+        ArgumentCaptor<AiRequest> request = ArgumentCaptor.forClass(AiRequest.class);
+        verify(provider).generate(request.capture());
+        assertThat(new ObjectMapper().readTree(request.getValue().userPrompt()).path("managerAnswerAttempt").asInt()).isEqualTo(8);
+    }
+
+    @Test
+    void validHistoricalQuoteCannotSubstituteForCurrentAnswer() {
+        String previous = "Сверю историю отправки.";
+        String answer = previous + " Зафиксирую итог сверки в карточке.";
+        provider(assessment("SATISFIED", previous, "E1", "PROMISE", "PLAN", "Прежнее действие"));
+        var result = service.assessAnswer("Отправка требует сверки.", question(), answer, false, List.of(previous), false);
+        assertThat(result.decision()).isEqualTo(ManagerReportReviewQualityService.Decision.UNAVAILABLE);
+        assertThat(result.reason()).contains("CURRENT_ANSWER_REQUIRED");
+    }
+
+    @Test
+    void mismatchedQuoteCannotBeReassignedToAnotherHistoricalAnswer() throws Exception {
+        String previous = "Сверю историю отправки.";
+        var root = new ObjectMapper().readTree(assessment("SATISFIED", previous, "E1", "PROMISE", "PLAN", "Прежнее действие"));
+        ((com.fasterxml.jackson.databind.node.ObjectNode) root.path("criteria").get(0)).put("answerAttempt", 1);
+        provider(root.toString());
+        var result = service.assessAnswer("Отправка требует сверки.", question(), "Уточню получателя сообщения.", false,
+                List.of(previous, "Проверю карточку компании."), false);
+        assertThat(result.decision()).isEqualTo(ManagerReportReviewQualityService.Decision.UNAVAILABLE);
+        assertThat(result.reason()).contains("ANSWER_QUOTE_MISMATCH");
+    }
+
+    @Test
+    void correctedQuoteIndexDoesNotProveAnUnknownCompletedAction() {
+        String answer = "Я уже отправила сообщение.";
+        provider(assessment("UNVERIFIABLE", answer, "E1", "COMPLETED_ACTION", "UNVERIFIABLE", "Нет подтверждения доставки"));
+        var result = service.assessAnswer("Результат отправки не подтверждён.", question(), answer, false,
+                List.of("Проверю историю чата."), false);
+        assertThat(result.decision()).isEqualTo(ManagerReportReviewQualityService.Decision.NEEDS_CONTEXT);
+        assertThat(result.claims().getFirst().answerAttempt()).isEqualTo(1);
+        assertThat(result.claims().getFirst().status()).isEqualTo(ManagerReportReviewQualityService.ClaimStatus.UNVERIFIABLE);
+    }
+
+    @Test
+    void commitmentQuoteRecoveryRequiresDeadlineAndVerificationInTheSameAnswer() throws Exception {
+        String previous = "Проверю счёт через час и сверю статус.";
+        for (boolean includeDeadline : List.of(true, false)) {
+            String answer = includeDeadline ? previous + " Итог сохраню в карточке." : "Проверю счёт и сверю статус.";
+            var root = (com.fasterxml.jackson.databind.node.ObjectNode) new ObjectMapper().readTree(
+                    assessment("SATISFIED", answer, "E1", "PROMISE", "PLAN", "Есть план"));
+            root.putArray("commitments").addObject().put("sourceTaskId", 42)
+                    .put("action", "Проверить счёт").put("owner", "менеджер")
+                    .put("dueAt", java.time.OffsetDateTime.now().plusHours(1).toString()).put("verification", "Сверить статус")
+                    .put("answerAttempt", 0).put("answerQuote", answer).put("deadlineQuote", "через час")
+                    .put("verificationQuote", "сверю статус").putArray("dependencies");
+            provider(root.toString());
+            var result = service.assessAnswer(invoiceEvidence("COLLECTING", 2), sourceQuestion(), answer, false,
+                    List.of(previous), false);
+            if (includeDeadline) {
+                assertThat(result.accepted()).isTrue();
+                assertThat(result.commitments()).hasSize(1);
+            } else {
+                assertThat(result.decision()).isEqualTo(ManagerReportReviewQualityService.Decision.UNAVAILABLE);
+                assertThat(result.reason()).contains("ANSWER_QUOTE_MISMATCH");
+            }
+        }
+    }
+
+    @Test
     void protocolRetryGetsExactSafeCodeWithoutPreviousModelBodyAndRetainsAllOriginalEvidence() throws Exception {
         ObjectMapper mapper = new ObjectMapper();
         String answer = "Employee-private-text: проверю переписку.";

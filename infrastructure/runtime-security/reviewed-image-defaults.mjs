@@ -17,6 +17,7 @@ import { C29_ALLOY_PROOF_LABEL, C29_ALLOY_BUILD_INFO_READER } from './alloy-c29-
 import { C36_ALLOY_PROOF_LABEL, C36_ALLOY_BUILD_INFO_READER } from './alloy-c36-adjudication.mjs';
 import { C43_ALLOY_PROOF_LABEL, C43_ALLOY_BUILD_INFO_READER } from './alloy-c43-adjudication.mjs';
 import {validateGuavaC43Activation,couplePostgresC36WithKeycloakC43} from './guava-c43-activation.mjs';
+import {validateBrotliC45Activation,couplePostgresC36WithKeycloakC45} from './brotli-c45-activation.mjs';
 import { BUILD_INFO_READER } from './go-binary-inspection.mjs';
 import { assertPublicationSet, reviewedImageSetForComponent, supplementalReviewedSources, validateReviewedImageSet } from './reviewed-image-sets.mjs';
 import { validateDatabaseTransitionReadiness } from './mysql-c42-readiness.mjs';
@@ -43,6 +44,8 @@ const EVIDENCE_FILE = /^registry-(?:index|amd64-(?:manifest|config)|attestation-
 // that resemble credentials. Retain their exact bytes compressed and verify them
 // before any publication or registry checks consume them.
 const COMPRESSED_PROOFS = new Map([
+  ["infrastructure/runtime-security/proofs/c45-keycloak/publication/registry-attestation-0-payload-0.json", "bae2df73caa62439199ea583d86a71b631dc4d40188cbc5e1e35c489c15d6270"],
+  ["infrastructure/runtime-security/proofs/c45-keycloak/anonymous/registry-attestation-0-payload-0.json", "bae2df73caa62439199ea583d86a71b631dc4d40188cbc5e1e35c489c15d6270"],
   ['infrastructure/runtime-security/proofs/c43-keycloak/publication/registry-attestation-0-payload-0.json', '3394b868268b572422560b783b27dffeac05c73b812d094bd506df821b80e55f'],
   ['infrastructure/runtime-security/proofs/c43-keycloak/anonymous/registry-attestation-0-payload-0.json', '3394b868268b572422560b783b27dffeac05c73b812d094bd506df821b80e55f'],
   ['infrastructure/runtime-security/proofs/c40-node/acceptance/published-smoke.json',
@@ -512,6 +515,9 @@ export async function validateActivation(image, entry, manifestBytes, read) {
   if (selected.manifestSet === 'c43-keycloak') {
     await validateGuavaC43Activation(publication.value, entry, read, validateActivation);
   }
+  if (selected.manifestSet === 'c45-keycloak') {
+    await validateBrotliC45Activation(publication.value, entry, read, validateActivation);
+  }
   if (selected.manifestSet === 'c36-alloy') {
     await validateAlloyC36ActivationScan(publication.value, entry.publication.path, read);
   }
@@ -595,6 +601,8 @@ const SSL_REFRESH_KEYCLOAK_MANIFESTS = new Set([
 ]);
 
 export async function coupleRegisteredKeycloak(readiness, issuer, read) {
+  if (issuer?.manifest?.path === 'infrastructure/runtime-security/reviewed-images-c45-keycloak.json')
+    return couplePostgresC36WithKeycloakC45(readiness, issuer, read, validateActivation);
   if (issuer?.manifest?.path === 'infrastructure/runtime-security/reviewed-images-c43-keycloak.json')
     return couplePostgresC36WithKeycloakC43(readiness, issuer, read, validateActivation);
   if (readiness?.postgresC36Acceptance)

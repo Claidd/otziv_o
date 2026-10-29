@@ -19,7 +19,7 @@ import { combinedScanSummary } from './scan-verdict.mjs';
 const ROOT = resolve(fileURLToPath(new URL('../../', import.meta.url)));
 const PREFIX = 'infrastructure/runtime-security/';
 const COMPONENTS = new Set(['dozzle', 'prometheus', 'loki', 'alloy', 'tempo', 'grafana', 'mc', 'minio', 'postgres']);
-const LIBRARY_PATCH_SETS = new Set(['c43-tempo', 'c43-loki', 'c43-alloy', 'c43-grafana', 'c43-keycloak', 'c44-grafana']);
+const LIBRARY_PATCH_SETS = new Set(['c43-tempo', 'c43-loki', 'c43-alloy', 'c43-grafana', 'c43-keycloak', 'c44-grafana', 'c45-keycloak']);
 const MYSQL_REFRESH_SET = 'c37-mysql';
 const REGISTRY_FILE = /^registry-(?:index|amd64-(?:manifest|config)|attestation-[0-9]+(?:-payload-[0-9]+)?)\.json$/;
 const PUBLICATION_FILE = /^(?:publication\.json|build-metadata\.json|known-runtime-dependencies\.json|vulnerabilities\.[A-Za-z0-9.-]+)$/;
@@ -170,6 +170,9 @@ export async function prepareActivationPair({ manifestSet, publicationFiles, ano
   };
   if (manifestSet === 'c43-keycloak') {
     return { entry, activationReady: false, remaining: 'Guava runtime comparison and C35/C36 authentication/rollback acceptance' };
+  }
+  if (manifestSet === 'c45-keycloak') {
+    return { entry, activationReady: false, remaining: 'Official Brotli overlay comparison and C43/C36 authentication/rollback acceptance' };
   }
   if (component === 'postgres') {
     await validatePostgresC36ActivationScan(publication, entry.publication.path, read);

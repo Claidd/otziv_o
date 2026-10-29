@@ -251,7 +251,7 @@ class CoordinatedSslTests(unittest.TestCase):
                               'keycloak':{'image':entries['keycloak']['reference']}}}
         with patch.object(refresh,'run') as docker:
             self.assertEqual(entries['keycloak']['manifest']['path'],
-                             'infrastructure/runtime-security/reviewed-images-c43-keycloak.json')
+                             'infrastructure/runtime-security/reviewed-images-c45-keycloak.json')
             with self.assertRaisesRegex(refresh.GuardError,'^coordinated_ssl_unreviewed_generation$'):
                 refresh.reviewed_plan(root,resolved)
             docker.assert_not_called()

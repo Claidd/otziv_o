@@ -96,6 +96,7 @@ const RELEASE_SETS = Object.freeze({
   'c36-postgres': { component: 'postgres', path: 'infrastructure/runtime-security/reviewed-images-c36-postgres.json', context: 'infrastructure/runtime-security/builds/c36-postgres', dockerfile: 'infrastructure/runtime-security/builds/c36-postgres/Dockerfile' },
   // Keep implicit historical lookup stable; current publications use explicit manifests.
   'c44-grafana': { component: 'grafana', path: 'infrastructure/runtime-security/reviewed-images-c44-grafana.json', context: 'infrastructure/runtime-security/builds/c44-grafana', dockerfile: 'infrastructure/runtime-security/builds/c44-grafana/Dockerfile' },
+  'c45-keycloak': { component: 'keycloak', path: 'infrastructure/runtime-security/reviewed-images-c45-keycloak.json', context: 'infrastructure/runtime-security/builds/c45-keycloak', dockerfile: 'infrastructure/runtime-security/builds/c45-keycloak/Dockerfile' },
   'c43-keycloak': { component: 'keycloak', path: 'infrastructure/runtime-security/reviewed-images-c43-keycloak.json', context: 'infrastructure/runtime-security/builds/c43-keycloak', dockerfile: 'infrastructure/runtime-security/builds/c43-keycloak/Dockerfile' },
   'c43-tempo': { component: 'tempo', path: 'infrastructure/runtime-security/reviewed-images-c43-tempo.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c43-tempo/Dockerfile' },
   'c43-loki': { component: 'loki', path: 'infrastructure/runtime-security/reviewed-images-c43-loki.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c43-loki/Dockerfile' },
@@ -157,7 +158,8 @@ export function validateReviewedImageSet(name, manifestBytes, baselineBytes = ma
   assert.equal(image.prepare, undefined, 'reviewed_image_set_preparation_forbidden');
   assert.equal(image.sourceBeforeRef, original.sourceBeforeRef, 'reviewed_image_set_historical_source_changed');
   assert.deepEqual(image.defaultReferencesBefore, original.defaultReferencesBefore, 'reviewed_image_set_service_coverage_changed');
-  if (name === 'c26-keycloak' || name === 'c35-keycloak') assert.equal(image.knownRuntimeDependencyPolicy, C26_POLICY, 'reviewed_image_set_dependency_policy');
+  if (['c26-keycloak', 'c35-keycloak', 'c43-keycloak', 'c45-keycloak'].includes(name))
+    assert.equal(image.knownRuntimeDependencyPolicy, C26_POLICY, 'reviewed_image_set_dependency_policy');
   return manifest;
 }
 

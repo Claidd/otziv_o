@@ -199,5 +199,90 @@ class C43PublicMavenCoordinateGuardTest(unittest.TestCase):
         self.assertFalse(any(re.search(r, path + ".copy") for r in block["paths"]))
 
 
+class C45PublicMavenCoordinateGuardTest(unittest.TestCase):
+    PATH = "infrastructure/runtime-security/proofs/c45-keycloak/publication/vulnerabilities.json"
+    SHA256 = "8210ba0bfefcd6669c5d20fad077014032207f911385b8877faf0f4bcae6cb78"
+
+    def test_exact_public_coordinate_is_bound_to_unchanged_evidence_and_full_line(self):
+        raw = (ROOT / self.PATH).read_bytes()
+        self.assertEqual(self.SHA256, hashlib.sha256(raw).hexdigest())
+        coordinate = "keycloak-crypto-" + "fips1402"
+        line = '          "Name": "org.keycloak:' + coordinate + '",'
+        self.assertEqual(2, raw.decode().splitlines().count(line))
+        packages = [p for result in json.loads(raw)["Results"] for p in result.get("Packages", [])
+                    if p["Name"] == "org.keycloak:" + coordinate]
+        self.assertEqual(2, len(packages))
+        self.assertTrue(all(p["Identifier"]["PURL"].startswith("pkg:maven/org.keycloak/" + coordinate + "@") for p in packages))
+        blocks = [block for block in tomllib.loads((ROOT / ".gitleaks.toml").read_text(encoding="utf-8"))["allowlists"]
+                  if block.get("description") == "C45 Keycloak exact public Maven package coordinate"]
+        self.assertEqual(1, len(blocks))
+        block = blocks[0]
+        self.assertEqual(["generic-api-key"], block["targetRules"])
+        self.assertEqual("AND", block["condition"])
+        self.assertEqual("line", block["regexTarget"])
+        self.assertEqual(["(^|/)" + re.escape(self.PATH) + "$"], block["paths"])
+        self.assertTrue(any(re.search(pattern, line) for pattern in block["regexes"]))
+        for wrong in [line + ' "api_key": "unknown-value"', line.replace("fips1402", "fips1403"),
+                      '"api_key": "' + coordinate + '"', 'prefix' + line]:
+            self.assertFalse(any(re.search(pattern, wrong) for pattern in block["regexes"]))
+        self.assertFalse(any(re.search(pattern, self.PATH + ".copy") for pattern in block["paths"]))
+
+    def test_real_scanner_rejects_adjacent_credentials_and_other_paths_in_both_modes(self):
+        scanner = os.environ.get("GITLEAKS_BIN") or shutil.which("gitleaks")
+        docker = shutil.which("docker") if os.environ.get("CI") == "true" else None
+        if not scanner and not docker:
+            if os.environ.get("CI") == "true": self.fail("CI requires Gitleaks or Docker")
+            self.skipTest("Set GITLEAKS_BIN to the verified executable")
+        image = re.search(r"ghcr\.io/gitleaks/gitleaks@sha256:[a-f0-9]{64}",
+                          (ROOT / ".github/workflows/secret-scan.yml").read_text(encoding="utf-8")).group()
+        identity = ["--user", str(os.getuid()) + ":" + str(os.getgid())] if not scanner else []
+        command = [scanner] if scanner else [docker, "run", "--rm", "--network", "none", *identity, image]
+        self.assertEqual("8.30.1", subprocess.check_output(command + ["version"], text=True).strip().lstrip("v"))
+        with tempfile.TemporaryDirectory(prefix="otziv-c45-metadata-controls-") as directory:
+            base = Path(directory)
+            source = base / "source"
+            path = source / self.PATH
+            path.parent.mkdir(parents=True)
+            coordinate = "keycloak-crypto-" + "fips1402"
+            line = '          "Name": "org.keycloak:' + coordinate + '",'
+            path.write_text(line + "\n", encoding="utf-8")
+
+            def commit():
+                for arguments in (["init", "--quiet"], ["add", "."],
+                                  ["-c", "user.name=Scanner fixture", "-c", "user.email=fixture@example.invalid",
+                                   "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "Synthetic controls"]):
+                    subprocess.run(["git", "-C", str(source), *arguments], check=True,
+                                   stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=30)
+
+            def scan(mode):
+                report = base / "report.json"
+                command = [scanner] if scanner else [docker, "run", "--rm", "--network", "none", *identity,
+                    "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
+                    "--mount", "type=bind,source=" + str(base) + ",target=/fixture",
+                    "--mount", "type=bind,source=" + str(ROOT / ".gitleaks.toml") + ",target=/config.toml,readonly", image]
+                result = subprocess.run(command + [mode, str(source) if scanner else "/fixture/source",
+                    "--config", str(ROOT / ".gitleaks.toml") if scanner else "/config.toml",
+                    "--enable-rule", "generic-api-key", "--no-banner", "--report-format", "json",
+                    "--report-path", str(report) if scanner else "/fixture/report.json"]
+                    + (["--log-opts=HEAD"] if mode == "git" else []), capture_output=True, text=True, timeout=120)
+                self.assertIn(result.returncode, (0, 1), result.stderr)
+                return json.loads(report.read_text(encoding="utf-8"))
+
+            self.assertEqual([], scan("dir"))
+            commit()
+            self.assertEqual([], scan("git"))
+            unknown = "fixture-" + hashlib.sha256(b"Synthetic C45 scanner control").hexdigest()[:40]
+            path.write_text(line + ' "api_key": "' + unknown + '"\n', encoding="utf-8")
+            wrong = self.PATH + ".copy"
+            (source / wrong).write_text(line + "\n", encoding="utf-8")
+            commit()
+            for mode in ("dir", "git"):
+                with self.subTest(mode=mode):
+                    findings = scan(mode)
+                    self.assertTrue(any(item["Secret"] == unknown for item in findings))
+                    self.assertTrue(any(item["Secret"] == coordinate and item["File"].replace("\\", "/").endswith(wrong)
+                                        for item in findings))
+
+
 if __name__ == "__main__":
     unittest.main()
