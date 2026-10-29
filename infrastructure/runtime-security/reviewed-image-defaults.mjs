@@ -512,6 +512,9 @@ export async function validateActivation(image, entry, manifestBytes, read) {
   if (selected.manifestSet === 'c43-keycloak') {
     await validateGuavaC43Activation(publication.value, entry, read, validateActivation);
   }
+  if (selected.manifestSet === 'c45-keycloak') {
+    assert.fail('brotli_c45_runtime_and_data_acceptance_required');
+  }
   if (selected.manifestSet === 'c36-alloy') {
     await validateAlloyC36ActivationScan(publication.value, entry.publication.path, read);
   }
