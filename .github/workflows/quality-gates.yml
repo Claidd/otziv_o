@@ -651,6 +651,7 @@ jobs:
       - name: Load the exact reviewed issuer release image
         if: ${{ needs.changes.outputs.infrastructure == 'true' }}
         run: |
+          python3 -B infrastructure/runtime-security/evidence_archive.py hydrate --download
           ISSUER_IMAGE="$(node infrastructure/runtime-security/ci-keycloak-c43-fixture.mjs)"
           docker pull --platform linux/amd64 "$ISSUER_IMAGE"
           docker tag "$ISSUER_IMAGE" otziv-issuer-ci
