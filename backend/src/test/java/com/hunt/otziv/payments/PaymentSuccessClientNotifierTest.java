@@ -60,7 +60,7 @@ class PaymentSuccessClientNotifierTest {
         link.setExpiresAt(LocalDateTime.now().plusDays(1));
 
         when(messageSender.sendWithOperationId(eq(company), eq("wa-client"), eq("wa-group"), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.isNull(), eq("payment-success:101")))
-                .thenReturn(ClientMessageSendResult.sent("WhatsApp"));
+                .thenReturn(ClientMessageSendResult.sent("WhatsApp", "provider-receipt-101"));
         when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true)).thenReturn(true);
         when(appSettingService.getString(
                 AppSettingService.CLIENT_MESSAGES_PAYMENT_SUCCESS_TEXT,
@@ -109,7 +109,7 @@ class PaymentSuccessClientNotifierTest {
         link.setExpiresAt(LocalDateTime.now().plusDays(1));
 
         when(messageSender.sendWithOperationId(eq(company), eq("wa-client"), eq("wa-group"), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.isNull(), eq("payment-success:101")))
-                .thenReturn(ClientMessageSendResult.sent("WhatsApp"));
+                .thenReturn(ClientMessageSendResult.sent("WhatsApp", "provider-receipt-101"));
         when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true)).thenReturn(true);
         when(appSettingService.getString(
                 AppSettingService.CLIENT_MESSAGES_PAYMENT_SUCCESS_TEXT,
