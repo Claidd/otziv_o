@@ -78,7 +78,7 @@ class C43PublicHashGuardTest(unittest.TestCase):
                                     for path, text in strings), item["path"])
 
     def test_allowlists_require_exact_rule_path_and_complete_value(self):
-        self.assertEqual(4, len(self.blocks))
+        self.assertEqual(7, len(self.blocks))
         actual = set()
         for block in self.blocks:
             self.assertEqual([RULE], block["targetRules"])

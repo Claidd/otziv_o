@@ -1,0 +1,19 @@
+{
+  "component": "grafana",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:07233e89f1964d967e516a7b97856011a502213194a27c941fc5cf5d052208fa",
+  "commit": "6143f2499ec015343d8bf1f121e508f96402a1bf",
+  "run": "40791273064",
+  "attempt": "1",
+  "manifest": {
+    "path": "infrastructure/runtime-security/reviewed-images-c44-grafana.json",
+    "sha256": "5566475cbe9a5218efc1d6ea92f827a23e981fdf98cc0546e4b7e8fb74ab8438"
+  },
+  "publication": {
+    "path": "infrastructure/runtime-security/proofs/c44-grafana/publication/publication.json",
+    "sha256": "c76df25032e35f2adaf546853411a16e6448d3d5ee1ef8dade3fc971e8c47459"
+  },
+  "anonymous": {
+    "path": "infrastructure/runtime-security/proofs/c44-grafana/anonymous/anonymous-download.json",
+    "sha256": "2245a1843a0f1fdedc51e867f99eb9ea9fbcafbf242c3345e1d2c0ea203a32ac"
+  }
+}

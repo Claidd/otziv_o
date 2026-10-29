@@ -35,3 +35,12 @@ Primary advisories:
 
 - https://github.com/go-jose/go-jose/security/advisories/GHSA-mgcc-cww5-fp2q
 - https://github.com/google/guava/security/advisories/GHSA-xxph-c9ww-hj94
+
+All five candidates are now registered only after successful publication and
+fresh anonymous download. Grafana C44 run 40791273064 passed the fresh scan with
+the inspected C43 executable; both retained Tempo decisions are exact binary
+adjudications and the original failed discovery report remains unchanged.
+
+The frontend development server also required @hono/node-server 2.1.3 for
+GHSA-rmxm-3fg6-px4f, newly indexed by the required npm audit. Its override and
+lockfile are updated without changing frontend application code.

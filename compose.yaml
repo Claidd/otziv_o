@@ -284,7 +284,7 @@ services:
       - internal_net
 
   keycloak:
-    image: ghcr.io/claidd/otziv-security@sha256:c28364544835f5fbef6d4e0b0b3e63154127f7fb440b05432760f11235b5f4a9
+    image: ghcr.io/claidd/otziv-security@sha256:6df30e829eec786f9f7b51f56a5e0c10451e96b4ff086157129c649df80632f1
     container_name: otziv-keycloak
     command: start-dev --import-realm
     ports:
@@ -327,7 +327,7 @@ services:
       - internal_net
 
   loki:
-    image: ghcr.io/claidd/otziv-security@sha256:4ee21ecfd0dfb4e0906c57c7c5fb22d7a548122ba03034489ee0b17da204b9f6
+    image: ghcr.io/claidd/otziv-security@sha256:87d426476ddadecd314b8c7e0064df618c84b6461be52d05c830be9095e3c14e
     profiles: ["observability"]
     container_name: otziv-loki
     command: -config.file=/etc/loki/loki-config.yaml
@@ -347,7 +347,7 @@ services:
       start_period: 40s
 
   tempo:
-    image: ghcr.io/claidd/otziv-security@sha256:2bdc304812f800c5c9d0344b748630936a131e24ae8e56d13dfa2e9bbb55ea98
+    image: ghcr.io/claidd/otziv-security@sha256:4d64639afbe1d54b305ce72c1964141ec0cc63a1506eae5f70340d8b82b8d4b9
     stop_grace_period: 30s
     profiles: ["observability"]
     container_name: otziv-tempo
@@ -370,7 +370,7 @@ services:
       start_period: 40s
 
   alloy:
-    image: ghcr.io/claidd/otziv-security@sha256:1f0578124292e4664c50657836cba77288a9148f9b41950b7fad6040b08bbe6e
+    image: ghcr.io/claidd/otziv-security@sha256:27905df1862decf6e9c2543cb476e70e83d68351f7a5bb17194a6a094764db32
     profiles: ["observability"]
     container_name: otziv-alloy
     command:
@@ -393,7 +393,7 @@ services:
       - internal_net
 
   grafana:
-    image: ghcr.io/claidd/otziv-security@sha256:fee75a266b5d85e4668da86f4089624f3764dd5df4a6e798f167913cfc5ccfc6
+    image: ghcr.io/claidd/otziv-security@sha256:07233e89f1964d967e516a7b97856011a502213194a27c941fc5cf5d052208fa
     profiles: ["observability"]
     container_name: otziv-grafana
     ports:

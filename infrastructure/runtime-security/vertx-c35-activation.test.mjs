@@ -179,9 +179,8 @@ test('published C35 Keycloak validates its proofs and couples to C23 PostgreSQL'
   const read = await createEvidenceReader(process.cwd());
   const manifest = await read('infrastructure/runtime-security/reviewed-images.json');
   const baseline = JSON.parse(manifest);
-  const activations = JSON.parse(await read('infrastructure/runtime-security/reviewed-image-activations.json'));
   const postgresEntry = JSON.parse(await read('infrastructure/runtime-security/c36-parent-postgres.json'));
-  const issuerEntry = activations.images.find(entry => entry.component === 'keycloak');
+  const issuerEntry = JSON.parse(await read('infrastructure/runtime-security/c43-parent-keycloak.json'));
   assert.equal(issuerEntry.manifest.path, 'infrastructure/runtime-security/reviewed-images-c35-keycloak.json');
   const image = baseline.images.find(image => image.component === 'keycloak');
   assert.equal(await validateActivation(image, issuerEntry, manifest, read), issuerEntry.reference);

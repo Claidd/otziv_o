@@ -1,0 +1,51 @@
+{
+  "schema": "otziv-reviewed-public-proof-hashes-v1",
+  "rule": "sourcegraph-access-token",
+  "scannerVersion": "8.30.1",
+  "ciFindings": 2,
+  "files": [
+    {
+      "path": "infrastructure/runtime-security/proofs/c44-grafana/anonymous/registry-attestation-0-payload-0.json",
+      "sha256": "be1df1fe898d38cdd123293f5198ce59ff0dbf962645d99159ac9508332beb69",
+      "findings": 0,
+      "verifiedJsonContexts": [
+        "$.predicate.packages[].packageVerificationCode.packageVerificationCodeValue"
+      ],
+      "publicValueCount": 1
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c44-grafana/publication/registry-attestation-0-payload-0.json",
+      "sha256": "be1df1fe898d38cdd123293f5198ce59ff0dbf962645d99159ac9508332beb69",
+      "findings": 0,
+      "verifiedJsonContexts": [
+        "$.predicate.packages[].packageVerificationCode.packageVerificationCodeValue"
+      ],
+      "publicValueCount": 1
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c44-grafana/publication/vulnerabilities.json",
+      "sha256": "750ccfd158ab0723cfb0a6640967b8c64164a85d6cc21dc68e01b8e2204d34c0",
+      "findings": 0,
+      "verifiedJsonContexts": [
+        "$.Metadata.ImageConfig.config.Labels.com.otziv.publication.revision",
+        "$.Metadata.ImageConfig.config.Labels.org.opencontainers.image.revision",
+        "$.Metadata.ImageConfig.history[].created_by",
+        "$.Results[].Packages[].Digest",
+        "$.Results[].Vulnerabilities[].References[]"
+      ],
+      "publicValueCount": 42
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c44-grafana/publication/vulnerabilities.sbom.cdx.json",
+      "sha256": "16546d1a52d0e87e9bc901f63f2069781450fda1c1fe6037c5cf6287bc5b1163",
+      "findings": 2,
+      "verifiedJsonContexts": [
+        "$.components[].hashes[].content",
+        "$.metadata.component.properties[].value",
+        "$.vulnerabilities[].advisories[].url"
+      ],
+      "publicValueCount": 42
+    }
+  ],
+  "sourceCommitPrefix": "6143f249"
+}
