@@ -38,7 +38,9 @@ RUN mkdir /patch/classes \
 # Java 21 is supported by Keycloak 26.7.3. Retain the upstream distribution,
 # replace the vendor JRE/OS with the tested patched Temurin runtime.
 FROM eclipse-temurin:21-jre-jammy@sha256:eebd356ad7358b7094758e5787a6726f332917cfd56feab6457c56dab895cdbf
-RUN apt-get update && apt-get upgrade -y && apt-get clean && rm -rf /var/lib/apt/lists/* \
+RUN apt-get update && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends libbrotli1=1.0.9-2ubuntu0.1 \
+    && apt-get clean && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 1000 keycloak \
     && useradd --uid 1000 --gid 0 --home-dir /opt/keycloak --no-create-home --shell /usr/sbin/nologin keycloak
 COPY --from=distribution --chown=1000:0 /opt/keycloak /opt/keycloak

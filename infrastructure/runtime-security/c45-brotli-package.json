@@ -1,0 +1,159 @@
+{
+  "architecture": "amd64",
+  "bytes": 315370,
+  "control": {
+    "control": {
+      "gid": 0,
+      "kind": "file",
+      "mode": 420,
+      "sha256": "18a2e18f4526961a023775340977e8f7d295ca10709406621c9ae366436c5b82",
+      "uid": 0
+    },
+    "md5sums": {
+      "gid": 0,
+      "kind": "file",
+      "mode": 420,
+      "sha256": "b6d0609b7eb16be2ff82131ecd98965718e30f1ac23b61540311f9713e147f64",
+      "uid": 0
+    },
+    "shlibs": {
+      "gid": 0,
+      "kind": "file",
+      "mode": 420,
+      "sha256": "2012f62fed99634565837e9b75a90d828095a40ac076e70761dd8249a0c13bb4",
+      "uid": 0
+    },
+    "symbols": {
+      "gid": 0,
+      "kind": "file",
+      "mode": 420,
+      "sha256": "1925764a594a17cc23793cce99c4ea3a5fa7428ce0250598e901094313c8f209",
+      "uid": 0
+    },
+    "triggers": {
+      "gid": 0,
+      "kind": "file",
+      "mode": 420,
+      "sha256": "5d84abb82775d01b9d3656b045595eb316da0f59d5b007e4612bca4ef0d057b3",
+      "uid": 0
+    }
+  },
+  "package": "libbrotli1",
+  "payload": {
+    "usr": {
+      "gid": 0,
+      "kind": "directory",
+      "mode": 493,
+      "uid": 0
+    },
+    "usr/lib": {
+      "gid": 0,
+      "kind": "directory",
+      "mode": 493,
+      "uid": 0
+    },
+    "usr/lib/x86_64-linux-gnu": {
+      "gid": 0,
+      "kind": "directory",
+      "mode": 493,
+      "uid": 0
+    },
+    "usr/lib/x86_64-linux-gnu/libbrotlicommon.so.1": {
+      "gid": 0,
+      "kind": "symlink",
+      "mode": 511,
+      "target": "libbrotlicommon.so.1.0.9",
+      "uid": 0
+    },
+    "usr/lib/x86_64-linux-gnu/libbrotlicommon.so.1.0.9": {
+      "gid": 0,
+      "kind": "file",
+      "mode": 420,
+      "sha256": "617035f98d836e37ccaefdd5fe56b45ef4f5e10460c5b4f68c2d488e5a62766f",
+      "uid": 0
+    },
+    "usr/lib/x86_64-linux-gnu/libbrotlidec.so.1": {
+      "gid": 0,
+      "kind": "symlink",
+      "mode": 511,
+      "target": "libbrotlidec.so.1.0.9",
+      "uid": 0
+    },
+    "usr/lib/x86_64-linux-gnu/libbrotlidec.so.1.0.9": {
+      "gid": 0,
+      "kind": "file",
+      "mode": 420,
+      "sha256": "b877956d7814d95fb37473002f46a43fe7f09bebb48a41312c329c65631622b5",
+      "uid": 0
+    },
+    "usr/lib/x86_64-linux-gnu/libbrotlienc.so.1": {
+      "gid": 0,
+      "kind": "symlink",
+      "mode": 511,
+      "target": "libbrotlienc.so.1.0.9",
+      "uid": 0
+    },
+    "usr/lib/x86_64-linux-gnu/libbrotlienc.so.1.0.9": {
+      "gid": 0,
+      "kind": "file",
+      "mode": 420,
+      "sha256": "180da53c45df8a1a4bc1d2ad1439bd15d8e74a49b01820d63423342e971a74c3",
+      "uid": 0
+    },
+    "usr/share": {
+      "gid": 0,
+      "kind": "directory",
+      "mode": 493,
+      "uid": 0
+    },
+    "usr/share/doc": {
+      "gid": 0,
+      "kind": "directory",
+      "mode": 493,
+      "uid": 0
+    },
+    "usr/share/doc/libbrotli1": {
+      "gid": 0,
+      "kind": "directory",
+      "mode": 493,
+      "uid": 0
+    },
+    "usr/share/doc/libbrotli1/changelog.Debian.gz": {
+      "gid": 0,
+      "kind": "file",
+      "mode": 420,
+      "sha256": "5686989fc72ecdf7f517a128193266120dc60c876c130d55b139f3379ed97b0d",
+      "uid": 0
+    },
+    "usr/share/doc/libbrotli1/copyright": {
+      "gid": 0,
+      "kind": "file",
+      "mode": 420,
+      "sha256": "24a64e5bb83d0960d1835696a1e23c0896ad6055b0ca47c66ab0eb9a766324b1",
+      "uid": 0
+    },
+    "usr/share/lintian": {
+      "gid": 0,
+      "kind": "directory",
+      "mode": 493,
+      "uid": 0
+    },
+    "usr/share/lintian/overrides": {
+      "gid": 0,
+      "kind": "directory",
+      "mode": 493,
+      "uid": 0
+    },
+    "usr/share/lintian/overrides/libbrotli1": {
+      "gid": 0,
+      "kind": "file",
+      "mode": 420,
+      "sha256": "2348de77b1f367dbd9891dd844d22a63299861d50db72b621849ecd0466467f2",
+      "uid": 0
+    }
+  },
+  "schema": "otziv-official-brotli-package-v1",
+  "sha256": "908295e77a65219a62114c3c79690a3c99712274d1317c3ba47ffa2f8ea52ca5",
+  "url": "https://security.ubuntu.com/ubuntu/pool/main/b/brotli/libbrotli1_1.0.9-2ubuntu0.1_amd64.deb",
+  "version": "1.0.9-2ubuntu0.1"
+}

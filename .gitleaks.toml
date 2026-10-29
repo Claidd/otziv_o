@@ -2478,3 +2478,11 @@ regexes = [
   '''^f482d0e3f6ec36fd4910358472c6b48be6388584$''',
   '''^f509c801d070f8ea9f7400d5093c888ff1fee02e$''',
 ]
+
+[[allowlists]]
+description = "C45 Keycloak exact public Maven package coordinate"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''(^|/)infrastructure/runtime\-security/proofs/c45\-keycloak/publication/vulnerabilities\.json$''']
+regexes = ['''^\n?          "Name": "org\.keycloak:keycloak\-crypto\-fips1402",\r?$''']

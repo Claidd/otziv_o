@@ -1,0 +1,24 @@
+{
+  "schema": "otziv-keycloak-brotli-c45-inspection-v1",
+  "result": "PASS",
+  "parent": "ghcr.io/claidd/otziv-security@sha256:6df30e829eec786f9f7b51f56a5e0c10451e96b4ff086157129c649df80632f1",
+  "parentImageId": "sha256:6df30e829eec786f9f7b51f56a5e0c10451e96b4ff086157129c649df80632f1",
+  "candidate": "ghcr.io/claidd/otziv-security@sha256:6c6f398170954330c03dc2c16db1b96c5ebf2cb29546fe59542b6dcc7b60ee5e",
+  "candidateImageId": "sha256:6c6f398170954330c03dc2c16db1b96c5ebf2cb29546fe59542b6dcc7b60ee5e",
+  "runtimeSha256": "9b906b0953b12281d7a0ec45e362086cf80f42d5adcccc31e6796038c79ea45e",
+  "changedFiles": [
+    "usr/lib/x86_64-linux-gnu/libbrotlicommon.so.1.0.9",
+    "usr/lib/x86_64-linux-gnu/libbrotlidec.so.1.0.9",
+    "usr/lib/x86_64-linux-gnu/libbrotlienc.so.1.0.9",
+    "usr/share/doc/libbrotli1/changelog.Debian.gz",
+    "var/cache/ldconfig/aux-cache",
+    "var/lib/dpkg/info/libbrotli1:amd64.md5sums",
+    "var/lib/dpkg/status",
+    "var/lib/dpkg/status-old",
+    "var/log/dpkg.log"
+  ],
+  "packageInventorySha256": "8ea4699bd36f21de6174106ffa18fd76fb6fab34a3d34deeb3bdd61b4fd62b0a",
+  "inspectedContainersExecuted": false,
+  "executedScriptSha256": "115429ceb9f9fba524f49ec0daeeb00174ad59eeaf1ac353cfefda4348a5d514",
+  "inventoryScriptSha256": "4969ebbd33456ba2fa10e377d2ff6877dca7651334c33536ca03362f83af1e1d"
+}
