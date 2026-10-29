@@ -465,7 +465,17 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
                      AND next_attempt_at=?)
                 """, Integer.class, stateId, state.getDispatchGeneration(), Long.toString(stateId), state.getTargetKey(),
                 Long.toString(source.generation()), Long.toString(state.getDispatchGeneration()), state.getNextAttemptAt());
-        return count != null && count > 0 ? Optional.of(new PendingReminderRestart(source, state.getNextAttemptAt())) : Optional.empty();
+        if (count == null || count <= 0) return Optional.empty();
+        return Optional.of(new PendingReminderRestart(source, state.getNextAttemptAt(), isDeferredReminderGeneration(state)));
+    }
+
+    private boolean isDeferredReminderGeneration(ScheduledClientMessageState state) {
+        Integer deferred = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM client_reminder_restart_audit
+                WHERE subject_type='SCHEDULED' AND subject_id=? AND new_generation=?
+                  AND reason='periodic_next_cycle_scheduled_unknown_preserved'
+                """, Integer.class, state.getId(), state.getDispatchGeneration());
+        return deferred != null && deferred > 0;
     }
 
     /** Explicit repair of a periodic reminder. Status transitions and invoices never use this path. */
@@ -496,13 +506,65 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
     }
 
     private boolean stalePeriodicReminder(ScheduledClientMessageState state, LocalDateTime now) {
+        return uncertainPeriodicReminder(state, now, now.minusDays(2));
+    }
+
+    private boolean uncertainPeriodicReminder(ScheduledClientMessageState state, LocalDateTime now, LocalDateTime cutoff) {
         return state != null && state.getStatus() == ScheduledMessageStateStatus.ACTIVE
                 && Set.of(ClientMessageScenario.REVIEW_CHECK_REMINDER, ClientMessageScenario.PAYMENT_REMINDER).contains(state.getScenario())
                 && "UNKNOWN".equals(state.getDeliveryStatus()) && hasText(state.getDeliveryEnvelope())
-                && state.getDeliveryPreparedAt() != null && !state.getDeliveryPreparedAt().isAfter(now.minusDays(2))
+                && state.getDeliveryPreparedAt() != null && !state.getDeliveryPreparedAt().isAfter(cutoff)
                 && (state.getLockedUntil() == null || state.getLockedUntil().isBefore(now))
                 && (ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN.equals(state.getLastErrorCode())
                     || ClientMessageStateSafety.MANUAL_DELIVERY_HANDOFF_PENDING.equals(state.getLastErrorCode()));
+    }
+
+    @Override @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public Optional<DeferredReminderCheck> checkDeferredReminderRestart(long stateId, Long managerId) {
+        var state = stateRepository.findById(stateId).orElse(null);
+        LocalDateTime now = messageTime.nowStorage();
+        if (!uncertainPeriodicReminder(state, now, now.minusMinutes(5))
+                || !Set.of("WhatsApp", "MAX", "Telegram").contains(state.getDeliveryChannel() == null ? "" : state.getDeliveryChannel()))
+            return Optional.empty();
+        var order = orderDeliveryContext.read(state.getOrderId()).orElse(null);
+        if (order == null || !Objects.equals(managerId, order.managerId())) return Optional.empty();
+        var prepared = decodeScheduledDelivery(state);
+        if (prepared.orderAction() != null || prepared.recoveryBatchId() != null
+                || !Objects.equals(prepared.stateId(), state.getId()) || prepared.scenario() != state.getScenario()
+                || !Objects.equals(prepared.token(), state.getDeliveryToken())
+                || !Objects.equals(prepared.targetKey(), state.getTargetKey()) || !hasText(prepared.operationId())
+                || !Objects.equals(prepared.orderId(), order.orderId())
+                || prepared.orderGeneration() != order.generation()
+                || !Objects.equals(prepared.orderStatus(), order.status())) return Optional.empty();
+        var receipt = messageSender.recordedOutcome(prepared.operationId());
+        // Positive receipts and known failures retain their ordinary finalization/retry path.
+        if (receipt == null || receipt.sent() || ClientMessageDelivery.isKnownUnsent(receipt)
+                || !messageSender.hasSettledUncertainOperation(prepared.operationId())) return Optional.empty();
+        var reference = new DeliveryReference(prepared.stateId(), prepared.token(), prepared.targetKey(),
+                prepared.operationId(), prepared.clientId(), prepared.groupId());
+        return Optional.of(new DeferredReminderCheck(new ReminderRestartCheck(reference, state.getDeliveryEnvelope(),
+                order, state.getDeliveryPreparedAt(), messageTime.nowStorage()), state.getDeliveryChannel()));
+    }
+
+    @Override @Transactional(readOnly = true)
+    public List<RecoveryCandidate> deferredReminderRecoveryCandidates(long afterStateId, int limit) {
+        var ids = jdbcTemplate.queryForList("""
+                SELECT state_id FROM scheduled_client_message_state
+                WHERE state_id>? AND state_status='ACTIVE' AND delivery_status='UNKNOWN'
+                  AND scenario IN ('REVIEW_CHECK_REMINDER','PAYMENT_REMINDER') AND order_id IS NOT NULL
+                  AND delivery_prepared_at<=? AND (locked_until IS NULL OR locked_until<?)
+                ORDER BY state_id LIMIT ?
+                """, Long.class, afterStateId, messageTime.nowStorage().minusMinutes(5), messageTime.nowStorage(),
+                Math.max(1, Math.min(20, limit)));
+        var result = new ArrayList<RecoveryCandidate>();
+        for (Long id : ids) {
+            var state = stateRepository.findById(id).orElse(null);
+            Long managerId = state == null || state.getOrderId() == null ? null
+                    : orderDeliveryContext.read(state.getOrderId()).map(source -> source.managerId()).orElse(null);
+            // Include orphaned candidates so a bounded scan can advance beyond them.
+            result.add(new RecoveryCandidate(id, managerId));
+        }
+        return result;
     }
 
     @Override
@@ -582,13 +644,30 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
     /** Caller holds card/order locks. Atomic with retiring old manual reminder commands. No transport call. */
     @Transactional(propagation = Propagation.MANDATORY)
     public LocalDateTime restartStaleReminder(ReminderRestartCheck check, LocalDateTime lastContact, String actor) {
+        return restartPeriodicReminder(check, lastContact, actor, null);
+    }
+
+    @Override @Transactional(propagation = Propagation.MANDATORY)
+    public LocalDateTime restartDeferredReminder(DeferredReminderCheck check, LocalDateTime lastContact, String actor) {
+        if (check == null || check.channel() == null)
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Исходный канал отправки не подтверждён. Очередь сохранена.");
+        return restartPeriodicReminder(check.source(), lastContact, actor, check.channel());
+    }
+
+    private LocalDateTime restartPeriodicReminder(ReminderRestartCheck check, LocalDateTime lastContact, String actor,
+            String deferredChannel) {
         var current = orderDeliveryContext.lock(check.order().orderId()).orElseThrow();
         LocalDateTime now = messageTime.nowStorage();
-        if (!Objects.equals(current, check.order()) || check.checkedAt().isBefore(now.minusMinutes(5)))
+        boolean deferred = deferredChannel != null;
+        if (!hasText(actor) || !Objects.equals(current, check.order()) || check.checkedAt().isBefore(now.minusMinutes(5)))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Заказ изменился во время проверки. Обновите карточку.");
         Order order = orderRepository.findByIdForMutation(current.orderId()).orElseThrow();
         var state = stateRepository.findByIdForUpdate(check.delivery().stateId()).orElseThrow();
-        if (!stalePeriodicReminder(state, now) || !Objects.equals(state.getDeliveryEnvelope(), check.envelope())
+        if (!(deferred ? uncertainPeriodicReminder(state, now, now.minusMinutes(5)) : stalePeriodicReminder(state, now))
+                || deferred && (!Set.of("WhatsApp", "MAX", "Telegram").contains(deferredChannel)
+                    || !Objects.equals(deferredChannel, state.getDeliveryChannel()))
+                || !Objects.equals(state.getDeliveryEnvelope(), check.envelope())
+                || !Objects.equals(state.getDeliveryPreparedAt(), check.preparedAt())
                 || !Objects.equals(state.getDeliveryToken(), check.delivery().token())
                 || !Objects.equals(state.getTargetKey(), check.delivery().targetKey())
                 || !isCurrentOrderCycle(state, order) || order.isComplete() || order.getPayDay() != null
@@ -600,21 +679,26 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
         int days = Math.max(2, state.getScenario() == ClientMessageScenario.REVIEW_CHECK_REMINDER
                 ? reviewCheckIntervalDays() : paymentReminderIntervalDays());
         LocalDateTime contact = check.preparedAt();
+        // A new periodic occurrence waits a full interval from restoration, even if the old send happened.
+        // This path needs no assertion that incomplete channel history proves non-delivery or client silence.
+        if (deferred && now.isAfter(contact)) contact = now;
         if (lastContact != null && lastContact.isAfter(contact)) contact = lastContact;
         if (state.getLastSuccessAt() != null && state.getLastSuccessAt().isAfter(contact)) contact = state.getLastSuccessAt();
         LocalDateTime desired = contact.plusDays(days);
+        if (deferred && desired.getNano() != 0) desired = desired.withNano(0).plusSeconds(1);
         if (desired.isBefore(now.plusMinutes(1))) desired = now.plusMinutes(1);
         LocalDateTime next = scheduleAtStorage(desired);
         long generation = Math.addExact(state.getDispatchGeneration(), 1);
         jdbcTemplate.update("""
                 INSERT INTO client_reminder_restart_audit
                   (request_key,subject_type,subject_id,old_operation_id,actor,reason,previous_snapshot,new_generation,next_attempt_at)
-                SELECT ?, 'SCHEDULED', state_id, ?, ?, 'periodic_reminder_restarted_after_history_check',
+                SELECT ?, 'SCHEDULED', state_id, ?, ?, ?,
                   JSON_OBJECT('deliveryStatus',delivery_status,'envelope',delivery_envelope,'token',delivery_token,
                     'preparedAt',delivery_prepared_at,'errorCode',last_error_code,'sentCount',sent_count,
-                    'lastSuccessAt',last_success_at,'generation',dispatch_generation), ?, ?
+                    'lastSuccessAt',last_success_at,'generation',dispatch_generation,'channel',delivery_channel), ?, ?
                 FROM scheduled_client_message_state WHERE state_id=?
                 """, "repair:" + check.delivery().operationId(), check.delivery().operationId(), actor,
+                deferred ? "periodic_next_cycle_scheduled_unknown_preserved" : "periodic_reminder_restarted_after_history_check",
                 generation, next, state.getId());
         clearDeliveryPreparation(state);
         state.setDispatchGeneration(generation);
@@ -660,6 +744,8 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
         return state != null && state.getScenario() == ClientMessageScenario.REVIEW_CHECK_REMINDER
                 && state.getStatus() == ScheduledMessageStateStatus.ACTIVE && state.getSentCount() >= 7
                 && state.getDeliveryStatus() == null && !hasText(state.getDeliveryEnvelope())
+                && !(state.getDispatchGeneration() > 0 && state.getNextAttemptAt() != null
+                    && state.getNextAttemptAt().isAfter(now) && isDeferredReminderGeneration(state))
                 && state.getLastSuccessAt() != null
                 && !state.getLastSuccessAt().plusDays(Math.max(2,reviewCheckIntervalDays())).isAfter(now)
                 && (state.getLockedUntil() == null || !state.getLockedUntil().isAfter(now));

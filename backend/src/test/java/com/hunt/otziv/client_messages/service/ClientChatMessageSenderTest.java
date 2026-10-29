@@ -450,6 +450,30 @@ class ClientChatMessageSenderTest {
         verifyNoMoreInteractions(maxBotClient);
     }
 
+    @ParameterizedTest @ValueSource(strings = {"PREPARED", "UNKNOWN", "SUCCEEDED", "FAILED_KNOWN"})
+    void futurePeriodicRecoveryRequiresASettledUnknownLocalOperation(String state) {
+        var saved = new ClientMessageOperationFence.Snapshot("stable-operation", "MAX", state, "d", "e", "t", null);
+        when(operationFence.lookup("stable-operation")).thenReturn(java.util.Optional.of(saved));
+        assertEquals("UNKNOWN".equals(state), sender.hasSettledUncertainOperation("stable-operation"));
+        verifyNoMoreInteractions(whatsAppService, telegramService, maxBotClient, businessOperations);
+    }
+
+    @ParameterizedTest @ValueSource(strings = {"UNKNOWN", "RUNNING", "SUCCEEDED", "wrong-hash", "wrong-id", "unavailable"})
+    void futurePeriodicRecoveryRequiresTheExactUnknownGatewayBarrier(String state) {
+        var frozen = new com.hunt.otziv.whatsapp.api.WhatsAppBusinessOperations.FrozenMessage(
+                "stable-operation", "client", "send-group", "1234567890@g.us", "text");
+        when(businessOperations.findFrozen("stable-operation")).thenReturn(java.util.Optional.of(frozen));
+        String hash = com.hunt.otziv.whatsapp.dto.WhatsAppOperationEnvelope.groupHash("client", "1234567890@g.us", "text");
+        if ("unavailable".equals(state)) when(whatsAppService.getOperationStatus("client", "stable-operation"))
+                .thenThrow(new IllegalStateException("unavailable"));
+        else when(whatsAppService.getOperationStatus("client", "stable-operation")).thenReturn(
+                new com.hunt.otziv.whatsapp.dto.WhatsAppOperationStatus("wrong-id".equals(state) ? "other-operation" : "stable-operation",
+                        state.startsWith("wrong-") ? "UNKNOWN" : state, null, "wrong-hash".equals(state) ? "other-hash" : hash));
+        assertEquals("UNKNOWN".equals(state), sender.hasSettledUncertainOperation("stable-operation"));
+        verifyNoMoreInteractions(telegramService, maxBotClient);
+        verify(businessOperations, never()).freezeForDispatch(anyString(), anyString(), anyString(), anyString(), anyString());
+    }
+
     private String receipt(String token) {
         return "{\"status\":\"ok\",\"operationId\":\"" + token + "\",\"state\":\"SUCCEEDED\",\"messageId\":\"fixture\"}";
     }

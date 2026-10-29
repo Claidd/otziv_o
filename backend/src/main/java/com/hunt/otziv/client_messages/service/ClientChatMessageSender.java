@@ -60,6 +60,25 @@ public class ClientChatMessageSender implements com.hunt.otziv.client_messages.a
         return ClientMessageOperationFence.unknown();
     }
 
+    /** A future periodic occurrence must not retire a still-running or unreadable original operation. */
+    public boolean hasSettledUncertainOperation(String operationId) {
+        try {
+            var local = operationFence.lookup(operationId);
+            if (local.isPresent()) return "UNKNOWN".equals(local.get().state())
+                    && List.of("TELEGRAM", "MAX").contains(local.get().platform());
+            var frozen = businessOperations.findFrozen(operationId).orElse(null);
+            if (frozen == null || !List.of("send-group", "send").contains(frozen.kind())) return false;
+            var receipt = whatsAppService.getOperationStatus(frozen.clientId(), operationId);
+            String hash = "send-group".equals(frozen.kind())
+                    ? com.hunt.otziv.whatsapp.dto.WhatsAppOperationEnvelope.groupHash(frozen.clientId(), frozen.destination(), frozen.message())
+                    : com.hunt.otziv.whatsapp.dto.WhatsAppOperationEnvelope.phoneHash(frozen.clientId(), frozen.destination(), frozen.message());
+            return receipt != null && operationId.equals(receipt.operationId()) && "UNKNOWN".equals(receipt.state())
+                    && hash.equals(receipt.envelopeHash()) && receipt.messageId() == null;
+        } catch (RuntimeException unavailable) {
+            return false;
+        }
+    }
+
     /** The gateway searches the original operation window, including older group/direct history. */
     @Override public ClientMessageSendResult recoverRecordedOutcomeFromChat(String operationId, LocalDateTime preparedAt) {
         ClientMessageSendResult current = recordedOutcome(operationId);

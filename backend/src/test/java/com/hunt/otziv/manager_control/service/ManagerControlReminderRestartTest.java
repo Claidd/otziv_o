@@ -76,6 +76,39 @@ class ManagerControlReminderRestartTest {
         sequence.verify(outcome).recordReminderScheduled(eq(card), contains("Очередь напоминаний восстановлена"), any(), eq(due));
     }
 
+    @Test void buttonCanRestoreFreshFutureQueueWithoutWhatsAppHistoryOrResending() {
+        var deferred = new PeriodicReminderRestart.DeferredReminderCheck(checked, "MAX");
+        when(scheduled.checkDeferredReminderRestart(30, 2L)).thenReturn(Optional.of(deferred));
+        when(scheduled.restartDeferredReminder(deferred, null, "owner")).thenReturn(due);
+        assertThat(repair.repair(10, 30, 2L, () -> "owner")).contains(response);
+        verify(outcome).recordReminderScheduled(eq(card), contains("Старая неподтверждённая операция сохранена"), any(), eq(due));
+        verifyNoInteractions(worker, history);
+        verify(queue, never()).supersedeStaleReminder(any(), anyString(), any());
+        verify(scheduled, never()).restartStaleReminder(any(), any(), anyString());
+    }
+
+    @Test void automaticRecoveryOnlyRestoresTheQueueWithoutImpersonatingAManagerOrResolvingBusinessFacts() {
+        var deferred = new PeriodicReminderRestart.DeferredReminderCheck(checked, "Telegram");
+        when(scheduled.checkDeferredReminderRestart(30, 2L)).thenReturn(Optional.of(deferred));
+        when(scheduled.restartDeferredReminder(deferred, null, "system:periodic-reminder-recovery")).thenReturn(due);
+        assertThat(repair.recoverDeferredAutomatically(30, 2L)).contains(due);
+        verifyNoInteractions(cards, outcome, worker, history, closure);
+    }
+
+    @Test void automaticRecoveryCannotBypassPendingManualContactOrAConcurrentNewCommand() {
+        var deferred = new PeriodicReminderRestart.DeferredReminderCheck(checked, "WhatsApp");
+        when(scheduled.checkDeferredReminderRestart(30, 2L)).thenReturn(Optional.of(deferred));
+        var unknown = pending("UNKNOWN", "operation_unknown");
+        var queued = pending("QUEUED", null);
+        when(queue.controlHistory(77)).thenReturn(List.of(unknown));
+        assertThat(repair.recoverDeferredAutomatically(30, 2L)).isEmpty();
+        when(queue.controlHistory(77)).thenReturn(List.of());
+        when(queue.controlHistoryForSettlement(77)).thenReturn(List.of(queued));
+        assertThatThrownBy(() -> repair.recoverDeferredAutomatically(30, 2L)).hasMessageContaining("изменился заказ");
+        verify(scheduled, never()).restartDeferredReminder(any(), any(), anyString());
+        verifyNoInteractions(cards, outcome, worker, history);
+    }
+
     @Test void unavailableHistoryCannotRetireAnOperationOrCloseCard() {
         when(history.latestReminderContact(anyString(), anyString(), any())).thenThrow(new IllegalStateException("offline"));
         assertThatThrownBy(() -> repair.repair(10, 30, 2L, () -> "owner")).hasMessageContaining("Не удалось прочитать");
