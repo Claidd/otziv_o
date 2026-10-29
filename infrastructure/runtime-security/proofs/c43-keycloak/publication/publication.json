@@ -1,0 +1,190 @@
+{
+  "schema": "otziv-reviewed-image-publication-v1",
+  "component": "keycloak",
+  "commit": "a5f4790fa3ab100188bfc053138a031e99c1a7e1",
+  "run": "40786025571",
+  "attempt": "1",
+  "tag": "ghcr.io/claidd/otziv-security:keycloak-a5f4790fa3ab100188bfc053138a031e99c1a7e1-40786025571-1",
+  "manifestSet": "c43-keycloak",
+  "manifestPath": "infrastructure/runtime-security/reviewed-images-c43-keycloak.json",
+  "sourceBeforeRef": "quay.io/keycloak/keycloak@sha256:4883630ef9db14031cde3e60700c9a9a8eaf1b5c24db1589d6a2d43de38ba2a9",
+  "platform": "linux/amd64",
+  "productionActivated": false,
+  "publicDownloadReadiness": "NOT_VERIFIED_REQUIRES_ANONYMOUS_PULL_AFTER_VISIBILITY_CONFIGURATION",
+  "manifestSha256": "18d57da74ad4cddc99b3e3e2ef1221cec8e968001346be7af028d27cbf946fd5",
+  "dockerfileSha256": "b0d2ccdd31f0c7eedc3e5ec2dcf35a77395cb206caaf4598e0a49f606e84a113",
+  "builder": "moby/buildkit@sha256:28a898719c18a33f4e8000685287fa36fd0dd9560c6440227d3a732d79bb41d8",
+  "sbomGenerator": "docker/buildkit-syft-scanner@sha256:ae4f3b554449e7e25548e7d8ccc029d17357348e30c6e3df01b92bc93654d6a9",
+  "result": "PASS",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:6df30e829eec786f9f7b51f56a5e0c10451e96b4ff086157129c649df80632f1",
+  "attestationEvidence": {
+    "schema": "otziv-registry-evidence-v1",
+    "imageManifestDigest": "sha256:12da01a76efc72c2833ee1ea3d85050032f3fa17f8ac4209cdb7b8a98e45c1de",
+    "predicates": [
+      "https://slsa.dev/provenance/v1",
+      "https://spdx.dev/Document"
+    ],
+    "artifacts": [
+      {
+        "file": "registry-index.json",
+        "digest": "sha256:6df30e829eec786f9f7b51f56a5e0c10451e96b4ff086157129c649df80632f1",
+        "size": 858
+      },
+      {
+        "file": "registry-amd64-manifest.json",
+        "digest": "sha256:12da01a76efc72c2833ee1ea3d85050032f3fa17f8ac4209cdb7b8a98e45c1de",
+        "size": 14796
+      },
+      {
+        "file": "registry-amd64-config.json",
+        "digest": "sha256:8ff19b507872c8b27b444184c93bae61a2835ed889b410324e7436923d57c240",
+        "size": 34730
+      },
+      {
+        "file": "registry-attestation-0.json",
+        "digest": "sha256:49bd6f741bf11870e11c67a66c4bab8db40653208934c620621118453b6cf9ff",
+        "size": 1113
+      },
+      {
+        "file": "registry-attestation-0-payload-0.json",
+        "digest": "sha256:3394b868268b572422560b783b27dffeac05c73b812d094bd506df821b80e55f",
+        "size": 5928292
+      },
+      {
+        "file": "registry-attestation-0-payload-1.json",
+        "digest": "sha256:b9fae4f1c249f8506249ce8c63cdfeef158f049d963e487c1e715a69764366cd",
+        "size": 49005
+      }
+    ],
+    "sourceBinding": "LOCAL_GIT_METADATA_CHECKED_AGAINST_CLEAN_CHECKOUT_NOT_INDEPENDENT_SOURCE_AUTHENTICATION"
+  },
+  "imageId": "sha256:8ff19b507872c8b27b444184c93bae61a2835ed889b410324e7436923d57c240",
+  "providerJarSha256": "78645d0aff42d8c6668c88eb2e2bfa239f01d8db4085e4133803bfe7f5e5984a",
+  "security": {
+    "schema": "otziv-vulnerability-scan-v1",
+    "artifactCount": 2,
+    "high": 0,
+    "critical": 0,
+    "unfixedHighOrCritical": 0,
+    "blockingFixedHighOrCritical": 0,
+    "adjudicatedFixedHighOrCritical": 0,
+    "effectiveBlockingFixedHighOrCritical": 0,
+    "result": "PASS",
+    "adjudicatedAbsentFixedHighOrCritical": 0,
+    "adjudicatedAbsentUnfixedHighOrCritical": 0,
+    "effectiveUnfixedHighOrCritical": 0,
+    "unresolvedRiskReview": "NONE",
+    "scannerImage": "aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969"
+  },
+  "knownRuntimeDependencies": {
+    "schema": "otziv-keycloak-runtime-dependencies-v1",
+    "policy": "keycloak-26.7.3-core-databind-2.21.7-other-jackson-2.21.6-parsson-1.1.9",
+    "result": "PASS",
+    "imageId": "sha256:8ff19b507872c8b27b444184c93bae61a2835ed889b410324e7436923d57c240",
+    "rawScanSha256": "42433faebceffbd54aa52b6c3034f279e7aedf351d59514165a014211fb2f81d",
+    "packages": [
+      {
+        "name": "com.fasterxml.jackson.core:jackson-annotations",
+        "version": "2.21",
+        "purl": "pkg:maven/com.fasterxml.jackson.core/jackson-annotations@2.21",
+        "path": "opt/keycloak/lib/lib/main/com.fasterxml.jackson.core.jackson-annotations-2.21.jar"
+      },
+      {
+        "name": "com.fasterxml.jackson.core:jackson-core",
+        "version": "2.21.7",
+        "purl": "pkg:maven/com.fasterxml.jackson.core/jackson-core@2.21.7",
+        "path": "opt/keycloak/bin/client/keycloak-admin-cli-26.7.3.jar"
+      },
+      {
+        "name": "com.fasterxml.jackson.core:jackson-core",
+        "version": "2.21.7",
+        "purl": "pkg:maven/com.fasterxml.jackson.core/jackson-core@2.21.7",
+        "path": "opt/keycloak/lib/lib/main/com.fasterxml.jackson.core.jackson-core-2.21.5.jar"
+      },
+      {
+        "name": "com.fasterxml.jackson.core:jackson-databind",
+        "version": "2.21.7",
+        "purl": "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.21.7",
+        "path": "opt/keycloak/bin/client/keycloak-admin-cli-26.7.3.jar"
+      },
+      {
+        "name": "com.fasterxml.jackson.core:jackson-databind",
+        "version": "2.21.7",
+        "purl": "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.21.7",
+        "path": "opt/keycloak/lib/lib/main/com.fasterxml.jackson.core.jackson-databind-2.21.5.jar"
+      },
+      {
+        "name": "com.fasterxml.jackson.dataformat:jackson-dataformat-cbor",
+        "version": "2.21.6",
+        "purl": "pkg:maven/com.fasterxml.jackson.dataformat/jackson-dataformat-cbor@2.21.6",
+        "path": "opt/keycloak/lib/lib/main/com.fasterxml.jackson.dataformat.jackson-dataformat-cbor-2.21.5.jar"
+      },
+      {
+        "name": "com.fasterxml.jackson.dataformat:jackson-dataformat-yaml",
+        "version": "2.21.6",
+        "purl": "pkg:maven/com.fasterxml.jackson.dataformat/jackson-dataformat-yaml@2.21.6",
+        "path": "opt/keycloak/bin/client/keycloak-admin-cli-26.7.3.jar"
+      },
+      {
+        "name": "com.fasterxml.jackson.dataformat:jackson-dataformat-yaml",
+        "version": "2.21.6",
+        "purl": "pkg:maven/com.fasterxml.jackson.dataformat/jackson-dataformat-yaml@2.21.6",
+        "path": "opt/keycloak/lib/lib/main/com.fasterxml.jackson.dataformat.jackson-dataformat-yaml-2.21.5.jar"
+      },
+      {
+        "name": "com.fasterxml.jackson.datatype:jackson-datatype-jdk8",
+        "version": "2.21.6",
+        "purl": "pkg:maven/com.fasterxml.jackson.datatype/jackson-datatype-jdk8@2.21.6",
+        "path": "opt/keycloak/bin/client/keycloak-admin-cli-26.7.3.jar"
+      },
+      {
+        "name": "com.fasterxml.jackson.datatype:jackson-datatype-jdk8",
+        "version": "2.21.6",
+        "purl": "pkg:maven/com.fasterxml.jackson.datatype/jackson-datatype-jdk8@2.21.6",
+        "path": "opt/keycloak/lib/lib/main/com.fasterxml.jackson.datatype.jackson-datatype-jdk8-2.21.5.jar"
+      },
+      {
+        "name": "com.fasterxml.jackson.datatype:jackson-datatype-jsr310",
+        "version": "2.21.6",
+        "purl": "pkg:maven/com.fasterxml.jackson.datatype/jackson-datatype-jsr310@2.21.6",
+        "path": "opt/keycloak/bin/client/keycloak-admin-cli-26.7.3.jar"
+      },
+      {
+        "name": "com.fasterxml.jackson.datatype:jackson-datatype-jsr310",
+        "version": "2.21.6",
+        "purl": "pkg:maven/com.fasterxml.jackson.datatype/jackson-datatype-jsr310@2.21.6",
+        "path": "opt/keycloak/lib/lib/main/com.fasterxml.jackson.datatype.jackson-datatype-jsr310-2.21.5.jar"
+      },
+      {
+        "name": "com.fasterxml.jackson.jakarta.rs:jackson-jakarta-rs-base",
+        "version": "2.21.6",
+        "purl": "pkg:maven/com.fasterxml.jackson.jakarta.rs/jackson-jakarta-rs-base@2.21.6",
+        "path": "opt/keycloak/lib/lib/main/com.fasterxml.jackson.jakarta.rs.jackson-jakarta-rs-base-2.21.5.jar"
+      },
+      {
+        "name": "com.fasterxml.jackson.jakarta.rs:jackson-jakarta-rs-yaml-provider",
+        "version": "2.21.6",
+        "purl": "pkg:maven/com.fasterxml.jackson.jakarta.rs/jackson-jakarta-rs-yaml-provider@2.21.6",
+        "path": "opt/keycloak/lib/lib/main/com.fasterxml.jackson.jakarta.rs.jackson-jakarta-rs-yaml-provider-2.21.5.jar"
+      },
+      {
+        "name": "com.fasterxml.jackson.module:jackson-module-jakarta-xmlbind-annotations",
+        "version": "2.21.6",
+        "purl": "pkg:maven/com.fasterxml.jackson.module/jackson-module-jakarta-xmlbind-annotations@2.21.6",
+        "path": "opt/keycloak/lib/lib/main/com.fasterxml.jackson.module.jackson-module-jakarta-xmlbind-annotations-2.21.5.jar"
+      },
+      {
+        "name": "com.fasterxml.jackson.module:jackson-module-parameter-names",
+        "version": "2.21.6",
+        "purl": "pkg:maven/com.fasterxml.jackson.module/jackson-module-parameter-names@2.21.6",
+        "path": "opt/keycloak/lib/lib/main/com.fasterxml.jackson.module.jackson-module-parameter-names-2.21.5.jar"
+      },
+      {
+        "name": "org.eclipse.parsson:parsson",
+        "version": "1.1.9",
+        "purl": "pkg:maven/org.eclipse.parsson/parsson@1.1.9",
+        "path": "opt/keycloak/lib/lib/boot/org.eclipse.parsson.parsson-1.1.7.jar"
+      }
+    ]
+  }
+}

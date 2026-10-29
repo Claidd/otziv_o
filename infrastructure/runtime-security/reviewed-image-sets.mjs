@@ -9,6 +9,7 @@ const BASELINE_PATH = 'infrastructure/runtime-security/reviewed-images.json';
 const C12_PATH = 'infrastructure/runtime-security/reviewed-images-c12-phpmyadmin.json';
 const C12_CONTEXT = 'infrastructure/runtime-security/builds/phpmyadmin-alpine';
 const RELEASE_SETS = Object.freeze({
+  'c44-grafana': { component: 'grafana', path: 'infrastructure/runtime-security/reviewed-images-c44-grafana.json', context: 'infrastructure/runtime-security/builds/c44-grafana', dockerfile: 'infrastructure/runtime-security/builds/c44-grafana/Dockerfile' },
   'c43-keycloak': { component: 'keycloak', path: 'infrastructure/runtime-security/reviewed-images-c43-keycloak.json', context: 'infrastructure/runtime-security/builds/c43-keycloak', dockerfile: 'infrastructure/runtime-security/builds/c43-keycloak/Dockerfile' },
   'c43-tempo': { component: 'tempo', path: 'infrastructure/runtime-security/reviewed-images-c43-tempo.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c43-tempo/Dockerfile' },
   'c43-loki': { component: 'loki', path: 'infrastructure/runtime-security/reviewed-images-c43-loki.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c43-loki/Dockerfile' },

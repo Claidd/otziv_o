@@ -27,6 +27,8 @@ export async function readMonitoringSource(component) {
 export function isPublishedMonitoringOverlayManifest(component, selected) {
   assert.ok(COMPONENTS.has(component), 'monitoring_component_invalid');
   return selected === `infrastructure/runtime-security/reviewed-images-c29-${component}.json` ||
+    (['loki', 'tempo', 'alloy', 'grafana'].includes(component) && selected === `infrastructure/runtime-security/reviewed-images-c43-${component}.json`) ||
+    (component === 'grafana' && selected === 'infrastructure/runtime-security/reviewed-images-c44-grafana.json') ||
     selected === `infrastructure/runtime-security/reviewed-images-c36-${component}.json` ||
     (component === 'grafana' && selected === 'infrastructure/runtime-security/reviewed-images-c30-grafana.json') ||
     (component === 'grafana' && selected === 'infrastructure/runtime-security/reviewed-images-c40-grafana.json') ||

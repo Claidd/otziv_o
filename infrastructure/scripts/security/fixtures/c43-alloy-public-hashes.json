@@ -1,0 +1,45 @@
+{
+  "schema": "otziv-reviewed-public-proof-hashes-v1",
+  "rule": "sourcegraph-access-token",
+  "scannerVersion": "8.30.1",
+  "ciFindings": 80,
+  "files": [
+    {
+      "path": "infrastructure/runtime-security/proofs/c43-alloy/anonymous/registry-attestation-0-payload-0.json",
+      "sha256": "5c64ba4b42841ba7da92b475e5b9f51427be785a4ec2843c55093ccf95acf4c1",
+      "findings": 30,
+      "verifiedJsonContexts": [
+        "$.predicate.packages[].packageVerificationCode.packageVerificationCodeValue"
+      ],
+      "publicValueCount": 1
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c43-alloy/publication/registry-attestation-0-payload-0.json",
+      "sha256": "5c64ba4b42841ba7da92b475e5b9f51427be785a4ec2843c55093ccf95acf4c1",
+      "findings": 30,
+      "verifiedJsonContexts": [
+        "$.predicate.packages[].packageVerificationCode.packageVerificationCodeValue"
+      ],
+      "publicValueCount": 1
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c43-alloy/publication/vulnerabilities.json",
+      "sha256": "de4c05ba9cbeec5ce8ba691bb5ab65b2b7accdedfc196c2b7982c0a8cc0234a4",
+      "findings": 18,
+      "verifiedJsonContexts": [
+        "$.Results[].Vulnerabilities[].References[]"
+      ],
+      "publicValueCount": 35
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c43-grafana-discovery/publication/vulnerabilities.sbom.cdx.json",
+      "sha256": "6d1baa47890f66d5b5ebc794447f7386f9056f60862803cc44313656ffbfb1c6",
+      "findings": 2,
+      "verifiedJsonContexts": [
+        "$.vulnerabilities[].advisories[].url"
+      ],
+      "publicValueCount": 7
+    }
+  ],
+  "sourceCommitPrefix": "a5f4790f"
+}

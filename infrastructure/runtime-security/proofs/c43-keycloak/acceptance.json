@@ -1,0 +1,14 @@
+{
+  "schema": "otziv-keycloak-guava-c43-acceptance-v1",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:6df30e829eec786f9f7b51f56a5e0c10451e96b4ff086157129c649df80632f1",
+  "imageConfigId": "sha256:8ff19b507872c8b27b444184c93bae61a2835ed889b410324e7436923d57c240",
+  "files": {
+    "infrastructure/runtime-security/proofs/c43-keycloak/executed-inspection.py.txt": "93b82d5219b3c752a981bdc98ad6ad18898c007989719bb73420d72221d43080",
+    "infrastructure/runtime-security/proofs/c43-keycloak/executed-rehearsal.py.txt": "00e95cdb6ce53bc1a6906e0dc0426481290c95323a9c3b10100fa307b397147e",
+    "infrastructure/runtime-security/proofs/c43-keycloak/executed-runtime-inventory.py.txt": "4969ebbd33456ba2fa10e377d2ff6877dca7651334c33536ca03362f83af1e1d",
+    "infrastructure/runtime-security/proofs/c43-keycloak/inspection/inspection.json": "a379fe5e7235098a64ac1efbbe004ae940a3c9041d601561cf0e787dc184b8d4",
+    "infrastructure/runtime-security/proofs/c43-keycloak/inspection/runtime.json.gz": "0a27d463f2fb6de09fddc5ace51c63f65a68041566838f7f314b5bf6ce393448",
+    "infrastructure/runtime-security/proofs/c43-keycloak/rehearsal/capture.json": "3834d676df4e89644e57e619f15b4a9b37765f4fa4918ae09acdf0645d6636b5",
+    "infrastructure/runtime-security/proofs/c43-keycloak/rehearsal/replay.json": "1154eb5eeb468286059a84cfdd15d09a96057277588fd58859ff227bb3ad76d5"
+  }
+}

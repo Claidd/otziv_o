@@ -1,0 +1,19 @@
+{
+  "component": "tempo",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:4d64639afbe1d54b305ce72c1964141ec0cc63a1506eae5f70340d8b82b8d4b9",
+  "commit": "a5f4790fa3ab100188bfc053138a031e99c1a7e1",
+  "run": "40785999708",
+  "attempt": "1",
+  "manifest": {
+    "path": "infrastructure/runtime-security/reviewed-images-c43-tempo.json",
+    "sha256": "a79fc8e67949d371b2ab058db6ebbe32e66886cf15b352188f8765c4237336d8"
+  },
+  "publication": {
+    "path": "infrastructure/runtime-security/proofs/c43-tempo/publication/publication.json",
+    "sha256": "63f6bca45d8e16c36da882a8d2fa98fae31db77e6cc9d326cbf09f682476b2eb"
+  },
+  "anonymous": {
+    "path": "infrastructure/runtime-security/proofs/c43-tempo/anonymous/anonymous-download.json",
+    "sha256": "56cbb4cd0dbfb56fab1575ddac2ca33a58a187e8326f8dfe91342b3c8230736b"
+  }
+}

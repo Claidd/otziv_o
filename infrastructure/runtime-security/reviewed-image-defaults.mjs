@@ -16,6 +16,7 @@ import { combinedScanSummary } from './scan-verdict.mjs';
 import { C29_ALLOY_PROOF_LABEL, C29_ALLOY_BUILD_INFO_READER } from './alloy-c29-adjudication.mjs';
 import { C36_ALLOY_PROOF_LABEL, C36_ALLOY_BUILD_INFO_READER } from './alloy-c36-adjudication.mjs';
 import { C43_ALLOY_PROOF_LABEL, C43_ALLOY_BUILD_INFO_READER } from './alloy-c43-adjudication.mjs';
+import {validateGuavaC43Activation,couplePostgresC36WithKeycloakC43} from './guava-c43-activation.mjs';
 import { BUILD_INFO_READER } from './go-binary-inspection.mjs';
 import { assertPublicationSet, reviewedImageSetForComponent, supplementalReviewedSources, validateReviewedImageSet } from './reviewed-image-sets.mjs';
 import { validateDatabaseTransitionReadiness } from './mysql-c42-readiness.mjs';
@@ -42,6 +43,8 @@ const EVIDENCE_FILE = /^registry-(?:index|amd64-(?:manifest|config)|attestation-
 // that resemble credentials. Retain their exact bytes compressed and verify them
 // before any publication or registry checks consume them.
 const COMPRESSED_PROOFS = new Map([
+  ['infrastructure/runtime-security/proofs/c43-keycloak/publication/registry-attestation-0-payload-0.json', '3394b868268b572422560b783b27dffeac05c73b812d094bd506df821b80e55f'],
+  ['infrastructure/runtime-security/proofs/c43-keycloak/anonymous/registry-attestation-0-payload-0.json', '3394b868268b572422560b783b27dffeac05c73b812d094bd506df821b80e55f'],
   ['infrastructure/runtime-security/proofs/c40-node/acceptance/published-smoke.json',
     '18f2e12ff4386b3d5122f7fa0b4741e4bb4f59dfcdcb7ab665dbbb5c770a7981'],
   ['infrastructure/runtime-security/proofs/c29-alloy/anonymous/registry-attestation-0-payload-0.json',
@@ -437,6 +440,41 @@ export async function validateGrafanaC36ActivationScan(publication, publicationP
   assert.equal(expected.unresolvedRiskReview, 'NONE', 'activation_grafana_c36_unresolved');
 }
 
+export async function validateGrafanaC43ActivationScan(publication, publicationPath, read) {
+  assert.equal(publication.component, 'grafana', 'activation_grafana_c43_component');
+  const directory = dirname(publicationPath).replaceAll('\\', '/');
+  const [rawBytes, receiptBytes] = await Promise.all([
+    read(directory + '/vulnerabilities.json'), read(directory + '/vulnerabilities.adjudications.json')]);
+  const raw = JSON.parse(rawBytes), receipt = JSON.parse(receiptBytes);
+  const { review, reviewSha256 } = await loadReviewedProof('c43');
+  assert.equal(raw.Metadata?.ImageID, publication.imageId, 'activation_grafana_c43_report_image');
+  assertGrafanaC30KinOpenApi(raw);
+  assert.equal(receipt?.schema, 'otziv-image-adjudication-v1', 'activation_grafana_c43_schema');
+  assert.equal(receipt.status, 'EXACT_BINARY_FIXED_CODE_PROVEN', 'activation_grafana_c43_not_proven');
+  assert.equal(receipt.alloy?.status, 'NOT_APPLICABLE', 'activation_grafana_c43_alloy_scope');
+  assert.deepEqual(receipt.alloy.decisions, [], 'activation_grafana_c43_alloy_decisions');
+  assert.equal(receipt.reviewSha256, reviewSha256, 'activation_grafana_c43_review_changed');
+  assert.equal(receipt.rawReportSha256, sha256(rawBytes), 'activation_grafana_c43_raw_changed');
+  assert.equal(receipt.imageConfigId, publication.imageId, 'activation_grafana_c43_receipt_image');
+  assert.ok([publication.imageId, publication.reference.split('@')[1]].includes(receipt.immutableImageId),
+    'activation_grafana_c43_inspected_image');
+  assert.equal(receipt.binarySha256, review.binary.sha256, 'activation_grafana_c43_binary');
+  assert.equal(receipt.canonicalBuildInfoSha256, review.binary.canonicalBuildInfoSha256,
+    'activation_grafana_c43_build_info');
+  assert.equal(receipt.buildInfoReader, review.binary.buildInfoReader, 'activation_grafana_c43_reader');
+  assert.equal(receipt.rawReportModified, false, 'activation_grafana_c43_raw_modified');
+  assert.equal(receipt.inspectedBinaryExecuted, false, 'activation_grafana_c43_binary_executed');
+  assert.deepEqual(receipt.module, review.module, 'activation_grafana_c43_module');
+  assert.deepEqual(receipt.decisions, matchingFindings(raw, review), 'activation_grafana_c43_decisions');
+  assert.equal(receipt.decisions.length, 2, 'activation_grafana_c43_scope');
+  const expected = { ...combinedScanSummary(summarizeReport(raw),
+    { grafana: receipt, alloy: receipt.alloy }), scannerImage: TRIVY_IMAGE };
+  assert.deepEqual(publication.security, expected, 'activation_grafana_c43_summary');
+  assert.equal(expected.result, 'PASS', 'activation_grafana_c43_security_failed');
+  assert.equal(expected.effectiveBlockingFixedHighOrCritical, 0, 'activation_grafana_c43_fixed_findings');
+  assert.equal(expected.unresolvedRiskReview, 'NONE', 'activation_grafana_c43_unresolved');
+}
+
 export async function validateActivation(image, entry, manifestBytes, read) {
   assert.equal(entry.component, image.component, 'activation_component_mismatch');
   assert.match(entry.commit || '', /^[a-f0-9]{40}$/, 'activation_commit_missing');
@@ -468,11 +506,11 @@ export async function validateActivation(image, entry, manifestBytes, read) {
   if (selected.manifestSet === 'c43-alloy') {
     await validateAlloyC43ActivationScan(publication.value, entry.publication.path, read);
   }
-  if (selected.manifestSet === 'c43-grafana') {
-    throw new Error('activation_grafana_c43_identity_pending');
+  if (['c43-grafana', 'c44-grafana'].includes(selected.manifestSet)) {
+    await validateGrafanaC43ActivationScan(publication.value, entry.publication.path, read);
   }
   if (selected.manifestSet === 'c43-keycloak') {
-    throw new Error('activation_keycloak_c43_acceptance_pending');
+    await validateGuavaC43Activation(publication.value, entry, read, validateActivation);
   }
   if (selected.manifestSet === 'c36-alloy') {
     await validateAlloyC36ActivationScan(publication.value, entry.publication.path, read);
@@ -557,6 +595,8 @@ const SSL_REFRESH_KEYCLOAK_MANIFESTS = new Set([
 ]);
 
 export async function coupleRegisteredKeycloak(readiness, issuer, read) {
+  if (issuer?.manifest?.path === 'infrastructure/runtime-security/reviewed-images-c43-keycloak.json')
+    return couplePostgresC36WithKeycloakC43(readiness, issuer, read, validateActivation);
   if (readiness?.postgresC36Acceptance)
     return couplePostgresC36WithKeycloakC35(readiness, issuer, read, validateActivation);
   if (issuer?.manifest?.path === 'infrastructure/runtime-security/reviewed-images-c35-keycloak.json')
