@@ -9,6 +9,7 @@ import subprocess
 import tempfile
 import tomllib
 import unittest
+from urllib.parse import unquote
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -30,8 +31,9 @@ def public_values(item):
             for child in value:
                 walk(child, path + "[]")
         elif isinstance(value, str) and path in item["verifiedJsonContexts"]:
-            # Match the pinned rule's bare-hash delimiter, not embedded URL path segments.
-            values.update(re.findall(r"\b[a-f0-9]{40}\b(?=[`'\"\s;]|\\[nr]|$)", value))
+            # Git-fragment scanning also decodes percent-encoded advisory URLs.
+            # Match the pinned rule's delimiter after the same decoding step.
+            values.update(re.findall(r"\b[a-f0-9]{40}\b(?=[`'\"\s;]|\\[nr]|$)", unquote(value)))
 
     walk(json.loads(evidence))
     if len(values) != item["publicValueCount"]:
@@ -45,6 +47,7 @@ class C43PublicHashGuardTest(unittest.TestCase):
         cls.fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
         for item in cls.fixture["files"]:
             item["publicValues"] = public_values(item)
+        cls.inventory = {item["path"]: item["publicValues"] for item in cls.fixture["files"]}
         cls.blocks = [item for item in tomllib.loads((ROOT / ".gitleaks.toml").read_text(encoding="utf-8"))["allowlists"]
                       if item.get("description", "").startswith("C43 reviewed public ")]
 
@@ -55,7 +58,7 @@ class C43PublicHashGuardTest(unittest.TestCase):
                    for block in self.blocks)
 
     def test_exact_public_evidence_is_unchanged_and_covers_all_ci_findings(self):
-        self.assertEqual(80, sum(item["findings"] for item in self.fixture["files"]))
+        self.assertEqual(82, sum(item["findings"] for item in self.fixture["files"]))
         for item in self.fixture["files"]:
             evidence = (ROOT / item["path"]).read_bytes()
             self.assertEqual(item["sha256"], hashlib.sha256(evidence).hexdigest())
@@ -104,55 +107,70 @@ class C43PublicHashGuardTest(unittest.TestCase):
                 self.assertFalse(self.allowed(item["path"], wrong_value))
             self.assertFalse(self.allowed(item["path"], value, "generic-api-key"))
 
-    def test_real_scanner_keeps_negative_controls(self):
+    def test_real_scanner_preserves_positive_and_negative_controls(self):
         scanner = os.environ.get("GITLEAKS_BIN") or shutil.which("gitleaks")
         docker = shutil.which("docker") if os.environ.get("CI") == "true" else None
         if not scanner and not docker:
             if os.environ.get("CI") == "true":
-                self.fail("CI requires native Gitleaks or Docker for the negative scanner controls")
+                self.fail("CI requires Gitleaks or Docker for scanner controls")
             self.skipTest("Set GITLEAKS_BIN to the verified Gitleaks 8.30.1 executable")
         image = re.search(r"ghcr\.io/gitleaks/gitleaks@sha256:[a-f0-9]{64}",
                           (ROOT / ".github/workflows/secret-scan.yml").read_text(encoding="utf-8")).group()
         identity = ["--user", str(os.getuid()) + ":" + str(os.getgid())] if not scanner else []
-        command = [scanner] if scanner else [docker, "run", "--rm", "--network", "none"] + identity + [image]
-        version = subprocess.check_output(command + ["version"], text=True).strip().lstrip("v")
-        self.assertEqual(self.fixture["scannerVersion"], version)
+        command = [scanner] if scanner else [docker, "run", "--rm", "--network", "none", *identity, image]
+        self.assertEqual("8.30.1", subprocess.check_output(command + ["version"], text=True).strip().lstrip("v"))
         with tempfile.TemporaryDirectory(prefix="otziv-c43-secret-guard-") as directory:
             base = Path(directory)
             source = base / "source"
-            for item in self.fixture["files"]:
-                path = source / item["path"]
+            for evidence, values in self.inventory.items():
+                path = source / evidence
                 path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text("sourcegraph public metadata\n" + "\n".join(item["publicValues"]) + "\n", encoding="utf-8")
+                # Include raw and encoded values. This actually exercises the default
+                # decoder instead of testing only a non-encoded directory fragment.
+                encoded = ["".join("%%%02X" % ord(c) for c in value) for value in sorted(values)]
+                path.write_text("sourcegraph public metadata\n" + "\n".join(sorted(values) + encoded) + "\n", encoding="utf-8")
 
-            def scan():
+            def scan(mode):
                 report = base / "report.json"
                 command = [scanner] if scanner else [
                     docker, "run", "--rm", "--network", "none", *identity, "--read-only", "--cap-drop", "ALL",
                     "--security-opt", "no-new-privileges:true",
                     "--mount", "type=bind,source=" + str(base) + ",target=/fixture",
-                    "--mount", "type=bind,source=" + str(ROOT / ".gitleaks.toml") + ",target=/config.toml,readonly",
-                    image]
-                result = subprocess.run(command + ["dir", str(source) if scanner else "/fixture/source",
+                    "--mount", "type=bind,source=" + str(ROOT / ".gitleaks.toml") + ",target=/config.toml,readonly", image]
+                result = subprocess.run(command + [mode, str(source) if scanner else "/fixture/source",
                                          "--config", str(ROOT / ".gitleaks.toml") if scanner else "/config.toml",
                                          "--enable-rule", RULE, "--no-banner", "--report-format", "json",
-                                         "--report-path", str(report) if scanner else "/fixture/report.json"],
-                                        capture_output=True, text=True)
-                self.assertIn(result.returncode, (0, 1), result.stderr)
+                                         "--report-path", str(report) if scanner else "/fixture/report.json"]
+                                        + (["--log-opts=HEAD"] if mode == "git" else []),
+                                        capture_output=True, text=True, timeout=120)
+                self.assertIn(result.returncode, (0, 1))
                 return json.loads(report.read_text(encoding="utf-8"))
 
-            self.assertEqual([], scan())
-            item = self.fixture["files"][0]
-            value = item["publicValues"][0]
+            def commit_fixture():
+                for arguments in (["init", "--quiet"], ["add", "."],
+                                  ["-c", "user.name=Scanner fixture", "-c", "user.email=fixture@example.invalid",
+                                   "-c", "commit.gpgsign=false", "commit", "--quiet", "--allow-empty", "-m", "Synthetic scanner controls"]):
+                    subprocess.run(["git", "-C", str(source), *arguments], check=True,
+                                   stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=30)
+
+            self.assertEqual([], scan("dir"))
+            commit_fixture()
+            self.assertEqual([], scan("git"))
+            value = self.fixture["files"][0]["publicValues"][0]
             unknown = "0123456789abcdef" * 2 + "01234567"
-            with (source / item["path"]).open("a", encoding="utf-8") as stream:
-                stream.write(unknown + "\nsgp_" + value + "\n")
-            wrong_path = item["path"] + ".copy"
+            encoded = "".join("%%%02X" % ord(c) for c in unknown)
+            with (source / self.fixture["files"][0]["path"]).open("a", encoding="utf-8") as stream:
+                stream.write(unknown + "\nsgp_" + value + "\n" + encoded + "\n")
+            wrong_path = self.fixture["files"][0]["path"] + ".copy"
             (source / wrong_path).write_text("sourcegraph\n" + value + "\n", encoding="utf-8")
-            findings = scan()
-            self.assertEqual(3, len(findings))
-            self.assertEqual({unknown, "sgp_" + value, value}, {item["Secret"] for item in findings})
-            self.assertTrue(any(item["File"].replace("\\", "/").endswith(wrong_path) for item in findings))
+            commit_fixture()
+            for mode in ("dir", "git"):
+                with self.subTest(mode=mode):
+                    findings = scan(mode)
+                    self.assertEqual({RULE}, {item["RuleID"] for item in findings})
+                    self.assertEqual({unknown, "sgp_" + value, value}, {item["Secret"] for item in findings})
+                    self.assertTrue(any(item["Secret"] == unknown and "decoded:percent" in item.get("Tags", []) for item in findings))
+                    self.assertTrue(any(item["File"].replace("\\", "/").endswith(wrong_path) and item["Secret"] == value for item in findings))
 
 
 class C43PublicMavenCoordinateGuardTest(unittest.TestCase):
