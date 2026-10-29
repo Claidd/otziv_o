@@ -60,8 +60,9 @@ class CoordinatedSslTests(unittest.TestCase):
         parent='infrastructure/runtime-security/c36-parent-postgres.json'
         target=root/parent;target.parent.mkdir(parents=True,exist_ok=True)
         target.write_bytes((source/parent).read_bytes())
-        original=json.loads((source/'infrastructure/runtime-security/reviewed-image-activations.json').read_bytes())['images']
-        kc=next(value for value in original if value['component']=='keycloak')
+        # This procedure proves the historical C35/C36 database cutover only.
+        # Its issuer fixture must stay pinned when the ordinary issuer advances.
+        kc=json.loads((source/'infrastructure/runtime-security/c43-parent-keycloak.json').read_bytes())
         kc_manifest=kc['manifest']['path']
         target=root/kc_manifest;target.parent.mkdir(parents=True,exist_ok=True)
         target.write_bytes((source/kc_manifest).read_bytes())
@@ -242,14 +243,17 @@ class CoordinatedSslTests(unittest.TestCase):
             with self.assertRaisesRegex(refresh.GuardError,'coordinated_ssl_evidence_changed'):
                 refresh.reviewed_plan(root,resolved)
 
-    def test_repository_split_evidence_passes_plan_without_docker(self):
+    def test_repository_new_issuer_cannot_authorize_historical_database_cutover(self):
         root=HERE.parents[2]
         entries={entry['component']:entry for entry in json.loads(
             (root/'infrastructure/runtime-security/reviewed-image-activations.json').read_text())['images']}
         resolved={'services':{'keycloak-postgres':{'image':entries['postgres']['reference']},
                               'keycloak':{'image':entries['keycloak']['reference']}}}
         with patch.object(refresh,'run') as docker:
-            self.assertEqual(refresh.reviewed_plan(root,resolved)[1]['reference'],refresh.ACTIVE_KC)
+            self.assertEqual(entries['keycloak']['manifest']['path'],
+                             'infrastructure/runtime-security/reviewed-images-c43-keycloak.json')
+            with self.assertRaisesRegex(refresh.GuardError,'^coordinated_ssl_unreviewed_generation$'):
+                refresh.reviewed_plan(root,resolved)
             docker.assert_not_called()
 
     def test_keycloak_preparation_backs_up_before_switch_and_restores_c26(self):
