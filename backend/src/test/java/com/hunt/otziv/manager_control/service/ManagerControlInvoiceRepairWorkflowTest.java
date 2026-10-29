@@ -38,6 +38,16 @@ class ManagerControlInvoiceRepairWorkflowTest {
     private final ManagerControlInvoiceDiagnostics diagnostics = mock(ManagerControlInvoiceDiagnostics.class);
     private final LocalTransactionManager transactions = new LocalTransactionManager();
 
+    @Test void scheduledFutureReminderCanResolveItsTechnicalRemarkWithoutClaimingPaymentOrDelivery() {
+        var invoice = invoice(CommonInvoiceStatus.REMINDER); invoice.setLastError("message_send_in_progress");
+        when(invoices.findByIdWithAccount(88L)).thenReturn(Optional.of(invoice));
+        when(billing.recoverPendingMessageReceipt(88L)).thenReturn(new CommonInvoiceMessageRecovery(false, false,
+                "Очередь восстановлена; старый результат не подтверждён", java.time.LocalDateTime.now().plusDays(2)));
+        assertTrue(proxiedWorkflow().repair(88L).eventDescription().contains("следующий срок"));
+        assertFalse(invoice.isPaymentMessageConfirmed());
+        verify(billing, never()).sendInvoice(88L, true);
+    }
+
     @Test
     void realSpringBoundarySuspendsAndResumesTheControlTransactionAroundConfirmedSend() {
         CommonInvoice invoice = invoice(CommonInvoiceStatus.READY);

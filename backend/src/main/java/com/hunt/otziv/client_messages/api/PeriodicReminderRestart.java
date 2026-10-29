@@ -27,6 +27,8 @@ public interface PeriodicReminderRestart {
     /** Plans a new future periodic occurrence; does not declare the old delivery sent or unsent. */
     Optional<DeferredReminderCheck> checkDeferredReminderRestart(long stateId, Long managerId);
     List<RecoveryCandidate> deferredReminderRecoveryCandidates(long afterStateId, int limit);
+    /** Full configured payment-reminder interval (at least two days), then the next working window. */
+    LocalDateTime futurePaymentReminderAt(LocalDateTime from);
     /** Caller holds the current order lock and has excluded pending manual contacts. No transport call. */
     LocalDateTime restartDeferredReminder(DeferredReminderCheck check, LocalDateTime lastContact, String actor);
     Optional<PendingReminderRestart> pendingReminderRestart(long stateId, Long managerId);

@@ -549,6 +549,14 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
                 order, state.getDeliveryPreparedAt(), messageTime.nowStorage()), state.getDeliveryChannel()));
     }
 
+    @Override public LocalDateTime futurePaymentReminderAt(LocalDateTime from) {
+        LocalDateTime base = messageTime.nowStorage();
+        if (from != null && from.isAfter(base)) base = from;
+        LocalDateTime desired = base.plusDays(Math.max(2, paymentReminderIntervalDays()));
+        if (desired.getNano() != 0) desired = desired.withNano(0).plusSeconds(1);
+        return scheduleAtStorage(desired);
+    }
+
     @Override @Transactional(readOnly = true)
     public List<RecoveryCandidate> deferredReminderRecoveryCandidates(long afterStateId, int limit) {
         var ids = jdbcTemplate.queryForList("""

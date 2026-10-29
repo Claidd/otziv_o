@@ -61,7 +61,7 @@ public class ClientChatMessageSender implements com.hunt.otziv.client_messages.a
     }
 
     /** A future periodic occurrence must not retire a still-running or unreadable original operation. */
-    public boolean hasSettledUncertainOperation(String operationId) {
+    @Override public boolean hasSettledUncertainOperation(String operationId) {
         try {
             var local = operationFence.lookup(operationId);
             if (local.isPresent()) return "UNKNOWN".equals(local.get().state())
