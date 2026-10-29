@@ -91,6 +91,10 @@ public class CommonInvoiceDeliveryService {
 
     private final CommonInvoiceMessageQueue messageQueue;
 
+    @Autowired
+    @Lazy
+    private CommonInvoiceFutureReminderRecovery futureReminderRecovery;
+
     private final PaperInvoiceManagerNotificationService paperInvoiceManagerNotificationService;
 
     private final AppSettingService appSettingService;
@@ -107,6 +111,15 @@ public class CommonInvoiceDeliveryService {
             ensureCommonInvoiceVisibleForCurrentUser(invoice);
             return invoice.getPaymentMessageOperationId();
         });
+        // Visibility was checked above. Restore a future reminder without asserting that the old send succeeded.
+        if (futureReminderRecovery != null) {
+            var next = futureReminderRecovery.recover(invoiceId);
+            if (next.isPresent()) return new CommonInvoiceMessageRecovery(false, false,
+                    "Очередь плановых напоминаний по общему счёту восстановлена. Следующий срок — "
+                    + next.get().atZone(java.time.ZoneId.systemDefault()).withZoneSameInstant(java.time.ZoneId.of("Asia/Irkutsk"))
+                        .format(java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm"))
+                    + " (Иркутск). Старая неподтверждённая отправка сохранена без повтора; оплата не изменялась.", next.get());
+        }
         if (operationId == null || operationId.isBlank() || messageQueue.status(operationId) == null) {
             return new CommonInvoiceMessageRecovery(false, false,
                     "Данные исходной отправки счёта недоступны. Повторное сообщение заблокировано.");

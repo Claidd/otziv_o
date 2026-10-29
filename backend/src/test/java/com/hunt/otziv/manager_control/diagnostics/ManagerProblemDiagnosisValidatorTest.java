@@ -68,7 +68,7 @@ class ManagerProblemDiagnosisValidatorTest {
                 new Fact("automation:3:state_status", "automation", "state_status", "ACTIVE"),
                 new Fact("automation:3:current_cycle", "automation", "current_cycle", "true"));
         Diagnosis result = validator.validate(diagnosis("invoice.status=COLLECTING", "invoice:189:status", "CONTACT_RESPONSIBLE"), facts);
-        assertThat(result.actions().getFirst().text()).contains("проверка восстановления очереди");
+        assertThat(result.actions().getFirst().text()).contains("автоматически восстанавливает очередь", "полным интервалом ожидания");
     }
 
     @Test

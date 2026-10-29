@@ -39,12 +39,14 @@ public class ManagerControlInvoiceRepairWorkflow {
         if (deliveryError.startsWith("message_send_in_progress") || deliveryError.startsWith("message_send_stale")
                 || deliveryError.startsWith("message_send_unknown") || deliveryError.startsWith("payment_route_changed_message_in_progress")) {
             var recovery = commonBillingService.recoverPendingMessageReceipt(invoiceId);
-            if (recovery == null || !recovery.confirmed()) {
+            if (recovery == null || !recovery.confirmed() && recovery.nextReminderAt() == null) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, recovery == null
                         ? "Не удалось проверить исходную отправку счёта. Повторное сообщение не отправлялось."
                         : recovery.message());
             }
-            return new Outcome(recovery.message(), "Восстановлено подтверждение исходной отправки общего счёта");
+            return new Outcome(recovery.message(), recovery.nextReminderAt() == null
+                    ? "Восстановлено подтверждение исходной отправки общего счёта"
+                    : "Восстановлен следующий срок планового напоминания общего счёта");
         }
         if (invoice.getStatus() == CommonInvoiceStatus.PARTIALLY_PAID
                 && invoiceDiagnostics.commonInvoiceRequiresCompositionReview(invoice,

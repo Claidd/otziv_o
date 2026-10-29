@@ -7,6 +7,15 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 @Configuration
 class ManagerClientQueueScheduling {
     @Bean
+    ThreadPoolTaskScheduler periodicReminderRecoveryScheduler() {
+        var scheduler = new ThreadPoolTaskScheduler();
+        scheduler.setPoolSize(1);
+        scheduler.setThreadNamePrefix("periodic-reminder-recovery-");
+        scheduler.setWaitForTasksToCompleteOnShutdown(true);
+        scheduler.setAwaitTerminationSeconds(30);
+        return scheduler;
+    }
+    @Bean
     ThreadPoolTaskScheduler managerClientMessageScheduler() {
         var scheduler = new ThreadPoolTaskScheduler();
         scheduler.setPoolSize(1);

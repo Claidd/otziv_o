@@ -226,7 +226,8 @@ class ManagerProblemBusinessDiagnosisTest {
         Diagnosis result = ManagerProblemBusinessDiagnosis.fallback(List.of(f("automation", "delivery_status", "UNKNOWN"),
                 f("automation", "scenario", scenario), f("automation", "state_status", "ACTIVE"), f("automation", "current_cycle", "true")));
 
-        assertThat(result.actions().getFirst().text()).contains("Система проверяет", "проверка восстановления очереди", "повтор старой операции не запускается");
+        assertThat(result.actions().getFirst().text()).contains("Система проверяет", "автоматически восстанавливает очередь", "Старая неподтверждённая отправка не повторяется");
+        assertThat(result.actions().getFirst().verification()).contains("либо проверяемый срок следующего планового напоминания");
         assertThat(result.verification().getFirst()).contains("восстановлена очередь плановых напоминаний", "только по их фактическому результату");
         assertThat(ManagerProblemBusinessDiagnosis.readable(result)).isTrue();
     }

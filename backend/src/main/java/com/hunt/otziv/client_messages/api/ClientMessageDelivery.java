@@ -17,6 +17,9 @@ public interface ClientMessageDelivery {
     /** Receipt-only lookup. Missing evidence never authorizes another provider call. */
     ClientMessageSendResult recordedOutcome(String operationId);
 
+    /** A matching durable UNKNOWN barrier, excluding running, missing or unreadable operations. */
+    default boolean hasSettledUncertainOperation(String operationId) { return false; }
+
     /** Existing operation only; provider history may establish a receipt, never permission to resend. */
     default ClientMessageSendResult recoverRecordedOutcomeFromChat(String operationId, java.time.LocalDateTime preparedAt) {
         return recordedOutcome(operationId);

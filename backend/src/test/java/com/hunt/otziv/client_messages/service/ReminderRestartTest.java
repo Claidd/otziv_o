@@ -214,6 +214,119 @@ class ReminderRestartTest {
         verifyNoInteractions(messageSender, jdbcTemplate);
     }
 
+    @ParameterizedTest @ValueSource(strings = {"WhatsApp", "MAX", "Telegram"})
+    void freshUncertainPeriodicSendGetsOnlyAFutureOccurrenceWithoutClaimingDelivery(String channel) {
+        var before = LocalDateTime.now();
+        var lastSuccess = state.getLastSuccessAt();
+        state.setDeliveryChannel(channel);
+        state.setDeliveryPreparedAt(before.minusHours(1));
+        when(messageSender.recordedOutcome("old-operation"))
+                .thenReturn(ClientMessageSendResult.failed("operation_unknown", "unknown"));
+        when(messageSender.hasSettledUncertainOperation("old-operation")).thenReturn(true);
+        var inspected = service.checkDeferredReminderRestart(30, 2L).orElseThrow();
+        var next = service.restartDeferredReminder(inspected, null, "owner");
+        assertThat(next).isAfterOrEqualTo(before.plusDays(2));
+        assertThat(slotPlanner.isAllowedNow(messageTime.toIrkutskTime(next))).isTrue();
+        assertThat(state.getSentCount()).isEqualTo(11);
+        assertThat(state.getLastSuccessAt()).isEqualTo(lastSuccess);
+        assertThat(state.getDispatchGeneration()).isEqualTo(1);
+        assertThat(state.getDeliveryEnvelope()).isNull();
+        assertThat(state.getNextAttemptAt()).isEqualTo(next);
+        assertThat(order.getPayDay()).isNull(); assertThat(order.isComplete()).isFalse();
+        verify(jdbcTemplate).update(contains("INSERT INTO client_reminder_restart_audit"), eq("repair:old-operation"),
+                eq("old-operation"), eq("owner"), eq("periodic_next_cycle_scheduled_unknown_preserved"), eq(2L), eq(1L), eq(next), eq(30L));
+        verify(messageSender).recordedOutcome("old-operation");
+        verify(messageSender).hasSettledUncertainOperation("old-operation");
+        verifyNoMoreInteractions(messageSender);
+        assertThatThrownBy(() -> service.restartDeferredReminder(inspected, null, "owner"));
+    }
+
+    @ParameterizedTest @ValueSource(strings = {"sent", "known-unsent", "unavailable"})
+    void deferredInspectionDoesNotReplacePositiveReceiptsOrKnownFailures(String outcome) {
+        state.setDeliveryChannel("MAX");
+        when(messageSender.recordedOutcome("old-operation")).thenReturn(switch (outcome) {
+            case "sent" -> ClientMessageSendResult.sent("MAX", "receipt");
+            case "known-unsent" -> ClientMessageSendResult.failed("gateway_not_ready", "not sent");
+            default -> null;
+        });
+        assertThat(service.checkDeferredReminderRestart(30, 2L)).isEmpty();
+        verifyNoInteractions(jdbcTemplate);
+        verify(stateRepository, never()).save(any());
+    }
+
+    @ParameterizedTest @ValueSource(strings = {"inflight", "lease", "invoice", "archive-offer", "prepared", "channel", "token", "manager"})
+    void deferredInspectionExcludesActiveDispatchesAndNonPeriodicOrMismatchedSources(String change) {
+        state.setDeliveryChannel("MAX");
+        switch (change) {
+            case "inflight" -> state.setDeliveryPreparedAt(LocalDateTime.now().minusMinutes(4));
+            case "lease" -> state.setLockedUntil(LocalDateTime.now().plusMinutes(1));
+            case "invoice" -> state.setScenario(ClientMessageScenario.PAYMENT_INVOICE_RETRY);
+            case "archive-offer" -> state.setScenario(ClientMessageScenario.ARCHIVE_REORDER_OFFER);
+            case "prepared" -> state.setDeliveryStatus("PREPARED");
+            case "channel" -> state.setDeliveryChannel(null);
+            case "token" -> state.setDeliveryToken("changed");
+            case "manager" -> { }
+        }
+        assertThat(service.checkDeferredReminderRestart(30, "manager".equals(change) ? 3L : 2L)).isEmpty();
+        verifyNoInteractions(messageSender, jdbcTemplate);
+    }
+
+    @ParameterizedTest @ValueSource(strings = {"paid", "complete", "cycle", "prepared-time", "channel", "actor", "stale-check"})
+    void deferredWriteRevalidatesCurrentMoneyCycleAndFrozenDelivery(String change) {
+        state.setDeliveryChannel("MAX");
+        when(messageSender.recordedOutcome("old-operation"))
+                .thenReturn(ClientMessageSendResult.failed("operation_unknown", "unknown"));
+        when(messageSender.hasSettledUncertainOperation("old-operation")).thenReturn(true);
+        var inspected = service.checkDeferredReminderRestart(30, 2L).orElseThrow();
+        switch (change) {
+            case "paid" -> order.setPayDay(java.time.LocalDate.now());
+            case "complete" -> order.setComplete(true);
+            case "cycle" -> order.setStatusChangedAt(LocalDateTime.now());
+            case "prepared-time" -> state.setDeliveryPreparedAt(state.getDeliveryPreparedAt().minusHours(1));
+            case "channel" -> state.setDeliveryChannel("Telegram");
+            case "stale-check" -> inspected = new com.hunt.otziv.client_messages.api.PeriodicReminderRestart.DeferredReminderCheck(
+                    new com.hunt.otziv.client_messages.api.PeriodicReminderRestart.ReminderRestartCheck(inspected.source().delivery(),
+                            inspected.source().envelope(), inspected.source().order(), inspected.source().preparedAt(),
+                            LocalDateTime.now().minusMinutes(6)), inspected.channel());
+            case "actor" -> { }
+        }
+        var frozen = inspected;
+        assertThatThrownBy(() -> service.restartDeferredReminder(frozen, null, "actor".equals(change) ? "" : "owner"));
+        assertThat(state.getDispatchGeneration()).isZero();
+        verifyNoInteractions(jdbcTemplate);
+        verify(stateRepository, never()).save(any());
+    }
+
+    @Test void olderFrozenLineageCanOnlyResumeAnIndependentFutureOccurrenceInTheSameCycle() {
+        state.setDeliveryChannel("MAX");
+        order.setClientMessageGeneration(3);
+        source = new OrderDeliveryControlContext.Snapshot(77L, 2L, "На проверке", 3, order.getStatusChangedAt(), false, null);
+        when(orderDeliveryContext.read(77L)).thenReturn(Optional.of(source));
+        when(orderDeliveryContext.lock(77L)).thenReturn(Optional.of(source));
+        when(messageSender.recordedOutcome("old-operation")).thenReturn(ClientMessageSendResult.failed("operation_unknown", "unknown"));
+        when(messageSender.hasSettledUncertainOperation("old-operation")).thenReturn(true);
+        assertThat(service.checkStaleReminderRestart(30, 2L)).isEmpty();
+        var deferred = service.checkDeferredReminderRestart(30, 2L).orElseThrow();
+        assertThat(deferred.source().order().generation()).isEqualTo(3);
+        var next = service.restartDeferredReminder(deferred, null, "owner");
+        assertThat(next).isAfterOrEqualTo(LocalDateTime.now().plusDays(2).withNano(0));
+        assertThat(state.getDispatchGeneration()).isEqualTo(1);
+        assertThat(order.getClientMessageGeneration()).isEqualTo(3);
+        assertThat(state.getSentCount()).isEqualTo(11);
+        verify(messageSender, never()).recoverRecordedOutcomeFromChat(anyString(), any());
+    }
+
+    @ParameterizedTest @ValueSource(strings = {"older-current-lineage", "different-cycle"})
+    void aNewerFrozenLineageOrAnotherCycleCannotBeAdoptedAsAFutureReminder(String change) {
+        state.setDeliveryChannel("MAX");
+        var altered = new OrderDeliveryControlContext.Snapshot(77L, 2L, "На проверке",
+                "older-current-lineage".equals(change) ? 1 : 2,
+                "different-cycle".equals(change) ? LocalDateTime.now() : order.getStatusChangedAt(), false, null);
+        when(orderDeliveryContext.read(77L)).thenReturn(Optional.of(altered));
+        assertThat(service.checkDeferredReminderRestart(30, 2L)).isEmpty();
+        verifyNoInteractions(messageSender, jdbcTemplate);
+    }
+
     private void reservedReminder() {
         state.setDeliveryStatus(null);
         state.setDeliveryToken(null);

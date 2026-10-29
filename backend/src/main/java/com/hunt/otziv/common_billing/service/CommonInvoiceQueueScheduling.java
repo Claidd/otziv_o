@@ -8,6 +8,14 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 @Configuration
 class CommonInvoiceQueueScheduling {
     @Bean
+    ThreadPoolTaskScheduler commonInvoiceReminderRecoveryScheduler() {
+        var scheduler = new ThreadPoolTaskScheduler();
+        scheduler.setPoolSize(1);
+        scheduler.setThreadNamePrefix("common-invoice-reminder-recovery-");
+        scheduler.setWaitForTasksToCompleteOnShutdown(false);
+        return scheduler;
+    }
+    @Bean
     ThreadPoolTaskScheduler commonInvoiceMessageScheduler() {
         var scheduler = new ThreadPoolTaskScheduler();
         scheduler.setPoolSize(1);

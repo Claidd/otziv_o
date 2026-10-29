@@ -64,6 +64,21 @@ public class ManagerControlReminderRestart {
     }
 
     private Optional<ManagerControlConcreteItemResponse> repairReminder(long cardId, long stateId, Long managerId, Principal actor) {
+        var deferred = scheduled.checkDeferredReminderRestart(stateId, managerId);
+        if (deferred.isPresent() && !hasPendingContact(deferred.get().source().order())) {
+            var check = deferred.get();
+            return Optional.of(transactions.contactReservation(() -> {
+                var card = cards.findByIdForUpdate(cardId).orElseThrow();
+                requireDeferredSource(check, managerId);
+                if (card.getControl() == null || !Objects.equals(card.getControl().managerId(), managerId)
+                        || !("ORDER".equals(card.getEntityType()) && Objects.equals(card.getEntityId(), check.source().order().orderId())
+                            || "AUTOMATION_FAILURE".equals(card.getEntityType()) && Objects.equals(card.getEntityId(), stateId))) throw conflict();
+                String actorName = actor == null ? "" : actor.getName();
+                if (actorName.isBlank()) throw conflict();
+                LocalDateTime next = scheduled.restartDeferredReminder(check, null, actorName);
+                return outcome.recordReminderScheduled(card, deferredNote(next), actor, next);
+            }));
+        }
         var inspected = scheduled.checkStaleReminderRestart(stateId, managerId);
         if (inspected.isEmpty()) {
             var reserved = scheduled.checkManualReservationReminder(stateId, managerId);
@@ -123,6 +138,42 @@ public class ManagerControlReminderRestart {
             for (var row : pending) queue.supersedeStaleReminder(row, actorName, next);
             return outcome.recordReminderScheduled(card, note(next), actor, next);
         }));
+    }
+
+    /** Only the periodic queue changes. The board refresh resolves its technical source normally. */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public Optional<LocalDateTime> recoverDeferredAutomatically(long stateId, Long managerId) {
+        if (managerId == null) return Optional.empty();
+        var inspected = scheduled.checkDeferredReminderRestart(stateId, managerId);
+        if (inspected.isEmpty() || hasPendingContact(inspected.get().source().order())) return Optional.empty();
+        var check = inspected.get();
+        return Optional.of(transactions.contactReservation(() -> {
+            requireDeferredSource(check, managerId);
+            return scheduled.restartDeferredReminder(check, null, "system:periodic-reminder-recovery");
+        }));
+    }
+
+    private boolean hasPendingContact(OrderDeliveryControlContext.Snapshot source) {
+        return queue.controlHistory(source.orderId()).stream()
+                .filter(row -> ManagerControlOrderDeliveryState.sameCycle(row, source))
+                .anyMatch(row -> ManagerControlOrderDeliveryState.blocks(row.delivery()));
+    }
+
+    private void requireDeferredSource(PeriodicReminderRestart.DeferredReminderCheck check, Long managerId) {
+        var source = check.source().order();
+        var current = orders.lock(source.orderId()).orElseThrow();
+        if (!Objects.equals(source, current) || !Objects.equals(current.managerId(), managerId)
+                || queue.controlHistoryForSettlement(current.orderId()).stream()
+                    .filter(row -> ManagerControlOrderDeliveryState.sameCycle(row, current))
+                    .anyMatch(row -> ManagerControlOrderDeliveryState.blocks(row.delivery()))) throw conflict();
+    }
+
+    private String deferredNote(LocalDateTime next) {
+        return "Очередь напоминаний восстановлена. Следующее плановое напоминание — "
+                + next.atZone(java.time.ZoneId.systemDefault()).withZoneSameInstant(java.time.ZoneId.of("Asia/Irkutsk"))
+                    .format(DateTimeFormatter.ofPattern("dd.MM HH:mm"))
+                + " (Иркутск), после полного интервала ожидания. Старая неподтверждённая операция сохранена в журнале без повтора. "
+                + "Подтверждение доставки, оплаты или проверки отзывов не подставлялось.";
     }
 
     private Optional<ManagerControlConcreteItemResponse> repairCancelledManualReservation(long cardId,
@@ -185,7 +236,7 @@ public class ManagerControlReminderRestart {
                     || !("ORDER".equals(card.getEntityType()) && Objects.equals(card.getEntityId(), current.orderId())
                         || "AUTOMATION_FAILURE".equals(card.getEntityType()) && Objects.equals(card.getEntityId(), stateId)))
                 throw conflict();
-            return outcome.recordReminderScheduled(card, note(latest.nextAt()), actor, latest.nextAt());
+            return outcome.recordReminderScheduled(card, latest.deferred() ? deferredNote(latest.nextAt()) : note(latest.nextAt()), actor, latest.nextAt());
         }));
     }
 

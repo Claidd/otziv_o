@@ -1260,6 +1260,27 @@ public class CommonInvoiceInitializationService {
         return invoicePresenter.isTbankCommonRoute(invoice);
     }
 
+    record ReminderRecoveryPosition(Long id, Long orderId, long generation, java.time.LocalDateTime cycle,
+            boolean ready, boolean paid, long amount) { }
+    record ReminderRecoveryIdentity(com.hunt.otziv.client_messages.api.ClientMessageDelivery.Target target,
+            String clientId, String groupId, List<ReminderRecoveryPosition> positions) { }
+
+    /** Freeze existing billing/chat relations as scalar values before leaving the owner transaction. */
+    java.util.Optional<ReminderRecoveryIdentity> reminderRecoveryIdentity(CommonInvoice invoice) {
+        var company = chatCompany(invoice); var assigned = manager(invoice);
+        if (company == null || assigned == null) return java.util.Optional.empty();
+        var items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoice.getId()).stream()
+                .filter(com.hunt.otziv.common_billing.model.CommonInvoiceOrder::isActiveMembership).toList();
+        if (items.isEmpty() || items.stream().anyMatch(p -> !p.isReady() || p.getId() == null || p.getOrder() == null))
+            return java.util.Optional.empty();
+        var positions = items.stream().map(p -> new ReminderRecoveryPosition(p.getId(), p.getOrder().getId(),
+                p.getOrder().getClientMessageGeneration(), p.getOrder().getStatusChangedAt(), p.isReady(), p.isPaid(), p.getAmountKopecks()))
+                .sorted(java.util.Comparator.comparing(ReminderRecoveryPosition::id)).toList();
+        return java.util.Optional.of(new ReminderRecoveryIdentity(new com.hunt.otziv.client_messages.api.ClientMessageDelivery.Target(
+                company.getId(), company.getTitle(), company.getUrlChat(), company.getTelegramGroupChatId(), company.getMaxGroupChatId()),
+                assigned.getClientId(), company.getGroupId(), positions));
+    }
+
     Company chatCompany(CommonInvoice invoice) {
         return chatCompany(invoice, null);
     }
