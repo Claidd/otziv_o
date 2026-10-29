@@ -1,0 +1,24 @@
+{
+  "schema": "otziv-reviewed-image-activation-draft-v1",
+  "activationReady": false,
+  "remaining": "Guava runtime comparison and C35/C36 authentication/rollback acceptance",
+  "entry": {
+    "component": "keycloak",
+    "reference": "ghcr.io/claidd/otziv-security@sha256:6df30e829eec786f9f7b51f56a5e0c10451e96b4ff086157129c649df80632f1",
+    "commit": "a5f4790fa3ab100188bfc053138a031e99c1a7e1",
+    "run": "40786025571",
+    "attempt": "1",
+    "manifest": {
+      "path": "infrastructure/runtime-security/reviewed-images-c43-keycloak.json",
+      "sha256": "18d57da74ad4cddc99b3e3e2ef1221cec8e968001346be7af028d27cbf946fd5"
+    },
+    "publication": {
+      "path": "infrastructure/runtime-security/proofs/c43-keycloak/publication/publication.json",
+      "sha256": "b6a0569835db6c4a20f9df308929ecea5ad317c6161e8f3b7288450d65ea8021"
+    },
+    "anonymous": {
+      "path": "infrastructure/runtime-security/proofs/c43-keycloak/anonymous/anonymous-download.json",
+      "sha256": "61dfdf8252909d27ec4a52922a78ed0ae8b15368802319a98f8ebae4116b8b30"
+    }
+  }
+}

@@ -165,7 +165,8 @@ public class ManagerControlDayLifecycle {
         if (item.getStatus() == ManagerDailyControlItemStatus.RESOLVED) {
             return false;
         }
-        if (item.getGroup() == ManagerDailyControlGroup.WORKLOAD) {
+        if (item.getGroup() == ManagerDailyControlGroup.WORKLOAD
+                && !"AUTOMATION_FAILURES".equals(item.getReasonCode())) {
             return false;
         }
         return item.getItemType() != ManagerDailyControlItemType.WORKER_SECTION || !"risk".equals(item.getSectionCode());

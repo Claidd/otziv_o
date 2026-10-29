@@ -12,6 +12,10 @@ const C30_PRODUCT_VERSION = '12.4.10+otziv.3';
 const C30_IDENTITY_SHA256 = '66d2387e49ef930bfa2002ba1a10c38368d23cbdda5d2030175b67cc4d27d0e3';
 const C30_BINARY_SHA256 = 'da43653c2fdd936dac451ffda63ddebd2899758672376daf73087740dc35528c';
 const C30_BUILD_INFO_SHA256 = '03d0697eff5ee1f06df6bc721dcb17c7398544287a9cf8f8cad79ea1c1d6de3f';
+const C43_PRODUCT_VERSION = '12.4.10+otziv.5';
+const C43_IDENTITY_SHA256 = 'e58d1175e7cfb0fe9014fa4547ee20720fc91d96ffefd9dc4924f6e0a37e6d0c';
+const C43_BINARY_SHA256 = 'b1d95ccc9b85d9cffaa1f9d99b89618a37f043354619a6395521d226969bec19';
+const C43_BUILD_INFO_SHA256 = 'a2e85fd734ff3c45a3fa29158e17963fc2ef2a02c08e03ef8aca1dcecc39965c';
 const C36_PRODUCT_VERSION = '12.4.10+otziv.4';
 // Rebuilt with the fixed Go toolchain. Its exact executable was inspected
 // independently; the old C30 binary identity cannot adjudicate this image.
@@ -21,8 +25,8 @@ const C36_BUILD_INFO_SHA256 = '03d0697eff5ee1f06df6bc721dcb17c7398544287a9cf8f8c
 
 
 export async function loadReviewedProof(generation = 'original') {
-  if (!['original', 'c15', 'c29', 'c30', 'c36'].includes(generation)) throw new Error('adjudication_review_unknown');
-  if (['c29', 'c30', 'c36'].includes(generation)) {
+  if (!['original', 'c15', 'c29', 'c30', 'c36', 'c43'].includes(generation)) throw new Error('adjudication_review_unknown');
+  if (['c29', 'c30', 'c36', 'c43'].includes(generation)) {
     // Reuse the byte-checked fixed Tempo source and ancestry review from C15.
     // Only the exact Grafana executable and its Go toolchain changed.
     if (generation === 'c30' && (!C30_IDENTITY_SHA256 || !C30_BINARY_SHA256 || !C30_BUILD_INFO_SHA256))
@@ -33,16 +37,17 @@ export async function loadReviewedProof(generation = 'original') {
     const identityBytes = await readFile(new URL(`./adjudications/grafana-tempo-${generation}/identity.json`, import.meta.url));
     const identity = JSON.parse(identityBytes);
     const identitySha256 = sha256(identityBytes);
-    assert.equal(identitySha256, generation === 'c36' ? C36_IDENTITY_SHA256 : generation === 'c30' ? C30_IDENTITY_SHA256 : '96040cec15743c05e1550331821a358a390dc0c87051654ff5fe688bff273167', `adjudication_${generation}_identity_changed`);
+    assert.equal(identitySha256, generation === 'c43' ? C43_IDENTITY_SHA256 : generation === 'c36' ? C36_IDENTITY_SHA256 : generation === 'c30' ? C30_IDENTITY_SHA256 : '96040cec15743c05e1550331821a358a390dc0c87051654ff5fe688bff273167', `adjudication_${generation}_identity_changed`);
     assert.equal(identity.schema, `otziv-grafana-tempo-${generation}-identity-v1`, `adjudication_${generation}_schema`);
     assert.equal(identity.sourceReviewSha256, base.reviewSha256, `adjudication_${generation}_source_changed`);
-    assert.equal(identity.productVersion, generation === 'c36' ? C36_PRODUCT_VERSION : generation === 'c30' ? C30_PRODUCT_VERSION : '12.4.10+otziv.2', `adjudication_${generation}_version`);
-    assert.equal(identity.binarySha256, generation === 'c36' ? C36_BINARY_SHA256 : generation === 'c30' ? C30_BINARY_SHA256 : '5d7687c55e709e8ac3ccde640ac3f814cac65ce974623ef0cb612f24c13bf7d9', `adjudication_${generation}_binary`);
-    assert.equal(identity.canonicalBuildInfoSha256, generation === 'c36' ? C36_BUILD_INFO_SHA256 : generation === 'c30' ? C30_BUILD_INFO_SHA256 : '6794e488a8cc58c21fbea13b138e6b3102f0419c09c0c237ac4abc1337793688', `adjudication_${generation}_build_info`);
-    assert.equal(identity.goVersion, generation === 'c36' ? 'go1.27.3' : 'go1.27.2', `adjudication_${generation}_compiler`);
-    assert.equal(identity.buildInfoReader, generation === 'c36'
+    assert.equal(identity.productVersion, generation === 'c43' ? C43_PRODUCT_VERSION : generation === 'c36' ? C36_PRODUCT_VERSION : generation === 'c30' ? C30_PRODUCT_VERSION : '12.4.10+otziv.2', `adjudication_${generation}_version`);
+    assert.equal(identity.binarySha256, generation === 'c43' ? C43_BINARY_SHA256 : generation === 'c36' ? C36_BINARY_SHA256 : generation === 'c30' ? C30_BINARY_SHA256 : '5d7687c55e709e8ac3ccde640ac3f814cac65ce974623ef0cb612f24c13bf7d9', `adjudication_${generation}_binary`);
+    assert.equal(identity.canonicalBuildInfoSha256, generation === 'c43' ? C43_BUILD_INFO_SHA256 : generation === 'c36' ? C36_BUILD_INFO_SHA256 : generation === 'c30' ? C30_BUILD_INFO_SHA256 : '6794e488a8cc58c21fbea13b138e6b3102f0419c09c0c237ac4abc1337793688', `adjudication_${generation}_build_info`);
+    assert.equal(identity.goVersion, ['c36', 'c43'].includes(generation) ? 'go1.27.3' : 'go1.27.2', `adjudication_${generation}_compiler`);
+    assert.equal(identity.buildInfoReader, ['c36', 'c43'].includes(generation)
       ? 'golang:1.27.3-bookworm@sha256:21ade014faf952365b9ecbd8dbdb87176fbacb82fac9fb132d9f2a7b8cc3f132'
       : 'golang:1.27.2-bookworm@sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61', `adjudication_${generation}_reader`);
+    if (generation === 'c43') assert.equal(identity.goJoseVersion, 'v4.1.6', 'adjudication_c43_go_jose');
     assert.equal(identity.moduleSum, base.review.module.sum, `adjudication_${generation}_module_changed`);
     const review = structuredClone(base.review);
     review.product.version = identity.productVersion;
@@ -101,7 +106,8 @@ export async function adjudicateGrafanaImage(report, reportBytes, immutableImage
     imageConfigId: report.Metadata?.ImageID, immutableImageId, rawReportModified: false, decisions: [] };
   try {
     const version = labelsOf(report)['org.opencontainers.image.version'];
-    const generations = version === C36_PRODUCT_VERSION ? ['c36'] :
+    const generations = version === C43_PRODUCT_VERSION ? ['c43'] :
+      version === C36_PRODUCT_VERSION ? ['c36'] :
       version === C30_PRODUCT_VERSION ? ['c30'] : ['original', 'c15', 'c29'];
     const candidates = await Promise.all(generations.map(loadReviewedProof));
     const matching = candidates.filter(candidate => matchingFindings(report, candidate.review).length);

@@ -1,0 +1,84 @@
+{
+  "schema": "otziv-reviewed-public-proof-hashes-v1",
+  "rule": "sourcegraph-access-token",
+  "scannerVersion": "8.30.1",
+  "ciFindings": 82,
+  "files": [
+    {
+      "path": "infrastructure/runtime-security/proofs/c43-alloy/anonymous/registry-attestation-0-payload-0.json",
+      "sha256": "5c64ba4b42841ba7da92b475e5b9f51427be785a4ec2843c55093ccf95acf4c1",
+      "findings": 30,
+      "verifiedJsonContexts": [
+        "$.predicate.packages[].packageVerificationCode.packageVerificationCodeValue"
+      ],
+      "publicValueCount": 1
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c43-alloy/publication/registry-attestation-0-payload-0.json",
+      "sha256": "5c64ba4b42841ba7da92b475e5b9f51427be785a4ec2843c55093ccf95acf4c1",
+      "findings": 30,
+      "verifiedJsonContexts": [
+        "$.predicate.packages[].packageVerificationCode.packageVerificationCodeValue"
+      ],
+      "publicValueCount": 1
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c43-alloy/publication/vulnerabilities.json",
+      "sha256": "de4c05ba9cbeec5ce8ba691bb5ab65b2b7accdedfc196c2b7982c0a8cc0234a4",
+      "findings": 19,
+      "verifiedJsonContexts": [
+        "$.Metadata.ImageConfig.config.Labels.com.otziv.publication.revision",
+        "$.Metadata.ImageConfig.config.Labels.org.opencontainers.image.revision",
+        "$.Metadata.ImageConfig.history[].created_by",
+        "$.Results[].Packages[].Digest",
+        "$.Results[].Vulnerabilities[].References[]"
+      ],
+      "publicValueCount": 38
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c43-alloy/publication/vulnerabilities.sbom.cdx.json",
+      "sha256": "35316d092135d0028a74ccf01054a71f76e034f09f4e9e73002542afb5aa8a28",
+      "findings": 1,
+      "verifiedJsonContexts": [
+        "$.components[].hashes[].content",
+        "$.metadata.component.properties[].value",
+        "$.vulnerabilities[].advisories[].url"
+      ],
+      "publicValueCount": 38
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c43-grafana-discovery/publication/registry-attestation-0-payload-0.json",
+      "sha256": "10dd790ca2a6525ea403119d400a992a24e0a860e0f43cd062d98a73b4e4e793",
+      "findings": 0,
+      "verifiedJsonContexts": [
+        "$.predicate.packages[].packageVerificationCode.packageVerificationCodeValue"
+      ],
+      "publicValueCount": 1
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c43-grafana-discovery/publication/vulnerabilities.json",
+      "sha256": "9fbcd57974c6e40908cf69f23917bc7ce3b6a233e0b8d2a6823e9974945538ee",
+      "findings": 0,
+      "verifiedJsonContexts": [
+        "$.Metadata.ImageConfig.config.Labels.com.otziv.publication.revision",
+        "$.Metadata.ImageConfig.config.Labels.org.opencontainers.image.revision",
+        "$.Metadata.ImageConfig.history[].created_by",
+        "$.Results[].Packages[].Digest",
+        "$.Results[].Vulnerabilities[].References[]"
+      ],
+      "publicValueCount": 42
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c43-grafana-discovery/publication/vulnerabilities.sbom.cdx.json",
+      "sha256": "6d1baa47890f66d5b5ebc794447f7386f9056f60862803cc44313656ffbfb1c6",
+      "findings": 2,
+      "verifiedJsonContexts": [
+        "$.components[].hashes[].content",
+        "$.metadata.component.properties[].value",
+        "$.vulnerabilities[].advisories[].url"
+      ],
+      "publicValueCount": 42
+    }
+  ],
+  "sourceCommitPrefix": "a5f4790f"
+}

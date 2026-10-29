@@ -137,6 +137,15 @@ public class ManagerProblemDiagnosticsService {
         return Set.of("OFF", "SHADOW", "PILOT", "ENFORCE").contains(mode) ? mode : "SHADOW";
     }
 
+    /** An unresolved provider receipt is a system task, not evidence of a manager's mistake. */
+    public boolean systemOwnsDeliveryReconciliation(Long sourceTaskId) {
+        if (sourceTaskId == null) return false;
+        var evidence = collector.collect(sourceTaskId);
+        return evidence != null
+                && "AUTOMATION_FAILURE".equals(value(evidence.facts(), "card", "entity_type"))
+                && !ManagerProblemBusinessDiagnosis.uncertainDelivery(evidence.facts()).isEmpty();
+    }
+
     /** Conservative factual gate for stale RESOLVED cards. UNKNOWN must never auto-close an audit question. */
     public ResolutionState resolutionState(Long sourceTaskId) {
         ManagerProblemEvidenceCollector.Evidence evidence;

@@ -36,6 +36,20 @@ class ManagerProblemDiagnosticsServiceTest {
     }
 
     @Test
+    void uncertainAutomationReceiptIsSystemWorkButInvoiceReadinessRemainsManagerWork() {
+        var unknown = new Fact("automation:90:delivery_status", "automation", "delivery_status", "UNKNOWN");
+        stub(List.of(new Fact("card:10:entity_type", "card", "entity_type", "AUTOMATION_FAILURE"), unknown));
+        assertThat(service.systemOwnsDeliveryReconciliation(10L)).isTrue();
+        stub(List.of(new Fact("card:10:entity_type", "card", "entity_type", "COMMON_INVOICE"), unknown));
+        assertThat(service.systemOwnsDeliveryReconciliation(10L)).isFalse();
+        stub(List.of(new Fact("card:10:entity_type", "card", "entity_type", "AUTOMATION_FAILURE"), unknown,
+                new Fact("automation:90:current_cycle", "automation", "current_cycle", "false")));
+        assertThat(service.systemOwnsDeliveryReconciliation(10L)).isFalse();
+        when(collector.collect(10L)).thenReturn(null);
+        assertThat(service.systemOwnsDeliveryReconciliation(10L)).isFalse();
+    }
+
+    @Test
     void onlyPilotManagersSeeAdvisoryDiagnosis() {
         when(settings.mode()).thenReturn("PILOT");
         when(settings.pilotManagerIds()).thenReturn(Set.of(1L, 3L));

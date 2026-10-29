@@ -137,3 +137,17 @@ infrastructure/runtime-security/reviewed-images-c42-mysql.json text eol=lf
 infrastructure/runtime-security/builds/c42-mysql/** text eol=lf
 infrastructure/runtime-security/mysql-c42-rehearsal.py text eol=lf
 infrastructure/runtime-security/proofs/c42-mysql/publication/vulnerabilities.scanner.log -whitespace
+
+# C43 publication manifests and executed proof sources retain their exact bytes.
+infrastructure/runtime-security/reviewed-images-c43-*.json text eol=lf
+infrastructure/runtime-security/builds/c43-*/** text eol=lf
+infrastructure/runtime-security/c43-parent-keycloak.json text eol=lf
+infrastructure/runtime-security/guava-c43-activation.mjs text eol=lf
+infrastructure/runtime-security/guava-c43-inspection.py -text
+infrastructure/runtime-security/guava-c43-rehearsal.py -text
+infrastructure/runtime-security/guava-c43-rehearsal.py whitespace=cr-at-eol
+infrastructure/runtime-security/proofs/c43-keycloak/executed-*.txt whitespace=cr-at-eol
+infrastructure/runtime-security/proofs/c43-keycloak/inspection/inspection.json whitespace=cr-at-eol
+infrastructure/runtime-security/adjudications/grafana-tempo-c43/** -text
+infrastructure/runtime-security/reviewed-images-c44-grafana.json text eol=lf
+infrastructure/runtime-security/builds/c44-grafana/** text eol=lf

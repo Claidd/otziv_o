@@ -19,11 +19,26 @@ public class ManagerReportReviewRecoveryJob {
     private final ManagerReportReviewSessionRepository repository;
     private final ManagerReportReviewTelegramService reviews;
     private final PlatformTransactionManager transactionManager;
+    private long sourceRefreshCursor;
 
     @Scheduled(fixedDelay = 60_000L, initialDelay = 60_000L)
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void recover() {
         if (!reviews.enabled()) return;
+        var sources = repository.findSourceRefreshCandidates(sourceRefreshCursor);
+        if (sources.isEmpty() && sourceRefreshCursor != 0) {
+            sourceRefreshCursor = 0;
+            sources = repository.findSourceRefreshCandidates(0);
+        }
+        for (Long id : sources) {
+            sourceRefreshCursor = id;
+            try {
+                reviews.refreshSystemSourceQuestion(id);
+            } catch (RuntimeException failure) {
+                log.warn("Manager audit source refresh failed reviewId={} errorType={}",
+                        id, failure.getClass().getSimpleName());
+            }
+        }
         LocalDateTime now = LocalDateTime.now();
         var transaction = new TransactionTemplate(transactionManager);
         for (Long id : repository.findRecoveryCandidates(now, now.minusMinutes(1))) {

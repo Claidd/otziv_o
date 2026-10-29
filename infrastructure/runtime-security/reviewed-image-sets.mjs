@@ -94,6 +94,13 @@ const RELEASE_SETS = Object.freeze({
   'c36-mc': { component: 'mc', path: 'infrastructure/runtime-security/reviewed-images-c36-mc.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c36-mc/Dockerfile' },
   'c36-minio': { component: 'minio', path: 'infrastructure/runtime-security/reviewed-images-c36-minio.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c36-local-s3/Dockerfile' },
   'c36-postgres': { component: 'postgres', path: 'infrastructure/runtime-security/reviewed-images-c36-postgres.json', context: 'infrastructure/runtime-security/builds/c36-postgres', dockerfile: 'infrastructure/runtime-security/builds/c36-postgres/Dockerfile' },
+  // Keep implicit historical lookup stable; current publications use explicit manifests.
+  'c44-grafana': { component: 'grafana', path: 'infrastructure/runtime-security/reviewed-images-c44-grafana.json', context: 'infrastructure/runtime-security/builds/c44-grafana', dockerfile: 'infrastructure/runtime-security/builds/c44-grafana/Dockerfile' },
+  'c43-keycloak': { component: 'keycloak', path: 'infrastructure/runtime-security/reviewed-images-c43-keycloak.json', context: 'infrastructure/runtime-security/builds/c43-keycloak', dockerfile: 'infrastructure/runtime-security/builds/c43-keycloak/Dockerfile' },
+  'c43-tempo': { component: 'tempo', path: 'infrastructure/runtime-security/reviewed-images-c43-tempo.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c43-tempo/Dockerfile' },
+  'c43-loki': { component: 'loki', path: 'infrastructure/runtime-security/reviewed-images-c43-loki.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c43-loki/Dockerfile' },
+  'c43-alloy': { component: 'alloy', path: 'infrastructure/runtime-security/reviewed-images-c43-alloy.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c43-alloy/Dockerfile' },
+  'c43-grafana': { component: 'grafana', path: 'infrastructure/runtime-security/reviewed-images-c43-grafana.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c43-grafana/Dockerfile' },
 });
 // These two local-stack dependencies were absent from the immutable C7 manifest.
 // Keep their original pins and service coverage explicit when adding publication.

@@ -225,7 +225,8 @@ public class ManagerAutomationFailureService {
                 invoice == null ? null : invoice.getId(),
                 title,
                 subtitle,
-                "Ошибка автоматизации · " + state.getConsecutiveFailures(),
+                policy.requiresDeliveryReceipt(state) ? "Сверка доставки · система"
+                        : "Ошибка автоматизации · " + state.getConsecutiveFailures(),
                 String.join(" · ", reasonParts),
                 targetUrl,
                 company == null ? null : company.getUrlChat(),
@@ -243,6 +244,13 @@ public class ManagerAutomationFailureService {
                 || normalized.contains("уже есть другой банковский платеж")
                 || normalized.contains("уже есть созданный банковский платеж")
                 || normalized.contains("уже существует другой банковский платеж");
+    }
+
+    @Transactional(readOnly = true)
+    public boolean systemOwnsIssue(AutomationFailureIssue issue) {
+        return issue != null && ENTITY_AUTOMATION_FAILURE.equals(issue.entityType()) && issue.commonInvoiceId() == null
+                && issue.stateId() != null
+                && stateRepository.findById(issue.stateId()).map(policy::requiresDeliveryReceipt).orElse(false);
     }
 
     private CommonInvoice activeCommonInvoice(Order order) {

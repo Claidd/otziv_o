@@ -1061,6 +1061,34 @@ class ManagerReportReviewQualityServiceTest {
     }
 
     @Test
+    void futureIntentionMislabelledAsCompletedDoesNotCreateADataPause() throws Exception {
+        String answer = "Открою карточку компании Вектор.";
+        var root = new ObjectMapper().readTree(assessment("SATISFIED", answer, "E1", "COMPLETED_ACTION", "UNVERIFIABLE", "Нет события открытия"));
+        ((com.fasterxml.jackson.databind.node.ObjectNode) root).put("contextStatus", "INSUFFICIENT");
+        var missing = root.path("criteria").get(0).deepCopy();
+        ((com.fasterxml.jackson.databind.node.ObjectNode) missing).put("criterionIndex", 1).put("status", "MISSING").put("answerQuote", "");
+        ((com.fasterxml.jackson.databind.node.ArrayNode) root.path("criteria")).add(missing);
+        provider(root.toString());
+
+        var result = service.assessAnswer("Существующая отправка требует проверки.",
+                new ManagerReportReviewQualityService.ReviewQuestion("Что сделаете для проверки?",
+                        List.of("открыть карточку", "проверить исходную отправку")), answer, false);
+
+        assertThat(result.decision()).isEqualTo(ManagerReportReviewQualityService.Decision.NEEDS_CLARIFICATION);
+        assertThat(result.claims().getFirst().kind()).isEqualTo(ManagerReportReviewQualityService.ClaimKind.PROMISE);
+        assertThat(result.claims().getFirst().status()).isEqualTo(ManagerReportReviewQualityService.ClaimStatus.PLAN);
+        assertThat(result.pending()).isFalse();
+    }
+
+    @Test
+    void futureOpeningCannotHideAClaimThatPaymentAlreadyArrived() {
+        String answer = "Открою уже оплаченный счёт и проверю результат.";
+        provider(assessment("SATISFIED", answer, "E1", "FACT", "UNVERIFIABLE", "Оплата не подтверждена"));
+        assertThat(service.assessAnswer("Оплата не подтверждена.", question(), answer, false).decision())
+                .isEqualTo(ManagerReportReviewQualityService.Decision.NEEDS_CONTEXT);
+    }
+
+    @Test
     void originalRecordedErrorCanProveTheRecordButNotTheCurrentInvoiceState() throws Exception {
         String note = "invoice:189:last_error | invoice.last_error=Прежняя ошибка про отзыв #200221";
         String report = "История: invoice:999:last_error | invoice.last_error=НЕ БРАТЬ ИЗ ИСТОРИИ\n"

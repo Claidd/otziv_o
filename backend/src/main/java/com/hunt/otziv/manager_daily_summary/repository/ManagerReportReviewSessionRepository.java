@@ -68,6 +68,14 @@ public interface ManagerReportReviewSessionRepository extends JpaRepository<Mana
             """, nativeQuery = true)
     List<Long> findRecoveryCandidates(@Param("now") LocalDateTime now, @Param("cutoff") LocalDateTime cutoff);
 
+    @Query(value = """
+            SELECT review_id FROM manager_report_review_sessions
+             WHERE test_mode = false AND completed_at IS NULL AND status = 'QUESTION_PENDING'
+               AND review_id > :afterId
+             ORDER BY review_id LIMIT 20
+            """, nativeQuery = true)
+    List<Long> findSourceRefreshCandidates(@Param("afterId") long afterId);
+
     /** Committed separately from the provider call, so restarts and failed transactions retain the lease. */
     @Modifying
     @Query(value = """

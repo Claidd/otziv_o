@@ -236,7 +236,7 @@ public class ManagerReportReviewTelegramService {
                             review.getQuestionsContext(), currentDayIssueCount)
                     : new ManagerReportReviewQualityService.QuestionGeneration(List.of(), true, "");
             preparedQuestions = generation.aiVerified()
-                    ? withGoalQuestions(generation.questions(), mandatoryQuestions)
+                    ? managerQuestions(withGoalQuestions(generation.questions(), mandatoryQuestions), manager.getId())
                     : List.of();
             review.setQuestionsJson(qualityService.questionsJson(preparedQuestions));
             review.setQuestionsSource(generation.aiVerified() ? QUESTIONS_AI : QUESTIONS_PENDING_AI);
@@ -693,6 +693,42 @@ public class ManagerReportReviewTelegramService {
 
     private String continueFlow(ManagerReportReviewSession review, User actor) {
         return continueFlow(review, actor, false);
+    }
+
+    @Transactional
+    public void refreshSystemSourceQuestion(Long reviewId) {
+        ManagerReportReviewSession review = sessionRepository.findForUpdateById(reviewId).orElse(null);
+        if (review == null || review.isTestMode() || review.getCompletedAt() != null
+                || review.getStatus() != ManagerReportReviewStatus.QUESTION_PENDING) return;
+        var questions = qualityService.readQuestions(review.getQuestionsJson());
+        int index = review.getCurrentQuestionIndex();
+        if (index < 0 || index >= questions.size() || !issueService.isPending(review, index)) return;
+        var sources = questions.get(index).sourceTaskIds();
+        if (sources.isEmpty() || !sources.stream().allMatch(id -> taskContextService.systemOwnsSource(id, review.managerId()))) return;
+        issueService.withdrawResolvedSourceIssues(review, questions);
+        if (issueService.isPending(review, index)) return;
+        event(review, "SYSTEM_SOURCE_QUESTION_WITHDRAWN", null, "SYSTEM", "recovery-job",
+                "questionIndex=" + index + "; сверка доставки выполняется системой, ответ менеджера не требуется");
+        LocalDateTime now = LocalDateTime.now();
+        aiAvailabilityService.resume(review, now, "source-refresh");
+        // A withdrawn system question cannot consume the employee's business-answer window.
+        // Clear the old restriction episode; its immutable events remain in the audit history.
+        if (review.getDeadlineStartedAt() != null) {
+            event(review, "SYSTEM_SOURCE_DEADLINE_RESTARTED", null, "SYSTEM", "recovery-job",
+                    "previousDeadlineStartedAt=" + review.getDeadlineStartedAt()
+                            + "; restrictedAt=" + review.getRestrictedAt()
+                            + "; срок начат заново после снятия технического вопроса");
+            review.setDeadlineStartedAt(now);
+            review.setReminderOneSentAt(null);
+            review.setReminderThreeSentAt(null);
+            review.setRestrictedAt(null);
+            review.setRestrictionReleasedAt(null);
+        }
+        review.setRecoveryAttempts(0);
+        review.setRecoveryNextAttemptAt(null);
+        review.setRecoveryAwaitingContext(false);
+        accessPolicy.invalidate(review.getManagerUserId());
+        continueFlow(review, review.getManager().getUser(), true);
     }
 
     @Transactional
@@ -1554,10 +1590,8 @@ public class ManagerReportReviewTelegramService {
         telegramService.sendMessage(
                 review.getRecipientChatId(),
                 "✅ <b>Аудит обновлён</b>\n\n"
-                        + (withdrawn == 1
-                        ? "Одна связанная задача уже выполнена после формирования отчёта. "
-                        : "Связанные задачи уже выполнены после формирования отчёта: " + withdrawn + ". ")
-                        + "Вопрос по ней снят автоматически.",
+                        + "После сверки источников снято вопросов: " + withdrawn + ". "
+                        + "Уже выполненные задачи и техническая сверка доставки не требуют ответа менеджера.",
                 "HTML"
         );
     }
@@ -1684,9 +1718,8 @@ public class ManagerReportReviewTelegramService {
                 review.getManager() == null ? null : review.getManager().getId(), review.getSummaryDate())));
         mandatoryQuestions.addAll(commitmentService.dueQuestions(
                 review.getManager() == null ? null : review.getManager().getId()));
-        List<ManagerReportReviewQualityService.ReviewQuestion> allQuestions = withGoalQuestions(
-                generation.questions(),
-                mandatoryQuestions);
+        List<ManagerReportReviewQualityService.ReviewQuestion> allQuestions = managerQuestions(withGoalQuestions(
+                generation.questions(), mandatoryQuestions), review.managerId());
         review.setQuestionsJson(qualityService.questionsJson(allQuestions));
         review.setQuestionsSource(QUESTIONS_AI);
         review.setIssueCount(allQuestions.size());
@@ -1697,6 +1730,13 @@ public class ManagerReportReviewTelegramService {
 
     private boolean questionsPendingAi(ManagerReportReviewSession review) {
         return QUESTIONS_PENDING_AI.equalsIgnoreCase(clean(review.getQuestionsSource()));
+    }
+
+    private List<ManagerReportReviewQualityService.ReviewQuestion> managerQuestions(
+            List<ManagerReportReviewQualityService.ReviewQuestion> questions, Long managerId) {
+        return questions.stream().filter(question -> question.sourceTaskIds().isEmpty()
+                || !question.sourceTaskIds().stream().allMatch(id -> taskContextService.systemOwnsSource(id, managerId)))
+                .toList();
     }
 
     private String answerDirectionsHtml() {
@@ -1728,7 +1768,9 @@ public class ManagerReportReviewTelegramService {
         String prompt = "Ответ сохранён и повторно проверен автоматически. Для одного из утверждений пока нет "
                 + "подтверждения в исходных данных. Уточните, на какую запись или проверенное действие вы опираетесь; "
                 + "если это предположение или цитата прежней ошибки, обозначьте это. "
-                + "Остальные части ответа сохранены. Срок остаётся на паузе, проверка продолжится автоматически.";
+                + "Остальные части ответа сохранены. Срок остаётся на паузе. "
+                + "Ответьте уточнением на вопрос обычным сообщением; после него система проверит ответ автоматически. "
+                + "Нажимать «Продолжить проверку» не нужно.";
         boolean delivered;
         if (questionIndex == -1) {
             sendPlanPrompt(review, prompt);

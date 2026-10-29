@@ -212,7 +212,7 @@ class ManagerProblemBusinessDiagnosisTest {
         assertThat(result.actions()).extracting(Action::code).containsExactly("CHECK_DELIVERY");
         assertThat(result.summary()).contains("не подтверждён");
         assertThat(result.actions()).allSatisfy(action -> {
-            assertThat(action.text()).contains("Нажмите «Проверить отправку»", "существующую отправку", "замечание останется открытым")
+            assertThat(action.text()).contains("Система сверяет", "существующую отправку", "нужна сверка администратором")
                     .doesNotContain("восстановить очередь", "восстановит очередь", "Откройте историю", "администратору", "вручную");
             assertThat(action.owner()).isEqualTo("Система");
             assertThat(action.verification()).contains("Отсутствие сообщения", "не доказывает");
@@ -226,7 +226,7 @@ class ManagerProblemBusinessDiagnosisTest {
         Diagnosis result = ManagerProblemBusinessDiagnosis.fallback(List.of(f("automation", "delivery_status", "UNKNOWN"),
                 f("automation", "scenario", scenario), f("automation", "state_status", "ACTIVE"), f("automation", "current_cycle", "true")));
 
-        assertThat(result.actions().getFirst().text()).contains("Проверить отправку", "проверит возможность восстановить очередь", "Повтор старой операции не запускается");
+        assertThat(result.actions().getFirst().text()).contains("Система проверяет", "проверка восстановления очереди", "повтор старой операции не запускается");
         assertThat(result.verification().getFirst()).contains("восстановлена очередь плановых напоминаний", "только по их фактическому результату");
         assertThat(ManagerProblemBusinessDiagnosis.readable(result)).isTrue();
     }
@@ -237,7 +237,7 @@ class ManagerProblemBusinessDiagnosisTest {
         Diagnosis result = ManagerProblemBusinessDiagnosis.fallback(List.of(f("automation", "delivery_status", "UNKNOWN"),
                 f("automation", "scenario", scenario), f("automation", "state_status", "ACTIVE"), f("automation", "current_cycle", "true")));
 
-        assertThat(result.actions().getFirst().text()).contains("Проверить отправку", "замечание останется открытым", "Новое сообщение не создаётся")
+        assertThat(result.actions().getFirst().text()).contains("Система сверяет", "нужна сверка администратором", "Новое сообщение не создаётся")
                 .doesNotContain("очередь");
         assertThat(result.verification().getFirst()).doesNotContain("очередь");
         assertThat(ManagerProblemBusinessDiagnosis.readable(result)).isTrue();

@@ -94,6 +94,10 @@ ADD --chown=1000:0 --checksum=sha256:03dc4dc834a928730d52a50952de0f30c35e0daf048
 ADD --chown=1000:0 --checksum=sha256:d0e4c6ee4779f59f6ab2fb5d388e4f57147c82270164b37945764bb9bda96a44 \
     https://repo.maven.apache.org/maven2/io/netty/netty-handler/4.1.137.Final/netty-handler-4.1.137.Final.jar \
     /opt/keycloak/lib/lib/main/io.netty.netty-handler-4.1.136.Final.jar
+# Match the accepted issuer's official Guava patch at the registered classpath path.
+ADD --chown=1000:0 --chmod=0644 --checksum=sha256:b530942257fb935f8b2cfaa5f8eb5bd59c555fd8e8d01b8ce98912e077ea606c \
+    https://repo.maven.apache.org/maven2/com/google/guava/guava/33.7.2-jre/guava-33.7.2-jre.jar \
+    /opt/keycloak/lib/lib/main/com.google.guava.guava-33.5.0-jre.jar
 COPY --from=provider-build --chown=1000:0 /provider/target/otziv-security-generation.jar /opt/keycloak/providers/otziv-security-generation.jar
 ENV KC_RUN_IN_CONTAINER=true
 WORKDIR /opt/keycloak

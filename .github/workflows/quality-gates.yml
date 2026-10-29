@@ -85,6 +85,12 @@ on:
           - c36-mc
           - c36-minio
           - c36-postgres
+          - c43-tempo
+          - c43-loki
+          - c43-alloy
+          - c43-grafana
+          - c43-keycloak
+          - c44-grafana
   pull_request:
   push:
     branches: [main]
@@ -311,6 +317,8 @@ jobs:
         run: |
           python3 -B infrastructure/scripts/security/test_c40_gitleaks_evidence.py -v
           python3 -B infrastructure/scripts/security/test_c41_gitleaks_evidence.py -v
+          python3 -B infrastructure/scripts/security/test_c43_gitleaks_evidence.py -v
+          python3 -B infrastructure/scripts/security/test_c44_gitleaks_evidence.py -v
       - name: Exercise production release lineage guards
         shell: pwsh
         run: ./infrastructure/scripts/security/check-deploy-release-contract.ps1
@@ -640,9 +648,13 @@ jobs:
         if: ${{ needs.changes.outputs.issuer == 'true' }}
         working-directory: backend
         run: bash ./mvnw -f ../infrastructure/keycloak/security-generation/pom.xml -B -ntp verify
-      - name: Build the real issuer release image
+      - name: Load the exact reviewed issuer release image
         if: ${{ needs.changes.outputs.infrastructure == 'true' }}
-        run: docker build -t otziv-issuer-ci infrastructure/runtime-security/builds/c35-keycloak
+        run: |
+          python3 -B infrastructure/runtime-security/evidence_archive.py hydrate --download
+          ISSUER_IMAGE="$(node infrastructure/runtime-security/ci-keycloak-c43-fixture.mjs)"
+          docker pull --platform linux/amd64 "$ISSUER_IMAGE"
+          docker tag "$ISSUER_IMAGE" otziv-issuer-ci
       - name: Build MySQL and scan the exact reviewed PostgreSQL image
         if: ${{ needs.changes.outputs.infrastructure == 'true' }}
         run: |

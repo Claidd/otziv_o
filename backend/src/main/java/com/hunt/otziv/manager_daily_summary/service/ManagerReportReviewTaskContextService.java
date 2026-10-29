@@ -83,6 +83,16 @@ public class ManagerReportReviewTaskContextService {
                 .orElse(false);
     }
 
+    @Transactional(readOnly = true)
+    public boolean systemOwnsSource(Long sourceTaskId, Long managerId) {
+        if (sourceTaskId == null || managerId == null) return false;
+        return concreteItemRepository.findById(sourceTaskId)
+                .filter(source -> source.getControl() != null && managerId.equals(source.getControl().managerId()))
+                .filter(source -> "AUTOMATION_FAILURE".equals(source.getEntityType()))
+                .map(source -> diagnosticsService.systemOwnsDeliveryReconciliation(sourceTaskId))
+                .orElse(false);
+    }
+
     private boolean resolvedSatisfactorily(ManagerDailyControlConcreteItem source) {
         if (source.getStatus() != ManagerDailyControlItemStatus.RESOLVED) {
             boolean resolvedLater = source.getDeferredAt() != null

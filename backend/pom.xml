@@ -23,6 +23,7 @@
 		<pdfbox.version>3.0.8</pdfbox.version>
 		<testcontainers.version>2.0.5</testcontainers.version>
 		<aws.sdk.version>2.44.1</aws.sdk.version>
+		<guava.version>33.7.2-jre</guava.version>
 		<!-- Boot 4.0.8 selects Netty 4.2.17; 4.2.18 fixes CVE-2026-89044.
 		     Keep newer transport fixes above its BOM; HttpClient 5.6.4 targets Core 5.4.3. -->
 		<netty.version>4.2.18.Final</netty.version>
@@ -37,6 +38,12 @@
 
 	<dependencyManagement>
 		<dependencies>
+			<!-- Fix CVE-2026-102554 in transitive Guava consumers. -->
+			<dependency>
+				<groupId>com.google.guava</groupId>
+				<artifactId>guava</artifactId>
+				<version>${guava.version}</version>
+			</dependency>
 			<dependency>
 				<groupId>software.amazon.awssdk</groupId>
 				<artifactId>bom</artifactId>
@@ -465,6 +472,11 @@
 						<version>1.0.0</version>
 						<!-- Plugin realms do not inherit the application's dependencyManagement. -->
 						<dependencies>
+							<dependency>
+								<groupId>com.google.guava</groupId>
+								<artifactId>guava</artifactId>
+								<version>${guava.version}</version>
+							</dependency>
 							<dependency>
 								<groupId>com.fasterxml.jackson.core</groupId>
 								<artifactId>jackson-core</artifactId>

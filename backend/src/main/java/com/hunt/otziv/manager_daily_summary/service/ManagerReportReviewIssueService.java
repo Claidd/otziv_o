@@ -113,7 +113,8 @@ public class ManagerReportReviewIssueService {
             }
             List<Long> sourceIds = questions.get(issue.getQuestionIndex()).sourceTaskIds();
             if (!sourceIds.isEmpty()
-                    && sourceIds.stream().allMatch(taskContextService::resolvedSatisfactorily)) {
+                    && sourceIds.stream().allMatch(id -> taskContextService.resolvedSatisfactorily(id)
+                            || taskContextService.systemOwnsSource(id, review.managerId()))) {
                 issue.setStatus(ManagerReportReviewIssueStatus.WITHDRAWN);
                 withdrawn.add(issue);
             }

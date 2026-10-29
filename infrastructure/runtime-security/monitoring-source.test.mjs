@@ -56,3 +56,10 @@ test('C41 curl refresh keeps Grafana on the exact published image verification p
  for(const component of ['prometheus','loki','tempo','alloy'])assert.equal(isPublishedMonitoringOverlayManifest(component,path),false);
  assert.equal(isPublishedMonitoringOverlayManifest('grafana','infrastructure/runtime-security/reviewed-images-c41-tempo.json'),false);
 });
+
+test('library patch candidates retain published monitoring verification and component isolation',()=>{
+ for(const component of ['loki','tempo','alloy','grafana'])assert.equal(isPublishedMonitoringOverlayManifest(component,`infrastructure/runtime-security/reviewed-images-c43-${component}.json`),true);
+ assert.equal(isPublishedMonitoringOverlayManifest('prometheus','infrastructure/runtime-security/reviewed-images-c43-prometheus.json'),false);
+ assert.equal(isPublishedMonitoringOverlayManifest('grafana','infrastructure/runtime-security/reviewed-images-c44-grafana.json'),true);
+ assert.equal(isPublishedMonitoringOverlayManifest('tempo','infrastructure/runtime-security/reviewed-images-c44-grafana.json'),false);
+});
