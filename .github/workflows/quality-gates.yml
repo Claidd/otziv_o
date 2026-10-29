@@ -91,6 +91,7 @@ on:
           - c43-grafana
           - c43-keycloak
           - c44-grafana
+          - c45-keycloak
   pull_request:
   push:
     branches: [main]
