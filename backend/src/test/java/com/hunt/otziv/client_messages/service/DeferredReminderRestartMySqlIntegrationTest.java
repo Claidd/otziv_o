@@ -129,6 +129,7 @@ class DeferredReminderRestartMySqlIntegrationTest {
         assertThat(service.pendingReminderRestart(30, 2L)).contains(new PeriodicReminderRestart.PendingReminderRestart(checked.source().order(), next, true));
         assertThatThrownBy(() -> tx.execute(s -> service.restartDeferredReminder(checked, null, "owner")));
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM client_reminder_restart_audit", Integer.class)).isEqualTo(1);
+        assertThat(service.reminderRecoveryGeneration()).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT JSON_UNQUOTE(JSON_EXTRACT(previous_snapshot,'$.deliveryStatus')) FROM client_reminder_restart_audit", String.class)).isEqualTo("UNKNOWN");
         assertThat(jdbc.queryForObject("SELECT JSON_EXTRACT(previous_snapshot,'$.currentOrderGeneration') FROM client_reminder_restart_audit", Integer.class)).isEqualTo(3);
         assertThat(jdbc.queryForObject("SELECT JSON_UNQUOTE(JSON_EXTRACT(previous_snapshot,'$.envelope')) FROM client_reminder_restart_audit", String.class)).isEqualTo(checked.source().envelope());
@@ -145,6 +146,7 @@ class DeferredReminderRestartMySqlIntegrationTest {
         assertThat(read(false).getDeliveryEnvelope()).isEqualTo(checked.source().envelope());
         assertThat(read(false).getDispatchGeneration()).isZero();
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM client_reminder_restart_audit", Integer.class)).isZero();
+        assertThat(service.reminderRecoveryGeneration()).isZero();
     }
 
     @Test void concurrentRepairsCreateOnlyOneNewGenerationAndOneAudit() throws Exception {

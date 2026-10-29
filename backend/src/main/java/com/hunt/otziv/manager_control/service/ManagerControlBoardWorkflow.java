@@ -218,7 +218,8 @@ public class ManagerControlBoardWorkflow {
         }
         List<ManagerDailyControlItem> items = dailyControlItemRepository.findByControl(control);
         for (ManagerDailyControlItem item : items) {
-            if (item == null || item.getGroup() != ManagerDailyControlGroup.ACTION) {
+            if (item == null || item.getGroup() != ManagerDailyControlGroup.ACTION
+                    && !"AUTOMATION_FAILURES".equals(item.getReasonCode())) {
                 continue;
             }
             if (item.getCount() <= 0) {

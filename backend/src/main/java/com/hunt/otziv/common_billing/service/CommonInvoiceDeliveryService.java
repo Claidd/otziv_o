@@ -92,6 +92,7 @@ public class CommonInvoiceDeliveryService {
     private final CommonInvoiceMessageQueue messageQueue;
 
     @Autowired
+    @Lazy
     private CommonInvoiceFutureReminderRecovery futureReminderRecovery;
 
     private final PaperInvoiceManagerNotificationService paperInvoiceManagerNotificationService;

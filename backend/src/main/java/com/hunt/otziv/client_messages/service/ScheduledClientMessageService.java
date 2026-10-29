@@ -87,6 +87,7 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
 
     private static final ObjectMapper DELIVERY_JSON = new ObjectMapper();
 
+
     private static final int REVIEW_RECOVERY_RECHECK_MINUTES = 10;
 
     public static final String DEFAULT_REVIEW_CHECK_STATUSES = "На проверке";
@@ -549,6 +550,16 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
                 order, state.getDeliveryPreparedAt(), messageTime.nowStorage()), state.getDeliveryChannel()));
     }
 
+    @Override @Transactional(readOnly = true)
+    public long reminderRecoveryGeneration() {
+        Long count = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM client_reminder_restart_audit
+                WHERE reason IN ('periodic_next_cycle_scheduled_unknown_preserved',
+                  'periodic_invoice_next_cycle_scheduled_unknown_preserved')
+                """, Long.class);
+        return count == null ? 0 : count;
+    }
+
     @Override public LocalDateTime futurePaymentReminderAt(LocalDateTime from) {
         LocalDateTime base = messageTime.nowStorage();
         if (from != null && from.isAfter(base)) base = from;
@@ -720,6 +731,8 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
         state.setLockedUntil(null);
         state.setNextAttemptAt(next);
         stateRepository.save(state);
+        if (deferred && applicationEvents != null) applicationEvents.publishEvent(
+                new com.hunt.otziv.client_messages.api.ClientReminderQueueRestored(messageTime.nowIrkutsk().toLocalDate()));
         return next;
     }
 

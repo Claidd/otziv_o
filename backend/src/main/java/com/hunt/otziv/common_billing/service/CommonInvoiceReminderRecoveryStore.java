@@ -24,6 +24,9 @@ public class CommonInvoiceReminderRecoveryStore {
     private final JdbcTemplate jdbc;
     private final PeriodicReminderRestart planner;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private org.springframework.context.ApplicationEventPublisher reminderEvents;
+
     record QueueSource(String operationId, String hash, LocalDateTime createdAt) { }
     record InvoiceSource(CommonInvoiceStatus status, long amount, long paid, LocalDateTime sent,
             LocalDateTime lastReminder, LocalDateTime nextReminder, LocalDateTime updated, Long accountId,
@@ -111,6 +114,8 @@ public class CommonInvoiceReminderRecoveryStore {
         invoice.setPaymentMessageConfirmed(false); invoice.setPaymentMessageChannel(null);
         invoice.setLastError(null); invoice.setNextReminderAt(next);
         invoices.save(invoice);
+        if (reminderEvents != null) reminderEvents.publishEvent(new com.hunt.otziv.client_messages.api.ClientReminderQueueRestored(
+                java.time.LocalDate.now(java.time.ZoneId.of("Asia/Irkutsk"))));
         return Optional.of(next);
     }
 
