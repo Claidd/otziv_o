@@ -118,7 +118,8 @@ public class ManagerReportReviewQualityService {
             из обещания косвенное признание невыполнения. Нужен факт действия или прямое признание,
             что действие ещё не выполнено. Один PROMISE не подтверждает такой критерий.
             В previousAttempts попытки идут от старых к новым; индексы начинаются с нуля.
-            Индекс managerAnswer равен числу previousAttempts. Дополнение можно оценить вместе
+            Индекс managerAnswer явно указан в managerAnswerAttempt и равен числу previousAttempts.
+            Для цитаты текущего ответа используй именно managerAnswerAttempt. Дополнение можно оценить вместе
             с прежними ответами. Новая явная поправка отменяет прежнее утверждение: не используй
             отозванную версию. Неразрешённое противоречие означает CONTRADICTED.
             Явный отзыв собственного предыдущего ответа (например «про ошибку оплаты я написала неверно»)
@@ -392,6 +393,7 @@ public class ManagerReportReviewQualityService {
             facts.put("requiresCommitment", requiresCommitment(expectedPoints));
             facts.put("previousAttempts", attempts.subList(0, attempts.size() - 1));
             facts.put("managerAnswer", value);
+            facts.put("managerAnswerAttempt", attempts.size() - 1);
             facts.put("evaluationTime", answeredAt.toString());
             int tokenBudget = settingInt("manager.report-review.answer-assessment-max-tokens", 8000, 2000, 16000);
             long deadline = requestDeadline("answer-assessment");
@@ -455,7 +457,7 @@ public class ManagerReportReviewQualityService {
             int attempt = item.path("answerAttempt").asInt(-1);
             String quote = clean(item.path("answerQuote").asText(""));
             List<String> refs = references(item.path("evidenceRefs"), evidence);
-            if (status != CriterionStatus.MISSING) requireQuotedAttempt(attempt, quote, attempts);
+            if (status != CriterionStatus.MISSING) attempt = resolveQuotedAttempt(attempt, quote, attempts);
             if (status == CriterionStatus.SATISFIED || status == CriterionStatus.CONTRADICTED) {
                 require(!refs.isEmpty(), ProtocolViolation.CRITERION_EVIDENCE_REQUIRED);
             }
@@ -468,7 +470,7 @@ public class ManagerReportReviewQualityService {
             ClaimStatus status = protocolEnum(ClaimStatus.class, item.path("status").asText(""), ProtocolViolation.CLAIM_STATUS);
             int attempt = item.path("answerAttempt").asInt(-1);
             String quote = clean(item.path("answerQuote").asText(""));
-            requireQuotedAttempt(attempt, quote, attempts);
+            attempt = resolveQuotedAttempt(attempt, quote, attempts);
             List<String> refs = references(item.path("evidenceRefs"), evidence);
             require(status != ClaimStatus.PLAN || kind == ClaimKind.PROMISE, ProtocolViolation.PLAN_REQUIRES_PROMISE);
             require(kind != ClaimKind.PROMISE || status != ClaimStatus.SUPPORTED,
@@ -624,7 +626,7 @@ public class ManagerReportReviewQualityService {
             String verification = limit(item.path("verification").asText(""), 1000);
             String dueAt = clean(item.path("dueAt").asText(""));
             int attempt = item.path("answerAttempt").asInt(-1);
-            requireQuotedAttempt(attempt, item.path("answerQuote").asText(""), attempts);
+            attempt = resolveQuotedAttempt(attempt, item.path("answerQuote").asText(""), attempts);
             requireQuotedAttempt(attempt, item.path("deadlineQuote").asText(""), attempts);
             requireQuotedAttempt(attempt, item.path("verificationQuote").asText(""), attempts);
             require(!action.isBlank() && !owner.isBlank() && !verification.isBlank(), ProtocolViolation.COMMITMENT_FIELDS);
@@ -908,6 +910,18 @@ public class ManagerReportReviewQualityService {
             }
         }
         return false;
+    }
+
+    private int resolveQuotedAttempt(int attempt, String quote, List<String> attempts) {
+        require(attempt >= 0 && attempt < attempts.size(), ProtocolViolation.ANSWER_ATTEMPT_INDEX);
+        require(!quote.isBlank(), ProtocolViolation.ANSWER_QUOTE_REQUIRED);
+        if (attempts.get(attempt).contains(quote)) return attempt;
+        int current = attempts.size() - 1;
+        // The model can miscount repeated attempts. Rebind only a verbatim quote
+        // actually present in the current answer; never guess a historical source,
+        // rewrite a quote, or replace an already valid historical attribution.
+        if (attempts.get(current).contains(quote)) return current;
+        throw new ProtocolValidationFailure(ProtocolViolation.ANSWER_QUOTE_MISMATCH);
     }
 
     private void requireQuotedAttempt(int attempt, String quote, List<String> attempts) {
