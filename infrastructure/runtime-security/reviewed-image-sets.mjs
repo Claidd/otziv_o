@@ -10,6 +10,7 @@ const C12_PATH = 'infrastructure/runtime-security/reviewed-images-c12-phpmyadmin
 const C12_CONTEXT = 'infrastructure/runtime-security/builds/phpmyadmin-alpine';
 const RELEASE_SETS = Object.freeze({
   'c42-mysql': { component: 'mysql', path: 'infrastructure/runtime-security/reviewed-images-c42-mysql.json', context: 'infrastructure/runtime-security/builds/c42-mysql', dockerfile: 'infrastructure/runtime-security/builds/c42-mysql/Dockerfile' },
+  'c46-mysql': { component: 'mysql', path: 'infrastructure/runtime-security/reviewed-images-c46-mysql.json', context: 'infrastructure/runtime-security/builds/c46-mysql', dockerfile: 'infrastructure/runtime-security/builds/c46-mysql/Dockerfile' },
   'c41-nginx': { component: 'nginx', path: 'infrastructure/runtime-security/reviewed-images-c41-nginx.json', context: 'infrastructure/runtime-security/builds/c41-nginx', dockerfile: 'infrastructure/runtime-security/builds/c41-nginx/Dockerfile' },
   'c41-phpmyadmin': { component: 'phpmyadmin', path: 'infrastructure/runtime-security/reviewed-images-c41-phpmyadmin.json', context: 'infrastructure/runtime-security/builds/c41-phpmyadmin', dockerfile: 'infrastructure/runtime-security/builds/c41-phpmyadmin/Dockerfile' },
   'c41-grafana': { component: 'grafana', path: 'infrastructure/runtime-security/reviewed-images-c41-grafana.json', context: 'infrastructure/runtime-security/builds/c41-grafana', dockerfile: 'infrastructure/runtime-security/builds/c41-grafana/Dockerfile' },

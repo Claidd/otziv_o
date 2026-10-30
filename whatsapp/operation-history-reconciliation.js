@@ -3,6 +3,7 @@ const { OperationLedgerError, envelopeHash } = require("./operation-ledger");
 const { serializedId } = require("./message-identity");
 const { fetchAvailableWindow } = require("./inbound-history");
 const { createOperationReconciliationHandler } = require("./operation-reconciliation");
+const { requestHistorySynchronization } = require("./operation-history-sync");
 
 // Read the saved operation's chat, never the current company route. Neither an
 // empty nor a partial history authorizes sending. Ledger binding is the only write.
@@ -36,6 +37,25 @@ function createOperationHistoryReconciliationHandler({ ledger, clientId, getChat
     };
     const work = Promise.resolve().then(async () => {
       requireLive();
+      if (record.receiptCandidateConflict || (record.receiptCandidates?.length || 0) > 1)
+        return { ...ledger.lookup(operationId), recoveryCode: "history_ambiguous" };
+      if (record.receiptCandidates?.length === 1) {
+        let captured;
+        const binding = createOperationReconciliationHandler({ ledger, clientId,
+          canRead: () => !expired && canRead(), getMessage: async id => {
+            requireLive(); const found = await getMessage(id); requireLive(); return found;
+          }, onReconciled });
+        try {
+          await binding({ params: { operationId }, body: { messageId: record.receiptCandidates[0].messageId } },
+            { set() {}, json(value) { captured = value; } });
+          return captured;
+        } catch (error) {
+          requireLive();
+          if (error.code !== "operation_evidence_mismatch") throw error;
+          // A queued message with ACK=0 is not a confirmed send. History may
+          // become readable later; never submit that message a second time.
+        }
+      }
       const directIdentity = async id => {
         if (!getDirectMappings) return { chat: destination, aliases: new Set([destination]) };
         const mappings = await getDirectMappings(id);
@@ -63,7 +83,14 @@ function createOperationHistoryReconciliationHandler({ ledger, clientId, getChat
         return page;
       } }, window.from / 1000, { maxMessages });
       requireLive();
-      if (!history.covered) return { ...ledger.lookup(operationId), recoveryCode: "history_incomplete" };
+      const unresolved = async fallback => {
+        const synchronization = await requestHistorySynchronization({ ledger, record, envelope, chat, requireLive });
+        requireLive();
+        return { ...ledger.lookup(operationId),
+          recoveryCode: synchronization && synchronization.code !== "history_no_receipt" ? synchronization.code : fallback,
+          ...(synchronization ? { historySyncNextAt: synchronization.nextAt } : {}) };
+      };
+      if (!history.covered) return unresolved("history_incomplete");
       const matches = new Map();
       for (const candidate of history.messages) {
         const time = Number(candidate?.timestamp) * 1000;
@@ -74,8 +101,8 @@ function createOperationHistoryReconciliationHandler({ ledger, clientId, getChat
             && typeof candidate.body === "string" && candidate.body.trim() === message)
           matches.set(id, candidate);
       }
-      if (matches.size !== 1) return { ...ledger.lookup(operationId),
-        recoveryCode: matches.size ? "history_ambiguous" : "history_no_receipt" };
+      if (matches.size > 1) return { ...ledger.lookup(operationId), recoveryCode: "history_ambiguous" };
+      if (matches.size === 0) return unresolved("history_no_receipt");
       let result;
       const handler = createOperationReconciliationHandler({ ledger, clientId,
         canRead: () => !expired && canRead(),

@@ -38,6 +38,7 @@ on:
           - c30-mysql
           - c37-mysql
           - c42-mysql
+          - c46-mysql
           - c22-keycloak
           - c22-mc
           - c22-phpmyadmin
@@ -329,11 +330,12 @@ jobs:
       - name: Verify committed external evidence in coordinated deploy bundles
         shell: pwsh
         run: ./infrastructure/scripts/security/test-external-evidence-deploy-bundle.ps1
-      - name: Verify both reviewed MySQL deployment bundles
+      - name: Verify reviewed MySQL deployment bundles
         shell: pwsh
         run: |
           ./infrastructure/scripts/security/test-coordinated-mysql-deploy-bundle.ps1 -Set c37-mysql
           ./infrastructure/scripts/security/test-coordinated-mysql-deploy-bundle.ps1 -Set c42-mysql
+          ./infrastructure/scripts/security/test-coordinated-mysql-deploy-bundle.ps1 -Set c46-mysql
       - name: Exercise database image continuity and startup guards
         run: |
           python3 -m pip install --target "$RUNNER_TEMP/retained-artifact-deps" --require-hashes -r infrastructure/scripts/prod/retained-artifacts-requirements.txt
@@ -656,10 +658,12 @@ jobs:
           ISSUER_IMAGE="$(node infrastructure/runtime-security/ci-keycloak-fixture.mjs)"
           docker pull --platform linux/amd64 "$ISSUER_IMAGE"
           docker tag "$ISSUER_IMAGE" otziv-issuer-ci
-      - name: Build MySQL and scan the exact reviewed PostgreSQL image
+      - name: Load and scan the exact reviewed MySQL and PostgreSQL images
         if: ${{ needs.changes.outputs.infrastructure == 'true' }}
         run: |
-          docker build -t otziv-mysql-ci infrastructure/runtime-security/builds/c42-mysql
+          MYSQL_IMAGE="$(node infrastructure/runtime-security/ci-mysql-fixture.mjs)"
+          docker pull --platform linux/amd64 "$MYSQL_IMAGE"
+          docker tag "$MYSQL_IMAGE" otziv-mysql-ci
           POSTGRES_IMAGE="$(node infrastructure/runtime-security/ci-postgres-c36-fixture.mjs)"
           docker pull --platform linux/amd64 "$POSTGRES_IMAGE"
           docker tag "$POSTGRES_IMAGE" otziv-postgres-ci

@@ -69,7 +69,9 @@ class WhatsAppServiceTest {
 
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.CsvSource({"history_incomplete,whatsapp_history_incomplete",
-            "history_ambiguous,whatsapp_history_evidence_ambiguous", "history_no_receipt,whatsapp_history_checked_no_receipt"})
+            "history_ambiguous,whatsapp_history_evidence_ambiguous", "history_no_receipt,whatsapp_history_checked_no_receipt",
+            "history_sync_requested,whatsapp_history_sync_pending", "history_sync_pending,whatsapp_history_sync_pending",
+            "history_sync_unavailable,whatsapp_history_sync_unavailable"})
     void automatedHistoryUncertaintyCannotBeTreatedAsKnownUnsent(String reason, String expected) {
         historyClient();
         when(restTemplate.getForObject("http://fixture:3000/operations/saved", String.class)).thenReturn(historyStatus("UNKNOWN", ""));

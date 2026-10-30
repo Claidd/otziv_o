@@ -12,6 +12,7 @@ const HASH = /^[a-f0-9]{64}$/u;
 const RECORD_FILE = /^[a-f0-9]{64}\.json$/u;
 const MAX_RECORD_BYTES = 4096;
 const MAX_RECEIPT_WINDOW_MS = 5 * 60 * 1000;
+const HISTORY_SYNC_INTERVAL_MS = 30 * 60 * 1000;
 
 class OperationLedgerError extends Error {
   constructor(code, statusCode = 503) { super(code); this.code = code; this.statusCode = statusCode; }
@@ -45,7 +46,7 @@ class OperationLedger {
     this.maxRecords = Math.max(1, Math.min(Math.floor(Number(maxRecords)) || 100_000, 1_000_000));
     this.index = new OperationLedgerIndex(); this.inFlight = new Set(); this.maintenance = 0;
     // Rebuilt from the same durable records. A receipt can identify only one operation.
-    this.messageOwners = new Map(); this.envelopeRecords = new Map();
+    this.messageOwners = new Map(); this.envelopeRecords = new Map(); this.historySyncByChat = new Map();
     this.healthy = true; this.closing = false; this.persistenceFailures = 0; this.readFailures = 0;
     this.admissionRejected = 0; this.closeWaiters = [];
     io.mkdirSync(this.directory, { recursive: true, mode: 0o700 });
@@ -81,6 +82,11 @@ class OperationLedger {
       let records = this.envelopeRecords.get(record.envelopeHash);
       if (!records) this.envelopeRecords.set(record.envelopeHash, records = new Map());
       records.set(record.key, record);
+      if (record.historySync) {
+        const previous = this.historySyncByChat.get(record.historySync.chatHash);
+        if (previous === undefined || record.historySync.requestedAt >= previous.requestedAt)
+          this.historySyncByChat.set(record.historySync.chatHash, record.historySync);
+      }
       if (record.state === "SUCCEEDED") {
         let owners = this.messageOwners.get(record.messageId);
         if (!owners) this.messageOwners.set(record.messageId, owners = new Set());
@@ -97,6 +103,16 @@ class OperationLedger {
       if (record.version !== 1 || record.key !== key || !HASH.test(record.envelopeHash)
           || !["RUNNING", "UNKNOWN", "SUCCEEDED"].includes(record.state)
           || !Number.isSafeInteger(record.startedAt) || record.startedAt < 0
+          || (record.historySync !== undefined && (!record.historySync || !HASH.test(record.historySync.chatHash)
+            || !Number.isSafeInteger(record.historySync.requestedAt) || record.historySync.requestedAt < 0
+            || (record.historySync.outcome !== undefined
+              && !["RESERVED", "REQUESTED", "NOT_AVAILABLE", "UNAVAILABLE"].includes(record.historySync.outcome))))
+          || (record.receiptCandidates !== undefined && (!Array.isArray(record.receiptCandidates)
+            || record.receiptCandidates.length > 4 || record.receiptCandidates.some(candidate => !candidate
+              || !validMessageId(candidate.messageId) || Buffer.byteLength(JSON.stringify(candidate.messageId), "utf8") > 512
+              || !Number.isSafeInteger(candidate.sentAt) || candidate.sentAt < 0
+              || !Number.isSafeInteger(candidate.observedAt) || candidate.observedAt < record.startedAt)))
+          || (record.receiptCandidateConflict !== undefined && typeof record.receiptCandidateConflict !== "boolean")
           || (record.state === "SUCCEEDED" && !validMessageId(record.messageId))) throw new Error("invalid record");
       return this.observe(record);
     } catch (error) {
@@ -117,6 +133,49 @@ class OperationLedger {
   }
   lookup(id) { const record = this.read(this.key(id)); if (!record) this.missing(); return this.snapshot(record); }
   assertEnvelope(record, hash) { if (record.envelopeHash !== hash) throw new OperationLedgerError("operation_payload_conflict", 409); }
+  reserveHistorySynchronization(record, envelope) {
+    this.assertWritable();
+    const current = this.read(record.key);
+    if (!current) this.missing();
+    this.assertEnvelope(current, envelopeHash(envelope));
+    if (current.state === "SUCCEEDED") return { finished: true };
+    if (this.inFlight.has(current.key)) throw new OperationLedgerError("operation_running", 409);
+    const chatHash = digest("otziv.whatsapp.history-chat.v1", JSON.stringify([envelope.clientId, envelope.kind, envelope.destination]));
+    const previous = this.historySyncByChat.get(chatHash), now = this.now();
+    if (previous !== undefined && now < previous.requestedAt + HISTORY_SYNC_INTERVAL_MS)
+      return { reserved: false, outcome: previous.outcome || "RESERVED", nextAt: previous.requestedAt + HISTORY_SYNC_INTERVAL_MS };
+    // Persist before contacting the primary device. A restart or a second
+    // operation in this chat must not flood it with history requests.
+    this.replace({ ...current, historySync: { chatHash, requestedAt: now, outcome: "RESERVED" } });
+    return { reserved: true, chatHash, requestedAt: now, nextAt: now + HISTORY_SYNC_INTERVAL_MS };
+  }
+  finishHistorySynchronization(record, reservation, outcome) {
+    this.assertWritable();
+    if (!["REQUESTED", "NOT_AVAILABLE", "UNAVAILABLE"].includes(outcome))
+      throw new OperationLedgerError("invalid_history_sync_outcome");
+    const current = this.read(record.key);
+    if (!current || current.state === "SUCCEEDED" || current.historySync?.chatHash !== reservation.chatHash
+        || current.historySync.requestedAt !== reservation.requestedAt) return;
+    this.replace({ ...current, historySync: { ...current.historySync, outcome } });
+  }
+  rememberReceiptCandidate(record, envelope, messageId, sentAt) {
+    this.assertWritable();
+    const current = this.read(record.key);
+    if (!current || current.state === "SUCCEEDED") return false;
+    this.assertEnvelope(current, envelopeHash(envelope));
+    if (!validMessageId(messageId) || Buffer.byteLength(JSON.stringify(messageId), "utf8") > 512 || !Number.isSafeInteger(sentAt)
+        || sentAt < current.startedAt - 2000
+        || sentAt > Math.min(current.completedAt ?? current.startedAt + MAX_RECEIPT_WINDOW_MS,
+          current.startedAt + MAX_RECEIPT_WINDOW_MS) + 2000) return false;
+    const candidates = current.receiptCandidates || [];
+    if (candidates.some(candidate => candidate.messageId === messageId)) return true;
+    const observedAt = this.now();
+    if (!Number.isSafeInteger(observedAt) || observedAt < current.startedAt) return false;
+    this.replace({ ...current, receiptCandidateConflict: candidates.length > 0,
+      receiptCandidates: candidates.length >= 4 ? candidates
+        : [...candidates, { messageId, sentAt, observedAt }] });
+    return true;
+  }
   admission() {
     const code = !this.owner.writer ? "operation_writer_locked" : this.closing ? "operation_ledger_closing"
       : !this.healthy ? "operation_ledger_unavailable" : this.recovery.required ? "operation_recovery_required"
@@ -178,7 +237,9 @@ class OperationLedger {
     try {
       let messageId;
       try { messageId = await send(); } catch { /* A called provider may already have sent. */ }
-      record = { ...record, completedAt: this.now(), state: validMessageId(messageId) ? "SUCCEEDED" : "UNKNOWN" };
+      // Provider events may have recorded an ID while the awaited send was
+      // stalled. Preserve that durable observation when its response is lost.
+      record = { ...this.read(key), completedAt: this.now(), state: validMessageId(messageId) ? "SUCCEEDED" : "UNKNOWN" };
       if (record.state === "SUCCEEDED") record.messageId = messageId;
       this.replace(record); durableResult = true;
       return { ...this.snapshot(record), replayed: false };
@@ -209,15 +270,23 @@ class OperationLedger {
       const owners = this.messageOwners.get(messageId);
       if (owners && [...owners].some(key => key !== current.key))
         throw new OperationLedgerError("operation_evidence_already_bound", 409);
+      if (current.receiptCandidateConflict || (current.receiptCandidates?.length || 0) > 1)
+        throw new OperationLedgerError("operation_evidence_ambiguous", 409);
+      if (current.receiptCandidates?.length === 1 && current.receiptCandidates[0].messageId !== messageId)
+        throw new OperationLedgerError("operation_evidence_mismatch", 409);
       if (sentAt !== undefined) this.assertReceiptWindow(current, sentAt);
       const resolved = { ...current, state: "SUCCEEDED", messageId, reconciledAt: this.now() };
       this.replace(resolved); return { ...this.snapshot(resolved), replayed: true };
     } finally { this.maintenance--; this.finishDrain(); }
   }
   receiptWindow(record) {
-    if (!Number.isSafeInteger(record.completedAt) || record.completedAt < record.startedAt)
+    const captured = record.receiptCandidates?.length === 1 && !record.receiptCandidateConflict
+      ? record.receiptCandidates[0] : null;
+    const endAt = record.completedAt ?? (captured && captured.observedAt <= record.startedAt + MAX_RECEIPT_WINDOW_MS
+      ? captured.observedAt : undefined);
+    if (!Number.isSafeInteger(endAt) || endAt < record.startedAt)
       throw new OperationLedgerError("operation_evidence_window_unavailable", 409);
-    const end = Math.min(record.completedAt, record.startedAt + MAX_RECEIPT_WINDOW_MS);
+    const end = Math.min(endAt, record.startedAt + MAX_RECEIPT_WINDOW_MS);
     return { from: record.startedAt - 2000, until: end + 2000 };
   }
   assertReceiptWindow(record, sentAt) {
