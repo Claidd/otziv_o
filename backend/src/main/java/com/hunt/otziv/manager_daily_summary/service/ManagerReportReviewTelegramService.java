@@ -1470,9 +1470,7 @@ public class ManagerReportReviewTelegramService {
                 : escape(clean(prefix)) + "\n\n")
                 + "❓ <b>Вопрос " + progress.position() + " из " + progress.total() + "</b>\n\n"
                 + escape(question.question())
-                + answerDirectionsHtml()
-                + "\n\nОтветьте по существу: "
-                + "<i>что произошло → ваш вывод → как вы поступите в похожей ситуации</i>.";
+                + answerDirectionsHtml();
         Optional<Integer> messageId = telegramService.sendMessageWithInlineKeyboardMessageId(
                 review.getRecipientChatId(),
                 text,
@@ -1552,9 +1550,7 @@ public class ManagerReportReviewTelegramService {
         QuestionProgress progress = questionProgress(review, questions, index);
         String text = "✍️ Ответьте на вопрос " + progress.position() + " из " + progress.total() + ":\n\n"
                 + question.question()
-                + answerDirectionsPlain()
-                + "\n\nЧто произошло → какие факты это подтверждают → действие и проверка результата. "
-                + "Если действие уже выполнено, укажите, где можно проверить результат.";
+                + answerDirectionsPlain();
         Optional<Integer> promptId = sendReplyPrompt(review, text);
         review.setReplyPromptMessageId(promptId.orElse(null));
         review.setQuestionSentAt(LocalDateTime.now());
@@ -1741,7 +1737,9 @@ public class ManagerReportReviewTelegramService {
     }
 
     private String answerDirectionsHtml() {
-        return "\n\n🧭 <b>Подумайте:</b>"
+        return "\n\n📌 <b>Ответ должен содержать выполненные действия и их фактический результат.</b>\n\n"
+                + escape(answerResultDirections())
+                + "\n\n🧭 <b>Подумайте и сформулируйте вывод:</b>"
                 + "\n• что в ответе или действии было недостаточно;"
                 + "\n• какой принцип работы здесь важен;"
                 + "\n• как вы самостоятельно поступите в похожей ситуации."
@@ -1749,11 +1747,23 @@ public class ManagerReportReviewTelegramService {
     }
 
     private String answerDirectionsPlain() {
-        return "\n\nПодумайте:"
+        return "\n\n📌 Ответ должен содержать выполненные действия и их фактический результат.\n\n"
+                + answerResultDirections()
+                + "\n\nПодумайте и сформулируйте вывод:"
                 + "\n• что в ответе или действии было недостаточно;"
                 + "\n• какой принцип работы здесь важен;"
                 + "\n• как вы самостоятельно поступите в похожей ситуации."
                 + "\n\nГотовой формулировки нет — ответьте своими словами.";
+    }
+
+    private String answerResultDirections() {
+        return "Одного описания решения или обещания «проверю», «сделаю» недостаточно. "
+                + "По конкретному замечанию обязательно напишите:"
+                + "\n1. Что вы уже сделали."
+                + "\n2. Какой результат получили: что показала проверка, что изменилось или осталось нерешённым."
+                + "\n3. Где можно проверить этот результат: карточка, заказ или счёт, запись в истории и текущий статус."
+                + "\n\nЕсли подтверждение не найдено или действие пока выполнить нельзя, прямо укажите это, "
+                + "что мешает и какой следующий шаг нужен. Ожидаемый результат обозначайте отдельно от уже полученного.";
     }
 
     private void requestMissingAnswerContext(ManagerReportReviewSession review, int questionIndex,
