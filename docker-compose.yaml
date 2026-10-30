@@ -47,7 +47,7 @@ services:
   mysql:
     # A different running DB image is blocked by the ordinary deployment guard.
     # Upgrade the retained volume only through the reviewed coordinated cutover.
-    image: ghcr.io/claidd/otziv-security@sha256:d8b2c5d02611016eee74b77caede5c57a16cd8a1f379bf5c74d322bfd1b5f75d
+    image: ghcr.io/claidd/otziv-security@sha256:0ad40a668c292ebe70297cd4df66b2e9c5067fad3bfdb54179347a597e1ac48f
     user: "999:999"
     container_name: my-mysql
     restart: unless-stopped

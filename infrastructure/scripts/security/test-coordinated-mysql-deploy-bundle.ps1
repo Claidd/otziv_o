@@ -1,4 +1,4 @@
-param([ValidateSet('c37-mysql', 'c42-mysql')][string]$Set = 'c42-mysql')
+param([ValidateSet('c37-mysql', 'c42-mysql', 'c46-mysql')][string]$Set = 'c42-mysql')
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -19,11 +19,13 @@ try {
     $activationPath = 'infrastructure/runtime-security/reviewed-image-activations.json'
     if ($Set -eq 'c37-mysql') {
         $entry = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repository 'infrastructure/runtime-security/proofs/c42-mysql/parent-activation.json') | ConvertFrom-Json
+    } elseif ($Set -eq 'c42-mysql') {
+        $entry = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repository 'infrastructure/runtime-security/proofs/c46-mysql/parent-activation.json') | ConvertFrom-Json
     } else {
         $activation = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repository $activationPath) | ConvertFrom-Json
         $entry = @($activation.images | Where-Object { $_.component -eq 'mysql' })[0]
     }
-    $scriptPath = if ($Set -eq 'c37-mysql') { 'infrastructure/runtime-security/mysql-c37-rehearsal.py' } else { 'infrastructure/runtime-security/mysql-c42-rehearsal.py' }
+    $scriptPath = 'infrastructure/runtime-security/mysql-' + ($Set -replace '-mysql$', '') + '-rehearsal.py'
     $evidence = @($activationPath, $entry.manifest.path, $entry.publication.path, $entry.anonymous.path,
         $entry.databaseTransition.path, $scriptPath, ('infrastructure/runtime-security/proofs/' + $Set + '/parent-activation.json'))
     if ($evidence.Count -ne 7) { throw 'Reviewed MySQL deployment evidence inventory changed.' }
@@ -32,12 +34,13 @@ try {
         New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
         Copy-Item -LiteralPath (Join-Path $repository $path) -Destination $destination
     }
-    # The C37 fixture is historical and deliberately separate from the current C42 default.
+    # Historical C37/C42 fixtures remain separate from the current reviewed default.
     $fixtureActivation = @{ schema = 'otziv-reviewed-image-activations-v1'; images = @($entry) }
     [IO.File]::WriteAllText((Join-Path $fixture $activationPath), ($fixtureActivation | ConvertTo-Json -Depth 20))
     $null = Get-OtzivCoordinatedMysqlBundlePaths -Repository $fixture
     $helpers = @('infrastructure/scripts/prod/coordinated_mysql_refresh.py',
         'infrastructure/scripts/prod/coordinated_mysql_brotli_refresh.py',
+        'infrastructure/scripts/prod/coordinated_mysql_curl_refresh.py',
         'infrastructure/scripts/prod/coordinated_mysql_cutover.py')
     foreach ($helper in $helpers) {
         $helperDestination = Join-Path $fixture $helper

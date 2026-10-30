@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 
 TRANSITIONS = {
+    "ghcr.io/claidd/otziv-security@sha256:0ad40a668c292ebe70297cd4df66b2e9c5067fad3bfdb54179347a597e1ac48f": "coordinated_mysql_curl_refresh",
     "ghcr.io/claidd/otziv-security@sha256:eda70c6cb0a835e788a5ec96539610e9ef6a574ffc4129c9c5717acd647e159a": "coordinated_mysql_refresh",
     "ghcr.io/claidd/otziv-security@sha256:d8b2c5d02611016eee74b77caede5c57a16cd8a1f379bf5c74d322bfd1b5f75d": "coordinated_mysql_brotli_refresh",
 }

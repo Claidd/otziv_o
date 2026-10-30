@@ -330,11 +330,12 @@ jobs:
       - name: Verify committed external evidence in coordinated deploy bundles
         shell: pwsh
         run: ./infrastructure/scripts/security/test-external-evidence-deploy-bundle.ps1
-      - name: Verify both reviewed MySQL deployment bundles
+      - name: Verify reviewed MySQL deployment bundles
         shell: pwsh
         run: |
           ./infrastructure/scripts/security/test-coordinated-mysql-deploy-bundle.ps1 -Set c37-mysql
           ./infrastructure/scripts/security/test-coordinated-mysql-deploy-bundle.ps1 -Set c42-mysql
+          ./infrastructure/scripts/security/test-coordinated-mysql-deploy-bundle.ps1 -Set c46-mysql
       - name: Exercise database image continuity and startup guards
         run: |
           python3 -m pip install --target "$RUNNER_TEMP/retained-artifact-deps" --require-hashes -r infrastructure/scripts/prod/retained-artifacts-requirements.txt
