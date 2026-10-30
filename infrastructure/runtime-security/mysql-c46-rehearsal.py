@@ -103,7 +103,7 @@ def run(args):
         check('brotli_preserved',result['sourceLibbrotli']==result['candidateLibbrotli']=='libbrotli-1.0.9-10.0.1.el9_8.x86_64')
         check('openssl_preserved',result['sourceOpenSSL']==result['candidateOpenSSL']=='openssl-libs-3.5.8-2.0.1.el9_8.x86_64')
         check('libevent_fixed',result['candidateLibevent']=='libevent-2.1.13-1.el9_8.x86_64')
-        check('curl_libraries_fixed',sorted(result['candidateCurl'])==['curl-7.76.1-40.el9_8.8.x86_64','libcurl-7.76.1-40.el9_8.8.x86_64'])
+        check('curl_libraries_fixed',sorted(result['candidateCurl'])==['curl-7.76.1-40.el9_8.9.x86_64','libcurl-7.76.1-40.el9_8.9.x86_64'])
         check('libxml2_fixed',result['candidateLibxml2']=='libxml2-2.9.13-14.el9_8.5.x86_64')
         check('pcre2_preserved',result['sourcePcre2']==result['candidatePcre2']=='pcre2-10.40-7.0.1.el9_8.x86_64' and result['sourcePcre2Syntax']==result['candidatePcre2Syntax']=='pcre2-syntax-10.40-7.0.1.el9_8.noarch')
         check('only_curl_changed',result['sourceOtherPackagesSha256']==result['candidateOtherPackagesSha256'])

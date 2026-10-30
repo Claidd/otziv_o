@@ -29,7 +29,7 @@
       "platform": "linux/amd64",
       "candidateBaseRef": "ghcr.io/claidd/otziv-security@sha256:d8b2c5d02611016eee74b77caede5c57a16cd8a1f379bf5c74d322bfd1b5f75d",
       "buildArgs": {},
-      "dockerfileSha256": "13e27e8cfd5e3babe3af404d36661c0b7aa4083ba9432471c745456722bae94f"
+      "dockerfileSha256": "1bc14d6eb8298dc9a5fb61122f3bb19e73ea50887323aa2a762ae2fcea04935e"
     }
   ]
 }
