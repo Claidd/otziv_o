@@ -69,17 +69,17 @@ try {
         }
         if (-not $rejected) { throw 'Unaccepted PostgreSQL generation entered the cutover archive.' }
     }
-    $mysqlApproved = $mysql[0].manifest.path -eq 'infrastructure/runtime-security/reviewed-images-c42-mysql.json' -and
+    $mysqlApproved = $mysql[0].manifest.path -eq 'infrastructure/runtime-security/reviewed-images-c46-mysql.json' -and
         [bool]$mysql[0].PSObject.Properties['databaseTransition'] -and
-        $mysql[0].databaseTransition.path -eq 'infrastructure/runtime-security/proofs/c42-mysql/rehearsal.json'
+        $mysql[0].databaseTransition.path -eq 'infrastructure/runtime-security/proofs/c46-mysql/rehearsal.json'
     $mysqlPaths = @()
     if ($mysqlApproved) {
         $mysqlPaths = @(Get-OtzivCoordinatedMysqlBundlePaths -Repository $repository)
         $combinedMysqlPaths = @(Get-OtzivDeployBundlePaths -Repository $repository -CoordinatedMysqlRefresh)
         if ($mysqlPaths.Count -lt 7 -or
             @($mysqlPaths | Where-Object { $_ -notin $combinedMysqlPaths }).Count -gt 0 -or
-            'infrastructure/runtime-security/proofs/c42-mysql/rehearsal.json' -in $ordinaryPaths) {
-            throw 'Reviewed MySQL C42 evidence entered the wrong deployment inventory.'
+            'infrastructure/runtime-security/proofs/c46-mysql/rehearsal.json' -in $ordinaryPaths) {
+            throw 'Reviewed MySQL C46 evidence entered the wrong deployment inventory.'
         }
         $tamperedRoot = Join-Path $fixture 'mysql-evidence'
         foreach ($path in $mysqlPaths) {
@@ -87,7 +87,7 @@ try {
             New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
             Copy-Item -LiteralPath (Join-Path $repository $path) -Destination $destination
         }
-        $proof = Join-Path $tamperedRoot 'infrastructure/runtime-security/proofs/c42-mysql/rehearsal.json'
+        $proof = Join-Path $tamperedRoot 'infrastructure/runtime-security/proofs/c46-mysql/rehearsal.json'
         [IO.File]::AppendAllText($proof, 'tampered')
         $rejectedMysql = $false
         try { $null = Get-OtzivCoordinatedMysqlBundlePaths -Repository $tamperedRoot }
@@ -95,7 +95,7 @@ try {
             if ($_.Exception.Message -ne 'Accepted MySQL cutover evidence changed.') { throw }
             $rejectedMysql = $true
         }
-        if (-not $rejectedMysql) { throw 'Changed MySQL C42 rehearsal entered the deployment archive.' }
+        if (-not $rejectedMysql) { throw 'Changed MySQL C46 rehearsal entered the deployment archive.' }
     } else {
         $rejectedMysql = $false
         try { $null = Get-OtzivDeployBundlePaths -Repository $repository -CoordinatedMysqlRefresh }
