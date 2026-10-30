@@ -276,6 +276,8 @@ public class WhatsAppServiceImpl implements WhatsAppService {
                 case "history_no_receipt" -> "whatsapp_history_checked_no_receipt";
                 case "history_ambiguous" -> "whatsapp_history_evidence_ambiguous";
                 case "history_incomplete" -> "whatsapp_history_incomplete";
+                case "history_sync_requested", "history_sync_pending" -> "whatsapp_history_sync_pending";
+                case "history_sync_unavailable" -> "whatsapp_history_sync_unavailable";
                 default -> "operation_unknown";
             };
             return com.hunt.otziv.client_messages.dto.ClientMessageSendResult.failed(code,

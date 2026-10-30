@@ -38,6 +38,7 @@ on:
           - c30-mysql
           - c37-mysql
           - c42-mysql
+          - c46-mysql
           - c22-keycloak
           - c22-mc
           - c22-phpmyadmin

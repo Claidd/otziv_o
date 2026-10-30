@@ -32,6 +32,7 @@ const { OperationLedger, OperationLedgerError } = require("./operation-ledger");
 const { createOutboundHandler } = require("./outbound-routes");
 const { createOperationReconciliationHandler } = require("./operation-reconciliation");
 const { createOperationHistoryReconciliationHandler } = require("./operation-history-reconciliation");
+const { observeOperationReceipt } = require("./operation-receipt-observer");
 const { serializedId, installMessageIdentityCompatibility } = require("./message-identity");
 const { installPuppeteerCompatibility } = require("./puppeteer-compatibility");
 const { chromiumLaunchArgs } = require("./chromium-launch");
@@ -589,6 +590,7 @@ function wireClientEvents(instance, current, trackEvent) {
 
   instance.on("message_create", (message) => {
     if (!current()) return;
+    captureOperationReceipt(message);
     trackEvent(() => handleIncomingMessage(message)).catch((error) => {
       log("warn", "Message webhook failed", {
         stage: error.stage || "delivery",
@@ -599,6 +601,14 @@ function wireClientEvents(instance, current, trackEvent) {
       });
     });
   });
+  instance.on("message_ack", (message) => {
+    if (current()) captureOperationReceipt(message);
+  });
+}
+
+function captureOperationReceipt(message) {
+  try { observeOperationReceipt({ ledger: operationLedger, clientId: CLIENT_ID, message }); }
+  catch (error) { log("warn", "Operation receipt observation could not be saved", { code: error.code || "receipt_observation_unavailable" }); }
 }
 
 const clientLifecycle = new ClientLifecycle({
