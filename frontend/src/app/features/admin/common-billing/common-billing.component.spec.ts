@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   PAYMENT_INIT_NO_PAYMENT_BUTTON_LABEL,
+  CommonBillingComponent,
   PAPER_INVOICE_ISSUED_ROLES,
   canMarkCommonInvoicePaid,
   commonInvoicePaymentEvidence,
@@ -15,7 +16,48 @@ import {
   paymentInitNoPaymentInstructions,
   paperInvoiceRequiresDeliveryConfirmation
 } from './common-billing.component';
-import type { CommonInvoiceDetailsResponse } from '../../../core/common-billing.api';
+import type { CommonInvoiceDetailsResponse, CommonInvoiceOrderResponse } from '../../../core/common-billing.api';
+
+describe('invoice composition confirmation', () => {
+  for (const action of ['detachOrder', 'archiveDisputedOrder'] as const) {
+    it(`${action} asks before submitting and cancellation keeps the invoice untouched`, () => {
+      const invoiceAction = vi.fn();
+      const context = {
+        currentInvoice: () => ({ id: 297, status: 'NEEDS_ATTENTION', sentAt: null }),
+        mutating: () => '',
+        invoiceAction
+      } as unknown as CommonBillingComponent;
+      const position = { orderId: 27391, detachable: true, paid: false, originalOrderStatus: 'На проверке' } as CommonInvoiceOrderResponse;
+      const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+      try {
+        CommonBillingComponent.prototype[action].call(context, position);
+        expect(confirm).toHaveBeenCalledOnce();
+        expect(confirm.mock.calls[0][0]).toContain('27391');
+        expect(confirm.mock.calls[0][0]).toContain('297');
+        expect(confirm.mock.calls[0][0]).toContain('резерв освобождён');
+        expect(invoiceAction).not.toHaveBeenCalled();
+
+        confirm.mockReturnValue(true);
+        CommonBillingComponent.prototype[action].call(context, position);
+        expect(invoiceAction).toHaveBeenCalledOnce();
+      } finally { confirm.mockRestore(); }
+    });
+  }
+
+  it('the order card archive action uses the same atomic invoice archive and its confirmation', () => {
+    const position = { orderId: 27391 } as CommonInvoiceOrderResponse;
+    const archiveDisputedOrder = vi.fn();
+    const context = {
+      invoiceDetails: () => ({ orders: [position] }), archiveDisputedOrder
+    } as unknown as CommonBillingComponent;
+    CommonBillingComponent.prototype.updateOrderStatus.call(
+      context,
+      { id: 27391 } as Parameters<CommonBillingComponent['updateOrderStatus']>[0],
+      { status: 'Архив' } as Parameters<CommonBillingComponent['updateOrderStatus']>[1]
+    );
+    expect(archiveDisputedOrder).toHaveBeenCalledWith(position);
+  });
+});
 
 describe('paper invoice issue access', () => {
   it('lets a manager record document delivery without granting payment-mode administration', () => {

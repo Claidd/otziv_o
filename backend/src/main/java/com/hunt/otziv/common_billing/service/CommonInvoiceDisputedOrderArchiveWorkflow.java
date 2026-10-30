@@ -52,8 +52,7 @@ public class CommonInvoiceDisputedOrderArchiveWorkflow {
         CommonInvoice invoice = item.getInvoice();
         ensureNoPaymentState(item, orderId);
         if (!item.isActiveMembership() || invoice == null
-                || (invoice.getStatus() != CommonInvoiceStatus.COLLECTING
-                    && invoice.getStatus() != CommonInvoiceStatus.READY)) {
+                || !CommonInvoiceCompositionService.canChangeStatus(invoice)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Заказ или общий счет уже имеет платежное состояние; требуется ручной разбор конфликта");
         }

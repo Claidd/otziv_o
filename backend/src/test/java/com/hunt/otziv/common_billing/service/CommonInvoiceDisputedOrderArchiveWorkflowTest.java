@@ -57,6 +57,25 @@ class CommonInvoiceDisputedOrderArchiveWorkflowTest {
     }
 
     @Test
+    void reviewApprovalFailureDoesNotPreventArchivingUnpaidDisputedPosition() throws Exception {
+        item.getInvoice().setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+        item.getInvoice().setLastError("review_approval_failed: order=42; problem=duplicate text");
+        when(disputedOrderArchive.archive(42L)).thenReturn(true);
+        workflow.archive(5L, 42L);
+        verify(membershipWorkflow).detachOrder(5L, 42L);
+        verify(disputedOrderArchive).archive(42L);
+    }
+
+    @Test
+    void financialAttentionStillRequiresReconciliation() throws Exception {
+        item.getInvoice().setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+        item.getInvoice().setLastError("payment_init_conflict");
+        assertThrows(ResponseStatusException.class, () -> workflow.archive(5L, 42L));
+        verifyNoInteractions(membershipWorkflow);
+        verify(disputedOrderArchive, never()).archive(42L);
+    }
+
+    @Test
     void rejectsPaidOrderWithoutDetaching() throws Exception {
         item.setPaid(true);
         assertThrows(ResponseStatusException.class, () -> workflow.archive(5L, 42L));

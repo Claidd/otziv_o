@@ -97,6 +97,7 @@ class CommonInvoiceAccountArchiveTransactionMySqlIntegrationTest {
         register(CommonInvoicePresenter.class);
         register(CommonInvoiceCancellationService.class);
         register(CommonInvoiceInitializationService.class);
+        register(CommonInvoiceCompositionService.class);
         register(CommonInvoiceDetailsAssembler.class);
         CommonInvoiceDeliveryService delivery = register(CommonInvoiceDeliveryService.class);
         ReflectionTestUtils.setField(delivery, "orderStatusTransitionService", dependency(OrderStatusTransitionService.class));
@@ -111,6 +112,68 @@ class CommonInvoiceAccountArchiveTransactionMySqlIntegrationTest {
 
     @AfterEach
     void clearAuthentication() { SecurityContextHolder.clearContext(); }
+
+    @Test
+    void disputedPositionArchiveRollsBackCompositionAmountAndUnusedReserveOnLateFailure() throws Exception {
+        jdbc.execute("ALTER TABLE tx_invoices ADD amount_kopecks BIGINT NOT NULL DEFAULT 200000");
+        jdbc.execute("CREATE TABLE IF NOT EXISTS tx_composition_reserve(id BIGINT PRIMARY KEY,state VARCHAR(20)) ENGINE=InnoDB");
+        jdbc.update("DELETE FROM tx_composition_reserve");
+        jdbc.update("INSERT INTO tx_composition_reserve VALUES(7,'RESERVED')");
+        var items = dependency(CommonInvoiceOrderRepository.class);
+        when(items.findOrderIdsByInvoiceId(10L)).thenAnswer(call -> jdbc.queryForList("SELECT order_id FROM tx_items ORDER BY order_id", Long.class));
+        when(items.findByOrderIdWithInvoice(101L)).thenAnswer(call -> loadItems().stream().filter(item -> item.getOrder().getId().equals(101L)).findFirst());
+        doAnswer(call -> {CommonInvoiceOrder item = call.getArgument(0); jdbc.update("DELETE FROM tx_items WHERE order_id=?", item.getOrder().getId()); return null;})
+                .when(items).delete(any(CommonInvoiceOrder.class));
+        when(dependency(com.hunt.otziv.p_products.service.OrderStatusService.class).getOrderStatusByTitle(anyString()))
+                .thenAnswer(call -> {var status = new OrderStatus();status.setTitle(call.getArgument(0));return status;});
+        when(dependency(com.hunt.otziv.p_products.repository.OrderRepository.class).save(any(Order.class)))
+                .thenAnswer(call -> {Order order=call.getArgument(0);jdbc.update("UPDATE tx_orders SET status=? WHERE id=?",order.getStatus().getTitle(),order.getId());return order;});
+        var invoices = dependency(CommonInvoiceRepository.class);
+        doAnswer(call -> {
+            archiveConnection.compareAndSet(0, connectionId());
+            jdbc.queryForObject("SELECT id FROM tx_invoices WHERE id=10 FOR UPDATE",Long.class);
+            CommonInvoice invoice = loadInvoice();
+            invoice.setAmountKopecks(jdbc.queryForObject("SELECT amount_kopecks FROM tx_invoices WHERE id=10",Long.class));
+            if ("RESERVED".equals(jdbc.queryForObject("SELECT state FROM tx_composition_reserve WHERE id=7",String.class))) {
+                invoice.setContractorAllocationId(7L); invoice.setPaymentRouteType("MANUAL_MOBILE_BANK");
+                invoice.setPaymentRouteSelectedAt(LocalDateTime.now()); invoice.setPaymentRouteAmountKopecks(200000L);
+            }
+            return Optional.of(invoice);
+        }).when(invoices).findByIdWithAccountForUpdate(10L);
+        doAnswer(call -> {
+            CommonInvoice invoice = call.getArgument(0);
+            jdbc.update("UPDATE tx_invoices SET status=?,amount_kopecks=? WHERE id=10",invoice.getStatus().name(),invoice.getAmountKopecks());
+            return invoice;
+        }).when(invoices).save(any(CommonInvoice.class));
+        var routing = dependency(com.hunt.otziv.contractor_payments.service.ContractorPaymentLiveRoutingService.class);
+        when(routing.frozenCommonRouteAction(10L,7L)).thenReturn(com.hunt.otziv.contractor_payments.service.ContractorPaymentLiveRoutingService.FrozenCommonRouteAction.KEEP);
+        when(routing.releaseCommonInvoiceRouteForReplacement(any(),anyString(),eq("LIVE_COMMON:COMPOSITION_CHANGED"))).thenAnswer(call -> {
+            assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isTrue();
+            jdbc.update("UPDATE tx_composition_reserve SET state='CANCELED' WHERE id=7"); return true;
+        });
+        var archivePort = dependency(com.hunt.otziv.p_products.api.DisputedOrderArchive.class);
+        doAnswer(call -> {
+            jdbc.update("UPDATE tx_orders SET status='Архив' WHERE id=101");
+            if (failSecondOrder.get()) throw new LateFailure();
+            return true;
+        }).when(archivePort).archive(101L);
+        var workflow = register(CommonInvoiceDisputedOrderArchiveWorkflow.class);
+
+        failSecondOrder.set(true);
+        assertThatThrownBy(() -> workflow.archive(10L,101L)).isInstanceOf(IllegalStateException.class);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM tx_items",Integer.class)).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT amount_kopecks FROM tx_invoices WHERE id=10",Long.class)).isEqualTo(200000);
+        assertThat(jdbc.queryForObject("SELECT status FROM tx_orders WHERE id=101",String.class)).isEqualTo("В проверку");
+        assertThat(jdbc.queryForObject("SELECT state FROM tx_composition_reserve WHERE id=7",String.class)).isEqualTo("RESERVED");
+
+        failSecondOrder.set(false); archiveConnection.set(0);
+        workflow.archive(10L,101L);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM tx_items",Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT amount_kopecks FROM tx_invoices WHERE id=10",Long.class)).isEqualTo(100000);
+        assertThat(jdbc.queryForObject("SELECT status FROM tx_orders WHERE id=101",String.class)).isEqualTo("Архив");
+        assertThat(jdbc.queryForObject("SELECT state FROM tx_composition_reserve WHERE id=7",String.class)).isEqualTo("CANCELED");
+        jdbc.execute("DROP TABLE tx_composition_reserve");
+    }
 
     @Test
     void accountLinkReconciliationWaitsForCommitAndUsesIndependentTransactions() {
