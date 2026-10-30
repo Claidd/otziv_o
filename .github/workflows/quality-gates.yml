@@ -658,10 +658,12 @@ jobs:
           ISSUER_IMAGE="$(node infrastructure/runtime-security/ci-keycloak-fixture.mjs)"
           docker pull --platform linux/amd64 "$ISSUER_IMAGE"
           docker tag "$ISSUER_IMAGE" otziv-issuer-ci
-      - name: Build MySQL and scan the exact reviewed PostgreSQL image
+      - name: Load and scan the exact reviewed MySQL and PostgreSQL images
         if: ${{ needs.changes.outputs.infrastructure == 'true' }}
         run: |
-          docker build -t otziv-mysql-ci infrastructure/runtime-security/builds/c42-mysql
+          MYSQL_IMAGE="$(node infrastructure/runtime-security/ci-mysql-fixture.mjs)"
+          docker pull --platform linux/amd64 "$MYSQL_IMAGE"
+          docker tag "$MYSQL_IMAGE" otziv-mysql-ci
           POSTGRES_IMAGE="$(node infrastructure/runtime-security/ci-postgres-c36-fixture.mjs)"
           docker pull --platform linux/amd64 "$POSTGRES_IMAGE"
           docker tag "$POSTGRES_IMAGE" otziv-postgres-ci
