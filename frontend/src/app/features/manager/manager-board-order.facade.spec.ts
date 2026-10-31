@@ -284,6 +284,16 @@ describe('ManagerBoardOrderFacade', () => {
     expect(state.calls).toContain('load-board');
   });
 
+  it('keeps the order when deletion confirmation is canceled', () => {
+    const state = createFacade();
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    state.facade.openOrderEdit(order({ id: 30 }));
+    state.facade.deleteOrderEdit();
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('сумма счёта пересчитается'));
+    expect(state.calls).not.toContain('delete-order:30');
+    expect(state.facade.editOrder()?.id).toBe(30);
+  });
+
   it('cancels order payment after confirmation', () => {
     const state = createFacade({ orderPayload: orderPayload({ status: 'Оплачено', complete: true, canCancelPayment: true }) });
     vi.spyOn(window, 'confirm').mockReturnValue(true);

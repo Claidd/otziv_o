@@ -97,20 +97,23 @@ class SharedChatLinkSyncServiceTest {
     }
 
     @Test
-    void doesNotCopyChatIdToStoppedOrBannedCompany() {
+    void copiesChatIdToStoppedCompanyButNotBannedCompany() {
         Company source = company(1L, "Source", "https://chat.whatsapp.com/AbCdEfGhIjKlMnOpQrStUv");
         source.setGroupId("120363123@g.us");
         Company stopped = company(2L, "Stopped", "https://chat.whatsapp.com/AbCdEfGhIjKlMnOpQrStUv");
         stopped.setStatus(CompanyStatus.builder().title("На стопе").build());
+        Company banned = company(3L, "Banned", source.getUrlChat());
+        banned.setStatus(CompanyStatus.builder().title("Бан").build());
 
-        when(companyRepository.findAllWithChatUrl()).thenReturn(List.of(source, stopped));
+        when(companyRepository.findAllWithChatUrl()).thenReturn(List.of(source, stopped, banned));
 
         SharedChatLinkSyncResponse response = service.syncSharedChatIds();
 
-        assertNull(stopped.getGroupId());
-        assertEquals(1, response.scannedCompanies());
-        assertEquals(0, response.updatedCompanies());
-        verify(companyRepository, never()).saveAll(any());
+        assertEquals(source.getGroupId(), stopped.getGroupId());
+        assertNull(banned.getGroupId());
+        assertEquals(2, response.scannedCompanies());
+        assertEquals(1, response.updatedCompanies());
+        verify(companyRepository).saveAll(any());
     }
 
     @Test

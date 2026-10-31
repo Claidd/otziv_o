@@ -121,7 +121,9 @@ class CommonInvoiceAccountArchiveTransactionMySqlIntegrationTest {
         jdbc.update("INSERT INTO tx_composition_reserve VALUES(7,'RESERVED')");
         var items = dependency(CommonInvoiceOrderRepository.class);
         when(items.findOrderIdsByInvoiceId(10L)).thenAnswer(call -> jdbc.queryForList("SELECT order_id FROM tx_items ORDER BY order_id", Long.class));
-        when(items.findByOrderIdWithInvoice(101L)).thenAnswer(call -> loadItems().stream().filter(item -> item.getOrder().getId().equals(101L)).findFirst());
+        when(items.findByOrderIdWithInvoice(101L)).thenAnswer(call -> loadItems().stream()
+                .filter(item -> item.getOrder().getId().equals(101L))
+                .peek(item -> item.setOriginalOrderStatusTitle("Новый")).findFirst());
         doAnswer(call -> {CommonInvoiceOrder item = call.getArgument(0); jdbc.update("DELETE FROM tx_items WHERE order_id=?", item.getOrder().getId()); return null;})
                 .when(items).delete(any(CommonInvoiceOrder.class));
         when(dependency(com.hunt.otziv.p_products.service.OrderStatusService.class).getOrderStatusByTitle(anyString()))
@@ -153,6 +155,9 @@ class CommonInvoiceAccountArchiveTransactionMySqlIntegrationTest {
         });
         var archivePort = dependency(com.hunt.otziv.p_products.api.DisputedOrderArchive.class);
         doAnswer(call -> {
+            // The current review status must survive exclusion. The old "Новый"
+            // snapshot is valid for standalone detach, but cannot enter archive.
+            assertThat(jdbc.queryForObject("SELECT status FROM tx_orders WHERE id=101",String.class)).isEqualTo("В проверку");
             jdbc.update("UPDATE tx_orders SET status='Архив' WHERE id=101");
             if (failSecondOrder.get()) throw new LateFailure();
             return true;

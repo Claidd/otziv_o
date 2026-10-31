@@ -1876,6 +1876,60 @@ class ManagerControlServiceTest {
     }
 
     @Test
+    void repairStoppedCompanyChatBindingClosesOnlyAfterBindingIsSaved() {
+        ManagerDailyControl control = control();
+        ManagerDailyControlItem parent = actionParent(control);
+        parent.setReasonCode("CHAT_BINDING_ISSUES");
+        ManagerDailyControlConcreteItem concrete = concrete(control, parent, "COMPANY_CHAT_BINDING");
+        concrete.setEntityId(501L);
+        Company company = new Company();
+        company.setId(501L);
+        company.setTitle("Stopped company");
+        company.setUrlChat("https://chat.whatsapp.com/GqLRY4e7slyOFKjoLjIBPa");
+        company.setStatus(CompanyStatus.builder().title("На стопе").build());
+        stubSuccessfulConcreteAction(concrete, parent);
+        when(companyRepository.findById(501L)).thenReturn(Optional.of(company));
+        when(whatsAppGroupLinkSyncService.repairCompanyLink(company)).thenAnswer(invocation -> {
+            company.setGroupId("120363501@g.us");
+            return new WhatsAppGroupLinkSyncService.WhatsAppGroupRepairResult(true, "Group linked");
+        });
+
+        ManagerControlConcreteItemResponse response = service.repairConcreteItem(
+                concrete.getId(), principal(), adminAuth());
+
+        assertEquals("RESOLVED", response.itemStatus());
+        assertTrue(concrete.getComment().contains("WhatsApp-группа найдена"));
+        verify(whatsAppGroupLinkSyncService).repairCompanyLink(company);
+    }
+
+    @Test
+    void repairStoppedCompanyChatBindingKeepsWarningWhenGatewayCannotFindGroup() {
+        ManagerDailyControl control = control();
+        ManagerDailyControlItem parent = actionParent(control);
+        parent.setReasonCode("CHAT_BINDING_ISSUES");
+        ManagerDailyControlConcreteItem concrete = concrete(control, parent, "COMPANY_CHAT_BINDING");
+        concrete.setEntityId(501L);
+        var initialStatus = concrete.getStatus();
+        Company company = new Company();
+        company.setId(501L);
+        company.setUrlChat("https://chat.whatsapp.com/GqLRY4e7slyOFKjoLjIBPa");
+        company.setStatus(CompanyStatus.builder().title("На стопе").build());
+        when(dailyControlConcreteItemRepository.findById(concrete.getId())).thenReturn(Optional.of(concrete));
+        when(managerPermissionService.hasRole(any(), eq("ADMIN"))).thenReturn(true);
+        when(companyRepository.findById(501L)).thenReturn(Optional.of(company));
+        when(whatsAppGroupLinkSyncService.repairCompanyLink(company))
+                .thenReturn(new WhatsAppGroupLinkSyncService.WhatsAppGroupRepairResult(false, "Group unavailable"));
+
+        ResponseStatusException failure = assertThrows(ResponseStatusException.class,
+                () -> service.repairConcreteItem(concrete.getId(), principal(), adminAuth()));
+
+        assertEquals(409, failure.getStatusCode().value());
+        assertEquals(initialStatus, concrete.getStatus());
+        assertNull(company.getGroupId());
+        verify(whatsAppGroupLinkSyncService).repairCompanyLink(company);
+    }
+
+    @Test
     void repairCompanyChatBindingResolvesWithoutSyncWhenCompanyIsBanned() {
         ManagerDailyControl control = control();
         ManagerDailyControlItem parent = actionParent(control);

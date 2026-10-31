@@ -224,7 +224,12 @@ export class ManagerBoardOrderFacade {
       return;
     }
 
-    const confirmed = window.confirm(`Удалить заказ #${order.id}?`);
+    const confirmed = window.confirm(
+      `Удалить заказ #${order.id}?\n\n` +
+      'Если заказ входит в неотправленный общий счёт, он будет исключён из него: ' +
+      'сумма счёта пересчитается, неиспользованный резерв освободится.\n' +
+      'Заказ и его отзывы будут удалены. Для отмены нажмите «Отмена».'
+    );
     if (!confirmed) {
       return;
     }

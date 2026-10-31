@@ -668,7 +668,7 @@ class WhatsAppGroupLinkSyncServiceTest {
     }
 
     @Test
-    void repairCompanyLinkDoesNotCallGatewayForStoppedCompany() {
+    void repairCompanyLinkPersistsExactInviteBindingForStoppedCompany() {
         WhatsAppProperties.ClientConfig client = new WhatsAppProperties.ClientConfig();
         client.setId("whatsapp_lika");
         client.setUrl("http://whatsapp_lika:3000");
@@ -680,12 +680,33 @@ class WhatsAppGroupLinkSyncServiceTest {
         company.setUrlChat("https://chat.whatsapp.com/GfRcWynyKdYBRFxyLQdUBL");
         company.setStatus(CompanyStatus.builder().title("На стопе").build());
 
+        when(whatsAppService.resolveGroupByInvite("whatsapp_lika", company.getUrlChat()))
+                .thenReturn(Optional.of(new WhatsAppGroupInfo(
+                        "1203631182@g.us", "НС Stopped company 2 гис", company.getUrlChat())));
+
         WhatsAppGroupLinkSyncService.WhatsAppGroupRepairResult result = service.repairCompanyLink(company);
 
-        assertFalse(result.linked());
-        assertTrue(result.message().contains("не требуется"));
-        verify(whatsAppService, never()).resolveGroupByInvite("whatsapp_lika", company.getUrlChat());
+        assertTrue(result.linked());
+        assertEquals("1203631182@g.us", company.getGroupId());
+        verify(companyRepository).save(company);
+        verify(whatsAppService).resolveGroupByInvite("whatsapp_lika", company.getUrlChat());
         verify(whatsAppService, never()).listGroups("whatsapp_lika");
+    }
+
+    @Test
+    void scheduledGroupSyncAlsoLinksStoppedCompany() {
+        Company company = company(1182L, "Stopped company");
+        company.setStatus(CompanyStatus.builder().title("На стопе").build());
+        company.setUrlChat("https://chat.whatsapp.com/GfRcWynyKdYBRFxyLQdUBL");
+        when(whatsAppService.listGroups("whatsapp_vika")).thenReturn(List.of(
+                new WhatsAppGroupInfo("1203631182@g.us", "Stopped company", company.getUrlChat())));
+        when(companyRepository.findByUrlChatContainingIgnoreCase("gfrcwynykdybrfxylqdubl"))
+                .thenReturn(List.of(company));
+
+        service.syncClientGroups("whatsapp_vika");
+
+        assertEquals("1203631182@g.us", company.getGroupId());
+        verify(companyRepository).save(company);
     }
 
     @Test
