@@ -396,7 +396,7 @@ class CommonBillingServiceTest {
                 tbankClient, tochkaPaymentProfileResolver, tochkaClient);
         ReflectionTestUtils.setField(service, "invoiceInitialization", initialization);
         CommonInvoiceCompositionService composition = new CommonInvoiceCompositionService(
-                initialization, paymentRefRepository, contractorPaymentLiveRoutingService, taskReceiptIntegrationService);
+                initialization, paymentRefRepository);
         CommonInvoiceDetailsAssembler detailsAssembler = new CommonInvoiceDetailsAssembler(
                 presenter, composition, messageQueue, settlement, invoiceOrderRepository, paymentRefRepository,
                 orderRepository, nextOrderRequests, orderDtoMapper, badReviewTaskService, paymentProfileService);

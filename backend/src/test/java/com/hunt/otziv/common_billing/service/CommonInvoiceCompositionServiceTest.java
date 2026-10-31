@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.test.util.ReflectionTestUtils;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -22,11 +23,15 @@ class CommonInvoiceCompositionServiceTest {
     final CommonInvoicePaymentRefRepository refs = mock(CommonInvoicePaymentRefRepository.class);
     final ContractorPaymentLiveRoutingService routing = mock(ContractorPaymentLiveRoutingService.class);
     final ManualPaymentTaskReceiptIntegrationService tasks = mock(ManualPaymentTaskReceiptIntegrationService.class);
-    final CommonInvoiceCompositionService service = new CommonInvoiceCompositionService(initialization, refs, routing, tasks);
+    final CommonInvoiceCompositionService service = new CommonInvoiceCompositionService(initialization, refs);
     CommonInvoice invoice;
     CommonInvoiceOrder item;
 
     @BeforeEach void setup() {
+        ReflectionTestUtils.setField(initialization, "contractorPaymentLiveRoutingService", routing);
+        ReflectionTestUtils.setField(initialization, "taskReceiptIntegrationService", tasks);
+        doCallRealMethod().when(initialization).compositionReservationBlockReason(any(), anyBoolean());
+        doCallRealMethod().when(initialization).releaseUnusedCompositionReservation(any());
         invoice = new CommonInvoice(); invoice.setId(297L);
         invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
         invoice.setLastError("review_approval_failed: order=27391; problem=old duplicate");
@@ -92,6 +97,15 @@ class CommonInvoiceCompositionServiceTest {
         assertThatThrownBy(() -> service.prepareChange(invoice, item)).isInstanceOf(ResponseStatusException.class);
         assertThat(invoice.getContractorAllocationId()).isEqualTo(7L);
         assertThat(invoice.getPaymentRouteSelectedAt()).isNotNull();
+    }
+
+    @Test void previewChecksReservationWithoutTakingCommandLocksOrReleasingIt() {
+        reserve();
+        when(routing.previewFrozenCommonRouteAction(297L, 7L)).thenReturn(FrozenCommonRouteAction.BLOCK_RECONCILIATION);
+        assertThat(service.previewBlockReason(invoice)).contains("сверку резерва");
+        verify(routing, never()).frozenCommonRouteAction(any(), any());
+        verify(routing, never()).releaseCommonInvoiceRouteForReplacement(any(), anyString(), anyString());
+        assertThat(invoice.getContractorAllocationId()).isEqualTo(7L);
     }
 
     @Test void manualTaskUsesItsOwnReservationLedgerAndPropagatesConflict() {

@@ -5,10 +5,6 @@ import com.hunt.otziv.common_billing.model.CommonInvoiceOrder;
 import com.hunt.otziv.common_billing.model.CommonInvoicePaymentRef;
 import com.hunt.otziv.common_billing.model.CommonInvoiceStatus;
 import com.hunt.otziv.common_billing.repository.CommonInvoicePaymentRefRepository;
-import com.hunt.otziv.contractor_payments.service.ContractorPaymentLiveRoutingService;
-import com.hunt.otziv.contractor_payments.service.ContractorPaymentLiveRoutingService.FrozenCommonRouteAction;
-import com.hunt.otziv.payments.model.ManualPaymentSource;
-import com.hunt.otziv.payments.service.ManualPaymentTaskReceiptIntegrationService;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -26,8 +22,6 @@ public class CommonInvoiceCompositionService {
     private static final Set<String> CLOSED_REFS = Set.of("ARCHIVED", "CANCELED", "REJECTED", "EXPIRED", "REFUNDED", "REVERSED");
     private final CommonInvoiceInitializationService initialization;
     private final CommonInvoicePaymentRefRepository paymentRefs;
-    private final ContractorPaymentLiveRoutingService contractorRouting;
-    private final ManualPaymentTaskReceiptIntegrationService taskReceipts;
 
     static boolean isPublicationAttention(CommonInvoice invoice) {
         return invoice != null && invoice.getStatus() == CommonInvoiceStatus.NEEDS_ATTENTION
@@ -63,14 +57,7 @@ public class CommonInvoiceCompositionService {
         if (reason == null) reason = evidenceBlockReason(invoice, paymentRefs.findByInvoiceIdForUpdate(invoice.getId()), false);
         if (reason != null) throw new ResponseStatusException(HttpStatus.CONFLICT, reason);
 
-        String releaseReason = "Изменение состава неотправленного общего счёта";
-        if (invoice.getPaymentRouteManualSource() == ManualPaymentSource.MANUAL_TASK) {
-            taskReceipts.release(invoice, releaseReason);
-        } else if (invoice.getContractorAllocationId() != null) {
-            if (!contractorRouting.releaseCommonInvoiceRouteForReplacement(invoice, releaseReason, "LIVE_COMMON:COMPOSITION_CHANGED")) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "Не удалось освободить резерв общего счёта; состав не изменён");
-            }
-        }
+        initialization.releaseUnusedCompositionReservation(invoice);
         CommonInvoiceRouteState.clearPaymentRoute(invoice);
     }
 
@@ -105,13 +92,7 @@ public class CommonInvoiceCompositionService {
         if (refs.stream().anyMatch(ref -> !CLOSED_REFS.contains(text(ref.getStatus()).toUpperCase(Locale.ROOT)))) {
             return "По счёту есть незавершённая или подтверждённая банковская попытка. Сначала выполните сверку оплаты";
         }
-        if (invoice.getContractorAllocationId() != null && invoice.getPaymentRouteManualSource() != ManualPaymentSource.MANUAL_TASK) {
-            FrozenCommonRouteAction action = preview
-                    ? contractorRouting.previewFrozenCommonRouteAction(invoice.getId(), invoice.getContractorAllocationId())
-                    : contractorRouting.frozenCommonRouteAction(invoice.getId(), invoice.getContractorAllocationId());
-            if (action != FrozenCommonRouteAction.KEEP) return "Резерв получателя уже изменился. Сначала выполните сверку резерва";
-        }
-        return null;
+        return initialization.compositionReservationBlockReason(invoice, preview);
     }
 
     private static String text(String value) { return value == null ? "" : value.trim(); }
