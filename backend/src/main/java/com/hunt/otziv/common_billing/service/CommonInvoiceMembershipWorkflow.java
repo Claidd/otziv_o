@@ -67,7 +67,8 @@ import static com.hunt.otziv.config.metrics.R0ObservabilityMetrics.TransactionFl
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class CommonInvoiceMembershipWorkflow implements com.hunt.otziv.common_billing.api.PublicationInvoiceCompletion {
+public class CommonInvoiceMembershipWorkflow implements com.hunt.otziv.common_billing.api.PublicationInvoiceCompletion,
+        com.hunt.otziv.common_billing.api.CommonInvoiceOrderDeletion {
 
     private final CommonInvoiceManualPaymentWorkflow manualPaymentWorkflow;
 
@@ -395,8 +396,52 @@ public class CommonInvoiceMembershipWorkflow implements com.hunt.otziv.common_bi
         invoiceRepository.save(invoice);
     }
 
+    @Override
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public Long lockForOrderDeletion(Long orderId) {
+        var membership = invoiceOrderRepository.findByOrder_IdAndActiveMembershipTrue(orderId);
+        if (membership.isEmpty()) {
+            orderAggregateMutationLockService.lock(orderId);
+            if (invoiceOrderRepository.findByOrder_IdAndActiveMembershipTrue(orderId).isPresent()) {
+                throw invoiceMembershipChanged("заказ включён в общий счёт во время удаления; обновите карточку");
+            }
+            return null;
+        }
+        Long invoiceId = membership.get().getInvoice().getId();
+        Set<Long> orderIds = settlementService.lockInvoiceOrderAggregates(invoiceId);
+        if (!orderIds.contains(orderId)) throw invoiceMembershipChanged("состав общего счёта изменился");
+        lockPaymentLinksForOrders(orderIds);
+        lockedInvoiceAfterOrderPrelude(invoiceId).orElseThrow(() -> invoiceMembershipChanged("общий счёт исчез"));
+        settlementService.ensureInvoiceMembershipUnchanged(invoiceId, orderIds);
+        return invoiceId;
+    }
+
+    @Override
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public void detachForOrderDeletion(Long orderId, Long expectedInvoiceId) {
+        var membership = invoiceOrderRepository.findByOrder_IdAndActiveMembershipTrue(orderId);
+        Long currentInvoiceId = membership.map(CommonInvoiceOrder::getInvoice).map(CommonInvoice::getId).orElse(null);
+        if (!Objects.equals(expectedInvoiceId, currentInvoiceId)) {
+            throw invoiceMembershipChanged("заказ относится к другому общему счёту; обновите карточку");
+        }
+        if (currentInvoiceId != null) detachOrder(currentInvoiceId, orderId);
+        if (invoiceOrderRepository.existsByOrder_Id(orderId)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Заказ сохранён в истории общего счёта. Для сохранения платёжной истории используйте архивирование");
+        }
+    }
+
     @Transactional
     public CommonInvoiceDetailsResponse detachOrder(Long invoiceId, Long orderId) {
+        return detachOrder(invoiceId, orderId, true);
+    }
+
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public CommonInvoiceDetailsResponse detachOrderForArchive(Long invoiceId, Long orderId) {
+        return detachOrder(invoiceId, orderId, false);
+    }
+
+    private CommonInvoiceDetailsResponse detachOrder(Long invoiceId, Long orderId, boolean restoreStandaloneStatus) {
         Set<Long> orderIds = settlementService.lockInvoiceOrderAggregates(invoiceId);
         Map<Long, List<PaymentLink>> paymentLinks = lockPaymentLinksForOrders(orderIds);
         CommonInvoice invoice = lockedInvoiceAfterOrderPrelude(invoiceId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"));
@@ -423,7 +468,7 @@ public class CommonInvoiceMembershipWorkflow implements com.hunt.otziv.common_bi
             } catch (Exception e) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Заказ отмечен оплаченным, но не удалось закрыть его отдельно", e);
             }
-        } else {
+        } else if (restoreStandaloneStatus) {
             restoreDetachedOrderStatus(order, item.getOriginalOrderStatusTitle());
         }
         invoiceOrderRepository.delete(item);

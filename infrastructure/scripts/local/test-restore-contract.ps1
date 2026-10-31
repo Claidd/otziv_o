@@ -11,7 +11,7 @@ foreach($name in @('Assert-LocalRestoreContract','Import-LocalMySqlGzipStream','
 $script:passed=0
 $root=(Get-Location).Path
 $compose=Join-Path $root 'compose.prod-local.yaml'
-$image='ghcr.io/claidd/otziv-security@sha256:28521a2c331136328abde7b504ae0ded617c74caa8a4a2554f1f0494d4df9009'
+$image='ghcr.io/claidd/otziv-security@sha256:0ad40a668c292ebe70297cd4df66b2e9c5067fad3bfdb54179347a597e1ac48f'
 $volume='otziv-prod-local_mysql_973_data'
 $command=@('mysqld','--user=999','--character-set-server=utf8mb4','--collation-server=utf8mb4_unicode_ci','--default-time-zone=+08:00','--restrict-fk-on-non-standard-key=OFF','--gtid-mode=OFF','--enforce-gtid-consistency=OFF','--log-bin=mysql-bin','--binlog-format=ROW','--event-scheduler=OFF')
 function Reset-Fixture {
@@ -46,6 +46,11 @@ function Invoke-External {param([string]$FilePath,[string[]]$Arguments);$script:
 function Assert-Pass([string]$name,[scriptblock]$body){Reset-Fixture;&$body;$script:passed++;Write-Output "PASS $name"}
 function Assert-Reject([string]$name,[scriptblock]$change,[string]$selected=$volume,[string]$selectedCompose=$compose){Reset-Fixture;&$change;$rejected=$false;try{$null=Assert-LocalRestoreContract -ComposeArguments @('compose') -RepoRoot $root -ComposePath $selectedCompose -VolumeName $selected}catch{$rejected=$true};if(-not $rejected){throw "Expected rejection: $name"};if($script:mutationCalls){throw 'Mutation before rejection'};$script:passed++;Write-Output "PASS $name"}
 Assert-Pass 'fresh_reviewed_contract' {$r=Assert-LocalRestoreContract -ComposeArguments @('compose') -RepoRoot $root -ComposePath $compose -VolumeName $volume;if($r.VolumeExists -or $r.Image -ne $image){throw 'wrong result'}}
+Assert-Pass 'stock_compose_and_restore_use_same_reviewed_image' {
+ $yaml=[IO.File]::ReadAllText($compose)
+ $pin=[regex]::Match($yaml,'(?ms)^  mysql:\r?\n(?:(?!^  [a-z]).)*?^    image:\s*([^\r\n]+)')
+ if(-not $pin.Success -or $pin.Groups[1].Value.Trim() -cne $image){throw 'Stock Compose and local restore MySQL pins differ'}
+}
 Assert-Pass 'owned_existing_973_contract' {$script:existing=$true;$script:attached=$true;$r=Assert-LocalRestoreContract -ComposeArguments @('compose') -RepoRoot $root -ComposePath $compose -VolumeName $volume;if(-not $r.VolumeExists){throw 'wrong result'}}
 Assert-Reject 'old_volume_name_before_docker' {} 'otziv-prod-local_mysql_data'
 Assert-Reject 'foreign_volume_name_before_docker' {} 'production_mysql_973_data'

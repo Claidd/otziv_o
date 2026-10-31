@@ -6,6 +6,7 @@ import com.hunt.otziv.c_companies.service.CompanyService;
 import com.hunt.otziv.c_companies.service.CompanyStatusService;
 import com.hunt.otziv.bad_reviews.service.BadReviewTaskService;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceOrderRepository;
+import com.hunt.otziv.common_billing.api.CommonInvoiceOrderDeletion;
 import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
@@ -88,6 +89,7 @@ public class OrderDeletionService {
     private final CompanyStatusService companyStatusService;
     private final EntityManager entityManager;
     private final BusinessAuditService businessAuditService;
+    private final CommonInvoiceOrderDeletion invoiceOrderDeletion;
 
     @Transactional
     public boolean deleteOrder(Long orderId, Principal principal) {
@@ -96,6 +98,9 @@ public class OrderDeletionService {
 
         log.info("Начало удаления заказа ID: {}, инициатор: {}, роль: {}", orderId, username, userRole);
 
+        // A sibling with a lower ID must be locked before this target; do not invert
+        // the invoice's canonical aggregate order by locking only the target first.
+        Long invoiceId = invoiceOrderDeletion.lockForOrderDeletion(orderId);
         Order orderToDelete = orderRepository.findByIdForCounterUpdate(orderId)
                 .orElseThrow(() -> {
                     log.error("Заказ ID: {} не найден", orderId);
@@ -103,6 +108,7 @@ public class OrderDeletionService {
                 });
 
         if (orderDeletionPolicy.canDelete(userRole, orderToDelete)) {
+            invoiceOrderDeletion.detachForOrderDeletion(orderId, invoiceId);
             if (commonInvoiceOrderRepository.existsByOrder_Id(orderId)) {
                 log.warn("Заказ ID {} не удален: он включен в общий счет", orderId);
                 throw new ResponseStatusException(

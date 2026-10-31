@@ -62,6 +62,9 @@ import static org.mockito.Mockito.when;
 class OrderDeletionServiceTest {
 
     @Mock
+    private com.hunt.otziv.common_billing.api.CommonInvoiceOrderDeletion invoiceOrderDeletion;
+
+    @Mock
     private OrderRepository orderRepository;
 
     @Mock
@@ -164,6 +167,33 @@ class OrderDeletionServiceTest {
                 anyString()
         );
         verify(commonInvoiceOrderRepository, never()).deleteByOrderId(10L);
+    }
+
+    @Test
+    void invoicePreludeLocksSiblingsBeforeTargetAndDetachesBeforeDestructiveCleanup() {
+        authenticateWithRole("ROLE_ADMIN");
+        when(invoiceOrderDeletion.lockForOrderDeletion(27390L)).thenReturn(297L);
+        when(orderRepository.findByIdForCounterUpdate(27390L)).thenReturn(Optional.of(order(27390L, "На проверке")));
+        assertTrue(service().deleteOrder(27390L, () -> "admin"));
+        InOrder sequence = inOrder(invoiceOrderDeletion, orderRepository, paymentLinkArchiveService);
+        sequence.verify(invoiceOrderDeletion).lockForOrderDeletion(27390L);
+        sequence.verify(orderRepository).findByIdForCounterUpdate(27390L);
+        sequence.verify(invoiceOrderDeletion).detachForOrderDeletion(27390L, 297L);
+        sequence.verify(paymentLinkArchiveService).archiveForDeletedOrder(27390L);
+        sequence.verify(orderRepository).deleteById(27390L);
+    }
+
+    @Test
+    void invoicePaymentConflictPreventsChildDeletion() {
+        authenticateWithRole("ROLE_OWNER");
+        when(invoiceOrderDeletion.lockForOrderDeletion(27390L)).thenReturn(297L);
+        when(orderRepository.findByIdForCounterUpdate(27390L)).thenReturn(Optional.of(order(27390L, "На проверке")));
+        doThrow(new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT, "payment evidence"))
+                .when(invoiceOrderDeletion).detachForOrderDeletion(27390L, 297L);
+        assertThrows(org.springframework.web.server.ResponseStatusException.class,
+                () -> service().deleteOrder(27390L, () -> "owner"));
+        verifyNoInteractions(paymentLinkArchiveService, reviewService, orderDetailsService, badReviewTaskService);
+        verify(orderRepository, never()).deleteById(27390L);
     }
 
     @Test
@@ -470,7 +500,8 @@ class OrderDeletionServiceTest {
                 companyService,
                 companyStatusService,
                 entityManager,
-                businessAuditService
+                businessAuditService,
+                invoiceOrderDeletion
         );
     }
 

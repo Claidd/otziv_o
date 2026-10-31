@@ -52,7 +52,7 @@ class CommonInvoiceDisputedOrderArchiveWorkflowTest {
 
         assertSame(details, workflow.archive(5L, 42L));
         var sequence = inOrder(membershipWorkflow, disputedOrderArchive);
-        sequence.verify(membershipWorkflow).detachOrder(5L, 42L);
+        sequence.verify(membershipWorkflow).detachOrderForArchive(5L, 42L);
         sequence.verify(disputedOrderArchive).archive(42L);
     }
 
@@ -62,7 +62,7 @@ class CommonInvoiceDisputedOrderArchiveWorkflowTest {
         item.getInvoice().setLastError("review_approval_failed: order=42; problem=duplicate text");
         when(disputedOrderArchive.archive(42L)).thenReturn(true);
         workflow.archive(5L, 42L);
-        verify(membershipWorkflow).detachOrder(5L, 42L);
+        verify(membershipWorkflow).detachOrderForArchive(5L, 42L);
         verify(disputedOrderArchive).archive(42L);
     }
 

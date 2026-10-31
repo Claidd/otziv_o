@@ -30,8 +30,9 @@ public class CommonInvoiceDisputedOrderArchiveWorkflow {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Заказ относится к другому общему счету");
         }
         ensureCanArchive(item, orderId);
-        membershipWorkflow.detachOrder(invoiceId, orderId);
-        // detachOrder locks and refreshes the invoice and order. Check again in that same transaction.
+        membershipWorkflow.detachOrderForArchive(invoiceId, orderId);
+        // Keep the current review status for the archive transition; restoring an old
+        // "Новый" status here would make the real archive command reject the order.
         ensureNoPaymentState(item, orderId);
         if (invoiceOrderRepository.findByOrder_IdAndActiveMembershipTrue(orderId).isPresent()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Заказ остался в активном общем счете");
