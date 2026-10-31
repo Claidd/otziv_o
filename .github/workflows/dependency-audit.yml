@@ -59,6 +59,10 @@ jobs:
       - name: Verify locked install
         run: npm ci --ignore-scripts --no-audit --no-fund
         working-directory: ${{ matrix.project }}
+      - name: Verify patched glob consumers
+        if: ${{ matrix.project == 'frontend' || matrix.project == 'mobile' || matrix.project == 'whatsapp' }}
+        run: node --test ../infrastructure/scripts/security/glob-compatibility.test.mjs
+        working-directory: ${{ matrix.project }}
       - name: Full dependency audit (blocking)
         run: npm audit --audit-level=low
         working-directory: ${{ matrix.project }}
