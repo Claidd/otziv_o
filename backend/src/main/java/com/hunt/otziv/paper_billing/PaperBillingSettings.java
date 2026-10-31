@@ -15,4 +15,6 @@ public class PaperBillingSettings {
     private String accountLast4 = "";
     private String dadataKey = "";
     private String fixtureUrl = "";
+    private String signaturePath = "";
+    private String signatureSupplierInn = "";
 }

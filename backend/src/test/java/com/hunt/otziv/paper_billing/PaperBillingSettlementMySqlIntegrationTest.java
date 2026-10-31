@@ -32,6 +32,7 @@ class PaperBillingSettlementMySqlIntegrationTest {
         jdbc.execute("INSERT INTO payment_links VALUES(8)");
         jdbc.execute("CREATE TABLE common_invoices(invoice_id BIGINT PRIMARY KEY)");
         new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_348__tochka_paper_documents.sql")).execute(ds);
+        new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_350__paper_document_visual_signature.sql")).execute(ds);
         store=new PaperBillingStore(jdbc,mock(BankPaperInvoices.class)); id=UUID.randomUUID().toString();
         var service=mock(PaperBillingService.class);
         when(service.payer(anyString())).thenReturn(new Payer("company","Тест","7707083893","773601001",""));
@@ -90,5 +91,16 @@ class PaperBillingSettlementMySqlIntegrationTest {
         store.error(id,"NEEDS_REVIEW","Concurrent failure");
         assertEquals("PAID",store.row(id).get("stage"));
         assertNotNull(store.row(id).get("paid_at"));
+    }
+    @Test void originalPdfIsPreservedAndSignatureCannotChangeWithinASet() {
+        byte[] original={1,2,3},signed={4,5,6};String hash="a".repeat(64);
+        store.pdf(id,false,new PaperBillingPdfSignature.Pdf(original,signed,hash));
+        var row=store.row(id);
+        assertArrayEquals(original,(byte[])row.get("invoice_original_pdf"));
+        assertArrayEquals(signed,(byte[])row.get("invoice_pdf"));
+        assertThrows(IllegalStateException.class,()->store.pdf(id,true,new PaperBillingPdfSignature.Pdf(original,signed,"b".repeat(64))));
+        assertNull(store.row(id).get("act_pdf"));
+        store.pdf(id,true,new PaperBillingPdfSignature.Pdf(original,signed,hash));
+        assertArrayEquals(original,(byte[])store.row(id).get("act_original_pdf"));
     }
 }

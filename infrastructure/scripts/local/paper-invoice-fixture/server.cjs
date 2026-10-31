@@ -4,7 +4,7 @@ const http = require("node:http");
 const crypto = require("node:crypto");
 const { privateKey, publicKey } = crypto.generateKeyPairSync("rsa", { modulusLength: 2048 });
 const documents = new Map(), deliveries = new Map(), receipts = [], calls = [];
-const account = "40802810000000004287/044525104";
+const account = "40802810000000006542/044525104";
 function jwt(claims) {
   const h = Buffer.from(JSON.stringify({alg:"RS256",typ:"JWT"})).toString("base64url");
   const p = Buffer.from(JSON.stringify(claims)).toString("base64url");
@@ -34,7 +34,7 @@ http.createServer(async (req,res)=>{
   const send=(code,data)=>{res.writeHead(code,{"Content-Type":"application/json"});res.end(JSON.stringify(data));};
   if (url.pathname==="/keys") return send(200,publicKey.export({format:"jwk"}));
   if (url.pathname==="/health") return send(200,{ok:true});
-  if (url.pathname==="/test/state") return send(200,{documents:[...documents.values()],deliveries:[...deliveries.keys()],receipts,calls});
+  if (url.pathname==="/test/state") return send(200,{documents:[...documents.values()],deliveries:[...deliveries.keys()],deliveryDetails:[...deliveries.values()],receipts,calls});
   if (url.pathname==="/lookup") {
     const inn=body.query;
     return send(200,{suggestions:inn==="7707083893"?[{data:{type:"LEGAL",inn,kpp:"773601001",
@@ -55,7 +55,7 @@ http.createServer(async (req,res)=>{
     res.writeHead(200,{"Content-Type":"application/pdf"});return res.end(pdf(document.number));
   }
   if (url.pathname==="/delivery") {
-    if (!deliveries.has(body.operationId)) deliveries.set(body.operationId,{messageId:"fixture-"+deliveries.size});
+    if (!deliveries.has(body.operationId)) deliveries.set(body.operationId,{messageId:"fixture-"+deliveries.size,filename:body.filename,caption:body.caption,groupId:body.groupId});
     return send(200,deliveries.get(body.operationId));
   }
   if (url.pathname==="/test/pay") {

@@ -61,8 +61,11 @@ public class PaperBillingStore {
         jdbc.update("UPDATE paper_invoice_document SET "+(act?"bank_act_id":"bank_invoice_id")+"=?,error_text=IF(stage='NEEDS_REVIEW',error_text,NULL),stage=IF(stage='NEEDS_REVIEW',stage,?),updated_at=NOW(6) WHERE id=?",
                 bankId,stage,id);
     }
-    public void pdf(String id,boolean act,byte[] bytes) {
-        jdbc.update("UPDATE paper_invoice_document SET "+(act?"act_pdf":"invoice_pdf")+"=?,updated_at=NOW(6) WHERE id=?",bytes,id);
+    public void pdf(String id,boolean act,PaperBillingPdfSignature.Pdf pdf) {
+        String prefix=act?"act":"invoice";
+        int changed=jdbc.update("UPDATE paper_invoice_document SET "+prefix+"_pdf=?,"+prefix+"_original_pdf=?,signature_sha256=?,updated_at=NOW(6) WHERE id=? AND (signature_sha256 IS NULL OR signature_sha256 <=> ?)",
+                pdf.delivered(),pdf.original(),pdf.signatureSha256(),id,pdf.signatureSha256());
+        if (changed!=1) throw new IllegalStateException("Подпись комплекта изменилась; нужна сверка");
     }
     public void error(String id,String state,String message) {
         String text=message==null?"Операция не завершена":message.substring(0,Math.min(700,message.length()));

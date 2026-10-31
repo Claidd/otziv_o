@@ -14,6 +14,7 @@ public class PaperBillingWorker {
     private final PaperBillingBankClient bank;
     private final PaperBillingDelivery delivery;
     private final com.hunt.otziv.common_billing.api.BankPaperInvoices commonDelivery;
+    private final PaperBillingPdfSignature signature;
     @Scheduled(fixedDelay=15000,initialDelay=20000)
     public void tick() {
         if (!settings.isEnabled() || !settings.isBankOperationsEnabled() || !bank.configured()) return;
@@ -39,10 +40,10 @@ public class PaperBillingWorker {
         }
         if (stage.equals("ACT_CREATED")) {
             try {
-                if (r.get("invoice_pdf")==null) store.pdf(id,false,bank.pdf(r,false));
-                if (r.get("act_pdf")==null) store.pdf(id,true,bank.pdf(r,true));
+                if (r.get("invoice_pdf")==null) store.pdf(id,false,signature.apply(bank.pdf(r,false),false));
+                if (r.get("act_pdf")==null) store.pdf(id,true,signature.apply(bank.pdf(r,true),true));
                 store.move(id,"ACT_CREATED","FILES_READY");
-            } catch(Exception e) { store.error(id,"ACT_CREATED","Не удалось получить PDF из банка; получение будет повторено"); }
+            } catch(Exception e) { store.error(id,"ACT_CREATED","Не удалось получить или подготовить PDF документов; проверьте подключение и настройку подписи. Подготовка будет повторена"); }
             return;
         }
         if (stage.equals("FILES_READY") || stage.equals("WAITING_PAYMENT")) {
