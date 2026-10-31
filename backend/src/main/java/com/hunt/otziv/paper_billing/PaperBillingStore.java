@@ -74,11 +74,17 @@ public class PaperBillingStore {
     public boolean claimDelivery(String id,boolean act) {
         return jdbc.update("UPDATE paper_invoice_document SET "+(act?"act_delivery":"invoice_delivery")+"='SENDING',updated_at=NOW(6) WHERE id=? AND "+(act?"act_delivery":"invoice_delivery")+"='PENDING'",id)==1;
     }
+    public boolean claimMessage(String id) {
+        return jdbc.update("UPDATE paper_invoice_document SET message_delivery='SENDING',updated_at=NOW(6) WHERE id=? AND message_delivery='PENDING'",id)==1;
+    }
+    public void messageDelivery(String id,String state,String messageId) {
+        jdbc.update("UPDATE paper_invoice_document SET message_delivery=?,message_id=?,updated_at=NOW(6) WHERE id=?",state,messageId,id);
+    }
     public void delivery(String id,boolean act,String state,String messageId) {
         jdbc.update("UPDATE paper_invoice_document SET "+(act?"act_delivery":"invoice_delivery")+"=?,"+(act?"act_message_id":"invoice_message_id")+"=?,updated_at=NOW(6) WHERE id=?",state,messageId,id);
     }
     public List<String> pending() {
-        for (String column:List.of("invoice_delivery","act_delivery")) {
+        for (String column:List.of("message_delivery","invoice_delivery","act_delivery")) {
             jdbc.update("UPDATE paper_invoice_document SET "+column+"='UNKNOWN' WHERE "+column+"='SENDING' AND updated_at < DATE_SUB(NOW(),INTERVAL 5 MINUTE)");
         }
         // A process crash after a POST is ambiguous. Never send a second create automatically.
@@ -89,8 +95,8 @@ public class PaperBillingStore {
         return jdbc.queryForList("""
             SELECT id FROM paper_invoice_document
             WHERE stage IN ('PENDING','INVOICE_CREATED','ACT_CREATED')
-            OR (stage='FILES_READY' AND (invoice_delivery='PENDING' OR act_delivery='PENDING'
-                OR (invoice_delivery='SENT' AND act_delivery='SENT')))
+            OR (stage='FILES_READY' AND (message_delivery='PENDING' OR (message_delivery='SENT' AND
+                (invoice_delivery='PENDING' OR act_delivery='PENDING' OR (invoice_delivery='SENT' AND act_delivery='SENT')))))
             ORDER BY created_at LIMIT 20
             """,String.class);
     }

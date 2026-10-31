@@ -47,6 +47,17 @@ public class PaperBillingWorker {
             return;
         }
         if (stage.equals("FILES_READY") || stage.equals("WAITING_PAYMENT")) {
+            if(!settings.isDeliveryEnabled()) return;
+            if(!"SENT".equals(r.get("message_delivery"))) {
+                if(!"PENDING".equals(r.get("message_delivery")) || !store.claimMessage(id)) return;
+                String outcome="UNKNOWN";
+                try {
+                    var result=delivery.sendIntro(r);
+                    outcome=result.sent() && result.messageId()!=null?"SENT":ClientMessageDelivery.isKnownUnsent(result)?"PENDING":"UNKNOWN";
+                    store.messageDelivery(id,outcome,result.messageId());
+                } catch(Exception e) {outcome="UNKNOWN";store.messageDelivery(id,"UNKNOWN",null);}
+                if(!outcome.equals("SENT")) return;
+            }
             for (boolean act:new boolean[]{false,true}) {
                 r=store.row(id);
                 String state=(String)r.get(act?"act_delivery":"invoice_delivery");

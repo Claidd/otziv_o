@@ -19,11 +19,30 @@ public class PaperBillingDelivery {
     private final ClientGroupDocumentDelivery documents;
     private final OutboundMessagePolicy outbound;
     private final PublicationProgressSettings immediate;
+    private final ClientMessageDelivery messages;
+    public ClientMessageSendResult sendIntro(Map<String,Object> r) {
+        if (!settings.isDeliveryEnabled()) return ClientMessageSendResult.failed("not_ready","Отправка документов выключена");
+        String operation="paper:"+r.get("id")+":message";
+        String text=instructions(r);
+        if(bank.fixture()) {
+            var response=bank.fixtureCall("/delivery",Map.of("operationId",operation,"groupId",r.get("group_id"),"caption",text));
+            return response.path("messageId").asText().isBlank()
+                    ?ClientMessageSendResult.failed("operation_unknown","Тестовый сервис не подтвердил сообщение")
+                    :ClientMessageSendResult.sent("Fixture",response.path("messageId").asText());
+        }
+        if (!outbound.clientMessagesEnabled() || !immediate.immediatePublicationMessagesEnabled())
+            return ClientMessageSendResult.failed("not_ready","Клиентские сообщения выключены");
+        String[] destination=((String)r.get("group_id")).split(":",2);
+        var target=new ClientMessageDelivery.Target(((Number)r.get("company_id")).longValue(),"","",
+                destination[0].equals("TELEGRAM")?Long.valueOf(destination[1]):null,
+                destination[0].equals("MAX")?Long.valueOf(destination[1]):null);
+        return messages.deliverToPlatformWithOperationId(destination[0],target,(String)r.get("client_id"),destination[1],text,operation);
+    }
     public ClientMessageSendResult send(Map<String,Object> r,boolean act) {
         if (!settings.isDeliveryEnabled()) return ClientMessageSendResult.failed("not_ready","Отправка документов выключена");
         String operation="paper:"+r.get("id")+":"+(act?"act":"invoice");
-        String caption=caption(r,act);
-        String filename=(act?"Act-":"Invoice-")+r.get("number")+".pdf";
+        String caption="";
+        String filename=filename(r,act);
         byte[] bytes=(byte[])r.get(act?"act_pdf":"invoice_pdf");
         if (bank.fixture()) {
             var response=bank.fixtureCall("/delivery",Map.of("operationId",operation,"filename",filename,
@@ -37,16 +56,18 @@ public class PaperBillingDelivery {
         String destination=(String)r.get("group_id");
         return documents.send((String)r.get("client_id"),destination,caption,bytes,filename,operation);
     }
-    public static String caption(Map<String,Object> document,boolean act) {
+    public static String filename(Map<String,Object> document,boolean act) {
+        return (act?"Акт выполненных работ":"Счёт на оплату")+" — "+document.get("number")+".pdf";
+    }
+    public static String instructions(Map<String,Object> document) {
         long kopecks=((Number)document.get("amount_kopecks")).longValue();
         var format=NumberFormat.getNumberInstance(Locale.forLanguageTag("ru-RU"));
         format.setMinimumFractionDigits(kopecks%100==0?0:2);
         format.setMaximumFractionDigits(2);
         String amount=format.format(BigDecimal.valueOf(kopecks,2)).replace('\u00a0',' ')+" ₽";
         String number=(String)document.get("number");
-        if (act) return "Акт выполненных работ к счёту № "+number+" на сумму "+amount+".";
         return "Здравствуйте! Ваш заказ выполнен.\nК оплате: "+amount+".\n\n"
-                +"Во вложениях — счёт № "+number+" и акт выполненных работ.\n\n"
+                +"Ниже — счёт № "+number+" и акт выполненных работ в двух PDF.\n\n"
                 +"Пожалуйста, оплатите счёт переводом с расчётного счёта вашей организации или ИП "
                 +"по реквизитам из приложенного счёта. Переведите всю сумму одним платежом, "
                 +"в назначении платежа укажите номер счёта: "+number+".\n\n"

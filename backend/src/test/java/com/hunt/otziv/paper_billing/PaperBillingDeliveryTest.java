@@ -1,6 +1,7 @@
 package com.hunt.otziv.paper_billing;
 
 import com.hunt.otziv.client_messages.api.ClientGroupDocumentDelivery;
+import com.hunt.otziv.client_messages.api.ClientMessageDelivery;
 import com.hunt.otziv.client_messages.dto.ClientMessageSendResult;
 import com.hunt.otziv.config.settings.api.OutboundMessagePolicy;
 import com.hunt.otziv.config.settings.api.PublicationProgressSettings;
@@ -16,10 +17,11 @@ class PaperBillingDeliveryTest {
     private final ClientGroupDocumentDelivery documents=mock(ClientGroupDocumentDelivery.class);
     private final OutboundMessagePolicy outbound=mock(OutboundMessagePolicy.class);
     private final PublicationProgressSettings immediate=mock(PublicationProgressSettings.class);
-    private final PaperBillingDelivery delivery=new PaperBillingDelivery(settings,bank,documents,outbound,immediate);
+    private final ClientMessageDelivery messages=mock(ClientMessageDelivery.class);
+    private final PaperBillingDelivery delivery=new PaperBillingDelivery(settings,bank,documents,outbound,immediate,messages);
     private final byte[] pdf=new byte[]{1,2,3};
     private Map<String,Object> row() {
-        return Map.of("id","doc","number","PB-10-12345678","amount_kopecks",100050L,
+        return Map.of("id","doc","company_id",1L,"number","PB-10-12345678","amount_kopecks",100050L,
                 "client_id","sender","group_id","TELEGRAM:-123","invoice_pdf",pdf,"act_pdf",pdf);
     }
     private void enable() {
@@ -27,14 +29,14 @@ class PaperBillingDeliveryTest {
         when(outbound.clientMessagesEnabled()).thenReturn(true);
         when(immediate.immediatePublicationMessagesEnabled()).thenReturn(true);
     }
-    @Test void sendsCompletePaymentInstructionsWithTheInvoiceToTheFrozenRecipient() {
+    @Test void sendsSeparatePaymentInstructionsToTheFrozenRecipient() {
         enable();
-        when(documents.send(anyString(),anyString(),anyString(),any(),anyString(),anyString()))
+        when(messages.deliverToPlatformWithOperationId(anyString(),any(),anyString(),anyString(),anyString(),anyString()))
                 .thenReturn(ClientMessageSendResult.sent("Telegram","42"));
-        assertTrue(delivery.send(row(),false).sent());
+        assertTrue(delivery.sendIntro(row()).sent());
         var text=ArgumentCaptor.forClass(String.class);
-        verify(documents).send(eq("sender"),eq("TELEGRAM:-123"),text.capture(),same(pdf),
-                eq("Invoice-PB-10-12345678.pdf"),eq("paper:doc:invoice"));
+        verify(messages).deliverToPlatformWithOperationId(eq("TELEGRAM"),any(),eq("sender"),eq("-123"),text.capture(),eq("paper:doc:message"));
+        verifyNoInteractions(documents);
         String caption=text.getValue();
         assertAll(() -> assertTrue(caption.contains("заказ выполнен")),
                 () -> assertTrue(caption.contains("1 000,50 ₽")),
@@ -44,19 +46,20 @@ class PaperBillingDeliveryTest {
                 () -> assertFalse(caption.contains("отправьте чек")),
                 () -> assertTrue(caption.length()<=1024));
     }
-    @Test void actReferencesTheSameInvoiceWithoutASecondPaymentRequest() {
+    @Test void documentsHaveReadableNamesAndNoTextBetweenTheFiles() {
         enable();
+        delivery.send(row(),false);
         delivery.send(row(),true);
-        var text=ArgumentCaptor.forClass(String.class);
-        verify(documents).send(eq("sender"),eq("TELEGRAM:-123"),text.capture(),same(pdf),
-                eq("Act-PB-10-12345678.pdf"),eq("paper:doc:act"));
-        assertTrue(text.getValue().contains("PB-10-12345678"));
-        assertTrue(text.getValue().contains("1 000,50 ₽"));
-        assertFalse(text.getValue().contains("Пожалуйста, оплатите"));
+        verify(documents).send(eq("sender"),eq("TELEGRAM:-123"),eq(""),same(pdf),
+                eq("Счёт на оплату — PB-10-12345678.pdf"),eq("paper:doc:invoice"));
+        verify(documents).send(eq("sender"),eq("TELEGRAM:-123"),eq(""),same(pdf),
+                eq("Акт выполненных работ — PB-10-12345678.pdf"),eq("paper:doc:act"));
+        verifyNoInteractions(messages);
     }
     @Test void pausedOutboundMessagesNeverSendEvenWithDeliveryEnabled() {
         settings.setDeliveryEnabled(true);
         assertFalse(delivery.send(row(),false).sent());
-        verifyNoInteractions(documents);
+        assertFalse(delivery.sendIntro(row()).sent());
+        verifyNoInteractions(documents,messages);
     }
 }
