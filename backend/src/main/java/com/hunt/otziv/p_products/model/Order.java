@@ -72,6 +72,9 @@ public class Order {
     @Column(name = "invoice_payment_mode", nullable = false, length = 32)
     private InvoicePaymentMode invoicePaymentMode = InvoicePaymentMode.AUTO_ROUTING;
 
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public boolean isBankPaperInvoice() { return invoicePaymentMode == InvoicePaymentMode.OWNER_PAPER_INVOICE; }
+
     @Column(name = "order_zametka")
     private String zametka;
 
@@ -94,6 +97,12 @@ public class Order {
 
     @com.fasterxml.jackson.annotation.JsonIgnore
     public Long notificationManagerId() { return manager == null ? null : manager.getId(); }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public String notificationCompanyTitle() { return company == null ? "" : company.getTitle(); }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public String notificationFilialTitle() { return filial == null ? "" : filial.getTitle(); }
 
     //    каждый бот имеет Работника, который его добавлял
     @ManyToOne(fetch = FetchType.LAZY)

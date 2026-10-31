@@ -83,6 +83,7 @@ import org.springframework.web.server.ResponseStatusException;
 @RequiredArgsConstructor
 public class ScheduledClientMessageService implements PaymentDeadlineNoticeSource, UncertainClientMessageDelivery,
         com.hunt.otziv.client_messages.api.PeriodicReminderRestart,
+        com.hunt.otziv.client_messages.api.PaperInvoiceAutomation,
         com.hunt.otziv.client_messages.api.ReviewReminderClosure {
 
     private static final ObjectMapper DELIVERY_JSON = new ObjectMapper();
@@ -1258,6 +1259,14 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
 
         boolean eligible = synchronizeClientTextReminderForOrder(order);
         return synchronizeOrderAutomationStates(order) || eligible;
+    }
+
+    @Override
+    @Transactional
+    public void synchronizeOrder(long orderId) {
+        Order order=orderRepository.findByIdForCounterUpdate(orderId).orElseThrow(() -> new IllegalStateException("Заказ не найден"));
+        synchronizeClientTextReminderForOrder(order);
+        synchronizeOrderAutomationStates(order);
     }
 
     /**
@@ -3692,6 +3701,11 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
     }
 
     private PaymentMessageWithTransfer paymentReminderText(Order order) {
+        if (order.isBankPaperInvoice()) {
+            ManagerPaymentLinkResponse link=createBankPaymentLink(order);
+            if("CREATED".equals(link.status())) throw new PaperInvoicePendingException();
+            return new PaymentMessageWithTransfer(link.copyText(),null);
+        }
         String template = appSettingService.getString(
                 AppSettingService.CLIENT_MESSAGES_PAYMENT_REMINDER_TEXT,
                 DEFAULT_PAYMENT_REMINDER_TEXT

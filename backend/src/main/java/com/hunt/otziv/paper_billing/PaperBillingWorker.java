@@ -46,7 +46,7 @@ public class PaperBillingWorker {
             } catch(Exception e) { store.error(id,"ACT_CREATED","Не удалось получить или подготовить PDF документов; проверьте подключение и настройку подписи. Подготовка будет повторена"); }
             return;
         }
-        if (stage.equals("FILES_READY") || stage.equals("WAITING_PAYMENT")) {
+        if (stage.equals("FILES_READY") || stage.equals("WAITING_PAYMENT") || stage.equals("PAID")) {
             if(!settings.isDeliveryEnabled()) return;
             if(!"SENT".equals(r.get("message_delivery"))) {
                 if(!"PENDING".equals(r.get("message_delivery")) || !store.claimMessage(id)) return;
@@ -70,14 +70,7 @@ public class PaperBillingWorker {
             }
             r=store.row(id);
             if (r.get("invoice_delivery").equals("SENT") && r.get("act_delivery").equals("SENT")) {
-                if (r.get("target_kind").equals("COMMON_INVOICE"))
-                    commonDelivery.delivered(((Number)r.get("target_id")).longValue(),id);
-                store.jdbc().update("""
-                    UPDATE payment_links SET paper_invoice_issued_at=COALESCE(paper_invoice_issued_at,NOW(6)),
-                    initiated_at=COALESCE(initiated_at,NOW(6)),status='WAITING_MANUAL_PAYMENT'
-                    WHERE id=? AND payment_method='OWNER_PAPER_INVOICE' AND status='CREATED'
-                    """,r.get("payment_link_id"));
-                store.jdbc().update("UPDATE paper_invoice_document SET stage=IF(paid_at IS NULL,'WAITING_PAYMENT','PAID'),error_text=NULL,updated_at=NOW(6) WHERE id=? AND stage='FILES_READY'",id);
+                service.completeDelivery(id);
             }
         }
     }

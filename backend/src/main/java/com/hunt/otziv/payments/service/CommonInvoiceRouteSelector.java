@@ -303,6 +303,10 @@ public class CommonInvoiceRouteSelector {
     }
 
     String paymentInstructionText(PaymentLink link, String url, ManualRouteReadView requisites) {
+        if (isPaperInvoice(link) && link.getPaperBankDocumentId()!=null) {
+            String number="PB-"+link.getOrder().getId()+"-"+link.getPaperBankDocumentId().substring(0,8).toUpperCase(java.util.Locale.ROOT);
+            return "Пожалуйста, оплатите ранее отправленный счёт № "+number+" по реквизитам из PDF одним переводом. В назначении платежа укажите номер счёта.";
+        }
         if (isPaperInvoice(link)) {
             return "Оплата производится по выставленному счёту. Документ будет отправлен в этот чат.";
         }

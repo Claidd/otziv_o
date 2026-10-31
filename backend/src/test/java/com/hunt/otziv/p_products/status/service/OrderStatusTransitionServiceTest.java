@@ -67,6 +67,22 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class OrderStatusTransitionServiceTest {
+    @Test
+    void lateBankDocumentDeliveryCannotDemoteAPaidOrder() throws Exception {
+        var order=order(42L,"Оплачено");when(orderRepository.findByIdForMutation(42L)).thenReturn(Optional.of(order));
+        service().markBankPaperInvoiceDelivered(42L);
+        assertEquals("Оплачено",order.getStatus().getTitle());verify(orderRepository,never()).save(order);
+        verifyNoInteractions(orderStatusNotificationService,telegramService);
+    }
+
+    @Test
+    void newlyDeliveredBankDocumentsStartANewReminderCycleWhenAlreadyInvoiced() throws Exception {
+        var order=order(42L,"Выставлен счет");order.setClientMessageGeneration(3);order.setStatusChangedAt(LocalDateTime.now().minusDays(20));
+        var before=order.getStatusChangedAt();when(orderRepository.findByIdForMutation(42L)).thenReturn(Optional.of(order));
+        service().markBankPaperInvoiceDelivered(42L);
+        assertEquals(4,order.getClientMessageGeneration());assertTrue(order.getStatusChangedAt().isAfter(before));
+        verify(orderRepository).save(order);verifyNoInteractions(orderStatusNotificationService,telegramService);
+    }
 
     @Mock
     private OrderRepository orderRepository;

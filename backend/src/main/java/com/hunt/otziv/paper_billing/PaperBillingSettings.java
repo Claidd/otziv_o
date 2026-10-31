@@ -12,6 +12,7 @@ public class PaperBillingSettings {
     private boolean enabled;
     private boolean bankOperationsEnabled;
     private boolean deliveryEnabled;
+    private boolean staffNotificationsEnabled=true;
     private String accountLast4 = "";
     private String dadataKey = "";
     private String fixtureUrl = "";

@@ -97,6 +97,8 @@ public class PaperBillingStore {
             WHERE stage IN ('PENDING','INVOICE_CREATED','ACT_CREATED')
             OR (stage='FILES_READY' AND (message_delivery='PENDING' OR (message_delivery='SENT' AND
                 (invoice_delivery='PENDING' OR act_delivery='PENDING' OR (invoice_delivery='SENT' AND act_delivery='SENT')))))
+            OR (stage IN ('WAITING_PAYMENT','PAID') AND delivery_completed_at IS NULL
+                AND message_delivery='SENT' AND invoice_delivery='SENT' AND act_delivery='SENT')
             ORDER BY created_at LIMIT 20
             """,String.class);
     }

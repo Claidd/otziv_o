@@ -396,6 +396,7 @@ public class PaymentLinkPresenter {
     }
 
     String paymentAfterword(PaymentLink link) {
+        if (isPaperInvoice(link) && link.getPaperBankDocumentId()!=null) return "Поступление оплаты проверяется автоматически.";
         if (isPaperInvoice(link)) {
             return "После оплаты отправьте платёжное поручение в этот чат.";
         }

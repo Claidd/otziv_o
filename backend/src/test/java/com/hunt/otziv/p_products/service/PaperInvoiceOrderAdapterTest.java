@@ -16,7 +16,7 @@ class PaperInvoiceOrderAdapterTest {
         var recovery=mock(ReviewRecoveryMessageHold.class);
         var order=Order.builder().id(42L).amount(1).counter(1).status(new OrderStatus(1L,"Опубликовано")).build();
         when(repository.findByIdForCounterUpdate(42L)).thenReturn(java.util.Optional.of(order));
-        var adapter=new PaperInvoiceOrderAdapter(repository,mock(JdbcTemplate.class),recovery);
+        var adapter=new PaperInvoiceOrderAdapter(repository,mock(JdbcTemplate.class),recovery,mock(com.hunt.otziv.p_products.status.service.OrderStatusTransitionService.class),mock(com.hunt.otziv.client_messages.api.PaperInvoiceAutomation.class));
         when(recovery.shouldPauseActiveOrder(42L)).thenReturn(true);
         assertThrows(ResponseStatusException.class,() -> adapter.lockCompletedUnpaid(42));
         when(recovery.shouldPauseActiveOrder(42L)).thenReturn(false);

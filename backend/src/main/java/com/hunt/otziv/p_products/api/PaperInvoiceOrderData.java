@@ -4,4 +4,8 @@ package com.hunt.otziv.p_products.api;
 public interface PaperInvoiceOrderData {
     long companyId(long orderId);
     void lockCompletedUnpaid(long orderId);
+    void lockForDelivery(long orderId);
+    void markDelivered(long orderId);
+    record StaffContext(Long managerId,String company,String filial) {}
+    StaffContext staffContext(long orderId);
 }

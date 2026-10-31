@@ -23,6 +23,7 @@ public class PaperBillingSettlement {
     private final BankPaperInvoices common;
     private final TochkaWebhookJwtVerifier verifier;
     private final PlatformTransactionManager transactions;
+    private final com.hunt.otziv.client_messages.api.PaperInvoiceAutomation automation;
     private static final Pattern NUMBER=Pattern.compile("(?<![A-Z0-9-])PB-[0-9]+-[A-F0-9]{8}(?![A-Z0-9-])",Pattern.CASE_INSENSITIVE);
     public void webhook(String raw) {
         var claims=verifier.verifyIncomingPayment(raw);
@@ -88,8 +89,10 @@ public class PaperBillingSettlement {
                     if (row.get("paid_at")==null) store.error(id,"NEEDS_REVIEW","Перевод требует сверки: плательщик, сумма, состав счёта или несколько платежей");
                     return;
                 }
-                if (row.get("target_kind").equals("ORDER"))
+                if (row.get("target_kind").equals("ORDER")) {
                     standalone.applyVerifiedPaperBankPayment(((Number)row.get("payment_link_id")).longValue(),receipt.amountKopecks());
+                    automation.synchronizeOrder(((Number)row.get("target_id")).longValue());
+                }
                 else common.settle(((Number)row.get("target_id")).longValue(),receipt.amountKopecks(),receipt.paymentId());
                 store.jdbc().update("""
                     UPDATE paper_invoice_document SET stage=IF(stage='WAITING_PAYMENT','PAID',stage),

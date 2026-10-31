@@ -59,12 +59,14 @@ public class PaperBillingDelivery {
     public static String filename(Map<String,Object> document,boolean act) {
         return (act?"Акт выполненных работ":"Счёт на оплату")+" — "+document.get("number")+".pdf";
     }
-    public static String instructions(Map<String,Object> document) {
-        long kopecks=((Number)document.get("amount_kopecks")).longValue();
+    public static String amountText(long kopecks) {
         var format=NumberFormat.getNumberInstance(Locale.forLanguageTag("ru-RU"));
         format.setMinimumFractionDigits(kopecks%100==0?0:2);
         format.setMaximumFractionDigits(2);
-        String amount=format.format(BigDecimal.valueOf(kopecks,2)).replace('\u00a0',' ')+" ₽";
+        return format.format(BigDecimal.valueOf(kopecks,2)).replace('\u00a0',' ')+" ₽";
+    }
+    public static String instructions(Map<String,Object> document) {
+        String amount=amountText(((Number)document.get("amount_kopecks")).longValue());
         String number=(String)document.get("number");
         return "Здравствуйте! Ваш заказ выполнен.\nК оплате: "+amount+".\n\n"
                 +"Ниже — счёт № "+number+" и акт выполненных работ в двух PDF.\n\n"

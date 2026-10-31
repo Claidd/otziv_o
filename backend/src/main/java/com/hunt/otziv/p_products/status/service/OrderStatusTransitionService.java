@@ -179,6 +179,25 @@ public class OrderStatusTransitionService {
         return changeStatusForOrderInternal(orderID, title, true, false, false);
     }
 
+    /** Called once per committed bank-document delivery, under the ordinary order locks. */
+    @Transactional
+    public void markBankPaperInvoiceDelivered(Long id) throws Exception {
+        orderAggregateMutationLockService.lock(id);
+        Order order=orderRepository.findByIdForMutation(id).orElseThrow(() -> new NotFoundException("Order not found"));
+        String before=safeStatusTitle(order);
+        if (STATUS_PAYMENT.equals(before)) return;
+        boolean sameStatus=STATUS_TO_PAY.equals(before);
+        changeStatusForOrderInternal(id,STATUS_TO_PAY,false,false,false);
+        if(sameStatus) {
+            // A newly delivered document replaces the old reminder cycle even if its label is unchanged.
+            order.setStatusChangedAt(java.time.LocalDateTime.now());
+            order.setClientMessageGeneration(Math.addExact(order.getClientMessageGeneration(),1));
+            orderRepository.save(order);
+            eventPublisher.publishEvent(new OrderStatusChangedEvent(id,before,STATUS_TO_PAY,"BANK_PAPER_INVOICE_DELIVERED"));
+        }
+        businessAuditService.recordSafely("bank_paper_invoice_delivered","order",id,id,null,before,STATUS_TO_PAY,"Confirmed delivery of invoice and act PDFs");
+    }
+
     @Transactional
     public boolean changeStatusForPrivilegedCommonBillingOrder(Long orderID, String title) throws Exception {
         return changeStatusForOrderInternal(orderID, title, true, true, false);

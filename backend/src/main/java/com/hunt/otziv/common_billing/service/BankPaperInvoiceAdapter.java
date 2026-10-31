@@ -22,6 +22,8 @@ public class BankPaperInvoiceAdapter implements BankPaperInvoices {
     private final CommonInvoicePaymentRouteWorkflow routes;
     private final JdbcTemplate jdbc;
     private final com.hunt.otziv.review_recovery.api.ReviewRecoveryMessageHold recovery;
+    private final com.hunt.otziv.p_products.api.PaperInvoiceOrderData orders;
+    private final com.hunt.otziv.client_messages.api.PaperInvoiceAutomation automation;
     @Transactional(readOnly=true)
     public Snapshot read(long id) {
         var invoice=invoices.findById(id).orElseThrow(() -> problem("Общий счёт не найден"));
@@ -56,7 +58,23 @@ public class BankPaperInvoiceAdapter implements BankPaperInvoices {
         var invoice=invoices.findByIdForUpdate(id).orElseThrow(() -> problem("Общий счёт не найден"));
         invoice.setPaperBankDocumentId(document); invoices.save(invoice);
     }
-    public void settle(long id,long amount,String payment) { settlement.applyVerifiedPaperBankPayment(id,amount,payment); }
-    public void delivered(long id,String document) { delivery.markBankPaperDocumentsDelivered(id,document); }
+    @Transactional
+    public void settle(long id,long amount,String payment) { settlement.applyVerifiedPaperBankPayment(id,amount,payment);synchronizeOrders(id); }
+    @Transactional
+    public void delivered(long id,String document) { delivery.markBankPaperDocumentsDelivered(id,document);synchronizeOrders(id); }
+    @Transactional
+    public void lockForDelivery(long id) {delivery.lockedInvoiceAfterStandalonePaymentPrelude(id);}
+    private void synchronizeOrders(long id) {
+        for(long order:jdbc.queryForList("SELECT order_id FROM common_invoice_orders WHERE invoice_id=? AND active_membership=1",Long.class,id)) automation.synchronizeOrder(order);
+    }
+    @Transactional(readOnly=true)
+    public StaffContext staffContext(long id) {
+        var source=jdbc.queryForMap("SELECT a.manager_id,i.title FROM common_invoices i JOIN common_billing_accounts a ON a.account_id=i.account_id WHERE i.invoice_id=?",id);
+        var ids=jdbc.queryForList("SELECT order_id FROM common_invoice_orders WHERE invoice_id=? AND active_membership=1 ORDER BY order_id",Long.class,id);
+        var managers=new java.util.LinkedHashSet<Long>();
+        if(source.get("manager_id") instanceof Number manager) managers.add(manager.longValue());
+        else for(long order:ids) {Long manager=orders.staffContext(order).managerId();if(manager!=null) managers.add(manager);}
+        return new StaffContext(java.util.List.copyOf(managers),ids,java.util.Objects.toString(source.get("title"),"Общий счёт"));
+    }
     private static ResponseStatusException problem(String text) { return new ResponseStatusException(HttpStatus.CONFLICT,text); }
 }

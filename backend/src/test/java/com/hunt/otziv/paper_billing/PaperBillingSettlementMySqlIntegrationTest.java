@@ -24,7 +24,7 @@ class PaperBillingSettlementMySqlIntegrationTest {
     @BeforeEach void setup() {
         var ds=new DriverManagerDataSource(MYSQL.getJdbcUrl(),MYSQL.getUsername(),MYSQL.getPassword());
         jdbc=new JdbcTemplate(ds);
-        for(String table:List.of("company_billing_payer_audit","company_billing_payer","paper_invoice_bank_receipt","paper_invoice_document","paper_invoice_statement_cursor","payment_links","common_invoices","orders"))
+        for(String table:List.of("paper_invoice_staff_notice","company_billing_payer_audit","company_billing_payer","paper_invoice_bank_receipt","paper_invoice_document","paper_invoice_statement_cursor","payment_links","common_invoices","orders"))
             jdbc.execute("DROP TABLE IF EXISTS "+table);
         jdbc.execute("CREATE TABLE orders(order_id BIGINT PRIMARY KEY)");
         jdbc.execute("INSERT INTO orders VALUES(42)");
@@ -34,13 +34,14 @@ class PaperBillingSettlementMySqlIntegrationTest {
         new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_348__tochka_paper_documents.sql")).execute(ds);
         new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_350__paper_document_visual_signature.sql")).execute(ds);
         new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_351__paper_document_intro_delivery.sql")).execute(ds);
+        new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_352__paper_invoice_delivery_and_staff_notices.sql")).execute(ds);
         store=new PaperBillingStore(jdbc,mock(BankPaperInvoices.class)); id=UUID.randomUUID().toString();
         var service=mock(PaperBillingService.class);
         when(service.payer(anyString())).thenReturn(new Payer("company","Тест","7707083893","773601001",""));
         var settings=new PaperBillingSettings(); settings.setEnabled(true); settings.setBankOperationsEnabled(true);
         finance=mock(PaymentLinkSettlementService.class);
         settlement=new PaperBillingSettlement(store,service,settings,mock(PaperBillingBankClient.class),finance,
-                mock(BankPaperInvoices.class),mock(TochkaWebhookJwtVerifier.class),new DataSourceTransactionManager(ds));
+                mock(BankPaperInvoices.class),mock(TochkaWebhookJwtVerifier.class),new DataSourceTransactionManager(ds),mock(com.hunt.otziv.client_messages.api.PaperInvoiceAutomation.class));
         store.insert(id,new Target("ORDER",42L),1,8L,250000,"{}","40802810000000004287/044525104","customer","manager","WHATSAPP:1@g.us","test");
         store.bankId(id,false,"bank-document","WAITING_PAYMENT");
     }
@@ -103,5 +104,73 @@ class PaperBillingSettlementMySqlIntegrationTest {
         assertNull(store.row(id).get("act_pdf"));
         store.pdf(id,true,new PaperBillingPdfSignature.Pdf(original,signed,hash));
         assertArrayEquals(original,(byte[])store.row(id).get("act_original_pdf"));
+    }
+    @Test void staffNoticesAreDurableDeduplicatedAndOnlyCreatedForAppliedPayment() {
+        var notices=new PaperBillingNoticeStore(jdbc);
+        assertTrue(notices.unprepared().isEmpty());
+        settlement.accept(receipt("staff-payment",250000,"7707083893"));
+        assertEquals(List.of(id),notices.unprepared());
+        var recipients=List.of(new com.hunt.otziv.u_users.api.PaymentNoticeRecipients.Recipient(1,null,9191L),
+                new com.hunt.otziv.u_users.api.PaymentNoticeRecipients.Recipient(20,7L,-500L));
+        notices.prepare(id,recipients,"Оплата подтверждена");notices.prepare(id,recipients,"Другой повтор");
+        assertEquals(2,jdbc.queryForObject("SELECT COUNT(*) FROM paper_invoice_staff_notice",Integer.class));
+        assertTrue(notices.unprepared().isEmpty());
+        long notice=notices.due().getFirst();
+        assertTrue(notices.claim(notice,"first").isPresent());assertTrue(notices.claim(notice,"second").isEmpty());
+        notices.finish(notice,"second","SENT","wrong",null);
+        assertEquals("SENDING",notices.row(notice).get("state"));
+        notices.finish(notice,"first","SENT","100",null);
+        assertEquals("SENT",notices.row(notice).get("state"));
+        assertTrue(notices.claim(notice,"again").isEmpty());
+        settlement.accept(receipt("staff-payment",250000,"7707083893"));
+        verify(finance,times(1)).applyVerifiedPaperBankPayment(8L,250000);
+        assertEquals(2,jdbc.queryForObject("SELECT COUNT(*) FROM paper_invoice_staff_notice",Integer.class));
+    }
+    @Test void failedFinancialTransactionAndMissingAppliedEvidenceCannotNotifyStaff() {
+        var notices=new PaperBillingNoticeStore(jdbc);
+        doThrow(PaperBillingModels.problem("financial failure")).when(finance).applyVerifiedPaperBankPayment(8L,250000);
+        settlement.accept(receipt("staff-failure",250000,"7707083893"));
+        assertTrue(notices.unprepared().isEmpty());
+        notices.prepare(id,List.of(new com.hunt.otziv.u_users.api.PaymentNoticeRecipients.Recipient(1,null,9191L)),"No send");
+        assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM paper_invoice_staff_notice",Integer.class));
+    }
+    @Test void abandonedStaffSendBecomesUnknownAndCannotBeRetriedBlindly() {
+        settlement.accept(receipt("unknown-staff",250000,"7707083893"));
+        var notices=new PaperBillingNoticeStore(jdbc);
+        notices.prepare(id,List.of(new com.hunt.otziv.u_users.api.PaymentNoticeRecipients.Recipient(1,null,9191L)),"Paid");
+        long notice=notices.due().getFirst();assertTrue(notices.claim(notice,"crashed").isPresent());
+        jdbc.update("UPDATE paper_invoice_staff_notice SET updated_at=DATE_SUB(NOW(),INTERVAL 6 MINUTE) WHERE notice_id=?",notice);
+        assertTrue(notices.due().isEmpty());assertEquals("UNKNOWN",notices.row(notice).get("state"));
+        assertTrue(notices.claim(notice,"retry").isEmpty());
+    }
+    @Test void completingDeliveredDocumentsIsAtomicAndCannotRestartTheCycleTwice() {
+        jdbc.execute("ALTER TABLE payment_links ADD payment_method VARCHAR(32),ADD status VARCHAR(32),ADD paper_invoice_issued_at DATETIME(6),ADD initiated_at DATETIME(6)");
+        jdbc.update("UPDATE payment_links SET payment_method='OWNER_PAPER_INVOICE',status='CREATED' WHERE id=8");
+        jdbc.update("UPDATE paper_invoice_document SET stage='FILES_READY',message_delivery='SENT',invoice_delivery='SENT',act_delivery='SENT' WHERE id=?",id);
+        var targets=mock(PaperBillingTargets.class);
+        var service=new PaperBillingService(store,targets,new PaperBillingSettings(),mock(PaperBillingBankClient.class),new com.fasterxml.jackson.databind.ObjectMapper(),new DataSourceTransactionManager(jdbc.getDataSource()));
+        service.completeDelivery(id);service.completeDelivery(id);
+        verify(targets,times(1)).delivered(new Target("ORDER",42L),id);
+        assertEquals("WAITING_PAYMENT",store.row(id).get("stage"));assertNotNull(store.row(id).get("delivery_completed_at"));
+        assertNotNull(jdbc.queryForObject("SELECT paper_invoice_issued_at FROM payment_links WHERE id=8",java.sql.Timestamp.class));
+    }
+    @Test void failedQueueSynchronizationRollsBackDeliveryAndOrderChanges() {
+        jdbc.update("UPDATE paper_invoice_document SET stage='FILES_READY',message_delivery='SENT',invoice_delivery='SENT',act_delivery='SENT' WHERE id=?",id);
+        var targets=mock(PaperBillingTargets.class);
+        doAnswer(call -> {
+            jdbc.update("UPDATE paper_invoice_document SET error_text='must roll back' WHERE id=?",id);
+            throw new IllegalStateException("queue unavailable");
+        }).when(targets).delivered(new Target("ORDER",42L),id);
+        var service=new PaperBillingService(store,targets,new PaperBillingSettings(),mock(PaperBillingBankClient.class),new com.fasterxml.jackson.databind.ObjectMapper(),new DataSourceTransactionManager(jdbc.getDataSource()));
+        assertThrows(IllegalStateException.class,()->service.completeDelivery(id));
+        assertNull(store.row(id).get("delivery_completed_at"));assertNull(store.row(id).get("error_text"));
+        assertEquals("FILES_READY",store.row(id).get("stage"));
+    }
+    @Test void unsuccessfulPdfDeliveryCannotChangeTheOrderOrStartReminders() {
+        jdbc.update("UPDATE paper_invoice_document SET stage='FILES_READY',message_delivery='SENT',invoice_delivery='SENT',act_delivery='UNKNOWN' WHERE id=?",id);
+        var targets=mock(PaperBillingTargets.class);
+        var service=new PaperBillingService(store,targets,new PaperBillingSettings(),mock(PaperBillingBankClient.class),new com.fasterxml.jackson.databind.ObjectMapper(),new DataSourceTransactionManager(jdbc.getDataSource()));
+        assertThrows(org.springframework.web.server.ResponseStatusException.class,()->service.completeDelivery(id));
+        verify(targets,never()).delivered(any(),any());assertNull(store.row(id).get("delivery_completed_at"));
     }
 }

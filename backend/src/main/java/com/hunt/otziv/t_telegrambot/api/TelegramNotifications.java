@@ -6,4 +6,6 @@ public interface TelegramNotifications {
 
     /** One Bot API call with a confirmed result, for retryable delivery intents. */
     boolean sendTextOnce(long chatId, String text);
+    boolean canSendTexts();
+    java.util.Optional<Integer> sendTextOnceMessageId(long chatId,String text);
 }

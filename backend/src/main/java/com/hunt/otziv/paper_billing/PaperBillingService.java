@@ -73,4 +73,28 @@ public class PaperBillingService {
         targets.company(new Target((String)r.get("target_kind"),((Number)r.get("target_id")).longValue()),auth);
         return r;
     }
+    public void completeDelivery(String id) {
+        var before=store.row(id);
+        var target=new Target((String)before.get("target_kind"),((Number)before.get("target_id")).longValue());
+        var transaction=new TransactionTemplate(transactions);
+        transaction.setIsolationLevel(org.springframework.transaction.TransactionDefinition.ISOLATION_READ_COMMITTED);
+        transaction.executeWithoutResult(tx -> {
+            targets.lockDelivery(target); // Order / common-invoice locks always precede the document lock.
+            var row=store.jdbc().queryForMap("SELECT * FROM paper_invoice_document WHERE id=? FOR UPDATE",id);
+            if(row.get("delivery_completed_at")!=null) return;
+            if(!"SENT".equals(row.get("message_delivery")) || !"SENT".equals(row.get("invoice_delivery")) || !"SENT".equals(row.get("act_delivery")))
+                throw problem("Доставка сообщения и обоих PDF ещё не подтверждена");
+            if(!Set.of("FILES_READY","WAITING_PAYMENT","PAID").contains(row.get("stage"))) throw problem("Документы требуют сверки");
+            targets.delivered(target,id);
+            if(row.get("payment_link_id")!=null) {
+                int updated=store.jdbc().update("""
+                    UPDATE payment_links SET paper_invoice_issued_at=COALESCE(paper_invoice_issued_at,NOW(6)),
+                    initiated_at=COALESCE(initiated_at,NOW(6)),status=IF(status='CREATED','WAITING_MANUAL_PAYMENT',status)
+                    WHERE id=? AND payment_method='OWNER_PAPER_INVOICE' AND paper_bank_document_id=?
+                    """,row.get("payment_link_id"),id);
+                if(updated!=1) throw problem("Платёжная запись банковского счёта изменилась");
+            }
+            store.jdbc().update("UPDATE paper_invoice_document SET delivery_completed_at=NOW(6),stage=IF(paid_at IS NULL,'WAITING_PAYMENT','PAID'),error_text=NULL,updated_at=NOW(6) WHERE id=?",id);
+        });
+    }
 }

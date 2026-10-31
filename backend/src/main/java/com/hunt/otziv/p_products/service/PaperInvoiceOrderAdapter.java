@@ -14,7 +14,22 @@ public class PaperInvoiceOrderAdapter implements PaperInvoiceOrderData {
     private final OrderRepository orders;
     private final JdbcTemplate jdbc;
     private final com.hunt.otziv.review_recovery.api.ReviewRecoveryMessageHold recovery;
+    private final com.hunt.otziv.p_products.status.service.OrderStatusTransitionService transitions;
+    private final com.hunt.otziv.client_messages.api.PaperInvoiceAutomation automation;
     public long companyId(long id) { return jdbc.queryForObject("SELECT order_company FROM orders WHERE order_id=?",Long.class,id); }
+    @Transactional
+    public void lockForDelivery(long id) {orders.findByIdForCounterUpdate(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,"Заказ не найден"));}
+    @Transactional
+    public void markDelivered(long id) {
+        try {transitions.markBankPaperInvoiceDelivered(id);automation.synchronizeOrder(id);}
+        catch(RuntimeException e) {throw e;}
+        catch(Exception e) {throw new IllegalStateException("Не удалось завершить отправку счёта",e);}
+    }
+    @Transactional(readOnly=true)
+    public StaffContext staffContext(long id) {
+        var order=orders.findByIdForOrderDto(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,"Заказ не найден"));
+        return new StaffContext(order.notificationManagerId(),order.notificationCompanyTitle(),order.notificationFilialTitle());
+    }
     @Transactional
     public void lockCompletedUnpaid(long id) {
         var order=orders.findByIdForCounterUpdate(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,"Заказ не найден"));

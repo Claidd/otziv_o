@@ -45,6 +45,14 @@ public class PaperBillingTargets {
     public Map<String,Object> companyInfo(long company) {
         return companies.read(company);
     }
+    public void lockDelivery(Target target) {
+        if(target.kind().equals("ORDER")) orders.lockForDelivery(target.id());
+        else common.lockForDelivery(target.id());
+    }
+    public void delivered(Target target,String document) {
+        if(target.kind().equals("ORDER")) orders.markDelivered(target.id());
+        else common.delivered(target.id(),document);
+    }
     public void configureCommon(Target t,Authentication auth) {
         if (t.kind().equals("COMMON_INVOICE")) {
             paymentTargets.requireCanManageCommonInvoice(t.id());

@@ -14,4 +14,7 @@ public interface BankPaperInvoices {
     void bindDocument(long invoiceId,String documentId);
     void settle(long invoiceId,long amountKopecks,String paymentId);
     void delivered(long invoiceId,String documentId);
+    void lockForDelivery(long invoiceId);
+    record StaffContext(java.util.List<Long> managerIds,java.util.List<Long> orderIds,String title) {}
+    StaffContext staffContext(long invoiceId);
 }
