@@ -23,6 +23,7 @@
     "ManagerManualCardPaymentResultResponse": ["manualPaymentReview"],
     "SpecialistManualPaymentReviewResponse": ["creditedAt", "confirmationBasis"],
     "CommonInvoiceDetailsResponse": ["delivery"],
+    "CommonInvoiceOrderResponse": ["detachBlockedReason"],
     "CommonInvoicePaymentRouteChangeContextResponse": ["ownerManualRoute"]
   },
   "releaseEvidence": "releases/inventory.json records actual latest published Android/backend artifacts; no minimum supported release is inferred."

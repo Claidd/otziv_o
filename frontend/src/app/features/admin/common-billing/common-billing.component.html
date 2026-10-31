@@ -79,19 +79,19 @@
                   <button
                     type="button"
                     class="toolbar-action toolbar-action--detach"
-                    title="Отключить заказ от общего счета"
+                    [title]="invoiceOrder?.detachBlockedReason || 'Отключить заказ от общего счета'"
                     (click)="invoiceOrder && detachOrder(invoiceOrder)"
-                    [disabled]="!!mutating() || invoiceNeedsAttention() || !invoiceOrder?.detachable"
+                    [disabled]="!!mutating() || !invoiceOrder?.detachable"
                   >
                     <span class="material-icons-sharp" aria-hidden="true">link_off</span>
                   </button>
                   <button
                     type="button"
                     class="toolbar-action toolbar-action--archive"
-                    title="Убрать спорный заказ из общего счета и архивировать"
+                    [title]="invoiceOrder?.detachBlockedReason || 'Убрать спорный заказ из общего счета и архивировать'"
                     [attr.aria-label]="'Архивировать спорный заказ №' + invoiceOrder?.orderId"
                     (click)="invoiceOrder && archiveDisputedOrder(invoiceOrder)"
-                    [disabled]="!!mutating() || invoiceNeedsAttention() || !invoiceOrder?.detachable || !!currentInvoice()?.sentAt || !['В проверку', 'На проверке', 'Коррекция', 'Публикация'].includes(invoiceOrder?.orderStatus || '')"
+                    [disabled]="!!mutating() || !invoiceOrder?.detachable || !!currentInvoice()?.sentAt || !['В проверку', 'На проверке', 'Коррекция', 'Публикация'].includes(invoiceOrder?.orderStatus || '')"
                   >
                     <span class="material-icons-sharp" aria-hidden="true">archive</span>
                   </button>

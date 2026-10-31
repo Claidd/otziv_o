@@ -1569,14 +1569,18 @@ export class CommonBillingComponent implements OnDestroy {
 
   detachOrder(order: CommonInvoiceOrderResponse): void {
     const invoice = this.currentInvoice();
-    if (!invoice || invoice.status === 'NEEDS_ATTENTION' || !order.detachable || this.mutating()) {
+    if (!invoice || !order.detachable || this.mutating()) {
       return;
     }
 
     const target = order.paid
       ? 'Заказ отмечен оплаченным внутри общего счета, поэтому будет закрыт отдельно как оплаченный.'
       : `Заказ вернется в статус "${order.originalOrderStatus || 'Опубликовано'}".`;
-    const confirmed = window.confirm(`Отключить заказ №${order.orderId} от общего счета? ${target}`);
+    const confirmed = window.confirm(
+      `Исключить заказ №${order.orderId} из общего счёта №${invoice.id}?\n\n` +
+      `${target}\nСумма счёта будет пересчитана, неиспользованный резерв освобождён.\n\n` +
+      'Подтвердите исключение заказа. Для отмены нажмите «Отмена».'
+    );
     if (!confirmed) {
       return;
     }
@@ -1591,10 +1595,14 @@ export class CommonBillingComponent implements OnDestroy {
 
   archiveDisputedOrder(order: CommonInvoiceOrderResponse): void {
     const invoice = this.currentInvoice();
-    if (!invoice || invoice.status === 'NEEDS_ATTENTION' || invoice.sentAt || !order.detachable || this.mutating()) {
+    if (!invoice || invoice.sentAt || !order.detachable || this.mutating()) {
       return;
     }
-    if (!window.confirm(`Убрать спорный заказ №${order.orderId} из общего счета и перевести его в архив?`)) {
+    if (!window.confirm(
+      `Архивировать заказ №${order.orderId} и исключить его из общего счёта №${invoice.id}?\n\n` +
+      'Заказ перейдёт в архив. Сумма счёта будет пересчитана, неиспользованный резерв освобождён.\n\n' +
+      'Подтвердите архивирование. Для отмены нажмите «Отмена».'
+    )) {
       return;
     }
     this.invoiceAction(
@@ -1884,6 +1892,11 @@ export class CommonBillingComponent implements OnDestroy {
   }
 
   updateOrderStatus(order: OrderCardItem, action: StatusAction): void {
+    if (action.status === 'Архив') {
+      const position = this.invoiceDetails()?.orders.find(item => item.orderId === order.id);
+      if (position) this.archiveDisputedOrder(position);
+      return;
+    }
     if (['Выставлен счет', 'Напоминание', 'Не оплачено', 'Оплачено'].includes(action.status)) {
       this.toastService.error('Одиночное финансовое действие отключено', 'Этот заказ входит в общий счет');
       return;

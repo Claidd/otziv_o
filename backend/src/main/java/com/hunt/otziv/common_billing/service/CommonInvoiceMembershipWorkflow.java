@@ -71,6 +71,8 @@ public class CommonInvoiceMembershipWorkflow implements com.hunt.otziv.common_bi
 
     private final CommonInvoiceManualPaymentWorkflow manualPaymentWorkflow;
 
+    private final CommonInvoiceCompositionService compositionService;
+
     private final CommonInvoiceDetailsAssembler invoiceDetailsAssembler;
 
     private final CommonInvoiceInitializationService invoiceInitialization;
@@ -395,15 +397,25 @@ public class CommonInvoiceMembershipWorkflow implements com.hunt.otziv.common_bi
 
     @Transactional
     public CommonInvoiceDetailsResponse detachOrder(Long invoiceId, Long orderId) {
-        CommonInvoice invoice = lockedInvoice(invoiceId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"));
+        Set<Long> orderIds = settlementService.lockInvoiceOrderAggregates(invoiceId);
+        Map<Long, List<PaymentLink>> paymentLinks = lockPaymentLinksForOrders(orderIds);
+        CommonInvoice invoice = lockedInvoiceAfterOrderPrelude(invoiceId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"));
+        settlementService.ensureInvoiceMembershipUnchanged(invoiceId, orderIds);
         ensureCommonInvoiceVisibleForCurrentUser(invoice);
-        ensureCommonInvoiceNotNeedsAttention(invoice);
         ensureCommonInvoiceCanChangePositions(invoice);
-        ensureCommonPaymentRouteAllowsCompositionChange(invoice);
+        settlementService.ensureNoCompetingStandaloneRoutesOrThrow(paymentLinks);
         CommonInvoiceOrder item = invoiceOrderRepository.findByOrderIdWithInvoice(orderId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден в общем счете"));
         if (!invoice.getId().equals(item.getInvoice().getId())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Заказ относится к другому общему счету");
         }
+        for (CommonInvoiceOrder position : invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId)) {
+            String reason = CommonInvoiceCompositionService.itemBlockReason(position);
+            if (reason != null || position.getOrder().isComplete() || position.getOrder().getPayDay() != null) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "В составе счёта есть платёжные данные. Сначала выполните сверку оплаты");
+            }
+        }
+        compositionService.prepareChange(invoice, item);
+        boolean publicationAttention = CommonInvoiceCompositionService.isPublicationAttention(invoice);
         Order order = item.getOrder();
         if (item.isPaid()) {
             try {
@@ -415,8 +427,16 @@ public class CommonInvoiceMembershipWorkflow implements com.hunt.otziv.common_bi
             restoreDetachedOrderStatus(order, item.getOriginalOrderStatusTitle());
         }
         invoiceOrderRepository.delete(item);
+        entityManager.flush();
         List<CommonInvoiceOrder> items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId);
-        recalculateInvoice(invoice, items);
+        if (publicationAttention && publicationFailureRemoved(invoice, items)) {
+            invoice.setStatus(CommonInvoiceStatus.COLLECTING);
+            invoice.setLastError(null);
+        }
+        settlementService.refreshInvoiceAmounts(invoice, items);
+        if (attentionError(invoice).startsWith("amount_calc_failed:")) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Не удалось пересчитать оставшиеся заказы. Состав счёта и резерв не изменены");
+        }
         publicationBlockerService.reconcileInvoice(invoiceId);
         if (items.isEmpty()) {
             invoice.setStatus(CommonInvoiceStatus.DISABLED);
@@ -432,6 +452,17 @@ public class CommonInvoiceMembershipWorkflow implements com.hunt.otziv.common_bi
             markInvoiceOrdersPublished(items);
         }
         return invoiceAfterOrderPrelude(invoiceId);
+    }
+
+    boolean publicationFailureRemoved(CommonInvoice invoice, List<CommonInvoiceOrder> remaining) {
+        var failedOrder = java.util.regex.Pattern.compile("\\border=(\\d+)(?:;|\\s|$)").matcher(normalize(invoice.getLastError()));
+        if (failedOrder.find()) {
+            String id = failedOrder.group(1);
+            return remaining.stream().noneMatch(item -> item.getOrder() != null
+                    && id.equals(String.valueOf(item.getOrder().getId()))
+                    && Set.of("В проверку", "На проверке", "Коррекция").contains(statusTitle(item.getOrder())));
+        }
+        return remaining.stream().noneMatch(item -> Set.of("В проверку", "На проверке", "Коррекция").contains(statusTitle(item.getOrder())));
     }
 
     /** Internal server policy. The caller archives the locked order in the same transaction.

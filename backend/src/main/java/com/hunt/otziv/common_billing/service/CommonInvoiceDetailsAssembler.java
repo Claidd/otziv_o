@@ -53,6 +53,8 @@ public class CommonInvoiceDetailsAssembler {
 
     private final CommonInvoicePresenter invoicePresenter;
 
+    private final CommonInvoiceCompositionService compositionService;
+
     private final CommonInvoiceMessageQueue messageQueue;
 
     private final CommonInvoiceSettlementService settlementService;
@@ -127,7 +129,8 @@ public class CommonInvoiceDetailsAssembler {
     CommonInvoiceDetailsResponse invoiceDetails(CommonInvoice invoice, List<CommonInvoiceOrder> items) {
         List<CommonInvoicePaymentRef> paymentRefs = paymentRefEvidenceRows(invoice);
         Map<String, String> terminalLabels = paymentTerminalLabels(invoice, paymentRefs);
-        return new CommonInvoiceDetailsResponse(toInvoiceSummary(invoice, items, terminalLabels.get(normalize(invoice == null ? null : invoice.getTbankTerminalKey()))), items.stream().map(this::toOrderResponse).toList(), toOrderCards(items), toNextCycleOrders(items), toPaymentRefEvidence(paymentRefs, terminalLabels), paymentEvidenceToken(invoice, paymentRefs), messageQueue.status(invoice.getPaymentMessageOperationId()));
+        String compositionBlock = compositionService.previewBlockReason(invoice);
+        return new CommonInvoiceDetailsResponse(toInvoiceSummary(invoice, items, terminalLabels.get(normalize(invoice == null ? null : invoice.getTbankTerminalKey()))), items.stream().map(item -> toOrderResponse(item, compositionBlock)).toList(), toOrderCards(items), toNextCycleOrders(items), toPaymentRefEvidence(paymentRefs, terminalLabels), paymentEvidenceToken(invoice, paymentRefs), messageQueue.status(invoice.getPaymentMessageOperationId()));
     }
 
     List<CommonInvoicePaymentRef> paymentRefEvidenceRows(CommonInvoice invoice) {
@@ -283,9 +286,14 @@ public class CommonInvoiceDetailsAssembler {
     }
 
     CommonInvoiceOrderResponse toOrderResponse(CommonInvoiceOrder item) {
+        return toOrderResponse(item, compositionService.previewBlockReason(item.getInvoice()));
+    }
+
+    private CommonInvoiceOrderResponse toOrderResponse(CommonInvoiceOrder item, String invoiceBlock) {
+        String block = invoiceBlock != null ? invoiceBlock : CommonInvoiceCompositionService.itemBlockReason(item);
         Order order = item.getOrder();
         Company company = order.getCompany();
-        return new CommonInvoiceOrderResponse(order.getId(), company == null ? null : company.getId(), company == null ? "" : company.getTitle(), order.getFilial() == null ? "" : order.getFilial().getTitle(), statusTitle(order), normalize(item.getOriginalOrderStatusTitle()), amountRubles(item.getAmountKopecks()), item.getAmountKopecks(), item.isReady(), item.isPaid(), item.isUnpaid(), !hasFrozenCommonPaymentRoute(item.getInvoice()) && item.getInvoice().getStatus() != CommonInvoiceStatus.PAID && item.getInvoice().getStatus() != CommonInvoiceStatus.UNPAID && item.getInvoice().getStatus() != CommonInvoiceStatus.BAN && item.getInvoice().getStatus() != CommonInvoiceStatus.ARCHIVED && item.getInvoice().getStatus() != CommonInvoiceStatus.NEEDS_ATTENTION, item.getPaidAt(), resolvedPaymentMethod(item), normalize(item.getManualPaidBy()), normalize(item.getManualPaymentComment()), normalize(item.getManualPaymentReceiptUrl()));
+        return new CommonInvoiceOrderResponse(order.getId(), company == null ? null : company.getId(), company == null ? "" : company.getTitle(), order.getFilial() == null ? "" : order.getFilial().getTitle(), statusTitle(order), normalize(item.getOriginalOrderStatusTitle()), amountRubles(item.getAmountKopecks()), item.getAmountKopecks(), item.isReady(), item.isPaid(), item.isUnpaid(), block == null, item.getPaidAt(), resolvedPaymentMethod(item), normalize(item.getManualPaidBy()), normalize(item.getManualPaymentComment()), normalize(item.getManualPaymentReceiptUrl()), block);
     }
 
     String resolvedPaymentMethod(CommonInvoiceOrder item) {

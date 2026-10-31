@@ -15,4 +15,28 @@ final class CommonInvoiceRouteState {
         return invoice != null && invoice.getPaymentRouteSelectedAt() != null
                 && invoice.getPaymentRouteType() != null && !invoice.getPaymentRouteType().trim().isBlank();
     }
+
+    static void clearPaymentRoute(CommonInvoice invoice) {
+        invoice.setPaymentRouteType(null);
+        invoice.setPaymentRouteProfileId(null);
+        invoice.setPaymentRouteProfileCode(null);
+        invoice.setPaymentRouteProfileName(null);
+        invoice.setContractorAllocationId(null);
+        invoice.setPaymentRouteTerminalKey(null);
+        invoice.setPaymentRouteManualSource(null);
+        invoice.setPaymentRouteManualTaskId(null);
+        invoice.setPaymentRouteManualTaskSourceGeneration(null);
+        invoice.setPaymentRouteManualTaskGeneration(null);
+        invoice.setPaymentRouteManualTaskAccountingMode(null);
+        invoice.setPaymentRouteManualType(null);
+        invoice.setPaymentRouteManualPhone(null);
+        invoice.setPaymentRouteManualRecipient(null);
+        invoice.setPaymentRouteManualBankName(null);
+        invoice.setPaymentRouteManualUrl(null);
+        invoice.setPaymentRouteManualButton(null);
+        invoice.setPaymentRouteManualComment(null);
+        invoice.setPaymentRouteInstructionText(null);
+        invoice.setPaymentRouteAmountKopecks(null);
+        invoice.setPaymentRouteSelectedAt(null);
+    }
 }

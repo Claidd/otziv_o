@@ -14933,6 +14933,13 @@
               "type" : "null"
             } ]
           },
+          "detachBlockedReason" : {
+            "anyOf" : [ {
+              "type" : "string"
+            }, {
+              "type" : "null"
+            } ]
+          },
           "detachable" : {
             "type" : "boolean"
           },
@@ -15010,7 +15017,7 @@
             "type" : "boolean"
           }
         },
-        "required" : [ "amount", "amountKopecks", "companyId", "companyTitle", "detachable", "filialTitle", "orderId", "orderStatus", "originalOrderStatus", "paid", "paidAt", "paidBy", "paymentComment", "paymentMethod", "paymentReceiptUrl", "ready", "unpaid" ],
+        "required" : [ "amount", "amountKopecks", "companyId", "companyTitle", "detachBlockedReason", "detachable", "filialTitle", "orderId", "orderStatus", "originalOrderStatus", "paid", "paidAt", "paidBy", "paymentComment", "paymentMethod", "paymentReceiptUrl", "ready", "unpaid" ],
         "additionalProperties" : true
       },
       "CommonInvoicePaymentInitCheckRequestInput" : {
@@ -27222,7 +27229,7 @@
     "sha256" : "c772483d9b491c1ab0049737539ff4bab5379adb58ce6b8060504ee2d1f31ed9"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/common_billing/dto/CommonInvoiceOrderResponse.java",
-    "sha256" : "f1d3b0afe0b6dbe652dcb1dc96008e60231620a20454e39dfed77421a43af490"
+    "sha256" : "7b729a7494ca161f3f6913a9150b763a45ec15daccbdbd0d4b1b439d1fa3512a"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/common_billing/dto/CommonInvoicePaymentInitCheckRequest.java",
     "sha256" : "9f52f08940b4751e92a7906a08a80cf73bf84a9202e201e9174e92338c62a6d1"
@@ -27780,7 +27787,7 @@
     "sha256" : "ec632e21d38c13762c66e4a42ee20e6cd042b058049eaf136f806eacb479b39d"
   }, {
     "path" : "contracts/client-api.config.json",
-    "sha256" : "3429f5ddec4f9f7624b4eaccc96731d142780d71058d2f9ca917c6f8dbaa2882"
+    "sha256" : "05140f88f8cc48516f5163efd47ffe90688fc09b0fcac77d51e4b8a69fce58f6"
   } ],
   "x-source-fingerprint-normalization" : "UTF-8 text with CRLF normalized to LF",
   "x-schema-java-types" : {

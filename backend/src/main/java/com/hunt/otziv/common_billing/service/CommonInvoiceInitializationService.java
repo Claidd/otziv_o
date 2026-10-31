@@ -1093,6 +1093,28 @@ public class CommonInvoiceInitializationService {
         return settlementService.allOrdersReady(items);
     }
 
+    /** Keeps composition changes behind the same payment-ledger boundary as route selection. */
+    String compositionReservationBlockReason(CommonInvoice invoice, boolean preview) {
+        if (invoice.getContractorAllocationId() != null && invoice.getPaymentRouteManualSource() != ManualPaymentSource.MANUAL_TASK) {
+            FrozenCommonRouteAction action = preview
+                    ? contractorPaymentLiveRoutingService.previewFrozenCommonRouteAction(invoice.getId(), invoice.getContractorAllocationId())
+                    : contractorPaymentLiveRoutingService.frozenCommonRouteAction(invoice.getId(), invoice.getContractorAllocationId());
+            if (action != FrozenCommonRouteAction.KEEP) return "Резерв получателя уже изменился. Сначала выполните сверку резерва";
+        }
+        return null;
+    }
+
+    // Called only after composition/payment evidence checks, inside the caller's canonical transaction.
+    void releaseUnusedCompositionReservation(CommonInvoice invoice) {
+        String reason = "Изменение состава неотправленного общего счёта";
+        if (invoice.getPaymentRouteManualSource() == ManualPaymentSource.MANUAL_TASK) {
+            taskReceiptIntegrationService.release(invoice, reason);
+        } else if (invoice.getContractorAllocationId() != null
+                && !contractorPaymentLiveRoutingService.releaseCommonInvoiceRouteForReplacement(invoice, reason, "LIVE_COMMON:COMPOSITION_CHANGED")) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Не удалось освободить резерв общего счёта; состав не изменён");
+        }
+    }
+
     void ensureCommonPaymentRouteSelected(CommonInvoice invoice, long remainingKopecks) {
         if (invoice == null || invoice.getId() == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден");

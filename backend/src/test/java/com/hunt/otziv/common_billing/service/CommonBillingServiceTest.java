@@ -395,8 +395,10 @@ class CommonBillingServiceTest {
                 taskReceiptIntegrationService, runtimeSettingsService, paymentProfileService, properties,
                 tbankClient, tochkaPaymentProfileResolver, tochkaClient);
         ReflectionTestUtils.setField(service, "invoiceInitialization", initialization);
+        CommonInvoiceCompositionService composition = new CommonInvoiceCompositionService(
+                initialization, paymentRefRepository);
         CommonInvoiceDetailsAssembler detailsAssembler = new CommonInvoiceDetailsAssembler(
-                presenter, messageQueue, settlement, invoiceOrderRepository, paymentRefRepository,
+                presenter, composition, messageQueue, settlement, invoiceOrderRepository, paymentRefRepository,
                 orderRepository, nextOrderRequests, orderDtoMapper, badReviewTaskService, paymentProfileService);
         ReflectionTestUtils.setField(service, "invoiceDetailsAssembler", detailsAssembler);
         CommonInvoiceDeliveryService delivery = new CommonInvoiceDeliveryService(
@@ -444,7 +446,7 @@ class CommonBillingServiceTest {
                 paymentRefRepository, paperInvoiceManagerNotificationService, contractorPaymentLiveRoutingService,
                 taskReceiptIntegrationService, paymentProfileService, tbankClient));
         CommonInvoiceMembershipWorkflow membership = new CommonInvoiceMembershipWorkflow(
-                manualPayments, detailsAssembler, initialization, presenter, settlement, entityManager,
+                manualPayments, composition, detailsAssembler, initialization, presenter, settlement, entityManager,
                 accountCompanyRepository, invoiceRepository, invoiceOrderRepository, paymentRefRepository,
                 orderRepository, orderAggregateMutationLockService, nextOrderRequests,
                 paymentLinkRepository, orderStatusService, badReviewTaskService, appSettingService,
@@ -3149,6 +3151,95 @@ class CommonBillingServiceTest {
 
         verify(messageSender, never()).deliverWithOperationId(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.anyString());
         verify(orderTransactionService, never()).handlePaymentStatus(any(), anyBoolean());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void removingDemidovReviewPositionsRecalculatesSevenToFourAndLatePublicationJoinsCurrentOrNextInvoice(boolean previousInvoiceFrozen) {
+        CommonInvoice invoice = invoice(account());
+        invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+        invoice.setLastError("review_approval_failed: order=27391; problem=duplicate text in an earlier attempt");
+        invoice.setAmountKopecks(140_000L);
+        List<CommonInvoiceOrder> positions = new ArrayList<>();
+        for (long id : List.of(27390L, 27391L, 27394L, 27392L, 27393L, 27395L, 27396L)) {
+            Order order = order(id);
+            boolean ready = positions.size() >= 3;
+            order.setStatus(status(ready ? "Ожидает общего счета" : "На проверке"));
+            order.setSum(BigDecimal.valueOf(200));
+            CommonInvoiceOrder position = item(invoice, order);
+            position.setReady(ready); position.setAmountKopecks(20_000);
+            position.setOriginalOrderStatusTitle(order.getStatus().getTitle());
+            positions.add(position);
+            when(orderAggregateMutationLockService.lock(id)).thenReturn(order);
+            if (!ready) when(invoiceOrderRepository.findByOrderIdWithInvoice(id)).thenAnswer(ignored ->
+                    positions.stream().filter(p -> p.getOrder().getId().equals(id)).findFirst());
+        }
+        Order lateOrder = positions.getFirst().getOrder();
+        when(invoiceOrderRepository.findOrderIdsByInvoiceId(10L)).thenAnswer(ignored ->
+                positions.stream().map(p -> p.getOrder().getId()).toList());
+        when(invoiceOrderRepository.findMembershipByInvoiceIdForRead(10L)).thenAnswer(ignored -> List.copyOf(positions));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenAnswer(ignored ->
+                positions.stream().filter(p -> p.getInvoice().getId().equals(10L)).toList());
+        when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(accountRepository.findByIdWithRelationsForUpdate(invoice.getAccount().getId())).thenReturn(Optional.of(invoice.getAccount()));
+        when(orderStatusService.getOrderStatusByTitle(anyString())).thenAnswer(call -> status(call.getArgument(0)));
+        when(badReviewTaskService.getPayableSum(any())).thenReturn(BigDecimal.valueOf(200));
+        doAnswer(call -> { positions.remove(call.getArgument(0)); return null; }).when(invoiceOrderRepository).delete(any());
+
+        service.detachOrder(10L, 27390L);
+        assertEquals(120_000L, invoice.getAmountKopecks());
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+        assertTrue(invoice.getLastError().contains("27391"));
+        service.detachOrder(10L, 27391L);
+        assertEquals(100_000L, invoice.getAmountKopecks());
+        assertEquals(CommonInvoiceStatus.COLLECTING, invoice.getStatus());
+        service.detachOrder(10L, 27394L);
+        assertEquals(80_000L, invoice.getAmountKopecks());
+        assertEquals(CommonInvoiceStatus.READY, invoice.getStatus());
+        assertNull(invoice.getLastError());
+        assertEquals(0L, invoice.getPaidKopecks());
+        assertEquals(4, positions.size());
+        verifyNoInteractions(publicationApprovalService, messageSender);
+
+        // Approval/publication can finish later, after the remaining four positions have already been invoiced.
+        lateOrder.setStatus(status("Опубликовано"));
+        invoice.getAccount().setEnabled(true);
+        CommonBillingAccountCompany link = new CommonBillingAccountCompany();
+        link.setAccount(invoice.getAccount()); link.setCompany(lateOrder.getCompany()); link.setEnabled(true);
+        when(orderRepository.findCompanyIdByOrderId(27390L)).thenReturn(Optional.of(20L));
+        when(accountCompanyRepository.findEnabledLinksForCompany(20L)).thenReturn(List.of(link));
+        when(accountCompanyRepository.findConfiguredEnabledLinksForCompany(20L)).thenReturn(List.of(link));
+        when(accountCompanyRepository.findByAccount_IdAndCompany_Id(1L,20L)).thenReturn(Optional.of(link));
+        when(invoiceOrderRepository.findByOrder_IdAndActiveMembershipTrue(27390L)).thenAnswer(ignored ->
+                positions.stream().filter(p -> p.getOrder().getId().equals(27390L)).findFirst());
+        when(invoiceOrderRepository.findMembershipByOrderIdForRead(27390L)).thenReturn(Optional.empty());
+        when(invoiceOrderRepository.save(any(CommonInvoiceOrder.class))).thenAnswer(call -> {
+            CommonInvoiceOrder position = call.getArgument(0);
+            if (!positions.contains(position)) positions.add(position);
+            return position;
+        });
+        if (previousInvoiceFrozen) {
+            invoice.setStatus(CommonInvoiceStatus.INVOICED);
+            invoice.setPaymentRouteType("MANUAL_MOBILE_BANK"); invoice.setPaymentRouteSelectedAt(LocalDateTime.now());
+            when(invoiceRepository.findCurrentForAccount(any(),any(),any())).thenReturn(List.of());
+            when(invoiceRepository.save(any(CommonInvoice.class))).thenAnswer(call -> {
+                CommonInvoice saved = call.getArgument(0); if (saved.getId()==null) saved.setId(11L); return saved;
+            });
+            when(invoiceOrderRepository.findByInvoiceIdWithOrders(11L)).thenAnswer(ignored ->
+                    positions.stream().filter(p -> p.getInvoice().getId().equals(11L)).toList());
+        } else {
+            when(invoiceRepository.findCurrentForAccount(any(),any(),any())).thenReturn(List.of(invoice));
+            when(invoiceOrderRepository.findBindingsByInvoiceIds(any())).thenAnswer(ignored ->
+                    positions.stream().map(p -> binding(p.getOrder().getId(),10L,1L)).toList());
+        }
+        assertTrue(service.completePublishedOrderIntoCommonInvoice(lateOrder));
+        CommonInvoiceOrder reattached = positions.stream().filter(p -> p.getOrder()==lateOrder).findFirst().orElseThrow();
+        assertEquals(previousInvoiceFrozen ? 11L : 10L, reattached.getInvoice().getId());
+        assertEquals(previousInvoiceFrozen ? 80_000L : 100_000L, invoice.getAmountKopecks());
+        assertEquals(previousInvoiceFrozen ? 20_000L : 100_000L, reattached.getInvoice().getAmountKopecks());
+        assertEquals(0L, invoice.getPaidKopecks());
+        verifyNoInteractions(messageSender);
     }
 
     @Test
