@@ -28,7 +28,7 @@ class TochkaWebhookControllerTest {
     @BeforeEach
     void setUp() {
         paymentLinkService = mock(PaymentLinkService.class);
-        controller = new TochkaWebhookController(paymentLinkService);
+        controller = new TochkaWebhookController(paymentLinkService, org.mockito.Mockito.mock(com.hunt.otziv.paper_billing.PaperBillingSettlement.class), new com.fasterxml.jackson.databind.ObjectMapper());
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
 

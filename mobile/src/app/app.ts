@@ -1,3 +1,4 @@
+import { PaperInvoiceDialogComponent } from './shared/paper-invoice-dialog.component';
 import { ChangeDetectionStrategy } from '@angular/core';
 import { Component, effect, inject } from '@angular/core';
 import { IonApp, IonRouterOutlet } from '@ionic/angular';
@@ -13,9 +14,10 @@ import { MobileThemeService } from './shared/mobile-theme.service';
 @Component({
   changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-root',
-  imports: [IonApp, IonRouterOutlet, MobileConfirmHostComponent, MobileNativeStatusComponent, MobileUpdateHostComponent],
+  imports: [PaperInvoiceDialogComponent, IonApp, IonRouterOutlet, MobileConfirmHostComponent, MobileNativeStatusComponent, MobileUpdateHostComponent],
   template: `
     <ion-app>
+      <app-paper-invoice-dialog />
       <ion-router-outlet />
       <app-mobile-confirm-host />
       <app-mobile-native-status />

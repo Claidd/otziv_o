@@ -175,6 +175,33 @@ export OrderCommandHttpAdapter. Текущая база — 3013 внутрен�
 
 ## Пределы доказательства
 
+### Счёт и акт Точки, 31.10.2026
+
+`paper_billing` принадлежит владельцу `payments`: он хранит банковские документы,
+снимки плательщика и дедупликацию поступлений. Новых baseline-исключений и циклических
+рёбер не добавляется. Между владельцами используются узкие контракты:
+
+- `common_billing.api.BankPaperInvoices` (billing): scope общего счёта, канонические
+  блокировки заказов/счёта, привязка документа, состав, подтверждённая доставка и
+  применение проверенного банковского поступления. Чтение и настройка сохраняют
+  существующую проверку текущего пользователя; `prepare`/`bindDocument` входят
+  в транзакцию caller, `settle` доступен только внутреннему обработчику после
+  проверки подписи/выписки и уникального paymentId. Сетевых операций под блокировками нет.
+- `p_products.api.PaperInvoiceOrderData` (orders): скалярный companyId и блокировка
+  выполненного неоплаченного заказа; caller сначала проверяет доступ к заказу.
+- `c_companies.api.PaperInvoiceCompanyData` (companies): скалярная проекция группы
+  и отправителя после проверки company/order scope. Проекция замораживается до отправки.
+- `client_messages.api.ClientGroupDocumentDelivery` (messaging): отправка PDF по
+  неизменяемым реквизитам доставки и operationId, вне транзакции. Caller проверяет
+  свежие `OutboundMessagePolicy` и `PublicationProgressSettings`; неопределённый
+  результат не приводит к слепому повтору.
+
+`PaymentReviewOrderAccess` дополнен существующей проверкой компании,
+`PaymentReviewTargetAuthorization` — существующей проверкой защищённого получателя
+общего счёта. Реализации и ограничения доступа не расширяются.
+Сценарии и доказательства: [описание](TOCHKA_PAPER_INVOICES.md),
+[локальная проверка](TOCHKA_PAPER_INVOICES_LOCAL_VERIFICATION.md).
+
 Дополнительная durable publication волна описана в [ADR-014](ADR-014-DURABLE-PUBLICATION-FOLLOW-UP.md):
 узкий billing owner API и ровно один reviewed retained settings-read dependency
 `OrderPublicationOutboxWorker → AppSettingService` на финальной границе отправки.

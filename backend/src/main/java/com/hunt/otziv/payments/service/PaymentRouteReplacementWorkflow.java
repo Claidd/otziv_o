@@ -99,9 +99,8 @@ public class PaymentRouteReplacementWorkflow {
         if (target == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Некорректный запрос смены способа оплаты");
         }
-        if (target == PaymentRouteChangeTarget.OWNER_PAPER_INVOICE) {
-            requireOwnerOrAdmin(authentication);
-        }
+        // The manager endpoint already requires an authenticated manager and the
+        // exact order assignment below. Paper documents use a fixed owner account.
         requirePaymentLinksEnabled();
         Order order = orderRepository.findByIdForCounterUpdate(orderId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден"));
         managerAccessService.requireOrderAccess(orderId, authentication);
@@ -214,6 +213,9 @@ public class PaymentRouteReplacementWorkflow {
     }
 
     private String routeChangeBlockReason(PaymentLink link) {
+        if (link != null && link.getPaperBankDocumentId() != null) {
+            return "По заказу уже выпускаются банковские документы. Проверьте их оплату перед сменой способа";
+        }
         if (link == null) {
             return "Активный счет не найден";
         }

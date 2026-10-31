@@ -70,6 +70,11 @@ public class ManualPaymentAutoConfirmationService {
 
         List<PaymentLink> links = paymentLinkRepository
                 .findByOrder_IdAndStatusIn(order.getId(), BANK_REVIEW_STATUSES);
+        if (links.stream().anyMatch(link -> link.getPaperBankDocumentId() != null
+                && link.getStatus() != PaymentLinkStatus.CONFIRMED)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Оплата банковского счёта подтверждается по поступлению в Точке; проверьте банковский документ");
+        }
         boolean hasOrdinaryManualPayment = links.stream().anyMatch(link ->
                 link != null
                         && MANUAL_PAYMENT_METHODS.contains(link.getPaymentMethod())

@@ -103,6 +103,29 @@ public class CommonInvoiceDeliveryService {
         return sendInvoice(invoiceId, manual, false);
     }
 
+    /** Internal completion after both immutable bank PDFs have confirmed delivery receipts. */
+    @Transactional
+    public void markBankPaperDocumentsDelivered(Long invoiceId, String documentId) {
+        var invoice = lockedInvoiceAfterStandalonePaymentPrelude(invoiceId).invoice();
+        if (!isOwnerPaperInvoice(invoice) || !java.util.Objects.equals(documentId, invoice.getPaperBankDocumentId()))
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Банковские документы не соответствуют общему счёту");
+        LocalDateTime now = LocalDateTime.now();
+        if (invoice.getStatus() != CommonInvoiceStatus.PAID) {
+            if (!SEND_INVOICE_STATUSES.contains(invoice.getStatus()))
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Состояние общего счёта изменилось; нужна сверка доставки");
+            ensureAllItemsReady(invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId), "Общий счёт ещё не готов");
+            if (invoice.getSentAt() == null) {
+                invoice.setStatus(CommonInvoiceStatus.INVOICED);
+                markInvoiceOrdersToPay(invoice);
+            }
+            if (invoice.getNextReminderAt() == null) invoice.setNextReminderAt(nextAutomaticPaymentReminderAt(now));
+        }
+        if (invoice.getSentAt() == null) invoice.setSentAt(now);
+        if (invoice.getPaperInvoiceIssuedAt() == null) invoice.setPaperInvoiceIssuedAt(now);
+        invoiceRepository.save(invoice);
+        paperInvoiceManagerNotificationService.closeAfterCommit(invoiceId);
+    }
+
     /** Existing-operation repair. All network reads run outside invoice/order locks. */
     @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     public CommonInvoiceMessageRecovery recoverPendingMessageReceipt(Long invoiceId) {

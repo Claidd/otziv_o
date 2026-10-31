@@ -330,6 +330,8 @@ public class PaymentLink {
 
     @Column(name = "paper_invoice_issued_at")
     private LocalDateTime paperInvoiceIssuedAt;
+    @Column(name = "paper_bank_document_id", length = 36)
+    private String paperBankDocumentId;
 
     @Column(name = "manual_confirmed_by", length = 160)
     private String manualConfirmedBy;

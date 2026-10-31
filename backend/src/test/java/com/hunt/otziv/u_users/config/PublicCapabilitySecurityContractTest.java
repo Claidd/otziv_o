@@ -98,6 +98,19 @@ class PublicCapabilitySecurityContractTest {
     }
 
     @Test
+    void bankDocumentsRequireManagementRole() throws Exception {
+        String path = "/api/paper-invoices/ORDER/42/context";
+        mockMvc.perform(get(path)).andExpect(status().isUnauthorized());
+        for (String role : java.util.List.of("ADMIN", "OWNER", "MANAGER")) {
+            String token = "paper-role-" + role;
+            stubJwt(token, role);
+            mockMvc.perform(get(path).header("Authorization", "Bearer " + token)).andExpect(status().isOk());
+        }
+        stubJwt("paper-worker", "WORKER");
+        mockMvc.perform(get(path).header("Authorization", "Bearer paper-worker")).andExpect(status().isForbidden());
+    }
+
+    @Test
     void anonymousReviewCheckCapabilityRoutesRemainPublic() throws Exception {
         mockMvc.perform(get("/api/review-check/contract-id"))
                 .andExpect(status().isOk());
@@ -343,8 +356,11 @@ class PublicCapabilitySecurityContractTest {
 
         @Bean
         ManagerReportReviewRestrictionFilter managerReportReviewRestrictionFilter(ObjectMapper objectMapper) {
+            var policy = mock(ManagerReportReviewAccessPolicy.class);
+            when(policy.state(org.mockito.ArgumentMatchers.any())).thenReturn(
+                    new ManagerReportReviewAccessPolicy.AccessState(false, false, null, null, null, "", 0, 0, null, null, ""));
             return new ManagerReportReviewRestrictionFilter(
-                    mock(ManagerReportReviewAccessPolicy.class),
+                    policy,
                     mock(ManagerReportReviewCheckInService.class),
                     mock(UserRepository.class),
                     objectMapper
@@ -395,7 +411,7 @@ class PublicCapabilitySecurityContractTest {
 
         @Bean
         TochkaWebhookController tochkaWebhookController(PaymentLinkService paymentLinkService) {
-            return new TochkaWebhookController(paymentLinkService);
+            return new TochkaWebhookController(paymentLinkService, org.mockito.Mockito.mock(com.hunt.otziv.paper_billing.PaperBillingSettlement.class), new com.fasterxml.jackson.databind.ObjectMapper());
         }
 
         @Bean
@@ -421,6 +437,9 @@ class PublicCapabilitySecurityContractTest {
 
     @RestController
     static class ReviewCheckPublicProbe {
+
+        @GetMapping("/api/paper-invoices/ORDER/42/context")
+        Map<String, String> paperDocumentContext() { return Map.of("status", "ok"); }
 
         @GetMapping("/api/contractor-payments/me")
         Map<String, String> contractorPaymentSelf(Authentication authentication) {

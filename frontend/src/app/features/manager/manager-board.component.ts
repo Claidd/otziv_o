@@ -1,3 +1,4 @@
+import { openPaperInvoiceDialog } from '../../shared/paper-invoice-dialog.component';
 import { commonInvoiceDeliveryWarning, deliveryOperationMessage, manualPaymentResultNotice } from '@otziv/client-common/billing-payments';
 import { Component, HostListener, OnDestroy, computed, effect, inject, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -216,6 +217,7 @@ export class ManagerBoardComponent implements OnDestroy {
     errorMessage: (err, fallback) => this.errorMessage(err, fallback)
   });
   private readonly orderFacade = new ManagerBoardOrderFacade({
+    openPaperInvoice: openPaperInvoiceDialog,
     managerApi: this.managerApi,
     toastService: this.toastService,
     loadBoard: () => this.loadBoard(),
@@ -1048,7 +1050,7 @@ export class ManagerBoardComponent implements OnDestroy {
   }
 
   canManagePaperInvoices(): boolean {
-    return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']);
+    return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER', 'MANAGER']);
   }
 
   markPaperInvoiceIssued(): void {

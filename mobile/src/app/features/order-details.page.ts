@@ -1,3 +1,4 @@
+import { openPaperInvoiceDialog } from '../shared/paper-invoice-dialog.component';
 import { ChangeDetectionStrategy } from '@angular/core';
 import { ManagerOrdersApi } from '../core/manager-orders.api';
 import { ManagerReviewActionsApi } from '../core/manager-review-actions.api';
@@ -697,6 +698,9 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
 
                 @if (!context.canChange) {
                   <p class="sheet-error">{{ context.blockReason || 'Получателя сейчас нельзя изменить.' }}</p>
+                  @if (context.configuredMode === 'OWNER_PAPER_INVOICE') {
+                    <button type="button" (click)="changePaymentRoute('OWNER_PAPER_INVOICE')">Счёт и акт Точки</button>
+                  }
                 } @else {
                   <div class="payment-route-options">
                     <button type="button" (click)="changePaymentRoute('EMPLOYEE_REQUISITES')" [disabled]="paymentRouteChanging() || paymentRouteTargetActive('EMPLOYEE_REQUISITES')">
@@ -3795,7 +3799,10 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
 
   closePaymentRouteChange(): void{ return this.paymentFacade.closePaymentRouteChange(); }
 
-  async changePaymentRoute(target: PaymentRouteChangeTarget): Promise<void>{ return this.paymentFacade.changePaymentRoute(target); }
+  async changePaymentRoute(target: PaymentRouteChangeTarget): Promise<void>{
+    if (target === 'OWNER_PAPER_INVOICE') { openPaperInvoiceDialog({kind: 'ORDER', id: this.orderId()!}, () => { void this.paymentFacade.changePaymentRoute(target); }); return; }
+    return this.paymentFacade.changePaymentRoute(target);
+  }
 
   async markPaperInvoiceIssued(): Promise<void>{ return this.paymentFacade.markPaperInvoiceIssued(); }
 

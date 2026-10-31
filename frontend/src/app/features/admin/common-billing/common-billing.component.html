@@ -373,11 +373,11 @@
           }
           @if (canManagePaperInvoices()
             && (!invoiceNeedsAttention() || paperModeSwitchNeedsRetry())
-            && invoice?.status !== 'PAID') {
+            && (invoice?.status !== 'PAID' || invoice?.invoicePaymentMode === 'OWNER_PAPER_INVOICE')) {
             <button type="button" class="secondary" (click)="changePaperInvoiceMode()" [disabled]="!!mutating()">
               <span class="material-icons-sharp" aria-hidden="true">{{ invoice?.invoicePaymentMode === 'OWNER_PAPER_INVOICE' ? 'account_tree' : 'description' }}</span>
               {{ invoice?.invoicePaymentMode === 'OWNER_PAPER_INVOICE'
-                ? 'Вернуть авто-распределение'
+                ? 'Счёт и акт'
                 : (paperModeSwitchNeedsRetry() ? 'Повторить переход на бумажный счёт' : 'Бумажный счёт') }}
             </button>
           }

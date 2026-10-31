@@ -109,6 +109,23 @@ public class TochkaWebhookJwtVerifier {
         return claims;
     }
 
+    /** Shared signature verification only; a bank-document caller must bind customer, account and receipt. */
+    public com.fasterxml.jackson.databind.JsonNode verifyIncomingPayment(String compactJwt) {
+        ParsedJwt parsed = parseCompactJwt(compactJwt);
+        JwtHeader header = parseAndValidateHeader(parsed.header());
+        CachedJwk key = getCachedJwk();
+        validateKeyId(header.kid(), key.kid());
+        verifySignature(parsed, key.publicKey());
+        try {
+            var claims = objectMapper.readTree(parsed.payload());
+            if (!"incomingPayment".equals(claims.path("webhookType").asText()))
+                throw rejected("Unexpected bank receipt event");
+            return claims;
+        } catch (java.io.IOException failure) {
+            throw rejected("Invalid incoming payment claims");
+        }
+    }
+
     /**
      * Verifies the bank signature and requires every local payment identity
      * field to match exactly. Amount comparison is numeric because the bank

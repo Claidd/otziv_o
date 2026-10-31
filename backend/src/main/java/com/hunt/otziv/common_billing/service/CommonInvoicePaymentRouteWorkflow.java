@@ -137,6 +137,11 @@ public class CommonInvoicePaymentRouteWorkflow {
         return writeTransaction(() -> invoiceAfterOrderPrelude(invoiceId));
     }
 
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public void configureBankPaperMode(long invoiceId, Principal actor) {
+        changeInvoicePaymentMode(invoiceId, new InvoicePaymentModeChangeRequest(InvoicePaymentMode.OWNER_PAPER_INVOICE,true),actor);
+    }
+
     @Transactional(readOnly = true)
     public CommonInvoicePaymentRouteChangeContextResponse commonInvoicePaymentRouteChangeContext(Long invoiceId) {
         CommonInvoice invoice = invoiceRepository.findById(invoiceId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счёт не найден"));
@@ -402,6 +407,7 @@ public class CommonInvoicePaymentRouteWorkflow {
     PreparedInvoicePaymentModeChange prepareInvoicePaymentModeChange(Long invoiceId, InvoicePaymentMode requestedMode, String actor) {
         CommonInvoice invoice = lockedInvoice(invoiceId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счёт не найден"));
         ensureCommonInvoiceVisibleForCurrentUser(invoice);
+        requireNoBankDocumentModeChange(invoice, requestedMode);
         if (invoice.getStatus() == CommonInvoiceStatus.PAID || invoice.getStatus() == CommonInvoiceStatus.ARCHIVED || invoice.getStatus() == CommonInvoiceStatus.DISABLED || invoice.getStatus() == CommonInvoiceStatus.BAN) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Закрытый общий счёт изменить нельзя");
         }
@@ -538,6 +544,7 @@ public class CommonInvoicePaymentRouteWorkflow {
     }
 
     void applyInvoicePaymentModeChange(CommonInvoice invoice, InvoicePaymentMode requestedMode, String actor) {
+        requireNoBankDocumentModeChange(invoice, requestedMode);
         Long invoiceId = invoice.getId();
         if (invoice.getContractorAllocationId() != null) {
             contractorPaymentLiveRoutingService.releaseCommonInvoiceRouteForPaperInvoice(invoice);
@@ -559,9 +566,16 @@ public class CommonInvoicePaymentRouteWorkflow {
         log.info("Common invoice payment mode changed: invoiceId={}, mode={}, actor={}", invoiceId, requestedMode, actor);
     }
 
+    private void requireNoBankDocumentModeChange(CommonInvoice invoice, InvoicePaymentMode mode) {
+        if (invoice.getPaperBankDocumentId() != null && mode != invoice.getInvoicePaymentMode())
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Сначала выполните сверку выпущенных банковских документов");
+    }
+
     @Transactional
     public CommonInvoiceDetailsResponse markPaperInvoiceIssued(Long invoiceId, Principal principal) {
         CommonInvoice invoice = lockedInvoice(invoiceId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счёт не найден"));
+        if (invoice.getPaperBankDocumentId() != null)
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Отправка банковских документов подтверждается автоматически");
         ensureCommonInvoiceVisibleForCurrentUser(invoice);
         if (!isOwnerPaperInvoice(invoice)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Для общего счёта не включён бумажный счёт");

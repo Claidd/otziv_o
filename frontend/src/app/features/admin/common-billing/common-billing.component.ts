@@ -1,3 +1,4 @@
+import { openPaperInvoiceDialog } from '../../../shared/paper-invoice-dialog.component';
 import { ClientContractError, commonInvoiceDeliveryWarning, deliveryOperationMessage, DeliveryStatusWatcher } from '@otziv/client-common/billing-payments';
 import { DatePipe } from '@angular/common';
 import { Component, ElementRef, OnDestroy, ViewChild, computed, inject, signal } from '@angular/core';
@@ -331,6 +332,7 @@ export class CommonBillingComponent implements OnDestroy {
   });
   readonly managerInvoiceDetailMode = this.router.url.startsWith('/manager/common-billing');
   private readonly orderFacade = new ManagerBoardOrderFacade({
+    openPaperInvoice: openPaperInvoiceDialog,
     managerApi: this.managerApi,
     toastService: this.toastService,
     loadBoard: () => this.loadSelectedInvoice(),
@@ -513,7 +515,7 @@ export class CommonBillingComponent implements OnDestroy {
   });
   readonly canManagePaperInvoices = computed(() => {
     this.auth.tokenParsed();
-    return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']);
+    return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER', 'MANAGER']);
   });
   readonly canMarkPaperInvoiceIssued = computed(() => {
     this.auth.tokenParsed();
@@ -951,8 +953,12 @@ export class CommonBillingComponent implements OnDestroy {
     );
   }
 
-  changePaperInvoiceMode(): void {
+  changePaperInvoiceMode(legacyPaper = false): void {
     const invoice = this.currentInvoice();
+    if (invoice && !legacyPaper) {
+      openPaperInvoiceDialog({ kind: 'COMMON_INVOICE', id: invoice.id }, () => this.changePaperInvoiceMode(true), () => this.loadSelectedInvoice());
+      return;
+    }
     if (!invoice || !this.canManagePaperInvoices() || this.mutating()) {
       return;
     }
