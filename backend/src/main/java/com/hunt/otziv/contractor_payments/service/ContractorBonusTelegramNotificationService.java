@@ -18,7 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Private employee notice for a committed bonus; Telegram failure never changes the accrual. */
+/** Work-group notice for a committed bonus; Telegram failure never changes the accrual. */
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -95,9 +95,11 @@ public class ContractorBonusTelegramNotificationService {
             markSkipped(delivery, "employee_inactive");
             return false;
         }
-        Long chatId = bonus.telegramChatId();
-        if (chatId == null || chatId <= 0) {
-            markSkipped(delivery, "employee_private_telegram_chat_missing");
+        Long chatId = bonus.telegramGroupChatId();
+        if (chatId == null || chatId >= 0) {
+            // Keep the intent pending so linking the group repairs delivery.
+            // A private chat is never a fallback for a shared bonus notice.
+            markFailed(delivery, "employee_work_telegram_group_missing");
             return false;
         }
 
@@ -141,6 +143,10 @@ public class ContractorBonusTelegramNotificationService {
         String referenceMonth = YearMonth.from(bonus.referenceMonth()).format(MONTH_FORMAT);
         StringBuilder text = new StringBuilder()
                 .append("🎁 Начислена премия\n")
+                .append("Сотрудник: ")
+                .append(bonus.employeeName() == null || bonus.employeeName().isBlank()
+                        ? "#" + bonus.userId() : bonus.employeeName().trim())
+                .append('\n')
                 .append("Сумма: ")
                 .append(String.format(RUSSIAN, "%,.2f ₽", BigDecimal.valueOf(bonus.amountKopecks(), 2)))
                 .append("\nМесяц начисления: ").append(month);
