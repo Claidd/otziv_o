@@ -1808,6 +1808,7 @@ public class CompanyServiceImpl implements CompanyService{
 
 
     public String changeNumberPhone(String phone){ // Вспомогательный метод для корректировки номера телефона
+        if(phone==null || phone.isBlank()) return phone;
         String[] a = phone.split("9", 2);
         if (a.length > 1) {
             a[0] = "79";

@@ -75,6 +75,42 @@ class ManagerProblemEvidenceCollectorMySqlIntegrationTest {
     }
 
     @Test
+    void workerGoalCandidatesAreScopedAndSeparateHistoricalBacklogFromLaterClosure() {
+        jdbc.execute("DROP TABLE IF EXISTS managers");
+        jdbc.execute("DROP TABLE IF EXISTS workers_users");
+        jdbc.execute("DROP TABLE IF EXISTS worker_work_item_lifecycle");
+        jdbc.execute("CREATE TABLE managers(manager_id BIGINT,user_id BIGINT)");
+        jdbc.execute("CREATE TABLE workers_users(user_id BIGINT,worker_id BIGINT)");
+        jdbc.execute("CREATE TABLE worker_work_item_lifecycle(work_item_key VARCHAR(120),worker_id BIGINT,item_type VARCHAR(32),item_id BIGINT,opened_at DATETIME,available_at DATETIME,due_at DATETIME,closed_at DATETIME,excluded BIT)");
+        jdbc.update("INSERT INTO managers VALUES(2,30),(3,31)");
+        jdbc.update("INSERT INTO workers_users VALUES(30,14),(31,15)");
+        jdbc.update("INSERT INTO worker_work_item_lifecycle VALUES('order:1',14,'order',1,'2026-10-30 10:00','2026-10-30 11:00','2026-10-31 12:00','2026-10-31 16:00',0),('order:2',14,'order',2,'2026-10-30 10:00','2026-10-30 11:00','2026-10-31 12:00','2026-10-30 12:00',0),('order:3',14,'order',3,'2026-10-30 10:00','2026-10-31 11:00','2026-10-31 12:00',NULL,0),('order:4',14,'order',4,'2026-10-30 10:00',NULL,NULL,NULL,1)");
+        var facts = collector.workerGoalTaskFacts(14L,2L,LocalDate.of(2026,10,30));
+        assertThat(facts).anyMatch(f->f.field().equals("closed_at") && f.value().startsWith("2026-10-31"));
+        assertThat(facts).anyMatch(f->f.field().equals("coverage") && f.value().contains("не доказательство состава дневной цели"));
+        assertThat(facts).noneMatch(f->f.reference().contains("order:2:") || f.reference().contains("order:3:") || f.reference().contains("order:4:"));
+        assertThat(collector.workerGoalTaskFacts(14L,3L,LocalDate.of(2026,10,30)))
+                .allMatch(f->f.field().equals("coverage"));
+    }
+
+    @Test
+    void conversationalAuditCanVerifySitePaymentWithoutExportingCredentialsOrRecipientDetails() {
+        jdbc.update("INSERT INTO client_chat_unanswered_items(id,manager_id,company_id,closed_at) VALUES(6704,2,7,'2026-10-30 19:24:00')");
+        jdbc.update("INSERT INTO order_statuses(order_status_id,order_status_title) VALUES(10,'Оплачено')");
+        jdbc.update("INSERT INTO orders(order_id,order_company,order_manager,order_status,order_sum,order_pay_day) VALUES(26532,7,2,10,1200,'2026-10-30')");
+        jdbc.update("INSERT INTO business_audit_events(event_id,order_id,created_at,actor,action,new_value,details) VALUES(1,26532,'2026-10-30 22:33:00','vika','order_status_changed','Оплачено','normal')");
+        jdbc.update("INSERT INTO business_audit_events(event_id,order_id,created_at,actor,action,new_value,details) VALUES(2,26532,'2026-10-30 22:34:00','vika','CREDENTIAL_REVEAL','neverExportMe','neverExportMe')");
+        jdbc.update("INSERT INTO business_audit_events(event_id,order_id,created_at,actor,action,new_value,details) VALUES(3,26532,'2026-10-30 22:35:00','vika','MANUAL_PAYMENT_ACTUAL_RECIPIENT_RECORDED','privateRecipientDetails','privateRecipientDetails')");
+
+        var facts=collector.conversationPaymentFacts(6704L,2L);
+
+        assertThat(facts).anyMatch(f->f.field().equals("status") && f.value().equals("Оплачено"));
+        assertThat(facts).anyMatch(f->f.field().equals("actor") && f.value().equals("vika"));
+        assertThat(facts.toString()).doesNotContain("neverExportMe","privateRecipientDetails","CREDENTIAL_REVEAL");
+        assertThat(collector.conversationPaymentFacts(6704L,3L)).isEmpty();
+    }
+
+    @Test
     void invoiceEvidenceIncludesArchivedPositionsPaymentAllocationAndDisabledBillingWithoutTreatingOldDeliveryAsCurrent() {
         invoiceFixture();
         jdbc.update("UPDATE common_billing_accounts SET enabled=FALSE");

@@ -359,7 +359,13 @@ public class ManagerCommunicationDailyReportSectionService {
                         managerId, response.errorMessage());
                 return "";
             }
-            return renderAi(response.text());
+            Set<Long> unverifiedCases = items.stream()
+                    .filter(item -> "INTERNAL_STAFF_UNVERIFIED".equals(replyAuthorAttribution(item,replyFor(item,replyEvidence))))
+                    .map(ClientChatUnansweredItem::getId).filter(java.util.Objects::nonNull)
+                    .collect(java.util.stream.Collectors.toSet());
+            boolean hasAttributedReplies = todayClosed.stream().anyMatch(item ->
+                    Set.of("VERIFIED_MANAGER","PROBABLE_MANAGER").contains(replyAuthorAttribution(item,replyFor(item,replyEvidence))));
+            return renderAi(response.text(),unverifiedCases,!hasAttributedReplies && !unverifiedCases.isEmpty());
         } catch (Exception exception) {
             log.warn("Ночной AI-разбор менеджера не сформирован managerId={}: {}",
                     managerId, exception.getMessage());
@@ -429,11 +435,18 @@ public class ManagerCommunicationDailyReportSectionService {
         return result;
     }
 
-    private String renderAi(String raw) throws Exception {
+    private String renderAi(String raw, Set<Long> unverifiedCases, boolean noAttributedReplies) throws Exception {
         JsonNode root = objectMapper.readTree(stripCodeFence(raw));
         StringBuilder result = new StringBuilder();
-        appendText(result, "<b>Вывод.</b> ", root.path("overallAssessment").asText(""));
-        appendList(result, "Что получается", root.path("strengths"), 2);
+        if (noAttributedReplies) {
+            result.append("<b>Ограничение проверки.</b> Авторство доступных ответов не подтверждено за проверяемым менеджером. "
+                    + "По ним нельзя сделать персональный вывод о качестве его работы. Ниже — наблюдения по переписке сотрудников.");
+        } else {
+            if (!unverifiedCases.isEmpty()) result.append("<b>Ограничение проверки.</b> Часть ответов принадлежит сотрудникам без подтверждённого авторства менеджера; "
+                    + "эти случаи не являются персональными нарушениями менеджера.\n");
+            appendText(result, "<b>Вывод.</b> ", root.path("overallAssessment").asText(""));
+            appendList(result, "Что получается", root.path("strengths"), 2);
+        }
         JsonNode findings = root.path("findings");
         if (findings.isArray()) {
             int count = 0;
@@ -446,7 +459,8 @@ public class ManagerCommunicationDailyReportSectionService {
                 if ("NORMAL".equals(classification) || "INSUFFICIENT_CONTEXT".equals(classification)) {
                     continue;
                 }
-                boolean confirmed = "CONFIRMED_PROBLEM".equals(classification) && confidence >= 0.8;
+                boolean confirmed = "CONFIRMED_PROBLEM".equals(classification) && confidence >= 0.8
+                        && !unverifiedCases.contains(finding.path("caseId").asLong(-1));
                 boolean improvement = "IMPROVEMENT_ONLY".equals(classification)
                         || ("CONFIRMED_PROBLEM".equals(classification) && !confirmed);
                 if (!confirmed && !improvement) {

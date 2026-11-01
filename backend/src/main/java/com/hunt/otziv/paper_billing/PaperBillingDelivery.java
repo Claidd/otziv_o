@@ -23,6 +23,10 @@ public class PaperBillingDelivery {
     public ClientMessageSendResult sendIntro(Map<String,Object> r) {
         return sendText(r,"message",instructions(r));
     }
+    public ClientMessageSendResult sendReminder(Map<String,Object> row,int number) {
+        return sendText(row,"reminder-"+number,"Здравствуйте! Напоминаем об оплате счёта № "+row.get("number")
+                +" на "+amountText(((Number)row.get("amount_kopecks")).longValue())+".\nПожалуйста, оплатите этот счёт одним полным переводом по реквизитам из PDF и укажите его номер в назначении платежа. Если перевод уже отправлен, сообщите об этом в чате — мы проверим поступление.");
+    }
     public ClientMessageSendResult sendCancellation(Map<String,Object> r) {
         return sendText(r,"cancellation","Счёт № "+r.get("number")+" и акт выполненных работ отменены.\n\n"
                 +"Пожалуйста, не оплачивайте этот счёт. Если перевод уже отправлен, сообщите об этом в чате — мы проверим поступление.\n"
@@ -75,7 +79,11 @@ public class PaperBillingDelivery {
     public static String instructions(Map<String,Object> document) {
         String amount=amountText(((Number)document.get("amount_kopecks")).longValue());
         String number=(String)document.get("number");
-        return "Здравствуйте! Ваш заказ выполнен.\nК оплате: "+amount+".\n\n"
+        if(document.get("paid_at")!=null)
+            return "Здравствуйте! Оплата по счёту № "+number+" на сумму "+amount+" получена. Спасибо!\n\nНиже — оплаченный счёт и акт выполненных работ в двух PDF.";
+        String completed="COMMON_PART".equals(document.get("target_kind"))
+                ?"Работы по выбранным заказам выполнены.\n"+document.get("service_name")+"\n":"Ваш заказ выполнен.\n";
+        return "Здравствуйте! "+completed+"К оплате: "+amount+".\n\n"
                 +"Ниже — счёт № "+number+" и акт выполненных работ в двух PDF.\n\n"
                 +"Пожалуйста, оплатите счёт переводом с расчётного счёта вашей организации или ИП "
                 +"по реквизитам из приложенного счёта. Переведите всю сумму одним платежом, "

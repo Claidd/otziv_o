@@ -31,6 +31,25 @@ class ManagerControlInvoiceDiagnosticsTest {
             invoices, positions, mock(CommonInvoicePublicationBlockerService.class),
             mock(PaymentLinkRepository.class), mock(AppSettingService.class));
 
+    @Test
+    void historicalAuditUsesCurrentInvoiceProblemRuleRatherThanItsDeferredCard() {
+        var paid = invoice(CommonInvoiceStatus.PAID, null);
+        given(paid,List.of());
+        assertThat(diagnostics.resolvedForAudit(paid.getId())).isTrue();
+        paid.setPaymentSuccessNotificationError("delivery_failed");
+        assertThat(diagnostics.resolvedForAudit(paid.getId())).isFalse();
+        assertThat(diagnostics.resolvedForAudit(99999L)).isFalse();
+    }
+
+    @Test
+    void oldPublicationBlockerDoesNotRemainAnAuditIssueAfterInvoiceWasSent() {
+        var active = invoice(CommonInvoiceStatus.REMINDER, null);
+        given(active,List.of(position("Напоминание",false,true)));
+        assertThat(diagnostics.resolvedForAudit(active.getId())).isTrue();
+        active.setStatus(CommonInvoiceStatus.UNPAID);
+        assertThat(diagnostics.resolvedForAudit(active.getId())).isFalse();
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"disabled: account disabled", "empty: no positions", "merged_into: another invoice", " MANUAL_FIX: reconciled "})
     void disabledInformationalTailWithoutUnpaidPositionsIsResolved(String error) {

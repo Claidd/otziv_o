@@ -1,4 +1,5 @@
 import { openPaperInvoiceDialog } from '../../../shared/paper-invoice-dialog.component';
+import { PaperInvoiceListComponent } from '../../../shared/paper-invoice-list.component';
 import { ClientContractError, commonInvoiceDeliveryWarning, deliveryOperationMessage, DeliveryStatusWatcher } from '@otziv/client-common/billing-payments';
 import { DatePipe } from '@angular/common';
 import { Component, ElementRef, OnDestroy, ViewChild, computed, inject, signal } from '@angular/core';
@@ -271,6 +272,7 @@ export function isManualTbankReconciliationRetryError(error: string | null | und
 @Component({
   selector: 'app-common-billing',
   imports: [
+    PaperInvoiceListComponent,
     AdminLayoutComponent,
     CommonManualPaymentAttributionModalComponent,
     DatePipe,
@@ -977,6 +979,7 @@ export class CommonBillingComponent implements OnDestroy {
       paperEnabled ? 'Автоматическое распределение восстановлено' : 'Режим бумажного счёта включён'
     );
   }
+  refreshPaperInvoiceList():void {this.loadSelectedInvoice();}
 
   changeCommonInvoicePaymentRoute(targetOverride?: CommonInvoicePaymentRouteChangeTarget): void {
     const invoice = this.currentInvoice();

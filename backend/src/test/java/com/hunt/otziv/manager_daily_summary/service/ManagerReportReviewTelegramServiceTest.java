@@ -137,6 +137,11 @@ class ManagerReportReviewTelegramServiceTest {
 
         assertThat(service.deliver(manager, summary)).isTrue();
 
+        var message = ArgumentCaptor.forClass(String.class);
+        verify(telegramService).sendRichMessageWithInlineKeyboardMessageId(eq(700L), message.capture(), eq(List.of()));
+        assertThat(message.getValue()).contains("На момент проверки", "по доступным данным")
+                .doesNotContain("Вы молодец", "Продолжайте сохранять такое же качество", "За день проблем и замечаний не обнаружено");
+
         verify(notificationMediaDeliveryService).sendMediaOnly(
                 eq(NotificationMediaEventCatalog.MANAGER_TEAM_PROGRESS_GROWING.code()),
                 eq(700L),

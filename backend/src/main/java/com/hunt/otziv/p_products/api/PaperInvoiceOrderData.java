@@ -11,6 +11,11 @@ public interface PaperInvoiceOrderData {
     void requireUnpaidForCancellation(long orderId);
     void holdForPaymentReview(long orderId);
     void resumeOrdinaryInvoice(long orderId);
+    void rememberPayer(long orderId,String choiceId);
+    void markCommonDelivered(long orderId);
+    record AutomaticOrder(long orderId,long companyId,String choiceId) {}
+    java.util.List<AutomaticOrder> automaticCandidates(long afterId,int limit);
+    AutomaticOrder automaticOrder(long orderId);
     record StaffContext(Long managerId,String company,String filial) {}
     StaffContext staffContext(long orderId);
 }

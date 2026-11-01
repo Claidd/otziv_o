@@ -51,6 +51,18 @@ class PaperBillingSettlementMySqlIntegrationTest {
     BankReceipt receipt(String payment,long amount,String inn) {
         return new BankReceipt("customer","40802810000000004287/044525104",payment,inn,amount,"Оплата по счёту "+store.row(id).get("number"));
     }
+    @Test void paymentArrivingDuringReminderDoesNotLeaveAPaidInvoiceInReview() {
+        new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_358__paper_part_reminders.sql")).execute(jdbc.getDataSource());
+        jdbc.update("UPDATE paper_invoice_document SET target_kind='COMMON_PART',target_id=1,paper_next_reminder_at=DATE_SUB(NOW(6),INTERVAL 1 MINUTE) WHERE id=?",id);
+        var settings=new PaperBillingSettings();settings.setEnabled(true);settings.setBankOperationsEnabled(true);settings.setDeliveryEnabled(true);
+        var bank=mock(PaperBillingBankClient.class);when(bank.configured()).thenReturn(true);
+        var parts=mock(com.hunt.otziv.common_billing.api.BankPaperInvoiceParts.class);when(parts.remindersAllowed(1)).thenReturn(true);when(parts.nextReminder(1)).thenReturn(java.time.LocalDateTime.now().plusDays(1));
+        var delivery=mock(PaperBillingDelivery.class);
+        when(delivery.sendReminder(anyMap(),anyInt())).thenAnswer(call->{jdbc.update("UPDATE paper_invoice_document SET paid_at=NOW(6),stage='PAID' WHERE id=?",id);return com.hunt.otziv.client_messages.dto.ClientMessageSendResult.sent("Fixture","reminder-receipt");});
+        var reminders=new PaperBillingReminders(store,mock(PaperBillingTargets.class),settings,bank,delivery,parts,new DataSourceTransactionManager(jdbc.getDataSource()));
+        reminders.send(id);reminders.tick();
+        var row=store.row(id);assertEquals("PAID",row.get("stage"));assertNull(row.get("error_text"));assertNull(row.get("paper_next_reminder_at"));assertEquals("PENDING",row.get("paper_reminder_state"));verify(delivery,times(1)).sendReminder(anyMap(),eq(1));
+    }
     @Test void fullTransferAndRepeatedCallbackApplyOnce() {
         var receipt=receipt("p1",250000,"7707083893");
         settlement.accept(receipt); settlement.accept(receipt);

@@ -76,9 +76,16 @@ public class Order {
     @Column(name = "invoice_payment_mode", nullable = false, length = 32)
     private InvoicePaymentMode invoicePaymentMode = InvoicePaymentMode.AUTO_ROUTING;
 
+    @Column(name="paper_billing_payer_choice_id",length=36)
+    private String paperBillingPayerChoiceId;
+
     @com.fasterxml.jackson.annotation.JsonIgnore
     public boolean isBankPaperInvoice() { return invoicePaymentMode == InvoicePaymentMode.OWNER_PAPER_INVOICE; }
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public boolean isAutomaticInvoicePaymentMode() {return invoicePaymentMode==InvoicePaymentMode.AUTO_ROUTING;}
     public void useAutomaticInvoicePaymentMode() { invoicePaymentMode=InvoicePaymentMode.AUTO_ROUTING; }
+    public void useBankPaperInvoicePaymentMode() { invoicePaymentMode=InvoicePaymentMode.OWNER_PAPER_INVOICE; }
+    public void inheritInvoicePreferences(Order source) {invoicePaymentMode=source.getInvoicePaymentMode();paperBillingPayerChoiceId=source.getPaperBillingPayerChoiceId();}
 
     @Column(name = "order_zametka")
     private String zametka;

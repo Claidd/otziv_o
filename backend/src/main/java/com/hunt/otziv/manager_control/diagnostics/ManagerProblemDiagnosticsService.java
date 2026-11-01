@@ -108,6 +108,27 @@ public class ManagerProblemDiagnosticsService {
         return advice.append(authoritative).toString();
     }
 
+    public String contextForConversationPayments(Long chatItemId,Long managerId) {
+        StringBuilder result=new StringBuilder();
+        for(var fact:collector.conversationPaymentFacts(chatItemId,managerId)) {
+            try {result.append(mapper.writeValueAsString(java.util.Map.of("id",fact.reference(),"source",fact.subject(),
+                    "field",fact.field(),"value",fact.value(),"sourceChatItemId",chatItemId,
+                    "observedAt",java.time.Instant.now().toString()))).append('\n');}
+            catch(com.fasterxml.jackson.core.JsonProcessingException failure) {throw new IllegalStateException("Cannot encode conversation payment facts",failure);}
+        }
+        return result.toString();
+    }
+
+    public String contextForWorkerGoal(Long workerId,Long managerId,java.time.LocalDate date) {
+        StringBuilder result = new StringBuilder();
+        for (var fact : collector.workerGoalTaskFacts(workerId,managerId,date)) {
+            try { result.append(mapper.writeValueAsString(java.util.Map.of("id",fact.reference(),"source",fact.subject(),
+                    "field",fact.field(),"value",fact.value(),"observedAt",java.time.Instant.now().toString()))).append('\n'); }
+            catch (com.fasterxml.jackson.core.JsonProcessingException failure) { throw new IllegalStateException("Cannot encode worker goal facts",failure); }
+        }
+        return result.toString();
+    }
+
     private DiagnosticView auditView(Long sourceTaskId) {
         if (!"OFF".equals(mode())) return refresh(sourceTaskId);
         // Recommendation rollout and answer verification are independent. OFF disables persistence/model

@@ -565,7 +565,7 @@ export class ManagerControlComponent implements OnInit {
       case 'PLAN_PENDING':
         return 'ждём план';
       case 'COMPLETED':
-        if (review.autoCompleted) return 'принят автоматически · замечаний нет';
+        if (review.autoCompleted) return 'принят автоматически · обязательных вопросов нет';
         return 'отчёт принят';
       case 'DISPUTE_PENDING':
         return 'формулирует спор';
@@ -632,7 +632,7 @@ export class ManagerControlComponent implements OnInit {
       case 'ISSUE_DISPUTE_REJECTED': return 'Оспоренное замечание подтверждено';
       case 'ISSUE_DISPUTE_CONTEXT_REQUESTED': return 'По замечанию запрошен контекст';
       case 'REVIEW_CANCELLED_NO_VALID_ISSUES': return 'Аудит отменён: корректных замечаний не осталось';
-      case 'AUTO_COMPLETED': return 'Принят автоматически без замечаний';
+      case 'AUTO_COMPLETED': return 'Принят автоматически: обязательных вопросов по доступным данным нет';
       case 'REVIEW_COMPLETED': return 'Все вопросы пройдены';
       default: return eventType;
     }

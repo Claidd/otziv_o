@@ -24,6 +24,7 @@ public class PaperBillingStaffNoticeWorker {
     private final PaymentNoticeRecipients recipients;
     private final TelegramNotifications telegram;
     private final PaperBillingBankClient bank;
+    @org.springframework.beans.factory.annotation.Autowired private com.hunt.otziv.common_billing.api.BankPaperInvoiceParts parts;
     @Scheduled(fixedDelay=15000,initialDelay=30000)
     public void tick() {
         if(!settings.isEnabled() || !settings.isStaffNotificationsEnabled()) return;
@@ -39,7 +40,7 @@ public class PaperBillingStaffNoticeWorker {
                     managers=new com.fasterxml.jackson.databind.ObjectMapper().readValue(snapshot,new com.fasterxml.jackson.core.type.TypeReference<List<Long>>(){});
                 } else if("ORDER".equals(row.get("target_kind"))) {
                     Long manager=orders.staffContext(target).managerId();managers=manager==null?List.of():List.of(manager);
-                } else managers=common.staffContext(target).managerIds();
+                } else managers=("COMMON_PART".equals(row.get("target_kind"))?parts.staffContext(target):common.staffContext(target)).managerIds();
                 notices.prepareEvent(id,key,recipients.forManagers(managers),(String)event.get("body"));
             } catch(Exception failure) {notices.postponeEvent(id,key);log.warn("Paper event notice {} {} failed ({})",id,key,failure.getClass().getSimpleName());}
         }
@@ -55,14 +56,14 @@ public class PaperBillingStaffNoticeWorker {
             var source=orders.staffContext(target);managers=source.managerId()==null?List.of():List.of(source.managerId());orderIds=List.of(target);
             title=source.company()+(source.filial()==null || source.filial().isBlank()?"":" — "+source.filial());
         } else {
-            var source=common.staffContext(target);managers=source.managerIds();orderIds=source.orderIds();title=source.title();
+            var source="COMMON_PART".equals(row.get("target_kind"))?parts.staffContext(target):common.staffContext(target);managers=source.managerIds();orderIds=source.orderIds();title=source.title();
         }
         // Also repairs a payment applied by an older process after this version was installed.
         orderIds.forEach(automation::synchronizeOrder);
         String amount=PaperBillingDelivery.amountText(((Number)row.get("amount_kopecks")).longValue());
         String body="Оплата по банковскому счёту получена.\n\n"+title+"\n"
-                +(row.get("target_kind").equals("ORDER")?"Заказ №":"Общий счёт №")+target
-                +"\nСчёт № "+row.get("number")+"\nСумма: "+amount+"\nСтатус: Оплачено.";
+                +(row.get("target_kind").equals("ORDER")?"Заказ №":"Общий счёт №")+("COMMON_PART".equals(row.get("target_kind"))?parts.parent(target):target)
+                +"\nЗаказы: "+orderIds+"\nСчёт № "+row.get("number")+"\nСумма: "+amount+"\nСтатус комплекта: Оплачено.";
         notices.prepare(id,recipients.forManagers(managers),body);
     }
     public void deliver(long id) {

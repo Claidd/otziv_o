@@ -18,6 +18,66 @@ import static com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosti
 public class ManagerProblemEvidenceCollector {
     private final JdbcTemplate jdbc;
 
+    @Transactional(readOnly = true)
+    public List<Fact> workerGoalTaskFacts(Long workerId, Long managerId, java.time.LocalDate date) {
+        if (workerId == null || managerId == null || date == null) return List.of();
+        var cutoff = date.plusDays(1).atStartOfDay();
+        var rows = jdbc.queryForList("""
+                SELECT l.work_item_key,l.item_type,l.item_id,l.available_at,l.due_at,l.closed_at
+                FROM worker_work_item_lifecycle l
+                WHERE l.worker_id=? AND l.excluded=0 AND l.opened_at<?
+                  AND COALESCE(l.available_at,l.opened_at)<? AND (l.closed_at IS NULL OR l.closed_at>=?)
+                  AND EXISTS (SELECT 1 FROM managers m JOIN workers_users wu ON wu.user_id=m.user_id
+                              WHERE m.manager_id=? AND wu.worker_id=l.worker_id)
+                ORDER BY l.opened_at,l.work_item_key LIMIT 21
+                """, workerId,cutoff,cutoff,cutoff,managerId);
+        List<Fact> facts = new ArrayList<>();
+        for (var row : rows.stream().limit(20).toList()) addRow(facts,
+                "worker-goal:"+workerId+":"+date+":"+string(row,"work_item_key"), "worker_goal_task",row,
+                "work_item_key","item_type","item_id","available_at","due_at","closed_at");
+        facts.add(new Fact("worker-goal:"+workerId+":"+date+":coverage", "worker_goal_task", "coverage",
+                (rows.size()>20 ? "Первые 20 карточек. " : "")
+                + "Карточки были доступны и не закрыты на конец отчётного дня. Это кандидаты для сверки недобора, "
+                + "а не доказательство состава дневной цели или причины задержки. closed_at отражает известное системе закрытие сейчас."));
+        return facts;
+    }
+
+    /** Conversation audit is scoped by an owned message and its reporting day.
+     * Export only order/payment chronology, never credentials or recipient details. */
+    @Transactional(readOnly = true)
+    public List<Fact> conversationPaymentFacts(Long chatItemId, Long managerId) {
+        var scope = jdbc.queryForList("SELECT company_id,DATE(closed_at) AS report_date FROM client_chat_unanswered_items WHERE id=? AND manager_id=? AND closed_at IS NOT NULL",
+                chatItemId,managerId);
+        if (scope.size()!=1 || scope.getFirst().get("company_id")==null) return List.of();
+        java.time.LocalDate date = java.time.LocalDate.parse(scope.getFirst().get("report_date").toString());
+        var from=date.minusDays(1).atStartOfDay();var to=date.plusDays(1).atStartOfDay();
+        var orders=jdbc.queryForList("""
+                SELECT o.order_id,s.order_status_title AS status,o.order_sum,o.order_pay_day
+                FROM orders o LEFT JOIN order_statuses s ON s.order_status_id=o.order_status
+                WHERE o.order_company=? AND o.order_manager=?
+                  AND (o.order_pay_day>=? AND o.order_pay_day<? OR o.order_status_changed_at>=? AND o.order_status_changed_at<?)
+                ORDER BY o.order_id DESC LIMIT 21
+                """,scope.getFirst().get("company_id"),managerId,from,to,from,to);
+        List<Fact> facts=new ArrayList<>();
+        for(var order:orders.stream().limit(20).toList()) {
+            long id=number(order,"order_id");
+            addRow(facts,"conversation:"+chatItemId+":order:"+id,"order",order,"order_id","status","order_sum","order_pay_day");
+            var history=jdbc.queryForList("""
+                    SELECT event_id,created_at,actor,action,
+                           CASE WHEN action='order_status_changed' THEN old_value ELSE NULL END AS previous_status,
+                           CASE WHEN action='order_status_changed' THEN new_value ELSE NULL END AS next_status
+                    FROM business_audit_events WHERE order_id=? AND created_at>=? AND created_at<?
+                      AND action IN ('order_status_changed','MANUAL_PAYMENT_ACTUAL_RECIPIENT_RECORDED') ORDER BY event_id DESC LIMIT 21
+                    """,id,from,to);
+            for(var event:history.stream().limit(20).toList()) addRow(facts,
+                    "conversation:"+chatItemId+":orderHistory:"+number(event,"event_id"),"order_status_history",event,
+                    "event_id","created_at","actor","action","previous_status","next_status");
+        }
+        if(orders.size()>20) facts.add(new Fact("conversation:"+chatItemId+":order_coverage","history_coverage",
+                "truncated","Показаны 20 заказов компании в окне отчётного дня; отсутствие других событий не подтверждено"));
+        return facts;
+    }
+
     @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
     public Evidence collect(Long sourceTaskId) {
         LocalDateTime observedAt = LocalDateTime.now();

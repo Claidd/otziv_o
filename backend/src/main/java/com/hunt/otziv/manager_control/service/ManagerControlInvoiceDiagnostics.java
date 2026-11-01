@@ -158,6 +158,13 @@ public class ManagerControlInvoiceDiagnostics {
         );
     }
 
+    /** Reuse the live board's business rule for historical audit cards as well. */
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public boolean resolvedForAudit(Long invoiceId) {
+        return invoiceId != null && commonInvoiceRepository.findById(invoiceId)
+                .filter(invoice -> !isCommonInvoiceManagerControlProblem(invoice, LocalDateTime.now())).isPresent();
+    }
+
     private boolean isCommonInvoiceManagerControlProblem(CommonInvoice invoice, LocalDateTime now) {
         if (invoice == null) {
             return false;

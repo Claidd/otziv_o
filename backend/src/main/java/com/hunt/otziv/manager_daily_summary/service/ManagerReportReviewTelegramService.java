@@ -238,6 +238,7 @@ public class ManagerReportReviewTelegramService {
             preparedQuestions = generation.aiVerified()
                     ? managerQuestions(withGoalQuestions(generation.questions(), mandatoryQuestions), manager.getId())
                     : List.of();
+            preparedQuestions = bindConversationQuestions(review, preparedQuestions);
             review.setQuestionsJson(qualityService.questionsJson(preparedQuestions));
             review.setQuestionsSource(generation.aiVerified() ? QUESTIONS_AI : QUESTIONS_PENDING_AI);
             if (generation.aiVerified()) {
@@ -265,8 +266,10 @@ public class ManagerReportReviewTelegramService {
                             ? "🧪 <b>Тестовый аудит завершён автоматически</b>\n\n"
                             + "В выбранном отчёте нет замечаний. Тестовая попытка сохранена "
                             + "без влияния на доступы и показатели."
-                            : "🌟 <b>Вы молодец!</b>\n\nЗа день проблем и замечаний не обнаружено. "
-                            + "Отчёт принят автоматически.",
+                            : "📘 <b>Проверка отчёта завершена</b>\n\n"
+                            + "На момент проверки по доступным данным обязательных вопросов нет. "
+                            + "Отчёт принят автоматически. Результат не подтверждает отсутствие проблем "
+                            + "в непроверенных данных. Подробности, советы и ограничения проверки — в персональном отчёте.",
                     "HTML"
             );
             if (!sent) {
@@ -278,7 +281,7 @@ public class ManagerReportReviewTelegramService {
             review.setCompletedAt(now);
             review.setAutoCompleted(true);
             review.setAnswerQuality("NO_ISSUES");
-            review.setAnswerQualityReason("Проблем и замечаний за день не обнаружено");
+            review.setAnswerQualityReason("По доступным данным на момент проверки обязательных вопросов нет");
             review.setStatus(ManagerReportReviewStatus.COMPLETED);
             sessionRepository.save(review);
             event(review, "DELIVERED", null, "SYSTEM", deliverySource(recipientChatId),
@@ -287,8 +290,8 @@ public class ManagerReportReviewTelegramService {
                             : "Отчёт доставлен в служебную группу менеджера");
             event(review, "AUTO_COMPLETED", null, "SYSTEM", "telegram",
                     testMode
-                            ? "Тестовый отчёт принят автоматически: замечаний нет"
-                            : "Отчёт принят автоматически: замечаний нет");
+                            ? "Тестовый отчёт принят автоматически: обязательных вопросов по доступным данным нет"
+                            : "Отчёт принят автоматически: обязательных вопросов по доступным данным нет");
             if (!testMode) {
                 accessPolicy.invalidate(review.getManagerUserId());
             }
@@ -408,7 +411,7 @@ public class ManagerReportReviewTelegramService {
             telegramService.sendMessageWithInlineKeyboard(
                     review.getRecipientChatId(),
                     review.isAutoCompleted()
-                            ? "🌟 Отчёт уже принят автоматически: замечаний нет."
+                            ? "📘 Отчёт принят автоматически: обязательных вопросов по доступным данным нет."
                             : "✅ Проверка уже завершена. Отчёт принят.",
                     "HTML",
                     disputeKeyboard(review.getId())
@@ -700,14 +703,13 @@ public class ManagerReportReviewTelegramService {
         ManagerReportReviewSession review = sessionRepository.findForUpdateById(reviewId).orElse(null);
         if (review == null || review.isTestMode() || review.getCompletedAt() != null
                 || review.getStatus() != ManagerReportReviewStatus.QUESTION_PENDING) return;
-        var questions = qualityService.readQuestions(review.getQuestionsJson());
+        var questions = repairConversationLinks(review, qualityService.readQuestions(review.getQuestionsJson()));
         int index = review.getCurrentQuestionIndex();
         if (index < 0 || index >= questions.size() || !issueService.isPending(review, index)) return;
-        var sources = questions.get(index).sourceTaskIds();
-        if (sources.isEmpty() || !sources.stream().allMatch(id -> taskContextService.resolvedSatisfactorily(id)
-                || taskContextService.systemOwnsSource(id, review.managerId()))) return;
         issueService.withdrawResolvedSourceIssues(review, questions);
         if (issueService.isPending(review, index)) return;
+        review.setAnswerQuality(null);
+        review.setAnswerQualityReason(null);
         event(review, "SYSTEM_SOURCE_QUESTION_WITHDRAWN", null, "SYSTEM", "recovery-job",
                 "questionIndex=" + index + "; связанные задачи закрыты или находятся в системной сверке, ответ менеджера не требуется");
         LocalDateTime now = LocalDateTime.now();
@@ -884,11 +886,15 @@ public class ManagerReportReviewTelegramService {
     }
 
     private String offerCurrentEvidenceRecheck(ManagerReportReviewSession review, int questionIndex, String answer) {
+        return offerCurrentEvidenceRecheck(review,questionIndex,answer,"Прежние данные проверки сохранились не полностью.");
+    }
+
+    private String offerCurrentEvidenceRecheck(ManagerReportReviewSession review, int questionIndex, String answer,String reason) {
         String action = currentEvidenceAction(questionIndex, answer,
                 qualityService.latestAnswerRecordedAt(review.getAnswersJson(), questionIndex));
         telegramService.sendMessageWithInlineKeyboard(review.getRecipientChatId(),
                 "⏸ <b>Нужна новая проверка сохранённого ответа</b>\n\n"
-                        + "Прежние данные проверки сохранились не полностью. Ответ и прогресс сохранены, срок остаётся на паузе. "
+                        + reason + " Ответ и прогресс сохранены, срок остаётся на паузе. "
                         + "Если ваш ответ по-прежнему верен, нажмите «Проверить по текущим данным». "
                         + "Система заново сверит его с состоянием заказов сейчас. Переписывать текст не нужно; "
                         + "если ситуация изменилась, выберите «Ответить заново».",
@@ -1095,10 +1101,13 @@ public class ManagerReportReviewTelegramService {
     private boolean handleActionPlan(ManagerReportReviewSession review, User actor, String messageText,
                                      java.time.ZonedDateTime submittedAt, boolean automatic) {
         review.setRecoveryAwaitingContext(false);
+        var planSources = questions(review);
         ManagerReportReviewQualityService.ReviewQuestion planQuestion =
                 new ManagerReportReviewQualityService.ReviewQuestion(
                         "Что конкретно вы измените в следующую смену и как проверите результат?",
-                        List.of("конкретное изменение", "способ проверки результата")
+                        List.of("конкретное изменение", "способ проверки результата"),
+                        planSources.stream().flatMap(q -> q.sourceTaskIds().stream()).distinct().toList(),
+                        planSources.stream().flatMap(q -> q.sourceChatItemIds().stream()).distinct().toList()
                 );
         java.time.ZonedDateTime answeredAt = submittedAt == null
                 ? java.time.ZonedDateTime.now(java.time.ZoneId.of("Asia/Irkutsk")) : submittedAt;
@@ -1683,7 +1692,7 @@ public class ManagerReportReviewTelegramService {
     ) {
         List<ManagerReportReviewQualityService.ReviewQuestion> questions =
                 qualityService.readQuestions(review.getQuestionsJson());
-        if (!questions.isEmpty()) return questions;
+        if (!questions.isEmpty()) return repairConversationLinks(review, questions);
         if (!QUESTIONS_PENDING_AI.equalsIgnoreCase(clean(review.getQuestionsSource()))) {
             return questions;
         }
@@ -1717,6 +1726,7 @@ public class ManagerReportReviewTelegramService {
                 review.getManager() == null ? null : review.getManager().getId()));
         List<ManagerReportReviewQualityService.ReviewQuestion> allQuestions = managerQuestions(withGoalQuestions(
                 generation.questions(), mandatoryQuestions), review.managerId());
+        allQuestions = bindConversationQuestions(review, allQuestions);
         review.setQuestionsJson(qualityService.questionsJson(allQuestions));
         review.setQuestionsSource(QUESTIONS_AI);
         review.setIssueCount(allQuestions.size());
@@ -1727,6 +1737,34 @@ public class ManagerReportReviewTelegramService {
 
     private boolean questionsPendingAi(ManagerReportReviewSession review) {
         return QUESTIONS_PENDING_AI.equalsIgnoreCase(clean(review.getQuestionsSource()));
+    }
+
+    private List<ManagerReportReviewQualityService.ReviewQuestion> bindConversationQuestions(
+            ManagerReportReviewSession review, List<ManagerReportReviewQualityService.ReviewQuestion> questions) {
+        return questions.stream().map(question -> !question.sourceTaskIds().isEmpty()
+                || !question.sourceChatItemIds().isEmpty() || question.question().startsWith("Специалист ")
+                ? question : Optional.ofNullable(taskContextService.bindConversationSource(
+                        question, review.managerId(), review.getSummaryDate())).orElse(question)).toList();
+    }
+
+    private List<ManagerReportReviewQualityService.ReviewQuestion> repairConversationLinks(
+            ManagerReportReviewSession review, List<ManagerReportReviewQualityService.ReviewQuestion> questions) {
+        var repaired = bindConversationQuestions(review, questions);
+        if (!repaired.equals(questions)) {
+            review.setQuestionsJson(qualityService.questionsJson(repaired));
+            sessionRepository.save(review);
+            issueService.refreshConversationLinks(review, repaired);
+            event(review, "CONVERSATION_SOURCE_LINKED", null, "SYSTEM", "source-refresh",
+                    "Восстановлена однозначная связь с перепиской отчётного дня. Текст вопросов, критерии и прежние ответы сохранены.");
+            // Preserve the original answer/evidence. The employee can explicitly recheck
+            // that same saved answer, without typing it again or silently replacing its proof.
+            if (review.getAiUnavailableStartedAt() != null) {
+                var saved = qualityService.previousAcceptedContext(review.getAnswersJson(), review.getCurrentQuestionIndex());
+                if (!saved.isEmpty()) offerCurrentEvidenceRecheck(review, review.getCurrentQuestionIndex(), saved.getLast(),
+                        "Связь вопроса с исходной перепиской восстановлена. Прежняя проверка не включала необходимые данные.");
+            }
+        }
+        return repaired;
     }
 
     private List<ManagerReportReviewQualityService.ReviewQuestion> managerQuestions(
@@ -1804,15 +1842,32 @@ public class ManagerReportReviewTelegramService {
         String original = clean(review.getQuestionsContext());
         if (original.isBlank()) original = clean(review.getReportSnapshot());
         // Keep the original snapshot for the time the manager acted; refresh the relevant sources.
-        String fresh = taskContextService.refreshSources(original, question.sourceTaskIds(), review.managerId());
+        String fresh = question.sourceChatItemIds().isEmpty()
+                ? taskContextService.refreshSources("", question.sourceTaskIds(), review.managerId())
+                : question.sourceTaskIds().isEmpty()
+                ? taskContextService.conversationEvidence(question.sourceChatItemIds(), review.managerId())
+                : taskContextService.refreshSources("", question.sourceTaskIds(), review.managerId())
+                        + "\n" + taskContextService.conversationEvidence(question.sourceChatItemIds(), review.managerId())
+                                .replace("СЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:\n", "");
         if (question.sourceTaskIds().isEmpty() && question.question().startsWith("Специалист ")) {
             var goals = workerProgressService.missedPreviousDayGoals(review.managerId(), review.getSummaryDate());
             if (goals != null && !goals.isEmpty()) {
                 StringBuilder goalFacts = new StringBuilder("\nСЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:\n");
                 for (var goal : goals) {
-                    goalFacts.append("workerId=").append(goal.workerId()).append("; имя=").append(clean(goal.workerName()))
-                            .append("; дата=").append(goal.date()).append("; завершено=").append(goal.completed())
-                            .append("; всего допустимых задач=").append(goal.total()).append("\n");
+                    if (!question.question().contains(goal.workerName())) continue;
+                    for (var field : java.util.Map.of("worker_name", clean(goal.workerName()),
+                            "goal_date", goal.date().toString(), "completed", String.valueOf(goal.completed()),
+                            "total", String.valueOf(goal.total())).entrySet()) {
+                        try {
+                            goalFacts.append(new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(
+                                    java.util.Map.of("id", "worker-goal:" + goal.workerId() + ":" + goal.date() + ":" + field.getKey(),
+                                            "source", "worker_daily_goal", "field", field.getKey(), "value", field.getValue(),
+                                            "observedAt", java.time.Instant.now().toString()))).append('\n');
+                        } catch (com.fasterxml.jackson.core.JsonProcessingException invalid) {
+                            throw new IllegalStateException("Cannot encode worker goal evidence", invalid);
+                        }
+                    }
+                    goalFacts.append(clean(taskContextService.workerGoalTaskEvidence(goal.workerId(),review.managerId(),goal.date()))).append('\n');
                 }
                 goalFacts.append("Время поступления отдельных задач и причина недобора здесь не установлены. ")
                         .append("Менеджер может предложить проверку; утверждение о позднем поступлении требует журнала задач.\n");
@@ -1867,6 +1922,7 @@ public class ManagerReportReviewTelegramService {
         if (candidates == null || candidates.isEmpty()) return List.of();
         LinkedHashMap<String, ManagerDailyControlConcreteItem> distinct = new LinkedHashMap<>();
         for (ManagerDailyControlConcreteItem item : candidates) {
+            if (taskContextService.resolvedSatisfactorily(item.getId())) continue;
             distinct.putIfAbsent(item.getEntityKey() == null ? "id:" + item.getId() : item.getEntityKey(), item);
         }
         return List.copyOf(distinct.values());
@@ -2005,10 +2061,11 @@ public class ManagerReportReviewTelegramService {
         return (review.isTestMode()
                 ? "<h2>🧪 Тестовый аудит завершён автоматически</h2>"
                 + "<blockquote>Тестовая попытка сохранена. Ограничения доступа не применяются.</blockquote>"
-                : "<h2>🌟 Вы молодец!</h2>")
+                : "<h2>📘 Проверка отчёта завершена</h2>")
                 + "<p>👤 <b>" + escape(review.getManagerName()) + "</b></p>"
-                + "<p>За день проблем и замечаний не обнаружено. Отчёт принят автоматически.</p>"
-                + "<p>Продолжайте сохранять такое же качество работы.</p>";
+                + "<p>На момент проверки по доступным данным обязательных вопросов нет. Отчёт принят автоматически.</p>"
+                + "<p>Результат не подтверждает отсутствие проблем в непроверенных данных. "
+                + "Подробности, советы и ограничения проверки — в персональном отчёте.</p>";
     }
 
     private String richPlain(String html) {

@@ -19,6 +19,30 @@ describe('Paper invoice asynchronous lifecycle', () => {
   });
   afterEach(() => { fixture.componentInstance.close();fixture.destroy();http.verify(); });
 
+  it('common selection totals only selected eligible orders and freezes the saved payer version',()=>{
+    openPaperInvoiceDialog({kind:'COMMON_INVOICE',id:8});fixture.detectChanges();
+    http.expectOne('/api/paper-invoices/COMMON_INVOICE/8/context').flush({enabled:true,configured:true,payer:null,document:null,payers:[{id:'choice',payer,primary:true,version:7}],positions:[
+      {orderId:1,companyId:1,companyTitle:'A',amountKopecks:10000,ready:true,paid:false,documentId:null},
+      {orderId:2,companyId:1,companyTitle:'A',amountKopecks:20000,ready:true,paid:false,documentId:null},
+      {orderId:3,companyId:2,companyTitle:'B',amountKopecks:30000,ready:false,paid:false,documentId:null},
+      {orderId:4,companyId:2,companyTitle:'B',amountKopecks:40000,ready:true,paid:false,documentId:'existing'}]});fixture.detectChanges();
+    const c=fixture.componentInstance;c.toggleOrder(1);c.toggleOrder(2);c.toggleOrder(3);c.toggleOrder(4);expect(c.selectedAmount()).toBe(30000);
+    c.chooseSaved('choice');c.confirmed=true;c.issue();const issue=http.expectOne('/api/paper-invoices/COMMON_INVOICE/8/issue');
+    expect(issue.request.body.orderIds).toEqual([1,2]);expect(issue.request.body.payerChoiceVersion).toBe(7);expect(issue.request.body.payerChoiceId).toBe('choice');issue.flush({...doc('part'),targetKind:'COMMON_PART',targetId:9});
+  });
+  it('an order already inside a common invoice opens its subset selector',()=>{
+    openPaperInvoiceDialog({kind:'ORDER',id:5});fixture.detectChanges();
+    http.expectOne('/api/paper-invoices/ORDER/5/context').flush({enabled:true,parentInvoiceId:8});fixture.detectChanges();
+    http.expectOne('/api/paper-invoices/COMMON_INVOICE/8/context').flush({enabled:true,configured:true,payer:null,document:null,positions:[{orderId:5,ready:true,paid:false,documentId:null,amountKopecks:12300}]});fixture.detectChanges();
+    expect(fixture.componentInstance.selectedOrders()).toEqual([5]);expect(fixture.componentInstance.selectedAmount()).toBe(12300);
+  });
+  it('cancelling one common part never requests the whole parent ordinary route',()=>{
+    openPaperInvoiceDialog({kind:'COMMON_PART',id:9});fixture.detectChanges();
+    http.expectOne('/api/paper-invoices/COMMON_PART/9/context').flush({enabled:true,document:{...doc('part','WAITING_PAYMENT'),targetKind:'COMMON_PART'},parentInvoiceId:8});fixture.detectChanges();
+    const c=fixture.componentInstance;c.cancelReason='Новые реквизиты';c.cancelConfirmed=true;c.cancel();
+    const cancel=http.expectOne('/api/paper-invoices/documents/part/cancel');expect(cancel.request.body.replaceWithOrdinary).toBe(false);cancel.flush(doc('part','CANCEL_REQUESTED'));
+  });
+
   it('closing the unissued form performs no bank mutation', () => {
     open(1); fixture.componentInstance.close();expect(fixture.componentInstance.opened()).toBe(false);
     http.expectNone(r=>r.method==='POST');

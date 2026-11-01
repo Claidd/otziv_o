@@ -233,6 +233,9 @@
           </div>
         </section>
 
+        @if(invoice && canManagePaperInvoices() && invoice.status !== 'ARCHIVED') {
+          <app-paper-invoice-list [invoiceId]="invoice.id" (updated)="refreshPaperInvoiceList()" />
+        }
         @if (invoice?.status === 'ARCHIVED') {
           <p class="invoice-action-sequence-hint">Сохранено для истории, без требования оплаты.</p>
         }

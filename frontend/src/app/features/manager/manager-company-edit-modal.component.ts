@@ -1,5 +1,6 @@
 import { Component, EventEmitter, HostListener, Input, OnDestroy, OnInit, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { BillingPayerEditorComponent } from '../../shared/billing-payer-editor.component';
 import type { CommonBillingAccountResponse } from '../../core/common-billing.api';
 import type {
   CompanyCardItem,
@@ -45,11 +46,12 @@ type CompanyFilialEditDraft = CompanyFilialUpdateRequest & {
 
 @Component({
   selector: 'app-manager-company-edit-modal',
-  imports: [FormsModule],
+  imports: [FormsModule, BillingPayerEditorComponent],
   templateUrl: './manager-company-edit-modal.component.html',
   styleUrl: './manager-company-edit-modal.component.scss'
 })
 export class ManagerCompanyEditModalComponent implements OnInit, OnDestroy {
+  showPayers = false;
   @Input() loading = false;
   @Input() company: CompanyEditPayload | null = null;
   @Input() draft: CompanyUpdateRequest | null = null;

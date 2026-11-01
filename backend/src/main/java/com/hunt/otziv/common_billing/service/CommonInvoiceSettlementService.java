@@ -1603,6 +1603,9 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
         return "Оплачено".equals(statusTitle(order));
     }
 
+    void closeBankPaperPositionAsPaid(CommonInvoiceOrder item) throws Exception {
+        closeOrderAsPaidWithoutNextOrder(item.getOrder());
+    }
     void closeOrderAsPaidWithoutNextOrder(Order order) throws Exception {
         closeOrderAsPaidWithoutNextOrder(order, false);
     }
@@ -1743,6 +1746,7 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
     }
 
     void ensurePartialPaymentNextAction(CommonInvoice invoice) {
+        if(invoice!=null && invoice.isPaperInvoiceAutomationHold()) {invoice.setNextReminderAt(null);return;}
         if (invoice == null || invoice.getStatus() != CommonInvoiceStatus.PARTIALLY_PAID) {
             return;
         }

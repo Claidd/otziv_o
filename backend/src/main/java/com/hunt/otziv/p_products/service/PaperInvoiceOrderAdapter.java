@@ -17,6 +17,26 @@ public class PaperInvoiceOrderAdapter implements PaperInvoiceOrderData {
     private final com.hunt.otziv.p_products.status.service.OrderStatusTransitionService transitions;
     private final com.hunt.otziv.client_messages.api.PaperInvoiceAutomation automation;
     private final OrderStatusService statuses;
+    public java.util.List<AutomaticOrder> automaticCandidates(long after,int limit) {
+        return jdbc.query("""
+            SELECT o.order_id,o.order_company,o.paper_billing_payer_choice_id FROM orders o JOIN order_statuses s ON s.order_status_id=o.order_status
+            JOIN companies c ON c.company_id=o.order_company
+            WHERE o.order_id>? AND o.invoice_payment_mode='OWNER_PAPER_INVOICE' AND c.paper_billing_automatic=1
+            AND o.order_amount>0 AND o.order_counter>=o.order_amount AND o.paper_invoice_automation_hold=0 AND o.paper_invoice_review_hold=0
+            AND s.order_status_title IN ('Опубликовано','Ожидает общего счета','Выставлен счет','Напоминание')
+            ORDER BY o.order_id LIMIT ?
+            """,(rs,n)->new AutomaticOrder(rs.getLong(1),rs.getLong(2),rs.getString(3)),after,Math.min(100,Math.max(1,limit)));
+    }
+    public AutomaticOrder automaticOrder(long id) {
+        return jdbc.query("SELECT order_id,order_company,paper_billing_payer_choice_id FROM orders WHERE order_id=? AND paper_invoice_automation_hold=0 AND paper_invoice_review_hold=0 AND invoice_payment_mode='OWNER_PAPER_INVOICE'",
+                (rs,n)->new AutomaticOrder(rs.getLong(1),rs.getLong(2),rs.getString(3)),id).stream().findFirst().orElse(null);
+    }
+    @Transactional
+    public void rememberPayer(long id,String choice) {
+        var order=orders.findByIdForCounterUpdate(id).orElseThrow();
+        order.useBankPaperInvoicePaymentMode();
+        order.setPaperBillingPayerChoiceId(choice);orders.saveAndFlush(order);
+    }
     @Transactional
     public void holdForPaymentReview(long id) {
         var order=orders.findByIdForCounterUpdate(id).orElse(null);
@@ -68,6 +88,14 @@ public class PaperInvoiceOrderAdapter implements PaperInvoiceOrderData {
         try {transitions.markBankPaperInvoiceDelivered(id);automation.synchronizeOrder(id);}
         catch(RuntimeException e) {throw e;}
         catch(Exception e) {throw new IllegalStateException("Не удалось завершить отправку счёта",e);}
+    }
+    @Transactional
+    public void markCommonDelivered(long id) {
+        var order=orders.findByIdForCounterUpdate(id).orElseThrow();
+        if("Оплачено".equals(order.getStatus().getTitle())) return;
+        try {transitions.changeStatusForCommonBillingOrder(id,"Выставлен счет");automation.synchronizeOrder(id);}
+        catch(RuntimeException failure) {throw failure;}
+        catch(Exception failure) {throw new IllegalStateException("Не удалось завершить отправку выбранных заказов",failure);}
     }
     @Transactional(readOnly=true)
     public StaffContext staffContext(long id) {
