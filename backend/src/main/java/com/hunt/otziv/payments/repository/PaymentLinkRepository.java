@@ -27,6 +27,10 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> {
+    // A locking scalar read sees commits made while the caller waited for the order mutex,
+    // even when its transaction established an earlier MySQL REPEATABLE READ snapshot.
+    @Query(value="SELECT paper_bank_document_id FROM payment_links WHERE order_id=:orderId AND paper_bank_document_id IS NOT NULL FOR UPDATE",nativeQuery=true)
+    List<String> findBankDocumentBindingsForUpdate(@Param("orderId") Long orderId);
 
     Optional<PaymentLink> findByToken(String token);
 
@@ -693,6 +697,7 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
         WHERE link.paymentMethod IN :paymentMethods
           AND link.status IN :statuses
           AND link.expiresAt <= :now
+          AND link.paperBankDocumentId IS NULL
     """)
     int expireManualLinks(
             @Param("paymentMethods") Collection<PaymentMethod> paymentMethods,
@@ -708,6 +713,7 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
         WHERE link.paymentMethod IN :paymentMethods
           AND link.status IN :statuses
           AND link.expiresAt <= :now
+          AND link.paperBankDocumentId IS NULL
         ORDER BY link.id
     """)
     List<PaymentLink> findExpiredManualLinksForUpdate(

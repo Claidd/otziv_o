@@ -83,9 +83,11 @@ $reviewedSql004 = @{
 # SQL syntax. filterWhereClause() contains fixed predicates and binds values.
 # Pin the full source as well as this exact SQL004 line: changing the enum
 # mapping or another predicate requires fresh review, including staged mode.
+# Paper-invoice audit: only the fixed archive eligibility predicate changed;
+# the two-literal enum mapping and bound filter values were rechecked.
 $reviewedArchiveOrder = @{
     Path = 'backend/src/main/java/com/hunt/otziv/payments/repository/PaymentLinkArchiveRepository.java'
-    SourceSha256 = 'df7c73d2b8e9611064f83db390e0ab0ce29fef201752029230b8c65ac7bad757'
+    SourceSha256 = 'c4104780308f2fc9b052fef37692b9fb204e91e44df43834c4e3ade3305fb42c'
     Lines = @(
         '""" + filterWhereClause() + " ORDER BY apl.created_at " + order + ", apl.id " + order + """'
     )

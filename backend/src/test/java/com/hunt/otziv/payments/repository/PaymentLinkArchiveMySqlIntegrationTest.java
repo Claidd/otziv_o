@@ -49,10 +49,21 @@ class PaymentLinkArchiveMySqlIntegrationTest {
                 MYSQL.getPassword()
         );
         initializeSchema(dataSource);
+        new JdbcTemplate(dataSource).execute("ALTER TABLE payment_links ADD paper_bank_document_id CHAR(36) NULL");
         jdbc = new JdbcTemplate(dataSource);
         repository = new PaymentLinkArchiveRepository(new NamedParameterJdbcTemplate(dataSource));
         transaction = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
         jdbc.update("INSERT INTO orders (order_id) VALUES (?)", ORDER_ID);
+    }
+
+    @Test void bankDocumentBindingCannotBeLostByDeletingOrArchivingItsPaymentSource() {
+        insertOldLink(LINK_ID,"CREATED");
+        jdbc.update("UPDATE payment_links SET paper_bank_document_id=? WHERE id=?","a".repeat(36),LINK_ID);
+        assertThat(repository.hasLiveArchiveBlockerForOrder(ORDER_ID)).isTrue();
+        assertThat(repository.findArchiveCandidateIds(PAID_CUTOFF,FINAL_CUTOFF,10)).isEmpty();
+        jdbc.update("UPDATE payment_links SET status='CONFIRMED' WHERE id=?",LINK_ID);
+        assertThat(repository.hasLiveArchiveBlockerForOrder(ORDER_ID)).isTrue();
+        assertThat(repository.findArchiveCandidateIds(PAID_CUTOFF,FINAL_CUTOFF,10)).isEmpty();
     }
 
     @Test

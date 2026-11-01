@@ -58,7 +58,7 @@ public class PaperBillingStore {
         return jdbc.update("UPDATE paper_invoice_document SET stage=?,error_text=NULL,updated_at=NOW(6) WHERE id=? AND stage=?",to,id,from)==1;
     }
     public void bankId(String id,boolean act,String bankId,String stage) {
-        jdbc.update("UPDATE paper_invoice_document SET "+(act?"bank_act_id":"bank_invoice_id")+"=?,error_text=IF(stage='NEEDS_REVIEW',error_text,NULL),stage=IF(stage='NEEDS_REVIEW',stage,?),updated_at=NOW(6) WHERE id=?",
+        jdbc.update("UPDATE paper_invoice_document SET "+(act?"bank_act_id":"bank_invoice_id")+"=?,error_text=IF(stage IN ('NEEDS_REVIEW','PAID'),error_text,NULL),stage=IF(stage IN ('NEEDS_REVIEW','PAID'),stage,?),updated_at=NOW(6) WHERE id=?",
                 bankId,stage,id);
     }
     public void pdf(String id,boolean act,PaperBillingPdfSignature.Pdf pdf) {
@@ -69,7 +69,7 @@ public class PaperBillingStore {
     }
     public void error(String id,String state,String message) {
         String text=message==null?"Операция не завершена":message.substring(0,Math.min(700,message.length()));
-        jdbc.update("UPDATE paper_invoice_document SET stage=?,error_text=?,updated_at=NOW(6) WHERE id=? AND (stage<>'NEEDS_REVIEW' OR ?='NEEDS_REVIEW') AND (?<>'NEEDS_REVIEW' OR paid_at IS NULL)",state,text,id,state,state);
+        jdbc.update("UPDATE paper_invoice_document SET stage=?,error_text=?,updated_at=NOW(6) WHERE id=? AND (stage<>'NEEDS_REVIEW' OR ?='NEEDS_REVIEW') AND (?<>'NEEDS_REVIEW' OR paid_at IS NULL) AND (stage<>'PAID' OR ?='PAID')",state,text,id,state,state,state);
     }
     public boolean claimDelivery(String id,boolean act) {
         return jdbc.update("UPDATE paper_invoice_document SET "+(act?"act_delivery":"invoice_delivery")+"='SENDING',updated_at=NOW(6) WHERE id=? AND "+(act?"act_delivery":"invoice_delivery")+"='PENDING'",id)==1;

@@ -103,6 +103,7 @@ public class PaymentLinkArchiveRepository {
     private static final String ARCHIVE_STATE_BLOCKER_SQL = """
             (
                 pl.status = 'NEEDS_RECONCILIATION'
+                OR pl.paper_bank_document_id IS NOT NULL
                 OR COALESCE(pl.status, '') NOT IN (
                     'CREATED',
                     'TEST_CONFIRMED',

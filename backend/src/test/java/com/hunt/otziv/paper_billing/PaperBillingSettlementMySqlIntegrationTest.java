@@ -32,6 +32,7 @@ class PaperBillingSettlementMySqlIntegrationTest {
         jdbc.execute("INSERT INTO payment_links VALUES(8)");
         jdbc.execute("CREATE TABLE common_invoices(invoice_id BIGINT PRIMARY KEY)");
         new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_348__tochka_paper_documents.sql")).execute(ds);
+        new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_349__paper_document_service_snapshot.sql")).execute(ds);
         new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_350__paper_document_visual_signature.sql")).execute(ds);
         new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_351__paper_document_intro_delivery.sql")).execute(ds);
         new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_352__paper_invoice_delivery_and_staff_notices.sql")).execute(ds);
@@ -55,6 +56,101 @@ class PaperBillingSettlementMySqlIntegrationTest {
         assertEquals("PAID",store.row(id).get("stage"));
         assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM paper_invoice_bank_receipt",Integer.class));
     }
+    @Test void simultaneousDuplicateWebhooksApplyThePaymentOnlyOnce() throws Exception {
+        concurrently(() -> settlement.accept(receipt("same",250000,"7707083893")),
+                () -> settlement.accept(receipt("same",250000,"7707083893")));
+        verify(finance,times(1)).applyVerifiedPaperBankPayment(8L,250000);
+        assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM paper_invoice_bank_receipt",Integer.class));
+        assertEquals("PAID",store.row(id).get("stage"));
+    }
+    @Test void simultaneousDifferentFullTransfersCannotDoubleCloseTheOrder() throws Exception {
+        concurrently(() -> settlement.accept(receipt("first",250000,"7707083893")),
+                () -> settlement.accept(receipt("second",250000,"7707083893")));
+        verify(finance,times(1)).applyVerifiedPaperBankPayment(8L,250000);
+        assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM paper_invoice_bank_receipt WHERE state='APPLIED'",Integer.class));
+        assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM paper_invoice_bank_receipt WHERE state='NEEDS_REVIEW'",Integer.class));
+        assertEquals("PAID",store.row(id).get("stage"));
+    }
+    @Test void lateBackgroundResultsCannotReopenAPaidDocument() {
+        settlement.accept(receipt("p1",250000,"7707083893"));
+        store.bankId(id,true,"late-act","ACT_CREATED");store.error(id,"ACT_CREATED","late failure");
+        assertEquals("PAID",store.row(id).get("stage"));assertNull(store.row(id).get("error_text"));
+    }
+    @Test void commonDocumentBindingIsVisibleToTheMutationGuardBeforeDelivery() {
+        jdbc.execute("CREATE TABLE common_invoice_orders(order_id BIGINT,invoice_id BIGINT,active_membership TINYINT)");
+        try {
+            jdbc.update("INSERT INTO common_invoices(invoice_id,paper_bank_document_id) VALUES(5,?)",id);
+            jdbc.update("INSERT INTO common_invoice_orders VALUES(42,5,1)");
+            var guard=new com.hunt.otziv.common_billing.service.BankPaperInvoiceBindingsService(jdbc);
+            assertTrue(guard.hasDocument(42));jdbc.update("UPDATE common_invoice_orders SET active_membership=0");assertFalse(guard.hasDocument(42));
+        } finally {jdbc.execute("DROP TABLE common_invoice_orders");}
+    }
+    @Test void commonBindingGuardSeesDocumentsCommittedAfterAnEarlierRepeatableReadSnapshot() {
+        jdbc.execute("CREATE TABLE common_invoice_orders(order_id BIGINT,invoice_id BIGINT,active_membership TINYINT)");
+        try(var executor=java.util.concurrent.Executors.newSingleThreadExecutor()) {
+            jdbc.update("INSERT INTO common_invoices(invoice_id) VALUES(5)");jdbc.update("INSERT INTO common_invoice_orders VALUES(42,5,1)");
+            var manager=new DataSourceTransactionManager(jdbc.getDataSource());
+            var tx=new org.springframework.transaction.support.TransactionTemplate(manager);
+            tx.setIsolationLevel(org.springframework.transaction.TransactionDefinition.ISOLATION_REPEATABLE_READ);
+            tx.executeWithoutResult(status -> {
+                assertNull(jdbc.queryForObject("SELECT paper_bank_document_id FROM common_invoices WHERE invoice_id=5",String.class));
+                java.util.concurrent.CompletableFuture.runAsync(()->new org.springframework.transaction.support.TransactionTemplate(manager).executeWithoutResult(other -> {
+                    jdbc.queryForObject("SELECT order_id FROM orders WHERE order_id=42 FOR UPDATE",Long.class);
+                    jdbc.update("UPDATE common_invoices SET paper_bank_document_id=? WHERE invoice_id=5",id);
+                }),executor).orTimeout(10,java.util.concurrent.TimeUnit.SECONDS).join();
+                jdbc.queryForObject("SELECT order_id FROM orders WHERE order_id=42 FOR UPDATE",Long.class);
+                assertTrue(new com.hunt.otziv.common_billing.service.BankPaperInvoiceBindingsService(jdbc).hasDocument(42));
+            });
+        } finally {jdbc.execute("DROP TABLE common_invoice_orders");}
+    }
+
+    @Test void concurrentIssueRequestsCreateOneDurableDocumentAndReturnTheSameNumber() throws Exception {
+        jdbc.update("DELETE FROM paper_invoice_document WHERE id=?",id);
+        var targets=mock(PaperBillingTargets.class);var bank=mock(PaperBillingBankClient.class);var settings=new PaperBillingSettings();settings.setBankOperationsEnabled(true);
+        var auth=new org.springframework.security.authentication.TestingAuthenticationToken("tester","","ROLE_ADMIN");var target=new Target("ORDER",42L);
+        when(bank.configured()).thenReturn(true);when(bank.supplierAccount()).thenReturn("40802810000000004287/044525104");when(bank.customer()).thenReturn("customer");when(bank.serviceName()).thenReturn("Service");when(bank.vatKind()).thenReturn("without_nds");
+        when(targets.company(target,auth)).thenReturn(1L);when(targets.companyInfo(1)).thenReturn(Map.of("company_group_id","local","company_url_chat","https://chat.whatsapp.com/local","client_id","fixture"));when(targets.deliveryClient(target,"fixture")).thenReturn("fixture");
+        when(targets.prepare(target,auth)).thenAnswer(call->{jdbc.queryForObject("SELECT order_id FROM orders WHERE order_id=42 FOR UPDATE",Long.class);return new PaperBillingTargets.Prepared(1,8L,250000);});
+        var service=new PaperBillingService(store,targets,settings,bank,new com.fasterxml.jackson.databind.ObjectMapper(),new DataSourceTransactionManager(jdbc.getDataSource()));
+        var result=new java.util.concurrent.ConcurrentLinkedQueue<Document>();var request=new IssueRequest(new Payer("company","Test","7707083893","773601001",""),true);
+        concurrently(()->result.add(service.issue(target,request,auth)),()->result.add(service.issue(target,request,auth)));
+        assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM paper_invoice_document",Integer.class));
+        assertEquals(1,result.stream().map(Document::id).distinct().count());assertEquals(2,result.size());
+        verify(bank,never()).create(anyMap(),any(),anyBoolean());
+    }
+    @Test void companyChangedDuringPreparationCannotUseThePreviousCompanysPayerOrChat() {
+        jdbc.update("DELETE FROM paper_invoice_document WHERE id=?",id);
+        var targets=mock(PaperBillingTargets.class);var bank=mock(PaperBillingBankClient.class);var settings=new PaperBillingSettings();settings.setBankOperationsEnabled(true);
+        var auth=new org.springframework.security.authentication.TestingAuthenticationToken("tester","","ROLE_ADMIN");var target=new Target("ORDER",42L);
+        when(bank.configured()).thenReturn(true);when(targets.company(target,auth)).thenReturn(1L);when(targets.prepare(target,auth)).thenReturn(new PaperBillingTargets.Prepared(2,8L,250000));
+        var service=new PaperBillingService(store,targets,settings,bank,new com.fasterxml.jackson.databind.ObjectMapper(),new DataSourceTransactionManager(jdbc.getDataSource()));
+        assertThrows(org.springframework.web.server.ResponseStatusException.class,()->service.issue(target,new IssueRequest(new Payer("company","Test","7707083893","773601001",""),true),auth));
+        assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM paper_invoice_document",Integer.class));verify(targets,never()).companyInfo(anyLong());
+    }
+    @Test void deliveryCompletionAndPaymentCanRaceWithoutLosingEitherCommit() throws Exception {
+        jdbc.execute("ALTER TABLE payment_links ADD payment_method VARCHAR(32),ADD status VARCHAR(32),ADD paper_invoice_issued_at DATETIME(6),ADD initiated_at DATETIME(6)");
+        jdbc.update("UPDATE payment_links SET payment_method='OWNER_PAPER_INVOICE',status='CREATED' WHERE id=8");
+        jdbc.update("UPDATE paper_invoice_document SET stage='FILES_READY',message_delivery='SENT',invoice_delivery='SENT',act_delivery='SENT' WHERE id=?",id);
+        var targets=mock(PaperBillingTargets.class);
+        doAnswer(call->{jdbc.queryForObject("SELECT order_id FROM orders WHERE order_id=42 FOR UPDATE",Long.class);return null;}).when(targets).lockDelivery(new Target("ORDER",42L));
+        var service=new PaperBillingService(store,targets,new PaperBillingSettings(),mock(PaperBillingBankClient.class),new com.fasterxml.jackson.databind.ObjectMapper(),new DataSourceTransactionManager(jdbc.getDataSource()));
+        concurrently(()->service.completeDelivery(id),()->settlement.accept(receipt("racing",250000,"7707083893")));
+        assertEquals("PAID",store.row(id).get("stage"));assertNotNull(store.row(id).get("paid_at"));assertNotNull(store.row(id).get("delivery_completed_at"));
+        verify(finance,times(1)).applyVerifiedPaperBankPayment(8L,250000);verify(targets,times(1)).delivered(new Target("ORDER",42L),id);
+    }
+
+    private void concurrently(Runnable first,Runnable second) throws Exception {
+        var start=new java.util.concurrent.CountDownLatch(1);
+        try(var executor=java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var a=executor.submit(()->{await(start);first.run();});var b=executor.submit(()->{await(start);second.run();});
+            start.countDown();a.get(10,java.util.concurrent.TimeUnit.SECONDS);b.get(10,java.util.concurrent.TimeUnit.SECONDS);
+        }
+    }
+    private static void await(java.util.concurrent.CountDownLatch latch) {
+        try {if(!latch.await(10,java.util.concurrent.TimeUnit.SECONDS)) throw new IllegalStateException("Start barrier timeout");}
+        catch(InterruptedException e) {Thread.currentThread().interrupt();throw new IllegalStateException(e);}
+    }
+
     @Test void partialThenRemainderCannotBeSummedIntoAutomaticPayment() {
         settlement.accept(receipt("p1",200000,"7707083893"));
         settlement.accept(receipt("p2",50000,"7707083893"));

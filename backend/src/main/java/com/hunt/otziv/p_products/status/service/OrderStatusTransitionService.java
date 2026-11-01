@@ -118,6 +118,7 @@ public class OrderStatusTransitionService {
 
     private final OrderRepository orderRepository;
     private final OrderAggregateMutationLockService orderAggregateMutationLockService;
+    private final com.hunt.otziv.payments.api.BankPaperPaymentBindings paperDocuments;
     private final OrderStatusService orderStatusService;
     private final OrderTransactionService orderTransactionService;
     private final BadReviewTaskService badReviewTaskService;
@@ -261,6 +262,12 @@ public class OrderStatusTransitionService {
                 return true;
             }
             ensureCommonBillingStatusTransitionAllowed(order, title, allowCommonBillingFinancialStatus);
+            if (Set.of(STATUS_NEW,STATUS_TO_CHECK,STATUS_IN_CHECK,STATUS_CORRECTION,STATUS_PUBLIC,
+                    STATUS_TO_PUBLISH,STATUS_ARCHIVE,STATUS_BAN).contains(title)
+                    && paperDocuments.hasDocument(orderID)) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "По заказу выпущены банковские документы. Сначала выполните сверку счёта и акта; смена рабочего статуса не отменяет документы в банке");
+            }
             ensureCompletedOrderNotReopened(order, title);
             ensureStatusTransitionAllowed(order, title, allowPaymentReturnReminder);
             if (STATUS_ARCHIVE.equals(title) && !OrderManualArchivePolicy.isAllowed(order)) {

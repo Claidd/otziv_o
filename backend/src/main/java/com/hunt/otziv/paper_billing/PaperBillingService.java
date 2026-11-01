@@ -45,11 +45,14 @@ public class PaperBillingService {
         // Persist buyer independently: a bank/delivery failure must not discard completed form data.
         store.savePayer(company,encode(request.payer()),auth.getName());
         String account=bank.supplierAccount();
+        String serviceName=bank.serviceName();
+        String vatKind=bank.vatKind();
         targets.configureCommon(target,auth);
         var transaction=new TransactionTemplate(transactions);
         transaction.setIsolationLevel(org.springframework.transaction.TransactionDefinition.ISOLATION_READ_COMMITTED);
         return transaction.execute(status -> {
             var prepared=targets.prepare(target,auth); // canonical Order locks precede the document row
+            if (prepared.companyId()!=company) throw problem("Компания-плательщик изменилась. Обновите реквизиты перед выпуском документов");
             var current=store.target(target);
             if (current.isPresent()) return store.document(current.get());
             if (prepared.amountKopecks()<=0) throw problem("Сумма счёта должна быть положительной");
@@ -64,7 +67,7 @@ public class PaperBillingService {
                 throw problem("Сначала привяжите группу заказчика и отправителя");
             String id=UUID.randomUUID().toString();
             store.insert(id,target,company,prepared.linkId(),prepared.amountKopecks(),encode(request.payer()),account,bank.customer(),client,group,auth.getName());
-            store.jdbc().update("UPDATE paper_invoice_document SET service_name=?,vat_kind=? WHERE id=?",bank.serviceName(),bank.vatKind(),id);
+            store.jdbc().update("UPDATE paper_invoice_document SET service_name=?,vat_kind=? WHERE id=?",serviceName,vatKind,id);
             return store.document(store.row(id));
         });
     }

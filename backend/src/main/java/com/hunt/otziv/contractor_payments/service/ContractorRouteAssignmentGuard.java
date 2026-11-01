@@ -12,6 +12,7 @@ public class ContractorRouteAssignmentGuard {
 
     private final ContractorPaymentShadowService paymentShadowService;
     private final ContractorCompletionRewardMarkerRepository completionRewardMarkerRepository;
+    private final com.hunt.otziv.payments.api.BankPaperPaymentBindings paperDocuments;
 
     public void requireWorkerReassignmentAllowed(Long orderId) {
         requireRecipientMutationAllowed(
@@ -52,6 +53,10 @@ public class ContractorRouteAssignmentGuard {
     }
 
     private void requireRecipientMutationAllowed(Long orderId, String message) {
+        if (orderId != null && paperDocuments.hasDocument(orderId)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "По заказу выпущены банковские документы. Сначала выполните сверку счёта и акта; их реквизиты и состав нельзя менять автоматически");
+        }
         if (paymentShadowService.hasFrozenLiveRoute(orderId)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, message);
         }

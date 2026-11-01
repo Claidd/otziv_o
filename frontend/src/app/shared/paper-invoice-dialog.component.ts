@@ -18,7 +18,7 @@ export function openPaperInvoiceDialog(target: PaperTarget, fallback: () => void
     @if (opened()) {
       <div class="paper-backdrop" (click)="close()">
         <section role="dialog" aria-modal="true" aria-labelledby="paper-title" (click)="$event.stopPropagation()" (keydown.escape)="close()">
-          <header><h2 id="paper-title">Счёт и акт</h2><button type="button" aria-label="Закрыть" (click)="close()" [disabled]="busy()">×</button></header>
+          <header><h2 id="paper-title">Счёт и акт</h2><button type="button" aria-label="Закрыть" (click)="close()" [disabled]="mutating()">×</button></header>
           @if (error()) { <p role="alert" class="error">{{ error() }}</p> }
           @if (context(); as c) {
             <p>{{ c.companyTitle }}</p>
@@ -30,32 +30,32 @@ export function openPaperInvoiceDialog(target: PaperTarget, fallback: () => void
               <p>Счёт: {{ delivery(d.invoiceDelivery) }}. Акт: {{ delivery(d.actDelivery) }}.</p>
               @if (d.error) { <p class="error">{{ d.error }}</p> }
               <div class="actions"><button type="button" (click)="download('invoice')">Скачать счёт</button><button type="button" (click)="download('act')">Скачать акт</button></div>
-              <p class="hint">Документы и поступление оплаты проверяются автоматически. Повторно создавать счёт не нужно.</p>
+              <p class="hint">Документы и поступление оплаты проверяются автоматически. Повторно создавать счёт не нужно. Закрытие окна не отменяет счёт и акт в банке.</p>
               <button type="button" (click)="poll()">Обновить</button>
               <button type="button" (click)="checkPayment()" [disabled]="busy() || d.paidAt !== null">Проверить оплату</button>
             } @else {
               <form (ngSubmit)="issue()">
-                <label>ИНН плательщика<input name="inn" inputmode="numeric" maxlength="12" autocomplete="off" [ngModel]="draft.inn" (ngModelChange)="innChanged($event)" /></label>
+                <label>ИНН плательщика<input [disabled]="mutating()" name="inn" inputmode="numeric" maxlength="12" autocomplete="off" [ngModel]="draft.inn" (ngModelChange)="innChanged($event)" /></label>
                 <button type="button" (click)="lookup()" [disabled]="busy() || !c.lookupAvailable">Найти по ИНН</button>
                 @if (!c.lookupAvailable) { <p class="hint">Автозаполнение ещё не подключено. Реквизиты можно заполнить вручную.</p> }
                 @if (candidates().length > 1) {
-                  <label>Организация или подразделение<select name="candidate" (change)="choose($any($event.target).value)">
+                  <label>Организация или подразделение<select [disabled]="busy()" name="candidate" (change)="choose($any($event.target).value)">
                     <option value="">Выберите плательщика</option>
                     @for (p of candidates(); track $index) { <option [value]="$index">{{ p.name }} · КПП {{ p.kpp || 'не применяется' }}</option> }
                   </select></label>
                 }
-                <label>Тип плательщика<select name="type" [(ngModel)]="draft.type" (ngModelChange)="typeChanged()"><option value="company">Организация</option><option value="ip">ИП</option></select></label>
-                <label>Полное наименование / ФИО ИП<input name="name" maxlength="300" [(ngModel)]="draft.name" /></label>
-                @if (draft.type === 'company') { <label>КПП<input name="kpp" maxlength="9" [(ngModel)]="draft.kpp" /></label> }
-                <label>Юридический адрес (если указан в реквизитах)<textarea name="address" maxlength="1000" [(ngModel)]="draft.address"></textarea></label>
+                <label>Тип плательщика<select [disabled]="busy()" name="type" [(ngModel)]="draft.type" (ngModelChange)="typeChanged()"><option value="company">Организация</option><option value="ip">ИП</option></select></label>
+                <label>Полное наименование / ФИО ИП<input [disabled]="busy()" name="name" maxlength="300" [(ngModel)]="draft.name" /></label>
+                @if (draft.type === 'company') { <label>КПП<input [disabled]="busy()" name="kpp" maxlength="9" [(ngModel)]="draft.kpp" /></label> }
+                <label>Юридический адрес (если указан в реквизитах)<textarea [disabled]="busy()" name="address" maxlength="1000" [(ngModel)]="draft.address"></textarea></label>
                 <p class="hint">Расчётный счёт клиента вводить не требуется. Счёт получателя: …{{ c.accountLast4 }}.</p>
-                <label class="check"><input name="confirmed" type="checkbox" [(ngModel)]="confirmed" /> Клиент ещё не оплатил по прежним реквизитам</label>
+                <label class="check"><input [disabled]="busy()" name="confirmed" type="checkbox" [(ngModel)]="confirmed" /> Клиент ещё не оплатил по прежним реквизитам</label>
                 <p class="hint">Счёт и акт формируются по выполненным работам. Введённые реквизиты сохранятся для следующих заказов.</p>
                 <div class="actions"><button type="button" (click)="save()" [disabled]="busy()">Сохранить реквизиты</button><button class="primary" type="submit" [disabled]="busy() || !confirmed || !c.configured">{{ busy() ? 'Сохраняем…' : 'Сформировать и отправить' }}</button></div>
               </form>
             }
           } @else { <p>Загрузка…</p> }
-          <footer><button type="button" (click)="close()" [disabled]="busy()">Закрыть</button></footer>
+          <footer><button type="button" (click)="close()" [disabled]="mutating()">Закрыть</button></footer>
         </section>
       </div>
     }
@@ -78,6 +78,9 @@ export class PaperInvoiceDialogComponent implements OnDestroy {
   readonly context = signal<Context | null>(null);
   readonly error = signal('');
   readonly busy = signal(false);
+  readonly mutating = signal(false);
+  private lookupTicket = 0;
+  private pollTicket = 0;
   readonly candidates = signal<Payer[]>([]);
   draft: Payer = { type: 'company', name: '', inn: '', kpp: '', address: '' };
   confirmed = false;
@@ -87,7 +90,7 @@ export class PaperInvoiceDialogComponent implements OnDestroy {
   private readonly watch = effect(() => {
     const r = request();
     if (!r) return;
-    this.stop(); this.busy.set(false); const ticket = ++this.ticket;
+    this.stop(); this.busy.set(false); this.mutating.set(false); ++this.lookupTicket; const ticket = ++this.ticket;
     this.opened.set(true); this.context.set(null); this.error.set(''); this.candidates.set([]); this.confirmed = false;
     this.http.get<Context>(this.path() + '/context').subscribe({
       next: c => {
@@ -100,8 +103,10 @@ export class PaperInvoiceDialogComponent implements OnDestroy {
     });
   });
   private path(): string { const t = request()!.target; return this.baseUrl + '/api/paper-invoices/' + t.kind + '/' + t.id; }
-  private failure(e: any): void { this.busy.set(false); this.error.set(e?.error?.detail || e?.error?.message || 'Не удалось выполнить действие. Проверьте соединение и обновите данные.'); }
+  private failure(e: any): void { this.busy.set(false); this.mutating.set(false); this.error.set(e?.error?.detail || e?.error?.message || 'Не удалось выполнить действие. Проверьте соединение и обновите данные.'); }
   innChanged(value: string): void {
+    if (this.mutating()) return;
+    ++this.lookupTicket;
     this.draft = { type: 'company', name: '', inn: value.replace(/\D/g, ''), kpp: '', address: '' };
     this.busy.set(false); this.error.set(''); this.candidates.set([]);
     if (this.lookupTimer) clearTimeout(this.lookupTimer);
@@ -110,57 +115,78 @@ export class PaperInvoiceDialogComponent implements OnDestroy {
   }
   typeChanged(): void { if (this.draft.type === 'ip') this.draft.kpp = ''; }
   lookup(): void {
-    const inn = this.draft.inn; const ticket = this.ticket;
+    if (this.mutating() || !this.opened()) return;
+    if (this.lookupTimer) clearTimeout(this.lookupTimer); this.lookupTimer = null;
+    const inn = this.draft.inn; const ticket = this.ticket; const lookupTicket = ++this.lookupTicket;
     this.error.set(''); this.busy.set(true);
     this.http.get<{ candidates: Payer[] }>(this.path() + '/lookup', { params: { inn } }).subscribe({
       next: result => {
-        if (ticket !== this.ticket || inn !== this.draft.inn) return;
+        if (ticket !== this.ticket || lookupTicket !== this.lookupTicket || inn !== this.draft.inn) return;
         this.busy.set(false); this.candidates.set(result.candidates);
         if (result.candidates.length === 1) this.draft = { ...result.candidates[0] };
         else if (!result.candidates.length) this.error.set('Действующая организация или ИП не найдены. Проверьте ИНН; реквизиты можно заполнить вручную.');
-      }, error: e => { if (ticket === this.ticket && inn === this.draft.inn) this.failure(e); }
+      }, error: e => { if (ticket === this.ticket && lookupTicket === this.lookupTicket && inn === this.draft.inn) this.failure(e); }
     });
   }
   choose(index: string): void { const p = this.candidates()[Number(index)]; if (index !== '' && p) this.draft = { ...p }; }
+  private beginMutation(): number | null {
+    if (this.busy() || !this.opened()) return null;
+    if (this.lookupTimer) clearTimeout(this.lookupTimer); this.lookupTimer = null;
+    ++this.lookupTicket;
+    this.mutating.set(true); this.busy.set(true); this.error.set('');
+    return this.ticket;
+  }
+  private finishMutation(ticket: number): boolean {
+    if (ticket !== this.ticket) return false;
+    this.busy.set(false); this.mutating.set(false); return true;
+  }
   save(): void {
-    this.error.set(''); this.busy.set(true);
-    this.http.put(this.path() + '/payer', this.draft).subscribe({ next: () => { this.busy.set(false); this.error.set(''); }, error: e => this.failure(e) });
+    const ticket = this.beginMutation(); if (ticket === null) return;
+    this.http.put(this.path() + '/payer', { ...this.draft }).subscribe({
+      next: () => { this.finishMutation(ticket); },
+      error: e => { if (ticket === this.ticket) this.failure(e); }
+    });
   }
   issue(): void {
-    if (this.busy() || !this.confirmed) return;
-    this.busy.set(true); this.error.set('');
-    this.http.post<Document>(this.path() + '/issue', { payer: this.draft, confirmedUnpaid: true }).subscribe({
-      next: document => { this.busy.set(false); this.context.update(c => c ? { ...c, document } : c); this.startPolling(); },
-      error: e => this.failure(e)
+    if (!this.confirmed) return;
+    const ticket = this.beginMutation(); if (ticket === null) return;
+    this.http.post<Document>(this.path() + '/issue', { payer: { ...this.draft }, confirmedUnpaid: true }).subscribe({
+      next: document => {
+        if (!this.finishMutation(ticket)) return;
+        this.context.update(c => c ? { ...c, document } : c); this.startPolling();
+      }, error: e => { if (ticket === this.ticket) this.failure(e); }
     });
   }
   poll(): void {
-    const id = this.context()?.document?.id; const ticket = this.ticket;
+    const id = this.context()?.document?.id; const ticket = this.ticket; const pollTicket = ++this.pollTicket;
     if (!id) return;
     this.http.get<Document>(this.baseUrl + '/api/paper-invoices/documents/' + id).subscribe({
-      next: document => { if (ticket === this.ticket) { this.context.update(c => c ? { ...c, document } : c); if (document.stage === 'PAID') this.stop(); } },
-      error: e => { if (ticket === this.ticket) this.failure(e); }
+      next: document => { if (ticket === this.ticket && pollTicket === this.pollTicket) { this.context.update(c => c ? { ...c, document } : c); if (document.stage === 'PAID') this.stop(); } },
+      error: e => { if (ticket === this.ticket && pollTicket === this.pollTicket && !this.mutating()) this.failure(e); }
     });
   }
   private startPolling(): void { if (!this.timer) this.timer = setInterval(() => this.poll(), 3000); }
   checkPayment(): void {
-    this.busy.set(true);
+    const ticket = this.beginMutation(); if (ticket === null) return;
     this.http.post(this.path() + '/reconcile', {}).subscribe({
-      next: () => { this.busy.set(false); this.poll(); }, error: e => this.failure(e)
+      next: () => { if (this.finishMutation(ticket)) this.poll(); },
+      error: e => { if (ticket === this.ticket) this.failure(e); }
     });
   }
   download(type: string): void {
+    if (this.busy()) return;
+    const ticket = this.ticket;
     const d = this.context()?.document; if (!d) return;
     this.http.get(this.baseUrl + '/api/paper-invoices/documents/' + d.id + '/' + type + '.pdf', { responseType: 'blob' }).subscribe({
-      next: blob => { const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = type + '-' + d.number + '.pdf'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); },
-      error: e => this.failure(e)
+      next: blob => { if (ticket !== this.ticket) return; const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = type + '-' + d.number + '.pdf'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); },
+      error: e => { if (ticket === this.ticket && !this.mutating()) this.failure(e); }
     });
   }
   stage(value: string): string {
     return ({ PENDING: 'Ожидает формирования', INVOICE_CREATING: 'Формируется счёт', INVOICE_CREATED: 'Формируется акт', ACT_CREATING: 'Формируется акт', ACT_CREATED: 'Получаем PDF', FILES_READY: 'Отправляем документы', WAITING_PAYMENT: 'Ожидает оплаты', PAID: 'Оплата получена' } as Record<string, string>)[value] || 'Требуется сверка';
   }
   delivery(value: string): string { return ({ SENT: 'отправлен', PENDING: 'ожидает отправки', SENDING: 'отправляется', UNKNOWN: 'доставку нужно проверить' } as Record<string, string>)[value] || 'проверяется'; }
-  close(): void { if (this.busy()) return; const r = request(); this.stop(); ++this.ticket; this.opened.set(false); request.set(null); if (this.context()?.document) r?.refresh(); }
+  close(): void { if (this.mutating()) return; this.busy.set(false); ++this.lookupTicket; const r = request(); this.stop(); ++this.ticket; this.opened.set(false); request.set(null); if (this.context()?.document) r?.refresh(); }
   private stop(): void { if (this.timer) clearInterval(this.timer); this.timer = null; if (this.lookupTimer) clearTimeout(this.lookupTimer); this.lookupTimer = null; }
-  ngOnDestroy(): void { this.stop(); }
+  ngOnDestroy(): void { ++this.ticket; ++this.lookupTicket; this.stop(); }
 }
