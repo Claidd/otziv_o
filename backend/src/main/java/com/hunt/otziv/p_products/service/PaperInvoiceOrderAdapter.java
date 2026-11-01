@@ -23,7 +23,7 @@ public class PaperInvoiceOrderAdapter implements PaperInvoiceOrderData {
         if(order==null) return; // The cancelled document outlives deletion/archival of its source.
         order.setPaperInvoiceReviewHold(true);order.setPaperInvoiceAutomationHold(true);orders.saveAndFlush(order);automation.synchronizeOrder(id);
     }
-    @Transactional
+    @Transactional(noRollbackFor=ResponseStatusException.class)
     public void requireUnpaidForCancellation(long id) {
         var order=orders.findByIdForCounterUpdate(id).orElseThrow();
         if("Оплачено".equals(order.getStatus().getTitle()) || (order.isComplete() && order.getPayDay()!=null))
@@ -45,6 +45,20 @@ public class PaperInvoiceOrderAdapter implements PaperInvoiceOrderData {
             order.setClientMessageGeneration(Math.addExact(order.getClientMessageGeneration(),1));
         }
         order.setPaperInvoiceAutomationHold(true);orders.saveAndFlush(order);automation.synchronizeOrder(id);
+    }
+    @Transactional
+    public void resumeOrdinaryInvoice(long id) {
+        var order=orders.findByIdForCounterUpdate(id).orElseThrow();
+        requireUnpaidForCancellation(id);
+        if(order.isPaperInvoiceReviewHold() || !order.isPaperInvoiceAutomationHold()
+                || !order.isBankPaperInvoice() || !"Опубликовано".equals(order.getStatus().getTitle()))
+            throw new ResponseStatusException(HttpStatus.CONFLICT,"Заказ изменился или требует сверки перед новым счётом");
+        order.useAutomaticInvoicePaymentMode();
+        order.setPaperInvoiceAutomationHold(false);
+        order.setStatusChangedAt(java.time.LocalDateTime.now());
+        order.setClientMessageGeneration(Math.addExact(order.getClientMessageGeneration(),1));
+        orders.saveAndFlush(order);
+        automation.scheduleOrdinaryInvoice(id);
     }
     public long companyId(long id) { return jdbc.queryForObject("SELECT order_company FROM orders WHERE order_id=?",Long.class,id); }
     @Transactional

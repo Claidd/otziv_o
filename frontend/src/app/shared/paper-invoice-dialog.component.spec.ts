@@ -7,7 +7,7 @@ describe('Paper invoice asynchronous lifecycle', () => {
   let http: HttpTestingController;
   let fixture: ReturnType<typeof TestBed.createComponent<PaperInvoiceDialogComponent>>;
   const payer = { type: 'company', name: 'Тест', inn: '7707083893', kpp: '773601001', address: '' };
-  const doc = (id: string, stage = 'PENDING') => ({ id, number: `PB-${id}`, amountKopecks: 10000, stage, invoiceDelivery: 'PENDING', actDelivery: 'PENDING', error: null, paidAt: stage === 'PAID' ? '2026-10-31T12:00:00' : null, cancellationDelivery: stage==='CANCELLED'?'SKIPPED':'PENDING' });
+  const doc = (id: string, stage = 'PENDING') => ({ id, number: `PB-${id}`, amountKopecks: 10000, stage, invoiceDelivery: 'PENDING', actDelivery: 'PENDING', error: null, paidAt: stage === 'PAID' ? '2026-10-31T12:00:00' : null, cancellationDelivery: stage==='CANCELLED'?'SKIPPED':'PENDING', replacementState: undefined as string | undefined });
   function open(id: number, document: ReturnType<typeof doc> | null = null): void {
     openPaperInvoiceDialog({kind: 'ORDER', id}); fixture.detectChanges();
     http.expectOne(`/api/paper-invoices/ORDER/${id}/context`).flush({enabled:true,configured:true,lookupAvailable:true,companyId:id,companyTitle:`Company ${id}`,amountKopecks:10000,accountLast4:'6542',payer,document});
@@ -55,7 +55,7 @@ describe('Paper invoice asynchronous lifecycle', () => {
     c.cancel();http.expectNone(r=>r.url.endsWith('/cancel'));
     c.cancelReason='Ошибка реквизитов';c.cancelConfirmed=true;c.cancel();c.cancel();
     const cancel=http.expectOne('/api/paper-invoices/documents/1/cancel');
-    expect(cancel.request.body).toEqual({reason:'Ошибка реквизитов',confirmed:true});
+    expect(cancel.request.body).toEqual({reason:'Ошибка реквизитов',confirmed:true,replaceWithOrdinary:true});
     cancel.flush(doc('1','CANCEL_REQUESTED'));expect(c.context()?.document?.stage).toBe('CANCEL_REQUESTED');expect(c.canCancel()).toBe(false);
   });
   it('an old waiting poll cannot undo the cancellation response', () => {
@@ -75,5 +75,28 @@ describe('Paper invoice asynchronous lifecycle', () => {
     open(1,{...doc('1','CANCELLED'),cancellationDelivery:'UNKNOWN'});const c=fixture.componentInstance;
     c.newInvoice();expect(c.replacement()).toBe(false);expect(c.canReplace()).toBe(false);
     open(2,{...doc('2','CANCELLED'),cancellationDelivery:'SENT'});c.newInvoice();expect(c.replacement()).toBe(true);
+  });
+  it('ordinary handoff has one action and cannot reissue a paper invoice', () => {
+    open(1,doc('1','WAITING_PAYMENT'));fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('Отменить и выставить обычный счёт');
+    open(2,{...doc('2','CANCELLED'),replacementState:'PENDING'});const c=fixture.componentInstance;fixture.detectChanges();
+    c.newInvoice();expect(c.replacement()).toBe(false);expect(c.canReplace()).toBe(false);
+    expect(fixture.nativeElement.textContent).toContain('по текущим резервам');
+    open(3,{...doc('3','CANCELLED'),replacementState:'QUEUED'});fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('Обычный счёт передан автоответчику');
+    expect(fixture.nativeElement.textContent).not.toContain('Выставить новый счёт');
+  });
+  it('a successful poll clears a transient restart error without overriding a mutation failure', () => {
+    open(1,doc('1','CANCEL_REQUESTED'));const c=fixture.componentInstance;
+    c.poll();http.expectOne('/api/paper-invoices/documents/1').flush({}, {status:503,statusText:'Restarting'});
+    expect(c.error()).not.toBe('');c.poll();
+    http.expectOne('/api/paper-invoices/documents/1').flush({...doc('1','CANCELLED'),replacementState:'QUEUED'});
+    expect(c.error()).toBe('');
+    open(2,doc('2','WAITING_PAYMENT'));c.poll();
+    http.expectOne('/api/paper-invoices/documents/2').flush({}, {status:503,statusText:'Restarting'});
+    c.cancelReason='Ошибка';c.cancelConfirmed=true;c.cancel();
+    http.expectOne('/api/paper-invoices/documents/2/cancel').flush({detail:'Уже оплачено'}, {status:409,statusText:'Conflict'});
+    c.poll();http.expectOne('/api/paper-invoices/documents/2').flush(doc('2','WAITING_PAYMENT'));
+    expect(c.error()).toBe('Уже оплачено');
   });
 });

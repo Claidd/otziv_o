@@ -19,6 +19,7 @@ public interface BankPaperInvoices {
     void cancelled(long invoiceId,String documentId);
     void requireUnpaidForCancellation(long invoiceId);
     void holdForPaymentReview(long invoiceId);
+    void resumeOrdinaryInvoice(long invoiceId);
     record StaffContext(java.util.List<Long> managerIds,java.util.List<Long> orderIds,String title) {}
     StaffContext staffContext(long invoiceId);
 }

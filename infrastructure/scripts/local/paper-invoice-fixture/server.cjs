@@ -4,6 +4,7 @@ const http = require("node:http");
 const crypto = require("node:crypto");
 const { privateKey, publicKey } = crypto.generateKeyPairSync("rsa", { modulusLength: 2048 });
 const documents = new Map(), deliveries = new Map(), receipts = [], calls = [];
+const acquiring = {merchantId:"LOCAL-MERCHANT",cashbox:"CloudKassir",operations:new Map()};
 const account = "40802810000000006542/044525104";
 function jwt(claims) {
   const h = Buffer.from(JSON.stringify({alg:"RS256",typ:"JWT"})).toString("base64url");
@@ -35,6 +36,16 @@ http.createServer(async (req,res)=>{
   if (url.pathname==="/keys") return send(200,publicKey.export({format:"jwk"}));
   if (url.pathname==="/health") return send(200,{ok:true});
   if (url.pathname==="/test/state") return send(200,{documents:[...documents.values()],deliveries:[...deliveries.keys()],deliveryDetails:[...deliveries.values()],receipts,calls});
+  if (url.pathname==="/delivery-receipt") return send(200,deliveries.get(body.operationId)||{});
+  if (url.pathname==="/test/acquiring") {acquiring.merchantId=body.merchantId;acquiring.cashbox=body.cashbox;return send(200,{ok:true});}
+  if (url.pathname.endsWith('/acquiring/v1.0/retailers')) return send(200,{Data:{Retailer:[{status:"REG",isActive:true,merchantId:acquiring.merchantId,cashbox:acquiring.cashbox,paymentModes:["card","sbp"]}]}});
+  if (url.pathname.endsWith('/acquiring/v1.0/payments_with_receipt')) {
+    const data=body.Data,id=crypto.randomUUID();
+    const operation={...data,status:"CREATED",operationId:id,paymentLink:"https://example.test/local-payment/"+id};
+    acquiring.operations.set(id,operation);calls.push({method:"POST",path:url.pathname,paymentLinkId:data.paymentLinkId});
+    return send(200,{Data:operation});
+  }
+  if (url.pathname.endsWith('/acquiring/v1.0/payments')) return send(200,{Data:{Operation:[...acquiring.operations.values()]},Meta:{totalPages:1}});
   if (url.pathname==="/lookup") {
     const inn=body.query;
     return send(200,{suggestions:inn==="7707083893"?[{data:{type:"LEGAL",inn,kpp:"773601001",

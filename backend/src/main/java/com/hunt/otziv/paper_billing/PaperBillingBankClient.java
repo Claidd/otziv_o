@@ -31,7 +31,7 @@ public class PaperBillingBankClient {
         if (settings.getFixtureUrl().isBlank()) return false;
         if (!environment.acceptsProfiles(Profiles.of("paper-invoice-fixture"))
                 || !settings.getFixtureUrl().equals("http://paper-invoice-fixture:8099")
-                || !tochka.getJwtToken().isBlank())
+                || (!tochka.getJwtToken().isBlank() && !tochka.getJwtToken().equals("local-fixture-only")))
             throw new IllegalStateException("Изолированный тестовый сервис документов настроен неверно");
         return true;
     }

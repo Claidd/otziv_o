@@ -83,7 +83,7 @@ public class PaperBillingSettlement {
                             receipt.customerCode(),receipt.accountId(),receipt.paymentId());
                     String reason="Перевод "+receipt.paymentId()+" на "+PaperBillingDelivery.amountText(receipt.amountKopecks())
                             +" поступил во время или после отмены счёта № "+row.get("number")+". Нужна ручная сверка; заказ автоматически не оплачен.";
-                    store.jdbc().update("UPDATE paper_invoice_document SET stage=IF(cancelled_at IS NULL,'CANCEL_REVIEW',stage),cancel_step=IF(cancelled_at IS NULL,'REVIEW',cancel_step),error_text=?,updated_at=NOW(6) WHERE id=?",reason,id);
+                    store.jdbc().update("UPDATE paper_invoice_document SET stage=IF(cancelled_at IS NULL,'CANCEL_REVIEW',stage),cancel_step=IF(cancelled_at IS NULL,'REVIEW',cancel_step),cancel_replacement_state=IF(cancel_replacement_state IS NULL,NULL,'REVIEW'),cancel_replacement_error=IF(cancel_replacement_state IS NULL,NULL,?),error_text=?,updated_at=NOW(6) WHERE id=?",reason,reason,id);
                     store.event(id,"PAYMENT_REVIEW",reason);
                     service.holdForCancellationReview(row);
                     store.jdbc().update("""

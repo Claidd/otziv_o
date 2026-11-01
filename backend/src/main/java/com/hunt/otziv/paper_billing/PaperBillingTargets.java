@@ -49,6 +49,10 @@ public class PaperBillingTargets {
         if(target.kind().equals("ORDER")) {cancellation.cancel(link,id);orders.cancelled(target.id(),false);}
         else common.cancelled(target.id(),id);
     }
+    public void resumeOrdinaryInvoice(Target target) {
+        if(target.kind().equals("ORDER")) orders.resumeOrdinaryInvoice(target.id());
+        else common.resumeOrdinaryInvoice(target.id());
+    }
     public long previewAmount(Target target) {
         if (target.kind().equals("COMMON_INVOICE"))
             return common.read(target.id()).amountKopecks();

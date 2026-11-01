@@ -37,6 +37,7 @@ class PaperBillingSettlementMySqlIntegrationTest {
         new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_351__paper_document_intro_delivery.sql")).execute(ds);
         new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_352__paper_invoice_delivery_and_staff_notices.sql")).execute(ds);
         new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_353__paper_invoice_cancellation.sql")).execute(ds);
+        new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_354__paper_cancel_ordinary_invoice.sql")).execute(ds);
         store=new PaperBillingStore(jdbc,mock(BankPaperInvoices.class)); id=UUID.randomUUID().toString();
         var service=mock(PaperBillingService.class);
         when(service.payer(anyString())).thenReturn(new Payer("company","Тест","7707083893","773601001",""));
@@ -398,5 +399,34 @@ class PaperBillingSettlementMySqlIntegrationTest {
         var service=new PaperBillingService(store,cancelTargets,settings,cancelBank,new com.fasterxml.jackson.databind.ObjectMapper(),new DataSourceTransactionManager(jdbc.getDataSource()));
         assertThrows(org.springframework.web.server.ResponseStatusException.class,()->service.issue(target,new IssueRequest(new Payer("company","Тест","7707083893","773601001",""),true),cancelActor));
         verify(cancelBank,never()).supplierAccount();assertTrue(store.target(target).isEmpty());
+    }
+    @Test void ordinaryHandoffWaitsForCancellationAndNoticeThenCommitsOnce() throws Exception {
+        cancellationFixture();cancelWorkflow.request(id,new CancelRequest("Другой способ оплаты",true,true),cancelActor);
+        cancelWorkflow.resumeOrdinaryInvoice(id);verify(cancelTargets,never()).resumeOrdinaryInvoice(any());
+        drainCancel();assertEquals("PENDING",store.row(id).get("cancel_replacement_state"));
+        cancelWorkflow.resumeOrdinaryInvoice(id);verify(cancelTargets,never()).resumeOrdinaryInvoice(any());
+        jdbc.update("UPDATE paper_invoice_document SET cancel_message_delivery='UNKNOWN' WHERE id=?",id);
+        cancelWorkflow.resumeOrdinaryInvoice(id);verify(cancelTargets,never()).resumeOrdinaryInvoice(any());
+        jdbc.update("UPDATE paper_invoice_document SET cancel_message_delivery='SENT' WHERE id=?",id);
+        concurrently(()->cancelWorkflow.resumeOrdinaryInvoice(id),()->cancelWorkflow.resumeOrdinaryInvoice(id));
+        assertEquals("QUEUED",store.row(id).get("cancel_replacement_state"));
+        verify(cancelTargets,times(1)).resumeOrdinaryInvoice(new Target("ORDER",42L));
+        assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM paper_invoice_event WHERE event_key='ORDINARY_QUEUED'",Integer.class));
+    }
+    @Test void ordinaryQueueFailureRollsBackHandoffAndCanBeRetried() throws Exception {
+        cancellationFixture();cancelWorkflow.request(id,new CancelRequest("Другой способ оплаты",true,true),cancelActor);drainCancel();
+        jdbc.update("UPDATE paper_invoice_document SET cancel_message_delivery='SENT' WHERE id=?",id);
+        doAnswer(call->{jdbc.update("UPDATE orders SET paper_invoice_automation_hold=0 WHERE order_id=42");throw new IllegalStateException("queue unavailable");}).when(cancelTargets).resumeOrdinaryInvoice(any());
+        jdbc.update("UPDATE orders SET paper_invoice_automation_hold=1 WHERE order_id=42");
+        assertThrows(IllegalStateException.class,()->cancelWorkflow.resumeOrdinaryInvoice(id));
+        assertEquals("PENDING",store.row(id).get("cancel_replacement_state"));assertEquals(1,jdbc.queryForObject("SELECT paper_invoice_automation_hold FROM orders WHERE order_id=42",Integer.class));
+        doNothing().when(cancelTargets).resumeOrdinaryInvoice(any());cancelWorkflow.resumeOrdinaryInvoice(id);
+        assertEquals("QUEUED",store.row(id).get("cancel_replacement_state"));verify(cancelBank,times(2)).deleteDocument(any(),anyBoolean());
+    }
+    @Test void transferAfterCancellationBlocksOrdinaryHandoff() throws Exception {
+        cancellationFixture();cancelWorkflow.request(id,new CancelRequest("Другой способ оплаты",true,true),cancelActor);drainCancel();
+        jdbc.update("UPDATE paper_invoice_document SET cancel_message_delivery='SENT' WHERE id=?",id);
+        settlement.accept(receipt("late-before-handoff",250000,"7707083893"));cancelWorkflow.resumeOrdinaryInvoice(id);
+        assertEquals("REVIEW",store.row(id).get("cancel_replacement_state"));verify(cancelTargets,never()).resumeOrdinaryInvoice(any());verifyNoInteractions(finance);
     }
 }

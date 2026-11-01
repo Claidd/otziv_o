@@ -37,7 +37,8 @@ public class PaperBillingStore {
         return new Document((String)r.get("id"),(String)r.get("number"),((Number)r.get("amount_kopecks")).longValue(),
                 (String)r.get("stage"),(String)r.get("invoice_delivery"),(String)r.get("act_delivery"),(String)r.get("error_text"),
                 r.get("paid_at") instanceof java.sql.Timestamp ts ? ts.toLocalDateTime() : r.get("paid_at") instanceof LocalDateTime time ? time : null,
-                (String)r.get("cancel_message_delivery"),(String)r.get("cancel_reason"));
+                (String)r.get("cancel_message_delivery"),(String)r.get("cancel_reason"),
+                (String)r.get("cancel_replacement_state"),(String)r.get("cancel_replacement_error"));
     }
     public String composition(Target target) {
         if(target.kind().equals("COMMON_INVOICE")) return common.composition(target.id());

@@ -184,6 +184,17 @@ public class CommonInvoiceDeliveryService {
         return writeTransaction(() -> invoice(invoiceId));
     }
 
+    /** Joins the durable paper-cancellation handoff; provider delivery runs after commit. */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public void queueAfterPaperCancellation(long invoiceId) {
+        if(messageQueue.unresolved(invoiceId).isPresent())
+            throw new ResponseStatusException(HttpStatus.CONFLICT,"Прежняя отправка общего счёта требует сверки");
+        var prepared=preparePaymentMessage(invoiceId,false,false,false,null,false);
+        if(prepared==null || prepared.alreadyConfirmed())
+            throw new ResponseStatusException(HttpStatus.CONFLICT,"Отправка обычного счёта пока недоступна; будет повторена автоматически");
+        messageQueue.enqueue(prepared.paymentRouteChanged()?prepared:prepared.asPaymentRouteChanged(paymentRouteChangedMessage(prepared.message())));
+    }
+
     void sendInvoiceMessage(Long invoiceId, boolean manual, boolean paymentRouteChanged, boolean checkVisibility) {
         queuePaymentMessage(invoiceId, false, manual, false, null, paymentRouteChanged, checkVisibility);
     }

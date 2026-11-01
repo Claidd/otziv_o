@@ -11,6 +11,28 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
 class PaperInvoiceOrderAdapterTest {
+    @Test void ordinaryHandoffUsesFreshAutomaticRoutingAndAnImmediateDurableInvoice() {
+        var repository=mock(OrderRepository.class);var automation=mock(com.hunt.otziv.client_messages.api.PaperInvoiceAutomation.class);
+        var order=Order.builder().id(42L).status(new OrderStatus(6L,"Опубликовано")).clientMessageGeneration(3)
+                .invoicePaymentMode(com.hunt.otziv.payments.model.InvoicePaymentMode.OWNER_PAPER_INVOICE).paperInvoiceAutomationHold(true).build();
+        when(repository.findByIdForCounterUpdate(42L)).thenReturn(java.util.Optional.of(order));
+        var adapter=new PaperInvoiceOrderAdapter(repository,mock(JdbcTemplate.class),mock(ReviewRecoveryMessageHold.class),mock(com.hunt.otziv.p_products.status.service.OrderStatusTransitionService.class),automation,mock(OrderStatusService.class));
+        adapter.resumeOrdinaryInvoice(42);
+        assertEquals(com.hunt.otziv.payments.model.InvoicePaymentMode.AUTO_ROUTING,order.getInvoicePaymentMode());
+        assertFalse(order.isPaperInvoiceAutomationHold());assertEquals(4,order.getClientMessageGeneration());
+        assertNotNull(order.getStatusChangedAt());verify(automation).scheduleOrdinaryInvoice(42);
+        assertThrows(ResponseStatusException.class,()->adapter.resumeOrdinaryInvoice(42));
+    }
+    @Test void paymentReviewPreventsSwitchingToAutomaticRouting() {
+        var repository=mock(OrderRepository.class);var automation=mock(com.hunt.otziv.client_messages.api.PaperInvoiceAutomation.class);
+        var order=Order.builder().id(42L).status(new OrderStatus(6L,"Опубликовано"))
+                .invoicePaymentMode(com.hunt.otziv.payments.model.InvoicePaymentMode.OWNER_PAPER_INVOICE)
+                .paperInvoiceAutomationHold(true).paperInvoiceReviewHold(true).build();
+        when(repository.findByIdForCounterUpdate(42L)).thenReturn(java.util.Optional.of(order));
+        var adapter=new PaperInvoiceOrderAdapter(repository,mock(JdbcTemplate.class),mock(ReviewRecoveryMessageHold.class),mock(com.hunt.otziv.p_products.status.service.OrderStatusTransitionService.class),automation,mock(OrderStatusService.class));
+        assertThrows(ResponseStatusException.class,()->adapter.resumeOrdinaryInvoice(42));verifyNoInteractions(automation);
+        assertTrue(order.isPaperInvoiceAutomationHold());assertTrue(order.isBankPaperInvoice());
+    }
     @Test void deletedSourceDoesNotDiscardLateBankEvidenceOrRequireAnAutomationMutation() {
         var repository=mock(OrderRepository.class);var automation=mock(com.hunt.otziv.client_messages.api.PaperInvoiceAutomation.class);
         var adapter=new PaperInvoiceOrderAdapter(repository,mock(JdbcTemplate.class),mock(ReviewRecoveryMessageHold.class),mock(com.hunt.otziv.p_products.status.service.OrderStatusTransitionService.class),automation,mock(OrderStatusService.class));

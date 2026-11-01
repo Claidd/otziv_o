@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 
 export interface PaperTarget { kind: 'ORDER' | 'COMMON_INVOICE'; id: number; }
 interface Payer { type: string; name: string; inn: string; kpp: string; address: string; }
-interface Document { id: string; number: string; amountKopecks: number; stage: string; invoiceDelivery: string; actDelivery: string; error: string | null; paidAt: string | null; cancellationDelivery?: string; cancellationReason?: string; }
+interface Document { id: string; number: string; amountKopecks: number; stage: string; invoiceDelivery: string; actDelivery: string; error: string | null; paidAt: string | null; cancellationDelivery?: string; cancellationReason?: string; replacementState?: string; replacementError?: string; }
 interface Context { enabled: boolean; configured: boolean; lookupAvailable: boolean; accountLast4: string; companyId: number; companyTitle: string; amountKopecks: number; payer: Payer | null; document: Document | null; }
 interface Request { target: PaperTarget; fallback: () => void; refresh: () => void; }
 const request = signal<Request | null>(null);
@@ -33,21 +33,26 @@ export function openPaperInvoiceDialog(target: PaperTarget, fallback: () => void
               <p class="hint">{{ d.stage === 'CANCELLED' ? 'Счёт и акт отменены. Эти PDF сохранены для истории, оплачивать их не нужно.' : 'Документы и поступление оплаты проверяются автоматически. Закрытие окна не отменяет счёт и акт в банке.' }}</p>
               <button type="button" (click)="poll()">Обновить</button>
               @if (!d.stage.startsWith('CANCEL')) { <button type="button" (click)="checkPayment()" [disabled]="busy() || d.paidAt !== null">Проверить оплату</button> }
-              @if (canCancel()) { <button type="button" class="danger" (click)="cancelForm.set(true)" [disabled]="busy()">Отменить счёт и акт</button> }
+              @if (canCancel()) { <button type="button" class="danger" (click)="cancelForm.set(true)" [disabled]="busy()">Отменить и выставить обычный счёт</button> }
               @if (d.stage === 'CANCEL_REQUESTED') { <p class="hint">Проверяем поступления и удаляем оба документа в Точке. Напоминания остановлены. При поступлении денег отмена будет передана на сверку.</p> }
               @if (d.stage === 'CANCEL_REVIEW') { <p role="alert" class="error">Отмена требует ручной сверки. Новый счёт не выпускается, автоматическое закрытие оплаты остановлено.</p> }
               @if (d.stage === 'CANCELLED') {
                 <p>Причина отмены: {{ d.cancellationReason }}</p>
                 <p class="hint">Уведомление заказчику: {{ d.cancellationDelivery === 'SKIPPED' ? 'не требуется — документы не отправлялись' : delivery(d.cancellationDelivery || 'PENDING') }}.</p>
-                @if (!canReplace()) { <p class="hint">Новый счёт можно выпустить после подтверждения уведомления об отмене. Неизвестный результат доставки требует сверки.</p> }
-                <button type="button" class="primary" (click)="newInvoice()" [disabled]="busy() || !canReplace()">Выставить новый счёт</button>
+                @if (d.replacementState) {
+                  <p class="hint">{{ d.replacementState === 'QUEUED' ? 'Обычный счёт передан автоответчику. Получатель выбирается заново по текущим резервам. Отправка реквизитов и напоминания отслеживаются в карточке заказа.' : d.replacementState === 'REVIEW' ? 'Переход к обычному счёту остановлен. Нужна ручная сверка; новые реквизиты автоматически не отправляются.' : 'После подтверждения уведомления об отмене система подготовит обычный счёт по текущим резервам и отправит новые реквизиты. Закрытие окна не остановит процесс.' }}</p>
+                  @if (d.replacementError) { <p role="alert" class="error">{{ d.replacementError }}</p> }
+                } @else {
+                  @if (!canReplace()) { <p class="hint">Новый счёт можно выпустить после подтверждения уведомления об отмене. Неизвестный результат доставки требует сверки.</p> }
+                  <button type="button" class="primary" (click)="newInvoice()" [disabled]="busy() || !canReplace()">Выставить новый счёт</button>
+                }
               }
               @if (cancelForm()) {
                 <form class="cancel-form" (ngSubmit)="cancel()">
-                  <h3>Отмена банковских документов</h3>
-                  <p>Система проверит поступления и запросит удаление счёта и акта. Заказчик получит уведомление об отмене, если документы могли быть отправлены. Перевод, уже отправленный клиентом, может поступить позднее и потребует сверки.</p>
+                  <h3>Замена бумажного счёта обычным</h3>
+                  <p>Система проверит поступления, отменит счёт и акт в Точке и уведомит заказчика. Затем заново выберет сотрудника или владельца по доступным резервам, отправит новые реквизиты и возобновит автоответчик. Если обнаружено поступление или нужна сверка, переход остановится.</p>
                   <label>Причина отмены<textarea name="cancelReason" maxlength="500" [(ngModel)]="cancelReason" [disabled]="busy()"></textarea></label>
-                  <label class="check"><input name="cancelConfirmed" type="checkbox" [(ngModel)]="cancelConfirmed" [disabled]="busy()" /> Подтверждаю отмену счёта и акта</label>
+                  <label class="check"><input name="cancelConfirmed" type="checkbox" [(ngModel)]="cancelConfirmed" [disabled]="busy()" /> Подтверждаю отмену счёта и акта и отправку обычного счёта</label>
                   <div class="actions"><button type="button" (click)="cancelForm.set(false)" [disabled]="busy()">Вернуться</button><button type="submit" class="danger" [disabled]="busy() || !cancelConfirmed || !cancelReason.trim()">Подтвердить отмену</button></div>
                 </form>
               }
@@ -106,6 +111,7 @@ export class PaperInvoiceDialogComponent implements OnDestroy {
   cancelConfirmed = false;
   private lookupTicket = 0;
   private pollTicket = 0;
+  private pollFailed = false;
   readonly candidates = signal<Payer[]>([]);
   draft: Payer = { type: 'company', name: '', inn: '', kpp: '', address: '' };
   confirmed = false;
@@ -159,7 +165,7 @@ export class PaperInvoiceDialogComponent implements OnDestroy {
     if (this.busy() || !this.opened()) return null;
     if (this.lookupTimer) clearTimeout(this.lookupTimer); this.lookupTimer = null;
     ++this.lookupTicket;
-    this.mutating.set(true); this.busy.set(true); this.error.set('');
+    this.pollFailed=false;this.mutating.set(true); this.busy.set(true); this.error.set('');
     return this.ticket;
   }
   private finishMutation(ticket: number): boolean {
@@ -188,8 +194,8 @@ export class PaperInvoiceDialogComponent implements OnDestroy {
     const id = this.context()?.document?.id; const ticket = this.ticket; const pollTicket = ++this.pollTicket;
     if (!id) return;
     this.http.get<Document>(this.baseUrl + '/api/paper-invoices/documents/' + id).subscribe({
-      next: document => { if (ticket === this.ticket && pollTicket === this.pollTicket) { this.context.update(c => c ? { ...c, document } : c); if (['PAID','CANCEL_REVIEW'].includes(document.stage) || (document.stage==='CANCELLED' && ['SENT','SKIPPED','UNKNOWN'].includes(document.cancellationDelivery || ''))) this.stop(); } },
-      error: e => { if (ticket === this.ticket && pollTicket === this.pollTicket && !this.mutating()) this.failure(e); }
+      next: document => { if (ticket === this.ticket && pollTicket === this.pollTicket) { if(this.pollFailed && !this.mutating()) {this.error.set('');this.pollFailed=false;} this.context.update(c => c ? { ...c, document } : c); if (['PAID','CANCEL_REVIEW'].includes(document.stage) || (document.stage==='CANCELLED' && document.replacementState!=='PENDING' && ['SENT','SKIPPED','UNKNOWN'].includes(document.cancellationDelivery || ''))) this.stop(); } },
+      error: e => { if (ticket === this.ticket && pollTicket === this.pollTicket && !this.mutating()) {this.pollFailed=true;this.failure(e);} }
     });
   }
   private startPolling(): void { if (!this.timer) this.timer = setInterval(() => this.poll(), 3000); }
@@ -200,7 +206,7 @@ export class PaperInvoiceDialogComponent implements OnDestroy {
   cancel(): void {
     const d=this.context()?.document;if(!d || !this.canCancel() || !this.cancelConfirmed || !this.cancelReason.trim()) return;
     const ticket=this.beginMutation();if(ticket===null) return;++this.pollTicket;
-    this.http.post<Document>(this.baseUrl+'/api/paper-invoices/documents/'+d.id+'/cancel',{reason:this.cancelReason.trim(),confirmed:true}).subscribe({
+    this.http.post<Document>(this.baseUrl+'/api/paper-invoices/documents/'+d.id+'/cancel',{reason:this.cancelReason.trim(),confirmed:true,replaceWithOrdinary:true}).subscribe({
       next: document => {if(!this.finishMutation(ticket)) return;++this.pollTicket;this.cancelForm.set(false);this.context.update(c=>c?{...c,document}:c);this.startPolling();},
       error: e => {if(ticket===this.ticket) this.failure(e);}
     });
@@ -211,7 +217,7 @@ export class PaperInvoiceDialogComponent implements OnDestroy {
   }
   canReplace(): boolean {
     const document=this.context()?.document;
-    return document?.stage==='CANCELLED' && ['SENT','SKIPPED'].includes(document.cancellationDelivery || '');
+    return document?.stage==='CANCELLED' && !document.replacementState && ['SENT','SKIPPED'].includes(document.cancellationDelivery || '');
   }
   checkPayment(): void {
     const ticket = this.beginMutation(); if (ticket === null) return;

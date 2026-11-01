@@ -78,6 +78,7 @@ public class Order {
 
     @com.fasterxml.jackson.annotation.JsonIgnore
     public boolean isBankPaperInvoice() { return invoicePaymentMode == InvoicePaymentMode.OWNER_PAPER_INVOICE; }
+    public void useAutomaticInvoicePaymentMode() { invoicePaymentMode=InvoicePaymentMode.AUTO_ROUTING; }
 
     @Column(name = "order_zametka")
     private String zametka;

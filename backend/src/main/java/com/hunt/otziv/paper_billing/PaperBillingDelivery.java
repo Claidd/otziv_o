@@ -26,7 +26,7 @@ public class PaperBillingDelivery {
     public ClientMessageSendResult sendCancellation(Map<String,Object> r) {
         return sendText(r,"cancellation","Счёт № "+r.get("number")+" и акт выполненных работ отменены.\n\n"
                 +"Пожалуйста, не оплачивайте этот счёт. Если перевод уже отправлен, сообщите об этом в чате — мы проверим поступление.\n"
-                +"При необходимости направим новый счёт отдельным сообщением.");
+                +("PENDING".equals(r.get("cancel_replacement_state"))?"Новые реквизиты для оплаты направим отдельным сообщением. Дождитесь их, пожалуйста.":"При необходимости направим новый счёт отдельным сообщением."));
     }
     private ClientMessageSendResult sendText(Map<String,Object> r,String kind,String text) {
         if (!settings.isDeliveryEnabled()) return ClientMessageSendResult.failed("not_ready","Отправка документов выключена");

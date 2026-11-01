@@ -33,6 +33,7 @@ import lombok.Setter;
         }
 )
 public class CommonInvoice {
+    public void useAutomaticInvoicePaymentMode() { invoicePaymentMode=InvoicePaymentMode.AUTO_ROUTING; }
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

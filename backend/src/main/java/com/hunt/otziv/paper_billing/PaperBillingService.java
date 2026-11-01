@@ -87,6 +87,8 @@ public class PaperBillingService {
     }
     private void requireCancellationNotice(Target target) {
         store.latest(target).filter(r->r.get("cancelled_at")!=null).ifPresent(row->{
+            if("PENDING".equals(row.get("cancel_replacement_state")))
+                throw problem("После отмены уже запрошен обычный счёт. Дождитесь завершения перехода");
             if(!Set.of("SENT","SKIPPED").contains(Objects.toString(row.get("cancel_message_delivery"),"")))
                 throw problem("Дождитесь подтверждения уведомления заказчика об отмене прежнего счёта. При неизвестном результате доставки нужна сверка");
         });

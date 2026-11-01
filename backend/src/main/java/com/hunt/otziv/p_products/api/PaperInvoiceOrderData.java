@@ -10,6 +10,7 @@ public interface PaperInvoiceOrderData {
     void cancelled(long orderId,boolean commonMember);
     void requireUnpaidForCancellation(long orderId);
     void holdForPaymentReview(long orderId);
+    void resumeOrdinaryInvoice(long orderId);
     record StaffContext(Long managerId,String company,String filial) {}
     StaffContext staffContext(long orderId);
 }

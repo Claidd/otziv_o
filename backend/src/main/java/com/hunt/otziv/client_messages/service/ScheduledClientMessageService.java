@@ -1269,6 +1269,18 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
         synchronizeOrderAutomationStates(order);
     }
 
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void scheduleOrdinaryInvoice(long orderId) {
+        if(!usesBankPaymentInstructionSource())
+            throw new IllegalStateException("Автоматический выбор получателя обычного счёта выключен");
+        Order order=orderRepository.findByIdForCounterUpdate(orderId).orElseThrow();
+        if(order.isPaperInvoiceAutomationHold() || order.isPaperInvoiceReviewHold()
+                || !STATUS_PUBLIC.equals(statusTitle(order)) || isManagedByActiveCommonInvoice(order))
+            throw new IllegalStateException("Заказ не готов к выставлению обычного счёта");
+        ensureOrderStateNow(ClientMessageScenario.PAYMENT_INVOICE_RETRY,order);
+    }
+
     /**
      * Enqueues a one-shot payment reminder for an order reopened after a
      * provider refund/reversal. The order intentionally remains in "Напоминание";

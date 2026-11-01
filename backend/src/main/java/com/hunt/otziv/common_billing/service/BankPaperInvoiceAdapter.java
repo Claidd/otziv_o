@@ -62,7 +62,7 @@ public class BankPaperInvoiceAdapter implements BankPaperInvoices {
     private java.util.List<Long> memberIds(long id) {
         return jdbc.queryForList("SELECT order_id FROM common_invoice_orders WHERE invoice_id=? AND active_membership=1 ORDER BY order_id",Long.class,id);
     }
-    @Transactional
+    @Transactional(noRollbackFor=ResponseStatusException.class)
     public void requireUnpaidForCancellation(long id) {
         var invoice=delivery.lockedInvoiceAfterStandalonePaymentPrelude(id).invoice();
         if(invoice.getPaidKopecks()!=0 || invoice.getStatus()==com.hunt.otziv.common_billing.model.CommonInvoiceStatus.PAID)
@@ -93,6 +93,21 @@ public class BankPaperInvoiceAdapter implements BankPaperInvoices {
         invoice.setStatus(com.hunt.otziv.common_billing.model.CommonInvoiceStatus.READY);
         invoices.save(invoice);
         for(long order:memberIds(id)) orders.cancelled(order,true);
+    }
+    @Transactional
+    public void resumeOrdinaryInvoice(long id) {
+        var invoice=delivery.lockedInvoiceAfterStandalonePaymentPrelude(id).invoice();
+        if(invoice.isPaperInvoiceReviewHold() || !invoice.isPaperInvoiceAutomationHold()
+                || !CommonInvoiceRouteState.isOwnerPaperInvoice(invoice) || invoice.getPaidKopecks()!=0
+                || invoice.getPaperBankDocumentId()!=null || invoice.getPaperInvoiceIssuedAt()!=null
+                || invoice.getStatus()!=com.hunt.otziv.common_billing.model.CommonInvoiceStatus.READY)
+            throw problem("Общий счёт изменился или требует сверки перед новым счётом");
+        invoice.useAutomaticInvoicePaymentMode();
+        invoice.setPaperInvoiceAutomationHold(false);
+        invoice.setLastError(CommonInvoiceDeliveryService.PAYMENT_ROUTE_CHANGED_MESSAGE_PENDING);
+        invoices.save(invoice);
+        for(long order:memberIds(id)) orders.holdAutomation(order,false);
+        delivery.queueAfterPaperCancellation(id);
     }
     @Transactional
     public void settle(long id,long amount,String payment) { settlement.applyVerifiedPaperBankPayment(id,amount,payment);synchronizeOrders(id); }
