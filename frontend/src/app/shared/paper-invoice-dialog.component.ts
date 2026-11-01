@@ -2,11 +2,14 @@ import { Component, effect, inject, OnDestroy, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 
-export interface PaperTarget { kind: 'ORDER' | 'COMMON_INVOICE'; id: number; }
+export interface PaperTarget { kind: 'ORDER' | 'COMMON_INVOICE' | 'COMMON_PART'; id: number; }
 interface Payer { type: string; name: string; inn: string; kpp: string; address: string; }
-interface Document { id: string; number: string; amountKopecks: number; stage: string; invoiceDelivery: string; actDelivery: string; error: string | null; paidAt: string | null; cancellationDelivery?: string; cancellationReason?: string; replacementState?: string; replacementError?: string; }
-interface Context { enabled: boolean; configured: boolean; lookupAvailable: boolean; accountLast4: string; companyId: number; companyTitle: string; amountKopecks: number; payer: Payer | null; document: Document | null; }
-interface Request { target: PaperTarget; fallback: () => void; refresh: () => void; }
+export interface PaperDocument { id: string; number: string; amountKopecks: number; stage: string; invoiceDelivery: string; actDelivery: string; error: string | null; paidAt: string | null; cancellationDelivery?: string; cancellationReason?: string; replacementState?: string; replacementError?: string; targetKind?:string;targetId?:number;payer?:Payer;orderIds?:number[]; }
+type Document = PaperDocument;
+interface Position {orderId:number;companyId:number;companyTitle:string;amountKopecks:number;ready:boolean;paid:boolean;documentId:string|null;}
+interface Choice {id:string;companyId:number;payer:Payer;primary:boolean;version?:number;lastUsedAt?:string;}
+interface Context { enabled: boolean; configured: boolean; lookupAvailable: boolean; accountLast4: string; companyId: number; companyTitle: string; amountKopecks: number; payer: Payer | null; document: Document | null; payers?:Choice[];positions?:Position[];documents?:Document[];parentInvoiceId?:number;groupUrl?:string;automaticError?:string; }
+interface Request { target: PaperTarget; fallback: () => void; refresh: () => void; selectedOrder?:number; }
 const request = signal<Request | null>(null);
 export function openPaperInvoiceDialog(target: PaperTarget, fallback: () => void = () => {}, refresh: () => void = () => {}): void {
   request.set({ target, fallback, refresh });
@@ -22,7 +25,9 @@ export function openPaperInvoiceDialog(target: PaperTarget, fallback: () => void
           @if (error()) { <p role="alert" class="error">{{ error() }}</p> }
           @if (context(); as c) {
             <p>{{ c.companyTitle }}</p>
-            @if (!c.document || replacement()) { <p>Сумма: {{ (c.amountKopecks / 100).toLocaleString('ru-RU') }} ₽</p> }
+            @if (!c.document || replacement()) { <p>Сумма: {{ (selectedAmount() / 100).toLocaleString('ru-RU') }} ₽</p> }
+            @if(c.groupUrl) { <p class="hint">Группа доставки: {{c.groupUrl}}</p> }
+            @if(c.automaticError) {<p class="error">Автоматический выпуск: {{c.automaticError}}</p>}
             @if (!c.configured) { <p class="error">Владелец ещё не настроил выпуск документов в Точке.</p> }
             @if (replacement() ? null : c.document; as d) {
               <h3>Счёт №{{ d.number }}</h3>
@@ -33,7 +38,7 @@ export function openPaperInvoiceDialog(target: PaperTarget, fallback: () => void
               <p class="hint">{{ d.stage === 'CANCELLED' ? 'Счёт и акт отменены. Эти PDF сохранены для истории, оплачивать их не нужно.' : 'Документы и поступление оплаты проверяются автоматически. Закрытие окна не отменяет счёт и акт в банке.' }}</p>
               <button type="button" (click)="poll()">Обновить</button>
               @if (!d.stage.startsWith('CANCEL')) { <button type="button" (click)="checkPayment()" [disabled]="busy() || d.paidAt !== null">Проверить оплату</button> }
-              @if (canCancel()) { <button type="button" class="danger" (click)="cancelForm.set(true)" [disabled]="busy()">Отменить и выставить обычный счёт</button> }
+              @if (canCancel()) { <button type="button" class="danger" (click)="cancelForm.set(true)" [disabled]="busy()">{{isPartDocument()?'Отменить этот счёт и акт':'Отменить и выставить обычный счёт'}}</button> }
               @if (d.stage === 'CANCEL_REQUESTED') { <p class="hint">Проверяем поступления и удаляем оба документа в Точке. Напоминания остановлены. При поступлении денег отмена будет передана на сверку.</p> }
               @if (d.stage === 'CANCEL_REVIEW') { <p role="alert" class="error">Отмена требует ручной сверки. Новый счёт не выпускается, автоматическое закрытие оплаты остановлено.</p> }
               @if (d.stage === 'CANCELLED') {
@@ -49,15 +54,25 @@ export function openPaperInvoiceDialog(target: PaperTarget, fallback: () => void
               }
               @if (cancelForm()) {
                 <form class="cancel-form" (ngSubmit)="cancel()">
-                  <h3>Замена бумажного счёта обычным</h3>
-                  <p>Система проверит поступления, отменит счёт и акт в Точке и уведомит заказчика. Затем заново выберет сотрудника или владельца по доступным резервам, отправит новые реквизиты и возобновит автоответчик. Если обнаружено поступление или нужна сверка, переход остановится.</p>
+                  <h3>{{isPartDocument()?'Отмена выбранного комплекта':'Замена бумажного счёта обычным'}}</h3>
+                  <p>Система проверит поступления, отменит счёт и акт в Точке и уведомит заказчика. @if(isPartDocument()) { Остальные счета и заказы сохранятся. Освобождённые заказы можно будет включить в новый бумажный счёт. } @else { Затем заново выберет сотрудника или владельца по доступным резервам, отправит новые реквизиты и возобновит автоответчик. } Если обнаружено поступление или нужна сверка, отмена остановится.</p>
                   <label>Причина отмены<textarea name="cancelReason" maxlength="500" [(ngModel)]="cancelReason" [disabled]="busy()"></textarea></label>
-                  <label class="check"><input name="cancelConfirmed" type="checkbox" [(ngModel)]="cancelConfirmed" [disabled]="busy()" /> Подтверждаю отмену счёта и акта и отправку обычного счёта</label>
+                  <label class="check"><input name="cancelConfirmed" type="checkbox" [(ngModel)]="cancelConfirmed" [disabled]="busy()" /> Подтверждаю отмену счёта и акта @if(!isPartDocument()){ и отправку обычного счёта }</label>
                   <div class="actions"><button type="button" (click)="cancelForm.set(false)" [disabled]="busy()">Вернуться</button><button type="submit" class="danger" [disabled]="busy() || !cancelConfirmed || !cancelReason.trim()">Подтвердить отмену</button></div>
                 </form>
               }
             } @else {
               <form (ngSubmit)="issue()">
+                @if(isCommonSelection()) {
+                  <fieldset><legend>Заказы для этого счёта</legend>
+                    @for(p of c.positions || []; track p.orderId) {
+                      <label class="check"><input type="checkbox" [name]="'paper-order-'+p.orderId" [checked]="selectedOrders().includes(p.orderId)" (change)="toggleOrder(p.orderId)" [disabled]="busy() || !p.ready || p.paid || !!p.documentId">{{p.companyTitle}} · заказ №{{p.orderId}} · {{(p.amountKopecks/100).toLocaleString('ru-RU')}} ₽ @if(p.paid){ · оплачен } @else if(p.documentId){ · уже выставлен счёт } @else if(!p.ready){ · ещё не готов }</label>
+                    }
+                  </fieldset>
+                }
+                @if(c.payers?.length) {
+                  <label>Сохранённый плательщик<select name="savedPayer" [ngModel]="selectedChoice" (ngModelChange)="chooseSaved($event)" [disabled]="busy()"><option value="">Новый плательщик / ввести ИНН</option>@for(p of c.payers || [];track p.id) {<option [value]="p.id">{{p.payer.name}} · ИНН {{p.payer.inn}} @if(p.payer.kpp){ · КПП {{p.payer.kpp}} } @if(p.primary){ · основной } </option>}</select></label>
+                }
                 <label>ИНН плательщика<input [disabled]="mutating()" name="inn" inputmode="numeric" maxlength="12" autocomplete="off" [ngModel]="draft.inn" (ngModelChange)="innChanged($event)" /></label>
                 <button type="button" (click)="lookup()" [disabled]="busy() || !c.lookupAvailable">Найти по ИНН</button>
                 @if (!c.lookupAvailable) { <p class="hint">Автозаполнение ещё не подключено. Реквизиты можно заполнить вручную.</p> }
@@ -67,14 +82,15 @@ export function openPaperInvoiceDialog(target: PaperTarget, fallback: () => void
                     @for (p of candidates(); track $index) { <option [value]="$index">{{ p.name }} · КПП {{ p.kpp || 'не применяется' }}</option> }
                   </select></label>
                 }
-                <label>Тип плательщика<select [disabled]="busy()" name="type" [(ngModel)]="draft.type" (ngModelChange)="typeChanged()"><option value="company">Организация</option><option value="ip">ИП</option></select></label>
-                <label>Полное наименование / ФИО ИП<input [disabled]="busy()" name="name" maxlength="300" [(ngModel)]="draft.name" /></label>
-                @if (draft.type === 'company') { <label>КПП<input [disabled]="busy()" name="kpp" maxlength="9" [(ngModel)]="draft.kpp" /></label> }
-                <label>Юридический адрес (если указан в реквизитах)<textarea [disabled]="busy()" name="address" maxlength="1000" [(ngModel)]="draft.address"></textarea></label>
+                <label>Тип плательщика<select [disabled]="busy() || !!selectedChoice" name="type" [(ngModel)]="draft.type" (ngModelChange)="typeChanged()"><option value="company">Организация</option><option value="ip">ИП</option></select></label>
+                <label>Полное наименование / ФИО ИП<input [disabled]="busy() || !!selectedChoice" name="name" maxlength="300" [(ngModel)]="draft.name" /></label>
+                @if (draft.type === 'company') { <label>КПП<input [disabled]="busy() || !!selectedChoice" name="kpp" maxlength="9" [(ngModel)]="draft.kpp" /></label> }
+                <label>Юридический адрес (если указан в реквизитах)<textarea [disabled]="busy() || !!selectedChoice" name="address" maxlength="1000" [(ngModel)]="draft.address"></textarea></label>
+                @if(selectedChoice){<p class="hint">Изменить сохранённые реквизиты можно в редакторе компании. Для другого плательщика выберите «Новый плательщик».</p>}
                 <p class="hint">Расчётный счёт клиента вводить не требуется. Счёт получателя: …{{ c.accountLast4 }}.</p>
                 <label class="check"><input [disabled]="busy()" name="confirmed" type="checkbox" [(ngModel)]="confirmed" /> Клиент ещё не оплатил по прежним реквизитам</label>
-                <p class="hint">Счёт и акт формируются по выполненным работам. Введённые реквизиты сохранятся для следующих заказов.</p>
-                <div class="actions"><button type="button" (click)="save()" [disabled]="busy()">Сохранить реквизиты</button><button class="primary" type="submit" [disabled]="busy() || !confirmed || !c.configured">{{ busy() ? 'Сохраняем…' : 'Сформировать и отправить' }}</button></div>
+                <p class="hint">Реквизиты сохранятся у компаний выбранных заказов. Бумажный режим и плательщик перенесутся в следующие заказы; готовые неоплаченные работы будут выставляться автоматически. Настройку можно изменить в редакторе компании.</p>
+                <div class="actions"><button type="button" (click)="save()" [disabled]="busy() || isCommonSelection() || !!selectedChoice">Сохранить реквизиты</button><button class="primary" type="submit" [disabled]="busy() || !confirmed || !c.configured || (isCommonSelection() && !selectedOrders().length)">{{ busy() ? 'Сохраняем…' : 'Сформировать и отправить' }}</button></div>
               </form>
             }
           } @else { <p>Загрузка…</p> }
@@ -115,6 +131,9 @@ export class PaperInvoiceDialogComponent implements OnDestroy {
   readonly candidates = signal<Payer[]>([]);
   draft: Payer = { type: 'company', name: '', inn: '', kpp: '', address: '' };
   confirmed = false;
+  selectedChoice = '';
+  readonly selectedOrders = signal<number[]>([]);
+  private requestKey = '';
   private ticket = 0;
   private timer: ReturnType<typeof setInterval> | null = null;
   private lookupTimer: ReturnType<typeof setTimeout> | null = null;
@@ -124,21 +143,41 @@ export class PaperInvoiceDialogComponent implements OnDestroy {
     this.stop(); this.busy.set(false); this.mutating.set(false); ++this.lookupTicket; const ticket = ++this.ticket;
     this.opened.set(true); this.context.set(null); this.error.set(''); this.candidates.set([]); this.confirmed = false;
     this.cancelForm.set(false);this.replacement.set(false);this.cancelReason='';this.cancelConfirmed=false;
+    this.selectedOrders.set([]);this.selectedChoice='';this.requestKey=crypto.randomUUID();
     this.http.get<Context>(this.path() + '/context').subscribe({
       next: c => {
         if (ticket !== this.ticket) return;
         if (!c.enabled) { this.opened.set(false); request.set(null); r.fallback(); return; }
+        if(r.target.kind==='ORDER' && c.parentInvoiceId){
+          const order=r.target.id;
+          request.set({...r,target:{kind:'COMMON_INVOICE',id:c.parentInvoiceId},selectedOrder:order});return;
+        }
+        if(r.target.kind==='COMMON_INVOICE' && (!c.document || c.document.stage==='CANCELLED')) c={...c,document:null};
         this.context.set(c);
-        this.draft = c.payer ? { ...c.payer } : { type: 'company', name: '', inn: '', kpp: '', address: '' };
+        if(r.selectedOrder && c.positions?.some(p=>p.orderId===r.selectedOrder && p.ready && !p.paid && !p.documentId))this.selectedOrders.set([r.selectedOrder]);
+        this.draft = r.target.kind!=='COMMON_INVOICE' && c.payer ? { ...c.payer } : { type: 'company', name: '', inn: '', kpp: '', address: '' };
+        if(r.target.kind!=='COMMON_INVOICE')this.selectedChoice=c.payers?.find(p=>p.primary)?.id || '';
         if (c.document) this.startPolling();
       }, error: e => { if (ticket === this.ticket) this.failure(e); }
     });
   });
   private path(): string { const t = request()!.target; return this.baseUrl + '/api/paper-invoices/' + t.kind + '/' + t.id; }
+  isCommonSelection(): boolean {return request()?.target.kind==='COMMON_INVOICE' && !this.context()?.document;}
+  isPartDocument():boolean {return this.context()?.document?.targetKind==='COMMON_PART' || request()?.target.kind==='COMMON_PART';}
+  selectedAmount():number {return this.isCommonSelection()?(this.context()?.positions || []).filter(p=>this.selectedOrders().includes(p.orderId)).reduce((sum,p)=>sum+p.amountKopecks,0):(this.context()?.amountKopecks || 0);}
+  toggleOrder(id:number):void {
+    if(this.busy())return;const p=this.context()?.positions?.find(p=>p.orderId===id);if(!p || !p.ready || p.paid || p.documentId)return;
+    this.selectedOrders.update(ids=>ids.includes(id)?ids.filter(i=>i!==id):[...ids,id]);
+  }
+  chooseSaved(id:string):void {
+    if(this.busy())return;const saved=this.context()?.payers?.find(p=>p.id===id);++this.lookupTicket;this.selectedChoice=id;this.candidates.set([]);
+    this.draft=saved?{...saved.payer}:{type:'company',name:'',inn:'',kpp:'',address:''};
+  }
   private failure(e: any): void { this.busy.set(false); this.mutating.set(false); this.error.set(e?.error?.detail || e?.error?.message || 'Не удалось выполнить действие. Проверьте соединение и обновите данные.'); }
   innChanged(value: string): void {
     if (this.mutating()) return;
     ++this.lookupTicket;
+    this.selectedChoice='';
     this.draft = { type: 'company', name: '', inn: value.replace(/\D/g, ''), kpp: '', address: '' };
     this.busy.set(false); this.error.set(''); this.candidates.set([]);
     if (this.lookupTimer) clearTimeout(this.lookupTimer);
@@ -181,8 +220,10 @@ export class PaperInvoiceDialogComponent implements OnDestroy {
   }
   issue(): void {
     if (!this.confirmed) return;
+    if(this.isCommonSelection() && !this.selectedOrders().length) {this.error.set('Выберите заказы для счёта');return;}
     const ticket = this.beginMutation(); if (ticket === null) return;
-    this.http.post<Document>(this.path() + '/issue', { payer: { ...this.draft }, confirmedUnpaid: true }).subscribe({
+    const choice=this.context()?.payers?.find(p=>p.id===this.selectedChoice && !p.id.startsWith('history:'));
+    this.http.post<Document>(this.path() + '/issue', { payer: { ...this.draft }, confirmedUnpaid: true,orderIds:this.selectedOrders(),requestKey:this.requestKey,payerChoiceId:choice?.id,payerChoiceVersion:choice?.version }).subscribe({
       next: document => {
         if (!this.finishMutation(ticket)) return;
         this.replacement.set(false);
@@ -206,13 +247,18 @@ export class PaperInvoiceDialogComponent implements OnDestroy {
   cancel(): void {
     const d=this.context()?.document;if(!d || !this.canCancel() || !this.cancelConfirmed || !this.cancelReason.trim()) return;
     const ticket=this.beginMutation();if(ticket===null) return;++this.pollTicket;
-    this.http.post<Document>(this.baseUrl+'/api/paper-invoices/documents/'+d.id+'/cancel',{reason:this.cancelReason.trim(),confirmed:true,replaceWithOrdinary:true}).subscribe({
+    this.http.post<Document>(this.baseUrl+'/api/paper-invoices/documents/'+d.id+'/cancel',{reason:this.cancelReason.trim(),confirmed:true,replaceWithOrdinary:!this.isPartDocument()}).subscribe({
       next: document => {if(!this.finishMutation(ticket)) return;++this.pollTicket;this.cancelForm.set(false);this.context.update(c=>c?{...c,document}:c);this.startPolling();},
       error: e => {if(ticket===this.ticket) this.failure(e);}
     });
   }
   newInvoice(): void {
     if(this.busy() || !this.canReplace()) return;
+    if(this.isPartDocument()) {
+      const current=request();const parent=current?.target.kind==='COMMON_INVOICE'?current.target.id:this.context()?.parentInvoiceId;
+      if(parent && current)openPaperInvoiceDialog({kind:'COMMON_INVOICE',id:parent},current.fallback,current.refresh);
+      return;
+    }
     this.stop();++this.pollTicket;this.confirmed=false;this.replacement.set(true);
   }
   canReplace(): boolean {

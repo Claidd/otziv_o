@@ -10,7 +10,7 @@ public final class PaperBillingModels {
     private PaperBillingModels() {}
     public record Target(String kind, Long id) {
         public Target {
-            if (!List.of("ORDER","COMMON_INVOICE").contains(kind == null ? "" : kind) || id == null || id <= 0)
+            if (!List.of("ORDER","COMMON_INVOICE","COMMON_PART").contains(kind == null ? "" : kind) || id == null || id <= 0)
                 throw problem("Некорректный заказ или общий счёт");
         }
     }
@@ -28,15 +28,25 @@ public final class PaperBillingModels {
             if (address.length()>1000) throw problem("Адрес слишком длинный");
         }
     }
-    public record IssueRequest(Payer payer, boolean confirmedUnpaid) {}
+    public record IssueRequest(Payer payer, boolean confirmedUnpaid,List<Long> orderIds,String requestKey,String payerChoiceId,Long payerChoiceVersion) {
+        public IssueRequest(Payer payer,boolean confirmedUnpaid) {this(payer,confirmedUnpaid,List.of(),null,null,null);}
+        public IssueRequest(Payer payer,boolean confirmedUnpaid,List<Long> orders,String key) {this(payer,confirmedUnpaid,orders,key,null,null);}
+    }
     public record CancelRequest(String reason, boolean confirmed, boolean replaceWithOrdinary) {
         public CancelRequest(String reason,boolean confirmed) {this(reason,confirmed,false);}
     }
     public record Context(boolean enabled, boolean configured, boolean lookupAvailable, String accountLast4,
-            long companyId, String companyTitle, long amountKopecks, Payer payer, Document document) {}
+            long companyId, String companyTitle, long amountKopecks, Payer payer, Document document,
+            List<BillingPayerService.Choice> payers,List<com.hunt.otziv.common_billing.api.BankPaperInvoiceParts.Position> positions,List<Document> documents,
+            Long parentInvoiceId,String groupUrl,String automaticError) {}
     public record Document(String id, String number, long amountKopecks, String stage,
             String invoiceDelivery, String actDelivery, String error, LocalDateTime paidAt,String cancellationDelivery,String cancellationReason,
-            String replacementState,String replacementError) {}
+            String replacementState,String replacementError,String targetKind,Long targetId,Payer payer,List<Long> orderIds) {
+        public Document(String id,String number,long amount,String stage,String invoiceDelivery,String actDelivery,String error,
+                LocalDateTime paidAt,String cancellationDelivery,String cancellationReason,String replacementState,String replacementError) {
+            this(id,number,amount,stage,invoiceDelivery,actDelivery,error,paidAt,cancellationDelivery,cancellationReason,replacementState,replacementError,null,null,null,List.of());
+        }
+    }
     public record BankReceipt(String customerCode, String accountId, String paymentId, String payerInn,
             long amountKopecks, String purpose) {}
     public record Lookup(List<Payer> candidates) {}

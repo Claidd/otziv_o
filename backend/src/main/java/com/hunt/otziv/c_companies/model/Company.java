@@ -36,6 +36,11 @@ public class Company {
     @Column(name = "row_version", nullable = false)
     private long rowVersion;
 
+    @Column(name="paper_billing_automatic",nullable=false,updatable=false)
+    private boolean paperBillingAutomatic;
+    @Column(name="paper_billing_payer_choice_id",length=36,updatable=false)
+    private String paperBillingPayerChoiceId;
+
     //    название компании
     @Column(name = "company_title")
     private String title;

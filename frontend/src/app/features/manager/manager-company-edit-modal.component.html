@@ -101,6 +101,10 @@
               >
             </label>
 
+            <section class="lead-edit-field lead-edit-field--wide company-edit-section">
+              <button type="button" class="secondary" (click)="showPayers = !showPayers">Реквизиты для счёта · необязательно</button>
+              @if(showPayers) { <app-billing-payer-editor [companyId]="company.id" /> }
+            </section>
             <section class="lead-edit-field lead-edit-field--wide company-edit-section company-edit-section--filials">
               <span>Филиалы</span>
               <div class="company-edit-list">

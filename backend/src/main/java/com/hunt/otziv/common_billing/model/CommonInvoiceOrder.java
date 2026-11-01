@@ -21,6 +21,7 @@ import lombok.Setter;
 @Setter
 @Table(name = "common_invoice_orders")
 public class CommonInvoiceOrder {
+    public Long orderId() {return order==null?null:order.getId();}
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

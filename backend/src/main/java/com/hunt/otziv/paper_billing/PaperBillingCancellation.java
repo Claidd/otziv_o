@@ -40,6 +40,8 @@ public class PaperBillingCancellation {
         if(request==null || !request.confirmed() || clean(request.reason()).isBlank() || clean(request.reason()).length()>500)
             throw problem("Укажите причину и подтвердите отмену счёта и акта");
         var before=service.authorized(id,actor);
+        if("COMMON_PART".equals(before.get("target_kind")) && request.replaceWithOrdinary())
+            throw problem("Для выбранных заказов отмените только этот комплект, затем выберите плательщика для нового. Другие счета общего счёта сохранятся");
         targets.authorizeCancellation(target(before),before.get("payment_link_id") instanceof Number n?n.longValue():null);
         return tx().execute(status -> {
             var row=locked(id);
@@ -48,6 +50,7 @@ public class PaperBillingCancellation {
             targets.requireUnpaidForCancellation(target(row));
             String stage=(String)row.get("stage");
             if(stage.contains("CREATING") || "PAID".equals(stage)
+                    || "SENDING".equals(row.get("paper_reminder_state"))
                     || List.of("message_delivery","invoice_delivery","act_delivery").stream().anyMatch(c -> "SENDING".equals(row.get(c))))
                 throw problem("Создание или отправка документа ещё не завершены. Обновите состояние перед отменой; неизвестный результат требует сверки");
             if(!Set.of("PENDING","INVOICE_CREATED","ACT_CREATED","FILES_READY","WAITING_PAYMENT","NEEDS_REVIEW").contains(stage))

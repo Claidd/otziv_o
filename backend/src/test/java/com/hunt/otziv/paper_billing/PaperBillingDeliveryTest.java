@@ -56,6 +56,12 @@ class PaperBillingDeliveryTest {
                 eq("Акт выполненных работ — PB-10-12345678.pdf"),eq("paper:doc:act"));
         verifyNoInteractions(messages);
     }
+    @Test void paymentBeforePdfDeliveryDoesNotAskTheCustomerToPayAgain() {
+        var paid=new java.util.HashMap<String,Object>(row());paid.put("paid_at",java.time.LocalDateTime.now());
+        String caption=PaperBillingDelivery.instructions(paid);
+        assertTrue(caption.contains("получена"));assertTrue(caption.contains("1 000,50 ₽"));assertTrue(caption.contains("акт выполненных работ"));
+        assertFalse(caption.contains("Пожалуйста, оплатите"));assertFalse(caption.contains("К оплате"));
+    }
     @Test void pausedOutboundMessagesNeverSendEvenWithDeliveryEnabled() {
         settings.setDeliveryEnabled(true);
         assertFalse(delivery.send(row(),false).sent());

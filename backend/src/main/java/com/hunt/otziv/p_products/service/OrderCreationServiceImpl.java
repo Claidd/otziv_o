@@ -105,7 +105,11 @@ public class OrderCreationServiceImpl implements OrderCreationService {
                 repeatTerms.total(),
                 repeatTerms.reviews()
         );
-        repeated.setInvoicePaymentMode(sourceOrder.getInvoicePaymentMode());
+        if(!sourceOrder.isAutomaticInvoicePaymentMode()
+                || sourceOrder.getPaperBillingPayerChoiceId()!=null
+                || sourceOrder.getCompany()==null || !sourceOrder.getCompany().isPaperBillingAutomatic()) {
+            repeated.inheritInvoicePreferences(sourceOrder);
+        }
         return orderRepository.save(repeated);
     }
 
@@ -116,6 +120,10 @@ public class OrderCreationServiceImpl implements OrderCreationService {
                                               List<RepeatReviewTerm> repeatReviewTerms) {
         try {
             Order order = saveOrder(orderDTO, summaryProduct, total);
+            if(order.getCompany()!=null && order.getCompany().isPaperBillingAutomatic()) {
+                order.useBankPaperInvoicePaymentMode();
+                order.setPaperBillingPayerChoiceId(order.getCompany().getPaperBillingPayerChoiceId());
+            }
             log.info("1. Сохранили ORDER");
 
             // 2. Создаём и сохраняем orderDetails без отзывов

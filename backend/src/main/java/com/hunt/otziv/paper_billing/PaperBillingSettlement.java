@@ -24,6 +24,7 @@ public class PaperBillingSettlement {
     private final TochkaWebhookJwtVerifier verifier;
     private final PlatformTransactionManager transactions;
     private final com.hunt.otziv.client_messages.api.PaperInvoiceAutomation automation;
+    @org.springframework.beans.factory.annotation.Autowired private com.hunt.otziv.common_billing.api.BankPaperInvoiceParts parts;
     private static final Pattern NUMBER=Pattern.compile("(?<![A-Z0-9-])PB-[0-9]+-[A-F0-9]{8}(?![A-Z0-9-])",Pattern.CASE_INSENSITIVE);
     public void webhook(String raw) {
         var claims=verifier.verifyIncomingPayment(raw);
@@ -68,6 +69,7 @@ public class PaperBillingSettlement {
                 // Canonical order locks before the document lock, including all members of a common invoice.
                 if (candidate.get("target_kind").equals("ORDER"))
                     store.jdbc().queryForList("SELECT order_id FROM orders WHERE order_id=? FOR UPDATE",candidate.get("target_id"));
+                else if("COMMON_PART".equals(candidate.get("target_kind"))) parts.lock(((Number)candidate.get("target_id")).longValue());
                 else {
                     var ids=store.jdbc().queryForList("SELECT order_id FROM common_invoice_orders WHERE invoice_id=? ORDER BY order_id",Long.class,candidate.get("target_id"));
                     for(Long order:ids) store.jdbc().queryForList("SELECT order_id FROM orders WHERE order_id=? FOR UPDATE",order);
@@ -108,6 +110,7 @@ public class PaperBillingSettlement {
                     standalone.applyVerifiedPaperBankPayment(((Number)row.get("payment_link_id")).longValue(),receipt.amountKopecks());
                     automation.synchronizeOrder(((Number)row.get("target_id")).longValue());
                 }
+                else if("COMMON_PART".equals(row.get("target_kind"))) parts.settle(((Number)row.get("target_id")).longValue(),receipt.amountKopecks(),receipt.paymentId());
                 else common.settle(((Number)row.get("target_id")).longValue(),receipt.amountKopecks(),receipt.paymentId());
                 store.jdbc().update("""
                     UPDATE paper_invoice_document SET stage=IF(stage='WAITING_PAYMENT','PAID',stage),
@@ -123,7 +126,8 @@ public class PaperBillingSettlement {
                     INSERT IGNORE INTO paper_invoice_bank_receipt(customer_code,account_id,payment_id,document_id,
                     amount_kopecks,payer_inn,purpose,state,received_at) VALUES(?,?,?,?,?,?,?,'NEEDS_REVIEW',NOW(6))
                     """,receipt.customerCode(),receipt.accountId(),receipt.paymentId(),id,receipt.amountKopecks(),receipt.payerInn(),receipt.purpose());
-                store.error(id,"NEEDS_REVIEW","Состояние заказа изменилось; поступление сохранено для сверки");
+                String reason=clean(failure.getReason());
+                store.error(id,"NEEDS_REVIEW",reason.isBlank()?"Состояние заказа изменилось; поступление сохранено для сверки":"Оплата требует сверки: "+reason);
             });
         }
     }

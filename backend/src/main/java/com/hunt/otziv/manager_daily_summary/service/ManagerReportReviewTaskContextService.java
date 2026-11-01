@@ -46,11 +46,11 @@ public class ManagerReportReviewTaskContextService {
         var candidates = unansweredRepository.findDailyReportItems(managerId, date.atStartOfDay(),
                 date.plusDays(1).atStartOfDay(), ClientChatUnansweredStatus.OPEN);
         if (candidates == null) return question;
-        var matches = candidates.stream().filter(item -> item.getId() != null && item.getManager() != null
-                        && managerId.equals(item.getManager().getId()) && item.getClosedAt() != null
-                        && date.equals(item.getClosedAt().toLocalDate()) && item.getCompany() != null)
+        var matches = candidates.stream().filter(item -> item.getId() != null
+                        && managerId.equals(item.managerId()) && item.getClosedAt() != null
+                        && date.equals(item.getClosedAt().toLocalDate()))
                 .filter(item -> {
-                    String company = normalized(item.getCompany().getTitle());
+                    String company = normalized(item.companyTitle());
                     String message = normalized(item.getLastMessageText());
                     return company.length() >= 3 && text.contains(company) && message.length() >= 30
                             && text.contains(message.substring(0, Math.min(100, message.length())));
@@ -67,7 +67,7 @@ public class ManagerReportReviewTaskContextService {
         var json = new com.fasterxml.jackson.databind.ObjectMapper();
         for (Long id : ids.stream().filter(java.util.Objects::nonNull).filter(value -> value > 0).distinct().toList()) {
             var item = id == null || managerId == null ? null : unansweredRepository.findById(id)
-                    .filter(row -> row.getManager() != null && managerId.equals(row.getManager().getId())).orElse(null);
+                    .filter(row -> managerId.equals(row.managerId())).orElse(null);
             java.util.Map<String,String> fields = item == null ? java.util.Map.of("availability", "unavailable")
                     : java.util.Map.of("client_message", java.util.Objects.requireNonNullElse(item.getLastMessageText(), ""),
                             "manager_reply", java.util.Objects.requireNonNullElse(item.getResolutionReplyText(), ""),

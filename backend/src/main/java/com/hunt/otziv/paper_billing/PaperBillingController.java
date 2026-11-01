@@ -29,6 +29,8 @@ public class PaperBillingController {
     public Context context(@PathVariable String kind,@PathVariable Long targetId,Authentication auth) {
         return service.context(new Target(kind,targetId),auth);
     }
+    @GetMapping("/{kind}/{targetId}/documents")
+    public java.util.List<Document> documents(@PathVariable String kind,@PathVariable Long targetId,Authentication auth) {return service.documents(new Target(kind,targetId),auth);}
     @GetMapping("/{kind}/{targetId}/lookup")
     public Lookup lookup(@PathVariable String kind,@PathVariable Long targetId,@RequestParam String inn,Authentication auth) {
         service.context(new Target(kind,targetId),auth);

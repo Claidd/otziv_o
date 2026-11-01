@@ -13,6 +13,7 @@ import org.springframework.stereotype.Repository;
 public class PaperBillingStore {
     private final JdbcTemplate jdbc;
     private final com.hunt.otziv.common_billing.api.BankPaperInvoices common;
+    @org.springframework.beans.factory.annotation.Autowired private com.hunt.otziv.common_billing.api.BankPaperInvoiceParts parts;
     public Map<String,Object> row(String id) {
         var rows=jdbc.queryForList("SELECT * FROM paper_invoice_document WHERE id=?",id);
         if (rows.isEmpty()) throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND,"Документ не найден");
@@ -24,6 +25,11 @@ public class PaperBillingStore {
     public Optional<Map<String,Object>> latest(Target target) {
         return jdbc.queryForList("SELECT * FROM paper_invoice_document WHERE target_kind=? AND target_id=? ORDER BY created_at DESC,id DESC LIMIT 1",target.kind(),target.id()).stream().findFirst();
     }
+    public List<Map<String,Object>> summaries(Target target) {
+        String columns="id,number,amount_kopecks,stage,invoice_delivery,act_delivery,error_text,paid_at,cancel_message_delivery,cancel_reason,cancel_replacement_state,cancel_replacement_error,target_kind,target_id,payer_json,created_at";
+        if(target.kind().equals("COMMON_INVOICE"))return jdbc.queryForList("SELECT "+columns+" FROM paper_invoice_document WHERE (target_kind=? AND target_id=?) OR parent_invoice_id=? ORDER BY created_at DESC,id DESC LIMIT 200",target.kind(),target.id(),target.id());
+        return jdbc.queryForList("SELECT "+columns+" FROM paper_invoice_document WHERE target_kind=? AND target_id=? ORDER BY created_at DESC,id DESC LIMIT 100",target.kind(),target.id());
+    }
     public void event(String id,String key,String body) {
         jdbc.update("INSERT IGNORE INTO paper_invoice_event(document_id,event_key,body) VALUES(?,?,?)",id,key,body);
     }
@@ -34,14 +40,19 @@ public class PaperBillingStore {
             """,Long.class,target.kind(),target.id(),exceptDocument,exceptDocument)>0;
     }
     public Document document(Map<String,Object> r) {
+        Payer payer=null;
+        try {if(r.get("payer_json")!=null) payer=new com.fasterxml.jackson.databind.ObjectMapper().readValue((String)r.get("payer_json"),Payer.class);} catch(Exception failure) {throw problem("Повреждены реквизиты банковского документа");}
+        String kind=(String)r.get("target_kind");Long target=((Number)r.get("target_id")).longValue();
+        var orderIds="COMMON_PART".equals(kind)?parts.members(target).stream().map(com.hunt.otziv.common_billing.api.BankPaperInvoiceParts.Position::orderId).toList():"ORDER".equals(kind)?List.of(target):List.<Long>of();
         return new Document((String)r.get("id"),(String)r.get("number"),((Number)r.get("amount_kopecks")).longValue(),
                 (String)r.get("stage"),(String)r.get("invoice_delivery"),(String)r.get("act_delivery"),(String)r.get("error_text"),
                 r.get("paid_at") instanceof java.sql.Timestamp ts ? ts.toLocalDateTime() : r.get("paid_at") instanceof LocalDateTime time ? time : null,
                 (String)r.get("cancel_message_delivery"),(String)r.get("cancel_reason"),
-                (String)r.get("cancel_replacement_state"),(String)r.get("cancel_replacement_error"));
+                (String)r.get("cancel_replacement_state"),(String)r.get("cancel_replacement_error"),kind,target,payer,orderIds);
     }
     public String composition(Target target) {
         if(target.kind().equals("COMMON_INVOICE")) return common.composition(target.id());
+        if(target.kind().equals("COMMON_PART")) return parts.composition(target.id());
         Object rows=List.of(target.id());
         try { return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
                 .digest(rows.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8))); }
@@ -67,6 +78,7 @@ public class PaperBillingStore {
             """,id,t.kind(),t.id(),company,link,"PB-"+t.id()+"-"+id.substring(0,8).toUpperCase(Locale.ROOT),amount,payer,account,customer,composition(t),client,group,actor);
         if (link!=null) jdbc.update("UPDATE payment_links SET paper_bank_document_id=? WHERE id=?",id,link);
         if (t.kind().equals("COMMON_INVOICE")) common.bindDocument(t.id(),id);
+        if (t.kind().equals("COMMON_PART")) {parts.bind(t.id(),id);jdbc.update("UPDATE paper_invoice_document SET parent_invoice_id=? WHERE id=?",parts.parent(t.id()),id);}
     }
     public boolean move(String id,String from,String to) {
         return jdbc.update("UPDATE paper_invoice_document SET stage=?,error_text=NULL,updated_at=NOW(6) WHERE id=? AND stage=?",to,id,from)==1;

@@ -24,6 +24,7 @@ import lombok.Setter;
 @Setter
 @Table(name = "client_chat_unanswered_items")
 public class ClientChatUnansweredItem {
+    public String companyTitle() {return company==null?"":company.getTitle();}
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
