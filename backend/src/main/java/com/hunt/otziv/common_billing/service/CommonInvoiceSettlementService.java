@@ -1790,6 +1790,13 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
     void refreshInvoiceAmounts(CommonInvoice invoice, List<CommonInvoiceOrder> items,
                                Map<Long, BigDecimal> preparedAmounts, Map<Long, Boolean> preparedRecovery,
                                BoardPaymentState preparedPayment) {
+        // Issued bank documents freeze the composition. Account/board reads may
+        // hold an older parent snapshot than their positions query; saving that
+        // snapshot can erase a concurrent final payment. Only the locked bank
+        // settlement/cancellation workflows may mutate these aggregates.
+        if (invoice != null && !normalize(invoice.getPaperBankDocumentId()).isBlank()) {
+            return;
+        }
         // Archive keeps the recorded composition and payments. An independent
         // order payment must not turn that history into a new invoice balance.
         if (invoice != null && invoice.getStatus() == CommonInvoiceStatus.ARCHIVED) {
