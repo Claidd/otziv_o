@@ -35,6 +35,7 @@
   --billing-panel-surface: #fbfcfd;
   --billing-panel-border: #e3e8ef;
   --billing-summary-surface: #ffffff;
+  --billing-cycle-surface: #f5f9ff;
   --billing-alert-surface: #fff4f6;
   --billing-alert-border: #efbdc8;
   --billing-alert-title: #9f173c;
@@ -91,6 +92,7 @@
   --billing-panel-surface: #22272b;
   --billing-panel-border: #3b444c;
   --billing-summary-surface: #282e33;
+  --billing-cycle-surface: #22272b;
   --billing-alert-surface: #3b252d;
   --billing-alert-border: #704052;
   --billing-alert-title: #ff9ab6;
@@ -703,9 +705,9 @@ button .material-icons-sharp {
 .next-cycle {
   order: 2;
   min-width: 0;
-  border: 1px solid #e2e7ee;
+  border: 1px solid var(--billing-panel-border);
   border-radius: 0.65rem;
-  background: #fbfcfd;
+  background: var(--billing-panel-surface);
 }
 
 .paid-history summary,
@@ -735,7 +737,7 @@ button .material-icons-sharp {
 .next-cycle > div {
   display: grid;
   gap: 0.42rem;
-  border-top: 1px solid #e8ecf1;
+  border-top: 1px solid var(--billing-panel-border);
   padding: 0.55rem;
 }
 
@@ -747,7 +749,8 @@ button .material-icons-sharp {
   gap: 0.65rem;
   border-radius: 0.48rem;
   padding: 0.58rem 0.65rem;
-  background: #fff;
+  color: var(--otziv-text);
+  background: var(--billing-summary-surface);
 }
 
 .paid-history-list strong,
@@ -776,7 +779,7 @@ button .material-icons-sharp {
 .next-cycle {
   order: 3;
   border-color: rgba(47, 127, 223, 0.24);
-  background: #f5f9ff;
+  background: var(--billing-cycle-surface);
 }
 
 .next-cycle > header {
