@@ -88,7 +88,7 @@ public class ManualPaymentRecipientTelegramNotificationService {
             Long chatId = resolveChatId(request.recipientType(), user);
             if (chatId == null) {
                 log.info(
-                        "Не отправлено уведомление получателю ручной оплаты: нет внутреннего Telegram-чата linkId={} userId={} type={}",
+                        "Не отправлено уведомление получателю ручной оплаты: нет рабочей Telegram-группы с менеджером linkId={} userId={} type={}",
                         request.linkId(),
                         request.recipientUserId(),
                         request.recipientType()
@@ -144,7 +144,7 @@ public class ManualPaymentRecipientTelegramNotificationService {
             if (chatId == null) {
                 return ClientMessageSendResult.failed(
                         "recipient_telegram_chat_missing",
-                        "У получателя не задан внутренний Telegram-чат"
+                        "У получателя не привязана рабочая Telegram-группа с менеджером"
                 );
             }
             boolean sent = telegramService.sendMessage(
@@ -203,13 +203,13 @@ public class ManualPaymentRecipientTelegramNotificationService {
 
     private Long resolveChatId(ContractorRecipientType recipientType, User user) {
         if (recipientType == ContractorRecipientType.SPECIALIST) {
-            return firstNonNull(user.getWorkerTelegramGroupChatId(), user.getTelegramChatId());
+            return groupChat(user.getWorkerTelegramGroupChatId());
         }
         if (recipientType == ContractorRecipientType.MANAGER) {
             Long managerGroupChatId = managerRepository.findByUserId(user.getId())
                     .map(Manager::getAuditTelegramGroupChatId)
                     .orElse(null);
-            return firstNonNull(managerGroupChatId, user.getTelegramChatId());
+            return groupChat(managerGroupChatId);
         }
         return user.getTelegramChatId();
     }
@@ -309,8 +309,8 @@ public class ManualPaymentRecipientTelegramNotificationService {
         return MONEY_FORMAT.format(rubles) + " ₽";
     }
 
-    private static Long firstNonNull(Long first, Long second) {
-        return first == null ? second : first;
+    private static Long groupChat(Long chatId) {
+        return chatId != null && chatId < 0 ? chatId : null;
     }
 
     private static boolean hasText(String value) {

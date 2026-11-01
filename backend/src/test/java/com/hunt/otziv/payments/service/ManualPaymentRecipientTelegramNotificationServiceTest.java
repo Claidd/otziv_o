@@ -56,6 +56,7 @@ class ManualPaymentRecipientTelegramNotificationServiceTest {
         specialist.setId(77L);
         specialist.setFio("Елена Ч.");
         specialist.setWorkerTelegramGroupChatId(-10077L);
+        specialist.setTelegramChatId(7777L);
         when(userRepository.findById(77L)).thenReturn(Optional.of(specialist));
 
         User confirmer = new User();
@@ -87,14 +88,15 @@ class ManualPaymentRecipientTelegramNotificationServiceTest {
         specialist.setId(78L);
         specialist.setFio("Юлия К.");
         specialist.setTelegramChatId(7800L);
+        specialist.setWorkerTelegramGroupChatId(-10078L);
         when(paymentLinkRepository.findByIdWithOrder(6803L)).thenReturn(Optional.of(link));
         when(userRepository.findById(78L)).thenReturn(Optional.of(specialist));
-        when(telegramService.sendMessage(eq(7800L), org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
+        when(telegramService.sendMessage(eq(-10078L), org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
 
         service.notifyAfterCommit(6803L);
 
         verify(paymentLinkRepository).findByIdWithOrder(6803L);
-        verify(telegramService).sendMessage(eq(7800L), org.mockito.ArgumentMatchers.anyString());
+        verify(telegramService).sendMessage(eq(-10078L), org.mockito.ArgumentMatchers.anyString());
     }
 
     @Test
@@ -107,6 +109,26 @@ class ManualPaymentRecipientTelegramNotificationServiceTest {
         service.notifyAfterCommit(link);
 
         verifyNoInteractions(userRepository, managerRepository, telegramService);
+    }
+
+    @Test
+    void missingOrInvalidGroupNeverFallsBackToPersonalChatForOrdinaryOrCommonInvoice() {
+        User specialist = new User(); specialist.setId(77L); specialist.setTelegramChatId(7777L);
+        when(userRepository.findById(77L)).thenReturn(Optional.of(specialist));
+        PaymentLink link = confirmedManualLink();
+        link.setManualActualRecipientType(ContractorRecipientType.SPECIALIST);
+        link.setManualActualRecipientUserId(77L);
+        for (Long group : new Long[]{null, 0L, 7777L}) {
+            specialist.setWorkerTelegramGroupChatId(group);
+            service.notifyAfterCommit(link);
+            var result = service.notifyCommonInvoiceRecipient(
+                    new ManualPaymentRecipientTelegramNotificationService.CommonInvoiceRecipientNotification(
+                            146L, "Тест", 1, 140000L, ContractorRecipientType.SPECIALIST,
+                            77L, "manager", LocalDateTime.now()));
+            assertTrue(!result.sent());
+            assertEquals("recipient_telegram_chat_missing", result.errorCode());
+        }
+        verifyNoInteractions(telegramService);
     }
 
     @Test

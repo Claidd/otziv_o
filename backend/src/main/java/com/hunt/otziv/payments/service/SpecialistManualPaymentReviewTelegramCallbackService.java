@@ -1,7 +1,6 @@
 package com.hunt.otziv.payments.service;
 
 import java.util.Optional;
-import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -22,12 +21,12 @@ public class SpecialistManualPaymentReviewTelegramCallbackService implements Spe
         if (data == null || !data.startsWith(PREFIX)) {
             return Optional.empty();
         }
-        if (fromUserId == null || !Objects.equals(chatId, fromUserId)) {
-            return Optional.of("Откройте личный чат с ботом под своей учётной записью");
+        if (fromUserId == null || chatId == null || chatId == 0) {
+            return Optional.of("Не удалось определить участника или чат");
         }
         try {
             Long reviewId = Long.valueOf(data.substring(PREFIX.length()));
-            return Optional.of(reviews.dispute(reviewId, fromUserId));
+            return Optional.of(reviews.dispute(reviewId, fromUserId, chatId));
         } catch (NumberFormatException malformed) {
             return Optional.of("Повреждённый запрос оплаты");
         } catch (ResponseStatusException rejected) {

@@ -364,7 +364,7 @@ public class SpecialistManualPaymentReviewService {
         if (claim == null) {
             return;
         }
-        String message = "💳 Менеджер сообщил о переводе на ваши реквизиты.\n"
+        String message = "💳 Менеджер сообщил о переводе получателю по заказу.\n"
                 + "Заказ №" + claim.orderId() + ", сумма "
                 + BigDecimal.valueOf(claim.amountKopecks(), 2).stripTrailingZeros().toPlainString()
                 + " ₽. Оплата учтена по отметке менеджера. Если деньги не пришли, сообщите менеджеру"
@@ -416,10 +416,13 @@ public class SpecialistManualPaymentReviewService {
                 return null;
             }
         }
-        Long chatId = review.getRecipientUserId() == null ? null
-                : users.activePersonalTelegramChatId(review.getRecipientUserId()).orElse(null);
+        boolean ownerReceipt = "OWNER".equals(review.getRecipientType());
+        Long chatId = review.getRecipientUserId() == null ? null : (ownerReceipt
+                ? users.activePersonalTelegramChatId(review.getRecipientUserId())
+                : users.activePaymentReviewGroupChatId(review.getRecipientUserId(), review.getRecipientType())).orElse(null);
         if (chatId == null) {
-            notificationFailure(review, "У получателя нет активного личного Telegram-чата");
+            notificationFailure(review, ownerReceipt ? "У владельца нет активного личного Telegram-чата"
+                    : "У получателя не привязана рабочая Telegram-группа с менеджером");
             return null;
         }
         review.setAttemptCount(review.getAttemptCount() + 1);
@@ -481,7 +484,7 @@ public class SpecialistManualPaymentReviewService {
     }
 
     @Transactional
-    public String dispute(Long reviewId, Long telegramUserId) {
+    public String dispute(Long reviewId, Long telegramUserId, Long chatId) {
         SpecialistManualPaymentReview review = reviews.lockById(reviewId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Запрос не найден"));
         Long recipientChatId = users.activePersonalTelegramChatId(review.getRecipientUserId())
@@ -490,13 +493,22 @@ public class SpecialistManualPaymentReviewService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     "Оспорить поступление может только указанный специалист");
         }
+        // Keep the already delivered private buttons usable during their existing
+        // dispute window. New notices are sent only to the shared group.
+        if (!Objects.equals(telegramUserId, chatId)) {
+            Long groupId = users.activePaymentReviewGroupChatId(review.getRecipientUserId(), review.getRecipientType())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Рабочая группа получателя не привязана"));
+            if (!Objects.equals(groupId, chatId)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Оспорить поступление можно в рабочей группе получателя");
+            }
+        }
         if (review.getStatus() == SpecialistManualPaymentReviewStatus.DISPUTED) {
             return "Поступление уже оспорено; владельцы и администраторы уведомлены";
         }
         if (!ManualPaymentReviewView.from(review).disputeAllowed()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Окно спора закрыто или операция ещё выполняется");
         }
-        recordDispute(review, "recipient", "Получатель оспорил поступление через личное уведомление");
+        recordDispute(review, "recipient", "Получатель оспорил поступление через Telegram");
         return "Спор сохранён. Окончательное подтверждение остановлено; менеджер проведёт сверку";
     }
 
