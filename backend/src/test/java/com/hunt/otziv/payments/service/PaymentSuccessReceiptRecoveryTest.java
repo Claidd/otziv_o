@@ -45,4 +45,19 @@ class PaymentSuccessReceiptRecoveryTest {
         assertThat(notifier.notifySuccess(link)).isEqualTo(failure);
         verify(sender,never()).recoverRecordedOutcomeFromChat(anyString(),any());
     }
+
+    @Test void aMissingPaymentChatIsRepairedBeforeDispatchAndUsesTheOriginalPaymentOperation(){
+        when(sender.recoverMissingWhatsAppGroup(any(), eq(""), eq(""), eq("payment-success:7")))
+                .thenReturn("123456789@g.us");
+        var proof=ClientMessageSendResult.sent("WhatsApp","payment-receipt");
+        when(sender.sendWithOperationId(any(),eq(""),eq("123456789@g.us"),anyString(),isNull(),eq("payment-success:7")))
+                .thenReturn(proof);
+        assertThat(notifier.notifySuccess(link)).isEqualTo(proof);
+        var ordered=inOrder(sender);
+        ordered.verify(sender).recoverMissingWhatsAppGroup(any(),eq(""),eq(""),eq("payment-success:7"));
+        ordered.verify(sender).sendWithOperationId(any(),eq(""),eq("123456789@g.us"),anyString(),isNull(),eq("payment-success:7"));
+        verify(sender,never()).recoverRecordedOutcomeFromChat(anyString(),any());
+        assertThat(link.getOrder().getId()).isEqualTo(77L);
+        assertThat(link.getAmountKopecks()).isEqualTo(10000L);
+    }
 }

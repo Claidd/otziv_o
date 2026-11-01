@@ -83,6 +83,25 @@ class ScheduledDeliveryProtocolTest {
                 message, copy, 14, null, null, null, null, NOW);
     }
 
+    @Test void automatedDeliveryRepairsTheMissingRouteOutsideTransactionsAndFinalizesTheSameOccurrence() {
+        company.setUrlChat("https://chat.whatsapp.com/ExactInvite123456");
+        company.setGroupId(null);
+        var prepared = prepare("service notification", null);
+        when(sender.recoverMissingWhatsAppGroup(eq(prepared.target()), eq(prepared.clientId()), isNull(), eq(prepared.operationId())))
+                .thenAnswer(inv -> {
+                    assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
+                    return "123456789@g.us";
+                });
+        when(sender.deliverWithOperationId(eq(prepared.target()), eq(prepared.clientId()), eq("123456789@g.us"),
+                eq("service notification"), isNull(), eq(prepared.operationId())))
+                .thenReturn(ClientMessageSendResult.sent("WhatsApp", "confirmed-receipt"));
+        service.dispatchScheduledDelivery(prepared, NOW);
+        assertThat(state.getSentCount()).isEqualTo(1);
+        assertThat(state.getLastSuccessAt()).isNotNull();
+        assertThat(state.getLastErrorCode()).isNull();
+        assertThat(state.getDeliveryEnvelope()).isNull();
+    }
+
     @Test void badReviewRecoveryRequiresItsFrozenReceiptAndNeverQueuesANewInvoice() {
         prepareBadReviewRecovery();
         when(sender.recoverRecordedOutcomeFromChat(anyString(), eq(NOW)))

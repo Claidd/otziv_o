@@ -6,6 +6,10 @@ import com.hunt.otziv.client_messages.dto.TelegramTransferCopyButton;
 /** Delivery for an already identified business occurrence. */
 public interface ClientMessageDelivery {
     record Target(Long companyId,String title,String urlChat,Long telegramChatId,Long maxChatId) {}
+    /** Automated owners only, outside their transaction and before the first transport envelope is frozen. */
+    default String recoverMissingWhatsAppGroup(Target target, String clientId, String groupId, String operationId) {
+        return groupId;
+    }
     ClientMessageSendResult deliverWithOperationId(Target target,String clientId,String groupId,String message,
             TelegramTransferCopyButton transfer,String operationId);
     ClientMessageSendResult deliverPublicationProgressWithOperationId(Target target,String clientId,String groupId,

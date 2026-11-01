@@ -39,6 +39,7 @@ class ClientChatMessageSenderTest {
     private ClientMessageOperationFence operationFence;
     private TelegramTransferCopyButton copyButton;
     private PublicationProgressPreferenceService progressPreferences;
+    private com.hunt.otziv.whatsapp.service.WhatsAppDeliveryRouteRecovery routeRecovery;
 
     @BeforeEach
     void setUp() {
@@ -50,7 +51,8 @@ class ClientChatMessageSenderTest {
         lenient().when(operationFence.execute(anyString(), anyString(), nullable(String.class), anyString(), any()))
                 .thenAnswer(call -> call.<java.util.function.Supplier<ClientMessageSendResult>>getArgument(4).get());
         progressPreferences = mock(PublicationProgressPreferenceService.class);
-        sender = new ClientChatMessageSender(whatsAppService, telegramService, maxBotClient, businessOperations, operationFence, progressPreferences);
+        routeRecovery = mock(com.hunt.otziv.whatsapp.service.WhatsAppDeliveryRouteRecovery.class);
+        sender = new ClientChatMessageSender(whatsAppService, telegramService, maxBotClient, businessOperations, operationFence, progressPreferences, routeRecovery);
         copyButton = TelegramTransferCopyButton.fromFrozenTransferNumber("2202208238396676").orElseThrow();
     }
 
@@ -472,6 +474,55 @@ class ClientChatMessageSenderTest {
         assertEquals("UNKNOWN".equals(state), sender.hasSettledUncertainOperation("stable-operation"));
         verifyNoMoreInteractions(telegramService, maxBotClient);
         verify(businessOperations, never()).freezeForDispatch(anyString(), anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void missingBindingIsRepairedBeforeFreezingAndDispatchUsesTheRestoredRoute() {
+        Company company = company("https://chat.whatsapp.com/VerifiedInvite1234", null, null);
+        when(whatsAppService.sendMessageToGroup("client", "123456789@g.us", "text", "repair:1"))
+                .thenReturn(receipt("repair:1"));
+        var target = new com.hunt.otziv.client_messages.api.ClientMessageDelivery.Target(company.getId(), company.getTitle(), company.getUrlChat(), null, null);
+        when(routeRecovery.recoverMissingGroup(company.getId(), company.getUrlChat(), "client")).thenReturn("123456789@g.us");
+        String restored = sender.recoverMissingWhatsAppGroup(target, "client", "", "repair:1");
+        var result = sender.sendWithOperationId(company, "client", restored, "text", null, "repair:1");
+        assertTrue(result.sent());
+        InOrder order = inOrder(routeRecovery, businessOperations, whatsAppService);
+        order.verify(routeRecovery).recoverMissingGroup(company.getId(), company.getUrlChat(), "client");
+        order.verify(businessOperations).freezeForDispatch("repair:1", "client", "send-group", "123456789@g.us", "text");
+        order.verify(whatsAppService).sendMessageToGroup("client", "123456789@g.us", "text", "repair:1");
+    }
+
+    @Test
+    void failedRouteRepairNeverFreezesOrDispatchesAndRemainsEligibleForSafeRetry() {
+        Company company = company("https://chat.whatsapp.com/VerifiedInvite1234", null, null);
+        var result = sender.sendWithOperationId(company, "client", "", "text", null, "repair:1");
+        assertTrue(ClientChatMessageSender.isKnownUnsent(result));
+        verify(businessOperations, never()).freezeForDispatch(anyString(), anyString(), anyString(), anyString(), anyString());
+        verifyNoMoreInteractions(whatsAppService);
+    }
+
+    @Test
+    void explicitPlatformDeliveryCannotFreezeAnEmptyWhatsAppDestination() {
+        Company company = company("https://chat.whatsapp.com/VerifiedInvite1234", null, null);
+        var result = sender.sendToPlatformWithOperationId(com.hunt.otziv.client_chat_control.model.ClientChatPlatform.WHATSAPP,
+                company, "client", "", "", "text", "repair:1");
+        assertTrue(ClientChatMessageSender.isKnownUnsent(result));
+        verify(businessOperations, never()).freezeForDispatch(anyString(), anyString(), anyString(), anyString(), anyString());
+        verifyNoMoreInteractions(whatsAppService);
+    }
+
+    @Test
+    void anOldFrozenEnvelopeIsNotReboundWhenTheCurrentCompanyHasNoGroup() {
+        Company company = company("https://chat.whatsapp.com/NewInvite12345678", null, null);
+        when(businessOperations.findFrozen("repair:1")).thenReturn(java.util.Optional.of(
+                new com.hunt.otziv.whatsapp.api.WhatsAppBusinessOperations.FrozenMessage(
+                        "repair:1", "old-client", "send-group", "111111111@g.us", "original text")));
+        when(whatsAppService.sendMessageToGroup("old-client", "111111111@g.us", "original text", "repair:1"))
+                .thenReturn("{\"status\":\"unknown\"}");
+        var result = sender.sendWithOperationId(company, "client", "", "changed", null, "repair:1");
+        assertFalse(result.sent());
+        verifyNoMoreInteractions(routeRecovery);
+        verify(whatsAppService).sendMessageToGroup("old-client", "111111111@g.us", "original text", "repair:1");
     }
 
     private String receipt(String token) {

@@ -67,6 +67,15 @@ receiver identity/order, retention, mixed-version handler и UNKNOWN policy. Д�
 Опора: [R6](R6_TRANSACTIONAL_OUTBOX.md), [outbound protocol](../whatsapp/OUTBOUND_OPERATIONS.md),
 [rollout](ARCHITECTURE_ROLLOUT.md).
 
+`c_companies.api.MissingWhatsAppRoute` принадлежит companies и вызывается messaging
+только для уже разрешённого автоматического уведомления. Скалярный snapshot читается
+в короткой read-only транзакции; проверка точной invite-ссылки у выбранного WhatsApp
+клиента выполняется вне неё. Companies сохраняет найденный groupId условной записью:
+ссылка не изменилась, включая регистр invite-кода, привязка всё ещё пуста и компания
+не заблокирована. Обычная очередь продолжает тот же business occurrence только до
+первой фиксации transport envelope. Сохранённые операции, деньги, статусы заказа
+и права интерактивных команд этот контракт не меняет.
+
 Отвергнуты: log-only retry, новый UUID на каждом повторе, новые producer-сценарии с отправкой до commit,
 слепой replay UNKNOWN и изменение прошлых SQL ради зелёного Flyway.
 Пересмотр нужен при изменении receiver guarantees или retry/retention horizon.

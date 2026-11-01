@@ -524,7 +524,8 @@ class OrderStatusNotificationServiceTest {
         org.mockito.Mockito.lenient().when(fence.execute(org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.nullable(String.class),org.mockito.ArgumentMatchers.anyString(),any()))
                 .thenAnswer(call -> call.<java.util.function.Supplier<com.hunt.otziv.client_messages.dto.ClientMessageSendResult>>getArgument(4).get());
         var delivery=new com.hunt.otziv.client_messages.service.ClientChatMessageSender(whatsAppService,telegramService,maxBotClient,
-                com.hunt.otziv.whatsapp.support.WhatsAppOperationsFixture.echo(),fence,publicationProgressPreferenceService);
+                com.hunt.otziv.whatsapp.support.WhatsAppOperationsFixture.echo(),fence,publicationProgressPreferenceService,
+                org.mockito.Mockito.mock(com.hunt.otziv.whatsapp.service.WhatsAppDeliveryRouteRecovery.class));
         return new OrderStatusNotificationService(orderRepository,orderStatusService,telegramService,whatsAppAuthAlertService,occurrences,delivery);
     }
 

@@ -52,6 +52,13 @@ public class PaymentSuccessClientNotifier {
         if (link.getId() == null) {
             return ClientMessageSendResult.failed("payment_link_missing", "Платёжная операция ещё не сохранена");
         }
+        if (groupId.isBlank() && company != null) {
+            String recovered = messageSender.recoverMissingWhatsAppGroup(
+                    new com.hunt.otziv.client_messages.api.ClientMessageDelivery.Target(company.getId(), company.getTitle(),
+                            company.getUrlChat(), company.getTelegramGroupChatId(), company.getMaxGroupChatId()),
+                    clientId, groupId, "payment-success:" + link.getId());
+            if (recovered != null && !recovered.isBlank()) groupId = recovered;
+        }
         var result = messageSender.sendWithOperationId(company, clientId, groupId,
                 buildMessage(link, order, company), null, "payment-success:" + link.getId());
         if (result != null && result.sent() && result.messageId() != null && !result.messageId().isBlank()) return result;

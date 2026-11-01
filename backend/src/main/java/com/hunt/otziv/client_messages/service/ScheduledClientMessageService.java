@@ -2383,8 +2383,12 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
         ClientMessageSendResult result;
         try {
             requireNoBusinessTransaction();
+            String recoveredGroup = prepared.orderAction() == null
+                    ? messageSender.recoverMissingWhatsAppGroup(prepared.target(), prepared.clientId(), prepared.groupId(), prepared.operationId())
+                    : null;
             result = prepared.orderAction() == null
-                    ? messageSender.deliverWithOperationId(prepared.target(), prepared.clientId(), prepared.groupId(), prepared.message(),
+                    ? messageSender.deliverWithOperationId(prepared.target(), prepared.clientId(),
+                            hasText(recoveredGroup) ? recoveredGroup : prepared.groupId(), prepared.message(),
                             TelegramTransferCopyButton.fromFrozenTransferNumber(prepared.copy()).orElse(null), prepared.operationId())
                     : orderStatusNotificationService.dispatchPreparedAction(prepared.orderAction());
             if (result == null) result = ClientMessageOperationFence.unknown();
