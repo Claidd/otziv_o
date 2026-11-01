@@ -55,6 +55,12 @@
 | `PAPER_INVOICES_SIGNATURE_PATH` | Путь к закрытому PNG в контейнере; пустое значение отключает наложение подписи |
 | `PAPER_INVOICES_SIGNATURE_SUPPLIER_INN` | ИНН исполнителя, которому принадлежит PNG; сверяется с PDF банка |
 
+На VPS PNG хранится вне Git в `data/paper-invoices/signature.png`. Каталог монтируется
+в приложение только для чтения; путь настройки — `/app/paper-invoices/signature.png`.
+Права файла разрешают чтение только пользователю приложения и администратору сервера.
+Production Compose передаёт оба параметра подписи; привязка к `PaperBillingSettings`
+проверяется отдельным тестом с настоящим `application.properties`.
+
 Используется существующее подключение Точки: `OTZIV_PAYMENTS_TOCHKA_JWT_TOKEN` и его customerCode. Для текущего подключения чтением проверены действующие права `ManageInvoiceData`, `ManageWebhookData`, `ReadAccountsBasic`, `ReadAccountsDetail`, `ReadStatements`, `ReadCustomerData`. Перевыпуск ключа не требуется.
 
 Перед будущим включением на VPS нужно добавить `incomingPayment` к существующей подписке webhook, сохранив `acquiringInternetPayment` и действующий адрес. Подписка банка не менялась. После проверки с имитацией по отдельной просьбе владельца выполнен изолированный запуск настоящего банковского клиента в локальном Docker: один счёт и связанный акт на 1 000 рублей по ИНН владельца, без клиентских рассылок и без деплоя. Подробности — в `docs/TOCHKA_PAPER_INVOICES_LOCAL_VERIFICATION.md`.
