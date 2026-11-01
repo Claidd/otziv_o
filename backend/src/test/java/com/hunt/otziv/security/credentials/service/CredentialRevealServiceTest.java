@@ -4,6 +4,7 @@ import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.bad_reviews.model.BadReviewTask;
 import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.r_review.model.Review;
+import com.hunt.otziv.review_recovery.model.ReviewRecoveryTask;
 import com.hunt.otziv.security.credentials.CredentialRevealRequest;
 import com.hunt.otziv.security.credentials.CredentialRevealResponse;
 import org.junit.jupiter.api.Test;
@@ -77,6 +78,29 @@ class CredentialRevealServiceTest {
         );
 
         assertEquals(auditFailure, thrown);
+    }
+
+    @Test
+    void missingArchivedRecoveryAccountExplainsHowToObtainOneWithoutAuditingAReveal() {
+        CredentialRevealService service = new CredentialRevealService(businessAuditService);
+        ReviewRecoveryTask task = ReviewRecoveryTask.builder().id(1160L).archiveReviewId(125646L).build();
+        for (String field : new String[]{"login", "password"}) {
+            var failure = assertThrows(org.springframework.web.server.ResponseStatusException.class,
+                    () -> service.revealRecoveryTask(task,
+                            new CredentialRevealRequest(field, "worker-board", "menu", "recovery"), null));
+            assertEquals(org.springframework.http.HttpStatus.CONFLICT, failure.getStatusCode());
+            assertTrue(failure.getReason().contains("Получить аккаунт"));
+        }
+        org.mockito.Mockito.verifyNoInteractions(businessAuditService);
+    }
+
+    @Test
+    void archivedRecoveryCanRevealSavedCredentialsWithoutALiveSourceReview() {
+        CredentialRevealService service = new CredentialRevealService(businessAuditService);
+        ReviewRecoveryTask task = ReviewRecoveryTask.builder().id(1160L).archiveReviewId(125646L)
+                .botLoginSnapshot("saved-login").botPasswordSnapshot("saved-password").build();
+        assertEquals("saved-password", service.revealRecoveryTask(task,
+                new CredentialRevealRequest("password", "worker-board", "menu", "recovery"), null).value());
     }
 
     @Test

@@ -1026,6 +1026,11 @@ public class PersonalServiceImpl implements PersonalService {
         }
         report.append("Прогресс дня: <b>").append(progress.completed()).append("/")
                 .append(progress.total()).append(" (").append(progress.percent()).append("%)</b>\n");
+        if (progress.externalBlockedCount() > 0 || progress.lateExcludedCount() > 0) {
+            report.append("Отдельно: ждут аккаунта — ").append(progress.externalBlockedCount())
+                    .append(", поздние задачи — ").append(progress.lateExcludedCount()).append(".\n")
+                    .append("100% текущего плана не означает закрытие этих карточек.\n");
+        }
     }
 
     private void attachWorkerReportDetails(

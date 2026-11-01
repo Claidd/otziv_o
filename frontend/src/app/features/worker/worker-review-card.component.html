@@ -354,6 +354,14 @@
     }
   </div>
 
+  @if (needsRecoveryAccount()) {
+    <div class="recovery-account-notice" role="status">
+      <strong>Для восстановления нужен аккаунт</strong>
+      <span>Логин или пароль не сохранились. Нажмите «Получить аккаунт» — система подберёт свободный выгулянный аккаунт. Затем скопируйте логин и пароль и выполните восстановление.</span>
+      <span>Если свободных аккаунтов нет, обратитесь к менеджеру. Задача останется в плане до выполнения или переноса менеджером.</span>
+    </div>
+  }
+
   <div class="review-actions">
     <button type="button" (click)="copyRequested.emit('url')">
       {{ copied === 'url-' + review.id ? 'готово' : 'ссылка' }}
@@ -390,11 +398,12 @@
     <button
       type="button"
       (click)="requestBotChange()"
+      [class.review-action--get-account]="needsRecoveryAccount()"
       [disabled]="isMutating('review-' + review.id + '-change-bot')"
       [attr.aria-disabled]="accountActionCooldownLocked ? 'true' : null"
-      [title]="accountActionCooldownLocked ? accountActionCooldownTitle : 'Сменить аккаунт'"
+      [title]="accountActionCooldownLocked ? accountActionCooldownTitle : needsRecoveryAccount() ? 'Получить аккаунт для восстановления' : 'Сменить аккаунт'"
     >
-      {{ isMutating('review-' + review.id + '-change-bot') ? '...' : 'смена' }}
+      {{ isMutating('review-' + review.id + '-change-bot') ? '...' : needsRecoveryAccount() ? 'Получить аккаунт' : 'смена' }}
     </button>
     <button
       type="button"

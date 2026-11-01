@@ -1394,12 +1394,10 @@ public class ApiWorkerBoardController {
         Bot bot = task.getBot();
         Long botId = bot != null ? bot.getId() : review.getBotId();
         String botFio = bot != null ? safe(bot.getFio()) : safe(task.getBotFioSnapshot());
-        boolean botLoginPresent = !(bot != null
-                ? safe(bot.getLogin())
-                : safe(task.getBotLoginSnapshot())).isBlank();
-        boolean botPasswordPresent = !(bot != null
-                ? safe(bot.getPassword())
-                : safe(task.getBotPasswordSnapshot())).isBlank();
+        boolean botLoginPresent = !firstNonBlank(
+                bot != null ? bot.getLogin() : null, task.getBotLoginSnapshot()).isBlank();
+        boolean botPasswordPresent = !firstNonBlank(
+                bot != null ? bot.getPassword() : null, task.getBotPasswordSnapshot()).isBlank();
         int botCounter = bot != null ? bot.getCounter() : review.getBotCounter();
         String workerFio = task.getWorker() != null && task.getWorker().getUser() != null
                 ? safe(task.getWorker().getUser().getFio())

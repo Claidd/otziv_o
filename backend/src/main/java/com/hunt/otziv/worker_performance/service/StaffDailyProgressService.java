@@ -558,7 +558,7 @@ public class StaffDailyProgressService {
                     reached100,
                     progress.firstReached100At(),
                     progress.lastReached100At()
-            ));
+            ).withWorkloadBlockers(progress.externalBlocked(), progress.lateExcluded()));
         });
         return Map.copyOf(result);
     }
@@ -818,6 +818,8 @@ public class StaffDailyProgressService {
                 visible.stream().mapToInt(DailyWorkProgressResponse::reached100Days).sum(),
                 visible.stream().allMatch(DailyWorkProgressResponse::closedPeriod)
         ).withUpdating(visible.stream().anyMatch(DailyWorkProgressResponse::updating))
+                .withWorkloadBlockers(visible.stream().mapToLong(DailyWorkProgressResponse::externalBlockedCount).sum(),
+                        visible.stream().mapToLong(DailyWorkProgressResponse::lateExcludedCount).sum())
                 .withCalculatedAt(visible.stream().anyMatch(value -> value.calculatedAt() == null) ? null
                         : visible.stream().map(DailyWorkProgressResponse::calculatedAt).min(java.time.Instant::compareTo).orElse(null));
     }

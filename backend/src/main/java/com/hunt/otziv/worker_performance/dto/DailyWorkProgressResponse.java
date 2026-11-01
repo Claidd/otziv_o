@@ -47,8 +47,60 @@ public record DailyWorkProgressResponse(
         int reached100Days,
         boolean closedPeriod,
         boolean updating,
-        java.time.Instant calculatedAt
+        java.time.Instant calculatedAt,
+        long externalBlockedCount,
+        long lateExcludedCount
 ) {
+    /** Compatibility for callers without workload blocker details. */
+    public DailyWorkProgressResponse(
+            boolean visible,
+            String roleType,
+            LocalDate date,
+            long completed,
+            long active,
+            long total,
+            int percent,
+            boolean checked,
+            LocalDateTime firstCompletedAt,
+            LocalDateTime lastCompletedAt,
+            long averageCloseSeconds,
+            long medianCloseSeconds,
+            long p90CloseSeconds,
+            LocalDateTime firstActivityAt,
+            LocalDateTime lastActivityAt,
+            long activeWorkSeconds,
+            long workWindowSeconds,
+            long activityEvents,
+            long loadScore,
+            int efficiencyScore,
+            long openedCount,
+            long orderCompletedCount,
+            long nagulCompletedCount,
+            long publishCompletedCount,
+            long badCompletedCount,
+            long recoveryCompletedCount,
+            long recoveryCreatedCount,
+            long orderOverdueCount,
+            long totalOverdueCount,
+            int speedScore,
+            int disciplineScore,
+            int workloadScore,
+            long botChangeCount,
+            long botBlockCount,
+            boolean reached100,
+            LocalDateTime firstReached100At,
+            LocalDateTime lastReached100At,
+            String periodType,
+            int workingDays,
+            int checkedDays,
+            int reached100Days,
+            boolean closedPeriod,
+            boolean updating,
+            java.time.Instant calculatedAt
+    ) {
+        this(visible, roleType, date, completed, active, total, percent, checked, firstCompletedAt, lastCompletedAt, averageCloseSeconds, medianCloseSeconds, p90CloseSeconds, firstActivityAt, lastActivityAt, activeWorkSeconds, workWindowSeconds, activityEvents, loadScore, efficiencyScore, openedCount, orderCompletedCount, nagulCompletedCount, publishCompletedCount, badCompletedCount, recoveryCompletedCount, recoveryCreatedCount, orderOverdueCount, totalOverdueCount, speedScore, disciplineScore, workloadScore, botChangeCount, botBlockCount, reached100, firstReached100At, lastReached100At, periodType, workingDays, checkedDays, reached100Days, closedPeriod, updating, calculatedAt, 0, 0);
+    }
+
     /** Compatibility constructor for live calculations without a persisted snapshot timestamp. */
     public DailyWorkProgressResponse(
             boolean visible,
@@ -350,7 +402,9 @@ public record DailyWorkProgressResponse(
                 reached100Days,
                 closedPeriod,
                 updating,
-                calculatedAt
+                calculatedAt,
+                externalBlockedCount,
+                lateExcludedCount
         );
     }
 
@@ -409,7 +463,9 @@ public record DailyWorkProgressResponse(
                 reached100Days,
                 closedPeriod,
                 updating,
-                calculatedAt
+                calculatedAt,
+                externalBlockedCount,
+                lateExcludedCount
         );
     }
 
@@ -461,12 +517,18 @@ public record DailyWorkProgressResponse(
                 reached100Days,
                 closedPeriod,
                 value,
-                calculatedAt
+                calculatedAt,
+                externalBlockedCount,
+                lateExcludedCount
         );
     }
 
     public DailyWorkProgressResponse withCalculatedAt(java.time.Instant value) {
-        return new DailyWorkProgressResponse(visible, roleType, date, completed, active, total, percent, checked, firstCompletedAt, lastCompletedAt, averageCloseSeconds, medianCloseSeconds, p90CloseSeconds, firstActivityAt, lastActivityAt, activeWorkSeconds, workWindowSeconds, activityEvents, loadScore, efficiencyScore, openedCount, orderCompletedCount, nagulCompletedCount, publishCompletedCount, badCompletedCount, recoveryCompletedCount, recoveryCreatedCount, orderOverdueCount, totalOverdueCount, speedScore, disciplineScore, workloadScore, botChangeCount, botBlockCount, reached100, firstReached100At, lastReached100At, periodType, workingDays, checkedDays, reached100Days, closedPeriod, updating, value);
+        return new DailyWorkProgressResponse(visible, roleType, date, completed, active, total, percent, checked, firstCompletedAt, lastCompletedAt, averageCloseSeconds, medianCloseSeconds, p90CloseSeconds, firstActivityAt, lastActivityAt, activeWorkSeconds, workWindowSeconds, activityEvents, loadScore, efficiencyScore, openedCount, orderCompletedCount, nagulCompletedCount, publishCompletedCount, badCompletedCount, recoveryCompletedCount, recoveryCreatedCount, orderOverdueCount, totalOverdueCount, speedScore, disciplineScore, workloadScore, botChangeCount, botBlockCount, reached100, firstReached100At, lastReached100At, periodType, workingDays, checkedDays, reached100Days, closedPeriod, updating, value, externalBlockedCount, lateExcludedCount);
     }
 
+
+    public DailyWorkProgressResponse withWorkloadBlockers(long blocked, long late) {
+        return new DailyWorkProgressResponse(visible, roleType, date, completed, active, total, percent, checked, firstCompletedAt, lastCompletedAt, averageCloseSeconds, medianCloseSeconds, p90CloseSeconds, firstActivityAt, lastActivityAt, activeWorkSeconds, workWindowSeconds, activityEvents, loadScore, efficiencyScore, openedCount, orderCompletedCount, nagulCompletedCount, publishCompletedCount, badCompletedCount, recoveryCompletedCount, recoveryCreatedCount, orderOverdueCount, totalOverdueCount, speedScore, disciplineScore, workloadScore, botChangeCount, botBlockCount, reached100, firstReached100At, lastReached100At, periodType, workingDays, checkedDays, reached100Days, closedPeriod, updating, calculatedAt, Math.max(0, blocked), Math.max(0, late));
+    }
 }

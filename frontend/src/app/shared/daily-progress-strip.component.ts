@@ -30,6 +30,12 @@ import { DailyWorkProgress } from '../core/daily-progress';
           <span class="material-icons-sharp daily-progress-check" aria-label="Выполнено">check_circle</span>
         }
       </section>
+      @if (hasPendingExceptions()) {
+        <small class="daily-progress-exceptions" role="status">
+          Ждут аккаунта: {{ progress?.externalBlockedCount || 0 }} · Поздние задачи: {{ progress?.lateExcludedCount || 0 }}.
+          100% текущего плана не означает закрытие этих карточек.
+        </small>
+      }
     }
   `,
   styles: [`
@@ -66,6 +72,14 @@ import { DailyWorkProgress } from '../core/daily-progress';
       line-height: 1;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+
+    .daily-progress-exceptions {
+      display: block;
+      margin-top: 0.3rem;
+      color: var(--otziv-progress-text);
+      font-size: 0.72rem;
+      line-height: 1.35;
     }
 
     .daily-progress-bar {
@@ -164,6 +178,10 @@ export class DailyProgressStripComponent {
     return (this.progress?.total || 0) <= 0;
   }
 
+  hasPendingExceptions(): boolean {
+    return (this.progress?.externalBlockedCount || 0) > 0 || (this.progress?.lateExcludedCount || 0) > 0;
+  }
+
   isUnavailable(): boolean {
     return this.progress?.updating === true && this.progress.calculatedAt === null;
   }
@@ -200,13 +218,13 @@ export class DailyProgressStripComponent {
     }
 
     if (name === 'Команда' || progress.roleType === 'WORKER_TEAM') {
-      return `Прогресс команды за сегодня: закрытые задачи специалистов / все задачи специалистов (закрытые + активные). ${base}`;
+      return `Прогресс команды за сегодня: закрытые задачи / текущий доступный план. Задачи без аккаунта и поздние назначения показаны отдельно. ${base}`;
     }
 
     if (progress.roleType === 'MANAGER') {
       return `Прогресс менеджерского контроля: обработано / всего к действию. ${base}`;
     }
 
-    return `Дневной прогресс специалиста: закрытые карточки / все карточки в работе. Карточки “Новые — ждёт клиента” не учитываются. ${base}`;
+    return `Дневной прогресс специалиста: закрытые карточки / текущий доступный план. Задачи без аккаунта и поздние назначения показаны отдельно; 100% не закрывает их автоматически. Карточки “Новые — ждёт клиента” не учитываются. ${base}`;
   }
 }

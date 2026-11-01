@@ -667,6 +667,23 @@
   white-space: nowrap;
 }
 
+.recovery-account-notice {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.7rem;
+  border: 1px solid var(--otziv-progress-border);
+  border-radius: 1rem;
+  color: var(--otziv-progress-text);
+  background: var(--otziv-progress-surface);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.review-actions .review-action--get-account {
+  font-size: 0.65rem;
+  white-space: normal;
+}
+
 .publish-button {
   width: 100%;
   border-color: rgba(27, 156, 133, 0.24) !important;

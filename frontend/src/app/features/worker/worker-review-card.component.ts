@@ -607,6 +607,10 @@ export class WorkerReviewCardComponent implements OnChanges {
       && (this.activeSection === 'new' || this.cannotCompleteBecauseBotUnavailable());
   }
 
+  needsRecoveryAccount(): boolean {
+    return this.isRecoveryTask() && (!this.review.botLoginPresent || !this.review.botPasswordPresent);
+  }
+
   reviewCredentialCopyTitle(kind: ReviewCopyKind): string {
     if ((kind === 'login' || kind === 'password') && this.activeSection === 'new') {
       return 'В разделе «Новые» логин и пароль недоступны';
@@ -651,6 +655,9 @@ export class WorkerReviewCardComponent implements OnChanges {
   }
 
   doneLabel(): string {
+    if (this.needsRecoveryAccount()) {
+      return 'СНАЧАЛА ПОЛУЧИТЕ АККАУНТ';
+    }
     if (this.isRecoveryTask()) {
       return 'Восстановил';
     }
@@ -688,6 +695,9 @@ export class WorkerReviewCardComponent implements OnChanges {
   }
 
   cannotCompleteBecauseBotUnavailable(): boolean {
+    if (this.needsRecoveryAccount()) {
+      return true;
+    }
     return (
       this.isAccountWorkSection() &&
       !this.isBadTask() &&
@@ -724,6 +734,9 @@ export class WorkerReviewCardComponent implements OnChanges {
   }
 
   private accountRepairTitle(): string {
+    if (this.needsRecoveryAccount()) {
+      return 'Для восстановления нет логина или пароля. Нажмите «Получить аккаунт»; система подберёт свободный выгулянный аккаунт.';
+    }
     if (!this.review.botId || this.review.botId === 1) {
       return 'Аккаунт не назначен. Нажмите "смена", чтобы подобрать рабочий аккаунт.';
     }

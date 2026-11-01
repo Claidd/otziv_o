@@ -187,7 +187,7 @@ class StaffDailyProgressServiceTest {
         )));
         when(workload.findCurrentProgressWithState(eq(List.of(7L)), eq(date)))
                 .thenReturn(new CurrentProgress(Map.of(7L, new Progress(
-                        5, 7, 0, 0, 71, false, false, null, null
+                        5, 7, 3, 1, 71, false, false, null, null
                 )), false));
         StaffDailyProgressService localService = new StaffDailyProgressService(localJdbc, settings, workload);
         Worker worker = Worker.builder().id(7L).build();
@@ -199,6 +199,12 @@ class StaffDailyProgressServiceTest {
         assertEquals(7, progress.total());
         assertEquals(71, progress.percent());
         assertEquals(9, progress.activityEvents());
+        assertEquals(1, progress.externalBlockedCount());
+        assertEquals(3, progress.lateExcludedCount());
+        DailyWorkProgressResponse copied = progress.withUpdating(true)
+                .withCalculatedAt(java.time.Instant.now()).withActiveWorkSeconds(50);
+        assertEquals(1, copied.externalBlockedCount());
+        assertEquals(3, copied.lateExcludedCount());
         ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
         verify(localJdbc).queryForList(sql.capture(), any(MapSqlParameterSource.class));
         assertTrue(sql.getValue().contains("FROM worker_daily_performance"));

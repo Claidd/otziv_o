@@ -575,6 +575,48 @@ describe('WorkerReviewCardComponent', () => {
     expect(component.reviewCredentialCopyDisabled('password')).toBe(true);
   });
 
+  it('explains missing recovery credentials and requests an account instead of completing the task', () => {
+    const fixture = TestBed.createComponent(WorkerReviewCardComponent);
+    const component = fixture.componentInstance;
+    component.review = review({ recoveryTask: true, recoveryTaskId: 1160,
+      botId: null, botLoginPresent: false, botPasswordPresent: false });
+    component.activeSection = 'recovery';
+    let changed = false;
+    let completed = false;
+    let repair = '';
+    component.botChangeRequested.subscribe(() => changed = true);
+    component.doneRequested.subscribe(() => completed = true);
+    component.accountRepairRequested.subscribe(value => repair = value);
+    fixture.detectChanges();
+    const element = fixture.nativeElement as HTMLElement;
+    expect(element.querySelector('.recovery-account-notice')?.textContent).toContain('Задача останется в плане');
+    const buttons = element.querySelectorAll<HTMLButtonElement>('.review-actions button');
+    expect(buttons[1].disabled).toBe(true);
+    expect(buttons[2].disabled).toBe(true);
+    element.querySelector<HTMLButtonElement>('.review-action--get-account')?.click();
+    expect(changed).toBe(true);
+    element.querySelector<HTMLButtonElement>('.publish-button')?.click();
+    expect(completed).toBe(false);
+    expect(repair).toContain('Получить аккаунт');
+  });
+
+  it('allows recovery with saved credentials even when the original bot no longer exists', () => {
+    const fixture = TestBed.createComponent(WorkerReviewCardComponent);
+    const component = fixture.componentInstance;
+    component.review = review({ recoveryTask: true, recoveryTaskId: 1160, botId: null });
+    component.activeSection = 'all';
+    let completed = false;
+    component.doneRequested.subscribe(() => completed = true);
+    fixture.detectChanges();
+    const element = fixture.nativeElement as HTMLElement;
+    expect(element.querySelector('.recovery-account-notice')).toBeNull();
+    const buttons = element.querySelectorAll<HTMLButtonElement>('.review-actions button');
+    expect(buttons[1].disabled).toBe(false);
+    expect(buttons[2].disabled).toBe(false);
+    element.querySelector<HTMLButtonElement>('.publish-button')?.click();
+    expect(completed).toBe(true);
+  });
+
   it('blocks publication while credential wait timer is active', () => {
     const fixture = TestBed.createComponent(WorkerReviewCardComponent);
     fixture.componentInstance.review = review();

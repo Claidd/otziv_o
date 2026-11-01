@@ -43,4 +43,6 @@ export interface DailyWorkProgress {
   closedPeriod?: boolean;
   updating?: boolean;
   calculatedAt?: string | null;
+  externalBlockedCount?: number;
+  lateExcludedCount?: number;
 }
