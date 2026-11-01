@@ -21,9 +21,16 @@ public class PaperBillingDelivery {
     private final PublicationProgressSettings immediate;
     private final ClientMessageDelivery messages;
     public ClientMessageSendResult sendIntro(Map<String,Object> r) {
+        return sendText(r,"message",instructions(r));
+    }
+    public ClientMessageSendResult sendCancellation(Map<String,Object> r) {
+        return sendText(r,"cancellation","Счёт № "+r.get("number")+" и акт выполненных работ отменены.\n\n"
+                +"Пожалуйста, не оплачивайте этот счёт. Если перевод уже отправлен, сообщите об этом в чате — мы проверим поступление.\n"
+                +"При необходимости направим новый счёт отдельным сообщением.");
+    }
+    private ClientMessageSendResult sendText(Map<String,Object> r,String kind,String text) {
         if (!settings.isDeliveryEnabled()) return ClientMessageSendResult.failed("not_ready","Отправка документов выключена");
-        String operation="paper:"+r.get("id")+":message";
-        String text=instructions(r);
+        String operation="paper:"+r.get("id")+":"+kind;
         if(bank.fixture()) {
             var response=bank.fixtureCall("/delivery",Map.of("operationId",operation,"groupId",r.get("group_id"),"caption",text));
             return response.path("messageId").asText().isBlank()

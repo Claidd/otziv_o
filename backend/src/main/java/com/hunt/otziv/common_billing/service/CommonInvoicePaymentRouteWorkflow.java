@@ -65,6 +65,7 @@ import static com.hunt.otziv.config.metrics.R0ObservabilityMetrics.TransactionFl
 @Slf4j
 @RequiredArgsConstructor
 public class CommonInvoicePaymentRouteWorkflow {
+    private final com.hunt.otziv.p_products.api.PaperInvoiceOrderAutomation paperOrders;
 
     private final CommonInvoiceManualPaymentWorkflow manualPaymentWorkflow;
 
@@ -544,6 +545,7 @@ public class CommonInvoicePaymentRouteWorkflow {
     }
 
     void applyInvoicePaymentModeChange(CommonInvoice invoice, InvoicePaymentMode requestedMode, String actor) {
+        if(invoice.isPaperInvoiceReviewHold()) throw new ResponseStatusException(HttpStatus.CONFLICT,"По отменённому банковскому счёту есть несверенное поступление. Смена способа оплаты заблокирована");
         requireNoBankDocumentModeChange(invoice, requestedMode);
         Long invoiceId = invoice.getId();
         if (invoice.getContractorAllocationId() != null) {
@@ -551,12 +553,14 @@ public class CommonInvoicePaymentRouteWorkflow {
         }
         clearCommonPaymentRouteForModeSwitch(invoice);
         invoice.setInvoicePaymentMode(requestedMode);
+        invoice.setPaperInvoiceAutomationHold(false);
         invoice.setPaperInvoiceIssuedAt(null);
         invoice.setSentAt(null);
         invoice.setLastReminderAt(null);
         invoice.setNextReminderAt(null);
         invoice.setLastError(null);
         List<CommonInvoiceOrder> items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId);
+        for(long order:invoiceOrderRepository.findActiveOrderIdsByInvoiceId(invoiceId)) paperOrders.resumeAfterRouteChange(order);
         invoice.setStatus(areInvoiceItemsReady(items) ? CommonInvoiceStatus.READY : CommonInvoiceStatus.COLLECTING);
         CommonBillingAccount account = invoice.getAccount();
         account.setInvoicePaymentMode(requestedMode);

@@ -30,6 +30,19 @@ public class PaperBillingStaffNoticeWorker {
         for(String id:notices.unprepared()) {
             try {prepare(id);} catch(Exception failure) {notices.postponePreparation(id);log.warn("Paper staff notice preparation {} failed ({})",id,failure.getClass().getSimpleName());}
         }
+        for(var event:notices.unpreparedEvents()) {
+            String id=(String)event.get("document_id"),key=(String)event.get("event_key");
+            try {
+                var row=documents.row(id);long target=((Number)row.get("target_id")).longValue();
+                List<Long> managers;
+                if(row.get("cancel_manager_ids_json") instanceof String snapshot) {
+                    managers=new com.fasterxml.jackson.databind.ObjectMapper().readValue(snapshot,new com.fasterxml.jackson.core.type.TypeReference<List<Long>>(){});
+                } else if("ORDER".equals(row.get("target_kind"))) {
+                    Long manager=orders.staffContext(target).managerId();managers=manager==null?List.of():List.of(manager);
+                } else managers=common.staffContext(target).managerIds();
+                notices.prepareEvent(id,key,recipients.forManagers(managers),(String)event.get("body"));
+            } catch(Exception failure) {notices.postponeEvent(id,key);log.warn("Paper event notice {} {} failed ({})",id,key,failure.getClass().getSimpleName());}
+        }
         for(long id:notices.due()) {
             try {deliver(id);} catch(Exception failure) {log.warn("Paper staff notice {} failed ({})",id,failure.getClass().getSimpleName());}
         }

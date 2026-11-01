@@ -59,6 +59,10 @@ public class CommonInvoice {
     private LocalDateTime paperInvoiceIssuedAt;
     @Column(name = "paper_bank_document_id", length = 36)
     private String paperBankDocumentId;
+    @Column(name="paper_invoice_automation_hold",nullable=false)
+    private boolean paperInvoiceAutomationHold;
+    @Column(name="paper_invoice_review_hold",nullable=false)
+    private boolean paperInvoiceReviewHold;
 
     @Column(name = "cycle_idempotency_key", length = 160)
     private String cycleIdempotencyKey;

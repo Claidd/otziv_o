@@ -56,7 +56,43 @@ public class BankPaperInvoiceAdapter implements BankPaperInvoices {
     @Transactional
     public void bindDocument(long id,String document) {
         var invoice=invoices.findByIdForUpdate(id).orElseThrow(() -> problem("Общий счёт не найден"));
-        invoice.setPaperBankDocumentId(document); invoices.save(invoice);
+        invoice.setPaperBankDocumentId(document); invoice.setPaperInvoiceAutomationHold(false); invoices.save(invoice);
+        for(long order:memberIds(id)) orders.holdAutomation(order,false);
+    }
+    private java.util.List<Long> memberIds(long id) {
+        return jdbc.queryForList("SELECT order_id FROM common_invoice_orders WHERE invoice_id=? AND active_membership=1 ORDER BY order_id",Long.class,id);
+    }
+    @Transactional
+    public void requireUnpaidForCancellation(long id) {
+        var invoice=delivery.lockedInvoiceAfterStandalonePaymentPrelude(id).invoice();
+        if(invoice.getPaidKopecks()!=0 || invoice.getStatus()==com.hunt.otziv.common_billing.model.CommonInvoiceStatus.PAID)
+            throw problem("Общий счёт уже оплачен; отмена документов запрещена");
+        for(long order:memberIds(id)) orders.requireUnpaidForCancellation(order);
+    }
+    @Transactional
+    public void holdForPaymentReview(long id) {
+        var invoice=invoices.findByIdForUpdate(id).orElse(null);
+        if(invoice==null) return; // Late bank evidence and frozen staff recipients still remain valid.
+        invoice.setPaperInvoiceAutomationHold(true);invoice.setPaperInvoiceReviewHold(true);invoice.setNextReminderAt(null);invoices.save(invoice);
+        for(long order:memberIds(id)) orders.holdForPaymentReview(order);
+    }
+    @Transactional
+    public void holdAutomation(long id,boolean hold) {
+        var invoice=delivery.lockedInvoiceAfterStandalonePaymentPrelude(id).invoice();
+        if(!hold && invoice.isPaperInvoiceReviewHold()) throw problem("Есть несверенное поступление по отменённому счёту");
+        invoice.setPaperInvoiceAutomationHold(hold);if(hold) invoice.setNextReminderAt(null);
+        invoices.save(invoice);
+        for(long order:memberIds(id)) orders.holdAutomation(order,hold);
+    }
+    @Transactional
+    public void cancelled(long id,String document) {
+        var invoice=delivery.lockedInvoiceAfterStandalonePaymentPrelude(id).invoice();
+        if(invoice.getPaidKopecks()!=0 || !java.util.Objects.equals(document,invoice.getPaperBankDocumentId())) throw problem("Общий счёт изменился или уже оплачен");
+        invoice.setPaperBankDocumentId(null);invoice.setPaperInvoiceIssuedAt(null);invoice.setSentAt(null);
+        invoice.setNextReminderAt(null);invoice.setPaperInvoiceAutomationHold(true);
+        invoice.setStatus(com.hunt.otziv.common_billing.model.CommonInvoiceStatus.READY);
+        invoices.save(invoice);
+        for(long order:memberIds(id)) orders.cancelled(order,true);
     }
     @Transactional
     public void settle(long id,long amount,String payment) { settlement.applyVerifiedPaperBankPayment(id,amount,payment);synchronizeOrders(id); }

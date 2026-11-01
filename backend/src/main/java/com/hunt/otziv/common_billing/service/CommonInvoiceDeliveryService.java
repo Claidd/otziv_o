@@ -193,6 +193,7 @@ public class CommonInvoiceDeliveryService {
         return writeTransaction(() -> {
             var prelude = lockedInvoiceAfterStandalonePaymentPrelude(invoiceId);
             var invoice = prelude.invoice();
+            if(invoice.isPaperInvoiceAutomationHold()) throw new ResponseStatusException(HttpStatus.CONFLICT,"Банковский счёт отменяется или отменён. Для новой отправки сначала выпустите новый комплект");
             if (checkVisibility) ensureCommonInvoiceVisibleForCurrentUser(invoice);
             var existing = messageQueue.unresolved(invoiceId);
             if (existing.isPresent()) {
@@ -444,7 +445,7 @@ public class CommonInvoiceDeliveryService {
         return writeTransaction(() -> {
             var invoice = lockedInvoiceAfterStandalonePaymentPrelude(prepared.invoiceId()).invoice();
             refreshInvoiceAmounts(invoice, invoiceOrderRepository.findByInvoiceIdWithOrders(prepared.invoiceId()));
-            return java.util.Objects.equals(invoice.getPaymentMessageOperationId(), prepared.operationId())
+            return !invoice.isPaperInvoiceAutomationHold() && java.util.Objects.equals(invoice.getPaymentMessageOperationId(), prepared.operationId())
                     && !invoice.isPaymentMessageConfirmed() && SEND_INVOICE_STATUSES.contains(invoice.getStatus())
                     && remainingKopecks(invoice) > 0 && remainingKopecks(invoice) == prepared.remainingKopecks();
         });
@@ -554,7 +555,7 @@ public class CommonInvoiceDeliveryService {
     }
 
     boolean isStillDueReminderCandidate(CommonInvoice invoice, LocalDateTime now) {
-        return invoice != null && REMINDER_STATUSES.contains(invoice.getStatus()) && invoice.getNextReminderAt() != null && !invoice.getNextReminderAt().isAfter(now);
+        return invoice != null && !invoice.isPaperInvoiceAutomationHold() && REMINDER_STATUSES.contains(invoice.getStatus()) && invoice.getNextReminderAt() != null && !invoice.getNextReminderAt().isAfter(now);
     }
 
     boolean isPaymentRouteChangedMessagePending(CommonInvoice invoice) {

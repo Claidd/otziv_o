@@ -21,7 +21,7 @@ public class PaperBillingService {
         long company=targets.company(target,auth);
         return new Context(settings.isEnabled(),bank.configured()&&settings.isBankOperationsEnabled(),bank.fixture()||!settings.getDadataKey().isBlank(),
                 settings.getAccountLast4(),company,(String)targets.companyInfo(company).get("company_title"),targets.previewAmount(target),
-                payer(store.payer(company)),store.target(target).map(store::document).orElse(null));
+                payer(store.payer(company)),store.latest(target).map(store::document).orElse(null));
     }
     Payer payer(String source) {
         if (source==null) return null;
@@ -42,6 +42,8 @@ public class PaperBillingService {
         long company=targets.company(target,auth);
         var existing=store.target(target);
         if (existing.isPresent()) return store.document(existing.get());
+        if(store.hasUnresolvedReceipt(target,null)) throw problem("По прежнему счёту есть несверенное поступление. Новый комплект пока не выпускается");
+        requireCancellationNotice(target);
         // Persist buyer independently: a bank/delivery failure must not discard completed form data.
         store.savePayer(company,encode(request.payer()),auth.getName());
         String account=bank.supplierAccount();
@@ -52,6 +54,8 @@ public class PaperBillingService {
         transaction.setIsolationLevel(org.springframework.transaction.TransactionDefinition.ISOLATION_READ_COMMITTED);
         return transaction.execute(status -> {
             var prepared=targets.prepare(target,auth); // canonical Order locks precede the document row
+            if(store.hasUnresolvedReceipt(target,null)) throw problem("Обнаружено несверенное поступление по прежнему счёту. Нужна ручная сверка");
+            requireCancellationNotice(target);
             if (prepared.companyId()!=company) throw problem("Компания-плательщик изменилась. Обновите реквизиты перед выпуском документов");
             var current=store.target(target);
             if (current.isPresent()) return store.document(current.get());
@@ -67,14 +71,25 @@ public class PaperBillingService {
                 throw problem("Сначала привяжите группу заказчика и отправителя");
             String id=UUID.randomUUID().toString();
             store.insert(id,target,company,prepared.linkId(),prepared.amountKopecks(),encode(request.payer()),account,bank.customer(),client,group,auth.getName());
+            targets.holdAutomation(target,false);
             store.jdbc().update("UPDATE paper_invoice_document SET service_name=?,vat_kind=? WHERE id=?",serviceName,vatKind,id);
             return store.document(store.row(id));
         });
     }
     public Map<String,Object> authorized(String id,Authentication auth) {
         Map<String,Object> r=store.row(id);
-        targets.company(new Target((String)r.get("target_kind"),((Number)r.get("target_id")).longValue()),auth);
+        if(r.get("cancelled_at")!=null) targets.authorizeHistorical(((Number)r.get("company_id")).longValue(),auth);
+        else targets.company(new Target((String)r.get("target_kind"),((Number)r.get("target_id")).longValue()),auth);
         return r;
+    }
+    void holdForCancellationReview(Map<String,Object> row) {
+        targets.holdForPaymentReview(new Target((String)row.get("target_kind"),((Number)row.get("target_id")).longValue()));
+    }
+    private void requireCancellationNotice(Target target) {
+        store.latest(target).filter(r->r.get("cancelled_at")!=null).ifPresent(row->{
+            if(!Set.of("SENT","SKIPPED").contains(Objects.toString(row.get("cancel_message_delivery"),"")))
+                throw problem("Дождитесь подтверждения уведомления заказчика об отмене прежнего счёта. При неизвестном результате доставки нужна сверка");
+        });
     }
     public void completeDelivery(String id) {
         var before=store.row(id);
@@ -84,6 +99,7 @@ public class PaperBillingService {
         transaction.executeWithoutResult(tx -> {
             targets.lockDelivery(target); // Order / common-invoice locks always precede the document lock.
             var row=store.jdbc().queryForMap("SELECT * FROM paper_invoice_document WHERE id=? FOR UPDATE",id);
+            if(row.get("cancel_requested_at")!=null) return;
             if(row.get("delivery_completed_at")!=null) return;
             if(!"SENT".equals(row.get("message_delivery")) || !"SENT".equals(row.get("invoice_delivery")) || !"SENT".equals(row.get("act_delivery")))
                 throw problem("Доставка сообщения и обоих PDF ещё не подтверждена");

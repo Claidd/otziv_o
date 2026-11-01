@@ -31,6 +31,22 @@ public class PaperBillingNoticeStore {
     public void postponePreparation(String document) {
         jdbc.update("UPDATE paper_invoice_document SET staff_notice_next_attempt_at=DATE_ADD(NOW(6),INTERVAL 1 MINUTE) WHERE id=? AND staff_notices_prepared_at IS NULL",document);
     }
+    public List<Map<String,Object>> unpreparedEvents() {
+        return jdbc.queryForList("SELECT document_id,event_key,body FROM paper_invoice_event WHERE prepared_at IS NULL AND next_attempt_at<=NOW(6) ORDER BY next_attempt_at LIMIT 20");
+    }
+    @Transactional
+    public void prepareEvent(String document,String event,List<Recipient> recipients,String body) {
+        var rows=jdbc.queryForList("SELECT prepared_at FROM paper_invoice_event WHERE document_id=? AND event_key=? FOR UPDATE",document,event);
+        if(rows.isEmpty() || rows.getFirst().get("prepared_at")!=null) return;
+        for(var recipient:recipients) jdbc.update("""
+            INSERT IGNORE INTO paper_invoice_staff_notice(document_id,event_key,recipient_user_id,manager_id,chat_id,body)
+            VALUES(?,?,?,?,?,?)
+            """,document,event,recipient.userId(),recipient.managerId(),recipient.chatId(),body);
+        jdbc.update("UPDATE paper_invoice_event SET prepared_at=NOW(6) WHERE document_id=? AND event_key=?",document,event);
+    }
+    public void postponeEvent(String document,String event) {
+        jdbc.update("UPDATE paper_invoice_event SET next_attempt_at=DATE_ADD(NOW(6),INTERVAL 1 MINUTE) WHERE document_id=? AND event_key=? AND prepared_at IS NULL",document,event);
+    }
     public List<Long> due() {
         jdbc.update("UPDATE paper_invoice_staff_notice SET state='UNKNOWN',error_text='Результат отправки неизвестен; нужна сверка',updated_at=NOW(6) WHERE state='SENDING' AND updated_at<DATE_SUB(NOW(6),INTERVAL 5 MINUTE)");
         return jdbc.queryForList("SELECT notice_id FROM paper_invoice_staff_notice WHERE state='PENDING' AND next_attempt_at<=NOW(6) ORDER BY next_attempt_at,notice_id LIMIT 50",Long.class);
@@ -44,7 +60,7 @@ public class PaperBillingNoticeStore {
         if(jdbc.update("UPDATE IGNORE paper_invoice_staff_notice SET chat_id=? WHERE notice_id=? AND chat_id IS NULL AND state='PENDING'",chat,id)==1) return true;
         var row=row(id);
         if(row.get("chat_id")!=null) return true;
-        jdbc.update("UPDATE paper_invoice_staff_notice SET state='SKIPPED',error_text='Этот чат уже получает уведомление о том же счёте',updated_at=NOW(6) WHERE notice_id=? AND state='PENDING'",id);
+        jdbc.update("UPDATE paper_invoice_staff_notice SET state='SKIPPED',error_text='Этот чат уже получает уведомление о том же событии счёта',updated_at=NOW(6) WHERE notice_id=? AND state='PENDING'",id);
         return false;
     }
     @Transactional

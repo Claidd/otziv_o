@@ -24,7 +24,7 @@ class PaperBillingSettlementMySqlIntegrationTest {
     @BeforeEach void setup() {
         var ds=new DriverManagerDataSource(MYSQL.getJdbcUrl(),MYSQL.getUsername(),MYSQL.getPassword());
         jdbc=new JdbcTemplate(ds);
-        for(String table:List.of("paper_invoice_staff_notice","company_billing_payer_audit","company_billing_payer","paper_invoice_bank_receipt","paper_invoice_document","paper_invoice_statement_cursor","payment_links","common_invoices","orders"))
+        for(String table:List.of("paper_invoice_event","paper_invoice_staff_notice","company_billing_payer_audit","company_billing_payer","paper_invoice_bank_receipt","paper_invoice_document","paper_invoice_statement_cursor","payment_links","common_invoices","orders"))
             jdbc.execute("DROP TABLE IF EXISTS "+table);
         jdbc.execute("CREATE TABLE orders(order_id BIGINT PRIMARY KEY)");
         jdbc.execute("INSERT INTO orders VALUES(42)");
@@ -36,6 +36,7 @@ class PaperBillingSettlementMySqlIntegrationTest {
         new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_350__paper_document_visual_signature.sql")).execute(ds);
         new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_351__paper_document_intro_delivery.sql")).execute(ds);
         new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_352__paper_invoice_delivery_and_staff_notices.sql")).execute(ds);
+        new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_353__paper_invoice_cancellation.sql")).execute(ds);
         store=new PaperBillingStore(jdbc,mock(BankPaperInvoices.class)); id=UUID.randomUUID().toString();
         var service=mock(PaperBillingService.class);
         when(service.payer(anyString())).thenReturn(new Payer("company","Тест","7707083893","773601001",""));
@@ -268,5 +269,134 @@ class PaperBillingSettlementMySqlIntegrationTest {
         var service=new PaperBillingService(store,targets,new PaperBillingSettings(),mock(PaperBillingBankClient.class),new com.fasterxml.jackson.databind.ObjectMapper(),new DataSourceTransactionManager(jdbc.getDataSource()));
         assertThrows(org.springframework.web.server.ResponseStatusException.class,()->service.completeDelivery(id));
         verify(targets,never()).delivered(any(),any());assertNull(store.row(id).get("delivery_completed_at"));
+    }
+    PaperBillingCancellation cancelWorkflow; PaperBillingBankClient cancelBank; PaperBillingTargets cancelTargets;
+    org.springframework.security.core.Authentication cancelActor=new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("admin","unused");
+    void cancellationFixture() throws Exception {
+        cancelBank=mock(PaperBillingBankClient.class);cancelTargets=mock(PaperBillingTargets.class);
+        var settings=new PaperBillingSettings();settings.setEnabled(true);settings.setBankOperationsEnabled(true);
+        var authorized=mock(PaperBillingService.class);
+        when(authorized.authorized(eq(id),any())).thenAnswer(call->store.row(id));
+        when(cancelBank.configured()).thenReturn(true);when(cancelBank.invoicePaymentStatus(any())).thenReturn("payment_waiting");
+        doAnswer(call->{jdbc.queryForObject("SELECT order_id FROM orders WHERE order_id=42 FOR UPDATE",Long.class);return null;}).when(cancelTargets).lockDelivery(any());
+        var json=new com.fasterxml.jackson.databind.ObjectMapper();
+        when(cancelBank.call(eq("/open-banking/v1.0/statements"),eq(org.springframework.http.HttpMethod.POST),any())).thenReturn(json.readTree("{\"Data\":{\"Statement\":{\"statementId\":\"cancel-test\"}}}"));
+        when(cancelBank.call(contains("/statements/cancel-test"),eq(org.springframework.http.HttpMethod.GET),isNull())).thenReturn(cancelStatement("Ready",""));
+        jdbc.update("UPDATE paper_invoice_document SET bank_act_id='bank-act',invoice_pdf=?,act_pdf=?,message_delivery='SENT',invoice_delivery='SENT',act_delivery='SENT',delivery_completed_at=NOW(6) WHERE id=?",new byte[]{1,2},new byte[]{3,4},id);
+        cancelWorkflow=new PaperBillingCancellation(store,authorized,cancelTargets,cancelBank,settings,settlement,mock(PaperBillingDelivery.class),new DataSourceTransactionManager(jdbc.getDataSource()));
+    }
+    com.fasterxml.jackson.databind.JsonNode cancelStatement(String state,String transactions) throws Exception {
+        return new com.fasterxml.jackson.databind.ObjectMapper().readTree("{\"Data\":{\"Statement\":[{\"accountId\":\"40802810000000004287/044525104\",\"statementId\":\"cancel-test\",\"status\":\""+state+"\",\"Transaction\":["+transactions+"]}]},\"Meta\":{\"totalPages\":1}}");
+    }
+    void requestCancel() {cancelWorkflow.request(id,new CancelRequest("Ошибка реквизитов",true),cancelActor);}
+    void drainCancel() {for(int i=0;i<14 && !Set.of("CANCELLED","CANCEL_REVIEW").contains(store.row(id).get("stage"));i++) cancelWorkflow.process(id);}
+    @Test void cancellationDeletesBothDocumentsAndKeepsImmutableHistory() throws Exception {
+        cancellationFixture();requestCancel();requestCancel();drainCancel();
+        assertEquals("CANCELLED",store.row(id).get("stage"));assertNotNull(store.row(id).get("invoice_deleted_at"));assertNotNull(store.row(id).get("act_deleted_at"));
+        assertArrayEquals(new byte[]{1,2},(byte[])store.row(id).get("invoice_pdf"));assertTrue(store.target(new Target("ORDER",42L)).isEmpty());
+        assertEquals(id,store.latest(new Target("ORDER",42L)).orElseThrow().get("id"));
+        verify(cancelBank,times(1)).deleteDocument(any(),eq(true));verify(cancelBank,times(1)).deleteDocument(any(),eq(false));
+        verify(cancelTargets,times(1)).holdAutomation(new Target("ORDER",42L),true);
+        verify(cancelTargets,times(1)).cancelled(new Target("ORDER",42L),id,8L);verifyNoInteractions(finance);
+        assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM paper_invoice_event WHERE event_key='CANCELLED'",Integer.class));
+        assertFalse(store.claimMessage(id));assertFalse(store.claimDelivery(id,false));
+        store.error(id,"ACT_CREATED","late");store.bankId(id,true,"bank-act","ACT_CREATED");assertEquals("CANCELLED",store.row(id).get("stage"));
+        jdbc.update("INSERT INTO payment_links(id) VALUES(9)");String fresh=UUID.randomUUID().toString();
+        store.insert(fresh,new Target("ORDER",42L),1,9L,250000,"{}","40802810000000004287/044525104","customer","manager","WHATSAPP:1@g.us","test");
+        assertEquals(fresh,store.target(new Target("ORDER",42L)).orElseThrow().get("id"));assertEquals("CANCELLED",store.row(id).get("stage"));
+    }
+    @Test void paidReceiptWinsBeforeCancellation() throws Exception {
+        cancellationFixture();settlement.accept(receipt("paid-first",250000,"7707083893"));
+        assertThrows(org.springframework.web.server.ResponseStatusException.class,this::requestCancel);
+        assertNull(store.row(id).get("cancel_requested_at"));verify(cancelBank,never()).deleteDocument(any(),anyBoolean());
+    }
+    @Test void cancellationWinsBeforeWebhookAndNeverAppliesThePayment() throws Exception {
+        cancellationFixture();requestCancel();settlement.accept(receipt("after-request",250000,"7707083893"));drainCancel();
+        assertEquals("CANCEL_REVIEW",store.row(id).get("stage"));assertNull(store.row(id).get("cancelled_at"));verifyNoInteractions(finance);
+        assertEquals("NEEDS_REVIEW",jdbc.queryForObject("SELECT state FROM paper_invoice_bank_receipt",String.class));verify(cancelBank,never()).deleteDocument(any(),anyBoolean());
+    }
+    @Test void simultaneousPaymentAndCancellationHaveOnlyOneFinancialWinner() throws Exception {
+        cancellationFixture();
+        concurrently(()->settlement.accept(receipt("race-cancel",250000,"7707083893")),()->{try{requestCancel();}catch(org.springframework.web.server.ResponseStatusException alreadyPaid){}});
+        if(store.row(id).get("paid_at")!=null) {assertNull(store.row(id).get("cancel_requested_at"));verify(finance).applyVerifiedPaperBankPayment(8L,250000);}
+        else {assertEquals("CANCEL_REVIEW",store.row(id).get("stage"));verifyNoInteractions(finance);}
+        verify(cancelBank,never()).deleteDocument(any(),anyBoolean());
+    }
+    @Test void paymentDuringActDeletionStopsInvoiceDeletionButPreservesBankReceipt() throws Exception {
+        cancellationFixture();requestCancel();
+        doAnswer(call->{settlement.accept(receipt("during-delete",250000,"7707083893"));return null;}).when(cancelBank).deleteDocument(any(),eq(true));
+        drainCancel();assertEquals("CANCEL_REVIEW",store.row(id).get("stage"));assertNotNull(store.row(id).get("act_deleted_at"));
+        assertNull(store.row(id).get("invoice_deleted_at"));verify(cancelBank,never()).deleteDocument(any(),eq(false));verifyNoInteractions(finance);
+    }
+    @Test void latePaymentAfterCompletedCancellationIsStoredAndAlertsStaff() throws Exception {
+        cancellationFixture();requestCancel();drainCancel();settlement.accept(receipt("too-late",250000,"7707083893"));settlement.accept(receipt("too-late",250000,"7707083893"));
+        assertEquals("CANCELLED",store.row(id).get("stage"));assertNull(store.row(id).get("paid_at"));verifyNoInteractions(finance);
+        assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM paper_invoice_event WHERE event_key='PAYMENT_REVIEW'",Integer.class));
+        assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM paper_invoice_bank_receipt WHERE state='NEEDS_REVIEW'",Integer.class));
+    }
+    @Test void invoiceDeleteFailureRetainsActReceiptAndRetriesOnlyTheInvoice() throws Exception {
+        cancellationFixture();requestCancel();doThrow(new IllegalStateException("timeout")).doNothing().when(cancelBank).deleteDocument(any(),eq(false));
+        drainCancel();assertEquals("CANCELLED",store.row(id).get("stage"));verify(cancelBank,times(1)).deleteDocument(any(),eq(true));verify(cancelBank,times(2)).deleteDocument(any(),eq(false));
+    }
+    @Test void asynchronousStatementIsPolledWithoutIssuingAnotherRequest() throws Exception {
+        cancellationFixture();requestCancel();
+        when(cancelBank.call(contains("/statements/cancel-test"),eq(org.springframework.http.HttpMethod.GET),isNull())).thenReturn(cancelStatement("Pending",""));
+        for(int i=0;i<4;i++) cancelWorkflow.process(id);
+        verify(cancelBank,times(1)).call(eq("/open-banking/v1.0/statements"),eq(org.springframework.http.HttpMethod.POST),any());
+        verify(cancelBank,never()).deleteDocument(any(),anyBoolean());assertEquals("CANCEL_REQUESTED",store.row(id).get("stage"));
+    }
+    @Test void partialTransferInFreshStatementBlocksAllDeletion() throws Exception {
+        cancellationFixture();requestCancel();
+        String transfer="{\"paymentId\":\"partial\",\"creditDebitIndicator\":\"Credit\",\"status\":\"Booked\",\"transactionTypeCode\":\"Платежное поручение\",\"description\":\"Оплата "+store.row(id).get("number")+"\",\"Amount\":{\"amount\":\"1.00\",\"currency\":\"RUB\"},\"DebtorParty\":{\"inn\":\"7707083893\"}}";
+        when(cancelBank.call(contains("/statements/cancel-test"),eq(org.springframework.http.HttpMethod.GET),isNull())).thenReturn(cancelStatement("Ready",transfer));
+        drainCancel();assertEquals("CANCEL_REVIEW",store.row(id).get("stage"));verify(cancelBank,never()).deleteDocument(any(),anyBoolean());verifyNoInteractions(finance);
+    }
+    @Test void localFinalizationFailureRollsBackAndCanResume() throws Exception {
+        cancellationFixture();requestCancel();doThrow(new IllegalStateException("queue unavailable")).when(cancelTargets).cancelled(any(),anyString(),anyLong());
+        drainCancel();assertNull(store.row(id).get("cancelled_at"));assertEquals("FINALIZE",store.row(id).get("cancel_step"));assertTrue(store.target(new Target("ORDER",42L)).isPresent());
+        doNothing().when(cancelTargets).cancelled(any(),anyString(),anyLong());drainCancel();assertEquals("CANCELLED",store.row(id).get("stage"));
+        verify(cancelBank,times(1)).deleteDocument(any(),eq(true));verify(cancelBank,times(1)).deleteDocument(any(),eq(false));
+    }
+    @Test void inFlightCreationAndDeliveryCannotBeCancelled() throws Exception {
+        cancellationFixture();jdbc.update("UPDATE paper_invoice_document SET stage='ACT_CREATING' WHERE id=?",id);
+        assertThrows(org.springframework.web.server.ResponseStatusException.class,this::requestCancel);
+        jdbc.update("UPDATE paper_invoice_document SET stage='FILES_READY',act_delivery='SENDING' WHERE id=?",id);
+        assertThrows(org.springframework.web.server.ResponseStatusException.class,this::requestCancel);assertNull(store.row(id).get("cancel_requested_at"));
+    }
+    @Test void bankPaidStatusBlocksDeletionEvenBeforeWebhookArrives() throws Exception {
+        cancellationFixture();when(cancelBank.invoicePaymentStatus(any())).thenReturn("payment_paid");requestCancel();drainCancel();
+        assertEquals("CANCEL_REVIEW",store.row(id).get("stage"));verify(cancelBank,never()).deleteDocument(any(),anyBoolean());verifyNoInteractions(finance);
+    }
+    @Test void eventsHaveSeparateDeduplicationKeysForCancellationAndLatePayment() throws Exception {
+        cancellationFixture();requestCancel();drainCancel();settlement.accept(receipt("late-events",250000,"7707083893"));
+        var notices=new PaperBillingNoticeStore(jdbc);
+        var recipients=List.of(new com.hunt.otziv.u_users.api.PaymentNoticeRecipients.Recipient(1,null,9191L));
+        for(var event:notices.unpreparedEvents()) {
+            notices.prepareEvent(id,(String)event.get("event_key"),recipients,(String)event.get("body"));
+            notices.prepareEvent(id,(String)event.get("event_key"),recipients,"duplicate");
+        }
+        assertEquals(2,jdbc.queryForObject("SELECT COUNT(*) FROM paper_invoice_staff_notice",Integer.class));assertTrue(notices.unpreparedEvents().isEmpty());
+    }
+    @Test void pendingUncreatedDocumentCanBeCancelledWithoutAnyBankMutation() throws Exception {
+        cancellationFixture();jdbc.update("UPDATE paper_invoice_document SET stage='PENDING',bank_invoice_id=NULL,bank_act_id=NULL,message_delivery='PENDING',invoice_delivery='PENDING',act_delivery='PENDING' WHERE id=?",id);
+        requestCancel();drainCancel();assertEquals("CANCELLED",store.row(id).get("stage"));assertEquals("SKIPPED",store.row(id).get("cancel_message_delivery"));
+        verify(cancelBank,never()).deleteDocument(any(),anyBoolean());verify(cancelBank,never()).create(any(),any(),anyBoolean());
+    }
+    @Test void lateReceiptForOldCancelledDocumentBlocksAReplacementPayment() throws Exception {
+        cancellationFixture();requestCancel();drainCancel();String fresh=UUID.randomUUID().toString();
+        jdbc.update("INSERT INTO payment_links(id) VALUES(9)");
+        store.insert(fresh,new Target("ORDER",42L),1,9L,250000,"{}","40802810000000004287/044525104","customer","manager","WHATSAPP:1@g.us","test");
+        store.bankId(fresh,false,"new-bank","WAITING_PAYMENT");
+        settlement.accept(receipt("old-late",250000,"7707083893"));assertEquals("NEEDS_REVIEW",store.row(fresh).get("stage"));
+        settlement.accept(new BankReceipt("customer","40802810000000004287/044525104","new-payment","7707083893",250000,"Оплата "+store.row(fresh).get("number")));
+        verifyNoInteractions(finance);assertNull(store.row(fresh).get("paid_at"));assertTrue(store.hasUnresolvedReceipt(new Target("ORDER",42L),fresh));
+    }
+    @Test void replacementCannotStartBeforeCancellationNoticeIsConfirmed() throws Exception {
+        cancellationFixture();requestCancel();drainCancel();var target=new Target("ORDER",42L);
+        when(cancelTargets.company(target,cancelActor)).thenReturn(1L);
+        var settings=new PaperBillingSettings();settings.setEnabled(true);settings.setBankOperationsEnabled(true);
+        var service=new PaperBillingService(store,cancelTargets,settings,cancelBank,new com.fasterxml.jackson.databind.ObjectMapper(),new DataSourceTransactionManager(jdbc.getDataSource()));
+        assertThrows(org.springframework.web.server.ResponseStatusException.class,()->service.issue(target,new IssueRequest(new Payer("company","Тест","7707083893","773601001",""),true),cancelActor));
+        verify(cancelBank,never()).supplierAccount();assertTrue(store.target(target).isEmpty());
     }
 }

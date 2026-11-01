@@ -129,6 +129,25 @@ public class PaperBillingBankClient {
             throw problem("Банк не вернул корректный PDF");
         return bytes;
     }
+    private String documentPath(Map<String,Object> row,boolean act) {
+        String customer=Objects.toString(row.get("customer_code"),"");
+        String id=Objects.toString(row.get(act?"bank_act_id":"bank_invoice_id"),"");
+        if(!customer.equals(customer()) || !customer.matches("[A-Za-z0-9]{1,20}") || !id.matches("[A-Za-z0-9-]{1,96}"))
+            throw problem("Банковский документ не соответствует подключению");
+        return "/invoice/v1.0/"+(act?"closing-documents":"bills")+"/"+customer+"/"+id;
+    }
+    public String invoicePaymentStatus(Map<String,Object> row) {
+        return call(documentPath(row,false)+"/payment-status",HttpMethod.GET,null).path("Data").path("paymentStatus").asText();
+    }
+    /** DELETE is retried only for the same immutable ID. 404 confirms the desired absence. */
+    public void deleteDocument(Map<String,Object> row,boolean act) {
+        try {
+            var result=call(documentPath(row,act),HttpMethod.DELETE,null).path("Data").path("result");
+            if(!result.isBoolean() || !result.booleanValue()) throw problem("Банк не подтвердил удаление документа");
+        } catch(org.springframework.web.client.HttpClientErrorException.NotFound absent) {
+            // The previous DELETE may have succeeded before its response was lost.
+        }
+    }
     public JsonNode fixtureCall(String path,Object body) {
         if (!fixture()) throw new IllegalStateException("Fixture is unavailable");
         return call(path,HttpMethod.POST,body);

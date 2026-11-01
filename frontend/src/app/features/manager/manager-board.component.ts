@@ -1040,6 +1040,7 @@ export class ManagerBoardComponent implements OnDestroy {
   openPaymentRouteChange(): void {
     this.orderFacade.openPaymentRouteChange();
   }
+  openOrderPaperInvoice(): void {this.orderFacade.openPaperInvoice();}
 
   closePaymentRouteChange(): void {
     this.orderFacade.closePaymentRouteChange();

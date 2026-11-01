@@ -42,6 +42,19 @@ http.createServer(async (req,res)=>{
   }
   if (url.pathname==="/open-banking/v1.0/accounts")
     return send(200,{Data:{Account:[{customerCode:"LOCAL0001",accountId:account,status:"Enabled",currency:"RUB",accountType:"Business"}]}});
+  if (url.pathname.endsWith('/payment-status')) {
+    const doc=documents.get(url.pathname.split('/').at(-2));
+    if(!doc || doc.deleted) return send(404,{message:'missing'});
+    calls.push({method:'GET',path:url.pathname});
+    const paid=receipts.some(r=>r.purpose==='Оплата по счёту '+doc.number && r.SidePayer.inn===doc.payer && r.SideRecipient.amount===String(doc.amount));
+    return send(200,{Data:{paymentStatus:paid?'payment_paid':'payment_waiting'}});
+  }
+  if(req.method==='DELETE' && /^\/invoice\/v1.0\/(bills|closing-documents)\/LOCAL0001\/[A-Za-z0-9-]+$/.test(url.pathname)) {
+    const doc=documents.get(url.pathname.split('/').at(-1));
+    calls.push({method:'DELETE',path:url.pathname});
+    if(!doc || doc.deleted) return send(404,{message:'missing'});
+    doc.deleted=true;return send(200,{Data:{result:true}});
+  }
   if (req.method==="POST" && ["/invoice/v1.0/bills","/invoice/v1.0/closing-documents"].includes(url.pathname)) {
     const d=body.Data, content=d?.Content?.Invoice||d?.Content?.Act;
     if (!d?.SecondSide?.taxCode || !content?.number || !content?.Positions?.length) return send(400,{message:"invalid document"});
@@ -51,7 +64,7 @@ http.createServer(async (req,res)=>{
   }
   if (url.pathname.endsWith("/file")) {
     const id=url.pathname.split("/").at(-2), document=documents.get(id);
-    if (!document) return send(404,{message:"missing"});
+    if (!document || document.deleted) return send(404,{message:"missing"});
     res.writeHead(200,{"Content-Type":"application/pdf"});return res.end(pdf(document.number));
   }
   if (url.pathname==="/delivery") {

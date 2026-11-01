@@ -441,7 +441,7 @@ class CommonBillingServiceTest {
                 actualPaymentAttributionFlowPolicy, taskReceiptIntegrationService, paymentProfileService, tbankClient);
         ReflectionTestUtils.setField(service, "manualPaymentWorkflow", manualPayments);
         ReflectionTestUtils.setField(service, "invoiceRouteWorkflow", new CommonInvoicePaymentRouteWorkflow(
-                manualPayments, delivery, detailsAssembler, invoiceRouteSelector, initialization, cancellation,
+                org.mockito.Mockito.mock(com.hunt.otziv.p_products.api.PaperInvoiceOrderAutomation.class),manualPayments, delivery, detailsAssembler, invoiceRouteSelector, initialization, cancellation,
                 presenter, settlement, accountRepository, invoiceRepository, invoiceOrderRepository,
                 paymentRefRepository, paperInvoiceManagerNotificationService, contractorPaymentLiveRoutingService,
                 taskReceiptIntegrationService, paymentProfileService, tbankClient));

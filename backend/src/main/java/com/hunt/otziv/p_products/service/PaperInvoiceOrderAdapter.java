@@ -16,6 +16,36 @@ public class PaperInvoiceOrderAdapter implements PaperInvoiceOrderData {
     private final com.hunt.otziv.review_recovery.api.ReviewRecoveryMessageHold recovery;
     private final com.hunt.otziv.p_products.status.service.OrderStatusTransitionService transitions;
     private final com.hunt.otziv.client_messages.api.PaperInvoiceAutomation automation;
+    private final OrderStatusService statuses;
+    @Transactional
+    public void holdForPaymentReview(long id) {
+        var order=orders.findByIdForCounterUpdate(id).orElse(null);
+        if(order==null) return; // The cancelled document outlives deletion/archival of its source.
+        order.setPaperInvoiceReviewHold(true);order.setPaperInvoiceAutomationHold(true);orders.saveAndFlush(order);automation.synchronizeOrder(id);
+    }
+    @Transactional
+    public void requireUnpaidForCancellation(long id) {
+        var order=orders.findByIdForCounterUpdate(id).orElseThrow();
+        if("Оплачено".equals(order.getStatus().getTitle()) || (order.isComplete() && order.getPayDay()!=null))
+            throw new ResponseStatusException(HttpStatus.CONFLICT,"Заказ уже оплачен; отмена документов запрещена");
+    }
+    @Transactional
+    public void holdAutomation(long id,boolean hold) {
+        var order=orders.findByIdForCounterUpdate(id).orElseThrow();
+        if(!hold && order.isPaperInvoiceReviewHold()) throw new ResponseStatusException(HttpStatus.CONFLICT,"Есть несверенное поступление по отменённому счёту");
+        order.setPaperInvoiceAutomationHold(hold);orders.saveAndFlush(order);automation.synchronizeOrder(id);
+    }
+    @Transactional
+    public void cancelled(long id,boolean commonMember) {
+        var order=orders.findByIdForCounterUpdate(id).orElseThrow();
+        if("Оплачено".equals(order.getStatus().getTitle())) throw new ResponseStatusException(HttpStatus.CONFLICT,"Заказ уже оплачен");
+        if(java.util.Set.of("Выставлен счет","Напоминание","Не оплачено").contains(order.getStatus().getTitle())) {
+            order.setStatus(statuses.getOrderStatusByTitle(commonMember?"Ожидает общего счета":"Опубликовано"));
+            order.setStatusChangedAt(java.time.LocalDateTime.now());
+            order.setClientMessageGeneration(Math.addExact(order.getClientMessageGeneration(),1));
+        }
+        order.setPaperInvoiceAutomationHold(true);orders.saveAndFlush(order);automation.synchronizeOrder(id);
+    }
     public long companyId(long id) { return jdbc.queryForObject("SELECT order_company FROM orders WHERE order_id=?",Long.class,id); }
     @Transactional
     public void lockForDelivery(long id) {orders.findByIdForCounterUpdate(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,"Заказ не найден"));}

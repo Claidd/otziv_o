@@ -15,6 +15,11 @@ public class PaperBillingController {
     private final PaperBillingBankClient bank;
     private final PaperBillingStore store;
     private final PaperBillingReconciliation reconciliation;
+    private final PaperBillingCancellation cancellation;
+    @PostMapping("/documents/{id}/cancel")
+    public Document cancel(@PathVariable String id,@RequestBody CancelRequest request,Authentication auth) {
+        return cancellation.request(id,request,auth);
+    }
     @PostMapping("/{kind}/{targetId}/reconcile")
     public void reconcile(@PathVariable String kind,@PathVariable Long targetId,Authentication auth) {
         service.context(new Target(kind,targetId),auth);

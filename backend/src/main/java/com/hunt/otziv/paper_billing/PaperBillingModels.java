@@ -29,10 +29,11 @@ public final class PaperBillingModels {
         }
     }
     public record IssueRequest(Payer payer, boolean confirmedUnpaid) {}
+    public record CancelRequest(String reason, boolean confirmed) {}
     public record Context(boolean enabled, boolean configured, boolean lookupAvailable, String accountLast4,
             long companyId, String companyTitle, long amountKopecks, Payer payer, Document document) {}
     public record Document(String id, String number, long amountKopecks, String stage,
-            String invoiceDelivery, String actDelivery, String error, LocalDateTime paidAt) {}
+            String invoiceDelivery, String actDelivery, String error, LocalDateTime paidAt,String cancellationDelivery,String cancellationReason) {}
     public record BankReceipt(String customerCode, String accountId, String paymentId, String payerInn,
             long amountKopecks, String purpose) {}
     public record Lookup(List<Payer> candidates) {}

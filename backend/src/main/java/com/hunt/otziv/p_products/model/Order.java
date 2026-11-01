@@ -47,6 +47,10 @@ public class Order {
     @com.fasterxml.jackson.annotation.JsonIgnore
     @Column(name="client_message_generation",nullable=false)
     private long clientMessageGeneration;
+    @Column(name="paper_invoice_automation_hold",nullable=false)
+    private boolean paperInvoiceAutomationHold;
+    @Column(name="paper_invoice_review_hold",nullable=false)
+    private boolean paperInvoiceReviewHold;
     @Column(name = "order_pay_day")
     private LocalDate payDay;
     @Column(name = "order_amount")

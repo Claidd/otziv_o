@@ -7,7 +7,7 @@ describe('Paper invoice asynchronous lifecycle', () => {
   let http: HttpTestingController;
   let fixture: ReturnType<typeof TestBed.createComponent<PaperInvoiceDialogComponent>>;
   const payer = { type: 'company', name: 'Тест', inn: '7707083893', kpp: '773601001', address: '' };
-  const doc = (id: string, stage = 'PENDING') => ({ id, number: `PB-${id}`, amountKopecks: 10000, stage, invoiceDelivery: 'PENDING', actDelivery: 'PENDING', error: null, paidAt: stage === 'PAID' ? '2026-10-31T12:00:00' : null });
+  const doc = (id: string, stage = 'PENDING') => ({ id, number: `PB-${id}`, amountKopecks: 10000, stage, invoiceDelivery: 'PENDING', actDelivery: 'PENDING', error: null, paidAt: stage === 'PAID' ? '2026-10-31T12:00:00' : null, cancellationDelivery: stage==='CANCELLED'?'SKIPPED':'PENDING' });
   function open(id: number, document: ReturnType<typeof doc> | null = null): void {
     openPaperInvoiceDialog({kind: 'ORDER', id}); fixture.detectChanges();
     http.expectOne(`/api/paper-invoices/ORDER/${id}/context`).flush({enabled:true,configured:true,lookupAvailable:true,companyId:id,companyTitle:`Company ${id}`,amountKopecks:10000,accountLast4:'6542',payer,document});
@@ -49,5 +49,31 @@ describe('Paper invoice asynchronous lifecycle', () => {
     open(1);const c=fixture.componentInstance;c.confirmed=true;c.issue();c.issue();c.innChanged('380124742639');
     const issue=http.expectOne('/api/paper-invoices/ORDER/1/issue');expect(issue.request.body.payer.inn).toBe(payer.inn);
     expect(c.draft.inn).toBe(payer.inn);issue.flush(doc('1'));
+  });
+  it('cancellation requires a reason and confirmation and rejects duplicate submissions', () => {
+    open(1,doc('1','WAITING_PAYMENT'));const c=fixture.componentInstance;
+    c.cancel();http.expectNone(r=>r.url.endsWith('/cancel'));
+    c.cancelReason='Ошибка реквизитов';c.cancelConfirmed=true;c.cancel();c.cancel();
+    const cancel=http.expectOne('/api/paper-invoices/documents/1/cancel');
+    expect(cancel.request.body).toEqual({reason:'Ошибка реквизитов',confirmed:true});
+    cancel.flush(doc('1','CANCEL_REQUESTED'));expect(c.context()?.document?.stage).toBe('CANCEL_REQUESTED');expect(c.canCancel()).toBe(false);
+  });
+  it('an old waiting poll cannot undo the cancellation response', () => {
+    open(1,doc('1','WAITING_PAYMENT'));const c=fixture.componentInstance;c.poll();const stale=http.expectOne('/api/paper-invoices/documents/1');
+    c.cancelReason='Ошибка';c.cancelConfirmed=true;c.cancel();http.expectOne('/api/paper-invoices/documents/1/cancel').flush(doc('1','CANCEL_REQUESTED'));
+    stale.flush(doc('1','WAITING_PAYMENT'));expect(c.context()?.document?.stage).toBe('CANCEL_REQUESTED');
+  });
+  it('paid documents cannot be cancelled and a replacement requires completed cancellation', () => {
+    open(1,doc('1','PAID'));const c=fixture.componentInstance;c.cancelReason='Ошибка';c.cancelConfirmed=true;c.cancel();c.newInvoice();
+    http.expectNone(r=>r.method==='POST');expect(c.replacement()).toBe(false);
+    open(2,doc('2','CANCELLED'));c.newInvoice();expect(c.replacement()).toBe(true);expect(c.confirmed).toBe(false);
+    fixture.detectChanges();expect(fixture.nativeElement.textContent).toContain('Сумма: 100 ₽');
+    c.confirmed=true;c.issue();http.expectOne('/api/paper-invoices/ORDER/2/issue').flush(doc('new'));
+    expect(c.replacement()).toBe(false);expect(c.context()?.document?.id).toBe('new');
+  });
+  it('a replacement waits for the cancellation notice receipt', () => {
+    open(1,{...doc('1','CANCELLED'),cancellationDelivery:'UNKNOWN'});const c=fixture.componentInstance;
+    c.newInvoice();expect(c.replacement()).toBe(false);expect(c.canReplace()).toBe(false);
+    open(2,{...doc('2','CANCELLED'),cancellationDelivery:'SENT'});c.newInvoice();expect(c.replacement()).toBe(true);
   });
 });

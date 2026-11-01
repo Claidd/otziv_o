@@ -78,11 +78,26 @@ public class PaperBillingSettlement {
                     amount_kopecks,payer_inn,purpose,state,received_at) VALUES(?,?,?,?,?,?,?,'RECEIVED',NOW(6))
                     """,receipt.customerCode(),receipt.accountId(),receipt.paymentId(),id,receipt.amountKopecks(),receipt.payerInn(),receipt.purpose());
                 if (inserted==0) return;
+                if(row.get("cancel_requested_at")!=null) {
+                    store.jdbc().update("UPDATE paper_invoice_bank_receipt SET state='NEEDS_REVIEW' WHERE customer_code=? AND account_id=? AND payment_id=?",
+                            receipt.customerCode(),receipt.accountId(),receipt.paymentId());
+                    String reason="Перевод "+receipt.paymentId()+" на "+PaperBillingDelivery.amountText(receipt.amountKopecks())
+                            +" поступил во время или после отмены счёта № "+row.get("number")+". Нужна ручная сверка; заказ автоматически не оплачен.";
+                    store.jdbc().update("UPDATE paper_invoice_document SET stage=IF(cancelled_at IS NULL,'CANCEL_REVIEW',stage),cancel_step=IF(cancelled_at IS NULL,'REVIEW',cancel_step),error_text=?,updated_at=NOW(6) WHERE id=?",reason,id);
+                    store.event(id,"PAYMENT_REVIEW",reason);
+                    service.holdForCancellationReview(row);
+                    store.jdbc().update("""
+                        UPDATE paper_invoice_document SET stage='NEEDS_REVIEW',error_text=?,updated_at=NOW(6)
+                        WHERE target_kind=? AND target_id=? AND cancelled_at IS NULL AND cancel_requested_at IS NULL AND paid_at IS NULL
+                        """,reason,row.get("target_kind"),row.get("target_id"));
+                    return;
+                }
                 var payer=service.payer((String)row.get("payer_json"));
                 long receipts=store.jdbc().queryForObject("SELECT COUNT(*) FROM paper_invoice_bank_receipt WHERE document_id=?",Long.class,id);
                 if (!receipt.customerCode().equals(row.get("customer_code")) || !receipt.accountId().equals(row.get("supplier_account"))
                         || !receipt.payerInn().equals(payer.inn()) || receipt.amountKopecks()!=((Number)row.get("amount_kopecks")).longValue()
                         || row.get("bank_invoice_id")==null || receipts!=1 || row.get("paid_at")!=null
+                        || store.hasUnresolvedReceipt(new Target((String)row.get("target_kind"),((Number)row.get("target_id")).longValue()),id)
                         || !store.composition(new Target((String)row.get("target_kind"),((Number)row.get("target_id")).longValue())).equals(row.get("composition_hash"))) {
                     store.jdbc().update("UPDATE paper_invoice_bank_receipt SET state='NEEDS_REVIEW' WHERE customer_code=? AND account_id=? AND payment_id=?",
                             receipt.customerCode(),receipt.accountId(),receipt.paymentId());

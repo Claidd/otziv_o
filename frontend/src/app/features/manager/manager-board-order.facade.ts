@@ -363,6 +363,10 @@ export class ManagerBoardOrderFacade {
       }
     });
   }
+  openPaperInvoice(): void {
+    const order=this.editOrder();
+    if(order && !this.orderSaving() && !this.paymentRouteChanging()) this.deps.openPaperInvoice?.({kind:'ORDER',id:order.id},()=>this.deps.toastService.error('Бумажный счёт недоступен','Владелец ещё не включил выпуск документов Точки'),this.deps.loadBoard);
+  }
 
   markPaperInvoiceIssued(): void {
     const order = this.editOrder();

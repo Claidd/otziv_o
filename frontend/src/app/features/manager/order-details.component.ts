@@ -1,4 +1,5 @@
 import { DecimalPipe } from '@angular/common';
+import { openPaperInvoiceDialog } from '../../shared/paper-invoice-dialog.component';
 import { Component, DestroyRef, HostListener, computed, effect, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
@@ -240,6 +241,12 @@ export class OrderDetailsComponent {
   readonly isAdmin = computed(() => this.auth.authenticated() && this.auth.hasRealmRole('ADMIN'));
   readonly canManagePayments = computed(() => this.auth.authenticated()
     && this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']));
+  readonly canManagePaperInvoices = computed(() => this.auth.authenticated() && this.auth.hasAnyRealmRole(['ADMIN','OWNER','MANAGER']));
+  openPaperInvoice(): void {
+    const id=this.orderId();if(!id || !this.canManagePaperInvoices()) return;
+    const generation=this.orderRouteGeneration;
+    openPaperInvoiceDialog({kind:'ORDER',id},()=>this.toastService.error('Бумажный счёт недоступен','Владелец ещё не включил выпуск документов Точки'),()=>{if(generation===this.orderRouteGeneration && id===this.orderId()) this.loadDetails();});
+  }
   readonly canShowPaymentLinkAction = computed(() => {
     const status = this.tbankStatus();
     return !!this.details()

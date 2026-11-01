@@ -15,6 +15,10 @@ public interface BankPaperInvoices {
     void settle(long invoiceId,long amountKopecks,String paymentId);
     void delivered(long invoiceId,String documentId);
     void lockForDelivery(long invoiceId);
+    void holdAutomation(long invoiceId,boolean hold);
+    void cancelled(long invoiceId,String documentId);
+    void requireUnpaidForCancellation(long invoiceId);
+    void holdForPaymentReview(long invoiceId);
     record StaffContext(java.util.List<Long> managerIds,java.util.List<Long> orderIds,String title) {}
     StaffContext staffContext(long invoiceId);
 }

@@ -1861,6 +1861,7 @@ export class CommonBillingComponent implements OnDestroy {
   openPaymentRouteChange(): void {
     this.orderFacade.openPaymentRouteChange();
   }
+  openOrderPaperInvoice(): void {this.orderFacade.openPaperInvoice();}
 
   isOwnerBankRoute(invoice: CommonInvoiceSummaryResponse | null | undefined): boolean {
     return Boolean(invoice && isBankPaymentRouteType(invoice.paymentRouteType));

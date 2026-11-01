@@ -19,12 +19,25 @@ public class PaperBillingStore {
         return rows.getFirst();
     }
     public Optional<Map<String,Object>> target(Target target) {
-        return jdbc.queryForList("SELECT * FROM paper_invoice_document WHERE target_kind=? AND target_id=?",target.kind(),target.id()).stream().findFirst();
+        return jdbc.queryForList("SELECT * FROM paper_invoice_document WHERE target_kind=? AND target_id=? AND cancelled_at IS NULL",target.kind(),target.id()).stream().findFirst();
+    }
+    public Optional<Map<String,Object>> latest(Target target) {
+        return jdbc.queryForList("SELECT * FROM paper_invoice_document WHERE target_kind=? AND target_id=? ORDER BY created_at DESC,id DESC LIMIT 1",target.kind(),target.id()).stream().findFirst();
+    }
+    public void event(String id,String key,String body) {
+        jdbc.update("INSERT IGNORE INTO paper_invoice_event(document_id,event_key,body) VALUES(?,?,?)",id,key,body);
+    }
+    public boolean hasUnresolvedReceipt(Target target,String exceptDocument) {
+        return jdbc.queryForObject("""
+            SELECT COUNT(*) FROM paper_invoice_bank_receipt r JOIN paper_invoice_document d ON d.id=r.document_id
+            WHERE d.target_kind=? AND d.target_id=? AND r.state='NEEDS_REVIEW' AND (? IS NULL OR d.id<>?)
+            """,Long.class,target.kind(),target.id(),exceptDocument,exceptDocument)>0;
     }
     public Document document(Map<String,Object> r) {
         return new Document((String)r.get("id"),(String)r.get("number"),((Number)r.get("amount_kopecks")).longValue(),
                 (String)r.get("stage"),(String)r.get("invoice_delivery"),(String)r.get("act_delivery"),(String)r.get("error_text"),
-                r.get("paid_at") instanceof java.sql.Timestamp ts ? ts.toLocalDateTime() : r.get("paid_at") instanceof LocalDateTime time ? time : null);
+                r.get("paid_at") instanceof java.sql.Timestamp ts ? ts.toLocalDateTime() : r.get("paid_at") instanceof LocalDateTime time ? time : null,
+                (String)r.get("cancel_message_delivery"),(String)r.get("cancel_reason"));
     }
     public String composition(Target target) {
         if(target.kind().equals("COMMON_INVOICE")) return common.composition(target.id());
@@ -58,7 +71,7 @@ public class PaperBillingStore {
         return jdbc.update("UPDATE paper_invoice_document SET stage=?,error_text=NULL,updated_at=NOW(6) WHERE id=? AND stage=?",to,id,from)==1;
     }
     public void bankId(String id,boolean act,String bankId,String stage) {
-        jdbc.update("UPDATE paper_invoice_document SET "+(act?"bank_act_id":"bank_invoice_id")+"=?,error_text=IF(stage IN ('NEEDS_REVIEW','PAID'),error_text,NULL),stage=IF(stage IN ('NEEDS_REVIEW','PAID'),stage,?),updated_at=NOW(6) WHERE id=?",
+        jdbc.update("UPDATE paper_invoice_document SET "+(act?"bank_act_id":"bank_invoice_id")+"=?,error_text=IF(cancel_requested_at IS NOT NULL OR stage IN ('NEEDS_REVIEW','PAID'),error_text,NULL),stage=IF(cancel_requested_at IS NOT NULL OR stage IN ('NEEDS_REVIEW','PAID'),stage,?),updated_at=NOW(6) WHERE id=?",
                 bankId,stage,id);
     }
     public void pdf(String id,boolean act,PaperBillingPdfSignature.Pdf pdf) {
@@ -69,13 +82,13 @@ public class PaperBillingStore {
     }
     public void error(String id,String state,String message) {
         String text=message==null?"Операция не завершена":message.substring(0,Math.min(700,message.length()));
-        jdbc.update("UPDATE paper_invoice_document SET stage=?,error_text=?,updated_at=NOW(6) WHERE id=? AND (stage<>'NEEDS_REVIEW' OR ?='NEEDS_REVIEW') AND (?<>'NEEDS_REVIEW' OR paid_at IS NULL) AND (stage<>'PAID' OR ?='PAID')",state,text,id,state,state,state);
+        jdbc.update("UPDATE paper_invoice_document SET stage=?,error_text=?,updated_at=NOW(6) WHERE id=? AND cancel_requested_at IS NULL AND (stage<>'NEEDS_REVIEW' OR ?='NEEDS_REVIEW') AND (?<>'NEEDS_REVIEW' OR paid_at IS NULL) AND (stage<>'PAID' OR ?='PAID')",state,text,id,state,state,state);
     }
     public boolean claimDelivery(String id,boolean act) {
-        return jdbc.update("UPDATE paper_invoice_document SET "+(act?"act_delivery":"invoice_delivery")+"='SENDING',updated_at=NOW(6) WHERE id=? AND "+(act?"act_delivery":"invoice_delivery")+"='PENDING'",id)==1;
+        return jdbc.update("UPDATE paper_invoice_document SET "+(act?"act_delivery":"invoice_delivery")+"='SENDING',updated_at=NOW(6) WHERE id=? AND cancel_requested_at IS NULL AND stage IN ('FILES_READY','WAITING_PAYMENT','PAID') AND "+(act?"act_delivery":"invoice_delivery")+"='PENDING'",id)==1;
     }
     public boolean claimMessage(String id) {
-        return jdbc.update("UPDATE paper_invoice_document SET message_delivery='SENDING',updated_at=NOW(6) WHERE id=? AND message_delivery='PENDING'",id)==1;
+        return jdbc.update("UPDATE paper_invoice_document SET message_delivery='SENDING',updated_at=NOW(6) WHERE id=? AND cancel_requested_at IS NULL AND stage IN ('FILES_READY','WAITING_PAYMENT','PAID') AND message_delivery='PENDING'",id)==1;
     }
     public void messageDelivery(String id,String state,String messageId) {
         jdbc.update("UPDATE paper_invoice_document SET message_delivery=?,message_id=?,updated_at=NOW(6) WHERE id=?",state,messageId,id);

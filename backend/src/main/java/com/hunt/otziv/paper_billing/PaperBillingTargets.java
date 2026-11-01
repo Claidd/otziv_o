@@ -25,6 +25,30 @@ public class PaperBillingTargets {
     private final PaymentLinkService links;
     private final PaymentRouteReplacementWorkflow routes;
     private final com.hunt.otziv.contractor_payments.api.PaymentReviewTargetAuthorization paymentTargets;
+    private final com.hunt.otziv.payments.api.BankPaperPaymentCancellation cancellation;
+    public void authorizeCancellation(Target target,Long link) {
+        if(target.kind().equals("ORDER")) paymentTargets.requireCanManagePaymentLink(link);
+        else paymentTargets.requireCanManageCommonInvoice(target.id());
+    }
+    public void requireUnpaidForCancellation(Target target) {
+        if(target.kind().equals("ORDER")) orders.requireUnpaidForCancellation(target.id());
+        else common.requireUnpaidForCancellation(target.id());
+    }
+    public java.util.List<Long> cancellationManagers(Target target) {
+        if(target.kind().equals("COMMON_INVOICE")) return common.staffContext(target.id()).managerIds();
+        Long manager=orders.staffContext(target.id()).managerId();return manager==null?java.util.List.of():java.util.List.of(manager);
+    }
+    public void holdAutomation(Target target,boolean hold) {
+        if(target.kind().equals("ORDER")) orders.holdAutomation(target.id(),hold);
+        else common.holdAutomation(target.id(),hold);
+    }
+    public void holdForPaymentReview(Target target) {
+        if(target.kind().equals("ORDER")) orders.holdForPaymentReview(target.id());else common.holdForPaymentReview(target.id());
+    }
+    public void cancelled(Target target,String id,Long link) {
+        if(target.kind().equals("ORDER")) {cancellation.cancel(link,id);orders.cancelled(target.id(),false);}
+        else common.cancelled(target.id(),id);
+    }
     public long previewAmount(Target target) {
         if (target.kind().equals("COMMON_INVOICE"))
             return common.read(target.id()).amountKopecks();
@@ -45,6 +69,7 @@ public class PaperBillingTargets {
     public Map<String,Object> companyInfo(long company) {
         return companies.read(company);
     }
+    public void authorizeHistorical(long company,Authentication auth) {access.requireCompanyAccess(company,auth);}
     public void lockDelivery(Target target) {
         if(target.kind().equals("ORDER")) orders.lockForDelivery(target.id());
         else common.lockForDelivery(target.id());
