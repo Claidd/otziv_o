@@ -26,7 +26,7 @@ class CommonPaperPartsMySqlIntegrationTest {
     @Container static final MySQLContainer MYSQL=new MySQLContainer("mysql@sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383")
         .withDatabaseName("parts").withUsername("root").withPassword(UUID.randomUUID().toString());
     JdbcTemplate jdbc;TransactionTemplate tx;BankPaperInvoicePartsService service;CommonInvoiceSettlementService financial;
-    PaperInvoiceOrderData orders;CommonInvoiceDeliveryService delivery;
+    PaperInvoiceOrderData orders;CommonInvoiceDeliveryService delivery;CommonInvoiceRepository invoices;
     @BeforeEach void setup() {
         var ds=new DriverManagerDataSource(MYSQL.getJdbcUrl(),MYSQL.getUsername(),MYSQL.getPassword());jdbc=new JdbcTemplate(ds);tx=new TransactionTemplate(new DataSourceTransactionManager(ds));tx.setIsolationLevel(org.springframework.transaction.TransactionDefinition.ISOLATION_READ_COMMITTED);
         jdbc.execute("SET FOREIGN_KEY_CHECKS=0");for(String table:jdbc.queryForList("SELECT TABLE_NAME FROM information_schema.tables WHERE table_schema=DATABASE()",String.class))jdbc.execute("DROP TABLE "+table);jdbc.execute("SET FOREIGN_KEY_CHECKS=1");
@@ -35,7 +35,7 @@ class CommonPaperPartsMySqlIntegrationTest {
         jdbc.execute("CREATE TABLE common_invoices(invoice_id BIGINT PRIMARY KEY,status VARCHAR(24),paper_bank_document_id CHAR(36),paper_invoice_review_hold BOOLEAN DEFAULT FALSE,paper_invoice_automation_hold BOOLEAN DEFAULT FALSE,paid_kopecks BIGINT DEFAULT 0)");jdbc.update("INSERT INTO common_invoices(invoice_id,status) VALUES(8,'READY')");
         jdbc.execute("CREATE TABLE common_invoice_orders(order_id BIGINT PRIMARY KEY,invoice_id BIGINT,amount_kopecks BIGINT,ready BOOLEAN,paid BOOLEAN DEFAULT FALSE,active_membership BOOLEAN DEFAULT TRUE)");jdbc.update("INSERT INTO common_invoice_orders(order_id,invoice_id,amount_kopecks,ready) SELECT order_id,8,10000,TRUE FROM orders");
         jdbc.execute("CREATE TABLE paper_invoice_document(id CHAR(36),created_at DATETIME(6))");new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_356__common_invoice_paper_parts.sql")).execute(ds);
-        var invoices=mock(CommonInvoiceRepository.class);when(invoices.findById(8L)).thenAnswer(c->Optional.of(invoice()));
+        invoices=mock(CommonInvoiceRepository.class);when(invoices.findById(8L)).thenAnswer(c->Optional.of(invoice()));
         when(invoices.save(any())).thenAnswer(c->{CommonInvoice i=c.getArgument(0);jdbc.update("UPDATE common_invoices SET status=?,paper_bank_document_id=?,paper_invoice_automation_hold=?,paid_kopecks=? WHERE invoice_id=8",i.getStatus().name(),i.getPaperBankDocumentId(),i.isPaperInvoiceAutomationHold(),i.getPaidKopecks());return i;});
         delivery=mock(CommonInvoiceDeliveryService.class);when(delivery.lockedInvoiceAfterStandalonePaymentPrelude(8L)).thenAnswer(c->{jdbc.queryForList("SELECT order_id FROM orders ORDER BY order_id FOR UPDATE");jdbc.queryForList("SELECT invoice_id FROM common_invoices WHERE invoice_id=8 FOR UPDATE");return new CommonInvoiceInitializationService.LockedInvoicePaymentPrelude(invoice(),Map.of());});
         var items=mock(CommonInvoiceOrderRepository.class);when(items.findByInvoiceIdWithOrders(8L)).thenAnswer(c->rows());
@@ -80,6 +80,22 @@ class CommonPaperPartsMySqlIntegrationTest {
     @Test void cancellationReleasesOnlyItsSubsetAndNeverPaidSiblings() {
         long a=part("request-a",1L,2L),b=part("request-b",3L,4L);write(()->{service.bind(a,"doc-a");service.bind(b,"doc-b");return null;});
         write(()->{service.cancelled(a,"doc-a");return null;});assertEquals("doc-b",invoice().getPaperBankDocumentId());assertNull(service.positions(8).getFirst().documentId());assertThrows(RuntimeException.class,()->part("overlap",3L));assertTrue(part("replacement",1L,2L)>b);
+    }
+    @Test void staleAccountListSnapshotCannotOverwriteTheFinalBankPayment() throws Exception {
+        long a=part("request-a",1L,2L,3L),b=part("request-b",4L,5L),c=part("request-c",6L);
+        write(()->{service.bind(a,"doc-a");service.settle(a,30000,"first");service.settle(b,20000,"second");return null;});
+        // The account list has read the parent, but its positions query runs after the final bank transaction.
+        var stale=invoice();assertEquals(CommonInvoiceStatus.PARTIALLY_PAID,stale.getStatus());
+        write(()->{service.settle(c,10000,"last");return null;});
+        assertEquals(CommonInvoiceStatus.PAID,invoice().getStatus());
+        var constructor=Arrays.stream(CommonInvoiceSettlementService.class.getConstructors())
+                .max(Comparator.comparingInt(java.lang.reflect.Constructor::getParameterCount)).orElseThrow();
+        var reader=(CommonInvoiceSettlementService)constructor.newInstance(Arrays.stream(constructor.getParameterTypes())
+                .map(type->type==CommonInvoiceRepository.class?invoices:mock(type)).toArray());
+        write(()->{reader.refreshInvoiceAmounts(stale,rows(),Map.of(),Map.of(),
+                new CommonInvoiceSettlementService.BoardPaymentState(false,0));return null;});
+        assertEquals(CommonInvoiceStatus.PAID,invoice().getStatus());
+        assertEquals(60000,invoice().getPaidKopecks());
     }
     @Test void concurrentOverlappingSelectionsReserveOrdersOnlyOnce() throws Exception {
         var start=new java.util.concurrent.CountDownLatch(1);var successes=new java.util.concurrent.atomic.AtomicInteger();
