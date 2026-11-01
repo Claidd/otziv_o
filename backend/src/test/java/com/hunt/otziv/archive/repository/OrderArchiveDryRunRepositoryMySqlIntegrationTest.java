@@ -57,6 +57,50 @@ class OrderArchiveDryRunRepositoryMySqlIntegrationTest {
     }
 
     @Test
+    void paymentReconciliationKeepsItsOrderLiveWithoutBlockingOtherCandidates() {
+        insertPaidOrder(101L);
+        insertPaidOrder(102L);
+        jdbc.update("INSERT INTO order_payment_reconciliations VALUES (1,101,false)");
+
+        transaction.executeWithoutResult(status -> {
+            repository.prepareCandidateOrders(CUTOFF_DATE, 10);
+            assertThat(jdbc.queryForList("SELECT order_id FROM archive_candidate_orders", Long.class))
+                    .containsExactly(102L);
+            assertThat(repository.hasPreparedCandidateEligibilityDrift(CUTOFF_DATE)).isFalse();
+            jdbc.update("DELETE FROM orders WHERE order_id IN (SELECT order_id FROM archive_candidate_orders)");
+        });
+        assertThat(jdbc.queryForList("SELECT order_id FROM orders", Long.class)).containsExactly(101L);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM order_payment_reconciliations", Long.class)).isEqualTo(1);
+    }
+
+    @Test
+    void reconciliationInRelatedHistoricalInvoiceProtectsTheWholeArchiveComponent() {
+        insertPaidOrder(201L);
+        insertPaidOrder(202L);
+        insertPaidOrder(203L);
+        jdbc.update("INSERT INTO common_invoices(invoice_id,status,closed_at) VALUES (301,'PAID','2025-01-01'),(302,'ARCHIVED','2025-01-01')");
+        jdbc.update("INSERT INTO common_invoice_orders VALUES (401,301,201,true),(402,301,202,true),(403,302,201,false)");
+        jdbc.update("INSERT INTO order_payment_reconciliations VALUES (1,202,true)");
+
+        transaction.executeWithoutResult(status -> {
+            repository.prepareCandidateOrders(CUTOFF_DATE, 10);
+            assertThat(jdbc.queryForList("SELECT order_id FROM archive_candidate_orders", Long.class))
+                    .containsExactly(203L);
+            assertThat(repository.countPreparedCandidateCommonInvoices()).isZero();
+        });
+    }
+
+    @Test
+    void reconciliationCreatedAfterPreparationIsDetectedBeforeArchival() {
+        insertPaidOrder(101L);
+        transaction.executeWithoutResult(status -> {
+            repository.prepareCandidateOrders(CUTOFF_DATE, 10);
+            jdbc.update("INSERT INTO order_payment_reconciliations VALUES (1,101,true)");
+            assertThat(repository.hasPreparedCandidateEligibilityDrift(CUTOFF_DATE)).isTrue();
+        });
+    }
+
+    @Test
     void statusReactivationAfterPreparationIsDetectedByMySqlDriftQuery() {
         insertPaidOrder(101L);
 
@@ -310,6 +354,7 @@ class OrderArchiveDryRunRepositoryMySqlIntegrationTest {
         setup.execute("DROP TABLE IF EXISTS reviews");
         setup.execute("DROP TABLE IF EXISTS archive_candidate_orders");
         setup.execute("DROP TABLE IF EXISTS order_details");
+        setup.execute("DROP TABLE IF EXISTS order_payment_reconciliations");
         setup.execute("DROP TABLE IF EXISTS orders");
         setup.execute("DROP TABLE IF EXISTS order_statuses");
         setup.execute("DROP TABLE IF EXISTS filial");
@@ -338,6 +383,14 @@ class OrderArchiveDryRunRepositoryMySqlIntegrationTest {
                     order_created DATE NULL,
                     order_status_changed_at DATETIME(6) NULL,
                     PRIMARY KEY (order_id)
+                ) ENGINE=InnoDB
+                """);
+        setup.execute("""
+                CREATE TABLE order_payment_reconciliations (
+                    id BIGINT PRIMARY KEY,
+                    order_id BIGINT NOT NULL,
+                    active BOOLEAN NOT NULL,
+                    FOREIGN KEY (order_id) REFERENCES orders(order_id)
                 ) ENGINE=InnoDB
                 """);
         setup.execute("""

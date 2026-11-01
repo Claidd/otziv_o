@@ -16,6 +16,8 @@ import com.hunt.otziv.reputationai.infrastructure.ai.service.AiProviderRouter;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 
 class ManagerReportReviewQualityServiceTest {
@@ -112,9 +114,13 @@ class ManagerReportReviewQualityServiceTest {
                 .isEqualTo(ManagerReportReviewQualityService.Decision.NEEDS_CONTEXT);
     }
 
-    @Test
-    void disclaimerOfAnUnconfirmedActionDoesNotAssertThatActionOrHideAnAddedPaymentClaim() throws Exception {
-        String answer="Я не утверждаю, что нашла чек, лично уточняла оплату или уже исправила отзыв.";
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "Я не утверждаю, что нашла чек, лично уточняла оплату или уже исправила отзыв.",
+            "Факт закрытия оставшихся задач я не подтверждаю.",
+            "Я не подтверждаю, что оставшиеся задачи уже закрыты."
+    })
+    void disclaimerOfAnUnconfirmedActionDoesNotAssertThatActionOrHideAnAddedPaymentClaim(String answer) throws Exception {
         String report="СЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:\n"+new ObjectMapper().writeValueAsString(java.util.Map.of(
                 "id","chat:6704:reply","source","recorded_chat_message","field","manager_reply",
                 "value","Вы оплатили отзывы?","sourceChatItemId",6704));
@@ -637,6 +643,125 @@ class ManagerReportReviewQualityServiceTest {
                 .addObject().put("factId", "invoice:189:orderCount").put("assertedValue", "2");
         provider(json.toString());
         assertThat(service.assessAnswer(invoiceEvidence("COLLECTING", 4), sourceQuestion(), answer, false).accepted()).isFalse();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"SUPPORTED", "CONTRADICTED"})
+    void lifecycleCandidateReferencesAloneCannotConfirmOrDisproveDailyGoalComposition(String verdict) {
+        String answer = "Остался 1 новый заказ на 5 текстов.";
+        provider(assessment(verdict.equals("SUPPORTED") ? "SATISFIED" : "CONTRADICTED",
+                answer, "E1", "FACT", verdict, "В списке есть заказы и отзывы"));
+
+        var result = service.assessAnswer(workerGoalCandidateEvidence(), question(), answer, false);
+
+        assertThat(result.accepted()).isFalse();
+        assertThat(result.decision()).isEqualTo(ManagerReportReviewQualityService.Decision.NEEDS_CONTEXT);
+        assertThat(result.claims().getFirst().status())
+                .isEqualTo(ManagerReportReviewQualityService.ClaimStatus.UNVERIFIABLE);
+    }
+
+    @Test
+    void specificLifecycleFieldRemainsVerifiableWithAnExplicitMatchingCheck() throws Exception {
+        String answer = "В карточке указан тип order.";
+        var json = (com.fasterxml.jackson.databind.node.ObjectNode) new ObjectMapper().readTree(
+                assessment("SATISFIED", answer, "E1", "FACT", "SUPPORTED", "Тип подтверждён полем"));
+        ((com.fasterxml.jackson.databind.node.ObjectNode) json.path("claims").get(0)).putArray("factChecks")
+                .addObject().put("factId", "worker-goal:14:2026-10-30:order:25553:item_type")
+                .put("assertedValue", "order");
+        provider(json.toString());
+
+        assertThat(service.assessAnswer(workerGoalCandidateEvidence(), question(), answer, false).accepted()).isTrue();
+    }
+
+    @Test
+    void candidateEvidenceDoesNotTurnANarrowFuturePlanIntoAnIndefiniteDataPause() {
+        String answer = "Проверю карточки специалиста.";
+        provider(assessment("SATISFIED", answer, "E1", "FACT", "SUPPORTED", "Нужно проверить карточки"));
+
+        var result = service.assessAnswer(workerGoalCandidateEvidence(), question(), answer, false);
+
+        assertThat(result.accepted()).isTrue();
+        assertThat(result.claims().getFirst().kind()).isEqualTo(ManagerReportReviewQualityService.ClaimKind.PROMISE);
+    }
+
+    @Test
+    void futurePlanNeedsNoExternalEventForAnUnperformedAction() throws Exception {
+        String answer = "Проверю карточки специалиста.";
+        provider(withoutCriterionRefs(assessment("SATISFIED", answer, "E1", "PROMISE", "PLAN", "Конкретный план"), true));
+
+        assertThat(service.assessAnswer(workerGoalCandidateEvidence(), question(), answer, false).accepted()).isTrue();
+    }
+
+    @Test
+    void conversationOnlyAuditCannotAttachACommitmentToAnInventedTaskOrBlockTheAnswerForIt() throws Exception {
+        String answer = "Проверю карточки специалиста.";
+        var json = (com.fasterxml.jackson.databind.node.ObjectNode) new ObjectMapper().readTree(
+                assessment("SATISFIED", answer, "E1", "PROMISE", "PLAN", "План проверки"));
+        json.putArray("commitments").addObject().put("sourceTaskId", 999);
+        provider(json.toString());
+
+        var result = service.assessAnswer(workerGoalCandidateEvidence(), question(), answer, false);
+
+        assertThat(result.accepted()).isTrue();
+        assertThat(result.commitments()).isEmpty();
+    }
+
+    @Test
+    void futurePlanWithoutRefsStillCannotProveCompletedWork() throws Exception {
+        String answer = "Проверю карточки специалиста.";
+        provider(withoutCriterionRefs(assessment("SATISFIED", answer, "E1", "PROMISE", "PLAN", "План"), true));
+        var question = new ManagerReportReviewQualityService.ReviewQuestion("Что уже проверили?",
+                List.of("конкретное уже выполненное действие"));
+
+        var result = service.assessAnswer(workerGoalCandidateEvidence(), question, answer, false);
+
+        assertThat(result.accepted()).isFalse();
+        assertThat(result.decision()).isEqualTo(ManagerReportReviewQualityService.Decision.NEEDS_CLARIFICATION);
+    }
+
+    @Test
+    void missingCriterionRefsCanReuseExactSupportedClaimRefs() throws Exception {
+        String answer = "Статус COLLECTING.";
+        provider(withoutCriterionRefs(assessment("SATISFIED", answer, "E1", "FACT", "SUPPORTED", "Статус подтверждён"), false));
+
+        var result = service.assessAnswer(invoiceEvidence("COLLECTING", 2), sourceQuestion(), answer, false);
+
+        assertThat(result.accepted()).isTrue();
+        assertThat(result.criteria().getFirst().evidenceRefs()).containsExactly("E1");
+    }
+
+    @Test
+    void unsupportedFactWithoutRefsRemainsMissingContextInsteadOfAProtocolFailure() throws Exception {
+        String answer = "Остался один заказ.";
+        provider(withoutCriterionRefs(assessment("SATISFIED", answer, "E1", "FACT", "UNVERIFIABLE", "Нет подтверждения"), true));
+
+        var result = service.assessAnswer(workerGoalCandidateEvidence(), question(), answer, false);
+
+        assertThat(result.decision()).isEqualTo(ManagerReportReviewQualityService.Decision.NEEDS_CONTEXT);
+    }
+
+    @Test
+    void aShortPlanCannotSupplyEvidenceForAMixedFactualCriterion() throws Exception {
+        String answer = "Проверю карточки. Оплата уже пришла.";
+        var json = (com.fasterxml.jackson.databind.node.ObjectNode) new ObjectMapper().readTree(
+                withoutCriterionRefs(assessment("SATISFIED", answer, "E1", "PROMISE", "PLAN", "План"), true));
+        ((com.fasterxml.jackson.databind.node.ObjectNode) json.path("claims").get(0)).put("answerQuote", "Проверю карточки.");
+        provider(json.toString());
+
+        assertThat(service.assessAnswer(workerGoalCandidateEvidence(), question(), answer, false).accepted()).isFalse();
+    }
+
+    private String withoutCriterionRefs(String response, boolean clearClaimRefs) throws Exception {
+        var json = (com.fasterxml.jackson.databind.node.ObjectNode) new ObjectMapper().readTree(response);
+        ((com.fasterxml.jackson.databind.node.ObjectNode) json.path("criteria").get(0)).putArray("evidenceRefs");
+        if (clearClaimRefs) ((com.fasterxml.jackson.databind.node.ObjectNode) json.path("claims").get(0)).putArray("evidenceRefs");
+        return json.toString();
+    }
+
+    private String workerGoalCandidateEvidence() {
+        return "СЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:\n"
+                + "{\"id\":\"worker-goal:14:2026-10-30:order:25553:item_type\","
+                + "\"source\":\"worker_goal_task\",\"field\":\"item_type\",\"value\":\"order\"}";
     }
 
     @Test

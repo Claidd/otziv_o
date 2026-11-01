@@ -1075,7 +1075,7 @@ public class ManagerReportReviewTelegramService {
             if (!sendQuestion(
                     review,
                     questions,
-                    "✅ Ответ принят. Обещанные действия сохраняются до проверки результата."
+                    "✅ Ответ принят. План сохранён в истории аудита; исполнение требует отдельной проверки."
             )) {
                 notifyQuestionDeliveryFailure(review);
             }
@@ -1815,7 +1815,9 @@ public class ManagerReportReviewTelegramService {
             return;
         }
         String prompt = "Ответ сохранён и повторно проверен автоматически. Для одного из утверждений пока нет "
-                + "подтверждения в исходных данных. Уточните, на какую запись или проверенное действие вы опираетесь; "
+                + "подтверждения в исходных данных. "
+                + missingAnswerContextReason(review)
+                + "Уточните, на какую запись или проверенное действие вы опираетесь; "
                 + "если это предположение или цитата прежней ошибки, обозначьте это. "
                 + "Остальные части ответа сохранены. Срок остаётся на паузе. "
                 + "Ответьте уточнением на вопрос обычным сообщением; после него система проверит ответ автоматически. "
@@ -1881,6 +1883,8 @@ public class ManagerReportReviewTelegramService {
         boolean canAnswerAgain = review.getStatus() == ManagerReportReviewStatus.QUESTION_PENDING
                 || review.getStatus() == ManagerReportReviewStatus.PLAN_PENDING;
         boolean preparingQuestions = QUESTIONS_PENDING_AI.equals(review.getQuestionsSource());
+        boolean awaitingContext = !preparingQuestions
+                && (review.isRecoveryAwaitingContext() || "NEEDS_CONTEXT".equals(review.getAnswerQuality()));
         telegramService.sendMessageWithInlineKeyboard(
                 review.getRecipientChatId(),
                 (preparingQuestions ? "⏸ <b>Не удалось подготовить вопросы</b>\n\n"
@@ -1890,8 +1894,12 @@ public class ManagerReportReviewTelegramService {
                         : "⏸ <b>Для проверки нужны дополнительные данные</b>\n\n")
                         + (preparingQuestions ? "Ваш прогресс сохранён. " : "Ваш ответ и прогресс сохранены. ")
                         + "Трёхчасовой срок приостановлен, доступ не будет ограничен. "
-                        + "Система автоматически повторит проверку и пришлёт результат или следующий вопрос. "
-                        + "Нажимать «Продолжить проверку» и повторно отправлять сохранённый ответ не нужно."
+                        + (awaitingContext
+                            ? escape(missingAnswerContextReason(review)) + "\n\n"
+                                + "Добавьте уточнение ответом на последний вопрос аудита. Если он недоступен, нажмите «Ответить заново». "
+                                + "После уточнения система проверит ответ автоматически. Повторять прежний ответ не нужно."
+                            : "Система автоматически повторит проверку и пришлёт результат или следующий вопрос. "
+                                + "Нажимать «Продолжить проверку» и повторно отправлять сохранённый ответ не нужно.")
                         + (canAnswerAgain ? " Если хотите дополнить ответ, можно выбрать «Ответить заново»." : ""),
                 "HTML",
                 canAnswerAgain ? List.of(
@@ -1899,6 +1907,11 @@ public class ManagerReportReviewTelegramService {
                         List.of(button("✍️ Ответить заново", ANSWER, review.getId()))
                 ) : continueKeyboard(review.getId())
         );
+    }
+
+    private String missingAnswerContextReason(ManagerReportReviewSession review) {
+        String reason = clean(review.getAnswerQualityReason());
+        return reason.isBlank() ? "" : "Нужно уточнить: " + limit(reason, 1000) + "\n\n";
     }
 
     private int issueCount(ManagerDailySummaryResponse summary) {

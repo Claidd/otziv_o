@@ -20,6 +20,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
 import org.mockito.InOrder;
 import org.springframework.data.domain.Pageable;
+import org.springframework.context.event.ContextClosedEvent;
+import org.springframework.context.ApplicationContext;
 
 class ContractorPaymentReconciliationDispatcherTest {
 
@@ -121,6 +123,36 @@ class ContractorPaymentReconciliationDispatcherTest {
 
         verify(shadowService).reconcileAllocationId(4L);
         verify(claimService).succeeded(4L, "claim-4");
+    }
+
+    @Test
+    void closedContextDoesNotStartAnotherDatabasePoll() {
+        dispatcher.onContextClosed(new ContextClosedEvent(mock(ApplicationContext.class)));
+        org.mockito.Mockito.clearInvocations(repository);
+
+        dispatcher.reconcile();
+
+        org.mockito.Mockito.verifyNoInteractions(repository, claimService, shadowService);
+    }
+
+    @Test
+    void databaseFailureDuringNormalOperationRemainsVisible() {
+        when(repository.currentDatabaseTime()).thenThrow(new IllegalStateException("database unavailable"));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(dispatcher::reconcile)
+                .isInstanceOf(IllegalStateException.class).hasMessage("database unavailable");
+    }
+
+    @Test
+    void shutdownDuringPollDoesNotRecordAnInventedPaymentResult() {
+        when(repository.currentDatabaseTime()).thenAnswer(invocation -> {
+            dispatcher.onContextClosed(new ContextClosedEvent(mock(ApplicationContext.class)));
+            throw new IllegalStateException("EntityManagerFactory is closed");
+        });
+
+        org.assertj.core.api.Assertions.assertThatCode(dispatcher::reconcile).doesNotThrowAnyException();
+
+        org.mockito.Mockito.verifyNoInteractions(claimService, shadowService);
     }
 
     private ContractorPaymentAllocation allocation(Long id) {

@@ -905,7 +905,8 @@ class StaffDailyProgressServiceTest {
         localService.rebuildMonthlyAggregates(LocalDate.of(2026, 7, 1), false);
 
         ArgumentCaptor<String> updateSql = ArgumentCaptor.forClass(String.class);
-        verify(localJdbc).update(updateSql.capture(), any(MapSqlParameterSource.class));
+        verify(localJdbc).query(updateSql.capture(), any(MapSqlParameterSource.class),
+                org.mockito.ArgumentMatchers.any(org.springframework.jdbc.core.RowMapper.class));
         String sql = updateSql.getValue();
         assertTrue(sql.contains("FROM reviews monthly_review"));
         assertTrue(sql.contains("FROM review_recovery_tasks monthly_recovery"));

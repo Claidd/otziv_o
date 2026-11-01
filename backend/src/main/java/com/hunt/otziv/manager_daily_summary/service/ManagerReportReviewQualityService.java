@@ -218,7 +218,10 @@ public class ManagerReportReviewQualityService {
             утверждения при необходимости укажи отдельными claims с собственными цитатами.
             evidenceRefs и factChecks включают только относящиеся к конкретному утверждению источники,
             а не весь каталог. Не пропускай противоречащие источники и не объединяй разные утверждения,
-            если у них различаются статус или доказательства. reason — одно короткое объяснение,
+            если у них различаются статус или доказательства.
+            Для будущего плана или явного отзыва прежнего утверждения evidenceRefs может быть пустым:
+            они подтверждаются точной цитатой соответствующего claims, а не событием о выполненной работе.
+            reason — одно короткое объяснение,
             summary — итог в одном предложении. Не копируй факты сервера, вопрос и ответ в объяснения.
             Возвращай только JSON со ВСЕМИ критериями (criterionIndex — индекс expectedPoints с 0):
             {"contextStatus":"SUFFICIENT|INSUFFICIENT","summary":"...",
@@ -492,9 +495,6 @@ public class ManagerReportReviewQualityService {
             String quote = clean(item.path("answerQuote").asText(""));
             List<String> refs = references(item.path("evidenceRefs"), evidence);
             if (status != CriterionStatus.MISSING) attempt = resolveQuotedAttempt(attempt, quote, attempts);
-            if (status == CriterionStatus.SATISFIED || status == CriterionStatus.CONTRADICTED) {
-                require(!refs.isEmpty(), ProtocolViolation.CRITERION_EVIDENCE_REQUIRED);
-            }
             criteria.add(new CriterionAssessment(index, status, attempt, quote, refs,
                     limit(item.path("reason").asText(""), 1000), feedbackTopic(expectedPoints.get(index))));
         }
@@ -541,6 +541,12 @@ public class ManagerReportReviewQualityService {
             }
             if (checksKnownContradiction) status = ClaimStatus.CONTRADICTED;
             else if (checksUnknownOutcome) status = ClaimStatus.UNVERIFIABLE;
+            // Lifecycle candidates prove availability/timing fields, not the
+            // composition of a historical daily goal. A list of references
+            // without a check of specific fields cannot establish a fact.
+            if (Set.of(ClaimKind.FACT, ClaimKind.COMPLETED_ACTION).contains(kind)
+                    && checks.isEmpty() && workerGoalCandidatesOnly(refs, typedFacts))
+                status = ClaimStatus.UNVERIFIABLE;
             // A narrowly quoted future intention cannot be evidence of a completed action.
             // Keep mixed factual statements and all structured fact checks subject to verification.
             if ((kind == ClaimKind.COMPLETED_ACTION || kind == ClaimKind.FACT)
@@ -574,6 +580,33 @@ public class ManagerReportReviewQualityService {
         }
         require(claims.stream().anyMatch(claim -> claim.answerAttempt() == attempts.size() - 1),
                 ProtocolViolation.CURRENT_ANSWER_REQUIRED);
+        // A criterion can quote a plan without an external event. When the
+        // provider omitted redundant criterion refs, reuse only the refs of
+        // claims that cover the complete criterion quote from the same answer.
+        for (int position = 0; position < criteria.size(); position++) {
+            CriterionAssessment criterion = criteria.get(position);
+            if (!criterion.evidenceRefs().isEmpty()
+                    || !Set.of(CriterionStatus.SATISFIED, CriterionStatus.CONTRADICTED).contains(criterion.status())) continue;
+            var support = claims.stream().filter(claim -> claim.answerAttempt() == criterion.answerAttempt()
+                    && !normalize(criterion.answerQuote()).isBlank()
+                    && normalize(claim.answerQuote()).contains(normalize(criterion.answerQuote()))).toList();
+            require(!support.isEmpty(), ProtocolViolation.CRITERION_EVIDENCE_REQUIRED);
+            var refs = support.stream().flatMap(claim -> claim.evidenceRefs().stream()).distinct().toList();
+            boolean nonFactual = support.stream().allMatch(claim ->
+                    claim.kind() == ClaimKind.PROMISE && claim.status() == ClaimStatus.PLAN
+                    || claim.kind() == ClaimKind.RETRACTION
+                    || claim.kind() == ClaimKind.HYPOTHESIS && (epistemicDisclaimerOnly(claim.answerQuote())
+                        || wordingAppraisalOnly(claim.answerQuote()) || selfAssessmentOnly(claim.answerQuote())
+                        || generalApproachOnly(claim.answerQuote()) || futureOutcomeConditionOnly(claim.answerQuote())));
+            boolean unknownFact = support.stream().anyMatch(claim ->
+                    Set.of(ClaimKind.FACT, ClaimKind.COMPLETED_ACTION).contains(claim.kind())
+                            && claim.status() == ClaimStatus.UNVERIFIABLE);
+            require(!refs.isEmpty() || nonFactual || unknownFact, ProtocolViolation.CRITERION_EVIDENCE_REQUIRED);
+            CriterionStatus status = unknownFact || criterion.status() == CriterionStatus.CONTRADICTED && refs.isEmpty()
+                    ? CriterionStatus.UNVERIFIABLE : criterion.status();
+            criteria.set(position, new CriterionAssessment(criterion.criterionIndex(), status,
+                    criterion.answerAttempt(), criterion.answerQuote(), refs, criterion.reason(), criterion.feedbackTopic()));
+        }
         // A mixed correction may withdraw an earlier answer and state a new fact. Only the
         // withdrawal is exempt from external proof; the entire new assertion must be assessed.
         for (ClaimAssessment claim : claims) {
@@ -614,7 +647,8 @@ public class ManagerReportReviewQualityService {
             boolean unknownOutcome = claims.stream().anyMatch(claim -> claim.status() == ClaimStatus.UNVERIFIABLE
                     && relatedQuotes(criterion.answerQuote(), claim.answerQuote())
                     && claim.factChecks().stream().anyMatch(check -> unknownValue(typedFacts.get(check.factId()).value())));
-            if (!knownContradiction && (unknownOutcome || recordedMessagesOnly(criterion.evidenceRefs(), evidence)))
+            if (!knownContradiction && (unknownOutcome || recordedMessagesOnly(criterion.evidenceRefs(), evidence)
+                    || workerGoalCandidatesOnly(criterion.evidenceRefs(), typedFacts)))
                 criteria.set(position, new CriterionAssessment(
                     criterion.criterionIndex(), CriterionStatus.UNVERIFIABLE, criterion.answerAttempt(),
                     criterion.answerQuote(), criterion.evidenceRefs(), criterion.reason(), criterion.feedbackTopic()));
@@ -669,6 +703,9 @@ public class ManagerReportReviewQualityService {
                                                    ZonedDateTime evaluationTime) {
         if (node.isMissingNode() || node.isNull()) return List.of();
         require(node.isArray() && node.size() <= 20, ProtocolViolation.COMMITMENTS_ARRAY);
+        // Conversation-only audits have no task to attach a durable commitment
+        // to. Ignore inapplicable metadata; factual/criterion checks still apply.
+        if (sourceTaskIds.isEmpty()) return List.of();
         List<ActionCommitment> result = new ArrayList<>();
         for (JsonNode item : node) {
             long sourceTaskId = item.path("sourceTaskId").asLong(-1);
@@ -1112,6 +1149,15 @@ public class ManagerReportReviewQualityService {
                 evidence.getOrDefault(ref, "").startsWith("ЗАПИСАННОЕ СИСТЕМНОЕ СООБЩЕНИЕ "));
     }
 
+    private boolean workerGoalCandidatesOnly(List<String> refs, Map<String, AuthoritativeFact> facts) {
+        if (refs.isEmpty()) return false;
+        Set<String> candidateRefs = new HashSet<>();
+        for (AuthoritativeFact fact : facts.values()) {
+            if ("worker_goal_task".equals(fact.source())) candidateRefs.add(fact.evidenceRef());
+        }
+        return candidateRefs.containsAll(refs);
+    }
+
     private boolean recordedChatMessagesOnly(List<String> refs, Map<String, String> evidence) {
         return !refs.isEmpty() && refs.stream().allMatch(ref -> {
             String value = evidence.getOrDefault(ref, "");
@@ -1133,7 +1179,10 @@ public class ManagerReportReviewQualityService {
 
     private boolean epistemicDisclaimerOnly(String quote) {
         String text = normalize(quote);
-        return text.startsWith("я не утверждаю что ")
+        boolean disclaimer = text.startsWith("я не утверждаю что ")
+                || text.startsWith("я не подтверждаю что ")
+                || text.matches("факт .{1,200} я не (?:подтверждаю|утверждаю)");
+        return disclaimer
                 && !text.matches("(?U).*\\b(?:но|однако|зато|фактически)\\b.*")
                 && !text.contains("при этом")
                 && !clean(quote).replaceFirst("[.!?]$", "").matches(".*[.;!?].*");

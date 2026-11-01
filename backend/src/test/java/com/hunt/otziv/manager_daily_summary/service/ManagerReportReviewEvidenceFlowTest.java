@@ -40,6 +40,8 @@ import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -724,7 +726,8 @@ class ManagerReportReviewEvidenceFlowTest {
         var originalTime = quality.latestAnswerRecordedAt(review.getAnswersJson(), 0);
         var pause = review.getAiUnavailableStartedAt();
         doReturn(true).when(quality).aiAvailable();
-        doReturn(assessment(ManagerReportReviewQualityService.Decision.NEEDS_CONTEXT, "Не хватает записи"))
+        doReturn(assessment(ManagerReportReviewQualityService.Decision.NEEDS_CONTEXT,
+                "Не хватает записи для утверждения «1 новый заказ <5 текстов>»."))
                 .when(quality).assessAnswer(anyString(), eq(question), eq(answer), eq(false), any(), eq(false), eq(originalTime));
         org.mockito.Mockito.clearInvocations(telegram);
 
@@ -737,7 +740,8 @@ class ManagerReportReviewEvidenceFlowTest {
         assertThat(review.getRestrictedAt()).isNull();
         assertThat(mapper.readTree(review.getAnswersJson())).hasSize(1);
         verify(quality).assessAnswer(anyString(), eq(question), eq(answer), eq(false), any(), eq(false), eq(originalTime));
-        verify(telegram).sendMessageWithInlineKeyboardMessageId(eq(700L), contains("Уточните"), eq("HTML"), any());
+        verify(telegram).sendMessageWithInlineKeyboardMessageId(eq(700L),
+                contains("«1 новый заказ &lt;5 текстов&gt;»"), eq("HTML"), any());
 
         assessWith(assessment(ManagerReportReviewQualityService.Decision.ACCEPTED, "Источник уточнён"));
         review.setReplyPromptMessageId(777);
@@ -745,6 +749,26 @@ class ManagerReportReviewEvidenceFlowTest {
         assertThat(review.isRecoveryAwaitingContext()).isFalse();
         assertThat(review.getAiUnavailableStartedAt()).isNull();
         assertThat(review.getStatus()).isEqualTo(ManagerReportReviewStatus.COMPLETED);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void missingContextExplainsWhatToAddEvenWhenManualRetryHasResetTheRecoveryFlag(boolean waiting) {
+        review.setRecoveryAwaitingContext(waiting);
+        review.setAnswerQuality("NEEDS_CONTEXT");
+        review.setAnswerQualityReason("Нет подтверждения утверждения «1 заказ <5 текстов>».");
+        review.setAnswersJson(legacyAnswer(0));
+        String savedAnswer = review.getAnswersJson();
+
+        ReflectionTestUtils.invokeMethod(service, "sendAiUnavailable", review);
+
+        var text = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(telegram).sendMessageWithInlineKeyboard(eq(700L), text.capture(), eq("HTML"), any());
+        assertThat(text.getValue()).contains("1 заказ &lt;5 текстов&gt;", "Добавьте уточнение", "срок приостановлен")
+                .doesNotContain("Система автоматически повторит проверку и пришлёт результат");
+        assertThat(review.getAnswersJson()).isEqualTo(savedAnswer);
+        assertThat(review.isRecoveryAwaitingContext()).isEqualTo(waiting);
+        org.mockito.Mockito.verifyNoInteractions(access);
     }
 
     private String legacyAnswer(int questionIndex) {
