@@ -98,13 +98,15 @@ public class OrderCreationServiceImpl implements OrderCreationService {
         if (companyId == null) {
             throw new IllegalStateException("У исходного заказа " + sourceOrder.getId() + " не найдена компания");
         }
-        return createNewOrderWithReviews(
+        Order repeated = createNewOrderWithReviews(
                 companyId,
                 orderDTO,
                 repeatTerms.summaryProduct(),
                 repeatTerms.total(),
                 repeatTerms.reviews()
         );
+        repeated.setInvoicePaymentMode(sourceOrder.getInvoicePaymentMode());
+        return orderRepository.save(repeated);
     }
 
     private Order createNewOrderWithReviews(Long companyId,

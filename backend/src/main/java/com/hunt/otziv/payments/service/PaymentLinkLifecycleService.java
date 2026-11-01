@@ -36,7 +36,7 @@ public class PaymentLinkLifecycleService {
     private final OrderPaymentIntegrityService orderPaymentIntegrityService;
 
     boolean canRetireStaleLink(PaymentLink link) {
-        return link != null && RECREATABLE_STALE_STATUSES.contains(link.getStatus()) && !hasStartedBankPayment(link);
+        return link != null && link.getPaperBankDocumentId()==null && RECREATABLE_STALE_STATUSES.contains(link.getStatus()) && !hasStartedBankPayment(link);
     }
 
     boolean hasStartedBankPayment(PaymentLink link) {
@@ -77,7 +77,7 @@ public class PaymentLinkLifecycleService {
         if (link.getStatus() == PaymentLinkStatus.AUTHORIZED) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Платеж уже авторизован банком. Повторная инициализация заблокирована.");
         }
-        if (link.getExpiresAt().isBefore(LocalDateTime.now())) {
+        if (link.getPaperBankDocumentId()==null && link.getExpiresAt().isBefore(LocalDateTime.now())) {
             if (releaseTaskReservationOnExpiry) {
                 taskReceiptIntegrationService.release(link, "Срок действия платёжной ссылки истек");
             }
@@ -106,7 +106,7 @@ public class PaymentLinkLifecycleService {
 
     @Transactional(propagation = Propagation.MANDATORY, noRollbackFor = Exception.class)
     void expireIfPastDue(PaymentLink link) {
-        if (link.getExpiresAt() != null && link.getExpiresAt().isBefore(LocalDateTime.now()) && !hasBankInitReservation(link) && (link.getStatus() == PaymentLinkStatus.WAITING_MANUAL_PAYMENT || link.getStatus() == PaymentLinkStatus.MANUAL_REPORTED || link.getStatus() == PaymentLinkStatus.CREATED)) {
+        if (link.getPaperBankDocumentId()==null && link.getExpiresAt() != null && link.getExpiresAt().isBefore(LocalDateTime.now()) && !hasBankInitReservation(link) && (link.getStatus() == PaymentLinkStatus.WAITING_MANUAL_PAYMENT || link.getStatus() == PaymentLinkStatus.MANUAL_REPORTED || link.getStatus() == PaymentLinkStatus.CREATED)) {
             taskReceiptIntegrationService.release(link, "Срок действия платежной ссылки истек");
             link.setStatus(PaymentLinkStatus.EXPIRED);
             link.setLastError("Срок действия платежной ссылки истек");

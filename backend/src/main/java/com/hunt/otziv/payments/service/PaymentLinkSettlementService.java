@@ -313,6 +313,28 @@ public class PaymentLinkSettlementService {
         }
     }
 
+    /** Internal bank-document path. The caller has verified and durably deduplicated a bank receipt. */
+    @Transactional
+    public void applyVerifiedPaperBankPayment(Long linkId, long amountKopecks) {
+        PaymentLink source = paymentLinkRepository.findById(linkId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "Счёт заказа не найден"));
+        Long orderId = source.getOrder().getId();
+        orderRepository.findByIdForCounterUpdate(orderId).orElseThrow();
+        PaymentLink link = paymentLinkRepository.findByOrderIdForUpdate(orderId).stream()
+                .filter(candidate -> candidate.getId().equals(linkId)).findFirst().orElseThrow();
+        if (link.getPaymentMethod() != com.hunt.otziv.payments.model.PaymentMethod.OWNER_PAPER_INVOICE
+                || !Set.of(PaymentLinkStatus.CREATED, PaymentLinkStatus.WAITING_MANUAL_PAYMENT).contains(link.getStatus())
+                || link.getAmountKopecks() != amountKopecks || currentAmountKopecks(link) != amountKopecks
+                || !canApplyOrderPaymentNow(link.getOrder()) || !runtimeSettingsService.isApplyConfirmedPayments()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Заказ или сумма изменились; нужна сверка банковского счёта");
+        }
+        confirmPayment(link, false);
+        if (link.getStatus() != PaymentLinkStatus.CONFIRMED)
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Оплата банковского счёта требует сверки");
+        link.setReceiptStatus(PaymentReceiptStatus.LEGACY_NOT_REQUIRED);
+        paymentLinkRepository.save(link);
+    }
+
     private boolean isProviderTestPayment(PaymentLink link) {
         if (!isTochkaPaymentLink(link)) {
             return paymentProfileService.isTestTerminal(link.getTbankTerminalKey());

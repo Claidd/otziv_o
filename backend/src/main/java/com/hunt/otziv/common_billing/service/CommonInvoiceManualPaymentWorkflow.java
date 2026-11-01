@@ -75,6 +75,12 @@ public class CommonInvoiceManualPaymentWorkflow {
 
     static final String PAYMENT_METHOD_OWNER_PAPER_INVOICE = "OWNER_PAPER_INVOICE";
 
+    private void requireNoIntegratedPaperDocument(CommonInvoice invoice) {
+        if (invoice.getPaperBankDocumentId() != null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Оплата этого счёта подтверждается по банковскому поступлению");
+        }
+    }
+
     static final Set<PaymentLinkStatus> MANUAL_COMMON_PAYMENT_CLOSABLE_ROUTE_STATUSES = Set.of(PaymentLinkStatus.CREATED, PaymentLinkStatus.WAITING_MANUAL_PAYMENT, PaymentLinkStatus.MANUAL_REPORTED, PaymentLinkStatus.EXPIRED, PaymentLinkStatus.FAILED);
 
     static final Set<String> MANUAL_COMMON_PAYMENT_SAFE_REF_STATUSES = Set.of(PAYMENT_REF_APPLIED, PAYMENT_REF_ARCHIVED, PAYMENT_REF_CANCELED, "REJECTED", "EXPIRED", "REFUNDED", "REVERSED");
@@ -111,6 +117,9 @@ public class CommonInvoiceManualPaymentWorkflow {
     public CommonInvoiceDetailsResponse markPaperInvoicePaid(Long invoiceId, ManualPaymentConfirmationRequest request, Principal principal) {
         LockedInvoicePaymentPrelude paymentPrelude = lockedInvoiceAfterStandalonePaymentPrelude(invoiceId);
         CommonInvoice invoice = paymentPrelude.invoice();
+        if (invoice.getPaperBankDocumentId() != null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Оплата этого счёта подтверждается по банковскому поступлению");
+        }
         ensureCommonInvoiceVisibleForCurrentUser(invoice);
         if (!isOwnerPaperInvoice(invoice) || invoice.getPaperInvoiceIssuedAt() == null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Подтвердить оплату можно только после отправки бумажного счёта");
@@ -129,6 +138,31 @@ public class CommonInvoiceManualPaymentWorkflow {
         archiveAndClearCurrentPaymentRef(invoice, "owner_paper_invoice_paid");
         closePaidInvoice(invoice, items);
         return invoiceAfterOrderPrelude(invoiceId);
+    }
+
+    /** Internal settlement for a signature-verified, deduplicated receipt, including delivery failures. */
+    @Transactional
+    public void applyVerifiedPaperBankPayment(Long invoiceId, long amountKopecks, String paymentId) {
+        var prelude = lockedInvoiceAfterStandalonePaymentPrelude(invoiceId);
+        var invoice = prelude.invoice();
+        var items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId);
+        refreshInvoiceAmounts(invoice, items);
+        if (!isOwnerPaperInvoice(invoice) || invoice.getAmountKopecks() != amountKopecks
+                || invoice.getPaidKopecks() != 0 || items.isEmpty() || items.stream().anyMatch(item -> !item.isReady() || item.isPaid())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Состав или сумма общего счёта изменились; нужна сверка");
+        }
+        ensureCommonInvoiceNotNeedsAttention(invoice);
+        promoteCollectingInvoiceToReadyIfPossible(invoice, items);
+        ensureCommonInvoiceCanBeMarkedPaid(invoice);
+        ensurePaperModeSwitchHasNoFinancialEvidence(invoice);
+        ensurePaperModeSwitchHasNoUnresolvedProviderEvidence(invoice);
+        applyManualPaymentEvidence(invoice, items,
+                new ManualPaymentConfirmationRequest("Точка: банковский перевод " + paymentId, ""), () -> "tochka-bank");
+        invoice.setPaymentMethod(PAYMENT_METHOD_OWNER_PAPER_INVOICE);
+        items.forEach(item -> item.setPaymentMethod(PAYMENT_METHOD_OWNER_PAPER_INVOICE));
+        invoiceOrderRepository.saveAll(items);
+        archiveAndClearCurrentPaymentRef(invoice, "tochka_paper_invoice_paid");
+        closePaidInvoice(invoice, items);
     }
 
     void ensurePaperModeSwitchHasNoFinancialEvidence(CommonInvoice invoice) {
@@ -182,6 +216,7 @@ public class CommonInvoiceManualPaymentWorkflow {
     public CommonInvoiceDetailsResponse markPaid(Long invoiceId, ManualPaymentConfirmationRequest request, Principal principal) {
         LockedInvoicePaymentPrelude paymentPrelude = lockedInvoiceAfterStandalonePaymentPrelude(invoiceId);
         CommonInvoice invoice = paymentPrelude.invoice();
+        requireNoIntegratedPaperDocument(invoice);
         actualPaymentAttributionFlowPolicy.requireLegacyFlowLocked();
         ensureCommonInvoiceVisibleForCurrentUser(invoice);
         ensureGenericConfirmationDoesNotUseContractorSource(invoice);
@@ -232,6 +267,7 @@ public class CommonInvoiceManualPaymentWorkflow {
     CommonInvoiceDetailsResponse markPaidWithAttributionsLocked(Long invoiceId, CommonManualPaymentAttributionRequest request, Principal principal) {
         LockedInvoicePaymentPrelude paymentPrelude = lockedInvoiceAfterStandalonePaymentPrelude(invoiceId);
         CommonInvoice invoice = paymentPrelude.invoice();
+        requireNoIntegratedPaperDocument(invoice);
         ensureCommonInvoiceVisibleForCurrentUser(invoice);
         List<CommonInvoiceOrder> items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId);
         if (invoice.getStatus() == CommonInvoiceStatus.PAID) {
@@ -260,6 +296,7 @@ public class CommonInvoiceManualPaymentWorkflow {
 
     PreparedManualPaymentBankReconciliation prepareManualPaymentBankReconciliation(Long invoiceId) {
         CommonInvoice invoice = lockedInvoice(invoiceId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"));
+        requireNoIntegratedPaperDocument(invoice);
         ensureCommonInvoiceVisibleForCurrentUser(invoice);
         if (invoice.getStatus() == CommonInvoiceStatus.PAID) {
             return PreparedManualPaymentBankReconciliation.completed(invoiceId);

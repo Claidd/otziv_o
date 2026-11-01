@@ -5,6 +5,9 @@
         <small>{{ details()?.companyTitle || 'Заказ' }}</small>
         <h1>{{ layoutTitle() }}</h1>
       </div>
+      @if (details() && canManagePaperInvoices()) {
+        <div class="details-actions"><button type="button" (click)="openPaperInvoice()"><span class="material-icons-sharp" aria-hidden="true">description</span>Бумажный счёт и акт</button></div>
+      }
     </header>
 
     @if (loading() && !details()) {

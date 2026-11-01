@@ -118,6 +118,7 @@ public class OrderStatusTransitionService {
 
     private final OrderRepository orderRepository;
     private final OrderAggregateMutationLockService orderAggregateMutationLockService;
+    private final com.hunt.otziv.payments.api.BankPaperPaymentBindings paperDocuments;
     private final OrderStatusService orderStatusService;
     private final OrderTransactionService orderTransactionService;
     private final BadReviewTaskService badReviewTaskService;
@@ -177,6 +178,25 @@ public class OrderStatusTransitionService {
     @Transactional
     public boolean changeStatusForCommonBillingOrder(Long orderID, String title) throws Exception {
         return changeStatusForOrderInternal(orderID, title, true, false, false);
+    }
+
+    /** Called once per committed bank-document delivery, under the ordinary order locks. */
+    @Transactional
+    public void markBankPaperInvoiceDelivered(Long id) throws Exception {
+        orderAggregateMutationLockService.lock(id);
+        Order order=orderRepository.findByIdForMutation(id).orElseThrow(() -> new NotFoundException("Order not found"));
+        String before=safeStatusTitle(order);
+        if (STATUS_PAYMENT.equals(before)) return;
+        boolean sameStatus=STATUS_TO_PAY.equals(before);
+        changeStatusForOrderInternal(id,STATUS_TO_PAY,false,false,false);
+        if(sameStatus) {
+            // A newly delivered document replaces the old reminder cycle even if its label is unchanged.
+            order.setStatusChangedAt(java.time.LocalDateTime.now());
+            order.setClientMessageGeneration(Math.addExact(order.getClientMessageGeneration(),1));
+            orderRepository.save(order);
+            eventPublisher.publishEvent(new OrderStatusChangedEvent(id,before,STATUS_TO_PAY,"BANK_PAPER_INVOICE_DELIVERED"));
+        }
+        businessAuditService.recordSafely("bank_paper_invoice_delivered","order",id,id,null,before,STATUS_TO_PAY,"Confirmed delivery of invoice and act PDFs");
     }
 
     @Transactional
@@ -242,6 +262,12 @@ public class OrderStatusTransitionService {
                 return true;
             }
             ensureCommonBillingStatusTransitionAllowed(order, title, allowCommonBillingFinancialStatus);
+            if (Set.of(STATUS_NEW,STATUS_TO_CHECK,STATUS_IN_CHECK,STATUS_CORRECTION,STATUS_PUBLIC,
+                    STATUS_TO_PUBLISH,STATUS_ARCHIVE,STATUS_BAN).contains(title)
+                    && paperDocuments.hasDocument(orderID)) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "По заказу выпущены банковские документы. Сначала выполните сверку счёта и акта; смена рабочего статуса не отменяет документы в банке");
+            }
             ensureCompletedOrderNotReopened(order, title);
             ensureStatusTransitionAllowed(order, title, allowPaymentReturnReminder);
             if (STATUS_ARCHIVE.equals(title) && !OrderManualArchivePolicy.isAllowed(order)) {

@@ -67,12 +67,39 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class OrderStatusTransitionServiceTest {
+    @ParameterizedTest
+    @ValueSource(strings={"Новый","На проверке","Коррекция","Публикация","Архив","Бан"})
+    void bankDocumentsPreventWorkStatusChangesThatDoNotCancelTheBankInvoice(String status) {
+        var order=order(42L,"Выставлен счет");
+        when(orderRepository.findByIdForMutation(42L)).thenReturn(Optional.of(order));
+        when(paperDocuments.hasDocument(42L)).thenReturn(true);
+        assertThrows(ResponseStatusException.class,()->service().changeStatusForOrder(42L,status));
+        assertEquals("Выставлен счет",order.getStatus().getTitle());verify(orderRepository,never()).save(order);
+    }
+
+    @Test
+    void lateBankDocumentDeliveryCannotDemoteAPaidOrder() throws Exception {
+        var order=order(42L,"Оплачено");when(orderRepository.findByIdForMutation(42L)).thenReturn(Optional.of(order));
+        service().markBankPaperInvoiceDelivered(42L);
+        assertEquals("Оплачено",order.getStatus().getTitle());verify(orderRepository,never()).save(order);
+        verifyNoInteractions(orderStatusNotificationService,telegramService);
+    }
+
+    @Test
+    void newlyDeliveredBankDocumentsStartANewReminderCycleWhenAlreadyInvoiced() throws Exception {
+        var order=order(42L,"Выставлен счет");order.setClientMessageGeneration(3);order.setStatusChangedAt(LocalDateTime.now().minusDays(20));
+        var before=order.getStatusChangedAt();when(orderRepository.findByIdForMutation(42L)).thenReturn(Optional.of(order));
+        service().markBankPaperInvoiceDelivered(42L);
+        assertEquals(4,order.getClientMessageGeneration());assertTrue(order.getStatusChangedAt().isAfter(before));
+        verify(orderRepository).save(order);verifyNoInteractions(orderStatusNotificationService,telegramService);
+    }
 
     @Mock
     private OrderRepository orderRepository;
 
     @Mock
     private OrderAggregateMutationLockService orderAggregateMutationLockService;
+    @Mock private com.hunt.otziv.payments.api.BankPaperPaymentBindings paperDocuments;
 
     @Mock
     private OrderStatusService orderStatusService;
@@ -1307,6 +1334,7 @@ class OrderStatusTransitionServiceTest {
         return new OrderStatusTransitionService(
                 orderRepository,
                 orderAggregateMutationLockService,
+                paperDocuments,
                 orderStatusService,
                 orderTransactionService,
                 badReviewTaskService,

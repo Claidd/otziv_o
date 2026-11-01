@@ -175,6 +175,12 @@
             </label>
           </div>
 
+          @if (allowPaperInvoiceMode) {
+            <section class="payment-route-change" aria-label="Банковские документы заказа">
+              <strong>Счёт и акт Точки</strong>
+              <button type="button" class="secondary" (click)="paperInvoiceOpened.emit()" [disabled]="saving || deleting || paymentRouteChanging">Бумажный счёт и акт</button>
+            </section>
+          }
           @if (allowPaymentRouteChange && !order.complete) {
             <section class="payment-route-change" aria-label="Смена способа оплаты">
               <div class="payment-route-change__head">
@@ -203,6 +209,9 @@
                     }
                   </p>
                   @if (!paymentRouteContext.canChange) {
+                    @if (paymentRouteContext.configuredMode === 'OWNER_PAPER_INVOICE') {
+                      <button type="button" class="secondary" (click)="paymentRouteChanged.emit('OWNER_PAPER_INVOICE')">Счёт и акт Точки</button>
+                    }
                     <div class="payment-route-change__warning">{{ paymentRouteContext.blockReason }}</div>
                   } @else {
                     <div class="payment-route-change__options">

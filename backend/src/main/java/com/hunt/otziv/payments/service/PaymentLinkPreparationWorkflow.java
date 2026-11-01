@@ -134,6 +134,12 @@ public class PaymentLinkPreparationWorkflow {
         return prepareForOrder(orderId, null, false).response();
     }
 
+    @Transactional(readOnly=true)
+    public long paperInvoicePreviewAmount(long orderId) {
+        var order=orderRepository.findById(orderId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,"Заказ не найден"));
+        return amountKopecks(payableSum(order));
+    }
+
     /**
      * Public-token replacement handles failures inside its existing transaction.
      */
@@ -249,6 +255,8 @@ public class PaymentLinkPreparationWorkflow {
         Order order = orderRepository.findByIdForCounterUpdate(orderId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден"));
         managerAccessService.requireOrderAccess(orderId, authentication);
         PaymentLink link = currentRouteChangeLink(paymentLinkRepository.findByOrderIdForUpdate(orderId)).filter(this::isPaperInvoice).orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "Для заказа не подготовлен бумажный счёт"));
+        if (link.getPaperBankDocumentId() != null)
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Отправка банковских документов подтверждается автоматически");
         if (link.getPaperInvoiceIssuedAt() == null) {
             if (link.getStatus() != PaymentLinkStatus.CREATED) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Бумажный счёт уже находится в обработке или требует сверки");
@@ -295,7 +303,7 @@ public class PaymentLinkPreparationWorkflow {
         if (link == null || link.getOrder() == null || !orderId.equals(link.getOrder().getId())) {
             return false;
         }
-        boolean pristine = (link.getStatus() == PaymentLinkStatus.CREATED || link.getStatus() == PaymentLinkStatus.WAITING_MANUAL_PAYMENT) && link.getConfirmedAmountKopecks() == null && link.getTbankPaymentId() == null && link.getManualReportedAt() == null && link.getPaidAt() == null;
+        boolean pristine = link.getPaperBankDocumentId()==null && (link.getStatus() == PaymentLinkStatus.CREATED || link.getStatus() == PaymentLinkStatus.WAITING_MANUAL_PAYMENT) && link.getConfirmedAmountKopecks() == null && link.getTbankPaymentId() == null && link.getManualReportedAt() == null && link.getPaidAt() == null;
         if (!pristine) {
             return false;
         }
@@ -510,6 +518,14 @@ public class PaymentLinkPreparationWorkflow {
 
     @Transactional(propagation = Propagation.MANDATORY, noRollbackFor = Exception.class)
     private PaymentInstructionPreparation prepareOwnerPaperInvoice(Order order, List<PaymentLink> lockedOrderLinks, long amountKopecks, LocalDateTime now) {
+        var bound=lockedOrderLinks.stream().filter(link -> link.getPaperBankDocumentId()!=null).toList();
+        if (!bound.isEmpty()) {
+            PaymentLink frozen=bound.getFirst();
+            if (bound.size()==1 && isPaperInvoice(frozen) && frozen.getAmountKopecks()==amountKopecks
+                    && Set.of(PaymentLinkStatus.CREATED,PaymentLinkStatus.WAITING_MANUAL_PAYMENT).contains(frozen.getStatus()))
+                return new PaymentInstructionPreparation(toManagerResponseWithShadowRoute(frozen),false);
+            throw new ResponseStatusException(HttpStatus.CONFLICT,"Банковский счёт уже выпущен. Состояние или сумма изменились; требуется сверка, новый счёт не создан");
+        }
         PaymentLink current = currentRouteChangeLink(lockedOrderLinks).orElse(null);
         if (current != null) {
             if (isPaperInvoice(current) && current.getAmountKopecks() == amountKopecks && current.getExpiresAt() != null && current.getExpiresAt().isAfter(now)) {
@@ -846,6 +862,7 @@ public class PaymentLinkPreparationWorkflow {
     void expireStaleManualLinks(LocalDateTime now) {
         String reason = "Срок действия ручной платежной ссылки истек";
         paymentLinkRepository.findExpiredManualLinksForUpdate(MANUAL_PAYMENT_METHODS, Set.of(PaymentLinkStatus.WAITING_MANUAL_PAYMENT, PaymentLinkStatus.MANUAL_REPORTED), now).forEach(link -> {
+            if (link.getPaperBankDocumentId()!=null) return;
             taskReceiptIntegrationService.release(link, reason);
             link.setStatus(PaymentLinkStatus.EXPIRED);
             link.setLastError(reason);

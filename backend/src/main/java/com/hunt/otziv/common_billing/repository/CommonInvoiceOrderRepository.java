@@ -129,6 +129,8 @@ public interface CommonInvoiceOrderRepository extends CrudRepository<CommonInvoi
         ORDER BY item.order.id ASC
     """)
     List<Long> findOrderIdsByInvoiceId(@Param("invoiceId") Long invoiceId);
+    @Query("SELECT item.order.id FROM CommonInvoiceOrder item WHERE item.invoice.id=:invoiceId AND item.activeMembership=true ORDER BY item.order.id")
+    List<Long> findActiveOrderIdsByInvoiceId(@Param("invoiceId") Long invoiceId);
 
     @Query("""
         SELECT item.order.id

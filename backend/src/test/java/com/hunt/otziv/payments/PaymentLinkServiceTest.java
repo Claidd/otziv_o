@@ -341,6 +341,33 @@ class PaymentLinkServiceTest {
     }
 
     @Test
+    void issuedBankDocumentKeepsItsExactPaymentSourceAfterLinkExpiry() {
+        PaymentLinkService service=service(properties());
+        Order order=order(8901L,"Bank paper",BigDecimal.valueOf(2000));
+        order.setInvoicePaymentMode(InvoicePaymentMode.OWNER_PAPER_INVOICE);
+        PaymentLink link=payableLink(order,"bank-paper",200000L);link.setId(89011L);
+        link.setStatus(PaymentLinkStatus.WAITING_MANUAL_PAYMENT);link.setPaymentMethod(PaymentMethod.OWNER_PAPER_INVOICE);
+        link.setPaperBankDocumentId("952f305f-3300-4ef0-b200-df5fcf58ed57");link.setPaperInvoiceIssuedAt(LocalDateTime.now().minusDays(100));
+        link.setExpiresAt(LocalDateTime.now().minusDays(10));
+        when(orderRepository.findByIdForCounterUpdate(8901L)).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByOrderIdForUpdate(8901L)).thenReturn(List.of(link));
+        assertTrue(service.createForOrder(8901L).copyText().contains("PB-8901-952F305F"));
+        assertEquals(PaymentLinkStatus.WAITING_MANUAL_PAYMENT,link.getStatus());
+        verify(paymentLinkRepository,never()).save(any());verifyNoInteractions(tbankClient);
+    }
+
+    @Test
+    void unsentMessageCompensationCannotCancelBankDocumentsThatAreStillBeingPrepared() {
+        PaymentLinkService service=service(properties());Order order=new Order();order.setId(601L);
+        PaymentLink link=payableLink(order,"bank-creating",10000L);
+        link.setPaperBankDocumentId("952f305f-3300-4ef0-b200-df5fcf58ed57");
+        when(orderRepository.findByIdForCounterUpdate(601L)).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByTokenForUpdate("bank-creating")).thenReturn(Optional.of(link));
+        assertFalse(service.cancelFreshUnsentPreparationAuthorized("bank-creating",601L,authentication));
+        assertEquals(PaymentLinkStatus.CREATED,link.getStatus());verify(paymentLinkRepository,never()).save(link);
+    }
+
+    @Test
     void ownerPaperInvoiceDoesNotCreateBankPaymentOrContractorReserve() {
         PaymentLinkService service = service(properties());
         Order order = order(8_901L, "ООО Бумажный счёт", BigDecimal.valueOf(2_000));

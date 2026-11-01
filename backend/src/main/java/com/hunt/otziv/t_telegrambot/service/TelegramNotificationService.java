@@ -17,8 +17,10 @@ public class TelegramNotificationService implements TelegramNotifications {
 
     @Override
     public boolean sendTextOnce(long chatId, String text) {
-        return telegramService.sendMessageOnceWithInlineKeyboardMessageId(
-                chatId, text, null, null
-        ).isPresent();
+        return sendTextOnceMessageId(chatId,text).isPresent();
+    }
+    @Override public boolean canSendTexts() {return telegramService.canSendDocuments();}
+    @Override public java.util.Optional<Integer> sendTextOnceMessageId(long chatId,String text) {
+        return telegramService.sendMessageOnceWithInlineKeyboardMessageId(chatId,text,null,null);
     }
 }

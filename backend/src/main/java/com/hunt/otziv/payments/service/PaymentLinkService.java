@@ -83,6 +83,8 @@ public class PaymentLinkService implements com.hunt.otziv.payments.api.Standalon
         return preparationWorkflow.createForOrder(orderId);
     }
 
+    public long paperInvoicePreviewAmount(long orderId) { return preparationWorkflow.paperInvoicePreviewAmount(orderId); }
+
     public ManagerPaymentLinkResponse createForOrderInNewTransaction(Long orderId) {
         return preparationWorkflow.createForOrderInNewTransaction(orderId);
     }

@@ -47,6 +47,10 @@ public class Order {
     @com.fasterxml.jackson.annotation.JsonIgnore
     @Column(name="client_message_generation",nullable=false)
     private long clientMessageGeneration;
+    @Column(name="paper_invoice_automation_hold",nullable=false)
+    private boolean paperInvoiceAutomationHold;
+    @Column(name="paper_invoice_review_hold",nullable=false)
+    private boolean paperInvoiceReviewHold;
     @Column(name = "order_pay_day")
     private LocalDate payDay;
     @Column(name = "order_amount")
@@ -72,6 +76,10 @@ public class Order {
     @Column(name = "invoice_payment_mode", nullable = false, length = 32)
     private InvoicePaymentMode invoicePaymentMode = InvoicePaymentMode.AUTO_ROUTING;
 
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public boolean isBankPaperInvoice() { return invoicePaymentMode == InvoicePaymentMode.OWNER_PAPER_INVOICE; }
+    public void useAutomaticInvoicePaymentMode() { invoicePaymentMode=InvoicePaymentMode.AUTO_ROUTING; }
+
     @Column(name = "order_zametka")
     private String zametka;
 
@@ -94,6 +102,12 @@ public class Order {
 
     @com.fasterxml.jackson.annotation.JsonIgnore
     public Long notificationManagerId() { return manager == null ? null : manager.getId(); }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public String notificationCompanyTitle() { return company == null ? "" : company.getTitle(); }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public String notificationFilialTitle() { return filial == null ? "" : filial.getTitle(); }
 
     //    каждый бот имеет Работника, который его добавлял
     @ManyToOne(fetch = FetchType.LAZY)

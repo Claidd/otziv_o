@@ -1,0 +1,31 @@
+services:
+  paper-invoice-fixture:
+    image: otziv-external-review-worker:prod-local
+    entrypoint: ["node", "/fixture/server.cjs"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8099/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    volumes:
+      - ./infrastructure/scripts/local/paper-invoice-fixture:/fixture:ro
+    ports:
+      - "127.0.0.1:8099:8099"
+    networks: [internal_net]
+  app:
+    environment:
+      SPRING_PROFILES_ACTIVE: prod,paper-invoice-fixture
+      PAPER_INVOICES_ENABLED: "true"
+      PAPER_INVOICES_BANK_OPERATIONS_ENABLED: "true"
+      PAPER_INVOICES_DELIVERY_ENABLED: "true"
+      PAPER_INVOICES_ACCOUNT_LAST4: "6542"
+      PAPER_INVOICES_FIXTURE_URL: http://paper-invoice-fixture:8099
+      OTZIV_PAYMENTS_TOCHKA_JWT_TOKEN: ${PAPER_INVOICES_FIXTURE_BANK_TOKEN:-local-fixture-only}
+      OTZIV_PAYMENTS_TOCHKA_ENABLED: "true"
+      OTZIV_PAYMENTS_TOCHKA_CUSTOMER_CODE: LOCAL0001
+      OTZIV_PAYMENTS_TOCHKA_MERCHANT_ID: "000000000000001"
+      OTZIV_PAYMENTS_TOCHKA_REQUIRED_CASHBOX: CloudKassir
+      OTZIV_PAYMENTS_TOCHKA_TEST_MODE: "true"

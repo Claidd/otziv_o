@@ -65,6 +65,18 @@ class TochkaWebhookJwtVerifierTest {
     }
 
     @Test
+    void incomingPaymentRequiresBankSignatureAndSignedEventType() throws Exception {
+        expectOfficialJwkOnce();
+        var claims = Map.<String,Object>of("webhookType", "incomingPayment", "paymentId", "transfer-1");
+        assertEquals("transfer-1", verifier.verifyIncomingPayment(sign(claims, bankKeyPair)).path("paymentId").asText());
+        assertThrows(TochkaWebhookVerificationException.class,
+                () -> verifier.verifyIncomingPayment(sign(claims, rsaKeyPair())));
+        assertThrows(TochkaWebhookVerificationException.class,
+                () -> verifier.verifyIncomingPayment(sign(validClaims(), bankKeyPair)));
+        server.verify();
+    }
+
+    @Test
     void verifiesOfficialRs256ShapeAndBindsEveryPaymentIdentityField() throws Exception {
         expectOfficialJwkOnce();
         Map<String, Object> claims = validClaims();

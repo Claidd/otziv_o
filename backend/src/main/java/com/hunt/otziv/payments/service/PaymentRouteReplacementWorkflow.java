@@ -73,6 +73,7 @@ public class PaymentRouteReplacementWorkflow {
     public PaymentRouteChangeContextResponse paymentRouteChangeContextAuthorized(Long orderId, Authentication authentication) {
         Order order = orderRepository.findById(orderId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден"));
         managerAccessService.requireOrderAccess(orderId, authentication);
+        if(order.isPaperInvoiceReviewHold()) throw new ResponseStatusException(HttpStatus.CONFLICT,"По отменённому банковскому счёту есть несверенное поступление. Смена способа оплаты заблокирована");
         List<PaymentLink> links = paymentLinkRepository.findByOrderIdInForRead(Set.of(orderId));
         PaymentLink current = currentRouteChangeLink(links).orElse(null);
         Long expectedTargetPaymentProfileId = targetPaymentProfileId(order);
@@ -99,9 +100,8 @@ public class PaymentRouteReplacementWorkflow {
         if (target == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Некорректный запрос смены способа оплаты");
         }
-        if (target == PaymentRouteChangeTarget.OWNER_PAPER_INVOICE) {
-            requireOwnerOrAdmin(authentication);
-        }
+        // The manager endpoint already requires an authenticated manager and the
+        // exact order assignment below. Paper documents use a fixed owner account.
         requirePaymentLinksEnabled();
         Order order = orderRepository.findByIdForCounterUpdate(orderId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден"));
         managerAccessService.requireOrderAccess(orderId, authentication);
@@ -122,6 +122,7 @@ public class PaymentRouteReplacementWorkflow {
             validateExpectedTargetPaymentProfile(target, expectedTargetPaymentProfileId, profile);
             InvoicePaymentMode mode = paymentModeForTarget(target);
             order.setInvoicePaymentMode(mode);
+            order.setPaperInvoiceAutomationHold(false);
             orderRepository.save(order);
             log.info("Invoice payment mode configured before invoice creation: orderId={}, mode={}, actor={}", orderId, mode, authentication == null ? "system" : authentication.getName());
             return new PaymentRouteReplacement(null, null, target, null);
@@ -158,6 +159,7 @@ public class PaymentRouteReplacementWorkflow {
         }
         PaymentLink replacement = paymentLinkRepository.saveAndFlush(newPaymentLink(order, amountKopecks, now));
         order.setInvoicePaymentMode(paymentModeForTarget(target));
+        order.setPaperInvoiceAutomationHold(false);
         orderRepository.save(order);
         if (target == PaymentRouteChangeTarget.OWNER_PAPER_INVOICE) {
             applyOwnerPaperInvoiceRoute(replacement);
@@ -214,6 +216,9 @@ public class PaymentRouteReplacementWorkflow {
     }
 
     private String routeChangeBlockReason(PaymentLink link) {
+        if (link != null && link.getPaperBankDocumentId() != null) {
+            return "По заказу уже выпускаются банковские документы. Проверьте их оплату перед сменой способа";
+        }
         if (link == null) {
             return "Активный счет не найден";
         }

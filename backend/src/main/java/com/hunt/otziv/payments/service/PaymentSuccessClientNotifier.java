@@ -110,6 +110,9 @@ public class PaymentSuccessClientNotifier {
     }
 
     private String paymentSuccessTemplate(PaymentLink link) {
+        if (link.getPaymentMethod() == PaymentMethod.OWNER_PAPER_INVOICE) {
+            return "Оплата по банковскому счёту получена.\n{orderLine}{companyLine}Сумма: {sum}\nСпасибо!";
+        }
         String configuredTemplate = appSettingService.getString(
                 AppSettingService.CLIENT_MESSAGES_PAYMENT_SUCCESS_TEXT,
                 DEFAULT_PAYMENT_SUCCESS_TEXT

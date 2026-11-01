@@ -44,7 +44,7 @@ public class PaymentInvoiceRetryScheduler implements ManualPaymentAutomationCont
 
     @Transactional
     public void scheduleRetry(Order order) {
-        if (!canSchedule(order)) {
+        if (!canSchedule(order) || order.isPaperInvoiceAutomationHold()) {
             return;
         }
         scheduleOrderRetry(
@@ -60,7 +60,7 @@ public class PaymentInvoiceRetryScheduler implements ManualPaymentAutomationCont
 
     @Transactional
     public void scheduleInitialInvoice(Order order) {
-        if (!canSchedule(order)) {
+        if (!canSchedule(order) || order.isPaperInvoiceAutomationHold()) {
             return;
         }
         scheduleOrderRetry(
@@ -148,7 +148,7 @@ public class PaymentInvoiceRetryScheduler implements ManualPaymentAutomationCont
     /** Durable publication replay may create a missing cycle, never reopen an existing one. */
     @Transactional
     public void scheduleInitialInvoiceIfAbsent(Order order) {
-        if (!canSchedule(order)) return;
+        if (!canSchedule(order) || order.isPaperInvoiceAutomationHold()) return;
         String target = orderTargetKey(order);
         if (stateRepository.findByScenarioAndTargetKeyForUpdate(ClientMessageScenario.PAYMENT_INVOICE_RETRY, target).isPresent()) return;
         scheduleOrderRetry(order, ClientMessageScenario.PAYMENT_INVOICE_RETRY, target, 0);

@@ -1,5 +1,6 @@
 import { Component, inject } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
+import { PaperInvoiceDialogComponent } from './shared/paper-invoice-dialog.component';
 import { ReputationDeepReportMonitorService } from './core/reputation-deep-report-monitor.service';
 import { ToastContainerComponent } from './shared/toast-container.component';
 import { ManagerWorkActivityService } from './core/manager-work-activity.service';
@@ -8,7 +9,7 @@ import { WorkerAccountActionCooldownService } from './core/worker-account-action
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, ToastContainerComponent, WorkerAccountActionCooldownToastComponent],
+  imports: [RouterOutlet, ToastContainerComponent, WorkerAccountActionCooldownToastComponent, PaperInvoiceDialogComponent],
   templateUrl: './app.html',
   styleUrl: './app.scss'
 })

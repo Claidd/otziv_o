@@ -20,11 +20,21 @@ class ContractorRouteAssignmentGuardTest {
     @Mock private ContractorPaymentShadowService paymentShadowService;
     @Mock private ContractorCompletionRewardMarkerRepository markerRepository;
 
+    @Mock private com.hunt.otziv.payments.api.BankPaperPaymentBindings paperDocuments;
     private ContractorRouteAssignmentGuard guard;
 
     @BeforeEach
     void setUp() {
-        guard = new ContractorRouteAssignmentGuard(paymentShadowService, markerRepository);
+        guard = new ContractorRouteAssignmentGuard(paymentShadowService, markerRepository, paperDocuments);
+    }
+
+    @Test void bankDocumentsBlockCommercialMutationEvenWithoutAContractorAllocation() {
+        when(paperDocuments.hasDocument(42L)).thenReturn(true);
+        assertThrows(ResponseStatusException.class,()->guard.requirePayableMutationAllowed(42L));
+        assertThrows(ResponseStatusException.class,()->guard.requireWorkerReassignmentAllowed(42L));
+        assertThrows(ResponseStatusException.class,()->guard.requireManagerReassignmentAllowed(42L));
+        assertThrows(ResponseStatusException.class,()->guard.requirePaymentCancellationAllowed(42L));
+        verify(paymentShadowService,never()).hasFrozenLiveRoute(42L);
     }
 
     @Test

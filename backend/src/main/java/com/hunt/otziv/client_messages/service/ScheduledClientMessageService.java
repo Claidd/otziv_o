@@ -83,6 +83,7 @@ import org.springframework.web.server.ResponseStatusException;
 @RequiredArgsConstructor
 public class ScheduledClientMessageService implements PaymentDeadlineNoticeSource, UncertainClientMessageDelivery,
         com.hunt.otziv.client_messages.api.PeriodicReminderRestart,
+        com.hunt.otziv.client_messages.api.PaperInvoiceAutomation,
         com.hunt.otziv.client_messages.api.ReviewReminderClosure {
 
     private static final ObjectMapper DELIVERY_JSON = new ObjectMapper();
@@ -1260,6 +1261,26 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
         return synchronizeOrderAutomationStates(order) || eligible;
     }
 
+    @Override
+    @Transactional
+    public void synchronizeOrder(long orderId) {
+        Order order=orderRepository.findByIdForCounterUpdate(orderId).orElseThrow(() -> new IllegalStateException("Заказ не найден"));
+        synchronizeClientTextReminderForOrder(order);
+        synchronizeOrderAutomationStates(order);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void scheduleOrdinaryInvoice(long orderId) {
+        if(!usesBankPaymentInstructionSource())
+            throw new IllegalStateException("Автоматический выбор получателя обычного счёта выключен");
+        Order order=orderRepository.findByIdForCounterUpdate(orderId).orElseThrow();
+        if(order.isPaperInvoiceAutomationHold() || order.isPaperInvoiceReviewHold()
+                || !STATUS_PUBLIC.equals(statusTitle(order)) || isManagedByActiveCommonInvoice(order))
+            throw new IllegalStateException("Заказ не готов к выставлению обычного счёта");
+        ensureOrderStateNow(ClientMessageScenario.PAYMENT_INVOICE_RETRY,order);
+    }
+
     /**
      * Enqueues a one-shot payment reminder for an order reopened after a
      * provider refund/reversal. The order intentionally remains in "Напоминание";
@@ -1320,7 +1341,7 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
         }
         String status = statusTitle(order);
         if (STATUS_PUBLIC.equals(status)) {
-            return Optional.of(ClientMessageScenario.PAYMENT_INVOICE_RETRY);
+            return order.isPaperInvoiceAutomationHold()?Optional.empty():Optional.of(ClientMessageScenario.PAYMENT_INVOICE_RETRY);
         }
         if (STATUS_TO_CHECK.equals(status)) {
             return Optional.of(ClientMessageScenario.REVIEW_CHECK_DELIVERY_RETRY);
@@ -1331,7 +1352,7 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
         }
         if (listSetting(AppSettingService.CLIENT_MESSAGES_PAYMENT_REMINDER_STATUSES, DEFAULT_PAYMENT_REMINDER_STATUSES)
                 .contains(status)) {
-            return Optional.of(ClientMessageScenario.PAYMENT_REMINDER);
+            return order.isPaperInvoiceAutomationHold()?Optional.empty():Optional.of(ClientMessageScenario.PAYMENT_REMINDER);
         }
         return Optional.empty();
     }
@@ -1488,7 +1509,7 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
         boolean hasPaymentAutomation = scenarios.contains(ClientMessageScenario.PAYMENT_INVOICE_RETRY)
                 || scenarios.contains(ClientMessageScenario.PAYMENT_REMINDER)
                 || scenarios.contains(ClientMessageScenario.PAYMENT_OVERDUE_ESCALATION);
-        if (hasPaymentAutomation && isManagedByActiveCommonInvoice(order)) {
+        if (hasPaymentAutomation && (order.isPaperInvoiceAutomationHold() || isManagedByActiveCommonInvoice(order))) {
             scenarios.remove(ClientMessageScenario.PAYMENT_INVOICE_RETRY);
             scenarios.remove(ClientMessageScenario.PAYMENT_REMINDER);
             scenarios.remove(ClientMessageScenario.PAYMENT_OVERDUE_ESCALATION);
@@ -3011,6 +3032,9 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
             return false;
         }
         Order order = orderRepository.findByIdForMutation(state.getOrderId()).orElse(null);
+        if(order!=null && order.isPaperInvoiceAutomationHold()) {
+            markDone(state,nowStorage,"paper_invoice_cancelled","Автоответчик остановлен после запроса отмены счёта");return true;
+        }
         if (!orderPaymentIntegrityService.hasSettledPaymentEvidence(order)) {
             return false;
         }
@@ -3047,6 +3071,10 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
             LocalDateTime nowStorage,
             String message
     ) {
+        if(order!=null && order.isPaperInvoiceAutomationHold()) {
+            markDone(state,nowStorage,"paper_invoice_cancelled","Автоответчик остановлен: запрошена отмена банковского счёта");
+            return true;
+        }
         if (!isManagedByActiveCommonInvoice(order)) {
             return false;
         }
@@ -3692,6 +3720,11 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
     }
 
     private PaymentMessageWithTransfer paymentReminderText(Order order) {
+        if (order.isBankPaperInvoice()) {
+            ManagerPaymentLinkResponse link=createBankPaymentLink(order);
+            if("CREATED".equals(link.status())) throw new PaperInvoicePendingException();
+            return new PaymentMessageWithTransfer(link.copyText(),null);
+        }
         String template = appSettingService.getString(
                 AppSettingService.CLIENT_MESSAGES_PAYMENT_REMINDER_TEXT,
                 DEFAULT_PAYMENT_REMINDER_TEXT

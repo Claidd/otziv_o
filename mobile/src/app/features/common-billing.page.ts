@@ -1,3 +1,4 @@
+import { openPaperInvoiceDialog } from '../shared/paper-invoice-dialog.component';
 import { ChangeDetectionStrategy } from '@angular/core';
 import { commonInvoiceDeliveryWarning, deliveryOperationMessage, DeliveryStatusWatcher } from '@otziv/client-common/billing-payments';
 import { CommonBillingApi } from '../core/common-billing.api';
@@ -140,10 +141,10 @@ type InvoiceAction =
               }
               @if (canManagePaperInvoices()
                 && (invoice.status !== 'NEEDS_ATTENTION' || paperModeSwitchNeedsRetry(invoice))
-                && invoice.status !== 'PAID') {
+                && (invoice.status !== 'PAID' || invoice.invoicePaymentMode === 'OWNER_PAPER_INVOICE')) {
                 <button type="button" (click)="changePaperInvoiceMode()" [disabled]="!!mutating()">
                   {{ invoice.invoicePaymentMode === 'OWNER_PAPER_INVOICE'
-                    ? 'Вернуть авто-распределение'
+                    ? 'Счёт и акт'
                     : (paperModeSwitchNeedsRetry(invoice) ? 'Повторить бумажный счёт' : 'Бумажный счёт') }}
                 </button>
               }
@@ -1004,7 +1005,8 @@ export class CommonBillingPage implements OnInit, OnDestroy {
     }
   }
 
-  async changePaperInvoiceMode(): Promise<void> {
+  async changePaperInvoiceMode(legacyPaper = false): Promise<void> {
+    if (!legacyPaper && this.invoiceId()) { openPaperInvoiceDialog({kind: 'COMMON_INVOICE', id: this.invoiceId()!}, () => { void this.changePaperInvoiceMode(true); }); return; }
     const invoice = this.summary();
     const invoiceId = this.invoiceId();
     const ticket = this.routeGuard.capture();
@@ -1412,7 +1414,7 @@ export class CommonBillingPage implements OnInit, OnDestroy {
   }
 
   canManagePaperInvoices(): boolean {
-    return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']);
+    return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER', 'MANAGER']);
   }
 
   paperModeSwitchNeedsRetry(invoice: CommonInvoiceSummaryResponse): boolean {

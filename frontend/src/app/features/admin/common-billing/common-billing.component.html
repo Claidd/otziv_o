@@ -242,7 +242,7 @@
             <span class="material-icons-sharp" aria-hidden="true">description</span>
             <div>
               <strong>Бумажный счёт владельца</strong>
-              <p>Реквизиты сотрудников и банковская ссылка не выдаются. Напоминания начнутся после отметки об отправке счёта.</p>
+              <p>Счёт и акт Точки отправляются в группу. Напоминания начнутся после подтверждённой доставки документов.</p>
             </div>
           </section>
 
@@ -257,8 +257,8 @@
                   {{ invoice?.sentAt ? '✓' : '1' }}
                 </span>
                 <div>
-                  <strong>Сообщить о готовности</strong>
-                  <small>{{ invoice?.sentAt ? 'Клиент уведомлён' : 'Отправить сообщение о завершении работ' }}</small>
+                  <strong>Подготовить счёт и акт</strong>
+                  <small>{{ invoice?.sentAt ? 'Клиент уведомлён' : 'Открыть «Бумажный счёт» и проверить реквизиты' }}</small>
                 </div>
               </li>
               <li
@@ -268,8 +268,8 @@
                   {{ invoice?.paperInvoiceIssuedAt ? '✓' : '2' }}
                 </span>
                 <div>
-                  <strong>Отправить счёт клиенту</strong>
-                  <small>{{ invoice?.paperInvoiceIssuedAt ? 'Отправка подтверждена' : 'Прикрепить документ и подтвердить отправку' }}</small>
+                  <strong>Доставка документов</strong>
+                  <small>{{ invoice?.paperInvoiceIssuedAt ? 'Доставка подтверждена' : 'Система отправит сообщение и два PDF' }}</small>
                 </div>
               </li>
               <li
@@ -279,8 +279,8 @@
                   {{ invoice?.status === 'PAID' ? '✓' : '3' }}
                 </span>
                 <div>
-                  <strong>Подтвердить оплату</strong>
-                  <small>{{ invoice?.status === 'PAID' ? 'Оплата подтверждена' : 'После проверки поступления денег' }}</small>
+                  <strong>Поступление оплаты</strong>
+                  <small>{{ invoice?.status === 'PAID' ? 'Оплата подтверждена' : 'Проверяется автоматически по данным банка' }}</small>
                 </div>
               </li>
             </ol>
@@ -373,11 +373,11 @@
           }
           @if (canManagePaperInvoices()
             && (!invoiceNeedsAttention() || paperModeSwitchNeedsRetry())
-            && invoice?.status !== 'PAID') {
+            && (invoice?.status !== 'PAID' || invoice?.invoicePaymentMode === 'OWNER_PAPER_INVOICE')) {
             <button type="button" class="secondary" (click)="changePaperInvoiceMode()" [disabled]="!!mutating()">
               <span class="material-icons-sharp" aria-hidden="true">{{ invoice?.invoicePaymentMode === 'OWNER_PAPER_INVOICE' ? 'account_tree' : 'description' }}</span>
               {{ invoice?.invoicePaymentMode === 'OWNER_PAPER_INVOICE'
-                ? 'Вернуть авто-распределение'
+                ? 'Счёт и акт'
                 : (paperModeSwitchNeedsRetry() ? 'Повторить переход на бумажный счёт' : 'Бумажный счёт') }}
             </button>
           }
@@ -467,7 +467,7 @@
             @if (paperInvoiceAwaitingDeliveryConfirmation()) {
               <p class="invoice-action-sequence-hint">
                 <span class="material-icons-sharp" aria-hidden="true">info</span>
-                Сначала подтвердите отправку счёта клиенту — затем станет доступна кнопка «Оплачен».
+                Дождитесь подтверждённой доставки счёта и акта. Поступление оплаты проверяется автоматически.
               </p>
             }
             @if (invoice?.contractorPaymentRoute) {
@@ -775,6 +775,7 @@
       (paymentRouteChangeClosed)="closePaymentRouteChange()"
       (paymentRouteChanged)="changePaymentRoute($event)"
       (paperInvoiceIssued)="markOrderPaperInvoiceIssued()"
+      (paperInvoiceOpened)="openOrderPaperInvoice()"
     />
   }
 </app-admin-layout>

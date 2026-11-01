@@ -5,4 +5,5 @@ public interface PaymentReviewTargetAuthorization {
     boolean canManageUser(Long userId);
     void requireCanManageUser(Long userId);
     void requireCanManagePaymentLink(Long paymentLinkId);
+    void requireCanManageCommonInvoice(Long commonInvoiceId);
 }

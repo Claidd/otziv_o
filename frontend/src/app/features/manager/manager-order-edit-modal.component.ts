@@ -39,6 +39,7 @@ export class ManagerOrderEditModalComponent {
   @Output() readonly paymentRouteChangeClosed = new EventEmitter<void>();
   @Output() readonly paymentRouteChanged = new EventEmitter<PaymentRouteChangeTarget>();
   @Output() readonly paperInvoiceIssued = new EventEmitter<void>();
+  @Output() readonly paperInvoiceOpened = new EventEmitter<void>();
 
   setField<K extends keyof OrderUpdateRequest>(field: K, value: OrderUpdateRequest[K]): void {
     this.draftChange.emit({ field, value } as ManagerOrderEditDraftChange);

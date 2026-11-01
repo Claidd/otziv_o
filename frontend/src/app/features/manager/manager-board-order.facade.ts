@@ -44,6 +44,7 @@ type ManagerBoardOrderApi = Pick<
 type ManagerBoardOrderToast = Pick<ToastService, 'success' | 'error'>;
 
 export type ManagerBoardOrderFacadeDeps = {
+  openPaperInvoice?: (target: { kind: 'ORDER'; id: number }, fallback: () => void, refresh: () => void) => void;
   managerApi: ManagerBoardOrderApi;
   toastService: ManagerBoardOrderToast;
   loadBoard: () => void;
@@ -313,8 +314,12 @@ export class ManagerBoardOrderFacade {
     }
   }
 
-  changePaymentRoute(target: PaymentRouteChangeTarget): void {
+  changePaymentRoute(target: PaymentRouteChangeTarget, legacyPaper = false): void {
     const order = this.editOrder();
+    if (order && target === 'OWNER_PAPER_INVOICE' && !legacyPaper && this.deps.openPaperInvoice) {
+      this.deps.openPaperInvoice({ kind: 'ORDER', id: order.id }, () => this.changePaymentRoute(target, true), this.deps.loadBoard);
+      return;
+    }
     const context = this.paymentRouteContext();
     if (!order || !context?.canChange || this.paymentRouteChanging()) {
       return;
@@ -357,6 +362,10 @@ export class ManagerBoardOrderFacade {
         this.openPaymentRouteChange();
       }
     });
+  }
+  openPaperInvoice(): void {
+    const order=this.editOrder();
+    if(order && !this.orderSaving() && !this.paymentRouteChanging()) this.deps.openPaperInvoice?.({kind:'ORDER',id:order.id},()=>this.deps.toastService.error('Бумажный счёт недоступен','Владелец ещё не включил выпуск документов Точки'),this.deps.loadBoard);
   }
 
   markPaperInvoiceIssued(): void {

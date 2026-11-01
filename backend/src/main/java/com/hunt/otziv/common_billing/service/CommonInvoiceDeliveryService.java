@@ -103,6 +103,29 @@ public class CommonInvoiceDeliveryService {
         return sendInvoice(invoiceId, manual, false);
     }
 
+    /** Internal completion after both immutable bank PDFs have confirmed delivery receipts. */
+    @Transactional
+    public void markBankPaperDocumentsDelivered(Long invoiceId, String documentId) {
+        var invoice = lockedInvoiceAfterStandalonePaymentPrelude(invoiceId).invoice();
+        if (!isOwnerPaperInvoice(invoice) || !java.util.Objects.equals(documentId, invoice.getPaperBankDocumentId()))
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Банковские документы не соответствуют общему счёту");
+        LocalDateTime now = LocalDateTime.now();
+        if (invoice.getStatus() != CommonInvoiceStatus.PAID) {
+            if (!SEND_INVOICE_STATUSES.contains(invoice.getStatus()))
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Состояние общего счёта изменилось; нужна сверка доставки");
+            ensureAllItemsReady(invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId), "Общий счёт ещё не готов");
+            if (invoice.getSentAt() == null) {
+                invoice.setStatus(CommonInvoiceStatus.INVOICED);
+                markInvoiceOrdersToPay(invoice);
+            }
+            if (invoice.getNextReminderAt() == null) invoice.setNextReminderAt(nextAutomaticPaymentReminderAt(now));
+        }
+        if (invoice.getSentAt() == null) invoice.setSentAt(now);
+        if (invoice.getPaperInvoiceIssuedAt() == null) invoice.setPaperInvoiceIssuedAt(now);
+        invoiceRepository.save(invoice);
+        paperInvoiceManagerNotificationService.closeAfterCommit(invoiceId);
+    }
+
     /** Existing-operation repair. All network reads run outside invoice/order locks. */
     @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     public CommonInvoiceMessageRecovery recoverPendingMessageReceipt(Long invoiceId) {
@@ -161,6 +184,17 @@ public class CommonInvoiceDeliveryService {
         return writeTransaction(() -> invoice(invoiceId));
     }
 
+    /** Joins the durable paper-cancellation handoff; provider delivery runs after commit. */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public void queueAfterPaperCancellation(long invoiceId) {
+        if(messageQueue.unresolved(invoiceId).isPresent())
+            throw new ResponseStatusException(HttpStatus.CONFLICT,"Прежняя отправка общего счёта требует сверки");
+        var prepared=preparePaymentMessage(invoiceId,false,false,false,null,false);
+        if(prepared==null || prepared.alreadyConfirmed())
+            throw new ResponseStatusException(HttpStatus.CONFLICT,"Отправка обычного счёта пока недоступна; будет повторена автоматически");
+        messageQueue.enqueue(prepared.paymentRouteChanged()?prepared:prepared.asPaymentRouteChanged(paymentRouteChangedMessage(prepared.message())));
+    }
+
     void sendInvoiceMessage(Long invoiceId, boolean manual, boolean paymentRouteChanged, boolean checkVisibility) {
         queuePaymentMessage(invoiceId, false, manual, false, null, paymentRouteChanged, checkVisibility);
     }
@@ -170,6 +204,7 @@ public class CommonInvoiceDeliveryService {
         return writeTransaction(() -> {
             var prelude = lockedInvoiceAfterStandalonePaymentPrelude(invoiceId);
             var invoice = prelude.invoice();
+            if(invoice.isPaperInvoiceAutomationHold()) throw new ResponseStatusException(HttpStatus.CONFLICT,"Банковский счёт отменяется или отменён. Для новой отправки сначала выпустите новый комплект");
             if (checkVisibility) ensureCommonInvoiceVisibleForCurrentUser(invoice);
             var existing = messageQueue.unresolved(invoiceId);
             if (existing.isPresent()) {
@@ -421,7 +456,7 @@ public class CommonInvoiceDeliveryService {
         return writeTransaction(() -> {
             var invoice = lockedInvoiceAfterStandalonePaymentPrelude(prepared.invoiceId()).invoice();
             refreshInvoiceAmounts(invoice, invoiceOrderRepository.findByInvoiceIdWithOrders(prepared.invoiceId()));
-            return java.util.Objects.equals(invoice.getPaymentMessageOperationId(), prepared.operationId())
+            return !invoice.isPaperInvoiceAutomationHold() && java.util.Objects.equals(invoice.getPaymentMessageOperationId(), prepared.operationId())
                     && !invoice.isPaymentMessageConfirmed() && SEND_INVOICE_STATUSES.contains(invoice.getStatus())
                     && remainingKopecks(invoice) > 0 && remainingKopecks(invoice) == prepared.remainingKopecks();
         });
@@ -531,7 +566,7 @@ public class CommonInvoiceDeliveryService {
     }
 
     boolean isStillDueReminderCandidate(CommonInvoice invoice, LocalDateTime now) {
-        return invoice != null && REMINDER_STATUSES.contains(invoice.getStatus()) && invoice.getNextReminderAt() != null && !invoice.getNextReminderAt().isAfter(now);
+        return invoice != null && !invoice.isPaperInvoiceAutomationHold() && REMINDER_STATUSES.contains(invoice.getStatus()) && invoice.getNextReminderAt() != null && !invoice.getNextReminderAt().isAfter(now);
     }
 
     boolean isPaymentRouteChangedMessagePending(CommonInvoice invoice) {
