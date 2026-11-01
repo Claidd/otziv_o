@@ -12,6 +12,8 @@ import java.util.LinkedHashSet;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
+import java.time.LocalDate;
+import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +33,69 @@ public class ManagerReportReviewTaskContextService {
     private final ManagerDailyControlConcreteItemRepository concreteItemRepository;
     private final ClientChatUnansweredItemRepository unansweredRepository;
     private final ManagerProblemDiagnosticsService diagnosticsService;
+    private final com.hunt.otziv.manager_control.service.ManagerControlInvoiceDiagnostics invoiceDiagnostics;
+
+    /** Older conversational questions had no daily-control card. Bind only one exact,
+     * manager-owned case from the report day, using both company and quoted message. */
+    @Transactional(readOnly = true)
+    public ManagerReportReviewQualityService.ReviewQuestion bindConversationSource(
+            ManagerReportReviewQualityService.ReviewQuestion question, Long managerId, LocalDate date) {
+        if (question == null || managerId == null || date == null || !question.sourceTaskIds().isEmpty()
+                || !question.sourceChatItemIds().isEmpty() || question.question().startsWith("Специалист ")) return question;
+        String text = normalized(question.question());
+        var candidates = unansweredRepository.findDailyReportItems(managerId, date.atStartOfDay(),
+                date.plusDays(1).atStartOfDay(), ClientChatUnansweredStatus.OPEN);
+        if (candidates == null) return question;
+        var matches = candidates.stream().filter(item -> item.getId() != null && item.getManager() != null
+                        && managerId.equals(item.getManager().getId()) && item.getClosedAt() != null
+                        && date.equals(item.getClosedAt().toLocalDate()) && item.getCompany() != null)
+                .filter(item -> {
+                    String company = normalized(item.getCompany().getTitle());
+                    String message = normalized(item.getLastMessageText());
+                    return company.length() >= 3 && text.contains(company) && message.length() >= 30
+                            && text.contains(message.substring(0, Math.min(100, message.length())));
+                }).map(ClientChatUnansweredItem::getId).distinct().toList();
+        return matches.size() == 1 ? new ManagerReportReviewQualityService.ReviewQuestion(question.question(),
+                question.expectedPoints(), question.sourceTaskIds(), matches) : question;
+    }
+
+    /** Recorded conversation proves its words, never payment or completion of the order. */
+    @Transactional(readOnly = true)
+    public String conversationEvidence(Collection<Long> ids, Long managerId) {
+        StringBuilder result = new StringBuilder("СЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:\n");
+        if (ids == null) return result.toString();
+        var json = new com.fasterxml.jackson.databind.ObjectMapper();
+        for (Long id : ids.stream().filter(java.util.Objects::nonNull).filter(value -> value > 0).distinct().toList()) {
+            var item = id == null || managerId == null ? null : unansweredRepository.findById(id)
+                    .filter(row -> row.getManager() != null && managerId.equals(row.getManager().getId())).orElse(null);
+            java.util.Map<String,String> fields = item == null ? java.util.Map.of("availability", "unavailable")
+                    : java.util.Map.of("client_message", java.util.Objects.requireNonNullElse(item.getLastMessageText(), ""),
+                            "manager_reply", java.util.Objects.requireNonNullElse(item.getResolutionReplyText(), ""),
+                            "client_message_at", String.valueOf(item.getLastClientMessageAt()),
+                            "reply_recorded_at", String.valueOf(item.getClosedAt()));
+            for (var field : fields.entrySet()) {
+                try {
+                    result.append(json.writeValueAsString(java.util.Map.of("id", "chat-case:" + id + ":" + field.getKey(),
+                            "source", "recorded_chat_message", "sourceChatItemId", id,
+                            "field", field.getKey(), "value", field.getValue(),
+                            "observedAt", java.time.Instant.now().toString()))).append('\n');
+                } catch (com.fasterxml.jackson.core.JsonProcessingException failure) {
+                    throw new IllegalStateException("Cannot encode recorded conversation", failure);
+                }
+            }
+            if(item!=null) result.append(java.util.Objects.requireNonNullElse(
+                    diagnosticsService.contextForConversationPayments(id,managerId),""));
+        }
+        return result.toString();
+    }
+
+    private String normalized(String value) {
+        return clean(value).toLowerCase(Locale.ROOT).replaceAll("[^\\p{L}\\p{N}]+", " ").trim();
+    }
+
+    public String workerGoalTaskEvidence(Long workerId, Long managerId, LocalDate date) {
+        return diagnosticsService.contextForWorkerGoal(workerId,managerId,date);
+    }
 
     /** Read only the question's sources; never append the complete historical report to fresh evidence. */
     @Transactional
@@ -94,6 +159,11 @@ public class ManagerReportReviewTaskContextService {
     }
 
     private boolean resolvedSatisfactorily(ManagerDailyControlConcreteItem source) {
+        // A deferred daily copy can outlive the original problem for weeks. Use
+        // the same current eligibility rule as the live common-invoice board.
+        if (clean(source.getEntityType()).startsWith("COMMON_INVOICE")) {
+            return invoiceDiagnostics.resolvedForAudit(source.getEntityId());
+        }
         if (source.getStatus() != ManagerDailyControlItemStatus.RESOLVED) {
             boolean resolvedLater = source.getDeferredAt() != null
                     && source.getControl() != null
@@ -107,7 +177,7 @@ public class ManagerReportReviewTaskContextService {
         }
         var chatSource = clientChatItem(source);
         if (CLIENT_CHAT_TYPES.contains(clean(source.getEntityType())) && chatSource.isEmpty()) return false;
-        if (clean(source.getEntityType()).startsWith("COMMON_INVOICE") || "AUTOMATION_FAILURE".equals(source.getEntityType())) {
+        if ("AUTOMATION_FAILURE".equals(source.getEntityType())) {
             return diagnosticsService.resolutionState(source.getId()) == ManagerProblemDiagnosticsService.ResolutionState.RESOLVED;
         }
         return chatSource

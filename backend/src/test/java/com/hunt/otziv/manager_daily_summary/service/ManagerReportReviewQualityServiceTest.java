@@ -66,6 +66,110 @@ class ManagerReportReviewQualityServiceTest {
     }
 
     @Test
+    void conversationSourceRoundTripsWithoutChangingLegacyQuestionRubrics() {
+        var legacy = service.readQuestions("[{\"question\":\"Почему ответ не по вопросу?\",\"expectedPoints\":[\"Понять вопрос\"],\"sourceTaskIds\":[]}]").getFirst();
+        assertThat(legacy.sourceChatItemIds()).isEmpty();
+        var linked = new ManagerReportReviewQualityService.ReviewQuestion(legacy.question(), legacy.expectedPoints(),
+                legacy.sourceTaskIds(), List.of(6704L));
+        assertThat(service.readQuestions(service.questionsJson(List.of(linked)))).containsExactly(linked);
+    }
+
+    @Test
+    void structuredChatWordsCannotProveThatPaymentWasActuallyRecorded() throws Exception {
+        String answer="Я проставила оплату на сайте.";
+        provider(assessment("SATISFIED",answer,"E1","COMPLETED_ACTION","SUPPORTED","Все критерии удовлетворены"));
+        String report="СЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:\n"+new ObjectMapper().writeValueAsString(java.util.Map.of(
+                "id","chat:6704:reply","source","recorded_chat_message","field","manager_reply",
+                "value","Вы оплатили отзывы?","sourceChatItemId",6704));
+        var question=new ManagerReportReviewQualityService.ReviewQuestion("Что произошло?",List.of("результат"),List.of(),List.of(6704L));
+
+        var result=service.assessAnswer(report,question,answer,false);
+
+        assertThat(result.decision()).isEqualTo(ManagerReportReviewQualityService.Decision.NEEDS_CONTEXT);
+        assertThat(result.reason()).contains("Не хватает подтверждения",answer).doesNotContain("Все критерии удовлетворены");
+    }
+
+    @Test
+    void wordingComparisonCannotCauseAnExternalEvidencePauseOrHideACompletedAction() throws Exception {
+        String answer="Изначальный ответ не объясняет ситуацию с отзывом, а переводит тему на оплату";
+        String report="СЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:\n"+new ObjectMapper().writeValueAsString(java.util.Map.of(
+                "id","chat:6704:reply","source","recorded_chat_message","field","manager_reply",
+                "value","Вы оплатили отзывы?","sourceChatItemId",6704));
+        var question=new ManagerReportReviewQualityService.ReviewQuestion("Чего не хватило в ответе?",
+                List.of("понимание вопроса"),List.of(),List.of(6704L));
+        provider(assessment("SATISFIED",answer,"E1","FACT","SUPPORTED","Сравнение слов"));
+        assertThat(service.assessAnswer(report,question,answer,false).accepted()).isTrue();
+        provider(assessment("SATISFIED",answer+".","E1","FACT","SUPPORTED","Сравнение слов"));
+        assertThat(service.assessAnswer(report,question,answer+".",false).accepted()).isTrue();
+        var referenced=new ObjectMapper().readTree(assessment("SATISFIED",answer+".","E1","FACT","SUPPORTED","Сравнение слов"));
+        ((com.fasterxml.jackson.databind.node.ObjectNode)referenced.path("claims").get(0)).putArray("factChecks")
+                .addObject().put("factId","chat:6704:reply").put("assertedValue","Вы оплатили отзывы?");
+        provider(referenced.toString());
+        assertThat(service.assessAnswer(report,question,answer+".",false).accepted()).isTrue();
+        String mixed=answer+", но я уже проставила оплату";
+        provider(assessment("SATISFIED",mixed,"E1","FACT","SUPPORTED","Смешанное утверждение"));
+        assertThat(service.assessAnswer(report,question,mixed,false).decision())
+                .isEqualTo(ManagerReportReviewQualityService.Decision.NEEDS_CONTEXT);
+    }
+
+    @Test
+    void disclaimerOfAnUnconfirmedActionDoesNotAssertThatActionOrHideAnAddedPaymentClaim() throws Exception {
+        String answer="Я не утверждаю, что нашла чек, лично уточняла оплату или уже исправила отзыв.";
+        String report="СЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:\n"+new ObjectMapper().writeValueAsString(java.util.Map.of(
+                "id","chat:6704:reply","source","recorded_chat_message","field","manager_reply",
+                "value","Вы оплатили отзывы?","sourceChatItemId",6704));
+        var question=new ManagerReportReviewQualityService.ReviewQuestion("Что проверите?",
+                List.of("ограничение исходных данных"),List.of(),List.of(6704L));
+        provider(assessment("SATISFIED",answer,"E1","FACT","UNVERIFIABLE","Менеджер не заявляет о выполненном действии"));
+        assertThat(service.assessAnswer(report,question,answer,false).accepted()).isTrue();
+        String mixed=answer+" Но клиент уже оплатил счёт.";
+        provider(assessment("SATISFIED",mixed,"E1","FACT","SUPPORTED","Смешанный ответ"));
+        assertThat(service.assessAnswer(report,question,mixed,false).decision())
+                .isEqualTo(ManagerReportReviewQualityService.Decision.NEEDS_CONTEXT);
+    }
+
+    @Test
+    void recordedClientWordsCanProveWhatTheClientAskedWithoutProvingPayment() throws Exception {
+        String answer="Клиент спрашивает об отзыве с одной звездой.";
+        provider(assessment("SATISFIED",answer,"E1","FACT","SUPPORTED","Содержание вопроса подтверждено"));
+        String report="СЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:\n"+new ObjectMapper().writeValueAsString(java.util.Map.of(
+                "id","chat:6704:question","source","recorded_chat_message","field","client_message",
+                "value","Зачем писать отзыв с одной звездой?","sourceChatItemId",6704));
+        var question=new ManagerReportReviewQualityService.ReviewQuestion("О чём спрашивал клиент?",
+                List.of("понимание вопроса"),List.of(),List.of(6704L));
+        assertThat(service.assessAnswer(report,question,answer,false).accepted()).isTrue();
+    }
+
+    @Test
+    void recordedConversationStillCanContradictAnIncorrectReadingOfTheClientQuestion() throws Exception {
+        String answer="Клиент спрашивал только про оплату.";
+        provider(assessment("CONTRADICTED",answer,"E1","FACT","CONTRADICTED","Вопрос касался отзыва"));
+        String report="СЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:\n"+new ObjectMapper().writeValueAsString(java.util.Map.of(
+                "id","chat:6704:question","source","recorded_chat_message","field","client_message",
+                "value","Зачем писать отзыв с одной звездой?","sourceChatItemId",6704));
+        var question=new ManagerReportReviewQualityService.ReviewQuestion("О чём спрашивал клиент?",List.of("понимание вопроса"),List.of(),List.of(6704L));
+        assertThat(service.assessAnswer(report,question,answer,false).decision())
+                .isEqualTo(ManagerReportReviewQualityService.Decision.NEEDS_CLARIFICATION);
+    }
+
+    @Test
+    void conversationFinancialFactsRemainInScopeAndContradictAnIncorrectPaidClaim() throws Exception {
+        String answer="Заказ оплачен.";
+        var mapper=new ObjectMapper();
+        var response=mapper.readTree(assessment("SATISFIED",answer,"E1","FACT","SUPPORTED","Верно"));
+        ((com.fasterxml.jackson.databind.node.ObjectNode)response.path("claims").get(0)).putArray("factChecks")
+                .addObject().put("factId","conversation:6704:order:26532:status").put("assertedValue","Оплачено");
+        provider(response.toString());
+        String report="СЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:\n"+mapper.writeValueAsString(java.util.Map.of(
+                "id","conversation:6704:order:26532:status","source","order","field","status",
+                "value","Новый","sourceChatItemId",6704));
+        var question=new ManagerReportReviewQualityService.ReviewQuestion("Что произошло?",List.of("результат"),List.of(),List.of(6704L));
+
+        assertThat(service.assessAnswer(report,question,answer,false).decision())
+                .isEqualTo(ManagerReportReviewQualityService.Decision.NEEDS_CLARIFICATION);
+    }
+
+    @Test
     void marksQuestionGenerationAsPendingInsteadOfFreezingFallbackQuestions() {
         var generation = service.generateQuestions("Персональный отчёт", 3);
 

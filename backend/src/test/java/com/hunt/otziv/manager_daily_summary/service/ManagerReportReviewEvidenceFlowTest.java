@@ -474,7 +474,7 @@ class ManagerReportReviewEvidenceFlowTest {
         assertThat(service.handleTextMessage(-100900L, user, "Новый план.", 615)).isTrue();
 
         verify(quality).assessAnswer(anyString(), any(), eq("Новый план."), eq(true));
-        verify(context).refreshSources(review.getQuestionsContext(), List.of(), 9L);
+        verify(context).refreshSources("", List.of(42L), 9L);
     }
 
     @Test

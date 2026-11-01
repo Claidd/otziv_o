@@ -66,6 +66,23 @@ public class ManagerReportReviewIssueService {
         return issueRepository.findByReview_IdOrderByQuestionIndexAsc(review.getId());
     }
 
+    @Transactional
+    public void refreshConversationLinks(ManagerReportReviewSession review,
+            List<ManagerReportReviewQualityService.ReviewQuestion> questions) {
+        for (var issue : issues(review)) {
+            int index = issue.getQuestionIndex();
+            if (index < 0 || index >= questions.size()) continue;
+            var next = questions.get(index);
+            var before = qualityService.readQuestions(issue.getQuestionJson());
+            if (before.size() != 1 || !before.getFirst().sourceChatItemIds().isEmpty()
+                    || next.sourceChatItemIds().isEmpty() || !before.getFirst().question().equals(next.question())
+                    || !before.getFirst().expectedPoints().equals(next.expectedPoints())
+                    || !before.getFirst().sourceTaskIds().equals(next.sourceTaskIds())) continue;
+            issue.setQuestionJson(qualityService.questionsJson(List.of(next)));
+            issueRepository.save(issue);
+        }
+    }
+
     @Transactional(readOnly = true)
     public List<ManagerReportReviewIssue> selectableIssues(ManagerReportReviewSession review) {
         return issues(review).stream()

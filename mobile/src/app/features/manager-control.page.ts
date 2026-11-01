@@ -1116,7 +1116,7 @@ export class ManagerControlPage implements OnInit, OnDestroy {
         return 'ждём план действий';
       case 'COMPLETED':
         if (review.autoCompleted) {
-          return 'принят автоматически · замечаний нет';
+          return 'принят автоматически · обязательных вопросов нет';
         }
         return review.quickReview ? 'завершён слишком быстро' : 'отчёт принят';
       case 'DISPUTE_PENDING':

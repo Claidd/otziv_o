@@ -284,7 +284,7 @@ class ManagerCommunicationDailyReportSectionServiceTest {
                   "strengths":["Диалог продолжен по существу"],
                   "findings":[{
                     "caseId":5,
-                    "classification":"IMPROVEMENT_ONLY",
+                    "classification":"CONFIRMED_PROBLEM",
                     "confidence":0.93,
                     "company":"Салон Тест",
                     "title":"Сначала подтвердить решение клиента",
@@ -308,6 +308,8 @@ class ManagerCommunicationDailyReportSectionServiceTest {
         assertTrue(facts.contains("Нет, не нужно."));
         assertTrue(facts.contains("\"replySenderName\":\"Мария\""));
         assertTrue(facts.contains("\"replyAuthorAttribution\":\"INTERNAL_STAFF_UNVERIFIED\""));
+        assertTrue(report.contains("нельзя сделать персональный вывод"));
+        assertFalse(report.contains("Менеджер предложил клиенту полезную альтернативу"));
         assertTrue(report.contains("<b>Совет без штрафа:"));
         assertFalse(report.contains("<b>Подтверждённая проблема:"));
     }

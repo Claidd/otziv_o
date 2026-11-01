@@ -25,13 +25,15 @@ class ManagerReportReviewTaskContextServiceTest {
     private ClientChatUnansweredItemRepository unansweredRepository;
     private ManagerReportReviewTaskContextService service;
     private com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosticsService diagnostics;
+    private com.hunt.otziv.manager_control.service.ManagerControlInvoiceDiagnostics invoices;
 
     @BeforeEach
     void setUp() {
         concreteRepository = mock(ManagerDailyControlConcreteItemRepository.class);
         unansweredRepository = mock(ClientChatUnansweredItemRepository.class);
         diagnostics = mock(com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosticsService.class);
-        service = new ManagerReportReviewTaskContextService(concreteRepository, unansweredRepository, diagnostics);
+        invoices = mock(com.hunt.otziv.manager_control.service.ManagerControlInvoiceDiagnostics.class);
+        service = new ManagerReportReviewTaskContextService(concreteRepository, unansweredRepository, diagnostics, invoices);
     }
 
     @Test
@@ -101,6 +103,26 @@ class ManagerReportReviewTaskContextServiceTest {
     }
 
     @Test
+    void paidInvoiceWithdrawsHistoricalDeferredQuestionWithoutManualCardClosure() {
+        var item = source(7682L, ManagerDailyControlItemStatus.DEFERRED);
+        item.setEntityType("COMMON_INVOICE");
+        item.setEntityId(252L);
+        when(concreteRepository.findById(7682L)).thenReturn(Optional.of(item));
+        when(invoices.resolvedForAudit(252L)).thenReturn(true);
+
+        assertThat(service.resolvedSatisfactorily(7682L)).isTrue();
+    }
+
+    @Test
+    void unresolvedInvoiceIsNotWithdrawnBecauseItsOldCardWasManuallyClosed() {
+        var item = source(7682L, ManagerDailyControlItemStatus.RESOLVED);
+        item.setEntityType("COMMON_INVOICE");
+        when(concreteRepository.findById(7682L)).thenReturn(Optional.of(item));
+
+        assertThat(service.resolvedSatisfactorily(7682L)).isFalse();
+    }
+
+    @Test
     void laterResolvedCardWithdrawsEarlierDeferredQuestion() {
         ManagerDailyControlConcreteItem source = source(3545L, ManagerDailyControlItemStatus.DEFERRED);
         source.setEntityType("COMMON_INVOICE");
@@ -111,11 +133,7 @@ class ManagerReportReviewTaskContextServiceTest {
         when(control.managerId()).thenReturn(9L);
         source.setControl(control);
         when(concreteRepository.findById(3545L)).thenReturn(Optional.of(source));
-        when(concreteRepository.existsResolutionAfterDeferral(
-                9L, "COMMON_INVOICE:175", deferredAt, ManagerDailyControlItemStatus.RESOLVED))
-                .thenReturn(true);
-        when(diagnostics.resolutionState(3545L)).thenReturn(
-                com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosticsService.ResolutionState.RESOLVED);
+        when(invoices.resolvedForAudit(source.getEntityId())).thenReturn(true);
 
         assertThat(service.resolvedSatisfactorily(3545L)).isTrue();
     }
@@ -125,8 +143,6 @@ class ManagerReportReviewTaskContextServiceTest {
         var source = source(3545L, ManagerDailyControlItemStatus.RESOLVED);
         source.setEntityType("COMMON_INVOICE");
         when(concreteRepository.findById(3545L)).thenReturn(Optional.of(source));
-        when(diagnostics.resolutionState(3545L)).thenReturn(
-                com.hunt.otziv.manager_control.diagnostics.ManagerProblemDiagnosticsService.ResolutionState.OPEN);
         assertThat(service.resolvedSatisfactorily(3545L)).isFalse();
     }
 
@@ -179,6 +195,42 @@ class ManagerReportReviewTaskContextServiceTest {
         String context = service.refreshSources("СЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:\nold-history", List.of(), 9L);
         assertThat(context).contains("не подтверждено").doesNotContain("old-history", "СЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:");
         org.mockito.Mockito.verifyNoInteractions(concreteRepository, diagnostics, unansweredRepository);
+    }
+
+    @Test
+    void bindsUnreferencedConversationOnlyByCompanyAndExactQuotedMessageOnReportDay() {
+        var date = java.time.LocalDate.of(2026, 10, 30);
+        var manager = new com.hunt.otziv.u_users.model.Manager(); manager.setId(9L);
+        var company = new com.hunt.otziv.c_companies.model.Company(); company.setTitle("Furra designer");
+        var chat = answered(ClientChatReplyQuality.GOOD, false,
+                "Если у вас какая-то проблема вы можете просто удалить отзыв. Зачем писать отзыв с одной звездой?",
+                "Здравствуйте, вы оплатили отзывы?");
+        chat.setId(6704L); chat.setCompany(company); chat.setManager(manager); chat.setClosedAt(date.atTime(19,24));
+        when(unansweredRepository.findDailyReportItems(9L, date.atStartOfDay(), date.plusDays(1).atStartOfDay(),
+                ClientChatUnansweredStatus.OPEN)).thenReturn(List.of(chat));
+        var question = new ManagerReportReviewQualityService.ReviewQuestion(
+                "По Furra designer клиент спросил: «Если у вас какая-то проблема вы можете просто удалить отзыв. Зачем писать отзыв с одной звездой?» Что не так с ответом?",
+                List.of("Понять вопрос клиента"));
+
+        var bound = service.bindConversationSource(question, 9L, date);
+
+        assertThat(bound.sourceChatItemIds()).containsExactly(6704L);
+        assertThat(bound.question()).isEqualTo(question.question());
+        assertThat(bound.expectedPoints()).isEqualTo(question.expectedPoints());
+        assertThat(bound.sourceTaskIds()).isEmpty();
+        chat.setManager(new com.hunt.otziv.u_users.model.Manager());
+        assertThat(service.bindConversationSource(question, 9L, date).sourceChatItemIds()).isEmpty();
+    }
+
+    @Test
+    void missingOrForeignConversationDoesNotExposeItsMessages() {
+        var chat = answered(ClientChatReplyQuality.GOOD, false, "Private foreign message", "Private foreign reply");
+        var manager = new com.hunt.otziv.u_users.model.Manager(); manager.setId(10L); chat.setManager(manager);
+        when(unansweredRepository.findById(6704L)).thenReturn(Optional.of(chat));
+
+        assertThat(service.conversationEvidence(List.of(6704L),9L))
+                .contains("СЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:", "availability", "unavailable")
+                .doesNotContain("Private foreign");
     }
 
     private ManagerDailyControlConcreteItem source(
