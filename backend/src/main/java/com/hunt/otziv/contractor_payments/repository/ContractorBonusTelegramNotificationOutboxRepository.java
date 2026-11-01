@@ -89,7 +89,7 @@ public class ContractorBonusTelegramNotificationOutboxRepository {
         )).stream().findFirst();
     }
 
-    /** Read the current employee chat and reversal state immediately before delivery. */
+    /** Read the current work group for the accrual's role and reversal state before delivery. */
     public Optional<Bonus> findBonus(long adjustmentId) {
         return jdbc.query("""
                 SELECT adjustment.id AS adjustment_id,
@@ -99,8 +99,12 @@ public class ContractorBonusTelegramNotificationOutboxRepository {
                        adjustment.reference_month AS reference_month,
                        adjustment.reason AS reason,
                        employee.id AS user_id,
+                       employee.fio AS employee_name,
                        employee.active AS active,
-                       employee.telegram_chat_id AS telegram_chat_id,
+                       CASE profile.contractor_role
+                           WHEN 'SPECIALIST' THEN employee.worker_telegram_group_chat_id
+                           WHEN 'MANAGER' THEN manager.audit_telegram_group_chat_id
+                       END AS telegram_group_chat_id,
                        EXISTS (
                            SELECT 1
                            FROM contractor_accrual_adjustments reversal
@@ -110,6 +114,9 @@ public class ContractorBonusTelegramNotificationOutboxRepository {
                 JOIN contractor_bonus_telegram_notification_outbox notification
                   ON notification.adjustment_id = adjustment.id
                 JOIN users employee ON employee.id = notification.recipient_user_id
+                JOIN contractor_payment_profiles profile
+                  ON profile.id = adjustment.profile_id AND profile.user_id = employee.id
+                LEFT JOIN managers manager ON manager.user_id = employee.id
                 WHERE adjustment.id = :adjustmentId
                 """, Map.of("adjustmentId", adjustmentId),
                 (resultSet, rowNum) -> mapBonus(resultSet)).stream().findFirst();
@@ -176,7 +183,7 @@ public class ContractorBonusTelegramNotificationOutboxRepository {
     }
 
     private Bonus mapBonus(ResultSet resultSet) throws SQLException {
-        long chatId = resultSet.getLong("telegram_chat_id");
+        long chatId = resultSet.getLong("telegram_group_chat_id");
         Long nullableChatId = resultSet.wasNull() ? null : chatId;
         return new Bonus(
                 resultSet.getLong("adjustment_id"),
@@ -186,6 +193,7 @@ public class ContractorBonusTelegramNotificationOutboxRepository {
                 resultSet.getObject("reference_month", LocalDate.class),
                 resultSet.getString("reason"),
                 resultSet.getLong("user_id"),
+                resultSet.getString("employee_name"),
                 resultSet.getBoolean("active"),
                 nullableChatId,
                 resultSet.getBoolean("reversed")
@@ -210,8 +218,9 @@ public class ContractorBonusTelegramNotificationOutboxRepository {
             LocalDate referenceMonth,
             String reason,
             long userId,
+            String employeeName,
             boolean active,
-            Long telegramChatId,
+            Long telegramGroupChatId,
             boolean reversed
     ) {
     }

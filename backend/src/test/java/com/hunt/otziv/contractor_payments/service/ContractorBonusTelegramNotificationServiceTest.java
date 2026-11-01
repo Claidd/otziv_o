@@ -21,6 +21,9 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -67,34 +70,37 @@ class ContractorBonusTelegramNotificationServiceTest {
     }
 
     @Test
-    void sendsBonusOnlyToCurrentPrivateEmployeeChatAndMarksSent() {
+    void sendsBonusOnlyToCurrentWorkGroupAndMarksSent() {
         Delivery delivery = due();
-        when(repository.findBonus(42L)).thenReturn(Optional.of(bonus(true, 987L, false)));
-        when(telegramNotifications.sendTextOnce(eq(987L), anyString())).thenReturn(true);
+        when(repository.findBonus(42L)).thenReturn(Optional.of(bonus(true, -100987L, false)));
+        when(telegramNotifications.sendTextOnce(eq(-100987L), anyString())).thenReturn(true);
         when(claimService.markSent(delivery)).thenReturn(true);
 
         assertThat(service.retryBatch()).isEqualTo(1);
 
-        verify(telegramNotifications).sendTextOnce(eq(987L), anyString());
+        verify(telegramNotifications).sendTextOnce(eq(-100987L), anyString());
         verify(claimService).markSent(delivery);
         verify(claimService, never()).markFailed(eq(delivery), anyString());
     }
 
-    @Test
-    void doesNotSendWhenEmployeeHasNoPrivateChat() {
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(longs = {0, 987})
+    void missingOrInvalidWorkGroupRetriesWithoutPrivateFallback(Long chatId) {
         Delivery delivery = due();
-        when(repository.findBonus(42L)).thenReturn(Optional.of(bonus(true, null, false)));
+        when(repository.findBonus(42L)).thenReturn(Optional.of(bonus(true, chatId, false)));
 
         assertThat(service.retryBatch()).isZero();
 
-        verify(claimService).markSkipped(delivery, "employee_private_telegram_chat_missing");
+        verify(claimService).markFailed(delivery, "employee_work_telegram_group_missing");
+        verify(claimService, never()).markSkipped(eq(delivery), anyString());
         verifyNoInteractions(telegramNotifications);
     }
 
     @Test
     void doesNotSendReversedBonus() {
         Delivery delivery = due();
-        when(repository.findBonus(42L)).thenReturn(Optional.of(bonus(true, 987L, true)));
+        when(repository.findBonus(42L)).thenReturn(Optional.of(bonus(true, -100987L, true)));
 
         assertThat(service.retryBatch()).isZero();
 
@@ -105,7 +111,7 @@ class ContractorBonusTelegramNotificationServiceTest {
     @Test
     void doesNotSendToInactiveEmployee() {
         Delivery delivery = due();
-        when(repository.findBonus(42L)).thenReturn(Optional.of(bonus(false, 987L, false)));
+        when(repository.findBonus(42L)).thenReturn(Optional.of(bonus(false, -100987L, false)));
 
         assertThat(service.retryBatch()).isZero();
 
@@ -116,8 +122,8 @@ class ContractorBonusTelegramNotificationServiceTest {
     @Test
     void failedTelegramAttemptIsRetriedWithoutTouchingAccrual() {
         Delivery delivery = due();
-        when(repository.findBonus(42L)).thenReturn(Optional.of(bonus(true, 987L, false)));
-        when(telegramNotifications.sendTextOnce(eq(987L), anyString())).thenReturn(false);
+        when(repository.findBonus(42L)).thenReturn(Optional.of(bonus(true, -100987L, false)));
+        when(telegramNotifications.sendTextOnce(eq(-100987L), anyString())).thenReturn(false);
 
         assertThat(service.retryBatch()).isZero();
 
@@ -127,10 +133,11 @@ class ContractorBonusTelegramNotificationServiceTest {
 
     @Test
     void textSaysAccruedRatherThanPaidAndIncludesReasonAndMonth() {
-        String message = ContractorBonusTelegramNotificationService.message(bonus(true, 987L, false));
+        String message = ContractorBonusTelegramNotificationService.message(bonus(true, -100987L, false));
 
         assertThat(message).contains("Начислена премия", "1", "400,00 ₽", "октябрь 2026", "За отличную работу");
         assertThat(message).contains("Выплата учитывается отдельно");
+        assertThat(message).contains("Сотрудник: Виктория М.");
         assertThat(message).doesNotContain("выплачена");
     }
 
@@ -145,7 +152,7 @@ class ContractorBonusTelegramNotificationServiceTest {
         return new Bonus(
                 42L, "BONUS", 140_000L,
                 LocalDate.of(2026, 10, 18), LocalDate.of(2026, 10, 1),
-                "За отличную работу", 5L, active, chatId, reversed
+                "За отличную работу", 5L, "Виктория М.", active, chatId, reversed
         );
     }
 }
