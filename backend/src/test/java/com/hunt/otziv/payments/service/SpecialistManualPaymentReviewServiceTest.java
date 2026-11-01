@@ -108,8 +108,8 @@ class SpecialistManualPaymentReviewServiceTest {
         SpecialistManualPaymentReview review = pending(); review.setCreditedAt(LocalDateTime.now());
         review.setId(101L);
         when(reviews.lockById(101L)).thenReturn(Optional.of(review));
-        when(users.activePersonalTelegramChatId(37L)).thenReturn(Optional.of(999L));
-        when(telegram.sendPaymentReviewNoticeOnce(eq(999L), any(), any(), eq("specialist-payment-dispute:101")))
+        when(users.activePaymentReviewGroupChatId(37L, "SPECIALIST")).thenReturn(Optional.of(-100999L));
+        when(telegram.sendPaymentReviewNoticeOnce(eq(-100999L), any(), any(), eq("specialist-payment-dispute:101")))
                 .thenReturn(true);
         LocalDateTime originalDeadline = review.getDeadlineAt();
 
@@ -120,6 +120,36 @@ class SpecialistManualPaymentReviewServiceTest {
         assertEquals(originalDeadline, review.getDeadlineAt());
         verify(issues).resolveOrderIssueInCurrentTransaction(
                 SpecialistManualPaymentReviewService.DELIVERY_ISSUE, 101L);
+        service.deliver(101L);
+        verify(telegram).sendPaymentReviewNoticeOnce(eq(-100999L), any(), any(), any());
+        verify(users, never()).activePersonalTelegramChatId(any());
+    }
+
+    @Test
+    void missingGroupDoesNotSendToPersonalChatOrMarkDelivered() {
+        SpecialistManualPaymentReview review = pending(); review.setCreditedAt(LocalDateTime.now());
+        review.setId(101L);
+        when(reviews.lockById(101L)).thenReturn(Optional.of(review));
+
+        service.deliver(101L);
+
+        assertEquals(SpecialistManualPaymentReviewStatus.PENDING_DELIVERY, review.getStatus());
+        assertEquals(null, review.getNotifiedAt());
+        assertTrue(review.getLastError().contains("рабочая Telegram-группа"));
+        verify(users, never()).activePersonalTelegramChatId(any());
+        verify(telegram, never()).sendPaymentReviewNoticeOnce(anyLong(), any(), any(), any());
+    }
+
+    @Test
+    void ownerReceiptKeepsExistingAdministrativeNoticeRoute() {
+        SpecialistManualPaymentReview review = pending(); review.setCreditedAt(LocalDateTime.now());
+        review.setId(101L); review.setRecipientType("OWNER");
+        when(reviews.lockById(101L)).thenReturn(Optional.of(review));
+        when(users.activePersonalTelegramChatId(37L)).thenReturn(Optional.of(999L));
+        when(telegram.sendPaymentReviewNoticeOnce(eq(999L), any(), any(), any())).thenReturn(true);
+        service.deliver(101L);
+        assertEquals(SpecialistManualPaymentReviewStatus.WAITING, review.getStatus());
+        verify(users, never()).activePaymentReviewGroupChatId(any(), any());
     }
 
     @Test
@@ -132,8 +162,8 @@ class SpecialistManualPaymentReviewServiceTest {
             }
             return Optional.of(review);
         });
-        when(users.activePersonalTelegramChatId(37L)).thenReturn(Optional.of(999L));
-        when(telegram.sendPaymentReviewNoticeOnce(eq(999L), any(), any(), any())).thenReturn(true);
+        when(users.activePaymentReviewGroupChatId(37L, "SPECIALIST")).thenReturn(Optional.of(-100999L));
+        when(telegram.sendPaymentReviewNoticeOnce(eq(-100999L), any(), any(), any())).thenReturn(true);
 
         service.deliver(101L);
 
@@ -147,8 +177,8 @@ class SpecialistManualPaymentReviewServiceTest {
     void failedNotificationNeverEnablesAutomaticCredit() {
         SpecialistManualPaymentReview review = pending(); review.setCreditedAt(LocalDateTime.now()); review.setId(101L);
         when(reviews.lockById(101L)).thenReturn(Optional.of(review));
-        when(users.activePersonalTelegramChatId(37L)).thenReturn(Optional.of(999L));
-        when(telegram.sendPaymentReviewNoticeOnce(eq(999L), any(), any(), any())).thenReturn(false);
+        when(users.activePaymentReviewGroupChatId(37L, "SPECIALIST")).thenReturn(Optional.of(-100999L));
+        when(telegram.sendPaymentReviewNoticeOnce(eq(-100999L), any(), any(), any())).thenReturn(false);
 
         service.deliver(101L);
 
@@ -188,8 +218,8 @@ class SpecialistManualPaymentReviewServiceTest {
     void uncertainTelegramOutcomeRequiresManualReconciliationWithoutRetry() {
         SpecialistManualPaymentReview review = pending(); review.setCreditedAt(LocalDateTime.now()); review.setId(101L);
         when(reviews.lockById(101L)).thenReturn(Optional.of(review));
-        when(users.activePersonalTelegramChatId(37L)).thenReturn(Optional.of(999L));
-        when(telegram.sendPaymentReviewNoticeOnce(eq(999L), any(), any(), any()))
+        when(users.activePaymentReviewGroupChatId(37L, "SPECIALIST")).thenReturn(Optional.of(-100999L));
+        when(telegram.sendPaymentReviewNoticeOnce(eq(-100999L), any(), any(), any()))
                 .thenThrow(new IllegalStateException("connection lost"));
 
         service.deliver(101L);
@@ -197,23 +227,38 @@ class SpecialistManualPaymentReviewServiceTest {
 
         assertEquals(SpecialistManualPaymentReviewStatus.NEEDS_ATTENTION, review.getStatus());
         assertEquals(1, review.getAttemptCount());
-        verify(telegram).sendPaymentReviewNoticeOnce(eq(999L), any(), any(), any());
+        verify(telegram).sendPaymentReviewNoticeOnce(eq(-100999L), any(), any(), any());
     }
 
     @Test
-    void onlyAssignedSpecialistCanDisputeBeforeDeadline() {
+    void onlyAssignedSpecialistCanDisputeInTheirGroupBeforeDeadline() {
+        SpecialistManualPaymentReview review = pending(); review.setId(101L);
+        review.setStatus(SpecialistManualPaymentReviewStatus.WAITING);
+        review.setNotifiedAt(LocalDateTime.now());
+        when(reviews.lockById(101L)).thenReturn(Optional.of(review));
+        when(users.activePaymentReviewGroupChatId(37L, "SPECIALIST")).thenReturn(Optional.of(-100999L));
+
+        when(users.activePersonalTelegramChatId(37L)).thenReturn(Optional.of(999L));
+        assertThrows(ResponseStatusException.class, () -> service.dispute(101L, 998L, -100999L));
+        assertThrows(ResponseStatusException.class, () -> service.dispute(101L, 999L, -100998L));
+        assertThrows(ResponseStatusException.class, () -> service.dispute(101L, 999L, 998L));
+        assertEquals(SpecialistManualPaymentReviewStatus.WAITING, review.getStatus());
+        service.dispute(101L, 999L, -100999L);
+        assertEquals(SpecialistManualPaymentReviewStatus.DISPUTED, review.getStatus());
+        verify(issues).notifyOrderIssueAfterCommit(eq(7L),
+                eq(SpecialistManualPaymentReviewService.DISPUTE_ISSUE), eq(101L), any(), any());
+    }
+
+    @Test
+    void alreadyDeliveredPrivateButtonKeepsExistingRecipientsDisputeRight() {
         SpecialistManualPaymentReview review = pending(); review.setId(101L);
         review.setStatus(SpecialistManualPaymentReviewStatus.WAITING);
         review.setNotifiedAt(LocalDateTime.now());
         when(reviews.lockById(101L)).thenReturn(Optional.of(review));
         when(users.activePersonalTelegramChatId(37L)).thenReturn(Optional.of(999L));
-
-        assertThrows(ResponseStatusException.class, () -> service.dispute(101L, 998L));
-        assertEquals(SpecialistManualPaymentReviewStatus.WAITING, review.getStatus());
-        service.dispute(101L, 999L);
+        service.dispute(101L, 999L, 999L);
         assertEquals(SpecialistManualPaymentReviewStatus.DISPUTED, review.getStatus());
-        verify(issues).notifyOrderIssueAfterCommit(eq(7L),
-                eq(SpecialistManualPaymentReviewService.DISPUTE_ISSUE), eq(101L), any(), any());
+        verify(users, never()).activePaymentReviewGroupChatId(any(), any());
     }
 
     @Test

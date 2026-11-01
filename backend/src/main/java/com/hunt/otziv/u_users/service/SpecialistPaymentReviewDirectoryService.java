@@ -3,6 +3,7 @@ package com.hunt.otziv.u_users.service;
 import com.hunt.otziv.u_users.api.SpecialistPaymentReviewDirectory;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.repository.UserRepository;
+import com.hunt.otziv.u_users.repository.ManagerRepository;
 import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class SpecialistPaymentReviewDirectoryService implements SpecialistPaymentReviewDirectory {
     private final UserRepository users;
+    private final ManagerRepository managers;
 
     @Override
     @Transactional(readOnly = true)
@@ -27,6 +29,19 @@ public class SpecialistPaymentReviewDirectoryService implements SpecialistPaymen
     public Optional<Long> activePersonalTelegramChatId(Long userId) {
         return users.findById(userId).filter(User::isActive).map(User::getTelegramChatId)
                 .filter(chatId -> chatId > 0);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<Long> activePaymentReviewGroupChatId(Long userId, String recipientType) {
+        if (userId == null) return Optional.empty();
+        return users.findById(userId).filter(User::isActive).flatMap(user -> {
+            Long group = "MANAGER".equals(recipientType)
+                    ? managers.findByUserId(userId).map(manager -> manager.getAuditTelegramGroupChatId()).orElse(null)
+                    : user.getWorkerTelegramGroupChatId();
+            // A positive Telegram ID is a private chat, even if entered in the group field.
+            return Optional.ofNullable(group).filter(chatId -> chatId < 0);
+        });
     }
 
     @Override
