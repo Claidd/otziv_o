@@ -25,18 +25,21 @@ public class PaymentSuccessNotificationRetryClaimService {
     private final Duration leaseDuration;
     private final Supplier<String> tokenSupplier;
     private final String processingOwner;
+    private final com.hunt.otziv.client_messages.api.NotificationFollowup followups;
 
     @Autowired
     public PaymentSuccessNotificationRetryClaimService(
             PaymentSuccessNotificationRetryClaimRepository repository,
             @Value("${otziv.payments.success-notification-retry.lease-duration:PT2M}")
-            Duration leaseDuration
+            Duration leaseDuration,
+            com.hunt.otziv.client_messages.api.NotificationFollowup followups
     ) {
         this(
                 repository,
                 leaseDuration,
                 () -> UUID.randomUUID().toString(),
-                "payment-notification-" + UUID.randomUUID()
+                "payment-notification-" + UUID.randomUUID(),
+                followups
         );
     }
 
@@ -46,10 +49,17 @@ public class PaymentSuccessNotificationRetryClaimService {
             Supplier<String> tokenSupplier,
             String processingOwner
     ) {
+        this(repository,leaseDuration,tokenSupplier,processingOwner,null);
+    }
+
+    PaymentSuccessNotificationRetryClaimService(PaymentSuccessNotificationRetryClaimRepository repository,
+            Duration leaseDuration, Supplier<String> tokenSupplier, String processingOwner,
+            com.hunt.otziv.client_messages.api.NotificationFollowup followups) {
         this.repository = Objects.requireNonNull(repository, "repository");
         this.leaseDuration = requireBoundedLease(leaseDuration);
         this.tokenSupplier = Objects.requireNonNull(tokenSupplier, "tokenSupplier");
         this.processingOwner = requireIdentifier(processingOwner, 128, "processingOwner");
+        this.followups = followups;
     }
 
     @Transactional(
@@ -92,6 +102,20 @@ public class PaymentSuccessNotificationRetryClaimService {
         boolean updated = repository.markSucceeded(valid.paymentLinkId());
         repository.release(valid.paymentLinkId(), valid.processingToken());
         return updated;
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW, timeout = 10)
+    public boolean markSucceededWithRecovery(Claim claim, com.hunt.otziv.client_messages.api.NotificationFollowup.Outcome receipt) {
+        Claim valid = requireClaim(claim);
+        if (receipt == null || !receipt.followup() || !Objects.equals(receipt.originalOperationId(),"payment-success:"+valid.paymentLinkId())
+                || followups == null) throw new IllegalArgumentException("Recovery receipt does not belong to this payment notification");
+        if (!repository.lockPaymentLinkForFinalization(valid.paymentLinkId())
+                || !repository.lockOwnedClaim(valid.paymentLinkId(),valid.processingToken())) return false;
+        followups.markApplied(receipt);
+        if (!repository.markSucceededWithRecovery(valid.paymentLinkId(),receipt.operationId()))
+            throw new IllegalStateException("Payment notification changed before follow-up finalization");
+        repository.release(valid.paymentLinkId(),valid.processingToken());
+        return true;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW, timeout = 10)

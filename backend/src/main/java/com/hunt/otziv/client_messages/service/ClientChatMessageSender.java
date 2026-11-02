@@ -36,6 +36,19 @@ public class ClientChatMessageSender implements com.hunt.otziv.client_messages.a
     private final com.hunt.otziv.whatsapp.api.WhatsAppBusinessOperations businessOperations;
     private final ClientMessageOperationFence operationFence;
     private final PublicationProgressPreferenceService progressPreferences;
+    private final com.hunt.otziv.whatsapp.service.WhatsAppDeliveryRouteRecovery routeRecovery;
+
+    @Override public String recoverMissingWhatsAppGroup(com.hunt.otziv.client_messages.api.ClientMessageDelivery.Target target,
+            String clientId, String groupId, String operationId) {
+        if (hasText(groupId) || target == null || !hasText(operationId)) return groupId;
+        try {
+            if (businessOperations.findFrozen(operationId).isPresent() || operationFence.lookup(operationId).isPresent())
+                return groupId;
+            return routeRecovery.recoverMissingGroup(target.companyId(), target.urlChat(), clientId);
+        } catch (RuntimeException unavailable) {
+            return groupId;
+        }
+    }
 
     /** Receipt-only recovery. Neither absence nor UNKNOWN authorizes a provider call. */
     @Override public ClientMessageSendResult recordedOutcome(String operationId) {
@@ -295,7 +308,9 @@ public class ClientChatMessageSender implements com.hunt.otziv.client_messages.a
         }
 
         return switch (platform) {
-            case WHATSAPP -> sendToWhatsApp(clientId, hasText(groupId) ? groupId : chatId, message, operationId);
+            case WHATSAPP -> hasText(groupId) || hasText(chatId)
+                    ? sendToWhatsApp(clientId, hasText(groupId) ? groupId : chatId, message, operationId)
+                    : missingActiveChannel("whatsapp_group_missing", "Для WhatsApp-группы не задан groupId");
             case TELEGRAM -> parseLong(hasText(chatId) ? chatId : String.valueOf(company.getTelegramGroupChatId()))
                     .map(id -> operationId == null ? sendToTelegram(id, message) : sendToTelegramOnce(id, message, null))
                     .orElseGet(() -> missingActiveChannel("telegram_group_missing", "Для Telegram-группы не задан chatId"));

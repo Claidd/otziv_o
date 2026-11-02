@@ -14,6 +14,7 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -128,6 +129,8 @@ public class ManagerReportReviewQualityService {
             Короткое дополнение не заменяет и не обнуляет предыдущий содержательный ответ.
             previouslySatisfiedCriteria указывает ранее зачтённые цитаты, а не внешние доказательства:
             проверь их по текущим evidence и сохрани зачёт, если нет отзыва или противоречия.
+            Перенос прежнего зачёта не освобождает от evidenceRefs/claims: для каждого такого
+            критерия тоже верни соответствующее утверждение из той же прежней попытки и его проверку.
             Не ставь MISSING только потому, что нужный пункт не повторён в последнем дополнении.
             При отмене ранее зачтённого пункта верни точную цитату новой поправки в RETRACTION;
             при изменении фактов используй CONTRADICTED или UNVERIFIABLE с актуальными ссылками.
@@ -218,21 +221,39 @@ public class ManagerReportReviewQualityService {
             утверждения при необходимости укажи отдельными claims с собственными цитатами.
             evidenceRefs и factChecks включают только относящиеся к конкретному утверждению источники,
             а не весь каталог. Не пропускай противоречащие источники и не объединяй разные утверждения,
-            если у них различаются статус или доказательства. reason — одно короткое объяснение,
+            если у них различаются статус или доказательства.
+            Для будущего плана или явного отзыва прежнего утверждения evidenceRefs может быть пустым:
+            они подтверждаются точной цитатой соответствующего claims, а не событием о выполненной работе.
+            reason — одно короткое объяснение,
             summary — итог в одном предложении. Не копируй факты сервера, вопрос и ответ в объяснения.
             Возвращай только JSON со ВСЕМИ критериями (criterionIndex — индекс expectedPoints с 0):
             {"contextStatus":"SUFFICIENT|INSUFFICIENT","summary":"...",
              "criteria":[{"criterionIndex":0,"status":"SATISFIED|MISSING|CONTRADICTED|UNVERIFIABLE",
               "answerAttempt":0,"answerQuote":"точная цитата или пусто для MISSING",
               "evidenceRefs":["E1"],"reason":"..."}],
-             "claims":[{"kind":"FACT|COMPLETED_ACTION|PROMISE|HYPOTHESIS|RETRACTION",
-              "status":"SUPPORTED|CONTRADICTED|UNVERIFIABLE|PLAN","answerAttempt":0,
+             "claims":[{"kind":"FACT|COMPLETED_ACTION|PROMISE|HYPOTHESIS|RETRACTION|MANAGEMENT_REPORT",
+              "status":"SUPPORTED|CONTRADICTED|UNVERIFIABLE|PLAN|REPORTED","answerAttempt":0,
               "answerQuote":"точная цитата","evidenceRefs":["E1"],"reason":"...",
               "temporal":"CURRENT|HISTORICAL","factChecks":[{"factId":"invoice:189:status","assertedValue":"REMINDER"}]}],
              "commitments":[{"sourceTaskId":123,"action":"...","owner":"...",
               "dueAt":"2026-10-23T12:00:00+08:00","verification":"...","dependencies":[],
               "answerAttempt":0,"answerQuote":"точная цитата обещания",
               "deadlineQuote":"точная цитата срока","verificationQuote":"точная цитата проверки"}] }.
+            В вопросе о недоборе специалиста различай объяснение менеджера и проверенный результат.
+            Рассказ «я писала/поговорила/обсудила со специалистом» о разборе, поддержке и приоритетах
+            можно учесть как MANAGEMENT_REPORT/REPORTED: это объяснение со слов менеджера,
+            а не независимое подтверждение разговора. Не останавливай весь аудит из-за отсутствия
+            записи такого разговора. Для такого объяснения evidenceRefs может быть пустым;
+            criterion.answerQuote должен полностью покрываться цитатой этого claim.
+            Этот вид нельзя использовать для платежей, доставки клиенту,
+            фактического устранения проблемы или показателей выполнения. Даты, числа и проценты
+            проверяй отдельными FACT по соответствующим дневным источникам. Последующие хорошие
+            дни не стирают недобор прошлого дня. Если вопрос требует доказательства выполненного
+            действия, MANAGEMENT_REPORT не заменяет доказательство.
+            Названный менеджером состав исторического недобора («один заказ, пять текстов»)
+            тоже можно записать MANAGEMENT_REPORT/REPORTED, если общее число согласуется с
+            подтверждённым недобором, а точный исторический состав цели сервером не сохранён.
+            Не выдавай рассказ о составе за подтверждённые карточки и не требуй несуществующий журнал.
             commitments — только обещанные в ответе конкретные действия; sourceTaskId бери из
             sourceTaskIds, не придумывай; если список sourceTaskIds пуст, commitments=[].
             requiresCommitment=true означает, что вопрос требует плана и срока.
@@ -432,9 +453,13 @@ public class ManagerReportReviewQualityService {
                                     + "CUMULATIVE_CRITERION_OMITTED: оцени ВСЕ previousAttempts вместе с managerAnswer; "
                                     + "ранее зачтённую цитату нельзя потерять из-за краткого дополнения. Проверь её по свежим evidence. "
                                     + "CRITERIA_COVERAGE: верни ровно criterionCount критериев с индексами criterionIndexes, "
-                                    + "не создавай новый критерий для managerAnswerAttempt."),
+                                    + "не создавай новый критерий для managerAnswerAttempt. "
+                                    + "CRITERION_EVIDENCE_REQUIRED: для SATISFIED/CONTRADICTED укажи относящиеся evidenceRefs. "
+                                    + "Если внешние доказательства не нужны (план, MANAGEMENT_REPORT), добавь claim того же answerAttempt, "
+                                    + "чья точная цитата полностью содержит criterion.answerQuote. Это относится и к previousAttempts. "
+                                    + "Прежний зачёт сам по себе не является доказательством. Не выдумывай ссылки."),
                             objectMapper.writeValueAsString(facts), budget, deadline);
-                    Assessment assessment = parseAssessment(response, expectedPoints, attempts, evidence, sourceTaskIds, sourceChatItemIds, answeredAt);
+                    Assessment assessment = parseAssessment(response, expectedPoints, attempts, evidence, sourceTaskIds, sourceChatItemIds, answeredAt,carried);
                     // A short supplement cannot erase verified partial progress.
                     // Changed facts and explicit retractions must still be checked.
                     for (var prior : carried) {
@@ -473,7 +498,8 @@ public class ManagerReportReviewQualityService {
 
     private Assessment parseAssessment(AiResponse response, List<String> expectedPoints,
                                        List<String> attempts, Map<String, String> evidence,
-                                       List<Long> sourceTaskIds, List<Long> sourceChatItemIds, ZonedDateTime evaluationTime) throws Exception {
+                                       List<Long> sourceTaskIds, List<Long> sourceChatItemIds, ZonedDateTime evaluationTime,
+                                       List<PriorCriterion> carried) throws Exception {
         JsonNode root = objectMapper.readTree(stripCodeFence(response.text()));
         require(root != null && root.isObject(), ProtocolViolation.OBJECT_REQUIRED);
         String contextStatus = root.path("contextStatus").asText("");
@@ -492,9 +518,6 @@ public class ManagerReportReviewQualityService {
             String quote = clean(item.path("answerQuote").asText(""));
             List<String> refs = references(item.path("evidenceRefs"), evidence);
             if (status != CriterionStatus.MISSING) attempt = resolveQuotedAttempt(attempt, quote, attempts);
-            if (status == CriterionStatus.SATISFIED || status == CriterionStatus.CONTRADICTED) {
-                require(!refs.isEmpty(), ProtocolViolation.CRITERION_EVIDENCE_REQUIRED);
-            }
             criteria.add(new CriterionAssessment(index, status, attempt, quote, refs,
                     limit(item.path("reason").asText(""), 1000), feedbackTopic(expectedPoints.get(index))));
         }
@@ -502,6 +525,9 @@ public class ManagerReportReviewQualityService {
         for (JsonNode item : root.path("claims")) {
             ClaimKind kind = protocolEnum(ClaimKind.class, item.path("kind").asText(""), ProtocolViolation.CLAIM_KIND);
             ClaimStatus status = protocolEnum(ClaimStatus.class, item.path("status").asText(""), ProtocolViolation.CLAIM_STATUS);
+            // A reported conversation is never an evidence-backed external event. Validate its scope below.
+            if (kind==ClaimKind.MANAGEMENT_REPORT) {kind=ClaimKind.FACT; if(status!=ClaimStatus.CONTRADICTED) status=ClaimStatus.UNVERIFIABLE;}
+            else if (status==ClaimStatus.REPORTED) status=ClaimStatus.UNVERIFIABLE;
             int attempt = item.path("answerAttempt").asInt(-1);
             String quote = clean(item.path("answerQuote").asText(""));
             attempt = resolveQuotedAttempt(attempt, quote, attempts);
@@ -541,6 +567,12 @@ public class ManagerReportReviewQualityService {
             }
             if (checksKnownContradiction) status = ClaimStatus.CONTRADICTED;
             else if (checksUnknownOutcome) status = ClaimStatus.UNVERIFIABLE;
+            // Lifecycle candidates prove availability/timing fields, not the
+            // composition of a historical daily goal. A list of references
+            // without a check of specific fields cannot establish a fact.
+            if (Set.of(ClaimKind.FACT, ClaimKind.COMPLETED_ACTION).contains(kind)
+                    && checks.isEmpty() && workerGoalCandidatesOnly(refs, typedFacts))
+                status = ClaimStatus.UNVERIFIABLE;
             // A narrowly quoted future intention cannot be evidence of a completed action.
             // Keep mixed factual statements and all structured fact checks subject to verification.
             if ((kind == ClaimKind.COMPLETED_ACTION || kind == ClaimKind.FACT)
@@ -569,11 +601,61 @@ public class ManagerReportReviewQualityService {
             // Known structured fields are checked again independently of the model's verdict/value extraction.
             if (temporal.equals("CURRENT") && kind == ClaimKind.FACT
                     && contradictsInvoiceFields(quote, typedFacts)) status = ClaimStatus.CONTRADICTED;
+            if (status==ClaimStatus.UNVERIFIABLE && checks.isEmpty()
+                    && Set.of(ClaimKind.FACT,ClaimKind.COMPLETED_ACTION).contains(kind)
+                    && reportedWorkerCoaching(quote,expectedPoints,sourceTaskIds,typedFacts)) {
+                kind=ClaimKind.MANAGEMENT_REPORT;status=ClaimStatus.REPORTED;
+            }
             claims.add(new ClaimAssessment(kind, status, attempt, quote, refs,
                     limit(item.path("reason").asText(""), 1000), temporal, checks));
         }
+        boolean restoredPrior=restoreReportedWorkerCriteria(criteria,claims,carried,expectedPoints,sourceTaskIds,sourceChatItemIds,typedFacts);
         require(claims.stream().anyMatch(claim -> claim.answerAttempt() == attempts.size() - 1),
                 ProtocolViolation.CURRENT_ANSWER_REQUIRED);
+        // A criterion can quote a plan without an external event. When the
+        // provider omitted redundant criterion refs, reuse only the refs of
+        // claims that cover the complete criterion quote from the same answer.
+        for (int position = 0; position < criteria.size(); position++) {
+            CriterionAssessment criterion = criteria.get(position);
+            if (!criterion.evidenceRefs().isEmpty()
+                    || !Set.of(CriterionStatus.SATISFIED, CriterionStatus.CONTRADICTED).contains(criterion.status())) continue;
+            var support = claims.stream().filter(claim -> claim.answerAttempt() == criterion.answerAttempt()
+                    && !normalize(criterion.answerQuote()).isBlank()
+                    && normalize(claim.answerQuote()).contains(normalize(criterion.answerQuote()))).toList();
+            require(!support.isEmpty(), ProtocolViolation.CRITERION_EVIDENCE_REQUIRED);
+            var refs = support.stream().flatMap(claim -> claim.evidenceRefs().stream()).distinct().toList();
+            boolean nonFactual = support.stream().allMatch(claim ->
+                    claim.kind() == ClaimKind.PROMISE && claim.status() == ClaimStatus.PLAN
+                    || claim.kind() == ClaimKind.RETRACTION
+                    || claim.kind() == ClaimKind.MANAGEMENT_REPORT && claim.status() == ClaimStatus.REPORTED
+                    || claim.kind() == ClaimKind.HYPOTHESIS && (epistemicDisclaimerOnly(claim.answerQuote())
+                        || wordingAppraisalOnly(claim.answerQuote()) || selfAssessmentOnly(claim.answerQuote())
+                        || generalApproachOnly(claim.answerQuote()) || futureOutcomeConditionOnly(claim.answerQuote())));
+            boolean unknownFact = support.stream().anyMatch(claim ->
+                    Set.of(ClaimKind.FACT, ClaimKind.COMPLETED_ACTION).contains(claim.kind())
+                            && claim.status() == ClaimStatus.UNVERIFIABLE);
+            require(!refs.isEmpty() || nonFactual || unknownFact, ProtocolViolation.CRITERION_EVIDENCE_REQUIRED);
+            CriterionStatus status = unknownFact || criterion.status() == CriterionStatus.CONTRADICTED && refs.isEmpty()
+                    ? CriterionStatus.UNVERIFIABLE : criterion.status();
+            criteria.set(position, new CriterionAssessment(criterion.criterionIndex(), status,
+                    criterion.answerAttempt(), criterion.answerQuote(), refs, criterion.reason(), criterion.feedbackTopic()));
+        }
+        // A reported historical task composition answers the explanation criterion without
+        // becoming independently verified task history. Never apply this to completion criteria.
+        for (int position=0;position<criteria.size();position++) {
+            var criterion=criteria.get(position);
+            if (criterion.status()!=CriterionStatus.UNVERIFIABLE
+                    || requiresCompletedAction(expectedPoints.get(criterion.criterionIndex()))
+                    || !reportedWorkComposition(normalize(criterion.answerQuote()),typedFacts)) continue;
+            var supporting=claims.stream().filter(c->c.answerAttempt()==criterion.answerAttempt()
+                    && normalize(c.answerQuote()).contains(normalize(criterion.answerQuote()))).toList();
+            if (!supporting.isEmpty() && supporting.stream().allMatch(c->c.kind()==ClaimKind.MANAGEMENT_REPORT
+                    && c.status()==ClaimStatus.REPORTED))
+                criteria.set(position,new CriterionAssessment(criterion.criterionIndex(),CriterionStatus.SATISFIED,
+                        criterion.answerAttempt(),criterion.answerQuote(),criterion.evidenceRefs(),
+                        "Состав недобора учтён со слов менеджера; численность согласуется с дневным итогом, точный журнал не сохранён",
+                        criterion.feedbackTopic()));
+        }
         // A mixed correction may withdraw an earlier answer and state a new fact. Only the
         // withdrawal is exempt from external proof; the entire new assertion must be assessed.
         for (ClaimAssessment claim : claims) {
@@ -614,7 +696,8 @@ public class ManagerReportReviewQualityService {
             boolean unknownOutcome = claims.stream().anyMatch(claim -> claim.status() == ClaimStatus.UNVERIFIABLE
                     && relatedQuotes(criterion.answerQuote(), claim.answerQuote())
                     && claim.factChecks().stream().anyMatch(check -> unknownValue(typedFacts.get(check.factId()).value())));
-            if (!knownContradiction && (unknownOutcome || recordedMessagesOnly(criterion.evidenceRefs(), evidence)))
+            if (!knownContradiction && (unknownOutcome || recordedMessagesOnly(criterion.evidenceRefs(), evidence)
+                    || workerGoalCandidatesOnly(criterion.evidenceRefs(), typedFacts)))
                 criteria.set(position, new CriterionAssessment(
                     criterion.criterionIndex(), CriterionStatus.UNVERIFIABLE, criterion.answerAttempt(),
                     criterion.answerQuote(), criterion.evidenceRefs(), criterion.reason(), criterion.feedbackTopic()));
@@ -639,7 +722,8 @@ public class ManagerReportReviewQualityService {
                 || claims.stream().anyMatch(c -> c.status() == ClaimStatus.UNVERIFIABLE
                         && c.kind() != ClaimKind.HYPOTHESIS && c.kind() != ClaimKind.RETRACTION && c.kind() != ClaimKind.PROMISE);
         // INSUFFICIENT must identify what cannot be verified. Never silently accept such a response.
-        require(!"INSUFFICIENT".equals(contextStatus) || uncertain || missing || contradicted,
+        require(!"INSUFFICIENT".equals(contextStatus) || uncertain || missing || contradicted
+                        || claims.stream().anyMatch(c->c.kind()==ClaimKind.MANAGEMENT_REPORT && c.status()==ClaimStatus.REPORTED),
                 ProtocolViolation.CONTEXT_UNCERTAINTY_REQUIRED);
         // An unrelated unverifiable claim cannot erase a contradiction supported by fresh evidence.
         Decision decision = staleEvidence ? Decision.NEEDS_CONTEXT
@@ -654,6 +738,10 @@ public class ManagerReportReviewQualityService {
         if (untrackedPromise) missingPoints.add("commitment:missing");
         if (unclearPromise) missingPoints.add("promise:unclear");
         String summary = limit(root.path("summary").asText("Проверка по критериям и фактам"), 2000);
+        if (restoredPrior && decision==Decision.ACCEPTED)
+            summary="Ответ принят с учётом предыдущих пояснений и плана проверки; повторять их в дополнении не требуется.";
+        if (decision==Decision.ACCEPTED && claims.stream().anyMatch(c->c.status()==ClaimStatus.REPORTED))
+            summary=limit(summary+" Описание разговора учтено со слов менеджера, без независимого подтверждения переписки.",2000);
         if (decision == Decision.NEEDS_CONTEXT) {
             var unsupported = claims.stream().filter(c -> c.status() == ClaimStatus.UNVERIFIABLE
                     && c.kind() != ClaimKind.HYPOTHESIS && c.kind() != ClaimKind.RETRACTION && c.kind() != ClaimKind.PROMISE).findFirst();
@@ -669,6 +757,9 @@ public class ManagerReportReviewQualityService {
                                                    ZonedDateTime evaluationTime) {
         if (node.isMissingNode() || node.isNull()) return List.of();
         require(node.isArray() && node.size() <= 20, ProtocolViolation.COMMITMENTS_ARRAY);
+        // Conversation-only audits have no task to attach a durable commitment
+        // to. Ignore inapplicable metadata; factual/criterion checks still apply.
+        if (sourceTaskIds.isEmpty()) return List.of();
         List<ActionCommitment> result = new ArrayList<>();
         for (JsonNode item : node) {
             long sourceTaskId = item.path("sourceTaskId").asLong(-1);
@@ -692,6 +783,83 @@ public class ManagerReportReviewQualityService {
                     textArray(item.path("dependencies"), 10, 300)));
         }
         return List.copyOf(result);
+    }
+
+    private boolean reportedWorkerCoaching(String quote, List<String> expectedPoints, List<Long> sourceTaskIds,
+                                           Map<String,AuthoritativeFact> facts) {
+        if (!sourceTaskIds.isEmpty() || expectedPoints.stream().anyMatch(this::requiresCompletedAction)
+                || !normalize(String.join(" ",expectedPoints)).contains("специалист")
+                || facts.values().stream().noneMatch(f->f.source().startsWith("worker_daily_goal"))) return false;
+        String value=normalize(quote);
+        if (quote.contains("%") || value.matches("(?U).*\\b(?:клиент\\p{L}*|заказчик\\p{L}*|счет\\p{L}*|оплат\\p{L}*|платеж\\p{L}*|руб\\p{L}*|чек\\p{L}*|достав\\p{L}*|отправ\\p{L}*|выполнен\\p{L}*|выполнил\\p{L}*|закрыт[аоы]?|разблок\\p{L}*|удален\\p{L}*)\\b.*")) return false;
+        if (quote.matches("(?s).*\\d.*")) return reportedWorkComposition(value,facts);
+        // An organizational appraisal is the manager's explanation, not a recorded event timeline.
+        if (value.matches("(?U)(?:помешал[оа]|причина\\p{L}*)\\b.*")
+                && value.matches("(?U).*\\b(?:накоп\\p{L}*|приоритет\\p{L}*|нагрузк\\p{L}*|организац\\p{L}*|обработк\\p{L}*)\\b.*")
+                && !value.matches("(?U).*\\b(?:поступ\\p{L}*|пришл\\p{L}*|назнач\\p{L}*|выдан\\p{L}*|дедлайн\\p{L}*|дат[аы])\\b.*")) return true;
+        return value.matches("(?U).*\\b(?:я|мы)\\b.*")
+                && value.matches("(?U).*\\b(?:писал[аи]?|писали|написал[аи]?|написали|поговорил[аи]?|поговорили|обсудил[аи]?|обсудили|напомнил[аи]?|напомнили|провел[аи]? разбор|провели разбор)\\b.*");
+    }
+
+    /** Retain only independently classifiable non-factual explanations/plans, never old factual verdicts. */
+    private boolean restoreReportedWorkerCriteria(List<CriterionAssessment> criteria,List<ClaimAssessment> claims,
+            List<PriorCriterion> carried,List<String> expectedPoints,List<Long> taskIds,List<Long> chatIds,
+            Map<String,AuthoritativeFact> facts) {
+        if (!taskIds.isEmpty() || !chatIds.isEmpty() || carried.isEmpty()
+                || !normalize(String.join(" ",expectedPoints)).contains("специалист")
+                || facts.values().stream().noneMatch(f->f.source().equals("worker_daily_goal"))) return false;
+        boolean restored=false;
+        for(var prior:carried) {
+            if (requiresCompletedAction(expectedPoints.get(prior.criterionIndex()))
+                    || requiresCommitment(List.of(expectedPoints.get(prior.criterionIndex())))
+                    || claims.stream().anyMatch(c->c.status()==ClaimStatus.CONTRADICTED
+                        || c.kind()==ClaimKind.RETRACTION && c.answerAttempt()>prior.answerAttempt())) continue;
+            boolean report=reportedWorkerCoaching(prior.answerQuote(),expectedPoints,taskIds,facts);
+            boolean plan=futureIntentionOnly(prior.answerQuote());
+            if (!report && !plan) continue;
+            for(int position=0;position<criteria.size();position++) {
+                var current=criteria.get(position);
+                if(current.criterionIndex()!=prior.criterionIndex() || current.status()==CriterionStatus.CONTRADICTED
+                        || current.status()==CriterionStatus.SATISFIED && !current.evidenceRefs().isEmpty()) continue;
+                claims.add(new ClaimAssessment(report?ClaimKind.MANAGEMENT_REPORT:ClaimKind.PROMISE,
+                        report?ClaimStatus.REPORTED:ClaimStatus.PLAN,prior.answerAttempt(),prior.answerQuote(),List.of(),
+                        "Сохранён ранее зачтённый смысл: объяснение/план, без утверждения о фактическом выполнении",
+                        "HISTORICAL",List.of()));
+                criteria.set(position,new CriterionAssessment(prior.criterionIndex(),CriterionStatus.SATISFIED,
+                        prior.answerAttempt(),prior.answerQuote(),List.of(),
+                        "Прежнее объяснение/план сохранены; повторять их в дополнении не требуется",current.feedbackTopic()));
+                restored=true;
+            }
+        }
+        return restored;
+    }
+
+    private boolean reportedWorkComposition(String quote, Map<String,AuthoritativeFact> facts) {
+        if (!quote.matches("(?U).*(?:\\bзаказ\\p{L}*\\b|\\bтекст\\p{L}*\\b|\\bзадач\\p{L}*\\b).*")
+                || quote.matches("(?U).*\\b(?:день|дня|дней|процент\\p{L}*|час\\p{L}*)\\b.*")) return false;
+        Map<String,Map<String,Long>> goals=new HashMap<>();
+        for(var fact:facts.values()) {
+            if (!fact.source().equals("worker_daily_goal") || !Set.of("completed","total").contains(fact.field())) continue;
+            try {goals.computeIfAbsent(fact.id().substring(0,fact.id().lastIndexOf(':')),ignored->new HashMap<>())
+                    .put(fact.field(),Long.parseLong(fact.value()));}catch(RuntimeException ignored){ }
+        }
+        var numbers=java.util.regex.Pattern.compile("\\d+").matcher(quote);List<Long> counts=new ArrayList<>();
+        while(numbers.find()) {try{counts.add(Long.parseLong(numbers.group()));}catch(NumberFormatException invalid){return false;}}
+        return !counts.isEmpty() && goals.values().stream().anyMatch(goal->{
+            long gap=goal.getOrDefault("total",0L)-goal.getOrDefault("completed",0L);
+            return gap>0 && counts.contains(gap) && counts.stream().allMatch(count->count>0 && count<=gap);
+        });
+    }
+
+    /** Stable source values, not observation time: unchanged facts must not cause an AI retry loop. */
+    String workerGoalContextFingerprint(String context) {
+        var rows=typedFacts(evidence(clean(context)),List.of(),List.of()).values().stream()
+                .filter(f->f.source().startsWith("worker_daily_goal"))
+                .map(f->f.id()+"|"+f.field()+"|"+f.value()).sorted().toList();
+        if (rows.isEmpty()) return "";
+        try {return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                .digest(("worker-explanation-report-v1\n"+String.join("\n",rows)).getBytes(java.nio.charset.StandardCharsets.UTF_8)));}
+        catch(java.security.NoSuchAlgorithmException impossible){throw new IllegalStateException(impossible);}
     }
 
     private boolean requiresCommitment(List<String> expectedPoints) {
@@ -767,9 +935,9 @@ public class ManagerReportReviewQualityService {
 
     private boolean futureIntentionOnly(String quote) {
         String value = normalize(quote);
-        return value.matches("(?U)(?:я )?(?:открою|проверю|сверю|уточню|зафиксирую|попрошу|передам|исправлю|напишу)\\b[^.!?;,:\\n]*[.!?]?")
+        return value.matches("(?U)(?:(?:после|затем) )?(?:я )?(?:зайду|открою|проверю|сверю|уточню|зафиксирую|попрошу|передам|исправлю|напишу)\\b[^.!?;,:\\n]*[.!?]?")
                 && !value.matches("(?U).*\\b(?:уже|вчера|ранее|оплачен\\p{L}*|доставлен\\p{L}*|отправлен\\p{L}*|"
-                + "выполнен\\p{L}*|подтвержден\\p{L}*|проверил\\p{L}*|получил\\p{L}*|сделал\\p{L}*)\\b.*");
+                + "выполнен(?!и)\\p{L}*|подтвержден\\p{L}*|проверил\\p{L}*|получил\\p{L}*|сделал\\p{L}*)\\b.*");
     }
 
     private FeedbackTopic feedbackTopic(String expectedPoint) {
@@ -906,7 +1074,10 @@ public class ManagerReportReviewQualityService {
         Instant evaluatedAt = evaluationTime.toInstant();
         Instant oldestAllowed = evaluatedAt.minus(Duration.ofMinutes(minutes));
         for (AuthoritativeFact fact : facts.values()) {
-            if (fact.source().equals("source_link") || fact.observedAt().isBlank()) continue;
+            // A dated final-day result is historical knowledge, possibly retrieved after submission.
+            // Its service limits dates to days already closed before that submission; it is not a current status.
+            if (fact.source().equals("source_link") || historicalFinalWorkerDay(fact,evaluationTime)
+                    || fact.observedAt().isBlank()) continue;
             try {
                 Instant observed;
                 try { observed = OffsetDateTime.parse(fact.observedAt()).toInstant(); }
@@ -919,6 +1090,14 @@ public class ManagerReportReviewQualityService {
             }
         }
         return false;
+    }
+
+    private boolean historicalFinalWorkerDay(AuthoritativeFact fact,ZonedDateTime evaluatedAt) {
+        if (!fact.source().equals("worker_daily_goal_followup_result")) return false;
+        String[] id=fact.id().split(":");
+        try {return id.length==4 && id[0].equals("worker-goal") && Long.parseLong(id[1])>0
+                && java.time.LocalDate.parse(id[2]).isBefore(evaluatedAt.withZoneSameInstant(ZoneId.of("Asia/Irkutsk")).toLocalDate());}
+        catch(RuntimeException invalid){return false;}
     }
 
     private boolean matchesFact(AuthoritativeFact fact, String asserted) {
@@ -1112,6 +1291,15 @@ public class ManagerReportReviewQualityService {
                 evidence.getOrDefault(ref, "").startsWith("ЗАПИСАННОЕ СИСТЕМНОЕ СООБЩЕНИЕ "));
     }
 
+    private boolean workerGoalCandidatesOnly(List<String> refs, Map<String, AuthoritativeFact> facts) {
+        if (refs.isEmpty()) return false;
+        Set<String> candidateRefs = new HashSet<>();
+        for (AuthoritativeFact fact : facts.values()) {
+            if ("worker_goal_task".equals(fact.source())) candidateRefs.add(fact.evidenceRef());
+        }
+        return candidateRefs.containsAll(refs);
+    }
+
     private boolean recordedChatMessagesOnly(List<String> refs, Map<String, String> evidence) {
         return !refs.isEmpty() && refs.stream().allMatch(ref -> {
             String value = evidence.getOrDefault(ref, "");
@@ -1133,7 +1321,10 @@ public class ManagerReportReviewQualityService {
 
     private boolean epistemicDisclaimerOnly(String quote) {
         String text = normalize(quote);
-        return text.startsWith("я не утверждаю что ")
+        boolean disclaimer = text.startsWith("я не утверждаю что ")
+                || text.startsWith("я не подтверждаю что ")
+                || text.matches("факт .{1,200} я не (?:подтверждаю|утверждаю)");
+        return disclaimer
                 && !text.matches("(?U).*\\b(?:но|однако|зато|фактически)\\b.*")
                 && !text.contains("при этом")
                 && !clean(quote).replaceFirst("[.!?]$", "").matches(".*[.;!?].*");
@@ -1471,8 +1662,17 @@ public class ManagerReportReviewQualityService {
 
     public enum Decision { ACCEPTED, NEEDS_CLARIFICATION, NEEDS_CONTEXT, UNAVAILABLE }
     public enum CriterionStatus { SATISFIED, MISSING, CONTRADICTED, UNVERIFIABLE }
-    public enum ClaimKind { FACT, COMPLETED_ACTION, PROMISE, HYPOTHESIS, RETRACTION }
-    public enum ClaimStatus { SUPPORTED, CONTRADICTED, UNVERIFIABLE, PLAN }
+    public enum ClaimKind {
+        FACT, COMPLETED_ACTION, PROMISE, HYPOTHESIS, RETRACTION, MANAGEMENT_REPORT;
+        /** Keep saved answer history readable by the previous server during a rollback. */
+        @com.fasterxml.jackson.annotation.JsonValue public String storedValue() {return this==MANAGEMENT_REPORT?"HYPOTHESIS":name();}
+        @com.fasterxml.jackson.annotation.JsonCreator public static ClaimKind fromStoredValue(String value){return valueOf(value);}
+    }
+    public enum ClaimStatus {
+        SUPPORTED, CONTRADICTED, UNVERIFIABLE, PLAN, REPORTED;
+        @com.fasterxml.jackson.annotation.JsonValue public String storedValue(){return this==REPORTED?"UNVERIFIABLE":name();}
+        @com.fasterxml.jackson.annotation.JsonCreator public static ClaimStatus fromStoredValue(String value){return valueOf(value);}
+    }
     public enum FeedbackTopic { FACT, CAUSE, ACTION, DEADLINE, VERIFICATION, OWNER }
 
     public record AuthoritativeFact(String id, String source, String field, String value, String observedAt,
@@ -1489,6 +1689,8 @@ public class ManagerReportReviewQualityService {
         public ClaimAssessment {
             evidenceRefs = evidenceRefs == null ? List.of() : List.copyOf(evidenceRefs);
             factChecks = factChecks == null ? List.of() : List.copyOf(factChecks);
+            if (kind==ClaimKind.MANAGEMENT_REPORT && status==ClaimStatus.REPORTED)
+                reason="Со слов менеджера, без независимого подтверждения: "+(reason==null?"":reason);
         }
     }
 

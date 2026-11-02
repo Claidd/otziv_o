@@ -94,6 +94,8 @@ export class WorkerBoardActionFacade {
   changeReviewBot(review: WorkerReviewItem): void {
     const key = `review-${review.id}-change-bot`;
     const oldBotId = review.botId ?? null;
+    const obtainingRecoveryAccount = this.isRecoveryTask(review)
+      && (!review.botLoginPresent || !review.botPasswordPresent);
     this.deps.mutationKey.set(key);
 
     const request = this.isRecoveryTask(review) && review.recoveryTaskId
@@ -106,14 +108,16 @@ export class WorkerBoardActionFacade {
       next: (response) => {
         this.deps.mutationKey.set(null);
         this.deps.toastService.success(
-          'Аккаунт изменен',
-          workerBotChangeMessage(oldBotId, response?.newBotId ?? null)
+          obtainingRecoveryAccount ? 'Аккаунт получен' : 'Аккаунт изменен',
+          obtainingRecoveryAccount ? 'Скопируйте логин и пароль в карточке и выполните восстановление.'
+            : workerBotChangeMessage(oldBotId, response?.newBotId ?? null)
         );
         this.deps.loadBoard();
       },
       error: (err) => {
         this.deps.mutationKey.set(null);
-        this.deps.toastService.error('Бот не заменен', this.deps.errorMessage(err, 'Не удалось заменить бота'));
+        this.deps.toastService.error(obtainingRecoveryAccount ? 'Аккаунт не получен' : 'Бот не заменен',
+          this.deps.errorMessage(err, 'Не удалось подобрать аккаунт'));
       }
     });
   }

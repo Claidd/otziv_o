@@ -167,7 +167,9 @@ public class CredentialRevealService {
         String field = normalizeField(request);
         String value = "login".equals(field) ? login : password;
         if (!hasText(value)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Данные аккаунта недоступны");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "recovery_task".equals(entityType)
+                    ? "Нет логина или пароля для восстановления. Нажмите «Получить аккаунт» в карточке задачи"
+                    : "Данные аккаунта недоступны");
         }
 
         // Standalone callers require an independently committed audit. A bounded

@@ -57,6 +57,16 @@ class PersonalServiceImplTelegramReportTest {
     }
 
     @Test
+    void personalReportExplainsTasksOutsideTheCurrentPercentage() {
+        UserData worker = worker("Альфия Л.");
+        worker.setDailyProgress(worker.getDailyProgress().withWorkloadBlockers(1, 2));
+
+        assertThat(service.displayResultToWorker(Map.of("Альфия Л.", worker)))
+                .contains("ждут аккаунта — 1, поздние задачи — 2")
+                .contains("100% текущего плана не означает закрытие этих карточек");
+    }
+
+    @Test
     void displayResultToManagerHidesCompanyFinanceAndWorkerPay() {
         Map<String, UserData> result = new LinkedHashMap<>();
         result.put("Вика_Ц.", manager("Вика_Ц."));

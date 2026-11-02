@@ -394,6 +394,13 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
         if (isBlankOrPlaceholder(task.getRecoveryText())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Заполните текст восстановления");
         }
+        // Archived tasks may have lost their original account. Keep them pending
+        // until a usable account is selected; text alone is not a recovery.
+        if (firstNonBlank(botLogin(task.getBot()), task.getBotLoginSnapshot()).isBlank()
+                || firstNonBlank(botPassword(task.getBot()), task.getBotPasswordSnapshot()).isBlank()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Нет логина или пароля для восстановления. Нажмите «Получить аккаунт» в карточке задачи");
+        }
 
         task.setStatus(ReviewRecoveryTaskStatus.DONE);
         task.setCompletedDate(LocalDate.now());

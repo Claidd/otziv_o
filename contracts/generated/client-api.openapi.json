@@ -17355,6 +17355,9 @@
           "efficiencyScore" : {
             "type" : "integer"
           },
+          "externalBlockedCount" : {
+            "type" : "integer"
+          },
           "firstActivityAt" : {
             "anyOf" : [ {
               "type" : "string",
@@ -17402,6 +17405,9 @@
             }, {
               "type" : "null"
             } ]
+          },
+          "lateExcludedCount" : {
+            "type" : "integer"
           },
           "loadScore" : {
             "type" : "integer"
@@ -17481,7 +17487,7 @@
             "type" : "integer"
           }
         },
-        "required" : [ "active", "activeWorkSeconds", "activityEvents", "averageCloseSeconds", "badCompletedCount", "botBlockCount", "botChangeCount", "calculatedAt", "checked", "checkedDays", "closedPeriod", "completed", "date", "disciplineScore", "efficiencyScore", "firstActivityAt", "firstCompletedAt", "firstReached100At", "lastActivityAt", "lastCompletedAt", "lastReached100At", "loadScore", "medianCloseSeconds", "nagulCompletedCount", "openedCount", "orderCompletedCount", "orderOverdueCount", "p90CloseSeconds", "percent", "periodType", "publishCompletedCount", "reached100", "reached100Days", "recoveryCompletedCount", "recoveryCreatedCount", "roleType", "speedScore", "total", "totalOverdueCount", "updating", "visible", "workWindowSeconds", "workingDays", "workloadScore" ],
+        "required" : [ "active", "activeWorkSeconds", "activityEvents", "averageCloseSeconds", "badCompletedCount", "botBlockCount", "botChangeCount", "calculatedAt", "checked", "checkedDays", "closedPeriod", "completed", "date", "disciplineScore", "efficiencyScore", "externalBlockedCount", "firstActivityAt", "firstCompletedAt", "firstReached100At", "lastActivityAt", "lastCompletedAt", "lastReached100At", "lateExcludedCount", "loadScore", "medianCloseSeconds", "nagulCompletedCount", "openedCount", "orderCompletedCount", "orderOverdueCount", "p90CloseSeconds", "percent", "periodType", "publishCompletedCount", "reached100", "reached100Days", "recoveryCompletedCount", "recoveryCreatedCount", "roleType", "speedScore", "total", "totalOverdueCount", "updating", "visible", "workWindowSeconds", "workingDays", "workloadScore" ],
         "additionalProperties" : true
       },
       "DeepCompanyResearchJobStatusOutput" : {
@@ -27784,10 +27790,10 @@
     "sha256" : "ebe4d52a55395dc9b33ac8ca2edd94da899101f8b22b7c6573d119c81619a2ed"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/worker_performance/dto/DailyWorkProgressResponse.java",
-    "sha256" : "ec632e21d38c13762c66e4a42ee20e6cd042b058049eaf136f806eacb479b39d"
+    "sha256" : "2df85404d4ed11d696f31578e63c233185f81391eaec3e21b4d40c570f510435"
   }, {
     "path" : "contracts/client-api.config.json",
-    "sha256" : "05140f88f8cc48516f5163efd47ffe90688fc09b0fcac77d51e4b8a69fce58f6"
+    "sha256" : "39cd90fef0adc4493e7af6dfa33cdca592423ae5472950572ac2d9d5b4c02106"
   } ],
   "x-source-fingerprint-normalization" : "UTF-8 text with CRLF normalized to LF",
   "x-schema-java-types" : {

@@ -83,6 +83,74 @@ class ScheduledDeliveryProtocolTest {
                 message, copy, 14, null, null, null, null, NOW);
     }
 
+    @Test void automatedDeliveryRepairsTheMissingRouteOutsideTransactionsAndFinalizesTheSameOccurrence() {
+        company.setUrlChat("https://chat.whatsapp.com/ExactInvite123456");
+        company.setGroupId(null);
+        var prepared = prepare("service notification", null);
+        when(sender.recoverMissingWhatsAppGroup(eq(prepared.target()), eq(prepared.clientId()), isNull(), eq(prepared.operationId())))
+                .thenAnswer(inv -> {
+                    assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
+                    return "123456789@g.us";
+                });
+        when(sender.deliverWithOperationId(eq(prepared.target()), eq(prepared.clientId()), eq("123456789@g.us"),
+                eq("service notification"), isNull(), eq(prepared.operationId())))
+                .thenReturn(ClientMessageSendResult.sent("WhatsApp", "confirmed-receipt"));
+        service.dispatchScheduledDelivery(prepared, NOW);
+        assertThat(state.getSentCount()).isEqualTo(1);
+        assertThat(state.getLastSuccessAt()).isNotNull();
+        assertThat(state.getLastErrorCode()).isNull();
+        assertThat(state.getDeliveryEnvelope()).isNull();
+    }
+
+    @Test void anAuthorizedArchiveFollowupResumesTheQueueOnceAndPreservesItsOriginInTheAudit() {
+        prepareArchiveFollowup();
+        String envelope=state.getDeliveryEnvelope();
+        var followups=dependency(service,"notificationFollowups",com.hunt.otziv.client_messages.api.NotificationFollowup.class);
+        var prepared=ReflectionTestUtils.<ScheduledClientMessageService.PreparedScheduledDelivery>invokeMethod(service,"decodeScheduledDelivery",envelope);
+        var outcome=new com.hunt.otziv.client_messages.api.NotificationFollowup.Outcome(prepared.operationId(),"notification-followup-v1:fixture",true,
+                ClientMessageSendResult.sent("WhatsApp","followup-receipt"));
+        when(followups.recover(any(),any())).thenAnswer(inv->{
+            var request=inv.<com.hunt.otziv.client_messages.api.NotificationFollowup.Request>getArgument(0);
+            assertThat(request.sourceSnapshot()).isEqualTo(envelope);assertThat(request.message()).contains("№24139");
+            assertThat(inv.<java.util.function.BooleanSupplier>getArgument(1).getAsBoolean()).isTrue();return outcome;
+        });
+        ReflectionTestUtils.invokeMethod(service,"recoverArchiveContactWithFollowup",envelope);
+        assertThat(state.getSentCount()).isEqualTo(1);assertThat(state.getDispatchGeneration()).isEqualTo(1);
+        assertThat(state.getDeliveryEnvelope()).isNull();assertThat(state.getNextAttemptAt()).isNotNull();
+        assertThat(state.getLastErrorCode()).isNull();verify(followups).markApplied(outcome);
+        ReflectionTestUtils.invokeMethod(service,"recoverArchiveContactWithFollowup",envelope);
+        assertThat(state.getSentCount()).isEqualTo(1);verify(followups,times(1)).recover(any(),any());
+        verify(sender,never()).deliverWithOperationId(any(),any(),any(),any(),any(),any());
+    }
+
+    @Test void aCancelledArchiveTaskCannotBeCompletedByALateFollowup() {
+        prepareArchiveFollowup();String envelope=state.getDeliveryEnvelope();
+        var followups=dependency(service,"notificationFollowups",com.hunt.otziv.client_messages.api.NotificationFollowup.class);
+        when(followups.recover(any(),any())).thenAnswer(inv->{
+            var request=inv.<com.hunt.otziv.client_messages.api.NotificationFollowup.Request>getArgument(0);
+            state.setStatus(ScheduledMessageStateStatus.DONE);
+            return new com.hunt.otziv.client_messages.api.NotificationFollowup.Outcome(request.originalOperationId(),"notification-followup-v1:fixture",true,
+                    ClientMessageSendResult.sent("WhatsApp","late-receipt"));
+        });
+        ReflectionTestUtils.invokeMethod(service,"recoverArchiveContactWithFollowup",envelope);
+        assertThat(state.getSentCount()).isZero();assertThat(state.getDeliveryEnvelope()).isEqualTo(envelope);
+        verify(followups,never()).markApplied(any());
+    }
+
+    private void prepareArchiveFollowup() {
+        state.setCompanyId(7L);state.setArchiveOrderId(24139L);state.setTargetKey("archive-company:7:"+NOW);
+        company.setStatus(com.hunt.otziv.c_companies.model.CompanyStatus.builder().title(ScheduledClientMessageService.DEFAULT_ARCHIVE_COMPANY_STATUS).build());
+        company.setStatusChangedAt(NOW);company.setManager(manager);company.setUrlChat("https://chat.whatsapp.com/ExactInvite123456");
+        company.setGroupId("123456789@g.us");company.setTelegramGroupChatId(null);
+        when(states.findById(71L)).thenReturn(Optional.of(state));
+        when(dependency(service,"companyRepository",com.hunt.otziv.c_companies.repository.CompanyRepository.class).findByIdForCompanyDto(7L)).thenReturn(Optional.of(company));
+        var settings=dependency(service,"appSettingService",AppSettingService.class);
+        when(settings.getString(anyString(),nullable(String.class))).thenAnswer(inv->inv.getArgument(1));
+        when(settings.getBooleanFreshFailClosed(AppSettingService.CLIENT_MESSAGES_ARCHIVE_REORDER_ENABLED,true)).thenReturn(true);
+        prepare("old archive contact",null);state.setDeliveryStatus("UNKNOWN");
+        state.setLastErrorCode(ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN);
+    }
+
     @Test void badReviewRecoveryRequiresItsFrozenReceiptAndNeverQueuesANewInvoice() {
         prepareBadReviewRecovery();
         when(sender.recoverRecordedOutcomeFromChat(anyString(), eq(NOW)))

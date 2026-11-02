@@ -195,6 +195,7 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
     private final ClientMessageTransactionRunner transactionRunner;
     private final JdbcTemplate jdbcTemplate;
     private final ScheduledDeliveryRecovery deliveryRecovery;
+    private final com.hunt.otziv.client_messages.api.NotificationFollowup notificationFollowups;
     private final SchedulerLeaseService schedulerLeaseService;
     private final ClientMessageTime messageTime;
     private final com.hunt.otziv.client_chat_control.api.ReminderContactHistory archiveChatHistory;
@@ -2383,8 +2384,12 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
         ClientMessageSendResult result;
         try {
             requireNoBusinessTransaction();
+            String recoveredGroup = prepared.orderAction() == null
+                    ? messageSender.recoverMissingWhatsAppGroup(prepared.target(), prepared.clientId(), prepared.groupId(), prepared.operationId())
+                    : null;
             result = prepared.orderAction() == null
-                    ? messageSender.deliverWithOperationId(prepared.target(), prepared.clientId(), prepared.groupId(), prepared.message(),
+                    ? messageSender.deliverWithOperationId(prepared.target(), prepared.clientId(),
+                            hasText(recoveredGroup) ? recoveredGroup : prepared.groupId(), prepared.message(),
                             TelegramTransferCopyButton.fromFrozenTransferNumber(prepared.copy()).orElse(null), prepared.operationId())
                     : orderStatusNotificationService.dispatchPreparedAction(prepared.orderAction());
             if (result == null) result = ClientMessageOperationFence.unknown();
@@ -2563,7 +2568,90 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
                     boolean finalized = transactionRunner.callInNewTransaction(
                             () -> finalizeScheduledDelivery(prepared, receipt, nowStorage, 0));
                     if (finalized) notifyScheduledDeliveryOutcome(prepared, receipt, nowStorage);
-                });
+                }, this::recoverArchiveContactWithFollowup);
+    }
+
+    private record ArchiveFollowupContext(ClientMessageDelivery.Target target, String clientId, String version,
+                                          LocalDateTime preparedAt, Long archiveOrderId) { }
+
+    /** Reorders get a neutral contact follow-up, never a fresh invoice or another order. */
+    private void recoverArchiveContactWithFollowup(String envelope) {
+        PreparedScheduledDelivery prepared=decodeScheduledDelivery(envelope);
+        if (prepared.scenario()!=ClientMessageScenario.ARCHIVE_REORDER_OFFER || prepared.orderAction()!=null
+                || prepared.successEffect()!=null || !liveSendingEnabled()) return;
+        ArchiveFollowupContext context=transactionRunner.callInNewTransaction(()->archiveFollowupContext(prepared,envelope));
+        if (context==null) return;
+        Long reference=prepared.orderId()==null ? context.archiveOrderId() : prepared.orderId();
+        String order=reference==null ? "" : " №"+reference;
+        String text="Здравствуйте! Повторно связываемся по ранее завершённому заказу"+order+" компании «"
+                +context.target().title()+"». Если у вас остались вопросы по этому заказу, пожалуйста, напишите в этот чат.";
+        var request=new com.hunt.otziv.client_messages.api.NotificationFollowup.Request(
+                com.hunt.otziv.client_messages.api.NotificationFollowup.Kind.ARCHIVE_CONTACT,prepared.stateId(),context.version(),
+                prepared.operationId(),context.preparedAt(),context.target(),context.clientId(),text,envelope);
+        var outcome=notificationFollowups.recover(request,()->liveSendingEnabled()
+                && context.equals(transactionRunner.callInNewTransaction(()->archiveFollowupContext(prepared,envelope))));
+        if (outcome==null || outcome.delivery()==null) return;
+        if (!outcome.delivery().sent()) {
+            transactionRunner.runInNewTransaction(()->{
+                var state=stateRepository.findByIdForUpdate(prepared.stateId()).orElse(null);
+                if (sameArchivePreparation(state,prepared,envelope)) {
+                    state.setLastErrorMessage("Исход старой отправки неизвестен. Разрешён только один отдельный автоматический повтор; состояние: "
+                            +outcome.delivery().errorCode()+". Если повтор тоже не подтверждён, нужна проверка менеджера.");
+                    stateRepository.save(state);
+                }
+            });
+            return;
+        }
+        if (!outcome.followup()) {
+            transactionRunner.runInNewTransaction(()->finalizeScheduledDelivery(prepared,outcome.delivery(),
+                    messageTime.databaseTimestamp(messageTime.nowStorage()),0));
+            return;
+        }
+        transactionRunner.runInNewTransaction(()->{
+            var state=stateRepository.findByIdForUpdate(prepared.stateId()).orElse(null);
+            if (!sameArchivePreparation(state,prepared,envelope) || !context.equals(archiveFollowupContext(prepared,envelope))) return;
+            stateRepository.lockDispatchBudget();
+            notificationFollowups.markApplied(outcome);
+            clearDeliveryPreparation(state);
+            state.setDispatchGeneration(Math.addExact(state.getDispatchGeneration(),1));
+            registerSuccess(state,messageTime.databaseTimestamp(messageTime.nowStorage()),outcome.delivery().channel(),text,0,
+                    prepared.nextIntervalDays(),"authorized_followup_confirmed");
+        });
+    }
+
+    private boolean sameArchivePreparation(ScheduledClientMessageState state, PreparedScheduledDelivery prepared, String envelope) {
+        return state!=null && state.getStatus()==ScheduledMessageStateStatus.ACTIVE
+                && "UNKNOWN".equals(state.getDeliveryStatus()) && Objects.equals(state.getDeliveryToken(),prepared.token())
+                && state.getScenario()==prepared.scenario() && Objects.equals(state.getTargetKey(),prepared.targetKey())
+                && Objects.equals(state.getOrderId(),prepared.orderId())
+                && Objects.equals(state.getDeliveryEnvelope(),envelope)
+                && !ClientMessageStateSafety.MANUAL_DELIVERY_HANDOFF_PENDING.equals(state.getLastErrorCode());
+    }
+
+    private ArchiveFollowupContext archiveFollowupContext(PreparedScheduledDelivery prepared, String envelope) {
+        var state=stateRepository.findById(prepared.stateId()).orElse(null);
+        if (!sameArchivePreparation(state,prepared,envelope) || prepared.target()==null
+                || !Objects.equals(state.getCompanyId(),prepared.target().companyId())
+                || !appSettingService.getBooleanFreshFailClosed(AppSettingService.CLIENT_MESSAGES_ARCHIVE_REORDER_ENABLED,true)
+                || !withinDailyLimit(messageTime.nowStorage())) return null;
+        Company company=companyRepository.findByIdForCompanyDto(prepared.target().companyId()).orElse(null);
+        if (company==null || company.getManager()==null || !hasText(company.getManager().getClientId())
+                || !archiveCompanyStatus().equals(companyStatusTitle(company)) || !isCurrentArchiveCompanyCycle(state,company)
+                || archiveCandidateRepository.hasArchiveReorderBlocker(company.getId(),
+                    listSetting(AppSettingService.CLIENT_MESSAGES_ARCHIVE_INACTIVE_ORDER_STATUSES,DEFAULT_ARCHIVE_INACTIVE_ORDER_STATUSES),
+                    listSetting(AppSettingService.CLIENT_MESSAGES_OPEN_NEXT_ORDER_REQUEST_STATUSES,DEFAULT_OPEN_NEXT_ORDER_REQUEST_STATUSES))
+                || hasText(company.getGroupId()) && archiveChatHistory.hasOpenReply(company.getGroupId())) return null;
+        LocalDateTime now=messageTime.nowIrkutsk();
+        LocalDateTime allowed=slotPlanner.nextAllowedAt(now,businessWindows());
+        if (allowed==null || allowed.isAfter(now.plusSeconds(1))) return null;
+        var target=companyTarget(company);
+        String client=company.getManager().getClientId();
+        try {
+            String version=com.hunt.otziv.client_messages.api.NotificationFollowup.fingerprint(
+                    DELIVERY_JSON.writeValueAsString(new Object[]{state.getDeliveryEnvelope(),target,client,company.getManager().getId(),
+                            String.valueOf(state.getDeliveryPreparedAt()),state.getArchiveOrderId()}));
+            return new ArchiveFollowupContext(target,client,version,state.getDeliveryPreparedAt(),state.getArchiveOrderId());
+        } catch(com.fasterxml.jackson.core.JsonProcessingException failure){throw new IllegalStateException(failure);}
     }
 
     private PreparedScheduledDelivery processClaimedState(
@@ -3398,7 +3486,13 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
             long durationMs,
             Integer nextIntervalDays
     ) {
-        recordAttempt(state, ScheduledMessageAttemptStatus.SENT, channel, null, null, message, durationMs);
+        registerSuccess(state,nowStorage,channel,message,durationMs,nextIntervalDays,null);
+    }
+
+    private void registerSuccess(ScheduledClientMessageState state, LocalDateTime nowStorage, String channel,
+            String message, long durationMs, Integer nextIntervalDays, String recoveryCode) {
+        recordAttempt(state, ScheduledMessageAttemptStatus.SENT, channel, recoveryCode,
+                recoveryCode==null?null:"Подтверждено отдельное уведомление с разрешённым риском дубля; исход старой попытки сохранён в истории", message, durationMs);
         state.setLastAttemptAt(nowStorage);
         state.setLastSuccessAt(nowStorage);
         state.setLastErrorCode(null);

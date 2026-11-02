@@ -158,6 +158,12 @@ public class ManagerReportReviewSession {
     @Column(name = "recovery_awaiting_context", nullable = false)
     private boolean recoveryAwaitingContext;
 
+    @Column(name = "recovery_context_fingerprint", length = 64)
+    private String recoveryContextFingerprint;
+
+    @Column(name = "recovery_context_checked_at")
+    private LocalDateTime recoveryContextCheckedAt;
+
     @Column(name = "completed_at")
     private LocalDateTime completedAt;
 

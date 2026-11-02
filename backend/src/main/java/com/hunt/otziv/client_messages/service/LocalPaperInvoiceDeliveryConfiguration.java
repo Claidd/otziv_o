@@ -18,7 +18,7 @@ public class LocalPaperInvoiceDeliveryConfiguration {
                 || (!token.isBlank() && !token.equals("local-fixture-only")))
             throw new IllegalStateException("Local message fixture requires an isolated bank without a real token");
         var rest=new RestTemplate();
-        return new ClientChatMessageSender(null,null,null,null,null,null) {
+        return new ClientChatMessageSender(null,null,null,null,null,null,null) {
             private ClientMessageSendResult sendLocal(Target target,String group,String message,String operation) {
                 if(target==null || target.title()==null || !target.title().startsWith("Local Paper") || group==null || operation==null)
                     return ClientMessageSendResult.failed("not_ready","Only isolated Local Paper companies are allowed");

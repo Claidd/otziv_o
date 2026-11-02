@@ -7,6 +7,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.any;
 
 import com.hunt.otziv.client_messages.dto.ClientMessageSendResult;
 import com.hunt.otziv.payments.model.PaymentLink;
@@ -64,6 +65,20 @@ class PaymentSuccessNotificationDeliveryServiceTest {
         order.verify(claimService).markSucceeded(claim);
         assertThat(link.getPaymentSuccessNotifiedAt()).isNotNull();
         assertThat(link.isPaymentSuccessNotificationRetryEligible()).isFalse();
+    }
+
+    @Test void aConfirmedFollowupUsesItsOwnReceiptDuringPaymentNotificationFinalization() {
+        PaymentLink link=link();var claim=claim();
+        when(claimService.tryClaim(LINK_ID)).thenReturn(Optional.of(claim));
+        when(paymentLinkRepository.findByIdWithOrder(LINK_ID)).thenReturn(Optional.of(link));
+        when(notifier.notifySuccess(link)).thenReturn(ClientMessageSendResult.failed("operation_unknown","unknown"));
+        var proof=new com.hunt.otziv.client_messages.api.NotificationFollowup.Outcome("payment-success:"+LINK_ID,"notification-followup-v1:fixture",true,
+                ClientMessageSendResult.sent("WhatsApp","followup-proof"));
+        when(notifier.recoverWithFollowup(org.mockito.ArgumentMatchers.eq(link),any())).thenReturn(proof);
+        when(claimService.markSucceededWithRecovery(claim,proof)).thenReturn(true);
+        assertThat(service.tryDeliver(LINK_ID)).isTrue();
+        verify(claimService,never()).markSucceeded(any());
+        assertThat(link.getPaymentSuccessNotificationRecoveryOperationId()).isEqualTo(proof.operationId());
     }
 
     @Test

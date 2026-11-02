@@ -14,6 +14,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.context.event.ContextClosedEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -35,16 +37,29 @@ public class ContractorPaymentReconciliationDispatcher {
     private final ContractorPaymentReconcileClaimService claimService;
     private final ContractorPaymentShadowService shadowService;
     private final AppSettingService appSettingService;
+    private volatile boolean stopping;
+
+    @EventListener(ContextClosedEvent.class)
+    public void onContextClosed(ContextClosedEvent event) {
+        stopping = true;
+    }
 
     @Value("${otziv.contractor-payments.terminal-recheck-seconds:3600}")
     private long terminalRecheckSeconds;
 
     @Scheduled(fixedDelayString = "${otziv.contractor-payments.reconcile-delay-ms:60000}")
     public void reconcile() {
+        if (stopping) return;
         // The switch gates only new SHADOW allocations. Persisted attempts
         // remain financial obligations and must always be polled to terminality.
-        dispatchMode(ContractorAllocationMode.SHADOW);
-        dispatchMode(ContractorAllocationMode.LIVE);
+        try {
+            dispatchMode(ContractorAllocationMode.SHADOW);
+            if (!stopping) dispatchMode(ContractorAllocationMode.LIVE);
+        } catch (RuntimeException failure) {
+            if (!stopping) throw failure;
+            // An unfinished lease expires normally; shutdown must not fabricate a result.
+            log.debug("Contractor reconciliation interrupted by application shutdown", failure);
+        }
     }
 
     private void dispatchMode(ContractorAllocationMode mode) {
@@ -59,6 +74,7 @@ public class ContractorPaymentReconciliationDispatcher {
         ));
         candidates.sort(java.util.Comparator.comparing(ContractorPaymentAllocation::getId));
         for (ContractorPaymentAllocation candidate : candidates) {
+            if (stopping) return;
             Long allocationId = candidate.getId();
             // Do not give late items in a large batch a lease that already
             // elapsed while earlier sources were reconciled.

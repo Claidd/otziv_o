@@ -786,6 +786,9 @@ class ApiWorkerBoardControllerTest {
                 .id(99L)
                 .order(order)
                 .sourceReview(review)
+                .bot(Bot.builder().id(71L).login("").password(" ").build())
+                .botLoginSnapshot("saved-recovery-login")
+                .botPasswordSnapshot("saved-recovery-password")
                 .status(ReviewRecoveryTaskStatus.PLANNED)
                 .recoveryText("Текст восстановления")
                 .scheduledDate(LocalDate.now())
@@ -813,6 +816,11 @@ class ApiWorkerBoardControllerTest {
         assertEquals(654L, item.orderId());
         assertEquals("заметка компании", item.commentCompany());
         assertEquals("заметка заказа", item.orderComments());
+        assertTrue(item.botLoginPresent());
+        assertTrue(item.botPasswordPresent());
+        String json = new ObjectMapper().valueToTree(item).toString();
+        assertFalse(json.contains("saved-recovery-login"));
+        assertFalse(json.contains("saved-recovery-password"));
     }
 
     @Test

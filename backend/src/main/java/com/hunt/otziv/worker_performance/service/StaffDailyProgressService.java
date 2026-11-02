@@ -558,7 +558,7 @@ public class StaffDailyProgressService {
                     reached100,
                     progress.firstReached100At(),
                     progress.lastReached100At()
-            ));
+            ).withWorkloadBlockers(progress.externalBlocked(), progress.lateExcluded()));
         });
         return Map.copyOf(result);
     }
@@ -818,6 +818,8 @@ public class StaffDailyProgressService {
                 visible.stream().mapToInt(DailyWorkProgressResponse::reached100Days).sum(),
                 visible.stream().allMatch(DailyWorkProgressResponse::closedPeriod)
         ).withUpdating(visible.stream().anyMatch(DailyWorkProgressResponse::updating))
+                .withWorkloadBlockers(visible.stream().mapToLong(DailyWorkProgressResponse::externalBlockedCount).sum(),
+                        visible.stream().mapToLong(DailyWorkProgressResponse::lateExcludedCount).sum())
                 .withCalculatedAt(visible.stream().anyMatch(value -> value.calculatedAt() == null) ? null
                         : visible.stream().map(DailyWorkProgressResponse::calculatedAt).min(java.time.Instant::compareTo).orElse(null));
     }
@@ -1932,19 +1934,19 @@ public class StaffDailyProgressService {
                 .addValue("monthStart", monthStart)
                 .addValue("nextMonth", monthStart.plusMonths(1))
                 .addValue("closed", closed);
-        jdbc.update("""
-                INSERT INTO worker_performance_monthly (
-                    month_start, worker_id, worker_user_id, working_days, completed_count, active_count,
-                    total_count, opened_count, average_progress_percent, checked_days, reached_100_days,
-                    order_completed_count, nagul_completed_count, publish_completed_count,
-                    bad_completed_count, recovery_completed_count, recovery_created_count,
-                    order_overdue_count, total_overdue_count,
-                    average_close_seconds, median_close_seconds, p90_close_seconds,
-                    average_speed_score, average_discipline_score, average_workload_score,
-                    active_work_seconds, average_work_window_seconds,
-                    activity_events, bot_change_count, bot_block_count,
-                    load_score, average_efficiency_score, closed_period
-                )
+        // INSERT ... SELECT in MySQL REPEATABLE READ takes shared locks on
+        // workers/activity rows, reversing the account-command lock order. Read
+        // a consistent snapshot first; only the monthly target is write-locked.
+        String[] columns = {
+                "month_start", "worker_id", "worker_user_id", "working_days", "completed_count", "active_count",
+                "total_count", "opened_count", "average_progress_percent", "checked_days", "reached_100_days",
+                "order_completed_count", "nagul_completed_count", "publish_completed_count", "bad_completed_count",
+                "recovery_completed_count", "recovery_created_count", "order_overdue_count", "total_overdue_count",
+                "average_close_seconds", "median_close_seconds", "p90_close_seconds", "average_speed_score",
+                "average_discipline_score", "average_workload_score", "active_work_seconds", "average_work_window_seconds",
+                "activity_events", "bot_change_count", "bot_block_count", "load_score", "average_efficiency_score", "closed_period"
+        };
+        List<MapSqlParameterSource> rows = jdbc.query("""
                 SELECT :monthStart,
                        d.worker_id,
                        MAX(d.worker_user_id),
@@ -2025,6 +2027,40 @@ public class StaffDailyProgressService {
                  WHERE d.progress_date >= :monthStart
                   AND d.progress_date < :nextMonth
                 GROUP BY d.worker_id
+                ORDER BY d.worker_id
+                """, params, (row, index) -> {
+            MapSqlParameterSource values = new MapSqlParameterSource();
+            for (int column = 0; column < columns.length; column++) {
+                values.addValue(columns[column], row.getObject(column + 1));
+            }
+            return values;
+        });
+        if (rows.isEmpty()) return;
+        jdbc.batchUpdate("""
+                INSERT INTO worker_performance_monthly (
+                    month_start, worker_id, worker_user_id, working_days, completed_count, active_count,
+                    total_count, opened_count, average_progress_percent, checked_days, reached_100_days,
+                    order_completed_count, nagul_completed_count, publish_completed_count,
+                    bad_completed_count, recovery_completed_count, recovery_created_count,
+                    order_overdue_count, total_overdue_count,
+                    average_close_seconds, median_close_seconds, p90_close_seconds,
+                    average_speed_score, average_discipline_score, average_workload_score,
+                    active_work_seconds, average_work_window_seconds,
+                    activity_events, bot_change_count, bot_block_count,
+                    load_score, average_efficiency_score, closed_period
+                )
+                VALUES (
+                    :month_start, :worker_id, :worker_user_id, :working_days, :completed_count, :active_count,
+                    :total_count, :opened_count, :average_progress_percent, :checked_days, :reached_100_days,
+                    :order_completed_count, :nagul_completed_count, :publish_completed_count,
+                    :bad_completed_count, :recovery_completed_count, :recovery_created_count,
+                    :order_overdue_count, :total_overdue_count,
+                    :average_close_seconds, :median_close_seconds, :p90_close_seconds,
+                    :average_speed_score, :average_discipline_score, :average_workload_score,
+                    :active_work_seconds, :average_work_window_seconds,
+                    :activity_events, :bot_change_count, :bot_block_count,
+                    :load_score, :average_efficiency_score, :closed_period
+                )
                 ON DUPLICATE KEY UPDATE
                     worker_user_id = VALUES(worker_user_id),
                     working_days = VALUES(working_days),
@@ -2058,7 +2094,7 @@ public class StaffDailyProgressService {
                     average_efficiency_score = VALUES(average_efficiency_score),
                     closed_period = VALUES(closed_period),
                     updated_at = CURRENT_TIMESTAMP(6)
-                """, params);
+                """, rows.toArray(MapSqlParameterSource[]::new));
     }
 
     private int workerEfficiencyScore(int progressPercent, int speedScore, int disciplineScore, int workloadScore) {

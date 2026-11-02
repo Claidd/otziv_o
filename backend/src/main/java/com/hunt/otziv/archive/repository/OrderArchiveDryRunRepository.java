@@ -143,6 +143,10 @@ public class OrderArchiveDryRunRepository {
                     FROM common_invoice_orders cio
                     WHERE cio.order_id = o.order_id
               )
+              AND NOT EXISTS (
+                    SELECT 1 FROM order_payment_reconciliations reconciliation
+                    WHERE reconciliation.order_id = o.order_id
+              )
             """;
 
     private static final String ELIGIBLE_COMMON_INVOICE_WHERE = """
@@ -150,6 +154,17 @@ public class OrderArchiveDryRunRepository {
             WHERE ci.status IN ('ARCHIVED', 'BAN', 'PAID')
               AND ci.closed_at IS NOT NULL
               AND DATE(ci.closed_at) <= :cutoffDate
+              AND NOT EXISTS (
+                    SELECT 1
+                    FROM common_invoice_orders reconciliation_seed
+                    JOIN common_invoice_orders reconciliation_invoice
+                      ON reconciliation_invoice.order_id = reconciliation_seed.order_id
+                    JOIN common_invoice_orders reconciliation_order
+                      ON reconciliation_order.invoice_id = reconciliation_invoice.invoice_id
+                    JOIN order_payment_reconciliations reconciliation
+                      ON reconciliation.order_id = reconciliation_order.order_id
+                    WHERE reconciliation_seed.invoice_id = ci.invoice_id
+              )
               AND EXISTS (
                     SELECT 1
                     FROM common_invoice_orders cio

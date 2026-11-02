@@ -17,7 +17,7 @@
   },
   "optionalForCompatibility": {
     "ManagerArchiveOrderDetailsResponse": ["recoveryWorkers", "recoveryTasks"],
-    "DailyWorkProgressResponse": ["calculatedAt"],
+    "DailyWorkProgressResponse": ["calculatedAt", "externalBlockedCount", "lateExcludedCount"],
     "ManagerControlConcreteItemResponse": ["delivery", "diagnosis", "auditCommitments", "clientMessageSendBlockedReason"],
     "ManagerReportReviewResponse": ["answerAttempts"],
     "ManagerManualCardPaymentResultResponse": ["manualPaymentReview"],

@@ -67,8 +67,60 @@ class ManagerReportReviewTelegramServiceTest {
     @Mock private ManagerReportReviewCommitmentService commitmentService;
     @Mock private ManagerReportReviewRolloutPolicy rolloutPolicy;
 
+    @Test void refreshedWorkerGoalFactsRequeueTheSavedAnswerOnlyWhenTheirValuesChange() {
+        var review=new ManagerReportReviewSession();review.setId(177L);review.setManager(Manager.builder().id(3L).build());
+        review.setSummaryDate(java.time.LocalDate.of(2026,10,31));review.setStatus(ManagerReportReviewStatus.QUESTION_PENDING);
+        review.setCurrentQuestionIndex(0);review.setAnswersJson("saved-answer");review.setAnswerQuality("NEEDS_CONTEXT");
+        review.setRecoveryAwaitingContext(true);review.setRecoveryAttempts(3);review.setQuestionsContext("saved-evidence");
+        var question=new ManagerReportReviewQualityService.ReviewQuestion("Специалист Алёна К. не достиг цели",List.of("действие менеджера"));
+        when(qualityService.latestAnswerRecordedAt("saved-answer",0)).thenReturn(java.time.ZonedDateTime.now());
+        when(qualityService.workerGoalContextFingerprint(any())).thenReturn("a".repeat(64));
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(service,"refreshWorkerGoalAnswerContext",review,question);
+        assertThat(review.isRecoveryAwaitingContext()).isFalse();assertThat(review.getRecoveryAttempts()).isZero();
+        assertThat(review.getRecoveryNextAttemptAt()).isNotNull();assertThat(review.getAnswersJson()).isEqualTo("saved-answer");
+        review.setRecoveryAwaitingContext(true);review.setRecoveryAttempts(3);review.setRecoveryNextAttemptAt(null);
+        review.setRecoveryContextCheckedAt(java.time.LocalDateTime.now().minusMinutes(16));
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(service,"refreshWorkerGoalAnswerContext",review,question);
+        assertThat(review.isRecoveryAwaitingContext()).isTrue();assertThat(review.getRecoveryNextAttemptAt()).isNull();
+        when(qualityService.workerGoalContextFingerprint(any())).thenReturn("b".repeat(64));
+        review.setRecoveryContextCheckedAt(java.time.LocalDateTime.now().minusMinutes(16));
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(service,"refreshWorkerGoalAnswerContext",review,question);
+        assertThat(review.isRecoveryAwaitingContext()).isFalse();assertThat(review.getRecoveryContextFingerprint()).isEqualTo("b".repeat(64));
+        verify(qualityService,never()).assessAnswer(any(),any(),any(),org.mockito.ArgumentMatchers.anyBoolean());
+    }
+
     @InjectMocks
     private ManagerReportReviewTelegramService service;
+
+    @Test void workerGoalDirectionsAllowAnExplanationAndPlanWithoutDemandingProofOfAPrivateConversation() {
+        var worker=new ManagerReportReviewQualityService.ReviewQuestion("Специалист Алёна К. не достиг цели",List.of("помощь"));
+        String directions=org.springframework.test.util.ReflectionTestUtils.invokeMethod(service,"answerDirectionsHtml",worker);
+        assertThat(directions).contains("или планируете","Система сама сверит").doesNotContain("Одного описания решения");
+        var invoice=new ManagerReportReviewQualityService.ReviewQuestion("Проверьте оплату",List.of("результат"),List.of(42L));
+        String financial=org.springframework.test.util.ReflectionTestUtils.invokeMethod(service,"answerDirectionsHtml",invoice);
+        assertThat(financial).contains("выполненные действия","фактический результат");
+    }
+
+    @Test void recoverySupplementAddsOnlyPreviouslyMissingClosedDaysWithoutReplacingOriginalFacts() {
+        var review=new ManagerReportReviewSession();review.setManager(Manager.builder().id(3L).build());
+        review.setSummaryDate(LocalDate.of(2026,10,31));
+        var question=new ManagerReportReviewQualityService.ReviewQuestion("Специалист Алёна К. не достиг цели",List.of("объяснение"));
+        var goal=new ManagerWorkerDailyProgressService.MissedWorkerGoal(14L,"Алёна К.",LocalDate.of(2026,10,30),18,23);
+        when(workerProgressService.missedPreviousDayGoals(3L,review.getSummaryDate())).thenReturn(List.of(goal));
+        when(workerProgressService.followingDayResults(goal,LocalDate.of(2026,11,1))).thenReturn(List.of(
+                new ManagerWorkerDailyProgressService.FollowingWorkerGoal(LocalDate.of(2026,10,31),47,47,true),
+                new ManagerWorkerDailyProgressService.FollowingWorkerGoal(LocalDate.of(2026,11,1),24,24,true)));
+        String original="СЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:\n{\"id\":\"worker-goal:14:2026-10-31:completed\",\"source\":\"worker_daily_goal_followup_result\",\"field\":\"completed\",\"value\":\"46\"}";
+        String supplement=org.springframework.test.util.ReflectionTestUtils.invokeMethod(service,"workerGoalHistoricalSupplement",
+                review,question,java.time.ZonedDateTime.parse("2026-11-01T12:00:00+08:00"),original);
+        assertThat(supplement).contains("worker-goal:14:2026-10-31:total","Получены сейчас");
+        assertThat(supplement).doesNotContain("worker-goal:14:2026-11-01:","worker-goal:14:2026-10-31:completed");
+        var realQuality=new ManagerReportReviewQualityService(
+                mock(com.hunt.otziv.reputationai.infrastructure.ai.service.AiProviderRouter.class),new com.fasterxml.jackson.databind.ObjectMapper(),appSettingService);
+        java.util.Map<String,String> parsed=org.springframework.test.util.ReflectionTestUtils.invokeMethod(realQuality,"evidence",original+"\n"+supplement);
+        assertThat(parsed.values()).anyMatch(line->line.contains("2026-10-31:completed") && line.contains("46"));
+        assertThat(parsed.values()).anyMatch(line->line.contains("2026-10-31:total"));
+    }
 
     private User user;
     private Manager manager;

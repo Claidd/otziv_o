@@ -352,6 +352,29 @@ class ReviewRecoveryTaskServiceImplTest {
     }
 
     @Test
+    void archivedRecoveryWithoutOriginalAccountCanObtainAWalkedAccount() {
+        ReviewRecoveryTask task = ReviewRecoveryTask.builder().id(1160L).archiveReviewId(125646L)
+                .archiveCompanyId(1773L).archiveFilialCityId(3L)
+                .status(ReviewRecoveryTaskStatus.PLANNED).build();
+        Bot available = activeWalkedBot(21L, 3);
+        when(taskRepository.findByIdForMutation(1160L)).thenReturn(Optional.of(task));
+        when(botService.getFindAllByFilialCityId(3L)).thenReturn(List.of(available));
+        when(botCooldownService.isAvailableForAssignment(available)).thenReturn(true);
+        when(taskRepository.save(task)).thenReturn(task);
+
+        ReviewRecoveryTask updated = service.changeTaskBot(1160L);
+
+        assertSame(available, updated.getBot());
+        assertEquals("login", updated.getBotLoginSnapshot());
+        assertEquals("password", updated.getBotPasswordSnapshot());
+        assertEquals(ReviewRecoveryTaskStatus.PLANNED, updated.getStatus());
+        verify(assignmentGuardService).scopeForRecoveryTask(1773L, 1160L, null);
+        verify(assignmentGuardService).lockIfEligible(eq(available), any());
+        verify(botCooldownService).markReservedUntilTaskCompletion(available, "review recovery task 1160");
+        verify(reviewRepository, never()).save(any());
+    }
+
+    @Test
     void changeTaskBotUsesFreeWalkedSameCityAccountOnly() {
         City city = new City();
         city.setId(3L);
@@ -536,6 +559,28 @@ class ReviewRecoveryTaskServiceImplTest {
     }
 
     @Test
+    void recoveryWithoutCredentialsCannotBeMarkedDoneOrReleaseItsAccount() {
+        for (String[] credentials : new String[][]{{null, null}, {"login", " "}, {"", "password"}}) {
+            ReviewRecoveryTask task = ReviewRecoveryTask.builder().id(40L)
+                    .status(ReviewRecoveryTaskStatus.PLANNED).recoveryText("готовый текст")
+                    .botLoginSnapshot(credentials[0]).botPasswordSnapshot(credentials[1]).build();
+            when(taskRepository.findByIdForMutation(40L)).thenReturn(Optional.of(task));
+
+            ResponseStatusException failure = assertThrows(ResponseStatusException.class,
+                    () -> service.completeTask(40L, user(4L)));
+
+            assertEquals(HttpStatus.CONFLICT, failure.getStatusCode());
+            assertTrue(failure.getReason().contains("Получить аккаунт"));
+            assertEquals(ReviewRecoveryTaskStatus.PLANNED, task.getStatus());
+            assertNull(task.getCompletedDate());
+        }
+        verify(taskRepository, never()).save(any());
+        verify(botCooldownService, never()).markReleased(any(), any());
+        verify(gamificationEventService, never()).recordReviewRecoveryTaskDone(any());
+        verify(batchRepository, never()).save(any());
+    }
+
+    @Test
     void completeTaskMarksBatchCompletedWhenNoPlannedTasksLeft() {
         ReviewRecoveryBatch batch = batch(30L, order(10L), ReviewRecoveryBatchStatus.OPEN);
         ReviewRecoveryTask task = ReviewRecoveryTask.builder()
@@ -545,6 +590,8 @@ class ReviewRecoveryTaskServiceImplTest {
                 .sourceReview(review(100L, "текст", batch.getOrder(), null))
                 .status(ReviewRecoveryTaskStatus.PLANNED)
                 .recoveryText("готовый текст")
+                .botLoginSnapshot("saved-login")
+                .botPasswordSnapshot("saved-password")
                 .build();
         User actor = user(4L);
 

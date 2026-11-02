@@ -23,7 +23,7 @@ class ScheduledDeliveryReceiptTest {
     private final WhatsAppBusinessOperations operations = mock(WhatsAppBusinessOperations.class);
     private final ClientMessageOperationFence fences = mock(ClientMessageOperationFence.class);
     private final ClientChatMessageSender sender = new ClientChatMessageSender(whatsapp, telegram, max, operations, fences,
-            mock(PublicationProgressPreferenceService.class));
+            mock(PublicationProgressPreferenceService.class), mock(com.hunt.otziv.whatsapp.service.WhatsAppDeliveryRouteRecovery.class));
 
     private void frozen() {
         when(operations.findFrozen("operation:1")).thenReturn(Optional.of(new WhatsAppBusinessOperations.FrozenMessage(
