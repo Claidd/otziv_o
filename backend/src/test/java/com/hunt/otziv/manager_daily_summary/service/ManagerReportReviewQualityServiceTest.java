@@ -1620,6 +1620,137 @@ class ManagerReportReviewQualityServiceTest {
                 + "{\"id\":\"invoice:189:orderCount\",\"source\":\"invoice\",\"field\":\"orderCount\",\"value\":\"" + count + "\",\"sourceTaskId\":42}";
     }
 
+    private String workerGoalEvidence() {
+        return "СЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:\n"
+                +"{\"id\":\"worker-goal:14:2026-10-30:completed\",\"source\":\"worker_daily_goal\",\"field\":\"completed\",\"value\":\"18\"}\n"
+                +"{\"id\":\"worker-goal:14:2026-10-30:total\",\"source\":\"worker_daily_goal\",\"field\":\"total\",\"value\":\"23\"}";
+    }
+
+    @Test void aReportedCoachingConversationDoesNotRequireAnUnavailablePrivateChat() {
+        String answer="Алёне К я уже писала: Алёна надо тебе в работе немного усилиться, я начинаю переживать.";
+        var question=new ManagerReportReviewQualityService.ReviewQuestion("Как помогли специалисту?",List.of("специалист и конкретное действие менеджера"));
+        provider(assessment("SATISFIED",answer,"E1","COMPLETED_ACTION","UNVERIFIABLE","Не найден разговор"));
+        var result=service.assessAnswer(workerGoalEvidence(),question,answer,false);
+        assertThat(result.accepted()).isTrue();
+        assertThat(result.claims().getFirst().kind()).isEqualTo(ManagerReportReviewQualityService.ClaimKind.MANAGEMENT_REPORT);
+        assertThat(result.claims().getFirst().status()).isEqualTo(ManagerReportReviewQualityService.ClaimStatus.REPORTED);
+        assertThat(result.reason()).contains("со слов менеджера");
+    }
+
+    @Test void aReportedCompositionMatchingTheKnownGapIsAnExplanationNotVerifiedTaskHistory() {
+        var question=new ManagerReportReviewQualityService.ReviewQuestion("Какие задачи не завершил специалист?",List.of("специалист и состав недобора"));
+        String answer="1 новый заказ 5 текстов для фирмы";
+        provider(assessment("SATISFIED",answer,"E1","FACT","UNVERIFIABLE","Нет исторического списка"));
+        var result=service.assessAnswer(workerGoalEvidence(),question,answer,false);
+        assertThat(result.accepted()).isTrue();assertThat(result.claims().getFirst().status()).isEqualTo(ManagerReportReviewQualityService.ClaimStatus.REPORTED);
+        String different="1 новый заказ 7 текстов для фирмы";
+        provider(assessment("SATISFIED",different,"E1","FACT","UNVERIFIABLE","Числа не сходятся"));
+        assertThat(service.assessAnswer(workerGoalEvidence(),question,different,false).accepted()).isFalse();
+    }
+
+    @Test void reportedCoachingCanSatisfyAnExplanationCriterionWithoutInventingExternalEvidence() {
+        String answer="Я поговорила со специалистом, обсудила приоритеты.";
+        var question=new ManagerReportReviewQualityService.ReviewQuestion("Как помогли специалисту?",List.of("специалист и конкретное действие менеджера"));
+        provider(assessment("SATISFIED",answer,"E1","MANAGEMENT_REPORT","REPORTED","Объяснение")
+                .replace("[\"E1\"]","[]"));
+        var result=service.assessAnswer(workerGoalEvidence(),question,answer,false);
+        assertThat(result.accepted()).isTrue();
+        assertThat(result.claims().getFirst().status()).isEqualTo(ManagerReportReviewQualityService.ClaimStatus.REPORTED);
+        assertThat(result.claims().getFirst().evidenceRefs()).isEmpty();
+    }
+
+    @Test void anUnreferencedReportCannotProveFinancialResults() {
+        String answer="Я написала клиенту: счёт уже оплачен.";
+        var question=new ManagerReportReviewQualityService.ReviewQuestion("Что сделал специалист?",List.of("специалист и фактический результат"));
+        provider(assessment("SATISFIED",answer,"E1","MANAGEMENT_REPORT","REPORTED","Якобы объяснение")
+                .replace("[\"E1\"]","[]"));
+        assertThat(service.assessAnswer(workerGoalEvidence(),question,answer,false).decision())
+                .isEqualTo(ManagerReportReviewQualityService.Decision.NEEDS_CONTEXT);
+    }
+
+    @Test void missingHistoricalTaskJournalDoesNotBlockAnAlreadyReportedCompatibleComposition() {
+        String answer="1 новый заказ 5 текстов для фирмы";
+        var question=new ManagerReportReviewQualityService.ReviewQuestion("Какие задачи не завершил специалист?",List.of("специалист и состав недобора"));
+        provider(assessment("UNVERIFIABLE",answer,"E1","MANAGEMENT_REPORT","REPORTED","Точный журнал не сохранён"));
+        var result=service.assessAnswer(workerGoalEvidence(),question,answer,false);
+        assertThat(result.accepted()).isTrue();
+        assertThat(result.criteria().getFirst().reason()).contains("со слов менеджера");
+    }
+
+    @Test void aShortSupplementCannotEraseThePreviouslyAcceptedWorkerSupportPlan() {
+        String first="После я зайду в карточку Алены К и проверю выполнение задачи";
+        var question=new ManagerReportReviewQualityService.ReviewQuestion("Как поможете специалисту?",List.of("специалист и действие менеджера со способом проверки"));
+        provider(assessment("SATISFIED",first,"E1","PROMISE","PLAN","План"));
+        var original=service.assessAnswer(workerGoalEvidence(),question,first,false);
+        String history=service.appendAnswer("[]",new ManagerReportReviewQualityService.ReviewAnswer(
+                0,question.question(),first,true,100,"План","deepseek",original,"2026-11-02T06:00:00+08:00"));
+        String supplement="Я поговорила со специалистом, обсудила приоритеты.";
+        provider(assessment("MISSING",supplement,"E1","MANAGEMENT_REPORT","REPORTED","План не повторён")
+                .replace("\"answerAttempt\":0","\"answerAttempt\":1"));
+        var result=service.assessAnswer(workerGoalEvidence(),question,supplement,false,service.previousAcceptedContext(history,0),false);
+        assertThat(result.accepted()).isTrue();
+        assertThat(result.reason()).doesNotContain("План не повторён").contains("с учётом предыдущих");
+        assertThat(result.criteria().getFirst().answerQuote()).isEqualTo(first);
+        assertThat(result.claims()).anyMatch(c->c.kind()==ManagerReportReviewQualityService.ClaimKind.PROMISE
+                && c.status()==ManagerReportReviewQualityService.ClaimStatus.PLAN);
+        assertThat(result.claims()).noneMatch(c->c.kind()==ManagerReportReviewQualityService.ClaimKind.COMPLETED_ACTION);
+    }
+
+    @Test void organizationalAppraisalIsReportedButAnUnrecordedTaskArrivalIsStillAFactClaim() {
+        var question=new ManagerReportReviewQualityService.ReviewQuestion("Что помешало специалисту?",List.of("специалист и причина недобора"));
+        String appraisal="Помешало несвоевременная обработка накопившихся задач";
+        provider(assessment("SATISFIED",appraisal,"E1","MANAGEMENT_REPORT","REPORTED","Объяснение"));
+        assertThat(service.assessAnswer(workerGoalEvidence(),question,appraisal,false).accepted()).isTrue();
+        String arrival="Причина: накопившиеся задачи поступили поздно";
+        provider(assessment("SATISFIED",arrival,"E1","MANAGEMENT_REPORT","REPORTED","Нет журнала поступления"));
+        assertThat(service.assessAnswer(workerGoalEvidence(),question,arrival,false).accepted()).isFalse();
+    }
+
+    @Test void aClosedHistoricalDayMayBeRetrievedLaterButAFutureDayCannotProveAnEarlierAnswer() {
+        String answer="Специалист Алёна выполнила день на 100%.";
+        var question=new ManagerReportReviewQualityService.ReviewQuestion("Проверить результат",List.of("специалист и фактический результат"));
+        String context=workerGoalEvidence()+"\n{\"id\":\"worker-goal:14:2026-11-01:reached_100\","
+                +"\"source\":\"worker_daily_goal_followup_result\",\"field\":\"reached_100\",\"value\":\"true\",\"observedAt\":\"2026-11-03T00:00:00Z\"}";
+        provider(assessment("SATISFIED",answer,"E3","FACT","SUPPORTED","Подтверждено дневным итогом"));
+        var submitted=java.time.ZonedDateTime.parse("2026-11-02T06:48:30+08:00");
+        assertThat(service.assessAnswer(context,question,answer,false,List.of(),false,submitted).accepted()).isTrue();
+        assertThat(service.assessAnswer(context.replace("2026-11-01:","2026-11-02:"),question,answer,false,List.of(),false,submitted).accepted()).isFalse();
+    }
+
+    @ParameterizedTest @ValueSource(strings={"Я написала клиенту: счёт уже оплачен.","Специалист выполнила два дня на 100%.","Я написала, что все задачи выполнены."})
+    void managementReportCannotCertifyPaymentDeliveryOrCompletedPerformance(String answer) {
+        var question=new ManagerReportReviewQualityService.ReviewQuestion("Что сделал специалист?",List.of("специалист и фактический результат"));
+        provider(assessment("SATISFIED",answer,"E1","MANAGEMENT_REPORT","REPORTED","Якобы объяснение"));
+        assertThat(service.assessAnswer(workerGoalEvidence(),question,answer,false).accepted()).isFalse();
+    }
+
+    @Test void anExplicitQuestionAboutProvenCompletionStillRequiresEvidence() {
+        String answer="Я поговорила со специалистом.";
+        var question=new ManagerReportReviewQualityService.ReviewQuestion("Подтвердите действие",List.of("специалист и факт выполнения действия"));
+        provider(assessment("SATISFIED",answer,"E1","COMPLETED_ACTION","UNVERIFIABLE","Нет записи"));
+        assertThat(service.assessAnswer(workerGoalEvidence(),question,answer,false).accepted()).isFalse();
+    }
+
+    @Test void workerContextFingerprintIgnoresObservationTimeButChangesWithResults() {
+        String facts=workerGoalEvidence();
+        String first=service.workerGoalContextFingerprint(facts);
+        assertThat(first).isEqualTo(service.workerGoalContextFingerprint(facts.replace("\"value\":\"18\"","\"value\":\"18\",\"observedAt\":\"2026-11-02T00:00:00Z\"")));
+        assertThat(first).isNotEqualTo(service.workerGoalContextFingerprint(facts.replace("\"value\":\"18\"","\"value\":\"23\"")));
+        assertThat(service.workerGoalContextFingerprint("Нет исходных данных")).isEmpty();
+    }
+
+    @Test void reportedExplanationsKeepTheSavedHistoryCompatibleWithPreviousEnumReaders() throws Exception {
+        var mapper=new ObjectMapper();
+        var report=new ManagerReportReviewQualityService.ClaimAssessment(
+                ManagerReportReviewQualityService.ClaimKind.MANAGEMENT_REPORT,ManagerReportReviewQualityService.ClaimStatus.REPORTED,
+                0,"Я поговорила со специалистом.",List.of(),"Объяснение","HISTORICAL",List.of());
+        String stored=mapper.writeValueAsString(report);
+        assertThat(stored).contains("\"kind\":\"HYPOTHESIS\"","\"status\":\"UNVERIFIABLE\"","Со слов менеджера");
+        var restored=mapper.readValue(stored,ManagerReportReviewQualityService.ClaimAssessment.class);
+        assertThat(restored.kind()).isEqualTo(ManagerReportReviewQualityService.ClaimKind.HYPOTHESIS);
+        assertThat(restored.status()).isEqualTo(ManagerReportReviewQualityService.ClaimStatus.UNVERIFIABLE);
+    }
+
     private ManagerReportReviewQualityService.ReviewQuestion question() {
         return new ManagerReportReviewQualityService.ReviewQuestion("Что произошло и как действовать?", List.of("объяснение и действие"));
     }

@@ -41,6 +41,21 @@ class ManagerWorkerDailyProgressServiceTest {
         service = new ManagerWorkerDailyProgressService(managerRepository, progressService, achievementService);
     }
 
+    @Test void auditIncludesOnlyTwoFinalizedFollowingDaysAndNeverInventsMissingResults() {
+        var date=LocalDate.of(2026,10,30);
+        var goal=new ManagerWorkerDailyProgressService.MissedWorkerGoal(14L,"Алёна К.",date,18,23);
+        when(achievementService.workerDayResults(List.of(14L),date.plusDays(1)))
+                .thenReturn(Map.of(14L,new FinalWorkerDayResults.WorkerDayResult(14L,47,47,true)));
+        when(achievementService.workerDayResults(List.of(14L),date.plusDays(2)))
+                .thenReturn(Map.of(14L,new FinalWorkerDayResults.WorkerDayResult(14L,24,24,true)));
+        var rows=service.followingDayResults(goal,date.plusDays(3));
+        assertEquals(2,rows.size());assertEquals(47,rows.getFirst().completed());assertEquals(24,rows.getLast().completed());
+        assertFalse(rows.stream().anyMatch(row->!row.reached100()));
+        assertEquals(1,service.followingDayResults(goal,date.plusDays(2)).size());
+        when(achievementService.workerDayResults(List.of(14L),date.plusDays(1))).thenReturn(Map.of());
+        assertEquals(0,service.followingDayResults(goal,date.plusDays(2)).size());
+    }
+
     @Test
     void returnsCurrentAndPreviousProgressForWorkersAssignedToManager() {
         when(progressService.progressEnabled()).thenReturn(true);

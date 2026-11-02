@@ -707,7 +707,10 @@ public class ManagerReportReviewTelegramService {
         int index = review.getCurrentQuestionIndex();
         if (index < 0 || index >= questions.size() || !issueService.isPending(review, index)) return;
         issueService.withdrawResolvedSourceIssues(review, questions);
-        if (issueService.isPending(review, index)) return;
+        if (issueService.isPending(review, index)) {
+            refreshWorkerGoalAnswerContext(review,questions.get(index));
+            return;
+        }
         review.setAnswerQuality(null);
         review.setAnswerQualityReason(null);
         event(review, "SYSTEM_SOURCE_QUESTION_WITHDRAWN", null, "SYSTEM", "recovery-job",
@@ -755,6 +758,25 @@ public class ManagerReportReviewTelegramService {
             review.setRecoveryNextAttemptAt(review.isRecoveryAwaitingContext() ? null : LocalDateTime.now().plusMinutes(minutes));
         }
         sessionRepository.save(review);
+    }
+
+    private void refreshWorkerGoalAnswerContext(ManagerReportReviewSession review,
+            ManagerReportReviewQualityService.ReviewQuestion question) {
+        if (!review.isRecoveryAwaitingContext() || !"NEEDS_CONTEXT".equals(review.getAnswerQuality())
+                || !question.sourceTaskIds().isEmpty() || !question.question().startsWith("Специалист ")
+                || qualityService.latestAnswerRecordedAt(review.getAnswersJson(),review.getCurrentQuestionIndex())==null) return;
+        LocalDateTime now=LocalDateTime.now();
+        if (review.getRecoveryContextCheckedAt()!=null && review.getRecoveryContextCheckedAt().isAfter(now.minusMinutes(15))) return;
+        String fingerprint=qualityService.workerGoalContextFingerprint(answerContext(review,question));
+        review.setRecoveryContextCheckedAt(now);
+        if (fingerprint==null || fingerprint.isBlank() || fingerprint.equals(review.getRecoveryContextFingerprint())) return;
+        review.setRecoveryContextFingerprint(fingerprint);
+        review.setRecoveryAwaitingContext(false);
+        review.setRecoveryAttempts(0);
+        review.setRecoveryNextAttemptAt(now);
+        if (review.getAiUnavailableStartedAt()==null) review.setAiUnavailableStartedAt(now.minusMinutes(1));
+        event(review,"WORKER_GOAL_CONTEXT_REFRESHED",null,"SYSTEM","recovery-job",
+                "questionIndex="+review.getCurrentQuestionIndex()+";sourceFingerprint="+fingerprint+";savedAnswerRetained=true");
     }
 
     private String continueFlow(ManagerReportReviewSession review, User actor, boolean automatic) {
@@ -979,6 +1001,14 @@ public class ManagerReportReviewTelegramService {
                 ? java.time.ZonedDateTime.now(java.time.ZoneId.of("Asia/Irkutsk")) : submittedAt;
         String evidenceContext = submittedAt == null ? answerContext(review, question)
                 : savedAnswerEvidence(review, index, answeredAt, messageText);
+        if (submittedAt != null && !evidenceContext.isBlank()) {
+            String supplement = workerGoalHistoricalSupplement(review, question, answeredAt, evidenceContext);
+            if (!supplement.isBlank()) {
+                event(review, "ANSWER_EVIDENCE_SUPPLEMENT", null, "SYSTEM", "worker-goal-recovery",
+                        answerEvidenceHeader(index, answeredAt, messageText) + evidenceSnapshots.encode(supplement));
+                evidenceContext += "\n" + supplement;
+            }
+        }
         ManagerReportReviewQualityService.Assessment assessment =
                 submittedAt == null ? qualityService.assessAnswer(
                         evidenceContext,
@@ -1479,7 +1509,7 @@ public class ManagerReportReviewTelegramService {
                 : escape(clean(prefix)) + "\n\n")
                 + "❓ <b>Вопрос " + progress.position() + " из " + progress.total() + "</b>\n\n"
                 + escape(question.question())
-                + answerDirectionsHtml();
+                + answerDirectionsHtml(question);
         Optional<Integer> messageId = telegramService.sendMessageWithInlineKeyboardMessageId(
                 review.getRecipientChatId(),
                 text,
@@ -1559,7 +1589,7 @@ public class ManagerReportReviewTelegramService {
         QuestionProgress progress = questionProgress(review, questions, index);
         String text = "✍️ Ответьте на вопрос " + progress.position() + " из " + progress.total() + ":\n\n"
                 + question.question()
-                + answerDirectionsPlain();
+                + answerDirectionsPlain(question);
         Optional<Integer> promptId = sendReplyPrompt(review, text);
         review.setReplyPromptMessageId(promptId.orElse(null));
         review.setQuestionSentAt(LocalDateTime.now());
@@ -1774,7 +1804,21 @@ public class ManagerReportReviewTelegramService {
                 .toList();
     }
 
-    private String answerDirectionsHtml() {
+    private boolean workerGoalQuestion(ManagerReportReviewQualityService.ReviewQuestion question) {
+        return question!=null && question.sourceTaskIds().isEmpty() && question.sourceChatItemIds().isEmpty()
+                && question.question().startsWith("Специалист ");
+    }
+
+    private String workerGoalAnswerDirections() {
+        return "Опишите, какие задачи не удалось завершить или что помешало, какую помощь вы оказали "
+                +"или планируете и как проверите результат. Разговор со специалистом можно описать своими словами. "
+                +"Система сама сверит сохранённые дневные итоги. Уже выполненное отделяйте от обещанного; "
+                +"повторять ранее зачтённые пояснения в каждом дополнении не нужно.";
+    }
+
+    private String answerDirectionsHtml(ManagerReportReviewQualityService.ReviewQuestion question) {
+        if (workerGoalQuestion(question)) return "\n\n📌 <b>Объясните недобор и помощь специалисту.</b>\n\n"
+                +escape(workerGoalAnswerDirections());
         return "\n\n📌 <b>Ответ должен содержать выполненные действия и их фактический результат.</b>\n\n"
                 + escape(answerResultDirections())
                 + "\n\n🧭 <b>Подумайте и сформулируйте вывод:</b>"
@@ -1784,7 +1828,8 @@ public class ManagerReportReviewTelegramService {
                 + "\n\n<i>Готовой формулировки нет — ответьте своими словами.</i>";
     }
 
-    private String answerDirectionsPlain() {
+    private String answerDirectionsPlain(ManagerReportReviewQualityService.ReviewQuestion question) {
+        if (workerGoalQuestion(question)) return "\n\n📌 Объясните недобор и помощь специалисту.\n\n"+workerGoalAnswerDirections();
         return "\n\n📌 Ответ должен содержать выполненные действия и их фактический результат.\n\n"
                 + answerResultDirections()
                 + "\n\nПодумайте и сформулируйте вывод:"
@@ -1870,6 +1915,8 @@ public class ManagerReportReviewTelegramService {
                         }
                     }
                     goalFacts.append(clean(taskContextService.workerGoalTaskEvidence(goal.workerId(),review.managerId(),goal.date()))).append('\n');
+                    goalFacts.append(followingWorkerGoalFacts(goal,
+                            java.time.ZonedDateTime.now(java.time.ZoneId.of("Asia/Irkutsk")).toLocalDate(), java.util.Set.of()));
                 }
                 goalFacts.append("Время поступления отдельных задач и причина недобора здесь не установлены. ")
                         .append("Менеджер может предложить проверку; утверждение о позднем поступлении требует журнала задач.\n");
@@ -1877,6 +1924,47 @@ public class ManagerReportReviewTelegramService {
             }
         }
         return evidenceSnapshots.compose(original, fresh, question.sourceTaskIds());
+    }
+
+    /** Later knowledge of closed historical days supplements, never replaces, the submission's original evidence. */
+    private String workerGoalHistoricalSupplement(ManagerReportReviewSession review,
+            ManagerReportReviewQualityService.ReviewQuestion question, java.time.ZonedDateTime submittedAt, String original) {
+        if (!question.sourceTaskIds().isEmpty() || !question.sourceChatItemIds().isEmpty()
+                || !question.question().startsWith("Специалист ")) return "";
+        var goals=workerProgressService.missedPreviousDayGoals(review.managerId(),review.getSummaryDate());
+        if (goals==null || goals.isEmpty()) return "";
+        var mapper=new com.fasterxml.jackson.databind.ObjectMapper();
+        java.util.Set<String> existing=new java.util.HashSet<>();
+        original.lines().filter(line->line.stripLeading().startsWith("{")).forEach(line->{
+            try {existing.add(mapper.readTree(line).path("id").asText());}
+            catch(com.fasterxml.jackson.core.JsonProcessingException ignored){ }
+        });
+        StringBuilder facts=new StringBuilder();
+        var beforeDate=submittedAt.withZoneSameInstant(java.time.ZoneId.of("Asia/Irkutsk")).toLocalDate();
+        for(var goal:goals) if(question.question().contains(goal.workerName()))
+            facts.append(followingWorkerGoalFacts(goal,beforeDate,existing));
+        return facts.isEmpty()?"":"ДОПОЛНЕНИЕ ПРИ ПОВТОРНОЙ СВЕРКЕ: итоги закрытых дней до отправки ответа. "
+                +"Получены сейчас; не являются доказательством разговора или погашения прежнего недобора.\n"
+                +facts;
+    }
+
+    private String followingWorkerGoalFacts(ManagerWorkerDailyProgressService.MissedWorkerGoal goal,
+            java.time.LocalDate beforeDate, java.util.Set<String> existing) {
+        StringBuilder result=new StringBuilder();
+        for(var day:workerProgressService.followingDayResults(goal,beforeDate)) {
+            if (!day.date().isBefore(beforeDate)) continue;
+            for(var field:java.util.Map.of("worker_name",clean(goal.workerName()),"goal_date",day.date().toString(),
+                    "completed",String.valueOf(day.completed()),"total",String.valueOf(day.total()),
+                    "reached_100",String.valueOf(day.reached100())).entrySet()) {
+                String id="worker-goal:"+goal.workerId()+":"+day.date()+":"+field.getKey();
+                if(existing.contains(id)) continue;
+                try {result.append(new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(java.util.Map.of(
+                        "id",id,"source","worker_daily_goal_followup_result","field",field.getKey(),"value",field.getValue(),
+                        "observedAt",java.time.Instant.now().toString()))).append('\n');}
+                catch(com.fasterxml.jackson.core.JsonProcessingException invalid){throw new IllegalStateException(invalid);}
+            }
+        }
+        return result.toString();
     }
 
     private void sendAiUnavailable(ManagerReportReviewSession review) {

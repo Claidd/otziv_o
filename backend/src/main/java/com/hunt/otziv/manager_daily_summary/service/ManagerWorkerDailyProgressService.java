@@ -135,6 +135,22 @@ public class ManagerWorkerDailyProgressService {
                 .toList();
     }
 
+    record FollowingWorkerGoal(LocalDate date, long completed, long total, boolean reached100) { }
+
+    /** Input is an authorized goal returned above; never expose arbitrary workers through this helper. */
+    List<FollowingWorkerGoal> followingDayResults(MissedWorkerGoal authorizedGoal, LocalDate today) {
+        if (authorizedGoal==null || authorizedGoal.workerId()==null || authorizedGoal.date()==null || today==null) return List.of();
+        List<FollowingWorkerGoal> result=new java.util.ArrayList<>();
+        for(int offset=1;offset<=2;offset++) {
+            LocalDate date=authorizedGoal.date().plusDays(offset);
+            if (!date.isBefore(today)) break;
+            var rows=achievementService.workerDayResults(List.of(authorizedGoal.workerId()),date);
+            var day=rows==null?null:rows.get(authorizedGoal.workerId());
+            if (day!=null) result.add(new FollowingWorkerGoal(date,day.completedCount(),day.eligibleCount(),day.reached100()));
+        }
+        return List.copyOf(result);
+    }
+
     private ManagerWorkerProgress aggregate(
             Long managerId,
             List<WorkerProgress> workers,
