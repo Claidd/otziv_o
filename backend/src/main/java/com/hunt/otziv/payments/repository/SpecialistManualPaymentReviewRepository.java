@@ -43,6 +43,17 @@ public interface SpecialistManualPaymentReviewRepository
 
     boolean existsByOrderIdAndStatusIn(Long orderId, Collection<SpecialistManualPaymentReviewStatus> statuses);
 
+    @Query("select r.id from SpecialistManualPaymentReview r, PaymentLink l left join l.order.status orderStatus "
+            + "where l.id = r.paymentLinkId and l.order.id = r.orderId and l.amountKopecks = r.amountKopecks "
+            + "and r.creditedAt is null and r.resolvedAt is null and r.status in :statuses "
+            + "and l.status = com.hunt.otziv.payments.model.PaymentLinkStatus.CONFIRMED "
+            + "and l.confirmedAmountKopecks = r.amountKopecks "
+            + "and l.paymentMethod in (com.hunt.otziv.payments.model.PaymentMethod.BANK_FORM, com.hunt.otziv.payments.model.PaymentMethod.SBP_QR) "
+            + "and l.paidAt is not null and l.manualConfirmedAt is null and length(trim(l.tbankPaymentId)) > 0 "
+            + "and ((l.order.complete = true and l.order.payDay is not null) or orderStatus.title = 'Оплачено') order by r.id")
+    List<Long> findUncreditedBankConfirmedIds(@Param("statuses") Collection<SpecialistManualPaymentReviewStatus> statuses,
+            org.springframework.data.domain.Pageable page);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select r from SpecialistManualPaymentReview r where r.orderId = :orderId "
             + "and r.status in :statuses order by r.id")

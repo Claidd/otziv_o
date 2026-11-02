@@ -364,6 +364,8 @@ public class ManualCardPaymentWorkflow {
         ContractorRecipientType recipientType = ContractorRecipientType.valueOf(recipientTypeName);
         Order order = orderRepository.findByIdForCounterUpdate(orderId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден"));
+        // Reject before freezing a recipient or creating a review that would fence the bank link.
+        requireManualCardProviderEligibility(link);
         requireManualCardPaymentLocalEligibility(order, link, orderId);
         freezeActualRecipientIntentIfRequired(order, link, recipientType,
                 recipientProfileId, recipientKey, reason, receiptUrl, actor);
@@ -386,9 +388,7 @@ public class ManualCardPaymentWorkflow {
         if (orderId == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ платежной ссылки не найден");
         }
-        if (isActiveOrAmbiguousTochkaRouteForManualCardPayment(initialSnapshot)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Активный или неоднозначный платеж Точки нельзя автоматически закрыть для ручного перевода. " + "Сначала завершите сверку платежа в Точке.");
-        }
+        requireManualCardProviderEligibility(initialSnapshot);
         reconcileLegacyTerminalBankRoutesForManualCardPayment(orderId, authentication);
         PaymentLink snapshot = paymentLinkRepository.findByIdWithOrder(linkId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежная ссылка не найдена"));
         if (!hasOrderBinding(snapshot, orderId)) {
@@ -905,6 +905,14 @@ public class ManualCardPaymentWorkflow {
 
     private boolean isActiveOrAmbiguousTochkaRouteForManualCardPayment(PaymentLink link) {
         return manualCardRoutePolicy.isActiveOrAmbiguousTochkaRouteForManualCardPayment(link);
+    }
+
+    private void requireManualCardProviderEligibility(PaymentLink link) {
+        if (isActiveOrAmbiguousTochkaRouteForManualCardPayment(link)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    ManualCardRoutePolicy.ACTIVE_TOCHKA_MANUAL_ERROR_PREFIX + " нельзя автоматически закрыть для ручного перевода. "
+                    + "Ручная отметка не зачислена. Используйте исходную банковскую ссылку либо завершите банковскую операцию перед сменой получателя.");
+        }
     }
 
     private boolean isSafeTerminalBeforeManualCardPayment(PaymentLinkStatus status) {

@@ -23,6 +23,16 @@ public class SpecialistManualPaymentReviewScheduler {
 
     @Scheduled(fixedDelayString = "${otziv.payments.specialist-review-delay-ms:60000}")
     public void run() {
+        // Bank confirmation resolves an uncredited transfer claim without ever
+        // attempting its manual credit or notifying the reported recipient.
+        for (Long id : reviews.findUncreditedBankConfirmedIds(java.util.EnumSet.of(
+                SpecialistManualPaymentReviewStatus.PENDING_DELIVERY, SpecialistManualPaymentReviewStatus.WAITING,
+                SpecialistManualPaymentReviewStatus.NEEDS_ATTENTION, SpecialistManualPaymentReviewStatus.SETTLING,
+                SpecialistManualPaymentReviewStatus.ADMIN_SETTLING, SpecialistManualPaymentReviewStatus.DISPUTED),
+                PageRequest.of(0, BATCH_SIZE))) {
+            try { notifications.supersedeOnConfirmedBankPayment(id); }
+            catch (RuntimeException failure) { log.warn("Bank payment review reconciliation failed: reviewId={}", id, failure); }
+        }
         for (Long id : reviews.findCommittedClaimIds(LocalDateTime.now().minusMinutes(1), PageRequest.of(0,BATCH_SIZE))) {
             try { settlement.creditNow(id); }
             catch (RuntimeException failure) { log.warn("Committed payment review recovery failed: reviewId={}",id,failure); }

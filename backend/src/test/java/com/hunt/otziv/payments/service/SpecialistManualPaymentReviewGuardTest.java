@@ -24,6 +24,37 @@ import static org.mockito.Mockito.when;
 class SpecialistManualPaymentReviewGuardTest {
     @Mock SpecialistManualPaymentReviewRepository reviews;
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {
+            "credited", "disputed", "settling", "different-link", "different-amount", "other-failure",
+            "no-operation", "no-url", "cancel-pending", "different-method", "another-review", "unissued"})
+    void recoveryNeverAllowsANewOrCompetingBankPayment(String change) {
+        PaymentLink link = link();
+        link.setStatus(com.hunt.otziv.payments.model.PaymentLinkStatus.INITIATED);
+        link.setPaymentMethod(com.hunt.otziv.payments.model.PaymentMethod.SBP_QR);
+        var profile = new com.hunt.otziv.payments.model.PaymentProfile();
+        profile.setProvider(com.hunt.otziv.payments.model.PaymentProfile.PROVIDER_TOCHKA);
+        link.setPaymentProfile(profile); link.setTbankPaymentId("original-operation");
+        link.setPaymentUrl("https://merch.securepaytb.ru/pay/original-operation");
+        var review = review(SpecialistManualPaymentReviewStatus.NEEDS_ATTENTION);
+        review.setLastError(ManualCardRoutePolicy.ACTIVE_TOCHKA_MANUAL_ERROR_PREFIX + " нельзя закрыть");
+        if (change.equals("credited")) review.setCreditedAt(java.time.LocalDateTime.now());
+        if (change.equals("disputed")) review.setDisputedAt(java.time.LocalDateTime.now());
+        if (change.equals("settling")) review.setStatus(SpecialistManualPaymentReviewStatus.SETTLING);
+        if (change.equals("different-link")) review.setPaymentLinkId(72L);
+        if (change.equals("different-amount")) review.setAmountKopecks(150_000L);
+        if (change.equals("other-failure")) review.setLastError("Неизвестный исход ручного зачисления");
+        if (change.equals("no-operation")) link.setTbankPaymentId(null);
+        if (change.equals("no-url")) link.setPaymentUrl(null);
+        if (change.equals("cancel-pending")) link.setBankCancelNonce("cancel-claim");
+        if (change.equals("different-method")) link.setPaymentMethod(com.hunt.otziv.payments.model.PaymentMethod.BANK_FORM);
+        if (change.equals("unissued")) link.setStatus(com.hunt.otziv.payments.model.PaymentLinkStatus.CREATED);
+        when(reviews.lockUnresolvedByOrderId(eq(7L), anyCollection())).thenReturn(
+                change.equals("another-review") ? List.of(review, review(SpecialistManualPaymentReviewStatus.WAITING)) : List.of(review));
+        assertThrows(ResponseStatusException.class, () -> new SpecialistManualPaymentReviewGuard(reviews)
+                .requireBankPaymentAccess(link, com.hunt.otziv.payments.model.PaymentMethod.SBP_QR));
+    }
+
     @Test
     void unresolvedReportBlocksNewInstructionsAndGenericPaidTransition() {
         when(reviews.existsByOrderIdAndStatusIn(eq(7L), anyCollection())).thenReturn(true);

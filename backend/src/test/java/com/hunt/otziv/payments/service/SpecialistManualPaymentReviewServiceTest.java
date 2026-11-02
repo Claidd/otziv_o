@@ -317,10 +317,12 @@ class SpecialistManualPaymentReviewServiceTest {
         assertEquals(SpecialistManualPaymentReviewStatus.CONFIRMED, review.getStatus());
     }
 
-    @Test
-    void confirmedProviderPaymentOnExactLinkSupersedesManualReview() {
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = SpecialistManualPaymentReviewStatus.class,
+            names = {"WAITING", "NEEDS_ATTENTION"})
+    void confirmedProviderPaymentOnExactLinkSupersedesManualReview(SpecialistManualPaymentReviewStatus status) {
         SpecialistManualPaymentReview review = pending(); review.setId(101L);
-        review.setStatus(SpecialistManualPaymentReviewStatus.WAITING);
+        review.setStatus(status);
         PaymentLink bankLink = link(); bankLink.setPaymentMethod(PaymentMethod.BANK_FORM);
         bankLink.setStatus(PaymentLinkStatus.CONFIRMED);
         bankLink.setConfirmedAmountKopecks(140_000L);

@@ -29,6 +29,8 @@ import org.springframework.web.server.ResponseStatusException;
 @RequiredArgsConstructor
 public class ManualCardRoutePolicy {
 
+    static final String ACTIVE_TOCHKA_MANUAL_ERROR_PREFIX = "Активный или неоднозначный платеж Точки";
+
     private final PaymentLinkLifecycleService lifecycleService;
 
     private final ManualPaymentConfirmationWorkflow manualConfirmationWorkflow;

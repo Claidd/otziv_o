@@ -345,7 +345,6 @@ public class PaymentLinkInitializationWorkflow {
         if (observedOrderId == null || orderRepository.findByIdForCounterUpdate(observedOrderId).isEmpty()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ платежной ссылки не найден");
         }
-        specialistReviewGuard.requireNoPendingReview(observedOrderId);
         // The order lock serializes this check with common-invoice attachment.
         // A disclosed legacy token must not be able to create a second bank
         // payment after the order has moved under one common payment route.
@@ -354,7 +353,9 @@ public class PaymentLinkInitializationWorkflow {
         if (!hasOrderBinding(source, observedOrderId)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Платежная ссылка изменилась; повторите запрос");
         }
-        PaymentLink resolved = resolveReplacementPublicLink(source, LocalDateTime.now(), true);
+        var reviewAccess = specialistReviewGuard.requireBankPaymentAccess(source, mode.paymentMethod());
+        boolean existingOnly = reviewAccess == SpecialistManualPaymentReviewGuard.BankPaymentAccess.EXISTING_OPERATION_ONLY;
+        PaymentLink resolved = existingOnly ? source : resolveReplacementPublicLink(source, LocalDateTime.now(), true);
         PaymentLink link = sameLinkId(source, resolved) ? source : lockResolvedPublicLink(resolved);
         if (!hasOrderBinding(link, observedOrderId)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Платежная ссылка изменилась; повторите запрос");
@@ -377,6 +378,10 @@ public class PaymentLinkInitializationWorkflow {
         PublicPaymentInitResponse cached = cachedBankInitResponse(link, bankId, clientIp, userAgent, mode, tochkaProfile != null);
         if (cached != null) {
             return bankInitReservation(link, runtimeProfile, tochkaProfile, email, bankId, mode, null, cached);
+        }
+        if (existingOnly) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Во время сверки доступна только исходная банковская операция; новый платёж не создаётся");
         }
         link.setPayerEmail(email);
         applyConsentTrace(link, clientIp, userAgent);
