@@ -26,11 +26,13 @@ public class PaperBillingSettlement {
     private final com.hunt.otziv.client_messages.api.PaperInvoiceAutomation automation;
     @org.springframework.beans.factory.annotation.Autowired private com.hunt.otziv.common_billing.api.BankPaperInvoiceParts parts;
     private static final Pattern NUMBER=Pattern.compile("(?<![A-Z0-9-])PB-[0-9]+-[A-F0-9]{8}(?![A-Z0-9-])",Pattern.CASE_INSENSITIVE);
+    private static final Pattern LEGACY_ORDER=Pattern.compile("(?iu)(?<![\\p{L}\\p{N}])заказ\\s*(?:№|#)?\\s*([1-9][0-9]{0,17})(?![0-9])");
     public void webhook(String raw) {
         var claims=verifier.verifyIncomingPayment(raw);
         // The subscription receives all incoming transfers, including bank test events.
         // Verify every signature, then ignore traffic unrelated to our invoice numbers.
-        if (!NUMBER.matcher(claims.path("purpose").asText()).find()) return;
+        String purpose=claims.path("purpose").asText();
+        if (!NUMBER.matcher(purpose).find() && !LEGACY_ORDER.matcher(purpose).find()) return;
         accept(parse(claims));
     }
     public BankReceipt parse(JsonNode data) {
@@ -57,8 +59,27 @@ public class PaperBillingSettlement {
         var numbers=new LinkedHashSet<String>();
         var matcher=NUMBER.matcher(receipt.purpose());
         while(matcher.find()) numbers.add(matcher.group().toUpperCase(Locale.ROOT));
-        if (numbers.size()!=1) return; // unrelated bank traffic never closes an order
-        var rows=store.jdbc().queryForList("SELECT * FROM paper_invoice_document WHERE number=?",numbers.iterator().next());
+        List<Map<String,Object>> rows;
+        if(numbers.size()==1) rows=store.jdbc().queryForList("SELECT * FROM paper_invoice_document WHERE number=?",numbers.iterator().next());
+        else if(numbers.isEmpty() && !receipt.purpose().toUpperCase(Locale.ROOT).contains("PB-")) {
+            var references=new LinkedHashSet<Long>();
+            var legacy=LEGACY_ORDER.matcher(receipt.purpose());
+            while(legacy.find()) references.add(Long.parseLong(legacy.group(1)));
+            if(references.size()!=1) return;
+            // Older bank PDFs suggested "Заказ <target_id>". Never guess by amount
+            // alone or choose the newest reissue: the historical reference must
+            // identify exactly one document for this supplier and payer.
+            var historical=store.jdbc().queryForList("""
+                SELECT * FROM paper_invoice_document
+                WHERE target_id=? AND customer_code=? AND supplier_account=? AND bank_invoice_id IS NOT NULL
+                  AND payment_reference IS NULL
+                ORDER BY created_at LIMIT 101
+                """,references.iterator().next(),receipt.customerCode(),receipt.accountId());
+            if(historical.size()>100) return;
+            rows=historical.stream()
+                    .filter(row->receipt.payerInn().equals(service.payer((String)row.get("payer_json")).inn())).toList();
+            if(rows.size()!=1) return;
+        } else return; // unrelated or ambiguous traffic never closes an order
         if (rows.isEmpty()) return;
         var candidate=rows.getFirst();
         String id=(String)candidate.get("id");

@@ -26,7 +26,7 @@ class CommonPaperPartsMySqlIntegrationTest {
     @Container static final MySQLContainer MYSQL=new MySQLContainer("mysql@sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383")
         .withDatabaseName("parts").withUsername("root").withPassword(UUID.randomUUID().toString());
     JdbcTemplate jdbc;TransactionTemplate tx;BankPaperInvoicePartsService service;CommonInvoiceSettlementService financial;
-    PaperInvoiceOrderData orders;CommonInvoiceDeliveryService delivery;CommonInvoiceRepository invoices;
+    PaperInvoiceOrderData orders;CommonInvoiceDeliveryService delivery;CommonInvoiceRepository invoices;CommonInvoiceOrderRepository items;
     @BeforeEach void setup() {
         var ds=new DriverManagerDataSource(MYSQL.getJdbcUrl(),MYSQL.getUsername(),MYSQL.getPassword());jdbc=new JdbcTemplate(ds);tx=new TransactionTemplate(new DataSourceTransactionManager(ds));tx.setIsolationLevel(org.springframework.transaction.TransactionDefinition.ISOLATION_READ_COMMITTED);
         jdbc.execute("SET FOREIGN_KEY_CHECKS=0");for(String table:jdbc.queryForList("SELECT TABLE_NAME FROM information_schema.tables WHERE table_schema=DATABASE()",String.class))jdbc.execute("DROP TABLE "+table);jdbc.execute("SET FOREIGN_KEY_CHECKS=1");
@@ -35,11 +35,12 @@ class CommonPaperPartsMySqlIntegrationTest {
         jdbc.execute("CREATE TABLE common_invoices(invoice_id BIGINT PRIMARY KEY,status VARCHAR(24),paper_bank_document_id CHAR(36),paper_invoice_review_hold BOOLEAN DEFAULT FALSE,paper_invoice_automation_hold BOOLEAN DEFAULT FALSE,paid_kopecks BIGINT DEFAULT 0)");jdbc.update("INSERT INTO common_invoices(invoice_id,status) VALUES(8,'READY')");
         jdbc.execute("CREATE TABLE common_invoice_orders(order_id BIGINT PRIMARY KEY,invoice_id BIGINT,amount_kopecks BIGINT,ready BOOLEAN,paid BOOLEAN DEFAULT FALSE,active_membership BOOLEAN DEFAULT TRUE)");jdbc.update("INSERT INTO common_invoice_orders(order_id,invoice_id,amount_kopecks,ready) SELECT order_id,8,10000,TRUE FROM orders");
         jdbc.execute("CREATE TABLE paper_invoice_document(id CHAR(36),created_at DATETIME(6))");new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_356__common_invoice_paper_parts.sql")).execute(ds);
+        new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_362__ordinary_payment_after_paper_part_cancel.sql")).execute(ds);
         invoices=mock(CommonInvoiceRepository.class);when(invoices.findById(8L)).thenAnswer(c->Optional.of(invoice()));
         when(invoices.save(any())).thenAnswer(c->{CommonInvoice i=c.getArgument(0);jdbc.update("UPDATE common_invoices SET status=?,paper_bank_document_id=?,paper_invoice_automation_hold=?,paid_kopecks=? WHERE invoice_id=8",i.getStatus().name(),i.getPaperBankDocumentId(),i.isPaperInvoiceAutomationHold(),i.getPaidKopecks());return i;});
         delivery=mock(CommonInvoiceDeliveryService.class);when(delivery.lockedInvoiceAfterStandalonePaymentPrelude(8L)).thenAnswer(c->{jdbc.queryForList("SELECT order_id FROM orders ORDER BY order_id FOR UPDATE");jdbc.queryForList("SELECT invoice_id FROM common_invoices WHERE invoice_id=8 FOR UPDATE");return new CommonInvoiceInitializationService.LockedInvoicePaymentPrelude(invoice(),Map.of());});
-        var items=mock(CommonInvoiceOrderRepository.class);when(items.findByInvoiceIdWithOrders(8L)).thenAnswer(c->rows());
-        when(items.saveAll(any())).thenAnswer(c->{Iterable<CommonInvoiceOrder> values=c.getArgument(0);for(var i:values)jdbc.update("UPDATE common_invoice_orders SET paid=? WHERE order_id=?",i.isPaid(),i.getOrder().getId());return values;});
+        items=mock(CommonInvoiceOrderRepository.class);when(items.findByInvoiceIdWithOrders(8L)).thenAnswer(c->rows());
+        when(items.saveAll(any())).thenAnswer(c->{Iterable<CommonInvoiceOrder> values=c.getArgument(0);for(var i:values)jdbc.update("UPDATE common_invoice_orders SET paid=?,ordinary_after_paper_cancel=? WHERE order_id=?",i.isPaid(),i.isOrdinaryAfterPaperCancel(),i.orderId());return values;});
         financial=mock(CommonInvoiceSettlementService.class);
         doAnswer(c->{CommonInvoice i=c.getArgument(0);i.setPaidKopecks(rows().stream().filter(CommonInvoiceOrder::isPaid).mapToLong(CommonInvoiceOrder::getAmountKopecks).sum());return null;}).when(financial).recalculateInvoice(any(),anyList());
         doAnswer(c->{CommonInvoice i=c.getArgument(0);i.setStatus(CommonInvoiceStatus.PAID);invoices.save(i);return null;}).when(financial).closePaidInvoice(any(),anyList());
@@ -47,7 +48,7 @@ class CommonPaperPartsMySqlIntegrationTest {
         service=new BankPaperInvoicePartsService(jdbc,delivery,mock(CommonInvoicePaymentRouteWorkflow.class),invoices,items,mock(CommonInvoiceManualPaymentWorkflow.class),financial,legacy,orders,mock(PaperInvoiceAutomation.class),mock(com.hunt.otziv.review_recovery.api.ReviewRecoveryMessageHold.class));
     }
     CommonInvoice invoice(){var row=jdbc.queryForMap("SELECT * FROM common_invoices WHERE invoice_id=8");var i=new CommonInvoice();i.setId(8L);i.setInvoicePaymentMode(InvoicePaymentMode.OWNER_PAPER_INVOICE);i.setStatus(CommonInvoiceStatus.valueOf((String)row.get("status")));i.setAmountKopecks(60000);i.setPaidKopecks(((Number)row.get("paid_kopecks")).longValue());i.setPaperBankDocumentId((String)row.get("paper_bank_document_id"));i.setPaperInvoiceReviewHold(Boolean.TRUE.equals(row.get("paper_invoice_review_hold")));return i;}
-    List<CommonInvoiceOrder> rows(){return jdbc.queryForList("SELECT * FROM common_invoice_orders").stream().map(r->{var i=new CommonInvoiceOrder();var o=new Order();o.setId(((Number)r.get("order_id")).longValue());i.setOrder(o);i.setReady(Boolean.TRUE.equals(r.get("ready")));i.setPaid(Boolean.TRUE.equals(r.get("paid")));i.setActiveMembership(true);i.setAmountKopecks(((Number)r.get("amount_kopecks")).longValue());return i;}).toList();}
+    List<CommonInvoiceOrder> rows(){return jdbc.queryForList("SELECT * FROM common_invoice_orders").stream().map(r->{var i=new CommonInvoiceOrder();var o=new Order();o.setId(((Number)r.get("order_id")).longValue());i.setOrder(o);i.setReady(Boolean.TRUE.equals(r.get("ready")));i.setPaid(Boolean.TRUE.equals(r.get("paid")));i.setActiveMembership(true);i.setOrdinaryAfterPaperCancel(Boolean.TRUE.equals(r.get("ordinary_after_paper_cancel")));i.setAmountKopecks(((Number)r.get("amount_kopecks")).longValue());return i;}).toList();}
     <T>T write(Supplier<T> action){return tx.execute(s->action.get());}
     long part(String key,Long...ids){return write(()->service.create(8,List.of(ids),key));}
     @Test void sixOrdersCanBeReservedAsThreeTwoAndOneWithoutOverlap() {
@@ -96,6 +97,27 @@ class CommonPaperPartsMySqlIntegrationTest {
                 new CommonInvoiceSettlementService.BoardPaymentState(false,0));return null;});
         assertEquals(CommonInvoiceStatus.PAID,invoice().getStatus());
         assertEquals(60000,invoice().getPaidKopecks());
+    }
+    @Test void ordinaryHandoffKeepsAllMembershipsAndOnlySwitchesTheCancelledSubset() {
+        long a=part("a",1L,2L),b=part("b",3L,4L,5L,6L);
+        write(()->{service.bind(a,"a-doc");service.bind(b,"b-doc");service.cancelled(a,"a-doc");service.resumeOrdinaryInvoice(a);return null;});
+        assertEquals(6,jdbc.queryForObject("SELECT COUNT(*) FROM common_invoice_orders WHERE active_membership",Integer.class));
+        assertEquals(2,jdbc.queryForObject("SELECT COUNT(*) FROM common_invoice_orders WHERE ordinary_after_paper_cancel",Integer.class));
+        assertEquals("b-doc",invoice().getPaperBankDocumentId());
+        assertEquals("ORDINARY",service.positions(8).getFirst().documentId());
+        verify(orders).resumeCommonOrdinaryInvoice(1L);verify(orders).resumeCommonOrdinaryInvoice(2L);
+        verify(orders,never()).resumeCommonOrdinaryInvoice(3L);
+        verify(financial,never()).closePaidInvoice(any(),anyList());
+        assertThrows(RuntimeException.class,()->part("new-paper",1L));
+    }
+    @Test void ordinaryQueueFailureRollsBackTheWholeSelectedSubset() {
+        long a=part("a",1L,2L);
+        write(()->{service.bind(a,"a-doc");service.cancelled(a,"a-doc");return null;});
+        jdbc.execute("CREATE TABLE ordinary_queue(order_id BIGINT PRIMARY KEY)");
+        doAnswer(call->{long order=call.getArgument(0);jdbc.update("INSERT INTO ordinary_queue VALUES(?)",order);if(order==2L)throw new IllegalStateException("queue failed");return null;}).when(orders).resumeCommonOrdinaryInvoice(anyLong());
+        assertThrows(IllegalStateException.class,()->write(()->{service.resumeOrdinaryInvoice(a);return null;}));
+        assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM ordinary_queue",Integer.class));
+        assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM common_invoice_orders WHERE ordinary_after_paper_cancel",Integer.class));
     }
     @Test void concurrentOverlappingSelectionsReserveOrdersOnlyOnce() throws Exception {
         var start=new java.util.concurrent.CountDownLatch(1);var successes=new java.util.concurrent.atomic.AtomicInteger();

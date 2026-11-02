@@ -878,6 +878,7 @@ export interface CommonInvoiceOrderResponse {
   paid: boolean;
   unpaid: boolean;
   detachable: boolean;
+  ordinaryAfterPaperCancel?: boolean;
   paidAt?: string | null;
   paymentMethod?: 'TBANK' | 'MANUAL' | 'MIXED' | 'MANUAL_LEGACY' | 'OWNER_PAPER_INVOICE' | null;
   paidBy?: string | null;

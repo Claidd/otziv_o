@@ -206,6 +206,10 @@ public class CommonBillingService {
         return settlementService.isOrderInActiveCommonInvoice(orderId);
     }
 
+    public boolean allowsStandalonePaymentAfterPaperCancellation(Long orderId) {
+        return settlementService.allowsStandalonePaymentAfterPaperCancellation(orderId);
+    }
+
     @Transactional(readOnly = true)
     public Set<Long> findOrderIdsInActiveCommonInvoices(Collection<Long> orderIds) {
         if (orderIds == null || orderIds.isEmpty()) {

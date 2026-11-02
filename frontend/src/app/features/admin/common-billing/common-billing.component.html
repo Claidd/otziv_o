@@ -234,7 +234,7 @@
         </section>
 
         @if(invoice && canManagePaperInvoices() && invoice.status !== 'ARCHIVED') {
-          <app-paper-invoice-list [invoiceId]="invoice.id" (updated)="refreshPaperInvoiceList()" />
+          <app-paper-invoice-list [invoiceId]="invoice.id" (updated)="refreshPaperInvoiceList()" (stateChanged)="paperInvoiceState.set($event)" />
         }
         @if (invoice?.status === 'ARCHIVED') {
           <p class="invoice-action-sequence-hint">Сохранено для истории, без требования оплаты.</p>
@@ -244,40 +244,50 @@
           <section class="invoice-problem" aria-label="Режим бумажного счёта">
             <span class="material-icons-sharp" aria-hidden="true">description</span>
             <div>
-              <strong>Бумажный счёт владельца</strong>
-              <p>Счёт и акт Точки отправляются в группу. Напоминания начнутся после подтверждённой доставки документов.</p>
+              <strong>{{invoice?.status === 'PAID' ? 'Оплата завершена' : paperWorkflow().ordinaryOnly ? 'Оплата по обычным реквизитам' : paperWorkflow().ordinaryCount ? 'Разные способы оплаты' : 'Бумажный счёт владельца'}}</strong>
+              @if(invoice?.status === 'PAID') {
+                <p>Все заказы оплачены. Документы и использованные способы оплаты сохранены в истории.</p>
+              } @else if(paperWorkflow().ordinaryOnly) {
+                <p>Оставшиеся заказы оплачиваются отдельно по обычным реквизитам. Общий счёт закроется после оплаты всех заказов.</p>
+              } @else {
+                <p>Счёт и акт Точки отправляются в группу. Напоминания начнутся после подтверждённой доставки документов.</p>
+              }
             </div>
           </section>
 
+          @if(!paperWorkflow().ordinaryOnly && invoice?.status !== 'PAID') {
           <section class="paper-invoice-workflow" aria-label="Последовательность работы с бумажным счётом">
             <header>
               <strong>Порядок работы</strong>
               <small>Выполняйте действия последовательно</small>
             </header>
+            @if (invoice?.sentAt) {
+              <p>Клиент уведомлён о готовности работ. Это уведомление не подтверждает создание или доставку счёта и акта.</p>
+            }
             <ol>
-              <li [class.is-done]="!!invoice?.sentAt" [class.is-current]="!invoice?.sentAt">
+              <li [class.is-done]="paperWorkflow().prepared" [class.is-current]="!paperWorkflow().prepared">
                 <span class="paper-invoice-workflow-marker" aria-hidden="true">
-                  {{ invoice?.sentAt ? '✓' : '1' }}
+                  {{ paperWorkflow().prepared ? '✓' : '1' }}
                 </span>
                 <div>
                   <strong>Подготовить счёт и акт</strong>
-                  <small>{{ invoice?.sentAt ? 'Клиент уведомлён' : 'Открыть «Бумажный счёт» и проверить реквизиты' }}</small>
+                  <small>{{ paperWorkflow().preparationText }}</small>
                 </div>
               </li>
               <li
-                [class.is-done]="!!invoice?.paperInvoiceIssuedAt"
-                [class.is-current]="!!invoice?.sentAt && !invoice?.paperInvoiceIssuedAt">
+                [class.is-done]="paperWorkflow().delivered"
+                [class.is-current]="paperWorkflow().prepared && !paperWorkflow().delivered">
                 <span class="paper-invoice-workflow-marker" aria-hidden="true">
-                  {{ invoice?.paperInvoiceIssuedAt ? '✓' : '2' }}
+                  {{ paperWorkflow().delivered ? '✓' : '2' }}
                 </span>
                 <div>
                   <strong>Доставка документов</strong>
-                  <small>{{ invoice?.paperInvoiceIssuedAt ? 'Доставка подтверждена' : 'Система отправит сообщение и два PDF' }}</small>
+                  <small>{{ paperWorkflow().deliveryText }}</small>
                 </div>
               </li>
               <li
                 [class.is-done]="invoice?.status === 'PAID'"
-                [class.is-current]="!!invoice?.paperInvoiceIssuedAt && invoice?.status !== 'PAID'">
+                [class.is-current]="paperWorkflow().anyDelivered && invoice?.status !== 'PAID'">
                 <span class="paper-invoice-workflow-marker" aria-hidden="true">
                   {{ invoice?.status === 'PAID' ? '✓' : '3' }}
                 </span>
@@ -288,6 +298,7 @@
               </li>
             </ol>
           </section>
+          }
         }
 
         @if (invoiceProblem()) {

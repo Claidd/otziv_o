@@ -82,6 +82,22 @@ public class PaperInvoiceOrderAdapter implements PaperInvoiceOrderData {
     }
     public long companyId(long id) { return jdbc.queryForObject("SELECT order_company FROM orders WHERE order_id=?",Long.class,id); }
     @Transactional
+    public void resumeCommonOrdinaryInvoice(long id) {
+        var order=orders.findByIdForCounterUpdate(id).orElseThrow();
+        requireUnpaidForCancellation(id);
+        if(order.isPaperInvoiceReviewHold() || !order.isPaperInvoiceAutomationHold()
+                || !order.isBankPaperInvoice()
+                || !java.util.Set.of("Опубликовано","Ожидает общего счета").contains(order.getStatus().getTitle()))
+            throw new ResponseStatusException(HttpStatus.CONFLICT,"Выбранный заказ изменился или требует сверки");
+        order.useAutomaticInvoicePaymentMode();
+        order.setPaperInvoiceAutomationHold(false);
+        order.setStatus(statuses.getOrderStatusByTitle("Опубликовано"));
+        order.setStatusChangedAt(java.time.LocalDateTime.now());
+        order.setClientMessageGeneration(Math.addExact(order.getClientMessageGeneration(),1));
+        orders.saveAndFlush(order);
+        automation.scheduleOrdinaryInvoice(id);
+    }
+    @Transactional
     public void lockForDelivery(long id) {orders.findByIdForCounterUpdate(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,"Заказ не найден"));}
     @Transactional
     public void markDelivered(long id) {

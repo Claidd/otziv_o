@@ -224,6 +224,30 @@ class ReviewRecoveryTaskServiceImplTest {
         ReviewRecoveryTask task = service.createTask(101L, user(2L));
 
         assertEquals(LocalDate.of(2026, 5, 17), task.getScheduledDate());
+        assertEquals(ReviewRecoveryTaskStatus.PLANNED, task.getStatus());
+        assertEquals(null, task.getBot());
+        assertEquals(null, task.getBotLoginSnapshot());
+        assertEquals(null, task.getBotPasswordSnapshot());
+    }
+
+    @Test
+    void createArchiveTaskAllowsLostSourceAccountAndKeepsWorkPending() {
+        ArchiveReviewRecoverySource source = org.mockito.Mockito.mock(ArchiveReviewRecoverySource.class);
+        when(source.orderId()).thenReturn(10L);
+        when(source.reviewId()).thenReturn(125646L);
+        when(source.managerId()).thenReturn(null);
+        when(source.botId()).thenReturn(null);
+        Worker worker = Worker.builder().id(6L).build();
+        when(workerRepository.findActiveWorkerIds()).thenReturn(List.of(6L));
+        when(workerRepository.findById(6L)).thenReturn(Optional.of(worker));
+        when(batchRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(taskRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        ReviewRecoveryTask task = service.createArchiveTask(source, user(1L), 6L);
+        assertEquals(ReviewRecoveryTaskStatus.PLANNED, task.getStatus());
+        assertSame(worker, task.getWorker());
+        assertEquals(null, task.getBot());
+        assertTrue(task.getBotLoginSnapshot().isBlank());
+        assertTrue(task.getBotPasswordSnapshot().isBlank());
     }
 
     @Test
@@ -372,6 +396,26 @@ class ReviewRecoveryTaskServiceImplTest {
         verify(assignmentGuardService).lockIfEligible(eq(available), any());
         verify(botCooldownService).markReservedUntilTaskCompletion(available, "review recovery task 1160");
         verify(reviewRepository, never()).save(any());
+    }
+
+    @Test
+    void archivedRecoveryDoesNotSelectAWalkedAccountWithoutCredentials() {
+        ReviewRecoveryTask task = ReviewRecoveryTask.builder().id(1160L).archiveReviewId(125646L)
+                .archiveCompanyId(1773L).archiveFilialCityId(3L)
+                .status(ReviewRecoveryTaskStatus.PLANNED).build();
+        Bot noLogin = activeWalkedBot(21L, 3);
+        noLogin.setLogin(" ");
+        Bot noPassword = activeWalkedBot(22L, 3);
+        noPassword.setPassword(null);
+        Bot available = activeWalkedBot(23L, 3);
+        when(taskRepository.findByIdForMutation(1160L)).thenReturn(Optional.of(task));
+        when(botService.getFindAllByFilialCityId(3L)).thenReturn(List.of(noLogin, noPassword, available));
+        when(botCooldownService.isAvailableForAssignment(available)).thenReturn(true);
+        when(taskRepository.save(task)).thenReturn(task);
+
+        assertSame(available, service.changeTaskBot(1160L).getBot());
+        verify(assignmentGuardService, never()).lockIfEligible(eq(noLogin), any());
+        verify(assignmentGuardService, never()).lockIfEligible(eq(noPassword), any());
     }
 
     @Test

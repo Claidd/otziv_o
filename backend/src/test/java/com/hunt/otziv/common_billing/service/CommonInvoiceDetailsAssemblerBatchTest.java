@@ -33,6 +33,8 @@ class CommonInvoiceDetailsAssemblerBatchTest {
         memberships = mock(CommonInvoiceOrderRepository.class);
         requests = mock(NextOrderRequests.class);
         CommonInvoiceSettlementService settlement = mock(CommonInvoiceSettlementService.class);
+        when(settlement.normalize(org.mockito.ArgumentMatchers.nullable(String.class)))
+                .thenAnswer(call->java.util.Objects.toString(call.getArgument(0),""));
         assembler = new CommonInvoiceDetailsAssembler(null, mock(CommonInvoiceCompositionService.class), org.mockito.Mockito.mock(CommonInvoiceMessageQueue.class), settlement, memberships, null,
                 null, requests, null, null, null);
     }
@@ -60,6 +62,16 @@ class CommonInvoiceDetailsAssemblerBatchTest {
         verify(requests).createdOrdersForSources(sourceIds);
         verify(memberships).findCurrentInvoiceBindingsByOrderIds(createdIds);
         verifyNoMoreInteractions(requests, memberships);
+    }
+
+    @Test
+    void selectedOrdinaryPaymentIsExposedWithoutLosingCommonMembership() {
+        var item=item(28293L);
+        item.setOrdinaryAfterPaperCancel(true);
+        var response=assembler.toOrderResponse(item);
+        assertThat(response.ordinaryAfterPaperCancel()).isTrue();
+        assertThat(response.orderId()).isEqualTo(28293L);
+        assertThat(item.isActiveMembership()).isTrue();
     }
 
     @Test

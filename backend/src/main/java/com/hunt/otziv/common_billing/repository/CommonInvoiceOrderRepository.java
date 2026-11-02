@@ -219,7 +219,8 @@ public interface CommonInvoiceOrderRepository extends CrudRepository<CommonInvoi
         JOIN item.invoice invoice
         WHERE item.order.id IN :orderIds
           AND item.activeMembership = TRUE
-          AND invoice.status IN :statuses
+            AND invoice.status IN :statuses
+            AND (item.ordinaryAfterPaperCancel = FALSE OR invoice.paperInvoiceReviewHold = TRUE)
     """)
     List<Long> findLinkedOrderIds(
             @Param("orderIds") Collection<Long> orderIds,

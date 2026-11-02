@@ -599,7 +599,8 @@ public class PaymentLinkPreparationWorkflow {
         CommonInvoicePaymentOperations commonBillingService = commonInvoicePayments;
         final boolean covered;
         try {
-            covered = commonBillingService.isOrderInActiveCommonInvoice(orderId);
+            covered = commonBillingService.isOrderInActiveCommonInvoice(orderId)
+                    && !commonBillingService.allowsStandalonePaymentAfterPaperCancellation(orderId);
         } catch (RuntimeException e) {
             log.warn("Не удалось проверить общий счет заказа {} перед созданием отдельной ссылки", orderId, e);
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Не удалось безопасно проверить общий счет заказа. Отдельная платежная ссылка не создана.", e);

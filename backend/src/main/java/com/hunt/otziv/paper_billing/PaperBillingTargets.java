@@ -57,7 +57,7 @@ public class PaperBillingTargets {
         else if(isPart(target)) parts.cancelled(target.id(),id);else common.cancelled(target.id(),id);
     }
     public void resumeOrdinaryInvoice(Target target) {
-        if(isPart(target)) throw problem("Отменённый комплект можно перевыставить на выбранные заказы. Общий счёт и другие комплекты сохранены");
+        if(isPart(target)) {parts.resumeOrdinaryInvoice(target.id());return;}
         if(target.kind().equals("ORDER")) orders.resumeOrdinaryInvoice(target.id());
         else common.resumeOrdinaryInvoice(target.id());
     }

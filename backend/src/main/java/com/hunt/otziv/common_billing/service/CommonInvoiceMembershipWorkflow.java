@@ -208,6 +208,10 @@ public class CommonInvoiceMembershipWorkflow implements com.hunt.otziv.common_bi
         item.setReady(true);
         item.setAmountKopecks(payable);
         invoiceOrderRepository.save(item);
+        if (item.isOrdinaryAfterPaperCancel()) {
+            // The regular publication flow owns its status and individual invoice.
+            return false;
+        }
         markOrderWaitingCommonInvoice(order);
         recalculateInvoice(invoice);
         List<CommonInvoiceOrder> currentItems = invoiceOrderRepository.findByInvoiceIdWithOrders(invoice.getId());
@@ -336,6 +340,7 @@ public class CommonInvoiceMembershipWorkflow implements com.hunt.otziv.common_bi
             CommonInvoiceOrder successorItem = new CommonInvoiceOrder();
             successorItem.setInvoice(successor);
             successorItem.setActiveMembership(true);
+            successorItem.setOrdinaryAfterPaperCancel(sourceItem.isOrdinaryAfterPaperCancel());
             successorItem.setOrder(sourceItem.getOrder());
             successorItem.setAmountKopecks(payableByOrder.get(sourceItem.getOrder().getId()));
             successorItem.setOriginalOrderStatusTitle(sourceItem.getOriginalOrderStatusTitle());
@@ -805,6 +810,9 @@ public class CommonInvoiceMembershipWorkflow implements com.hunt.otziv.common_bi
         CommonInvoiceOrder item = new CommonInvoiceOrder();
         item.setInvoice(invoice);
         item.setOrder(order);
+        item.setOrdinaryAfterPaperCancel(order.isAutomaticInvoicePaymentMode()
+                && order.getPaperBillingPayerChoiceId()!=null
+                && CommonInvoiceRouteState.isOwnerPaperInvoice(invoice));
         Long payable = payableKopecksOrMarkAttention(invoice, order);
         item.setAmountKopecks(payable == null ? 0 : payable);
         item.setOriginalOrderStatusTitle(limit(statusTitle(order), 64));

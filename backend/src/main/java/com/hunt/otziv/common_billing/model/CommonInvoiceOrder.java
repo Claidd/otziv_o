@@ -35,6 +35,10 @@ public class CommonInvoiceOrder {
     @Column(name = "active_membership", nullable = false)
     private boolean activeMembership = true;
 
+    /** Still belongs to the common total, but pays through its own ordinary route. */
+    @Column(name = "ordinary_after_paper_cancel", nullable = false)
+    private boolean ordinaryAfterPaperCancel;
+
     /** Retained historical position excluded from an active invoice after the seven-reminder archive policy. */
     @Column(name = "silence_archived_at")
     private LocalDateTime silenceArchivedAt;

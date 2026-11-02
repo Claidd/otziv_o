@@ -65,6 +65,9 @@ import static com.hunt.otziv.config.metrics.R0ObservabilityMetrics.TransactionFl
 @Slf4j
 @RequiredArgsConstructor
 public class CommonInvoicePaymentRouteWorkflow {
+    @org.springframework.beans.factory.annotation.Value("${paper-invoices.enabled:false}")
+    private boolean automaticPaperInvoicesEnabled;
+
     private final com.hunt.otziv.p_products.api.PaperInvoiceOrderAutomation paperOrders;
 
     private final CommonInvoiceManualPaymentWorkflow manualPaymentWorkflow;
@@ -578,9 +581,9 @@ public class CommonInvoicePaymentRouteWorkflow {
     @Transactional
     public CommonInvoiceDetailsResponse markPaperInvoiceIssued(Long invoiceId, Principal principal) {
         CommonInvoice invoice = lockedInvoice(invoiceId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счёт не найден"));
-        if (invoice.getPaperBankDocumentId() != null)
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Отправка банковских документов подтверждается автоматически");
         ensureCommonInvoiceVisibleForCurrentUser(invoice);
+        if (automaticPaperInvoicesEnabled || invoice.getPaperBankDocumentId() != null)
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Отправка банковских документов подтверждается автоматически");
         if (!isOwnerPaperInvoice(invoice)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Для общего счёта не включён бумажный счёт");
         }

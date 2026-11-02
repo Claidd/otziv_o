@@ -25,6 +25,8 @@ import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.service.ManagerService;
 import com.hunt.otziv.u_users.service.WorkerService;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -63,12 +65,24 @@ class OrderCreationServiceRepeatTest {
     @Mock private ApplicationEventPublisher eventPublisher;
     @Mock private CommonBillingService commonBillingService;
 
-    @Test
-    void repeatUsesActualPreviousReviewProductAndSnapshotPrice() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void repeatUsesActualPreviousReviewProductAndSnapshotPrice(boolean ordinaryAfterPaperCancel) {
         Product staleDetailProduct = product(1L, "200.00");
         Product actualReviewProduct = product(2L, "999.00");
         Order source = sourceOrder(staleDetailProduct, actualReviewProduct, "250.00");
         Company company = source.getCompany();
+        company.setPaperBillingAutomatic(true);
+        company.setPaperBillingPayerChoiceId("company-default");
+        source.setPaperBillingPayerChoiceId("source-payer");
+        if(ordinaryAfterPaperCancel) source.useAutomaticInvoicePaymentMode();
+        else source.useBankPaperInvoicePaymentMode();
+        when(commonBillingService.attachOrderIfNeeded(any(Order.class))).thenAnswer(call->{
+            Order attached=call.getArgument(0);
+            assertEquals(ordinaryAfterPaperCancel,attached.isAutomaticInvoicePaymentMode());
+            assertEquals("source-payer",attached.getPaperBillingPayerChoiceId());
+            return true;
+        });
         Worker worker = source.getWorker();
         Manager manager = source.getManager();
         Filial filial = source.getFilial();

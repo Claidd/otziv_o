@@ -279,6 +279,8 @@ class OrderArchiveDryRunRepositoryMySqlIntegrationTest {
                 missingReviewFilialDetail.toString(),
                 differentNamedDetail.toString()
         );
+        jdbc.update("UPDATE reviews SET review_bot = 844537 WHERE review_id = 1");
+        jdbc.update("UPDATE reviews SET review_bot = 844538 WHERE review_id = 3");
 
         repository.copyReviews(new MapSqlParameterSource()
                 .addValue("archivedAt", LocalDateTime.of(2026, 8, 4, 10, 0))
@@ -299,6 +301,12 @@ class OrderArchiveDryRunRepositoryMySqlIntegrationTest {
                 .containsEntry(1L, "")
                 .containsEntry(2L, "Филиал заказа")
                 .containsEntry(3L, "Филиал отзыва");
+        assertThat(jdbc.queryForObject("SELECT review_bot FROM archive_reviews WHERE review_id=1", Long.class))
+                .isEqualTo(844537L);
+        assertThat(jdbc.queryForObject("SELECT review_bot FROM archive_reviews WHERE review_id=2", Long.class))
+                .isNull();
+        assertThat(jdbc.queryForObject("SELECT review_bot FROM archive_reviews WHERE review_id=3", Long.class))
+                .isEqualTo(844538L);
     }
 
     private void insertPaidOrder(long orderId) {
@@ -411,6 +419,7 @@ class OrderArchiveDryRunRepositoryMySqlIntegrationTest {
                     review_id BIGINT NOT NULL,
                     review_order_details BINARY(16) NOT NULL,
                     review_filial BIGINT NULL,
+                    review_bot BIGINT NULL,
                     PRIMARY KEY (review_id)
                 ) ENGINE=InnoDB
                 """);
@@ -419,6 +428,7 @@ class OrderArchiveDryRunRepositoryMySqlIntegrationTest {
                     review_id BIGINT NOT NULL,
                     review_order_details BINARY(16) NOT NULL,
                     review_filial BIGINT NULL,
+                    review_bot BIGINT NULL,
                     archived_at DATETIME(6) NOT NULL,
                     archive_reason VARCHAR(255) NOT NULL,
                     archive_batch_id BIGINT NOT NULL,

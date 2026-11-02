@@ -11,6 +11,7 @@ public interface PaperInvoiceOrderData {
     void requireUnpaidForCancellation(long orderId);
     void holdForPaymentReview(long orderId);
     void resumeOrdinaryInvoice(long orderId);
+    void resumeCommonOrdinaryInvoice(long orderId);
     void rememberPayer(long orderId,String choiceId);
     void markCommonDelivered(long orderId);
     record AutomaticOrder(long orderId,long companyId,String choiceId) {}

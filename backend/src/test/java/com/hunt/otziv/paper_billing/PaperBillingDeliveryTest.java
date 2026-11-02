@@ -46,13 +46,13 @@ class PaperBillingDeliveryTest {
                 () -> assertFalse(caption.contains("отправьте чек")),
                 () -> assertTrue(caption.length()<=1024));
     }
-    @Test void documentsHaveReadableNamesAndNoTextBetweenTheFiles() {
+    @Test void documentsHaveReadableNamesAndCaptionsAcceptedByTheWhatsAppGateway() {
         enable();
         delivery.send(row(),false);
         delivery.send(row(),true);
-        verify(documents).send(eq("sender"),eq("TELEGRAM:-123"),eq(""),same(pdf),
+        verify(documents).send(eq("sender"),eq("TELEGRAM:-123"),eq("Счёт на оплату № PB-10-12345678 · 1 000,50 ₽"),same(pdf),
                 eq("Счёт на оплату — PB-10-12345678.pdf"),eq("paper:doc:invoice"));
-        verify(documents).send(eq("sender"),eq("TELEGRAM:-123"),eq(""),same(pdf),
+        verify(documents).send(eq("sender"),eq("TELEGRAM:-123"),eq("Акт выполненных работ № PB-10-12345678 · 1 000,50 ₽"),same(pdf),
                 eq("Акт выполненных работ — PB-10-12345678.pdf"),eq("paper:doc:act"));
         verifyNoInteractions(messages);
     }
@@ -61,6 +61,13 @@ class PaperBillingDeliveryTest {
         String caption=PaperBillingDelivery.instructions(paid);
         assertTrue(caption.contains("получена"));assertTrue(caption.contains("1 000,50 ₽"));assertTrue(caption.contains("акт выполненных работ"));
         assertFalse(caption.contains("Пожалуйста, оплатите"));assertFalse(caption.contains("К оплате"));
+    }
+    @Test void commonPartFilenamesShowActualOrdersInsteadOfTheInternalPartId() {
+        var part=new java.util.HashMap<String,Object>(row());part.put("target_kind","COMMON_PART");
+        part.put("service_name","Репутационное сопровождение. Заказы № 27805, 27806, 27807, 27808");
+        String filename=PaperBillingDelivery.filename(part,false);
+        assertTrue(filename.contains("заказы 27805, 27806, 27807 и ещё 1"));
+        assertTrue(filename.contains("PB-10-12345678"));assertTrue(filename.length()<=200);
     }
     @Test void pausedOutboundMessagesNeverSendEvenWithDeliveryEnabled() {
         settings.setDeliveryEnabled(true);

@@ -3150,7 +3150,8 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
             return false;
         }
         CommonBillingService commonBillingService = commonBillingServiceProvider.getIfAvailable();
-        return commonBillingService != null && commonBillingService.isOrderInActiveCommonInvoice(order.getId());
+        return commonBillingService != null && commonBillingService.isOrderInActiveCommonInvoice(order.getId())
+                && !commonBillingService.allowsStandalonePaymentAfterPaperCancellation(order.getId());
     }
 
     private boolean completePaymentMessageForCommonBillingLinkedOrder(

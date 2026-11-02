@@ -247,6 +247,17 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
         return invoiceOrderRepository.findByOrderIdWithInvoice(orderId).map(CommonInvoiceOrder::getInvoice).map(invoice -> invoice.getStatus() != CommonInvoiceStatus.PAID && invoice.getStatus() != CommonInvoiceStatus.BAN && invoice.getStatus() != CommonInvoiceStatus.ARCHIVED && invoice.getStatus() != CommonInvoiceStatus.DISABLED).orElse(false);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public boolean allowsStandalonePaymentAfterPaperCancellation(Long orderId) {
+        if (orderId == null) return false;
+        return invoiceOrderRepository.findByOrderIdWithInvoice(orderId)
+                .filter(CommonInvoiceOrder::isOrdinaryAfterPaperCancel)
+                .filter(item -> !item.isPaid() && !item.getInvoice().isPaperInvoiceReviewHold())
+                .filter(item -> !Set.of(CommonInvoiceStatus.PAID,CommonInvoiceStatus.BAN,CommonInvoiceStatus.ARCHIVED,CommonInvoiceStatus.DISABLED).contains(item.getInvoice().getStatus()))
+                .isPresent();
+    }
+
     boolean isTochkaRefundSubmissionClaimed(String reason) {
         String clean = normalize(reason);
         return clean.startsWith(TOCHKA_REFUND_SUBMITTING_PREFIX) || clean.startsWith("tochka_refund_requested") || clean.startsWith("tochka_refund_in_progress") || clean.startsWith("tochka_refund_observed_external") || clean.startsWith("tochka_refund_outcome_unknown") || clean.startsWith("tochka_refund_confirmation_timeout");
@@ -308,14 +319,23 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
         // The caller already supplied the confirmed standalone payment. Avoid
         // discovering and closing sibling standalone links while only the
         // target order is locked.
-        refreshInvoiceAmounts(invoice, items);
+        if (target.isOrdinaryAfterPaperCancel()) {
+            // Bank documents freeze composition on board reads, not the paid total.
+            // This path owns the canonical payment and invoice locks and has just
+            // verified the exact standalone source for the selected position.
+            recalculateInvoice(invoice, items);
+        } else {
+            refreshInvoiceAmounts(invoice, items);
+        }
         if (!items.isEmpty() && items.stream().allMatch(CommonInvoiceOrder::isPaid)) {
             closeOrderAsPaidForConfirmedItem(invoice, target);
             closePaidInvoice(invoice, items);
         } else {
             closeOrderAsPaidForConfirmedItem(invoice, target);
             invoice.setStatus(CommonInvoiceStatus.PARTIALLY_PAID);
-            if (invoice.getNextReminderAt() == null) {
+            if (invoice.isPaperInvoiceAutomationHold()) {
+                invoice.setNextReminderAt(null);
+            } else if (invoice.getNextReminderAt() == null) {
                 invoice.setNextReminderAt(nextAutomaticPaymentReminderAt(LocalDateTime.now()));
             }
             invoiceRepository.save(invoice);
@@ -1031,7 +1051,7 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
         if (paymentLinksByOrder == null || paymentLinksByOrder.isEmpty() || items == null || items.isEmpty()) {
             return Map.of();
         }
-        Set<Long> invoiceOrderIds = items.stream().filter(Objects::nonNull).filter(item -> item.getOrder() != null && item.getOrder().getId() != null).map(item -> item.getOrder().getId()).collect(Collectors.toSet());
+        Set<Long> invoiceOrderIds = items.stream().filter(Objects::nonNull).filter(item -> !item.isOrdinaryAfterPaperCancel()).filter(item -> item.getOrder() != null && item.getOrder().getId() != null).map(item -> item.getOrder().getId()).collect(Collectors.toSet());
         Set<PaymentLink> applied = appliedStandalonePayments == null ? Set.of() : appliedStandalonePayments;
         Map<Long, List<PaymentLink>> selected = new HashMap<>();
         for (Map.Entry<Long, List<PaymentLink>> entry : paymentLinksByOrder.entrySet()) {
@@ -2041,6 +2061,7 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
         }
         OrderStatus publicStatus = orderStatusService.getOrderStatusByTitle(STATUS_PUBLIC);
         for (CommonInvoiceOrder item : items) {
+            if (item == null || item.isPaid() || item.isOrdinaryAfterPaperCancel()) continue;
             Order order = item == null ? null : item.getOrder();
             if (order == null || STATUS_PUBLIC.equals(statusTitle(order))) {
                 continue;

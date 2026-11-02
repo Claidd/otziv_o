@@ -33,6 +33,7 @@ export interface CommonInvoiceOrderResponse {
   paid: boolean;
   unpaid: boolean;
   detachable: boolean;
+  ordinaryAfterPaperCancel?: boolean;
   detachBlockedReason?: string | null;
   paidAt?: string | null;
   paymentMethod?: 'TBANK' | 'TOCHKA' | 'BANK' | 'MANUAL' | 'MIXED' | 'MANUAL_LEGACY' | 'OWNER_PAPER_INVOICE' | null;

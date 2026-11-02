@@ -21,8 +21,18 @@ public record CommonInvoiceOrderResponse(
         String paidBy,
         String paymentComment,
         String paymentReceiptUrl,
-        String detachBlockedReason
+        String detachBlockedReason,
+        boolean ordinaryAfterPaperCancel
 ) {
+    public CommonInvoiceOrderResponse(Long orderId, Long companyId, String companyTitle, String filialTitle,
+            String orderStatus, String originalOrderStatus, BigDecimal amount, long amountKopecks,
+            boolean ready, boolean paid, boolean unpaid, boolean detachable, LocalDateTime paidAt,
+            String paymentMethod, String paidBy, String paymentComment, String paymentReceiptUrl,
+            String detachBlockedReason) {
+        this(orderId,companyId,companyTitle,filialTitle,orderStatus,originalOrderStatus,amount,
+                amountKopecks,ready,paid,unpaid,detachable,paidAt,paymentMethod,paidBy,paymentComment,
+                paymentReceiptUrl,detachBlockedReason,false);
+    }
     public CommonInvoiceOrderResponse(Long orderId, Long companyId, String companyTitle, String filialTitle,
             String orderStatus, String originalOrderStatus, BigDecimal amount, long amountKopecks,
             boolean ready, boolean paid, boolean unpaid, boolean detachable, LocalDateTime paidAt,

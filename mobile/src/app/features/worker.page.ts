@@ -402,6 +402,13 @@ type ReviewFieldEditorTarget = { review: WorkerReviewItem; field: ReviewEditable
                     }
                   </div>
 
+                  @if (needsRecoveryAccount(review)) {
+                    <div class="recovery-account-notice" role="status">
+                      <strong>Для восстановления нужен аккаунт</strong>
+                      <p>Логин или пароль не сохранились. Нажмите «Получить аккаунт» — система подберёт свободный выгулянный аккаунт. Затем скопируйте логин и пароль и выполните восстановление.</p>
+                      <p>Если свободных аккаунтов нет, обратитесь к менеджеру. Задача останется в плане до выполнения или переноса менеджером.</p>
+                    </div>
+                  }
                   <div class="card-actions review-actions">
                     <button type="button" (click)="copyReviewValue(review, 'url')">{{ copiedKey() === 'url-' + review.id ? 'готово' : 'ссылка' }}</button>
                     <button
@@ -420,13 +427,13 @@ type ReviewFieldEditorTarget = { review: WorkerReviewItem; field: ReviewEditable
                     <button type="button" (click)="copyReviewValue(review, 'text')">{{ copiedKey() === 'text-' + review.id ? 'готово' : 'текст' }}</button>
                     <button type="button" (click)="copyReviewValue(review, 'answer')">{{ copiedKey() === 'answer-' + review.id ? 'готово' : 'ответ' }}</button>
                     <button type="button" (click)="changeReviewBot(review)" [disabled]="isMutating(reviewBotMutationKey(review, 'change'))">
-                      {{ isMutating(reviewBotMutationKey(review, 'change')) ? '...' : 'смена' }}
+                      {{ isMutating(reviewBotMutationKey(review, 'change')) ? '...' : needsRecoveryAccount(review) ? 'Получить аккаунт' : 'смена' }}
                     </button>
                     <button type="button" (click)="deactivateReviewBot(review)" [disabled]="!review.botId || blockLockedByCredentials(review) || isMutating(reviewBotMutationKey(review, 'block'))" [title]="blockLockedByCredentials(review) ? 'Сначала скопируйте логин и пароль текущего аккаунта' : 'Блок аккаунта'">
                       {{ isMutating(reviewBotMutationKey(review, 'block')) ? '...' : 'блок' }}
                     </button>
                   </div>
-                  @if (blockLockedByCredentials(review)) {
+                  @if (blockLockedByCredentials(review) && !needsRecoveryAccount(review)) {
                     <small>Чтобы нажать «Блок», скопируйте логин и пароль текущего аккаунта.</small>
                   }
 
@@ -1322,6 +1329,17 @@ type ReviewFieldEditorTarget = { review: WorkerReviewItem; field: ReviewEditable
       background: #ffe6ef !important;
       opacity: 1;
     }
+
+    .recovery-account-notice {
+      margin: 10px 0;
+      padding: 12px;
+      border: 1px solid var(--ion-color-warning, #bc931e);
+      border-radius: 12px;
+      background: var(--ion-card-background, var(--ion-background-color, #fff));
+      color: var(--ion-text-color, #263746);
+      line-height: 1.45;
+    }
+    .recovery-account-notice p { margin: 6px 0 0; font-size: 13px; }
 
     .publish-button.credential-locked,
     .publish-button.credential-locked:disabled {
@@ -2347,6 +2365,7 @@ export class WorkerPage implements OnInit, OnDestroy {
   }
 
   publishCredentialWaitTitle(review: WorkerReviewItem): string {
+    if (this.needsRecoveryAccount(review)) return this.accountRepairTitle(review);
     const preparation = this.publishCredentialPreparation();
     const botId = review.botId ?? null;
     const invalidated = preparation.invalidated[review.id];
@@ -2522,6 +2541,10 @@ export class WorkerPage implements OnInit, OnDestroy {
 
   async markReviewDone(review: WorkerReviewItem): Promise<void> {
     const key = this.reviewDoneMutationKey(review);
+    if (this.needsRecoveryAccount(review)) {
+      this.error.set(this.accountRepairTitle(review));
+      return;
+    }
     if (this.isRecoveryTask(review) && review.recoveryTaskId) {
       await this.runMutation(key, () => this.workerApi.completeWorkerRecoveryTask(review.recoveryTaskId!), 'Не удалось отметить восстановление.');
       return;
@@ -2560,6 +2583,9 @@ export class WorkerPage implements OnInit, OnDestroy {
   }
 
   cannotCompleteBecauseBotUnavailable(review: WorkerReviewItem): boolean {
+    if (this.needsRecoveryAccount(review)) {
+      return true;
+    }
     return this.isAccountWorkSection()
       && !this.isBadTask(review)
       && !this.isRecoveryTask(review)
@@ -2580,6 +2606,9 @@ export class WorkerPage implements OnInit, OnDestroy {
   }
 
   private accountRepairTitle(review: WorkerReviewItem): string {
+    if (this.needsRecoveryAccount(review)) {
+      return 'Для восстановления нет логина или пароля. Нажмите «Получить аккаунт»; система подберёт свободный выгулянный аккаунт.';
+    }
     if (!review.botId || review.botId === 1) {
       return 'Аккаунт не назначен. Нажмите "смена", чтобы подобрать рабочий аккаунт.';
     }
@@ -3075,8 +3104,11 @@ export class WorkerPage implements OnInit, OnDestroy {
   }
 
   doneLabel(review: WorkerReviewItem): string {
+    if (this.needsRecoveryAccount(review)) {
+      return 'СНАЧАЛА ПОЛУЧИТЕ АККАУНТ';
+    }
     if (this.isRecoveryTask(review)) {
-      return 'Сообщить менеджеру';
+      return 'Восстановил';
     }
     if (this.isBadTask(review)) {
       return 'Сменил';
@@ -3099,6 +3131,10 @@ export class WorkerPage implements OnInit, OnDestroy {
 
   isPublishedPublishAction(review: WorkerReviewItem): boolean {
     return this.activeSection() === 'publish' && !this.isBadTask(review) && !!review.publish;
+  }
+
+  needsRecoveryAccount(review: WorkerReviewItem): boolean {
+    return this.isRecoveryTask(review) && (!review.botLoginPresent || !review.botPasswordPresent);
   }
 
   reviewBotMutationKey(review: WorkerReviewItem, action: 'change' | 'block'): string {

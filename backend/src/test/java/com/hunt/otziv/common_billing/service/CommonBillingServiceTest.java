@@ -1844,8 +1844,9 @@ class CommonBillingServiceTest {
         assertFalse(invoiceItem.isPaid());
     }
 
-    @Test
-    void applyConfirmedOrderPaymentMarksOnlyLinkedItemPaidAndClosesLinkedOrder() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void applyConfirmedOrderPaymentMarksOnlyLinkedItemPaidAndClosesLinkedOrder(boolean ordinaryAfterPaperCancel) throws Exception {
         CommonBillingAccount account = account();
         CommonInvoice invoice = invoice(account);
         invoice.setStatus(CommonInvoiceStatus.REMINDER);
@@ -1854,6 +1855,11 @@ class CommonBillingServiceTest {
         Order openOrder = order(102L);
         CommonInvoiceOrder paidItem = item(invoice, paidOrder);
         CommonInvoiceOrder openItem = item(invoice, openOrder);
+        if (ordinaryAfterPaperCancel) {
+            paidItem.setOrdinaryAfterPaperCancel(true);
+            invoice.setPaperBankDocumentId("preserved-sibling-bank-document");
+            invoice.setPaperInvoiceAutomationHold(true);
+        }
         List<CommonInvoiceOrder> items = List.of(paidItem, openItem);
         LocalDateTime paidAt = LocalDateTime.of(2026, 6, 10, 18, 54, 53);
         PaymentLink confirmed = confirmedStandaloneBankPayment(501L, paidOrder, 100_000L);
@@ -1864,7 +1870,7 @@ class CommonBillingServiceTest {
         when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
         when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(items);
         when(badReviewTaskService.getPayableSum(paidOrder)).thenReturn(BigDecimal.valueOf(1000));
-        when(badReviewTaskService.getPayableSum(openOrder)).thenReturn(BigDecimal.valueOf(1000));
+        if (!ordinaryAfterPaperCancel) when(badReviewTaskService.getPayableSum(openOrder)).thenReturn(BigDecimal.valueOf(1000));
 
         boolean applied = service.applyConfirmedOrderPayment(101L, paidAt, "T-Bank/SBP оплата заказа");
 
@@ -1875,6 +1881,7 @@ class CommonBillingServiceTest {
         assertEquals(CommonInvoiceStatus.PARTIALLY_PAID, invoice.getStatus());
         assertEquals(200_000L, invoice.getAmountKopecks());
         assertEquals(100_000L, invoice.getPaidKopecks());
+        if (ordinaryAfterPaperCancel) assertNull(invoice.getNextReminderAt());
         assertEquals(501L, paidItem.getSourcePaymentLinkId());
         assertNull(confirmed.getLastError());
         verify(orderTransactionService, never()).handlePaymentStatus(paidOrder, false);

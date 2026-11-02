@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { of, throwError } from 'rxjs';
 import {
   PAYMENT_INIT_NO_PAYMENT_BUTTON_LABEL,
   CommonBillingComponent,
@@ -17,6 +18,27 @@ import {
   paperInvoiceRequiresDeliveryConfirmation
 } from './common-billing.component';
 import type { CommonInvoiceDetailsResponse, CommonInvoiceOrderResponse } from '../../../core/common-billing.api';
+
+describe('ordinary payment after cancelling only one paper part', () => {
+  for (const ordinary of [true,false]) {
+    it(ordinary ? 'copies the selected order payment instructions' : 'keeps the common link for other orders', async () => {
+      const prepare=vi.fn(()=>of({copyText:'ordinary order instructions',url:'https://example.test/pay'}));
+      const copyText=vi.fn();
+      const context={invoiceOrderInfo:()=>({ordinaryAfterPaperCancel:ordinary}),paymentsApi:{createOrderPaymentLink:prepare},
+        currentInvoice:()=>({publicUrl:'https://example.test/common'}),copyText} as unknown as CommonBillingComponent;
+      await CommonBillingComponent.prototype.copyOrderText.call(context,{id:28293} as Parameters<CommonBillingComponent['copyOrderText']>[0],'payment');
+      expect(copyText.mock.calls[0][0]).toBe(ordinary ? 'ordinary order instructions' : 'https://example.test/common');
+      expect(prepare).toHaveBeenCalledTimes(ordinary ? 1 : 0);
+    });
+  }
+  it('shows an ordinary-route failure without falling back to the wrong common payment',async()=>{
+    const copyText=vi.fn(),error=vi.fn();
+    const context={invoiceOrderInfo:()=>({ordinaryAfterPaperCancel:true}),paymentsApi:{createOrderPaymentLink:()=>throwError(()=>new Error('unavailable'))},
+      copyText,toastService:{error}} as unknown as CommonBillingComponent;
+    await CommonBillingComponent.prototype.copyOrderText.call(context,{id:28293} as Parameters<CommonBillingComponent['copyOrderText']>[0],'payment');
+    expect(error).toHaveBeenCalledOnce();expect(copyText).not.toHaveBeenCalled();
+  });
+});
 
 describe('invoice composition confirmation', () => {
   for (const action of ['detachOrder', 'archiveDisputedOrder'] as const) {

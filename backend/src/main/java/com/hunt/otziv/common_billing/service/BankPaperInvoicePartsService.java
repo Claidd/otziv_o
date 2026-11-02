@@ -54,7 +54,7 @@ public class BankPaperInvoicePartsService implements BankPaperInvoiceParts {
     private List<Position> currentPositions(long invoice) {
         return jdbc.queryForList("""
             SELECT o.order_id,o.amount_kopecks,o.ready,o.paid,c.company_id,c.company_title,
-            COALESCE(p.document_id,IF(po.part_id IS NULL,NULL,'PREPARING')) AS document_id
+            IF(o.ordinary_after_paper_cancel,'ORDINARY',COALESCE(p.document_id,IF(po.part_id IS NULL,NULL,'PREPARING'))) AS document_id
             FROM common_invoice_orders o JOIN orders r ON r.order_id=o.order_id JOIN companies c ON c.company_id=r.order_company
             LEFT JOIN common_invoice_paper_part_orders po ON po.active_order_id=o.order_id
             LEFT JOIN common_invoice_paper_parts p ON p.part_id=po.part_id
@@ -204,6 +204,28 @@ public class BankPaperInvoicePartsService implements BankPaperInvoiceParts {
         else if(remaining.isEmpty()) {value.setStatus(CommonInvoiceStatus.READY);value.setPaperInvoiceIssuedAt(null);value.setSentAt(null);}
         value.setNextReminderAt(null);invoices.save(value);
     }
+    @Transactional
+    public void resumeOrdinaryInvoice(long part) {
+        var parent=delivery.lockedInvoiceAfterStandalonePaymentPrelude(parent(part)).invoice();
+        requireUnpaid(part);
+        var cancelled=jdbc.queryForMap("SELECT * FROM common_invoice_paper_parts WHERE part_id=? FOR UPDATE",part);
+        if(cancelled.get("cancelled_at")==null || !composition(part).equals(cancelled.get("composition_hash")))
+            throw problem("Отмена комплекта или его состав не подтверждены");
+        var memberIds=members(part).stream().map(Position::orderId).toList();
+        var current=currentPositions(parent.getId()).stream().filter(p->memberIds.contains(p.orderId())).toList();
+        if(current.size()!=memberIds.size() || current.stream().anyMatch(p->p.paid() || !p.ready() || p.documentId()!=null))
+            throw problem("Выбранные заказы уже оплачены, перевыставлены или изменились");
+        var selected=items.findByInvoiceIdWithOrders(parent.getId()).stream()
+                .filter(CommonInvoiceOrder::isActiveMembership).filter(item->memberIds.contains(item.orderId())).toList();
+        if(selected.size()!=memberIds.size()) throw problem("Состав общего счёта изменился");
+        selected.forEach(item->item.setOrdinaryAfterPaperCancel(true));
+        items.saveAll(selected);
+        // Membership stays active: each ordinary receipt contributes to the same
+        // total and successor orders remain deferred until the whole invoice is paid.
+        for(long order:memberIds) orders.resumeCommonOrdinaryInvoice(order);
+        parent.setNextReminderAt(null);invoices.save(parent);
+    }
+
     public BankPaperInvoices.StaffContext staffContext(long part) {
         var context=legacy.staffContext(parent(part));
         return new BankPaperInvoices.StaffContext(context.managerIds(),members(part).stream().map(Position::orderId).toList(),context.title());

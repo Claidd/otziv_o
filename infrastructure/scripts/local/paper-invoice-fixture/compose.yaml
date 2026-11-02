@@ -29,3 +29,6 @@ services:
       OTZIV_PAYMENTS_TOCHKA_MERCHANT_ID: "000000000000001"
       OTZIV_PAYMENTS_TOCHKA_REQUIRED_CASHBOX: CloudKassir
       OTZIV_PAYMENTS_TOCHKA_TEST_MODE: "true"
+      # Ordinary checkout validates HTTPS return URLs before the fixture intercepts HTTP.
+      # No external redirect is followed by the fixture tests; the payment UI stays on localhost.
+      OTZIV_PAYMENTS_TBANK_PUBLIC_BASE_URL: https://example.test

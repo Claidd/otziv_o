@@ -38,6 +38,7 @@ class PaperBillingSettlementMySqlIntegrationTest {
         new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_352__paper_invoice_delivery_and_staff_notices.sql")).execute(ds);
         new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_353__paper_invoice_cancellation.sql")).execute(ds);
         new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_354__paper_cancel_ordinary_invoice.sql")).execute(ds);
+        new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_363__paper_invoice_payment_reference.sql")).execute(ds);
         store=new PaperBillingStore(jdbc,mock(BankPaperInvoices.class)); id=UUID.randomUUID().toString();
         var service=mock(PaperBillingService.class);
         when(service.payer(anyString())).thenReturn(new Payer("company","Тест","7707083893","773601001",""));
@@ -62,6 +63,24 @@ class PaperBillingSettlementMySqlIntegrationTest {
         var reminders=new PaperBillingReminders(store,mock(PaperBillingTargets.class),settings,bank,delivery,parts,new DataSourceTransactionManager(jdbc.getDataSource()));
         reminders.send(id);reminders.tick();
         var row=store.row(id);assertEquals("PAID",row.get("stage"));assertNull(row.get("error_text"));assertNull(row.get("paper_next_reminder_at"));assertEquals("PENDING",row.get("paper_reminder_state"));verify(delivery,times(1)).sendReminder(anyMap(),eq(1));
+    }
+    @Test void oldBankPurposeContainingOnlyTheOrderNumberIsAppliedOnce() {
+        jdbc.update("UPDATE paper_invoice_document SET payment_reference=NULL WHERE id=?",id);
+        var legacy=new BankReceipt("customer","40802810000000004287/044525104","legacy-order-payment","7707083893",250000,"Заказ 42");
+        settlement.accept(legacy);settlement.accept(legacy);
+        verify(finance,times(1)).applyVerifiedPaperBankPayment(8L,250000);
+        assertEquals("PAID",store.row(id).get("stage"));
+        assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM paper_invoice_bank_receipt",Integer.class));
+    }
+    @Test void ambiguousHistoricalOrderNumberNeverChoosesTheNewestInvoice() {
+        jdbc.update("UPDATE paper_invoice_document SET payment_reference=NULL,cancelled_at=NOW(6),stage='CANCELLED' WHERE id=?",id);
+        String replacement=UUID.randomUUID().toString();
+        store.insert(replacement,new Target("ORDER",42L),1,null,250000,"{}","40802810000000004287/044525104","customer","manager","WHATSAPP:1@g.us","test");
+        store.bankId(replacement,false,"new-bank-id","WAITING_PAYMENT");
+        jdbc.update("UPDATE paper_invoice_document SET payment_reference=NULL WHERE id=?",replacement);
+        settlement.accept(new BankReceipt("customer","40802810000000004287/044525104","ambiguous","7707083893",250000,"Заказ №42"));
+        verifyNoInteractions(finance);
+        assertNull(store.row(replacement).get("paid_at"));
     }
     @Test void fullTransferAndRepeatedCallbackApplyOnce() {
         var receipt=receipt("p1",250000,"7707083893");
