@@ -29,6 +29,31 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class WhatsAppServiceTest {
 
+    static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments> documentTransportFailures() {
+        return java.util.stream.Stream.of(
+                org.junit.jupiter.params.provider.Arguments.of(new java.net.ConnectException("connection refused"), true),
+                org.junit.jupiter.params.provider.Arguments.of(new java.net.UnknownHostException("fixture"), true),
+                org.junit.jupiter.params.provider.Arguments.of(new java.net.NoRouteToHostException("no route"), true),
+                org.junit.jupiter.params.provider.Arguments.of(new java.io.IOException("wrapper", new java.net.ConnectException("refused")), true),
+                org.junit.jupiter.params.provider.Arguments.of(new java.net.SocketTimeoutException("response timed out"), false),
+                org.junit.jupiter.params.provider.Arguments.of(new java.net.SocketException("connection reset"), false),
+                org.junit.jupiter.params.provider.Arguments.of(new java.io.IOException("response lost"), false),
+                org.junit.jupiter.params.provider.Arguments.of(null, false));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.MethodSource("documentTransportFailures")
+    void documentsOnlyRearmWhenGatewayConnectionWasNeverEstablished(java.io.IOException cause, boolean knownUnsent) {
+        historyClient();
+        when(restTemplate.postForObject(eq("http://fixture:3000/send-group-file"), any(), eq(String.class)))
+                .thenThrow(new ResourceAccessException("transport unavailable", cause));
+        var result=service.sendDocumentToGroupOnce("fixture","12345678@g.us","Счёт",new byte[]{1,2},"Счёт.pdf","application/pdf","paper:fixture:invoice");
+        assertFalse(result.sent());
+        assertEquals(knownUnsent?"gateway_not_ready":"operation_unknown",result.errorCode());
+        assertEquals(knownUnsent,com.hunt.otziv.client_messages.api.ClientMessageDelivery.isKnownUnsent(result));
+        org.mockito.Mockito.verify(restTemplate).postForObject(eq("http://fixture:3000/send-group-file"), any(), eq(String.class));
+    }
+
     private String historyStatus(String state, String extra) {
         String hash = com.hunt.otziv.whatsapp.dto.WhatsAppOperationEnvelope.groupHash("fixture", "12345678@g.us", "saved");
         return "{\"operationId\":\"saved\",\"receiptBindingVersion\":1,\"historyReconciliationVersion\":1,\"envelopeHash\":\""

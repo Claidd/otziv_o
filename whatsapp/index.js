@@ -35,6 +35,7 @@ const { createOperationHistoryReconciliationHandler } = require("./operation-his
 const { observeOperationReceipt } = require("./operation-receipt-observer");
 const { serializedId, installMessageIdentityCompatibility } = require("./message-identity");
 const { installPuppeteerCompatibility } = require("./puppeteer-compatibility");
+const { installDocumentMediaCompatibility } = require("./document-media-compatibility");
 const { chromiumLaunchArgs } = require("./chromium-launch");
 const { fetchRecentMessagesFromRawChat } = require("./raw-chat-reconciliation");
 const { createLastSeenLookup } = require("./last-seen");
@@ -455,7 +456,7 @@ async function createClient() {
       await initialize(...args);
       await remoteSessionFence.capture(instance, generation);
     };
-    return installRemoteBrowserLifecycle(installMessageIdentityCompatibility(installPuppeteerCompatibility(instance)), {
+    return installRemoteBrowserLifecycle(installDocumentMediaCompatibility(installMessageIdentityCompatibility(installPuppeteerCompatibility(instance))), {
       beforeDestroy: current => remoteSessionFence.capture(current, generation),
       afterDestroy: () => remoteSessionFence.complete(browserURL, generation),
     });
@@ -463,7 +464,7 @@ async function createClient() {
 
   removeStaleChromiumLocks(AUTH_PATH);
   const launchArgs = chromiumLaunchArgs(proxyServerArg());
-  return installMessageIdentityCompatibility(installPuppeteerCompatibility(new Client({
+  return installDocumentMediaCompatibility(installMessageIdentityCompatibility(installPuppeteerCompatibility(new Client({
     authStrategy: new LocalAuth({
       clientId: CLIENT_ID,
       dataPath: AUTH_PATH,
@@ -481,7 +482,7 @@ async function createClient() {
       protocolTimeout: WHATSAPP_PUPPETEER_TIMEOUT_MS,
       args: launchArgs,
     },
-  })));
+  }))));
 }
 
 function wireClientEvents(instance, current, trackEvent) {

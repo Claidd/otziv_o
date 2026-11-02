@@ -159,10 +159,24 @@ public class WhatsAppServiceImpl implements WhatsAppService {
         } catch (RestClientResponseException error) {
             var result = httpSendError(error,"Шлюз WhatsApp не принял файл");
             if (result.hasStatus("error")) return com.hunt.otziv.client_messages.dto.ClientMessageSendResult.failed(result.code(),result.displayError());
+        } catch (ResourceAccessException unavailable) {
+            if (gatewayConnectionWasNotEstablished(unavailable))
+                return com.hunt.otziv.client_messages.dto.ClientMessageSendResult.failed("gateway_not_ready",
+                        "Соединение со шлюзом WhatsApp не установлено; отправка будет повторена");
+            log.warn("WhatsApp document operation unconfirmed ({})",unavailable.getClass().getSimpleName());
         } catch (Exception unconfirmed) {
             log.warn("WhatsApp document operation unconfirmed ({})",unconfirmed.getClass().getSimpleName());
         }
         return com.hunt.otziv.client_messages.dto.ClientMessageSendResult.failed("operation_unknown","Доставка файла не подтверждена; проверьте чат");
+    }
+
+    private static boolean gatewayConnectionWasNotEstablished(Throwable error) {
+        // A refused connection, failed DNS lookup or missing route cannot have
+        // dispatched the request. A read timeout/reset can follow a real send.
+        for (int depth=0; error!=null && depth<8; depth++,error=error.getCause())
+            if (error instanceof java.net.ConnectException || error instanceof java.net.UnknownHostException
+                    || error instanceof java.net.NoRouteToHostException) return true;
+        return false;
     }
 
     private com.hunt.otziv.client_messages.dto.ClientMessageSendResult confirmedOnce(String response,String operationId,String expected) throws JsonProcessingException {

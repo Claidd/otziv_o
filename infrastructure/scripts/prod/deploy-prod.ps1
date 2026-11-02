@@ -1057,6 +1057,7 @@ $deployBundlePaths = @(
     "whatsapp\puppeteer-compatibility.js",
     "whatsapp\message-webhook.js",
     "whatsapp\message-identity.js",
+    "whatsapp\document-media-compatibility.js",
     "whatsapp\operation-reconciliation.js",
     "whatsapp\operation-history-reconciliation.js",
     "whatsapp\operation-history-sync.js",
