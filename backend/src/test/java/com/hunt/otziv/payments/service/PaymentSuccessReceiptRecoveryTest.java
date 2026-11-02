@@ -16,7 +16,9 @@ import org.junit.jupiter.api.*;
 class PaymentSuccessReceiptRecoveryTest {
     ClientChatMessageSender sender=mock(ClientChatMessageSender.class);
     AppSettingService settings=mock(AppSettingService.class);
-    PaymentSuccessClientNotifier notifier=new PaymentSuccessClientNotifier(sender,new TbankPaymentProperties(),settings);
+    com.hunt.otziv.client_messages.api.NotificationFollowup followups=mock(com.hunt.otziv.client_messages.api.NotificationFollowup.class);
+    PaymentSuccessClientNotifier notifier=new PaymentSuccessClientNotifier(sender,new TbankPaymentProperties(),settings,
+            followups);
     PaymentLink link=new PaymentLink();
     @BeforeEach void setup(){
         link.setId(7L);link.setAmountKopecks(10000);link.setPaidAt(LocalDateTime.now().minusDays(3));
@@ -59,5 +61,34 @@ class PaymentSuccessReceiptRecoveryTest {
         verify(sender,never()).recoverRecordedOutcomeFromChat(anyString(),any());
         assertThat(link.getOrder().getId()).isEqualTo(77L);
         assertThat(link.getAmountKopecks()).isEqualTo(10000L);
+    }
+
+    @Test void followupConfirmsPreviouslyReceivedMoneyAndCannotAskForAnotherTransfer(){
+        link.setStatus(com.hunt.otziv.payments.model.PaymentLinkStatus.CONFIRMED);
+        link.getOrder().getCompany().setTitle("Local Company");
+        link.getOrder().getCompany().setUrlChat("https://chat.whatsapp.com/LocalFixtureInvite");
+        link.getOrder().setManager(com.hunt.otziv.u_users.model.Manager.builder().id(3L).clientId("client").build());
+        when(settings.getBooleanFreshFailClosed(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED,true)).thenReturn(true);
+        when(followups.recover(any(),any())).thenAnswer(inv->{
+            var request=inv.<com.hunt.otziv.client_messages.api.NotificationFollowup.Request>getArgument(0);
+            assertThat(request.originalOperationId()).isEqualTo("payment-success:7");
+            assertThat(request.sourceVersion()).matches("[a-f0-9]{64}");
+            assertThat(request.message()).contains("№77","100 ₽","получена ранее","Повторно оплачивать этот заказ не нужно");
+            assertThat(request.sourceSnapshot()).contains("\"payment\":\"7\"");
+            assertThat(inv.<java.util.function.BooleanSupplier>getArgument(1).getAsBoolean()).isTrue();
+            return new com.hunt.otziv.client_messages.api.NotificationFollowup.Outcome("payment-success:7","followup:fixture",true,
+                    ClientMessageSendResult.sent("WhatsApp","receipt"));
+        });
+        assertThat(notifier.recoverWithFollowup(link,()->true).delivery().sent()).isTrue();
+    }
+
+    @Test void refundedPaymentsAndDisabledMessagingCannotPrepareAFollowup(){
+        when(settings.getBooleanFreshFailClosed(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED,true)).thenReturn(true);
+        link.setStatus(com.hunt.otziv.payments.model.PaymentLinkStatus.REFUNDED);
+        assertThat(notifier.recoverWithFollowup(link,()->true)).isNull();
+        link.setStatus(com.hunt.otziv.payments.model.PaymentLinkStatus.CONFIRMED);
+        when(settings.getBooleanFreshFailClosed(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED,true)).thenReturn(false);
+        assertThat(notifier.recoverWithFollowup(link,()->true)).isNull();
+        verifyNoInteractions(followups);
     }
 }

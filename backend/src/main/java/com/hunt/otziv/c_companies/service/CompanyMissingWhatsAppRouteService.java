@@ -23,4 +23,10 @@ public class CompanyMissingWhatsAppRouteService implements MissingWhatsAppRoute 
         if (expected == null || !expected.bindingRequired() || groupId == null || !groupId.matches("[0-9]+@g\\.us")) return false;
         return companies.restoreMissingWhatsAppGroup(expected.companyId(), expected.invite(), groupId) == 1;
     }
+
+    @Override
+    public boolean refresh(Snapshot expected, String groupId) {
+        if (expected == null || !expected.bindingRequired() || groupId == null || !groupId.matches("[0-9]+@g\\.us")) return false;
+        return companies.refreshWhatsAppGroup(expected.companyId(), expected.invite(), expected.groupId(), groupId) == 1;
+    }
 }

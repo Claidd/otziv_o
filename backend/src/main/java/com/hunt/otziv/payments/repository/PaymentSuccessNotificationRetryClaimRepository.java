@@ -126,6 +126,17 @@ public class PaymentSuccessNotificationRetryClaimRepository {
                 """, Map.of("paymentLinkId", paymentLinkId)) == 1;
     }
 
+    public boolean markSucceededWithRecovery(long paymentLinkId, String operationId) {
+        return jdbc.update("""
+                UPDATE payment_links SET payment_success_notified_at=CURRENT_TIMESTAMP(6),
+                  payment_success_notification_error=NULL,payment_success_notification_retry_eligible=0,
+                  payment_success_notification_recovery_operation_id=:operationId,
+                  row_version=row_version+1,updated_at=CURRENT_TIMESTAMP(6)
+                WHERE id=:paymentLinkId AND status='CONFIRMED'
+                  AND payment_success_notified_at IS NULL AND payment_success_notification_retry_eligible=1
+                """, Map.of("paymentLinkId",paymentLinkId,"operationId",operationId)) == 1;
+    }
+
     public boolean markFailed(long paymentLinkId, String error) {
         MapSqlParameterSource parameters = new MapSqlParameterSource()
                 .addValue("paymentLinkId", paymentLinkId)

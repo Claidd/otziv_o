@@ -7,6 +7,7 @@ import com.hunt.otziv.client_messages.repository.ScheduledClientMessageStateRepo
 import java.time.LocalDateTime;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
+import java.util.function.Consumer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -24,6 +25,11 @@ public class ScheduledDeliveryRecovery {
 
     public void recover(LocalDateTime now, LocalDateTime cutoff, Function<String, String> operationId,
             BiConsumer<String, ClientMessageSendResult> finalizeReceipt) {
+        recover(now,cutoff,operationId,finalizeReceipt,envelope -> { });
+    }
+
+    public void recover(LocalDateTime now, LocalDateTime cutoff, Function<String, String> operationId,
+            BiConsumer<String, ClientMessageSendResult> finalizeReceipt, Consumer<String> authorizedFollowup) {
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
             throw new IllegalStateException("Receipt lookup must run outside a business transaction");
         }
@@ -46,18 +52,22 @@ public class ScheduledDeliveryRecovery {
                         state.setLockedUntil(null);
                     }
                     states.save(state);
-                    return new RecoverySnapshot(state.getDeliveryEnvelope(), state.getDeliveryPreparedAt());
+                    return new RecoverySnapshot(state.getDeliveryEnvelope(), state.getDeliveryPreparedAt(),
+                            state.getStatus()==ScheduledMessageStateStatus.ACTIVE
+                            && !ClientMessageStateSafety.MANUAL_DELIVERY_HANDOFF_PENDING.equals(state.getLastErrorCode()));
                 });
                 if (snapshot == null) continue;
                 ClientMessageSendResult receipt = delivery.recoverRecordedOutcomeFromChat(
                         operationId.apply(snapshot.envelope()), snapshot.preparedAt());
                 if (receipt != null && receipt.sent()) {
                     finalizeReceipt.accept(snapshot.envelope(), receipt);
+                } else if (snapshot.followupAllowed()) {
+                    authorizedFollowup.accept(snapshot.envelope());
                 }
             } catch (RuntimeException failure) {
                 log.warn("Scheduled delivery recovery held for review: stateId={}, errorType={}", stateId, failure.getClass().getSimpleName());
             }
         }
     }
-    private record RecoverySnapshot(String envelope, LocalDateTime preparedAt) { }
+    private record RecoverySnapshot(String envelope, LocalDateTime preparedAt, boolean followupAllowed) { }
 }

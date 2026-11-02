@@ -346,6 +346,9 @@ public class PaymentLink {
     @Column(name = "payment_success_notified_at")
     private LocalDateTime paymentSuccessNotifiedAt;
 
+    @Column(name = "payment_success_notification_recovery_operation_id", length = 128)
+    private String paymentSuccessNotificationRecoveryOperationId;
+
     @Column(name = "payment_success_notification_error", length = 512)
     private String paymentSuccessNotificationError;
 

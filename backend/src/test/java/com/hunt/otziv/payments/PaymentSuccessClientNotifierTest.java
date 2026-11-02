@@ -37,7 +37,8 @@ class PaymentSuccessClientNotifierTest {
     void notifySuccessSendsPaymentPageAndReceiptNoticeToCompanyMessenger() {
         TbankPaymentProperties properties = new TbankPaymentProperties();
         properties.setPublicBaseUrl("https://o-ogo.ru/");
-        PaymentSuccessClientNotifier notifier = new PaymentSuccessClientNotifier(messageSender, properties, appSettingService);
+        PaymentSuccessClientNotifier notifier = new PaymentSuccessClientNotifier(messageSender, properties, appSettingService,
+                org.mockito.Mockito.mock(com.hunt.otziv.client_messages.api.NotificationFollowup.class));
 
         Manager manager = new Manager();
         manager.setClientId("wa-client");
@@ -85,7 +86,8 @@ class PaymentSuccessClientNotifierTest {
     void notifySuccessUsesManualConfirmationTextForManualPayments() {
         TbankPaymentProperties properties = new TbankPaymentProperties();
         properties.setPublicBaseUrl("https://o-ogo.ru/");
-        PaymentSuccessClientNotifier notifier = new PaymentSuccessClientNotifier(messageSender, properties, appSettingService);
+        PaymentSuccessClientNotifier notifier = new PaymentSuccessClientNotifier(messageSender, properties, appSettingService,
+                org.mockito.Mockito.mock(com.hunt.otziv.client_messages.api.NotificationFollowup.class));
 
         Manager manager = new Manager();
         manager.setClientId("wa-client");

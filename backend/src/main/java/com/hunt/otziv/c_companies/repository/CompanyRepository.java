@@ -34,6 +34,18 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
     int restoreMissingWhatsAppGroup(@Param("companyId") Long companyId,
             @Param("urlChat") String urlChat, @Param("groupId") String groupId);
 
+    @Modifying
+    @org.springframework.transaction.annotation.Transactional
+    @Query(value = """
+        UPDATE companies c SET c.company_group_id = :groupId
+        WHERE c.company_id = :companyId AND BINARY c.company_url_chat = BINARY :urlChat
+          AND BINARY COALESCE(c.company_group_id,'') = BINARY COALESCE(:previousGroup,'')
+          AND NOT EXISTS (SELECT 1 FROM company_status s
+              WHERE s.company_status_id = c.company_status AND LOWER(TRIM(s.status_title)) = 'бан')
+        """, nativeQuery = true)
+    int refreshWhatsAppGroup(@Param("companyId") Long companyId, @Param("urlChat") String urlChat,
+            @Param("previousGroup") String previousGroup, @Param("groupId") String groupId);
+
     @Override
     List<Company> findAll();
 

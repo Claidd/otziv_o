@@ -102,10 +102,15 @@ public class PaymentSuccessNotificationDeliveryService {
             return false;
         }
 
-        final ClientMessageSendResult result;
+        ClientMessageSendResult result;
+        com.hunt.otziv.client_messages.api.NotificationFollowup.Outcome followup = null;
         try {
             // The claim and snapshot transactions have both completed here.
             result = paymentSuccessClientNotifier.notifySuccess(link);
+            if (result != null && !result.sent() && !com.hunt.otziv.client_messages.api.ClientMessageDelivery.isKnownUnsent(result)) {
+                followup=paymentSuccessClientNotifier.recoverWithFollowup(link,()->sameConfirmedPayment(link));
+                if (followup!=null && followup.delivery()!=null) result=followup.delivery();
+            }
         } catch (Exception exception) {
             String error = exception.getMessage() == null || exception.getMessage().isBlank()
                     ? exception.getClass().getSimpleName()
@@ -124,7 +129,8 @@ public class PaymentSuccessNotificationDeliveryService {
                 && !result.messageId().isBlank() && result.messageId().length() <= 512) {
             final boolean finalized;
             try {
-                finalized = claimService.markSucceeded(claim);
+                finalized = followup != null && followup.followup()
+                        ? claimService.markSucceededWithRecovery(claim,followup) : claimService.markSucceeded(claim);
             } catch (RuntimeException exception) {
                 log.warn(
                         "Payment success notification success finalization failed: linkId={}, errorType={}",
@@ -143,6 +149,7 @@ public class PaymentSuccessNotificationDeliveryService {
             link.setPaymentSuccessNotifiedAt(LocalDateTime.now());
             link.setPaymentSuccessNotificationError(null);
             link.setPaymentSuccessNotificationRetryEligible(false);
+            if (followup!=null && followup.followup()) link.setPaymentSuccessNotificationRecoveryOperationId(followup.operationId());
             log.info(
                     "Payment success notification sent: linkId={}, orderId={}, channel={}",
                     link.getId(),
@@ -163,6 +170,15 @@ public class PaymentSuccessNotificationDeliveryService {
                 error
         );
         return false;
+    }
+
+    private boolean sameConfirmedPayment(PaymentLink expected) {
+        return transactionExecutor.required(()->paymentLinkRepository.findByIdWithOrder(expected.getId())
+                .filter(current->current.getStatus()==com.hunt.otziv.payments.model.PaymentLinkStatus.CONFIRMED
+                        && current.getPaidAt()!=null && current.getPaymentSuccessNotifiedAt()==null
+                        && current.isPaymentSuccessNotificationRetryEligible()
+                        && paymentSuccessClientNotifier.followupSourceSnapshot(expected).equals(paymentSuccessClientNotifier.followupSourceSnapshot(current)))
+                .isPresent());
     }
 
     private void enqueueWakeup(long paymentLinkId) {

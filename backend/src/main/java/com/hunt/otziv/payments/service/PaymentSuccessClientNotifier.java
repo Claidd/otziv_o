@@ -33,6 +33,40 @@ public class PaymentSuccessClientNotifier {
     private final ClientChatMessageSender messageSender;
     private final TbankPaymentProperties properties;
     private final AppSettingService appSettingService;
+    private final com.hunt.otziv.client_messages.api.NotificationFollowup followups;
+
+    public com.hunt.otziv.client_messages.api.NotificationFollowup.Outcome recoverWithFollowup(PaymentLink link,
+            java.util.function.BooleanSupplier stillEligible) {
+        if (!appSettingService.getBooleanFreshFailClosed(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED,true)
+                || link == null || link.getId() == null || link.getPaidAt() == null
+                || link.getStatus() != com.hunt.otziv.payments.model.PaymentLinkStatus.CONFIRMED
+                || link.getOrder() == null || link.getOrder().getCompany() == null) return null;
+        var order=link.getOrder(); var company=order.getCompany();
+        String source=followupSourceSnapshot(link);
+        String text="Здравствуйте! Повторно подтверждаем: оплата по заказу №"+order.getId()+" ("+normalize(company.getTitle())
+                +") на сумму "+amountText(link)+" получена ранее. Спасибо!\n\nЭто повторное уведомление о поступившей оплате. Повторно оплачивать этот заказ не нужно.";
+        var request=new com.hunt.otziv.client_messages.api.NotificationFollowup.Request(
+                com.hunt.otziv.client_messages.api.NotificationFollowup.Kind.PAYMENT_SUCCESS,link.getId(),
+                com.hunt.otziv.client_messages.api.NotificationFollowup.fingerprint(source),"payment-success:"+link.getId(),
+                link.getPaidAt(),new com.hunt.otziv.client_messages.api.ClientMessageDelivery.Target(company.getId(),company.getTitle(),
+                company.getUrlChat(),company.getTelegramGroupChatId(),company.getMaxGroupChatId()),clientId(order,company),text,source);
+        return followups.recover(request,()->appSettingService.getBooleanFreshFailClosed(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED,true)
+                && stillEligible.getAsBoolean());
+    }
+
+    String followupSourceSnapshot(PaymentLink link) {
+        var order=link.getOrder(); var company=order==null?null:order.getCompany();
+        Map<String,String> source=new LinkedHashMap<>();
+        source.put("payment",String.valueOf(link.getId())); source.put("status",String.valueOf(link.getStatus()));
+        source.put("paidAt",String.valueOf(link.getPaidAt())); source.put("amount",amountText(link));
+        source.put("order",String.valueOf(order==null?null:order.getId()));
+        source.put("manager",String.valueOf(order==null||order.getManager()==null?null:order.getManager().getId()));
+        source.put("company",String.valueOf(company==null?null:company.getId()));
+        source.put("title",company==null?"":normalize(company.getTitle()));
+        source.put("invite",company==null?"":normalize(company.getUrlChat())); source.put("client",clientId(order,company));
+        try { return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(source); }
+        catch(com.fasterxml.jackson.core.JsonProcessingException failure){ throw new IllegalStateException(failure); }
+    }
 
     public ClientMessageSendResult notifySuccess(PaymentLink link) {
         if (link == null) {

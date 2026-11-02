@@ -11,4 +11,6 @@ public interface MissingWhatsAppRoute {
     record Snapshot(Long companyId, String invite, String groupId, boolean bindingRequired) { }
     Optional<Snapshot> find(Long companyId);
     boolean restore(Snapshot expected, String groupId);
+    /** Reconfirm an exact invite without overwriting a concurrent route edit. */
+    boolean refresh(Snapshot expected, String groupId);
 }

@@ -16,6 +16,23 @@ public class WhatsAppDeliveryRouteRecovery {
     private final MissingWhatsAppRoute companies;
     private final WhatsAppService whatsapp;
 
+    /** Separate authorized follow-ups verify the invite even when the old groupId is populated. */
+    public String reconfirmGroup(Long companyId, String invite, String clientId) {
+        if (companyId == null || clientId == null || clientId.isBlank()
+                || TransactionSynchronizationManager.isActualTransactionActive()
+                || WhatsAppGroupCompanyLinker.whatsAppInviteCode(invite).isEmpty()) return null;
+        try {
+            var current = companies.find(companyId).orElse(null);
+            if (current == null || !current.bindingRequired() || !Objects.equals(current.invite(), invite)) return null;
+            var resolved = whatsapp.resolveGroupByInvite(clientId, invite).orElse(null);
+            if (resolved == null || resolved.groupId() == null || !resolved.groupId().matches("[0-9]+@g\\.us")) return null;
+            return companies.refresh(current, resolved.groupId()) ? resolved.groupId() : null;
+        } catch (RuntimeException unavailable) {
+            log.warn("WhatsApp follow-up route check deferred: companyId={}, errorType={}", companyId, unavailable.getClass().getSimpleName());
+            return null;
+        }
+    }
+
     public String recoverMissingGroup(Long companyId, String invite, String clientId) {
         if (companyId == null || clientId == null || clientId.isBlank()
                 || TransactionSynchronizationManager.isActualTransactionActive()
