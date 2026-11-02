@@ -179,9 +179,6 @@ public class ApiManagerCompanyController {
     ) {
         managerAccessService.requireCompanyAccess(companyId, authentication);
         CompanyDTO current = companyService.getCompaniesDTOById(companyId);
-        String previousChatUrl = blankToNull(current == null ? null : current.getUrlChat());
-        String nextChatUrl = blankToNull(request == null ? null : request.urlChat());
-        boolean chatUrlChanged = !Objects.equals(previousChatUrl, nextChatUrl);
         boolean permissionWasEnabled = current != null && current.isAllowWorkerPublicationDateEdit();
         boolean permissionWillBeEnabled = request != null && request.allowWorkerPublicationDateEdit() != null
                 ? request.allowWorkerPublicationDateEdit()
@@ -190,7 +187,6 @@ public class ApiManagerCompanyController {
 
         try {
             companyService.updateCompany(toCompanyUpdateDto(current, request, companyId, authentication), toWorkerDTO(request), companyId);
-            syncChatBindingAfterCompanySave(companyId, nextChatUrl, chatUrlChanged);
         } catch (DataIntegrityViolationException exception) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Телефон, email или филиал уже используется", exception);
         } catch (RuntimeException exception) {
@@ -269,7 +265,6 @@ public class ApiManagerCompanyController {
         managerAccessService.requireCompanyAccess(companyId, authentication);
         String chatUrl = blankToNull(request == null ? null : request.urlChat());
         companyService.updateChatUrl(companyId, chatUrl);
-        syncChatBindingAfterCompanySave(companyId, chatUrl, true);
 
         CompanyDTO refreshed = companyService.getCompaniesDTOById(companyId);
         ChatPlatform platform = chatPlatform(chatUrl);
@@ -281,27 +276,6 @@ public class ApiManagerCompanyController {
                 repaired ? "" : chatBindingLaunchUrl(refreshed, platform),
                 repaired ? "Группа привязана" : "Ссылка сохранена; для завершения привязки используйте кнопку «Починить»"
         );
-    }
-
-    private void syncChatBindingAfterCompanySave(Long companyId, String chatUrl, boolean chatUrlChanged) {
-        if (!chatUrlChanged || isBlank(chatUrl)) {
-            return;
-        }
-        try {
-            if (isWhatsAppChatUrl(chatUrl)) {
-                whatsAppGroupLinkSyncService.runNow();
-            } else if (isTelegramChatUrl(chatUrl) || isMaxChatUrl(chatUrl)) {
-                sharedChatLinkSyncService.syncCompanyChatId(companyId);
-            }
-        } catch (RuntimeException exception) {
-            log.warn(
-                    "Chat binding sync after company save failed companyId={} chatUrl={}: {}",
-                    companyId,
-                    chatUrl,
-                    exception.getMessage(),
-                    exception
-            );
-        }
     }
 
     private boolean isWhatsAppChatUrl(String value) {

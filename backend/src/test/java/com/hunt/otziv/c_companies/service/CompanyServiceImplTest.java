@@ -100,6 +100,60 @@ class CompanyServiceImplTest {
     @Mock
     private PublicationProgressPreferenceService publicationProgressPreferenceService;
 
+    @Mock
+    private org.springframework.context.ApplicationEventPublisher applicationEvents;
+
+    @Test
+    void changedChatLinkClearsEveryPreviousMessengerRouteBeforeVerification() {
+        Company company = Company.builder().id(2505L).urlChat("https://chat.whatsapp.com/OldInvite123456")
+                .groupId("111@g.us").telegramGroupChatId(-100111L).maxGroupChatId(222L)
+                .maxLinkUserId(333L).maxLinkRequestedAt(LocalDateTime.now()).build();
+        when(companyRepository.findByIdForUpdate(2505L)).thenReturn(Optional.of(company));
+
+        service().updateChatUrl(2505L, "  https://chat.whatsapp.com/NewInvite123456  ");
+
+        assertEquals("https://chat.whatsapp.com/NewInvite123456", company.getUrlChat());
+        org.junit.jupiter.api.Assertions.assertNull(company.getGroupId());
+        org.junit.jupiter.api.Assertions.assertNull(company.getTelegramGroupChatId());
+        org.junit.jupiter.api.Assertions.assertNull(company.getMaxGroupChatId());
+        org.junit.jupiter.api.Assertions.assertNull(company.getMaxLinkUserId());
+        org.junit.jupiter.api.Assertions.assertNull(company.getMaxLinkRequestedAt());
+        assertTrue(company.isWhatsAppInvitePending());
+        verify(applicationEvents).publishEvent(new com.hunt.otziv.c_companies.api.CompanyChatLinkChanged(
+                2505L, "https://chat.whatsapp.com/NewInvite123456"));
+    }
+
+    @Test
+    void removingTheChatLinkAlsoRemovesPreviousRoutes() {
+        Company company = Company.builder().id(2505L).urlChat("https://chat.whatsapp.com/OldInvite123456")
+                .groupId("111@g.us").whatsAppInvitePending(true).build();
+        when(companyRepository.findByIdForUpdate(2505L)).thenReturn(Optional.of(company));
+        service().updateChatUrl(2505L, " ");
+        org.junit.jupiter.api.Assertions.assertNull(company.getUrlChat());
+        org.junit.jupiter.api.Assertions.assertNull(company.getGroupId());
+        assertFalse(company.isWhatsAppInvitePending());
+    }
+
+    @Test
+    void fullCompanyEditorPublishesTheSameExactInviteVerificationAsTheLinkEditor() {
+        Company company = Company.builder().id(2505L).title("Архидек").telephone("79000000000")
+                .city("Ставрополь").active(true).urlChat("https://chat.whatsapp.com/OldInvite123456")
+                .groupId("111@g.us").filial(new LinkedHashSet<>()).contacts(new LinkedHashSet<>()).build();
+        when(companyRepository.findByIdForUpdate(2505L)).thenReturn(Optional.of(company));
+        when(companyInfoRepository.findByCompanyId(2505L)).thenReturn(Optional.empty());
+        CompanyDTO dto = CompanyDTO.builder().title(company.getTitle()).telephone(company.getTelephone())
+                .city(company.getCity()).active(true).urlChat("https://chat.whatsapp.com/NewInvite123456")
+                .publicationProgressReportsEnabled(true).filial(FilialDTO.builder().title("").build())
+                .contacts(Set.of()).build();
+
+        service().updateCompany(dto,WorkerDTO.builder().workerId(0L).build(),2505L);
+
+        org.junit.jupiter.api.Assertions.assertNull(company.getGroupId());
+        assertTrue(company.isWhatsAppInvitePending());
+        verify(applicationEvents).publishEvent(new com.hunt.otziv.c_companies.api.CompanyChatLinkChanged(
+                2505L,dto.getUrlChat()));
+    }
+
     @Test
     void getAllCompaniesDTOListUsesStableSortForEqualUpdateDates() {
         CompanyServiceImpl service = service();
@@ -232,7 +286,8 @@ class CompanyServiceImplTest {
                 telegramGroupLinkService,
                 maxGroupLinkService,
                 nextOrderRequests,
-                publicationProgressPreferenceService
+                publicationProgressPreferenceService,
+                applicationEvents
         );
     }
 }

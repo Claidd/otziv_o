@@ -25,7 +25,8 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
     @Modifying
     @org.springframework.transaction.annotation.Transactional
     @Query(value = """
-        UPDATE companies c SET c.company_group_id = :groupId
+        UPDATE companies c SET c.company_group_id = :groupId,
+            c.company_whatsapp_invite_pending = 0, c.row_version = c.row_version + 1
         WHERE c.company_id = :companyId AND BINARY c.company_url_chat = BINARY :urlChat
           AND (c.company_group_id IS NULL OR TRIM(c.company_group_id) = '')
           AND NOT EXISTS (SELECT 1 FROM company_status s
@@ -37,7 +38,8 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
     @Modifying
     @org.springframework.transaction.annotation.Transactional
     @Query(value = """
-        UPDATE companies c SET c.company_group_id = :groupId
+        UPDATE companies c SET c.company_group_id = :groupId,
+            c.company_whatsapp_invite_pending = 0, c.row_version = c.row_version + 1
         WHERE c.company_id = :companyId AND BINARY c.company_url_chat = BINARY :urlChat
           AND BINARY COALESCE(c.company_group_id,'') = BINARY COALESCE(:previousGroup,'')
           AND NOT EXISTS (SELECT 1 FROM company_status s

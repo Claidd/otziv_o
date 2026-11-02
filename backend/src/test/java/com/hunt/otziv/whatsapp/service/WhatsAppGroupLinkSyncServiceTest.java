@@ -33,13 +33,72 @@ class WhatsAppGroupLinkSyncServiceTest {
     private final WhatsAppGroupCompanyLinker groupCompanyLinker = new WhatsAppGroupCompanyLinker(companyRepository);
     private final SharedChatLinkSyncService sharedChatLinkSyncService = mock(SharedChatLinkSyncService.class);
     private final AppSettingService appSettingService = mock(AppSettingService.class);
+    private final WhatsAppDeliveryRouteRecovery routeRecovery = mock(WhatsAppDeliveryRouteRecovery.class);
     private final WhatsAppGroupLinkSyncService service = new WhatsAppGroupLinkSyncService(
             properties,
             whatsAppService,
             groupCompanyLinker,
             sharedChatLinkSyncService,
-            appSettingService
+            appSettingService,
+            routeRecovery
     );
+
+    @Test
+    void pendingInviteRepairUsesTheTransactionalSnapshotInsteadOfADetachedStatus() {
+        var client = new WhatsAppProperties.ClientConfig();
+        client.setId("whatsapp_lika"); client.setUrl("http://whatsapp_lika:3000");
+        properties.setClients(List.of(client));
+        var detachedStatus = new CompanyStatus() {
+            @Override public String getTitle() { throw new org.hibernate.LazyInitializationException("detached status"); }
+        };
+        Company company = new Company(); company.setId(2505L); company.setStatus(detachedStatus);
+        company.setUrlChat("https://chat.whatsapp.com/NewInvite123456"); company.setWhatsAppInvitePending(true);
+        when(routeRecovery.reconfirmGroup(company.getId(), company.getUrlChat(), "whatsapp_lika")).thenReturn("222@g.us");
+
+        assertTrue(service.repairCompanyLink(company).linked());
+
+        verify(routeRecovery).reconfirmGroup(company.getId(), company.getUrlChat(), "whatsapp_lika");
+        verify(whatsAppService, never()).listGroups("whatsapp_lika");
+    }
+
+    @Test
+    void changedInviteNeverFallsBackToAnOldSameNameGroupWhenProviderIsUnavailable() {
+        var client = new WhatsAppProperties.ClientConfig();
+        client.setId("whatsapp_lika"); client.setUrl("http://whatsapp_lika:3000");
+        properties.setClients(List.of(client));
+        Company company = new Company(); company.setId(2505L); company.setTitle("Архидек");
+        company.setUrlChat("https://chat.whatsapp.com/NewInvite123456"); company.setWhatsAppInvitePending(true);
+        when(companyRepository.findAllWithChatUrl()).thenReturn(List.of(company));
+        when(whatsAppService.listGroups("whatsapp_lika")).thenReturn(List.of(
+                new WhatsAppGroupInfo("111@g.us", "Архидек. Отзывы", null)));
+
+        assertFalse(service.repairCompanyLink(company).linked());
+        service.syncClientGroups("whatsapp_lika");
+
+        org.junit.jupiter.api.Assertions.assertNull(company.getGroupId());
+        assertTrue(company.isWhatsAppInvitePending());
+        verify(companyRepository, never()).save(company);
+    }
+
+    @Test
+    void verifiedChangedInviteUpdatesAllCompaniesSharingThatExactInviteOnly() {
+        var client = new WhatsAppProperties.ClientConfig();
+        client.setId("whatsapp_lika"); client.setUrl("http://whatsapp_lika:3000");
+        properties.setClients(List.of(client));
+        String invite = "https://chat.whatsapp.com/NewInvite123456";
+        Company first = new Company(); first.setId(2505L); first.setUrlChat(invite); first.setWhatsAppInvitePending(true);
+        Company second = new Company(); second.setId(2506L); second.setUrlChat(invite + "?s=cl"); second.setGroupId("111@g.us");
+        Company differentCase = new Company(); differentCase.setId(2507L); differentCase.setUrlChat(invite.toLowerCase()); differentCase.setGroupId("333@g.us");
+        when(routeRecovery.reconfirmGroup(2505L, invite, "whatsapp_lika")).thenReturn("222@g.us");
+        when(companyRepository.findByUrlChatContainingIgnoreCase("newinvite123456"))
+                .thenReturn(List.of(first, second, differentCase));
+
+        assertTrue(service.repairChangedCompanyLink(2505L, invite).linked());
+
+        assertEquals("222@g.us", first.getGroupId()); assertFalse(first.isWhatsAppInvitePending());
+        assertEquals("222@g.us", second.getGroupId()); assertEquals("333@g.us", differentCase.getGroupId());
+        verify(whatsAppService, never()).listGroups("whatsapp_lika");
+    }
 
     @Test
     void linksGroupByWhatsAppInviteLinkFromGatewayGroupList() {

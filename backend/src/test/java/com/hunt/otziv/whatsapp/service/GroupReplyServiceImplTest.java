@@ -30,6 +30,18 @@ class GroupReplyServiceImplTest {
     @InjectMocks
     private GroupReplyServiceImpl service;
 
+    @org.junit.jupiter.api.Test void oldGroupMessageCannotBindAnUnverifiedChangedInviteByPhoneAndTitle() {
+        var reply = new WhatsAppGroupReplyDTO(); reply.setGroupId("111@g.us");
+        reply.setGroupName("Архидек. Отзывы"); reply.setFrom("70000000000@c.us"); reply.setMessage("hello");
+        var company = new com.hunt.otziv.c_companies.model.Company(); company.setWhatsAppInvitePending(true);
+        org.mockito.Mockito.when(companyService.getCompanyByTelephonAndTitle("70000000000", "Архидек"))
+                .thenReturn(java.util.Optional.of(company));
+        service.processGroupReply(reply);
+        org.junit.jupiter.api.Assertions.assertNull(company.getGroupId());
+        org.mockito.Mockito.verify(companyService,org.mockito.Mockito.never()).save(org.mockito.ArgumentMatchers.any(com.hunt.otziv.c_companies.model.Company.class));
+        verifyNoInteractions(replyOutbox,clientChatMessageTrackerService);
+    }
+
     @org.junit.jupiter.api.Test void preferenceWithoutDurableInboundIdIsRejectedBeforeBusinessWrites() {
         var reply=new WhatsAppGroupReplyDTO();reply.setMessage("отключить уведомления");
         org.mockito.Mockito.when(publicationProgressPreferenceService.isPreferenceCommand(reply.getMessage())).thenReturn(true);
