@@ -245,6 +245,11 @@ public class ManagerReportReviewQualityService {
             а не независимое подтверждение разговора. Не останавливай весь аудит из-за отсутствия
             записи такого разговора. Для такого объяснения evidenceRefs может быть пустым;
             criterion.answerQuote должен полностью покрываться цитатой этого claim.
+            Сохраняй атрибуцию при дроблении пересказа на claims: слова после «я писала: ...»
+            остаются содержанием сообщения менеджера, а не самостоятельным подтверждением
+            описанных в нём событий. Общую фразу «меры приняты» можно учесть как пересказ
+            только вместе с конкретно описанным разговором в том же ответе; сама по себе
+            она не заменяет действие и способ проверки результата.
             Этот вид нельзя использовать для платежей, доставки клиенту,
             фактического устранения проблемы или показателей выполнения. Даты, числа и проценты
             проверяй отдельными FACT по соответствующим дневным источникам. Последующие хорошие
@@ -603,7 +608,8 @@ public class ManagerReportReviewQualityService {
                     && contradictsInvoiceFields(quote, typedFacts)) status = ClaimStatus.CONTRADICTED;
             if (status==ClaimStatus.UNVERIFIABLE && checks.isEmpty()
                     && Set.of(ClaimKind.FACT,ClaimKind.COMPLETED_ACTION).contains(kind)
-                    && reportedWorkerCoaching(quote,expectedPoints,sourceTaskIds,typedFacts)) {
+                    && (reportedWorkerCoaching(quote,expectedPoints,sourceTaskIds,typedFacts)
+                        || reportedCoachingNarrative(quote,attempts.get(attempt),expectedPoints,sourceTaskIds,typedFacts))) {
                 kind=ClaimKind.MANAGEMENT_REPORT;status=ClaimStatus.REPORTED;
             }
             claims.add(new ClaimAssessment(kind, status, attempt, quote, refs,
@@ -801,6 +807,29 @@ public class ManagerReportReviewQualityService {
                 && value.matches("(?U).*\\b(?:писал[аи]?|писали|написал[аи]?|написали|поговорил[аи]?|поговорили|обсудил[аи]?|обсудили|напомнил[аи]?|напомнили|провел[аи]? разбор|провели разбор)\\b.*");
     }
 
+    /** A provider may split reported speech into separate claims, dropping its attribution. */
+    private boolean reportedCoachingNarrative(String quote, String answer, List<String> expectedPoints,
+            List<Long> taskIds, Map<String,AuthoritativeFact> facts) {
+        // Reuse the same scope and outcome exclusions as a directly quoted coaching report.
+        if (!reportedWorkerCoaching("Я поговорила со специалистом. " + quote,expectedPoints,taskIds,facts)) return false;
+        String value=normalize(quote);
+        boolean summary=value.matches("(?U)(?:(?:по )?(?:этому|данному) (?:вопросу|поводу) )?(?:уже )?(?:были )?приняты меры")
+                || value.matches("(?U)меры (?:уже )?(?:были )?приняты");
+        for (String sentence:answer.split("(?<=[.!?])\\s+|[\\r\\n]+")) {
+            int colon=sentence.indexOf(':');
+            if (colon<0) continue;
+            String prefix=sentence.substring(0,colon);
+            var speaker=java.util.regex.Pattern.compile("(?iuU)\\b(?:я|мы)\\b").matcher(prefix);
+            while (speaker.find()) {
+                if (!reportedWorkerCoaching(prefix.substring(speaker.start()),expectedPoints,taskIds,facts)) continue;
+                // Only words inside the attributed speech inherit its status. A following
+                // assertion about reassignment, payment or performance still needs evidence.
+                if (summary || !value.isBlank() && normalize(sentence.substring(colon+1)).contains(value)) return true;
+            }
+        }
+        return false;
+    }
+
     /** Retain only independently classifiable non-factual explanations/plans, never old factual verdicts. */
     private boolean restoreReportedWorkerCriteria(List<CriterionAssessment> criteria,List<ClaimAssessment> claims,
             List<PriorCriterion> carried,List<String> expectedPoints,List<Long> taskIds,List<Long> chatIds,
@@ -858,7 +887,7 @@ public class ManagerReportReviewQualityService {
                 .map(f->f.id()+"|"+f.field()+"|"+f.value()).sorted().toList();
         if (rows.isEmpty()) return "";
         try {return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
-                .digest(("worker-explanation-report-v1\n"+String.join("\n",rows)).getBytes(java.nio.charset.StandardCharsets.UTF_8)));}
+                .digest(("worker-explanation-report-v2\n"+String.join("\n",rows)).getBytes(java.nio.charset.StandardCharsets.UTF_8)));}
         catch(java.security.NoSuchAlgorithmException impossible){throw new IllegalStateException(impossible);}
     }
 

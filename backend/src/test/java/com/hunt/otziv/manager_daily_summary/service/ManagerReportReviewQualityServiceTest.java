@@ -1648,6 +1648,34 @@ class ManagerReportReviewQualityServiceTest {
         assertThat(service.assessAnswer(workerGoalEvidence(),question,different,false).accepted()).isFalse();
     }
 
+    @ParameterizedTest @ValueSource(strings={"по этому вопросу уже были приняты меры",
+            "твои фирмы переводят другим специалистам", "я начинаю переживать"})
+    void splitClaimsRetainTheirReportedCoachingAttribution(String quote) {
+        String answer="Это вопрос про 30.10, по этому вопросу уже были приняты меры, Алёне К я уже писала: "
+                +"Алёна надо тебе в работе немного усилиться, твои фирмы переводят другим специалистам, я начинаю переживать.\n"
+                +"После специалист повысила результаты.";
+        var question=new ManagerReportReviewQualityService.ReviewQuestion("Как помогли специалисту?",
+                List.of("специалист и конкретное действие менеджера"));
+        provider(assessment("SATISFIED",quote,"E1","FACT","UNVERIFIABLE","Нет независимого подтверждения"));
+        var result=service.assessAnswer(workerGoalEvidence(),question,answer,false);
+        assertThat(result.accepted()).isTrue();
+        assertThat(result.claims().getFirst().status()).isEqualTo(ManagerReportReviewQualityService.ClaimStatus.REPORTED);
+        assertThat(result.reason()).contains("со слов менеджера");
+    }
+
+    @ParameterizedTest @ValueSource(strings={"Меры приняты.",
+            "Я писала: надо усилиться. Фирмы переведены другим специалистам.",
+            "Я писала: счёт оплачен.", "Я писала: задачи выполнены на 100%."})
+    void coachingAttributionCannotCertifyUnspecifiedMeasuresOrSeparateExternalOutcomes(String answer) {
+        String quote=answer.contains("Фирмы")?"Фирмы переведены другим специалистам"
+                :answer.contains(":")?answer.substring(answer.indexOf(':')+1).trim():answer;
+        var question=new ManagerReportReviewQualityService.ReviewQuestion("Как помогли специалисту?",
+                List.of("специалист и конкретное действие менеджера"));
+        provider(assessment("SATISFIED",quote,"E1","FACT","UNVERIFIABLE","Нужно подтверждение результата"));
+        assertThat(service.assessAnswer(workerGoalEvidence(),question,answer,false).decision())
+                .isEqualTo(ManagerReportReviewQualityService.Decision.NEEDS_CONTEXT);
+    }
+
     @Test void reportedCoachingCanSatisfyAnExplanationCriterionWithoutInventingExternalEvidence() {
         String answer="Я поговорила со специалистом, обсудила приоритеты.";
         var question=new ManagerReportReviewQualityService.ReviewQuestion("Как помогли специалисту?",List.of("специалист и конкретное действие менеджера"));
