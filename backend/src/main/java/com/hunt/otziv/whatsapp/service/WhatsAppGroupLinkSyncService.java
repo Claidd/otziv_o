@@ -37,6 +37,7 @@ public class WhatsAppGroupLinkSyncService {
     private final WhatsAppGroupCompanyLinker groupCompanyLinker;
     private final SharedChatLinkSyncService sharedChatLinkSyncService;
     private final AppSettingService appSettingService;
+    private final WhatsAppDeliveryRouteRecovery routeRecovery;
 
     public static final boolean DEFAULT_ENABLED = true;
     public static final int DEFAULT_INTERVAL_MINUTES = 30;
@@ -105,6 +106,11 @@ public class WhatsAppGroupLinkSyncService {
     public WhatsAppGroupRepairResult repairCompanyLink(Company company) {
         if (company == null || company.getId() == null) {
             return WhatsAppGroupRepairResult.failed("У компании нет данных для проверки WhatsApp-группы");
+        }
+        // The request entity can be detached. Changed-link recovery checks the
+        // current status and invite through the company-owned transactional snapshot.
+        if (company.isWhatsAppInvitePending()) {
+            return repairChangedCompanyLink(company.getId(), company.getUrlChat());
         }
         if (!CompanyChatBindingPolicy.isRequired(company)) {
             return WhatsAppGroupRepairResult.failed(
@@ -221,6 +227,21 @@ public class WhatsAppGroupLinkSyncService {
         );
     }
 
+    /** A changed link is authoritative; group names and old group lists are not evidence. */
+    public WhatsAppGroupRepairResult repairChangedCompanyLink(Long companyId, String invite) {
+        if (properties.getClients() != null) {
+            for (WhatsAppProperties.ClientConfig client : properties.getClients()) {
+                if (client == null || !hasText(client.getId()) || !hasText(client.getUrl())) continue;
+                String groupId = routeRecovery.reconfirmGroup(companyId, invite, client.getId());
+                if (!hasText(groupId)) continue;
+                // Match the exact invite, including case, before propagating the verified id.
+                groupCompanyLinker.linkByInvite(groupId, invite);
+                return WhatsAppGroupRepairResult.linked("Группа подтверждена по новой WhatsApp-ссылке");
+            }
+        }
+        return WhatsAppGroupRepairResult.failed("Новая WhatsApp-ссылка пока не подтверждена; старая группа не используется");
+    }
+
     @Async
     public void runNowInBackground(String source) {
         try {
@@ -253,6 +274,10 @@ public class WhatsAppGroupLinkSyncService {
         int clients = 0;
 
         log.info("WhatsApp group sync started source={}", source);
+        for (Company company : groupCompanyLinker.companiesWithChatUrl().stream()
+                .filter(Company::isWhatsAppInvitePending).toList()) {
+            if (repairChangedCompanyLink(company.getId(), company.getUrlChat()).linked()) linked++;
+        }
         List<WhatsAppProperties.ClientConfig> configuredClients = properties.getClients() != null
                 ? properties.getClients()
                 : List.of();

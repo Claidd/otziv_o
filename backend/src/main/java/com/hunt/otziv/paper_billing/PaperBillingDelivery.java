@@ -52,7 +52,10 @@ public class PaperBillingDelivery {
     public ClientMessageSendResult send(Map<String,Object> r,boolean act) {
         if (!settings.isDeliveryEnabled()) return ClientMessageSendResult.failed("not_ready","Отправка документов выключена");
         String operation="paper:"+r.get("id")+":"+(act?"act":"invoice");
-        String caption="";
+        // The WhatsApp file gateway requires a non-empty caption, even when
+        // payment instructions have already been sent as a separate message.
+        String caption=(act?"Акт выполненных работ":"Счёт на оплату")+" № "+r.get("number")
+                +" · "+amountText(((Number)r.get("amount_kopecks")).longValue());
         String filename=filename(r,act);
         byte[] bytes=(byte[])r.get(act?"act_pdf":"invoice_pdf");
         if (bank.fixture()) {
@@ -68,7 +71,21 @@ public class PaperBillingDelivery {
         return documents.send((String)r.get("client_id"),destination,caption,bytes,filename,operation);
     }
     public static String filename(Map<String,Object> document,boolean act) {
-        return (act?"Акт выполненных работ":"Счёт на оплату")+" — "+document.get("number")+".pdf";
+        String orders="";
+        if("ORDER".equals(document.get("target_kind"))) orders="заказ "+document.get("target_id")+" — ";
+        else if("COMMON_PART".equals(document.get("target_kind"))) {
+            String service=java.util.Objects.toString(document.get("service_name"),"");
+            int marker=service.lastIndexOf("Заказы № ");
+            if(marker>=0) {
+                var matcher=java.util.regex.Pattern.compile("^[0-9]+(?:, [0-9]+)*").matcher(service.substring(marker+9));
+                if(matcher.find()) {
+                    String[] ids=matcher.group().split(", ");
+                    orders="заказы "+String.join(", ",java.util.Arrays.copyOf(ids,Math.min(3,ids.length)))
+                            +(ids.length>3?" и ещё "+(ids.length-3):"")+" — ";
+                }
+            }
+        }
+        return (act?"Акт выполненных работ":"Счёт на оплату")+" — "+orders+document.get("number")+".pdf";
     }
     public static String amountText(long kopecks) {
         var format=NumberFormat.getNumberInstance(Locale.forLanguageTag("ru-RU"));

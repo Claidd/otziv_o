@@ -56,6 +56,10 @@ public class Company {
     @Column(name = "company_url_chat", length = 500)
     private String urlChat;
 
+    // A changed invite cannot be rebound by an old group name or an incoming message.
+    @Column(name = "company_whatsapp_invite_pending", nullable = false)
+    private boolean whatsAppInvitePending;
+
     //    мейл пользователя
     @Column(name = "company_email", unique = true, updatable = true)
     @Email

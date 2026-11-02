@@ -7,6 +7,7 @@ import com.hunt.otziv.c_categories.model.SubCategory;
 import com.hunt.otziv.c_categories.service.CategoryService;
 import com.hunt.otziv.c_categories.service.SubCategoryService;
 import com.hunt.otziv.c_companies.api.CompanyStatisticsOperations;
+import com.hunt.otziv.c_companies.api.CompanyChatLinkChanged;
 import com.hunt.otziv.c_companies.dto.CompanyDTO;
 import com.hunt.otziv.c_companies.dto.CompanyContactDTO;
 import com.hunt.otziv.c_companies.dto.CompanyInfoDTO;
@@ -95,6 +96,7 @@ public class CompanyServiceImpl implements CompanyService{
     private final MaxGroupLinkService maxGroupLinkService;
     private final NextOrderRequests nextOrderRequests;
     private final PublicationProgressPreferenceService publicationProgressPreferenceService;
+    private final org.springframework.context.ApplicationEventPublisher applicationEvents;
 
     @Value("${otziv.board.live-slice.retention-days:90}")
     private int liveSliceRetentionDays;
@@ -142,6 +144,7 @@ public class CompanyServiceImpl implements CompanyService{
                 .build();
         company.setContacts(convertContactDTOSetToContacts(companyDTO.getContacts(), company));
         company.setInfo(convertInfoDTOToInfo(companyDTO.getInfo(), company));
+        resetCurrentChatBinding(company, company.getUrlChat());
 
         log.info("2. Собрали компания из ДТО");
 
@@ -177,6 +180,7 @@ public class CompanyServiceImpl implements CompanyService{
                     telegramService.sendMessage(telegramChatId, resultBuilder);
                 }
             }
+            applicationEvents.publishEvent(new CompanyChatLinkChanged(company1.getId(), company1.getUrlChat()));
             return Optional.of(company1);
         } catch (Exception e) {
             log.error("ОШИБКА при сохранении компании: {}", e.getMessage(), e);
@@ -1345,6 +1349,8 @@ public class CompanyServiceImpl implements CompanyService{
         log.info("2. Вошли в обновление данных компании");
         Company saveCompany = companyRepository.findByIdForUpdate(companyId).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", companyId)));
         boolean isChanged = false;
+        String nextChatUrl = normalizeChatUrl(companyDTO.getUrlChat());
+        boolean chatUrlChanged = !Objects.equals(normalizeChatUrl(saveCompany.getUrlChat()), nextChatUrl);
 
         if (saveCompany.getSubCategory() == null) {
             saveCompany.setSubCategory(convertSubCategoryDTOToSubCategory(companyDTO.getSubCategory()));
@@ -1368,10 +1374,10 @@ public class CompanyServiceImpl implements CompanyService{
             saveCompany.setCity(companyDTO.getCity());
             isChanged = true;
         }
-        if (!Objects.equals(companyDTO.getUrlChat(), saveCompany.getUrlChat())){ /*Проверка смены ссылки на чат*/
+        if (chatUrlChanged){ /*Проверка смены ссылки на чат*/
             log.info("Обновляем ссылку на чат");
-            saveCompany.setUrlChat(companyDTO.getUrlChat());
-            resetCurrentChatBinding(saveCompany, companyDTO.getUrlChat());
+            saveCompany.setUrlChat(nextChatUrl);
+            resetCurrentChatBinding(saveCompany, nextChatUrl);
             isChanged = true;
         }
         if (!Objects.equals(companyDTO.getUrlSite(), saveCompany.getUrlSite())){ /*Проверка смены официального сайта*/
@@ -1482,19 +1488,25 @@ public class CompanyServiceImpl implements CompanyService{
         else {
             log.info("3. Изменений не было, сущность в БД не изменена");
         }
+        if (chatUrlChanged) {
+            applicationEvents.publishEvent(new CompanyChatLinkChanged(companyId, nextChatUrl));
+        }
     } // Обновление компании
 
 //    =====================================================================================================
 
     private void resetCurrentChatBinding(Company company, String urlChat) {
         String chat = urlChat == null ? "" : urlChat.trim().toLowerCase(Locale.ROOT);
-        if (chat.contains("chat.whatsapp.com/")) {
-            company.setGroupId(null);
-        } else if (chat.contains("t.me/") || chat.contains("telegram.me/")) {
-            company.setTelegramGroupChatId(null);
-        } else if (chat.contains("max.ru/") || chat.contains("max.com/")) {
-            company.setMaxGroupChatId(null);
-        }
+        company.setGroupId(null);
+        company.setTelegramGroupChatId(null);
+        company.setMaxGroupChatId(null);
+        company.setMaxLinkUserId(null);
+        company.setMaxLinkRequestedAt(null);
+        company.setWhatsAppInvitePending(chat.contains("chat.whatsapp.com/"));
+    }
+
+    private static String normalizeChatUrl(String urlChat) {
+        return urlChat == null || urlChat.isBlank() ? null : urlChat.trim();
     }
 
 //    =====================================================================================================
@@ -1731,13 +1743,15 @@ public class CompanyServiceImpl implements CompanyService{
     public void updateChatUrl(Long companyId, String urlChat) {
         Company company = companyRepository.findByIdForUpdate(companyId)
                 .orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найдена", companyId)));
-        String normalized = urlChat == null || urlChat.isBlank() ? null : urlChat.trim();
+        String normalized = normalizeChatUrl(urlChat);
         if (Objects.equals(company.getUrlChat(), normalized)) {
+            applicationEvents.publishEvent(new CompanyChatLinkChanged(companyId, normalized));
             return;
         }
         company.setUrlChat(normalized);
         resetCurrentChatBinding(company, normalized);
         companyRepository.save(company);
+        applicationEvents.publishEvent(new CompanyChatLinkChanged(companyId, normalized));
     }
 
     private CompanyInfo resolveCompanyInfo(Company company) {

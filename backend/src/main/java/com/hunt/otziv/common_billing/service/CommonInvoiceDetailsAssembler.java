@@ -293,7 +293,7 @@ public class CommonInvoiceDetailsAssembler {
         String block = invoiceBlock != null ? invoiceBlock : CommonInvoiceCompositionService.itemBlockReason(item);
         Order order = item.getOrder();
         Company company = order.getCompany();
-        return new CommonInvoiceOrderResponse(order.getId(), company == null ? null : company.getId(), company == null ? "" : company.getTitle(), order.getFilial() == null ? "" : order.getFilial().getTitle(), statusTitle(order), normalize(item.getOriginalOrderStatusTitle()), amountRubles(item.getAmountKopecks()), item.getAmountKopecks(), item.isReady(), item.isPaid(), item.isUnpaid(), block == null, item.getPaidAt(), resolvedPaymentMethod(item), normalize(item.getManualPaidBy()), normalize(item.getManualPaymentComment()), normalize(item.getManualPaymentReceiptUrl()), block);
+        return new CommonInvoiceOrderResponse(order.getId(), company == null ? null : company.getId(), company == null ? "" : company.getTitle(), order.getFilial() == null ? "" : order.getFilial().getTitle(), statusTitle(order), normalize(item.getOriginalOrderStatusTitle()), amountRubles(item.getAmountKopecks()), item.getAmountKopecks(), item.isReady(), item.isPaid(), item.isUnpaid(), block == null, item.getPaidAt(), resolvedPaymentMethod(item), normalize(item.getManualPaidBy()), normalize(item.getManualPaymentComment()), normalize(item.getManualPaymentReceiptUrl()), block, item.isOrdinaryAfterPaperCancel());
     }
 
     String resolvedPaymentMethod(CommonInvoiceOrder item) {

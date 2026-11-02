@@ -26,6 +26,22 @@ class SharedChatLinkSyncServiceTest {
     private final SharedChatLinkSyncService service = new SharedChatLinkSyncService(companyRepository);
 
     @Test
+    void unverifiedChangedInviteCannotInheritAnOldGroupFromAnotherCard() {
+        Company old = company(1L, "Old", "https://chat.whatsapp.com/NewInvite123456");
+        old.setGroupId("111@g.us");
+        Company edited = company(2L, "Edited", old.getUrlChat());
+        edited.setWhatsAppInvitePending(true);
+        when(companyRepository.findAllWithChatUrl()).thenReturn(List.of(old, edited));
+        when(companyRepository.findById(2L)).thenReturn(Optional.of(edited));
+
+        service.syncSharedChatIds();
+        service.syncCompanyChatId(2L);
+
+        assertNull(edited.getGroupId());
+        verify(companyRepository, never()).saveAll(any());
+    }
+
+    @Test
     void copiesKnownChatIdsToCompaniesWithSameChatLink() {
         Company whatsAppSource = company(1L, "Source WA", "https://chat.whatsapp.com/AbCdEfGhIjKlMnOpQrStUv?mode=gi_t");
         whatsAppSource.setGroupId("120363123@g.us");

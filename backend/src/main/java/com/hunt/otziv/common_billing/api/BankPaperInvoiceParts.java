@@ -28,5 +28,6 @@ public interface BankPaperInvoiceParts {
     void hold(long partId,boolean hold);
     void review(long partId);
     void cancelled(long partId,String document);
+    void resumeOrdinaryInvoice(long partId);
     BankPaperInvoices.StaffContext staffContext(long partId);
 }

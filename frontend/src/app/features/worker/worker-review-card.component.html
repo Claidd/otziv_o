@@ -415,7 +415,7 @@
       {{ isMutating('review-' + review.id + '-block-bot') ? '...' : 'блок' }}
     </button>
   </div>
-  @if (blockLockedByCredentials) {
+  @if (blockLockedByCredentials && !needsRecoveryAccount()) {
     <small>Чтобы нажать «Блок», скопируйте логин и пароль текущего аккаунта.</small>
   }
 

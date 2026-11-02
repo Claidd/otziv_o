@@ -392,6 +392,7 @@ public class OrderStatusTransitionService {
         }
 
         if (targetsFinancialStatus) {
+            if (commonBillingService.allowsStandalonePaymentAfterPaperCancellation(order.getId())) return;
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Финансовый статус заказа внутри общего счета меняется только через общий счет"

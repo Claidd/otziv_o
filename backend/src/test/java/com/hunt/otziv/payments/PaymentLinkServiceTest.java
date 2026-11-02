@@ -247,6 +247,9 @@ class PaymentLinkServiceTest {
     private SpecialistManualPaymentReviewService specialistManualPaymentReviewService;
 
     @Mock
+    private com.hunt.otziv.payments.repository.SpecialistManualPaymentReviewRepository paymentReviews;
+
+    @Mock
     private com.hunt.otziv.payments.service.SpecialistManualPaymentReviewSettlementService reviewSettlement;
 
     @Mock
@@ -10287,7 +10290,7 @@ class PaymentLinkServiceTest {
                 paymentProfileService, tbankClient, tochkaPaymentProfileResolver, tochkaClient,
                 tochkaPaymentOperationMapper, orderPaymentIntegrityService, paymentLinkReturnOutboxService,
                 contractorPaymentTargetAccessPolicy, transactionExecutor,
-                org.mockito.Mockito.mock(com.hunt.otziv.payments.service.SpecialistManualPaymentReviewGuard.class));
+                new com.hunt.otziv.payments.service.SpecialistManualPaymentReviewGuard(paymentReviews));
         var manualRoutePolicy = new com.hunt.otziv.payments.service.ManualCardRoutePolicy(
                 lifecycle, manualConfirmation, presenter, contractorPaymentRuntimeSwitch, actualPaymentAttributionService);
         var observationApplication = new com.hunt.otziv.payments.service.BankObservationApplicationService(
@@ -10531,6 +10534,47 @@ class PaymentLinkServiceTest {
                 paymentModes,
                 Duration.ofDays(7)
         );
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = PaymentMethod.class, names = {"SBP_QR", "BANK_FORM"})
+    void failedUncreditedManualHandoffKeepsOriginalOwnerBankPaymentUsable(PaymentMethod method) {
+        PaymentLinkService service = service(properties());
+        Order order = order(27_145L, "Цыганаш", BigDecimal.valueOf(2_500));
+        PaymentProfile profile = tochkaEntityProfile(3L);
+        TochkaPaymentProfile runtime = tochkaRuntimeProfile();
+        PaymentLink link = payableLink(order, "original-owner-payment", 250_000L);
+        link.setId(8_644L); link.setStatus(PaymentLinkStatus.INITIATED); link.setPaymentMethod(method);
+        link.setPaymentProfile(profile); link.setContractorAllocationId(2_409L);
+        link.setTbankPaymentId("original-operation"); link.setTbankOrderId("original-provider-link");
+        link.setPaymentUrl("https://merch.securepaytb.ru/pay/original-operation");
+        link.setManualActualRecipientFrozenAt(LocalDateTime.now());
+        link.setManualActualRecipientType(ContractorRecipientType.MANAGER);
+        stubTochkaPublicInit(link, order, profile, runtime);
+        SpecialistManualPaymentReview review = new SpecialistManualPaymentReview();
+        review.setId(119L); review.setOrderId(order.getId()); review.setPaymentLinkId(link.getId());
+        review.setAmountKopecks(link.getAmountKopecks()); review.setReason("По реквизитам");
+        review.setStatus(com.hunt.otziv.payments.model.SpecialistManualPaymentReviewStatus.NEEDS_ATTENTION);
+        review.setLastError("Активный или неоднозначный платеж Точки нельзя автоматически закрыть для ручного перевода.");
+        when(paymentReviews.lockUnresolvedByOrderId(eq(order.getId()), anyCollection())).thenReturn(List.of(review));
+
+        for (int attempt = 0; attempt < 2; attempt++) {
+            PublicPaymentInitResponse result = method == PaymentMethod.SBP_QR
+                    ? service.initSbp(link.getToken(), "payer@example.ru", true, true, true, null, "127.0.0.1", "JUnit")
+                    : service.init(link.getToken(), "payer@example.ru", true, true, true, "127.0.0.1", "JUnit");
+            assertEquals(link.getPaymentUrl(), result.paymentUrl());
+            assertEquals("original-operation", result.paymentId());
+        }
+        assertEquals(2_409L, link.getContractorAllocationId());
+        assertNull(link.getPaidAt()); assertNull(review.getCreditedAt());
+        assertEquals("По реквизитам", review.getReason());
+        assertEquals(com.hunt.otziv.payments.model.SpecialistManualPaymentReviewStatus.NEEDS_ATTENTION, review.getStatus());
+        verifyNoInteractions(tochkaClient, tbankClient);
+
+        review.setCreditedAt(LocalDateTime.now());
+        assertThrows(ResponseStatusException.class, () -> service.initSbp(
+                link.getToken(), "payer@example.ru", true, true, true, null, "127.0.0.1", "JUnit"));
+        verifyNoInteractions(tochkaClient, tbankClient);
     }
 
     private void stubTochkaPublicInit(

@@ -1149,6 +1149,7 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
         ReviewBotAssignmentGuardService.AssignmentScope assignmentScope = assignmentScope(task);
         excludedBotIds.addAll(assignmentGuardService.blockedBotIds(assignmentScope));
         List<Bot> sameCityCandidates = botService.getFindAllByFilialCityId(city.getId()).stream()
+                .filter(this::hasUsableCredentials)
                 .filter(accountWalkScheduleService::isWalkedAccount)
                 .filter(botCooldownService::isAvailableForAssignment)
                 .filter(bot -> !excludedBotIds.contains(bot.getId()))
@@ -1167,6 +1168,7 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
                         accountWalkScheduleService.walkedCounterThreshold()
                 )
                 .stream()
+                .filter(this::hasUsableCredentials)
                 .filter(accountWalkScheduleService::isWalkedAccount)
                 .filter(botCooldownService::isAvailableForAssignment)
                 .filter(bot -> !excludedBotIds.contains(bot.getId()))
@@ -1195,11 +1197,16 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
         while (!remaining.isEmpty()) {
             Bot selected = remaining.remove(random.nextInt(remaining.size()));
             Bot locked = assignmentGuardService.lockIfEligible(selected, scope).orElse(null);
-            if (locked != null) {
+            if (locked != null && hasUsableCredentials(locked)) {
                 return locked;
             }
         }
         return null;
+    }
+
+    private boolean hasUsableCredentials(Bot bot) {
+        return bot != null && bot.getLogin() != null && !bot.getLogin().isBlank()
+                && bot.getPassword() != null && !bot.getPassword().isBlank();
     }
 
     private ReviewBotAssignmentGuardService.AssignmentScope assignmentScope(ReviewRecoveryTask task) {

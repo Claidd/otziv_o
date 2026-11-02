@@ -40,8 +40,6 @@ public class PaperBillingCancellation {
         if(request==null || !request.confirmed() || clean(request.reason()).isBlank() || clean(request.reason()).length()>500)
             throw problem("Укажите причину и подтвердите отмену счёта и акта");
         var before=service.authorized(id,actor);
-        if("COMMON_PART".equals(before.get("target_kind")) && request.replaceWithOrdinary())
-            throw problem("Для выбранных заказов отмените только этот комплект, затем выберите плательщика для нового. Другие счета общего счёта сохранятся");
         targets.authorizeCancellation(target(before),before.get("payment_link_id") instanceof Number n?n.longValue():null);
         return tx().execute(status -> {
             var row=locked(id);

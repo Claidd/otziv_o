@@ -32,6 +32,24 @@ class WhatsAppDeliveryRouteRecoveryTest {
         assertThat(recover()).isNull();
     }
 
+    @Test void explicitLinkVerificationReplacesAnOldPopulatedRouteConditionally() {
+        var old = new MissingWhatsAppRoute.Snapshot(1L,company.invite(),"111@g.us",true);
+        when(companies.find(1L)).thenReturn(Optional.of(old));
+        when(whatsapp.resolveGroupByInvite("client",old.invite()))
+                .thenReturn(Optional.of(new WhatsAppGroupInfo("222@g.us","name",old.invite())));
+        when(companies.refresh(old,"222@g.us")).thenReturn(true);
+        assertThat(recovery.reconfirmGroup(1L,old.invite(),"client")).isEqualTo("222@g.us");
+        verify(companies).refresh(old,"222@g.us");
+    }
+
+    @Test void concurrentEditDuringExplicitVerificationCannotOverwriteTheNewerRoute() {
+        when(companies.find(1L)).thenReturn(Optional.of(company));
+        when(whatsapp.resolveGroupByInvite("client",company.invite()))
+                .thenReturn(Optional.of(new WhatsAppGroupInfo("222@g.us","name",company.invite())));
+        assertThat(recovery.reconfirmGroup(1L,company.invite(),"client")).isNull();
+        verify(companies).refresh(company,"222@g.us");
+    }
+
     @Test void neverMatchesGroupsByNameWhenInviteLookupFails() {
         when(companies.find(1L)).thenReturn(Optional.of(company));
         when(whatsapp.resolveGroupByInvite("client", company.invite())).thenReturn(Optional.empty());

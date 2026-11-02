@@ -55,6 +55,7 @@ public class PaperBillingWorker {
                     var result=delivery.sendIntro(r);
                     outcome=result.sent() && result.messageId()!=null?"SENT":ClientMessageDelivery.isKnownUnsent(result)?"PENDING":"UNKNOWN";
                     store.messageDelivery(id,outcome,result.messageId());
+                    if(!outcome.equals("SENT")) store.deliveryFailure(id,"Сообщение",result.errorCode(),result.errorMessage());
                 } catch(Exception e) {outcome="UNKNOWN";store.messageDelivery(id,"UNKNOWN",null);}
                 if(!outcome.equals("SENT")) return;
             }
@@ -66,6 +67,7 @@ public class PaperBillingWorker {
                 try {
                     var result=delivery.send(r,act);
                     store.delivery(id,act,result.sent() && result.messageId()!=null?"SENT":ClientMessageDelivery.isKnownUnsent(result)?"PENDING":"UNKNOWN",result.messageId());
+                    if(!result.sent() || result.messageId()==null) store.deliveryFailure(id,act?"Акт":"Счёт",result.errorCode(),result.errorMessage());
                 } catch(Exception e) { store.delivery(id,act,"UNKNOWN",null); }
             }
             r=store.row(id);

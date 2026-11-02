@@ -8,6 +8,7 @@ import java.util.Map;
 /** Synchronous settlement boundary; implementations own invoice locks and atomic ledger changes. */
 public interface CommonInvoicePaymentOperations {
     boolean isOrderInActiveCommonInvoice(Long orderId);
+    default boolean allowsStandalonePaymentAfterPaperCancellation(Long orderId) { return false; }
     boolean applyConfirmedOrderPayment(Long orderId, LocalDateTime paidAt, String reason);
     boolean applyStandalonePaymentReversal(Long orderId, Long paymentLinkId, PaymentLinkStatus terminalStatus);
     boolean handleTbankWebhook(Map<String, String> payload);

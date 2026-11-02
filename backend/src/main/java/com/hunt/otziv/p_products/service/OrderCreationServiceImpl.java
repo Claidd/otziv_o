@@ -103,13 +103,9 @@ public class OrderCreationServiceImpl implements OrderCreationService {
                 orderDTO,
                 repeatTerms.summaryProduct(),
                 repeatTerms.total(),
-                repeatTerms.reviews()
+                repeatTerms.reviews(),
+                sourceOrder
         );
-        if(!sourceOrder.isAutomaticInvoicePaymentMode()
-                || sourceOrder.getPaperBillingPayerChoiceId()!=null
-                || sourceOrder.getCompany()==null || !sourceOrder.getCompany().isPaperBillingAutomatic()) {
-            repeated.inheritInvoicePreferences(sourceOrder);
-        }
         return orderRepository.save(repeated);
     }
 
@@ -118,11 +114,25 @@ public class OrderCreationServiceImpl implements OrderCreationService {
                                               Product summaryProduct,
                                               BigDecimal total,
                                               List<RepeatReviewTerm> repeatReviewTerms) {
+        return createNewOrderWithReviews(companyId,orderDTO,summaryProduct,total,repeatReviewTerms,null);
+    }
+
+    private Order createNewOrderWithReviews(Long companyId, OrderDTO orderDTO, Product summaryProduct,
+                                              BigDecimal total, List<RepeatReviewTerm> repeatReviewTerms,
+                                              Order invoicePreferenceSource) {
         try {
             Order order = saveOrder(orderDTO, summaryProduct, total);
             if(order.getCompany()!=null && order.getCompany().isPaperBillingAutomatic()) {
                 order.useBankPaperInvoicePaymentMode();
                 order.setPaperBillingPayerChoiceId(order.getCompany().getPaperBillingPayerChoiceId());
+            }
+            // Common membership and its automation must see the final preference.
+            // Applying it after attach could restore paper billing to a successor
+            // whose selected source had explicitly switched to ordinary requisites.
+            if(invoicePreferenceSource!=null && (!invoicePreferenceSource.isAutomaticInvoicePaymentMode()
+                    || invoicePreferenceSource.getPaperBillingPayerChoiceId()!=null
+                    || invoicePreferenceSource.getCompany()==null || !invoicePreferenceSource.getCompany().isPaperBillingAutomatic())) {
+                order.inheritInvoicePreferences(invoicePreferenceSource);
             }
             log.info("1. Сохранили ORDER");
 

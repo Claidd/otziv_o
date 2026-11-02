@@ -35,17 +35,35 @@ http.createServer(async (req,res)=>{
   const send=(code,data)=>{res.writeHead(code,{"Content-Type":"application/json"});res.end(JSON.stringify(data));};
   if (url.pathname==="/keys") return send(200,publicKey.export({format:"jwk"}));
   if (url.pathname==="/health") return send(200,{ok:true});
-  if (url.pathname==="/test/state") return send(200,{documents:[...documents.values()],deliveries:[...deliveries.keys()],deliveryDetails:[...deliveries.values()],receipts,calls});
+  if (url.pathname==="/test/state") return send(200,{documents:[...documents.values()],deliveries:[...deliveries.keys()],deliveryDetails:[...deliveries.values()],receipts,calls,acquiringOperations:[...acquiring.operations.values()]});
   if (url.pathname==="/delivery-receipt") return send(200,deliveries.get(body.operationId)||{});
-  if (url.pathname==="/test/acquiring") {acquiring.merchantId=body.merchantId;acquiring.cashbox=body.cashbox;return send(200,{ok:true});}
+  if (url.pathname==="/test/acquiring") {
+    const restored=body.operations||[];
+    if(restored.some(o=>o.customerCode!=='LOCAL0001' || !o.operationId || !o.paymentLinkId)) return send(400,{message:'only local operations may be restored'});
+    acquiring.merchantId=body.merchantId;acquiring.cashbox=body.cashbox;
+    for(const operation of restored) acquiring.operations.set(operation.operationId,{...operation,paymentLink:'https://merch.securepaytb.ru/otziv-local-fixture/'+operation.operationId});
+    return send(200,{ok:true});
+  }
   if (url.pathname.endsWith('/acquiring/v1.0/retailers')) return send(200,{Data:{Retailer:[{status:"REG",isActive:true,merchantId:acquiring.merchantId,cashbox:acquiring.cashbox,paymentModes:["card","sbp"]}]}});
   if (url.pathname.endsWith('/acquiring/v1.0/payments_with_receipt')) {
     const data=body.Data,id=crypto.randomUUID();
-    const operation={...data,status:"CREATED",operationId:id,paymentLink:"https://example.test/local-payment/"+id};
+    const operation={...data,status:"CREATED",operationId:id,paymentLink:"https://merch.securepaytb.ru/otziv-local-fixture/"+id};
     acquiring.operations.set(id,operation);calls.push({method:"POST",path:url.pathname,paymentLinkId:data.paymentLinkId});
     return send(200,{Data:operation});
   }
   if (url.pathname.endsWith('/acquiring/v1.0/payments')) return send(200,{Data:{Operation:[...acquiring.operations.values()]},Meta:{totalPages:1}});
+  if (/\/acquiring\/v1.0\/payments\/[A-Za-z0-9-]+$/.test(url.pathname) && req.method==='GET') {
+    const operation=acquiring.operations.get(url.pathname.split('/').at(-1));
+    return operation ? send(200,{Data:{Operation:[operation]}}) : send(404,{message:'missing operation'});
+  }
+  if (url.pathname==='/test/pay-acquiring') {
+    const operation=acquiring.operations.get(body.operationId);
+    if(!operation) return send(404,{message:'missing local operation'});
+    operation.status='APPROVED';operation.paymentType=body.paymentType||operation.paymentMode?.[0]||'sbp';
+    const claims={...operation,webhookType:'acquiringInternetPayment'};
+    const response=await fetch('http://app:8080/api/payments/tochka/webhook',{method:'POST',headers:{'Content-Type':'text/plain'},body:jwt(claims)});
+    return send(200,{operationId:operation.operationId,status:response.status,response:await response.text()});
+  }
   if (url.pathname==="/lookup") {
     const inn=body.query;
     return send(200,{suggestions:inn==="7707083893"?[{data:{type:"LEGAL",inn,kpp:"773601001",
@@ -79,6 +97,8 @@ http.createServer(async (req,res)=>{
     res.writeHead(200,{"Content-Type":"application/pdf"});return res.end(pdf(document.number));
   }
   if (url.pathname==="/delivery") {
+    // Match the real file gateway contract, so empty PDF captions cannot pass local QA.
+    if (body.data && (!body.caption || !body.caption.trim())) return send(400,{code:"invalid_request"});
     if (!deliveries.has(body.operationId)) deliveries.set(body.operationId,{messageId:"fixture-"+deliveries.size,filename:body.filename,caption:body.caption,groupId:body.groupId});
     return send(200,deliveries.get(body.operationId));
   }

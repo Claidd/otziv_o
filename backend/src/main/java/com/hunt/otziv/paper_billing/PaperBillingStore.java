@@ -71,11 +71,12 @@ public class PaperBillingStore {
     }
     public void insert(String id,Target t,long company,Long link,long amount,String payer,String account,String customer,
             String client,String group,String actor) {
+        String reference="PB-"+t.id()+"-"+id.substring(0,8).toUpperCase(Locale.ROOT);
         jdbc.update("""
-            INSERT INTO paper_invoice_document(id,target_kind,target_id,company_id,payment_link_id,number,amount_kopecks,
+            INSERT INTO paper_invoice_document(id,target_kind,target_id,company_id,payment_link_id,number,payment_reference,amount_kopecks,
             payer_json,supplier_account,customer_code,composition_hash,client_id,group_id,created_by,created_at,updated_at)
-            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,NOW(6),NOW(6))
-            """,id,t.kind(),t.id(),company,link,"PB-"+t.id()+"-"+id.substring(0,8).toUpperCase(Locale.ROOT),amount,payer,account,customer,composition(t),client,group,actor);
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NOW(6),NOW(6))
+            """,id,t.kind(),t.id(),company,link,reference,reference,amount,payer,account,customer,composition(t),client,group,actor);
         if (link!=null) jdbc.update("UPDATE payment_links SET paper_bank_document_id=? WHERE id=?",id,link);
         if (t.kind().equals("COMMON_INVOICE")) common.bindDocument(t.id(),id);
         if (t.kind().equals("COMMON_PART")) {parts.bind(t.id(),id);jdbc.update("UPDATE paper_invoice_document SET parent_invoice_id=? WHERE id=?",parts.parent(t.id()),id);}
@@ -108,6 +109,12 @@ public class PaperBillingStore {
     }
     public void delivery(String id,boolean act,String state,String messageId) {
         jdbc.update("UPDATE paper_invoice_document SET "+(act?"act_delivery":"invoice_delivery")+"=?,"+(act?"act_message_id":"invoice_message_id")+"=?,updated_at=NOW(6) WHERE id=?",state,messageId,id);
+    }
+    public void deliveryFailure(String id,String label,String code,String detail) {
+        String text=label+": "+Objects.toString(detail,"Доставка не подтверждена")
+                +" ("+Objects.toString(code,"operation_unknown")+").";
+        jdbc.update("UPDATE paper_invoice_document SET error_text=?,updated_at=NOW(6) WHERE id=? AND cancelled_at IS NULL",
+                text.substring(0,Math.min(700,text.length())),id);
     }
     public List<String> pending() {
         for (String column:List.of("message_delivery","invoice_delivery","act_delivery")) {

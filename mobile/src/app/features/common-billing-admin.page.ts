@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy } from '@angular/core';
 import { ManagerCompanyBillingApi } from '../core/manager-company-billing.api';
 import { ManagerBoardApi } from '../core/manager-board.api';
 import { CommonBillingApi } from '../core/common-billing.api';
+import { OrderPaymentApi } from '../core/order-payment.api';
 import { ClientContractError } from '@otziv/client-common/billing-payments';
 import { inject, Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -587,6 +588,7 @@ export class CommonBillingAdminPage implements OnInit, OnDestroy {
   private readonly managerCompanyBillingApi = inject(ManagerCompanyBillingApi);
   private readonly managerBoardApi = inject(ManagerBoardApi);
   private readonly commonBillingApi = inject(CommonBillingApi);
+  private readonly orderPaymentApi = inject(OrderPaymentApi);
   readonly accounts = signal<CommonBillingAccountResponse[]>([]);
   readonly selectedAccountId = signal<number | null>(null);
   readonly details = signal<CommonInvoiceDetailsResponse | null>(null);
@@ -1004,6 +1006,13 @@ export class CommonBillingAdminPage implements OnInit, OnDestroy {
         orderReviewCopyText(order, this.orderReviewUrl(order)),
         `common-order-review-${order.id}`
       );
+      return;
+    }
+    if (this.details()?.orders.some(item=>item.orderId===order.id && item.ordinaryAfterPaperCancel)) {
+      try {
+        const result=await firstValueFrom(this.orderPaymentApi.createManagerOrderPaymentLink(order.id));
+        await this.copyText(result.copyText || result.url, `common-order-payment-${order.id}`);
+      } catch (error) { this.error.set(this.errorMessage(error,'Не удалось подготовить реквизиты заказа')); }
       return;
     }
     await this.copyText(this.currentInvoice()?.publicUrl ?? '', `common-order-payment-${order.id}`);

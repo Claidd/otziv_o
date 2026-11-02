@@ -6,9 +6,9 @@ export interface PaperTarget { kind: 'ORDER' | 'COMMON_INVOICE' | 'COMMON_PART';
 interface Payer { type: string; name: string; inn: string; kpp: string; address: string; }
 export interface PaperDocument { id: string; number: string; amountKopecks: number; stage: string; invoiceDelivery: string; actDelivery: string; error: string | null; paidAt: string | null; cancellationDelivery?: string; cancellationReason?: string; replacementState?: string; replacementError?: string; targetKind?:string;targetId?:number;payer?:Payer;orderIds?:number[]; }
 type Document = PaperDocument;
-interface Position {orderId:number;companyId:number;companyTitle:string;amountKopecks:number;ready:boolean;paid:boolean;documentId:string|null;}
+export interface Position {orderId:number;companyId:number;companyTitle:string;amountKopecks:number;ready:boolean;paid:boolean;documentId:string|null;}
 interface Choice {id:string;companyId:number;payer:Payer;primary:boolean;version?:number;lastUsedAt?:string;}
-interface Context { enabled: boolean; configured: boolean; lookupAvailable: boolean; accountLast4: string; companyId: number; companyTitle: string; amountKopecks: number; payer: Payer | null; document: Document | null; payers?:Choice[];positions?:Position[];documents?:Document[];parentInvoiceId?:number;groupUrl?:string;automaticError?:string; }
+export interface Context { enabled: boolean; configured: boolean; lookupAvailable: boolean; accountLast4: string; companyId: number; companyTitle: string; amountKopecks: number; payer: Payer | null; document: Document | null; payers?:Choice[];positions?:Position[];documents?:Document[];parentInvoiceId?:number;groupUrl?:string;automaticError?:string; }
 interface Request { target: PaperTarget; fallback: () => void; refresh: () => void; selectedOrder?:number; }
 const request = signal<Request | null>(null);
 export function openPaperInvoiceDialog(target: PaperTarget, fallback: () => void = () => {}, refresh: () => void = () => {}): void {
@@ -31,14 +31,17 @@ export function openPaperInvoiceDialog(target: PaperTarget, fallback: () => void
             @if (!c.configured) { <p class="error">Владелец ещё не настроил выпуск документов в Точке.</p> }
             @if (replacement() ? null : c.document; as d) {
               <h3>Счёт №{{ d.number }}</h3>
+              @if(d.orderIds?.length) { <p class="hint">Заказы № {{d.orderIds?.join(', ')}}</p> }
               <p>{{ (d.amountKopecks / 100).toLocaleString('ru-RU') }} ₽ · {{ d.paidAt ? 'Оплата получена' : stage(d.stage) }}</p>
               <p>Счёт: {{ delivery(d.invoiceDelivery) }}. Акт: {{ delivery(d.actDelivery) }}.</p>
               @if (d.error) { <p class="error">{{ d.error }}</p> }
               <div class="actions"><button type="button" (click)="download('invoice')">Скачать счёт</button><button type="button" (click)="download('act')">Скачать акт</button></div>
               <p class="hint">{{ d.stage === 'CANCELLED' ? 'Счёт и акт отменены. Эти PDF сохранены для истории, оплачивать их не нужно.' : 'Документы и поступление оплаты проверяются автоматически. Закрытие окна не отменяет счёт и акт в банке.' }}</p>
+              <div class="actions document-actions">
               <button type="button" (click)="poll()">Обновить</button>
               @if (!d.stage.startsWith('CANCEL')) { <button type="button" (click)="checkPayment()" [disabled]="busy() || d.paidAt !== null">Проверить оплату</button> }
-              @if (canCancel()) { <button type="button" class="danger" (click)="cancelForm.set(true)" [disabled]="busy()">{{isPartDocument()?'Отменить этот счёт и акт':'Отменить и выставить обычный счёт'}}</button> }
+              @if (canCancel()) { <button type="button" class="danger" (click)="cancelForm.set(true)" [disabled]="busy()">Сменить способ оплаты</button> }
+              </div>
               @if (d.stage === 'CANCEL_REQUESTED') { <p class="hint">Проверяем поступления и удаляем оба документа в Точке. Напоминания остановлены. При поступлении денег отмена будет передана на сверку.</p> }
               @if (d.stage === 'CANCEL_REVIEW') { <p role="alert" class="error">Отмена требует ручной сверки. Новый счёт не выпускается, автоматическое закрытие оплаты остановлено.</p> }
               @if (d.stage === 'CANCELLED') {
@@ -54,10 +57,10 @@ export function openPaperInvoiceDialog(target: PaperTarget, fallback: () => void
               }
               @if (cancelForm()) {
                 <form class="cancel-form" (ngSubmit)="cancel()">
-                  <h3>{{isPartDocument()?'Отмена выбранного комплекта':'Замена бумажного счёта обычным'}}</h3>
-                  <p>Система проверит поступления, отменит счёт и акт в Точке и уведомит заказчика. @if(isPartDocument()) { Остальные счета и заказы сохранятся. Освобождённые заказы можно будет включить в новый бумажный счёт. } @else { Затем заново выберет сотрудника или владельца по доступным резервам, отправит новые реквизиты и возобновит автоответчик. } Если обнаружено поступление или нужна сверка, отмена остановится.</p>
+                  <h3>Замена бумажного счёта обычным</h3>
+                  <p>Система проверит поступления, отменит счёт и акт в Точке и уведомит заказчика. Затем заново выберет сотрудника или владельца по доступным резервам, отправит новые реквизиты и возобновит автоответчик. @if(isPartDocument()) { Способ оплаты изменится только у заказов этого комплекта. Остальные счета сохранятся, а оплаты всех заказов продолжат учитываться в общем счёте. } Если обнаружено поступление или нужна сверка, отмена остановится.</p>
                   <label>Причина отмены<textarea name="cancelReason" maxlength="500" [(ngModel)]="cancelReason" [disabled]="busy()"></textarea></label>
-                  <label class="check"><input name="cancelConfirmed" type="checkbox" [(ngModel)]="cancelConfirmed" [disabled]="busy()" /> Подтверждаю отмену счёта и акта @if(!isPartDocument()){ и отправку обычного счёта }</label>
+                  <label class="check"><input name="cancelConfirmed" type="checkbox" [(ngModel)]="cancelConfirmed" [disabled]="busy()" /> Подтверждаю отмену счёта и акта и отправку обычных реквизитов</label>
                   <div class="actions"><button type="button" (click)="cancelForm.set(false)" [disabled]="busy()">Вернуться</button><button type="submit" class="danger" [disabled]="busy() || !cancelConfirmed || !cancelReason.trim()">Подтвердить отмену</button></div>
                 </form>
               }
@@ -66,7 +69,7 @@ export function openPaperInvoiceDialog(target: PaperTarget, fallback: () => void
                 @if(isCommonSelection()) {
                   <fieldset><legend>Заказы для этого счёта</legend>
                     @for(p of c.positions || []; track p.orderId) {
-                      <label class="check"><input type="checkbox" [name]="'paper-order-'+p.orderId" [checked]="selectedOrders().includes(p.orderId)" (change)="toggleOrder(p.orderId)" [disabled]="busy() || !p.ready || p.paid || !!p.documentId">{{p.companyTitle}} · заказ №{{p.orderId}} · {{(p.amountKopecks/100).toLocaleString('ru-RU')}} ₽ @if(p.paid){ · оплачен } @else if(p.documentId){ · уже выставлен счёт } @else if(!p.ready){ · ещё не готов }</label>
+                      <label class="check"><input type="checkbox" [name]="'paper-order-'+p.orderId" [checked]="selectedOrders().includes(p.orderId)" (change)="toggleOrder(p.orderId)" [disabled]="busy() || !p.ready || p.paid || !!p.documentId">{{p.companyTitle}} · заказ №{{p.orderId}} · {{(p.amountKopecks/100).toLocaleString('ru-RU')}} ₽ @if(p.paid){ · оплачен } @else if(p.documentId === 'ORDINARY'){ · обычные реквизиты } @else if(p.documentId){ · уже выставлен счёт } @else if(!p.ready){ · ещё не готов }</label>
                     }
                   </fieldset>
                 }
@@ -104,13 +107,15 @@ export function openPaperInvoiceDialog(target: PaperTarget, fallback: () => void
     :host-context(body.otziv-dark-theme){--paper-bg:#252b30;--paper-text:#edf1f5;--paper-muted:#b9c5d1;--paper-input:#1c2227;--paper-border:#596775;--paper-button:#343e47;--paper-error-bg:#482b34;--paper-error-text:#ffd5dc;--paper-error-border:#a65a70;color-scheme:dark}
     .paper-backdrop{position:fixed;inset:0;background:#14182799;z-index:100000;display:flex;align-items:center;justify-content:center;padding:16px}
     section{background:var(--paper-bg);color:var(--paper-text);border:1px solid var(--paper-border);border-radius:20px;padding:24px;width:min(580px,100%);max-height:92dvh;overflow:auto;box-shadow:0 20px 80px #0004}
-    header,.actions{display:flex;align-items:center;justify-content:space-between;gap:12px}h2{margin:0}header button{font-size:28px;border:0;background:transparent}
+    *,*::before,*::after{box-sizing:border-box}header{display:flex;align-items:center;justify-content:space-between;gap:12px}h2{margin:0}h3,p{overflow-wrap:anywhere;line-height:1.5}header button{font-size:28px;border:0;background:transparent;flex:0 0 44px}
+    .actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:stretch}.document-actions{margin-top:16px}.document-actions .danger{grid-column:1/-1}
     label{display:block;margin:16px 0 6px;font-size:14px;font-weight:600}input,select,textarea{display:block;width:100%;box-sizing:border-box;padding:12px;margin-top:6px;border:1px solid var(--paper-border);border-radius:9px;background:var(--paper-input);color:var(--paper-text);font:inherit}textarea{min-height:70px}
     .check{display:flex;align-items:center;gap:10px;font-weight:400}.check input{width:20px;flex-shrink:0}
-    button{padding:11px 16px;border:1px solid var(--paper-border);border-radius:10px;background:var(--paper-button);color:var(--paper-text);cursor:pointer;min-height:44px}button:disabled{opacity:.6;cursor:default}.primary{background:#ba4a25;color:white;border-color:#ba4a25}
+    button{padding:12px 16px;border:1px solid var(--paper-border);border-radius:12px;background:var(--paper-button);color:var(--paper-text);cursor:pointer;min-height:48px;min-width:0;max-width:100%;margin:0;font:inherit;line-height:1.35;white-space:normal}button:disabled{opacity:.6;cursor:default}.primary{background:#ba4a25;color:white;border-color:#ba4a25}
     .danger{background:var(--paper-error-bg);color:var(--paper-error-text);border-color:var(--paper-error-border)}.cancel-form{margin-top:20px;padding-top:12px;border-top:1px solid var(--paper-border)}button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid #dc8e67;outline-offset:2px}
     .hint{font-size:13px;color:var(--paper-muted);line-height:1.5}.error{padding:12px;border:1px solid var(--paper-error-border);background:var(--paper-error-bg);border-radius:9px;color:var(--paper-error-text)}footer{margin-top:20px;text-align:right}
-    @media(max-width:600px){.paper-backdrop{padding:8px;align-items:flex-end}section{padding:20px 16px}.actions{flex-wrap:wrap}.actions button{flex:1}}
+    @media(max-width:600px){.paper-backdrop{padding:12px;align-items:center}section{padding:24px 20px;max-height:calc(100dvh - 24px)}footer button{width:100%}}
+    @media(max-width:360px){.actions{grid-template-columns:1fr}}
   `]
 })
 export class PaperInvoiceDialogComponent implements OnDestroy {
@@ -247,7 +252,7 @@ export class PaperInvoiceDialogComponent implements OnDestroy {
   cancel(): void {
     const d=this.context()?.document;if(!d || !this.canCancel() || !this.cancelConfirmed || !this.cancelReason.trim()) return;
     const ticket=this.beginMutation();if(ticket===null) return;++this.pollTicket;
-    this.http.post<Document>(this.baseUrl+'/api/paper-invoices/documents/'+d.id+'/cancel',{reason:this.cancelReason.trim(),confirmed:true,replaceWithOrdinary:!this.isPartDocument()}).subscribe({
+    this.http.post<Document>(this.baseUrl+'/api/paper-invoices/documents/'+d.id+'/cancel',{reason:this.cancelReason.trim(),confirmed:true,replaceWithOrdinary:true}).subscribe({
       next: document => {if(!this.finishMutation(ticket)) return;++this.pollTicket;this.cancelForm.set(false);this.context.update(c=>c?{...c,document}:c);this.startPolling();},
       error: e => {if(ticket===this.ticket) this.failure(e);}
     });

@@ -927,7 +927,7 @@ public class CommonInvoiceDeliveryService {
     void markInvoiceOrdersToStatus(Long invoiceId, String status) {
         List<String> failures = new ArrayList<>();
         for (CommonInvoiceOrder item : invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId)) {
-            if (item == null || item.isPaid()) {
+            if (item == null || item.isPaid() || item.isOrdinaryAfterPaperCancel()) {
                 continue;
             }
             Order order = item.getOrder();

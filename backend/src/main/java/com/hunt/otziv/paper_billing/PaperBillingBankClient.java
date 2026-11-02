@@ -110,7 +110,8 @@ public class PaperBillingBankClient {
         content.put("Positions",List.of(line)); content.put("number",r.get("number")+(act?"-ACT":""));
         Object created=r.get("created_at");
         content.put("date",(created instanceof java.sql.Timestamp ts?ts.toLocalDateTime():(java.time.LocalDateTime)created).toLocalDate().toString());
-        content.put("basedOn","Заказ "+r.get("target_id")); content.put("totalAmount",total);
+        // Keep the bank's suggested purpose consistent with our unique reference.
+        content.put("basedOn","Счёт № "+r.get("number")); content.put("totalAmount",total);
         if (line.containsKey("totalNds")) content.put("totalNds",line.get("totalNds"));
         var data=new LinkedHashMap<String,Object>();
         data.put("accountId",r.get("supplier_account")); data.put("customerCode",r.get("customer_code"));

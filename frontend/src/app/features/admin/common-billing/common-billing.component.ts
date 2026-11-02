@@ -1,5 +1,6 @@
 import { openPaperInvoiceDialog } from '../../../shared/paper-invoice-dialog.component';
 import { PaperInvoiceListComponent } from '../../../shared/paper-invoice-list.component';
+import { paperInvoiceWorkflow, type PaperInvoiceListState } from '../../../shared/paper-invoice-workflow';
 import { ClientContractError, commonInvoiceDeliveryWarning, deliveryOperationMessage, DeliveryStatusWatcher } from '@otziv/client-common/billing-payments';
 import { DatePipe } from '@angular/common';
 import { Component, ElementRef, OnDestroy, ViewChild, computed, inject, signal } from '@angular/core';
@@ -21,6 +22,7 @@ import {
   type CommonManualPaymentMode
 } from '../../../core/common-manual-payment-attribution.api';
 import { AuthService } from '../../../core/auth.service';
+import { PaymentsApi } from '../../../core/payments.api';
 import {
   CompanyCardItem,
   ManagerApi,
@@ -294,6 +296,7 @@ export class CommonBillingComponent implements OnDestroy {
   @ViewChild('invoiceOrderCardsViewport') private invoiceOrderCardsElement?: ElementRef<HTMLElement>;
 
   private readonly commonBillingApi = inject(CommonBillingApi);
+  private readonly paymentsApi = inject(PaymentsApi);
   private readonly commonManualPaymentApi = inject(CommonManualPaymentAttributionApi);
   private readonly managerApi = inject(ManagerApi);
   private readonly auth = inject(AuthService);
@@ -519,9 +522,11 @@ export class CommonBillingComponent implements OnDestroy {
     this.auth.tokenParsed();
     return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER', 'MANAGER']);
   });
+  readonly paperInvoiceState = signal<PaperInvoiceListState | null>(null);
+  readonly paperWorkflow = computed(() => paperInvoiceWorkflow(this.currentInvoice(), this.paperInvoiceState()));
   readonly canMarkPaperInvoiceIssued = computed(() => {
     this.auth.tokenParsed();
-    return this.auth.hasAnyRealmRole([...PAPER_INVOICE_ISSUED_ROLES]);
+    return this.auth.hasAnyRealmRole([...PAPER_INVOICE_ISSUED_ROLES]) && this.paperWorkflow().manualAllowed;
   });
   readonly paperInvoiceAwaitingDeliveryConfirmation = computed(() =>
     paperInvoiceRequiresDeliveryConfirmation(this.currentInvoice())
@@ -1818,6 +1823,15 @@ export class CommonBillingComponent implements OnDestroy {
 
   async copyOrderText(order: OrderCardItem, kind: 'review' | 'payment'): Promise<void> {
     if (kind === 'payment') {
+      if (this.invoiceOrderInfo(order)?.ordinaryAfterPaperCancel) {
+        try {
+          const response = await firstValueFrom(this.paymentsApi.createOrderPaymentLink(order.id));
+          await this.copyText(response.copyText || response.url, `payment-${order.id}`, 'Реквизиты заказа скопированы');
+        } catch (error) {
+          this.toastService.error('Счёт не создан', apiErrorDetail(error, 'Не удалось подготовить реквизиты заказа'));
+        }
+        return;
+      }
       const url = this.currentInvoice()?.publicUrl?.trim();
       await this.copyText(
         url,

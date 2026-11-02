@@ -43,6 +43,16 @@ public class SharedChatLinkSyncService {
 
     private final CompanyRepository companyRepository;
 
+    @org.springframework.transaction.event.TransactionalEventListener(
+            phase = org.springframework.transaction.event.TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public void syncChangedMessengerLink(com.hunt.otziv.c_companies.api.CompanyChatLinkChanged event) {
+        if (event != null && event.urlChat() != null
+                && !normalizedChatKey(event.urlChat()).orElse("").startsWith("whatsapp:")) {
+            syncCompanyChatId(event.companyId());
+        }
+    }
+
     @Transactional
     public SharedChatLinkSyncResponse syncSharedChatIds() {
         List<Company> companies = companyRepository.findAllWithChatUrl().stream()
@@ -245,6 +255,7 @@ public class SharedChatLinkSyncService {
     ) {
         Set<String> knownIds = new LinkedHashSet<>();
         for (Company company : companies) {
+            if ("WhatsApp".equals(platform) && company.isWhatsAppInvitePending()) continue;
             String value = normalizeNullable(reader.read(company));
             if (value != null) {
                 knownIds.add(value);
@@ -263,6 +274,7 @@ public class SharedChatLinkSyncService {
         String sharedId = knownIds.iterator().next();
         int linked = 0;
         for (Company company : companies) {
+            if ("WhatsApp".equals(platform) && company.isWhatsAppInvitePending()) continue;
             if (normalizeNullable(reader.read(company)) != null) {
                 continue;
             }
@@ -296,6 +308,7 @@ public class SharedChatLinkSyncService {
             knownIds.add(authoritativeId.trim());
         }
         for (Company company : companies) {
+            if ("WhatsApp".equals(platform) && company.isWhatsAppInvitePending() && !hasAuthoritativeId) continue;
             if (!hasAuthoritativeId && Objects.equals(company.getId(), targetCompanyId)) {
                 continue;
             }
@@ -319,6 +332,7 @@ public class SharedChatLinkSyncService {
                 : knownIds.iterator().next();
         int linked = 0;
         for (Company company : companies) {
+            if ("WhatsApp".equals(platform) && company.isWhatsAppInvitePending() && !hasAuthoritativeId) continue;
             if (!isTargetedSyncTarget(company, targetCompanyId)) {
                 continue;
             }
@@ -329,6 +343,7 @@ public class SharedChatLinkSyncService {
             }
 
             writer.write(company, sharedId);
+            if ("WhatsApp".equals(platform) && hasAuthoritativeId) company.setWhatsAppInvitePending(false);
             updatedCompanies.add(company);
             linked++;
         }

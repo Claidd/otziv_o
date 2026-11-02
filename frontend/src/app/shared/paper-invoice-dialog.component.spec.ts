@@ -36,11 +36,11 @@ describe('Paper invoice asynchronous lifecycle', () => {
     http.expectOne('/api/paper-invoices/COMMON_INVOICE/8/context').flush({enabled:true,configured:true,payer:null,document:null,positions:[{orderId:5,ready:true,paid:false,documentId:null,amountKopecks:12300}]});fixture.detectChanges();
     expect(fixture.componentInstance.selectedOrders()).toEqual([5]);expect(fixture.componentInstance.selectedAmount()).toBe(12300);
   });
-  it('cancelling one common part never requests the whole parent ordinary route',()=>{
+  it('cancelling one common part requests ordinary payment only for its own target',()=>{
     openPaperInvoiceDialog({kind:'COMMON_PART',id:9});fixture.detectChanges();
     http.expectOne('/api/paper-invoices/COMMON_PART/9/context').flush({enabled:true,document:{...doc('part','WAITING_PAYMENT'),targetKind:'COMMON_PART'},parentInvoiceId:8});fixture.detectChanges();
     const c=fixture.componentInstance;c.cancelReason='Новые реквизиты';c.cancelConfirmed=true;c.cancel();
-    const cancel=http.expectOne('/api/paper-invoices/documents/part/cancel');expect(cancel.request.body.replaceWithOrdinary).toBe(false);cancel.flush(doc('part','CANCEL_REQUESTED'));
+    const cancel=http.expectOne('/api/paper-invoices/documents/part/cancel');expect(cancel.request.body.replaceWithOrdinary).toBe(true);cancel.flush(doc('part','CANCEL_REQUESTED'));
   });
 
   it('closing the unissued form performs no bank mutation', () => {
@@ -102,7 +102,7 @@ describe('Paper invoice asynchronous lifecycle', () => {
   });
   it('ordinary handoff has one action and cannot reissue a paper invoice', () => {
     open(1,doc('1','WAITING_PAYMENT'));fixture.detectChanges();
-    expect(fixture.nativeElement.textContent).toContain('Отменить и выставить обычный счёт');
+    expect(fixture.nativeElement.textContent).toContain('Сменить способ оплаты');
     open(2,{...doc('2','CANCELLED'),replacementState:'PENDING'});const c=fixture.componentInstance;fixture.detectChanges();
     c.newInvoice();expect(c.replacement()).toBe(false);expect(c.canReplace()).toBe(false);
     expect(fixture.nativeElement.textContent).toContain('по текущим резервам');

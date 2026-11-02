@@ -93,6 +93,10 @@ public class GroupReplyServiceImpl implements GroupReplyService {
         }
 
         Company found = optCompany.get();
+        if (found.isWhatsAppInvitePending()) {
+            log.info("WhatsApp group reply cannot restore a changed invite by phone/title: companyId={}", found.getId());
+            return;
+        }
         if (found.getGroupId() == null || found.getGroupId().isBlank()) {
             found.setGroupId(reply.getGroupId());
             companyService.save(found);

@@ -1,6 +1,9 @@
 package com.hunt.otziv.payments.service;
 
 import com.hunt.otziv.payments.model.PaymentLink;
+import com.hunt.otziv.payments.model.PaymentLinkStatus;
+import com.hunt.otziv.payments.model.PaymentMethod;
+import com.hunt.otziv.payments.model.PaymentProfile;
 import java.time.LocalDateTime;
 import com.hunt.otziv.payments.model.SpecialistManualPaymentReview;
 import com.hunt.otziv.payments.model.SpecialistManualPaymentReviewStatus;
@@ -26,6 +29,44 @@ public class SpecialistManualPaymentReviewGuard implements com.hunt.otziv.paymen
             SpecialistManualPaymentReviewStatus.DISPUTED,
             SpecialistManualPaymentReviewStatus.NEEDS_ATTENTION);
     private final SpecialistManualPaymentReviewRepository reviews;
+
+    public enum BankPaymentAccess { UNRESTRICTED, EXISTING_OPERATION_ONLY }
+
+    /** Order and source link are locked by the caller. A failed manual handoff must
+     * not hide the original unpaid bank operation. This never authorizes a new one. */
+    public BankPaymentAccess requireBankPaymentAccess(PaymentLink link, PaymentMethod requestedMethod) {
+        List<SpecialistManualPaymentReview> unresolved = reviews.lockUnresolvedByOrderId(link.getOrderId(), UNRESOLVED);
+        if (unresolved.isEmpty()) return BankPaymentAccess.UNRESTRICTED;
+        if (unresolved.size() == 1 && isUncreditedTochkaHandoffFailure(unresolved.getFirst(), link, requestedMethod)) {
+            return BankPaymentAccess.EXISTING_OPERATION_ONLY;
+        }
+        throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "Сверка перевода специалисту не завершена. Оплату и новый счёт пока нельзя подтвердить");
+    }
+
+    private boolean isUncreditedTochkaHandoffFailure(SpecialistManualPaymentReview review,
+            PaymentLink link, PaymentMethod requestedMethod) {
+        return review.getStatus() == SpecialistManualPaymentReviewStatus.NEEDS_ATTENTION
+                && review.getCreditedAt() == null && review.getSettledAt() == null
+                && review.getDisputedAt() == null && review.getResolvedAt() == null
+                && review.getLastError() != null
+                && review.getLastError().startsWith(ManualCardRoutePolicy.ACTIVE_TOCHKA_MANUAL_ERROR_PREFIX)
+                && Objects.equals(review.getOrderId(), link.getOrderId())
+                && Objects.equals(review.getPaymentLinkId(), link.getId())
+                && review.getAmountKopecks() == link.getAmountKopecks()
+                && link.getPaymentProfile() != null
+                && PaymentProfile.PROVIDER_TOCHKA.equals(link.getPaymentProfile().normalizedProvider())
+                && link.getStatus() == PaymentLinkStatus.INITIATED
+                && (requestedMethod == PaymentMethod.SBP_QR || requestedMethod == PaymentMethod.BANK_FORM)
+                && requestedMethod == link.getPaymentMethod()
+                && link.getPaidAt() == null && link.getManualConfirmedAt() == null
+                && link.getConfirmedAmountKopecks() == null
+                && hasText(link.getTbankPaymentId()) && hasText(link.getPaymentUrl())
+                && !hasText(link.getBankInitNonce()) && !hasText(link.getBankCancelNonce())
+                && link.getBankCancelOriginStatus() == null;
+    }
+
+    private boolean hasText(String value) { return value != null && !value.isBlank(); }
 
     public void requireNoPendingReview(Long orderId) {
         if (orderId != null && reviews.existsByOrderIdAndStatusIn(orderId, UNRESOLVED)) {

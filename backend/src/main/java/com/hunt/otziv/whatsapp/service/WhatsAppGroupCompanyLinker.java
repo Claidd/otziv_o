@@ -72,12 +72,13 @@ public class WhatsAppGroupCompanyLinker {
         for (Company candidate : candidates) {
             if (!CompanyChatBindingPolicy.isRequired(candidate)
                     || !code.equals(whatsAppInviteCode(candidate.getUrlChat()).orElse(null))
-                    || Objects.equals(candidate.getGroupId(), groupId)) {
+                    || (Objects.equals(candidate.getGroupId(), groupId) && !candidate.isWhatsAppInvitePending())) {
                 continue;
             }
 
             String previousGroupId = candidate.getGroupId();
             candidate.setGroupId(groupId);
+            candidate.setWhatsAppInvitePending(false);
             companyRepository.save(candidate);
             updated++;
             if (hasText(previousGroupId)) {
@@ -294,7 +295,7 @@ public class WhatsAppGroupCompanyLinker {
         }
 
         for (Company company : companies) {
-            if (!CompanyChatBindingPolicy.isRequired(company)) {
+            if (!CompanyChatBindingPolicy.isRequired(company) || company.isWhatsAppInvitePending()) {
                 continue;
             }
             String title = normalizeTitle(company == null ? null : company.getTitle());

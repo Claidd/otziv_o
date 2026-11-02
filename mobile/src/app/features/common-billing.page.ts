@@ -2,6 +2,7 @@ import { openPaperInvoiceDialog } from '../shared/paper-invoice-dialog.component
 import { ChangeDetectionStrategy } from '@angular/core';
 import { commonInvoiceDeliveryWarning, deliveryOperationMessage, DeliveryStatusWatcher } from '@otziv/client-common/billing-payments';
 import { CommonBillingApi } from '../core/common-billing.api';
+import { OrderPaymentApi } from '../core/order-payment.api';
 import { inject, Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -658,6 +659,7 @@ export class CommonBillingPage implements OnInit, OnDestroy {
   readonly deliveryStatusText = deliveryOperationMessage;
   private readonly deliveryWatcher = new DeliveryStatusWatcher();
   private readonly commonBillingApi = inject(CommonBillingApi);
+  private readonly orderPaymentApi = inject(OrderPaymentApi);
   readonly paymentInitNoPaymentActionLabel = COMMON_INVOICE_NO_PAYMENT_ACTION_LABEL;
   readonly paymentInitNoPaymentActionHint = commonInvoiceNoPaymentActionHint();
   readonly paymentInitInstructions = commonInvoicePaymentInitInstructions();
@@ -1228,6 +1230,13 @@ export class CommonBillingPage implements OnInit, OnDestroy {
         `invoice-order-review-${order.id}`,
         'Не удалось скопировать текст проверки отзывов.'
       );
+      return;
+    }
+    if (this.invoiceOrderForCard(order)?.ordinaryAfterPaperCancel) {
+      try {
+        const result=await firstValueFrom(this.orderPaymentApi.createManagerOrderPaymentLink(order.id));
+        await this.copyText(result.copyText || result.url, `invoice-order-payment-${order.id}`, 'Не удалось скопировать реквизиты заказа.');
+      } catch (error) { this.error.set(this.errorMessage(error,'Не удалось подготовить реквизиты заказа')); }
       return;
     }
     await this.copyText(this.summary()?.publicUrl ?? '', `invoice-order-payment-${order.id}`, 'Не удалось скопировать ссылку общего счета.');
