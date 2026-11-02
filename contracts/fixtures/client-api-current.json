@@ -1192,7 +1192,9 @@
       "reached100Days" : 2,
       "closedPeriod" : false,
       "updating" : false,
-      "calculatedAt" : "2026-09-07T00:00:00Z"
+      "calculatedAt" : "2026-09-07T00:00:00Z",
+      "externalBlockedCount" : 2,
+      "lateExcludedCount" : 2
     },
     "DeepCompanyResearchJobStatusOutput" : {
       "jobId" : 2,
@@ -1708,7 +1710,9 @@
         "reached100Days" : 2,
         "closedPeriod" : false,
         "updating" : false,
-        "calculatedAt" : "2026-09-07T00:00:00Z"
+        "calculatedAt" : "2026-09-07T00:00:00Z",
+        "externalBlockedCount" : 2,
+        "lateExcludedCount" : 2
       }
     },
     "ManagerClientReplyResolutionResponseOutput" : {
