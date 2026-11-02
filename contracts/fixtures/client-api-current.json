@@ -526,7 +526,8 @@
         "paidBy" : "contract-example",
         "paymentComment" : "contract-example",
         "paymentReceiptUrl" : "contract-example",
-        "detachBlockedReason" : "contract-example"
+        "detachBlockedReason" : "contract-example",
+        "ordinaryAfterPaperCancel" : false
       } ],
       "orderCards" : [ {
         "id" : 2,
@@ -653,7 +654,8 @@
       "paidBy" : "contract-example",
       "paymentComment" : "contract-example",
       "paymentReceiptUrl" : "contract-example",
-      "detachBlockedReason" : "contract-example"
+      "detachBlockedReason" : "contract-example",
+      "ordinaryAfterPaperCancel" : false
     },
     "CommonInvoicePaymentRefResponseOutput" : {
       "id" : 2,
@@ -3817,7 +3819,8 @@
         "paidBy" : "contract-example",
         "paymentComment" : "contract-example",
         "paymentReceiptUrl" : "contract-example",
-        "detachBlockedReason" : "contract-example"
+        "detachBlockedReason" : "contract-example",
+        "ordinaryAfterPaperCancel" : false
       } ]
     },
     "PublicPaymentInitResponseOutput" : {
