@@ -1,15 +1,15 @@
 package com.hunt.otziv.client_messages.service;
 
 import com.hunt.otziv.client_messages.model.ClientMessageScenario;
-import com.hunt.otziv.config.settings.service.AppSettingService;
+import com.hunt.otziv.config.settings.api.BackgroundAutomationSettings;
 import java.time.LocalDateTime;
-import static com.hunt.otziv.config.settings.service.AppSettingService.*;
+import static com.hunt.otziv.config.settings.api.BackgroundAutomationSettings.*;
 
 /** Shared, fresh permissions for background work; unavailable settings never grant permission. */
 final class ClientMessageAutomationPolicy {
     private ClientMessageAutomationPolicy() { }
 
-    static boolean allowed(AppSettingService settings, ClientMessageScenario scenario, LocalDateTime now) {
+    static boolean allowed(BackgroundAutomationSettings settings, ClientMessageScenario scenario, LocalDateTime now) {
         try {
             if (!settings.getBooleanFreshFailClosed(CLIENT_MESSAGES_WORKER_ENABLED, true)) return false;
             String pause = settings.getStringFresh(CLIENT_MESSAGES_PAUSED_UNTIL, null);
