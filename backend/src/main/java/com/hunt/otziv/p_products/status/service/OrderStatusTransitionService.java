@@ -165,6 +165,13 @@ public class OrderStatusTransitionService {
                 false, null, false, true);
     }
 
+    /** Called by the seven-reminder policy after complete channel-history and payment checks. */
+    @Transactional
+    public boolean archiveAfterClientTextReminders(Long orderID) throws Exception {
+        return changeStatusForOrderInternal(orderID, STATUS_ARCHIVE, false, false, false,
+                false, null, false, false, true);
+    }
+
     @Transactional
     public boolean changeStatusForRestoredArchiveOrder(Long orderID, String title) throws Exception {
         return changeStatusForOrderInternal(orderID, title, false, false, true);
@@ -250,6 +257,15 @@ public class OrderStatusTransitionService {
             boolean allowBanWithPendingBadTasks,boolean restoredArchiveOrigin,boolean allowPaymentReturnReminder,
             org.springframework.security.core.Authentication actor,boolean explicitActor,
             boolean automaticReviewApproval) throws Exception {
+        return changeStatusForOrderInternal(orderID, title, allowCommonBillingFinancialStatus,
+                allowBanWithPendingBadTasks, restoredArchiveOrigin, allowPaymentReturnReminder,
+                actor, explicitActor, automaticReviewApproval, false);
+    }
+
+    private boolean changeStatusForOrderInternal(Long orderID,String title,boolean allowCommonBillingFinancialStatus,
+            boolean allowBanWithPendingBadTasks,boolean restoredArchiveOrigin,boolean allowPaymentReturnReminder,
+            org.springframework.security.core.Authentication actor,boolean explicitActor,
+            boolean automaticReviewApproval, boolean clientTextSilenceArchive) throws Exception {
         try {
             orderAggregateMutationLockService.lock(orderID);
             Order order = orderRepository.findByIdForMutation(orderID)
@@ -257,6 +273,12 @@ public class OrderStatusTransitionService {
 
             ensureSupportedTargetStatus(title);
             String oldStatus = safeStatusTitle(order);
+            if (clientTextSilenceArchive && (!STATUS_NEW.equals(oldStatus) || !order.isWaitingForClient()
+                    || order.isComplete() || order.getPayDay() != null || order.getCounter() > 0
+                    || reviewRepository.countPublishedByOrderId(orderID) > 0)) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Автоархив ожидания текстов допустим только для нового заказа без публикаций и оплаты");
+            }
             if (safeString(oldStatus).equals(safeString(title))) {
                 recordStatusAudit(order, oldStatus, oldStatus, title, false,actor,explicitActor);
                 return true;
@@ -269,8 +291,9 @@ public class OrderStatusTransitionService {
                         "По заказу выпущены банковские документы. Сначала выполните сверку счёта и акта; смена рабочего статуса не отменяет документы в банке");
             }
             ensureCompletedOrderNotReopened(order, title);
-            ensureStatusTransitionAllowed(order, title, allowPaymentReturnReminder);
-            if (STATUS_ARCHIVE.equals(title) && !OrderManualArchivePolicy.isAllowed(order)) {
+            // The automatic client-text path validated its narrower source above.
+            if (!clientTextSilenceArchive) ensureStatusTransitionAllowed(order, title, allowPaymentReturnReminder);
+            if (STATUS_ARCHIVE.equals(title) && !clientTextSilenceArchive && !OrderManualArchivePolicy.isAllowed(order)) {
                 throw new ResponseStatusException(
                         HttpStatus.CONFLICT,
                         "В архив можно перевести заказ только из статусов \"В проверку\", \"На проверке\", \"Коррекция\" или \"Публикация\""
@@ -283,7 +306,7 @@ public class OrderStatusTransitionService {
             order.setClientMessageGeneration(Math.addExact(previousMessageGeneration, 1));
             boolean changed = switch (title) {
                 case STATUS_PAYMENT -> handlePaymentStatus(order);
-                case STATUS_ARCHIVE -> handleArchiveStatus(order);
+                case STATUS_ARCHIVE -> handleArchiveStatus(order, !clientTextSilenceArchive);
                 case STATUS_TO_CHECK -> handleToCheckStatus(order);
                 case STATUS_IN_CHECK -> handleManualInCheckStatus(order);
                 case STATUS_CORRECTION -> handleCorrectionStatus(order);
@@ -623,16 +646,18 @@ public class OrderStatusTransitionService {
         log.info("Уведомление о начале публикации поставлено в очередь, orderId={}", order.getId());
     }
 
-    private boolean handleArchiveStatus(Order order) {
+    private boolean handleArchiveStatus(Order order, boolean requireReviewTexts) {
         log.info("=== АРХИВАЦИЯ ЗАКАЗА ID: {} ===", order.getId());
 
-        validateReviewsReadyForArchive(order);
+        if (requireReviewTexts) validateReviewsReadyForArchive(order);
 
         saveReviewsToArchive(order);
 
         clearPublicationDatesForUnpublishedReviews(order);
 
         order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_ARCHIVE));
+        order.setWaitingForClient(false);
+        order.setWaitingForClientChangedAt(null);
         orderCompanyStatusService.autoManageCompanyStatus(order, STATUS_ARCHIVE);
 
         orderBotLifecycleService.detachBots(order);

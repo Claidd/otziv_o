@@ -19,7 +19,7 @@ public class ReviewArchiveCheckMonitor {
             SELECT s.state_id,s.order_id,c.company_title,s.archive_check_channel,s.archive_check_status,
               s.archive_block_reason,s.archive_checked_at,s.archive_next_check_at
             FROM scheduled_client_message_state s LEFT JOIN companies c ON c.company_id=s.company_id
-            WHERE s.scenario='REVIEW_CHECK_REMINDER' AND s.sent_count>=7
+            WHERE s.scenario IN ('REVIEW_CHECK_REMINDER','CLIENT_TEXT_REMINDER') AND s.sent_count>=7
               AND (s.state_status='ACTIVE' OR s.archive_checked_at>DATE_SUB(NOW(6),INTERVAL 7 DAY))
             ORDER BY s.archive_checked_at DESC,s.state_id LIMIT 200
             """,(rs,n)->new Row(rs.getLong(1),rs.getLong(2),rs.getString(3),rs.getString(4),rs.getString(5),rs.getString(6),

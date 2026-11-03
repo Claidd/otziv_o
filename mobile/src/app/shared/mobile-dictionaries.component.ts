@@ -502,7 +502,7 @@ const CLIENT_MESSAGE_DEFAULTS: AdminClientMessageSettings = {
                     <label class="toggle-row"><input type="checkbox" [ngModel]="autoresponder().liveEnabled" (ngModelChange)="patchAutoresponder('liveEnabled', $event)"><span>Реальная отправка</span></label>
                     <label class="toggle-row"><input type="checkbox" [ngModel]="autoresponder().immediateEnabled" (ngModelChange)="patchAutoresponder('immediateEnabled', $event)"><span>Быстрые отправки</span></label>
                     <label class="toggle-row"><input type="checkbox" [ngModel]="autoresponder().reviewCheckEnabled" (ngModelChange)="patchAutoresponder('reviewCheckEnabled', $event)"><span>Проверка отзывов</span></label>
-                    <label class="toggle-row"><input type="checkbox" [ngModel]="autoresponder().reviewCheckAutoArchiveEnabled" (ngModelChange)="patchAutoresponder('reviewCheckAutoArchiveEnabled', $event)"><span>Автоархив проверки</span></label>
+                    <label class="toggle-row"><input type="checkbox" [ngModel]="autoresponder().reviewCheckAutoArchiveEnabled" (ngModelChange)="patchAutoresponder('reviewCheckAutoArchiveEnabled', $event)"><span>Архив после 7 напоминаний</span></label>
                     <label class="toggle-row"><input type="checkbox" [ngModel]="autoresponder().clientTextReminderEnabled" (ngModelChange)="patchAutoresponder('clientTextReminderEnabled', $event)"><span>Запрос текста клиента</span></label>
                     <label class="toggle-row"><input type="checkbox" [ngModel]="autoresponder().paymentReminderEnabled" (ngModelChange)="patchAutoresponder('paymentReminderEnabled', $event)"><span>Напоминать об оплате</span></label>
                     <label class="toggle-row"><input type="checkbox" [ngModel]="autoresponder().badReviewInvoiceEnabled" (ngModelChange)="patchAutoresponder('badReviewInvoiceEnabled', $event)"><span>Счет после плохого</span></label>
@@ -526,7 +526,7 @@ const CLIENT_MESSAGE_DEFAULTS: AdminClientMessageSettings = {
                   </header>
                   <div class="form-grid">
                     <label><span>Интервал проверки, дней</span><input type="number" min="1" [ngModel]="autoresponder().reviewCheckIntervalDays" (ngModelChange)="patchAutoresponder('reviewCheckIntervalDays', $event)"></label>
-                    <label><span>Автоархив проверки, дней</span><input type="number" min="1" [ngModel]="autoresponder().reviewCheckAutoArchiveDays" (ngModelChange)="patchAutoresponder('reviewCheckAutoArchiveDays', $event)"></label>
+                    <p>Ожидание текстов или согласования: после 7 доставленных напоминаний даётся ещё один интервал для ответа, не менее двух дней. Архивирование требует проверки переписки и отсутствия оплаты.</p>
                     <label><span>Запрос текста, дней</span><input type="number" min="1" [ngModel]="autoresponder().clientTextReminderIntervalDays" (ngModelChange)="patchAutoresponder('clientTextReminderIntervalDays', $event)"></label>
                     <label><span>Интервал оплаты, дней</span><input type="number" min="1" [ngModel]="autoresponder().paymentReminderIntervalDays" (ngModelChange)="patchAutoresponder('paymentReminderIntervalDays', $event)"></label>
                     <label><span>Повтор проверки, часов</span><input type="number" min="1" [ngModel]="autoresponder().reviewCheckRetryDelayHours" (ngModelChange)="patchAutoresponder('reviewCheckRetryDelayHours', $event)"></label>

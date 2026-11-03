@@ -98,16 +98,6 @@ public class ManagerControlOrderAutomationDiagnostics {
             return WorkerClientTextDecision.includeDefault();
         }
 
-        long days = daysSince(clientTextWaitingControlDate(order), today);
-        if (days > ScheduledClientMessageService.DEFAULT_CLIENT_TEXT_WAITING_AUTO_CLEAR_DAYS) {
-            return new WorkerClientTextDecision(
-                    true,
-                    "Клиент не прислал текст больше "
-                            + ScheduledClientMessageService.DEFAULT_CLIENT_TEXT_WAITING_AUTO_CLEAR_DAYS
-                            + " дн., но заказ все еще отмечен как «ждет клиента». Решение: снимите статус \"ждет клиента\"."
-            );
-        }
-
         String bindingProblem = clientTextChatBindingProblem(order.getCompany());
         if (!bindingProblem.isBlank()) {
             return new WorkerClientTextDecision(
@@ -241,6 +231,10 @@ public class ManagerControlOrderAutomationDiagnostics {
         if (state.getStatus() == ScheduledMessageStateStatus.DISABLED || state.getStatus() == ScheduledMessageStateStatus.PAUSED) {
             return false;
         }
+        if (state.getSentCount() >= ScheduledClientMessageService.SILENCE_ARCHIVE_REMINDER_COUNT
+                && !safe(state.getArchiveBlockReason()).isBlank()) {
+            return false;
+        }
         String errorCode = safe(state.getLastErrorCode()).toLowerCase(Locale.ROOT);
         if (!errorCode.isBlank()
                 && !errorCode.contains("dry_run")
@@ -258,6 +252,10 @@ public class ManagerControlOrderAutomationDiagnostics {
     String clientTextReminderProblem(ScheduledClientMessageState state) {
         if (state == null) {
             return "нет записи в очереди CLIENT_TEXT_REMINDER";
+        }
+        if (state.getSentCount() >= ScheduledClientMessageService.SILENCE_ARCHIVE_REMINDER_COUNT
+                && !safe(state.getArchiveBlockReason()).isBlank()) {
+            return "проверка автоархива отложена: " + state.getArchiveBlockReason();
         }
         if (!safe(state.getLastErrorMessage()).isBlank()) {
             return state.getLastErrorMessage();

@@ -115,7 +115,7 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
 
     public static final int DEFAULT_REMINDER_INTERVAL_DAYS = 2;
     public static final int DEFAULT_CLIENT_TEXT_REMINDER_INTERVAL_DAYS = 2;
-    public static final int DEFAULT_CLIENT_TEXT_WAITING_AUTO_CLEAR_DAYS = 7;
+    public static final int SILENCE_ARCHIVE_REMINDER_COUNT = 7;
     public static final int DEFAULT_REVIEW_CHECK_AUTO_ARCHIVE_DAYS = 30;
     public static final int DEFAULT_REVIEW_CHECK_RETRY_DELAY_HOURS = 2;
     public static final int DEFAULT_PAYMENT_INVOICE_RETRY_DELAY_HOURS = 2;
@@ -145,6 +145,7 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
     public static final int DEFAULT_ERROR_PROTECTION_COOLDOWN_MINUTES = 60;
     private static final Duration SUMMARY_LOG_INTERVAL = Duration.ofMinutes(5);
     private static final String RECONCILE_LEASE_NAME = "client-messages-reconciliation";
+    private static final String STATUS_NEW = "Новый";
     private static final String STATUS_TO_CHECK = "В проверку";
     private static final String STATUS_IN_CHECK = "На проверке";
     private static final String STATUS_PUBLIC = "Опубликовано";
@@ -755,7 +756,7 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
     @Override @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public Decision archiveAfterReminders(long stateId) {
         var requested = stateRepository.findById(stateId).orElse(null);
-        if (requested == null || requested.getScenario() != ClientMessageScenario.REVIEW_CHECK_REMINDER)
+        if (!isSilenceArchiveReminder(requested))
             return new Decision(false,null);
         if (!appSettingService.getBooleanFreshFailClosed(AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_AUTO_ARCHIVE_ENABLED,true))
             return new Decision(false,"Автоархив выключен настройкой.");
@@ -774,10 +775,9 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
                     proof==null || proof.outcome()==ReviewArchiveHistory.Outcome.HISTORY_UNAVAILABLE?5:30,
                     proof==null?"HISTORY_UNAVAILABLE":proof.outcome().name(),chat.platform());
         var checkedProof=proof;
-        boolean changed = transactionRunner.callInPreparationTransaction(() -> commitReviewArchive(check,chat,checkedProof));
-        if(!changed) return deferReviewArchive(check,"Автоархив остановлен: изменились заказ, оплата, отправка или данные ответа клиента.",5,"STATE_CHANGED",chat.platform());
-        return new Decision(changed,changed ? "Заказ архивирован; предложение и уведомления записаны в очередь."
-                : "Автоархив остановлен: изменились заказ, оплата, отправка или данные ответа клиента.");
+        Decision result = transactionRunner.callInPreparationTransaction(() -> commitReviewArchive(check,chat,checkedProof));
+        if(result == null) return deferReviewArchive(check,"Автоархив остановлен: изменились заказ, оплата, отправка или данные ответа клиента.",5,"STATE_CHANGED",chat.platform());
+        return result;
     }
 
     private ReviewArchiveHistory.Chat archiveChat(ArchiveCheck check) {
@@ -817,14 +817,31 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
     }
 
     private boolean silenceThresholdReached(ScheduledClientMessageState state, LocalDateTime now) {
-        return state != null && state.getScenario() == ClientMessageScenario.REVIEW_CHECK_REMINDER
-                && state.getStatus() == ScheduledMessageStateStatus.ACTIVE && state.getSentCount() >= 7
+        return isSilenceArchiveReminder(state)
+                && state.getStatus() == ScheduledMessageStateStatus.ACTIVE
+                && state.getSentCount() >= SILENCE_ARCHIVE_REMINDER_COUNT
                 && state.getDeliveryStatus() == null && !hasText(state.getDeliveryEnvelope())
                 && !(state.getDispatchGeneration() > 0 && state.getNextAttemptAt() != null
                     && state.getNextAttemptAt().isAfter(now) && isDeferredReminderGeneration(state))
                 && state.getLastSuccessAt() != null
-                && !state.getLastSuccessAt().plusDays(Math.max(2,reviewCheckIntervalDays())).isAfter(now)
+                && !state.getLastSuccessAt().plusDays(Math.max(2,
+                    state.getScenario() == ClientMessageScenario.CLIENT_TEXT_REMINDER
+                            ? clientTextReminderIntervalDays() : reviewCheckIntervalDays())).isAfter(now)
                 && (state.getLockedUntil() == null || !state.getLockedUntil().isAfter(now));
+    }
+
+    private boolean isSilenceArchiveReminder(ScheduledClientMessageState state) {
+        return state != null && (state.getScenario() == ClientMessageScenario.REVIEW_CHECK_REMINDER
+                || state.getScenario() == ClientMessageScenario.CLIENT_TEXT_REMINDER);
+    }
+
+    private boolean isCurrentSilenceArchiveCycle(ScheduledClientMessageState state, Order order) {
+        if (state.getScenario() == ClientMessageScenario.CLIENT_TEXT_REMINDER) {
+            return STATUS_NEW.equals(statusTitle(order)) && order.isWaitingForClient()
+                    && isCurrentClientTextWaitingCycle(state, order);
+        }
+        return state.getScenario() == ClientMessageScenario.REVIEW_CHECK_REMINDER
+                && STATUS_IN_CHECK.equals(statusTitle(order)) && isCurrentOrderCycle(state, order);
     }
 
     private ArchiveCheck archiveCheck(long stateId) {
@@ -832,32 +849,35 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
         if (!silenceThresholdReached(state,messageTime.nowStorage())) return null;
         var source = orderDeliveryContext.read(state.getOrderId()).orElse(null);
         Order order = orderRepository.findById(state.getOrderId()).orElse(null);
-        if (source == null || order == null || !STATUS_IN_CHECK.equals(statusTitle(order))
-                || !isCurrentOrderCycle(state,order) || order.isComplete() || order.getPayDay() != null
+        if (source == null || order == null || !isCurrentSilenceArchiveCycle(state,order)
+                || order.isComplete() || order.getPayDay() != null
                 || order.getCounter() > 0 || order.getCompany() == null) return null;
         Company company = order.getCompany();
         return new ArchiveCheck(stateId,state.getTargetKey(),state.getSentCount(),state.getLastSuccessAt(),source,
                 companyTarget(company),manager(order)==null?null:manager(order).getClientId(),company.getGroupId());
     }
 
-    private boolean commitReviewArchive(ArchiveCheck check,ReviewArchiveHistory.Chat chat,ReviewArchiveHistory.Check proof) {
+    private Decision commitReviewArchive(ArchiveCheck check,ReviewArchiveHistory.Chat chat,ReviewArchiveHistory.Check proof) {
         var current = orderDeliveryContext.lock(check.order().orderId()).orElse(null);
-        if (!Objects.equals(current,check.order()) || manualContactReservation.blocksScheduledContact(check.order().orderId())) return false;
+        if (!Objects.equals(current,check.order()) || manualContactReservation.blocksScheduledContact(check.order().orderId())) return null;
         var state = stateRepository.findByIdForUpdate(check.stateId()).orElse(null);
         if (!silenceThresholdReached(state,messageTime.nowStorage()) || !Objects.equals(state.getTargetKey(),check.targetKey())
-                || state.getSentCount() != check.sentCount() || !Objects.equals(state.getLastSuccessAt(),check.lastSuccess())) return false;
+                || state.getSentCount() != check.sentCount() || !Objects.equals(state.getLastSuccessAt(),check.lastSuccess())) return null;
         Order order = orderRepository.findByIdForMutation(current.orderId()).orElseThrow();
-        if(manager(order)==null || order.getCompany()==null) return false;
-        if (!STATUS_IN_CHECK.equals(statusTitle(order)) || !isCurrentOrderCycle(state,order) || order.isComplete()
+        if(manager(order)==null || order.getCompany()==null) return null;
+        if (!isCurrentSilenceArchiveCycle(state,order) || order.isComplete()
                 || order.getPayDay() != null || order.getCounter() > 0 || orderPaymentIntegrityService.hasSettledPaymentEvidence(order)
                 || !Objects.equals(check.clientId(),manager(order).getClientId())
                 || !Objects.equals(check.groupId(),order.getCompany().getGroupId())
                 || !Objects.equals(check.company(),companyTarget(order.getCompany()))
-                || reviewArchiveHistory.hasLocalReply(chat,check.lastSuccess()) || postponeForReviewRecoveryIfNeeded(state,order,messageTime.nowStorage())) return false;
+                || reviewArchiveHistory.hasLocalReply(chat,check.lastSuccess()) || postponeForReviewRecoveryIfNeeded(state,order,messageTime.nowStorage())) return null;
         var billing = commonBillingServiceProvider.getObject();
         var membership = billing.archiveReviewMembershipAfterReminders(order.getId());
         try {
-            if (!orderStatusTransitionService.changeStatusForOrder(order.getId(),STATUS_ARCHIVE))
+            boolean changed = state.getScenario() == ClientMessageScenario.CLIENT_TEXT_REMINDER
+                    ? orderStatusTransitionService.archiveAfterClientTextReminders(order.getId())
+                    : orderStatusTransitionService.changeStatusForOrder(order.getId(),STATUS_ARCHIVE);
+            if (!changed)
                 throw new IllegalStateException("Order archive was not applied");
         } catch (Exception failure) { throw new IllegalStateException("Не удалось перевести заказ в архив",failure); }
         Company company = order.getCompany();
@@ -879,13 +899,16 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
         }
         archiveNotifications.recordArchive(state.getId(),order.getId(),check.targetKey(),check.sentCount(),
                 Map.of("order",check.order(),"lastReminder",check.lastSuccess(),"membership",membership,"chatHistory",proof,"chat",chat),offerAt,offerStatus);
-        String clientText = company.getTitle() + "\n\nЗдравствуйте! Согласование текстов заказа №" + order.getId()
-                + " после семи напоминаний не получено. Мы остановили работу и перенесли заказ в архив. "
+        String clientText = company.getTitle() + "\n\nЗдравствуйте! "
+                + (state.getScenario() == ClientMessageScenario.CLIENT_TEXT_REMINDER
+                    ? "Тексты или пожелания по заказу №" + order.getId() + " после семи напоминаний не получены. "
+                    : "Согласование текстов заказа №" + order.getId() + " после семи напоминаний не получено. ")
+                + "Мы остановили работу и перенесли заказ в архив. "
                 + "Если захотите вернуться к заказу или обсудить новый, напишите нам в этот чат.";
         archiveNotifications.enqueue(state.getId(),"client",new ReviewArchiveNotifications.Envelope(
                 check.company(),check.clientId(),check.groupId(),clientText,null));
         String staffText = "Заказ №" + order.getId() + " — " + company.getTitle()
-                + "\nПереведён в архив после " + check.sentCount() + " подтверждённых напоминаний без согласования.\n"
+                + "\nПереведён в архив после " + check.sentCount() + " подтверждённых напоминаний без ответа клиента.\n"
                 + offerStatus + "\nУведомление клиенту поставлено в очередь. Оплата не изменялась.";
         for (Long staffChat : archiveNoticeRecipients.archiveRecipients(current.managerId()))
             archiveNotifications.enqueue(state.getId(),"staff:" + staffChat,new ReviewArchiveNotifications.Envelope(null,null,null,staffText,staffChat));
@@ -895,7 +918,7 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
         state.setArchiveCheckStatus("ARCHIVED");
         state.setArchiveCheckChannel(chat.platform());
         markDone(state,messageTime.nowStorage(),null,null);
-        return true;
+        return new Decision(true,"Заказ архивирован. " + offerStatus + " Уведомления записаны в очередь.");
     }
 
     private LocalDateTime scheduleOfferAfterReviewArchive(Company company, String key, LocalDateTime archivedAt) {
@@ -2921,15 +2944,6 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
             markDone(state, nowStorage, "client_text_received", "Заказ уже не ждет текст клиента");
             return null;
         }
-        if (shouldAutoClearClientTextWaiting(order, nowStorage)) {
-            order.setWaitingForClient(false);
-            order.setWaitingForClientChangedAt(null);
-            orderRepository.save(order);
-            markDone(state, nowStorage, "client_text_waiting_expired", "Ожидание текста клиента снято автоматически: заказ без изменений 7 дней");
-            log.info("Client text waiting auto-cleared orderId={} stateId={} after {} days",
-                    order.getId(), state.getId(), DEFAULT_CLIENT_TEXT_WAITING_AUTO_CLEAR_DAYS);
-            return null;
-        }
         if (postponeForReviewRecoveryIfNeeded(state, order, nowStorage)) {
             return null;
         }
@@ -2941,6 +2955,12 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
         }
         if (!isCurrentClientTextWaitingCycle(state, order)) {
             markDone(state, nowStorage, "client_text_cycle_changed", "Заказ уже перешел в новый цикл ожидания текста клиента");
+            return null;
+        }
+
+        if (state.getSentCount() >= SILENCE_ARCHIVE_REMINDER_COUNT) {
+            state.setNextAttemptAt(scheduleAtStorage(nowStorage.plusHours(1)));
+            stateRepository.save(state);
             return null;
         }
 
@@ -4371,14 +4391,6 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
 
     private boolean isCurrentClientTextWaitingCycle(ScheduledClientMessageState state, Order order) {
         return clientTextWaitingTargetKey(order.getId(), clientTextWaitingChangedAt(order)).equals(state.getTargetKey());
-    }
-
-    private boolean shouldAutoClearClientTextWaiting(Order order, LocalDateTime nowStorage) {
-        LocalDate changed = order.getChanged();
-        if (changed != null) {
-            return !changed.plusDays(DEFAULT_CLIENT_TEXT_WAITING_AUTO_CLEAR_DAYS).isAfter(nowStorage.toLocalDate());
-        }
-        return !clientTextWaitingChangedAt(order).plusDays(DEFAULT_CLIENT_TEXT_WAITING_AUTO_CLEAR_DAYS).isAfter(nowStorage);
     }
 
     private LocalDateTime clientTextWaitingChangedAt(Order order) {

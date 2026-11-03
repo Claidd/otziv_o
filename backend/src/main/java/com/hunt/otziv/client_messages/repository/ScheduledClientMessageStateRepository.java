@@ -21,7 +21,8 @@ public interface ScheduledClientMessageStateRepository extends CrudRepository<Sc
 
     @Query("""
         SELECT s.id FROM ScheduledClientMessageState s
-        WHERE s.scenario = com.hunt.otziv.client_messages.model.ClientMessageScenario.REVIEW_CHECK_REMINDER
+        WHERE s.scenario IN (com.hunt.otziv.client_messages.model.ClientMessageScenario.REVIEW_CHECK_REMINDER,
+                             com.hunt.otziv.client_messages.model.ClientMessageScenario.CLIENT_TEXT_REMINDER)
           AND s.status = com.hunt.otziv.client_messages.model.ScheduledMessageStateStatus.ACTIVE
           AND s.sentCount >= 7 AND s.deliveryStatus IS NULL AND s.id > :afterId
           AND (s.archiveNextCheckAt IS NULL OR s.archiveNextCheckAt <= CURRENT_TIMESTAMP)

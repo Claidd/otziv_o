@@ -32,10 +32,13 @@ class CommonInvoiceSilenceArchiveTest {
         when(settlement.statusTitle(any())).thenAnswer(i->i.getArgument(0,Order.class).getStatus().getTitle());
         when(settlement.normalize(any())).thenAnswer(i->i.getArgument(0)==null?"":i.getArgument(0,String.class).trim());
     }
-    @Test void lastCurrentPositionArchivesInvoiceWithoutDeletingPositionOrChangingPaymentHistory() {
+    @Test void lastCurrentPositionArchivesInvoiceWithoutDeletingPositionOrChangingPaymentHistory() throws Exception {
         when(positions.findByInvoiceIdWithOrders(10L)).thenReturn(List.of());
         var evidence=workflow.archiveReviewMembershipAfterReminders(7L);
         assertThat(invoice.getStatus()).isEqualTo(CommonInvoiceStatus.ARCHIVED);
+        int closeReasonLimit=CommonInvoice.class.getDeclaredField("closeReason")
+                .getAnnotation(jakarta.persistence.Column.class).length();
+        assertThat(invoice.getCloseReason()).hasSizeLessThanOrEqualTo(closeReasonLimit);
         assertThat(invoice.getAmountKopecks()).isEqualTo(450000);assertThat(invoice.getPaidKopecks()).isZero();
         assertThat(item.isActiveMembership()).isFalse();assertThat(item.getSilenceArchivedAt()).isNotNull();
         assertThat(item.getAmountKopecks()).isEqualTo(150000);assertThat(item.getArchiveSourceOrderStatusTitle()).isEqualTo("На проверке");
@@ -49,6 +52,25 @@ class CommonInvoiceSilenceArchiveTest {
         assertThat(invoice.getStatus()).isEqualTo(CommonInvoiceStatus.COLLECTING);
         verify(settlement).recalculateInvoice(invoice,List.of(remaining));
         verify(positions,never()).deleteByOrderId(anyLong());
+    }
+    @Test void clientTextArchivePreservesNewSourceStatusAndClosesTheLastUnpaidMembership() {
+        item.getOrder().setStatus(OrderStatus.builder().title("Новый").build());
+        item.getOrder().setWaitingForClient(true);
+        when(positions.findByInvoiceIdWithOrders(10L)).thenReturn(List.of());
+        workflow.archiveReviewMembershipAfterReminders(7L);
+        assertThat(item.getArchiveSourceOrderStatusTitle()).isEqualTo("Новый");
+        assertThat(item.isActiveMembership()).isFalse();
+        assertThat(item.getAmountKopecks()).isEqualTo(150000);
+        assertThat(invoice.getStatus()).isEqualTo(CommonInvoiceStatus.ARCHIVED);
+        assertThat(invoice.getPaidKopecks()).isZero();
+        verify(positions,never()).deleteByOrderId(anyLong());
+    }
+    @Test void newOrderWithoutClientTextWaitingCannotBeDetachedBySilencePolicy() {
+        item.getOrder().setStatus(OrderStatus.builder().title("Новый").build());
+        assertThatThrownBy(()->workflow.archiveReviewMembershipAfterReminders(7L))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+        assertThat(item.isActiveMembership()).isTrue();
+        verify(positions,never()).save(any());
     }
     @ParameterizedTest @ValueSource(strings={"paid","sent","reported","positionPaid","paymentUrl","invoiceChanged"})
     void financialOrChangedStateIsUntouched(String condition) {

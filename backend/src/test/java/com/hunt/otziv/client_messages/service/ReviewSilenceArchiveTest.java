@@ -94,6 +94,73 @@ class ReviewSilenceArchiveTest {
     }
     @AfterEach void close() throws Exception { mocks.close(); }
 
+    private void waitForClientTexts() throws Exception {
+        order.setStatus(OrderStatus.builder().title("Новый").build());
+        order.setWaitingForClient(true);
+        order.setWaitingForClientChangedAt(now.minusDays(20));
+        state.setScenario(ClientMessageScenario.CLIENT_TEXT_REMINDER);
+        state.setTargetKey("client-text:77:" + order.getWaitingForClientChangedAt().withNano(0));
+        source = new OrderDeliveryControlContext.Snapshot(77L,2L,"Новый",2,
+                order.getStatusChangedAt(),true,order.getWaitingForClientChangedAt());
+        when(orderDeliveryContext.read(77L)).thenReturn(Optional.of(source));
+        when(orderDeliveryContext.lock(77L)).thenReturn(Optional.of(source));
+        when(orderStatusTransitionService.archiveAfterClientTextReminders(77L)).thenAnswer(i -> {
+            order.setStatus(OrderStatus.builder().title("Архив").build());
+            order.setWaitingForClient(false);
+            company.getStatus().setTitle("На стопе");
+            return true;
+        });
+    }
+
+    @Test void clientTextSilenceArchivesNewOrderAndQueuesOneOfferAfterTheLastOrder() throws Exception {
+        waitForClientTexts();
+        assertThat(service.archiveAfterReminders(30).archived()).isTrue();
+        assertThat(order.isWaitingForClient()).isFalse();
+        assertThat(company.getStatus().getTitle()).isEqualTo("На стопе");
+        assertThat(state.getStatus()).isEqualTo(ScheduledMessageStateStatus.DONE);
+        verify(orderStatusTransitionService).archiveAfterClientTextReminders(77L);
+        verify(orderStatusTransitionService,never()).changeStatusForOrder(anyLong(),anyString());
+        verify(billing).archiveReviewMembershipAfterReminders(77L);
+        verify(archiveNotifications).recordArchive(eq(30L),eq(77L),eq(state.getTargetKey()),eq(7),any(),
+                argThat(time -> time.isAfter(now.plusMonths(2))),contains("поставлено в очередь"));
+        verify(archiveNotifications).enqueue(eq(30L),eq("client"),argThat(e -> e.text().contains("Тексты или пожелания")));
+        assertThat(service.archiveAfterReminders(30).archived()).isFalse();
+        verify(stateRepository,times(1)).findByScenarioAndTargetKeyForUpdate(eq(ClientMessageScenario.ARCHIVE_REORDER_OFFER),anyString());
+    }
+
+    @Test void clientTextSilenceWaitsTheClientTextIntervalAfterTheSeventhReminder() throws Exception {
+        waitForClientTexts();
+        when(appSettingService.getInt(AppSettingService.CLIENT_MESSAGES_CLIENT_TEXT_REMINDER_INTERVAL_DAYS,2)).thenReturn(3);
+        state.setLastSuccessAt(now.minusDays(2).minusHours(1));
+        assertThat(service.archiveAfterReminders(30).archived()).isFalse();
+        state.setLastSuccessAt(now.minusDays(3).minusMinutes(1));
+        assertThat(service.archiveAfterReminders(30).archived()).isTrue();
+    }
+
+    @ParameterizedTest @ValueSource(strings={"six","recent","answered","new_cycle","status","payment","unknown","reply","history_missing","reply_during_check"})
+    void clientTextArchiveRequiresTheSameWaitingCycleAndCompleteSilenceEvidence(String condition) throws Exception {
+        waitForClientTexts();
+        switch(condition) {
+            case "six" -> state.setSentCount(6);
+            case "recent" -> state.setLastSuccessAt(now.minusHours(1));
+            case "answered" -> order.setWaitingForClient(false);
+            case "new_cycle" -> order.setWaitingForClientChangedAt(now.minusDays(1));
+            case "status" -> order.setStatus(OrderStatus.builder().title("На проверке").build());
+            case "payment" -> when(orderPaymentIntegrityService.hasSettledPaymentEvidence(order)).thenReturn(true);
+            case "unknown" -> state.setDeliveryStatus("UNKNOWN");
+            case "reply", "history_missing" -> when(reviewArchiveHistory.inspect(any(),any())).thenReturn(new ReviewArchiveHistory.Check(
+                    condition.equals("reply")?ReviewArchiveHistory.Outcome.REPLY_FOUND:ReviewArchiveHistory.Outcome.HISTORY_MISSING,
+                    "No silence proof",state.getLastSuccessAt(),now,1,"fixture"));
+            case "reply_during_check" -> when(reviewArchiveHistory.inspect(any(),any())).thenAnswer(i -> {
+                order.setWaitingForClient(false);
+                return new ReviewArchiveHistory.Check(ReviewArchiveHistory.Outcome.CLEAR,"History checked",i.getArgument(1),now,0,"fixture");
+            });
+        }
+        assertThat(service.archiveAfterReminders(30).archived()).isFalse();
+        verify(orderStatusTransitionService,never()).archiveAfterClientTextReminders(anyLong());
+        verifyNoInteractions(archiveNotifications);
+    }
+
     @Test void sevenReceiptsArchiveAndAtomicallyQueueOfferAndBothKindsOfNotification() throws Exception {
         assertThat(service.archiveAfterReminders(30).archived()).isTrue();
         assertThat(state.getStatus()).isEqualTo(ScheduledMessageStateStatus.DONE);
@@ -190,7 +257,9 @@ class ReviewSilenceArchiveTest {
 
     @Test void activeOtherOrderPreventsOfferButNotItsHistoricalArchiveNotice() {
         when(archiveCandidateRepository.hasArchiveReorderBlocker(anyLong(),anyList(),anyList())).thenReturn(true);
-        assertThat(service.archiveAfterReminders(30).archived()).isTrue();
+        var result = service.archiveAfterReminders(30);
+        assertThat(result.archived()).isTrue();
+        assertThat(result.reason()).contains("Предложение нового заказа отложено");
         verify(archiveNotifications).recordArchive(eq(30L),eq(77L),anyString(),eq(7),any(),isNull(),contains("отложено"));
         verify(stateRepository,never()).findByScenarioAndTargetKeyForUpdate(eq(ClientMessageScenario.ARCHIVE_REORDER_OFFER),anyString());
     }

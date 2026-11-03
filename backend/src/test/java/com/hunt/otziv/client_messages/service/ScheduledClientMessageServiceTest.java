@@ -767,7 +767,7 @@ class ScheduledClientMessageServiceTest {
     @Test
     void clientTextReminderSendsOnlyForCurrentWaitingCycle() {
         LocalDateTime waitingChangedAt = LocalDateTime.of(2026, 5, 20, 10, 0);
-        LocalDateTime now = LocalDateTime.of(2026, 5, 23, 10, 0);
+        LocalDateTime now = LocalDateTime.of(2026, 5, 30, 10, 0);
         ScheduledClientMessageState state = ScheduledClientMessageState.builder()
                 .id(79L)
                 .scenario(ClientMessageScenario.CLIENT_TEXT_REMINDER)
@@ -1006,7 +1006,7 @@ class ScheduledClientMessageServiceTest {
     }
 
     @Test
-    void clientTextReminderAutoClearsWaitingFlagAfterSevenUnchangedDays() {
+    void seventhClientTextReminderWaitsForArchiveWithoutClearingWaitingOrSendingAgain() {
         LocalDateTime waitingChangedAt = LocalDateTime.of(2026, 5, 20, 10, 0);
         LocalDateTime now = LocalDateTime.of(2026, 5, 27, 10, 0);
         ScheduledClientMessageState state = ScheduledClientMessageState.builder()
@@ -1017,6 +1017,7 @@ class ScheduledClientMessageServiceTest {
                 .companyId(27L)
                 .orderId(17L)
                 .status(ScheduledMessageStateStatus.ACTIVE)
+                .sentCount(7)
                 .build();
         Company company = new Company();
         company.setId(27L);
@@ -1027,17 +1028,18 @@ class ScheduledClientMessageServiceTest {
         order.setStatus(OrderStatus.builder().title("Новый").build());
         order.setWaitingForClient(true);
         order.setWaitingForClientChangedAt(waitingChangedAt);
-        order.setChanged(now.toLocalDate().minusDays(ScheduledClientMessageService.DEFAULT_CLIENT_TEXT_WAITING_AUTO_CLEAR_DAYS));
+        order.setChanged(now.toLocalDate().minusDays(7));
 
         when(orderRepository.findByIdForMutation(17L)).thenReturn(java.util.Optional.of(order));
 
         runDeliveryScenario("sendClientTextReminder", state, company, now);
 
-        assertEquals(false, order.isWaitingForClient());
-        assertNull(order.getWaitingForClientChangedAt());
-        assertEquals(ScheduledMessageStateStatus.DONE, state.getStatus());
-        assertNull(state.getNextAttemptAt());
-        verify(orderRepository).save(order);
+        assertTrue(order.isWaitingForClient());
+        assertEquals(waitingChangedAt, order.getWaitingForClientChangedAt());
+        assertEquals(ScheduledMessageStateStatus.ACTIVE, state.getStatus());
+        assertNotNull(state.getNextAttemptAt());
+        assertEquals(7, state.getSentCount());
+        verify(orderRepository, never()).save(order);
         verify(messageSender, never()).sendWithOperationId(any(), any(), any(), anyString(), org.mockito.ArgumentMatchers.isNull(), anyString());
     }
 
