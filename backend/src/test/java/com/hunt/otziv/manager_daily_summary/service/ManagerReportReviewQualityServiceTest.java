@@ -1779,6 +1779,112 @@ class ManagerReportReviewQualityServiceTest {
         assertThat(restored.status()).isEqualTo(ManagerReportReviewQualityService.ClaimStatus.UNVERIFIABLE);
     }
 
+    @ParameterizedTest
+    @ValueSource(strings={"Я позвонила специалисту, чтобы выяснить причину недобора.",
+            "Я созвонилась со специалистом и обсудила приоритеты.",
+            "Я поговорила со специалистом о выполнении плана.",
+            "На данный момент Виктория Ц пока не ответила мне.",
+            "Ответа от специалиста пока нет.","Причина пока неизвестна.",
+            "Со слов специалиста, не удалось скопировать данные аккаунта."})
+    void workerExplanationWordingDoesNotRequireAHiddenPrivateConversation(String answer) {
+        var question=new ManagerReportReviewQualityService.ReviewQuestion("Что помешало специалисту?",
+                List.of("специалист и объяснение причины"));
+        provider(assessment("UNVERIFIABLE",answer,"E1","MANAGEMENT_REPORT","REPORTED","Объяснение")
+                .replace("[\"E1\"]","[]"));
+        var result=service.assessAnswer(workerGoalEvidence(),question,answer,false);
+        assertThat(result.accepted()).isTrue();
+        assertThat(result.claims().getFirst().status()).isEqualTo(ManagerReportReviewQualityService.ClaimStatus.REPORTED);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings={"Я позвонила специалисту, все задачи выполнены.","Со слов специалиста, счёт оплачен.",
+            "Я поговорила со специалистом, отзывы опубликованы.","Я написала клиенту, что вопрос решён.",
+            "Специалист сделал 7 текстов из 5.","Фирмы переведены другим специалистам."})
+    void reportedLabelCannotTurnBusinessOutcomesIntoProof(String answer) {
+        var question=new ManagerReportReviewQualityService.ReviewQuestion("Что помешало специалисту?",
+                List.of("специалист и объяснение причины"));
+        provider(assessment("SATISFIED",answer,"E1","MANAGEMENT_REPORT","REPORTED","Якобы объяснение")
+                .replace("[\"E1\"]","[]"));
+        assertThat(service.assessAnswer(workerGoalEvidence(),question,answer,false).accepted()).isFalse();
+    }
+
+    @Test void exactClaimFragmentsCanCoverOnePlanCriterionButCannotHideAnExtraAssertion() throws Exception {
+        String first="Я проведу разбор со специалистом";
+        String second="Проверю оставшиеся тексты в карточке заказа";
+        String answer=first+". "+second+".";
+        var root=(com.fasterxml.jackson.databind.node.ObjectNode)new ObjectMapper().readTree(
+                assessment("SATISFIED",answer,"E1","PROMISE","PLAN","План"));
+        ((com.fasterxml.jackson.databind.node.ObjectNode)root.path("criteria").get(0)).putArray("evidenceRefs");
+        var claims=root.putArray("claims");
+        for(String part:List.of(first,second)) claims.addObject().put("kind","PROMISE").put("status","PLAN")
+                .put("answerAttempt",0).put("answerQuote",part).put("reason","План").putArray("evidenceRefs");
+        provider(root.toString());
+        assertThat(service.assessAnswer("Факт вопроса",question(),answer,false).accepted()).isTrue();
+        String mixed=first+". Деньги получены. "+second+".";
+        ((com.fasterxml.jackson.databind.node.ObjectNode)root.path("criteria").get(0)).put("answerQuote",mixed);
+        provider(root.toString());
+        assertThat(service.assessAnswer("Факт вопроса",question(),mixed,false).accepted()).isFalse();
+    }
+
+    @Test void aMissingVerificationStepGetsClarificationInsteadOfWaitingForAPrivateReply() throws Exception {
+        String answer="Виктория Ц пока не ответила мне";
+        var root=(com.fasterxml.jackson.databind.node.ObjectNode)new ObjectMapper().readTree(
+                assessment("SATISFIED",answer,"E1","FACT","UNVERIFIABLE","Нет проверки результата"));
+        root.withArray("criteria").addObject().put("criterionIndex",1).put("status","MISSING").put("answerAttempt",0)
+                .put("answerQuote","").put("reason","Не указана проверка результата").putArray("evidenceRefs");
+        provider(root.toString());
+        var question=new ManagerReportReviewQualityService.ReviewQuestion("Как поможете специалисту?",
+                List.of("объяснение специалиста","способ проверить результат"));
+        assertThat(service.assessAnswer(workerGoalEvidence(),question,answer,false).decision())
+                .isEqualTo(ManagerReportReviewQualityService.Decision.NEEDS_CLARIFICATION);
+    }
+
+    @Test void oneGroupedOrderWithFiveTextsDoesNotAssertACompletedTotalOfTwentyTwo() throws Exception {
+        String quote="Специалист не выполнила 1 задачу";
+        String answer=quote+", это новый заказ фирме, конкретно не написала 5 текстов отзывов";
+        var root=(com.fasterxml.jackson.databind.node.ObjectNode)new ObjectMapper().readTree(
+                assessment("CONTRADICTED",quote,"E1","FACT","CONTRADICTED","Якобы недобор один"));
+        ((com.fasterxml.jackson.databind.node.ObjectNode)root.path("claims").get(0)).putArray("factChecks")
+                .addObject().put("factId","worker-goal:14:2026-10-30:completed").put("assertedValue","22");
+        provider(root.toString());
+        var question=new ManagerReportReviewQualityService.ReviewQuestion("Что осталось у специалиста?",List.of("специалист и недобор"));
+        var result=service.assessAnswer(workerGoalEvidence(),question,answer,false);
+        assertThat(result.accepted()).isTrue();assertThat(result.claims().getFirst().status()).isEqualTo(ManagerReportReviewQualityService.ClaimStatus.REPORTED);
+        assertThat(result.claims().getFirst().factChecks()).isEmpty();
+        provider(root.toString());
+        assertThat(service.assessAnswer(workerGoalEvidence(),question,answer.replace("5 текстов","7 текстов"),false).accepted()).isFalse();
+    }
+
+    @Test void contactingTheWorkerDoesNotByItselfSpecifyHowTheRemainingWorkWillBeChecked() {
+        String answer="Я написала специалисту, чтобы выяснить причину недобора";
+        var question=new ManagerReportReviewQualityService.ReviewQuestion("Как поможете специалисту?",
+                List.of("конкретное действие менеджера и способ проверить результат специалиста"));
+        provider(assessment("SATISFIED",answer,"E1","MANAGEMENT_REPORT","REPORTED","Действие названо"));
+        var missing=service.assessAnswer(workerGoalEvidence(),question,answer,false);
+        assertThat(missing.decision()).isEqualTo(ManagerReportReviewQualityService.Decision.NEEDS_CLARIFICATION);
+        assertThat(missing.criteria().getFirst().feedbackTopic()).isEqualTo(ManagerReportReviewQualityService.FeedbackTopic.VERIFICATION);
+        String plan="Проверю пять оставшихся текстов в карточке исходного заказа";
+        provider(assessment("SATISFIED",plan,"E1","PROMISE","PLAN","Проверка названа"));
+        assertThat(service.assessAnswer(workerGoalEvidence(),question,plan,false).accepted()).isTrue();
+    }
+
+    @Test void aConcreteCheckAndHelpPlanCannotBeRejectedForMissingVerification() throws Exception {
+        String check="Проверю именно эти пять текстов в карточке исходного заказа";
+        String help="Разберу незавершённые тексты и помогу расставить приоритеты";
+        String answer=check+". "+help+".";
+        var root=(com.fasterxml.jackson.databind.node.ObjectNode)new ObjectMapper().readTree(
+                assessment("MISSING","","E1","PROMISE","PLAN","Якобы не указан способ проверки"));
+        var claims=root.putArray("claims");
+        for(String quote:List.of(check,help)) claims.addObject().put("kind","PROMISE").put("status","PLAN")
+                .put("answerAttempt",0).put("answerQuote",quote).put("reason","План").putArray("evidenceRefs");
+        provider(root.toString());
+        var question=new ManagerReportReviewQualityService.ReviewQuestion("Как поможете специалисту?",
+                List.of("конкретное действие менеджера и способ проверить результат специалиста"));
+        var result=service.assessAnswer(workerGoalEvidence(),question,answer,false);
+        assertThat(result.accepted()).isTrue();assertThat(result.reason()).contains("конкретный способ");
+        assertThat(result.claims()).allMatch(c->c.status()==ManagerReportReviewQualityService.ClaimStatus.PLAN);
+    }
+
     private ManagerReportReviewQualityService.ReviewQuestion question() {
         return new ManagerReportReviewQualityService.ReviewQuestion("Что произошло и как действовать?", List.of("объяснение и действие"));
     }

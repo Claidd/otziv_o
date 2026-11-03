@@ -245,6 +245,11 @@ public class ManagerReportReviewQualityService {
             а не независимое подтверждение разговора. Не останавливай весь аудит из-за отсутствия
             записи такого разговора. Для такого объяснения evidenceRefs может быть пустым;
             criterion.answerQuote должен полностью покрываться цитатой этого claim.
+            Звонок, созвон, ожидание ответа специалиста, неизвестная пока причина и пересказ
+            технического затруднения также являются объяснением со слов менеджера. Не требуй
+            журнала частного разговора. Объяснение не устанавливает истинность причины и не
+            подтверждает устранение ошибки или выполнение работ. Отдельно выделяй именно
+            утверждения о результате. «Поговорила о выполнении плана» описывает тему разговора.
             Сохраняй атрибуцию при дроблении пересказа на claims: слова после «я писала: ...»
             остаются содержанием сообщения менеджера, а не самостоятельным подтверждением
             описанных в нём событий. Общую фразу «меры приняты» можно учесть как пересказ
@@ -259,14 +264,24 @@ public class ManagerReportReviewQualityService {
             тоже можно записать MANAGEMENT_REPORT/REPORTED, если общее число согласуется с
             подтверждённым недобором, а точный исторический состав цели сервером не сохранён.
             Не выдавай рассказ о составе за подтверждённые карточки и не требуй несуществующий журнал.
+            Различай единицы: один заказ с пятью ненаписанными текстами может составлять недобор
+            пяти текстовых задач. Не вычисляй из слов «один заказ» якобы заявленное менеджером
+            completed=total-1. Если вопрос требует действие И способ проверки результата, одно
+            обращение к специалисту не покрывает проверку: нужен конкретный способ сверить остаток.
             commitments — только обещанные в ответе конкретные действия; sourceTaskId бери из
-            sourceTaskIds, не придумывай; если список sourceTaskIds пуст, commitments=[].
+            sourceTaskIds, не придумывай. Если workerGoalTarget задан, commitments может содержать
+            план по этому исходному недобору с sourceTaskId=null. Не подменяй его новым днём.
+            Для такого плана сохраняй действие, ответственного, способ проверки и срок, если он
+            назван: dueAt=null и deadlineQuote="" допустимы при отсутствии срока. action/verification
+            должны быть покрыты дословными answerQuote/verificationQuote. При отсутствии обоих
+            видов источников commitments=[].
             requiresCommitment=true означает, что вопрос требует плана и срока.
             При requiresCommitment=false допускается объяснение правильного действия без обещания и срока.
             Срок вычисляй по evaluationTime, сохраняя часовой пояс.
             Если явно обещанное действие требует срока/проверки, но их нет, не выдумывай их,
             оставь соответствующий критерий MISSING. Неполное обещание не включай в commitments:
-            требуются точные непустые цитаты срока и способа проверки. Для исторических ответов commitments=[].
+            требуются точные непустые цитаты способа проверки и названного срока.
+            Если ответ не содержит будущих обещаний, commitments=[].
             """;
 
     private final AiProviderRouter providerRouter;
@@ -435,6 +450,7 @@ public class ManagerReportReviewQualityService {
             facts.put("conditionCriterionIndexes", conditionCriteria);
             facts.put("sourceTaskIds", question == null ? List.of() : question.sourceTaskIds());
             facts.put("sourceChatItemIds", question == null ? List.of() : question.sourceChatItemIds());
+            facts.put("workerGoalTarget", workerGoalTarget(clean(report)).orElse(null));
             facts.put("requiresCommitment", requiresCommitment(expectedPoints));
             facts.put("previousAttempts", attempts.subList(0, attempts.size() - 1));
             var carried = previouslySatisfiedCriteria(question, attempts, previousAttempts);
@@ -530,12 +546,15 @@ public class ManagerReportReviewQualityService {
         for (JsonNode item : root.path("claims")) {
             ClaimKind kind = protocolEnum(ClaimKind.class, item.path("kind").asText(""), ProtocolViolation.CLAIM_KIND);
             ClaimStatus status = protocolEnum(ClaimStatus.class, item.path("status").asText(""), ProtocolViolation.CLAIM_STATUS);
+            boolean declaredReport = kind == ClaimKind.MANAGEMENT_REPORT || status == ClaimStatus.REPORTED;
             // A reported conversation is never an evidence-backed external event. Validate its scope below.
             if (kind==ClaimKind.MANAGEMENT_REPORT) {kind=ClaimKind.FACT; if(status!=ClaimStatus.CONTRADICTED) status=ClaimStatus.UNVERIFIABLE;}
             else if (status==ClaimStatus.REPORTED) status=ClaimStatus.UNVERIFIABLE;
             int attempt = item.path("answerAttempt").asInt(-1);
             String quote = clean(item.path("answerQuote").asText(""));
             attempt = resolveQuotedAttempt(attempt, quote, attempts);
+            boolean composedOrder = workerGoalExplanationScope(expectedPoints,sourceTaskIds,typedFacts)
+                    && reportedOrderComposition(quote,attempts.get(attempt),typedFacts);
             List<String> refs = references(item.path("evidenceRefs"), evidence);
             require(status != ClaimStatus.PLAN || kind == ClaimKind.PROMISE, ProtocolViolation.PLAN_REQUIRES_PROMISE);
             require(kind != ClaimKind.PROMISE || status != ClaimStatus.SUPPORTED,
@@ -572,6 +591,11 @@ public class ManagerReportReviewQualityService {
             }
             if (checksKnownContradiction) status = ClaimStatus.CONTRADICTED;
             else if (checksUnknownOutcome) status = ClaimStatus.UNVERIFIABLE;
+            if(composedOrder) {
+                // This quote names one grouped order; the same sentence explicitly names
+                // the matching text remainder. The model may not invent a different completed total.
+                kind=ClaimKind.MANAGEMENT_REPORT;status=ClaimStatus.REPORTED;checks.clear();
+            }
             // Lifecycle candidates prove availability/timing fields, not the
             // composition of a historical daily goal. A list of references
             // without a check of specific fields cannot establish a fact.
@@ -609,6 +633,8 @@ public class ManagerReportReviewQualityService {
             if (status==ClaimStatus.UNVERIFIABLE && checks.isEmpty()
                     && Set.of(ClaimKind.FACT,ClaimKind.COMPLETED_ACTION).contains(kind)
                     && (reportedWorkerCoaching(quote,expectedPoints,sourceTaskIds,typedFacts)
+                        || declaredReport && workerGoalExplanationScope(expectedPoints,sourceTaskIds,typedFacts)
+                            && WorkerGoalExplanationPolicy.reportedExplanation(quote,true)
                         || reportedCoachingNarrative(quote,attempts.get(attempt),expectedPoints,sourceTaskIds,typedFacts))) {
                 kind=ClaimKind.MANAGEMENT_REPORT;status=ClaimStatus.REPORTED;
             }
@@ -616,6 +642,17 @@ public class ManagerReportReviewQualityService {
                     limit(item.path("reason").asText(""), 1000), temporal, checks));
         }
         boolean restoredPrior=restoreReportedWorkerCriteria(criteria,claims,carried,expectedPoints,sourceTaskIds,sourceChatItemIds,typedFacts);
+        for(int position=0;position<criteria.size();position++) {
+            var criterion=criteria.get(position);
+            if(criterion.status()!=CriterionStatus.CONTRADICTED
+                    || !workerGoalExplanationScope(expectedPoints,sourceTaskIds,typedFacts)
+                    || !reportedOrderComposition(criterion.answerQuote(),attempts.get(criterion.answerAttempt()),typedFacts)) continue;
+            var support=coveringClaims(criterion,claims);
+            if(!support.isEmpty() && support.stream().allMatch(c->c.kind()==ClaimKind.MANAGEMENT_REPORT&&c.status()==ClaimStatus.REPORTED))
+                criteria.set(position,new CriterionAssessment(criterion.criterionIndex(),CriterionStatus.SATISFIED,
+                        criterion.answerAttempt(),criterion.answerQuote(),criterion.evidenceRefs(),
+                        "Один заказ содержит названный остаток текстов, согласующийся с дневным недобором",criterion.feedbackTopic()));
+        }
         require(claims.stream().anyMatch(claim -> claim.answerAttempt() == attempts.size() - 1),
                 ProtocolViolation.CURRENT_ANSWER_REQUIRED);
         // A criterion can quote a plan without an external event. When the
@@ -625,9 +662,7 @@ public class ManagerReportReviewQualityService {
             CriterionAssessment criterion = criteria.get(position);
             if (!criterion.evidenceRefs().isEmpty()
                     || !Set.of(CriterionStatus.SATISFIED, CriterionStatus.CONTRADICTED).contains(criterion.status())) continue;
-            var support = claims.stream().filter(claim -> claim.answerAttempt() == criterion.answerAttempt()
-                    && !normalize(criterion.answerQuote()).isBlank()
-                    && normalize(claim.answerQuote()).contains(normalize(criterion.answerQuote()))).toList();
+            var support = coveringClaims(criterion, claims);
             require(!support.isEmpty(), ProtocolViolation.CRITERION_EVIDENCE_REQUIRED);
             var refs = support.stream().flatMap(claim -> claim.evidenceRefs().stream()).distinct().toList();
             boolean nonFactual = support.stream().allMatch(claim ->
@@ -652,14 +687,13 @@ public class ManagerReportReviewQualityService {
             var criterion=criteria.get(position);
             if (criterion.status()!=CriterionStatus.UNVERIFIABLE
                     || requiresCompletedAction(expectedPoints.get(criterion.criterionIndex()))
-                    || !reportedWorkComposition(normalize(criterion.answerQuote()),typedFacts)) continue;
-            var supporting=claims.stream().filter(c->c.answerAttempt()==criterion.answerAttempt()
-                    && normalize(c.answerQuote()).contains(normalize(criterion.answerQuote()))).toList();
+                    ) continue;
+            var supporting=coveringClaims(criterion,claims);
             if (!supporting.isEmpty() && supporting.stream().allMatch(c->c.kind()==ClaimKind.MANAGEMENT_REPORT
                     && c.status()==ClaimStatus.REPORTED))
                 criteria.set(position,new CriterionAssessment(criterion.criterionIndex(),CriterionStatus.SATISFIED,
                         criterion.answerAttempt(),criterion.answerQuote(),criterion.evidenceRefs(),
-                        "Состав недобора учтён со слов менеджера; численность согласуется с дневным итогом, точный журнал не сохранён",
+                        "Объяснение учтено со слов менеджера; оно не подтверждает выполнение работы",
                         criterion.feedbackTopic()));
         }
         // A mixed correction may withdraw an earlier answer and state a new fact. Only the
@@ -714,7 +748,39 @@ public class ManagerReportReviewQualityService {
                     attempts.getLast(), typedFacts.values().stream().map(AuthoritativeFact::evidenceRef).toList(),
                     "Утверждение о состоянии счёта расходится с серверными полями", "CURRENT", List.of()));
         }
-        List<ActionCommitment> commitments = parseCommitments(root.path("commitments"), sourceTaskIds, attempts, evaluationTime);
+        List<ActionCommitment> commitments = parseCommitments(root.path("commitments"), sourceTaskIds, attempts, evaluationTime,
+                workerGoalExplanationScope(expectedPoints,sourceTaskIds,typedFacts));
+        boolean restoredWorkerPlan=false;
+        if(workerGoalExplanationScope(expectedPoints,sourceTaskIds,typedFacts)) {
+            var check=claims.stream().filter(c->(c.kind()==ClaimKind.PROMISE && c.status()==ClaimStatus.PLAN
+                        || c.kind()==ClaimKind.MANAGEMENT_REPORT && c.status()==ClaimStatus.REPORTED
+                        || c.kind()==ClaimKind.FACT && c.status()==ClaimStatus.SUPPORTED)
+                    && concreteWorkerVerification(c.answerQuote())).reduce((a,b)->b);
+            boolean hasCheck=check.isPresent();
+            boolean hasHelp=claims.stream().anyMatch(c->(c.kind()==ClaimKind.PROMISE&&c.status()==ClaimStatus.PLAN
+                        || c.kind()==ClaimKind.MANAGEMENT_REPORT&&c.status()==ClaimStatus.REPORTED)
+                    && normalize(c.answerQuote()).matches("(?U).*\\b(?:разбер\\p{L}*|разбор|помог\\p{L}*|распредел\\p{L}*|обсуд\\p{L}*|поговор\\p{L}*|приоритет\\p{L}*)\\b.*"));
+            for(int position=0;position<criteria.size();position++) {
+                var criterion=criteria.get(position);
+                String point=normalize(expectedPoints.get(criterion.criterionIndex()));
+                boolean asksForCheck=point.contains("способ") && (point.contains("провер")||point.contains("свер"));
+                if(!hasCheck && criterion.status()==CriterionStatus.SATISFIED && point.contains("способ")
+                        && (point.contains("провер") || point.contains("свер")))
+                    criteria.set(position,new CriterionAssessment(criterion.criterionIndex(),CriterionStatus.MISSING,
+                            criterion.answerAttempt(),"",List.of(),"Не указан способ проверки оставшегося объёма",
+                            FeedbackTopic.VERIFICATION));
+                else if(hasCheck && asksForCheck && criterion.status()==CriterionStatus.MISSING
+                        && (!point.contains("действ")||hasHelp)
+                        && (!requiresCommitment(List.of(point)) || commitments.stream().anyMatch(c->c.dueAt()!=null))) {
+                    var verification=check.orElseThrow();
+                    criteria.set(position,new CriterionAssessment(criterion.criterionIndex(),CriterionStatus.SATISFIED,
+                            verification.answerAttempt(),verification.answerQuote(),verification.evidenceRefs(),
+                            "Названы помощь специалисту и конкретная сверка оставшейся работы; выполнение не подтверждается планом",
+                            FeedbackTopic.VERIFICATION));
+                    restoredWorkerPlan=true;
+                }
+            }
+        }
         boolean contradicted = criteria.stream().anyMatch(c -> c.status() == CriterionStatus.CONTRADICTED)
                 || claims.stream().anyMatch(c -> c.status() == ClaimStatus.CONTRADICTED);
         boolean untrackedPromise = !sourceTaskIds.isEmpty() && requiresCommitment(expectedPoints) && commitments.isEmpty()
@@ -724,9 +790,12 @@ public class ManagerReportReviewQualityService {
                 && c.kind() == ClaimKind.PROMISE && c.status() == ClaimStatus.UNVERIFIABLE);
         boolean missing = criteria.stream().anyMatch(c -> c.status() == CriterionStatus.MISSING) || untrackedPromise || unclearPromise;
         boolean staleEvidence = staleCurrentFacts(typedFacts, evaluationTime);
+        var unknownClaims = claims.stream().filter(c -> c.status() == ClaimStatus.UNVERIFIABLE
+                && c.kind() != ClaimKind.HYPOTHESIS && c.kind() != ClaimKind.RETRACTION && c.kind() != ClaimKind.PROMISE).toList();
         boolean uncertain = criteria.stream().anyMatch(c -> c.status() == CriterionStatus.UNVERIFIABLE)
-                || claims.stream().anyMatch(c -> c.status() == ClaimStatus.UNVERIFIABLE
-                        && c.kind() != ClaimKind.HYPOTHESIS && c.kind() != ClaimKind.RETRACTION && c.kind() != ClaimKind.PROMISE);
+                || !unknownClaims.isEmpty();
+        boolean missingWorkerPlan = missing && workerGoalExplanationScope(expectedPoints,sourceTaskIds,typedFacts)
+                && unknownClaims.stream().noneMatch(c -> WorkerGoalExplanationPolicy.containsUnverifiedOutcome(c.answerQuote()));
         // INSUFFICIENT must identify what cannot be verified. Never silently accept such a response.
         require(!"INSUFFICIENT".equals(contextStatus) || uncertain || missing || contradicted
                         || claims.stream().anyMatch(c->c.kind()==ClaimKind.MANAGEMENT_REPORT && c.status()==ClaimStatus.REPORTED),
@@ -735,6 +804,7 @@ public class ManagerReportReviewQualityService {
         Decision decision = staleEvidence ? Decision.NEEDS_CONTEXT
                 : contradicted ? Decision.NEEDS_CLARIFICATION
                 : criteria.stream().allMatch(c -> c.status() == CriterionStatus.MISSING) ? Decision.NEEDS_CLARIFICATION
+                : missingWorkerPlan ? Decision.NEEDS_CLARIFICATION
                 : uncertain ? Decision.NEEDS_CONTEXT
                 : missing ? Decision.NEEDS_CLARIFICATION : Decision.ACCEPTED;
         int score = (int) (criteria.stream().filter(c -> c.status() == CriterionStatus.SATISFIED).count()
@@ -746,6 +816,8 @@ public class ManagerReportReviewQualityService {
         String summary = limit(root.path("summary").asText("Проверка по критериям и фактам"), 2000);
         if (restoredPrior && decision==Decision.ACCEPTED)
             summary="Ответ принят с учётом предыдущих пояснений и плана проверки; повторять их в дополнении не требуется.";
+        if(restoredWorkerPlan && decision==Decision.ACCEPTED)
+            summary="Ответ принят: описаны помощь специалисту и конкретный способ проверить оставшийся объём. Выполнение плана проверяется отдельно.";
         if (decision==Decision.ACCEPTED && claims.stream().anyMatch(c->c.status()==ClaimStatus.REPORTED))
             summary=limit(summary+" Описание разговора учтено со слов менеджера, без независимого подтверждения переписки.",2000);
         if (decision == Decision.NEEDS_CONTEXT) {
@@ -760,51 +832,112 @@ public class ManagerReportReviewQualityService {
     }
 
     private List<ActionCommitment> parseCommitments(JsonNode node, List<Long> sourceTaskIds, List<String> attempts,
-                                                   ZonedDateTime evaluationTime) {
+                                                   ZonedDateTime evaluationTime, boolean workerGoal) {
         if (node.isMissingNode() || node.isNull()) return List.of();
         require(node.isArray() && node.size() <= 20, ProtocolViolation.COMMITMENTS_ARRAY);
         // Conversation-only audits have no task to attach a durable commitment
         // to. Ignore inapplicable metadata; factual/criterion checks still apply.
-        if (sourceTaskIds.isEmpty()) return List.of();
+        if (sourceTaskIds.isEmpty() && !workerGoal) return List.of();
         List<ActionCommitment> result = new ArrayList<>();
         for (JsonNode item : node) {
-            long sourceTaskId = item.path("sourceTaskId").asLong(-1);
-            require(sourceTaskIds.contains(sourceTaskId), ProtocolViolation.COMMITMENT_SOURCE);
+            Long sourceTaskId = item.path("sourceTaskId").isNull() || !item.has("sourceTaskId")
+                    ? null : item.path("sourceTaskId").asLong(-1);
+            require(workerGoal && sourceTaskId == null || sourceTaskId!=null && sourceTaskIds.contains(sourceTaskId), ProtocolViolation.COMMITMENT_SOURCE);
             String action = limit(item.path("action").asText(""), 1000);
             String owner = limit(item.path("owner").asText(""), 200);
             String verification = limit(item.path("verification").asText(""), 1000);
             String dueAt = clean(item.path("dueAt").asText(""));
             int attempt = item.path("answerAttempt").asInt(-1);
             attempt = resolveQuotedAttempt(attempt, item.path("answerQuote").asText(""), attempts);
-            requireQuotedAttempt(attempt, item.path("deadlineQuote").asText(""), attempts);
+            if (!dueAt.isBlank()) requireQuotedAttempt(attempt, item.path("deadlineQuote").asText(""), attempts);
             requireQuotedAttempt(attempt, item.path("verificationQuote").asText(""), attempts);
             require(!action.isBlank() && !owner.isBlank() && !verification.isBlank(), ProtocolViolation.COMMITMENT_FIELDS);
-            OffsetDateTime deadline;
-            try { deadline = OffsetDateTime.parse(dueAt); }
+            OffsetDateTime deadline=null;
+            try { if (!dueAt.isBlank()) deadline = OffsetDateTime.parse(dueAt); }
             catch (java.time.format.DateTimeParseException invalid) {
                 throw new ProtocolValidationFailure(ProtocolViolation.COMMITMENT_DEADLINE_FORMAT);
             }
-            require(deadline.isAfter(evaluationTime.toOffsetDateTime().minusMinutes(2)), ProtocolViolation.COMMITMENT_DEADLINE_PAST);
-            result.add(new ActionCommitment(sourceTaskId, action, owner, deadline.toString(), verification,
+            require(workerGoal || deadline != null,ProtocolViolation.COMMITMENT_DEADLINE_FORMAT);
+            require(deadline == null || deadline.isAfter(evaluationTime.toOffsetDateTime().minusMinutes(2)), ProtocolViolation.COMMITMENT_DEADLINE_PAST);
+            result.add(new ActionCommitment(sourceTaskId, action, owner, deadline==null?null:deadline.toString(), verification,
                     textArray(item.path("dependencies"), 10, 300)));
         }
         return List.copyOf(result);
     }
 
+    public record WorkerGoalTarget(long workerId,String workerName,String date,long remaining) { }
+
+    /** Only the one original server goal in this question may own a worker follow-up. */
+    public java.util.Optional<WorkerGoalTarget> workerGoalTarget(String context) {
+        var facts=typedFacts(evidence(clean(context)),List.of(),List.of());
+        var groups=new LinkedHashMap<String,Map<String,String>>();
+        for(var fact:facts.values()) if(fact.source().equals("worker_daily_goal")
+                && fact.id().matches("worker-goal:[0-9]+:[0-9]{4}-[0-9]{2}-[0-9]{2}:[a-z_]+"))
+            groups.computeIfAbsent(fact.id().substring(0,fact.id().lastIndexOf(':')),ignored->new LinkedHashMap<>())
+                    .put(fact.field(),fact.value());
+        if(groups.size()!=1) return java.util.Optional.empty();
+        var row=groups.entrySet().iterator().next();
+        try {
+            String[] identity=row.getKey().split(":");
+            long gap=Long.parseLong(row.getValue().get("total"))-Long.parseLong(row.getValue().get("completed"));
+            String name=row.getValue().getOrDefault("worker_name","");
+            java.time.LocalDate.parse(identity[2]);
+            return gap>0 && !name.isBlank()?java.util.Optional.of(new WorkerGoalTarget(Long.parseLong(identity[1]),name,identity[2],gap))
+                    :java.util.Optional.empty();
+        } catch(RuntimeException invalid) {return java.util.Optional.empty();}
+    }
+
     private boolean reportedWorkerCoaching(String quote, List<String> expectedPoints, List<Long> sourceTaskIds,
                                            Map<String,AuthoritativeFact> facts) {
-        if (!sourceTaskIds.isEmpty() || expectedPoints.stream().anyMatch(this::requiresCompletedAction)
-                || !normalize(String.join(" ",expectedPoints)).contains("специалист")
-                || facts.values().stream().noneMatch(f->f.source().startsWith("worker_daily_goal"))) return false;
+        if (!workerGoalExplanationScope(expectedPoints,sourceTaskIds,facts)
+                || WorkerGoalExplanationPolicy.containsUnverifiedOutcome(quote)) return false;
+        if (reportedWorkComposition(normalize(quote),facts)) return true;
+        return WorkerGoalExplanationPolicy.reportedExplanation(quote,false);
+    }
+
+    private boolean workerGoalExplanationScope(List<String> expectedPoints,List<Long> taskIds,
+                                               Map<String,AuthoritativeFact> facts) {
+        return taskIds.isEmpty() && expectedPoints.stream().noneMatch(this::requiresCompletedAction)
+                && normalize(String.join(" ",expectedPoints)).contains("специалист")
+                && facts.values().stream().anyMatch(f->f.source().startsWith("worker_daily_goal"));
+    }
+
+    private boolean concreteWorkerVerification(String quote) {
         String value=normalize(quote);
-        if (quote.contains("%") || value.matches("(?U).*\\b(?:клиент\\p{L}*|заказчик\\p{L}*|счет\\p{L}*|оплат\\p{L}*|платеж\\p{L}*|руб\\p{L}*|чек\\p{L}*|достав\\p{L}*|отправ\\p{L}*|выполнен\\p{L}*|выполнил\\p{L}*|закрыт[аоы]?|разблок\\p{L}*|удален\\p{L}*)\\b.*")) return false;
-        if (quote.matches("(?s).*\\d.*")) return reportedWorkComposition(value,facts);
-        // An organizational appraisal is the manager's explanation, not a recorded event timeline.
-        if (value.matches("(?U)(?:помешал[оа]|причина\\p{L}*)\\b.*")
-                && value.matches("(?U).*\\b(?:накоп\\p{L}*|приоритет\\p{L}*|нагрузк\\p{L}*|организац\\p{L}*|обработк\\p{L}*)\\b.*")
-                && !value.matches("(?U).*\\b(?:поступ\\p{L}*|пришл\\p{L}*|назнач\\p{L}*|выдан\\p{L}*|дедлайн\\p{L}*|дат[аы])\\b.*")) return true;
-        return value.matches("(?U).*\\b(?:я|мы)\\b.*")
-                && value.matches("(?U).*\\b(?:писал[аи]?|писали|написал[аи]?|написали|поговорил[аи]?|поговорили|обсудил[аи]?|обсудили|напомнил[аи]?|напомнили|провел[аи]? разбор|провели разбор)\\b.*");
+        return value.matches("(?U).*\\b(?:провер\\p{L}*|свер\\p{L}*|посмотр\\p{L}*|отслеж\\p{L}*|контрол\\p{L}*|убед\\p{L}*)\\b.*")
+                && value.matches("(?U).*\\b(?:карточ\\p{L}*|заказ\\p{L}*|задач\\p{L}*|текст\\p{L}*|отзыв\\p{L}*|журнал\\p{L}*|спис\\p{L}*|публик\\p{L}*)\\b.*");
+    }
+
+    private boolean reportedOrderComposition(String quote,String answer,Map<String,AuthoritativeFact> facts) {
+        String value=normalize(quote).replaceAll("(?U)\\bне выполнил[аи]?\\b","");
+        if(WorkerGoalExplanationPolicy.containsUnverifiedOutcome(value)
+                || !value.matches("(?U).*\\b(?:1|одн[аоуы])\\s+(?:нов\\p{L}*\\s+)?(?:задач\\p{L}*|заказ\\p{L}*)\\b.*")) return false;
+        var matcher=java.util.regex.Pattern.compile("(?iuU)\\b(?:новый )?заказ\\p{L}*[^.!?\\n]{0,160}?\\b([0-9]+)\\s+текст\\p{L}*").matcher(answer);
+        while(matcher.find()) if(reportedWorkComposition(matcher.group(),facts)) return true;
+        return false;
+    }
+
+    /** Several exact claims may cover one criterion; any unaccounted assertion still fails validation. */
+    private List<ClaimAssessment> coveringClaims(CriterionAssessment criterion,List<ClaimAssessment> claims) {
+        String quote=quoteWords(criterion.answerQuote());
+        if(quote.isBlank()) return List.of();
+        var direct=claims.stream().filter(c->c.answerAttempt()==criterion.answerAttempt()
+                && quoteWords(c.answerQuote()).contains(quote)).toList();
+        if(!direct.isEmpty()) return direct;
+        String remaining=" "+quote+" ";
+        List<ClaimAssessment> covering=new ArrayList<>();
+        for(var claim:claims) {
+            String part=quoteWords(claim.answerQuote());
+            if(claim.answerAttempt()!=criterion.answerAttempt() || part.isBlank()
+                    || !(" "+quote+" ").contains(" "+part+" ")) continue;
+            remaining=remaining.replace(" "+part+" "," ");
+            covering.add(claim);
+        }
+        return remaining.replaceAll("(?U)\\b(?:и|затем|после этого)\\b","").isBlank()?covering:List.of();
+    }
+
+    private String quoteWords(String value) {
+        return normalize(value).replaceAll("[\\p{P}\\s]+"," ").trim();
     }
 
     /** A provider may split reported speech into separate claims, dropping its attribution. */
@@ -887,7 +1020,7 @@ public class ManagerReportReviewQualityService {
                 .map(f->f.id()+"|"+f.field()+"|"+f.value()).sorted().toList();
         if (rows.isEmpty()) return "";
         try {return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
-                .digest(("worker-explanation-report-v2\n"+String.join("\n",rows)).getBytes(java.nio.charset.StandardCharsets.UTF_8)));}
+                .digest(("worker-explanation-report-v4\n"+String.join("\n",rows)).getBytes(java.nio.charset.StandardCharsets.UTF_8)));}
         catch(java.security.NoSuchAlgorithmException impossible){throw new IllegalStateException(impossible);}
     }
 

@@ -11,6 +11,7 @@ import com.hunt.otziv.manager_daily_summary.model.ManagerReportReviewStatus;
 import com.hunt.otziv.manager_daily_summary.model.ManagerReportReviewIssue;
 import com.hunt.otziv.manager_daily_summary.model.ManagerReportReviewIssueStatus;
 import com.hunt.otziv.manager_daily_summary.model.ManagerReportReviewDispute;
+import com.hunt.otziv.manager_daily_summary.model.ManagerReportReviewDisputeStatus;
 import com.hunt.otziv.manager_daily_summary.repository.ManagerReportReviewEventRepository;
 import com.hunt.otziv.manager_daily_summary.repository.ManagerReportReviewSessionRepository;
 import com.hunt.otziv.notification_media.service.NotificationMediaDeliveryService;
@@ -702,13 +703,22 @@ public class ManagerReportReviewTelegramService {
     public void refreshSystemSourceQuestion(Long reviewId) {
         ManagerReportReviewSession review = sessionRepository.findForUpdateById(reviewId).orElse(null);
         if (review == null || review.isTestMode() || review.getCompletedAt() != null
-                || review.getStatus() != ManagerReportReviewStatus.QUESTION_PENDING) return;
+                || (review.getStatus() != ManagerReportReviewStatus.QUESTION_PENDING
+                    && review.getStatus() != ManagerReportReviewStatus.PLAN_PENDING)) return;
         var questions = repairConversationLinks(review, qualityService.readQuestions(review.getQuestionsJson()));
+        if (review.getStatus() == ManagerReportReviewStatus.PLAN_PENDING) {
+            escalateVerificationIfDue(review, questions);
+            return;
+        }
         int index = review.getCurrentQuestionIndex();
         if (index < 0 || index >= questions.size() || !issueService.isPending(review, index)) return;
         issueService.withdrawResolvedSourceIssues(review, questions);
         if (issueService.isPending(review, index)) {
+            String previousFingerprint = review.getRecoveryContextFingerprint();
             refreshWorkerGoalAnswerContext(review,questions.get(index));
+            // Changed evidence or assessment rules get one retry before an old pause is escalated.
+            if (!java.util.Objects.equals(previousFingerprint, review.getRecoveryContextFingerprint())) return;
+            escalateVerificationIfDue(review, questions);
             return;
         }
         review.setAnswerQuality(null);
@@ -740,6 +750,8 @@ public class ManagerReportReviewTelegramService {
     @Transactional
     public void recoverAutomatically(Long reviewId) {
         ManagerReportReviewSession review = sessionRepository.findForUpdateById(reviewId).orElse(null);
+        if (review != null && !review.isTestMode() && review.getCompletedAt() == null
+                && review.getAiUnavailableStartedAt() != null) refreshSystemSourceQuestion(reviewId);
         if (review == null || review.isTestMode() || review.getCompletedAt() != null
                 || review.isRecoveryAwaitingContext()
                 || review.getAiUnavailableStartedAt() == null
@@ -760,13 +772,54 @@ public class ManagerReportReviewTelegramService {
         sessionRepository.save(review);
     }
 
+    private boolean escalateVerificationIfDue(ManagerReportReviewSession review,
+            List<ManagerReportReviewQualityService.ReviewQuestion> questions) {
+        if (review.getAiUnavailableStartedAt() == null || review.getCompletedAt() != null
+                || (review.getStatus()!=ManagerReportReviewStatus.QUESTION_PENDING
+                    && review.getStatus()!=ManagerReportReviewStatus.PLAN_PENDING)) return false;
+        if ("NEEDS_CONTEXT".equals(review.getAnswerQuality()) && !review.isRecoveryAwaitingContext()
+                && review.getRecoveryAttempts() <= 1 && review.getRecoveryNextAttemptAt() != null
+                && review.getRecoveryContextCheckedAt() != null
+                && review.getRecoveryContextCheckedAt().isAfter(LocalDateTime.now().minusMinutes(15))) return false;
+        if (!ownerVerificationDue(review)) return false;
+        int index=review.getCurrentQuestionIndex();
+        if(review.getStatus()==ManagerReportReviewStatus.PLAN_PENDING && !questions.isEmpty())
+            index=Math.min(Math.max(0,index),questions.size()-1);
+        if(index<0 || index>=questions.size()) return false;
+        var requested=issueService.requestOwnerVerification(review,index,review.getAnswerQualityReason());
+        if(requested.isEmpty()) return false;
+        review.setAuditRequired(true);
+        review.setRecoveryAwaitingContext(true);
+        review.setRecoveryNextAttemptAt(null);
+        review.setAnswerQuality("OWNER_REVIEW_REQUIRED");
+        event(review,"OWNER_VERIFICATION_REQUESTED",null,"SYSTEM","recovery-job",
+                "questionIndex="+index+"; disputeId="+requested.get().getId()+"; savedAnswerRetained=true");
+        ownerNotificationService.notifyDispute(review,requested.get());
+        String message="🔎 Проверка этого пункта передана владельцу: автоматическая сверка не смогла завершиться. "
+                +"Ответ и прогресс сохранены, срок остаётся на паузе. Остальные вопросы можно продолжать.";
+        if(!sendQuestion(review,questions,message)) {
+            waitForDisputeOrComplete(review,review.getManager().getUser(),"Ожидается решение владельца по проверке");
+            telegramService.sendMessageWithInlineKeyboard(review.getRecipientChatId(),message,"HTML",continueKeyboard(review.getId()));
+        }
+        sessionRepository.save(review);
+        return true;
+    }
+
+    private boolean ownerVerificationDue(ManagerReportReviewSession review) {
+        int waitMinutes=Math.max(5,Math.min(240,appSettingService.getInt("manager.report-review.owner-review-after-minutes",30)));
+        int maxAttempts=Math.max(2,Math.min(10,appSettingService.getInt("manager.report-review.max-recovery-attempts",4)));
+        return review.getAiUnavailableStartedAt()!=null && (review.getRecoveryAttempts()>=maxAttempts
+                || !review.getAiUnavailableStartedAt().isAfter(LocalDateTime.now().minusMinutes(waitMinutes)));
+    }
+
     private void refreshWorkerGoalAnswerContext(ManagerReportReviewSession review,
             ManagerReportReviewQualityService.ReviewQuestion question) {
         if (!review.isRecoveryAwaitingContext() || !"NEEDS_CONTEXT".equals(review.getAnswerQuality())
                 || !question.sourceTaskIds().isEmpty() || !question.question().startsWith("Специалист ")
                 || qualityService.latestAnswerRecordedAt(review.getAnswersJson(),review.getCurrentQuestionIndex())==null) return;
         LocalDateTime now=LocalDateTime.now();
-        if (review.getRecoveryContextCheckedAt()!=null && review.getRecoveryContextCheckedAt().isAfter(now.minusMinutes(15))) return;
+        if (review.getRecoveryContextCheckedAt()!=null && review.getRecoveryContextCheckedAt().isAfter(now.minusMinutes(15))
+                && !ownerVerificationDue(review)) return;
         String fingerprint=qualityService.workerGoalContextFingerprint(answerContext(review,question));
         review.setRecoveryContextCheckedAt(now);
         if (fingerprint==null || fingerprint.isBlank() || fingerprint.equals(review.getRecoveryContextFingerprint())) return;
@@ -1089,13 +1142,14 @@ public class ManagerReportReviewTelegramService {
             if (!sendQuestion(
                     review,
                     questions,
-                    assessment.safeManagerFeedback()
+                    answerFeedback(question,assessment)
             )) {
                 notifyQuestionDeliveryFailure(review);
             }
             return true;
         }
-        commitmentService.record(review, index, question, assessment.commitments());
+        if(workerGoalQuestion(question)) commitmentService.recordWorkerGoal(review,index,question,assessment,evidenceContext);
+        else commitmentService.record(review, index, question, assessment.commitments());
         issueService.markAnswered(review, index);
         int next = nextQuestionIndex(review, questions, index + 1);
         review.setCurrentQuestionIndex(next < 0 ? questions.size() : next);
@@ -1319,9 +1373,13 @@ public class ManagerReportReviewTelegramService {
         review.setStatus(ManagerReportReviewStatus.DISPUTE_PENDING);
         Optional<Integer> promptId = sendReplyPrompt(
                 review,
-                "⚖️ Вы оспариваете:\n"
+                (dispute.isVerificationRequestedBySystem()
+                        ? "🔎 Уточнение по системной проверке:\n"
+                        : "⚖️ Вы оспариваете:\n")
                         + dispute.getIssue().getQuestionText()
-                        + "\n\nОпишите конкретно, что в этом замечании неверно.\n\n"
+                        + (dispute.isVerificationRequestedBySystem()
+                            ? "\n\nУточните ответ и доступные данные для проверки.\n\n"
+                            : "\n\nОпишите конкретно, что в этом замечании неверно.\n\n")
                         + "Укажите пример, фактическое событие и, если возможно, где это можно проверить. "
                         + "Остальные замечания останутся в проверке."
         );
@@ -1472,7 +1530,9 @@ public class ManagerReportReviewTelegramService {
             return;
         }
         var draft = issueService.explanationDispute(review);
-        if (draft.isPresent()) {
+        boolean systemVerification = draft.map(ManagerReportReviewDispute::isVerificationRequestedBySystem).orElse(false);
+        if (draft.isPresent() && (!systemVerification
+                || draft.get().getStatus() == ManagerReportReviewDisputeStatus.NEEDS_CONTEXT)) {
             promptDispute(review, draft.get());
             return;
         }
@@ -1485,8 +1545,10 @@ public class ManagerReportReviewTelegramService {
         }
         telegramService.sendMessage(
                 review.getRecipientChatId(),
-                "✅ Все неоспоренные вопросы пройдены.\n\n"
-                        + "Аудит пока не завершён: ожидается решение владельца по спорному замечанию.",
+                systemVerification
+                        ? "🔎 Действующие вопросы пройдены. Ожидается решение владельца по системной проверке. Ответ сохранён, срок остаётся на паузе."
+                        : "✅ Все неоспоренные вопросы пройдены.\n\n"
+                            + "Аудит пока не завершён: ожидается решение владельца по спорному замечанию.",
                 "HTML"
         );
     }
@@ -1816,6 +1878,28 @@ public class ManagerReportReviewTelegramService {
                 +"повторять ранее зачтённые пояснения в каждом дополнении не нужно.";
     }
 
+    private java.time.LocalDate workerGoalReportDate(ManagerReportReviewQualityService.ReviewQuestion question,
+                                                    java.time.LocalDate reportDate) {
+        var matcher=java.util.regex.Pattern.compile("(?U)\\bза (\\d{2}\\.\\d{2}\\.\\d{4})\\b").matcher(question.question());
+        if(matcher.find()) try {
+            var goalDate=java.time.LocalDate.parse(matcher.group(1),java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy"));
+            if(goalDate.isBefore(reportDate)) return goalDate.plusDays(1);
+        } catch(java.time.format.DateTimeParseException ignored) { }
+        return reportDate;
+    }
+
+    private String answerFeedback(ManagerReportReviewQualityService.ReviewQuestion question,
+                                  ManagerReportReviewQualityService.Assessment assessment) {
+        if(workerGoalQuestion(question) && assessment.decision()==ManagerReportReviewQualityService.Decision.NEEDS_CLARIFICATION
+                && assessment.criteria().stream().noneMatch(c->c.status()==ManagerReportReviewQualityService.CriterionStatus.CONTRADICTED)
+                && assessment.claims().stream().noneMatch(c->c.status()==ManagerReportReviewQualityService.ClaimStatus.CONTRADICTED)
+                && assessment.criteria().stream().anyMatch(c->c.status()==ManagerReportReviewQualityService.CriterionStatus.MISSING
+                    && c.feedbackTopic()==ManagerReportReviewQualityService.FeedbackTopic.VERIFICATION))
+            return "Как и где вы проверите результат именно по оставшемуся объёму работ? "
+                    +"Назовите конкретную проверку; запланированное действие можно описать как план. Прежние пояснения сохранены.";
+        return assessment.safeManagerFeedback();
+    }
+
     private String answerDirectionsHtml(ManagerReportReviewQualityService.ReviewQuestion question) {
         if (workerGoalQuestion(question)) return "\n\n📌 <b>Объясните недобор и помощь специалисту.</b>\n\n"
                 +escape(workerGoalAnswerDirections());
@@ -1897,7 +1981,7 @@ public class ManagerReportReviewTelegramService {
                         + "\n" + taskContextService.conversationEvidence(question.sourceChatItemIds(), review.managerId())
                                 .replace("СЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:\n", "");
         if (question.sourceTaskIds().isEmpty() && question.question().startsWith("Специалист ")) {
-            var goals = workerProgressService.missedPreviousDayGoals(review.managerId(), review.getSummaryDate());
+            var goals = workerProgressService.missedPreviousDayGoals(review.managerId(), workerGoalReportDate(question,review.getSummaryDate()));
             if (goals != null && !goals.isEmpty()) {
                 StringBuilder goalFacts = new StringBuilder("\nСЕРВЕРНЫЕ ФАКТЫ ДЛЯ ПРОВЕРКИ:\n");
                 for (var goal : goals) {
@@ -1931,7 +2015,7 @@ public class ManagerReportReviewTelegramService {
             ManagerReportReviewQualityService.ReviewQuestion question, java.time.ZonedDateTime submittedAt, String original) {
         if (!question.sourceTaskIds().isEmpty() || !question.sourceChatItemIds().isEmpty()
                 || !question.question().startsWith("Специалист ")) return "";
-        var goals=workerProgressService.missedPreviousDayGoals(review.managerId(),review.getSummaryDate());
+        var goals=workerProgressService.missedPreviousDayGoals(review.managerId(),workerGoalReportDate(question,review.getSummaryDate()));
         if (goals==null || goals.isEmpty()) return "";
         var mapper=new com.fasterxml.jackson.databind.ObjectMapper();
         java.util.Set<String> existing=new java.util.HashSet<>();

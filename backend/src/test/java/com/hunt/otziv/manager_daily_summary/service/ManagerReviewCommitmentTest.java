@@ -21,7 +21,8 @@ import org.mockito.ArgumentCaptor;
 class ManagerReviewCommitmentTest {
     private final ManagerReviewCommitmentRepository promises = mock(ManagerReviewCommitmentRepository.class);
     private final ManagerDailyControlConcreteItemRepository sources = mock(ManagerDailyControlConcreteItemRepository.class);
-    private final ManagerReportReviewCommitmentService service = new ManagerReportReviewCommitmentService(promises, sources);
+    private final ManagerReportReviewCommitmentService service = new ManagerReportReviewCommitmentService(promises, sources,
+            mock(ManagerReportReviewQualityService.class),mock(ManagerWorkerDailyProgressService.class));
 
     @Test void promiseKeepsCaseOpenAndPreservesEarlierIndependentAction() {
         var source = source(9L);

@@ -70,7 +70,7 @@ public interface ManagerReportReviewSessionRepository extends JpaRepository<Mana
 
     @Query(value = """
             SELECT review_id FROM manager_report_review_sessions
-             WHERE test_mode = false AND completed_at IS NULL AND status = 'QUESTION_PENDING'
+             WHERE test_mode = false AND completed_at IS NULL AND status IN ('QUESTION_PENDING', 'PLAN_PENDING')
                AND review_id > :afterId
              ORDER BY review_id LIMIT 20
             """, nativeQuery = true)

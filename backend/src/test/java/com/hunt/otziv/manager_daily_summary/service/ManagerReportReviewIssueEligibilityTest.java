@@ -33,6 +33,18 @@ class ManagerReportReviewIssueEligibilityTest {
         assertThat(fixture.service.withdrawResolvedSourceIssues(fixture.review, fixture.questions)).isEqualTo(1);
     }
 
+    @Test void systemVerificationPreservesTheAnswerAndDoesNotPretendTheManagerDisputedAnything() {
+        var fixture=new Fixture(List.of());fixture.issue.setId(101L);
+        when(fixture.repository.findByReview_IdAndQuestionIndex(41L,0)).thenReturn(java.util.Optional.of(fixture.issue));
+        when(fixture.repository.findById(101L)).thenReturn(java.util.Optional.of(fixture.issue));
+        var request=fixture.service.requestOwnerVerification(fixture.review,0,"Данные исходного события недоступны").orElseThrow();
+        assertThat(request.isVerificationRequestedBySystem()).isTrue();
+        assertThat(request.getVerificationReason()).contains("недоступны");assertThat(request.getManagerText()).isNull();
+        assertThat(request.getStatus()).isEqualTo(ManagerReportReviewDisputeStatus.DRAFT);
+        assertThat(fixture.issue.getStatus()).isEqualTo(ManagerReportReviewIssueStatus.DISPUTE_PENDING);
+        assertThat(fixture.review.getAnswersJson()).isEqualTo("[\"saved answer\"]");
+    }
+
     private static class Fixture {
         final ManagerReportReviewIssueRepository repository = mock(ManagerReportReviewIssueRepository.class);
         final ManagerReportReviewTaskContextService context = mock(ManagerReportReviewTaskContextService.class);

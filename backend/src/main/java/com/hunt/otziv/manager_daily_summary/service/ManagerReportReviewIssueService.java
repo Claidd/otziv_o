@@ -199,6 +199,21 @@ public class ManagerReportReviewIssueService {
         return dispute(review, List.of(ManagerReportReviewDisputeStatus.DRAFT));
     }
 
+    /** A verifier failure requests an owner decision; it is not an employee dispute or admission. */
+    @Transactional
+    public Optional<ManagerReportReviewDispute> requestOwnerVerification(ManagerReportReviewSession review,
+                                                                        int questionIndex, String reason) {
+        if (review == null || review.getId() == null || unresolvedDispute(review).isPresent()) return Optional.empty();
+        var issue = issueRepository.findByReview_IdAndQuestionIndex(review.getId(), questionIndex).orElse(null);
+        if (issue == null || (issue.getStatus() != ManagerReportReviewIssueStatus.PENDING
+                && issue.getStatus() != ManagerReportReviewIssueStatus.ANSWERED)) return Optional.empty();
+        var dispute = beginDispute(review, issue.getId());
+        dispute.setVerificationRequestedBySystem(true);
+        dispute.setVerificationReason(limit(reason, 2000));
+        disputeRepository.save(dispute);
+        return Optional.of(dispute);
+    }
+
     @Transactional(readOnly = true)
     public Optional<ManagerReportReviewDispute> explanationDispute(ManagerReportReviewSession review) {
         return dispute(review, List.of(ManagerReportReviewDisputeStatus.DRAFT,
