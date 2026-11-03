@@ -32,6 +32,20 @@ class MaxBotClientTest {
     @AfterEach
     void verifyRequests() { server.verify(); }
 
+    @Test void archiveHistoryIsReadOnlyBoundedAndDoesNotConsumeUpdates() {
+        server.expect(requestTo("https://max.fixture/messages?chat_id=-91&from=1793635200000&count=100"))
+                .andExpect(method(HttpMethod.GET)).andExpect(header("Authorization","fixture-token"))
+                .andRespond(withSuccess("{\"messages\":[]}",MediaType.APPLICATION_JSON));
+        assertThat(client.archiveHistoryPage(-91,1793635200000L).path("messages").isArray()).isTrue();
+    }
+
+    @ParameterizedTest @ValueSource(ints={401,403,429,500})
+    void failedHistoryRequestIsNeverConvertedToAnEmptyCompleteHistory(int status) {
+        server.expect(requestTo("https://max.fixture/messages?chat_id=-91&from=1793635200000&count=100"))
+                .andRespond(withStatus(HttpStatus.valueOf(status)));
+        assertThatThrownBy(()->client.archiveHistoryPage(-91,1793635200000L)).isInstanceOf(IllegalStateException.class);
+    }
+
     @Test
     void singleAttemptPreservesPayloadAndRequiresCreatedMessageReceipt() {
         String text = "x".repeat(3900);

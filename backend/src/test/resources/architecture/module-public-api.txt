@@ -70,6 +70,7 @@ com.hunt.otziv.client_chat_control.dto.ClientChatPerformanceSample
 com.hunt.otziv.client_chat_control.api.ClientChatReplyEvidence
 # Reminder restart contract: authorized frozen chat, strict read-only provider history; no send/card mutation.
 com.hunt.otziv.client_chat_control.api.ReminderContactHistory
+com.hunt.otziv.client_chat_control.api.ReviewArchiveHistory
 # ADR-021: finalized scalar worker goal results, scoped to assigned worker IDs.
 com.hunt.otziv.worker_performance.api.FinalWorkerDayResults
 
