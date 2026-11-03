@@ -760,11 +760,38 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
         ArchiveCheck check = transactionRunner.callInNewTransaction(() -> archiveCheck(stateId));
         if (check == null) return new Decision(false,"Автоархив ожидает семи подтверждённых напоминаний и окончания срока для ответа; также проверяется текущий этап заказа.");
         // Transport calls precede the write transaction. Missing/partial history never means client silence.
-        if (archiveChatHistory.hasReplyBlockingArchive(check.clientId(),check.groupId(),check.lastSuccess()))
-            return new Decision(false,"Автоархив приостановлен: в WhatsApp есть ответ клиента, который нужно разобрать.");
+        String chatUrl=Objects.toString(check.company().urlChat(),"").trim().toLowerCase(Locale.ROOT);
+        boolean otherChannel=chatUrl.matches("^(?:https?://)?(?:t\\.me|telegram\\.me|telegram\\.dog|(?:web\\.)?max\\.ru)/.+")
+                || chatUrl.startsWith("tg://resolve?") || !hasText(check.groupId())
+                    && (check.company().telegramChatId()!=null || check.company().maxChatId()!=null);
+        if(otherChannel)
+            return deferReviewArchive(check,"Автоархив приостановлен: для Telegram/MAX полная история переписки не подтверждена. Проверьте ответ клиента и завершите заказ вручную.",30);
+        if(!hasText(check.clientId()) || !hasText(check.groupId()))
+            return deferReviewArchive(check,"Автоархив приостановлен: проверьте WhatsApp-клиент менеджера и привязку группы компании.",30);
+        try {
+            if (archiveChatHistory.hasReplyBlockingArchive(check.clientId(),check.groupId(),check.lastSuccess()))
+                return deferReviewArchive(check,"Автоархив приостановлен: в WhatsApp есть ответ клиента, который нужно разобрать.",30);
+        } catch(RuntimeException unavailable) {
+            return deferReviewArchive(check,"Автоархив приостановлен: история WhatsApp не подтверждена. Проверка будет повторена.",5);
+        }
         boolean changed = transactionRunner.callInPreparationTransaction(() -> commitReviewArchive(check));
         return new Decision(changed,changed ? "Заказ архивирован; предложение и уведомления записаны в очередь."
                 : "Автоархив остановлен: изменились заказ, оплата, отправка или данные ответа клиента.");
+    }
+
+    private Decision deferReviewArchive(ArchiveCheck check,String reason,int minutes) {
+        transactionRunner.callInNewTransaction(()->{
+            var state=stateRepository.findByIdForUpdate(check.stateId()).orElse(null);
+            if(state!=null && state.getStatus()==ScheduledMessageStateStatus.ACTIVE
+                    && Objects.equals(state.getTargetKey(),check.targetKey()) && state.getSentCount()==check.sentCount()
+                    && Objects.equals(state.getLastSuccessAt(),check.lastSuccess())) {
+                state.setArchiveBlockReason(reason);
+                state.setArchiveNextCheckAt(messageTime.nowStorage().plusMinutes(minutes));
+                stateRepository.save(state);
+            }
+            return null;
+        });
+        return new Decision(false,reason);
     }
 
     private boolean silenceThresholdReached(ScheduledClientMessageState state, LocalDateTime now) {
@@ -785,10 +812,10 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
         Order order = orderRepository.findById(state.getOrderId()).orElse(null);
         if (source == null || order == null || !STATUS_IN_CHECK.equals(statusTitle(order))
                 || !isCurrentOrderCycle(state,order) || order.isComplete() || order.getPayDay() != null
-                || order.getCounter() > 0 || order.getCompany() == null || manager(order) == null) return null;
+                || order.getCounter() > 0 || order.getCompany() == null) return null;
         Company company = order.getCompany();
         return new ArchiveCheck(stateId,state.getTargetKey(),state.getSentCount(),state.getLastSuccessAt(),source,
-                companyTarget(company),manager(order).getClientId(),company.getGroupId());
+                companyTarget(company),manager(order)==null?null:manager(order).getClientId(),company.getGroupId());
     }
 
     private boolean commitReviewArchive(ArchiveCheck check) {
@@ -798,10 +825,12 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
         if (!silenceThresholdReached(state,messageTime.nowStorage()) || !Objects.equals(state.getTargetKey(),check.targetKey())
                 || state.getSentCount() != check.sentCount() || !Objects.equals(state.getLastSuccessAt(),check.lastSuccess())) return false;
         Order order = orderRepository.findByIdForMutation(current.orderId()).orElseThrow();
+        if(manager(order)==null || order.getCompany()==null) return false;
         if (!STATUS_IN_CHECK.equals(statusTitle(order)) || !isCurrentOrderCycle(state,order) || order.isComplete()
                 || order.getPayDay() != null || order.getCounter() > 0 || orderPaymentIntegrityService.hasSettledPaymentEvidence(order)
                 || !Objects.equals(check.clientId(),manager(order).getClientId())
                 || !Objects.equals(check.groupId(),order.getCompany().getGroupId())
+                || !Objects.equals(check.company(),companyTarget(order.getCompany()))
                 || archiveChatHistory.hasOpenReply(check.groupId()) || postponeForReviewRecoveryIfNeeded(state,order,messageTime.nowStorage())) return false;
         var billing = commonBillingServiceProvider.getObject();
         var membership = billing.archiveReviewMembershipAfterReminders(order.getId());
@@ -838,6 +867,8 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
                 + offerStatus + "\nУведомление клиенту поставлено в очередь. Оплата не изменялась.";
         for (Long chat : archiveNoticeRecipients.archiveRecipients(current.managerId()))
             archiveNotifications.enqueue(state.getId(),"staff:" + chat,new ReviewArchiveNotifications.Envelope(null,null,null,staffText,chat));
+        state.setArchiveNextCheckAt(null);
+        state.setArchiveBlockReason(null);
         markDone(state,messageTime.nowStorage(),null,null);
         return true;
     }

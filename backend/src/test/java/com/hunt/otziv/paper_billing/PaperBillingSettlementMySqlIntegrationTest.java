@@ -24,7 +24,7 @@ class PaperBillingSettlementMySqlIntegrationTest {
     @BeforeEach void setup() {
         var ds=new DriverManagerDataSource(MYSQL.getJdbcUrl(),MYSQL.getUsername(),MYSQL.getPassword());
         jdbc=new JdbcTemplate(ds);
-        for(String table:List.of("paper_invoice_event","paper_invoice_staff_notice","company_billing_payer_audit","company_billing_payer","paper_invoice_bank_receipt","paper_invoice_document","paper_invoice_statement_cursor","payment_links","common_invoices","orders"))
+        for(String table:List.of("paper_invoice_files","paper_invoice_event","paper_invoice_staff_notice","company_billing_payer_audit","company_billing_payer","paper_invoice_bank_receipt","paper_invoice_document","paper_invoice_statement_cursor","payment_links","common_invoices","orders"))
             jdbc.execute("DROP TABLE IF EXISTS "+table);
         jdbc.execute("CREATE TABLE orders(order_id BIGINT PRIMARY KEY)");
         jdbc.execute("INSERT INTO orders VALUES(42)");
@@ -39,6 +39,7 @@ class PaperBillingSettlementMySqlIntegrationTest {
         new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_353__paper_invoice_cancellation.sql")).execute(ds);
         new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_354__paper_cancel_ordinary_invoice.sql")).execute(ds);
         new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_363__paper_invoice_payment_reference.sql")).execute(ds);
+        new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_364__paper_files_and_delivery_backoff.sql")).execute(ds);
         store=new PaperBillingStore(jdbc,mock(BankPaperInvoices.class)); id=UUID.randomUUID().toString();
         var service=mock(PaperBillingService.class);
         when(service.payer(anyString())).thenReturn(new Payer("company","Тест","7707083893","773601001",""));
@@ -51,6 +52,46 @@ class PaperBillingSettlementMySqlIntegrationTest {
     }
     BankReceipt receipt(String payment,long amount,String inn) {
         return new BankReceipt("customer","40802810000000004287/044525104",payment,inn,amount,"Оплата по счёту "+store.row(id).get("number"));
+    }
+
+    @Test void unavailableGatewayBacksOffWithoutChangingFilesOrWritingEveryPoll() {
+        jdbc.update("UPDATE paper_invoice_document SET stage='FILES_READY',message_delivery='SENT' WHERE id=?",id);
+        store.pdf(id,false,new PaperBillingPdfSignature.Pdf(new byte[]{1,2,3},new byte[]{4,5},"signature"));
+        var settings=new PaperBillingSettings();settings.setDeliveryEnabled(true);
+        var delivery=mock(PaperBillingDelivery.class);
+        when(delivery.send(anyMap(),eq(false))).thenReturn(com.hunt.otziv.client_messages.dto.ClientMessageSendResult.failed("gateway_not_ready","Unavailable"));
+        var worker=new PaperBillingWorker(store,mock(PaperBillingService.class),settings,mock(PaperBillingBankClient.class),delivery,mock(BankPaperInvoices.class),mock(PaperBillingPdfSignature.class));
+        worker.process(id);
+        var after=store.row(id);
+        for(int i=0;i<20;i++) {assertFalse(store.pending().contains(id));worker.process(id);}
+        verify(delivery,times(1)).send(anyMap(),eq(false));
+        assertEquals(after.get("updated_at"),store.row(id).get("updated_at"));
+        assertEquals(1,((Number)store.row(id).get("work_failures")).intValue());
+        assertTrue(jdbc.queryForObject("SELECT work_next_attempt_at>DATE_ADD(NOW(6),INTERVAL 45 SECOND) FROM paper_invoice_document WHERE id=?",Boolean.class,id));
+        assertArrayEquals(new byte[]{4,5},(byte[])store.row(id).get("invoice_pdf"));
+        assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='paper_invoice_document' AND data_type IN ('blob','mediumblob','longblob')",Integer.class));
+        jdbc.update("UPDATE paper_invoice_document SET work_next_attempt_at=DATE_SUB(NOW(6),INTERVAL 1 SECOND) WHERE id=?",id);
+        worker.process(id);
+        verify(delivery,times(2)).send(anyMap(),eq(false));
+        assertTrue(jdbc.queryForObject("SELECT work_next_attempt_at>DATE_ADD(NOW(6),INTERVAL 105 SECOND) FROM paper_invoice_document WHERE id=?",Boolean.class,id));
+    }
+
+    @Test void deliveryLeaseExpiresIndependentlyOfPaymentStatusUpdates() {
+        jdbc.update("UPDATE paper_invoice_document SET stage='FILES_READY',invoice_delivery='SENDING',delivery_attempted_at=DATE_SUB(NOW(6),INTERVAL 6 MINUTE),updated_at=NOW(6) WHERE id=?",id);
+        store.pending();
+        assertEquals("UNKNOWN",store.row(id).get("invoice_delivery"));
+        assertFalse(store.claimDelivery(id,false));
+    }
+    @Test void configurationFailureWaitsThirtyMinutesAndLongFailureCreatesOneStaffNotice() {
+        jdbc.update("UPDATE paper_invoice_document SET stage='FILES_READY',message_delivery='SENT' WHERE id=?",id);
+        for(int attempt=0;attempt<7;attempt++) {
+            jdbc.update("UPDATE paper_invoice_document SET work_next_attempt_at=DATE_SUB(NOW(6),INTERVAL 1 SECOND) WHERE id=?",id);
+            assertTrue(store.claimDelivery(id,false));
+            store.delivery(id,false,"PENDING",null);
+            store.deliveryFailure(id,"Счёт","not_ready","Клиентские сообщения выключены");
+        }
+        assertTrue(jdbc.queryForObject("SELECT work_next_attempt_at>DATE_ADD(NOW(6),INTERVAL 29 MINUTE) FROM paper_invoice_document WHERE id=?",Boolean.class,id));
+        assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM paper_invoice_event WHERE document_id=? AND event_key='delivery-attention'",Integer.class,id));
     }
     @Test void paymentArrivingDuringReminderDoesNotLeaveAPaidInvoiceInReview() {
         new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1_10_358__paper_part_reminders.sql")).execute(jdbc.getDataSource());
@@ -314,7 +355,8 @@ class PaperBillingSettlementMySqlIntegrationTest {
         var json=new com.fasterxml.jackson.databind.ObjectMapper();
         when(cancelBank.call(eq("/open-banking/v1.0/statements"),eq(org.springframework.http.HttpMethod.POST),any())).thenReturn(json.readTree("{\"Data\":{\"Statement\":{\"statementId\":\"cancel-test\"}}}"));
         when(cancelBank.call(contains("/statements/cancel-test"),eq(org.springframework.http.HttpMethod.GET),isNull())).thenReturn(cancelStatement("Ready",""));
-        jdbc.update("UPDATE paper_invoice_document SET bank_act_id='bank-act',invoice_pdf=?,act_pdf=?,message_delivery='SENT',invoice_delivery='SENT',act_delivery='SENT',delivery_completed_at=NOW(6) WHERE id=?",new byte[]{1,2},new byte[]{3,4},id);
+        jdbc.update("UPDATE paper_invoice_document SET bank_act_id='bank-act',message_delivery='SENT',invoice_delivery='SENT',act_delivery='SENT',delivery_completed_at=NOW(6) WHERE id=?",id);
+        jdbc.update("INSERT INTO paper_invoice_files(document_id,invoice_pdf,act_pdf) VALUES(?,?,?)",id,new byte[]{1,2},new byte[]{3,4});
         cancelWorkflow=new PaperBillingCancellation(store,authorized,cancelTargets,cancelBank,settings,settlement,mock(PaperBillingDelivery.class),new DataSourceTransactionManager(jdbc.getDataSource()));
     }
     com.fasterxml.jackson.databind.JsonNode cancelStatement(String state,String transactions) throws Exception {

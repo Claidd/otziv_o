@@ -43,6 +43,7 @@ public class GroupReplyServiceImpl implements GroupReplyService {
     private final PublicationProgressPreferenceService publicationProgressPreferenceService;
     private final WhatsAppInboundReplyOutbox replyOutbox;
     private final ClientChatMessageTrackerService clientChatMessageTrackerService;
+    private final WhatsAppUnlinkedEventStore unlinkedEvents;
 
     @Override
     @Transactional
@@ -83,8 +84,7 @@ public class GroupReplyServiceImpl implements GroupReplyService {
                     optCompany = companyService.findByGroupId(reply.getGroupId());
                 }
                 if (optCompany.isEmpty()) {
-                    log.warn("WhatsApp group reply ignored: company not found for groupId={}, phone={}, titlePresent={}, groupNamePresent={}",
-                            reply.getGroupId(), maskPhone(telephoneNumber), hasText(title), hasText(reply.getGroupName()));
+                    unlinkedEvents.defer(reply,"company_missing");
                     return;
                 }
             }
@@ -94,7 +94,12 @@ public class GroupReplyServiceImpl implements GroupReplyService {
 
         Company found = optCompany.get();
         if (found.isWhatsAppInvitePending()) {
+            unlinkedEvents.defer(reply,"invite_pending");
             log.info("WhatsApp group reply cannot restore a changed invite by phone/title: companyId={}", found.getId());
+            return;
+        }
+        if(hasText(found.getGroupId()) && !found.getGroupId().equals(reply.getGroupId())) {
+            unlinkedEvents.defer(reply,"group_mismatch");
             return;
         }
         if (found.getGroupId() == null || found.getGroupId().isBlank()) {
@@ -106,6 +111,7 @@ public class GroupReplyServiceImpl implements GroupReplyService {
             log.info("Компания '{}' уже имеет GroupId: {}", found.getTitle(), found.getGroupId());
         }
         groupCompanyLinker.linkByGroupName(reply.getGroupId(), reply.getGroupName());
+        unlinkedEvents.resolved(reply);
 
         Optional<PublicationProgressPreferenceService.PreferenceUpdate> preferenceUpdate =
                 Boolean.TRUE.equals(reply.getSystemGenerated())

@@ -104,6 +104,38 @@ class ReviewSilenceArchiveTest {
         verify(archiveNotifications,times(3)).enqueue(anyLong(),anyString(),any());
     }
 
+    @ParameterizedTest @ValueSource(strings={"client","group","manager"})
+    void missingIdentityIsVisibleAndDeferredWithoutTransportOrArchival(String missing) throws Exception {
+        if(missing.equals("client")) order.getManager().setClientId(" ");
+        if(missing.equals("group")) company.setGroupId(null);
+        if(missing.equals("manager")) {order.setManager(null);company.setManager(null);}
+        var result=service.archiveAfterReminders(30);
+        assertThat(result.archived()).isFalse();
+        assertThat(result.reason()).contains("привязку");
+        assertThat(state.getArchiveBlockReason()).isEqualTo(result.reason());
+        assertThat(state.getArchiveNextCheckAt()).isAfter(now.plusMinutes(25));
+        verifyNoInteractions(archiveChatHistory,archiveNotifications);
+        verify(orderStatusTransitionService,never()).changeStatusForOrder(anyLong(),anyString());
+    }
+
+    @Test void repairingBindingAllowsManualRecheckBeforeDeferredTime() {
+        company.setGroupId(null);
+        assertThat(service.archiveAfterReminders(30).archived()).isFalse();
+        company.setGroupId("repaired-group");
+        assertThat(service.archiveAfterReminders(30).archived()).isTrue();
+        assertThat(state.getArchiveBlockReason()).isNull();
+        assertThat(state.getArchiveNextCheckAt()).isNull();
+    }
+
+    @ParameterizedTest @ValueSource(strings={"https://t.me/group","https://max.ru/chat"})
+    void otherChannelsNeverUseAnOldWhatsappGroupToAssertClientSilence(String url) {
+        company.setUrlChat(url);
+        var result=service.archiveAfterReminders(30);
+        assertThat(result.archived()).isFalse();
+        assertThat(result.reason()).contains("Telegram/MAX");
+        verifyNoInteractions(archiveChatHistory,archiveNotifications);
+    }
+
     @ParameterizedTest @ValueSource(strings={"six","unknown","recent","paid","pending","changed","reply","history_unavailable"})
     void unsafeOrIncompleteConditionsDoNotArchiveOrNotify(String condition) throws Exception {
         switch(condition) {
