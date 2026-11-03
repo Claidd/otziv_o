@@ -1959,7 +1959,7 @@ class ManagerControlServiceTest {
     }
 
     @Test
-    void repairRegularOrderCardRestoresClientTextReminderForNewWaitingOrder() {
+    void repairRegularOrderCardPreservesLongClientTextWaitingAndRestoresReminders() {
         ManagerDailyControl control = control();
         ManagerDailyControlItem parent = actionParent(control);
         ManagerDailyControlConcreteItem concrete = concrete(control, parent, "ORDER");
@@ -1967,7 +1967,7 @@ class ManagerControlServiceTest {
         concrete.setReason("Автоответчик не обработал заказ: нет записи в очереди CLIENT_TEXT_REMINDER");
 
         LocalDateTime waitingChangedAt = LocalDate.now()
-                .minusDays(1)
+                .minusDays(20)
                 .atTime(14, 50, 19);
         Company company = new Company();
         company.setId(2155L);
@@ -1983,6 +1983,7 @@ class ManagerControlServiceTest {
         order.setStatus(newStatus);
         order.setWaitingForClient(true);
         order.setWaitingForClientChangedAt(waitingChangedAt);
+        order.setChanged(waitingChangedAt.toLocalDate());
 
         ScheduledClientMessageState healthyState = ScheduledClientMessageState.builder()
                 .id(4200L)
@@ -2007,6 +2008,8 @@ class ManagerControlServiceTest {
         assertEquals(ManagerDailyControlItemStatus.RESOLVED, concrete.getStatus());
         assertEquals("RESOLVED", response.itemStatus());
         assertTrue(concrete.getComment().contains("CLIENT_TEXT_REMINDER"));
+        assertTrue(order.isWaitingForClient());
+        assertEquals(waitingChangedAt,order.getWaitingForClientChangedAt());
         verify(scheduledClientMessageService).ensureClientTextReminderForOrder(order);
         verify(scheduledClientMessageService, never()).ensureOrderAutomationForOrder(order);
     }

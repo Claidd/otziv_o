@@ -26,6 +26,7 @@ public class ReviewArchiveNotifications {
     private final TelegramNotifications telegram;
     private final ClientMessageTransactionRunner transactions;
     private final OutboundMessagePolicy settings;
+    private final org.springframework.beans.factory.ObjectProvider<ScheduledClientMessageService> automation;
 
     public record Envelope(ClientMessageDelivery.Target target, String clientId, String groupId, String text, Long staffChatId) { }
     record Claim(String operationId, String channel, String envelope, String token, boolean receiptOnly, LocalDateTime createdAt) { }
@@ -124,7 +125,24 @@ public class ReviewArchiveNotifications {
 
     void deliver(String id) {
         if (!settings.clientMessagesEnabled()) return;
-        Claim claim = transactions.callInNewTransaction(() -> {
+        Claim claim = transactions.callInPreparationTransaction(() -> {
+            // Same lock order for concurrent drainers; the reservation is committed with the outbox claim.
+            var intent = jdbc.query("SELECT source_state_id,envelope,channel,state FROM review_archive_notifications WHERE operation_id=?",
+                    (rs,row) -> new Object[]{rs.getLong(1),rs.getString(2),rs.getString(3),rs.getString(4)},id);
+            if (intent.isEmpty()) return null;
+            var draft = intent.getFirst();
+            if ("STAFF".equals(draft[2]) && "READY".equals(draft[3])
+                    && !automation.getObject().archiveNoticeDispatchEnabled((Long)draft[0])) return null;
+            if ("CLIENT".equals(draft[2]) && "READY".equals(draft[3])) {
+                Envelope envelope;
+                try { envelope=json.readValue(cipher.decrypt((String)draft[1]),Envelope.class); }
+                catch (java.io.IOException failure) { throw new IllegalStateException(failure); }
+                LocalDateTime next=automation.getObject().archiveNoticeNextSlot((Long)draft[0],envelope.target());
+                if (next.isAfter(LocalDateTime.now().plusSeconds(1))) {
+                    jdbc.update("UPDATE review_archive_notifications SET next_attempt_at=? WHERE operation_id=? AND state='READY'",next,id);
+                    return null;
+                }
+            }
             var rows = jdbc.query("""
                 SELECT operation_id,channel,envelope,state,created_at FROM review_archive_notifications
                 WHERE operation_id=? AND state IN ('READY','DISPATCHING','UNKNOWN')
@@ -135,12 +153,21 @@ public class ReviewArchiveNotifications {
             Claim result = rows.getFirst();
             if (result.receiptOnly() && "STAFF".equals(result.channel())) return null;
             jdbc.update("""
-                UPDATE review_archive_notifications SET state=?,claim_token=?,attempts=attempts+1,
+                UPDATE review_archive_notifications SET
+                  dispatch_reserved_at=IF(channel='CLIENT' AND state='READY',CURRENT_TIMESTAMP(6),dispatch_reserved_at),
+                  state=?,claim_token=?,attempts=attempts+1,
                   next_attempt_at=TIMESTAMPADD(MINUTE,5,CURRENT_TIMESTAMP(6)) WHERE operation_id=?
                 """,result.receiptOnly() ? "UNKNOWN" : "DISPATCHING",result.token(),id);
             return result;
         });
         if (claim == null) return;
+        if (!claim.receiptOnly()) {
+            Long sourceId=jdbc.queryForObject("SELECT source_state_id FROM review_archive_notifications WHERE operation_id=?",Long.class,id);
+            if (!automation.getObject().archiveNoticeDispatchEnabled(sourceId)) {
+                transactions.runInNewTransaction(() -> jdbc.update("UPDATE review_archive_notifications SET state='READY',claim_token=NULL,dispatch_reserved_at=NULL WHERE operation_id=? AND claim_token=?",id,claim.token()));
+                return;
+            }
+        }
         ClientMessageSendResult outcome;
         try {
             Envelope envelope = json.readValue(cipher.decrypt(claim.envelope()), Envelope.class);

@@ -58,7 +58,7 @@ class ScheduledDeliveryTransactionMySqlIntegrationTest {
         return new DriverManagerDataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword());
     }
 
-    @BeforeAll static void startPersistence() {
+    @BeforeAll static void startPersistence() throws Exception {
         var beans = new DefaultListableBeanFactory();
         beans.registerSingleton("credentialCipher", mock(CredentialCipher.class));
         factory = new LocalContainerEntityManagerFactoryBean();
@@ -81,11 +81,15 @@ class ScheduledDeliveryTransactionMySqlIntegrationTest {
         independent.setQueryTimeout(5);
         independent.execute("CREATE TABLE scheduled_client_message_dispatch_guard (guard_id INT PRIMARY KEY) ENGINE=InnoDB");
         independent.update("INSERT INTO scheduled_client_message_dispatch_guard VALUES (1)");
+        String outbox = java.nio.file.Files.readString(java.nio.file.Path.of("src/main/resources/db/migration/V1_10_342__review_silence_archive_notifications.sql"));
+        independent.execute(outbox.substring(outbox.indexOf("CREATE TABLE review_archive_notifications")));
+        independent.execute(java.nio.file.Files.readString(java.nio.file.Path.of("src/main/resources/db/migration/V1_10_369__archive_notice_dispatch_budget.sql")));
     }
 
     @AfterAll static void stopPersistence() { if (factory != null) factory.destroy(); }
 
     @BeforeEach void setup() throws Exception {
+        independent.update("DELETE FROM review_archive_notifications");
         independent.update("DELETE FROM scheduled_client_message_state");
         independent.update("DELETE FROM orders");
         independent.update("DELETE FROM app_settings");
@@ -119,6 +123,20 @@ class ScheduledDeliveryTransactionMySqlIntegrationTest {
         factory.addAdvice(new org.springframework.transaction.interceptor.TransactionInterceptor(transactionManager,
                 new org.springframework.transaction.annotation.AnnotationTransactionAttributeSource()));
         return (AppSettingService) factory.getProxy();
+    }
+
+    @Test void archiveOutboxReservationsShareTheOrdinaryDispatchBudget() {
+        independent.update("INSERT INTO review_archive_notifications(operation_id,source_state_id,channel,envelope,state,dispatch_reserved_at) VALUES('fixture-notice',?,'CLIENT','fixture','DISPATCHING',?)",stateId,preparedAt);
+        assertThat(states.countArchiveNoticeReservationsSince(preparedAt.minusSeconds(1))).isEqualTo(1);
+        assertThat(states.latestArchiveNoticeReservation()).contains(preparedAt);
+        assertThat(states.countArchiveNoticeReservationsSince(preparedAt.plusSeconds(1))).isZero();
+        for (String state : java.util.List.of("UNKNOWN","SENT")) {
+            independent.update("UPDATE review_archive_notifications SET state=?",state);
+            assertThat(states.countArchiveNoticeReservationsSince(preparedAt.minusSeconds(1))).isEqualTo(1);
+        }
+        independent.update("UPDATE review_archive_notifications SET state='READY'");
+        assertThat(states.countArchiveNoticeReservationsSince(preparedAt.minusSeconds(1))).isZero();
+        assertThat(states.latestArchiveNoticeReservation()).isEmpty();
     }
 
     private ScheduledClientMessageState newState(String key) {

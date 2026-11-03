@@ -54,6 +54,24 @@ class ManagerReportReviewOwnerNotificationServiceTest {
         verify(telegram).sendMessageWithInlineKeyboard(eq(-100900L), any(), any(), any());
     }
 
+    @Test
+    void systemVerificationDoesNotClaimTheManagerFiledADisputeOrLostTheAnswer() {
+        var review = review();
+        review.setTestMode(true);
+        var dispute = dispute(review);
+        dispute.setVerificationRequestedBySystem(true);
+        dispute.setVerificationReason("Нет подтверждения <выполнения>");
+
+        service.notifyDispute(review, dispute);
+
+        verify(telegram).sendMessageWithInlineKeyboard(eq(-100900L),
+                argThat(text -> text.contains("Автоматической проверке нужно решение владельца")
+                        && text.contains("Ответ менеджера сохранён")
+                        && text.contains("&lt;выполнения&gt;")
+                        && !text.contains("Менеджер оспорил") && !text.contains("Ещё не отправлено")), eq("HTML"), any());
+        verifyNoInteractions(users);
+    }
+
     private ManagerReportReviewSession review() {
         ManagerReportReviewSession review = new ManagerReportReviewSession();
         review.setId(45L);

@@ -76,13 +76,19 @@ class ManagerControlOrderAutomationDiagnosticsTest {
     }
 
     @Test
-    void overdueWaitingFlagStillNeedsActionWhenReminderQueueIsHealthy() {
+    void calendarAgeDoesNotRequireClearingWaitingBeforeSevenDeliveredReminders() {
         Order order = waitingOrder();
         order.setChanged(today.minusDays(40));
+        order.setWaitingForClientChangedAt(today.minusDays(40).atTime(12, 0));
+        var scheduled = activeState(order);
+        scheduled.setSentCount(6);
         var result = diagnostics.workerOrderClientTextDecision(order, "Новый", today,
-                Map.of(11L, List.of(activeState(order))));
-        assertThat(result.include()).isTrue();
-        assertThat(result.reason()).contains("снимите статус");
+                Map.of(11L, List.of(scheduled)));
+        assertThat(result.include()).isFalse();
+        assertThat(order.isWaitingForClient()).isTrue();
+        assertThat(order.getWaitingForClientChangedAt()).isEqualTo(today.minusDays(40).atTime(12, 0));
+        assertThat(scheduled.getSentCount()).isEqualTo(6);
+        assertThat(scheduled.getStatus()).isEqualTo(ScheduledMessageStateStatus.ACTIVE);
     }
 
     @Test

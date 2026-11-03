@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
@@ -61,6 +62,7 @@ class ManagerReportReviewEvidenceFlowTest {
     private ManagerReportReviewRolloutPolicy rollout;
     private UserService users;
     private ManagerReportReviewTelegramService service;
+    private ManagerReportReviewOwnerNotificationService ownerNotifications;
     private ManagerReportReviewSession review;
     private ManagerReportReviewQualityService.ReviewQuestion question;
     private User user;
@@ -81,10 +83,11 @@ class ManagerReportReviewEvidenceFlowTest {
         users = mock(UserService.class);
         quality = spy(new ManagerReportReviewQualityService(mock(AiProviderRouter.class), mapper, settings));
         var availability = new ManagerReportReviewAiAvailabilityService(sessions, events, access);
+        ownerNotifications=mock(ManagerReportReviewOwnerNotificationService.class);
         service = new ManagerReportReviewTelegramService(sessions, events, quality,
                 mock(ManagerSummaryFormatter.class), mock(ManagerWorkerDailyProgressService.class), sources,
                 telegram, mock(NotificationMediaDeliveryService.class), users,
-                mock(ManagerRepository.class), settings, mock(ManagerReportReviewOwnerNotificationService.class),
+                mock(ManagerRepository.class), settings, ownerNotifications,
                 access, mock(ManagerReportReviewAdminService.class), availability, issues, context, commitments, rollout);
         user = User.builder().id(17L).active(true).telegramChatId(700L).username("manager").build();
         review = new ManagerReportReviewSession();
@@ -141,6 +144,120 @@ class ManagerReportReviewEvidenceFlowTest {
                 + "\"value\":\"COLLECTING\",\"sourceTaskId\":42}");
         when(telegram.sendMessageWithInlineKeyboardMessageId(eq(700L), anyString(), eq("HTML"), any()))
                 .thenReturn(Optional.of(511));
+    }
+
+    @Test
+    void aLongContextPauseIsHandedToTheOwnerOnceWithoutReplacingTheAnswer() {
+        String original=review.getAnswersJson();
+        prepareOwnerHandoff();review.setAiUnavailableStartedAt(LocalDateTime.now().minusHours(1));
+        service.refreshSystemSourceQuestion(41L);
+        assertThat(review.getAnswerQuality()).isEqualTo("OWNER_REVIEW_REQUIRED");
+        assertThat(review.getAnswersJson()).isEqualTo(original);assertThat(review.getAiUnavailableStartedAt()).isNotNull();
+        assertThat(review.getCompletedAt()).isNull();assertThat(review.getRecoveryNextAttemptAt()).isNull();
+        assertThat(review.getStatus()).isEqualTo(ManagerReportReviewStatus.DISPUTED);
+        verify(telegram, never()).sendForceReplyMessageId(org.mockito.ArgumentMatchers.anyLong(), anyString());
+        verify(ownerNotifications).notifyDispute(eq(review),any());
+        service.refreshSystemSourceQuestion(41L);
+        verify(ownerNotifications,times(1)).notifyDispute(eq(review),any());
+    }
+
+    @Test
+    void repeatedTechnicalFailureHasABoundedExitBeforeAnotherProviderCall() {
+        prepareOwnerHandoff();review.setAiUnavailableStartedAt(LocalDateTime.now().minusMinutes(1));
+        review.setRecoveryAttempts(4);
+        service.recoverAutomatically(41L);
+        assertThat(review.getAnswerQuality()).isEqualTo("OWNER_REVIEW_REQUIRED");
+        verify(ownerNotifications).notifyDispute(eq(review),any());
+        verify(quality,never()).assessAnswer(anyString(),any(),anyString(),anyBoolean(),anyList(),anyBoolean());
+    }
+
+    @Test
+    void aPlanPauseUsesTheLastIssueEvenAfterTheQuestionCursorHasAdvanced() {
+        prepareOwnerHandoff();review.setStatus(ManagerReportReviewStatus.PLAN_PENDING);review.setCurrentQuestionIndex(1);
+        review.setAiUnavailableStartedAt(LocalDateTime.now().minusHours(1));
+        service.refreshSystemSourceQuestion(41L);
+        verify(issues).requestOwnerVerification(eq(review),eq(0),any());
+        assertThat(review.getAnswerQuality()).isEqualTo("OWNER_REVIEW_REQUIRED");
+    }
+
+    private void prepareOwnerHandoff() {
+        var request=new com.hunt.otziv.manager_daily_summary.model.ManagerReportReviewDispute();request.setId(300L);
+        request.setVerificationRequestedBySystem(true);
+        request.setStatus(com.hunt.otziv.manager_daily_summary.model.ManagerReportReviewDisputeStatus.DRAFT);
+        when(issues.requestOwnerVerification(eq(review),eq(0),any())).thenReturn(Optional.of(request));
+        when(issues.explanationDispute(review)).thenReturn(Optional.of(request));
+        when(issues.nextPending(eq(review),anyInt())).thenReturn(Optional.empty());
+        when(issues.hasUnresolvedDisputes(review)).thenReturn(true);
+        review.setAnswerQuality("NEEDS_CONTEXT");review.setAnswerQualityReason("Источник недоступен");
+    }
+
+    @Test
+    void resolvedSourceIsWithdrawnBeforeAnOldPauseCanRequestOwnerVerification() {
+        prepareOwnerHandoff();
+        review.setAiUnavailableStartedAt(LocalDateTime.now().minusHours(1));
+        review.setAnswersJson(legacyAnswer(0));
+        String original = review.getAnswersJson();
+        var pending = new java.util.concurrent.atomic.AtomicBoolean(true);
+        when(issues.isPending(review, 0)).thenAnswer(ignored -> pending.get());
+        doAnswer(ignored -> { pending.set(false); return 1; })
+                .when(issues).withdrawResolvedSourceIssues(eq(review), any());
+
+        service.recoverAutomatically(41L);
+
+        assertThat(review.getAnswersJson()).isEqualTo(original);
+        assertThat(review.getAiUnavailableStartedAt()).isNull();
+        verify(issues, never()).requestOwnerVerification(any(), anyInt(), any());
+        verify(ownerNotifications, never()).notifyDispute(any(), any());
+        assertThat(savedEvents).anyMatch(event -> "SYSTEM_SOURCE_QUESTION_WITHDRAWN".equals(event.getEventType()));
+    }
+
+    @Test
+    void updatedWorkerEvidenceGetsARetryBeforeAnOldPauseIsHandedToOwner() {
+        question = new ManagerReportReviewQualityService.ReviewQuestion(
+                "Специалист Виктория Ц. за 01.11.2026: почему остались пять текстов?", List.of("проверка результата"));
+        review.setQuestionsJson(quality.questionsJson(List.of(question)));
+        assessWith(assessment(ManagerReportReviewQualityService.Decision.UNAVAILABLE, "Таймаут"));
+        service.handleTextMessage(700L, user, "Я позвонила специалисту и уточню причину.", 777);
+        String original = review.getAnswersJson();
+        prepareOwnerHandoff();
+        var pending = new ManagerReportReviewIssue();
+        pending.setQuestionIndex(0);
+        when(issues.nextPending(eq(review), anyInt())).thenReturn(Optional.of(pending));
+        review.setAiUnavailableStartedAt(LocalDateTime.now().minusHours(1));
+        review.setRecoveryAwaitingContext(true);
+        review.setRecoveryContextFingerprint("previous-rules");
+        review.setRecoveryContextCheckedAt(LocalDateTime.now().minusMinutes(1));
+        doReturn("new-rules-and-evidence").when(quality).workerGoalContextFingerprint(anyString());
+
+        service.refreshSystemSourceQuestion(41L);
+
+        assertThat(review.getRecoveryContextFingerprint()).isEqualTo("new-rules-and-evidence");
+        assertThat(review.isRecoveryAwaitingContext()).isFalse();
+        assertThat(review.getRecoveryNextAttemptAt()).isNotNull();
+        assertThat(review.getAnswersJson()).isEqualTo(original);
+        service.refreshSystemSourceQuestion(41L);
+        // The scheduler claims the retry and increments its counter before entering the service.
+        review.setRecoveryAttempts(1);
+        doReturn(true).when(quality).aiAvailable();
+        doReturn(assessment(ManagerReportReviewQualityService.Decision.NEEDS_CONTEXT, "Источник ещё недоступен"))
+                .when(quality).assessAnswer(anyString(), eq(question), anyString(), eq(false), any(), eq(false), any());
+        service.recoverAutomatically(41L);
+        verify(quality).assessAnswer(anyString(), eq(question), anyString(), eq(false), any(), eq(false), any());
+        verify(issues, never()).requestOwnerVerification(any(), anyInt(), any());
+        verify(ownerNotifications, never()).notifyDispute(any(), any());
+    }
+
+    @Test void aFollowupReadsTheOriginalWorkerDayInsteadOfYesterdaysNewGoal() {
+        var progress=(ManagerWorkerDailyProgressService)ReflectionTestUtils.getField(service,"workerProgressService");
+        review.setSummaryDate(LocalDate.of(2026,11,4));
+        var oldGoal=new ManagerWorkerDailyProgressService.MissedWorkerGoal(13L,"Виктория Ц.",LocalDate.of(2026,11,1),57,62);
+        when(progress.missedPreviousDayGoals(9L,LocalDate.of(2026,11,2))).thenReturn(List.of(oldGoal));
+        var followup=new ManagerReportReviewQualityService.ReviewQuestion(
+                "Специалист Виктория Ц. за 01.11.2026: ранее принят план по недобору 5 задач.",List.of("специалист и результат"));
+        String evidence=ReflectionTestUtils.invokeMethod(service,"answerContext",review,followup);
+        assertThat(evidence).contains("worker-goal:13:2026-11-01:completed");
+        verify(progress).missedPreviousDayGoals(9L,LocalDate.of(2026,11,2));
+        verify(progress,never()).missedPreviousDayGoals(9L,LocalDate.of(2026,11,4));
     }
 
     @Test

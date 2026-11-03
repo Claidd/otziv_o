@@ -119,14 +119,6 @@ public class ManagerControlRepairWorkflow {
             return repairOrderAutomationConcreteItem(concreteItem, control, order, principal);
         }
         LocalDate today = LocalDate.now();
-        long waitingDays = daysSince(clientTextWaitingControlDate(order), today);
-        if (waitingDays > ScheduledClientMessageService.DEFAULT_CLIENT_TEXT_WAITING_AUTO_CLEAR_DAYS) {
-            order.setWaitingForClient(false);
-            order.setWaitingForClientChangedAt(null);
-            orderRepository.save(order);
-            scheduledClientMessageService.synchronizeClientTextReminderForOrder(order);
-            return resolveRepairedConcreteItem(concreteItem, control, "Снят зависший статус «ждет клиента» после " + waitingDays + " дн.", principal, "Снят зависший статус ожидания клиента");
-        }
         scheduledClientMessageService.ensureClientTextReminderForOrder(order);
         WorkerClientTextDecision decision = workerOrderClientTextDecision(order, "Новый", today, scheduledStatesByOrderId(List.of(order)));
         if (decision.include()) {

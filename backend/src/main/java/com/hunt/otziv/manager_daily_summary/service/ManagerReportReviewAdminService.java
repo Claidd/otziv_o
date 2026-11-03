@@ -35,6 +35,7 @@ public class ManagerReportReviewAdminService {
     private final ManagerReportReviewIssueService issueService;
     private final ManagerReportReviewIssueRepository issueRepository;
     private final ManagerReportReviewDisputeRepository disputeRepository;
+    private final ManagerReportReviewCommitmentService commitmentService;
 
     @Transactional
     public void resolveDispute(Long reviewId, String action, String comment, User actor) {
@@ -194,6 +195,7 @@ public class ManagerReportReviewAdminService {
 
         if (REPORT_INCORRECT.equals(normalizedAction)) {
             issue.setStatus(ManagerReportReviewIssueStatus.WITHDRAWN);
+            commitmentService.withdrawWorkerGoal(review,issue,comment);
             dispute.setStatus(ManagerReportReviewDisputeStatus.ACCEPTED);
             saveIssueDecision(issue, dispute);
             review.setAuditRequired(issueService.hasUnresolvedDisputes(review));

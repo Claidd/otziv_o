@@ -22,6 +22,11 @@ import lombok.Setter;
 @Setter
 @Table(name = "manager_report_review_disputes")
 public class ManagerReportReviewDispute {
+    @Column(name = "verification_requested_by_system", nullable = false)
+    private boolean verificationRequestedBySystem;
+
+    @Column(name = "verification_reason", length = 2000)
+    private String verificationReason;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

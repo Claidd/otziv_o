@@ -27,16 +27,24 @@ public class ManagerReportReviewOwnerNotificationService {
             throw new IllegalArgumentException("Не выбран спор для уведомления");
         }
         boolean draft = dispute.getStatus() == ManagerReportReviewDisputeStatus.DRAFT;
-        String text = "⚖️ <b>Менеджер оспорил отдельное замечание аудита</b>\n\n"
+        String text = (dispute.isVerificationRequestedBySystem()
+                ? "🔎 <b>Автоматической проверке нужно решение владельца</b>\n\n"
+                : "⚖️ <b>Менеджер оспорил отдельное замечание аудита</b>\n\n")
                 + "👤 <b>" + escape(review.getManagerName()) + "</b>\n"
                 + "📅 Отчёт за <b>" + review.getSummaryDate() + "</b>\n"
                 + "🧾 Разбор №<b>" + review.getId() + "</b>, спор №<b>" + dispute.getId() + "</b>\n\n"
                 + "<b>Выбранное замечание:</b>\n"
                 + escape(limit(dispute.getIssue().getQuestionText(), 1400))
-                + "\n\n<b>Объяснение менеджера:</b>\n"
-                + (draft ? "Ещё не отправлено. Владелец может проверить замечание по переписке "
-                        + "или запросить дополнительные данные."
-                        : escape(limit(dispute.getManagerText(), 1800)))
+                + (dispute.isVerificationRequestedBySystem()
+                    ? "\n\n<b>Причина передачи:</b>\n" + escape(limit(dispute.getVerificationReason(), 1000))
+                        + "\nОтвет менеджера сохранён. Техническая остановка не является его ошибкой."
+                    : "")
+                + (dispute.isVerificationRequestedBySystem()
+                    ? "\n\nВладелец может проверить сохранённый ответ в истории аудита или запросить уточнение."
+                    : "\n\n<b>Объяснение менеджера:</b>\n"
+                        + (draft ? "Ещё не отправлено. Владелец может проверить замечание по переписке "
+                            + "или запросить дополнительные данные."
+                            : escape(limit(dispute.getManagerText(), 1800))))
                 + "\n\nРешение применяется только к этому пункту. Остальные замечания "
                 + "и история прохождения доступны в контроле менеджеров.";
         Set<Long> chats = new java.util.LinkedHashSet<>();

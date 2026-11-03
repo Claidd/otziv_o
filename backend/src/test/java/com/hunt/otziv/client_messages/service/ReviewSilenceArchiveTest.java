@@ -30,6 +30,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 class ReviewSilenceArchiveTest {
     @Mock ScheduledClientMessageStateRepository stateRepository;
+    @Mock ScheduledClientMessageAttemptRepository attemptRepository;
     @Mock OrderRepository orderRepository;
     @Mock OrderDeliveryControlContext orderDeliveryContext;
     @Mock com.hunt.otziv.client_messages.api.OrderManualContactReservation manualContactReservation;
@@ -93,6 +94,114 @@ class ReviewSilenceArchiveTest {
                 .thenReturn(Optional.empty());
     }
     @AfterEach void close() throws Exception { mocks.close(); }
+
+    private void waitForClientTexts() throws Exception {
+        order.setStatus(OrderStatus.builder().title("Новый").build());
+        order.setWaitingForClient(true);
+        order.setWaitingForClientChangedAt(now.minusDays(20));
+        state.setScenario(ClientMessageScenario.CLIENT_TEXT_REMINDER);
+        state.setTargetKey("client-text:77:" + order.getWaitingForClientChangedAt().withNano(0));
+        source = new OrderDeliveryControlContext.Snapshot(77L,2L,"Новый",2,
+                order.getStatusChangedAt(),true,order.getWaitingForClientChangedAt());
+        when(orderDeliveryContext.read(77L)).thenReturn(Optional.of(source));
+        when(orderDeliveryContext.lock(77L)).thenReturn(Optional.of(source));
+        when(orderStatusTransitionService.archiveAfterClientTextReminders(77L)).thenAnswer(i -> {
+            order.setStatus(OrderStatus.builder().title("Архив").build());
+            order.setWaitingForClient(false);
+            company.getStatus().setTitle("На стопе");
+            return true;
+        });
+    }
+
+    @ParameterizedTest @ValueSource(strings={"worker","pause","scenario","archive","changed_during_history"})
+    void autoresponderSettingsBlockArchiveAndResumeWithoutLosingTheCycle(String condition) throws Exception {
+        waitForClientTexts();
+        String key=switch(condition) {
+            case "worker" -> AppSettingService.CLIENT_MESSAGES_WORKER_ENABLED;
+            case "archive" -> AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_AUTO_ARCHIVE_ENABLED;
+            default -> AppSettingService.CLIENT_MESSAGES_CLIENT_TEXT_REMINDER_ENABLED;
+        };
+        if (condition.equals("pause")) when(appSettingService.getStringFresh(AppSettingService.CLIENT_MESSAGES_PAUSED_UNTIL,null)).thenReturn(now.plusHours(1).toString());
+        else if (condition.equals("changed_during_history")) when(reviewArchiveHistory.inspect(any(),any())).thenAnswer(i -> {
+            when(appSettingService.getBooleanFreshFailClosed(key,true)).thenReturn(false);
+            return new ReviewArchiveHistory.Check(ReviewArchiveHistory.Outcome.CLEAR,"checked",i.getArgument(1),now,0,"fixture");
+        });
+        else when(appSettingService.getBooleanFreshFailClosed(key,true)).thenReturn(false);
+        assertThat(service.archiveAfterReminders(30).archived()).isFalse();
+        assertThat(state.getSentCount()).isEqualTo(7);
+        assertThat(order.isWaitingForClient()).isTrue();
+        verifyNoInteractions(billing,archiveNotifications);
+        when(appSettingService.getBooleanFreshFailClosed(key,true)).thenReturn(true);
+        when(appSettingService.getStringFresh(AppSettingService.CLIENT_MESSAGES_PAUSED_UNTIL,null)).thenReturn(null);
+        doReturn(new ReviewArchiveHistory.Check(ReviewArchiveHistory.Outcome.CLEAR,"checked",state.getLastSuccessAt(),now,0,"fixture"))
+                .when(reviewArchiveHistory).inspect(any(),any());
+        assertThat(service.archiveAfterReminders(30).archived()).isTrue();
+        assertThat(state.getSentCount()).isEqualTo(7);
+    }
+
+    @Test void clientTextSilenceArchivesNewOrderAndQueuesOneOfferAfterTheLastOrder() throws Exception {
+        waitForClientTexts();
+        assertThat(service.archiveAfterReminders(30).archived()).isTrue();
+        assertThat(order.isWaitingForClient()).isFalse();
+        assertThat(company.getStatus().getTitle()).isEqualTo("На стопе");
+        assertThat(state.getStatus()).isEqualTo(ScheduledMessageStateStatus.DONE);
+        verify(orderStatusTransitionService).archiveAfterClientTextReminders(77L);
+        verify(orderStatusTransitionService,never()).changeStatusForOrder(anyLong(),anyString());
+        verify(billing).archiveReviewMembershipAfterReminders(77L);
+        verify(archiveNotifications).recordArchive(eq(30L),eq(77L),eq(state.getTargetKey()),eq(7),any(),
+                argThat(time -> time.isAfter(now.plusMonths(2))),contains("поставлено в очередь"));
+        verify(archiveNotifications).enqueue(eq(30L),eq("client"),argThat(e -> e.text().contains("Тексты или пожелания")));
+        assertThat(service.archiveAfterReminders(30).archived()).isFalse();
+        verify(stateRepository,times(1)).findByScenarioAndTargetKeyForUpdate(eq(ClientMessageScenario.ARCHIVE_REORDER_OFFER),anyString());
+    }
+
+    @ParameterizedTest @ValueSource(strings={"window","limit","gap","paused"})
+    void archiveNoticesUseTheSharedAutoresponderBudget(String condition) throws Exception {
+        waitForClientTexts();
+        LocalDateTime local=LocalDateTime.of(2026,11,3,condition.equals("window")?22:11,0);
+        LocalDateTime storage=messageTime.toStorageTime(local);
+        doReturn(local).when(messageTime).nowIrkutsk();
+        doReturn(storage).when(messageTime).nowStorage();
+        if(condition.equals("limit")) when(stateRepository.countArchiveNoticeReservationsSince(any())).thenReturn(140L);
+        if(condition.equals("gap")) when(stateRepository.latestArchiveNoticeReservation()).thenReturn(Optional.of(storage));
+        if(condition.equals("paused")) when(appSettingService.getBooleanFreshFailClosed(AppSettingService.CLIENT_MESSAGES_WORKER_ENABLED,true)).thenReturn(false);
+        var next=service.archiveNoticeNextSlot(30,new com.hunt.otziv.client_messages.api.ClientMessageDelivery.Target(20L,"fixture",null,null,null));
+        assertThat(next).isAfter(storage.plusSeconds(1));
+        verifyNoInteractions(archiveNotifications);
+    }
+
+    @Test void clientTextSilenceWaitsTheClientTextIntervalAfterTheSeventhReminder() throws Exception {
+        waitForClientTexts();
+        when(appSettingService.getInt(AppSettingService.CLIENT_MESSAGES_CLIENT_TEXT_REMINDER_INTERVAL_DAYS,2)).thenReturn(3);
+        state.setLastSuccessAt(now.minusDays(2).minusHours(1));
+        assertThat(service.archiveAfterReminders(30).archived()).isFalse();
+        state.setLastSuccessAt(now.minusDays(3).minusMinutes(1));
+        assertThat(service.archiveAfterReminders(30).archived()).isTrue();
+    }
+
+    @ParameterizedTest @ValueSource(strings={"six","recent","answered","new_cycle","status","payment","unknown","reply","history_missing","reply_during_check"})
+    void clientTextArchiveRequiresTheSameWaitingCycleAndCompleteSilenceEvidence(String condition) throws Exception {
+        waitForClientTexts();
+        switch(condition) {
+            case "six" -> state.setSentCount(6);
+            case "recent" -> state.setLastSuccessAt(now.minusHours(1));
+            case "answered" -> order.setWaitingForClient(false);
+            case "new_cycle" -> order.setWaitingForClientChangedAt(now.minusDays(1));
+            case "status" -> order.setStatus(OrderStatus.builder().title("На проверке").build());
+            case "payment" -> when(orderPaymentIntegrityService.hasSettledPaymentEvidence(order)).thenReturn(true);
+            case "unknown" -> state.setDeliveryStatus("UNKNOWN");
+            case "reply", "history_missing" -> when(reviewArchiveHistory.inspect(any(),any())).thenReturn(new ReviewArchiveHistory.Check(
+                    condition.equals("reply")?ReviewArchiveHistory.Outcome.REPLY_FOUND:ReviewArchiveHistory.Outcome.HISTORY_MISSING,
+                    "No silence proof",state.getLastSuccessAt(),now,1,"fixture"));
+            case "reply_during_check" -> when(reviewArchiveHistory.inspect(any(),any())).thenAnswer(i -> {
+                order.setWaitingForClient(false);
+                return new ReviewArchiveHistory.Check(ReviewArchiveHistory.Outcome.CLEAR,"History checked",i.getArgument(1),now,0,"fixture");
+            });
+        }
+        assertThat(service.archiveAfterReminders(30).archived()).isFalse();
+        verify(orderStatusTransitionService,never()).archiveAfterClientTextReminders(anyLong());
+        verifyNoInteractions(archiveNotifications);
+    }
 
     @Test void sevenReceiptsArchiveAndAtomicallyQueueOfferAndBothKindsOfNotification() throws Exception {
         assertThat(service.archiveAfterReminders(30).archived()).isTrue();
@@ -190,7 +299,9 @@ class ReviewSilenceArchiveTest {
 
     @Test void activeOtherOrderPreventsOfferButNotItsHistoricalArchiveNotice() {
         when(archiveCandidateRepository.hasArchiveReorderBlocker(anyLong(),anyList(),anyList())).thenReturn(true);
-        assertThat(service.archiveAfterReminders(30).archived()).isTrue();
+        var result = service.archiveAfterReminders(30);
+        assertThat(result.archived()).isTrue();
+        assertThat(result.reason()).contains("Предложение нового заказа отложено");
         verify(archiveNotifications).recordArchive(eq(30L),eq(77L),anyString(),eq(7),any(),isNull(),contains("отложено"));
         verify(stateRepository,never()).findByScenarioAndTargetKeyForUpdate(eq(ClientMessageScenario.ARCHIVE_REORDER_OFFER),anyString());
     }

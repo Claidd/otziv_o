@@ -27541,7 +27541,7 @@
     "sha256" : "966e0ce5dad8bfe9ecece242f399fc850b3cdf87f25d97684b0771922767c30d"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/manager_daily_summary/service/ManagerReportReviewOwnerNotificationService.java",
-    "sha256" : "aa2c773ce9b520bd90502c1aa902fe1dd4736f405b7dcc4c8d071566035a7388"
+    "sha256" : "9d1d9ac0bad7e9e0dfb236d2fd7c8412d9b7af861b47f075ffdd8b08fe132102"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/manager_performance/dto/ManagerPerformanceScoreResponse.java",
     "sha256" : "ed4c6f0bdb96625f54cd8643d9765906ef2ca4a871a892a6f32e7c9c61ff5f10"

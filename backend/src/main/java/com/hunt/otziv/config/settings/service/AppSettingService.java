@@ -14,7 +14,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @RequiredArgsConstructor
-public class AppSettingService implements com.hunt.otziv.config.settings.api.OutboundMessagePolicy,
+public class AppSettingService implements com.hunt.otziv.config.settings.api.BackgroundAutomationSettings,
+        com.hunt.otziv.config.settings.api.OutboundMessagePolicy,
         com.hunt.otziv.config.settings.api.PublicationProgressSettings,
         com.hunt.otziv.config.settings.api.ClientChatReviewSettings {
 
@@ -103,19 +104,19 @@ public class AppSettingService implements com.hunt.otziv.config.settings.api.Out
     public static final String PAYMENT_LINKS_ARCHIVE_PAID_RETENTION_DAYS = "payment.links.archive.paid-retention-days";
     public static final String PAYMENT_LINKS_ARCHIVE_FINAL_RETENTION_DAYS = "payment.links.archive.final-retention-days";
     public static final String PAYMENT_LINKS_ARCHIVE_BATCH_SIZE = "payment.links.archive.batch-size";
-    public static final String CLIENT_MESSAGES_WORKER_ENABLED = "client.messages.worker.enabled";
+    public static final String CLIENT_MESSAGES_WORKER_ENABLED = com.hunt.otziv.config.settings.api.BackgroundAutomationSettings.CLIENT_MESSAGES_WORKER_ENABLED;
     public static final String CLIENT_MESSAGES_LIVE_ENABLED = "client.messages.live.enabled";
     public static final String CLIENT_MESSAGES_IMMEDIATE_ENABLED = "client.messages.immediate.enabled";
     public static final String CLIENT_MESSAGES_MONITOR_ENABLED = "client.messages.monitor.enabled";
-    public static final String CLIENT_MESSAGES_REVIEW_CHECK_ENABLED = "client.messages.review-check.enabled";
-    public static final String CLIENT_MESSAGES_REVIEW_CHECK_AUTO_ARCHIVE_ENABLED = "client.messages.review-check.auto-archive.enabled";
-    public static final String CLIENT_MESSAGES_CLIENT_TEXT_REMINDER_ENABLED = "client.messages.client-text-reminder.enabled";
-    public static final String CLIENT_MESSAGES_PAYMENT_REMINDER_ENABLED = "client.messages.payment-reminder.enabled";
-    public static final String CLIENT_MESSAGES_BAD_REVIEW_INVOICE_ENABLED = "client.messages.bad-review-invoice.enabled";
-    public static final String CLIENT_MESSAGES_BAD_REVIEW_AUTO_BAN_ENABLED = "client.messages.bad-review-auto-ban.enabled";
-    public static final String CLIENT_MESSAGES_REVIEW_RECOVERY_NOTICE_ENABLED = "client.messages.review-recovery-notice.enabled";
-    public static final String CLIENT_MESSAGES_ARCHIVE_REORDER_ENABLED = "client.messages.archive-reorder.enabled";
-    public static final String CLIENT_MESSAGES_PAYMENT_OVERDUE_ENABLED = "client.messages.payment-overdue.enabled";
+    public static final String CLIENT_MESSAGES_REVIEW_CHECK_ENABLED = com.hunt.otziv.config.settings.api.BackgroundAutomationSettings.CLIENT_MESSAGES_REVIEW_CHECK_ENABLED;
+    public static final String CLIENT_MESSAGES_REVIEW_CHECK_AUTO_ARCHIVE_ENABLED = com.hunt.otziv.config.settings.api.BackgroundAutomationSettings.CLIENT_MESSAGES_REVIEW_CHECK_AUTO_ARCHIVE_ENABLED;
+    public static final String CLIENT_MESSAGES_CLIENT_TEXT_REMINDER_ENABLED = com.hunt.otziv.config.settings.api.BackgroundAutomationSettings.CLIENT_MESSAGES_CLIENT_TEXT_REMINDER_ENABLED;
+    public static final String CLIENT_MESSAGES_PAYMENT_REMINDER_ENABLED = com.hunt.otziv.config.settings.api.BackgroundAutomationSettings.CLIENT_MESSAGES_PAYMENT_REMINDER_ENABLED;
+    public static final String CLIENT_MESSAGES_BAD_REVIEW_INVOICE_ENABLED = com.hunt.otziv.config.settings.api.BackgroundAutomationSettings.CLIENT_MESSAGES_BAD_REVIEW_INVOICE_ENABLED;
+    public static final String CLIENT_MESSAGES_BAD_REVIEW_AUTO_BAN_ENABLED = com.hunt.otziv.config.settings.api.BackgroundAutomationSettings.CLIENT_MESSAGES_BAD_REVIEW_AUTO_BAN_ENABLED;
+    public static final String CLIENT_MESSAGES_REVIEW_RECOVERY_NOTICE_ENABLED = com.hunt.otziv.config.settings.api.BackgroundAutomationSettings.CLIENT_MESSAGES_REVIEW_RECOVERY_NOTICE_ENABLED;
+    public static final String CLIENT_MESSAGES_ARCHIVE_REORDER_ENABLED = com.hunt.otziv.config.settings.api.BackgroundAutomationSettings.CLIENT_MESSAGES_ARCHIVE_REORDER_ENABLED;
+    public static final String CLIENT_MESSAGES_PAYMENT_OVERDUE_ENABLED = com.hunt.otziv.config.settings.api.BackgroundAutomationSettings.CLIENT_MESSAGES_PAYMENT_OVERDUE_ENABLED;
     public static final String CLIENT_MESSAGES_PAYMENT_OVERDUE_LIVE_ENABLED = "client.messages.payment-overdue.live-enabled";
     public static final String CLIENT_MESSAGES_REVIEW_CHECK_INTERVAL_DAYS = "client.messages.review-check.interval-days";
     public static final String CLIENT_MESSAGES_REVIEW_CHECK_AUTO_ARCHIVE_DAYS = "client.messages.review-check.auto-archive-days";
@@ -161,7 +162,7 @@ public class AppSettingService implements com.hunt.otziv.config.settings.api.Out
     public static final String CLIENT_MESSAGES_ERROR_PROTECTION_THRESHOLD = "client.messages.error-protection.threshold";
     public static final String CLIENT_MESSAGES_ERROR_PROTECTION_WINDOW_MINUTES = "client.messages.error-protection.window-minutes";
     public static final String CLIENT_MESSAGES_ERROR_PROTECTION_COOLDOWN_MINUTES = "client.messages.error-protection.cooldown-minutes";
-    public static final String CLIENT_MESSAGES_PAUSED_UNTIL = "client.messages.paused-until";
+    public static final String CLIENT_MESSAGES_PAUSED_UNTIL = com.hunt.otziv.config.settings.api.BackgroundAutomationSettings.CLIENT_MESSAGES_PAUSED_UNTIL;
     public static final String CLIENT_MESSAGES_PAUSE_REASON = "client.messages.pause-reason";
     public static final String CLIENT_MESSAGES_WHATSAPP_AUTH_RETRY_HOURS = "client.messages.whatsapp-auth.retry-hours";
     public static final String CLIENT_MESSAGES_WHATSAPP_AUTH_ALERT_COOLDOWN_HOURS = "client.messages.whatsapp-auth.alert-cooldown-hours";

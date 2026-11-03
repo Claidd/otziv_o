@@ -55,7 +55,8 @@ class ManagerReportReviewAdminServiceTest {
                 telegramService,
                 issueService,
                 issueRepository,
-                disputeRepository
+                disputeRepository,
+                mock(ManagerReportReviewCommitmentService.class)
         );
     }
 

@@ -2676,6 +2676,8 @@ function Sync-LocalKeycloakLoginCredential {
     } finally {
         if ($loginClientCreated) {
             try {
+                # Staff login probes can outlive the short-lived master token.
+                $headers = @{ Authorization = "Bearer $(Get-KeycloakAdminToken -RootUrl $RootUrl -EnvPath $EnvPath)" }
                 $encodedClientId = [Uri]::EscapeDataString($loginClientId)
                 $clientResponse = Invoke-RestMethod -Uri "$apiRoot/clients?clientId=$encodedClientId" -Headers $headers -TimeoutSec 30
                 $clients = @(ConvertTo-SmokeArray -Value $clientResponse) |
@@ -2689,6 +2691,7 @@ function Sync-LocalKeycloakLoginCredential {
         }
     }
 
+    $headers = @{ Authorization = "Bearer $(Get-KeycloakAdminToken -RootUrl $RootUrl -EnvPath $EnvPath)" }
     Remove-LocalKeycloakLoginSmokeClients -ApiRoot $apiRoot -Headers $headers
 
     if ($InitializeSnapshot -or $RotateCredentials) {

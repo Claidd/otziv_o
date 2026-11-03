@@ -19,11 +19,21 @@ public class ManagerReviewCommitmentJob {
     public void verifyResults() {
         LocalDateTime now = LocalDateTime.now();
         for (var promise : repository.findByStatusInOrderByCheckedAtAsc(
-                ManagerReportReviewCommitmentService.OPEN, PageRequest.of(0, 100))) {
+                ManagerReportReviewCommitmentService.ALL_OPEN, PageRequest.of(0, 100))) {
+            if(promise.getWorkerId()!=null) {
+                // Daily totals cannot establish which original texts/reviews were completed.
+                // Keep the exact old goal open for a separate result check.
+                if(promise.getDueAt()!=null && !promise.getDueAt().isAfter(now)) promise.setStatus("WORKER_OVERDUE");
+                else if(promise.getCreatedAt()!=null && promise.getCreatedAt().isBefore(now.minusDays(1)))
+                    promise.setStatus("WORKER_NEEDS_CONTEXT");
+                promise.setCheckedAt(now);
+                repository.save(promise);
+                continue;
+            }
             if (taskContext.resolvedSatisfactorily(promise.getSourceTaskId())) {
                 // Closure proves the case no longer needs follow-up, not who performed every promised action.
                 promise.setStatus("CASE_RESOLVED");
-            } else if (!promise.getDueAt().isAfter(now)) {
+            } else if (promise.getDueAt()!=null && !promise.getDueAt().isAfter(now)) {
                 promise.setStatus("OVERDUE");
             }
             promise.setCheckedAt(now);

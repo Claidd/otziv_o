@@ -524,7 +524,9 @@ public class CommonInvoiceMembershipWorkflow implements com.hunt.otziv.common_bi
         Long invoiceId = original.get().getInvoice().getId();
         var invoice = lockedInvoiceAfterOrderPrelude(invoiceId).orElseThrow();
         var item = invoiceOrderRepository.findByOrder_IdAndActiveMembershipTrue(orderId).orElseThrow();
-        if (!invoiceId.equals(item.getInvoice().getId()) || !"На проверке".equals(statusTitle(item.getOrder()))
+        String sourceStatus = statusTitle(item.getOrder());
+        boolean waitingForClientText = "Новый".equals(sourceStatus) && item.getOrder().isWaitingForClient();
+        if (!invoiceId.equals(item.getInvoice().getId()) || !("На проверке".equals(sourceStatus) || waitingForClientText)
                 || item.getOrder().isComplete() || item.getOrder().getPayDay() != null
                 || invoice.getPaidKopecks() != 0 || invoice.getSentAt() != null || invoice.getClientReportedAt() != null)
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Общий счёт уже изменён или содержит оплату; автоархив остановлен");
@@ -533,7 +535,7 @@ public class CommonInvoiceMembershipWorkflow implements com.hunt.otziv.common_bi
         var snapshot = Map.<String,Object>of("invoiceId",invoiceId,"membershipId",item.getId(),
                 "orderId",orderId,"amountKopecks",item.getAmountKopecks(),"invoiceAmountKopecks",invoice.getAmountKopecks(),
                 "invoiceStatus",invoice.getStatus().name(),"originalStatus",normalize(item.getOriginalOrderStatusTitle()));
-        item.setArchiveSourceOrderStatusTitle("На проверке");
+        item.setArchiveSourceOrderStatusTitle(sourceStatus);
         item.setSilenceArchivedAt(LocalDateTime.now());
         item.setActiveMembership(false);
         invoiceOrderRepository.save(item);
@@ -543,8 +545,8 @@ public class CommonInvoiceMembershipWorkflow implements com.hunt.otziv.common_bi
             invoice.setPreviousStatus(invoice.getStatus().name());
             invoice.setStatus(CommonInvoiceStatus.ARCHIVED);
             invoice.setClosedAt(LocalDateTime.now());
-            invoice.setClosedBy("system:seven_review_reminders");
-            invoice.setCloseReason("Заказы архивированы после семи подтверждённых напоминаний без согласования");
+            invoice.setClosedBy("system:seven_client_reminders");
+            invoice.setCloseReason("Нет ответа после 7 напоминаний");
             invoice.setNextReminderAt(null);
             invoice.setLastError(null);
             invoiceRepository.save(invoice);

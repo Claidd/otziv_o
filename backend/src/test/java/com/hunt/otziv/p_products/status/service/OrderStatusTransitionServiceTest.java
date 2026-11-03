@@ -611,6 +611,50 @@ class OrderStatusTransitionServiceTest {
         verify(orderRepository).save(order);
     }
 
+    @ParameterizedTest
+    @ValueSource(strings={"", "Текст отзыва", "Готовый текст клиента"})
+    void clientTextSilenceArchivesWaitingNewOrderWithoutRequiringMissingTexts(String text) throws Exception {
+        Order order = orderWithReview(45L,"Новый",450L,text);
+        order.setWaitingForClient(true);
+        order.setWaitingForClientChangedAt(LocalDateTime.now().minusDays(25));
+        when(orderRepository.findByIdForMutation(45L)).thenReturn(Optional.of(order));
+        when(orderStatusService.getOrderStatusByTitle("Архив")).thenReturn(status("Архив"));
+        assertTrue(service().archiveAfterClientTextReminders(45L));
+        assertEquals("Архив",order.getStatus().getTitle());
+        assertFalse(order.isWaitingForClient());
+        assertNull(order.getWaitingForClientChangedAt());
+        verify(orderCompanyStatusService).autoManageCompanyStatus(order,"Архив");
+        verify(orderBotLifecycleService).detachBots(order);
+        verify(orderRepository).save(order);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings={"not_waiting","published","counter","paid","complete","bank_documents","in_check"})
+    void clientTextSilenceCannotArchiveChangedOrFinanciallyStartedOrders(String condition) {
+        Order order = order(46L,"Новый");order.setWaitingForClient(true);
+        switch(condition) {
+            case "not_waiting" -> order.setWaitingForClient(false);
+            case "published" -> when(reviewRepository.countPublishedByOrderId(46L)).thenReturn(1);
+            case "counter" -> order.setCounter(1);
+            case "paid" -> order.setPayDay(LocalDate.now());
+            case "complete" -> order.setComplete(true);
+            case "bank_documents" -> when(paperDocuments.hasDocument(46L)).thenReturn(true);
+            case "in_check" -> order.setStatus(status("На проверке"));
+        }
+        when(orderRepository.findByIdForMutation(46L)).thenReturn(Optional.of(order));
+        assertThrows(ResponseStatusException.class,()->service().archiveAfterClientTextReminders(46L));
+        verify(orderRepository,never()).save(order);
+        verifyNoInteractions(orderCompanyStatusService,orderBotLifecycleService,reviewArchiveService);
+    }
+
+    @Test void manualArchiveDoesNotAcquireTheAutomaticClientTextException() {
+        Order order=order(47L,"Новый");order.setWaitingForClient(true);
+        when(orderRepository.findByIdForMutation(47L)).thenReturn(Optional.of(order));
+        assertThrows(ResponseStatusException.class,()->service().changeStatusForOrder(47L,"Архив"));
+        assertEquals("Новый",order.getStatus().getTitle());
+        verify(orderRepository,never()).save(order);
+    }
+
     @Test
     void archiveStatusSavesValidReviewsToArchiveBeforeDetachingBots() throws Exception {
         OrderStatusTransitionService service = service();

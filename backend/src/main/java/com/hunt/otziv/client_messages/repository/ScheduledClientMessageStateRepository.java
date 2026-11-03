@@ -21,7 +21,8 @@ public interface ScheduledClientMessageStateRepository extends CrudRepository<Sc
 
     @Query("""
         SELECT s.id FROM ScheduledClientMessageState s
-        WHERE s.scenario = com.hunt.otziv.client_messages.model.ClientMessageScenario.REVIEW_CHECK_REMINDER
+        WHERE s.scenario IN (com.hunt.otziv.client_messages.model.ClientMessageScenario.REVIEW_CHECK_REMINDER,
+                             com.hunt.otziv.client_messages.model.ClientMessageScenario.CLIENT_TEXT_REMINDER)
           AND s.status = com.hunt.otziv.client_messages.model.ScheduledMessageStateStatus.ACTIVE
           AND s.sentCount >= 7 AND s.deliveryStatus IS NULL AND s.id > :afterId
           AND (s.archiveNextCheckAt IS NULL OR s.archiveNextCheckAt <= CURRENT_TIMESTAMP)
@@ -68,6 +69,12 @@ public interface ScheduledClientMessageStateRepository extends CrudRepository<Sc
 
     @Query(value = "SELECT guard_id FROM scheduled_client_message_dispatch_guard WHERE guard_id = 1 FOR UPDATE", nativeQuery = true)
     int lockDispatchBudget();
+
+    @Query(value = "SELECT COUNT(*) FROM review_archive_notifications WHERE channel='CLIENT' AND state IN ('SENT','DISPATCHING','UNKNOWN') AND dispatch_reserved_at >= :dayStart", nativeQuery = true)
+    long countArchiveNoticeReservationsSince(@Param("dayStart") LocalDateTime dayStart);
+
+    @Query(value = "SELECT MAX(dispatch_reserved_at) FROM review_archive_notifications WHERE channel='CLIENT' AND state IN ('SENT','DISPATCHING','UNKNOWN')", nativeQuery = true)
+    Optional<LocalDateTime> latestArchiveNoticeReservation();
 
     @Query("SELECT COUNT(s) FROM ScheduledClientMessageState s WHERE s.deliveryStatus IN ('PREPARED','UNKNOWN') AND s.deliveryPreparedAt >= :dayStart")
     long countReservedDeliveriesSince(@Param("dayStart") LocalDateTime dayStart);
