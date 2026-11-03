@@ -10,20 +10,22 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 @Repository @RequiredArgsConstructor
-public class PaperBillingStore {
+public class PaperBillingStore implements com.hunt.otziv.client_messages.api.DeliveryQueueHealth {
+    private static final String WITH_FILES = "SELECT d.*,f.invoice_pdf,f.act_pdf,f.invoice_original_pdf,f.act_original_pdf "
+            + "FROM paper_invoice_document d LEFT JOIN paper_invoice_files f ON f.document_id=d.id ";
     private final JdbcTemplate jdbc;
     private final com.hunt.otziv.common_billing.api.BankPaperInvoices common;
     @org.springframework.beans.factory.annotation.Autowired private com.hunt.otziv.common_billing.api.BankPaperInvoiceParts parts;
     public Map<String,Object> row(String id) {
-        var rows=jdbc.queryForList("SELECT * FROM paper_invoice_document WHERE id=?",id);
+        var rows=jdbc.queryForList(WITH_FILES+"WHERE d.id=?",id);
         if (rows.isEmpty()) throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND,"Документ не найден");
         return rows.getFirst();
     }
     public Optional<Map<String,Object>> target(Target target) {
-        return jdbc.queryForList("SELECT * FROM paper_invoice_document WHERE target_kind=? AND target_id=? AND cancelled_at IS NULL",target.kind(),target.id()).stream().findFirst();
+        return jdbc.queryForList(WITH_FILES+"WHERE d.target_kind=? AND d.target_id=? AND d.cancelled_at IS NULL",target.kind(),target.id()).stream().findFirst();
     }
     public Optional<Map<String,Object>> latest(Target target) {
-        return jdbc.queryForList("SELECT * FROM paper_invoice_document WHERE target_kind=? AND target_id=? ORDER BY created_at DESC,id DESC LIMIT 1",target.kind(),target.id()).stream().findFirst();
+        return jdbc.queryForList(WITH_FILES+"WHERE d.target_kind=? AND d.target_id=? ORDER BY d.created_at DESC,d.id DESC LIMIT 1",target.kind(),target.id()).stream().findFirst();
     }
     public List<Map<String,Object>> summaries(Target target) {
         String columns="id,number,amount_kopecks,stage,invoice_delivery,act_delivery,error_text,paid_at,cancel_message_delivery,cancel_reason,cancel_replacement_state,cancel_replacement_error,target_kind,target_id,payer_json,created_at";
@@ -82,43 +84,65 @@ public class PaperBillingStore {
         if (t.kind().equals("COMMON_PART")) {parts.bind(t.id(),id);jdbc.update("UPDATE paper_invoice_document SET parent_invoice_id=? WHERE id=?",parts.parent(t.id()),id);}
     }
     public boolean move(String id,String from,String to) {
-        return jdbc.update("UPDATE paper_invoice_document SET stage=?,error_text=NULL,updated_at=NOW(6) WHERE id=? AND stage=?",to,id,from)==1;
+        return jdbc.update("UPDATE paper_invoice_document SET stage=?,error_text=NULL,work_failures=0,work_next_attempt_at=NOW(6),updated_at=NOW(6) WHERE id=? AND stage=? AND cancel_requested_at IS NULL",to,id,from)==1;
     }
     public void bankId(String id,boolean act,String bankId,String stage) {
         jdbc.update("UPDATE paper_invoice_document SET "+(act?"bank_act_id":"bank_invoice_id")+"=?,error_text=IF(cancel_requested_at IS NOT NULL OR stage IN ('NEEDS_REVIEW','PAID'),error_text,NULL),stage=IF(cancel_requested_at IS NOT NULL OR stage IN ('NEEDS_REVIEW','PAID'),stage,?),updated_at=NOW(6) WHERE id=?",
                 bankId,stage,id);
     }
+    @org.springframework.transaction.annotation.Transactional
     public void pdf(String id,boolean act,PaperBillingPdfSignature.Pdf pdf) {
         String prefix=act?"act":"invoice";
-        int changed=jdbc.update("UPDATE paper_invoice_document SET "+prefix+"_pdf=?,"+prefix+"_original_pdf=?,signature_sha256=?,updated_at=NOW(6) WHERE id=? AND (signature_sha256 IS NULL OR signature_sha256 <=> ?)",
-                pdf.delivered(),pdf.original(),pdf.signatureSha256(),id,pdf.signatureSha256());
+        int changed=jdbc.update("UPDATE paper_invoice_document SET signature_sha256=?,updated_at=NOW(6) WHERE id=? AND (signature_sha256 IS NULL OR signature_sha256 <=> ?)",
+                pdf.signatureSha256(),id,pdf.signatureSha256());
         if (changed!=1) throw new IllegalStateException("Подпись комплекта изменилась; нужна сверка");
+        jdbc.update("INSERT INTO paper_invoice_files(document_id,"+prefix+"_pdf,"+prefix+"_original_pdf) VALUES(?,?,?) "
+                +"ON DUPLICATE KEY UPDATE "+prefix+"_pdf=VALUES("+prefix+"_pdf),"+prefix+"_original_pdf=VALUES("+prefix+"_original_pdf)",id,pdf.delivered(),pdf.original());
     }
     public void error(String id,String state,String message) {
         String text=message==null?"Операция не завершена":message.substring(0,Math.min(700,message.length()));
-        jdbc.update("UPDATE paper_invoice_document SET stage=?,error_text=?,updated_at=NOW(6) WHERE id=? AND cancel_requested_at IS NULL AND (stage<>'NEEDS_REVIEW' OR ?='NEEDS_REVIEW') AND (?<>'NEEDS_REVIEW' OR paid_at IS NULL) AND (stage<>'PAID' OR ?='PAID')",state,text,id,state,state,state);
+        jdbc.update("UPDATE paper_invoice_document SET stage=?,error_text=?,work_next_attempt_at=DATE_ADD(NOW(6),INTERVAL LEAST(1800,60*POW(2,LEAST(work_failures,5))) SECOND),work_failures=LEAST(work_failures+1,30),updated_at=NOW(6) WHERE id=? AND cancel_requested_at IS NULL AND (stage<>'NEEDS_REVIEW' OR ?='NEEDS_REVIEW') AND (?<>'NEEDS_REVIEW' OR paid_at IS NULL) AND (stage<>'PAID' OR ?='PAID')",state,text,id,state,state,state);
     }
     public boolean claimDelivery(String id,boolean act) {
-        return jdbc.update("UPDATE paper_invoice_document SET "+(act?"act_delivery":"invoice_delivery")+"='SENDING',updated_at=NOW(6) WHERE id=? AND cancel_requested_at IS NULL AND stage IN ('FILES_READY','WAITING_PAYMENT','PAID') AND "+(act?"act_delivery":"invoice_delivery")+"='PENDING'",id)==1;
+        return claim(id,act?"act_delivery":"invoice_delivery");
     }
     public boolean claimMessage(String id) {
-        return jdbc.update("UPDATE paper_invoice_document SET message_delivery='SENDING',updated_at=NOW(6) WHERE id=? AND cancel_requested_at IS NULL AND stage IN ('FILES_READY','WAITING_PAYMENT','PAID') AND message_delivery='PENDING'",id)==1;
+        return claim(id,"message_delivery");
+    }
+    private boolean claim(String id,String column) {
+        return jdbc.update("UPDATE paper_invoice_document SET "+column+"='SENDING',delivery_attempted_at=NOW(6),updated_at=NOW(6) "
+                +"WHERE id=? AND cancel_requested_at IS NULL AND stage IN ('FILES_READY','WAITING_PAYMENT','PAID') AND "+column+"='PENDING' "
+                +"AND work_next_attempt_at<=NOW(6) AND message_delivery<>'SENDING' AND invoice_delivery<>'SENDING' AND act_delivery<>'SENDING'",id)==1;
     }
     public void messageDelivery(String id,String state,String messageId) {
-        jdbc.update("UPDATE paper_invoice_document SET message_delivery=?,message_id=?,updated_at=NOW(6) WHERE id=?",state,messageId,id);
+        finishDelivery(id,"message_delivery","message_id",state,messageId);
     }
     public void delivery(String id,boolean act,String state,String messageId) {
-        jdbc.update("UPDATE paper_invoice_document SET "+(act?"act_delivery":"invoice_delivery")+"=?,"+(act?"act_message_id":"invoice_message_id")+"=?,updated_at=NOW(6) WHERE id=?",state,messageId,id);
+        finishDelivery(id,act?"act_delivery":"invoice_delivery",act?"act_message_id":"invoice_message_id",state,messageId);
+    }
+    private void finishDelivery(String id,String column,String receipt,String state,String messageId) {
+        jdbc.update("UPDATE paper_invoice_document SET "+column+"=?,"+receipt+"=?,"
+                +"work_next_attempt_at=IF(?='PENDING',DATE_ADD(NOW(6),INTERVAL LEAST(1800,60*POW(2,LEAST(work_failures,5))) SECOND),NOW(6)),"
+                +"work_failures=IF(?='SENT',0,LEAST(work_failures+1,30)),updated_at=NOW(6) WHERE id=? AND "+column+"='SENDING'",
+                state,messageId,state,state,id);
     }
     public void deliveryFailure(String id,String label,String code,String detail) {
         String text=label+": "+Objects.toString(detail,"Доставка не подтверждена")
                 +" ("+Objects.toString(code,"operation_unknown")+").";
-        jdbc.update("UPDATE paper_invoice_document SET error_text=?,updated_at=NOW(6) WHERE id=? AND cancelled_at IS NULL",
-                text.substring(0,Math.min(700,text.length())),id);
+        jdbc.update("UPDATE paper_invoice_document SET error_text=?,updated_at=NOW(6) WHERE id=? AND cancelled_at IS NULL AND NOT(error_text <=> ?)",
+                text.substring(0,Math.min(700,text.length())),id,text.substring(0,Math.min(700,text.length())));
+        if(Set.of("not_ready","whatsapp_client_missing","whatsapp_group_missing","telegram_group_missing","max_group_missing",
+                "max_not_configured","chat_platform_missing","chat_platform_unknown","unauthorized","invalid_request","payload_too_large").contains(Objects.toString(code,"")))
+            jdbc.update("UPDATE paper_invoice_document SET work_next_attempt_at=DATE_ADD(NOW(6),INTERVAL 30 MINUTE) WHERE id=? AND (message_delivery='PENDING' OR invoice_delivery='PENDING' OR act_delivery='PENDING')",id);
+        jdbc.update("""
+            INSERT IGNORE INTO paper_invoice_event(document_id,event_key,body)
+            SELECT id,'delivery-attention',CONCAT('Бумажный счёт № ',number,': доставка документов требует проверки. ',COALESCE(error_text,''))
+            FROM paper_invoice_document WHERE id=? AND work_failures>=6 AND cancelled_at IS NULL
+            """,id);
     }
     public List<String> pending() {
         for (String column:List.of("message_delivery","invoice_delivery","act_delivery")) {
-            jdbc.update("UPDATE paper_invoice_document SET "+column+"='UNKNOWN' WHERE "+column+"='SENDING' AND updated_at < DATE_SUB(NOW(),INTERVAL 5 MINUTE)");
+            jdbc.update("UPDATE paper_invoice_document SET "+column+"='UNKNOWN' WHERE "+column+"='SENDING' AND delivery_attempted_at < DATE_SUB(NOW(),INTERVAL 5 MINUTE)");
         }
         // A process crash after a POST is ambiguous. Never send a second create automatically.
         jdbc.update("""
@@ -127,13 +151,28 @@ public class PaperBillingStore {
             """);
         return jdbc.queryForList("""
             SELECT id FROM paper_invoice_document
-            WHERE stage IN ('PENDING','INVOICE_CREATED','ACT_CREATED')
+            WHERE cancel_requested_at IS NULL AND work_next_attempt_at<=NOW(6) AND (stage IN ('PENDING','INVOICE_CREATED','ACT_CREATED')
             OR (stage='FILES_READY' AND (message_delivery='PENDING' OR (message_delivery='SENT' AND
                 (invoice_delivery='PENDING' OR act_delivery='PENDING' OR (invoice_delivery='SENT' AND act_delivery='SENT')))))
             OR (stage IN ('WAITING_PAYMENT','PAID') AND delivery_completed_at IS NULL
-                AND message_delivery='SENT' AND invoice_delivery='SENT' AND act_delivery='SENT')
-            ORDER BY created_at LIMIT 20
+                AND message_delivery='SENT' AND invoice_delivery='SENT' AND act_delivery='SENT'))
+            ORDER BY work_next_attempt_at,created_at LIMIT 20
             """,String.class);
     }
     public JdbcTemplate jdbc() { return jdbc; }
+    @Override public String queueName() {return "paper_documents";}
+    @Override @org.springframework.transaction.annotation.Transactional(readOnly=true,timeout=3)
+    public List<Row> deliveryQueueHealth() {
+        return jdbc.query("""
+            SELECT outcome,COUNT(*),GREATEST(0,TIMESTAMPDIFF(SECOND,MIN(created_at),NOW(6))),
+                SUM(CASE WHEN outcome='SENDING' AND delivery_attempted_at<DATE_SUB(NOW(6),INTERVAL 5 MINUTE) THEN 1 ELSE 0 END)
+            FROM (SELECT created_at,delivery_attempted_at,CASE
+                WHEN stage LIKE '%UNKNOWN' OR message_delivery='UNKNOWN' OR invoice_delivery='UNKNOWN' OR act_delivery='UNKNOWN' THEN 'UNKNOWN'
+                WHEN message_delivery='SENDING' OR invoice_delivery='SENDING' OR act_delivery='SENDING' THEN 'SENDING'
+                WHEN work_failures>0 THEN 'RETRYABLE' ELSE 'QUEUED' END AS outcome
+                FROM paper_invoice_document WHERE cancel_requested_at IS NULL
+                  AND delivery_completed_at IS NULL AND stage NOT IN ('CANCELLED','NEEDS_REVIEW')) pending
+            GROUP BY outcome
+            """,(rs,n)->new Row(State.valueOf(rs.getString(1)),rs.getLong(2),rs.getDouble(3),rs.getLong(4)));
+    }
 }

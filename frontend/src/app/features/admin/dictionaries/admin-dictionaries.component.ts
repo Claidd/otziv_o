@@ -40,6 +40,7 @@ import { UiTooltipDirective } from '../../../shared/ui-tooltip.directive';
 import { SpecialistTransferComponent } from '../specialist-transfer/specialist-transfer.component';
 import { DeviceToken, OperatorPhone, OperatorPhonesApi, PhoneOperatorOption } from '../../../core/operator-phones.api';
 import { ManagerAuditSettingsComponent } from './manager-audit-settings.component';
+import { ReviewArchiveChecksComponent } from './review-archive-checks.component';
 
 type DictionaryTabKey = 'categories' | 'subcategories' | 'cities' | 'products' | 'phones' | 'accounts' | 'promo' | 'managerTexts' | 'messageDictionary' | 'specialistTransfer' | 'gamification' | 'settings' | 'audit' | 'aiProvider' | 'autoresponder' | 'autoresponderMonitor';
 
@@ -131,7 +132,7 @@ const DICTIONARY_GUIDES: Record<DictionaryTabKey, DictionaryGuide> = {
 
 @Component({
   selector: 'app-admin-dictionaries',
-  imports: [AdminLayoutComponent, DatePipe, LoadErrorCardComponent, ReactiveFormsModule, RouterLink, UiTooltipDirective, SpecialistTransferComponent, ManagerAuditSettingsComponent, BotImportReportComponent],
+  imports: [AdminLayoutComponent, DatePipe, LoadErrorCardComponent, ReactiveFormsModule, RouterLink, UiTooltipDirective, SpecialistTransferComponent, ManagerAuditSettingsComponent, BotImportReportComponent, ReviewArchiveChecksComponent],
   templateUrl: './admin-dictionaries.component.html',
   styleUrls: ['./admin-dictionaries.component.scss', './admin-dictionaries-monitor.component.scss']
 })

@@ -10,6 +10,11 @@ import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.test.util.ReflectionTestUtils;
+import static org.mockito.Mockito.mock;
+import static org.mockito.ArgumentMatchers.argThat;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.Mock;
 import org.springframework.beans.factory.ObjectProvider;
@@ -89,6 +94,31 @@ class TelegramServiceUpdateHandlingTest {
         verify(userService, never()).findByChatId(anyLong());
         verify(userService, never()).findByUserName(anyString());
         assertTrue(service.sentMessages.isEmpty());
+    }
+
+    @ParameterizedTest @ValueSource(strings={"photo","voice","document"})
+    void nonTextGroupResponseIsTrackedWithoutSendingOrStartingLogin(String kind) {
+        CapturingTelegramService service=service();
+        var tracker=mock(com.hunt.otziv.client_chat_control.service.ClientChatMessageTrackerService.class);
+        ReflectionTestUtils.setField(service,"clientChatMessageTrackerService",tracker);
+        Update update=textUpdate(-100123L,"supergroup",null);
+        update.getMessage().setMessageId(55);
+        if(kind.equals("photo")) update.getMessage().setPhoto(List.of(new org.telegram.telegrambots.meta.api.objects.PhotoSize()));
+        if(kind.equals("voice")) update.getMessage().setVoice(new org.telegram.telegrambots.meta.api.objects.Voice());
+        if(kind.equals("document")) {update.getMessage().setDocument(new org.telegram.telegrambots.meta.api.objects.Document());update.getMessage().setCaption("Нужны правки");}
+        service.onUpdateReceived(update);
+        verify(tracker).track(argThat(command->command.platform()==com.hunt.otziv.client_chat_control.model.ClientChatPlatform.TELEGRAM
+                && command.chatId().equals("-100123") && command.externalMessageId().equals("55")));
+        verifyNoInteractions(userService);
+        assertTrue(service.sentMessages.isEmpty());
+    }
+
+    @Test void membershipEventDoesNotBecomeAClientReply() {
+        CapturingTelegramService service=service();
+        var tracker=mock(com.hunt.otziv.client_chat_control.service.ClientChatMessageTrackerService.class);
+        ReflectionTestUtils.setField(service,"clientChatMessageTrackerService",tracker);
+        service.onUpdateReceived(textUpdate(-100123L,"supergroup",null));
+        verifyNoInteractions(tracker,userService);
     }
 
     @Test

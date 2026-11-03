@@ -26,9 +26,26 @@ class GroupReplyServiceImplTest {
     private WhatsAppInboundReplyOutbox replyOutbox;
     @Mock
     private ClientChatMessageTrackerService clientChatMessageTrackerService;
+    @Mock private WhatsAppUnlinkedEventStore unlinkedEvents;
 
     @InjectMocks
     private GroupReplyServiceImpl service;
+
+    @org.junit.jupiter.api.Test void unknownCompanyIsDurablyDeferredBeforeAcknowledgment() {
+        var reply=new WhatsAppGroupReplyDTO();reply.setClientId("client");reply.setGroupId("unlinked@g.us");
+        reply.setMessageId("message");reply.setMessage("Нужен ответ");
+        service.processGroupReply(reply);
+        org.mockito.Mockito.verify(unlinkedEvents).defer(reply,"company_missing");
+        verifyNoInteractions(clientChatMessageTrackerService,replyOutbox);
+        org.mockito.Mockito.verify(unlinkedEvents,org.mockito.Mockito.never()).resolved(org.mockito.ArgumentMatchers.any());
+    }
+
+    @org.junit.jupiter.api.Test void queueWriteFailurePreventsSuccessfulReceipt() {
+        var reply=new WhatsAppGroupReplyDTO();reply.setGroupId("unlinked@g.us");reply.setMessage("Нужен ответ");
+        org.mockito.Mockito.doThrow(new IllegalStateException("database unavailable")).when(unlinkedEvents)
+                .defer(reply,"company_missing");
+        org.assertj.core.api.Assertions.assertThatThrownBy(()->service.processGroupReply(reply)).hasMessage("database unavailable");
+    }
 
     @org.junit.jupiter.api.Test void oldGroupMessageCannotBindAnUnverifiedChangedInviteByPhoneAndTitle() {
         var reply = new WhatsAppGroupReplyDTO(); reply.setGroupId("111@g.us");

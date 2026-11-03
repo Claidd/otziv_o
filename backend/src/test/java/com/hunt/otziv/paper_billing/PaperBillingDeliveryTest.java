@@ -75,4 +75,12 @@ class PaperBillingDeliveryTest {
         assertFalse(delivery.sendIntro(row()).sent());
         verifyNoInteractions(documents,messages);
     }
+    @Test void localFixtureCanExerciseKnownUnsentRetryWithoutContactingARealGateway() {
+        settings.setDeliveryEnabled(true);when(bank.fixture()).thenReturn(true);
+        when(bank.fixtureCall(eq("/delivery"),anyMap())).thenReturn(new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode()
+                .put("errorCode","gateway_not_ready").put("errorMessage","Локальный шлюз временно недоступен"));
+        assertTrue(ClientMessageDelivery.isKnownUnsent(delivery.sendIntro(row())));
+        assertTrue(ClientMessageDelivery.isKnownUnsent(delivery.send(row(),false)));
+        verifyNoInteractions(documents,messages);
+    }
 }

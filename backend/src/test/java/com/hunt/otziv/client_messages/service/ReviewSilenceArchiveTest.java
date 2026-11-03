@@ -7,6 +7,7 @@ import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.client_messages.model.*;
 import com.hunt.otziv.client_messages.repository.*;
 import com.hunt.otziv.client_chat_control.service.ClientChatMessageReconciliationService;
+import com.hunt.otziv.client_chat_control.api.ReviewArchiveHistory;
 import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.p_products.api.OrderDeliveryControlContext;
@@ -36,6 +37,7 @@ class ReviewSilenceArchiveTest {
     @Mock OrderPaymentIntegrityService orderPaymentIntegrityService;
     @Mock AppSettingService appSettingService;
     @Mock com.hunt.otziv.client_chat_control.api.ReminderContactHistory archiveChatHistory;
+    @Mock ReviewArchiveHistory reviewArchiveHistory;
     @Mock com.hunt.otziv.review_recovery.service.ReviewRecoveryHoldService reviewRecoveryHoldService;
     @Mock AutomationNoticeRecipients archiveNoticeRecipients;
     @Mock ReviewArchiveNotifications archiveNotifications;
@@ -72,6 +74,8 @@ class ReviewSilenceArchiveTest {
                 .scenario(ClientMessageScenario.REVIEW_CHECK_REMINDER).status(ScheduledMessageStateStatus.ACTIVE)
                 .targetKey("order:77:"+source.cycleAt().withNano(0)).sentCount(7).lastSuccessAt(now.minusDays(3)).build();
         when(stateRepository.findById(30L)).thenReturn(Optional.of(state));
+        when(reviewArchiveHistory.inspect(any(),any())).thenAnswer(i -> new ReviewArchiveHistory.Check(
+                ReviewArchiveHistory.Outcome.CLEAR,"History checked",i.getArgument(1),now,0,"fixture"));
         when(stateRepository.findByIdForUpdate(30L)).thenReturn(Optional.of(state));
         when(orderRepository.findById(77L)).thenReturn(Optional.of(order));
         when(orderRepository.findByIdForMutation(77L)).thenReturn(Optional.of(order));
@@ -104,6 +108,68 @@ class ReviewSilenceArchiveTest {
         verify(archiveNotifications,times(3)).enqueue(anyLong(),anyString(),any());
     }
 
+    @ParameterizedTest @ValueSource(strings={"client","group","manager"})
+    void missingIdentityIsVisibleAndDeferredWithoutTransportOrArchival(String missing) throws Exception {
+        if(missing.equals("client")) order.getManager().setClientId(" ");
+        if(missing.equals("group")) company.setGroupId(null);
+        if(missing.equals("manager")) {order.setManager(null);company.setManager(null);}
+        var result=service.archiveAfterReminders(30);
+        assertThat(result.archived()).isFalse();
+        assertThat(result.reason()).contains("привязку");
+        assertThat(state.getArchiveBlockReason()).isEqualTo(result.reason());
+        assertThat(state.getArchiveNextCheckAt()).isAfter(now.plusMinutes(25));
+        verifyNoInteractions(archiveChatHistory,archiveNotifications);
+        verify(orderStatusTransitionService,never()).changeStatusForOrder(anyLong(),anyString());
+    }
+
+    @Test void repairingBindingAllowsManualRecheckBeforeDeferredTime() {
+        company.setGroupId(null);
+        assertThat(service.archiveAfterReminders(30).archived()).isFalse();
+        company.setGroupId("repaired-group");
+        assertThat(service.archiveAfterReminders(30).archived()).isTrue();
+        assertThat(state.getArchiveBlockReason()).isNull();
+        assertThat(state.getArchiveNextCheckAt()).isNull();
+    }
+
+    @ParameterizedTest @ValueSource(strings={"https://t.me/group","https://max.ru/chat"})
+    void otherChannelsNeverUseAnOldWhatsappGroupToAssertClientSilence(String url) {
+        company.setUrlChat(url);
+        var result=service.archiveAfterReminders(30);
+        assertThat(result.archived()).isFalse();
+        assertThat(result.reason()).contains("привязку");
+        verifyNoInteractions(archiveChatHistory,reviewArchiveHistory,archiveNotifications);
+    }
+
+    @ParameterizedTest @ValueSource(strings={"TELEGRAM","MAX"})
+    void completeChannelHistoryArchivesUsingTheCorrectChatInsteadOfTheOldWhatsappBinding(String platform) {
+        company.setUrlChat(platform.equals("MAX")?"https://max.ru/chat":"https://t.me/group");
+        company.setTelegramGroupChatId(-123L);company.setMaxGroupChatId(-456L);
+        assertThat(service.archiveAfterReminders(30).archived()).isTrue();
+        verify(reviewArchiveHistory).inspect(argThat(chat->chat.platform().equals(platform)
+                && chat.chatId().equals(platform.equals("MAX")?"-456":"-123")),eq(state.getLastSuccessAt()));
+        assertThat(state.getArchiveCheckStatus()).isEqualTo("ARCHIVED");
+        assertThat(state.getArchiveCheckChannel()).isEqualTo(platform);
+        verifyNoInteractions(archiveChatHistory);
+    }
+
+    @ParameterizedTest @ValueSource(strings={"REPLY_FOUND","HISTORY_MISSING","HISTORY_UNAVAILABLE"})
+    void missingOrUncertainChannelHistoryIsRecordedAndRetriedWithoutChangingTheOrder(String outcome) {
+        company.setUrlChat("https://t.me/group");company.setTelegramGroupChatId(-123L);
+        when(reviewArchiveHistory.inspect(any(),any())).thenReturn(new ReviewArchiveHistory.Check(
+                ReviewArchiveHistory.Outcome.valueOf(outcome),"Proof unavailable",state.getLastSuccessAt(),now,0,"fixture"));
+        assertThat(service.archiveAfterReminders(30).archived()).isFalse();
+        assertThat(state.getArchiveCheckStatus()).isEqualTo(outcome);
+        assertThat(state.getArchiveCheckChannel()).isEqualTo("TELEGRAM");
+        assertThat(state.getArchiveNextCheckAt()).isAfter(now);
+        verifyNoInteractions(archiveNotifications);
+    }
+
+    @Test void replyArrivingDuringHistoryLookupPreventsArchivalAtCommit() {
+        when(reviewArchiveHistory.hasLocalReply(any(),any())).thenReturn(true);
+        assertThat(service.archiveAfterReminders(30).archived()).isFalse();
+        verifyNoInteractions(archiveNotifications);
+    }
+
     @ParameterizedTest @ValueSource(strings={"six","unknown","recent","paid","pending","changed","reply","history_unavailable"})
     void unsafeOrIncompleteConditionsDoNotArchiveOrNotify(String condition) throws Exception {
         switch(condition) {
@@ -113,8 +179,8 @@ class ReviewSilenceArchiveTest {
             case "paid" -> when(orderPaymentIntegrityService.hasSettledPaymentEvidence(order)).thenReturn(true);
             case "pending" -> when(manualContactReservation.blocksScheduledContact(77L)).thenReturn(true);
             case "changed" -> when(orderDeliveryContext.lock(77L)).thenReturn(Optional.empty());
-            case "reply" -> when(archiveChatHistory.hasReplyBlockingArchive(anyString(),anyString(),any())).thenReturn(true);
-            case "history_unavailable" -> when(archiveChatHistory.hasReplyBlockingArchive(anyString(),anyString(),any())).thenThrow(new IllegalStateException("offline"));
+            case "reply" -> when(reviewArchiveHistory.inspect(any(),any())).thenReturn(new ReviewArchiveHistory.Check(ReviewArchiveHistory.Outcome.REPLY_FOUND,"reply",state.getLastSuccessAt(),now,1,"fixture"));
+            case "history_unavailable" -> when(reviewArchiveHistory.inspect(any(),any())).thenThrow(new IllegalStateException("offline"));
         }
         try { assertThat(service.archiveAfterReminders(30).archived()).isFalse(); }
         catch (IllegalStateException failure) { assertThat(condition).isEqualTo("history_unavailable"); }

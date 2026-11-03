@@ -4,6 +4,8 @@ const http = require("node:http");
 const crypto = require("node:crypto");
 const { privateKey, publicKey } = crypto.generateKeyPairSync("rsa", { modulusLength: 2048 });
 const documents = new Map(), deliveries = new Map(), receipts = [], calls = [];
+let deliveryFailure = false;
+let deliveryFailureSuffix = '';
 const acquiring = {merchantId:"LOCAL-MERCHANT",cashbox:"CloudKassir",operations:new Map()};
 const account = "40802810000000006542/044525104";
 function jwt(claims) {
@@ -97,10 +99,17 @@ http.createServer(async (req,res)=>{
     res.writeHead(200,{"Content-Type":"application/pdf"});return res.end(pdf(document.number));
   }
   if (url.pathname==="/delivery") {
+    calls.push({method:'POST',path:'/delivery',operationId:body.operationId});
+    if(deliveryFailure && (!deliveryFailureSuffix || body.operationId.endsWith(deliveryFailureSuffix)))
+      return send(200,{errorCode:'gateway_not_ready',errorMessage:'Локальный шлюз временно недоступен'});
     // Match the real file gateway contract, so empty PDF captions cannot pass local QA.
     if (body.data && (!body.caption || !body.caption.trim())) return send(400,{code:"invalid_request"});
     if (!deliveries.has(body.operationId)) deliveries.set(body.operationId,{messageId:"fixture-"+deliveries.size,filename:body.filename,caption:body.caption,groupId:body.groupId});
     return send(200,deliveries.get(body.operationId));
+  }
+  if(url.pathname==='/test/delivery-failure' && req.method==='POST') {
+    deliveryFailure=body.enabled===true;deliveryFailureSuffix=[':message',':invoice',':act'].includes(body.suffix)?body.suffix:'';
+    return send(200,{enabled:deliveryFailure,suffix:deliveryFailureSuffix});
   }
   if (url.pathname==="/test/pay") {
     const doc=[...documents.values()].find(d=>d.number===body.number);

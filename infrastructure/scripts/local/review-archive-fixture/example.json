@@ -1,0 +1,16 @@
+{
+  "source": "Synthetic local example; replace with a metadata-only snapshot using REVIEW_ARCHIVE_FIXTURE_SNAPSHOT",
+  "chats": {
+    "-91": {
+      "complete": true,
+      "messages": [
+        {
+          "recipient": {"chat_id": -91},
+          "timestamp": 1793635200000,
+          "sender": {"is_bot": true},
+          "body": {"mid": "fixture.bot.reminder"}
+        }
+      ]
+    }
+  }
+}

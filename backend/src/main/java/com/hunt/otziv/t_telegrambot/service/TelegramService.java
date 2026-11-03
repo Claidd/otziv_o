@@ -254,7 +254,16 @@ public class TelegramService extends TelegramLongPollingBot implements TelegramA
         if (handleChatMigrationUpdate(update)) {
             return;
         }
-        if (update == null || !update.hasMessage() || !update.getMessage().hasText()) {
+        if (update == null || !update.hasMessage()) {
+            return;
+        }
+        if (!update.getMessage().hasText()) {
+            Message message=update.getMessage();
+            // Media is a client response too. Membership/service events are not replies.
+            if (!isPrivateChat(update) && (message.hasPhoto() || message.hasDocument() || message.hasVoice()
+                    || message.hasVideo() || message.hasAudio() || message.hasSticker() || message.hasVideoNote()
+                    || message.hasContact() || message.hasLocation() || message.hasPoll() || message.hasAnimation() || message.hasDice()))
+                trackTelegramGroupMessage(update);
             return;
         }
 

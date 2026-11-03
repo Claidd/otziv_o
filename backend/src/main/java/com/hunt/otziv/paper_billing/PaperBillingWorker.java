@@ -67,8 +67,11 @@ public class PaperBillingWorker {
                 try {
                     var result=delivery.send(r,act);
                     store.delivery(id,act,result.sent() && result.messageId()!=null?"SENT":ClientMessageDelivery.isKnownUnsent(result)?"PENDING":"UNKNOWN",result.messageId());
-                    if(!result.sent() || result.messageId()==null) store.deliveryFailure(id,act?"Акт":"Счёт",result.errorCode(),result.errorMessage());
-                } catch(Exception e) { store.delivery(id,act,"UNKNOWN",null); }
+                    if(!result.sent() || result.messageId()==null) {
+                        store.deliveryFailure(id,act?"Акт":"Счёт",result.errorCode(),result.errorMessage());
+                        return;
+                    }
+                } catch(Exception e) { store.delivery(id,act,"UNKNOWN",null); return; }
             }
             r=store.row(id);
             if (r.get("invoice_delivery").equals("SENT") && r.get("act_delivery").equals("SENT")) {

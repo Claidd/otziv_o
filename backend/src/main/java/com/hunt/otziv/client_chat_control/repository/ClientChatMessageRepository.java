@@ -16,6 +16,10 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface ClientChatMessageRepository extends JpaRepository<ClientChatMessage, Long> {
 
+    boolean existsByPlatformAndChatIdAndDirectionAndSenderRoleNotAndMessageAtGreaterThanEqual(
+            ClientChatPlatform platform, String chatId, ClientChatDirection direction,
+            ClientChatSenderRole excludedRole, LocalDateTime since);
+
     Optional<ClientChatMessage> findByPlatformAndChatIdAndExternalMessageId(
             ClientChatPlatform platform,
             String chatId,

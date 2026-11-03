@@ -236,6 +236,19 @@ public class MaxBotClient {
         }
     }
 
+    /** Strict history lookup for an archive decision. Never acknowledges updates or sends messages. */
+    public JsonNode archiveHistoryPage(long chatId,long upperMillis) {
+        if(!isConfigured()) throw new IllegalStateException("MAX history is not configured");
+        String url=UriComponentsBuilder.fromUriString(baseUrl+"/messages")
+                .queryParam("chat_id",chatId).queryParam("from",upperMillis).queryParam("count",100).toUriString();
+        try {
+            var response=restTemplate.exchange(url,HttpMethod.GET,new HttpEntity<>(headers()),String.class);
+            JsonNode body=objectMapper.readTree(response.getBody());
+            if(body==null || !response.getStatusCode().is2xxSuccessful()) throw new IllegalStateException("MAX history is unavailable");
+            return body;
+        } catch(Exception unavailable) { throw new IllegalStateException("MAX history is unavailable",unavailable); }
+    }
+
     public boolean registerWebhook(String webhookUrl, List<String> updateTypes, String secret) {
         if (!isConfigured()) {
             log.warn("MAX webhook не зарегистрирован: MAX_BOT_TOKEN пустой");

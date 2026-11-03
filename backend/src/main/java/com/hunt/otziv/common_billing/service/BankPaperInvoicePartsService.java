@@ -31,7 +31,9 @@ public class BankPaperInvoicePartsService implements BankPaperInvoiceParts {
     private final com.hunt.otziv.review_recovery.api.ReviewRecoveryMessageHold recovery;
 
     public long parent(long part) {return jdbc.queryForObject("SELECT invoice_id FROM common_invoice_paper_parts WHERE part_id=?",Long.class,part);}
+    @Transactional(readOnly=true)
     public List<Long> partIds(long invoice) {positions(invoice);return jdbc.queryForList("SELECT part_id FROM common_invoice_paper_parts WHERE invoice_id=? ORDER BY part_id",Long.class,invoice);}
+    @Transactional(readOnly=true)
     public List<Long> historyInvoiceIds(long invoice) {positions(invoice);return jdbc.queryForList("SELECT old.invoice_id FROM common_invoices current_invoice JOIN common_invoices old ON old.account_id=current_invoice.account_id WHERE current_invoice.invoice_id=? ORDER BY old.invoice_id DESC LIMIT 100",Long.class,invoice);}
     public LocalDateTime nextReminder(long part) {return delivery.nextAutomaticPaymentReminderAt(LocalDateTime.now());}
     public boolean remindersAllowed(long part) {
@@ -74,6 +76,7 @@ public class BankPaperInvoicePartsService implements BankPaperInvoiceParts {
             WHERE current_invoice.invoice_id=? ORDER BY r.order_company LIMIT 200
             """,Long.class,invoice);
     }
+    @Transactional
     public void configure(long invoice,Principal actor) {
         var value=invoices.findById(invoice).orElseThrow();
         delivery.ensureCommonInvoiceVisibleForCurrentUser(value);

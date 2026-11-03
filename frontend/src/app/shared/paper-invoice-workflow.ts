@@ -28,18 +28,21 @@ export function paperInvoiceWorkflow(
   const manualAllowed = Boolean(context && !context.enabled && documents.length === 0);
   const legacyDelivered = manualAllowed && Boolean(invoice?.paperInvoiceIssuedAt);
   return {
+    contextAvailable: Boolean(context),
+    bankManaged: active.length > 0,
     manualAllowed,
     ordinaryCount,
     ordinaryOnly: ordinaryCount > 0 && positions.every(p=>p.paid),
     prepared: allPrepared || legacyDelivered,
     delivered: allDelivered || legacyDelivered,
     anyDelivered: active.some(delivered) || legacyDelivered,
-    preparationText: !context ? 'Состояние документов ещё не подтверждено'
+    preparationText: !context ? (invoice?.paperInvoiceIssuedAt ? 'Отправка счёта отмечена. Загружаем сведения о комплектах.' : 'Загружаем сведения о счёте и акте.')
       : legacyDelivered ? 'Отправка счёта подтверждена вручную'
       : allPrepared ? (ordinaryCount ? 'Документы сформированы для всех заказов с бумажной оплатой' : 'Документы сформированы для всех заказов')
       : !active.length ? 'Счёт и акт ещё не созданы. Нажмите «Счёт и акт» и подтвердите выпуск.'
       : `Документы готовы для ${preparedCount} из ${positions.length} заказов. ${active.some(d => !ready(d)) ? 'Остальные документы формируются или требуют проверки.' : 'Выставите счёт на оставшиеся заказы.'}`,
-    deliveryText: allDelivered || legacyDelivered ? 'Доставка всех комплектов подтверждена'
+    deliveryText: !context ? (invoice?.paperInvoiceIssuedAt ? 'Отправка отмечена; уточняем состояние комплектов.' : 'Загружаем подтверждения доставки.')
+      : allDelivered || legacyDelivered ? 'Доставка всех комплектов подтверждена'
       : !active.some(ready) ? 'Отправка начнётся после формирования счёта и акта'
       : `Доставка подтверждена для ${deliveredCount} из ${positions.length} заказов. Ожидаем отправку и подтверждение остальных документов.`
   };

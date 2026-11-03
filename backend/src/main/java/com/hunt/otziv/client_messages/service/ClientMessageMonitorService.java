@@ -393,8 +393,8 @@ public class ClientMessageMonitorService {
                 toIrkutskTime(state.getNextAttemptAt()),
                 toIrkutskTime(state.getLastAttemptAt()),
                 toIrkutskTime(state.getLastSuccessAt()),
-                state.getLastErrorCode(),
-                state.getLastErrorMessage(),
+                hasText(state.getArchiveBlockReason()) ? "archive_waiting" : state.getLastErrorCode(),
+                firstText(state.getArchiveBlockReason(),state.getLastErrorMessage()),
                 state.getSentCount(),
                 state.getConsecutiveFailures(),
                 preview.expectedChannel(),
@@ -682,6 +682,9 @@ public class ClientMessageMonitorService {
             boolean windowAllowed,
             boolean paused
     ) {
+        if (hasText(state.getArchiveBlockReason())) {
+            return new QueueReadiness("ARCHIVE_WAITING", "Архивирование приостановлено", state.getArchiveBlockReason());
+        }
         if (!workerEnabled) {
             return new QueueReadiness("WORKER_DISABLED", "Автоответчик выключен", "Фоновый worker выключен настройкой");
         }

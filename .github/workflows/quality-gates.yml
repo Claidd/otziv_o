@@ -66,6 +66,8 @@ on:
           - c40-node
           - c41-nginx
           - c41-phpmyadmin
+          - c47-nginx
+          - c47-phpmyadmin
           - c41-grafana
           - c29-dozzle
           - c29-prometheus

@@ -1,0 +1,23 @@
+services:
+  review-archive-fixture:
+    image: otziv-external-review-worker:prod-local
+    entrypoint: [node, /fixture/server.cjs]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - ./infrastructure/scripts/local/review-archive-fixture:/fixture:ro
+      - ${REVIEW_ARCHIVE_FIXTURE_SNAPSHOT:-./infrastructure/scripts/local/review-archive-fixture/example.json}:/snapshot/history.json:ro
+    ports: ["127.0.0.1:8098:8098"]
+    networks: [internal_net]
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:8098/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+  app:
+    environment:
+      MAX_BOT_API_BASE_URL: http://review-archive-fixture:8098
+      MAX_BOT_TOKEN: ${REVIEW_ARCHIVE_FIXTURE_TOKEN:-local-read-only-fixture}
+      MAX_BOT_LONG_POLLING_ENABLED: "false"
+      MAX_BOT_WEBHOOK_AUTO_REGISTER_ENABLED: "false"

@@ -1,0 +1,97 @@
+[
+    {
+        "Id": "sha256:9cc431bf4c4c22d22ff9473dfb9e259feb1cc0778a8355218b38df052181e82a",
+        "RepoTags": [],
+        "RepoDigests": [
+            "ghcr.io/claidd/otziv-security@sha256:0df04ca6f4b3b05ca72a4fc44ee7ee992a3152caa32dadeb0fd12b4d5f9d39de"
+        ],
+        "Parent": "",
+        "Comment": "buildkit.dockerfile.v0",
+        "Created": "2026-11-03T04:15:00.025535915Z",
+        "DockerVersion": "",
+        "Author": "",
+        "Config": {
+            "Hostname": "",
+            "Domainname": "",
+            "User": "",
+            "AttachStdin": false,
+            "AttachStdout": false,
+            "AttachStderr": false,
+            "ExposedPorts": {
+                "80/tcp": {}
+            },
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "NGINX_VERSION=1.30.6",
+                "PKG_RELEASE=1",
+                "DYNPKG_RELEASE=1",
+                "NJS_VERSION=1.0.2",
+                "NJS_RELEASE=1",
+                "ACME_VERSION=0.4.1"
+            ],
+            "Cmd": [
+                "nginx",
+                "-g",
+                "daemon off;"
+            ],
+            "Image": "",
+            "Volumes": null,
+            "WorkingDir": "/",
+            "Entrypoint": [
+                "/docker-entrypoint.sh"
+            ],
+            "OnBuild": null,
+            "Labels": {
+                "com.otziv.publication.revision": "7e1b5daad1f71a17e73e34f5adda43d32aa461ec",
+                "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+                "com.otziv.reviewed-component": "nginx",
+                "com.otziv.security.brotli-refresh": "C40: official Alpine3.24 brotli-libs1.2.1-r0; C38 nginx/config/modules and unrelated packages unchanged",
+                "com.otziv.security.curl-refresh": "C41: official Alpine3.24 curl/libcurl8.23.0-r0; C40 nginx/config/modules and all other packages unchanged",
+                "com.otziv.security.expat-refresh": "C47: official Alpine3.24 libexpat2.10.0-r0; C41 server/application/config and unrelated packages unchanged",
+                "com.otziv.security.patch": "Official nginx 1.30.6 stable and matching modules; preserve unrelated C31 packages",
+                "maintainer": "NGINX Docker Maintainers <docker-maint@nginx.com>"
+            },
+            "StopSignal": "SIGQUIT"
+        },
+        "Architecture": "amd64",
+        "Os": "linux",
+        "Size": 93799787,
+        "GraphDriver": {
+            "Data": {
+                "LowerDir": "/var/lib/docker/overlay2/3c73df5d3e4f200cd996a108038d9b9ab1f9b35483da5ccca5080c6186f19590/diff:/var/lib/docker/overlay2/8e33b130d229fa1db0b80d8a3e31975f7cb137adb0efb96c2153d9353eab9201/diff:/var/lib/docker/overlay2/6b90b7c36e159db06a3b11e73276b4784e2c0aa73dbf02108007cb01f1f2a859/diff:/var/lib/docker/overlay2/045441418d0572a5ea0e222e1a63b7b0fe8536ae8090aa33d60a64ca962719a7/diff:/var/lib/docker/overlay2/0c7b0f96b2595ec385464763a15822f19c8a41e3889b6638aad3275903b8de25/diff:/var/lib/docker/overlay2/ff7744924609b1a3edce47429c9951585c4a87a0eb8889d3b9f7c873baeffa84/diff:/var/lib/docker/overlay2/d1e74e21cfdca6820ee73e135862e4a52ac57c7a880dd3ac04793671cfc257a4/diff:/var/lib/docker/overlay2/35a71a0ff7e1f164f0ddd12210bc4f5d8ff10919b8cb8ef3ea1b827f7203e7d7/diff:/var/lib/docker/overlay2/2fa7875dcca82926bd52f0e75eb97d448393b39e489a5de9c64c18f131826d09/diff:/var/lib/docker/overlay2/b90c08725a313bc6e053dc5da415e3b8651197e4ea1e9220c6320a11e36ed0da/diff:/var/lib/docker/overlay2/051b37c6aedbb907d0e1a863748bb5db491816039faac6322d37c00c00df0751/diff:/var/lib/docker/overlay2/7faa375fb765676d4b422a487b3a4e9981d6666d8edc8e081168db4ad0ea5158/diff:/var/lib/docker/overlay2/2ee0cf9ecc24450f8cf092a10235c28b3d327148d25943f838aad2c9e35ebe2a/diff:/var/lib/docker/overlay2/b933c8aacee7951c6729c78e84af083d74c667dd07bfb6be343e16bdb6bc8b65/diff:/var/lib/docker/overlay2/9453d960d126e892c0c31790e311658aec2ba22ca47f6963f7c4a8f4272b7cae/diff:/var/lib/docker/overlay2/8a1a20a484553b0356b13968f7565630922e85bd542399f111ba4a23d21a7347/diff",
+                "MergedDir": "/var/lib/docker/overlay2/89e983456162e2240776fe9b56a4b0bb3122adbc9deafa781d4e03e7e9404013/merged",
+                "UpperDir": "/var/lib/docker/overlay2/89e983456162e2240776fe9b56a4b0bb3122adbc9deafa781d4e03e7e9404013/diff",
+                "WorkDir": "/var/lib/docker/overlay2/89e983456162e2240776fe9b56a4b0bb3122adbc9deafa781d4e03e7e9404013/work"
+            },
+            "Name": "overlay2"
+        },
+        "RootFS": {
+            "Type": "layers",
+            "Layers": [
+                "sha256:34884abbe92863fce933ed7c39c0e045631af0ed86d5cc0dfbdf9fdca426ce3c",
+                "sha256:84cbdb555a82aa30be7379831c3b42f9e47ce6b5e9252366058cda8366aac407",
+                "sha256:bcfe61bf39042c8e0db3138c3734a674184cb2b1ea15ef058ca019500008666b",
+                "sha256:9cc2a427511c2b0faf863976585ec18a9328e6eb837c87a61a4f10df6355d6ce",
+                "sha256:52071f7f756a6f9465c3aed773d057e828624898ea580ad04b449c4a495ee34f",
+                "sha256:f0696cdb71fe6a6572049d909d1f88c3e0f4e7e4d4b3fc96f8955c75876fa63d",
+                "sha256:04c07f9c0de8bd4fa8167e8de635b1fdc3fe3fb0cfcda6bb2fb2977ccf0b1283",
+                "sha256:85bb3570019b196fb23076fbd5adad3920191ce2e05291b2e2f7e47217a5e916",
+                "sha256:168c390bc1744d244a26db88c20d7a30fb87f470de1ed31180cd8ec72b5ed1f3",
+                "sha256:0ee0497220cbb5937281554ac5a07da4b67dd04f423f20ae1ba3c44d91892d75",
+                "sha256:838c0acda45f4733055c3dcccecdce6ad4fdfdff4210622ec9da1850d8a08106",
+                "sha256:3cb31be94528997ca3d099e05bc9cc8f14451a6c210fe350070b3b0ab9effc8e",
+                "sha256:070d11c31cfca0ba6a26fe2b075fdcc34d0512618c8dd9b9784b7a1f1ccf9831",
+                "sha256:3f11219145bb246b1d556b7e3567b16d48dcfb85c2292896c2eba3c06d4dbe17",
+                "sha256:a13496450b60c42facb03fab3974961b661543a86f7f4470047b0b76a0cce161",
+                "sha256:912d9ddb963e96fba459ce4c9792caf308fade7db6281f1842e2fc3602e66492",
+                "sha256:e6d0dbce73c606e7b7b3736d351b4980ca546bcf8e8b24e0d87e1f453cf716b0"
+            ]
+        },
+        "Metadata": {
+            "LastTagTime": "0001-01-01T00:00:00Z"
+        }
+    }
+]

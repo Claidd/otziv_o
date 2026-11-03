@@ -37,9 +37,7 @@ public class PaperBillingDelivery {
         String operation="paper:"+r.get("id")+":"+kind;
         if(bank.fixture()) {
             var response=bank.fixtureCall("/delivery",Map.of("operationId",operation,"groupId",r.get("group_id"),"caption",text));
-            return response.path("messageId").asText().isBlank()
-                    ?ClientMessageSendResult.failed("operation_unknown","Тестовый сервис не подтвердил сообщение")
-                    :ClientMessageSendResult.sent("Fixture",response.path("messageId").asText());
+            return fixtureResult(response);
         }
         if (!outbound.clientMessagesEnabled() || !immediate.immediatePublicationMessagesEnabled())
             return ClientMessageSendResult.failed("not_ready","Клиентские сообщения выключены");
@@ -61,9 +59,7 @@ public class PaperBillingDelivery {
         if (bank.fixture()) {
             var response=bank.fixtureCall("/delivery",Map.of("operationId",operation,"filename",filename,
                     "groupId",r.get("group_id"),"caption",caption,"data",java.util.Base64.getEncoder().encodeToString(bytes)));
-            return response.path("messageId").asText().isBlank()
-                    ?ClientMessageSendResult.failed("operation_unknown","Тестовый сервис не подтвердил доставку")
-                    :ClientMessageSendResult.sent("Fixture",response.path("messageId").asText());
+            return fixtureResult(response);
         }
         if (!outbound.clientMessagesEnabled() || !immediate.immediatePublicationMessagesEnabled())
             return ClientMessageSendResult.failed("not_ready","Клиентские сообщения выключены");
@@ -86,6 +82,12 @@ public class PaperBillingDelivery {
             }
         }
         return (act?"Акт выполненных работ":"Счёт на оплату")+" — "+orders+document.get("number")+".pdf";
+    }
+    private ClientMessageSendResult fixtureResult(com.fasterxml.jackson.databind.JsonNode response) {
+        if(!response.path("messageId").asText().isBlank())
+            return ClientMessageSendResult.sent("Fixture",response.path("messageId").asText());
+        return ClientMessageSendResult.failed(response.path("errorCode").asText("operation_unknown"),
+                response.path("errorMessage").asText("Тестовый сервис не подтвердил доставку"));
     }
     public static String amountText(long kopecks) {
         var format=NumberFormat.getNumberInstance(Locale.forLanguageTag("ru-RU"));

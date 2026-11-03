@@ -24,6 +24,7 @@ public interface ScheduledClientMessageStateRepository extends CrudRepository<Sc
         WHERE s.scenario = com.hunt.otziv.client_messages.model.ClientMessageScenario.REVIEW_CHECK_REMINDER
           AND s.status = com.hunt.otziv.client_messages.model.ScheduledMessageStateStatus.ACTIVE
           AND s.sentCount >= 7 AND s.deliveryStatus IS NULL AND s.id > :afterId
+          AND (s.archiveNextCheckAt IS NULL OR s.archiveNextCheckAt <= CURRENT_TIMESTAMP)
         ORDER BY s.id
     """)
     List<Long> findSilenceArchiveCandidates(@Param("afterId") long afterId, Pageable pageable);

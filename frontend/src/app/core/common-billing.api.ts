@@ -276,6 +276,10 @@ export class CommonBillingApi {
     );
   }
 
+  reconcilePaperInvoice(invoiceId: number): Observable<void> {
+    return this.http.post<void>(`${appEnvironment.apiBaseUrl}/api/paper-invoices/COMMON_INVOICE/${invoiceId}/reconcile`, {});
+  }
+
   markPaperInvoicePaid(
     invoiceId: number,
     request: ManualPaymentConfirmationRequest

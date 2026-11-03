@@ -63,6 +63,21 @@ public class ScheduledClientMessageState {
     @Column(name = "next_attempt_at")
     private LocalDateTime nextAttemptAt;
 
+    @Column(name = "archive_next_check_at")
+    private LocalDateTime archiveNextCheckAt;
+
+    @Column(name = "archive_block_reason", length = 500)
+    private String archiveBlockReason;
+
+    @Column(name = "archive_checked_at")
+    private LocalDateTime archiveCheckedAt;
+
+    @Column(name = "archive_check_status", length = 32)
+    private String archiveCheckStatus;
+
+    @Column(name = "archive_check_channel", length = 24)
+    private String archiveCheckChannel;
+
     @Column(name = "last_attempt_at")
     private LocalDateTime lastAttemptAt;
 
