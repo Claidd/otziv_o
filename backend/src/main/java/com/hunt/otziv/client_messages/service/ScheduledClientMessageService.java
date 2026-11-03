@@ -758,6 +758,8 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
         var requested = stateRepository.findById(stateId).orElse(null);
         if (!isSilenceArchiveReminder(requested))
             return new Decision(false,null);
+        if (!ClientMessageAutomationPolicy.allowed(appSettingService, requested.getScenario(), messageTime.nowStorage()))
+            return new Decision(false,"Автоархив приостановлен настройками автоответчика.");
         if (!appSettingService.getBooleanFreshFailClosed(AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_AUTO_ARCHIVE_ENABLED,true))
             return new Decision(false,"Автоархив выключен настройкой.");
         ArchiveCheck check = transactionRunner.callInNewTransaction(() -> archiveCheck(stateId));
@@ -838,14 +840,17 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
     private boolean isCurrentSilenceArchiveCycle(ScheduledClientMessageState state, Order order) {
         if (state.getScenario() == ClientMessageScenario.CLIENT_TEXT_REMINDER) {
             return STATUS_NEW.equals(statusTitle(order)) && order.isWaitingForClient()
+                    && listSetting(AppSettingService.CLIENT_MESSAGES_CLIENT_TEXT_REMINDER_STATUSES, DEFAULT_CLIENT_TEXT_REMINDER_STATUSES).contains(statusTitle(order))
                     && isCurrentClientTextWaitingCycle(state, order);
         }
         return state.getScenario() == ClientMessageScenario.REVIEW_CHECK_REMINDER
+                && listSetting(AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_STATUSES, DEFAULT_REVIEW_CHECK_STATUSES).contains(statusTitle(order))
                 && STATUS_IN_CHECK.equals(statusTitle(order)) && isCurrentOrderCycle(state, order);
     }
 
     private ArchiveCheck archiveCheck(long stateId) {
         var state = stateRepository.findById(stateId).orElse(null);
+        if (state == null || !ClientMessageAutomationPolicy.allowed(appSettingService, state.getScenario(), messageTime.nowStorage())) return null;
         if (!silenceThresholdReached(state,messageTime.nowStorage())) return null;
         var source = orderDeliveryContext.read(state.getOrderId()).orElse(null);
         Order order = orderRepository.findById(state.getOrderId()).orElse(null);
@@ -861,6 +866,8 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
         var current = orderDeliveryContext.lock(check.order().orderId()).orElse(null);
         if (!Objects.equals(current,check.order()) || manualContactReservation.blocksScheduledContact(check.order().orderId())) return null;
         var state = stateRepository.findByIdForUpdate(check.stateId()).orElse(null);
+        if (state == null || !ClientMessageAutomationPolicy.allowed(appSettingService, state.getScenario(), messageTime.nowStorage())
+                || !appSettingService.getBooleanFreshFailClosed(AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_AUTO_ARCHIVE_ENABLED,true)) return null;
         if (!silenceThresholdReached(state,messageTime.nowStorage()) || !Objects.equals(state.getTargetKey(),check.targetKey())
                 || state.getSentCount() != check.sentCount() || !Objects.equals(state.getLastSuccessAt(),check.lastSuccess())) return null;
         Order order = orderRepository.findByIdForMutation(current.orderId()).orElseThrow();
@@ -883,7 +890,7 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
         Company company = order.getCompany();
         LocalDateTime offerAt = null;
         String offerStatus;
-        if (!appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_ARCHIVE_REORDER_ENABLED,true)) {
+        if (!appSettingService.getBooleanFreshFailClosed(AppSettingService.CLIENT_MESSAGES_ARCHIVE_REORDER_ENABLED,true)) {
             offerStatus = "Предложение нового заказа пока не поставлено: архивная рассылка выключена.";
         } else if (!archiveCompanyStatus().equals(companyStatusTitle(company)) || archiveCandidateRepository.hasArchiveReorderBlocker(
                 company.getId(),listSetting(AppSettingService.CLIENT_MESSAGES_ARCHIVE_INACTIVE_ORDER_STATUSES,DEFAULT_ARCHIVE_INACTIVE_ORDER_STATUSES),
@@ -2453,7 +2460,7 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
 
     void dispatchScheduledDelivery(PreparedScheduledDelivery prepared, LocalDateTime nowStorage) {
         requireNoBusinessTransaction();
-        if (!liveSendingEnabled()) {
+        if (!liveSendingEnabled() || !ClientMessageAutomationPolicy.allowed(appSettingService, prepared.scenario(), messageTime.nowStorage())) {
             transactionRunner.runInNewTransaction(() -> pausePreparedWithoutDispatch(prepared.stateId(),
                     prepared.orderId(), prepared.token(), prepared.scenario(), prepared.targetKey(),
                     messageTime.databaseTimestamp(messageTime.nowStorage())));
@@ -2657,7 +2664,8 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
     private void recoverArchiveContactWithFollowup(String envelope) {
         PreparedScheduledDelivery prepared=decodeScheduledDelivery(envelope);
         if (prepared.scenario()!=ClientMessageScenario.ARCHIVE_REORDER_OFFER || prepared.orderAction()!=null
-                || prepared.successEffect()!=null || !liveSendingEnabled()) return;
+                || prepared.successEffect()!=null || !liveSendingEnabled()
+                || !ClientMessageAutomationPolicy.allowed(appSettingService,prepared.scenario(),messageTime.nowStorage())) return;
         ArchiveFollowupContext context=transactionRunner.callInNewTransaction(()->archiveFollowupContext(prepared,envelope));
         if (context==null) return;
         Long reference=prepared.orderId()==null ? context.archiveOrderId() : prepared.orderId();
@@ -2668,6 +2676,7 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
                 com.hunt.otziv.client_messages.api.NotificationFollowup.Kind.ARCHIVE_CONTACT,prepared.stateId(),context.version(),
                 prepared.operationId(),context.preparedAt(),context.target(),context.clientId(),text,envelope);
         var outcome=notificationFollowups.recover(request,()->liveSendingEnabled()
+                && ClientMessageAutomationPolicy.allowed(appSettingService,prepared.scenario(),messageTime.nowStorage())
                 && context.equals(transactionRunner.callInNewTransaction(()->archiveFollowupContext(prepared,envelope))));
         if (outcome==null || outcome.delivery()==null) return;
         if (!outcome.delivery().sent()) {
@@ -2851,6 +2860,10 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
     private PreparedScheduledDelivery processState(Long stateId, LocalDateTime nowStorage) {
         ScheduledClientMessageState state = stateRepository.findById(stateId).orElse(null);
         if (state == null || state.getStatus() != ScheduledMessageStateStatus.ACTIVE) {
+            return null;
+        }
+        if (!ClientMessageAutomationPolicy.allowed(appSettingService, state.getScenario(), nowStorage)) {
+            postponeScenarioDisabled(state, nowStorage, "automation_paused", "Сценарий приостановлен настройками автоответчика");
             return null;
         }
         if (state.getScenario() == ClientMessageScenario.BAD_REVIEW_AUTO_BAN
@@ -4066,11 +4079,34 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
         LocalDate irkutskToday = messageTime.nowIrkutsk().toLocalDate();
         LocalDateTime dayStart = messageTime.toStorageTime(irkutskToday.atStartOfDay());
         return attemptRepository.countClientSentSince(ScheduledMessageAttemptStatus.SENT, dayStart)
+                + stateRepository.countArchiveNoticeReservationsSince(dayStart)
                 + stateRepository.countReservedDeliveriesSince(dayStart) < limit;
+    }
+
+    /** Called by the durable archive outbox inside its claim transaction, using the same dispatch budget. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public LocalDateTime archiveNoticeNextSlot(long sourceId, ClientMessageDelivery.Target target) {
+        if (!archiveNoticeDispatchEnabled(sourceId)) return messageTime.nowStorage().plusMinutes(5);
+        stateRepository.lockDispatchBudget();
+        if (!withinDailyLimit(messageTime.nowStorage())) return nextBusinessDayStartStorage(messageTime.nowIrkutsk());
+        String channel = expectedChannel(target);
+        return messageTime.toStorageTime(slotPlanner.afterGap(messageTime.nowIrkutsk(),lastDispatchAtIrkutsk(channel),
+                gapSeconds(channel),businessWindows()));
+    }
+
+    public boolean archiveNoticeDispatchEnabled(long sourceId) {
+        try {
+            var source = stateRepository.findById(sourceId).orElse(null);
+            return source != null && isSilenceArchiveReminder(source) && liveSendingEnabled()
+                && ClientMessageAutomationPolicy.allowed(appSettingService,source.getScenario(),messageTime.nowStorage())
+                && appSettingService.getBooleanFreshFailClosed(AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_AUTO_ARCHIVE_ENABLED,true);
+        } catch (RuntimeException unavailable) { return false; }
     }
 
     private LocalDateTime lastDispatchAtIrkutsk(String channel) {
         LocalDateTime sentAt = lastSentAtIrkutsk(channel);
+        LocalDateTime noticeAt = stateRepository.latestArchiveNoticeReservation().map(messageTime::toIrkutskTime).orElse(null);
+        if (noticeAt != null && (sentAt == null || noticeAt.isAfter(sentAt))) sentAt = noticeAt;
         LocalDateTime reservedAt = stateRepository.latestReservedDeliveryAt(channel)
                 .map(messageTime::toIrkutskTime).orElse(null);
         return sentAt == null ? reservedAt : reservedAt == null || sentAt.isAfter(reservedAt) ? sentAt : reservedAt;

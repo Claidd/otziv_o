@@ -33,6 +33,7 @@ class ReviewArchiveNotificationsMySqlTest {
     ClientMessageDelivery delivery;
     TelegramNotifications telegram;
     OutboundMessagePolicy settings;
+    ScheduledClientMessageService automation;
     final String id="review-archive:30:client";
 
     @BeforeEach void setup() throws Exception {
@@ -44,12 +45,18 @@ class ReviewArchiveNotificationsMySqlTest {
         jdbc.execute("CREATE TABLE common_invoice_orders(id BIGINT PRIMARY KEY)");
         for(var statement:Files.readString(Path.of("src/main/resources/db/migration/V1_10_342__review_silence_archive_notifications.sql")).split(";"))
             if(!statement.isBlank())jdbc.execute(statement);
+        jdbc.execute(Files.readString(Path.of("src/main/resources/db/migration/V1_10_369__archive_notice_dispatch_budget.sql")));
         var props=new CredentialEncryptionProperties();props.setActiveKeyId("test");
         props.setActiveKeyBase64(Base64.getEncoder().encodeToString(new byte[32]));
         delivery=mock(ClientMessageDelivery.class);telegram=mock(TelegramNotifications.class);settings=mock(OutboundMessagePolicy.class);
         when(settings.clientMessagesEnabled()).thenReturn(true);
+        automation=mock(ScheduledClientMessageService.class);
+        when(automation.archiveNoticeNextSlot(anyLong(),any())).thenAnswer(i -> java.time.LocalDateTime.now());
+        when(automation.archiveNoticeDispatchEnabled(anyLong())).thenReturn(true);
+        var provider=mock(org.springframework.beans.factory.ObjectProvider.class);
+        when(provider.getObject()).thenReturn(automation);
         var proxy=new ProxyFactory(new ReviewArchiveNotifications(jdbc,new ObjectMapper(),new CredentialCipher(props),delivery,telegram,
-                new ClientMessageTransactionRunner(manager),settings));
+                new ClientMessageTransactionRunner(manager),settings,provider));
         proxy.setProxyTargetClass(true);proxy.addAdvice(new TransactionInterceptor(manager,new AnnotationTransactionAttributeSource()));
         queue=(ReviewArchiveNotifications)proxy.getProxy();
     }
@@ -57,6 +64,21 @@ class ReviewArchiveNotificationsMySqlTest {
         return new ReviewArchiveNotifications.Envelope(new ClientMessageDelivery.Target(20L,"company",null,null,null),"client","group",text,null);
     }
     void enqueue(){tx.executeWithoutResult(s->queue.enqueue(30,"client",draft("archived")));}
+
+    @Test void blockedDispatchRetainsIntentWithoutSpendingAnAttemptAndResumesOnce() {
+        enqueue();
+        when(automation.archiveNoticeNextSlot(anyLong(),any())).thenReturn(java.time.LocalDateTime.now().plusDays(1));
+        queue.deliver(id);
+        assertThat(state()).isEqualTo("READY");
+        assertThat(jdbc.queryForObject("SELECT attempts FROM review_archive_notifications",Integer.class)).isZero();
+        verifyNoInteractions(delivery);
+        due();when(automation.archiveNoticeNextSlot(anyLong(),any())).thenReturn(java.time.LocalDateTime.now());
+        when(delivery.deliverWithOperationId(any(),anyString(),anyString(),anyString(),isNull(),eq(id))).thenReturn(ClientMessageSendResult.sent("whatsapp"));
+        queue.deliver(id);queue.deliver(id);
+        assertThat(state()).isEqualTo("SENT");
+        assertThat(jdbc.queryForObject("SELECT dispatch_reserved_at IS NOT NULL FROM review_archive_notifications",Boolean.class)).isTrue();
+        verify(delivery,times(1)).deliverWithOperationId(any(),anyString(),anyString(),anyString(),isNull(),eq(id));
+    }
     void due(){jdbc.update("UPDATE review_archive_notifications SET next_attempt_at=DATE_SUB(CURRENT_TIMESTAMP(6),INTERVAL 1 MINUTE)");}
     String state(){return jdbc.queryForObject("SELECT state FROM review_archive_notifications WHERE operation_id=?",String.class,id);}
 

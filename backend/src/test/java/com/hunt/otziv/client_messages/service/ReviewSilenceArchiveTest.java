@@ -30,6 +30,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 class ReviewSilenceArchiveTest {
     @Mock ScheduledClientMessageStateRepository stateRepository;
+    @Mock ScheduledClientMessageAttemptRepository attemptRepository;
     @Mock OrderRepository orderRepository;
     @Mock OrderDeliveryControlContext orderDeliveryContext;
     @Mock com.hunt.otziv.client_messages.api.OrderManualContactReservation manualContactReservation;
@@ -112,6 +113,32 @@ class ReviewSilenceArchiveTest {
         });
     }
 
+    @ParameterizedTest @ValueSource(strings={"worker","pause","scenario","archive","changed_during_history"})
+    void autoresponderSettingsBlockArchiveAndResumeWithoutLosingTheCycle(String condition) throws Exception {
+        waitForClientTexts();
+        String key=switch(condition) {
+            case "worker" -> AppSettingService.CLIENT_MESSAGES_WORKER_ENABLED;
+            case "archive" -> AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_AUTO_ARCHIVE_ENABLED;
+            default -> AppSettingService.CLIENT_MESSAGES_CLIENT_TEXT_REMINDER_ENABLED;
+        };
+        if (condition.equals("pause")) when(appSettingService.getStringFresh(AppSettingService.CLIENT_MESSAGES_PAUSED_UNTIL,null)).thenReturn(now.plusHours(1).toString());
+        else if (condition.equals("changed_during_history")) when(reviewArchiveHistory.inspect(any(),any())).thenAnswer(i -> {
+            when(appSettingService.getBooleanFreshFailClosed(key,true)).thenReturn(false);
+            return new ReviewArchiveHistory.Check(ReviewArchiveHistory.Outcome.CLEAR,"checked",i.getArgument(1),now,0,"fixture");
+        });
+        else when(appSettingService.getBooleanFreshFailClosed(key,true)).thenReturn(false);
+        assertThat(service.archiveAfterReminders(30).archived()).isFalse();
+        assertThat(state.getSentCount()).isEqualTo(7);
+        assertThat(order.isWaitingForClient()).isTrue();
+        verifyNoInteractions(billing,archiveNotifications);
+        when(appSettingService.getBooleanFreshFailClosed(key,true)).thenReturn(true);
+        when(appSettingService.getStringFresh(AppSettingService.CLIENT_MESSAGES_PAUSED_UNTIL,null)).thenReturn(null);
+        doReturn(new ReviewArchiveHistory.Check(ReviewArchiveHistory.Outcome.CLEAR,"checked",state.getLastSuccessAt(),now,0,"fixture"))
+                .when(reviewArchiveHistory).inspect(any(),any());
+        assertThat(service.archiveAfterReminders(30).archived()).isTrue();
+        assertThat(state.getSentCount()).isEqualTo(7);
+    }
+
     @Test void clientTextSilenceArchivesNewOrderAndQueuesOneOfferAfterTheLastOrder() throws Exception {
         waitForClientTexts();
         assertThat(service.archiveAfterReminders(30).archived()).isTrue();
@@ -126,6 +153,21 @@ class ReviewSilenceArchiveTest {
         verify(archiveNotifications).enqueue(eq(30L),eq("client"),argThat(e -> e.text().contains("Тексты или пожелания")));
         assertThat(service.archiveAfterReminders(30).archived()).isFalse();
         verify(stateRepository,times(1)).findByScenarioAndTargetKeyForUpdate(eq(ClientMessageScenario.ARCHIVE_REORDER_OFFER),anyString());
+    }
+
+    @ParameterizedTest @ValueSource(strings={"window","limit","gap","paused"})
+    void archiveNoticesUseTheSharedAutoresponderBudget(String condition) throws Exception {
+        waitForClientTexts();
+        LocalDateTime local=LocalDateTime.of(2026,11,3,condition.equals("window")?22:11,0);
+        LocalDateTime storage=messageTime.toStorageTime(local);
+        doReturn(local).when(messageTime).nowIrkutsk();
+        doReturn(storage).when(messageTime).nowStorage();
+        if(condition.equals("limit")) when(stateRepository.countArchiveNoticeReservationsSince(any())).thenReturn(140L);
+        if(condition.equals("gap")) when(stateRepository.latestArchiveNoticeReservation()).thenReturn(Optional.of(storage));
+        if(condition.equals("paused")) when(appSettingService.getBooleanFreshFailClosed(AppSettingService.CLIENT_MESSAGES_WORKER_ENABLED,true)).thenReturn(false);
+        var next=service.archiveNoticeNextSlot(30,new com.hunt.otziv.client_messages.api.ClientMessageDelivery.Target(20L,"fixture",null,null,null));
+        assertThat(next).isAfter(storage.plusSeconds(1));
+        verifyNoInteractions(archiveNotifications);
     }
 
     @Test void clientTextSilenceWaitsTheClientTextIntervalAfterTheSeventhReminder() throws Exception {

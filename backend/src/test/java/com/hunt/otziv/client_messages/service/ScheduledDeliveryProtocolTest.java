@@ -62,7 +62,7 @@ class ScheduledDeliveryProtocolTest {
         var instance = (ScheduledClientMessageService) constructor.newInstance(Arrays.stream(constructor.getParameterTypes())
                 .map(type -> type == ClientMessageTime.class ? new ClientMessageTime() : mock(type)).toArray());
         when(dependency(instance, "appSettingService", AppSettingService.class)
-                .getBooleanFreshFailClosed(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(true);
+                .getBooleanFreshFailClosed(anyString(), anyBoolean())).thenAnswer(i -> i.getArgument(1));
         installRecovery(instance);
         return instance;
     }
@@ -81,6 +81,17 @@ class ScheduledDeliveryProtocolTest {
     private ScheduledClientMessageService.PreparedScheduledDelivery prepare(String message, String copy) {
         return ReflectionTestUtils.invokeMethod(service, "persistScheduledDelivery", state, company, manager,
                 message, copy, 14, null, null, null, null, NOW);
+    }
+
+    @Test void disablingArchiveOffersAfterPreparationPreventsDispatchAndPreservesTheEnvelope() {
+        var prepared=prepare("queued offer",null);
+        String envelope=state.getDeliveryEnvelope();
+        when(dependency(service,"appSettingService",AppSettingService.class)
+                .getBooleanFreshFailClosed(AppSettingService.CLIENT_MESSAGES_ARCHIVE_REORDER_ENABLED,true)).thenReturn(false);
+        service.dispatchScheduledDelivery(prepared,NOW);
+        verifyNoInteractions(sender);
+        assertThat(state.getSentCount()).isZero();
+        assertThat(state.getDeliveryEnvelope()).isEqualTo(envelope);
     }
 
     @Test void automatedDeliveryRepairsTheMissingRouteOutsideTransactionsAndFinalizesTheSameOccurrence() {

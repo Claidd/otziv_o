@@ -157,6 +157,7 @@ class ScheduledClientMessageServiceTest {
 
     @BeforeEach
     void setUpProviders() {
+        org.mockito.Mockito.lenient().when(appSettingService.getBooleanFreshFailClosed(anyString(),org.mockito.ArgumentMatchers.anyBoolean())).thenAnswer(i -> i.getArgument(1));
         org.mockito.Mockito.lenient().when(appSettingService.getBooleanFreshFailClosed(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true))
                 .thenAnswer(invocation -> appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true));
         org.mockito.Mockito.lenient().when(appSettingService.getStringFresh(anyString(), nullable(String.class)))
