@@ -186,21 +186,21 @@
     },
     {
       "component": "nginx",
-      "reference": "ghcr.io/claidd/otziv-security@sha256:b30ef32504546374c995f4c675c1a8f16f2feff0dc560c1f3df4725bdb0f4864",
-      "commit": "632ea46485e75174dbdac0d3b88e100231705212",
-      "run": "40278070720",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:0df04ca6f4b3b05ca72a4fc44ee7ee992a3152caa32dadeb0fd12b4d5f9d39de",
+      "commit": "7e1b5daad1f71a17e73e34f5adda43d32aa461ec",
+      "run": "41576900844",
       "attempt": "1",
       "manifest": {
-        "path": "infrastructure/runtime-security/reviewed-images-c41-nginx.json",
-        "sha256": "1571925f6efb9e234f73057ee02515a684b327bba99e8637e71a1656f0dd57ae"
+        "path": "infrastructure/runtime-security/reviewed-images-c47-nginx.json",
+        "sha256": "b381c42dbab1a7f356f89a18ff2a6c671bfb842ab3f46e9280dd33ca49c35964"
       },
       "publication": {
-        "path": "infrastructure/runtime-security/proofs/c41-nginx/publication/publication.json",
-        "sha256": "51039e3c5196318b953b864016a74ad969130601adbe33aed290234abbbf8ec6"
+        "path": "infrastructure/runtime-security/proofs/c47-nginx/publication/publication.json",
+        "sha256": "d649de8e8665f24aae5c06c692194deef3c944572cd917a5f97816bdb0d7ce18"
       },
       "anonymous": {
-        "path": "infrastructure/runtime-security/proofs/c41-nginx/anonymous/anonymous-download.json",
-        "sha256": "a7a4d84ab30d2b41a839b93c2f03a6fd0a092daf336ea07bb2d4de43ad259dbf"
+        "path": "infrastructure/runtime-security/proofs/c47-nginx/anonymous/anonymous-download.json",
+        "sha256": "0c484343af64c4304e51e63490d06bac147dada54a0f27bc958622283659cbe1"
       }
     },
     {
@@ -224,21 +224,21 @@
     },
     {
       "component": "phpmyadmin",
-      "reference": "ghcr.io/claidd/otziv-security@sha256:919ceaa723a3490d75ce1f264b2a852127cb2e7e6aa64c04aa7199a1761d5c47",
-      "commit": "632ea46485e75174dbdac0d3b88e100231705212",
-      "run": "40278078637",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:a28faa872c401b182e11021fc1cb2c20d10c4ade88dabf8d6be49c7a0660004b",
+      "commit": "7e1b5daad1f71a17e73e34f5adda43d32aa461ec",
+      "run": "41576904719",
       "attempt": "1",
       "manifest": {
-        "path": "infrastructure/runtime-security/reviewed-images-c41-phpmyadmin.json",
-        "sha256": "7a41f26e2b3e01b0718efebebe76bb73de3869da761c34e87a405f8b85ccc76b"
+        "path": "infrastructure/runtime-security/reviewed-images-c47-phpmyadmin.json",
+        "sha256": "367edf98a0a590690b10f93a82fdd7f25dde271095cb36624c0a8a009ea18992"
       },
       "publication": {
-        "path": "infrastructure/runtime-security/proofs/c41-phpmyadmin/publication/publication.json",
-        "sha256": "a1c0c1069d6350cd01d5198a9a291eb919d52d1b489b3f6780ac898faedcbe9e"
+        "path": "infrastructure/runtime-security/proofs/c47-phpmyadmin/publication/publication.json",
+        "sha256": "1819bd34a1824d5ec63199b2a4fe7a72bac795295ee2a67666769f6c398036b6"
       },
       "anonymous": {
-        "path": "infrastructure/runtime-security/proofs/c41-phpmyadmin/anonymous/anonymous-download.json",
-        "sha256": "1e365b6b49e461fa172bc0dcda5ffb32e7aa980bb60e5e86d191958946ace3bb"
+        "path": "infrastructure/runtime-security/proofs/c47-phpmyadmin/anonymous/anonymous-download.json",
+        "sha256": "27b1f8023aa2cd572123937e28796d985ef669d3fc324424e7339576a5866451"
       }
     },
     {

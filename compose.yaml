@@ -57,7 +57,7 @@ services:
       internal_net:
 
   nginx:
-    image: ghcr.io/claidd/otziv-security@sha256:b30ef32504546374c995f4c675c1a8f16f2feff0dc560c1f3df4725bdb0f4864
+    image: ghcr.io/claidd/otziv-security@sha256:0df04ca6f4b3b05ca72a4fc44ee7ee992a3152caa32dadeb0fd12b4d5f9d39de
     ports:
       - '127.0.0.1:80:80'
       - '127.0.0.1:443:443'
@@ -233,7 +233,7 @@ services:
       internal_net:
 
   phpmyadmin:
-    image: ghcr.io/claidd/otziv-security@sha256:919ceaa723a3490d75ce1f264b2a852127cb2e7e6aa64c04aa7199a1761d5c47
+    image: ghcr.io/claidd/otziv-security@sha256:a28faa872c401b182e11021fc1cb2c20d10c4ade88dabf8d6be49c7a0660004b
     profiles: ["db-admin"]
     ports:
       - "127.0.0.1:6571:80"

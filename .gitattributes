@@ -162,3 +162,7 @@ infrastructure/runtime-security/brotli-c45-rehearsal.py -text
 
 infrastructure/runtime-security/c45-parent-keycloak.json text eol=lf
 infrastructure/runtime-security/proofs/c45-keycloak/** -text
+
+# Preserve C47 package-only recipes and publication manifest hashes.
+infrastructure/runtime-security/builds/c47-*/** text eol=lf
+infrastructure/runtime-security/reviewed-images-c47-*.json text eol=lf
