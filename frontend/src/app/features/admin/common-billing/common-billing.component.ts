@@ -6,7 +6,7 @@ import { DatePipe } from '@angular/common';
 import { Component, ElementRef, OnDestroy, ViewChild, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { Subscription, firstValueFrom } from 'rxjs';
+import { Subscription, firstValueFrom, switchMap } from 'rxjs';
 import {
   CommonBillingAccountResponse,
   CommonBillingApi,
@@ -532,7 +532,9 @@ export class CommonBillingComponent implements OnDestroy {
     paperInvoiceRequiresDeliveryConfirmation(this.currentInvoice())
   );
   readonly canMarkPaid = computed(() => {
-    return canMarkCommonInvoicePaid(this.currentInvoice());
+    const invoice = this.currentInvoice();
+    return canMarkCommonInvoicePaid(invoice) && (invoice?.invoicePaymentMode !== 'OWNER_PAPER_INVOICE'
+      || this.paperWorkflow().contextAvailable && !this.paperWorkflow().bankManaged);
   });
   readonly canConfirmContractorSource = computed(() => {
     this.auth.tokenParsed();
@@ -915,6 +917,14 @@ export class CommonBillingComponent implements OnDestroy {
     this.invoiceAction(invoice.id, 'send-invoice', () => this.commonBillingApi.sendInvoice(invoice.id), 'Общий счет отправлен');
   }
 
+  reconcilePaperInvoice(): void {
+    const invoice=this.currentInvoice();
+    if(!invoice || this.mutating() || invoice.status==='PAID' || !this.paperWorkflow().bankManaged) return;
+    this.invoiceAction(invoice.id,'paper-invoice-reconcile',
+      ()=>this.commonBillingApi.reconcilePaperInvoice(invoice.id).pipe(switchMap(()=>this.commonBillingApi.invoice(invoice.id))),
+      'Сверка с банком запрошена; состояние счёта обновлено');
+  }
+
   markInvoicePaid(): void {
     const invoice = this.currentInvoice();
     if (!invoice || this.mutating() || !this.canMarkPaid()) {
@@ -984,7 +994,11 @@ export class CommonBillingComponent implements OnDestroy {
       paperEnabled ? 'Автоматическое распределение восстановлено' : 'Режим бумажного счёта включён'
     );
   }
-  refreshPaperInvoiceList():void {this.loadSelectedInvoice();}
+  refreshPaperInvoiceList(): void {
+    const invoiceId = this.managerInvoiceDetailMode ? this.requestedInvoiceId() : null;
+    if (invoiceId) this.loadInvoiceByRequestedId(invoiceId);
+    else this.loadSelectedInvoice();
+  }
 
   changeCommonInvoicePaymentRoute(targetOverride?: CommonInvoicePaymentRouteChangeTarget): void {
     const invoice = this.currentInvoice();
@@ -2263,7 +2277,7 @@ export class CommonBillingComponent implements OnDestroy {
         this.mutating.set('');
         const deliveryWarning = key === 'send-invoice'
           ? (deliveryOperationMessage(details.delivery) ?? commonInvoiceDeliveryWarning(details.summary.lastError)) : null;
-        if (details.delivery?.status === 'SENT') {
+        if (key === 'send-invoice' && details.delivery?.status === 'SENT') {
           this.toastService.success('Отправка подтверждена');
         } else if (deliveryWarning) {
           this.toastService.warning(details.delivery ? 'Состояние отправки' : 'Отправка общего счета не подтверждена', deliveryWarning);

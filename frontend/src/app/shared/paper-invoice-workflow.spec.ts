@@ -12,6 +12,18 @@ const state = (documents:PaperDocument[], extra:Partial<Context>={}) =>
   ({invoiceId:322,context:{enabled:true,documents,positions,...extra} as Context});
 
 describe('common paper invoice workflow',()=>{
+  it('keeps a recorded delivery visible while document details load, without claiming complete coverage',()=>{
+    const result=paperInvoiceWorkflow({...invoice,paperInvoiceIssuedAt:'2026-11-03T08:03:43'},null);
+    expect(result.contextAvailable).toBe(false);
+    expect(result.preparationText).toContain('Отправка счёта отмечена');
+    expect(result.deliveryText).not.toContain('после формирования');
+    expect(result.delivered).toBe(false);
+  });
+  it('uses bank reconciliation for bank documents and keeps manual legacy delivery separate',()=>{
+    expect(paperInvoiceWorkflow(invoice,state([doc('WAITING_PAYMENT')])).bankManaged).toBe(true);
+    expect(paperInvoiceWorkflow(invoice,state([doc('CANCELLED')])).bankManaged).toBe(false);
+    expect(paperInvoiceWorkflow(invoice,state([],{enabled:false})).bankManaged).toBe(false);
+  });
   it('does not treat the readiness notice as document creation or delivery',()=>{
     const result=paperInvoiceWorkflow(invoice,state([]));
     expect(result.prepared).toBe(false);

@@ -265,7 +265,7 @@
               <p>Клиент уведомлён о готовности работ. Это уведомление не подтверждает создание или доставку счёта и акта.</p>
             }
             <ol>
-              <li [class.is-done]="paperWorkflow().prepared" [class.is-current]="!paperWorkflow().prepared">
+              <li [class.is-done]="paperWorkflow().prepared" [class.is-current]="paperWorkflow().contextAvailable && !paperWorkflow().prepared">
                 <span class="paper-invoice-workflow-marker" aria-hidden="true">
                   {{ paperWorkflow().prepared ? '✓' : '1' }}
                 </span>
@@ -484,7 +484,12 @@
                 Дождитесь подтверждённой доставки счёта и акта. Поступление оплаты проверяется автоматически.
               </p>
             }
-            @if (invoice?.contractorPaymentRoute) {
+            @if (invoice?.invoicePaymentMode === 'OWNER_PAPER_INVOICE' && paperWorkflow().bankManaged) {
+              <button type="button" class="success" (click)="reconcilePaperInvoice()" [disabled]="!!mutating() || invoice?.status === 'PAID'">
+                <span class="material-icons-sharp" aria-hidden="true">fact_check</span>
+                Проверить оплату в банке
+              </button>
+            } @else if (invoice?.contractorPaymentRoute) {
               <button type="button" class="success" (click)="confirmContractorPaymentSource()" [disabled]="!!mutating() || !canConfirmContractorSource()">
                 <span class="material-icons-sharp" aria-hidden="true">fact_check</span>
                 Сверить поступление

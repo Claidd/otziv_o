@@ -82,6 +82,19 @@ describe('invoice composition confirmation', () => {
 });
 
 describe('paper invoice issue access', () => {
+  it('checks the bank and reloads the invoice without sending a manual payment confirmation',()=>{
+    const reconcilePaperInvoice=vi.fn(()=>of(undefined));
+    const invoice=vi.fn(()=>of({summary:{id:322,status:'INVOICED'}}));
+    const markPaperInvoicePaid=vi.fn();
+    const context={currentInvoice:()=>({id:322,status:'INVOICED'}),mutating:()=>'',paperWorkflow:()=>({bankManaged:true}),
+      commonBillingApi:{reconcilePaperInvoice,invoice,markPaperInvoicePaid},
+      invoiceAction:(_id:number,_key:string,operation:()=>ReturnType<typeof invoice>)=>operation().subscribe()
+    } as unknown as CommonBillingComponent;
+    CommonBillingComponent.prototype.reconcilePaperInvoice.call(context);
+    expect(reconcilePaperInvoice).toHaveBeenCalledExactlyOnceWith(322);
+    expect(invoice).toHaveBeenCalledExactlyOnceWith(322);
+    expect(markPaperInvoicePaid).not.toHaveBeenCalled();
+  });
   it('lets a manager record document delivery without granting payment-mode administration', () => {
     expect(PAPER_INVOICE_ISSUED_ROLES).toEqual(['ADMIN', 'OWNER', 'MANAGER']);
   });
