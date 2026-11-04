@@ -44,6 +44,7 @@ class PaymentInvoiceRetrySchedulerTest {
     private AppSettingService appSettingService;
     @Mock
     private ClientMessageSlotPlanner slotPlanner;
+    @Mock private com.hunt.otziv.payments.api.SpecialistPaymentReviewGate paymentReviewGate;
 
     @Test
     void afterCommitBadReviewAutoBanCancellationAlwaysOpensNewTransaction() throws Exception {
@@ -60,7 +61,7 @@ class PaymentInvoiceRetrySchedulerTest {
         PaymentInvoiceRetryScheduler scheduler = new PaymentInvoiceRetryScheduler(
                 stateRepository,
                 appSettingService,
-                slotPlanner
+                slotPlanner, paymentReviewGate
         );
         ScheduledClientMessageState activeAutoBan = state(
                 ClientMessageScenario.BAD_REVIEW_AUTO_BAN,
@@ -86,7 +87,7 @@ class PaymentInvoiceRetrySchedulerTest {
         PaymentInvoiceRetryScheduler scheduler = new PaymentInvoiceRetryScheduler(
                 stateRepository,
                 appSettingService,
-                slotPlanner
+                slotPlanner, paymentReviewGate
         );
         ScheduledClientMessageState activeReminder = state(
                 ClientMessageScenario.PAYMENT_REMINDER,
@@ -311,7 +312,7 @@ class PaymentInvoiceRetrySchedulerTest {
         PaymentInvoiceRetryScheduler scheduler = new PaymentInvoiceRetryScheduler(
                 stateRepository,
                 appSettingService,
-                slotPlanner
+                slotPlanner, paymentReviewGate
         );
         Company company = new Company();
         company.setId(70L);
@@ -519,7 +520,16 @@ class PaymentInvoiceRetrySchedulerTest {
     }
 
     private PaymentInvoiceRetryScheduler scheduler() {
-        return new PaymentInvoiceRetryScheduler(stateRepository, appSettingService, slotPlanner);
+        return new PaymentInvoiceRetryScheduler(stateRepository, appSettingService, slotPlanner, paymentReviewGate);
+    }
+
+    @Test void reportedReceiptPreventsEveryDirectInvoiceOrSanctionRearm() {
+        var order=order();when(paymentReviewGate.hasPendingReview(order.getId())).thenReturn(true);
+        when(slotPlanner.nextAllowedAt(any(LocalDateTime.class),any())).thenAnswer(i->i.getArgument(0));
+        var scheduler=scheduler();
+        scheduler.scheduleRetry(order);scheduler.scheduleInitialInvoice(order);
+        scheduler.scheduleBadReviewInvoiceRetry(order);scheduler.scheduleBadReviewAutoBan(order);
+        org.mockito.Mockito.verifyNoInteractions(stateRepository);
     }
 
     private Order order() {

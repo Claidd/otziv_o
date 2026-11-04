@@ -33,6 +33,7 @@ class ClientMessageSafetySchedulingTest {
     private AppSettingService appSettingService;
     @Mock
     private ClientMessageSlotPlanner slotPlanner;
+    @Mock private com.hunt.otziv.payments.api.SpecialistPaymentReviewGate paymentReviewGate;
 
     @Test
     void paymentSchedulerDoesNotRearmUncertainState() {
@@ -51,7 +52,7 @@ class ClientMessageSafetySchedulingTest {
                 state.getTargetKey()
         )).thenReturn(Optional.of(state));
 
-        new PaymentInvoiceRetryScheduler(stateRepository, appSettingService, slotPlanner).scheduleRetry(order);
+        new PaymentInvoiceRetryScheduler(stateRepository, appSettingService, slotPlanner, paymentReviewGate).scheduleRetry(order);
 
         assertNull(state.getNextAttemptAt());
         assertEquals("state_transaction_outcome_uncertain", state.getLastErrorCode());

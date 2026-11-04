@@ -114,7 +114,7 @@ class PublicationClientUpdatesMySqlIntegrationTest {
         var stateRepository = invoiceRepository();
         var slots = mock(ClientMessageSlotPlanner.class);
         when(slots.nextAllowedAt(any(LocalDateTime.class),any())).thenAnswer(call -> call.getArgument(0));
-        var retry = proxy(new PaymentInvoiceRetryScheduler(stateRepository,settings,slots));
+        var retry = proxy(new PaymentInvoiceRetryScheduler(stateRepository,settings,slots,mock(com.hunt.otziv.payments.api.SpecialistPaymentReviewGate.class)));
         var statuses = mock(OrderStatusService.class);
         when(statuses.getOrderStatusByTitle(anyString())).thenAnswer(call -> status(call.getArgument(0)));
         recovery = mock(com.hunt.otziv.review_recovery.service.ReviewRecoveryGateService.class);

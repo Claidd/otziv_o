@@ -80,6 +80,12 @@ public class SpecialistManualPaymentReview {
     @Column(name = "credited_at")
     private LocalDateTime creditedAt;
 
+    @Column(name = "credit_attempt_count", nullable = false)
+    private int creditAttemptCount;
+
+    @Column(name = "credit_next_attempt_at")
+    private LocalDateTime creditNextAttemptAt;
+
     @Column(name = "settled_at")
     private LocalDateTime settledAt;
 

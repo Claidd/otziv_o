@@ -123,6 +123,7 @@ public class SpecialistManualPaymentReviewSettlementService {
                     "Запрос нельзя подтвердить в текущем состоянии");
         }
         review.setStatus(SpecialistManualPaymentReviewStatus.ADMIN_SETTLING);
+        review.setCreditNextAttemptAt(null);
         review.setLastAttemptAt(LocalDateTime.now());
         review.setAttemptCount(review.getAttemptCount() + 1);
         review.setResolutionKind("ADMIN_VERIFIED_RECEIPT");
@@ -142,18 +143,34 @@ public class SpecialistManualPaymentReviewSettlementService {
                     || LocalDateTime.now().isBefore(review.getDeadlineAt()) || review.getDisputedAt() != null
                     || review.getStatus() == SpecialistManualPaymentReviewStatus.DISPUTED
                     || review.getStatus() == SpecialistManualPaymentReviewStatus.ADMIN_SETTLING
-                    || review.getStatus() == SpecialistManualPaymentReviewStatus.CONFIRMED
                     || review.getStatus() == SpecialistManualPaymentReviewStatus.SUPERSEDED) return null;
+            if (review.getStatus() == SpecialistManualPaymentReviewStatus.CONFIRMED) {
+                if (review.getSettledAt() != null && review.getResolvedAt() != null) {
+                    resolveFinalizedIssues(reviewId);
+                    if (review.getLastError() != null) {
+                        review.setLastError(null);
+                        reviews.save(review);
+                    }
+                }
+                return null;
+            }
             review.setStatus(SpecialistManualPaymentReviewStatus.CONFIRMED);
             review.setSettledAt(LocalDateTime.now());
             review.setResolutionKind("NO_OBJECTION_24H");
             review.setResolvedAt(LocalDateTime.now());
             review.setResolvedBy("system");
             review.setResolutionNote("За 24 часа от отметки менеджера спор не зарегистрирован; банковская проверка не выполнялась");
+            review.setLastError(null);
             reviews.save(review);
-            issues.resolveOrderIssueInCurrentTransaction(SpecialistManualPaymentReviewService.SETTLEMENT_ISSUE, reviewId);
+            resolveFinalizedIssues(reviewId);
             return null;
         });
+    }
+
+    private void resolveFinalizedIssues(Long reviewId) {
+        issues.resolveOrderIssueInCurrentTransaction(SpecialistManualPaymentReviewService.DELIVERY_ISSUE, reviewId);
+        issues.resolveOrderIssueInCurrentTransaction(SpecialistManualPaymentReviewService.DISPUTE_ISSUE, reviewId);
+        issues.resolveOrderIssueInCurrentTransaction(SpecialistManualPaymentReviewService.SETTLEMENT_ISSUE, reviewId);
     }
 
     /** Used by new submissions and narrowly eligible legacy manager reports, never by bank callbacks. */
@@ -180,8 +197,7 @@ public class SpecialistManualPaymentReviewSettlementService {
             // A failure after commit must not turn a proven receipt into an unpaid retry.
             if (transactions.required(() -> finishImmediate(reviewId))) return;
             if (reviewReconciliation.supersedeOnConfirmedBankPayment(reviewId)) return;
-            recordFailure(reviewId, claim.orderId(), failure);
-            throw failure;
+            if (!recordFailure(reviewId, claim.orderId(), failure)) throw failure;
         } finally {
             SecurityContextHolder.setContext(previous);
         }
@@ -194,6 +210,8 @@ public class SpecialistManualPaymentReviewSettlementService {
             finishImmediate(reviewId);
             return null;
         }
+        if (review.getCreditNextAttemptAt() != null
+                && LocalDateTime.now().isBefore(review.getCreditNextAttemptAt())) return null;
         boolean notificationOnly = review.getStatus() == SpecialistManualPaymentReviewStatus.NEEDS_ATTENTION
                 && review.getLastError() != null
                 && (review.getLastError().startsWith("Уведомление")
@@ -219,6 +237,9 @@ public class SpecialistManualPaymentReviewSettlementService {
         }
         review.setStatus(SpecialistManualPaymentReviewStatus.SETTLING);
         review.setCreditClaimedAt(LocalDateTime.now());
+        review.setCreditNextAttemptAt(null);
+        review.setCreditAttemptCount(review.getCreditAttemptCount() + 1);
+        if (!notificationOnly) review.setLastError(null);
         review.setAttemptCount(review.getAttemptCount() + 1);
         reviews.saveAndFlush(review);
         return new Claim(review.getOrderId(), review.getPaymentLinkId(), review.getAmountKopecks(),
@@ -229,6 +250,7 @@ public class SpecialistManualPaymentReviewSettlementService {
     private boolean finishImmediate(Long reviewId) {
         SpecialistManualPaymentReview review = reviews.lockById(reviewId).orElse(null);
         if (review == null || review.getCreditedAt() == null) return false;
+        review.setCreditNextAttemptAt(null);
         if (review.getStatus() == SpecialistManualPaymentReviewStatus.SETTLING) {
             review.setStatus(review.getNotifiedAt() == null
                     ? SpecialistManualPaymentReviewStatus.PENDING_DELIVERY : SpecialistManualPaymentReviewStatus.WAITING);
@@ -238,37 +260,60 @@ public class SpecialistManualPaymentReviewSettlementService {
             }
             reviews.save(review);
         }
+        issues.resolveOrderIssueInCurrentTransaction(SpecialistManualPaymentReviewService.SETTLEMENT_ISSUE, reviewId);
         return true;
     }
 
-    private void recordFailure(Long reviewId, Long orderId, RuntimeException failure) {
+    private boolean recordFailure(Long reviewId, Long orderId, RuntimeException failure) {
         try {
-            transactions.required(() -> {
+            return transactions.required(() -> {
                 SpecialistManualPaymentReview review = reviews.lockById(reviewId).orElse(null);
                 if (review == null || review.getStatus() != SpecialistManualPaymentReviewStatus.SETTLING) {
-                    return null;
+                    return false;
                 }
                 String reason = failure instanceof ResponseStatusException status
                         ? status.getReason() : failure.getMessage();
                 review.setLastError(limit(reason == null ? failure.getClass().getSimpleName() : reason, 512));
-                boolean retryable = failure instanceof ResponseStatusException status
-                        && status.getStatusCode().is5xxServerError();
-                if (retryable && review.getAttemptCount() < 3) {
+                boolean retryable = isTransientCreditFailure(failure);
+                if (retryable) {
                     review.setStatus(SpecialistManualPaymentReviewStatus.WAITING);
+                    long delaySeconds = Math.min(900L, 30L << Math.min(5, Math.max(0, review.getCreditAttemptCount() - 1)));
+                    review.setCreditNextAttemptAt(LocalDateTime.now().plusSeconds(delaySeconds));
+                    if (review.getCreditAttemptCount() >= 4) {
+                        issues.notifyOrderIssueAfterCommit(orderId,
+                                SpecialistManualPaymentReviewService.SETTLEMENT_ISSUE, reviewId,
+                                "Зачисление оплаты задерживается: заказ №" + orderId,
+                                "Отметка сохранена. Повторы продолжаются автоматически; следующий не ранее "
+                                        + review.getCreditNextAttemptAt() + ". Причина: " + review.getLastError());
+                    }
                 } else {
                     review.setStatus(SpecialistManualPaymentReviewStatus.NEEDS_ATTENTION);
+                    review.setCreditNextAttemptAt(null);
                     issues.notifyOrderIssueAfterCommit(orderId,
                             SpecialistManualPaymentReviewService.SETTLEMENT_ISSUE, reviewId,
                             "Оплата специалисту требует сверки: заказ №" + orderId,
                             "Автоматическое зачисление остановлено. " + review.getLastError());
                 }
                 reviews.save(review);
-                return null;
+                return retryable;
             });
         } catch (RuntimeException recordingFailure) {
             log.error("Cannot record specialist payment review failure reviewId={}", reviewId,
                     recordingFailure);
+            return false;
         }
+    }
+
+    private boolean isTransientCreditFailure(RuntimeException failure) {
+        Throwable cause = failure;
+        for (int depth = 0; cause != null && depth < 16; depth++, cause = cause.getCause()) {
+            if (cause instanceof org.springframework.dao.TransientDataAccessException
+                    || cause instanceof jakarta.persistence.PessimisticLockException
+                    || cause instanceof jakarta.persistence.OptimisticLockException) return true;
+            if (cause instanceof ResponseStatusException status && status.getStatusCode().is5xxServerError()) return true;
+            if (cause == cause.getCause()) break;
+        }
+        return false;
     }
 
     private String limit(String value, int maxLength) {

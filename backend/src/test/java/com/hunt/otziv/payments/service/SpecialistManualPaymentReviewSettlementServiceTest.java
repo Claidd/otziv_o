@@ -60,6 +60,19 @@ class SpecialistManualPaymentReviewSettlementServiceTest {
         assertNull(r.getCreditedAt()); assertNull(r.getSettledAt()); verifyNoInteractions(manualPayments);
     }
 
+    @Test void finalizedReceiptClosesObsoleteNotificationTasksWithoutChangingMoneyOrOriginalEvidence() {
+        var r=report();r.setCreditedAt(LocalDateTime.now().minusDays(2));r.setDeadlineAt(LocalDateTime.now().minusDays(1));
+        r.setSettledAt(LocalDateTime.now().minusHours(2));r.setResolvedAt(r.getSettledAt());
+        r.setStatus(SpecialistManualPaymentReviewStatus.CONFIRMED);r.setLastError("Уведомление задержалось");stub(r);
+        var credited=r.getCreditedAt();var settled=r.getSettledAt();
+        service().settle(101L);
+        assertEquals(credited,r.getCreditedAt());assertEquals(settled,r.getSettledAt());
+        assertNull(r.getLastError());
+        verify(issues).resolveOrderIssueInCurrentTransaction(SpecialistManualPaymentReviewService.DELIVERY_ISSUE,101L);
+        verify(issues).resolveOrderIssueInCurrentTransaction(SpecialistManualPaymentReviewService.SETTLEMENT_ISSUE,101L);
+        verifyNoInteractions(manualPayments,users);
+    }
+
     @Test void disputeBeforeDeadlinePermanentlyStopsAutomaticFinalisationWithoutReversingReceipt() {
         var r=report(); var credited=LocalDateTime.now().minusDays(1); r.setCreditedAt(credited);
         r.setDeadlineAt(LocalDateTime.now().minusSeconds(1)); r.setDisputedAt(LocalDateTime.now().minusMinutes(5));
@@ -92,6 +105,54 @@ class SpecialistManualPaymentReviewSettlementServiceTest {
     @Test void bankReceiptWinsWithoutManualRecredit() {
         when(reconciliation.supersedeOnConfirmedBankPayment(101L)).thenReturn(true);
         service().creditNow(101L);verifyNoInteractions(manualPayments,reviews,users);
+    }
+
+    @Test void allocationLeaseConflictRetriesSameReceiptAfterBackoffWithoutAnOperatorOrNewInvoice() {
+        var r = report(); stub(r); activeManager();
+        var deadline = r.getDeadlineAt();
+        when(manualPayments.confirmRecipientReviewPayment(any(),any(),any(),any(),any(),any(),any(),any(),any(),any(),any()))
+                .thenThrow(new ResponseStatusException(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE, "Сверка распределения занята"))
+                .thenAnswer(call -> { r.setCreditedAt(LocalDateTime.now()); return null; });
+        assertDoesNotThrow(() -> service().creditNow(101L));
+        assertNull(r.getCreditedAt()); assertEquals(SpecialistManualPaymentReviewStatus.WAITING, r.getStatus());
+        assertEquals(1, r.getCreditAttemptCount());
+        assertTrue(r.getCreditNextAttemptAt().isAfter(LocalDateTime.now()));
+        assertTrue(r.getCreditNextAttemptAt().isBefore(LocalDateTime.now().plusMinutes(1)));
+        service().creditNow(101L);
+        assertEquals(1, r.getCreditAttemptCount());
+        r.setCreditNextAttemptAt(LocalDateTime.now().minusSeconds(1));
+        service().creditNow(101L); service().creditNow(101L);
+        assertNotNull(r.getCreditedAt()); assertNull(r.getCreditNextAttemptAt()); assertNull(r.getLastError());
+        assertEquals(2, r.getCreditAttemptCount()); assertEquals(deadline, r.getDeadlineAt());
+        assertEquals(SpecialistManualPaymentReviewStatus.PENDING_DELIVERY, r.getStatus());
+        verify(manualPayments, times(2)).confirmRecipientReviewPayment(any(),any(),any(),any(),any(),any(),any(),any(),any(),any(),any());
+        verify(issues, never()).notifyOrderIssueAfterCommit(any(),any(),any(),any(),any());
+    }
+
+    @Test void repeatedDatabaseDeadlocksKeepDurableBoundedRetriesAfterThreeAttempts() {
+        var r=report(); stub(r); activeManager();
+        when(manualPayments.confirmRecipientReviewPayment(any(),any(),any(),any(),any(),any(),any(),any(),any(),any(),any()))
+                .thenThrow(new org.springframework.dao.CannotAcquireLockException("database deadlock"));
+        for (int attempt=1; attempt<=8; attempt++) {
+            r.setCreditNextAttemptAt(null);
+            assertDoesNotThrow(()->service().creditNow(101L));
+            assertEquals(attempt, r.getCreditAttemptCount());
+            assertEquals(SpecialistManualPaymentReviewStatus.WAITING,r.getStatus());
+            assertTrue(r.getCreditNextAttemptAt().isAfter(LocalDateTime.now()));
+            assertTrue(r.getCreditNextAttemptAt().isBefore(LocalDateTime.now().plusMinutes(16)));
+        }
+        assertNull(r.getCreditedAt());
+    }
+
+    @Test void financialConflictRemainsQuarantinedAndCannotBeRetriedAutomatically() {
+        var r=report(); stub(r); activeManager();
+        when(manualPayments.confirmRecipientReviewPayment(any(),any(),any(),any(),any(),any(),any(),any(),any(),any(),any()))
+                .thenThrow(new ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT, "Требуется сверка возврата"));
+        assertThrows(ResponseStatusException.class,()->service().creditNow(101L));
+        assertEquals(SpecialistManualPaymentReviewStatus.NEEDS_ATTENTION,r.getStatus());
+        assertNull(r.getCreditNextAttemptAt()); assertNull(r.getCreditedAt());
+        service().creditNow(101L);
+        verify(manualPayments,times(1)).confirmRecipientReviewPayment(any(),any(),any(),any(),any(),any(),any(),any(),any(),any(),any());
     }
 
     @Test void committedReceiptSurvivesAfterCommitExceptionAndIsNotRetried() {

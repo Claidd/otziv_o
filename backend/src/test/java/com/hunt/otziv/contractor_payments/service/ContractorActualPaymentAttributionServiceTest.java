@@ -406,6 +406,23 @@ class ContractorActualPaymentAttributionServiceTest {
     }
 
     @Test
+    void concurrentReconciliationLeaseIsTransientButUnresolvedReturnStillRequiresHumanEvidence() {
+        var allocation=sourceAllocation(100L,ContractorAllocationMode.LIVE,specialist,ContractorAllocationStatus.RESERVED);
+        allocation.setReconcileClaimToken("background-worker-claim");
+        assertThatThrownBy(()->record(allocation.getId(),allocation.getId(),ContractorRecipientType.SPECIALIST,specialist,
+                ContractorRecipientType.SPECIALIST,specialist)).isInstanceOfSatisfying(ResponseStatusException.class,
+                failure->assertThat(failure.getStatusCode().value()).isEqualTo(503));
+        // A separate source models the next, genuinely disputed receipt. A lease
+        // failure must not turn a financial-return guard into an automatic retry.
+        allocations.clear(); attributions.clear();
+        var returning=sourceAllocation(100L,ContractorAllocationMode.LIVE,specialist,ContractorAllocationStatus.RESERVED);
+        returning.setNeedsReturnAmount(true);
+        assertThatThrownBy(()->record(returning.getId(),returning.getId(),ContractorRecipientType.SPECIALIST,specialist,
+                ContractorRecipientType.SPECIALIST,specialist)).isInstanceOfSatisfying(ResponseStatusException.class,
+                failure->assertThat(failure.getStatusCode().value()).isEqualTo(409));
+    }
+
+    @Test
     void lateTransferToReleasedOriginalManagerIsRecordedOnceEvenWithoutAvailableBalance() {
         ContractorPaymentAllocation original = sourceAllocation(
                 100L, ContractorAllocationMode.LIVE, manager, ContractorAllocationStatus.RELEASED_UNPAID);

@@ -68,7 +68,7 @@ class ManualSettlementReminderMySqlIntegrationTest {
             }
             return states;
         });
-        var target = new PaymentInvoiceRetryScheduler(repository, mock(AppSettingService.class), mock(ClientMessageSlotPlanner.class));
+        var target = new PaymentInvoiceRetryScheduler(repository, mock(AppSettingService.class), mock(ClientMessageSlotPlanner.class), mock(com.hunt.otziv.payments.api.SpecialistPaymentReviewGate.class));
         var proxy = new ProxyFactory(target);
         proxy.setProxyTargetClass(true);
         proxy.addAdvice(new TransactionInterceptor(manager, new AnnotationTransactionAttributeSource(false)));

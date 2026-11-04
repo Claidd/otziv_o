@@ -80,7 +80,7 @@ public interface SpecialistManualPaymentReviewRepository
 
     @Query("select r.id from SpecialistManualPaymentReview r where r.creditedAt is null "
             + "and r.disputedAt is null and r.resolvedAt is null and r.status in :statuses "
-            + "and (r.creditClaimedAt is null or r.creditClaimedAt <= :cutoff) "
+            + "and (r.creditNextAttemptAt is null or r.creditNextAttemptAt <= :now) "
             + "and (r.status <> com.hunt.otziv.payments.model.SpecialistManualPaymentReviewStatus.SETTLING "
             + "or r.creditClaimedAt <= :cutoff) "
             + "and (r.status <> com.hunt.otziv.payments.model.SpecialistManualPaymentReviewStatus.NEEDS_ATTENTION "
@@ -88,7 +88,8 @@ public interface SpecialistManualPaymentReviewRepository
             + "or r.lastError like 'Исход предыдущей отправки Telegram%' "
             + "or r.lastError like 'За 24 часа не было подтверждено уведомление%') order by r.id")
     List<Long> findUncreditedIds(@Param("statuses") Collection<SpecialistManualPaymentReviewStatus> statuses,
-            @Param("cutoff") LocalDateTime cutoff, org.springframework.data.domain.Pageable page);
+            @Param("cutoff") LocalDateTime cutoff, @Param("now") LocalDateTime now,
+            org.springframework.data.domain.Pageable page);
 
     @Query("select r.id from SpecialistManualPaymentReview r where r.creditedAt is not null "
             + "and r.status = com.hunt.otziv.payments.model.SpecialistManualPaymentReviewStatus.SETTLING "
@@ -102,6 +103,12 @@ public interface SpecialistManualPaymentReviewRepository
             @Param("now") LocalDateTime now, org.springframework.data.domain.Pageable page);
 
     Optional<SpecialistManualPaymentReview> findByPaymentLinkId(Long linkId);
+
+    @Query("select r.id from SpecialistManualPaymentReview r where r.lastError is not null "
+            + "and r.status = com.hunt.otziv.payments.model.SpecialistManualPaymentReviewStatus.CONFIRMED "
+            + "and r.creditedAt is not null and r.settledAt is not null and r.resolvedAt is not null "
+            + "and r.disputedAt is null order by r.id")
+    List<Long> findFinalizedNoticeFailureIds(org.springframework.data.domain.Pageable page);
 
     List<SpecialistManualPaymentReview> findByStatusInOrderByRequestedAtDesc(
             Collection<SpecialistManualPaymentReviewStatus> statuses,
