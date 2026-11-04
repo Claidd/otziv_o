@@ -184,6 +184,7 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
     private final LegacyOrderMessagePreparationRecovery legacyPreparationRecovery;
     private final OrderPaymentMessageBuilder orderPaymentMessageBuilder;
     private final PaymentLinkService paymentLinkService;
+    private final com.hunt.otziv.payments.api.SpecialistPaymentReviewGate paymentReviewGate;
     private final PaymentIssueReminderService paymentIssueReminderService;
     private final OrderReviewCheckMessageBuilder reviewCheckMessageBuilder;
     private final BadReviewTaskService badReviewTaskService;
@@ -1427,6 +1428,9 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
             return Optional.empty();
         }
         String status = statusTitle(order);
+        if ((STATUS_PUBLIC.equals(status)
+                || listSetting(AppSettingService.CLIENT_MESSAGES_PAYMENT_REMINDER_STATUSES, DEFAULT_PAYMENT_REMINDER_STATUSES).contains(status))
+                && paymentReviewGate.hasPendingReview(order.getId())) return Optional.empty();
         if (STATUS_PUBLIC.equals(status)) {
             return order.isPaperInvoiceAutomationHold()?Optional.empty():Optional.of(ClientMessageScenario.PAYMENT_INVOICE_RETRY);
         }
@@ -1596,7 +1600,8 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
         boolean hasPaymentAutomation = scenarios.contains(ClientMessageScenario.PAYMENT_INVOICE_RETRY)
                 || scenarios.contains(ClientMessageScenario.PAYMENT_REMINDER)
                 || scenarios.contains(ClientMessageScenario.PAYMENT_OVERDUE_ESCALATION);
-        if (hasPaymentAutomation && (order.isPaperInvoiceAutomationHold() || isManagedByActiveCommonInvoice(order))) {
+        if (hasPaymentAutomation && (order.isPaperInvoiceAutomationHold() || isManagedByActiveCommonInvoice(order)
+                || paymentReviewGate.hasPendingReview(order.getId()))) {
             scenarios.remove(ClientMessageScenario.PAYMENT_INVOICE_RETRY);
             scenarios.remove(ClientMessageScenario.PAYMENT_REMINDER);
             scenarios.remove(ClientMessageScenario.PAYMENT_OVERDUE_ESCALATION);
@@ -2138,6 +2143,11 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
         if (order == null) {
             disable(state, nowStorage, "order_missing",
                     "Заказ для повторной отправки счета после дополнительной задачи не найден");
+            return null;
+        }
+        if (paymentReviewGate.hasPendingReview(order.getId())) {
+            markDone(state, nowStorage, "manual_payment_review",
+                    "Менеджер сообщил об оплате; повторный счёт закрыт на время сверки поступления");
             return null;
         }
         if (orderPaymentIntegrityService.hasSettledPaymentEvidence(order)) {
@@ -2875,6 +2885,12 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
                     "bad_review_auto_ban_disabled",
                     "Автобан после дополнительных задач выключен настройкой"
             );
+            return null;
+        }
+        if ((isPaymentScenario(state.getScenario()) || state.getScenario() == ClientMessageScenario.BAD_REVIEW_AUTO_BAN)
+                && paymentReviewGate.hasPendingReview(state.getOrderId())) {
+            markDone(state, nowStorage, "manual_payment_review",
+                    "Менеджер сообщил об оплате; платёжная автоматизация закрыта на время сверки поступления");
             return null;
         }
         if (isPaymentScenario(state.getScenario()) && suppressDuplicatePaymentMessage(state, nowStorage)) {

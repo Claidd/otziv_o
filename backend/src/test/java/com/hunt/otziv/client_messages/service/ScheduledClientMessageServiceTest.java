@@ -87,6 +87,7 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class ScheduledClientMessageServiceTest {
+    @Mock private com.hunt.otziv.payments.api.SpecialistPaymentReviewGate paymentReviewGate;
     @Mock private com.hunt.otziv.client_messages.api.OrderManualContactReservation manualContactReservation;
     @Mock private com.hunt.otziv.p_products.api.OrderDeliveryControlContext orderDeliveryContext;
     @Mock private org.springframework.context.ApplicationEventPublisher applicationEvents;
@@ -225,6 +226,32 @@ class ScheduledClientMessageServiceTest {
             service.dispatchScheduledDelivery(prepared, now);
         }
         return value;
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings={"Опубликовано","Выставлен счет","Напоминание"})
+    void reportedPaymentSuppressesInvoiceAndReminderReconciliationUntilReviewIsResolved(String status) {
+        var order=new Order();order.setId(27590L);order.setStatus(OrderStatus.builder().title(status).build());
+        when(paymentReviewGate.hasPendingReview(27590L)).thenReturn(true);
+        assertTrue(service.orderAutomationScenario(order).isEmpty());
+        var scenarios=(java.util.Set<?>)ReflectionTestUtils.invokeMethod(service,"orderAutomationScenarios",order);
+        assertTrue(scenarios.isEmpty());
+        when(paymentReviewGate.hasPendingReview(27590L)).thenReturn(false);
+        assertTrue(service.orderAutomationScenario(order).isPresent());
+        verifyNoInteractions(orderPaymentMessageBuilder,messageSender);
+    }
+
+    @Test
+    void oldActivePaymentQueueClosesWithoutPreparingBankDetailsWhenAReceiptWasReported() {
+        var state=ScheduledClientMessageState.builder().id(118L).orderId(27590L)
+                .scenario(ClientMessageScenario.PAYMENT_INVOICE_RETRY).status(ScheduledMessageStateStatus.ACTIVE).build();
+        when(stateRepository.findById(118L)).thenReturn(Optional.of(state));
+        when(paymentReviewGate.hasPendingReview(27590L)).thenReturn(true);
+        assertNull(ReflectionTestUtils.invokeMethod(service,"processState",118L,LocalDateTime.now()));
+        assertEquals(ScheduledMessageStateStatus.DONE,state.getStatus());
+        assertNull(state.getLastErrorCode());
+        assertNull(state.getNextAttemptAt());
+        verifyNoInteractions(orderPaymentMessageBuilder,messageSender,paymentLinkService);
     }
 
     @Test
@@ -1910,7 +1937,7 @@ class ScheduledClientMessageServiceTest {
                 ClientMessageScenario.BAD_REVIEW_AUTO_BAN, "bad-review-auto-ban:order:14"))
                 .thenReturn(java.util.Optional.of(state));
         PaymentInvoiceRetryScheduler scheduler = new PaymentInvoiceRetryScheduler(
-                stateRepository, appSettingService, new ClientMessageSlotPlanner());
+                stateRepository, appSettingService, new ClientMessageSlotPlanner(), paymentReviewGate);
         when(orderStatusTransitionService.changeStatusForOrder(14L, "Бан")).thenAnswer(invocation -> {
             // Exercise the real nested cancellation and its in-flight guard.
             scheduler.cancelBadReviewAutoBanInNewTransaction(14L, "Заказ переведен в Бан");

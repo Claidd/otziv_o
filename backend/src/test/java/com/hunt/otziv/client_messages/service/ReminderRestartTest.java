@@ -25,6 +25,7 @@ import org.mockito.*;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 class ReminderRestartTest {
+    @Mock com.hunt.otziv.payments.api.SpecialistPaymentReviewGate paymentReviewGate;
     @Mock ScheduledClientMessageStateRepository stateRepository;
     @Mock OrderRepository orderRepository;
     @Mock OrderDeliveryControlContext orderDeliveryContext;

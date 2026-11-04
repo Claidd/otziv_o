@@ -69,10 +69,16 @@ public class SpecialistManualPaymentReviewGuard implements com.hunt.otziv.paymen
     private boolean hasText(String value) { return value != null && !value.isBlank(); }
 
     public void requireNoPendingReview(Long orderId) {
-        if (orderId != null && reviews.existsByOrderIdAndStatusIn(orderId, UNRESOLVED)) {
+        if (hasPendingReview(orderId)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Сверка перевода специалисту не завершена. Оплату и новый счёт пока нельзя подтвердить");
         }
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public boolean hasPendingReview(Long orderId) {
+        return orderId != null && reviews.existsByOrderIdAndStatusIn(orderId, UNRESOLVED);
     }
 
     public void requireNoPendingReviewForManualPaid(Long orderId) {

@@ -29,6 +29,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.test.util.ReflectionTestUtils;
 
 class ReviewSilenceArchiveTest {
+    @Mock com.hunt.otziv.payments.api.SpecialistPaymentReviewGate paymentReviewGate;
     @Mock ScheduledClientMessageStateRepository stateRepository;
     @Mock ScheduledClientMessageAttemptRepository attemptRepository;
     @Mock OrderRepository orderRepository;

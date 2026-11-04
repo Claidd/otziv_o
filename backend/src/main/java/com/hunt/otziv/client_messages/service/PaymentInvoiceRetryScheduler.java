@@ -40,6 +40,7 @@ public class PaymentInvoiceRetryScheduler implements ManualPaymentAutomationCont
     private final ScheduledClientMessageStateRepository stateRepository;
     private final AppSettingService appSettingService;
     private final ClientMessageSlotPlanner slotPlanner;
+    private final com.hunt.otziv.payments.api.SpecialistPaymentReviewGate paymentReviewGate;
     private final Clock clock = Clock.systemDefaultZone();
 
     @Transactional
@@ -396,6 +397,7 @@ public class PaymentInvoiceRetryScheduler implements ManualPaymentAutomationCont
             LocalDateTime nextAttemptAt,
             boolean replaceNextAttempt
     ) {
+        if (PAYMENT_AUTOMATION_SCENARIOS.contains(scenario) && paymentReviewGate.hasPendingReview(order.getId())) return;
         Optional<ScheduledClientMessageState> existing = stateRepository.findByScenarioAndTargetKeyForUpdate(
                 scenario,
                 targetKey

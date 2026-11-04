@@ -49,7 +49,7 @@ public class SpecialistManualPaymentReviewScheduler {
         for (Long id : reviews.findUncreditedIds(List.of(
                 SpecialistManualPaymentReviewStatus.PENDING_DELIVERY, SpecialistManualPaymentReviewStatus.WAITING,
                 SpecialistManualPaymentReviewStatus.NEEDS_ATTENTION, SpecialistManualPaymentReviewStatus.SETTLING),
-                LocalDateTime.now().minusMinutes(15), PageRequest.of(0, BATCH_SIZE))) {
+                LocalDateTime.now().minusMinutes(15), LocalDateTime.now(), PageRequest.of(0, BATCH_SIZE))) {
             try {
                 settlement.creditNow(id);
             } catch (RuntimeException failure) {
@@ -65,6 +65,13 @@ public class SpecialistManualPaymentReviewScheduler {
             } catch (RuntimeException failure) {
                 log.warn("Manager payment finalisation failed: reviewId={}", id, failure);
             }
+        }
+        // Repair only stale task metadata of already proven receipts, in bounded
+        // pages. This never resends a notice or invokes the money-posting workflow.
+        List<Long> finalized = reviews.findFinalizedNoticeFailureIds(PageRequest.of(0, BATCH_SIZE));
+        for (Long id : finalized) {
+            try { settlement.settle(id); }
+            catch (RuntimeException failure) { log.warn("Finalized payment issue cleanup failed: reviewId={}", id, failure); }
         }
     }
 }

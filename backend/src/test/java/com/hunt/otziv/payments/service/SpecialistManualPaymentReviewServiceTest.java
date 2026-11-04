@@ -37,6 +37,8 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -448,6 +450,17 @@ class SpecialistManualPaymentReviewServiceTest {
                 "Специалист сообщил об отсутствии",new UsernamePasswordAuthenticationToken("admin",null)));
         assertEquals(SpecialistManualPaymentReviewStatus.CONFIRMED,review.getStatus());
         verify(reviews,never()).findById(anyLong());verify(reviews,never()).saveAndFlush(any());
+    }
+
+    @Test void durableCreditRetryIsPresentedAsPendingWithoutPretendingThatMoneyWasAlreadyPosted() {
+        var review=pending();review.setId(101L);review.setCreditedAt(null);
+        review.setStatus(SpecialistManualPaymentReviewStatus.WAITING);
+        review.setCreditNextAttemptAt(LocalDateTime.now().plusMinutes(1));
+        when(reviews.findById(101L)).thenReturn(Optional.of(review));
+        var result=service.result(review);
+        assertEquals("SPECIALIST_REVIEW_PENDING",result.status());
+        assertTrue(result.message().contains("автоматически"));assertNull(result.manualPaymentReview().creditedAt());
+        verifyNoInteractions(manualPayments,telegram);
     }
 
     private SpecialistManualPaymentReviewRepository.ReviewBinding binding() {

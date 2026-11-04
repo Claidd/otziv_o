@@ -2081,8 +2081,13 @@ public class ContractorActualPaymentAttributionService implements PaymentLinkAtt
                 .distinct()
                 .sorted(java.util.Comparator.comparing(ContractorPaymentAllocation::getId))
                 .toList()) {
-            if (allocation.isNeedsReturnAmount() || !normalize(allocation.getReconcileClaimToken()).isBlank()) {
-                throw conflict("Учёт распределения занят возвратом или сверкой; повторите операцию позже");
+            if (allocation.isNeedsReturnAmount()) {
+                throw conflict("По распределению ожидается уточнение возврата; необходима сверка оплаты");
+            }
+            if (!normalize(allocation.getReconcileClaimToken()).isBlank()) {
+                throw new ResponseStatusException(
+                        HttpStatus.SERVICE_UNAVAILABLE,
+                        "Фоновая сверка распределения ещё выполняется; зачисление будет повторено автоматически");
             }
             allocation.setLastReconciledAt(reconciledAt);
             allocation.setReconcileLeaseUntil(null);

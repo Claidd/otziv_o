@@ -278,6 +278,7 @@ public class SpecialistManualPaymentReviewService {
 
     private void supersedeAfterBankPayment(SpecialistManualPaymentReview review) {
         review.setStatus(SpecialistManualPaymentReviewStatus.SUPERSEDED);
+        review.setCreditNextAttemptAt(null);
         review.setResolvedAt(LocalDateTime.now());
         review.setResolvedBy("provider");
         review.setResolutionKind("BANK_PROVIDER_CONFIRMED");
@@ -326,6 +327,7 @@ public class SpecialistManualPaymentReviewService {
         // Both review dismissal and source closure share this transaction. The generic
         // close operation can proceed only after this review is no longer pending.
         review.setStatus(SpecialistManualPaymentReviewStatus.SUPERSEDED);
+        review.setCreditNextAttemptAt(null);
         review.setResolvedAt(LocalDateTime.now());
         review.setResolvedBy(authentication.getName());
         review.setResolutionKind("PAYMENT_ABSENT");
@@ -566,6 +568,7 @@ public class SpecialistManualPaymentReviewService {
 
     private void recordDispute(SpecialistManualPaymentReview review, String actor, String note) {
         review.setStatus(SpecialistManualPaymentReviewStatus.DISPUTED);
+        review.setCreditNextAttemptAt(null);
         review.setDisputedAt(LocalDateTime.now());
         review.setResolvedBy(actor);
         review.setResolutionKind("RECIPIENT_DISPUTE");
@@ -587,6 +590,13 @@ public class SpecialistManualPaymentReviewService {
                 || (review.getStatus() == SpecialistManualPaymentReviewStatus.SUPERSEDED
                     && "BANK_PROVIDER_CONFIRMED".equals(review.getResolutionKind()))) {
             return ManagerManualCardPaymentResultResponse.completed(review.getOrderId(), review.getPaymentLinkId());
+        }
+        if (review.getCreditNextAttemptAt() != null) {
+            return new ManagerManualCardPaymentResultResponse(
+                    ManagerManualCardPaymentResultResponse.SPECIALIST_REVIEW_PENDING,
+                    review.getOrderId(), review.getPaymentLinkId(),
+                    "Отметка оплаты сохранена. Зачисление ожидает фоновой сверки; система повторит его автоматически. Новый счёт клиенту не требуется.",
+                    ManualPaymentReviewView.from(review));
         }
         return ManagerManualCardPaymentResultResponse.specialistReviewPending(review.getOrderId(), review.getPaymentLinkId());
     }
