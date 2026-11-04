@@ -16,6 +16,9 @@ public class CommonInvoiceMessageWorker {
     private final CommonInvoiceMessageQueue queue;
     private final CommonInvoiceDeliveryService invoices;
     private final ClientMessageDelivery delivery;
+    /** Autoresponder admission for automatic reminders (field-injected; absent in narrow tests). */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.hunt.otziv.client_messages.api.BackgroundDispatchBudget dispatchBudget;
 
     @Scheduled(fixedDelayString = "${common-billing.message-queue-delay-ms:5000}", scheduler = "commonInvoiceMessageScheduler")
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -41,7 +44,15 @@ public class CommonInvoiceMessageWorker {
                     // Business state changed. Hold for review; never send obsolete billing text.
                     result = ClientMessageSendResult.failed("invoice_changed", "Delivery requires review");
                 } else {
-                    result = invoices.sendPreparedPaymentMessage(prepared);
+                    var admission = automaticReminderAdmission(prepared);
+                    if (admission != null && !admission.allowed()) {
+                        // Pause, master switch, business window, shared daily limit or interval:
+                        // keep the frozen message queued and retry later; nothing was sent.
+                        paused = true;
+                        result = ClientMessageSendResult.failed(admission.code(), admission.reason());
+                    } else {
+                        result = invoices.sendPreparedPaymentMessage(prepared);
+                    }
                 }
                 invoices.finishQueuedMessage(claim, prepared, result, paused);
             } catch (RuntimeException failure) {
@@ -49,5 +60,19 @@ public class CommonInvoiceMessageWorker {
                 log.warn("Common invoice delivery held: invoiceId={}, errorType={}", claim.invoiceId(), failure.getClass().getSimpleName());
             }
         }
+    }
+
+    private com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Admission automaticReminderAdmission(
+            PreparedCommonInvoiceMessage prepared) {
+        if (dispatchBudget == null || prepared == null || !prepared.reminder() || prepared.manual()
+                || prepared.alreadyConfirmed() || prepared.invoiceId() == null) {
+            return null;
+        }
+        return dispatchBudget.reserve(
+                com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Purpose.PAYMENT_REMINDER,
+                "COMMON_INVOICE",
+                prepared.invoiceId(),
+                prepared.chatCompany()
+        );
     }
 }

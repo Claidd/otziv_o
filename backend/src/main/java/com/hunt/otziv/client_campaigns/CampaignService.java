@@ -17,6 +17,9 @@ public class CampaignService {
     private final CampaignSender sender;
     private final OutboundMessagePolicy settings;
     private final Clock clock;
+    /** Autoresponder master switch and pause also stop campaigns (owner decision, field-injected). */
+    @Autowired(required = false)
+    private com.hunt.otziv.client_messages.api.BackgroundDispatchBudget dispatchBudget;
     @Autowired
     public CampaignService(CampaignStore store, CampaignSender sender, OutboundMessagePolicy settings) {
         this(store,sender,settings,Clock.systemUTC());
@@ -43,7 +46,7 @@ public class CampaignService {
                 var claim = store.claim(id,now());
                 if (claim == null) continue;
                 // Re-read the switch and campaign immediately before handing work to the transport.
-                if (!liveEnabled() || !"RUNNING".equals(store.get(id).state())) {
+                if (!liveEnabled() || !"RUNNING".equals(store.get(id).state()) || !autoresponderAdmits(claim)) {
                     store.releaseWithoutSend(claim);
                     continue;
                 }
@@ -54,5 +57,15 @@ public class CampaignService {
                 log.warn("Offer campaign tick failed: campaignId={}, errorType={}",id,failure.getClass().getSimpleName());
             }
         }
+    }
+
+    private boolean autoresponderAdmits(Claim claim) {
+        if (dispatchBudget == null) {
+            return true;
+        }
+        long sourceId = claim == null || claim.recipient() == null ? 0L : claim.recipient().id();
+        return dispatchBudget.reserveOnPlatform(
+                com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Purpose.OFFER_CAMPAIGN,
+                "OFFER_CAMPAIGN", sourceId, null).allowed();
     }
 }

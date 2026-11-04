@@ -16,6 +16,9 @@ public class PaperBillingReminders {
     private final PaperBillingSettings settings;private final PaperBillingBankClient bank;
     private final PaperBillingDelivery delivery;private final BankPaperInvoiceParts parts;
     private final PlatformTransactionManager transactions;
+    /** Autoresponder admission (field-injected; absent in narrow tests). */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.hunt.otziv.client_messages.api.BackgroundDispatchBudget dispatchBudget;
     @Scheduled(fixedDelay=30000,initialDelay=60000)
     public void tick() {
         if(!settings.isEnabled() || !settings.isDeliveryEnabled() || !settings.isBankOperationsEnabled() || !bank.configured()) return;
@@ -41,7 +44,23 @@ public class PaperBillingReminders {
         if(row==null)return;
         int count=((Number)row.get("paper_reminder_count")).intValue()+1;
         var latest=store.row(id);
-        if(latest.get("paid_at")!=null || latest.get("cancel_requested_at")!=null || !parts.remindersAllowed(((Number)row.get("target_id")).longValue())) return;
+        if(latest.get("paid_at")!=null || latest.get("cancel_requested_at")!=null || !parts.remindersAllowed(((Number)row.get("target_id")).longValue())) {
+            // Nothing was sent: return the claim instead of leaving SENDING to turn into a false UNKNOWN.
+            release(id,token,null,null);
+            return;
+        }
+        if(dispatchBudget!=null) {
+            // Same rules as every automatic client message: master switch, pause, reminder toggle,
+            // business windows, shared daily limit and interval. Postpone, never drop.
+            String platform=String.valueOf(row.get("group_id")).split(":",2)[0];
+            var admission=dispatchBudget.reserveOnPlatform(
+                    com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Purpose.PAYMENT_REMINDER,
+                    "PAPER_INVOICE",((Number)row.get("target_id")).longValue(),platform);
+            if(!admission.allowed()) {
+                release(id,token,admission.nextAttemptAt()==null?java.time.LocalDateTime.now().plusMinutes(5):admission.nextAttemptAt(),admission.reason());
+                return;
+            }
+        }
         var result=delivery.sendReminder(row,count);
         boolean sent=result.sent() && result.messageId()!=null;
         boolean knownUnsent=ClientMessageDelivery.isKnownUnsent(result);
@@ -49,5 +68,11 @@ public class PaperBillingReminders {
         store.jdbc().update("UPDATE paper_invoice_document SET paper_reminder_state=?,paper_reminder_count=paper_reminder_count+?,paper_next_reminder_at=?,error_text=? WHERE id=? AND paper_reminder_token=? AND paid_at IS NULL AND cancel_requested_at IS NULL",
                 sent || knownUnsent?"PENDING":"UNKNOWN",sent?1:0,sent && count>=7?null:next,
                 sent?(count>=7?"Напоминания по этому счёту завершены. Требуется проверка оплаты менеджером":null):knownUnsent?"Напоминание пока не отправлено":"Результат отправки напоминания неизвестен; требуется сверка",id,token);
+    }
+    private void release(String id,String token,java.time.LocalDateTime nextAttemptAt,String reason) {
+        store.jdbc().update("UPDATE paper_invoice_document SET paper_reminder_state='PENDING',paper_reminder_token=NULL,"
+                +"paper_next_reminder_at=COALESCE(?,paper_next_reminder_at),error_text=COALESCE(?,error_text) "
+                +"WHERE id=? AND paper_reminder_token=? AND paper_reminder_state='SENDING'",
+                nextAttemptAt,reason,id,token);
     }
 }

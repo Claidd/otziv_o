@@ -206,6 +206,8 @@ public class SecurityConfig {
         auth.requestMatchers("/api/personal-reminders", "/api/personal-reminders/**").authenticated();
         auth.requestMatchers("/api/metric-snapshots", "/api/metric-snapshots/**").authenticated();
         auth.requestMatchers("/api/cabinet/profile").authenticated();
+        // Diagnostics of inbound WhatsApp messages from groups not linked to any company.
+        auth.requestMatchers(HttpMethod.GET, "/api/whatsapp/unlinked-events").hasAnyRole("ADMIN", "OWNER");
         auth.requestMatchers("/api/cabinet/whatsapp").hasRole("MANAGER");
         auth.requestMatchers("/api/cabinet/user-info", "/api/cabinet/analyse").hasAnyRole("ADMIN", "OWNER");
         auth.requestMatchers("/api/cabinet/team").hasAnyRole("ADMIN", "OWNER", "MANAGER");

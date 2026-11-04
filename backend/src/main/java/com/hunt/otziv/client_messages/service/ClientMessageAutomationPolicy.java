@@ -9,6 +9,15 @@ import static com.hunt.otziv.config.settings.api.BackgroundAutomationSettings.*;
 final class ClientMessageAutomationPolicy {
     private ClientMessageAutomationPolicy() { }
 
+    /** Master switch and pause only: for automatic senders without a scenario toggle (campaigns). */
+    static boolean masterAllowed(BackgroundAutomationSettings settings, LocalDateTime now) {
+        try {
+            if (!settings.getBooleanFreshFailClosed(CLIENT_MESSAGES_WORKER_ENABLED, true)) return false;
+            String pause = settings.getStringFresh(CLIENT_MESSAGES_PAUSED_UNTIL, null);
+            return pause == null || pause.isBlank() || !LocalDateTime.parse(pause).isAfter(now);
+        } catch (RuntimeException unavailable) { return false; }
+    }
+
     static boolean allowed(BackgroundAutomationSettings settings, ClientMessageScenario scenario, LocalDateTime now) {
         try {
             if (!settings.getBooleanFreshFailClosed(CLIENT_MESSAGES_WORKER_ENABLED, true)) return false;

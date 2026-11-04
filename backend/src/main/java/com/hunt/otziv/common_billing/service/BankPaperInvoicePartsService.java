@@ -35,7 +35,13 @@ public class BankPaperInvoicePartsService implements BankPaperInvoiceParts {
     public List<Long> partIds(long invoice) {positions(invoice);return jdbc.queryForList("SELECT part_id FROM common_invoice_paper_parts WHERE invoice_id=? ORDER BY part_id",Long.class,invoice);}
     @Transactional(readOnly=true)
     public List<Long> historyInvoiceIds(long invoice) {positions(invoice);return jdbc.queryForList("SELECT old.invoice_id FROM common_invoices current_invoice JOIN common_invoices old ON old.account_id=current_invoice.account_id WHERE current_invoice.invoice_id=? ORDER BY old.invoice_id DESC LIMIT 100",Long.class,invoice);}
-    public LocalDateTime nextReminder(long part) {return delivery.nextAutomaticPaymentReminderAt(LocalDateTime.now());}
+    public LocalDateTime nextReminder(long part) {
+        // With automatic reminders switched off the next date used to be NULL, which ended the
+        // reminder chain for good. Keep a near re-check instead; the send path asks the
+        // autoresponder for permission and postpones while reminders are off.
+        LocalDateTime next = delivery.nextAutomaticPaymentReminderAt(LocalDateTime.now());
+        return next != null ? next : LocalDateTime.now().plusHours(6);
+    }
     public boolean remindersAllowed(long part) {
         return Boolean.TRUE.equals(jdbc.queryForObject("""
             SELECT p.paid_at IS NULL AND p.cancelled_at IS NULL AND NOT p.automation_hold

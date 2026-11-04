@@ -85,7 +85,8 @@ import org.springframework.web.server.ResponseStatusException;
 public class ScheduledClientMessageService implements PaymentDeadlineNoticeSource, UncertainClientMessageDelivery,
         com.hunt.otziv.client_messages.api.PeriodicReminderRestart,
         com.hunt.otziv.client_messages.api.PaperInvoiceAutomation,
-        com.hunt.otziv.client_messages.api.ReviewReminderClosure {
+        com.hunt.otziv.client_messages.api.ReviewReminderClosure,
+        com.hunt.otziv.client_messages.api.BackgroundDispatchBudget {
 
     private static final ObjectMapper DELIVERY_JSON = new ObjectMapper();
 
@@ -201,6 +202,9 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
     private final com.hunt.otziv.client_messages.api.NotificationFollowup notificationFollowups;
     private final SchedulerLeaseService schedulerLeaseService;
     private final ClientMessageTime messageTime;
+    /** Field-injected so existing constructors and tests stay unchanged. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.hunt.otziv.client_messages.repository.ExternalDispatchReservationStore externalReservations;
     private final com.hunt.otziv.client_chat_control.api.ReminderContactHistory archiveChatHistory;
     private final ReviewArchiveHistory reviewArchiveHistory;
     private final com.hunt.otziv.u_users.api.AutomationNoticeRecipients archiveNoticeRecipients;
@@ -308,6 +312,7 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
                 recoverExpiredBadReviewDeliveries(nowStorage);
                 stateRepository.releaseExpiredOrdinaryPreparationClaims(nowStorage);
                 releaseReenabledBadReviewScenarios(nowStorage);
+                releaseResumedAutomationScenarios(nowStorage);
             });
             recoverOrdinaryDeliveries(nowStorage);
             legacyPreparationRecovery.recoverDue(nowStorage);
@@ -2052,7 +2057,11 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
             return;
         }
         requireNoBusinessTransaction();
-        if (!liveSendingEnabled()) {
+        // A background retry (no explicit task) re-checks the autoresponder right before the external
+        // send, like every other scenario: a pause pressed mid-batch must stop the rest of the batch.
+        boolean backgroundBlocked = taskId == null && !ClientMessageAutomationPolicy.allowed(
+                appSettingService, ClientMessageScenario.BAD_REVIEW_INVOICE, messageTime.nowStorage());
+        if (!liveSendingEnabled() || backgroundBlocked) {
             transactionRunner.runInNewTransaction(() -> pausePreparedWithoutDispatch(prepared.stateId(),
                     prepared.orderId(), prepared.deliveryToken(), ClientMessageScenario.BAD_REVIEW_INVOICE,
                     "bad-review-invoice:order:" + prepared.orderId(), messageTime.databaseTimestamp(messageTime.nowStorage())));
@@ -2389,6 +2398,19 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
         int released = stateRepository.releaseExpiredUnpreparedBadReviewClaims(nowStorage);
         if (uncertain > 0 || released > 0) {
             log.warn("Bad-review delivery recovery: uncertain={}, returnedToQueue={}", uncertain, released);
+        }
+    }
+
+    /**
+     * A scenario switched off or paused postpones its due states by a day ("automation_paused").
+     * Once the switch is back on and the pause is over, return them to the queue right away
+     * instead of waiting until tomorrow; windows, limits and intervals still apply on dispatch.
+     */
+    private void releaseResumedAutomationScenarios(LocalDateTime nowStorage) {
+        for (ClientMessageScenario scenario : ClientMessageScenario.values()) {
+            if (ClientMessageAutomationPolicy.allowed(appSettingService, scenario, nowStorage)) {
+                stateRepository.releaseReenabledScenario(scenario.name(), "automation_paused", nowStorage);
+            }
         }
     }
 
@@ -4094,9 +4116,11 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
         int limit = intSetting(AppSettingService.CLIENT_MESSAGES_DAILY_LIMIT, DEFAULT_DAILY_LIMIT, 1, 5000);
         LocalDate irkutskToday = messageTime.nowIrkutsk().toLocalDate();
         LocalDateTime dayStart = messageTime.toStorageTime(irkutskToday.atStartOfDay());
+        long external = externalReservations == null ? 0 : externalReservations.countDailyLimitedSince(dayStart);
         return attemptRepository.countClientSentSince(ScheduledMessageAttemptStatus.SENT, dayStart)
                 + stateRepository.countArchiveNoticeReservationsSince(dayStart)
-                + stateRepository.countReservedDeliveriesSince(dayStart) < limit;
+                + stateRepository.countReservedDeliveriesSince(dayStart)
+                + external < limit;
     }
 
     /** Called by the durable archive outbox inside its claim transaction, using the same dispatch budget. */
@@ -4125,7 +4149,91 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
         if (noticeAt != null && (sentAt == null || noticeAt.isAfter(sentAt))) sentAt = noticeAt;
         LocalDateTime reservedAt = stateRepository.latestReservedDeliveryAt(channel)
                 .map(messageTime::toIrkutskTime).orElse(null);
-        return sentAt == null ? reservedAt : reservedAt == null || sentAt.isAfter(reservedAt) ? sentAt : reservedAt;
+        LocalDateTime latest = sentAt == null ? reservedAt : reservedAt == null || sentAt.isAfter(reservedAt) ? sentAt : reservedAt;
+        // Payment reminders of common/paper invoices share this interval (campaigns record under
+        // their own channel key so a running campaign cannot starve the autoresponder).
+        LocalDateTime externalAt = externalReservations == null ? null
+                : externalReservations.latestReservedAt(channel).map(messageTime::toIrkutskTime).orElse(null);
+        return externalAt == null ? latest : latest == null || externalAt.isAfter(latest) ? externalAt : latest;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Admission reserve(
+            com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Purpose purpose,
+            String sourceKind,
+            long sourceId,
+            ClientMessageDelivery.Target target
+    ) {
+        String channel = expectedChannel(target);
+        if ("ANY".equals(channel) && target != null) {
+            channel = target.telegramChatId() != null ? "Telegram" : target.maxChatId() != null ? "MAX" : channel;
+        }
+        return reserveOnChannel(purpose, sourceKind, sourceId, channel);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Admission reserveOnPlatform(
+            com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Purpose purpose,
+            String sourceKind,
+            long sourceId,
+            String platform
+    ) {
+        String normalized = platform == null ? "" : platform.trim().toUpperCase(Locale.ROOT);
+        String channel = switch (normalized) {
+            case "WHATSAPP" -> "WhatsApp";
+            case "TELEGRAM" -> "Telegram";
+            case "MAX" -> "MAX";
+            default -> "ANY";
+        };
+        return reserveOnChannel(purpose, sourceKind, sourceId, channel);
+    }
+
+    private com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Admission reserveOnChannel(
+            com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Purpose purpose,
+            String sourceKind,
+            long sourceId,
+            String channel
+    ) {
+        LocalDateTime nowStorage = messageTime.nowStorage();
+        LocalDateTime nowIrkutsk = messageTime.nowIrkutsk();
+        boolean reminder = purpose == com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Purpose.PAYMENT_REMINDER;
+        boolean permitted = reminder
+                ? ClientMessageAutomationPolicy.allowed(appSettingService, ClientMessageScenario.PAYMENT_REMINDER, nowStorage)
+                : ClientMessageAutomationPolicy.masterAllowed(appSettingService, nowStorage);
+        if (!permitted) {
+            return new com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Admission(false, "automation_paused",
+                    "Автоответчик выключен или на паузе", nowStorage.plusMinutes(5));
+        }
+        if (!reminder) {
+            // Campaigns keep their own schedule and quota; they only obey the master switch and pause.
+            if (externalReservations != null) {
+                externalReservations.purgeOlderThan(nowStorage.minusDays(8));
+                externalReservations.insert(purpose.name(), sourceKind, sourceId, "CAMPAIGN:" + channel, false, nowStorage);
+            }
+            return com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Admission.allow();
+        }
+        stateRepository.lockDispatchBudget();
+        LocalDateTime windowStart = slotPlanner.nextAllowedAt(nowIrkutsk, businessWindows());
+        if (windowStart.isAfter(nowIrkutsk.plusSeconds(1))) {
+            return new com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Admission(false, "outside_business_window",
+                    "Вне рабочего окна рассылки", messageTime.toStorageTime(windowStart));
+        }
+        if (!withinDailyLimit(nowStorage)) {
+            return new com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Admission(false, "daily_limit",
+                    "Дневной лимит авторассылки исчерпан", nextBusinessDayStartStorage(nowIrkutsk));
+        }
+        LocalDateTime allowed = slotPlanner.afterGap(nowIrkutsk, lastDispatchAtIrkutsk(channel), gapSeconds(channel), businessWindows());
+        if (allowed.isAfter(nowIrkutsk.plusSeconds(1))) {
+            return new com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Admission(false, "rate_limited",
+                    "Следующий слот отправки: " + allowed, messageTime.toStorageTime(allowed));
+        }
+        if (externalReservations != null) {
+            externalReservations.purgeOlderThan(nowStorage.minusDays(8));
+            externalReservations.insert(purpose.name(), sourceKind, sourceId, channel, true, nowStorage);
+        }
+        return com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Admission.allow();
     }
 
     private int gapSeconds(String expectedChannel) {
