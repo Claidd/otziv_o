@@ -33,7 +33,7 @@ export class UserCreateComponent {
     email: ['', [Validators.required, Validators.email]],
     fio: [''],
     phoneNumber: [''],
-    password: ['Temp123!', [Validators.required, Validators.minLength(6)]],
+    password: ['Temp123!', [Validators.required, Validators.minLength(8)]],
     temporaryPassword: [true],
     enabled: [true],
     emailVerified: [false],

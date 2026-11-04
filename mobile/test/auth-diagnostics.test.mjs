@@ -3,6 +3,7 @@ import test from 'node:test';
 import { readFileSync } from 'node:fs';
 
 const diagnostics = readFileSync(new URL('../src/app/core/mobile-auth-diagnostics.service.ts', import.meta.url), 'utf8');
+const diagnosticsRoute = readFileSync(new URL('../src/app/core/mobile-diagnostics-route.ts', import.meta.url), 'utf8');
 const auth = readFileSync(new URL('../src/app/core/auth.service.ts', import.meta.url), 'utf8');
 const header = readFileSync(new URL('../src/app/shared/mobile-header.component.ts', import.meta.url), 'utf8');
 const confirmService = readFileSync(new URL('../src/app/shared/mobile-confirm.service.ts', import.meta.url), 'utf8');
@@ -112,8 +113,12 @@ test('Android exit reasons are captured, deduplicated and attached to a bounded 
 });
 
 test('last-state breadcrumbs omit query values and dynamic resource identifiers', () => {
-  assert.match(diagnostics, /split\(\/\[\?\#\]\//);
-  assert.match(diagnostics, /replace\(\/\\\/\\d\+\(\?=\\\/\|\$\)\/gu, '\/:id'\)/);
+  // The route sanitizer lives in mobile-diagnostics-route.ts (behaviour is
+  // covered in mobile-auth-hardening.test.mjs); the service delegates to it.
+  assert.match(diagnosticsRoute, /split\(\/\[\?\#\]\//);
+  assert.match(diagnosticsRoute, /replace\(\/\\\/\\d\+\(\?=\\\/\|\$\)\/gu, '\/:id'\)/);
+  assert.match(diagnostics, /return sanitizeDiagnosticRoute\(route\)/);
+  assert.match(telemetryInterceptor, /maskDiagnosticPathSegments\(target\.pathname\)/);
   assert.match(telemetryInterceptor, /diagnosticRequestPath/);
   assert.match(telemetryInterceptor, /http\.\$\{request\.method\.toLowerCase\(\)\}/);
   assert.match(externalLinks, /diagnostics\.checkpoint\(`external\.https:/);

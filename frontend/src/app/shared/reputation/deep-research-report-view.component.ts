@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, EventEmitter, Input, Output, computed, signal } from '@angular/core';
 import type {
   DeepCompanyResearchJob,
   DeepCompanyResearchReport,
@@ -72,7 +72,16 @@ export type DeepReportSectionAction = {
   styleUrl: './deep-research-report-view.component.scss'
 })
 export class DeepResearchReportViewComponent {
-  @Input() report: DeepCompanyResearchReport | null = null;
+  private readonly reportState = signal<DeepCompanyResearchReport | null>(null);
+
+  @Input()
+  set report(value: DeepCompanyResearchReport | null) {
+    this.reportState.set(value ?? null);
+  }
+  get report(): DeepCompanyResearchReport | null {
+    return this.reportState();
+  }
+
   @Input() job: DeepCompanyResearchJob | null = null;
   @Input() comparison: DeepResearchReportComparison | null = null;
   @Input() busy = false;
@@ -95,13 +104,18 @@ export class DeepResearchReportViewComponent {
   editingReviewIdeas = false;
   reviewIdeaDraft: string[] = [];
 
+  // Section parsing and markdown rendering run once per report object instead
+  // of on every change detection pass (the template reads these repeatedly).
+  private readonly rawDeepReportBlocks = computed(() => this.buildDeepReportBlocks(this.reportState()));
+  private readonly visibleDeepReportBlocks = computed(() => this.rawDeepReportBlocks()
+    .filter((block) => !this.isReviewIdeasSection(block.title)));
+  private readonly memoizedReviewIdeas = computed(() => this.buildReviewIdeas(this.reportState()));
+
   deepReportBlocks(): DeepReportBlock[] {
-    return this.rawDeepReportBlocks()
-      .filter((block) => !this.isReviewIdeasSection(block.title));
+    return this.visibleDeepReportBlocks();
   }
 
-  private rawDeepReportBlocks(): DeepReportBlock[] {
-    const report = this.report;
+  private buildDeepReportBlocks(report: DeepCompanyResearchReport | null): DeepReportBlock[] {
     if (!report) {
       return [];
     }
@@ -192,7 +206,11 @@ export class DeepResearchReportViewComponent {
   }
 
   reviewIdeas(): string[] {
-    const explicit = (this.report?.reviewIdeas ?? [])
+    return this.memoizedReviewIdeas();
+  }
+
+  private buildReviewIdeas(report: DeepCompanyResearchReport | null): string[] {
+    const explicit = (report?.reviewIdeas ?? [])
       .map((idea) => idea?.trim() ?? '')
       .filter(Boolean);
     if (explicit.length > 0) {

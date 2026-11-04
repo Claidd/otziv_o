@@ -3,6 +3,10 @@ import { Component, OnDestroy, signal } from '@angular/core';
 import { IonContent } from '@ionic/angular';
 import { ApiService, WhatsAppClientStatus } from '../core/api.service';
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
+import { VisibilityAwarePoller, backoffDelayMs } from '../shared/visibility-aware-poller';
+
+const WHATSAPP_STATUS_POLL_MS = 6000;
+const WHATSAPP_STATUS_MAX_BACKOFF_MS = 60_000;
 
 @Component({
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -84,23 +88,23 @@ export class WhatsAppBindPage implements OnDestroy {
   readonly status = signal<WhatsAppClientStatus | null>(null);
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
-  private refreshTimer: ReturnType<typeof setInterval> | null = null;
+  private failedLoads = 0;
+  // The QR code rotates, so it is re-read every 6 s while waiting for a scan;
+  // nothing is requested while the app is in the background, and errors back off.
+  private readonly poller = new VisibilityAwarePoller(() => {
+    const current = this.status();
+    if (!current?.ready && current?.configured !== false) {
+      this.loadStatus(false);
+    }
+  }, () => backoffDelayMs(WHATSAPP_STATUS_POLL_MS, this.failedLoads, WHATSAPP_STATUS_MAX_BACKOFF_MS));
 
   constructor(private readonly api: ApiService) {
     this.loadStatus();
-    this.refreshTimer = setInterval(() => {
-      const current = this.status();
-      if (!current?.ready && current?.configured !== false) {
-        this.loadStatus(false);
-      }
-    }, 6000);
+    this.poller.start();
   }
 
   ngOnDestroy(): void {
-    if (this.refreshTimer) {
-      clearInterval(this.refreshTimer);
-      this.refreshTimer = null;
-    }
+    this.poller.stop();
   }
 
   loadStatus(showLoading = true): void {
@@ -110,10 +114,13 @@ export class WhatsAppBindPage implements OnDestroy {
     this.error.set(null);
     this.api.getWhatsAppBindingStatus().subscribe({
       next: (status) => {
+        this.failedLoads = 0;
         this.status.set(status);
         this.loading.set(false);
       },
       error: (error) => {
+        this.failedLoads += 1;
+        this.poller.reschedule();
         this.error.set(this.errorMessage(error));
         this.loading.set(false);
       }

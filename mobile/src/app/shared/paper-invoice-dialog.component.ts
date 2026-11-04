@@ -1,6 +1,7 @@
 import { Component, effect, inject, OnDestroy, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
+import { VisibilityAwarePoller, backoffDelayMs } from './visibility-aware-poller';
 import { mobileEnvironment } from '../core/mobile-environment';
 
 export interface PaperTarget { kind: 'ORDER' | 'COMMON_INVOICE' | 'COMMON_PART'; id: number; }
@@ -15,6 +16,18 @@ const request = signal<Request | null>(null);
 export function openPaperInvoiceDialog(target: PaperTarget, fallback: () => void = () => {}, refresh: () => void = () => {}): void {
   request.set({ target, fallback, refresh });
 }
+const SETTLING_PAPER_STAGES = ['PENDING', 'INVOICE_CREATING', 'INVOICE_CREATED', 'ACT_CREATING', 'ACT_CREATED', 'FILES_READY', 'CANCEL_REQUESTED'];
+const SETTLING_PAPER_DELIVERIES = ['PENDING', 'SENDING'];
+/** A bank document whose state changes within seconds: being created, sent or cancelled. */
+export function isSettlingPaperDocument(d: PaperDocument): boolean {
+  return SETTLING_PAPER_STAGES.includes(d.stage)
+    || SETTLING_PAPER_DELIVERIES.includes(d.invoiceDelivery || '')
+    || SETTLING_PAPER_DELIVERIES.includes(d.actDelivery || '')
+    || (d.stage === 'CANCELLED' && (d.replacementState === 'PENDING' || SETTLING_PAPER_DELIVERIES.includes(d.cancellationDelivery || '')));
+}
+const FAST_PAPER_POLL_MS = 3000;
+const IDLE_PAPER_POLL_MS = 30_000;
+const MAX_PAPER_POLL_BACKOFF_MS = 60_000;
 @Component({
   selector: 'app-paper-invoice-dialog',
   imports: [FormsModule],
@@ -141,7 +154,10 @@ export class PaperInvoiceDialogComponent implements OnDestroy {
   readonly selectedOrders = signal<number[]>([]);
   private requestKey = '';
   private ticket = 0;
-  private timer: ReturnType<typeof setInterval> | null = null;
+  private pollFailures = 0;
+  // Fast while the document is being prepared or sent; a document waiting for
+  // payment (possibly for days) is re-read every 30 s, nothing while hidden.
+  private readonly poller = new VisibilityAwarePoller(() => this.poll(), () => this.pollDelayMs());
   private lookupTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly watch = effect(() => {
     const r = request();
@@ -241,11 +257,16 @@ export class PaperInvoiceDialogComponent implements OnDestroy {
     const id = this.context()?.document?.id; const ticket = this.ticket; const pollTicket = ++this.pollTicket;
     if (!id) return;
     this.http.get<Document>(this.baseUrl + '/api/paper-invoices/documents/' + id).subscribe({
-      next: document => { if (ticket === this.ticket && pollTicket === this.pollTicket) { if(this.pollFailed && !this.mutating()) {this.error.set('');this.pollFailed=false;} this.context.update(c => c ? { ...c, document } : c); if (['PAID','CANCEL_REVIEW'].includes(document.stage) || (document.stage==='CANCELLED' && document.replacementState!=='PENDING' && ['SENT','SKIPPED','UNKNOWN'].includes(document.cancellationDelivery || ''))) this.stop(); } },
-      error: e => { if (ticket === this.ticket && pollTicket === this.pollTicket && !this.mutating()) {this.pollFailed=true;this.failure(e);} }
+      next: document => { if (ticket === this.ticket && pollTicket === this.pollTicket) { this.pollFailures = 0; if(this.pollFailed && !this.mutating()) {this.error.set('');this.pollFailed=false;} this.context.update(c => c ? { ...c, document } : c); if (['PAID','CANCEL_REVIEW'].includes(document.stage) || (document.stage==='CANCELLED' && document.replacementState!=='PENDING' && ['SENT','SKIPPED','UNKNOWN'].includes(document.cancellationDelivery || ''))) this.stop(); else this.poller.reschedule(); } },
+      error: e => { if (ticket === this.ticket && pollTicket === this.pollTicket) { this.pollFailures += 1; this.poller.reschedule(); if (!this.mutating()) {this.pollFailed=true;this.failure(e);} } }
     });
   }
-  private startPolling(): void { if (!this.timer) this.timer = setInterval(() => this.poll(), 3000); }
+  private startPolling(): void { this.poller.start(); }
+  private pollDelayMs(): number {
+    if (this.pollFailures > 0) return backoffDelayMs(FAST_PAPER_POLL_MS, this.pollFailures, MAX_PAPER_POLL_BACKOFF_MS);
+    const document = this.context()?.document;
+    return document && !isSettlingPaperDocument(document) ? IDLE_PAPER_POLL_MS : FAST_PAPER_POLL_MS;
+  }
   canCancel(): boolean {
     const d=this.context()?.document;
     return !!d && !d.paidAt && ['PENDING','INVOICE_CREATED','ACT_CREATED','FILES_READY','WAITING_PAYMENT','NEEDS_REVIEW'].includes(d.stage);
@@ -293,6 +314,6 @@ export class PaperInvoiceDialogComponent implements OnDestroy {
   }
   delivery(value: string): string { return ({ SENT: 'отправлен', PENDING: 'ожидает отправки', SENDING: 'отправляется', UNKNOWN: 'доставку нужно проверить' } as Record<string, string>)[value] || 'проверяется'; }
   close(): void { if (this.mutating()) return; this.busy.set(false); ++this.lookupTicket; const r = request(); this.stop(); ++this.ticket; this.opened.set(false); request.set(null); if (this.context()?.document) r?.refresh(); }
-  private stop(): void { if (this.timer) clearInterval(this.timer); this.timer = null; if (this.lookupTimer) clearTimeout(this.lookupTimer); this.lookupTimer = null; }
+  private stop(): void { this.poller.stop(); this.pollFailures = 0; if (this.lookupTimer) clearTimeout(this.lookupTimer); this.lookupTimer = null; }
   ngOnDestroy(): void { ++this.ticket; ++this.lookupTicket; this.stop(); }
 }

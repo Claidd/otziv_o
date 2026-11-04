@@ -2554,15 +2554,6 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
     return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
   }
 
-  private withVncParams(rawUrl: string): string {
-    const url = new URL(rawUrl, window.location.origin);
-    url.searchParams.set('autoconnect', '1');
-    url.searchParams.set('reconnect', '1');
-    url.searchParams.set('resize', 'none');
-    url.searchParams.set('clip', 'true');
-    return url.toString();
-  }
-
   dateTimeLabel(value: string): string {
     if (!value) {
       return 'еще не запускалась';

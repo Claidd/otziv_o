@@ -529,7 +529,12 @@ export class ManagerArchiveComponent implements OnDestroy {
     });
   }
 
-  restoreStatusOptions(_order: ArchiveOrderListItem): string[] {
+  restoreStatusOptions(order: ArchiveOrderListItem | null | undefined): string[] {
+    // A paid archived order keeps its payment: it comes back only as «Оплачено».
+    // Returning it to work requires cancelling the payment first (the server enforces this).
+    if (order?.status === 'Оплачено') {
+      return ['Оплачено'];
+    }
     return [...this.restoreStatuses];
   }
 
@@ -734,7 +739,7 @@ export class ManagerArchiveComponent implements OnDestroy {
     this.recoveryWorkerId.set(null);
     this.restoreResult.set(null);
     this.restoreError.set(null);
-    this.restoreTargetStatus.set(this.restoreStatuses[0]);
+    this.restoreTargetStatus.set(this.restoreStatusOptions(fallbackOrder)[0]);
     this.restoreLoading.set(true);
 
     this.managerApi.getArchiveOrder(orderId).subscribe({

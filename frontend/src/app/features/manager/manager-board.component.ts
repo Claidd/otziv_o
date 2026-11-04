@@ -450,11 +450,6 @@ export class ManagerBoardComponent implements OnDestroy {
       return;
     }
 
-    if (value.startsWith('href:')) {
-      window.location.href = value.slice(5);
-      return;
-    }
-
     if (value.startsWith('route:')) {
       this.mobileMenuOpen.set(false);
       void this.router.navigateByUrl(value.slice(6));

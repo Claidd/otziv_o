@@ -1,0 +1,50 @@
+<app-admin-layout title="Telegram" active="telegram-bind" rightPanelMode="custom">
+  <section class="whatsapp-bind">
+    <div class="bind-head">
+      <div>
+        <p class="eyebrow">Личный кабинет</p>
+        <h2>Привязка Telegram</h2>
+      </div>
+      <button type="button" class="refresh-button" (click)="issueLink()" [disabled]="loading()">
+        <span class="material-icons-sharp">link</span>
+        {{ loading() ? 'Получаю ссылку' : (link() ? 'Новая ссылка' : 'Привязать Telegram') }}
+      </button>
+    </div>
+
+    <article class="status-card neutral">
+      <span class="material-icons-sharp">info</span>
+      <div>
+        <strong>Как привязать</strong>
+        <p>
+          Нажмите «Привязать Telegram», затем «Открыть Telegram» и в чате с ботом нажмите «Запустить».
+          Бот привяжет этот Telegram к вашей учётной записи. Ссылка одноразовая и действует 15 минут.
+          Если Telegram уже привязан, новая привязка заменит прежний чат.
+        </p>
+      </div>
+    </article>
+
+    @if (error()) {
+      <article class="status-card danger">
+        <span class="material-icons-sharp">error</span>
+        <div>
+          <strong>Ссылка недоступна</strong>
+          <p>{{ error() }}</p>
+        </div>
+      </article>
+    }
+
+    @if (link()) {
+      <article class="status-card success">
+        <span class="material-icons-sharp">send</span>
+        <div>
+          <strong>Ссылка готова</strong>
+          <p>Действует до {{ expiresAtLabel() }}. Не пересылайте её другим людям.</p>
+          <button type="button" class="refresh-button" (click)="openTelegram()">
+            <span class="material-icons-sharp">open_in_new</span>
+            Открыть Telegram
+          </button>
+        </div>
+      </article>
+    }
+  </section>
+</app-admin-layout>

@@ -151,6 +151,22 @@ public class AppUpdaterPlugin extends Plugin {
             if (status == DownloadManager.STATUS_FAILED || status == DownloadManager.STATUS_PAUSED) {
                 result.put("reason", cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON)));
             }
+            if (status == DownloadManager.STATUS_SUCCESSFUL) {
+                long apkVersionCode = downloadedApkVersionCode();
+                if (apkVersionCode >= 0 && apkVersionCode <= installedVersionCode()) {
+                    // The update is installed (or the APK is older): drop the
+                    // leftover APK so it is never offered or launched again.
+                    discardDownload(downloadId);
+                    JSObject idle = new JSObject();
+                    idle.put("state", "idle");
+                    idle.put("progress", 0);
+                    call.resolve(idle);
+                    return;
+                }
+                if (apkVersionCode >= 0) {
+                    result.put("versionCode", apkVersionCode);
+                }
+            }
             call.resolve(result);
         } catch (Exception exception) {
             call.reject("Не удалось проверить загрузку обновления.", exception);
@@ -208,6 +224,7 @@ public class AppUpdaterPlugin extends Plugin {
             throw new SecurityException("APK относится к другому приложению.");
         }
         if (versionCode(archive) <= versionCode(installed)) {
+            discardDownload(preferences().getLong(KEY_DOWNLOAD_ID, -1L));
             throw new SecurityException("Версия APK не новее установленной.");
         }
         if (!signatureDigests(archive).equals(signatureDigests(installed))) {
@@ -277,6 +294,53 @@ public class AppUpdaterPlugin extends Plugin {
 
     private void clearDownloadState() {
         preferences().edit().clear().apply();
+    }
+
+    /** versionCode of the downloaded APK of this app, or -1 when it cannot be read. */
+    private long downloadedApkVersionCode() {
+        try {
+            File apk = updateFile(preferences().getString(KEY_FILE_NAME, ""));
+            if (!apk.isFile()) {
+                return -1L;
+            }
+            PackageInfo archive = getContext().getPackageManager().getPackageArchiveInfo(apk.getAbsolutePath(), 0);
+            if (archive == null || !getContext().getPackageName().equals(archive.packageName)) {
+                return -1L;
+            }
+            return versionCode(archive);
+        } catch (Exception exception) {
+            return -1L;
+        }
+    }
+
+    private long installedVersionCode() {
+        try {
+            return versionCode(installedPackageInfo());
+        } catch (Exception exception) {
+            // Unknown: never discard a download on a failed lookup.
+            return -1L;
+        }
+    }
+
+    /** Removes the download entry, the APK file and the stored download state. */
+    private void discardDownload(long downloadId) {
+        String fileName = preferences().getString(KEY_FILE_NAME, "");
+        if (downloadId >= 0) {
+            try {
+                downloadManager().remove(downloadId);
+            } catch (Exception ignored) {
+                // The file is deleted below as well.
+            }
+        }
+        try {
+            File apk = updateFile(fileName);
+            if (apk.exists()) {
+                apk.delete();
+            }
+        } catch (Exception ignored) {
+            // No valid file name was stored: nothing to delete.
+        }
+        clearDownloadState();
     }
 
     private String sha256(File file) throws Exception {

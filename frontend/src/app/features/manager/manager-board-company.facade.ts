@@ -19,6 +19,7 @@ import {
   removeSessionDraft,
   writeSessionDraft
 } from '../../shared/session-draft-storage';
+import { describeFieldDraftConflicts, fieldDraftOf, restoreFieldDraft } from '../../shared/field-draft';
 import {
   managerCompanyEditDraft,
   managerCompanyFilialDeletedLabel,
@@ -33,6 +34,35 @@ import type {
   ManagerCompanyBillingDraftChange,
   ManagerCompanyFilialUpdateRequest
 } from './manager-company-edit-modal.component';
+
+const COMPANY_EDIT_FIELD_LABELS: Partial<Record<keyof CompanyUpdateRequest, string>> = {
+  title: 'Название',
+  urlChat: 'Ссылка на чат',
+  urlSite: 'Официальный сайт',
+  telephone: 'Телефон',
+  city: 'Город компании',
+  email: 'Email',
+  phones: 'Телефоны',
+  mobilePhones: 'Мобильные',
+  whatsappPhones: 'WhatsApp',
+  emails: 'Email-адреса',
+  websites: 'Сайты',
+  vkUrl: 'VK',
+  telegramUrl: 'Telegram',
+  region: 'Регион',
+  address: 'Адрес',
+  industries: 'Отрасли',
+  companyType: 'Тип',
+  categoryId: 'Категория',
+  subCategoryId: 'Подкатегория',
+  statusId: 'Статус',
+  managerId: 'Менеджер',
+  commentsCompany: 'Комментарий',
+  active: 'Активность',
+  publicationProgressReportsEnabled: 'Оповещения о каждой публикации',
+  allowWorkerPublicationDateEdit: 'Разрешить специалистам изменять даты публикации',
+  contractorPaymentRoutingEnabled: 'По счёту / по ссылке'
+};
 
 export type ManagerCompanyBillingDraft = {
   name: string;
@@ -600,11 +630,24 @@ export class ManagerBoardCompanyFacade {
   }
 
   private applyCompanyEditPayload(payload: CompanyEditPayload): void {
-    const sourceDraft = managerCompanyEditDraft(payload);
-    const storedDraft = readSessionDraft<CompanyUpdateRequest>(this.companyEditSessionDraftKey(payload.id));
+    // Only fields the user changed are restored over fresh server data, so a
+    // reload never reverts what other users saved in the untouched fields.
+    const { draft, conflicts } = restoreFieldDraft(
+      managerCompanyEditDraft(payload),
+      readSessionDraft<unknown>(this.companyEditSessionDraftKey(payload.id))
+    );
     this.editCompany.set(payload);
-    this.editDraft.set(storedDraft ?? sourceDraft);
+    this.editDraft.set(draft);
     this.writeCompanyEditSessionDraft();
+    if (conflicts.length > 0) {
+      this.deps.toastService.warning(
+        'Компанию изменил другой пользователь',
+        `После начала вашего редактирования изменены поля: ${describeFieldDraftConflicts(conflicts, COMPANY_EDIT_FIELD_LABELS)}. `
+          + 'В форме оставлены ваши несохранённые значения — проверьте их перед сохранением.',
+        // An action keeps the warning on screen until the user closes it.
+        { label: 'Понятно', callback: () => undefined }
+      );
+    }
   }
 
   private loadCompanyBilling(companyId: number): void {
@@ -744,12 +787,13 @@ export class ManagerBoardCompanyFacade {
     }
 
     const key = this.companyEditSessionDraftKey(company.id);
-    if (!this.isCompanyEditDraftChanged(company, draft)) {
+    const changes = fieldDraftOf(managerCompanyEditDraft(company), draft);
+    if (!changes) {
       removeSessionDraft(key);
       return;
     }
 
-    writeSessionDraft(key, draft);
+    writeSessionDraft(key, changes);
   }
 
   private removeCompanyEditSessionDraft(companyId = this.editCompany()?.id): void {
@@ -760,11 +804,6 @@ export class ManagerBoardCompanyFacade {
 
   private companyEditSessionDraftKey(companyId: number): string {
     return `manager-company-edit:${companyId}`;
-  }
-
-  private isCompanyEditDraftChanged(company: CompanyEditPayload, draft: CompanyUpdateRequest): boolean {
-    const source = managerCompanyEditDraft(company);
-    return (Object.keys(source) as (keyof CompanyUpdateRequest)[]).some((field) => source[field] !== draft[field]);
   }
 
   private applyCompanyCardPatch(payload: CompanyEditPayload): void {

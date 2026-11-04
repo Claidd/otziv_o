@@ -4,6 +4,7 @@ import { from, switchMap } from 'rxjs';
 import { MobileAuthDiagnosticsService } from './mobile-auth-diagnostics.service';
 import { mobileEnvironment } from './mobile-environment';
 import { MobileNativeService } from './mobile-native.service';
+import { maskDiagnosticPathSegments } from './mobile-diagnostics-route';
 
 export const mobileTelemetryInterceptor: HttpInterceptorFn = (request, next) => {
   const apiBaseUrl = mobileEnvironment.apiBaseUrl;
@@ -34,10 +35,8 @@ export function diagnosticRequestPath(url: string, apiBaseUrl: string): string {
         return '/external';
       }
     }
-    return target.pathname
-      .replace(/\/[0-9a-f]{8}-[0-9a-f-]{27,}(?=\/|$)/giu, '/:id')
-      .replace(/\/\d+(?=\/|$)/gu, '/:id')
-      .slice(0, 96) || '/';
+    // Public payment requests carry the capability token in the path.
+    return maskDiagnosticPathSegments(target.pathname).slice(0, 96) || '/';
   } catch {
     return '/unknown';
   }

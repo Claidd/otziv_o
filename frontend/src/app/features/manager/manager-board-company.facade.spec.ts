@@ -318,3 +318,83 @@ describe('ManagerBoardCompanyFacade', () => {
     expect(state.toastMessages).toContain('success:Филиал сохранен:Updated filial');
   });
 });
+
+describe('ManagerBoardCompanyFacade session drafts', () => {
+  const draftKey = 'otziv:draft:manager-company-edit:10';
+
+  beforeEach(() => {
+    window.sessionStorage.clear();
+  });
+
+  afterEach(() => {
+    window.sessionStorage.clear();
+  });
+
+  it('stores only the changed fields with the server values they were edited from', () => {
+    const { facade } = createFacade();
+
+    facade.openCompanyEdit(companyCard());
+    facade.handleCompanyEditDraftChange({ field: 'commentsCompany', value: 'my note' });
+
+    const stored = JSON.parse(window.sessionStorage.getItem(draftKey) ?? 'null');
+    expect(stored.value).toEqual({
+      kind: 'field-draft',
+      version: 1,
+      changes: { commentsCompany: 'my note' },
+      base: { commentsCompany: 'company note' }
+    });
+
+    facade.handleCompanyEditDraftChange({ field: 'commentsCompany', value: 'company note' });
+    expect(window.sessionStorage.getItem(draftKey)).toBeNull();
+  });
+
+  it('restores the user change over fresh data without reverting fields another user saved', () => {
+    const first = createFacade();
+    first.facade.openCompanyEdit(companyCard());
+    first.facade.handleCompanyEditDraftChange({ field: 'commentsCompany', value: 'my note' });
+
+    // The page reloads after another manager renamed the company and changed its status.
+    const reloaded = createFacade({
+      payload: companyPayload({ title: 'Renamed by colleague', status: option(7, 'В работе') })
+    });
+    reloaded.facade.openCompanyEdit(companyCard());
+
+    expect(reloaded.facade.editDraft()?.commentsCompany).toBe('my note');
+    expect(reloaded.facade.editDraft()?.title).toBe('Renamed by colleague');
+    expect(reloaded.facade.editDraft()?.statusId).toBe(7);
+    expect(reloaded.toastMessages.some((message) => message.startsWith('warning:'))).toBe(false);
+  });
+
+  it('warns visibly when another user changed a field the draft also changed', () => {
+    const first = createFacade();
+    first.facade.openCompanyEdit(companyCard());
+    first.facade.handleCompanyEditDraftChange({ field: 'commentsCompany', value: 'my note' });
+
+    const reloaded = createFacade({ payload: companyPayload({ commentsCompany: 'colleague note' }) });
+    reloaded.facade.openCompanyEdit(companyCard());
+
+    expect(reloaded.facade.editDraft()?.commentsCompany).toBe('my note');
+    const warning = reloaded.toastMessages.find((message) => message.startsWith('warning:Компанию изменил другой пользователь'));
+    expect(warning).toContain('«Комментарий» (сейчас сохранено: «colleague note»)');
+
+    // The warning is shown once: the stored base now follows the fresh server value.
+    const again = createFacade({ payload: companyPayload({ commentsCompany: 'colleague note' }) });
+    again.facade.openCompanyEdit(companyCard());
+    expect(again.facade.editDraft()?.commentsCompany).toBe('my note');
+    expect(again.toastMessages.some((message) => message.startsWith('warning:'))).toBe(false);
+  });
+
+  it('ignores a legacy whole-form draft instead of reverting fresh server data', () => {
+    window.sessionStorage.setItem(draftKey, JSON.stringify({
+      value: { ...companyPayload(), title: 'Old title', commentsCompany: 'old note' },
+      updatedAt: Date.now()
+    }));
+    const { facade } = createFacade({ payload: companyPayload({ title: 'Fresh title' }) });
+
+    facade.openCompanyEdit(companyCard());
+
+    expect(facade.editDraft()?.title).toBe('Fresh title');
+    expect(facade.editDraft()?.commentsCompany).toBe('company note');
+    expect(window.sessionStorage.getItem(draftKey)).toBeNull();
+  });
+});

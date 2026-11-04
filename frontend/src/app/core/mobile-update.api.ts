@@ -16,31 +16,13 @@ export interface MobileUpdateRelease {
   publishedAt: string | null;
 }
 
-export interface PublishMobileUpdateRequest {
-  apk: File;
-  versionCode: number;
-  versionName: string;
-  minSupportedVersionCode: number;
-  required: boolean;
-  notes: string;
-}
-
+// Publishing through /api/admin/mobile-update is closed on the server (410)
+// since the signing key change; releases go to the /android-new/ channel.
 @Injectable({ providedIn: 'root' })
 export class MobileUpdateApi {
   constructor(private readonly http: HttpClient) {}
 
   current(): Observable<MobileUpdateRelease> {
     return this.http.get<MobileUpdateRelease>(`${appEnvironment.apiBaseUrl}/api/mobile-update`);
-  }
-
-  publish(request: PublishMobileUpdateRequest): Observable<MobileUpdateRelease> {
-    const body = new FormData();
-    body.append('apk', request.apk);
-    body.append('versionCode', String(request.versionCode));
-    body.append('versionName', request.versionName);
-    body.append('minSupportedVersionCode', String(request.minSupportedVersionCode));
-    body.append('required', String(request.required));
-    body.append('notes', request.notes);
-    return this.http.post<MobileUpdateRelease>(`${appEnvironment.apiBaseUrl}/api/admin/mobile-update`, body);
   }
 }

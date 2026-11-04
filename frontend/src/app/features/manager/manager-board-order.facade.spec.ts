@@ -187,6 +187,10 @@ function createFacade(config: {
       error: (title: string, message?: string) => {
         toastMessages.push(`error:${title}:${message ?? ''}`);
         return toastMessages.length;
+      },
+      warning: (title: string, message?: string) => {
+        toastMessages.push(`warning:${title}:${message ?? ''}`);
+        return toastMessages.length;
       }
     },
     loadBoard: () => {
@@ -334,5 +338,50 @@ describe('ManagerBoardOrderFacade', () => {
     state.facade.changePaymentRoute('OWNER_TBANK');
 
     expect(state.lastPaymentRouteRequest?.expectedTargetPaymentProfileId).toBe(81);
+  });
+});
+
+describe('ManagerBoardOrderFacade session drafts', () => {
+  beforeEach(() => {
+    window.sessionStorage.clear();
+  });
+
+  afterEach(() => {
+    window.sessionStorage.clear();
+  });
+
+  it('restores only the edited fields over fresh order data', () => {
+    const first = createFacade();
+    first.facade.openOrderEdit(order({ id: 30 }));
+    first.facade.handleOrderEditDraftChange({ field: 'orderComments', value: 'my order note' });
+
+    // Meanwhile another user published reviews and reassigned the specialist.
+    const reloaded = createFacade({ orderPayload: orderPayload({ counter: 5, worker: option(42, 'Other worker') }) });
+    reloaded.facade.openOrderEdit(order({ id: 30 }));
+
+    expect(reloaded.facade.orderDraft()).toEqual({
+      filialId: 21,
+      workerId: 42,
+      managerId: 31,
+      counter: 5,
+      orderComments: 'my order note',
+      commentsCompany: 'company note',
+      complete: false,
+      removePreviousWorkerFromCompany: false
+    });
+    expect(reloaded.toastMessages.some((message) => message.startsWith('warning:'))).toBe(false);
+  });
+
+  it('warns when the edited field was changed by another user', () => {
+    const first = createFacade();
+    first.facade.openOrderEdit(order({ id: 30 }));
+    first.facade.handleOrderEditDraftChange({ field: 'counter', value: 9 });
+
+    const reloaded = createFacade({ orderPayload: orderPayload({ counter: 5 }) });
+    reloaded.facade.openOrderEdit(order({ id: 30 }));
+
+    expect(reloaded.facade.orderDraft()?.counter).toBe(9);
+    expect(reloaded.toastMessages.some((message) => message.startsWith('warning:Заказ изменил другой пользователь')
+      && message.includes('«Опубликовано»'))).toBe(true);
   });
 });
