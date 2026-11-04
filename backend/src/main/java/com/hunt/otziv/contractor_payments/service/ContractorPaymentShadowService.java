@@ -1025,6 +1025,21 @@ public class ContractorPaymentShadowService {
         return reconcileOneAllocation(allocationId);
     }
 
+    /**
+     * The polling queue re-selects an allocation until lastReconciledAt moves; this branch used to
+     * return without stamping it, so such allocations were reconciled again every minute. The
+     * source locks are already held (order, then link), so the allocation lock follows them.
+     */
+    private ContractorPaymentAllocation markActualPaymentReconciled(ContractorPaymentAllocation snapshot,
+                                                                    LocalDateTime now) {
+        ContractorPaymentAllocation latest = lockLatestAttempt(snapshot);
+        if (latest == null) {
+            return snapshot;
+        }
+        latest.setLastReconciledAt(now);
+        return allocationRepository.save(latest);
+    }
+
     private ContractorPaymentAllocation reconcileOneAllocation(Long allocationId) {
         if (allocationId == null) {
             return null;
@@ -1050,7 +1065,7 @@ public class ContractorPaymentShadowService {
             }
             PaymentLink link = sourcePrelude.link();
             if (!isFinalAttributedPaymentLink(link)) {
-                return snapshot;
+                return markActualPaymentReconciled(snapshot, now);
             }
             if (isReturnedPaymentLink(link)) {
                 taskReturnBridge.recordAuthoritativePaymentLinkReturn(link);
@@ -1060,7 +1075,8 @@ public class ContractorPaymentShadowService {
             Map<Long, ContractorPaymentAllocation> reconciled = reconcileAttributedPaymentLinkReturnLocked(
                     link, sourceSnapshots, plan, now
             );
-            return reconciled.getOrDefault(snapshot.getId(), snapshot);
+            ContractorPaymentAllocation result = reconciled.get(snapshot.getId());
+            return result != null ? result : markActualPaymentReconciled(snapshot, now);
         }
         if (snapshot.getSourceType() == ContractorAllocationSourceType.PAYMENT_LINK) {
             PaymentSourcePrelude sourcePrelude = lockPaymentSourceOrderFirst(

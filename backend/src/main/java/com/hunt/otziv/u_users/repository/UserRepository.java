@@ -145,7 +145,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
         JOIN u.managers m
         JOIN FETCH m.user mu
         JOIN mu.roles mr
-        LEFT JOIN FETCH mu.image
         LEFT JOIN FETCH mu.workers w
         LEFT JOIN FETCH w.user
         LEFT JOIN FETCH mu.operators o
@@ -157,6 +156,19 @@ public interface UserRepository extends JpaRepository<User, Long> {
           AND mr.name = 'ROLE_MANAGER'
     """)
     Set<Manager> findManagersWithTeamByUsername(@Param("username") String username);
+
+    /** Same owner→active managers relation as findManagersWithTeamByUsername, ids only (no team graph, no avatars). */
+    @Query("""
+        SELECT DISTINCT m.id
+        FROM User u
+        JOIN u.managers m
+        JOIN m.user mu
+        JOIN mu.roles mr
+        WHERE u.username = :username
+          AND mu.active = true
+          AND mr.name = 'ROLE_MANAGER'
+    """)
+    Set<Long> findActiveManagerIdsByOwnerUsername(@Param("username") String username);
 
     @Query("""
         SELECT DISTINCT u

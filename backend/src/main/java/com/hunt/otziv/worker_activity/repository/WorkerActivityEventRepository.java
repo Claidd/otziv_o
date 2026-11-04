@@ -87,4 +87,16 @@ public interface WorkerActivityEventRepository extends JpaRepository<WorkerActiv
 
     @Modifying
     long deleteByCreatedAtBefore(LocalDateTime cutoff);
+
+    /** One bounded batch per call: the derived delete loaded every row and removed them one by one. */
+    @Modifying
+    @org.springframework.transaction.annotation.Transactional
+    @org.springframework.data.jpa.repository.Query(value = """
+        DELETE FROM worker_activity_events
+        WHERE created_at < :cutoff
+        ORDER BY created_at
+        LIMIT :batchSize
+        """, nativeQuery = true)
+    int deleteBatchCreatedBefore(@org.springframework.data.repository.query.Param("cutoff") LocalDateTime cutoff,
+                                 @org.springframework.data.repository.query.Param("batchSize") int batchSize);
 }

@@ -207,9 +207,7 @@ public class CommonInvoiceArchiveService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Пользователь не определен");
         }
         if (managerPermissionService.hasRole(authentication, "OWNER")) {
-            Set<Long> managerIds = userService.findManagersByUserName(principal.getName()).stream()
-                    .map(Manager::getId)
-                    .collect(Collectors.toSet());
+            Set<Long> managerIds = userService.findManagerIdsByUserName(principal.getName());
             return ArchiveAccessScope.managers(managerIds);
         }
         if (managerPermissionService.hasRole(authentication, "MANAGER")) {

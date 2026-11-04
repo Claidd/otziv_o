@@ -66,7 +66,7 @@ class ManagerAccessServiceTest {
     @Test
     void ownerCanAccessOnlyEntitiesAssignedToOwnedManagers() {
         Authentication owner = authentication("owner", "ROLE_OWNER");
-        when(userService.findManagersByUserName("owner")).thenReturn(Set.of(manager(7L), manager(8L)));
+        when(userService.findManagerIdsByUserName("owner")).thenReturn(Set.of(7L, 8L));
         when(orderRepository.existsByIdAndManager_IdIn(10L, Set.of(7L, 8L))).thenReturn(true);
         when(companyRepository.existsByIdAndManager_IdIn(20L, Set.of(7L, 8L))).thenReturn(false);
 
@@ -133,7 +133,7 @@ class ManagerAccessServiceTest {
         assertTrue(service.canAccessArchivedOrder(null, null, admin));
 
         Authentication owner = authentication("owner", "ROLE_OWNER");
-        when(userService.findManagersByUserName("owner")).thenReturn(Set.of(manager(7L)));
+        when(userService.findManagerIdsByUserName("owner")).thenReturn(Set.of(7L));
         assertTrue(service.canAccessArchivedOrder(7L, 12L, owner));
         assertFalse(service.canAccessArchivedOrder(8L, 12L, owner));
 
@@ -205,7 +205,7 @@ class ManagerAccessServiceTest {
     @Test
     void currentLockedOrderScopePreservesRestrictedOwnerManagerMembership() {
         Authentication actor = authentication("owner", "ROLE_OWNER");
-        when(userService.findManagersByUserName("owner")).thenReturn(Set.of(manager(7L)));
+        when(userService.findManagerIdsByUserName("owner")).thenReturn(Set.of(7L));
         assertTrue(service.canAccessCurrentOrderManager(7L, actor));
         assertFalse(service.canAccessCurrentOrderManager(8L, actor));
         assertFalse(service.canAccessCurrentOrderManager(null, actor));
