@@ -38,6 +38,7 @@ public class ReputationContentPackJobService {
 
     public ReputationContentPackJobStatus start(Long companyId, ReputationContentPackRequest request) {
         ReputationContentPackRequest safeRequest = safeRequest(request);
+        java.util.concurrent.atomic.AtomicBoolean created = new java.util.concurrent.atomic.AtomicBoolean();
         Long jobId = transactionTemplate.execute(status -> {
             Company company = companyRepository.findByIdForReputationAi(companyId)
                     .orElseThrow(() -> new UsernameNotFoundException(
@@ -60,10 +61,22 @@ public class ReputationContentPackJobService {
             entity.setStartedAt(null);
             entity.setCompletedAt(null);
             ReputationContentPackJobEntity saved = jobRepository.save(entity);
+            created.set(true);
             return saved.getId();
         });
 
-        reputationDeepReportExecutor.execute(() -> run(jobId));
+        if (created.get()) {
+            try {
+                reputationDeepReportExecutor.execute(() -> run(jobId));
+            } catch (RuntimeException rejected) {
+                // Full queue: fail the job visibly instead of leaving it QUEUED forever.
+                saveFailed(jobId, new IllegalStateException(
+                        "Очередь AI-задач переполнена. Повторите через несколько минут.", rejected));
+                throw new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
+                        "Очередь AI-задач переполнена. Повторите через несколько минут.");
+            }
+        }
         return findById(jobId)
                 .orElseThrow(() -> new IllegalStateException("Не удалось создать задачу AI-пакета"));
     }
@@ -166,7 +179,7 @@ public class ReputationContentPackJobService {
         }
 
         LocalDateTime startedAt = entity.getStartedAt();
-        return startedAt != null && startedAt.isAfter(LocalDateTime.now().minusMinutes(15));
+        return startedAt != null && startedAt.isAfter(LocalDateTime.now().minusMinutes(30));
     }
 
     private String contentPackModel(ReputationContentPackRequest request) {

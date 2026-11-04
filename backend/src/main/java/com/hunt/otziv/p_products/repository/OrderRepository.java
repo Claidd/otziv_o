@@ -36,6 +36,10 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
     long countByFilial_Id(Long filialId);
 
+    /** Archived orders keep their filial id without a foreign key; deleting the filial breaks their restore. */
+    @Query(value = "SELECT COUNT(*) FROM archive_orders WHERE order_filial = :filialId AND restored_at IS NULL", nativeQuery = true)
+    long countArchivedByFilialId(@Param("filialId") Long filialId);
+
     boolean existsByCompany_IdAndWorker_IdAndCompleteFalseAndIdNot(Long companyId, Long workerId, Long excludedOrderId);
 
     @Query("SELECT c.id FROM Order o LEFT JOIN o.company c WHERE o.id = :orderId")
@@ -1247,6 +1251,18 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     )
     Page<Long> findPageIdByCompanyId(@Param("companyId") long companyId,
                                      Pageable pageable);
+
+    @Query("""
+        SELECT o.id
+        FROM Order o
+        LEFT JOIN o.status s
+        WHERE o.company.id = :companyId
+          AND o.complete = false
+          AND COALESCE(s.title, '') NOT IN :inactiveStatuses
+        ORDER BY o.id
+    """)
+    List<Long> findOpenOrderIdsByCompanyId(@Param("companyId") Long companyId,
+                                           @Param("inactiveStatuses") java.util.Collection<String> inactiveStatuses);
 
     @Query("""
         SELECT CASE WHEN COUNT(o.id) > 0 THEN true ELSE false END

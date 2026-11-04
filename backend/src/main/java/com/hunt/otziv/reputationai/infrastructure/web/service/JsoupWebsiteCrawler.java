@@ -193,6 +193,9 @@ public class JsoupWebsiteCrawler implements WebsiteCrawler {
             CrawlBudget budget
     ) throws IOException {
         Duration timeout = budget.requestTimeout(properties.getWebsiteTimeout());
+        // setResponseTimeout bounds each socket read only; a server trickling one byte per read
+        // could otherwise hold an AI worker thread indefinitely. Bound the whole body read too.
+        long bodyDeadlineNanos = System.nanoTime() + timeout.toNanos();
         Timeout apacheTimeout = Timeout.ofMilliseconds(timeout.toMillis());
         RequestConfig requestConfig = RequestConfig.custom()
                 .setConnectTimeout(apacheTimeout)
@@ -227,7 +230,7 @@ public class JsoupWebsiteCrawler implements WebsiteCrawler {
                 budget.validateDeclaredLength(declaredLength);
                 if (status >= 300 && status < 400) {
                     if (entity != null) {
-                        readBounded(entity.getContent(), budget);
+                        readBounded(entity.getContent(), budget, bodyDeadlineNanos);
                     }
                     return new FetchResponse(requestUrl, status, location, "", new byte[0]);
                 }
@@ -238,19 +241,22 @@ public class JsoupWebsiteCrawler implements WebsiteCrawler {
                 if (!isAllowedContentType(contentType, allowXml)) {
                     throw new IOException("Unsupported response content type");
                 }
-                byte[] body = entity == null ? new byte[0] : readBounded(entity.getContent(), budget);
+                byte[] body = entity == null ? new byte[0] : readBounded(entity.getContent(), budget, bodyDeadlineNanos);
                 return new FetchResponse(requestUrl, status, location, contentType, body);
             });
         }
     }
 
-    private byte[] readBounded(InputStream input, CrawlBudget budget) throws IOException {
+    private byte[] readBounded(InputStream input, CrawlBudget budget, long deadlineNanos) throws IOException {
         int responseLimit = properties.getMaxWebsiteResponseBytes();
         ByteArrayOutputStream output = new ByteArrayOutputStream(Math.min(responseLimit, 32_768));
         byte[] buffer = new byte[8_192];
         int read;
         int responseBytes = 0;
         while ((read = input.read(buffer)) != -1) {
+            if (System.nanoTime() - deadlineNanos > 0) {
+                throw new IOException("Website response exceeded time budget");
+            }
             responseBytes += read;
             if (responseBytes > responseLimit) {
                 throw new IOException("Website response exceeds byte limit");

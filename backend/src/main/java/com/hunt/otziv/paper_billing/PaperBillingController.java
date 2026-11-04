@@ -23,7 +23,7 @@ public class PaperBillingController {
     @PostMapping("/{kind}/{targetId}/reconcile")
     public void reconcile(@PathVariable String kind,@PathVariable Long targetId,Authentication auth) {
         service.context(new Target(kind,targetId),auth);
-        reconciliation.check();
+        reconciliation.checkRequestedByUser();
     }
     @GetMapping("/{kind}/{targetId}/context")
     public Context context(@PathVariable String kind,@PathVariable Long targetId,Authentication auth) {

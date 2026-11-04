@@ -937,7 +937,10 @@ public class OrderCreationServiceImpl implements OrderCreationService {
                 .id(order.getId())
                 .amount(repeatAmount(order))
                 .worker(convertToWorkerDTO(order.getWorker()))
-                .manager(convertToManagerDTO(order.getManager()))
+                // A repeat belongs to the company's current manager, not to whoever sold the previous order.
+                .manager(convertToManagerDTO(order.getCompany() != null && order.getCompany().getManager() != null
+                        ? order.getCompany().getManager()
+                        : order.getManager()))
                 .company(convertToCompanyDTO(order.getCompany()))
                 .filial(convertToFilialDTO(order.getFilial()))
                 .reviewFilialIds(reviewFilialIds(order))

@@ -12,10 +12,27 @@ import static com.hunt.otziv.paper_billing.PaperBillingModels.*;
 /** Bank statements are an independent recovery source; receipt IDs share the webhook's unique key. */
 @Service @RequiredArgsConstructor
 public class PaperBillingReconciliation {
+    static final String MULTI_PAGE_MARKER="multi_page_window";
+    private final java.util.concurrent.atomic.AtomicLong lastManualCheckNanos=new java.util.concurrent.atomic.AtomicLong(System.nanoTime()-java.util.concurrent.TimeUnit.MINUTES.toNanos(5));
+
     private final PaperBillingStore store;
     private final PaperBillingBankClient bank;
     private final PaperBillingSettings settings;
     private final PaperBillingSettlement settlement;
+    /**
+     * "Проверить оплату" from a card runs the global bank sweep synchronously; several managers
+     * clicking would hammer the bank API next to the 5-minute scheduler. Allow one manual sweep
+     * per minute; a skipped click is served by the sweep that just ran or the next scheduled one.
+     */
+    public void checkRequestedByUser() {
+        long now=System.nanoTime();
+        long previous=lastManualCheckNanos.get();
+        if (now-previous<java.util.concurrent.TimeUnit.MINUTES.toNanos(1) || !lastManualCheckNanos.compareAndSet(previous,now)) {
+            return;
+        }
+        check();
+    }
+
     @Scheduled(fixedDelay=300000,initialDelay=60000)
     public void check() {
         if (!settings.isEnabled() || !settings.isBankOperationsEnabled() || !bank.configured()) return;
@@ -45,7 +62,10 @@ public class PaperBillingReconciliation {
             LocalDate start=cursor.get("next_date") instanceof java.sql.Date d?d.toLocalDate():(LocalDate)cursor.get("next_date");
             LocalDate today=LocalDate.now(java.time.ZoneId.of("Europe/Moscow"));
             if (start.isAfter(today)) start=today;
-            LocalDate end=start.plusDays(6).isAfter(today)?today:start.plusDays(6);
+            // A window whose statement came back in several pages is re-requested one day at a time.
+            boolean narrow=MULTI_PAGE_MARKER.equals(cursor.get("error_text"));
+            int span=narrow?0:6;
+            LocalDate end=start.plusDays(span).isAfter(today)?today:start.plusDays(span);
             var response=bank.call("/open-banking/v1.0/statements",HttpMethod.POST,
                     Map.of("Data",Map.of("Statement",Map.of("accountId",id,"startDateTime",start.toString(),"endDateTime",end.toString()))));
             var data=response.path("Data").path("Statement");
@@ -59,7 +79,21 @@ public class PaperBillingReconciliation {
             return;
         }
         var response=bank.call("/open-banking/v1.0/accounts/"+id+"/statements/"+statement,HttpMethod.GET,null);
-        if (response.path("Meta").path("totalPages").asInt(1)>1) throw problem("Выписка требует дополнительной сверки страниц");
+        if (response.path("Meta").path("totalPages").asInt(1)>1) {
+            LocalDate windowEnd=cursor.get("window_end") instanceof java.sql.Date wd?wd.toLocalDate():(LocalDate)cursor.get("window_end");
+            LocalDate windowStart=cursor.get("next_date") instanceof java.sql.Date sd?sd.toLocalDate():(LocalDate)cursor.get("next_date");
+            if (windowEnd!=null && windowStart!=null && windowEnd.isAfter(windowStart)) {
+                // Previously this stopped reconciliation of the account forever (same request every
+                // 5 minutes). Request a one-day window instead; only a single day that still spans
+                // several pages needs manual attention.
+                store.jdbc().update("""
+                    UPDATE paper_invoice_statement_cursor SET statement_id=NULL,error_text=?
+                    WHERE account_id=? AND statement_id=?
+                    """,MULTI_PAGE_MARKER,id,statement);
+                return;
+            }
+            throw problem("Выписка требует дополнительной сверки страниц");
+        }
         boolean ready=false;
         for(var s:response.path("Data").path("Statement")) {
             if (!id.equals(s.path("accountId").asText()) || !statement.equals(s.path("statementId").asText()))

@@ -17,6 +17,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -133,6 +134,12 @@ public class CommonInvoiceCancellationService {
             }
             TbankCancelResponse response = tbankClient.cancel(runtimeProfile, new TbankCancelCommand(prepared.paymentId(), prepared.amountKopecks()));
             if (response.success()) {
+                // Cancel of a paid session is a refund at the bank: keep the bank's real outcome so a
+                // late CONFIRMED webhook can be recognised as a refunded payment, not a new one.
+                String bankStatus = response.status() == null ? "" : response.status().trim().toUpperCase(java.util.Locale.ROOT);
+                if (Set.of("REFUNDED", "PARTIAL_REFUNDED", "REVERSED", "PARTIAL_REVERSED").contains(bankStatus)) {
+                    return bankStatus;
+                }
                 return PAYMENT_REF_CANCELED;
             }
             log.warn("T-Bank Cancel для архивной ссылки общего счета ref={} вернул отказ: {}", prepared.refId(), response.errorText());

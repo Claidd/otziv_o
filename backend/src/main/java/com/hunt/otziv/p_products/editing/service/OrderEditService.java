@@ -41,6 +41,10 @@ public class OrderEditService {
     private final ReviewRecoveryTaskService reviewRecoveryTaskService;
     private final OrderAggregateMutationLockService orderAggregateMutationLockService;
     private final ContractorRouteAssignmentGuard contractorRouteAssignmentGuard;
+    /** Field-injected so existing constructors and tests stay unchanged. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private org.springframework.beans.factory.ObjectProvider<com.hunt.otziv.r_review.bot.service.ReviewBotChangeService>
+            reviewBotChangeServiceProvider;
 
     @Transactional
     public void updateOrder(OrderDTO orderDTO, Long companyId, Long orderId) {
@@ -65,11 +69,28 @@ public class OrderEditService {
             Filial newFilial = convertFilialDTOToFilial(orderDTO);
             requireFilialBelongsToCompany(newFilial, company);
             saveOrder.setFilial(newFilial);
+            boolean cityChanged = com.hunt.otziv.r_review.bot.service.ReviewBotChangeService.cityDiffers(currentFilial, newFilial);
 
+            java.util.List<Long> reassignBots = new java.util.ArrayList<>();
             for (Review review : reviewRepository.getAllByOrderId(saveOrder.getId())) {
+                if (review.isPublish()) {
+                    // A published review stays attributed to the filial and account it was posted for.
+                    continue;
+                }
                 review.setFilial(newFilial);
                 reviewService.save(review);
+                if (cityChanged && review.getBot() != null) {
+                    reassignBots.add(review.getId());
+                }
                 log.info("Сменили филиал у отзыва в заказе");
+            }
+            // Same rule as editing one review: a city change needs an account from the new city.
+            org.springframework.beans.factory.ObjectProvider<com.hunt.otziv.r_review.bot.service.ReviewBotChangeService> botChanges =
+                    reviewBotChangeServiceProvider;
+            com.hunt.otziv.r_review.bot.service.ReviewBotChangeService botChangeService =
+                    botChanges == null ? null : botChanges.getIfAvailable();
+            if (botChangeService != null) {
+                reassignBots.forEach(botChangeService::changeBotAfterReviewEdit);
             }
 
             isChanged = true;
@@ -188,6 +209,44 @@ public class OrderEditService {
             return null;
         }
         return workerService.getWorkerById(orderDTO.getWorker().getWorkerId());
+    }
+
+    private static final java.util.Set<String> FINISHED_ORDER_STATUSES = java.util.Set.of("Оплачено", "Архив", "Бан");
+
+    /**
+     * Owner decision: when a company changes manager, its open (unpaid, unfinished) orders move
+     * with it. Paid and finished orders keep the manager who sold them, so earned salary is not
+     * touched; an order whose payment recipient is already fixed is left as is and logged.
+     * Runs synchronously inside the company save transaction.
+     */
+    @org.springframework.context.event.EventListener
+    public void moveOpenOrdersToCompanyManager(com.hunt.otziv.c_companies.api.CompanyManagerChanged event) {
+        if (event == null || event.companyId() == null || event.newManagerId() == null) {
+            return;
+        }
+        Manager newManager = managerService.getManagerById(event.newManagerId());
+        if (newManager == null) {
+            return;
+        }
+        for (Long orderId : orderRepository.findOpenOrderIdsByCompanyId(event.companyId(), FINISHED_ORDER_STATUSES)) {
+            try {
+                contractorRouteAssignmentGuard.requireManagerReassignmentAllowed(orderId);
+            } catch (org.springframework.web.server.ResponseStatusException fixedRecipient) {
+                log.warn("Заказ {} оставлен у прежнего менеджера при смене менеджера компании {}: {}",
+                        orderId, event.companyId(), fixedRecipient.getReason());
+                continue;
+            }
+            // Optimistic (@Version) rather than FOR UPDATE: the company row is already being written in
+            // this transaction, and taking order locks after it would invert the canonical order→company order.
+            Order order = orderRepository.findById(orderId).orElse(null);
+            if (order == null || order.isComplete()
+                    || (order.getManager() != null && Objects.equals(order.getManager().getId(), newManager.getId()))) {
+                continue;
+            }
+            order.setManager(newManager);
+            orderRepository.save(order);
+            log.info("Заказ {} передан менеджеру {} вместе с компанией {}", orderId, newManager.getId(), event.companyId());
+        }
     }
 
     private Manager convertManagerDTOToManager(OrderDTO orderDTO) {

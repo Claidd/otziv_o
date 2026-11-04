@@ -27196,7 +27196,7 @@
     "sha256" : "c6017314050c744e163aa975035677e3c3b9d18c3d69c625e355e54807a820ae"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/common_billing/controller/CommonManualPaymentTaskReturnController.java",
-    "sha256" : "21c7e35df88b1b34edb215c42b5384bb52429e8af9246c7f1bf03ed765d10519"
+    "sha256" : "8f0d16b8a926f119817c317b203a3416b8dc01c14866cdf340835da88d6d6d64"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/common_billing/controller/PublicCommonInvoiceController.java",
     "sha256" : "601c75f3809a9cec7b1d976bc0858b904d48327f3aa2d9e5de9e1040ed66682a"
@@ -27289,7 +27289,7 @@
     "sha256" : "6b92b50624b4b170c6380c1249dca68e220dc5168ac316f9f000ffe14b47e01d"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/config/api/ApiExceptionHandler.java",
-    "sha256" : "9ccd2b9b19d6735a3f23b619bf806c7f91f6e48d30a28b3f3ff17fe8d231bc7f"
+    "sha256" : "870c1755c16136b4d421b155f73696b5fc9b8a02637567a1460210aaae3968ad"
   }, {
     "path" : "backend/src/main/java/com/hunt/otziv/contractor_payments/dto/ContractorActualPaymentAttributionModeResponse.java",
     "sha256" : "8bdf645f5401714fff8cc072675600bde66b2343cf791b40064990f2eb43b1ba"

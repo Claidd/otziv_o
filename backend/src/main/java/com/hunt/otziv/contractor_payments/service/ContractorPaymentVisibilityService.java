@@ -121,6 +121,8 @@ public class ContractorPaymentVisibilityService {
         LocalDate monthStart = monthStart(selectedDate);
         List<ContractorPaymentProfile> profiles = profileRepository.findAllWithUser().stream()
                 .filter(profile -> profile.getUser() != null && profile.getUser().isActive())
+                // A restricted owner must not see finances of accounts the journal hides from them.
+                .filter(profile -> targetAccessPolicy == null || targetAccessPolicy.canManageUser(profile.getUser().getId()))
                 .toList();
         if (profiles.isEmpty()) return List.of();
         SummaryPolicy policy = summaryPolicy();

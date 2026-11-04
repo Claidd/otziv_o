@@ -951,6 +951,16 @@ public class CommonInvoiceSettlementService implements com.hunt.otziv.common_bil
             return true;
         }
         String terminalStatus = durableTerminalWebhookStatus(status, success, errorCode);
+        if (PAYMENT_REF_CONFIRMED.equals(terminalStatus) && PAYMENT_REF_REFUNDED_STATUSES.contains(originalStatus)) {
+            // A redelivered CONFIRMED for a session that was already cancelled or refunded is not
+            // new money: the client got it back. Keep the refunded state so the ref can never be
+            // "applied" as a late payment (the standalone link path follows the same rule).
+            paymentRef.setReason(limit("confirmed_after_" + originalStatus.toLowerCase(Locale.ROOT) + "_ignored", 160));
+            paymentRefRepository.save(paymentRef);
+            log.warn("Поздний CONFIRMED по уже возвращённой/отменённой ссылке {} общего счета {} проигнорирован",
+                    paymentRefLabel(paymentRef), invoice.getId());
+            return true;
+        }
         paymentRef.setStatus(terminalStatus);
         paymentRefRepository.save(paymentRef);
         if (PAYMENT_REF_CONFIRMED.equals(terminalStatus)) {

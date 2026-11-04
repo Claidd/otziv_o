@@ -37,9 +37,12 @@ public class OpenAIConfig {
 
         Duration timeout = Duration.ofSeconds(40);
 
+        // The application already retries text generation (AutoTextServiceImpl); SDK retries on top
+        // of that multiplied one click into up to nine synchronous, paid gpt-4o calls.
         OpenAIOkHttpClient.Builder builder = OpenAIOkHttpClient.builder()
                 .apiKey(apiKey)
-                .timeout(timeout);
+                .timeout(timeout)
+                .maxRetries(0);
 
         if (proxy != null) {
             builder.proxy(proxy);

@@ -92,7 +92,9 @@ public class FilialServiceImpl implements FilialService{
     @Transactional(readOnly = true)
     public FilialDeletionPreview previewDeletion(Long companyId, Long filialId) {
         Filial filial = requireOwnedFilial(companyId, filialId);
-        long orderCount = orderRepository.countByFilial_Id(filial.getId());
+        // Archived orders count too: a physically deleted filial makes them impossible to restore.
+        long orderCount = orderRepository.countByFilial_Id(filial.getId())
+                + orderRepository.countArchivedByFilialId(filial.getId());
         long reviewCount = reviewRepository.countByFilial_Id(filial.getId());
         return new FilialDeletionPreview(
                 filial.getId(),

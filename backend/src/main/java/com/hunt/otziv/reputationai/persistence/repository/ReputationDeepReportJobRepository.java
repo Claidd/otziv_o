@@ -33,4 +33,19 @@ public interface ReputationDeepReportJobRepository extends JpaRepository<Reputat
             Long companyId,
             Collection<DeepReportJobStatus> statuses
     );
+
+    /** The executor queue lives in memory: after a restart queued/running jobs can never finish. */
+    @org.springframework.data.jpa.repository.Modifying(clearAutomatically = true)
+    @org.springframework.transaction.annotation.Transactional
+    @org.springframework.data.jpa.repository.Query("""
+        UPDATE ReputationDeepReportJobEntity job
+        SET job.status = com.hunt.otziv.reputationai.persistence.model.DeepReportJobStatus.FAILED,
+            job.errorMessage = :message,
+            job.completedAt = :now,
+            job.updatedAt = :now
+        WHERE job.status IN (com.hunt.otziv.reputationai.persistence.model.DeepReportJobStatus.QUEUED,
+                             com.hunt.otziv.reputationai.persistence.model.DeepReportJobStatus.RUNNING)
+    """)
+    int failInterruptedJobs(@org.springframework.data.repository.query.Param("now") java.time.LocalDateTime now,
+                            @org.springframework.data.repository.query.Param("message") String message);
 }

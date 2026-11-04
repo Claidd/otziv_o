@@ -543,7 +543,7 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
         OR
         (LOWER(c.title) = LOWER(:title) AND LOWER(c.telephone) = LOWER(:telephoneNumber))
 """)
-    Optional<Company> getByTelephoneOrTitleIgnoreCase(String telephoneNumber, String title);
+    List<Company> getByTelephoneOrTitleIgnoreCase(String telephoneNumber, String title);
 
 
     @Query("""

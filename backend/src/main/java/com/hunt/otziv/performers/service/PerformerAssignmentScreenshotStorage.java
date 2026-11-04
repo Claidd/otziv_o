@@ -72,7 +72,9 @@ public class PerformerAssignmentScreenshotStorage {
             return baos.toByteArray();
         } catch (IOException e) {
             log.error("Ошибка при обработке скриншота задания исполнителя", e);
-            throw new RuntimeException("Не удалось обработать скриншот", e);
+            // The upload check accepts WebP, but ImageIO cannot decode it here: answer 400, not 500.
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST, "Не удалось прочитать изображение. Загрузите JPG или PNG.", e);
         }
     }
 

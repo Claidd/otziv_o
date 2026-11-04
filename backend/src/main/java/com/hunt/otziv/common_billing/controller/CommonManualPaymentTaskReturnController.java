@@ -19,6 +19,9 @@ import org.springframework.web.bind.annotation.RestController;
 public class CommonManualPaymentTaskReturnController {
 
     private final CommonManualPaymentTaskReturnService returnService;
+    /** Same hidden-recipient policy as the other common-invoice mutations (field-injected). */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.hunt.otziv.contractor_payments.api.PaymentReviewTargetAuthorization targetAuthorization;
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     @PostMapping("/api/common-billing/invoices/{invoiceId}/manual-task-return")
@@ -27,6 +30,9 @@ public class CommonManualPaymentTaskReturnController {
             @Valid @RequestBody CommonManualPaymentTaskReturnRequest request,
             Principal principal
     ) {
+        if (targetAuthorization != null) {
+            targetAuthorization.requireCanManageCommonInvoice(invoiceId);
+        }
         CommonManualPaymentTaskReturnResponse response = returnService.record(
                 invoiceId,
                 request,

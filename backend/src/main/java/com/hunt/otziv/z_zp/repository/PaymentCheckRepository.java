@@ -33,19 +33,21 @@ public interface PaymentCheckRepository extends CrudRepository<PaymentCheck, Lon
 //    @Query("SELECT p FROM PaymentCheck p WHERE YEAR(p.created) = YEAR(:localDate)")
 //    List<PaymentCheck> findAllToDate(LocalDate localDate);
 
-    @Query("SELECT p FROM PaymentCheck p WHERE p.created >= :startDate AND p.created < :endDate")
+    // Revenue shown to staff counts only active checks: refunds, payment cancellations and
+    // archive restores deactivate a check, and salary already ignores inactive rows.
+    @Query("SELECT p FROM PaymentCheck p WHERE p.created >= :startDate AND p.created < :endDate AND p.active = true")
     List<PaymentCheck> findAllToDate(@Param("startDate") LocalDate startDate,
                                       @Param("endDate") LocalDate endDate);
 
     @Query("""
         SELECT new com.hunt.otziv.z_zp.dto.PaymentCheckStatRow(p.created, p.sum)
         FROM PaymentCheck p
-        WHERE p.created >= :startDate AND p.created < :endDate
+        WHERE p.created >= :startDate AND p.created < :endDate AND p.active = true
     """)
     List<PaymentCheckStatRow> findStatRowsToDate(@Param("startDate") LocalDate startDate,
                                                  @Param("endDate") LocalDate endDate);
 
-    @Query("SELECT p FROM PaymentCheck p WHERE p.created >= :startDate AND p.created < :endDate AND p.managerId IN :managers")
+    @Query("SELECT p FROM PaymentCheck p WHERE p.created >= :startDate AND p.created < :endDate AND p.managerId IN :managers AND p.active = true")
     List<PaymentCheck> findAllToDateByManagers(@Param("startDate") LocalDate startDate,
                                                 @Param("endDate") LocalDate endDate,
                                                 @Param("managers") List<Long> managers);
@@ -53,16 +55,16 @@ public interface PaymentCheckRepository extends CrudRepository<PaymentCheck, Lon
     @Query("""
         SELECT new com.hunt.otziv.z_zp.dto.PaymentCheckStatRow(p.created, p.sum)
         FROM PaymentCheck p
-        WHERE p.created >= :startDate AND p.created < :endDate AND p.managerId IN :managers
+        WHERE p.created >= :startDate AND p.created < :endDate AND p.managerId IN :managers AND p.active = true
     """)
     List<PaymentCheckStatRow> findStatRowsToDateByManagers(@Param("startDate") LocalDate startDate,
                                                            @Param("endDate") LocalDate endDate,
                                                            @Param("managers") List<Long> managers);
 
-    @Query("SELECT p FROM PaymentCheck p WHERE p.managerId IN :managers")
+    @Query("SELECT p FROM PaymentCheck p WHERE p.managerId IN :managers AND p.active = true")
     List<PaymentCheck> findAllByManagers(@Param("managers") List<Long> managers);
 
-    @Query("SELECT p FROM PaymentCheck p WHERE p.managerId = :managerId AND p.created >= :firstDayOfMonth AND p.created <= :lastDayOfMonth")
+    @Query("SELECT p FROM PaymentCheck p WHERE p.managerId = :managerId AND p.created >= :firstDayOfMonth AND p.created <= :lastDayOfMonth AND p.active = true")
     List<PaymentCheck> getAllWorkerPayments(@Param("managerId") Long managerId,
                                              @Param("firstDayOfMonth") LocalDate firstDayOfMonth,
                                              @Param("lastDayOfMonth") LocalDate lastDayOfMonth);

@@ -93,6 +93,8 @@ class ContractorPaymentVisibilityServiceTest {
 
     @BeforeEach
     void useEffectiveShadowMode() {
+        // Unrestricted administrator by default; restricted-owner visibility has its own test.
+        org.mockito.Mockito.lenient().when(targetAccessPolicy.canManageUser(any())).thenReturn(true);
         when(adminRead.read(any(), any(), any(), any(), any())).thenReturn(com.hunt.otziv.contractor_payments.repository.ContractorAdminFinancialReadRepository.Facts.empty());
         when(accountingService.summaryEventTypes(any())).thenAnswer(call -> new ContractorPaymentAccountingService(eventRepository).summaryEventTypes(call.getArgument(0)));
         when(accountingService.totalsFromRows(any(), any())).thenAnswer(call -> new ContractorPaymentAccountingService(eventRepository).totalsFromRows(call.getArgument(0), call.getArgument(1)));
@@ -543,5 +545,18 @@ class ContractorPaymentVisibilityServiceTest {
         profile.setUser(user);
         profile.setRole(role);
         return profile;
+    }
+
+    @org.junit.jupiter.api.Test
+    void adminSummaryHidesProfilesTheRestrictedOwnerCannotManage() {
+        org.mockito.Mockito.when(targetAccessPolicy.canManageUser(any())).thenReturn(false);
+        com.hunt.otziv.u_users.model.User hidden = com.hunt.otziv.u_users.model.User.builder()
+                .id(901L).username("hidden-admin").active(true).build();
+        ContractorPaymentProfile profile = new ContractorPaymentProfile();
+        profile.setId(77L);
+        profile.setUser(hidden);
+        org.mockito.Mockito.when(profileRepository.findAllWithUser()).thenReturn(java.util.List.of(profile));
+
+        org.assertj.core.api.Assertions.assertThat(service.adminSummary(java.time.LocalDate.of(2026, 11, 1))).isEmpty();
     }
 }
