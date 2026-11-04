@@ -158,6 +158,22 @@ public class OrderArchiveDryRunRepository {
                     SELECT 1 FROM order_payment_reconciliations reconciliation
                     WHERE reconciliation.order_id = o.order_id
               )
+              AND NOT EXISTS (
+                    -- RESTRICT foreign keys to reviews: archiving would fail the whole batch
+                    -- on every run, so such orders stay live until their evidence is cleared.
+                    SELECT 1
+                    FROM review_external_checks external_check
+                    JOIN reviews checked_review ON checked_review.review_id = external_check.review_id
+                    JOIN order_details checked_detail ON checked_detail.order_detail_id = checked_review.review_order_details
+                    WHERE checked_detail.order_detail_order = o.order_id
+              )
+              AND NOT EXISTS (
+                    SELECT 1
+                    FROM workload_transfer_emergency_assignments emergency
+                    JOIN reviews emergency_review ON emergency_review.review_id = emergency.review_id
+                    JOIN order_details emergency_detail ON emergency_detail.order_detail_id = emergency_review.review_order_details
+                    WHERE emergency_detail.order_detail_order = o.order_id
+              )
             """;
 
     private static final String ELIGIBLE_COMMON_INVOICE_WHERE = """

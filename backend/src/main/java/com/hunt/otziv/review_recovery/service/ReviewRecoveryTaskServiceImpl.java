@@ -124,10 +124,20 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
     }
 
     @Override
-    @Transactional
+    // READ_COMMITTED: after waiting for the order lock, the duplicate check must see a task a
+    // concurrent request just committed (REPEATABLE READ would keep the earlier snapshot).
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public ReviewRecoveryTask createTask(Long reviewId, User createdBy) {
         Review review = requireReview(reviewId);
         Order order = requireOrder(review);
+        if (!review.isPublish()) {
+            // Recovery re-posts a review the platform removed; an unpublished review has nothing
+            // to recover and its task would block order completion.
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Восстановить можно только опубликованный отзыв");
+        }
+        // Serialize task creation per order: the duplicate check and the batch find-or-create
+        // below are check-then-act and a double click must not produce two tasks or batches.
+        orderRepository.findByIdForMutation(order.getId());
 
         if (hasActiveTask(reviewId)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Задача восстановления уже создана");

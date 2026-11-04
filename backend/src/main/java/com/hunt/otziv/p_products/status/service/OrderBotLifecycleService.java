@@ -51,6 +51,7 @@ public class OrderBotLifecycleService {
 
             long nullBotCount = reviews.stream()
                     .filter(review -> review.getBot() == null)
+                    .filter(review -> !review.isPublish())
                     .count();
 
             if (nullBotCount > 0) {
@@ -96,8 +97,13 @@ public class OrderBotLifecycleService {
             return;
         }
 
-        log.info("Отвязываем ботов от {} отзывов", reviews.size());
+        log.info("Отвязываем ботов от неопубликованных отзывов заказа ({} отзывов всего)", reviews.size());
         for (Review review : reviews) {
+            // Опубликованный отзыв сохраняет свой аккаунт: по нему строится история «какие аккаунты
+            // уже писали этой компании» и восстановление отзыва после удаления площадкой.
+            if (review.isPublish()) {
+                continue;
+            }
             if (review.getBot() != null) {
                 log.debug("Отвязываем бота ID: {} от отзыва ID: {}",
                         review.getBot().getId(), review.getId());

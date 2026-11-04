@@ -133,6 +133,7 @@ class WorkerReviewMutationActorMySqlIntegrationTest {
         when(users.findByUserName("worker")).thenReturn(Optional.of(user));
         Worker worker = new Worker(); worker.setId(30L);
         when(workerService.getWorkerByUserId(20L)).thenReturn(worker);
+        when(workerService.claimNagulSlot(eq(30L), anyInt())).thenReturn(true);
         var settings = mock(AppSettingService.class);
         nagul = proxy(new ReviewNagulService(reviews, users, workerService, new ReviewNagulPolicy(), settings, guard));
         audit = mock(BusinessAuditService.class);

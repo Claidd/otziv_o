@@ -91,9 +91,9 @@ public interface WorkerRepository extends CrudRepository<Worker, Long> {
     SELECT w
     FROM Worker w
     JOIN FETCH w.user u
-    LEFT JOIN FETCH u.image
     WHERE u.id = :id
 """)
+    // The avatar LONGBLOB is not fetched: callers need only the image id (User.imageId / proxy id).
     Optional<Worker> findByUserId(Long id);
 
     @Query("""
@@ -171,4 +171,16 @@ public interface WorkerRepository extends CrudRepository<Worker, Long> {
     WHERE m.id IN :managerIds
 """)
     List<Long> findUserIdsByManagerIds(@Param("managerIds") Set<Long> managerIds);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.transaction.annotation.Transactional
+    @Query(value = """
+        UPDATE workers
+        SET last_nagul_time = :now
+        WHERE worker_id = :workerId
+          AND (last_nagul_time IS NULL OR last_nagul_time <= :threshold)
+    """, nativeQuery = true)
+    int claimNagulSlot(@Param("workerId") Long workerId,
+                       @Param("now") java.time.LocalDateTime now,
+                       @Param("threshold") java.time.LocalDateTime threshold);
 }

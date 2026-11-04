@@ -339,6 +339,23 @@ class ReviewRecoveryTaskServiceImplTest {
     }
 
     @Test
+    void createTaskRejectsAReviewThatWasNeverPublished() {
+        Review review = review(103L, "текст", order(10L), null);
+        review.setPublish(false);
+
+        when(reviewRepository.findById(103L)).thenReturn(Optional.of(review));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.createTask(103L, user(3L))
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertEquals("Восстановить можно только опубликованный отзыв", exception.getReason());
+        verify(taskRepository, never()).save(any());
+    }
+
+    @Test
     void changeTaskBotUpdatesTaskSnapshotsAndSourceReviewBot() {
         City city = new City();
         city.setId(3L);
@@ -920,6 +937,8 @@ class ReviewRecoveryTaskServiceImplTest {
         review.setOrderDetails(details);
         review.setWorker(order.getWorker());
         review.setBot(bot);
+        // Only a review that was actually published can be lost and recovered.
+        review.setPublish(true);
         return review;
     }
 

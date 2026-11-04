@@ -110,13 +110,16 @@ public class ReviewNagulService {
 
         reviewNagulPolicy.validateBotName(review);
 
-        review.setVigul(true);
-
         if (isWorker && worker != null) {
-            worker.setLastNagulTime(LocalDateTime.now());
-            workerService.save(worker);
+            // Conditional UPDATE instead of read-check-save: two simultaneous nagul requests can
+            // no longer both pass the cooldown, and the rest of the worker row is not rewritten.
+            if (!workerService.claimNagulSlot(worker.getId(), nagulCooldownMinutes())) {
+                reviewNagulPolicy.validateWorkerCooldown(workerService.getWorkerByUserId(currentUser.getId()), nagulCooldownMinutes());
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Нагул уже выполнен только что. Подождите и повторите.");
+            }
         }
 
+        review.setVigul(true);
         reviewRepository.save(review);
     }
 

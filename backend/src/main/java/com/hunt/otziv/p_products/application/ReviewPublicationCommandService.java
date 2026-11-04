@@ -43,6 +43,10 @@ public class ReviewPublicationCommandService implements ReviewPublicationCommand
         preparation.clear(actor,WorkerCredentialPreparationScope.PUBLISH);
     }
 
+    @Override public void synchronizeExternalPublication(Long reviewId) {
+        mutation.synchronizeExternalPublication(reviewId);
+    }
+
     @Override public LegacyOutcome publishLegacy(Long companyId,Long orderId,Long reviewId,Authentication actor) throws Exception {
         WorkerOrderActor.from(actor).require("ADMIN","OWNER","MANAGER","WORKER");
         var blocked=gate.blockForPublication(actor,actor);

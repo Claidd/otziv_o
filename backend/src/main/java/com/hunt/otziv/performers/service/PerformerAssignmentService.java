@@ -75,6 +75,10 @@ public class PerformerAssignmentService {
     private final PerformerNotificationService notifications;
     private final PerformerNotificationRepository notificationRepository;
     private final PlatformTransactionManager transactionManager;
+    /** Field-injected and resolved lazily: keeps the constructor stable and avoids a bean cycle. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private org.springframework.beans.factory.ObjectProvider<com.hunt.otziv.p_products.api.ReviewPublicationCommands>
+            reviewPublicationCommandsProvider;
 
     @Value("${performers.offer.ttl-minutes:10}")
     private int offerTtlMinutes;
@@ -275,12 +279,25 @@ public class PerformerAssignmentService {
 
         Review review = assignment.getReview();
         if (review != null) {
+            boolean newlyPublished = !review.isPublish();
             review.setPublish(true);
             review.setPublishedMarkedAt(now);
             review.setPublishedDate(LocalDate.now());
             review.setUrl(trimToNull(request.getPublicationUrl()));
             review.setExternalConfirmStatus("PENDING");
             reviewRepository.save(review);
+            if (newlyPublished) {
+                // Same order counter, text archive and client progress as a staff publication,
+                // applied after this claim commits so the order lock is taken in canonical order.
+                Long reviewId = review.getId();
+                runAfterCommitInNewTransaction("учёт публикации отзыва " + reviewId, () -> {
+                    com.hunt.otziv.p_products.api.ReviewPublicationCommands commands =
+                            reviewPublicationCommandsProvider == null ? null : reviewPublicationCommandsProvider.getIfAvailable();
+                    if (commands != null) {
+                        commands.synchronizeExternalPublication(reviewId);
+                    }
+                });
+            }
         }
 
         assignmentRepository.save(assignment);
@@ -651,10 +668,40 @@ public class PerformerAssignmentService {
         if (notVerified > 0) {
             return;
         }
-        try {
-            orderStatusTransitionService.changeStatusForOrder(orderId, STATUS_PUBLISHED);
-        } catch (Exception e) {
-            log.warn("Не удалось автоматически перевести заказ {} в '{}'", orderId, STATUS_PUBLISHED, e);
+        // The order transition is a best-effort follow-up of a verification. Running it inside the
+        // verification transaction let an expected refusal (order already invoiced or paid) mark that
+        // transaction rollback-only, so the verification and payout could never be saved. Run it after
+        // the verification commits, in its own transaction, and only log a refusal.
+        runAfterCommitInNewTransaction("переход заказа " + orderId + " в '" + STATUS_PUBLISHED + "'", () -> {
+            try {
+                orderStatusTransitionService.changeStatusForOrder(orderId, STATUS_PUBLISHED);
+            } catch (Exception transitionFailure) {
+                throw new IllegalStateException(transitionFailure);
+            }
+        });
+    }
+
+    private void runAfterCommitInNewTransaction(String label, Runnable work) {
+        Runnable guarded = () -> {
+            try {
+                org.springframework.transaction.support.TransactionTemplate followUp =
+                        new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+                followUp.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+                followUp.executeWithoutResult(status -> work.run());
+            } catch (RuntimeException e) {
+                log.warn("Не удалось выполнить после фиксации: {}", label, e);
+            }
+        };
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                    new org.springframework.transaction.support.TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            guarded.run();
+                        }
+                    });
+        } else {
+            guarded.run();
         }
     }
 

@@ -701,6 +701,30 @@ public class OrderServiceImpl implements OrderService {
         return new ReviewPublicationTarget(review, order);
     }
 
+    @Override
+    @Transactional
+    public void synchronizeExternalPublication(Long reviewId) {
+        Review review = reviewId == null ? null : reviewRepository.findById(reviewId).orElse(null);
+        if (review == null || !review.isPublish()) {
+            return;
+        }
+        OrderDetails details = review.getOrderDetails();
+        Long orderId = details != null && details.getOrder() != null ? details.getOrder().getId() : null;
+        if (orderId == null) {
+            return;
+        }
+        Order order = orderRepository.findByIdForCounterUpdate(orderId).orElse(null);
+        if (order == null) {
+            return;
+        }
+        reviewArchiveService.saveNewReviewArchive(review.getId(), ReviewArchiveSourceReason.PUBLISHED);
+        int actualPublished = countPublishedReviews(order);
+        orderStatusCheckerService.validateCounterConsistency(order, actualPublished);
+        enqueuePublishedReviewClientUpdates(order, actualPublished,
+                "performer-review:" + reviewId + ":" + review.getPublishedMarkedAt());
+        botAssignmentExclusionService.clearForReview(reviewId);
+    }
+
     protected int countPublishedReviews(Order order) {
         if (order == null || order.getId() == null) {
             return 0;

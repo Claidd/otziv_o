@@ -22,6 +22,11 @@ public class ReviewPublicationMutationService {
     private final WorkerAssignmentMutationGuardService assignment;
     private final WorkerActivityService activity;
 
+    @Transactional
+    public void synchronizeExternalPublication(Long reviewId) {
+        orders.synchronizeExternalPublication(reviewId);
+    }
+
     @Transactional(rollbackFor=Exception.class)
     public void publish(Long reviewId,Long expectedOrderId,Long expectedCompanyId,Authentication actor,String sourceDetails,boolean recordActivity) throws Exception {
         WorkerOrderActor.from(actor).require("ADMIN","OWNER","MANAGER","WORKER");

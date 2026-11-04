@@ -67,6 +67,8 @@ const LIVE_STATUS_ACTIONS: ArchiveLiveStatusAction[] = [
 ];
 
 const RESTORE_STATUS_OPTIONS = ['Новый', 'Коррекция', 'На проверке'] as const;
+const PAID_RESTORE_STATUS_OPTIONS = ['Оплачено'] as const;
+type RestoreTargetStatus = (typeof RESTORE_STATUS_OPTIONS)[number] | (typeof PAID_RESTORE_STATUS_OPTIONS)[number];
 
 const EMPTY_ARCHIVE_PAGE: Page<ArchiveOrderListItem> = {
   content: [],
@@ -306,7 +308,7 @@ const EMPTY_ARCHIVE_PAGE: Page<ArchiveOrderListItem> = {
                   </header>
 
                   <div class="restore-status-segment" role="radiogroup" aria-label="Статус после восстановления">
-                    @for (status of restoreStatuses; track status) {
+                    @for (status of restoreStatusOptions(order); track status) {
                       <button
                         type="button"
                         role="radio"
@@ -994,7 +996,6 @@ export class ManagerArchivePage implements OnInit, OnDestroy {
 
   readonly modeTabs = ARCHIVE_MODE_TABS;
   readonly liveStatusActions = LIVE_STATUS_ACTIONS;
-  readonly restoreStatuses = RESTORE_STATUS_OPTIONS;
   readonly page = signal<Page<ArchiveOrderListItem>>(EMPTY_ARCHIVE_PAGE);
   readonly mode = signal<ArchiveOrderMode>('all');
   readonly keyword = signal('');
@@ -1009,7 +1010,7 @@ export class ManagerArchivePage implements OnInit, OnDestroy {
   readonly detailsPayload = signal<ArchiveOrderDetailsPayload | null>(null);
   readonly detailsLoading = signal(false);
   readonly detailsError = signal<string | null>(null);
-  readonly restoreTargetStatus = signal<(typeof RESTORE_STATUS_OPTIONS)[number]>('Новый');
+  readonly restoreTargetStatus = signal<RestoreTargetStatus>('Новый');
   readonly restoreResult = signal<ArchiveRestoreResult | null>(null);
   readonly restoring = signal(false);
   readonly liveStatusMutationKey = signal<string | null>(null);
@@ -1164,7 +1165,7 @@ export class ManagerArchivePage implements OnInit, OnDestroy {
     this.detailsPayload.set(null);
     this.detailsError.set(null);
     this.restoreResult.set(null);
-    this.restoreTargetStatus.set('Новый');
+    this.restoreTargetStatus.set(this.restoreStatusOptions(order)[0]);
     this.detailsLoading.set(true);
     this.loadingDetailsOrderId = order.id;
 
@@ -1197,6 +1198,12 @@ export class ManagerArchivePage implements OnInit, OnDestroy {
     this.detailsError.set(null);
     this.detailsLoading.set(false);
     this.restoreResult.set(null);
+  }
+
+  restoreStatusOptions(order: ArchiveOrderListItem | null | undefined): readonly RestoreTargetStatus[] {
+    // A paid archived order keeps its payment: the server restores it only as «Оплачено».
+    // Returning it to work requires cancelling the payment first.
+    return order?.status === 'Оплачено' ? PAID_RESTORE_STATUS_OPTIONS : RESTORE_STATUS_OPTIONS;
   }
 
   canRestore(order: ArchiveOrderListItem): boolean {

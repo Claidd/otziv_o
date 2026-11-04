@@ -119,6 +119,16 @@ public class ManagerArchiveService {
         if ("Оплачено".equals(order.status()) && !managerPermissionService.hasAnyRole(authentication, "ADMIN", "OWNER")) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Оплаченный архивный заказ может восстановить только администратор или владелец");
         }
+        // People return archived orders to work; publication, ban and archive statuses skip account
+        // assignment and invoicing, and "paid" is restored only for a paid order by an administrator.
+        String requested = targetStatus == null || targetStatus.isBlank() ? "Новый" : targetStatus.trim();
+        boolean paidTarget = "Оплачено".equals(requested);
+        if (!paidTarget && !OrderArchiveRestoreService.MANUAL_WORK_TARGETS.contains(requested)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Этот статус нельзя выбрать при восстановлении из архива");
+        }
+        if (paidTarget && !managerPermissionService.hasAnyRole(authentication, "ADMIN", "OWNER")) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Восстановить заказ как оплаченный может только администратор или владелец");
+        }
 
         String restoredBy = principal == null ? null : principal.getName();
         return restoreService.restoreOrder(orderId, targetStatus, restoredBy, confirm);
@@ -191,9 +201,7 @@ public class ManagerArchiveService {
         }
 
         if (managerPermissionService.hasRole(authentication, "OWNER")) {
-            Set<Long> managerIds = userService.findManagersByUserName(principal.getName()).stream()
-                    .map(Manager::getId)
-                    .collect(Collectors.toSet());
+            Set<Long> managerIds = userService.findManagerIdsByUserName(principal.getName());
             return ArchiveAccessScope.managers(managerIds);
         }
 

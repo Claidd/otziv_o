@@ -134,4 +134,14 @@ public class WorkerServiceImpl implements WorkerService {
             log.info("Добавили работника так как нет в списке");
         }
     }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional
+    public boolean claimNagulSlot(Long workerId, int cooldownMinutes) {
+        if (workerId == null) {
+            return false;
+        }
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        return workerRepository.claimNagulSlot(workerId, now, now.minusMinutes(Math.max(0, cooldownMinutes))) == 1;
+    }
 }

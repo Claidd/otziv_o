@@ -102,6 +102,7 @@ public class OrderReviewMutationService {
             return true;
         } catch (Exception e) {
             log.error("Ошибка при создании нового отзыва", e);
+            rollbackCurrentTransaction();
             return false;
         }
     }
@@ -137,6 +138,13 @@ public class OrderReviewMutationService {
                 log.warn("Отзыв с ID '{}' не относится к заказу '{}'", reviewId, orderId);
                 return false;
             }
+            if (review.isPublish()) {
+                // A published review is delivered work: deleting it would shrink the order sum,
+                // cascade-delete its quality/recovery tasks and drop its account from the company
+                // history while the review stays on the platform.
+                throw new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.CONFLICT, "Опубликованный отзыв нельзя удалить");
+            }
             if (!reviewService.deleteReviewFromLockedOrder(orderId, reviewId)) {
                 log.warn("Привязка отзыва '{}' к заказу '{}' изменилась", reviewId, orderId);
                 return false;
@@ -155,8 +163,12 @@ public class OrderReviewMutationService {
             log.info("4. Обновили компанию");
 
             return true;
+        } catch (org.springframework.web.server.ResponseStatusException e) {
+            // Business refusals carry their own status and message; never mask them as "not deleted".
+            throw e;
         } catch (Exception e) {
             log.error("Ошибка при удалении отзыва", e);
+            rollbackCurrentTransaction();
             return false;
         }
     }
@@ -177,4 +189,18 @@ public class OrderReviewMutationService {
                 .build();
     }
 
+
+    /**
+     * A "false" result means the mutation did not happen: discard any partial writes and avoid
+     * the UnexpectedRollbackException an inner transactional failure would cause at commit.
+     */
+    private static void rollbackCurrentTransaction() {
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
+            try {
+                org.springframework.transaction.interceptor.TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            } catch (org.springframework.transaction.NoTransactionException programmatic) {
+                // Programmatic transaction: the caller decides on the boolean result.
+            }
+        }
+    }
 }

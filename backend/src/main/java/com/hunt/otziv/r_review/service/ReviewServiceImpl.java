@@ -1277,9 +1277,11 @@ public class ReviewServiceImpl implements ReviewService {
                 changed = true;
             }
             if (!Objects.equals(reviewDTO.isPublish(), saveReview.isPublish())) {
-                saveReview.setPublish(reviewDTO.isPublish());
-                syncExternalConfirmationState(saveReview, oldPublish);
-                changed = true;
+                // A form snapshot never changes publication: a stale tab would silently unpublish a
+                // review published meanwhile, and publishing here would skip the order counter, the
+                // account counter, the text archive and the client progress update. Publication goes
+                // through the dedicated publish action only.
+                log.info("Изменение флага публикации отзыва {} через сохранение формы проигнорировано", saveReview.getId());
             }
             if (!Objects.equals(reviewDTO.getPublishedDate(), saveReview.getPublishedDate())) {
                 requirePublicationDateIntegrity(saveReview, reviewDTO.getPublishedDate());
@@ -1612,11 +1614,8 @@ public class ReviewServiceImpl implements ReviewService {
             saveReview.setAnswer(reviewDTO.getAnswer());
             isChanged = true;
         }
-        if (!Objects.equals(reviewDTO.isPublish(), saveReview.isPublish())) {
-            saveReview.setPublish(reviewDTO.isPublish());
-            syncExternalConfirmationState(saveReview, oldPublish);
-            isChanged = true;
-        }
+        // Publication itself is never changed while assigning publication dates (see the form
+        // snapshot rule in updateOrderDetailAndReviews); the dedicated publish action owns it.
 
         return isChanged;
     }

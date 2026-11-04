@@ -153,9 +153,11 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
             log.info("Филиал ID: {}, город: {}", filial.getId(), filial.getCity().getTitle());
             lockCompanyForBotAssignment(filial);
 
-            // 1. Фильтруем отзывы с null ботом
+            // 1. Фильтруем отзывы с null ботом. Опубликованный отзыв уже написан конкретным
+            // аккаунтом: новый аккаунт ему не назначается, иначе подменяется авторство.
             List<Review> reviewsWithoutBots = reviews.stream()
                     .filter(review -> review.getBot() == null)
+                    .filter(review -> !review.isPublish())
                     .collect(Collectors.toList());
 
             if (reviewsWithoutBots.isEmpty()) {

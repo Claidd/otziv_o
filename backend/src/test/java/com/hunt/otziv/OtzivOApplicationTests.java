@@ -2066,7 +2066,9 @@ class OtzivOApplicationTests {
 		assertThat(archiveDetails.zp()).hasSize(1);
 		assertThat(archiveDetails.paymentChecks()).hasSize(1);
 
-		managerArchiveService.restoreOrder(orderId, "Архив", true, () -> "admin", adminAuth);
+		// A paid order with an active payment check comes back only as paid (see OrderArchiveRestoreServiceTest
+		// for the rejected non-paid targets); its salary and check stay active instead of being silently undone.
+		managerArchiveService.restoreOrder(orderId, "Оплачено", true, () -> "admin", adminAuth);
 		assertThat(countById("orders", "order_id", orderId)).isEqualTo(1);
 		assertThat(countById("order_details", "order_detail_id", detailId)).isEqualTo(1);
 		assertThat(countById("reviews", "review_id", reviewId)).isEqualTo(1);
@@ -2075,7 +2077,12 @@ class OtzivOApplicationTests {
 				"SELECT zp_active FROM zp WHERE zp_id = ?",
 				Boolean.class,
 				zpId
-		)).as("salary restored with a reopened, non-paid order must stay inactive").isFalse();
+		)).as("salary of a paid order restored as paid stays active").isTrue();
+		assertThat(jdbcTemplate.queryForObject(
+				"SELECT check_active FROM payment_check WHERE check_id = ?",
+				Boolean.class,
+				checkId
+		)).as("the payment check of a paid order restored as paid stays active").isTrue();
 		assertThat(countById("payment_check", "check_id", checkId)).isEqualTo(1);
 		assertThat(countById("archive_orders", "order_id", orderId)).isEqualTo(1);
 		assertThat(jdbcTemplate.queryForObject(
