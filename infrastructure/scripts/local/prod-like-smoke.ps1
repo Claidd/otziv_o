@@ -636,6 +636,30 @@ function Assert-ScheduledMessageReconciliationHealthy {
     Write-Host "Contractor payment background-processing log check is clean."
 }
 
+function Assert-LegacyReviewCapabilityLogContent {
+    param(
+        [Parameter(Mandatory = $true)][string]$AccessLogPath,
+        [Parameter(Mandatory = $true)][string]$ReviewId,
+        [Parameter(Mandatory = $true)][string]$EncodedReviewId,
+        [Parameter(Mandatory = $true)][string]$ObservableMarker
+    )
+    # Stream the actual bind-mounted file on the host. Reading a large Windows
+    # bind through Docker's file sharing can stall an otherwise healthy smoke.
+    $matches = @(Select-String -LiteralPath $AccessLogPath -SimpleMatch `
+        -Pattern @($ReviewId, $EncodedReviewId, $ObservableMarker) -ErrorAction Stop)
+    $observableSeen = $false
+    foreach ($match in $matches) {
+        if ($match.Line.IndexOf($ReviewId, [StringComparison]::OrdinalIgnoreCase) -ge 0 `
+                -or $match.Line.IndexOf($EncodedReviewId, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+            throw 'Legacy review capability leaked into Nginx access.log.'
+        }
+        if ($match.Line.Contains($ObservableMarker)) { $observableSeen = $true }
+    }
+    if (-not $observableSeen) {
+        throw 'Legacy observability contract failed: an unrelated /legacy route was not written to access.log.'
+    }
+}
+
 function Assert-LegacyReviewCapabilityNotLogged {
     param(
         [Parameter(Mandatory = $true)][string]$BaseUrl,
@@ -676,6 +700,18 @@ function Assert-LegacyReviewCapabilityNotLogged {
         throw "Could not resolve the Nginx container for the legacy capability log assertion."
     }
     $nginxContainerId = ([string]$nginxContainerId).Trim()
+
+    $mountJson = & docker inspect --format '{{json .Mounts}}' $nginxContainerId
+    if ($LASTEXITCODE -ne 0) { throw 'Could not inspect Nginx log mounts.' }
+    $mounts = @($mountJson | ConvertFrom-Json -ErrorAction Stop)
+    $logMount = @($mounts | Where-Object { $_.Type -eq 'bind' -and $_.Destination -eq '/var/log/nginx' })
+    if ($logMount.Count -eq 1 -and (Test-Path -LiteralPath ([string]$logMount[0].Source) -PathType Container)) {
+        $hostAccessLog = Join-Path ([string]$logMount[0].Source) 'access.log'
+        Assert-LegacyReviewCapabilityLogContent -AccessLogPath $hostAccessLog `
+            -ReviewId $reviewId -EncodedReviewId $encodedReviewId -ObservableMarker $observableMarker
+        Write-Host 'Legacy review capability log contract OK: actual bind-mounted log checked; capabilities absent and unrelated traffic observable.'
+        return
+    }
 
     foreach ($needle in @($reviewId, $encodedReviewId)) {
         $matches = & docker @(
