@@ -162,7 +162,14 @@ services:
       KC_HTTP_ENABLED: "true"
       KC_HTTP_RELATIVE_PATH: /keycloak
       KC_HOSTNAME: ${KEYCLOAK_PUBLIC_URL}
-      KC_HOSTNAME_ADMIN: ${KEYCLOAK_PUBLIC_URL}
+      # Public Nginx refuses /keycloak/admin and /keycloak/realms/master. The
+      # admin console lives on the loopback port below (the settings script
+      # points the master realm frontend URL there too). From a workstation:
+      #   ssh -N -L 18180:127.0.0.1:18180 <user>@<vps>
+      #   open http://127.0.0.1:18180/keycloak/admin/master/console/
+      # Use exactly this origin; localhost or another local port breaks the
+      # console's redirect and CORS checks.
+      KC_HOSTNAME_ADMIN: http://127.0.0.1:18180/keycloak
       KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
       KC_HOSTNAME_STRICT: "true"
       KC_PROXY_HEADERS: xforwarded
@@ -175,6 +182,9 @@ services:
     volumes:
       - ./infrastructure/keycloak/realm-config.prod.json:/opt/keycloak/data/import/otziv-realm.json:ro
       - ./infrastructure/keycloak/themes:/opt/keycloak/themes:ro
+    ports:
+      # Loopback only: admin console via SSH tunnel (see KC_HOSTNAME_ADMIN).
+      - "127.0.0.1:18180:8080"
     depends_on:
       keycloak-postgres:
         condition: service_healthy

@@ -47,5 +47,18 @@ class SessionTest(unittest.TestCase):
     def test_owned_finish_releases_preparation(self):
         value=self.begin();result=transition(value,'finish','a'*40,'b'*40,'test',value['token'],now=101)
         self.assertFalse(active(result,102))
+    def test_status_never_reveals_the_session_token(self):
+        value=self.begin()
+        self.assertRegex(value['token'],'^[0-9a-f]{32}$')
+        for state in (value,transition(value,'finish','a'*40,'b'*40,'test',value['token'],now=101)):
+            status=transition(state,'status','a'*40,'b'*40,'other',now=102)
+            self.assertNotIn('token',status)
+            self.assertNotIn(value['token'],str(status))
+            self.assertTrue(status['tokenRedacted'])
+            self.assertEqual('test',status['owner'])
+        self.assertTrue(transition(value,'status','a'*40,'b'*40,'other',now=102)['active'])
+        self.assertEqual({'active':False},transition(None,'status','a'*40,'b'*40,'other',now=102))
+        # Reading status must not mutate the stored session the owner relies on.
+        self.assertIn('token',value)
 
 if __name__=='__main__':unittest.main()

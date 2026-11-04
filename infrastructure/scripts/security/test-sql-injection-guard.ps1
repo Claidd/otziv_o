@@ -86,7 +86,12 @@ try {
     Invoke-FixtureGit -Arguments @('add', '--', 'backend/src/main/java')
     Assert-Guard -Mode staged -ShouldPass $false -Scenario 'Identical source at another path is not exempt'
 
-    # Isolate the real rule predicate to prove this review cannot exempt SQL001-3.
+    $selfTest = Invoke-FixtureProcess -Executable $pwsh -Arguments @('-NoProfile', '-File', $fixtureGuard, '-Mode', 'selftest')
+    if ($selfTest.ExitCode -ne 0) { throw "Guard rule fixtures failed:`n$($selfTest.Output)" }
+    $checks++
+
+    # Isolate the real rule predicate to prove these reviews cannot exempt
+    # SQL001/SQL002, and exempt SQL003 only for the pinned source digest.
     $tokens = $null; $errors = $null
     $ast = [Management.Automation.Language.Parser]::ParseFile($guard, [ref]$tokens, [ref]$errors)
     if ($errors.Count) { throw 'Guard must parse.' }
@@ -100,17 +105,26 @@ try {
         $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Test-AllowListed'
     }, $true)
     . ([scriptblock]::Create($predicate.Extent.Text))
-    foreach ($rule in @('SQL001', 'SQL002', 'SQL003')) {
+    foreach ($rule in @('SQL001', 'SQL002')) {
         if (Test-AllowListed -RelativePath $reviewedSql004.Path -Line $reviewedSql004.Lines[0] -SourceSha256 $reviewedSql004.SourceSha256 -RuleId $rule) {
             throw "SQL004 review must not exempt $rule"
         }
         $checks++
     }
-    foreach ($rule in @('SQL001', 'SQL002', 'SQL003')) {
+    foreach ($rule in @('SQL001', 'SQL002')) {
         if (Test-AllowListed -RelativePath $reviewedArchiveOrder.Path -Line $reviewedArchiveOrder.Lines[0] -SourceSha256 $reviewedArchiveOrder.SourceSha256 -RuleId $rule) {
             throw "Archive SQL004 review must not exempt $rule"
         }
         $checks++
+    }
+    foreach ($review in @($reviewedSql004, $reviewedArchiveOrder)) {
+        if (-not (Test-AllowListed -RelativePath $review.Path -Line $review.Lines[0] -SourceSha256 $review.SourceSha256 -RuleId 'SQL003')) {
+            throw "Pinned review must cover the SQL003 concatenation it reviewed: $($review.Path)"
+        }
+        if (Test-AllowListed -RelativePath $review.Path -Line $review.Lines[0] -SourceSha256 ('0' * 64) -RuleId 'SQL003') {
+            throw "SQL003 review must depend on the pinned source digest: $($review.Path)"
+        }
+        $checks += 2
     }
 
     # A separate fixture proves that changing the enum provenance invalidates
