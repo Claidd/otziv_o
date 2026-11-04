@@ -774,6 +774,7 @@ class BadReviewTaskServiceImplTest {
                 .price(BigDecimal.valueOf(300))
                 .build();
         when(badReviewTaskRepository.findByIdForMutation(44L)).thenReturn(Optional.of(task));
+        when(orderRepository.findByIdForCounterUpdate(17L)).thenReturn(Optional.of(order));
         when(badReviewTaskRepository.summarizeByOrderId(17L)).thenReturn(List.<Object[]>of(
                 new Object[]{BadReviewTaskStatus.DONE, 1L, BigDecimal.valueOf(300)}
         ));
@@ -802,11 +803,14 @@ class BadReviewTaskServiceImplTest {
             return null;
         }).when(completionPostActionOrchestrator).deliverInvoice(44L, 17L);
 
-        ReflectionTestUtils.invokeMethod(service, "runCompletionSideEffectsById", 44L, false);
+        lenient().doThrow(new ResponseStatusException(HttpStatus.CONFLICT, "DONE is not mutable"))
+                .when(assignmentMutationGuardService).assertBadTask(44L);
+        ReflectionTestUtils.invokeMethod(service, "runCompletionSideEffectsById", 44L, 17L, false);
 
         verify(transactionRunner).required(any());
         verify(badReviewTaskRepository).findByIdForMutation(44L);
         verify(completionPostActionOrchestrator).deliverInvoice(44L, 17L);
+        verify(assignmentMutationGuardService, never()).assertBadTask(44L);
     }
 
     @Test
@@ -818,14 +822,28 @@ class BadReviewTaskServiceImplTest {
                 .price(BigDecimal.valueOf(300))
                 .build();
         when(badReviewTaskRepository.findByIdForMutation(45L)).thenReturn(Optional.of(task));
+        when(orderRepository.findByIdForCounterUpdate(19L)).thenReturn(Optional.of(task.getOrder()));
 
-        ReflectionTestUtils.invokeMethod(service, "runCompletionSideEffectsById", 45L, false);
+        ReflectionTestUtils.invokeMethod(service, "runCompletionSideEffectsById", 45L, 19L, false);
 
         verify(badReviewTaskRepository).findByIdForMutation(45L);
         verify(completionPostActionOrchestrator, never()).deliverInvoice(any(), any());
         verify(personalReminderService, never()).createSystemReminderDueNow(
                 any(), any(), any(), any(), any(), any()
         );
+    }
+
+    @Test
+    void completionCallbackCannotPrepareInvoiceForTaskMovedToAnotherOrder() {
+        when(orderRepository.findByIdForCounterUpdate(19L)).thenReturn(Optional.of(order(19L)));
+        when(badReviewTaskRepository.findByIdForMutation(45L)).thenReturn(Optional.of(
+                BadReviewTask.builder().id(45L).order(order(20L)).status(BadReviewTaskStatus.DONE).build()));
+
+        ReflectionTestUtils.invokeMethod(service, "runCompletionSideEffectsById", 45L, 19L, false);
+
+        verify(completionPostActionOrchestrator, never()).deliverInvoice(any(), any());
+        verify(paymentLinkService, never()).expireStaleLinksForOrder(any());
+        verify(personalReminderService, never()).createSystemReminderDueNow(any(), any(), any(), any(), any(), any());
     }
 
     @Test

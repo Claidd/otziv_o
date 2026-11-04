@@ -289,6 +289,7 @@ public class OrderArchiveDryRunService {
         ArchiveCandidateCounts archived = repository.countArchivedPreparedCandidates();
         verifyArchiveComplete(selected, archived);
         requirePaymentLinkArchiveService().archiveForPreparedOrderArchiveCandidates(batchId);
+        repository.bindPreparedContractorRewardsToArchive();
         ArchiveCandidateCounts deleted = repository.deletePreparedCandidatesFromLive();
         verifyDeleteComplete(selected, deleted);
 

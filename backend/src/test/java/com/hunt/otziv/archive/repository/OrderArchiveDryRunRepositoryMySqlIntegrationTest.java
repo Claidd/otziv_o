@@ -100,6 +100,46 @@ class OrderArchiveDryRunRepositoryMySqlIntegrationTest {
         });
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"review_performer_assignments", "review_recovery_batches", "review_recovery_tasks"})
+    void retainedWorkHistoryProtectsOrderAndWholeRelatedInvoiceComponent(String table) {
+        String column = retainedOrderColumn(table);
+        insertPaidOrder(101L);
+        insertPaidOrder(102L);
+        jdbc.update("INSERT INTO " + table + " VALUES(1,101)");
+        transaction.executeWithoutResult(status -> {
+            repository.prepareCandidateOrders(CUTOFF_DATE, 10);
+            assertThat(jdbc.queryForList("SELECT order_id FROM archive_candidate_orders", Long.class)).containsExactly(102L);
+        });
+        jdbc.update("INSERT INTO common_invoices(invoice_id,status,closed_at) VALUES(301,'PAID','2025-01-01'),(302,'ARCHIVED','2025-01-01')");
+        jdbc.update("INSERT INTO common_invoice_orders VALUES(401,301,101,true),(402,301,102,true),(403,302,101,false)");
+        transaction.executeWithoutResult(status -> {
+            repository.prepareCandidateOrders(CUTOFF_DATE, 10);
+            assertThat(repository.countPreparedCandidates().orders()).isZero();
+        });
+        assertThat(jdbc.queryForObject("SELECT " + column + " FROM " + table, Long.class)).isEqualTo(101L);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"review_performer_assignments", "review_recovery_batches", "review_recovery_tasks"})
+    void workHistoryCreatedAfterSelectionForcesFreshArchiveSelection(String table) {
+        insertPaidOrder(101L);
+        transaction.executeWithoutResult(status -> {
+            repository.prepareCandidateOrders(CUTOFF_DATE, 10);
+            jdbc.update("INSERT INTO " + table + " VALUES(1,101)");
+            assertThat(repository.hasPreparedCandidateEligibilityDrift(CUTOFF_DATE)).isTrue();
+        });
+    }
+
+    private String retainedOrderColumn(String table) {
+        return switch (table) {
+            case "review_performer_assignments" -> "order_id";
+            case "review_recovery_batches" -> "review_recovery_batch_order";
+            case "review_recovery_tasks" -> "review_recovery_task_order";
+            default -> throw new IllegalArgumentException(table);
+        };
+    }
+
     @Test
     void statusReactivationAfterPreparationIsDetectedByMySqlDriftQuery() {
         insertPaidOrder(101L);
@@ -363,6 +403,9 @@ class OrderArchiveDryRunRepositoryMySqlIntegrationTest {
         setup.execute("DROP TABLE IF EXISTS archive_candidate_orders");
         setup.execute("DROP TABLE IF EXISTS order_details");
         setup.execute("DROP TABLE IF EXISTS order_payment_reconciliations");
+        setup.execute("DROP TABLE IF EXISTS review_performer_assignments");
+        setup.execute("DROP TABLE IF EXISTS review_recovery_tasks");
+        setup.execute("DROP TABLE IF EXISTS review_recovery_batches");
         setup.execute("DROP TABLE IF EXISTS orders");
         setup.execute("DROP TABLE IF EXISTS order_statuses");
         setup.execute("DROP TABLE IF EXISTS filial");
@@ -401,6 +444,10 @@ class OrderArchiveDryRunRepositoryMySqlIntegrationTest {
                     FOREIGN KEY (order_id) REFERENCES orders(order_id)
                 ) ENGINE=InnoDB
                 """);
+        for (String table : java.util.List.of("review_performer_assignments", "review_recovery_batches", "review_recovery_tasks")) {
+            setup.execute("CREATE TABLE " + table + " (id BIGINT PRIMARY KEY," + retainedOrderColumn(table)
+                    + " BIGINT NOT NULL, FOREIGN KEY (" + retainedOrderColumn(table) + ") REFERENCES orders(order_id)) ENGINE=InnoDB");
+        }
         setup.execute("""
                 CREATE TABLE order_details (
                     order_detail_id BINARY(16) NOT NULL,

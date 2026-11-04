@@ -570,11 +570,12 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService, PaidBadRe
 
     private void runCompletionSideEffectsAfterCommit(BadReviewTask savedTask, boolean linkedToCommonInvoice) {
         Long taskId = savedTask == null ? null : savedTask.getId();
+        Long orderId = savedTask == null || savedTask.getOrder() == null ? null : savedTask.getOrder().getId();
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
-                    runCompletionSideEffectsById(taskId, linkedToCommonInvoice);
+                    runCompletionSideEffectsById(taskId, orderId, linkedToCommonInvoice);
                 }
             });
             return;
@@ -584,11 +585,19 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService, PaidBadRe
         runCompletionSideEffects(savedTask, linkedToCommonInvoice);
     }
 
-    private void runCompletionSideEffectsById(Long taskId, boolean linkedToCommonInvoice) {
+    private void runCompletionSideEffectsById(Long taskId, Long expectedOrderId, boolean linkedToCommonInvoice) {
         try {
-            CompletionInvoiceDelivery delivery = transactionRunner.required(() ->
-                    prepareCompletionSideEffects(requireTask(taskId), linkedToCommonInvoice)
-            );
+            CompletionInvoiceDelivery delivery = transactionRunner.required(() -> {
+                if (taskId == null || expectedOrderId == null
+                        || orderRepository.findByIdForCounterUpdate(expectedOrderId).isEmpty()) return null;
+                // This private callback follows an authorized, committed completion.
+                // The worker's mutation guard deliberately rejects DONE tasks: it
+                // must not be reused to authorize internal invoice preparation.
+                BadReviewTask task = badReviewTaskRepository.findByIdForMutation(taskId).orElse(null);
+                if (task == null || task.getStatus() != BadReviewTaskStatus.DONE || task.getOrder() == null
+                        || !Objects.equals(task.getOrder().getId(), expectedOrderId)) return null;
+                return prepareCompletionSideEffects(task, linkedToCommonInvoice);
+            });
             // The runner has committed and released the task row lock. The
             // orchestrator may now open its own short transaction safely.
             deliverCompletionInvoice(delivery);

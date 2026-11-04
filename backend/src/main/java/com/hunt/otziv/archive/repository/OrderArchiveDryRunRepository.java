@@ -108,6 +108,16 @@ public class OrderArchiveDryRunRepository {
             )
             """;
 
+    // These workflows still own live-order references. Keep their evidence
+    // until they have an explicit archive/restore protocol of their own.
+    private static String retainedOperationalEvidence(String orderId) {
+        return """
+                (EXISTS (SELECT 1 FROM review_performer_assignments assignment WHERE assignment.order_id = %s)
+                 OR EXISTS (SELECT 1 FROM review_recovery_batches recovery_batch WHERE recovery_batch.review_recovery_batch_order = %s)
+                 OR EXISTS (SELECT 1 FROM review_recovery_tasks recovery_task WHERE recovery_task.review_recovery_task_order = %s))
+                """.formatted(orderId, orderId, orderId);
+    }
+
     private static final String ELIGIBLE_ORDER_WHERE = """
             FROM orders o
             JOIN order_statuses s ON s.order_status_id = o.order_status
@@ -143,6 +153,7 @@ public class OrderArchiveDryRunRepository {
                     FROM common_invoice_orders cio
                     WHERE cio.order_id = o.order_id
               )
+              AND NOT """ + retainedOperationalEvidence("o.order_id") + """
               AND NOT EXISTS (
                     SELECT 1 FROM order_payment_reconciliations reconciliation
                     WHERE reconciliation.order_id = o.order_id
@@ -161,9 +172,11 @@ public class OrderArchiveDryRunRepository {
                       ON reconciliation_invoice.order_id = reconciliation_seed.order_id
                     JOIN common_invoice_orders reconciliation_order
                       ON reconciliation_order.invoice_id = reconciliation_invoice.invoice_id
-                    JOIN order_payment_reconciliations reconciliation
-                      ON reconciliation.order_id = reconciliation_order.order_id
                     WHERE reconciliation_seed.invoice_id = ci.invoice_id
+                      AND (EXISTS (SELECT 1 FROM order_payment_reconciliations reconciliation
+                                   WHERE reconciliation.order_id = reconciliation_order.order_id)
+                           OR """ + retainedOperationalEvidence("reconciliation_order.order_id") + """
+                      )
               )
               AND EXISTS (
                     SELECT 1
@@ -1205,6 +1218,17 @@ public class OrderArchiveDryRunRepository {
                         JOIN archive_candidate_orders co ON co.order_id = apc.check_order
                         """)
         );
+    }
+
+    public void bindPreparedContractorRewardsToArchive() {
+        // The verified archive copy exists before this atomic route switch.
+        // Paid-status FKs stay enforced and active earnings keep their identity.
+        jdbc.update("""
+                UPDATE contractor_reward_ledger ledger
+                JOIN archive_candidate_orders candidate ON candidate.order_id = ledger.order_id
+                JOIN archive_orders archived ON archived.order_id = candidate.order_id
+                SET ledger.archived_order_id = archived.order_id
+                """, Map.of());
     }
 
     public ArchiveCandidateCounts deletePreparedCandidatesFromLive() {
