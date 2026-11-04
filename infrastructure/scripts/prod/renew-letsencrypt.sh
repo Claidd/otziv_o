@@ -2,7 +2,11 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-ENV_FILE="${1:-$ROOT_DIR/.env.prod}"
+# Production deploys write /docker/.env (deploy.ps1 RemoteEnvFile=.env); .env.prod is the legacy
+# name. Prefer .env so a cron line without arguments renews with the live configuration.
+DEFAULT_ENV_FILE="$ROOT_DIR/.env"
+[[ -f "$DEFAULT_ENV_FILE" ]] || DEFAULT_ENV_FILE="$ROOT_DIR/.env.prod"
+ENV_FILE="${1:-$DEFAULT_ENV_FILE}"
 COMPOSE=(docker compose -f "$ROOT_DIR/docker-compose.yaml" --env-file "$ENV_FILE")
 
 read_env_value() {

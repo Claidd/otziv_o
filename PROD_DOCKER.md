@@ -444,7 +444,7 @@ docker compose -f compose.yaml up -d --build app frontend
 Добавить в cron на VPS, например раз в сутки:
 
 ```sh
-0 4 * * * cd /path/to/otziv && bash infrastructure/scripts/prod/renew-letsencrypt.sh >> data/nginx/logs/certbot-renew.log 2>&1
+0 4 * * * cd /docker && bash infrastructure/scripts/prod/renew-letsencrypt.sh /docker/.env >> data/nginx/logs/certbot-renew.log 2>&1
 ```
 
 Проверить продление без замены текущего сертификата можно так: временно поставь `CERTBOT_DRY_RUN=true` в `.env.prod` и выполни `bash infrastructure/scripts/prod/renew-letsencrypt.sh`, затем верни `false`.

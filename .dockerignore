@@ -17,8 +17,11 @@ mobile/www
 mobile/builds
 generated-assets
 *.log
+**/*.log
 .env
 .env.*
+**/.env
+**/.env.*
 **/keystore.properties
 **/*.jks
 **/*.keystore
