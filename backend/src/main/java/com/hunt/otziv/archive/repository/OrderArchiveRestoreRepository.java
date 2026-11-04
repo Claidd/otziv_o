@@ -349,6 +349,7 @@ public class OrderArchiveRestoreRepository {
                 UPDATE contractor_reward_ledger ledger
                 JOIN zp reward ON reward.zp_id = ledger.source_zp_id
                 SET ledger.active = reward.zp_active,
+                    ledger.archived_order_id = NULL,
                     ledger.payment_status_guard = CASE
                         WHEN reward.zp_active = 1 THEN :targetStatusId
                         ELSE ledger.payment_status_guard
@@ -356,6 +357,12 @@ public class OrderArchiveRestoreRepository {
                     ledger.occurred_on = reward.zp_date,
                     ledger.updated_at = CURRENT_TIMESTAMP(6)
                 WHERE reward.zp_order = :orderId
+                """, params);
+        // Also move inactive historical entries whose source is no longer in ZP.
+        // An active orphan on an unpaid target remains blocked by the paid FK.
+        jdbc.update("""
+                UPDATE contractor_reward_ledger SET archived_order_id = NULL
+                WHERE order_id = :orderId AND archived_order_id IS NOT NULL
                 """, params);
         jdbc.update("""
                 UPDATE contractor_reward_sync_markers sync_marker

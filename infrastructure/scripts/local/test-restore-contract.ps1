@@ -123,4 +123,33 @@ Assert-SelectorReject 'project_only_extra_volume_user_not_ignored' {Set-ProjectO
 if(-not $script:volumeQueryRead){throw 'All-volume-users guard was not queried'}
 Assert-SelectorReject 'foreign_volume_user_outside_project_still_rejected' {$script:existing=$true;$script:volumeOnly=$true;$script:containerMetadata.Config.Labels['com.docker.compose.project']='foreign'} 'foreign or legacy MySQL container'
 if(-not $script:volumeQueryRead){throw 'All-volume-users guard was not queried'}
+$smokeSource=(Resolve-Path 'infrastructure/scripts/local/prod-like-smoke.ps1').Path
+$smokeAst=[Management.Automation.Language.Parser]::ParseFile($smokeSource,[ref]$tokens,[ref]$errors)
+if($errors.Count){throw 'Smoke parse failed'}
+$logAssertion=$smokeAst.Find({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Assert-LegacyReviewCapabilityLogContent'},$true)
+if($null -eq $logAssertion){throw 'Missing capability log assertion'}
+. ([scriptblock]::Create($logAssertion.Extent.Text))
+$logFixture=[IO.Path]::GetTempFileName()
+$logReview='aa39245c-c680-4e31-836c-177d4ee01bfb'
+$logEncoded=$logReview.Replace('-','%2D')
+try {
+ Assert-Pass 'host_log_keeps_unrelated_traffic_observable' {
+  [IO.File]::WriteAllText($logFixture,"GET /legacy/other-uuid-bbbb-bbbb HTTP/1.1`nGET /legacy/observable-fixture HTTP/1.1`n")
+  Assert-LegacyReviewCapabilityLogContent $logFixture $logReview $logEncoded 'observable-fixture'
+ }
+ foreach($leak in @($logReview.ToUpperInvariant(),($logEncoded.Replace('%2D','%2d')+';matrix=1'))) {
+  [IO.File]::WriteAllText($logFixture,"GET /legacy/$leak HTTP/1.1`nGET /legacy/observable-fixture HTTP/1.1`n")
+  $rejected=$false
+  try { Assert-LegacyReviewCapabilityLogContent $logFixture $logReview $logEncoded 'observable-fixture' }
+  catch { if($_.Exception.Message -notlike '*capability leaked*'){throw};$rejected=$true }
+  if(-not $rejected){throw 'Capability leak was accepted'}
+  $script:passed++;Write-Output 'PASS host_log_rejects_raw_or_encoded_capability'
+ }
+ [IO.File]::WriteAllText($logFixture,'GET /unrelated HTTP/1.1')
+ $rejected=$false
+ try { Assert-LegacyReviewCapabilityLogContent $logFixture $logReview $logEncoded 'observable-fixture' }
+ catch { if($_.Exception.Message -notlike '*observability contract failed*'){throw};$rejected=$true }
+ if(-not $rejected){throw 'Missing observable marker was accepted'}
+ $script:passed++;Write-Output 'PASS host_log_requires_positive_observability'
+} finally { Remove-Item -LiteralPath $logFixture -Force }
 Write-Output "FINAL TOTAL PASS $script:passed"
