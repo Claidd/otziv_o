@@ -301,6 +301,23 @@ class KeycloakUserProvisioningServiceTest {
     }
 
     @Test
+    void lookAlikeRoleNamesAreRejectedBeforeAnyLookup() {
+        authenticateAs("OWNER");
+        for (String lookAlike : java.util.List.of("ÀDMIN", "ADMİN", "ADMIN​", "SUPERADMIN")) {
+            CreateKeycloakUserRequest request = createRequest("new-user", lookAlike);
+
+            ResponseStatusException error = assertThrows(
+                    ResponseStatusException.class,
+                    () -> service.createUser(request)
+            );
+
+            assertEquals(400, error.getStatusCode().value(), lookAlike);
+        }
+        verify(keycloakAdminClient, never()).createUser(any());
+        verify(userRepository, never()).saveAndFlush(any(User.class));
+    }
+
+    @Test
     void ownerCannotCreateAnotherOwnerByDefault() {
         authenticateAs("OWNER");
         CreateKeycloakUserRequest request = createRequest("new-owner", "OWNER");

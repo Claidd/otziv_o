@@ -87,3 +87,7 @@ com.hunt.otziv.r_review.utils.ReviewTextPolicy
 com.hunt.otziv.r_review.api.ReviewAccountWalkingPolicy
 # ADR-022: scalar active-recovery hold for reminder auto-approval.
 com.hunt.otziv.review_recovery.api.ReviewRecoveryMessageHold
+# Platform request-path canonicalization: security filters must match the decoded path Spring routes by.
+com.hunt.otziv.common.web.CanonicalRequestPath
+# Identity-owned one-time deep-link binding of a staff Telegram chat (replaces binding by typed login).
+com.hunt.otziv.u_users.api.StaffTelegramLinks

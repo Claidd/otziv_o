@@ -190,6 +190,23 @@ class AdminPerformerRegistrationLifecycleTest {
         assertThat(response.activationWarning()).contains("исторические согласия");
     }
 
+    @Test
+    void cancelledOrRejectedAssignmentsCannotBeVerifiedIntoAPayout() {
+        for (com.hunt.otziv.performers.model.PerformerAssignmentStatus status : java.util.List.of(
+                com.hunt.otziv.performers.model.PerformerAssignmentStatus.CANCELLED,
+                com.hunt.otziv.performers.model.PerformerAssignmentStatus.REJECTED)) {
+            com.hunt.otziv.performers.model.ReviewPerformerAssignment assignment =
+                    org.mockito.Mockito.mock(com.hunt.otziv.performers.model.ReviewPerformerAssignment.class);
+            when(assignment.getStatus()).thenReturn(status);
+            when(mutationLocks.assignment(77L)).thenReturn(assignment);
+
+            assertThatThrownBy(() -> service().verifyAssignment(77L, null))
+                    .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                    .hasMessageContaining("нельзя подтвердить");
+        }
+        verify(assignmentService, never()).markVerifiedByReview(any());
+    }
+
     private AdminPerformerService service() {
         return new AdminPerformerService(
                 performerProfileRepository,

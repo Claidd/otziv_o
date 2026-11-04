@@ -127,6 +127,43 @@ class PublicCapabilitySecurityContractTest {
     }
 
     @Test
+    void integrationLeadRoutesNeverOpenForAnyPathSpelling() throws Exception {
+        // SEC-1: the integration filter must not be bypassed by spelling the route differently.
+        for (String path : java.util.List.of(
+                "/api/leads/modified",
+                "/api/leads/%6Dodified",
+                "/api/leads/%6dodified",
+                "/api/%6Ceads/modified",
+                "/api/leads/modified;x=1"
+        )) {
+            int status = mockMvc.perform(get(java.net.URI.create(path + "?since=2000-01-01T00:00:00")))
+                    .andReturn().getResponse().getStatus();
+            org.assertj.core.api.Assertions.assertThat(status)
+                    .as("GET %s must not reach the export controller", path)
+                    .isIn(400, 401, 403);
+        }
+        for (String path : java.util.List.of("/api/leads/%73ync", "/api/leads/%69mport", "/api/leads/%75pdate")) {
+            int status = mockMvc.perform(post(java.net.URI.create(path))
+                            .contentType("application/json")
+                            .content("{}"))
+                    .andReturn().getResponse().getStatus();
+            org.assertj.core.api.Assertions.assertThat(status)
+                    .as("POST %s must not reach the lead mutation controller", path)
+                    .isIn(400, 401, 403);
+        }
+    }
+
+    @Test
+    void keycloakUsersDoNotGainIntegrationAuthority() throws Exception {
+        stubJwt("admin-lead-token", "ADMIN");
+        mockMvc.perform(get("/api/leads/modified")
+                        .param("since", "2000-01-01T00:00:00")
+                        .header("Authorization", "Bearer admin-lead-token"))
+                .andExpect(result -> org.assertj.core.api.Assertions
+                        .assertThat(result.getResponse().getStatus()).isIn(401, 403));
+    }
+
+    @Test
     void apiErrorDispatchIsNotRewrittenAsAnExpiredSession() throws Exception {
         mockMvc.perform(get("/error"))
                 .andExpect(status().isNotFound());
@@ -492,6 +529,16 @@ class PublicCapabilitySecurityContractTest {
         @GetMapping("/ws/logs")
         Map<String, String> liveLogsHandshake() {
             return Map.of("status", "ok");
+        }
+
+        @GetMapping("/api/leads/modified")
+        Map<String, String> leadExportProbe() {
+            return Map.of("leads", "exported");
+        }
+
+        @PostMapping({"/api/leads/sync", "/api/leads/import", "/api/leads/update"})
+        Map<String, String> leadMutationProbe() {
+            return Map.of("leads", "mutated");
         }
 
     }

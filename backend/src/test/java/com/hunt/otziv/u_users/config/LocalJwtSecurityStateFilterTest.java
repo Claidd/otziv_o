@@ -207,6 +207,44 @@ class LocalJwtSecurityStateFilterTest {
         );
     }
 
+    @Test
+    void unlinkedLocalAccountIsBoundToTheFirstSubjectExactlyOnce() throws Exception {
+        LocalJwtSecurityStateFilter filter = new LocalJwtSecurityStateFilter(userRepository, meterRegistryProvider, sessionSecurity);
+        User user = user("legacy", null, true, 2L, "ROLE_MANAGER");
+        user.setId(41L);
+        when(userRepository.findByUsername("legacy")).thenReturn(Optional.of(user));
+        when(userRepository.existsByKeycloakId("sub-legacy")).thenReturn(false);
+        when(userRepository.bindKeycloakIdIfUnlinked(41L, "sub-legacy")).thenReturn(1);
+        SecurityContextHolder.getContext().setAuthentication(token("legacy", "sub-legacy", 2L, "ROLE_MANAGER"));
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        MockFilterChain chain = new MockFilterChain();
+
+        filter.doFilter(new MockHttpServletRequest("GET", "/api/me"), response, chain);
+
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThat(chain.getRequest()).isNotNull();
+        assertThat(user.getKeycloakId()).isEqualTo("sub-legacy");
+    }
+
+    @Test
+    void renamedAccountWhoseSubjectBelongsToAnotherUserCannotTakeOverAnUnlinkedAccount() throws Exception {
+        LocalJwtSecurityStateFilter filter = new LocalJwtSecurityStateFilter(userRepository, meterRegistryProvider, sessionSecurity);
+        User victim = user("manager_ivan", null, true, 2L, "ROLE_MANAGER");
+        victim.setId(7L);
+        when(userRepository.findByUsername("manager_ivan")).thenReturn(Optional.of(victim));
+        // The attacker's own self-registered local account already owns this subject.
+        when(userRepository.existsByKeycloakId("sub-attacker")).thenReturn(true);
+        SecurityContextHolder.getContext().setAuthentication(token("manager_ivan", "sub-attacker", 2L, "ROLE_CLIENT"));
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(new MockHttpServletRequest("GET", "/api/me"), response, new MockFilterChain());
+
+        assertThat(response.getStatus()).isEqualTo(401);
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+        org.mockito.Mockito.verify(userRepository, org.mockito.Mockito.never())
+                .bindKeycloakIdIfUnlinked(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyString());
+    }
+
     private User user(String username, String keycloakId, boolean active, long authEpoch, String roleName) {
         Role role = new Role();
         role.setName(roleName);

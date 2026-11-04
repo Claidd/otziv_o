@@ -1,6 +1,7 @@
 package com.hunt.otziv.config.jwt.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.hunt.otziv.common.web.CanonicalRequestPath;
 import com.hunt.otziv.l_lead.dto.LeadDtoTransfer;
 import com.hunt.otziv.l_lead.dto.LeadUpdateDto;
 import io.jsonwebtoken.Claims;
@@ -13,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -28,6 +30,13 @@ import java.util.concurrent.atomic.AtomicLong;
 @Slf4j
 @Component
 public class JwtAuthFilter extends OncePerRequestFilter {
+
+    /**
+     * Granted only after the integration signature, scope, body checksum and replay checks pass.
+     * The integration routes require it instead of {@code permitAll}, so a request that does not
+     * reach this filter's rule (any path spelling the filter does not recognise) is denied.
+     */
+    public static final String INTEGRATION_AUTHORITY = "INTEGRATION_LEAD_EXCHANGE";
 
     private static final int MAX_INTEGRATION_BODY_BYTES = 1_048_576;
     private static final Map<String, IntegrationRule> RULES = Map.of(
@@ -132,7 +141,11 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         }
 
         SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken(claims.getSubject(), null, List.of())
+                new UsernamePasswordAuthenticationToken(
+                        claims.getSubject(),
+                        null,
+                        List.of(new SimpleGrantedAuthority(INTEGRATION_AUTHORITY))
+                )
         );
         try {
             filterChain.doFilter(effectiveRequest, response);
@@ -146,13 +159,8 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     }
 
     private String applicationPath(HttpServletRequest request) {
-        String path = request.getRequestURI();
-        String contextPath = request.getContextPath();
-        if (contextPath != null && !contextPath.isBlank() && path.startsWith(contextPath)) {
-            path = path.substring(contextPath.length());
-        }
-        int matrixSeparator = path.indexOf(';');
-        return matrixSeparator >= 0 ? path.substring(0, matrixSeparator) : path;
+        // Same decoded, matrix-free path that Spring Security and MVC match against.
+        return CanonicalRequestPath.of(request);
     }
 
     private SelectedToken extractToken(HttpServletRequest request) {

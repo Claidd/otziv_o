@@ -94,6 +94,9 @@ public class TelegramService extends TelegramLongPollingBot implements TelegramA
     private final TelegramGroupLinkService telegramGroupLinkService;
     private final PublicationProgressPreferenceService publicationProgressPreferenceService;
     private final ObjectProvider<PerformerTelegramLinkService> performerTelegramLinkServiceProvider;
+    /** Field-injected so the existing constructors (and their tests) stay unchanged. */
+    @Autowired(required = false)
+    private ObjectProvider<com.hunt.otziv.u_users.api.StaffTelegramLinks> staffTelegramLinksProvider;
     private final ObjectProvider<PerformerTelegramCallbackService> performerTelegramCallbackServiceProvider;
     private final ObjectProvider<WorkerRiskTelegramCallbackService> workerRiskTelegramCallbackServiceProvider;
     private final ObjectProvider<ManagerControlWorkerTaskTelegramCallbackService> managerControlWorkerTaskTelegramCallbackServiceProvider;
@@ -279,6 +282,15 @@ public class TelegramService extends TelegramLongPollingBot implements TelegramA
                 Optional<String> performerLinkResponse = performerTelegramLinkService.handleStartCommand(chatId, messageText);
                 if (performerLinkResponse.isPresent()) {
                     sendMessage(chatId, performerLinkResponse.get());
+                    return;
+                }
+            }
+            com.hunt.otziv.u_users.api.StaffTelegramLinks staffTelegramLinks =
+                    staffTelegramLinksProvider == null ? null : staffTelegramLinksProvider.getIfAvailable();
+            if (staffTelegramLinks != null) {
+                Optional<String> staffLinkResponse = staffTelegramLinks.handleStartCommand(chatId, messageText);
+                if (staffLinkResponse.isPresent()) {
+                    sendMessage(chatId, staffLinkResponse.get());
                     return;
                 }
             }
@@ -1837,25 +1849,11 @@ public class TelegramService extends TelegramLongPollingBot implements TelegramA
             return optionalUserByChatId.get();
         }
 
-        Optional<User> optionalUser = userService.findByUserName(messageText);
-
-        if (optionalUser.isPresent()) {
-            User user = optionalUser.get();
-
-            if (user.getTelegramChatId() == null) {
-                user.setTelegramChatId(chatId);
-                userService.save(user);
-                sendMessage(chatId, "Привязка успешно выполнена! Добро пожаловать, " + user.getUsername(), "Markdown");
-                log.info("Telegram chatId={} привязан к пользователю {}", chatId, user.getUsername());
-            } else {
-                sendMessage(chatId, "Добро пожаловать обратно, " + user.getUsername() + "!", "Markdown");
-            }
-
-            return user;
-        }
-
-        sendMessage(chatId, "Пользователь с таким username не найден. Введите свой логин:", "Markdown");
-        log.info("Telegram-пользователь не найден по chatId={} и username='{}'", chatId, messageText);
+        // A chat is never bound by typing a login: anyone who knows a username could take over the
+        // staff identity used by Telegram approvals. Binding goes through a one-time cabinet link.
+        sendMessage(chatId, "Этот Telegram не привязан к учётной записи. Откройте личный кабинет "
+                + "и нажмите «Привязать Telegram» — бот получит одноразовую ссылку.");
+        log.info("Telegram chatId={} не привязан; привязка по логину отключена", chatId);
         return null;
     }
 

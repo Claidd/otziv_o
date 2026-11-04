@@ -7,8 +7,9 @@ import lombok.Data;
 @Data
 public class ChangeKeycloakPasswordRequest {
 
+    /** Matches the Keycloak realm passwordPolicy length(8). */
     @NotBlank
-    @Size(min = 6)
+    @Size(min = 8, message = "Пароль должен содержать не менее 8 символов")
     private String password;
 
     private boolean temporary = false;

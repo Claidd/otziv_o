@@ -76,11 +76,7 @@ final class OptionalPublicBearerAuthenticationFilter extends OncePerRequestFilte
     }
 
     private static String applicationPath(HttpServletRequest request) {
-        String path = request.getRequestURI();
-        String contextPath = request.getContextPath();
-        return contextPath != null && !contextPath.isBlank() && path.startsWith(contextPath)
-                ? path.substring(contextPath.length())
-                : path;
+        return com.hunt.otziv.common.web.CanonicalRequestPath.of(request);
     }
 
     private static boolean isPublicCapabilityPath(String path) {

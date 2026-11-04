@@ -58,6 +58,21 @@ public class RequestValidationFilter implements Filter {
             return;
         }
 
+        // Other unauthenticated webhooks read the whole body before checking their secret;
+        // bound it here so an anonymous caller cannot make the JVM buffer ~100 MB per request.
+        if ("POST".equalsIgnoreCase(httpRequest.getMethod())
+                && (requestURI.equals("/webhook") || requestURI.startsWith("/webhook/"))) {
+            try {
+                chain.doFilter(new CachedBodyHttpServletRequest(httpRequest, 1_048_576), response);
+            } catch (BodyTooLargeException exception) {
+                httpResponse.sendError(
+                        HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE,
+                        "Webhook body exceeds byte limit"
+                );
+            }
+            return;
+        }
+
         if ("POST".equalsIgnoreCase(httpRequest.getMethod())
                 && (matchesEndpoint(requestURI, "/api/auth/register")
                 || matchesEndpoint(requestURI, "/api/auth/register-performer"))) {
@@ -101,11 +116,8 @@ public class RequestValidationFilter implements Filter {
     }
 
     private static String applicationPath(HttpServletRequest request) {
-        String path = request.getRequestURI();
-        String contextPath = request.getContextPath();
-        return contextPath != null && !contextPath.isBlank() && path.startsWith(contextPath)
-                ? path.substring(contextPath.length())
-                : path;
+        // Decoded and matrix-free: body limits must apply to every spelling of the endpoint.
+        return com.hunt.otziv.common.web.CanonicalRequestPath.of(request);
     }
 
     private static boolean matchesEndpoint(String path, String endpoint) {

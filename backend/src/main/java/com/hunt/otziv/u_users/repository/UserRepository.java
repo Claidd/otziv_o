@@ -73,6 +73,19 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     Optional<User> findByKeycloakId(String keycloakId);
 
+    boolean existsByKeycloakId(String keycloakId);
+
+    /** Binds an unlinked local account to its Keycloak subject exactly once. */
+    @Modifying
+    @org.springframework.transaction.annotation.Transactional
+    @Query(value = """
+        UPDATE users
+        SET keycloak_id = :subject
+        WHERE id = :userId
+          AND (keycloak_id IS NULL OR keycloak_id = '')
+    """, nativeQuery = true)
+    int bindKeycloakIdIfUnlinked(@Param("userId") Long userId, @Param("subject") String subject);
+
     @Query("""
         SELECT DISTINCT u
         FROM User u

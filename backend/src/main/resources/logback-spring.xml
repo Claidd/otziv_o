@@ -3,7 +3,8 @@
 
     <!-- Паттерн формата -->
     <springProperty scope="context" name="LOG_PATH" source="logging.file.path" defaultValue="/app/logs"/>
-    <property name="LOG_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"/>
+    <!-- CR/LF in messages are neutralized so a logged value cannot forge extra log lines. -->
+    <property name="LOG_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %replace(%msg){'[\r\n]+', ' '}%n"/>
 
     <!-- Консоль -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
@@ -51,6 +52,7 @@
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
             <fileNamePattern>${LOG_PATH}/error.%d{yyyy-MM-dd}.log</fileNamePattern>
             <maxHistory>7</maxHistory>
+            <totalSizeCap>1GB</totalSizeCap>
         </rollingPolicy>
         <encoder>
             <pattern>${LOG_PATTERN}</pattern>

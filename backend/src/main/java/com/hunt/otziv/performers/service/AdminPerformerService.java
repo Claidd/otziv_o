@@ -162,6 +162,11 @@ public class AdminPerformerService {
         if (assignment.getStatus() == PerformerAssignmentStatus.PAID) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Оплаченное задание уже завершено");
         }
+        if (assignment.getStatus() == PerformerAssignmentStatus.CANCELLED
+                || assignment.getStatus() == PerformerAssignmentStatus.REJECTED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Отменённое или отклонённое задание нельзя подтвердить");
+        }
         if (assignment.getReview() == null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "У задания нет отзыва");
         }

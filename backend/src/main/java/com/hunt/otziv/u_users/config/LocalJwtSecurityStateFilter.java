@@ -76,9 +76,20 @@ public class LocalJwtSecurityStateFilter extends OncePerRequestFilter {
             );
             return;
         }
-        if (hasText(user.getKeycloakId()) && !Objects.equals(user.getKeycloakId(), token.getToken().getSubject())) {
-            rejectOrContinueAnonymously(request, response, filterChain, "keycloak_subject_mismatch");
-            return;
+        String subject = token.getToken().getSubject();
+        if (hasText(user.getKeycloakId())) {
+            if (!Objects.equals(user.getKeycloakId(), subject)) {
+                rejectOrContinueAnonymously(request, response, filterChain, "keycloak_subject_mismatch");
+                return;
+            }
+        } else {
+            // Unlinked local account matched only by the mutable username claim. Bind it to the
+            // immutable subject on first use; a subject already owned by another local account
+            // (for example a self-registered client who renamed itself) is rejected.
+            if (!hasText(subject) || !bindUnlinkedAccount(user, subject)) {
+                rejectOrContinueAnonymously(request, response, filterChain, "keycloak_subject_unbindable");
+                return;
+            }
         }
 
         Long tokenEpoch = authEpoch(token);
@@ -138,6 +149,31 @@ public class LocalJwtSecurityStateFilter extends OncePerRequestFilter {
         canonical.setDetails(token.getDetails());
         SecurityContextHolder.getContext().setAuthentication(canonical);
         filterChain.doFilter(request, response);
+    }
+
+    private boolean bindUnlinkedAccount(User user, String subject) {
+        try {
+            if (userRepository.existsByKeycloakId(subject)) {
+                log.warn("JWT_UNLINKED_ACCOUNT_SUBJECT_ALREADY_BOUND userId={}", user.getId());
+                return false;
+            }
+            boolean bound = userRepository.bindKeycloakIdIfUnlinked(user.getId(), subject) == 1;
+            if (bound) {
+                increment("otziv.security.jwt.unlinked_account", "bound");
+                log.warn("JWT_UNLINKED_ACCOUNT_BOUND userId={}", user.getId());
+                user.setKeycloakId(subject);
+                return true;
+            }
+            // A concurrent request may have bound it first; accept only the same subject.
+            return userRepository.findById(user.getId())
+                    .map(User::getKeycloakId)
+                    .filter(subject::equals)
+                    .isPresent();
+        } catch (RuntimeException bindingFailure) {
+            log.warn("JWT_UNLINKED_ACCOUNT_BIND_FAILED userId={} error={}", user.getId(),
+                    bindingFailure.getClass().getSimpleName());
+            return false;
+        }
     }
 
     private boolean isExplicitlyExemptServiceAccount(JwtAuthenticationToken token) {
@@ -227,11 +263,7 @@ public class LocalJwtSecurityStateFilter extends OncePerRequestFilter {
     }
 
     private static String applicationPath(HttpServletRequest request) {
-        String path = request.getRequestURI();
-        String contextPath = request.getContextPath();
-        return contextPath != null && !contextPath.isBlank() && path.startsWith(contextPath)
-                ? path.substring(contextPath.length())
-                : path;
+        return com.hunt.otziv.common.web.CanonicalRequestPath.of(request);
     }
 
     private void increment(String metric, String outcome) {

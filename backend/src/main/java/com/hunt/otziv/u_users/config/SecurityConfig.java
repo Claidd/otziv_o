@@ -1,5 +1,6 @@
 package com.hunt.otziv.u_users.config;
 
+import com.hunt.otziv.common.web.CanonicalRequestPath;
 import com.hunt.otziv.config.jwt.service.JwtAuthFilter;
 import com.hunt.otziv.manager_daily_summary.service.ManagerReportReviewRestrictionFilter;
 import com.hunt.otziv.u_users.service.UserServiceImpl;
@@ -194,6 +195,8 @@ public class SecurityConfig {
         auth.requestMatchers("/api/auth", "/api/auth/**").permitAll();
         auth.requestMatchers(HttpMethod.GET, "/api/mobile-update", "/api/mobile-update/**").permitAll();
         auth.requestMatchers("/api/me").authenticated();
+        auth.requestMatchers(HttpMethod.POST, "/api/me/telegram-link")
+                .hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER", "OPERATOR", "MARKETOLOG");
         auth.requestMatchers(HttpMethod.GET, "/api/contractor-payments/me").authenticated();
         auth.requestMatchers("/api/manager-report-review/access-state", "/api/manager-report-review/check-in").authenticated();
         auth.requestMatchers("/api/manager-activity/**").authenticated();
@@ -216,6 +219,9 @@ public class SecurityConfig {
         auth.requestMatchers("/api/admin/categories", "/api/admin/categories/**", "/api/admin/subcategories", "/api/admin/subcategories/**").hasAnyRole("ADMIN", "OWNER", "MANAGER");
         auth.requestMatchers(HttpMethod.GET, "/api/admin/bots/*").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER");
         auth.requestMatchers("/api/admin/manager-control/**").hasAnyRole("ADMIN", "OWNER", "MANAGER");
+        // Global performer automation switches stay with administrators; managers keep day-to-day control.
+        auth.requestMatchers(HttpMethod.PUT, "/api/admin/performers/rollout").hasAnyRole("ADMIN", "OWNER");
+        auth.requestMatchers(HttpMethod.POST, "/api/admin/performers/scheduler/run").hasAnyRole("ADMIN", "OWNER");
         auth.requestMatchers("/api/admin/performers/**").hasAnyRole("ADMIN", "OWNER", "MANAGER");
         auth.requestMatchers("/api/admin/**").hasAnyRole("ADMIN", "OWNER");
         auth.requestMatchers("/api/operator/**").hasAnyRole("ADMIN", "OWNER", "OPERATOR");
@@ -286,11 +292,13 @@ public class SecurityConfig {
         auth.requestMatchers("/webhook", "/webhook/**").permitAll();
         // The bridge has its own constant-time token filter and is absent when disabled.
         auth.requestMatchers("/internal/outreach/**").permitAll();
-        auth.requestMatchers(HttpMethod.POST, "/api/leads/import").permitAll();
-        auth.requestMatchers(HttpMethod.POST, "/api/leads/sync").permitAll();
-        auth.requestMatchers(HttpMethod.POST, "/api/leads/update").permitAll();
-        auth.requestMatchers("/api/leads/modified").permitAll();
-        auth.requestMatchers("/api/dispatch-settings/cron").permitAll();
+        // Integration routes: JwtAuthFilter grants this authority only after verifying the
+        // signed integration token, body checksum and replay guard. Never permitAll here.
+        auth.requestMatchers(HttpMethod.POST, "/api/leads/import").hasAuthority(JwtAuthFilter.INTEGRATION_AUTHORITY);
+        auth.requestMatchers(HttpMethod.POST, "/api/leads/sync").hasAuthority(JwtAuthFilter.INTEGRATION_AUTHORITY);
+        auth.requestMatchers(HttpMethod.POST, "/api/leads/update").hasAuthority(JwtAuthFilter.INTEGRATION_AUTHORITY);
+        auth.requestMatchers("/api/leads/modified").hasAuthority(JwtAuthFilter.INTEGRATION_AUTHORITY);
+        auth.requestMatchers("/api/dispatch-settings/cron").hasAuthority(JwtAuthFilter.INTEGRATION_AUTHORITY);
     }
 
     private void configureLegacyAuthorization(AuthorizeHttpRequestsConfigurer<HttpSecurity>.AuthorizationManagerRequestMatcherRegistry auth) {
@@ -341,11 +349,7 @@ public class SecurityConfig {
     }
 
     private static String applicationPath(HttpServletRequest request) {
-        String path = request.getRequestURI();
-        String contextPath = request.getContextPath();
-        return contextPath != null && !contextPath.isBlank() && path.startsWith(contextPath)
-                ? path.substring(contextPath.length())
-                : path;
+        return CanonicalRequestPath.of(request);
     }
 
     private boolean isBearerOptionalPublicPath(String path) {
