@@ -33,8 +33,14 @@
     </label>
 
     <label>
-      <span>Пароль</span>
-      <input type="password" formControlName="password" autocomplete="new-password">
+      <span>Временный пароль</span>
+      <span class="password-field">
+        <input type="text" formControlName="password" autocomplete="off" spellcheck="false">
+        <button type="button" class="button secondary" (click)="regeneratePassword()" title="Сгенерировать новый пароль">
+          <span class="material-icons-sharp">autorenew</span>
+          Новый
+        </button>
+      </span>
     </label>
 
     <label>
@@ -116,6 +122,12 @@
           <dt>Роли</dt>
           <dd>{{ createdUser()?.roles?.join(', ') || '-' }}</dd>
         </div>
+        @if (createdPassword()) {
+          <div>
+            <dt>Пароль для первого входа</dt>
+            <dd class="created-password">{{ createdPassword() }}</dd>
+          </div>
+        }
       </dl>
     </section>
   }

@@ -11,6 +11,26 @@ import { apiErrorMessage } from '../../../shared/api-error-message';
 import { LoadErrorCardComponent } from '../../../shared/load-error-card.component';
 import { ToastService } from '../../../shared/toast.service';
 
+const TEMPORARY_PASSWORD_LENGTH = 14;
+const TEMPORARY_PASSWORD_GROUPS = ['ABCDEFGHJKLMNPQRSTUVWXYZ', 'abcdefghijkmnopqrstuvwxyz', '23456789'];
+
+/**
+ * A fresh random temporary password for each new account. A fixed default (it used to be
+ * shipped in this public repository) let anyone sign in to a new account before its owner
+ * and replace the temporary password with their own.
+ */
+export function generateTemporaryPassword(length = TEMPORARY_PASSWORD_LENGTH): string {
+  const alphabet = TEMPORARY_PASSWORD_GROUPS.join('');
+  const random = new Uint32Array(length);
+  for (;;) {
+    crypto.getRandomValues(random);
+    const password = Array.from(random, (value) => alphabet[value % alphabet.length]).join('');
+    if (TEMPORARY_PASSWORD_GROUPS.every((group) => [...password].some((char) => group.includes(char)))) {
+      return password;
+    }
+  }
+}
+
 @Component({
   selector: 'app-user-create',
   imports: [AdminLayoutComponent, LoadErrorCardComponent, ReactiveFormsModule, RouterLink],
@@ -27,13 +47,19 @@ export class UserCreateComponent {
   readonly saving = signal(false);
   readonly error = signal<string | null>(null);
   readonly createdUser = signal<CreatedKeycloakUserResponse | null>(null);
+  readonly createdPassword = signal<string | null>(null);
+
+  regeneratePassword(): void {
+    this.form.controls.password.setValue(generateTemporaryPassword());
+    this.form.controls.password.markAsDirty();
+  }
 
   readonly form = this.fb.nonNullable.group({
     username: ['', [Validators.required, Validators.minLength(3)]],
     email: ['', [Validators.required, Validators.email]],
     fio: [''],
     phoneNumber: [''],
-    password: ['Temp123!', [Validators.required, Validators.minLength(8)]],
+    password: [generateTemporaryPassword(), [Validators.required, Validators.minLength(8)]],
     temporaryPassword: [true],
     enabled: [true],
     emailVerified: [false],
@@ -87,6 +113,7 @@ export class UserCreateComponent {
     this.adminUsersApi.createUser(request).subscribe({
       next: (user) => {
         this.createdUser.set(user);
+        this.createdPassword.set(request.password ?? null);
         this.saving.set(false);
         this.toastService.success('Пользователь создан', user.username);
         this.form.reset({
@@ -94,7 +121,7 @@ export class UserCreateComponent {
           email: '',
           fio: '',
           phoneNumber: '',
-          password: 'Temp123!',
+          password: generateTemporaryPassword(),
           temporaryPassword: true,
           enabled: true,
           emailVerified: false,
