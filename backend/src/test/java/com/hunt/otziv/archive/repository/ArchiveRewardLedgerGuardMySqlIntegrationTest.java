@@ -36,8 +36,11 @@ class ArchiveRewardLedgerGuardMySqlIntegrationTest {
         jdbc.execute("DROP TABLE IF EXISTS archive_orders");
         jdbc.execute("DROP TABLE IF EXISTS orders");
         jdbc.execute("DROP TABLE IF EXISTS salary_paid_order_status_guard");
+        jdbc.execute("DROP TABLE IF EXISTS order_statuses");
+        jdbc.execute("CREATE TABLE order_statuses(order_status_id BIGINT PRIMARY KEY,order_status_title VARCHAR(64)) ENGINE=InnoDB");
+        jdbc.update("INSERT INTO order_statuses VALUES(7,'Оплачено'),(8,'Новый')");
         jdbc.execute("CREATE TABLE orders(order_id BIGINT PRIMARY KEY,order_status BIGINT,UNIQUE KEY(order_id,order_status)) ENGINE=InnoDB");
-        jdbc.execute("CREATE TABLE archive_orders(order_id BIGINT PRIMARY KEY,order_status BIGINT) ENGINE=InnoDB");
+        jdbc.execute("CREATE TABLE archive_orders(order_id BIGINT PRIMARY KEY,order_status BIGINT,restored_at DATETIME(6) NULL) ENGINE=InnoDB");
         jdbc.execute("CREATE TABLE archive_candidate_orders(order_id BIGINT PRIMARY KEY) ENGINE=InnoDB");
         jdbc.execute("CREATE TABLE salary_paid_order_status_guard(order_status_id BIGINT PRIMARY KEY) ENGINE=InnoDB");
         jdbc.update("INSERT INTO salary_paid_order_status_guard VALUES(7)");
@@ -55,6 +58,8 @@ class ArchiveRewardLedgerGuardMySqlIntegrationTest {
         jdbc.update("INSERT INTO orders VALUES(101,7)");
         jdbc.update("INSERT INTO archive_candidate_orders VALUES(101)");
         jdbc.update("INSERT INTO contractor_reward_ledger(id,source_zp_id,order_id,payment_status_guard,active,amount_kopecks) VALUES(1,900,101,7,1,150000)");
+        // The official smoke also runs against a fresh VPS schema before V371.
+        assertThat(jdbc.queryForObject(smokeLedgerGuardSql(), String.class)).isEqualTo("ACTIVE_UNPAID_LEDGER=0");
         new ResourceDatabasePopulator(new ClassPathResource(
                 "db/migration/V1_10_371__archive_reward_ledger_paid_order_guard.sql")).execute(ds);
         repository = new OrderArchiveDryRunRepository(new NamedParameterJdbcTemplate(ds));
@@ -64,7 +69,7 @@ class ArchiveRewardLedgerGuardMySqlIntegrationTest {
     @Test
     void archiveKeepsEarnedMoneyAndPaidConstraintAndCanReturnToLiveOrder() {
         Map<String,Object> before = financialSnapshot();
-        jdbc.update("INSERT INTO archive_orders SELECT * FROM orders");
+        jdbc.update("INSERT INTO archive_orders(order_id,order_status) SELECT * FROM orders");
         transactions.executeWithoutResult(status -> {
             repository.bindPreparedContractorRewardsToArchive();
             assertThat(jdbc.update("DELETE FROM orders WHERE order_id=101")).isOne();
@@ -87,7 +92,7 @@ class ArchiveRewardLedgerGuardMySqlIntegrationTest {
         repository.bindPreparedContractorRewardsToArchive();
         assertThatThrownBy(() -> jdbc.update("DELETE FROM orders WHERE order_id=101"))
                 .isInstanceOf(DataIntegrityViolationException.class);
-        jdbc.update("INSERT INTO archive_orders VALUES(101,8)");
+        jdbc.update("INSERT INTO archive_orders(order_id,order_status) VALUES(101,8)");
         assertThatThrownBy(repository::bindPreparedContractorRewardsToArchive)
                 .isInstanceOf(DataIntegrityViolationException.class);
         assertThat(jdbc.queryForObject("SELECT active FROM contractor_reward_ledger", Boolean.class)).isTrue();
@@ -96,7 +101,7 @@ class ArchiveRewardLedgerGuardMySqlIntegrationTest {
 
     @Test
     void failedArchiveRollsBackRoutingAndCannotAttachAnotherOrder() {
-        jdbc.update("INSERT INTO archive_orders VALUES(101,7),(102,7)");
+        jdbc.update("INSERT INTO archive_orders(order_id,order_status) VALUES(101,7),(102,7)");
         transactions.executeWithoutResult(status -> {
             repository.bindPreparedContractorRewardsToArchive();
             jdbc.update("DELETE FROM orders WHERE order_id=101");
@@ -107,6 +112,42 @@ class ArchiveRewardLedgerGuardMySqlIntegrationTest {
         assertThatThrownBy(() -> jdbc.update("UPDATE contractor_reward_ledger SET archived_order_id=102 WHERE id=1"))
                 .isInstanceOf(org.springframework.dao.DataAccessException.class)
                 .hasMessageContaining("ck_ledger_archive_order_identity");
+    }
+
+    @Test
+    void officialSmokeAcceptsPaidArchiveButNeverHidesUnpaidLiveOrRestoredSource() {
+        String guard = smokeLedgerGuardSql();
+        jdbc.update("INSERT INTO archive_orders(order_id,order_status) VALUES(101,7)");
+        repository.bindPreparedContractorRewardsToArchive();
+        jdbc.update("DELETE FROM orders WHERE order_id=101");
+        assertThat(jdbc.queryForObject(guard, String.class)).isEqualTo("ACTIVE_UNPAID_LEDGER=0");
+
+        // A historical paid copy must not mask a currently reopened live order.
+        jdbc.update("INSERT INTO orders VALUES(101,8)");
+        assertThat(jdbc.queryForObject(guard, String.class)).isEqualTo("ACTIVE_UNPAID_LEDGER=1");
+        jdbc.update("UPDATE contractor_reward_ledger SET active=0,archived_order_id=NULL WHERE id=1");
+        assertThat(jdbc.queryForObject(guard, String.class)).isEqualTo("ACTIVE_UNPAID_LEDGER=0");
+
+        // A restored snapshot cannot stand in for a missing live source either.
+        jdbc.update("DELETE FROM orders WHERE order_id=101");
+        jdbc.update("UPDATE archive_orders SET restored_at=NOW(6) WHERE order_id=101");
+        jdbc.update("UPDATE contractor_reward_ledger SET archived_order_id=101,active=1 WHERE id=1");
+        assertThat(jdbc.queryForObject(guard, String.class)).isEqualTo("ACTIVE_UNPAID_LEDGER=1");
+    }
+
+    private String smokeLedgerGuardSql() {
+        var relative = java.nio.file.Path.of("..", "infrastructure", "scripts", "local", "prod-like-smoke.ps1");
+        var script = java.nio.file.Files.isRegularFile(relative) ? relative
+                : java.nio.file.Path.of("infrastructure", "scripts", "local", "prod-like-smoke.ps1");
+        try {
+            var matcher = java.util.regex.Pattern.compile(
+                    "SELECT CONCAT\\('ACTIVE_UNPAID_LEDGER=', COUNT\\(\\*\\)\\).*?;",
+                    java.util.regex.Pattern.DOTALL).matcher(java.nio.file.Files.readString(script));
+            assertThat(matcher.find()).isTrue();
+            return matcher.group();
+        } catch (java.io.IOException exception) {
+            throw new java.io.UncheckedIOException(exception);
+        }
     }
 
     private Map<String,Object> financialSnapshot() {

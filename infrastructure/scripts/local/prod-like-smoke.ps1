@@ -3245,12 +3245,17 @@ WHERE reward.zp_active = 1
 SELECT CONCAT('ACTIVE_UNPAID_LEDGER=', COUNT(*))
 FROM contractor_reward_ledger ledger
 LEFT JOIN orders source_order ON source_order.order_id = ledger.order_id
-LEFT JOIN order_statuses source_status ON source_status.order_status_id = source_order.order_status
+LEFT JOIN archive_orders archived_source_order
+  ON archived_source_order.order_id = ledger.order_id
+ AND archived_source_order.restored_at IS NULL
+ AND source_order.order_id IS NULL
+LEFT JOIN order_statuses source_status
+  ON source_status.order_status_id = COALESCE(source_order.order_status, archived_source_order.order_status)
 WHERE ledger.active = 1
   AND ledger.order_id IS NOT NULL
   AND ledger.order_id > 0
-  AND (source_order.order_id IS NULL
-       OR BINARY source_status.order_status_title <> BINARY 'Оплачено');
+  AND ((source_order.order_id IS NULL AND archived_source_order.order_id IS NULL)
+       OR BINARY COALESCE(source_status.order_status_title, '') <> BINARY 'Оплачено');
 
 SELECT CONCAT('ACTIVE_PAYMENT_CHECK_GUARD_VIOLATIONS=', COUNT(*))
 FROM payment_check payment
