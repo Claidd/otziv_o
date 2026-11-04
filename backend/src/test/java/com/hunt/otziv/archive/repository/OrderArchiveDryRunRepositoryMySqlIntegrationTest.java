@@ -115,7 +115,8 @@ class OrderArchiveDryRunRepositoryMySqlIntegrationTest {
         jdbc.update("INSERT INTO common_invoice_orders VALUES(401,301,101,true),(402,301,102,true),(403,302,101,false)");
         transaction.executeWithoutResult(status -> {
             repository.prepareCandidateOrders(CUTOFF_DATE, 10);
-            assertThat(repository.countPreparedCandidates().orders()).isZero();
+            assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM archive_candidate_orders", Long.class)).isZero();
+            assertThat(repository.countPreparedCandidateCommonInvoices()).isZero();
         });
         assertThat(jdbc.queryForObject("SELECT " + column + " FROM " + table, Long.class)).isEqualTo(101L);
     }
