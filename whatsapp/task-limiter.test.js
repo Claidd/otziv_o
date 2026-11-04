@@ -89,3 +89,16 @@ test("metrics reflect tracked cleanup, bounded rejections and one timeout per ta
   assert.throws(() => gate.reject('user-controlled-id')); cleanup.resolve(); await running;
   assert.equal(gate.snapshot().active, 0); assert.equal(gate.snapshot().oldestCleanupSeconds, 0);
 });
+
+test("background work holds a real permit, is drained, and is skipped without capacity", async () => {
+  const limiter = new TaskLimiter(1);
+  let release;
+  const work = limiter.runInBackground(() => limiter.track(new Promise(resolve => { release = resolve; })));
+  assert.equal(limiter.active, 1);
+  assert.equal(limiter.runInBackground(assert.fail), null);
+  assert.deepEqual(limiter.snapshot().rejectedTotal, { busy: 0, draining: 0, not_ready: 0 });
+  const drained = limiter.drain(1000);
+  release(); await work;
+  assert.equal(await drained, true);
+  assert.equal(limiter.runInBackground(assert.fail), null);
+});

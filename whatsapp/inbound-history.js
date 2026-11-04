@@ -58,10 +58,18 @@ async function fetchAvailableWindow(chat, cutoff, { pageSize = 100, maxMessages 
   }
 }
 
+function withDeadline(promise, timeoutMs, code) {
+  if (!(timeoutMs > 0)) return promise;
+  let timer;
+  return Promise.race([promise, new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(code)), timeoutMs);
+  })]).finally(() => clearTimeout(timer));
+}
+
 async function recoverHistory({ client, inbox, clientId, groupEnabled = true, outreachEnabled = false,
   outboundRegistry, generatedMessageStore, participantResolver, log = () => {},
   overlapSeconds = 120, pageSize = 100, maxMessages = 10000, discoveryTimeoutMs = 30000,
-  current = () => true }) {
+  chatTimeoutMs = 60000, maxChatFailures = 3, current = () => true }) {
   inbox.paused = true;
   let errors = 0;
   try {
@@ -80,16 +88,33 @@ async function recoverHistory({ client, inbox, clientId, groupEnabled = true, ou
         const isGroup = chat.isGroup || chatId.endsWith("@g.us");
         return chatId && chatId !== "status@broadcast" && (isGroup ? groupEnabled : outreachEnabled);
       });
-    // Hold each chat until its own history is covered. Other chats can drain
-    // during a long scan instead of waiting behind a global pause.
-    for (const { chatId } of eligibleChats) inbox.blockedHistoryChats.add(chatId);
+    // Hold each chat until its own history is covered once in this client
+    // generation. Other chats drain during a long scan instead of waiting
+    // behind a global pause, and a periodic rescan never holds a covered chat.
+    for (const { chatId } of eligibleChats) {
+      if (!inbox.historyCoveredChats.has(chatId)) inbox.blockedHistoryChats.add(chatId);
+    }
     inbox.paused = false;
     for (const { chat, chatId } of eligibleChats) {
       if (!current()) break;
       const isGroup = chat.isGroup || chatId.endsWith("@g.us");
       const cutoff = Math.max(inbox.metadata.since, inbox.cursor(chatId) - overlapSeconds);
+      // A chat whose history keeps failing must still deliver live messages:
+      // after the failure cap its hold is released and the gap stays visible.
+      const incomplete = () => {
+        inbox.historyGaps.add(chatId); errors += 1;
+        const failures = (inbox.historyFailures.get(chatId) || 0) + 1;
+        inbox.historyFailures.set(chatId, failures);
+        if (inbox.historyCoveredChats.has(chatId)) return;
+        if (failures < maxChatFailures) { inbox.blockedHistoryChats.add(chatId); return; }
+        if (inbox.blockedHistoryChats.delete(chatId)) {
+          log("warn", "Inbound history hold released after repeated failures",
+            { stage: "history", code: "history_hold_released", failures });
+        }
+      };
       try {
-        const window = await fetchAvailableWindow(chat, cutoff, { pageSize, maxMessages });
+        const window = await withDeadline(fetchAvailableWindow(chat, cutoff, { pageSize, maxMessages }),
+          chatTimeoutMs, "inbound_history_chat_timeout");
         if (!current()) break;
         if (window.messages.some(m => trackedBody(m) && (!messageId(m) || !Number.isFinite(Number(m.timestamp))))) {
           throw new Error("inbound_history_identity_missing");
@@ -113,15 +138,18 @@ async function recoverHistory({ client, inbox, clientId, groupEnabled = true, ou
           // after a crash before this write safely queues the same IDs again.
           if (window.covered && page.length) inbox.checkpoint(chatId, Number(page[page.length - 1].timestamp));
         }
-        if (window.covered) { inbox.historyGaps.delete(chatId); inbox.blockedHistoryChats.delete(chatId); }
-        else { inbox.historyGaps.add(chatId); inbox.blockedHistoryChats.add(chatId); errors += 1; }
+        if (window.covered) {
+          inbox.historyGaps.delete(chatId); inbox.blockedHistoryChats.delete(chatId);
+          inbox.historyCoveredChats.add(chatId); inbox.historyFailures.delete(chatId);
+        } else incomplete();
       } catch (error) {
-        inbox.historyGaps.add(chatId); errors += 1;
         // Capacity must not deadlock the accepted prefix: drain it to create room,
         // then revisit the unchanged page cursor. Other history gaps hold the chat.
-        if (error.message === "inbound_store_full") inbox.blockedHistoryChats.delete(chatId);
-        else inbox.blockedHistoryChats.add(chatId);
-        log("warn", "Inbound history recovery incomplete", { stage: "history", code: error.code || "history_failed" });
+        if (error.message === "inbound_store_full") {
+          inbox.historyGaps.add(chatId); errors += 1; inbox.blockedHistoryChats.delete(chatId);
+        } else incomplete();
+        log("warn", "Inbound history recovery incomplete", { stage: "history",
+          code: error.code || (error.message === "inbound_history_chat_timeout" ? "history_chat_timeout" : "history_failed") });
       }
     }
   } catch (error) {

@@ -31,7 +31,7 @@ function createOperationReconciliationHandler({ ledger, clientId, getMessage, ca
     if (existing.state === "SUCCEEDED" && existing.messageId !== messageId) {
       throw new OperationLedgerError("operation_evidence_mismatch", 409);
     }
-    const result = await ledger.reconcile(id, envelope, messageId, async () => true, { sentAt });
+    const result = await ledger.reconcile(id, envelope, messageId, async () => true, { sentAt, ack: Number(message.ack) });
     await onReconciled(messageId);
     res.set("Cache-Control", "no-store");
     res.json({ operationId: id, ...result });

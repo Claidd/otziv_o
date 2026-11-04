@@ -4,6 +4,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
   fetchRecentMessagesFromRawChat,
+  groupCoverageSummary,
   normalizeMessage,
 } = require("./raw-chat-reconciliation");
 
@@ -75,7 +76,7 @@ test("returns an empty result when the raw chat is no longer available", async (
     const result = await fetchRecentMessagesFromRawChat({
       pupPage: { evaluate: async (callback, options) => callback(options) },
     }, "12001@g.us");
-    assert.deepEqual(result, { found: false, groupName: "", messages: [] });
+    assert.deepEqual(result, { found: false, groupName: "", messages: [], coverageComplete: false, oldestTimestamp: null });
   } finally {
     global.window = originalWindow;
   }
@@ -90,4 +91,76 @@ test("rejects invalid group identifiers before browser evaluation", async () => 
     /valid WhatsApp group id/
   );
   assert.equal(evaluated, false);
+});
+
+function rawClient(cached, loads) {
+  const originalWindow = global.window;
+  let calls = 0;
+  global.window = {
+    WWebJS: {
+      getChat: async () => ({ name: "Group", msgs: { getModelsArray: () => cached } }),
+      getMessageModel: (message) => ({ ...message, from: "12001@g.us" }),
+    },
+    require: () => ({ loadEarlierMsgs: async () => {
+      const next = loads[calls++];
+      if (next instanceof Error) throw next;
+      return next;
+    } }),
+  };
+  return {
+    client: { pupPage: { evaluate: async (callback, options) => callback(options) } },
+    restore: () => { global.window = originalWindow; },
+    loads: () => calls,
+  };
+}
+const raw = (id, t, fromMe = false) => ({ id: { _serialized: id, fromMe }, t, body: id });
+
+test("raw history is covered only after reaching the requested cursor", async () => {
+  const fixture = rawClient([raw("reply", 150), raw("bot", 160, true)], [[raw("older", 90), raw("cursor", 100)]]);
+  try {
+    const result = await fetchRecentMessagesFromRawChat(fixture.client, "12001@g.us", 100, { afterTimestamp: 100 });
+    assert.equal(result.coverageComplete, true);
+    assert.equal(result.oldestTimestamp, 90);
+    assert.equal(fixture.loads(), 1);
+  } finally { fixture.restore(); }
+});
+
+test("a failed earlier-history load or a limit-truncated window is not coverage", async () => {
+  for (const [cached, loads, options, limit] of [
+    [[raw("reply", 150)], [new Error("load failed")], { afterTimestamp: 100 }, 100],
+    [[raw("a", 150), raw("b", 160), raw("c", 170)], [], { afterTimestamp: 100 }, 2],
+    [Array.from({ length: 100 }, (_, i) => raw(`bot-${i}`, 200 + i, true)), [[raw("older", 50)]],
+      { afterTimestamp: 100, maxMessages: 100 }, 100],
+  ]) {
+    const fixture = rawClient(cached, loads);
+    try {
+      const result = await fetchRecentMessagesFromRawChat(fixture.client, "12001@g.us", limit, options);
+      assert.equal(result.found, true);
+      assert.equal(result.coverageComplete, false);
+    } finally { fixture.restore(); }
+  }
+});
+
+test("explicitly exhausted history is coverage even when it starts after the cursor", async () => {
+  const fixture = rawClient([raw("reply", 150)], [[]]);
+  try {
+    const result = await fetchRecentMessagesFromRawChat(fixture.client, "12001@g.us", 100, { afterTimestamp: 100 });
+    assert.equal(result.coverageComplete, true);
+  } finally { fixture.restore(); }
+});
+
+test("group coverage summary is complete only when every requested group is covered", () => {
+  assert.deepEqual(groupCoverageSummary([
+    { groupId: "a@g.us", failed: false, coverageComplete: true, source: "direct" },
+    { groupId: "b@g.us", failed: false, coverageComplete: true, source: "raw" },
+  ]).coverageComplete, true);
+  const partial = groupCoverageSummary([
+    { groupId: "a@g.us", failed: false, coverageComplete: true, source: "direct" },
+    { groupId: "b@g.us", failed: true, coverageComplete: true },
+    { groupId: "c@g.us", failed: false, coverageComplete: false, source: "raw" },
+  ]);
+  assert.equal(partial.coverageComplete, false);
+  assert.deepEqual(partial.groupCoverage.map(group => [group.groupId, group.coverageComplete, group.source]),
+    [["a@g.us", true, "direct"], ["b@g.us", false, "failed"], ["c@g.us", false, "raw"]]);
+  assert.equal(groupCoverageSummary([]).coverageComplete, false);
 });

@@ -19,7 +19,16 @@ message text and recipient are not recorded in the ledger or new logs.
 | Send outcome cannot be proven | 409 | `status=unknown`, `code=operation_unknown`, `state=UNKNOWN` |
 | Same ID, different envelope | 409 | `code=operation_payload_conflict` |
 | Bad/conflicting ID | 400 | `invalid_operation_id` / `operation_id_conflict` |
-| Store/readiness/admission unavailable | 503/429 | Stable local `code` |
+| Store/readiness/admission unavailable | 503/429 | Stable local `code`; optional `dispatched` |
+
+Additive fields: an error body may carry `dispatched: false` (no claim exists and the provider was not
+called for this ID; a later retry with the SAME ID may send) or `dispatched: true` (a provider call
+started; treat as UNKNOWN). It is absent when the gateway cannot prove either (follower, restore fence,
+unreadable record, validation errors). Send/lookup bodies may carry `providerAck` (WhatsApp ACK: -1
+error, 0 created/not server-confirmed, 1 server, 2 device, 3 read). The gateway waits up to
+`WHATSAPP_SEND_ACK_TIMEOUT_MS` (10000, `0` disables) for ACK >= 1. A message still below 1 is
+`UNKNOWN` with `providerAck`, never "not sent"; its later server ACK, or `reconcile` with ACK >= 1,
+turns the same ID into `SUCCEEDED`.
 
 All endpoints still require internal authentication. `GET /operations/:operationId`
 returns `{operationId,state,messageId,envelopeHash}` (404 for an unknown ID); it needs neither
@@ -60,9 +69,13 @@ an unreadable record fails closed. Failure persisting a result may leave UNKNOWN
 even if the provider actually sent. This contract does not promise exactly-once
 delivery by WhatsApp.
 
-There is no automatic TTL deletion. `WHATSAPP_OPERATION_LEDGER_MAX_RECORDS`
-(default 100000) rejects new identities at capacity rather than deleting replay
-protection. Monitor capacity/disk; expanding or archiving must preserve identity
+Only `SUCCEEDED` records older than `WHATSAPP_OPERATION_LEDGER_RETENTION_DAYS`
+(default 30, minimum 7, `0` disables) are compacted into durable identity
+tombstones that answer replay/lookup exactly like the full record and do not
+count towards capacity; `RUNNING`/`UNKNOWN` are never compacted.
+`WHATSAPP_OPERATION_LEDGER_MAX_RECORDS` (default 100000) rejects new identities at
+capacity rather than deleting replay protection; `/ready` reports 503 from
+`WHATSAPP_OPERATION_LEDGER_READY_MAX_UTILIZATION` (0.95). Monitor capacity/disk; expanding or archiving must preserve identity
 tombstones for the entire agreed replay horizon. Back up this directory with the
 gateway state and preserve it on image rollback. Missing old ledger files remove
 deduplication memory; restoring a ledger older than sent operations requires
