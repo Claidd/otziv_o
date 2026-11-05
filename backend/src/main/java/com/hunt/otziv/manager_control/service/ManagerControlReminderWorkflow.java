@@ -23,7 +23,8 @@ import com.hunt.otziv.u_users.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import java.security.Principal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -64,34 +65,60 @@ public class ManagerControlReminderWorkflow {
 
     private final ManagerDailyControlItemRepository dailyControlItemRepository;
 
-    @Transactional
+    private final PlatformTransactionManager transactionManager;
+
+    record OwnerTelegramMessage(long chatId, String text) {}
+
+    /**
+     * One short transaction per manager; owner Telegram messages are sent only
+     * after that manager's transaction commits. Previously every manager was
+     * processed in one transaction holding card row locks, with Telegram
+     * calls inside it, and one failing manager rolled back all the others.
+     */
     public void runTestModeNotifications() {
         LocalDate today = LocalDate.now();
         LocalDateTime now = LocalDateTime.now();
-        List<Manager> managers = managerRepository.findAllWithUserAndImage();
-        if (managers.isEmpty()) {
+        TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+        List<Long> managerIds = transaction.execute(status -> managerRepository.findAllWithUserAndImage().stream()
+                .map(Manager::getId).filter(Objects::nonNull).toList());
+        if (managerIds == null || managerIds.isEmpty()) {
             return;
         }
-        managers = managerRepository.findAllManagersWorkers(managers);
-        for (Manager manager : managers) {
-            managerControl(manager, today, null, true, false);
-            dailyControlRepository.findByControlDateAndManager(today, manager).ifPresent(control -> {
-                sendOverdueStageNotifications(control, now, false);
-                autoCloseControlIfReady(control, now);
-            });
-        }
-        if (!now.toLocalTime().isBefore(MORNING_STAGE_START)) {
-            LocalDate previousDay = today.minusDays(1);
-            for (Manager manager : managers) {
-                dailyControlRepository.findByControlDateAndManager(previousDay, manager).ifPresent(control -> {
-                    sendOverdueStageNotifications(control, now, true);
-                    autoCloseControlIfReady(control, now);
+        boolean previousDayDue = !now.toLocalTime().isBefore(MORNING_STAGE_START);
+        for (Long managerId : managerIds) {
+            List<OwnerTelegramMessage> outgoing = new ArrayList<>();
+            try {
+                transaction.executeWithoutResult(status -> {
+                    Manager manager = managerRepository.findByIdWithUser(managerId)
+                            .map(found -> managerRepository.findAllManagersWorkers(List.of(found)))
+                            .flatMap(found -> found.stream().findFirst())
+                            .orElse(null);
+                    if (manager == null) {
+                        return;
+                    }
+                    managerControl(manager, today, null, true, false);
+                    dailyControlRepository.findByControlDateAndManager(today, manager).ifPresent(control -> {
+                        sendOverdueStageNotifications(control, now, false, outgoing);
+                        autoCloseControlIfReady(control, now);
+                    });
+                    if (previousDayDue) {
+                        dailyControlRepository.findByControlDateAndManager(today.minusDays(1), manager).ifPresent(control -> {
+                            sendOverdueStageNotifications(control, now, true, outgoing);
+                            autoCloseControlIfReady(control, now);
+                        });
+                    }
                 });
+            } catch (RuntimeException failure) {
+                outgoing.clear();
+                log.warn("Manager control pass failed: managerId={}, errorType={}", managerId, failure.getClass().getSimpleName(), failure);
+                continue;
             }
+            outgoing.forEach(message -> telegramService.sendMessage(message.chatId(), message.text()));
         }
     }
 
-    void sendOverdueStageNotifications(ManagerDailyControl control, LocalDateTime now, boolean previousDayOnly) {
+    void sendOverdueStageNotifications(ManagerDailyControl control, LocalDateTime now, boolean previousDayOnly,
+                                       List<OwnerTelegramMessage> outgoing) {
         List<ManagerDailyControlItem> items = activeControlItems(dailyControlItemRepository.findByControl(control));
         long openAction = items.stream().filter(cardLifecycle::isOpenActionItem).count();
         boolean changed = false;
@@ -99,7 +126,7 @@ public class ManagerControlReminderWorkflow {
             control.setEveningNotificationSentAt(now);
             String text = overdueStageText(control, "конец дня", "05:00", openAction);
             cardLifecycle.saveEvent(control, null, null, ManagerDailyControlEventType.TEST_NOTIFICATION, null, text);
-            notifyOwners(control, "Просрочен конец дня", text);
+            notifyOwners(control, "Просрочен конец дня", text, outgoing);
             changed = true;
         }
         if (changed) {
@@ -115,14 +142,15 @@ public class ManagerControlReminderWorkflow {
         return "Просрочен " + stageName + ": " + managerName(control.getManager()) + ", дата " + control.getControlDate() + ", дедлайн " + deadline + ", открытых пунктов " + openAction;
     }
 
-    void notifyOwners(ManagerDailyControl control, String title, String text) {
+    /** Reminders are written in the caller's transaction; Telegram messages are queued for after commit. */
+    void notifyOwners(ManagerDailyControl control, String title, String text, List<OwnerTelegramMessage> outgoing) {
         List<User> recipients = new ArrayList<>();
         recipients.addAll(userRepository.findAllOwners("ROLE_OWNER"));
         recipients.addAll(userRepository.findAllOwners("ROLE_ADMIN"));
         recipients.stream().filter(Objects::nonNull).filter(user -> user.getId() != null).collect(Collectors.toMap(User::getId, Function.identity(), (left, right) -> left)).values().forEach(user -> {
             createReminder(user, title, text, SOURCE_CONTROL_OWNER, control.getId());
             if (user.getTelegramChatId() != null) {
-                telegramService.sendMessage(user.getTelegramChatId(), title + "\n" + text);
+                outgoing.add(new OwnerTelegramMessage(user.getTelegramChatId(), title + "\n" + text));
             }
         });
     }
