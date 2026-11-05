@@ -80,21 +80,40 @@ public class OrderPublicationOutbox {
                 """, (rs, row) -> rs.getLong(1), bounded(limit));
     }
 
+    /**
+     * One due event per order. The billing phase asks about the order's current
+     * invoice, so every completed event of the same order yields the same answer.
+     */
     public List<Long> dueBilling(int limit) {
         return jdbc.query("""
-                SELECT id FROM order_publication_client_updates
+                SELECT MAX(id) FROM order_publication_client_updates
                 WHERE completion_done=TRUE AND billing_done=FALSE AND billing_next_attempt_at<=CURRENT_TIMESTAMP(6)
-                ORDER BY billing_next_attempt_at,id LIMIT ?
+                GROUP BY order_id
+                ORDER BY MIN(billing_next_attempt_at),MAX(id) LIMIT ?
                 """, (rs, row) -> rs.getLong(1), bounded(limit));
     }
 
+    /**
+     * Settles the order's completed events up to this one; a later event keeps its own pass.
+     * An invoice that is not ready yet stays pending (ADR-014), but the retry interval
+     * grows with the wait: half the age of this event, from 60 s to one hour. A newer
+     * publication of the order starts its own short interval again.
+     */
     @Transactional(propagation=Propagation.REQUIRES_NEW)
     public void finishBilling(long id, boolean complete) {
-        jdbc.update("""
-                UPDATE order_publication_client_updates SET billing_done=?,
-                    billing_next_attempt_at=TIMESTAMPADD(SECOND,60,CURRENT_TIMESTAMP(6))
-                WHERE id=? AND completion_done=TRUE AND billing_done=FALSE
-                """, complete, id);
+        jdbc.query("""
+                SELECT order_id,TIMESTAMPDIFF(SECOND,created_at,CURRENT_TIMESTAMP(6))
+                FROM order_publication_client_updates WHERE id=?
+                """, (rs, row) -> new long[]{rs.getLong(1), rs.getLong(2)}, id).stream().findFirst().ifPresent(event ->
+            jdbc.update("""
+                    UPDATE order_publication_client_updates SET billing_done=?,
+                        billing_next_attempt_at=TIMESTAMPADD(SECOND,?,CURRENT_TIMESTAMP(6))
+                    WHERE order_id=? AND id<=? AND completion_done=TRUE AND billing_done=FALSE
+                    """, complete, billingRetryDelaySeconds(event[1]), event[0], id));
+    }
+
+    private static long billingRetryDelaySeconds(long waitedSeconds) {
+        return Math.min(3600, Math.max(60, waitedSeconds / 2));
     }
 
     public Optional<Long> orderId(long id) {
