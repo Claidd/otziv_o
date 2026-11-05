@@ -39,7 +39,7 @@ RUN mkdir /patch/classes \
 # replace the vendor JRE/OS with the tested patched Temurin runtime.
 FROM eclipse-temurin:21-jre-jammy@sha256:eebd356ad7358b7094758e5787a6726f332917cfd56feab6457c56dab895cdbf
 RUN apt-get update && apt-get upgrade -y \
-    && apt-get install -y --no-install-recommends libbrotli1=1.0.9-2ubuntu0.1 \
+    && apt-get install -y --no-install-recommends libbrotli1=1.0.9-2ubuntu0.1 apt=2.4.15ubuntu0.1 libapt-pkg6.0=2.4.15ubuntu0.1 \
     && apt-get clean && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 1000 keycloak \
     && useradd --uid 1000 --gid 0 --home-dir /opt/keycloak --no-create-home --shell /usr/sbin/nologin keycloak

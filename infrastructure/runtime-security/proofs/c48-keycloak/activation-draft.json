@@ -1,0 +1,24 @@
+{
+  "schema": "otziv-reviewed-image-activation-draft-v1",
+  "activationReady": false,
+  "remaining": "Official apt overlay comparison and C45/C36 authentication/rollback acceptance",
+  "entry": {
+    "component": "keycloak",
+    "reference": "ghcr.io/claidd/otziv-security@sha256:2e935efdb594ee4a3f0bc8343b1e6a76def33d70a4981cbd730ce5942ff47009",
+    "commit": "5d35c198898be7001769cf6ead6a0f3c2342cd07",
+    "run": "42065294809",
+    "attempt": "1",
+    "manifest": {
+      "path": "infrastructure/runtime-security/reviewed-images-c48-keycloak.json",
+      "sha256": "6fce2cfb66e7fab4fca9c16888d781b8acf1509c42e5a1eb799d89592cac855f"
+    },
+    "publication": {
+      "path": "infrastructure/runtime-security/proofs/c48-keycloak/publication/publication.json",
+      "sha256": "f22e4f579d99935d2426779b3d7187abf4c28299f54218e7207be17cf6dccf7f"
+    },
+    "anonymous": {
+      "path": "infrastructure/runtime-security/proofs/c48-keycloak/anonymous/anonymous-download.json",
+      "sha256": "e854e156f30ea7e78c030d4baf8e74a1c0b16828f8f1c5801e4a5ca9d72af070"
+    }
+  }
+}

@@ -1,0 +1,77 @@
+{
+  "schema": "otziv-anonymous-download-v1",
+  "component": "alloy",
+  "commit": "5d35c198898be7001769cf6ead6a0f3c2342cd07",
+  "run": "42065301547",
+  "attempt": "1",
+  "manifestSet": "c48-alloy",
+  "manifestPath": "infrastructure/runtime-security/reviewed-images-c48-alloy.json",
+  "runner": "GitHub Actions 1000031017",
+  "startedAt": "2026-11-05T16:34:18.354Z",
+  "sourcePublicationSha256": "50288dda97ea6aa31d079a5f491bda19c0d2d77ece26acdc856eff8877723e34",
+  "result": "PASS",
+  "accountCredentialsUsed": false,
+  "dockerCredentialHelpersAvailable": false,
+  "dockerTransport": "unix:///var/run/docker.sock",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:6010376795977db1a66670feab760e710f70a330f16aa8b2c088367f7ef5861d",
+  "imageAbsentBeforePull": true,
+  "daemonVersion": "\"28.0.4\"",
+  "attestationEvidence": {
+    "schema": "otziv-registry-evidence-v1",
+    "imageManifestDigest": "sha256:671471b4d37bde14d59bcf896ce20bc69067209adb661137208242e8f5fbd88a",
+    "predicates": [
+      "https://slsa.dev/provenance/v1",
+      "https://spdx.dev/Document"
+    ],
+    "artifacts": [
+      {
+        "file": "registry-index.json",
+        "digest": "sha256:6010376795977db1a66670feab760e710f70a330f16aa8b2c088367f7ef5861d",
+        "size": 857
+      },
+      {
+        "file": "registry-amd64-manifest.json",
+        "digest": "sha256:671471b4d37bde14d59bcf896ce20bc69067209adb661137208242e8f5fbd88a",
+        "size": 3349
+      },
+      {
+        "file": "registry-amd64-config.json",
+        "digest": "sha256:9431312d326aad43a0cced01c4c337822c1ee038ad11a9ff8f8f0048ce78c353",
+        "size": 8659
+      },
+      {
+        "file": "registry-attestation-0.json",
+        "digest": "sha256:92fffe94388fc6164ee6315fb5e0a96418e46aa73d5705fa2e49d7e609df8996",
+        "size": 1112
+      },
+      {
+        "file": "registry-attestation-0-payload-0.json",
+        "digest": "sha256:ca79e84faea42276568e02bf194d7ac481a4cc2b0190877d2fab5b83a937eafb",
+        "size": 3965798
+      },
+      {
+        "file": "registry-attestation-0-payload-1.json",
+        "digest": "sha256:fc4d99f441ec2c621ca429fd2705bb7ada928f2e732ddc1ff186cfbfeb056d9c",
+        "size": 24742
+      }
+    ],
+    "sourceBinding": "LOCAL_GIT_METADATA_CHECKED_AGAINST_CLEAN_CHECKOUT_NOT_INDEPENDENT_SOURCE_AUTHENTICATION"
+  },
+  "pullExitCode": 0,
+  "imageId": "sha256:9431312d326aad43a0cced01c4c337822c1ee038ad11a9ff8f8f0048ce78c353",
+  "platform": "linux/amd64",
+  "labels": {
+    "com.otziv.publication.revision": "5d35c198898be7001769cf6ead6a0f3c2342cd07",
+    "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+    "com.otziv.reviewed-component": "alloy",
+    "com.otziv.security.patch": "go-jose/v4 4.1.6; Go1.27.3; google.golang.org/grpc1.83.2; original UI lock and vendor build tags",
+    "com.otziv.security.proof": "alloy-daemon-c43",
+    "org.opencontainers.image.revision": "becfd489a7bb459c0496893b555fb87a003296b1",
+    "org.opencontainers.image.source": "https://github.com/grafana/alloy",
+    "org.opencontainers.image.version": "1.19.2-otziv.4",
+    "otziv.apt": "2.8.4ubuntu0.1",
+    "otziv.apt-advisory": "CVE-2026-109518"
+  },
+  "publicDownloadReadiness": "VERIFIED_ANONYMOUS_DIGEST_PULL",
+  "finishedAt": "2026-11-05T16:34:52.483Z"
+}

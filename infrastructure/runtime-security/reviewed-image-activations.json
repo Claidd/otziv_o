@@ -3,21 +3,25 @@
   "images": [
     {
       "component": "alloy",
-      "reference": "ghcr.io/claidd/otziv-security@sha256:27905df1862decf6e9c2543cb476e70e83d68351f7a5bb17194a6a094764db32",
-      "commit": "a5f4790fa3ab100188bfc053138a031e99c1a7e1",
-      "run": "40786012225",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:6010376795977db1a66670feab760e710f70a330f16aa8b2c088367f7ef5861d",
+      "commit": "5d35c198898be7001769cf6ead6a0f3c2342cd07",
+      "run": "42065301547",
       "attempt": "1",
       "manifest": {
-        "path": "infrastructure/runtime-security/reviewed-images-c43-alloy.json",
-        "sha256": "17f252ff293064c2bf6b5e559ffb4319eb97e8adef4a4b59e0d9a30d6cdb6656"
+        "path": "infrastructure/runtime-security/reviewed-images-c48-alloy.json",
+        "sha256": "5fabcde1061a26c8ef0ab640430872dc4612765ece53de06953d0c376b015310"
       },
       "publication": {
-        "path": "infrastructure/runtime-security/proofs/c43-alloy/publication/publication.json",
-        "sha256": "ca10690fe86e8c9ba89843ece1f605789eab25a9df2b183ef5a80cf482a6318b"
+        "path": "infrastructure/runtime-security/proofs/c48-alloy/publication/publication.json",
+        "sha256": "50288dda97ea6aa31d079a5f491bda19c0d2d77ece26acdc856eff8877723e34"
       },
       "anonymous": {
-        "path": "infrastructure/runtime-security/proofs/c43-alloy/anonymous/anonymous-download.json",
-        "sha256": "1072cca65120cd38203628c2fd186ef1745c165011b604f31c0414f285f071e7"
+        "path": "infrastructure/runtime-security/proofs/c48-alloy/anonymous/anonymous-download.json",
+        "sha256": "7d0353c4a3c6df5cef883b071049e598004279209046dfba2ad07750a4b6a2ab"
+      },
+      "aptRefreshAcceptance": {
+        "path": "infrastructure/runtime-security/proofs/c48-alloy/acceptance.json",
+        "sha256": "8cc6c4f9510edaed60192b142b8a07b26f716c8aa9456b4c8fc95dfd2ba5f6ab"
       }
     },
     {

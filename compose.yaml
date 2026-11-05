@@ -370,7 +370,7 @@ services:
       start_period: 40s
 
   alloy:
-    image: ghcr.io/claidd/otziv-security@sha256:27905df1862decf6e9c2543cb476e70e83d68351f7a5bb17194a6a094764db32
+    image: ghcr.io/claidd/otziv-security@sha256:6010376795977db1a66670feab760e710f70a330f16aa8b2c088367f7ef5861d
     profiles: ["observability"]
     container_name: otziv-alloy
     command:
