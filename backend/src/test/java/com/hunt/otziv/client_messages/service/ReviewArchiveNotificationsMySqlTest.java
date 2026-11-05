@@ -51,7 +51,7 @@ class ReviewArchiveNotificationsMySqlTest {
         delivery=mock(ClientMessageDelivery.class);telegram=mock(TelegramNotifications.class);settings=mock(OutboundMessagePolicy.class);
         when(settings.clientMessagesEnabled()).thenReturn(true);
         automation=mock(ScheduledClientMessageService.class);
-        when(automation.archiveNoticeNextSlot(anyLong(),any())).thenAnswer(i -> java.time.LocalDateTime.now());
+        when(automation.archiveNoticeNextSlot(anyLong(),any(),any())).thenAnswer(i -> java.time.LocalDateTime.now());
         when(automation.archiveNoticeDispatchEnabled(anyLong())).thenReturn(true);
         var provider=mock(org.springframework.beans.factory.ObjectProvider.class);
         when(provider.getObject()).thenReturn(automation);
@@ -67,17 +67,19 @@ class ReviewArchiveNotificationsMySqlTest {
 
     @Test void blockedDispatchRetainsIntentWithoutSpendingAnAttemptAndResumesOnce() {
         enqueue();
-        when(automation.archiveNoticeNextSlot(anyLong(),any())).thenReturn(java.time.LocalDateTime.now().plusDays(1));
+        when(automation.archiveNoticeNextSlot(anyLong(),any(),any())).thenReturn(java.time.LocalDateTime.now().plusDays(1));
         queue.deliver(id);
         assertThat(state()).isEqualTo("READY");
         assertThat(jdbc.queryForObject("SELECT attempts FROM review_archive_notifications",Integer.class)).isZero();
         verifyNoInteractions(delivery);
-        due();when(automation.archiveNoticeNextSlot(anyLong(),any())).thenReturn(java.time.LocalDateTime.now());
+        due();when(automation.archiveNoticeNextSlot(anyLong(),any(),any())).thenReturn(java.time.LocalDateTime.now());
         when(delivery.deliverWithOperationId(any(),anyString(),anyString(),anyString(),isNull(),eq(id))).thenReturn(ClientMessageSendResult.sent("whatsapp"));
         queue.deliver(id);queue.deliver(id);
         assertThat(state()).isEqualTo("SENT");
         assertThat(jdbc.queryForObject("SELECT dispatch_reserved_at IS NOT NULL FROM review_archive_notifications",Boolean.class)).isTrue();
         verify(delivery,times(1)).deliverWithOperationId(any(),anyString(),anyString(),anyString(),isNull(),eq(id));
+        // The slot keeps the interval of the WhatsApp account that sends the notice.
+        verify(automation,atLeastOnce()).archiveNoticeNextSlot(anyLong(),any(),eq("client"));
     }
     void due(){jdbc.update("UPDATE review_archive_notifications SET next_attempt_at=DATE_SUB(CURRENT_TIMESTAMP(6),INTERVAL 1 MINUTE)");}
     String state(){return jdbc.queryForObject("SELECT state FROM review_archive_notifications WHERE operation_id=?",String.class,id);}

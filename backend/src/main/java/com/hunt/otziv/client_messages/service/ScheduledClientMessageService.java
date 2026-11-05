@@ -205,6 +205,9 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
     /** Field-injected so existing constructors and tests stay unchanged. */
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.hunt.otziv.client_messages.repository.ExternalDispatchReservationStore externalReservations;
+    /** Field-injected like the reservation store: the per-account interval shared with campaigns. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private SenderAccountPacing senderAccountPacing;
     private final com.hunt.otziv.client_chat_control.api.ReminderContactHistory archiveChatHistory;
     private final ReviewArchiveHistory reviewArchiveHistory;
     private final com.hunt.otziv.u_users.api.AutomationNoticeRecipients archiveNoticeRecipients;
@@ -2186,6 +2189,9 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
         if (taskId == null && !reserveBackgroundDeliverySlot(state, company, nowStorage)) {
             return null;
         }
+        if (taskId == null && !admitSenderAccount(state, expectedChannel(company), badReviewSenderClientId(state, order), nowStorage)) {
+            return null;
+        }
         PreparedBadReviewDelivery prepared;
         if (hasText(state.getDeliveryEnvelope())) {
             // A pause before dispatch retains the exact invoice/route/token. It
@@ -2354,6 +2360,18 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
         state.setLockedUntil(null);
         state.setNextAttemptAt(nextNoSendAttemptAt(nowStorage));
         stateRepository.save(state);
+    }
+
+    private String badReviewSenderClientId(ScheduledClientMessageState state, Order order) {
+        if (hasText(state.getDeliveryEnvelope())) {
+            try {
+                return DELIVERY_JSON.readValue(state.getDeliveryEnvelope(), PreparedBadReviewDelivery.class).managerClientId();
+            } catch (Exception corrupt) {
+                return null; // The preparation below rejects the unreadable snapshot.
+            }
+        }
+        Manager manager = manager(order);
+        return manager == null ? null : manager.getClientId();
     }
 
     private void clearDeliveryPreparation(ScheduledClientMessageState state) {
@@ -3550,8 +3568,45 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
             registerDryRun(state, nowStorage, message, nextIntervalDays);
             return null;
         }
+        if (!admitScheduledSenderAccount(state, company, manager, nowStorage)) {
+            return null;
+        }
         return persistScheduledDelivery(state, company, manager, message, frozenTransferNumber, nextIntervalDays,
                 successEffect, recoveryBatchId, order, action, nowStorage);
+    }
+
+    /** The sending account's interval shared with offer campaigns; postpones the state when held. */
+    private boolean admitScheduledSenderAccount(ScheduledClientMessageState state, Company company, Manager manager,
+                                                LocalDateTime nowStorage) {
+        if (senderAccountPacing == null || !requiresClientMessageSlot(state.getScenario())) {
+            return true;
+        }
+        String channel;
+        String clientId;
+        if (hasText(state.getDeliveryEnvelope())) {
+            PreparedScheduledDelivery saved = decodeScheduledDelivery(state);
+            channel = hasText(state.getDeliveryChannel()) ? state.getDeliveryChannel() : expectedChannel(saved.target());
+            clientId = saved.clientId();
+        } else {
+            channel = expectedChannel(company);
+            clientId = manager == null ? null : manager.getClientId();
+        }
+        return admitSenderAccount(state, channel, clientId, nowStorage);
+    }
+
+    private boolean admitSenderAccount(ScheduledClientMessageState state, String channel, String clientId,
+                                       LocalDateTime nowStorage) {
+        if (senderAccountPacing == null || SenderAccountPacing.account(channel, clientId) == null) {
+            return true;
+        }
+        stateRepository.lockDispatchBudget();
+        SenderAccountPacing.Decision decision = senderAccountDecision(
+                SenderAccountPacing.Lane.AUTORESPONDER, channel, clientId, nowStorage);
+        if (decision.allowed()) {
+            return true;
+        }
+        postpone(state, decision.nextAt(), decision.code(), decision.reason());
+        return false;
     }
 
     private void movePaymentReminderToReminderStatus(ScheduledClientMessageState state, Order order, LocalDateTime nowStorage) {
@@ -4126,12 +4181,23 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
     /** Called by the durable archive outbox inside its claim transaction, using the same dispatch budget. */
     @Transactional(propagation = Propagation.MANDATORY)
     public LocalDateTime archiveNoticeNextSlot(long sourceId, ClientMessageDelivery.Target target) {
+        return archiveNoticeNextSlot(sourceId, target, null);
+    }
+
+    /** Same slot, also keeping the interval of the account that sends the notice. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public LocalDateTime archiveNoticeNextSlot(long sourceId, ClientMessageDelivery.Target target, String senderClientId) {
         if (!archiveNoticeDispatchEnabled(sourceId)) return messageTime.nowStorage().plusMinutes(5);
         stateRepository.lockDispatchBudget();
         if (!withinDailyLimit(messageTime.nowStorage())) return nextBusinessDayStartStorage(messageTime.nowIrkutsk());
         String channel = expectedChannel(target);
-        return messageTime.toStorageTime(slotPlanner.afterGap(messageTime.nowIrkutsk(),lastDispatchAtIrkutsk(channel),
+        LocalDateTime slot = messageTime.toStorageTime(slotPlanner.afterGap(messageTime.nowIrkutsk(),lastDispatchAtIrkutsk(channel),
                 gapSeconds(channel),businessWindows()));
+        LocalDateTime nowStorage = messageTime.nowStorage();
+        if (slot.isAfter(nowStorage.plusSeconds(1))) return slot;
+        SenderAccountPacing.Decision decision = senderAccountDecision(
+                SenderAccountPacing.Lane.AUTORESPONDER, channel, senderClientId, nowStorage);
+        return decision.allowed() ? slot : decision.nextAt();
     }
 
     public boolean archiveNoticeDispatchEnabled(long sourceId) {
@@ -4165,11 +4231,27 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
             long sourceId,
             ClientMessageDelivery.Target target
     ) {
+        return reserveOnChannel(purpose, sourceKind, sourceId, budgetChannel(target), null);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Admission reserveForSender(
+            com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Purpose purpose,
+            String sourceKind,
+            long sourceId,
+            ClientMessageDelivery.Target target,
+            String senderClientId
+    ) {
+        return reserveOnChannel(purpose, sourceKind, sourceId, budgetChannel(target), senderClientId);
+    }
+
+    private String budgetChannel(ClientMessageDelivery.Target target) {
         String channel = expectedChannel(target);
         if ("ANY".equals(channel) && target != null) {
             channel = target.telegramChatId() != null ? "Telegram" : target.maxChatId() != null ? "MAX" : channel;
         }
-        return reserveOnChannel(purpose, sourceKind, sourceId, channel);
+        return channel;
     }
 
     @Override
@@ -4180,21 +4262,37 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
             long sourceId,
             String platform
     ) {
+        return reserveOnChannel(purpose, sourceKind, sourceId, platformChannel(platform), null);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Admission reserveForSender(
+            com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Purpose purpose,
+            String sourceKind,
+            long sourceId,
+            String platform,
+            String senderClientId
+    ) {
+        return reserveOnChannel(purpose, sourceKind, sourceId, platformChannel(platform), senderClientId);
+    }
+
+    private static String platformChannel(String platform) {
         String normalized = platform == null ? "" : platform.trim().toUpperCase(Locale.ROOT);
-        String channel = switch (normalized) {
+        return switch (normalized) {
             case "WHATSAPP" -> "WhatsApp";
             case "TELEGRAM" -> "Telegram";
             case "MAX" -> "MAX";
             default -> "ANY";
         };
-        return reserveOnChannel(purpose, sourceKind, sourceId, channel);
     }
 
     private com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Admission reserveOnChannel(
             com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Purpose purpose,
             String sourceKind,
             long sourceId,
-            String channel
+            String channel,
+            String senderClientId
     ) {
         LocalDateTime nowStorage = messageTime.nowStorage();
         LocalDateTime nowIrkutsk = messageTime.nowIrkutsk();
@@ -4207,10 +4305,16 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
                     "Автоответчик выключен или на паузе", nowStorage.plusMinutes(5));
         }
         if (!reminder) {
-            // Campaigns keep their own schedule and quota; they only obey the master switch and pause.
+            // Campaigns keep their own schedule and quota. Besides the master switch and pause they keep
+            // the sending account's interval; the autoresponder's per-channel interval ignores them, so a
+            // running campaign cannot hold back clients served by other accounts.
+            stateRepository.lockDispatchBudget();
+            com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Admission held =
+                    senderAccountAdmission(SenderAccountPacing.Lane.CAMPAIGN, channel, senderClientId, nowStorage);
+            if (held != null) return held;
             if (externalReservations != null) {
                 externalReservations.purgeOlderThan(nowStorage.minusDays(8));
-                externalReservations.insert(purpose.name(), sourceKind, sourceId, "CAMPAIGN:" + channel, false, nowStorage);
+                externalReservations.insert(purpose.name(), sourceKind, sourceId, "CAMPAIGN:" + channelCode(channel), false, nowStorage);
             }
             return com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Admission.allow();
         }
@@ -4229,11 +4333,40 @@ public class ScheduledClientMessageService implements PaymentDeadlineNoticeSourc
             return new com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Admission(false, "rate_limited",
                     "Следующий слот отправки: " + allowed, messageTime.toStorageTime(allowed));
         }
+        com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Admission held =
+                senderAccountAdmission(SenderAccountPacing.Lane.AUTORESPONDER, channel, senderClientId, nowStorage);
+        if (held != null) return held;
         if (externalReservations != null) {
             externalReservations.purgeOlderThan(nowStorage.minusDays(8));
             externalReservations.insert(purpose.name(), sourceKind, sourceId, channel, true, nowStorage);
         }
         return com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Admission.allow();
+    }
+
+    /** {@code null} when the sending account may dispatch now (the slot is then recorded). Lock held. */
+    private com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Admission senderAccountAdmission(
+            SenderAccountPacing.Lane lane, String channel, String senderClientId, LocalDateTime nowStorage) {
+        SenderAccountPacing.Decision decision = senderAccountDecision(lane, channel, senderClientId, nowStorage);
+        return decision.allowed() ? null : new com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Admission(
+                false, decision.code(), decision.reason(), decision.nextAt());
+    }
+
+    private SenderAccountPacing.Decision senderAccountDecision(
+            SenderAccountPacing.Lane lane, String channel, String senderClientId, LocalDateTime nowStorage) {
+        String account = SenderAccountPacing.account(channel, senderClientId);
+        if (senderAccountPacing == null || account == null) {
+            return new SenderAccountPacing.Decision(true, null, null, null);
+        }
+        return senderAccountPacing.admit(lane, account, gapSeconds(channel), nowStorage);
+    }
+
+    private static String channelCode(String channel) {
+        return switch (channel == null ? "" : channel.toUpperCase(Locale.ROOT)) {
+            case "WHATSAPP" -> "WA";
+            case "TELEGRAM" -> "TG";
+            case "MAX" -> "MAX";
+            default -> "ANY";
+        };
     }
 
     private int gapSeconds(String expectedChannel) {

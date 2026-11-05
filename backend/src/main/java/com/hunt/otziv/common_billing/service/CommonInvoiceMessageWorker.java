@@ -68,11 +68,12 @@ public class CommonInvoiceMessageWorker {
                 || prepared.alreadyConfirmed() || prepared.invoiceId() == null) {
             return null;
         }
-        return dispatchBudget.reserve(
+        return dispatchBudget.reserveForSender(
                 com.hunt.otziv.client_messages.api.BackgroundDispatchBudget.Purpose.PAYMENT_REMINDER,
                 "COMMON_INVOICE",
                 prepared.invoiceId(),
-                prepared.chatCompany()
+                prepared.chatCompany(),
+                prepared.managerClientId()
         );
     }
 }
