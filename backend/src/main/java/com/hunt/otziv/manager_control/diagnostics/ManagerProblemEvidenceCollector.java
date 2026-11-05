@@ -354,25 +354,42 @@ public class ManagerProblemEvidenceCollector {
         return scan(afterId, limit, true);
     }
 
+    /**
+     * Unresolved cards that are the latest card of their problem subject
+     * (manager + type family + entity id/key, see problem_subject). The scan
+     * starts from unresolved cards and looks for a later card of the same
+     * subject instead of grouping the whole card history on every pass.
+     */
     private List<Long> scan(long afterId, int limit, boolean currentOnly) {
+        if (currentOnly) {
+            // Open cards on the manager's latest board day; the latest day is computed once.
+            return jdbc.queryForList("""
+                    SELECT current_item.control_entity_id
+                    FROM manager_daily_control_concrete_items current_item
+                    JOIN manager_daily_controls current_control ON current_control.daily_control_id=current_item.control_id
+                    JOIN (SELECT manager_id, MAX(control_date) AS control_date FROM manager_daily_controls GROUP BY manager_id) latest_day
+                      ON latest_day.manager_id=current_control.manager_id AND latest_day.control_date=current_control.control_date
+                    WHERE current_item.control_entity_id>? AND current_item.item_status='OPEN'
+                      AND NOT EXISTS (SELECT 1 FROM manager_daily_control_concrete_items later_item
+                          JOIN manager_daily_controls later_control ON later_control.daily_control_id=later_item.control_id
+                          WHERE later_item.problem_subject=current_item.problem_subject
+                            AND later_item.control_entity_id>current_item.control_entity_id
+                            AND later_control.manager_id=current_control.manager_id)
+                    ORDER BY current_item.control_entity_id LIMIT ?
+                    """, Long.class, afterId, limit);
+        }
         return jdbc.queryForList("""
-                SELECT latest.source_id
-                FROM (
-                    SELECT MAX(i.control_entity_id) AS source_id
-                    FROM manager_daily_control_concrete_items i
-                    JOIN manager_daily_controls c ON c.daily_control_id=i.control_id
-                    GROUP BY c.manager_id,
-                        CASE WHEN i.entity_type LIKE 'COMMON_INVOICE%' THEN 'COMMON_INVOICE'
-                             WHEN i.entity_type LIKE 'CLIENT_CHAT%' THEN 'CLIENT_CHAT' ELSE i.entity_type END,
-                        COALESCE(CAST(i.entity_id AS CHAR),i.entity_key)
-                ) latest
-                JOIN manager_daily_control_concrete_items current_item ON current_item.control_entity_id=latest.source_id
+                SELECT current_item.control_entity_id
+                FROM manager_daily_control_concrete_items current_item
                 JOIN manager_daily_controls current_control ON current_control.daily_control_id=current_item.control_id
-                WHERE latest.source_id>? AND current_item.item_status<>'RESOLVED'
-                  AND (?=FALSE OR (current_item.item_status='OPEN' AND current_control.control_date=(
-                      SELECT MAX(d.control_date) FROM manager_daily_controls d WHERE d.manager_id=current_control.manager_id)))
-                ORDER BY latest.source_id LIMIT ?
-                """, Long.class, afterId, currentOnly, limit);
+                WHERE current_item.control_entity_id>? AND current_item.item_status<>'RESOLVED'
+                  AND NOT EXISTS (SELECT 1 FROM manager_daily_control_concrete_items later_item
+                      JOIN manager_daily_controls later_control ON later_control.daily_control_id=later_item.control_id
+                      WHERE later_item.problem_subject=current_item.problem_subject
+                        AND later_item.control_entity_id>current_item.control_entity_id
+                        AND later_control.manager_id=current_control.manager_id)
+                ORDER BY current_item.control_entity_id LIMIT ?
+                """, Long.class, afterId, limit);
     }
 
     private List<Long> collectOrder(List<Fact> facts, long orderId, long managerId) {

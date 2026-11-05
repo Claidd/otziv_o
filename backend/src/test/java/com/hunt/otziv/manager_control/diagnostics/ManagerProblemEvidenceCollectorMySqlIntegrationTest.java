@@ -53,6 +53,8 @@ class ManagerProblemEvidenceCollectorMySqlIntegrationTest {
         jdbc.execute("DROP TABLE IF EXISTS manager_client_message_queue");
         new org.springframework.jdbc.datasource.init.ResourceDatabasePopulator(new org.springframework.core.io.ClassPathResource(
                 "db/migration/V1_10_313__manager_client_message_queue.sql")).execute(jdbc.getDataSource());
+        new org.springframework.jdbc.datasource.init.ResourceDatabasePopulator(new org.springframework.core.io.ClassPathResource(
+                "db/migration/V1_10_376__manager_problem_subject_index.sql")).execute(jdbc.getDataSource());
         collector = new ManagerProblemEvidenceCollector(jdbc);
         jdbc.update("INSERT INTO manager_daily_controls(daily_control_id,manager_id) VALUES(1,2)");
     }
@@ -256,6 +258,66 @@ class ManagerProblemEvidenceCollectorMySqlIntegrationTest {
         assertThat(collector.scan(0, 20)).containsExactly(10L, 20L, 21L, 30L);
         assertThat(collector.collect(10L).facts()).anyMatch(f -> f.subject().equals("card")
                 && f.field().equals("control_date") && f.value().equals("2026-07-16"));
+    }
+
+    /** PERF-14: the indexed subject scan must select exactly what the former whole-history GROUP BY selected. */
+    @Test
+    void indexedScanMatchesFormerHistoryGroupingOnMixedHistory() {
+        java.util.Random random = new java.util.Random(20261104L);
+        String[] types = {"COMMON_INVOICE", "COMMON_INVOICE_AUTOMATION", "CLIENT_CHAT_UNANSWERED", "CLIENT_CHAT_AUDIT",
+                "ORDER", "AUTOMATION_FAILURE", "MANUAL"};
+        String[] statuses = {"OPEN", "RESOLVED", "RESOLVED", "ACTION_TAKEN", "DEFERRED"};
+        jdbc.update("DELETE FROM manager_daily_controls");
+        int controlId = 0;
+        for (long manager = 1; manager <= 3; manager++) {
+            for (int day = 0; day < 6; day++) {
+                controlId++;
+                jdbc.update("INSERT INTO manager_daily_controls(daily_control_id,manager_id,control_date) VALUES(?,?,?)",
+                        controlId, manager, LocalDate.of(2026, 10, 1).plusDays(day));
+            }
+        }
+        for (long id = 1; id <= 400; id++) {
+            String type = types[random.nextInt(types.length)];
+            Long entityId = "MANUAL".equals(type) ? null : (long) random.nextInt(12);
+            String key = "MANUAL".equals(type) ? "manual:" + random.nextInt(5) : type.toLowerCase() + ":" + entityId;
+            jdbc.update("""
+                    INSERT INTO manager_daily_control_concrete_items(control_entity_id,control_id,entity_key,entity_type,entity_id,item_status)
+                    VALUES(?,?,?,?,?,?)""", id, 1 + random.nextInt(controlId), key, type, entityId,
+                    statuses[random.nextInt(statuses.length)]);
+        }
+        for (boolean currentOnly : new boolean[]{false, true}) {
+            for (long after : new long[]{0, 57, 200, 399}) {
+                List<Long> former = jdbc.queryForList("""
+                        SELECT latest.source_id
+                        FROM (
+                            SELECT MAX(i.control_entity_id) AS source_id
+                            FROM manager_daily_control_concrete_items i
+                            JOIN manager_daily_controls c ON c.daily_control_id=i.control_id
+                            GROUP BY c.manager_id,
+                                CASE WHEN i.entity_type LIKE 'COMMON_INVOICE%' THEN 'COMMON_INVOICE'
+                                     WHEN i.entity_type LIKE 'CLIENT_CHAT%' THEN 'CLIENT_CHAT' ELSE i.entity_type END,
+                                COALESCE(CAST(i.entity_id AS CHAR),i.entity_key)
+                        ) latest
+                        JOIN manager_daily_control_concrete_items current_item ON current_item.control_entity_id=latest.source_id
+                        JOIN manager_daily_controls current_control ON current_control.daily_control_id=current_item.control_id
+                        WHERE latest.source_id>? AND current_item.item_status<>'RESOLVED'
+                          AND (?=FALSE OR (current_item.item_status='OPEN' AND current_control.control_date=(
+                              SELECT MAX(d.control_date) FROM manager_daily_controls d WHERE d.manager_id=current_control.manager_id)))
+                        ORDER BY latest.source_id LIMIT 1000
+                        """, Long.class, after, currentOnly);
+                List<Long> scanned = currentOnly ? collector.scanCurrent(after, 1000) : collector.scan(after, 1000);
+                assertThat(scanned).as("currentOnly=%s after=%s", currentOnly, after).containsExactlyElementsOf(former);
+                if (!former.isEmpty()) {
+                    assertThat(currentOnly ? collector.scanCurrent(after, 3) : collector.scan(after, 3))
+                            .containsExactlyElementsOf(former.subList(0, Math.min(3, former.size())));
+                }
+            }
+        }
+        assertThat(collector.scan(0, 1000)).isNotEmpty();
+        assertThat(jdbc.queryForObject("""
+                SELECT COUNT(*) FROM information_schema.statistics
+                WHERE table_schema=DATABASE() AND table_name='manager_daily_control_concrete_items'
+                  AND index_name='idx_mdcci_problem_subject'""", Integer.class)).isEqualTo(2);
     }
 
     @Test
