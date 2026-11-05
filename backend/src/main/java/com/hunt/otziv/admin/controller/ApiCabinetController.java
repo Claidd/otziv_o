@@ -1104,6 +1104,11 @@ public class ApiCabinetController {
             List<ContractorPaymentAdminSummaryResponse> contractorPayments,
             Map<String, List<ScoreUserResponse>> groups
     ) {
+        /** Signed default avatar for cards the client builds itself (saved contractor balances). */
+        @JsonProperty(value = "defaultImageUrl", access = JsonProperty.Access.READ_ONLY)
+        public String defaultImageUrl() {
+            return SignedImageUrls.pathForOrDefault(null);
+        }
     }
 
     private record CachedScoreResponse(

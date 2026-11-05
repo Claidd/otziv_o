@@ -48,6 +48,7 @@ describe('ScoreComponent saved balances', () => {
       user: {},
       financeVisible: true,
       contractorPayments: [visible, orphan],
+      defaultImageUrl: '/images/1?exp=1793790900&sig=default',
       groups: {
         managers: [],
         marketologs: [],
@@ -64,6 +65,9 @@ describe('ScoreComponent saved balances', () => {
 
     expect(component.savedContractorPayments()).toEqual([orphan]);
     expect(component.visibleSections().at(-1)?.title).toBe('Сохранённые остатки');
+    // Client-built cards use the signed default avatar instead of the bare /images/1 path.
+    expect(component.users(component.visibleSections().at(-1)!).map((user) => user.imageUrl))
+      .toEqual(['/images/1?exp=1793790900&sig=default']);
   });
 
   it('uses exact salary kopecks in legacy score rows and falls back to rubles', () => {

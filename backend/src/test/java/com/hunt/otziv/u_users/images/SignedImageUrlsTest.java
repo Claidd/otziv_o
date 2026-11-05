@@ -130,6 +130,10 @@ class SignedImageUrlsTest {
         Map<?, ?> noPhoto = mapper.readValue(mapper.writeValueAsString(UserStatDTO.builder().build()), Map.class);
         assertThat(parse((String) noPhoto.get("imageUrl")).id()).isEqualTo(SignedImageUrls.DEFAULT_IMAGE_ID);
 
+        Map<?, ?> score = mapper.readValue(mapper.writeValueAsString(new com.hunt.otziv.admin.controller.ApiCabinetController.ScoreResponse(
+                null, null, true, false, java.util.List.of(), Map.of())), Map.class);
+        assertThat(parse((String) score.get("defaultImageUrl")).id()).isEqualTo(SignedImageUrls.DEFAULT_IMAGE_ID);
+
         Map<?, ?> adminUser = mapper.readValue(mapper.writeValueAsString(AdminUserResponse.builder().id(3L).build()), Map.class);
         assertThat(adminUser.containsKey("imageUrl")).isTrue();
         assertThat(adminUser.get("imageUrl")).isNull();

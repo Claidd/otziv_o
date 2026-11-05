@@ -143,12 +143,14 @@ export class ScoreComponent {
 
   private savedContractorUsers(): ScoreUser[] {
     const users = new Map<number, ScoreUser>();
+    const defaultImageUrl = this.score()?.defaultImageUrl ?? null;
     for (const payment of this.savedContractorPayments()) {
       if (!users.has(payment.userId)) {
         users.set(payment.userId, {
           fio: payment.fio || `Профиль #${payment.profileId}`,
           role: 'Сохранённый финансовый профиль',
-          userId: payment.userId
+          userId: payment.userId,
+          imageUrl: defaultImageUrl
         });
       }
     }

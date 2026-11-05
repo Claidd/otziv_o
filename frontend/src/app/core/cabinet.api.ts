@@ -349,6 +349,8 @@ export interface ScoreResponse {
   financeVisible: boolean;
   managerPerformanceVisible?: boolean;
   contractorPayments?: ScoreContractorPaymentSummary[];
+  /** Signed default avatar for cards built on the client. */
+  defaultImageUrl?: string | null;
   groups: {
     managers: ScoreUser[];
     marketologs: ScoreUser[];
