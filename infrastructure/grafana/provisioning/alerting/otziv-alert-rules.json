@@ -814,6 +814,78 @@
             "severity": "critical"
           },
           "isPaused": false
+        },
+        {
+          "uid": "otziv-restore-drill-due",
+          "title": "OtzivRestoreDrillDue",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "datasourceUid": "prometheus",
+              "model": {
+                "refId": "A",
+                "expr": "otziv_backup_restore_drill_age_days",
+                "instant": true,
+                "range": false
+              }
+            },
+            {
+              "refId": "B",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "B",
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "settings": {
+                  "mode": ""
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        75
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "10m",
+          "annotations": {
+            "summary": "Нужно провести учебное восстановление из резервной копии",
+            "description": "С последнего учебного восстановления прошло больше 75 дней. После 90 дней деплой будет заблокирован. Запустите infrastructure/scripts/local/restore-backup-drill.ps1 и обновите BACKUP_RESTORE_DRILL_DATE в prod.env."
+          },
+          "labels": {
+            "severity": "warning"
+          },
+          "isPaused": false
         }
       ]
     },

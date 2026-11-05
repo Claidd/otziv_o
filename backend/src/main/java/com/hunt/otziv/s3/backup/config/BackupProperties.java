@@ -29,6 +29,8 @@ public class BackupProperties {
     private String sourceCommit;
     /** Most recently measured isolated restore time, recorded in evidence when supplied. */
     private Duration restoreDrillRto;
+    /** Date (yyyy-MM-dd) of the latest isolated restore drill; the deploy gate refuses drills older than 90 days. */
+    private String restoreDrillDate;
     /** Daily scheduling is independent from the backup engine so a verified one-shot run can be performed safely. */
     private Schedule schedule = new Schedule();
     /** Explicit, idempotent startup request used only for controlled verification runs. */

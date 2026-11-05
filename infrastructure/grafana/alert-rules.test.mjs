@@ -152,6 +152,10 @@ test('rule expressions fire on synthetic failures and stay quiet otherwise (pinn
         alert('OtzivBackupStale', '27h20m', [{ database: 'keycloak', job: 'app', instance: 'app:8080' }]),
         alert('OtzivBackupStale', '28h20m', [{ database: 'keycloak', job: 'app', instance: 'app:8080' },
           { database: 'mysql', job: 'app', instance: 'app:8080' }])] },
+    // Two weeks before the 90-day deploy gate: quiet at 75 days, alerts from 76; no date configured stays quiet.
+    { interval: '1m', input_series: [s('otziv_backup_restore_drill_age_days{job="app",instance="app:8080"}', '75x20 76x20')],
+      alert_rule_test: [alert('OtzivRestoreDrillDue', '15m'),
+        alert('OtzivRestoreDrillDue', '35m', [{ job: 'app', instance: 'app:8080' }])] },
     // A steady 3 errors per 15 minutes for a day, then 20 every 5 minutes.
     { interval: '5m', input_series: [s('logback_events_total{level="error",job="app",instance="app:8080"}', '0+1x300 320+20x5')],
       alert_rule_test: [alert('OtzivErrorLogBurst', '1500m'), alert('OtzivErrorLogBurst', '1515m', [{}])] },
