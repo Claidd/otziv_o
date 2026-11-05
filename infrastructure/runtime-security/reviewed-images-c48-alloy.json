@@ -1,0 +1,36 @@
+{
+  "schema": "otziv-reviewed-images-v1",
+  "repository": "ghcr.io/claidd/otziv-security",
+  "publicationSet": "c48-alloy",
+  "baselineManifestSha256": "d48bdb7d6d869cde5d6f1a7b089491765e3eeaf46e0b0b6bb51b7719b38d3ef2",
+  "images": [
+    {
+      "component": "alloy",
+      "platform": "linux/amd64",
+      "sourceBeforeRef": "grafana/alloy@sha256:6e00cf7c5a692ff5f24844529416ed017d76fce922f8199004e73d5eca46b6b8",
+      "defaultReferencesBefore": [
+        {
+          "path": "compose.yaml",
+          "line": 347,
+          "service": "alloy"
+        },
+        {
+          "path": "compose.prod-local.yaml",
+          "line": 792,
+          "service": "alloy"
+        },
+        {
+          "path": "docker-compose.yaml",
+          "line": 954,
+          "service": "alloy"
+        }
+      ],
+      "buildArgs": {},
+      "candidateBaseRef": "ghcr.io/claidd/otziv-security@sha256:27905df1862decf6e9c2543cb476e70e83d68351f7a5bb17194a6a094764db32",
+      "context": "infrastructure/runtime-security/builds/c48-alloy",
+      "dockerfile": "infrastructure/runtime-security/builds/c48-alloy/Dockerfile",
+      "dockerfileSha256": "daaff3788a965372d075dd6d8217dfee604ac7ccd15cc6717938d3b3dcda56f8",
+      "version": "1.19.2-otziv.4"
+    }
+  ]
+}

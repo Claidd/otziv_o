@@ -166,3 +166,14 @@ infrastructure/runtime-security/proofs/c45-keycloak/** -text
 # Preserve C47 package-only recipes and publication manifest hashes.
 infrastructure/runtime-security/builds/c47-*/** text eol=lf
 infrastructure/runtime-security/reviewed-images-c47-*.json text eol=lf
+
+# C48 official Ubuntu apt overlays keep exact recipe, manifest, inventory and executed proof bytes.
+infrastructure/runtime-security/builds/c48-*/** text eol=lf
+infrastructure/runtime-security/reviewed-images-c48-*.json text eol=lf
+infrastructure/runtime-security/c48-*-apt-packages.json text eol=lf
+infrastructure/runtime-security/apt-c48-packages.py -text
+infrastructure/runtime-security/apt-c48-inspection.py -text
+infrastructure/runtime-security/apt-c48-rehearsal.py -text
+infrastructure/runtime-security/apt-c48-activation.mjs text eol=lf
+infrastructure/runtime-security/c48-parent-*.json text eol=lf
+infrastructure/runtime-security/proofs/c48-*/** -text

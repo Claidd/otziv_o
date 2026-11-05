@@ -100,6 +100,9 @@ const RELEASE_SETS = Object.freeze({
   // Keep implicit historical lookup stable; current publications use explicit manifests.
   'c44-grafana': { component: 'grafana', path: 'infrastructure/runtime-security/reviewed-images-c44-grafana.json', context: 'infrastructure/runtime-security/builds/c44-grafana', dockerfile: 'infrastructure/runtime-security/builds/c44-grafana/Dockerfile' },
   'c45-keycloak': { component: 'keycloak', path: 'infrastructure/runtime-security/reviewed-images-c45-keycloak.json', context: 'infrastructure/runtime-security/builds/c45-keycloak', dockerfile: 'infrastructure/runtime-security/builds/c45-keycloak/Dockerfile' },
+  // C48 changes only the official Ubuntu apt packages of the accepted C45 issuer and C43 Alloy.
+  'c48-keycloak': { component: 'keycloak', path: 'infrastructure/runtime-security/reviewed-images-c48-keycloak.json', context: 'infrastructure/runtime-security/builds/c48-keycloak', dockerfile: 'infrastructure/runtime-security/builds/c48-keycloak/Dockerfile' },
+  'c48-alloy': { component: 'alloy', path: 'infrastructure/runtime-security/reviewed-images-c48-alloy.json', context: 'infrastructure/runtime-security/builds/c48-alloy', dockerfile: 'infrastructure/runtime-security/builds/c48-alloy/Dockerfile' },
   'c43-keycloak': { component: 'keycloak', path: 'infrastructure/runtime-security/reviewed-images-c43-keycloak.json', context: 'infrastructure/runtime-security/builds/c43-keycloak', dockerfile: 'infrastructure/runtime-security/builds/c43-keycloak/Dockerfile' },
   'c43-tempo': { component: 'tempo', path: 'infrastructure/runtime-security/reviewed-images-c43-tempo.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c43-tempo/Dockerfile' },
   'c43-loki': { component: 'loki', path: 'infrastructure/runtime-security/reviewed-images-c43-loki.json', context: 'infrastructure/runtime-security', dockerfile: 'infrastructure/runtime-security/builds/c43-loki/Dockerfile' },
@@ -161,7 +164,7 @@ export function validateReviewedImageSet(name, manifestBytes, baselineBytes = ma
   assert.equal(image.prepare, undefined, 'reviewed_image_set_preparation_forbidden');
   assert.equal(image.sourceBeforeRef, original.sourceBeforeRef, 'reviewed_image_set_historical_source_changed');
   assert.deepEqual(image.defaultReferencesBefore, original.defaultReferencesBefore, 'reviewed_image_set_service_coverage_changed');
-  if (['c26-keycloak', 'c35-keycloak', 'c43-keycloak', 'c45-keycloak'].includes(name))
+  if (['c26-keycloak', 'c35-keycloak', 'c43-keycloak', 'c45-keycloak', 'c48-keycloak'].includes(name))
     assert.equal(image.knownRuntimeDependencyPolicy, C26_POLICY, 'reviewed_image_set_dependency_policy');
   return manifest;
 }

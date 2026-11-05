@@ -1,0 +1,3497 @@
+{
+  "advisory": "CVE-2026-109518",
+  "component": "alloy",
+  "distribution": "ubuntu-24.04",
+  "packages": [
+    {
+      "architecture": "amd64",
+      "bytes": 985236,
+      "conffiles": [],
+      "control": {
+        "control": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "0264e1f3b95f421a5b00838d5d0930d1ff5d4fe8352a64696cf5f2cf0ddacd62",
+          "uid": 0
+        },
+        "md5sums": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "31bd8a129297a0dfbd06f80afd02a4a8f72fb65d8b2fb198398eaa241794f50a",
+          "uid": 0
+        },
+        "shlibs": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "cb7b9017ecd61662b20b5a724e9ffddbc41399e991a55cee4bcfb2469137c186",
+          "uid": 0
+        },
+        "symbols": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "b0b03283ba6223038bbf1423fbf8df6e79e8a16c3cfc3bf2af62b9643a111b86",
+          "uid": 0
+        },
+        "triggers": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "0f1eda96d7595190cc2d40a06fafff8def651d19ceb635292ae6104de50de218",
+          "uid": 0
+        }
+      },
+      "controlFields": {
+        "Architecture": "amd64",
+        "Depends": "libbz2-1.0, libc6 (>= 2.38), libgcc-s1 (>= 3.3.1), libgcrypt20 (>= 1.10.0), liblz4-1 (>= 0.0~r127), liblzma5 (>= 5.1.1alpha+20120614), libstdc++6 (>= 13.1), libsystemd0 (>= 221), libudev1 (>= 183), libxxhash0 (>= 0.7.1), libzstd1 (>= 1.5.5), zlib1g (>= 1:1.2.2.3)",
+        "Package": "libapt-pkg6.0t64",
+        "Version": "2.8.4ubuntu0.1"
+      },
+      "dpkgInfoName": "libapt-pkg6.0t64:amd64",
+      "package": "libapt-pkg6.0t64",
+      "payload": {
+        "usr": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/lib": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/lib/x86_64-linux-gnu": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/lib/x86_64-linux-gnu/libapt-pkg.so.6.0": {
+          "gid": 0,
+          "kind": "symlink",
+          "mode": 511,
+          "target": "libapt-pkg.so.6.0.0",
+          "uid": 0
+        },
+        "usr/lib/x86_64-linux-gnu/libapt-pkg.so.6.0.0": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "582170c3fcf61a318fec500b962feb7515434d67bc07610b4978f2577896263e",
+          "uid": 0
+        },
+        "usr/share": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/doc": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/doc/libapt-pkg6.0t64": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/doc/libapt-pkg6.0t64/NEWS.Debian.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "a369c7ebef0a569241f3986caaf2193916eea1fa42076f6b9f3e0c91fa7a27fe",
+          "uid": 0
+        },
+        "usr/share/doc/libapt-pkg6.0t64/changelog.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "6cfbba03424441faed5ef904195a44dfe435460618a7add27371b54dccc585eb",
+          "uid": 0
+        },
+        "usr/share/doc/libapt-pkg6.0t64/copyright": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "b4701305243d8d746f4acaafe15d94f946251b05691bd6917fef41dd15e9ee12",
+          "uid": 0
+        },
+        "usr/share/lintian": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/lintian/overrides": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/lintian/overrides/libapt-pkg6.0t64": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "426eed5f66a5d2800831aac19e4f742805db41f153e2ac855f189fa8be824e40",
+          "uid": 0
+        },
+        "usr/share/locale": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/ar": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/ar/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/ar/LC_MESSAGES/libapt-pkg6.0.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "45862154308a8ecab92e76ba87a805716e9c92311e6fa1069ff860cf8e11e65b",
+          "uid": 0
+        },
+        "usr/share/locale/ast": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/ast/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/ast/LC_MESSAGES/libapt-pkg6.0.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "394524e6b169a3fb632a40727d6dc1328388862b9ad375830efa95ff1f043a1c",
+          "uid": 0
+        },
+        "usr/share/locale/bg": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/bg/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/bg/LC_MESSAGES/libapt-pkg6.0.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "1ebca99801bf2d73d3130e856567bfa2f2232c4487684c0912776e61d10d73f9",
+          "uid": 0
+        },
+        "usr/share/locale/bs": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/bs/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/bs/LC_MESSAGES/libapt-pkg6.0.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "93cbd6dc4d303f49974bc53514a6b547c91ff065872d4ba933876daa4d455f06",
+          "uid": 0
+        },
+        "usr/share/locale/ca": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/ca/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/ca/LC_MESSAGES/libapt-pkg6.0.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "a2ae4b36bddf7ff2657218b1d7581148c81a508b24fbed29b12b9f6b35e8206c",
+          "uid": 0
+        },
+        "usr/share/locale/cs": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/cs/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/cs/LC_MESSAGES/libapt-pkg6.0.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "eb2cc0351e4be89c44d1148b428aa026557d8cf33510363793fae9dc908aacda",
+          "uid": 0
+        },
+        "usr/share/locale/cy": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/cy/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/cy/LC_MESSAGES/libapt-pkg6.0.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "ff15b49b6abf3f19525a2f365466fd02f8a218c7d2b0d0d8aba80d7e48228ff1",
+          "uid": 0
+        },
+        "usr/share/locale/da": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/da/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/da/LC_MESSAGES/libapt-pkg6.0.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "4bf161e87e2a74e1caa22391d8ffdfd36ec0c208f5a8fd64b781619d93468b1d",
+          "uid": 0
+        },
+        "usr/share/locale/de": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/de/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/de/LC_MESSAGES/libapt-pkg6.0.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "384a60d45e61cb5768153eb7ad55a4ca877cf1a2b1e0c45ecfa763988f369c9d",
+          "uid": 0
+        },
+        "usr/share/locale/dz": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/dz/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/dz/LC_MESSAGES/libapt-pkg6.0.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "8c45a90eeefa9ee3826f4cbbfddee19cbdc238d3ea964a6920bbf4ec52d8b24c",
+          "uid": 0
+        },
+        "usr/share/locale/el": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/el/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/el/LC_MESSAGES/libapt-pkg6.0.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "fe73040a20ec5ea235c8b8f1e1e230a2e6b49e7ab905edd1159efb73072edaab",
+          "uid": 0
+        },
+        "usr/share/locale/es": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/es/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/es/LC_MESSAGES/libapt-pkg6.0.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "0ecc39da5f924b7858ebdbd8eb2e3fab1016db0774813a770420a0cc180c341d",
+          "uid": 0
+        },
+        "usr/share/locale/eu": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/eu/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/eu/LC_MESSAGES/libapt-pkg6.0.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "349021ae04b6ba6fe896fdfb7e0168f08bad3c123d17b808b8514986e88837be",
+          "uid": 0
+        },
+        "usr/share/locale/fi": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/fi/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/fi/LC_MESSAGES/libapt-pkg6.0.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "c63e8ec08ecdee1fd0909c5dbb528046345bd41130f244a32ec8b003cfb7aaca",
+          "uid": 0
+        },
+        "usr/share/locale/fr": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/fr/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/fr/LC_MESSAGES/libapt-pkg6.0.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "5e26b25b1f02a03e2a8e8d531925be9fb07c48303bac70bdb998286b083ddc10",
+          "uid": 0
+        },
+        "usr/share/locale/gl": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/gl/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/gl/LC_MESSAGES/libapt-pkg6.0.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "4a23382dd36ebd6dbc4563181dc86746663a843ac9a8e672beee44c684ff8d98",
+          "uid": 0
+        },
+        "usr/share/locale/hu": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/hu/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/hu/LC_MESSAGES/libapt-pkg6.0.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "3d02aa9522bd73e3bc8357df4dde4e355aa996e21242b6122575a3c178875b34",
+          "uid": 0
+        },
+        "usr/share/locale/it": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/it/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/it/LC_MESSAGES/libapt-pkg6.0.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "52788ffe8159f088b35a4cdbe9c63ef4a66eda36823f3a6df5f6d99ccbe6823f",
+          "uid": 0
+        },
+        "usr/share/locale/ja": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/ja/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/ja/LC_MESSAGES/libapt-pkg6.0.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "ce32bd946890a2844001a9ad9944aafbbdae62d52572f59f589672952b77e17a",
+          "uid": 0
+        },
+        "usr/share/locale/km": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/km/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/km/LC_MESSAGES/libapt-pkg6.0.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "b90d76700a91c6b73ce252165dfc53144f8308cdede568a67dd33de4d3c96d95",
+          "uid": 0
+        },
+        "usr/share/locale/ko": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/ko/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/ko/LC_MESSAGES/libapt-pkg6.0.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "8a62f863f54ee3dd4cc417f73090c7d3a54778c8b8123c43ed4d765b4affbb9c",
+          "uid": 0
+        },
+        "usr/share/locale/ku": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/ku/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/ku/LC_MESSAGES/libapt-pkg6.0.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "71e8ac637ed45649485588448b36af3632a520afdd5f83043b8b3e00263c993a",
+          "uid": 0
+        },
+        "usr/share/locale/lt": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/lt/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/lt/LC_MESSAGES/libapt-pkg6.0.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "687ebd17cecfcf7ad147b2bb58ef5cd2332a77dd211ccf8bf99b30b3353f26a5",
+          "uid": 0
+        },
+        "usr/share/locale/mr": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/mr/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/mr/LC_MESSAGES/libapt-pkg6.0.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "e4976fe68cceb47fc0ad3c3dc495bfe2da4b57b92652c99b509857e9c261d7d7",
+          "uid": 0
+        },
+        "usr/share/locale/nb": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/nb/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/nb/LC_MESSAGES/libapt-pkg6.0.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "a9d7d4e579aee358cab7c88a5fb8208b19e0d9f6e78b86fe4cf74dd24b74708e",
+          "uid": 0
+        },
+        "usr/share/locale/ne": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/ne/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/ne/LC_MESSAGES/libapt-pkg6.0.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "42b39d7959422757fa2e8a0f52cb10e59e7472db3dfab6541969244dd4bc8a7a",
+          "uid": 0
+        },
+        "usr/share/locale/nl": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/nl/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/nl/LC_MESSAGES/libapt-pkg6.0.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "39e4b7d16a13deaf5afc9fbe17708fcbbd6c4f2b9022331fbbc95646d4435efc",
+          "uid": 0
+        },
+        "usr/share/locale/nn": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/nn/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/nn/LC_MESSAGES/libapt-pkg6.0.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "3a3bc3cab79a303ddde42f92526261dba73753d8982a92aa903cf47b9c0236aa",
+          "uid": 0
+        },
+        "usr/share/locale/pl": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/pl/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/pl/LC_MESSAGES/libapt-pkg6.0.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "70cb2bddded9a5badbbda1a052a5ee5352cfcded1ab643ac363e7777e1f71b43",
+          "uid": 0
+        },
+        "usr/share/locale/pt": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/pt/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/pt/LC_MESSAGES/libapt-pkg6.0.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "331ffcf233e9de78c6632f2ae44d0441f2c4e054ef2c7ab0bdbce6cfcd035017",
+          "uid": 0
+        },
+        "usr/share/locale/pt_BR": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/pt_BR/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/pt_BR/LC_MESSAGES/libapt-pkg6.0.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "e6c35af2063b07aad722a90e7dc6c06b075701df1f5269403b62634a8e62f9a6",
+          "uid": 0
+        },
+        "usr/share/locale/ro": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/ro/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/ro/LC_MESSAGES/libapt-pkg6.0.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "233644bca48b78df6e2a4febea6214fd8f9e94beaffa63cf5d1e2e7e0185cc72",
+          "uid": 0
+        },
+        "usr/share/locale/ru": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/ru/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/ru/LC_MESSAGES/libapt-pkg6.0.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "656665aed57780c52abdd3c2630585209c433f4ecf56ec38e2d72581a41ce4e3",
+          "uid": 0
+        },
+        "usr/share/locale/sk": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/sk/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/sk/LC_MESSAGES/libapt-pkg6.0.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "0a39188cb25c0a48d1fa7b07d5d08e659baf071320f78e313fc9a667499ac9f5",
+          "uid": 0
+        },
+        "usr/share/locale/sl": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/sl/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/sl/LC_MESSAGES/libapt-pkg6.0.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "f2034363f15aaf87fa55077dbeea30b1356ae6a545097fff0a60034685576af8",
+          "uid": 0
+        },
+        "usr/share/locale/sv": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/sv/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/sv/LC_MESSAGES/libapt-pkg6.0.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "2b0c6539f6d66b9af15730159f7227a30a0d64f6c59bc1944039f15c96b90b1f",
+          "uid": 0
+        },
+        "usr/share/locale/th": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/th/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/th/LC_MESSAGES/libapt-pkg6.0.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "e1bf842cd5c9d612ddef4684509ca078e81662f7b6f9a5d712e4c8181891fa8c",
+          "uid": 0
+        },
+        "usr/share/locale/tl": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/tl/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/tl/LC_MESSAGES/libapt-pkg6.0.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "66550e5d3c7b262abb19e68326de98c4009cd4a81246957dce158c67040ec291",
+          "uid": 0
+        },
+        "usr/share/locale/tr": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/tr/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/tr/LC_MESSAGES/libapt-pkg6.0.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "ce53e9920bf9637b97264730da11483f86611244b3f92e314e53c2b859eb9c09",
+          "uid": 0
+        },
+        "usr/share/locale/uk": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/uk/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/uk/LC_MESSAGES/libapt-pkg6.0.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "8361551cf25293e8e3bdb96fcff119971bdc47d7db85430b3ce0415a05803fe8",
+          "uid": 0
+        },
+        "usr/share/locale/vi": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/vi/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/vi/LC_MESSAGES/libapt-pkg6.0.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "b22858fae9618c0772e9e5cb697852ea08c3984f374507d49e28e90ae7c2edc8",
+          "uid": 0
+        },
+        "usr/share/locale/zh_CN": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/zh_CN/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/zh_CN/LC_MESSAGES/libapt-pkg6.0.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "fae8037426dd0743c13281b5194867ddff3102104310add60524c73ff64a369f",
+          "uid": 0
+        },
+        "usr/share/locale/zh_TW": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/zh_TW/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/zh_TW/LC_MESSAGES/libapt-pkg6.0.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "725ac7a178f3f2b78d465812d84618af387049bcc2a414ca64a07ff3f06ae8f9",
+          "uid": 0
+        }
+      },
+      "previousVersion": "2.8.3",
+      "sha256": "a50f3e68a793f90b05f44a4b5f2f59f3ec7687e39b5d8bbd1da44c84671fa3d6",
+      "signedArchiveIndex": {
+        "filename": "pool/main/a/apt/libapt-pkg6.0t64_2.8.4ubuntu0.1_amd64.deb",
+        "sha256": "a50f3e68a793f90b05f44a4b5f2f59f3ec7687e39b5d8bbd1da44c84671fa3d6",
+        "size": 985236,
+        "verifiedWith": "apt-get update in the disposable parent image"
+      },
+      "url": "https://security.ubuntu.com/ubuntu/pool/main/a/apt/libapt-pkg6.0t64_2.8.4ubuntu0.1_amd64.deb",
+      "version": "2.8.4ubuntu0.1"
+    },
+    {
+      "architecture": "amd64",
+      "bytes": 1396574,
+      "conffiles": [
+        "/etc/apt/apt.conf.d/01-vendor-ubuntu",
+        "/etc/apt/apt.conf.d/01autoremove",
+        "/etc/cron.daily/apt-compat",
+        "/etc/logrotate.d/apt"
+      ],
+      "control": {
+        "conffiles": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "f273f28e1f7eec6a97851ef76a7f70e80c554ef5ee6f57471a99cd701447ff9d",
+          "uid": 0
+        },
+        "control": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "8333a159735ba423f8c769a5336cd1c7ef9fde8c84bcb6daa55a712f807b28db",
+          "uid": 0
+        },
+        "md5sums": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "e1a3946ccdb7ff232025e4842b50a720a6036fb287f493d5cce7368e27df24e3",
+          "uid": 0
+        },
+        "postinst": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 493,
+          "sha256": "1c80cdeccd4358d3aeec6bb20d73397c85980a40cd7df524f8214d3ca80fca6f",
+          "uid": 0
+        },
+        "postrm": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 493,
+          "sha256": "22ebfba8e9d2583c962df8103b082c54cfadcd86733ba9b212ab61620488b715",
+          "uid": 0
+        },
+        "preinst": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 493,
+          "sha256": "d8bc79dcc6d7817034726d7e3f55d4ee8f68a14597bb10075d73fbf28c06b0c8",
+          "uid": 0
+        },
+        "prerm": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 493,
+          "sha256": "51b242b25f8c068d08d5ee675d072556d8da2a6d94be4201a392aeb39664ec19",
+          "uid": 0
+        },
+        "shlibs": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "013eac8c0eb8aaa028600c6222a311fc97f26acf515c47edf2c9aedc0cc93eb6",
+          "uid": 0
+        },
+        "triggers": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "0f1eda96d7595190cc2d40a06fafff8def651d19ceb635292ae6104de50de218",
+          "uid": 0
+        }
+      },
+      "controlFields": {
+        "Architecture": "amd64",
+        "Depends": "base-passwd (>= 3.6.1) | adduser, gpgv, libapt-pkg6.0t64 (>= 2.8.4ubuntu0.1), ubuntu-keyring, libc6 (>= 2.38), libgcc-s1 (>= 3.3.1), libgnutls30t64 (>= 3.8.1), libseccomp2 (>= 2.4.2), libstdc++6 (>= 13.1), libsystemd0",
+        "Package": "apt",
+        "Version": "2.8.4ubuntu0.1"
+      },
+      "dpkgInfoName": "apt",
+      "package": "apt",
+      "payload": {
+        "etc": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "etc/apt": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "etc/apt/apt.conf.d": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "etc/apt/apt.conf.d/01-vendor-ubuntu": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "364d5eeac5475b7dddfd629899ea88b91ed8d8e8e319c29bb9dbd6772e87ed55",
+          "uid": 0
+        },
+        "etc/apt/apt.conf.d/01autoremove": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "35b4360d9126e5e5efc1ce42cea8a957ba42921de749ad8502922d536c9f385c",
+          "uid": 0
+        },
+        "etc/apt/auth.conf.d": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "etc/apt/keyrings": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "etc/apt/preferences.d": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "etc/apt/sources.list.d": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "etc/apt/trusted.gpg.d": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "etc/cron.daily": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "etc/cron.daily/apt-compat": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 493,
+          "sha256": "1983c659b042b1ec26127e7874954d83cd97eb8dcfd03238a7d2031ea0182fbe",
+          "uid": 0
+        },
+        "etc/kernel": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "etc/kernel/postinst.d": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "etc/logrotate.d": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "etc/logrotate.d/apt": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "fcc2510172fd914ca22762c4b2dc43d36152e65becf8e84abec59f7652da5e3f",
+          "uid": 0
+        },
+        "usr": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/bin": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/bin/apt": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 493,
+          "sha256": "fca9afdb3e2a5c4721c4baeeb982981f3fa67f721ad0db97b02f048b0fbf4303",
+          "uid": 0
+        },
+        "usr/bin/apt-cache": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 493,
+          "sha256": "3ae7267f71d70bec3c263314fceb1b2c2e6845f03ade9c57cbb5a2f71f06904a",
+          "uid": 0
+        },
+        "usr/bin/apt-cdrom": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 493,
+          "sha256": "1f531b00a89115c703942e274ca5730d7903d253b4b2906316c7d4d5a7c777e8",
+          "uid": 0
+        },
+        "usr/bin/apt-config": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 493,
+          "sha256": "b90c03c1b5ba357eab336dd499a2d7f9313483849124da21e920f6a34d53ca5a",
+          "uid": 0
+        },
+        "usr/bin/apt-get": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 493,
+          "sha256": "87279ca48820a0423c2ee8b25dba48af0ad7d9f46c16f1e3cfdc07934dcf5ae1",
+          "uid": 0
+        },
+        "usr/bin/apt-key": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 493,
+          "sha256": "45ec8c948cb0f17b38f27b4d8235596b17ece3b7eea5afcbb3be8b1ee5a98c77",
+          "uid": 0
+        },
+        "usr/bin/apt-mark": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 493,
+          "sha256": "c9cdab64a73df9aa80f5d158512515f1ba69e151570d7e75cf02c95e9d150d7d",
+          "uid": 0
+        },
+        "usr/lib": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/lib/apt": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/lib/apt/apt-helper": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 493,
+          "sha256": "4acf5f6fd2de56f5f861cc01ae81e17e4e39605ffa934b38a8582326209d6769",
+          "uid": 0
+        },
+        "usr/lib/apt/apt.systemd.daily": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 493,
+          "sha256": "4949c220a844071ee4709115aadfc00684578d5c7dda9c1b5a5c65a75de9d50f",
+          "uid": 0
+        },
+        "usr/lib/apt/methods": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/lib/apt/methods/cdrom": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 493,
+          "sha256": "f592c695e8bbb2e5958a47ad057ee18d954117f99046f0d53e1f5d4fa63d706c",
+          "uid": 0
+        },
+        "usr/lib/apt/methods/copy": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 493,
+          "sha256": "fa43b5f60e435f25e5b3516278e3d2a5ffb9e16dd159ca7c25f4538f92b8ba9f",
+          "uid": 0
+        },
+        "usr/lib/apt/methods/file": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 493,
+          "sha256": "a55a02bb263c6ee58299c6efe5e56d5a8e9873f02000435db078a0843ff8745e",
+          "uid": 0
+        },
+        "usr/lib/apt/methods/ftp": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 493,
+          "sha256": "629db397728e05a54fc1a29e5301b5bd558d8583f5864c6e39aedd271f8300d3",
+          "uid": 0
+        },
+        "usr/lib/apt/methods/gpgv": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 493,
+          "sha256": "6da472f0bbef2bcbd9296217e95dc827b53dbaf0eef1cf04c5099eb61892f596",
+          "uid": 0
+        },
+        "usr/lib/apt/methods/http": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 493,
+          "sha256": "53bf726d938bff90c8ca014ba76eaf21df7592ae5459561b16da937bfdae229e",
+          "uid": 0
+        },
+        "usr/lib/apt/methods/https": {
+          "gid": 0,
+          "kind": "symlink",
+          "mode": 511,
+          "target": "http",
+          "uid": 0
+        },
+        "usr/lib/apt/methods/mirror": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 493,
+          "sha256": "9c84e83dd9fdb20df0aff211f6bae82a316a86e8fa62532a00d2d5e90e069a20",
+          "uid": 0
+        },
+        "usr/lib/apt/methods/mirror+copy": {
+          "gid": 0,
+          "kind": "symlink",
+          "mode": 511,
+          "target": "mirror",
+          "uid": 0
+        },
+        "usr/lib/apt/methods/mirror+file": {
+          "gid": 0,
+          "kind": "symlink",
+          "mode": 511,
+          "target": "mirror",
+          "uid": 0
+        },
+        "usr/lib/apt/methods/mirror+ftp": {
+          "gid": 0,
+          "kind": "symlink",
+          "mode": 511,
+          "target": "mirror",
+          "uid": 0
+        },
+        "usr/lib/apt/methods/mirror+http": {
+          "gid": 0,
+          "kind": "symlink",
+          "mode": 511,
+          "target": "mirror",
+          "uid": 0
+        },
+        "usr/lib/apt/methods/mirror+https": {
+          "gid": 0,
+          "kind": "symlink",
+          "mode": 511,
+          "target": "mirror",
+          "uid": 0
+        },
+        "usr/lib/apt/methods/rred": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 493,
+          "sha256": "5b3828deb826b4e37854650e0b0e86b3e584ff6746a51c7a2d73c05a5beb4eb9",
+          "uid": 0
+        },
+        "usr/lib/apt/methods/rsh": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 493,
+          "sha256": "e16002e8ab76f998012b9567206b289fa2cb21634ef7c67a88e8ec389587376c",
+          "uid": 0
+        },
+        "usr/lib/apt/methods/ssh": {
+          "gid": 0,
+          "kind": "symlink",
+          "mode": 511,
+          "target": "rsh",
+          "uid": 0
+        },
+        "usr/lib/apt/methods/store": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 493,
+          "sha256": "8f49d36125a1667015789f5276391ae991fb9f55821a0c37edc8c43f9fd07919",
+          "uid": 0
+        },
+        "usr/lib/apt/planners": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/lib/apt/planners/dump": {
+          "gid": 0,
+          "kind": "symlink",
+          "mode": 511,
+          "target": "../solvers/dump",
+          "uid": 0
+        },
+        "usr/lib/apt/solvers": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/lib/apt/solvers/dump": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 493,
+          "sha256": "66c15ea8f99ea2dc6056fd3d0b720b8b0601d83f7b5bd3b982a4a34e971c24e9",
+          "uid": 0
+        },
+        "usr/lib/dpkg": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/lib/dpkg/methods": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/lib/dpkg/methods/apt": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/lib/dpkg/methods/apt/desc.apt": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "4035a2ca99d6d473f6e9a0af7b39d395bfe47e48b3a9993488fc2fae139145f8",
+          "uid": 0
+        },
+        "usr/lib/dpkg/methods/apt/install": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 493,
+          "sha256": "810da1fcf97636219401c67e891a04a7a4f01b2a0d73fd60bf3bbbdfb3775f76",
+          "uid": 0
+        },
+        "usr/lib/dpkg/methods/apt/names": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "0a636de469385b41ea06f639a389c523946ec7f023fe2a12c0adf8300e2a82ad",
+          "uid": 0
+        },
+        "usr/lib/dpkg/methods/apt/setup": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 493,
+          "sha256": "69b7a73685f410eae149698b86fed55605c938e716c6a6cc99a1e190e1251ead",
+          "uid": 0
+        },
+        "usr/lib/dpkg/methods/apt/update": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 493,
+          "sha256": "605ae19f87289e8d4cdb80028dd071c4b3ea0e2e46da9ad697b6bd739ba4c6b3",
+          "uid": 0
+        },
+        "usr/lib/systemd": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/lib/systemd/system": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/lib/systemd/system/apt-daily-upgrade.service": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "da0651537cad0ed384291bd50c0bbc3268e6c625626ec9344150de4e8db3925e",
+          "uid": 0
+        },
+        "usr/lib/systemd/system/apt-daily-upgrade.timer": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "b804d7bab8eb41202384f9270e25d5383346ace8b3d7c4f5029c150638d77bcd",
+          "uid": 0
+        },
+        "usr/lib/systemd/system/apt-daily.service": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "90f87047f4ea2f261f9117d02870de8719f808b911bb1808bf039ff3c162e5e9",
+          "uid": 0
+        },
+        "usr/lib/systemd/system/apt-daily.timer": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "0075e974af4e3a94757e219ba50ccb8348d4d1a8834d938f6cc9b1f4fd1db4e5",
+          "uid": 0
+        },
+        "usr/lib/x86_64-linux-gnu": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/lib/x86_64-linux-gnu/libapt-private.so.0.0": {
+          "gid": 0,
+          "kind": "symlink",
+          "mode": 511,
+          "target": "libapt-private.so.0.0.0",
+          "uid": 0
+        },
+        "usr/lib/x86_64-linux-gnu/libapt-private.so.0.0.0": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "350ff18b645f88082bdf532404da40a12485fcd4363d2c0ff121aff4f2f0ac12",
+          "uid": 0
+        },
+        "usr/share": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/bash-completion": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/bash-completion/completions": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/bash-completion/completions/apt": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "55d65e6cc7191d95fe7c13853b2aceb909935a12085dfeee4907acaa83a5ecf6",
+          "uid": 0
+        },
+        "usr/share/bug": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/bug/apt": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/bug/apt/script": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 493,
+          "sha256": "93494209c18c6dd053689e30972c1f733353b47b61dcc48ece77a5d74d7730c7",
+          "uid": 0
+        },
+        "usr/share/doc": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/doc/apt": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/doc/apt/NEWS.Debian.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "a369c7ebef0a569241f3986caaf2193916eea1fa42076f6b9f3e0c91fa7a27fe",
+          "uid": 0
+        },
+        "usr/share/doc/apt/README.md.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "4e4814a5488b9bbbe71e9783e28c700ce3b6a4d713e991e05d7ee4cd8e73e2e1",
+          "uid": 0
+        },
+        "usr/share/doc/apt/changelog.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "50824b4a139e66e91e7d23a40c14f1ca4c1d2a3e27d782da330c0f571a0c3e85",
+          "uid": 0
+        },
+        "usr/share/doc/apt/copyright": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "b4701305243d8d746f4acaafe15d94f946251b05691bd6917fef41dd15e9ee12",
+          "uid": 0
+        },
+        "usr/share/doc/apt/examples": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/doc/apt/examples/apt.conf": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "3c5496b4b050952b563e1184d411c3e655bb32e663229886d7720562cc619880",
+          "uid": 0
+        },
+        "usr/share/doc/apt/examples/configure-index": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "d8247b9e580400f76c5c4e5f7bbd5b4c92c137bb0f7aa654f7c492d1810e35e9",
+          "uid": 0
+        },
+        "usr/share/doc/apt/examples/preferences": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "f1a5f90e8ebdb870d2f03d469439df62f960a0e4a7cff5ea66b991c942aa4745",
+          "uid": 0
+        },
+        "usr/share/doc/apt/examples/sources.list": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "01f5acfe39cd4d41adc2e27b8626350eb2a0d55f56d06e5e6d47e2bfbb7fd026",
+          "uid": 0
+        },
+        "usr/share/lintian": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/lintian/overrides": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/lintian/overrides/apt": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "51f00c08a78f7178574afa6c37e46d0942c3ff9691b5da4e9118cd3283b0bf70",
+          "uid": 0
+        },
+        "usr/share/locale": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/ar": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/ar/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/ar/LC_MESSAGES/apt.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "dd7769f53c14d30fd7e239c583d5010ba7d632486f5fdc2c496ba5d9a0e25e6c",
+          "uid": 0
+        },
+        "usr/share/locale/ast": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/ast/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/ast/LC_MESSAGES/apt.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "5a209a04da0086df4a47ae42185b1b15c04dea8ac657be1b464677e12b14128f",
+          "uid": 0
+        },
+        "usr/share/locale/bg": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/bg/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/bg/LC_MESSAGES/apt.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "6378480be9db595ac0b9e39af013141ddf48ac76b97ee7d702ab9c4577459c6c",
+          "uid": 0
+        },
+        "usr/share/locale/bs": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/bs/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/bs/LC_MESSAGES/apt.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "68201197978552c7fefdd3bae8d28b602cb6c207fcee36ec6d8cbd9c2e8abb67",
+          "uid": 0
+        },
+        "usr/share/locale/ca": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/ca/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/ca/LC_MESSAGES/apt.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "90e8be7192c40a4c3d4cb2dff05b25495a3f5b77404585ea0a4bdc160845ac09",
+          "uid": 0
+        },
+        "usr/share/locale/cs": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/cs/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/cs/LC_MESSAGES/apt.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "84e653f880fd2a100731d56d1a13c2bbebb2ea9befa0aa38a52ce34295472b45",
+          "uid": 0
+        },
+        "usr/share/locale/cy": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/cy/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/cy/LC_MESSAGES/apt.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "4cac63e1b0c8dcb735b18f1ea0c012e62b667f67fd9469318dd3bf5aca2e5db9",
+          "uid": 0
+        },
+        "usr/share/locale/da": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/da/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/da/LC_MESSAGES/apt.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "f52da000ca9d8f0798fe780850acbc4119180a7cc2a81079af3eb32133a2f01c",
+          "uid": 0
+        },
+        "usr/share/locale/de": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/de/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/de/LC_MESSAGES/apt.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "cfb5e4d544e53fc2e61ce472655fc2a85e96db39ae7961c5829f0991aa9d545f",
+          "uid": 0
+        },
+        "usr/share/locale/dz": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/dz/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/dz/LC_MESSAGES/apt.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "74ceba7299868c575461aac36f9cc77f638333556ffe5344ea6d82ecda4a4516",
+          "uid": 0
+        },
+        "usr/share/locale/el": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/el/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/el/LC_MESSAGES/apt.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "46866318ab7e0b6919174cb185dc897d4ea7aa049fd5d53d6c82dffbf32c39ba",
+          "uid": 0
+        },
+        "usr/share/locale/es": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/es/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/es/LC_MESSAGES/apt.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "6baff8d114a63c4bc1e036c76ffc4c4e23c9e04facec71e2fe40a126a05b2c2d",
+          "uid": 0
+        },
+        "usr/share/locale/eu": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/eu/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/eu/LC_MESSAGES/apt.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "4b69bb66b054b40ae65cc3a6de0c18bf6d07c8ab5a2a5896a354a5a2c918ffba",
+          "uid": 0
+        },
+        "usr/share/locale/fi": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/fi/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/fi/LC_MESSAGES/apt.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "3f7d45e7e73a064cfb61ff179c30192f12fb148e878e6943e8c7bb07b146786f",
+          "uid": 0
+        },
+        "usr/share/locale/fr": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/fr/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/fr/LC_MESSAGES/apt.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "8bf1eef65c91b38c39408d54a116826861226e7e0bafee8e5708e1ec35fb4848",
+          "uid": 0
+        },
+        "usr/share/locale/gl": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/gl/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/gl/LC_MESSAGES/apt.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "8ca4d4d108621fd297aa6b2f535fb1334d9ab83f4a4520a0cd17d0e295e2d4a3",
+          "uid": 0
+        },
+        "usr/share/locale/hu": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/hu/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/hu/LC_MESSAGES/apt.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "783eebb287a57d7de2b3d3fbccacef08a3a75ecedff5e412018920ac7f9e0729",
+          "uid": 0
+        },
+        "usr/share/locale/it": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/it/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/it/LC_MESSAGES/apt.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "4d12c44cde011a3936383dd9b1da8a26e8178158f91f1754ebb0dd0ce25c6c28",
+          "uid": 0
+        },
+        "usr/share/locale/ja": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/ja/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/ja/LC_MESSAGES/apt.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "51f598c60ec18b46025719502b5a95ceddd5d42656adddd5b6386a5fa7953bc9",
+          "uid": 0
+        },
+        "usr/share/locale/km": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/km/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/km/LC_MESSAGES/apt.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "757a4f61a8b6b7ecb6c665f5c47e02adf8f1f06950c4a670ef9ef08c4e933a6a",
+          "uid": 0
+        },
+        "usr/share/locale/ko": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/ko/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/ko/LC_MESSAGES/apt.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "01f8991d0b8cb1b95b7419f7ee58489aaf1fcafbdb1e220c2167986b3c9b14cc",
+          "uid": 0
+        },
+        "usr/share/locale/ku": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/ku/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/ku/LC_MESSAGES/apt.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "da065550fede1f17ef121f8eff80886ad7ef1454d169e00897acd0b2b868054f",
+          "uid": 0
+        },
+        "usr/share/locale/lt": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/lt/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/lt/LC_MESSAGES/apt.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "177db446aa092464461c9a8e43f45567952e626d546e462679332f0c4262dadd",
+          "uid": 0
+        },
+        "usr/share/locale/mr": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/mr/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/mr/LC_MESSAGES/apt.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "a3f5fd299c08bdd3ae821930126cc043d0384d2af1440dba26827342a1d7f89b",
+          "uid": 0
+        },
+        "usr/share/locale/nb": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/nb/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/nb/LC_MESSAGES/apt.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "efe71b510912445aefb9d066d2cf2e9cb1aad0558d777a49982eec50997fa4f1",
+          "uid": 0
+        },
+        "usr/share/locale/ne": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/ne/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/ne/LC_MESSAGES/apt.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "3346e115ba6b36b6cbea9127bc302440e0dd04655053269136231b486cef0663",
+          "uid": 0
+        },
+        "usr/share/locale/nl": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/nl/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/nl/LC_MESSAGES/apt.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "7b30308ce80c5150c153fe803485dc9d7a4ef81fe43d680650d44d77c36aae0c",
+          "uid": 0
+        },
+        "usr/share/locale/nn": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/nn/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/nn/LC_MESSAGES/apt.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "8b944be738efb60c623f8b649ffaf4670f4b330cfbe6366b82ac916e426273d2",
+          "uid": 0
+        },
+        "usr/share/locale/pl": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/pl/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/pl/LC_MESSAGES/apt.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "6202edb5cbda4e7811717c39f5271b0506377aea77e8bd58415f7996600d0e9a",
+          "uid": 0
+        },
+        "usr/share/locale/pt": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/pt/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/pt/LC_MESSAGES/apt.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "a0994037484b589aef62446128b5506bf6e0f6b093915564a7552b828955b708",
+          "uid": 0
+        },
+        "usr/share/locale/pt_BR": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/pt_BR/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/pt_BR/LC_MESSAGES/apt.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "f6faa462c95acb17dd839d76066477f5e8bee7706506058321cea3f4fa4e5115",
+          "uid": 0
+        },
+        "usr/share/locale/ro": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/ro/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/ro/LC_MESSAGES/apt.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "640a564719b0c9f925a943db8da2cc5aeaca8d8e143d7ebfc426d9dbd8441d4d",
+          "uid": 0
+        },
+        "usr/share/locale/ru": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/ru/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/ru/LC_MESSAGES/apt.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "069ac056d3463158ec636d2104e6520d6bc320690e031fa8e85837f91e5704df",
+          "uid": 0
+        },
+        "usr/share/locale/sk": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/sk/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/sk/LC_MESSAGES/apt.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "0f442b2c366d28dcb392a0f222ca6330ab2e89838eb9394d6a29109987d8b4ff",
+          "uid": 0
+        },
+        "usr/share/locale/sl": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/sl/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/sl/LC_MESSAGES/apt.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "9c20717c6190e02dfcbe42166375d42f2b25fc7aa40c53611d22c034881903ba",
+          "uid": 0
+        },
+        "usr/share/locale/sv": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/sv/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/sv/LC_MESSAGES/apt.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "186ce8a067e4f218d129b799dbafdf31f649a6dc1ae06d4c1db54933edd6288f",
+          "uid": 0
+        },
+        "usr/share/locale/th": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/th/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/th/LC_MESSAGES/apt.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "f92ec178bfd4cd4e3e4004680b6f31d765117607038a162db8ad8f557ed47d96",
+          "uid": 0
+        },
+        "usr/share/locale/tl": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/tl/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/tl/LC_MESSAGES/apt.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "aa989990a9573b00e3f4eccb2210471590486af2cf354972a65ac3d40a60f055",
+          "uid": 0
+        },
+        "usr/share/locale/tr": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/tr/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/tr/LC_MESSAGES/apt.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "ba25e5949507e2356672e35d848c957af9232d4ca41e47a0d7c7e8fe0d0f6eff",
+          "uid": 0
+        },
+        "usr/share/locale/uk": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/uk/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/uk/LC_MESSAGES/apt.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "240ec25bdf0de7afffc9d42838703fd059a7a85e450092630a396e850cf5ed3b",
+          "uid": 0
+        },
+        "usr/share/locale/vi": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/vi/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/vi/LC_MESSAGES/apt.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "e12804522d96004a2d5a5d69a1ecbcbf4c4253f91a3b1df3b3403f32ae455005",
+          "uid": 0
+        },
+        "usr/share/locale/zh_CN": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/zh_CN/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/zh_CN/LC_MESSAGES/apt.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "54bad11eb9743c3e76f089e760645b839a675fdd3a8b0e95251669b2c7ce65e2",
+          "uid": 0
+        },
+        "usr/share/locale/zh_TW": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/zh_TW/LC_MESSAGES": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/locale/zh_TW/LC_MESSAGES/apt.mo": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "761b286e8aa04a54d179719a1471b386ee7b8cb2bb5f902f1444f56ffa158883",
+          "uid": 0
+        },
+        "usr/share/man": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/man/de": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/man/de/man1": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/man/de/man1/apt-transport-http.1.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "9089a393a64c788d2be78d6e4ad180960e350c728f8e49734e60f99b38096c4f",
+          "uid": 0
+        },
+        "usr/share/man/de/man1/apt-transport-https.1.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "f432c5801017a06a1912718c786d00126f56de360098aa031c9be9cdc9ae51c0",
+          "uid": 0
+        },
+        "usr/share/man/de/man1/apt-transport-mirror.1.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "18eae92100fd54f18558faf8ff7347853fb4e67bacc5423d85d6cc5f0a09a387",
+          "uid": 0
+        },
+        "usr/share/man/de/man5": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/man/de/man5/apt.conf.5.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "015d877f769987237c448484530fc5542c68b51183e07c9e5256f1098b03bf74",
+          "uid": 0
+        },
+        "usr/share/man/de/man5/apt_auth.conf.5.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "4a4e9fa844563839f80a1ba226428be0944975bf1e3a7e74a6fe4aecfdd1ea66",
+          "uid": 0
+        },
+        "usr/share/man/de/man5/apt_preferences.5.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "272ad8c4b7cba00ee611d5e1d4ef688d310938f3dc5d8f0af21fc03109d361c5",
+          "uid": 0
+        },
+        "usr/share/man/de/man5/sources.list.5.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "57d77f918e0049cf0e366825ae4e7e63f1ba1e1e926e375c08056da16092e44c",
+          "uid": 0
+        },
+        "usr/share/man/de/man7": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/man/de/man7/apt-patterns.7.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "57f7cd4b7702d02915d9c16dcc701ea35fd9a40efcc311d3e7131676911b5ead",
+          "uid": 0
+        },
+        "usr/share/man/de/man8": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/man/de/man8/apt-cache.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "218a4d7561c88eeb562859c2d03e163c00b840bb9fd89193e6a325d5c431a51b",
+          "uid": 0
+        },
+        "usr/share/man/de/man8/apt-cdrom.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "e29fa64520a82587ccb022c83216a46ddf1e2928df873d6c597ce463f70cd77c",
+          "uid": 0
+        },
+        "usr/share/man/de/man8/apt-config.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "c9441668b002d7d9a61337682c7935444f57446eaea22f4605efd88e980044ff",
+          "uid": 0
+        },
+        "usr/share/man/de/man8/apt-get.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "be6f49eb3f3300c7d7ca6f7580a03265d07c013bc9a5d46f7ed9473f3886e283",
+          "uid": 0
+        },
+        "usr/share/man/de/man8/apt-mark.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "d5713d65d2f77fc29c7c5550739d5140379bb6da90c1351a103c9c56991624e7",
+          "uid": 0
+        },
+        "usr/share/man/de/man8/apt-secure.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "5c17d3181c2caa18125f120720d7072a8df7ff7443201103f36ca962b7493e69",
+          "uid": 0
+        },
+        "usr/share/man/de/man8/apt.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "d98efb415daa22432afba34c39b59f05762c81b9e715718a393e10b46b64ca7a",
+          "uid": 0
+        },
+        "usr/share/man/es": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/man/es/man5": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/man/es/man5/apt_preferences.5.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "31c1f0b103c2c91a6a99dad3e50d5ad932822b56797a5879cc3c238f88ce1e1a",
+          "uid": 0
+        },
+        "usr/share/man/es/man8": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/man/es/man8/apt-cache.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "7285876855f1ca8d4f334757613c3c0f42242bfd244dc2fc231b6456efab96f7",
+          "uid": 0
+        },
+        "usr/share/man/es/man8/apt-cdrom.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "dc19dfab5c35ccfab5fd65e90fd6896462bed0bd99c1ad00faf736600894f432",
+          "uid": 0
+        },
+        "usr/share/man/es/man8/apt-config.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "7feecb7553edf4b67f867135cbbe2504ee15b4441d5c365b617f59948a1eb62e",
+          "uid": 0
+        },
+        "usr/share/man/fr": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/man/fr/man1": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/man/fr/man1/apt-transport-http.1.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "6aabc92d68bfc5f280ada8fcb4969ce42b123a408e5195df61e35edf6d0d2d2f",
+          "uid": 0
+        },
+        "usr/share/man/fr/man1/apt-transport-https.1.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "45c294186ae6c400770aaa42d26b1c692f318bf66b58c9604076b7c7326d3d8f",
+          "uid": 0
+        },
+        "usr/share/man/fr/man1/apt-transport-mirror.1.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "5b8125ca728f0ff3ba580be9b86e64c69b1367910d9178d10e2b1722412d2748",
+          "uid": 0
+        },
+        "usr/share/man/fr/man5": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/man/fr/man5/apt.conf.5.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "19cc584ed73753329c8c6c928f4d285889c5fe4aebd60bb3de4298ff330965a3",
+          "uid": 0
+        },
+        "usr/share/man/fr/man5/apt_auth.conf.5.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "678bde0293dfa0ed7cc3783840e1d2f7f09b62cd242a073f70952fc6258bd101",
+          "uid": 0
+        },
+        "usr/share/man/fr/man5/apt_preferences.5.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "97d48233e964a53d66739922e2594786bb84e870151e38c2d2a7fd1e575f76df",
+          "uid": 0
+        },
+        "usr/share/man/fr/man5/sources.list.5.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "3d72f703b6860bdd494c658ebee83283665ab345f68def79bd0bb808ca543617",
+          "uid": 0
+        },
+        "usr/share/man/fr/man8": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/man/fr/man8/apt-cache.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "dd4210e16b7b7f41d826bd71691e7f412f29ede205e5053ce369399fca9a3d1a",
+          "uid": 0
+        },
+        "usr/share/man/fr/man8/apt-cdrom.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "fcc0fe45c7eec8aaf8417dffa94cabf3400ae650e861a3197db6a3ab56130092",
+          "uid": 0
+        },
+        "usr/share/man/fr/man8/apt-config.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "cba7baf0da2efb4eecf015bb11cc9f388fd7043a346f59a0abdec97eddbe01cd",
+          "uid": 0
+        },
+        "usr/share/man/fr/man8/apt-get.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "2674649b9c3a32aaaf6570e57df5ec101f31f2ef75e0248688e1c67b7b93c7f6",
+          "uid": 0
+        },
+        "usr/share/man/fr/man8/apt-mark.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "1b75e69a246b54da5ac88ed8a2bdd3134a364b898e268e9753a2ceeb4369e03e",
+          "uid": 0
+        },
+        "usr/share/man/fr/man8/apt-secure.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "48abe665bafafdbd613abd2b7e951b4acb16924e8595fa80302465758e24283c",
+          "uid": 0
+        },
+        "usr/share/man/fr/man8/apt.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "908e0afb53ff84c899780497d9d5f80f1a1d8d78f86f3195f0aa006f85f51157",
+          "uid": 0
+        },
+        "usr/share/man/it": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/man/it/man5": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/man/it/man5/apt.conf.5.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "0e2b81b216ba593f84e8138aec6e236086a0930917dc275ab2afff7d0749c0f1",
+          "uid": 0
+        },
+        "usr/share/man/it/man5/apt_preferences.5.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "5dd8055e24c8db3d0e761f78464e2f9f973ca42d5c1fd0514cb0f0644c2ca2a2",
+          "uid": 0
+        },
+        "usr/share/man/it/man8": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/man/it/man8/apt-cache.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "ae0ac11d602c2119f3ef7de6eca1c45857f51a72b4d2da2c3321bdc33229adc5",
+          "uid": 0
+        },
+        "usr/share/man/it/man8/apt-cdrom.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "a4aa7b6fa9aa54299d7024f72cdaacf70bfc65bce0638d3c59c313955e083745",
+          "uid": 0
+        },
+        "usr/share/man/it/man8/apt-config.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "8199e938c5aa07588c7958076f6c62188c86f67315cab303b7a147f39ba0cb4b",
+          "uid": 0
+        },
+        "usr/share/man/it/man8/apt-mark.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "4bf543e3f29a66157d69d4f431016f36b90f3b7d2fe5df44e2d1f71c96b07569",
+          "uid": 0
+        },
+        "usr/share/man/it/man8/apt-secure.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "1d7d05c59c78d2e116808f6cafc6e966e033c0523a3500dff0da3c49bfeb3b00",
+          "uid": 0
+        },
+        "usr/share/man/it/man8/apt.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "d808c04b7758e10b60e4c13e77225f8800402a0c045f4ae26139d935a5229a0d",
+          "uid": 0
+        },
+        "usr/share/man/ja": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/man/ja/man5": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/man/ja/man5/apt.conf.5.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "2f257114eac93fda35ca5d8150e0d5b31a5db3716a1fbe78ab7a668442609c62",
+          "uid": 0
+        },
+        "usr/share/man/ja/man5/apt_preferences.5.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "076cc4043cc775d5b17e2e0596b21f420a311b3527f931a76c611df6ab54aebe",
+          "uid": 0
+        },
+        "usr/share/man/ja/man8": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/man/ja/man8/apt-cache.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "089fbeac946eba49dbe6257397fc76383a0816a7ef5bcb9b475e1f26431c21c8",
+          "uid": 0
+        },
+        "usr/share/man/ja/man8/apt-cdrom.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "26b425f0eda8d281a3573f9e6f80a258bc93e9ee9a1427a287f4401237bf35ef",
+          "uid": 0
+        },
+        "usr/share/man/ja/man8/apt-config.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "4f22144e3339747d5f6be2e8add373d7ca57db4c8dcb901da4d04ab14c831c0e",
+          "uid": 0
+        },
+        "usr/share/man/ja/man8/apt-mark.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "6bf6780a457ddc9f6380c74b89ca985c34c78dc210cf2ed0b9b7753873b58906",
+          "uid": 0
+        },
+        "usr/share/man/ja/man8/apt-secure.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "d87f020f302f3d8bc99f105f5e6c43c3c7fb5bf240eb5b9d4b7949978dc4ed29",
+          "uid": 0
+        },
+        "usr/share/man/ja/man8/apt.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "4610557b703d8ef2f9cd16be244c7161c4a7a81c5a5f5da6c7b4b51988adcfe0",
+          "uid": 0
+        },
+        "usr/share/man/man1": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/man/man1/apt-transport-http.1.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "42903095851933bac9f89777e7f99ff2c96d2d8ed3938d7cde54f2d32a72f5e5",
+          "uid": 0
+        },
+        "usr/share/man/man1/apt-transport-https.1.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "d63ae499311cc3cbb7fcc2ad526ff7c8c51844cd4fc25183e55cac280e4d1415",
+          "uid": 0
+        },
+        "usr/share/man/man1/apt-transport-mirror.1.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "c61ba9ac2e41b658c02a554ca0a9b332b219c6f43a9a81682b4e5f9e70fcec46",
+          "uid": 0
+        },
+        "usr/share/man/man5": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/man/man5/apt.conf.5.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "4f513e38f31c12746ecd5c41024ad65c7bef7ddf14870cf592dd7d80cda42380",
+          "uid": 0
+        },
+        "usr/share/man/man5/apt_auth.conf.5.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "5024c4f433e4948f8f4f4dd7188c33a38f07e3592ea6c7092320f7b7a8e1d19c",
+          "uid": 0
+        },
+        "usr/share/man/man5/apt_preferences.5.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "2339e1a1debf1e5b239a79f5ad868175cb244f4a8f1b8ca6c6cfd2543f616821",
+          "uid": 0
+        },
+        "usr/share/man/man5/sources.list.5.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "1a8e7b3574a4d0c421e180eca7c397b047f3ab62ed564e2f5e23f86478cac6e7",
+          "uid": 0
+        },
+        "usr/share/man/man7": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/man/man7/apt-patterns.7.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "8eb67fdd877e089b72afb5dbf73f5fea3ac740bc1b7008092bb91b23867d1b71",
+          "uid": 0
+        },
+        "usr/share/man/man8": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/man/man8/apt-cache.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "b18d3ccdac60577eba1eebc3f7c70e40cfb349a25897f52163c363d9c8fea617",
+          "uid": 0
+        },
+        "usr/share/man/man8/apt-cdrom.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "d66411963810f6b544e6fa9110f09ad43dd00cba508fcea1991b58167acb68cc",
+          "uid": 0
+        },
+        "usr/share/man/man8/apt-config.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "8ac4445e7d5788fd7c0de173f1964af98dc93e6a2c6b5b353f54ad820aaa1c4d",
+          "uid": 0
+        },
+        "usr/share/man/man8/apt-get.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "6570d139094fc79fe6a12d1e37b8c49e517c1f9b75531017a66ce64424f5ca58",
+          "uid": 0
+        },
+        "usr/share/man/man8/apt-key.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "47e024939a5d2ea9828d210d7f16677b211dbd3aea18d551517dfc26cdf451f9",
+          "uid": 0
+        },
+        "usr/share/man/man8/apt-mark.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "fd6e71a313245016c1d7611c69b536c1a8d441852b2fb65801b40af81ba4a1d7",
+          "uid": 0
+        },
+        "usr/share/man/man8/apt-secure.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "45ba8c8e16c2acea47eb4c65bce0aa973df69e1551877658bba51f8180898c6e",
+          "uid": 0
+        },
+        "usr/share/man/man8/apt.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "58599fd5f4f7863e6c419ea4573870752d785d74f48d5d65247a9b703301c531",
+          "uid": 0
+        },
+        "usr/share/man/nl": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/man/nl/man1": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/man/nl/man1/apt-transport-http.1.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "5389a92da8a3a7ddf7a924595a40496d5c6808fb3f1d8e41ac0d2c0c035c3067",
+          "uid": 0
+        },
+        "usr/share/man/nl/man1/apt-transport-https.1.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "4c895f7b55294ce3221a27e97c6c8bbad4012a9eb1c9301c7816c9a2b64a91da",
+          "uid": 0
+        },
+        "usr/share/man/nl/man1/apt-transport-mirror.1.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "a6e284999f67517c9588840f63df1ffad0b961da5d60810fb97a128b281875a8",
+          "uid": 0
+        },
+        "usr/share/man/nl/man5": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/man/nl/man5/apt.conf.5.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "2ff0d3d18db26b87b22a3d2b7475c370d0017496e669e3b44a2978ebe04c23b2",
+          "uid": 0
+        },
+        "usr/share/man/nl/man5/apt_auth.conf.5.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "f325162a32b7cd5f8d4bfa859f1e2baa69ba5b50b34446de0b115238ec86b193",
+          "uid": 0
+        },
+        "usr/share/man/nl/man5/apt_preferences.5.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "412a8f95cfe8f3389732173262be29abd8d1ab9557e870dc3516cb9f9999264a",
+          "uid": 0
+        },
+        "usr/share/man/nl/man5/sources.list.5.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "c6fe1ecc30bcbe60429129ab917b692802483d3a27002bd75e91f77723027ba1",
+          "uid": 0
+        },
+        "usr/share/man/nl/man7": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/man/nl/man7/apt-patterns.7.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "5b5d36c785ec822dbdaa2667520a0c2c5655e58aa2061d2c046ff0a9ac82f940",
+          "uid": 0
+        },
+        "usr/share/man/nl/man8": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/man/nl/man8/apt-cache.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "9a3946a481b1912603787031167e9641581cadd5fe1afa12915ae1588c7d90db",
+          "uid": 0
+        },
+        "usr/share/man/nl/man8/apt-cdrom.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "4d83f93e460f270a65afa93d7a80f539199d0c2b0ebf7dca836c04de9b20e328",
+          "uid": 0
+        },
+        "usr/share/man/nl/man8/apt-config.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "7015a83615df9362bdf39fdf6f9b844b5482d54e73b9895eb427e1b9dad8c71f",
+          "uid": 0
+        },
+        "usr/share/man/nl/man8/apt-get.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "d3821439369f014e474b311da8b525ce3e76c87253f6bac5b79942b3150e127b",
+          "uid": 0
+        },
+        "usr/share/man/nl/man8/apt-key.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "4f8e35eb3aa7de8b1f00fd2c9304c23caa5497962dd84609fcce6323665d6f80",
+          "uid": 0
+        },
+        "usr/share/man/nl/man8/apt-mark.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "909df5351f0c93a79bcf41cf283096d11d7b94e85591e019545e333fd55ad0b4",
+          "uid": 0
+        },
+        "usr/share/man/nl/man8/apt-secure.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "966f925d54b23b0187132cd1143f49df15fa08f69a3dae052bf000a930d27a53",
+          "uid": 0
+        },
+        "usr/share/man/nl/man8/apt.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "a0ae1bf44999cb9d79230b6f8e778bd939d36cc90c0b9de80a29b53c36fd3cc8",
+          "uid": 0
+        },
+        "usr/share/man/pl": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/man/pl/man5": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/man/pl/man5/apt_preferences.5.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "af5591b31fddd83dd36dfbb8d9b6b150aa69b2624474cfde36bea66e1e8b0b39",
+          "uid": 0
+        },
+        "usr/share/man/pl/man8": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/man/pl/man8/apt-cache.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "c953057b46bc12b47a97c798687e273fb339304b4c05db604c4dd40f70a496db",
+          "uid": 0
+        },
+        "usr/share/man/pl/man8/apt-cdrom.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "e2d87946d33c577129388b5abe76d01b0d7b5fe7a358d83701a60e4e33c69832",
+          "uid": 0
+        },
+        "usr/share/man/pl/man8/apt-config.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "5e4ae2364524ff5d773e42f17a3bea050b5d2b88915e20d230e1c23e0ad05c66",
+          "uid": 0
+        },
+        "usr/share/man/pt": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/man/pt/man1": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/man/pt/man1/apt-transport-http.1.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "a0462dfb38ff63c2e39c1e67e05540f52684e136addffb78bf57aeccb4a581a3",
+          "uid": 0
+        },
+        "usr/share/man/pt/man1/apt-transport-https.1.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "fa8223b484ebfe609935d9b253663e602af542c60720cbc8c53953661f67e128",
+          "uid": 0
+        },
+        "usr/share/man/pt/man1/apt-transport-mirror.1.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "3f1c7f148f80fb384e042130e7dc0c0ba9e433725a94e88e439b9cc7be54ffa4",
+          "uid": 0
+        },
+        "usr/share/man/pt/man5": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/man/pt/man5/apt.conf.5.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "05e04f93f56677b68e6e99e2a19e779d82b07f72df3259040e6546f8154e9f49",
+          "uid": 0
+        },
+        "usr/share/man/pt/man5/apt_auth.conf.5.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "850921fe382db6ddb2832883e0c8adf05b530c1bd0ea2180cec328bd0ecaaa4f",
+          "uid": 0
+        },
+        "usr/share/man/pt/man5/apt_preferences.5.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "2a5933db3f3666c4dbb984f0740f972e040944f5c6b3760fc6e9ca9b5d65067a",
+          "uid": 0
+        },
+        "usr/share/man/pt/man5/sources.list.5.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "7c1db36b6a18ba4cffd18c0cc89ee4359b660157dec62fcdf82bbadd11de93fc",
+          "uid": 0
+        },
+        "usr/share/man/pt/man7": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/man/pt/man7/apt-patterns.7.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "5b141dfc391869adf1162db2372dac4b6f75e76969ff0cced0a91fafa562b3e4",
+          "uid": 0
+        },
+        "usr/share/man/pt/man8": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "usr/share/man/pt/man8/apt-cache.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "72ad0309fde78914282d6204803585e564aa670b6d75fdad45d393e23aef1186",
+          "uid": 0
+        },
+        "usr/share/man/pt/man8/apt-cdrom.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "c22a3644fa90f2891c4d9043b7bc331153ade65794727595253d968e52cb7e92",
+          "uid": 0
+        },
+        "usr/share/man/pt/man8/apt-config.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "ce619f872926c5ca6c143a2edeba6a04e599a66e1e9ddc9d8954137d71b0ff72",
+          "uid": 0
+        },
+        "usr/share/man/pt/man8/apt-get.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "986f6725b04a93d529aa1075d8ff140a60032de2389165e60a0fc1d3b283fd9e",
+          "uid": 0
+        },
+        "usr/share/man/pt/man8/apt-key.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "8ce596189bee338e029e924164f0756e5b01335078e5591bb8231a2775ee5307",
+          "uid": 0
+        },
+        "usr/share/man/pt/man8/apt-mark.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "9a039e76487a8ea3264b4a0389e05ef758199490a9ad247ebaba8e37e4d72211",
+          "uid": 0
+        },
+        "usr/share/man/pt/man8/apt-secure.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "9a2960c2c568f7bf1b1755a445258af290027ab3c02ee0732e74019aba9ecab0",
+          "uid": 0
+        },
+        "usr/share/man/pt/man8/apt.8.gz": {
+          "gid": 0,
+          "kind": "file",
+          "mode": 420,
+          "sha256": "c049d792748d8ce4ca9e829a627447d45704297f8a8ac385a3e83f8dcc42ad13",
+          "uid": 0
+        },
+        "var": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "var/cache": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "var/cache/apt": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "var/cache/apt/archives": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "var/cache/apt/archives/partial": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "var/lib": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "var/lib/apt": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "var/lib/apt/lists": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "var/lib/apt/lists/partial": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "var/lib/apt/mirrors": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "var/lib/apt/mirrors/partial": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "var/lib/apt/periodic": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "var/log": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        },
+        "var/log/apt": {
+          "gid": 0,
+          "kind": "directory",
+          "mode": 493,
+          "uid": 0
+        }
+      },
+      "previousVersion": "2.8.3",
+      "sha256": "ad2ea7f107f250ba88b0bfdba31812a341e3247589647aa2b03b9dc4e8abf8ed",
+      "signedArchiveIndex": {
+        "filename": "pool/main/a/apt/apt_2.8.4ubuntu0.1_amd64.deb",
+        "sha256": "ad2ea7f107f250ba88b0bfdba31812a341e3247589647aa2b03b9dc4e8abf8ed",
+        "size": 1396574,
+        "verifiedWith": "apt-get update in the disposable parent image"
+      },
+      "url": "https://security.ubuntu.com/ubuntu/pool/main/a/apt/apt_2.8.4ubuntu0.1_amd64.deb",
+      "version": "2.8.4ubuntu0.1"
+    }
+  ],
+  "parent": "ghcr.io/claidd/otziv-security@sha256:27905df1862decf6e9c2543cb476e70e83d68351f7a5bb17194a6a094764db32",
+  "schema": "otziv-official-apt-packages-v1"
+}
