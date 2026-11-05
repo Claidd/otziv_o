@@ -1,7 +1,7 @@
 package com.hunt.otziv.admin.dto.personal;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.hunt.otziv.u_users.images.SignedImageUrls;
+import com.hunt.otziv.u_users.api.UserImageLinks;
 
 
 import com.hunt.otziv.worker_performance.dto.DailyWorkProgressResponse;
@@ -46,6 +46,6 @@ public class WorkersListDTO {
     /** Short-lived signed link to the photo, relative to the backend base URL. */
     @JsonProperty(value = "imageUrl", access = JsonProperty.Access.READ_ONLY)
     public String getImageUrl() {
-        return SignedImageUrls.pathForOrDefault(imageId);
+        return UserImageLinks.pathForOrDefault(imageId);
     }
 }
